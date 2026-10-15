@@ -3,6 +3,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --no-audit --no-fund
 COPY . .
+# Valores públicos de configuración del cliente Microsoft (se incluyen en el bundle).
+ARG VITE_ENTRA_TENANT_ID
+ARG VITE_ENTRA_CLIENT_ID
+ARG VITE_ENTRA_API_SCOPE
 RUN npm run build
 
 FROM nginx:1.27-alpine

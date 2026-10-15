@@ -1,0 +1,50 @@
+name: Comprobar SSH Contabo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/test-ssh.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ssh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Comprobar configuracion
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$VPS_HOST" ]; then echo '::error::Falta VPS_HOST (variable o secreto)'; exit 1; fi
+          if [ -z "$VPS_USER" ]; then echo '::error::Falta VPS_USER (variable o secreto)'; exit 1; fi
+          if [ -z "$VPS_KEY" ]; then echo '::error::Falta VPS_SSH_KEY (debe ser un secreto, no una variable)'; exit 1; fi
+          if ! [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]; then
+            echo '::error::VPS_HOST o VPS_USER no tienen formato valido'; exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keygen -y -f ~/.ssh/id_deploy >/dev/null 2>&1 || { echo '::error::VPS_SSH_KEY no es una clave privada SSH valida'; exit 1; }
+          ssh-keyscan -T 10 -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null || { echo '::error::No se ha podido obtener la clave publica del host SSH'; exit 1; }
+          chmod 600 ~/.ssh/known_hosts
+      - name: Probar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" 'echo "CONEXION_SSH_OK"'
+      - name: Probar subida sin tocar la aplicacion
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'Prueba de despliegue FM, ejecucion %s\n' "$GITHUB_RUN_ID" > /tmp/fm-test-upload.txt
+          REMOTE_FILE="/tmp/fm-test-upload-${GITHUB_RUN_ID}.txt"
+          scp -i ~/.ssh/id_deploy -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes /tmp/fm-test-upload.txt "$VPS_USER@$VPS_HOST:$REMOTE_FILE"
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" "test -s '$REMOTE_FILE' && rm '$REMOTE_FILE' && echo SUBIDA_ARCHIVO_OK"

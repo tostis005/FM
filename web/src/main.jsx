@@ -8,13 +8,14 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, Line } from "recharts";
 import "./styles.css";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
-  {id:"F001",name:"Farmacia Central",city:"Madrid",active:true},
-  {id:"F002",name:"Farmacia Sol",city:"Barcelona",active:true},
-  {id:"F003",name:"Farmacia Europa",city:"Valencia",active:true},
-  {id:"F004",name:"Farmacia Gran Vía",city:"Sevilla",active:true},
-  {id:"F005",name:"Farmacia Norte",city:"Bilbao",active:true}
+  {id:"F001",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
+  {id:"F002",name:"Valdemarías (confirmar)",city:"",active:true,sourceCode:"EUR",sourceHost:"",sourceDatabase:"Farmatic"},
+  {id:"F003",name:"Buenavista",city:"",active:true,sourceCode:"BUE",sourceHost:"",sourceDatabase:"Farmatic"},
+  {id:"F004",name:"Estación",city:"",active:true,sourceCode:"EST",sourceHost:"",sourceDatabase:"Farmatic"},
+  {id:"F005",name:"Pendiente de nombre (POL)",city:"",active:true,sourceCode:"POL",sourceHost:"",sourceDatabase:"Farmatic"}
 ];
 const DEFAULT_USERS = [
   {id:"U01",name:"Laura Gómez",email:"laura.gomez@demo.es",role:"superadmin",pharmacies:[],active:true},
@@ -42,7 +43,10 @@ function percent(s,t) {return t ? Math.round(s/t*100):0;}
 function sum(values){return Object.values(values||{}).reduce((a,b)=>a+(Number(b)||0),0);}
 function dateES(value){if(!value)return "—";const [y,m,d]=value.split("-");return d+"/"+m+"/"+y;}
 function readState(){
-  try {const saved=JSON.parse(localStorage.getItem(STORE_KEY));if(saved && Array.isArray(saved.promos) && Array.isArray(saved.pharmacies) && Array.isArray(saved.users))return saved;}catch {}
+  try {const saved=JSON.parse(localStorage.getItem(STORE_KEY));if(saved && Array.isArray(saved.promos) && Array.isArray(saved.pharmacies) && Array.isArray(saved.users)) {
+    const oldDemo=saved.pharmacies.length===5 && saved.pharmacies.every(f=>["Farmacia Central","Farmacia Sol","Farmacia Europa","Farmacia Gran Vía","Farmacia Norte"].includes(f.name));
+    return {...saved,pharmacies:oldDemo?DEFAULT_PHARMACIES:saved.pharmacies};
+  }}catch {}
   return {promos:DEFAULT_PROMOS,pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS};
 }
 function downloadCSV(name, rows) {
@@ -74,12 +78,18 @@ function App(){
  const [editingUser,setEditingUser]=useState(null);
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
  const [editingPharmacy,setEditingPharmacy]=useState(null);
- const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true});
+ const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
+  const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
+  const [pharmacyApiError,setPharmacyApiError]=useState("");
+  const [savingPharmacy,setSavingPharmacy]=useState(false);
  const [selectedPromo,setSelectedPromo]=useState("P100");
  const [selectedPharmacy,setSelectedPharmacy]=useState("Todas");
  const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
- useEffect(()=>{localStorage.setItem(STORE_KEY,JSON.stringify(data));},[data]);
+ useEffect(()=>{
+    localStorage.setItem(STORE_KEY,JSON.stringify({...data,pharmacies:pharmacyApiStatus==="connected"?DEFAULT_PHARMACIES:data.pharmacies}));
+  },[data,pharmacyApiStatus]);
+  useEffect(()=>{if(pharmacyBackendConfigured)void refreshPharmacies();},[]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  const {promos,pharmacies,users}=data;
  const selected=promos.find(p=>p.id===selectedPromo)||promos[0];
@@ -90,7 +100,7 @@ function App(){
   &&(!from||p.end>=from)&&(!to||p.start<=to));
  const totals={active:promos.filter(p=>p.status==="Activa").length,pharmacies:pharmacies.filter(f=>f.active).length,cns:new Set(promos.flatMap(p=>p.cns)).size,goal:promos.filter(p=>p.status!=="Borrador").reduce((n,p)=>n+sum(p.targets),0)};
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
- const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city).toLocaleLowerCase("es").includes(filterText));
+ const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id){setPage(id);setSearch("");setMobileMenu(false);}
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){
@@ -126,16 +136,45 @@ function App(){
   setData(prev=>({...prev,users:prev.users.some(x=>x.id===u.id)?prev.users.map(x=>x.id===u.id?u:x):[...prev.users,u]}));
   setEditingUser(null);setToast("Usuario guardado en la demostración");
  }
- function startPharmacy(f){setEditingPharmacy(f?.id||"nuevo");setPharmacyForm(f?{...f}:{id:"",name:"",city:"",active:true});}
- function savePharmacy(e) {
-  e.preventDefault();const id=pharmacyForm.id.trim().toUpperCase();
-  if(!id||!pharmacyForm.name.trim())return setToast("Código y nombre son obligatorios");
-  if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
-  const f={...pharmacyForm,id,name:pharmacyForm.name.trim()};
-  setData(prev=>({...prev,pharmacies:prev.pharmacies.some(x=>x.id===id)?prev.pharmacies.map(x=>x.id===id?f:x):[...prev.pharmacies,f]}));
-  setEditingPharmacy(null);setToast("Farmacia guardada en la demostración");
- }
- const cnParsed=parseCNs(cnText);
+ async function refreshPharmacies(){
+    try {
+      if (!(await hasPharmacySession())) {setPharmacyApiStatus("sin_sesion");return;}
+      const records=await loadPharmacies();
+      setData(prev=>({...prev,pharmacies:records}));
+      setPharmacyApiStatus("connected");setPharmacyApiError("");
+    } catch(err) {setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
+  }
+  async function connectPharmacies(){
+    try {setPharmacyApiError("");await signInPharmacies();await refreshPharmacies();}
+    catch(err){setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
+  }
+  function startPharmacy(f){
+    if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Conecta Microsoft 365 para editar el maestro real");
+    setEditingPharmacy(f?.id||"nuevo");
+    setPharmacyForm(f?{...f}:{id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
+  }
+  async function savePharmacy(e) {
+    e.preventDefault();const id=pharmacyForm.id.trim().toUpperCase();
+    if(!/^[A-Z0-9_-]{2,16}$/.test(id)||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
+    if(!/^[A-Z0-9_-]{2,16}$/.test((pharmacyForm.sourceCode||"").trim().toUpperCase()))return setToast("Indica un código de origen válido");
+    if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
+    const f={...pharmacyForm,id,name:pharmacyForm.name.trim(),sourceCode:pharmacyForm.sourceCode.trim().toUpperCase(),sourceHost:pharmacyForm.sourceHost?.trim()||"",sourceDatabase:pharmacyForm.sourceDatabase?.trim()||"Farmatic"};
+    if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Debes conectar Microsoft 365");
+    setSavingPharmacy(true);
+    try {
+      if(pharmacyApiStatus==="connected"){
+        await savePharmacyToServer(f,editingPharmacy==="nuevo");
+        await refreshPharmacies();
+        setToast("Farmacia guardada en PostgreSQL");
+      } else {
+        setData(prev=>({...prev,pharmacies:prev.pharmacies.some(x=>x.id===id)?prev.pharmacies.map(x=>x.id===id?f:x):[...prev.pharmacies,f]}));
+        setToast("Solo demo: cambios guardados en este navegador");
+      }
+      setEditingPharmacy(null);
+    } catch(err){setToast(err.message);}
+    finally{setSavingPharmacy(false);}
+  }
+  const cnParsed=parseCNs(cnText);
  const trackingTargets=selected?Object.entries(selected.targets).filter(([id])=>selectedPharmacy==="Todas"||selectedPharmacy===id):[];
  const trackingGoal=sum(Object.fromEntries(trackingTargets));
  const trackingSales=trackingTargets.reduce((n,[id])=>n+Number(selected?.sales?.[id]||0),0);
@@ -160,7 +199,7 @@ function App(){
    <header className="topbar">
     <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><span className="bread">Farmétrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
-    <div className="topbar-right"><span className="topbar-demo"><span/> Entorno demo</span><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">LG</span><span className="top-user">Laura Gómez<small>Superadministrador</small></span><ChevronDown size={14} className="muted desktop-only"/></div>
+    <div className="topbar-right"><span className="topbar-demo"><span/> {pharmacyApiStatus==="connected"&&page==="farmacias"?"Farmacias · PostgreSQL":"Promociones en demo"}</span><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">LG</span><span className="top-user">Laura Gómez<small>Superadministrador</small></span><ChevronDown size={14} className="muted desktop-only"/></div>
    </header>
    <main className="main-content">
     {page==="promociones"&&<>
@@ -194,7 +233,7 @@ function App(){
       <section className="card tracking-expanded"><div className="section-heading"><div><h2>{selected?.name||"Seguimiento"}</h2><p>Ventas acumuladas y evolución de la campaña</p></div><Pill status={selected?.status||"Borrador"}/></div><TrackingContent selected={selected} chartData={chartData} trackingTargets={trackingTargets} trackingGoal={trackingGoal} trackingSales={trackingSales} pharmaName={pharmaName}/></section>
       <div className="note"><CircleHelp size={17}/> Datos ilustrativos: las ventas reales se conectarán cuando esté lista la sincronización con PostgreSQL.</div>
     </>}
-    {page==="farmacias"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> ESTRUCTURA DE LA RED</div><h1>Maestro de farmacias</h1><p>Relaciona el código de origen con el nombre público de cada farmacia.</p></div><button className="btn btn-primary" onClick={()=>startPharmacy()}><Plus size={17}/> Nueva farmacia</button></div><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Código</th><th>Nombre público</th><th>Ciudad</th><th>Estado</th><th>Usuarios</th><th/></tr></thead><tbody>{currentPharmacies.map(f=><tr key={f.id} onClick={()=>startPharmacy(f)} className="click-row"><td><span className="id-code">{f.id}</span></td><td><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div></td><td>{f.city}</td><td><Pill status={f.active?"Activa":"Inactiva"}/></td><td>{users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length}</td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div><div className="card info-card"><div className="info-icon"><ShieldCheck size={24}/></div><h2>Identificadores únicos</h2><p>Usaremos el código de cada farmacia para vincular sus ventas de SQL Server y mostrar sus datos con el nombre correcto.</p><div className="info-band">Ejemplo: <strong>F001 → Farmacia Central</strong></div></div></div></>}
+    {page==="farmacias"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> ESTRUCTURA DE LA RED</div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={connectPharmacies}><ShieldCheck size={17}/> Conectar Microsoft 365</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración. Falta configurar Microsoft Entra ID y desplegar la API para activar PostgreSQL."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>ID</th><th>Nombre público</th><th>Origen</th><th>Servidor SQL</th><th>Estado</th><th>Usuarios</th><th/></tr></thead><tbody>{currentPharmacies.map(f=><tr key={f.id} onClick={()=>startPharmacy(f)} className="click-row"><td><span className="id-code">{f.id}</span></td><td><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div></td><td><span className="id-code">{f.sourceCode||"—"}</span></td><td>{pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"— (demo)"}</td><td><Pill status={f.active?"Activa":"Inactiva"}/></td><td>{users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length}</td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div><div className="card info-card"><div className="info-icon"><ShieldCheck size={24}/></div><h2>Identificadores únicos</h2><p>Usaremos el código de cada farmacia para vincular sus ventas de SQL Server y mostrar sus datos con el nombre correcto.</p><div className="info-band"><strong>F001 → Abadía (ABA)</strong></div><p>La IP identifica el origen SQL Server. La importación se configura por separado; la web no se conecta a los servidores de farmacia.</p></div></div></>}
     {page==="usuarios"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> EQUIPO Y PERMISOS</div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2><p>Identidad, permisos y farmacias asignadas</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Farmacias</th><th>Estado</th><th/></tr></thead><tbody>{currentUsers.map(u=><tr className="click-row" key={u.id} onClick={()=>startUser(u)}><td><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div></td><td><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span></td><td>{u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"}</td><td><Pill status={u.active?"Activa":"Inactiva"}/></td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2><p>Tres niveles de acceso</p></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div><div className="note small-note"><CircleHelp size={16}/> Los permisos reales se activarán con Microsoft Entra ID y el backend.</div></div></div></>}
     {page==="ajustes"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> CONFIGURACIÓN</div><h1>Ajustes</h1><p>Estado del prototipo y próximas integraciones.</p></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Microsoft 365</h2><p>Inicio de sesión con el tenant y control real de roles por farmacia.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>Airbyte → PostgreSQL, con actualización incremental y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div><div className="card reset-card"><div><h2>Reiniciar datos de ejemplo</h2><p>Elimina únicamente los cambios guardados por esta demostración en tu navegador.</p></div><button className="btn btn-secondary" onClick={()=>{if(confirm("¿Restablecer todos los datos de ejemplo?")){localStorage.removeItem(STORE_KEY);setData({promos:DEFAULT_PROMOS,pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS});setToast("Demostración restablecida");}}}><RefreshCcw size={16}/> Restaurar demo</button></div></>}
    </main>
@@ -213,7 +252,7 @@ function App(){
    {editingPromo!=="nuevo"&&<div className="drawer-extra"><button type="button" className="btn btn-secondary" onClick={()=>{const p={...promoForm};setEditingPromo(null);copyPromo(p)}}><Copy size={16}/> Duplicar promoción</button><button type="button" className="btn btn-secondary" onClick={()=>exportPromo(promoForm)}><ArrowDownToLine size={16}/> Exportar para Excel</button></div>}
   </form></div></div>}
   {editingUser&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingUser(null)}}><div className="drawer"><div className="drawer-top"><div><span className="eyebrow">ACCESOS Y PERMISOS</span><h2>{editingUser==="nuevo"?"Nuevo usuario":"Editar usuario"}</h2><p>Asigna un rol y define las farmacias disponibles.</p></div><button className="icon-btn" onClick={()=>setEditingUser(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={saveUser} className="drawer-content"><Field label="Nombre completo"><input required value={userForm.name} onChange={e=>setUserForm({...userForm,name:e.target.value})}/></Field><Field label="Correo electrónico"><input type="email" required value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/></Field><Field label="Rol"><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="farmacia">Personal de farmacia</option><option value="gestor">Gestor de farmacias</option><option value="superadmin">Superadministrador</option></select></Field><Field label="Estado"><select value={String(userForm.active)} onChange={e=>setUserForm({...userForm,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></Field><div className="form-divider"/><div className="field-heading"><div><strong>Farmacias asignadas</strong><small>{userForm.role==="superadmin"?"Este rol tiene acceso a toda la red.":"Marca las farmacias a las que podrá acceder."}</small></div></div>{userForm.role!=="superadmin"&&<div className="pharmacy-picker">{pharmacies.map(f=><label key={f.id} className={"pharmacy-choice "+(userForm.pharmacies.includes(f.id)?"chosen":"")}><input type="checkbox" checked={userForm.pharmacies.includes(f.id)} onChange={()=>setUserForm({...userForm,pharmacies:userForm.pharmacies.includes(f.id)?userForm.pharmacies.filter(x=>x!==f.id):[...userForm.pharmacies,f.id]})}/><span className="choice-check">{userForm.pharmacies.includes(f.id)&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>}<div className="note small-note"><ShieldCheck size={16}/> Estas asignaciones son solo visuales hasta habilitar autenticación y autorización en el servidor.</div><FormActions onCancel={()=>setEditingUser(null)}/></form></div></div>}
-  {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><span className="eyebrow">MAESTRO DE FARMACIAS</span><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El código debe coincidir con el identificador de los datos importados.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content"><Field label="Código de farmacia"><input required disabled={editingPharmacy!=="nuevo"} placeholder="F006" value={pharmacyForm.id} onChange={e=>setPharmacyForm({...pharmacyForm,id:e.target.value})}/></Field><Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)}/></form></div></div>}
+  {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><span className="eyebrow">MAESTRO DE FARMACIAS</span><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El código debe coincidir con el identificador de los datos importados.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content"><Field label="Código de farmacia"><input required disabled={editingPharmacy!=="nuevo"} placeholder="F006" value={pharmacyForm.id} onChange={e=>setPharmacyForm({...pharmacyForm,id:e.target.value})}/></Field><Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad (opcional)"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA" maxLength="16" value={pharmacyForm.sourceCode||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field><Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local" value={pharmacyForm.sourceHost||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field><Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field><div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)} label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/></form></div></div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
  </div>
 }

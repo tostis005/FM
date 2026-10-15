@@ -62,7 +62,7 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'test -d /opt/farmawao/web && test -w /opt/farmawao/web && cd /opt/farmawao && docker compose config --quiet && echo DESTINO_OK'
       - name: Subir codigo React (sin tocar Postgres)
         run: |
-          tar -czf - -C web --exclude=node_modules --exclude=dist . |             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao/web && tar -xzf -'
+          tar -czf - -C web --exclude=node_modules --exclude=dist . |             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao/web && tar -xzmf - --no-same-owner --no-same-permissions'
       - name: Reconstruir solo contenedor web
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose up -d --build --no-deps web'

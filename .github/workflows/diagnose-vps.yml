@@ -1,0 +1,38 @@
+name: Diagnostico Contabo
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-vps.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnosis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Comprobar acceso y estado
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -H -T 10 "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'EOS'
+          echo "REMOTE_USER=$(whoami)"
+          echo "REMOTE_GROUPS=$(id -Gn)"
+          ls -ld /opt/farmawao /opt/farmawao/web 2>&1 || true
+          test -d /opt/farmawao/web && echo "WEB_EXISTS=yes" || echo "WEB_EXISTS=no"
+          test -w /opt/farmawao/web && echo "WEB_WRITABLE=yes" || echo "WEB_WRITABLE=no"
+          command -v docker || true
+          docker compose version 2>&1 || true
+          cd /opt/farmawao && docker compose config --quiet >/dev/null 2>&1 && echo "COMPOSE_OK=yes" || echo "COMPOSE_OK=no"
+          command -v sudo >/dev/null && sudo -n docker compose version 2>&1 || true
+          EOS

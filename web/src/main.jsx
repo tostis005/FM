@@ -87,7 +87,7 @@ function App(){
  const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
  useEffect(()=>{
-    localStorage.setItem(STORE_KEY,JSON.stringify({...data,pharmacies:pharmacyApiStatus==="connected"?DEFAULT_PHARMACIES:data.pharmacies}));
+    localStorage.setItem(STORE_KEY,JSON.stringify({...data,pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
   },[data,pharmacyApiStatus]);
   useEffect(()=>{if(pharmacyBackendConfigured)void refreshPharmacies();},[]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);

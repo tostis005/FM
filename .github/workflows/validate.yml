@@ -1,0 +1,26 @@
+name: Validar frontend y API
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Comprobar API
+        run: node --check api/src/server.js
+      - name: Compilar React
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build

@@ -81,7 +81,9 @@ function readState(){
       };
     }
   }catch {}
-  return {promos:DEFAULT_PROMOS.map(p=>({...p,sales:{},type:"sin_clasificar",discountPercent:""})),pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS};
+  return {promos:REAL_OCTOBER_EXAMPLES.map(p=>({...p,
+    targets:Object.fromEntries(DEFAULT_PHARMACIES.map(f=>[f.id,""]))})),
+    pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS};
 }
 function downloadCSV(name, rows) {
   const csv="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
@@ -528,10 +530,10 @@ function App(){
    <div className="date-mini"><CalendarDays size={16}/><input type="date" title="Desde" value={from} onChange={e=>setFrom(e.target.value)}/><span>—</span><input type="date" title="Hasta" value={to} onChange={e=>setTo(e.target.value)}/></div>
   </div>
   <div className="table-scroll"><table className="data-table campaign-table">
-   <thead><tr><th>Promoción</th><th>Estado</th><th>Periodo</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendidas</th><th>Avance</th><th>Acciones</th></tr></thead>
+   <thead><tr><th>Promoción</th><th>Tipo</th><th>Estado</th><th>Periodo</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendidas</th><th>Avance</th><th>Acciones</th></tr></thead>
    <tbody>{filteredPromos.map(p=>{const goal=sum(p.targets),sold=sum(p.sales),pc=percent(sold,goal);return <tr key={p.id} className="click-row" onClick={()=>startPromo(p)}>
     <td><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div></td>
-    <td><Pill status={p.status}/></td><td><div className="small-stack">{dateES(p.start)}<small>{dateES(p.end)}</small></div></td>
+    <td><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span></td><td><Pill status={p.status}/></td><td><div className="small-stack">{dateES(p.start)}<small>{dateES(p.end)}</small></div></td>
     <td className="td-number">{p.cns.length}</td><td className="td-number">{Object.keys(p.targets).length}</td>
     <td className="td-number">{EUR.format(goal)}</td><td className="td-number">{EUR.format(sold)}</td>
     <td><div className="table-progress"><Progress value={pc}/><span>{pc}%</span></div></td>
@@ -548,7 +550,7 @@ function App(){
   <div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/> Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
    <button className="btn btn-primary" disabled={!reportSelected.length} onClick={()=>{if(reportSelected.length===1){void exportPromo(reportSelected[0]);}else{void exportAllPromos(reportSelected);}}}>
-    <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar Excel":reportSelected.length?"Descargar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+    <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar resumen Excel":reportSelected.length?"Descargar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
    </button>
   </div>
  </div>
@@ -586,7 +588,7 @@ function App(){
   <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"}/>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2><p>Referencias únicas de seis dígitos del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CNs</span></div>
-   <div className="cn-chips">{reportCNs.slice(0,45).map(cn=><span key={cn} className="cn-chip">{cn}</span>)}{reportCNs.length>45&&<span className="cn-chip">+{reportCNs.length-45} más</span>}</div>
+   <div className="cn-chips">{reportCNs.slice(0,45).map(cn=><span key={cn} className="cn-chip" title={reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||""}>{cn}</span>)}{reportCNs.length>45&&<span className="cn-chip">+{reportCNs.length-45} más</span>}</div>
   </section>
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
  <SalesNotice status={salesStatus} error={salesError} coverage={salesCoverage} canConnect={pharmacyBackendConfigured} onConnect={connectPharmacies}/>
@@ -644,7 +646,8 @@ function App(){
     {promoForm.importWarnings?.length>0&&<div className="note data-note"><CircleHelp size={16}/> Pendiente de revisar: {promoForm.importWarnings.join(" · ")}</div>}
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent&&<Field label="Porcentaje de descuento (%)"><input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
    <div className="form-divider"/><div className="field-heading"><div><strong>CNs (6 dígitos)</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
-   <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
+   {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos importados del Excel</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
+    <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
    {Object.keys(promoForm.targets).length>0&&<div className="target-list"><div className="target-head"><strong>Objetivos por farmacia</strong><div className="increase-controls"><label>Incremento <input type="number" step="0.5" min="-100" max="500" value={targetIncrease} onChange={e=>setTargetIncrease(e.target.value)} aria-label="Incremento porcentual"/> %</label><button type="button" onClick={applyIncrease}>Aplicar</button></div></div>{Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}><div><strong>{pharmaName(id)}</strong><small>{id}</small></div><div className="numeric-input"><input type="number" min="0" value={value} onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})} aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div></div>)}<div className="target-total"><span>Objetivo total</span><strong>{EUR.format(sum(promoForm.targets))} uds.</strong></div><small className="hint">Deja el objetivo vacío mientras sea borrador. Introduce valores base y pulsa Aplicar para incrementar el porcentaje; cambiar el campo no altera los objetivos hasta pulsar el botón. El cálculo desde histórico se añadirá más adelante.</small></div>}
    <FormActions onCancel={()=>setEditingPromo(null)} label={editingPromo==="nuevo"?"Crear promoción":"Guardar cambios"}/>

@@ -1,4 +1,4 @@
-# Farmétrica · prototipo
+# Farmametrica · prototipo
 
 Primera interfaz interactiva para la gestión de promociones de la red de farmacias. Diseño basado en el estilo visual verde/blanco acordado.
 
@@ -30,3 +30,7 @@ Nueva API en `api/` y migración PostgreSQL idempotente. Cinco farmacias precarg
 
 ### Aplicación del maestro en Contabo
 Al fusionar a `main`, el despliegue automático aplica la migración **idempotente** de las tablas `farmacias` y `stock_farmacia` en el PostgreSQL existente y despliega React. No elimina datos, no modifica volúmenes y no sustituye todavía la API existente. La persistencia de edición desde React solo estará activa tras completar Microsoft Entra ID y desplegar la API autenticada. Si existe una tabla antigua con ID no numérico, el proceso se detendrá para exigir migración supervisada.
+
+## Rutas de la aplicación
+
+Cada sección tiene URL propia: `/promociones`, `/seguimiento`, `/farmacias`, `/usuarios`, `/ajustes`. La navegación usa History API y permite volver/avanzar y recargar sin salir de la sección; Nginx reenvía las rutas a `index.html` sin cambiar el enrutamiento de `/api/`.

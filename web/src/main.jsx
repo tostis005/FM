@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import AccessAdmin from "./Accesos.jsx";
+import DetalleVentas from "./DetalleVentas.jsx";
+import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadSalesCatalog, loadSalesCoverage, loadPromotionSales } from "./farmaciasApi.js";
@@ -41,6 +43,11 @@ const PROMOTION_TYPES = [
   {id:"segunda_porcentaje",name:"Segunda unidad al X %",needsPercent:true},
   {id:"descuento_porcentaje",name:"Descuento del X %",needsPercent:true},
   {id:"precio_especial",name:"Precio especial"},
+  {id:"otras_unidades",name:"Unidades extra (4+1 / 3+1)"},
+  {id:"descuento_importe",name:"Descuento fijo en euros",needsAmount:true},
+  {id:"segunda_importe",name:"Importe descontado en segunda unidad",needsAmount:true},
+  {id:"regalo",name:"Regalo por compra"},
+  {id:"escalonado",name:"Descuento escalonado por cantidad"},
   {id:"otros",name:"Otros"}
 ];
 const STORE_KEY = "farmetrica-prototype-v1";
@@ -176,6 +183,8 @@ function App(){
   const [salesByPromotion,setSalesByPromotion]=useState({});
   const [salesCoverage,setSalesCoverage]=useState([]);
   const [targetIncrease,setTargetIncrease]=useState("5");
+  const importFileRef=useRef(null);
+  const [importBusy,setImportBusy]=useState(false);
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
  useEffect(()=>{
@@ -334,7 +343,8 @@ function App(){
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if(promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
-  const requiresPct=PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent;
+  const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
+   const requiresPct=promoType?.needsPercent;
   if(promoForm.status==="Activa" && !selections.length)return setToast("Selecciona farmacias y completa sus objetivos antes de activar");
   if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
      return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
@@ -373,6 +383,20 @@ function App(){
       start:"2026-10-01",end:"2026-10-31",cns,targets:Object.fromEntries(pharmacies.filter(f=>f.active).map(f=>[f.id,""]))};
     setData(prev=>({...prev,promos:[p,...prev.promos]}));startPromo(p);
     setToast("Borrador con CNs reales; objetivos pendientes de asignar");
+  }
+  async function importPromotionFile(event){
+    const file=event.target.files?.[0];if(!file)return;
+    setImportBusy(true);
+    try{
+      const campaigns=await readPromotionExcel(file);
+      const {additions,duplicates,warnings}=mergeImportedPromos(data.promos,campaigns);
+      const newPromos=additions.map(p=>({...p,status:"Borrador",
+        targets:Object.fromEntries(pharmacies.filter(f=>f.active).map(f=>[f.id,""]))}));
+      if(newPromos.length)setData(prev=>({...prev,promos:[...newPromos,...prev.promos]}));
+      setStatusFilter("Borrador");
+      setToast(newPromos.length+" promociones importadas; "+duplicates+" duplicadas omitidas; "+warnings+" pendientes de revisión.");
+    }catch(error){setToast(error.message||"No se pudo importar el Excel");}
+    finally{setImportBusy(false);event.target.value="";}
   }
   function copyPromo(p){startPromo({...p,id:null,name:p.name+" (copia)",status:"Borrador",sales:{}});setToast("Revisa la copia antes de guardarla");}
  async function exportPromo(p){
@@ -459,7 +483,8 @@ function App(){
     {page==="promociones"&&<>
  <div className="page-header"><div><h1>Promociones</h1><p>Crea campañas, asigna objetivos y consulta su seguimiento.</p></div>
     <div className="campaign-header-actions">
-      <button className="btn btn-secondary" type="button" onClick={()=>setToast("Importación de Excel pendiente de definir cuando recibamos el archivo modelo. No se ha cargado ningún fichero.")}><Upload size={17}/> Importar Excel</button>
+      <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
+      <button className="btn btn-secondary" type="button" disabled={importBusy} onClick={()=>importFileRef.current?.click()}><Upload size={17}/>{importBusy?"Importando…":"Importar Excel"}</button>
       {salesStatus==="real"&&<button className="btn btn-secondary" type="button" onClick={addLiveExample}><Database size={17}/> Ejemplo con 20 CNs reales</button>}
       <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
     </div></div>

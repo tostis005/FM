@@ -262,7 +262,7 @@ function App(){
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
-   const p=promoId?data.promos.find(item=>item.id===promoId):null;
+   const p=promoId?promos.find(item=>item.id===promoId):null;
    const status=p?p.status:"Activa",ids=p?[p.id]:data.promos.filter(item=>item.status==="Activa").map(item=>item.id);
    setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportDetailLimit(15);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));
@@ -307,7 +307,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){
   e.preventDefault();const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
@@ -315,16 +315,48 @@ function App(){
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if(promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
-  if(!Object.keys(promoForm.targets).length)return setToast("Selecciona al menos una farmacia");
-  const result={...promoForm,id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(Object.entries(promoForm.targets).map(([id,v])=>[id,Math.max(0,Number(v)||0)]))};
+  const selections=Object.entries(promoForm.targets);
+  const requiresPct=PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent;
+  if(promoForm.status==="Activa" && !selections.length)return setToast("Selecciona farmacias y completa sus objetivos antes de activar");
+  if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
+     return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
+  if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
+     return setToast("Clasifica el tipo de promoción antes de activarla");
+  if(promoForm.status==="Activa" && requiresPct &&
+    (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
+     return setToast("Introduce el porcentaje de descuento antes de activar");
+  if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
+     return setToast("Los objetivos deben ser unidades enteras no negativas");
+  const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
   setEditingPromo(null);setToast("Promoción guardada en esta demostración");
  }
  function togglePromoPharmacy(id) {
-  const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]=HISTORICAL[id]||100;
+  const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
   setPromoForm({...promoForm,targets});
  }
- function copyPromo(p){startPromo({...p,id:null,name:p.name+" (copia)",status:"Borrador",sales:{}});setToast("Revisa la copia antes de guardarla");}
+ function applyIncrease(){
+    const increase=Number(targetIncrease);
+    if(targetIncrease==="" || !Number.isFinite(increase) || increase < -100 || increase > 500)
+       return setToast("Introduce un porcentaje entre -100 y 500");
+    const targets={...promoForm.targets};
+    if(!Object.values(targets).some(v=>v!=="" && Number(v)>0))
+       return setToast("Introduce primero los objetivos base de las farmacias");
+    Object.keys(targets).forEach(id=>{if(targets[id]!=="" && Number(targets[id])>=0)targets[id]=Math.max(0,Math.ceil(Number(targets[id])*(1+increase/100)));});
+    setPromoForm({...promoForm,targets});
+    setToast("Incremento aplicado. Puedes retocar cada objetivo antes de guardar");
+  }
+  function addLiveExample(){
+    if(salesStatus!=="real" || !salesCatalog.length)return setToast("Conecta primero las ventas reales de Farmatic");
+    const cns=salesCatalog.slice(0,20).map(item=>item.cn);
+    const p={...EMPTY_PROMO,id:"PF"+Date.now(),name:"Selección real de "+cns.length+" CNs · octubre 2026",
+      subtitle:"Ejemplo con datos de Farmatic",
+      description:"CNs seleccionados por ventas netas en octubre de 2026. Pendiente de clasificar y de asignar objetivos. No se ha verificado que compartan proveedor.",
+      start:"2026-10-01",end:"2026-10-31",cns,targets:Object.fromEntries(pharmacies.filter(f=>f.active).map(f=>[f.id,""]))};
+    setData(prev=>({...prev,promos:[p,...prev.promos]}));startPromo(p);
+    setToast("Borrador con CNs reales; objetivos pendientes de asignar");
+  }
+  function copyPromo(p){startPromo({...p,id:null,name:p.name+" (copia)",status:"Borrador",sales:{}});setToast("Revisa la copia antes de guardarla");}
  async function exportPromo(p){
   try{await exportPromotionExcel(p,pharmaName);setToast("Excel de la promoción descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el Excel");}

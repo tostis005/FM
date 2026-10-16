@@ -3,6 +3,7 @@ import helmet from "helmet";
 import pg from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
+import { registerSalesRoutes } from "./ventas.js";
 
 const { Pool } = pg;
 const {
@@ -171,6 +172,8 @@ app.post("/api/ventas/seguimiento", requireAdmin, async (req, res, next) => {
     res.json({ sales: summary, origin: "farmatic.lineaventa", updatedAt: new Date().toISOString() });
   } catch (err) { next(err); }
 });
+
+registerSalesRoutes(app, pool, requireAdmin);
 
 app.use((err, req, res, next) => {
   if (err.message === "Datos inválidos" || err.message?.startsWith("Revisa")) return res.status(400).json({ error: err.message });

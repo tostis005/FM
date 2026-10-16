@@ -12,10 +12,10 @@ import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPh
 
 const DEFAULT_PHARMACIES = [
   {id:"F001",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
-  {id:"F002",name:"Valdemarías (confirmar)",city:"",active:true,sourceCode:"EUR",sourceHost:"",sourceDatabase:"Farmatic"},
+  {id:"F002",name:"Europa",city:"",active:true,sourceCode:"EUR",sourceHost:"",sourceDatabase:"Farmatic"},
   {id:"F003",name:"Buenavista",city:"",active:true,sourceCode:"BUE",sourceHost:"",sourceDatabase:"Farmatic"},
   {id:"F004",name:"Estación",city:"",active:true,sourceCode:"EST",sourceHost:"",sourceDatabase:"Farmatic"},
-  {id:"F005",name:"Pendiente de nombre (POL)",city:"",active:true,sourceCode:"POL",sourceHost:"",sourceDatabase:"Farmatic"}
+  {id:"F005",name:"Valdemarías",city:"",active:true,sourceCode:"POL",sourceHost:"",sourceDatabase:"Farmatic"}
 ];
 const DEFAULT_USERS = [
   {id:"U01",name:"Laura Gómez",email:"laura.gomez@demo.es",role:"superadmin",pharmacies:[],active:true},

@@ -46,3 +46,6 @@ VITE_ENTRA_API_SCOPE=api://API_APP_CLIENT_ID/Pharmacies.Manage
 Copiar `deploy/compose.farmacias.yml` a `/opt/farmawao/compose.farmacias.yml`. No publicar la contraseña o el archivo `.env`; verificar manualmente la existencia de variables sin imprimir sus valores. Utilizar **HTTPS** para Microsoft Entra.
 
 El workflow manual de despliegue del backend solo se debe ejecutar una vez que Entra ID esté configurado y las variables estén en el VPS; si falla la comprobación previa, no instala nada. La automatización normal de web permanece independiente del backend.
+
+## IDs numéricos y despliegue automático actual
+Las farmacias se identifican mediante enteros `1`…`5` en PostgreSQL, no `F001`…`F005`. El despliegue automático desde `main` prepara las dos tablas en PostgreSQL y actualiza React, **sin desplegar el backend API si no está configurado Microsoft Entra ID**. La edición real requerirá activar posteriormente la API autenticada, usando el workflow manual de GitHub `Activar backend de farmacias (manual)` después de verificar la configuración. El puerto PostgreSQL permanece accesible solo por localhost del VPS.

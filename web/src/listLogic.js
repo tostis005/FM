@@ -20,3 +20,9 @@ export function filterSortRows(rows,columns,filters={},sort=null){
     return (sort.direction==="desc"?-comparison:comparison)||a.i-b.i;
   }).map(x=>x.item);
 }
+
+export function pageRows(rows,page,pageSize){
+  const total=(rows||[]).length;
+  const current=Math.max(0,Math.min(page,Math.max(0,Math.ceil(total/pageSize)-1)));
+  return {page:current,items:(rows||[]).slice(current*pageSize,(current+1)*pageSize)};
+}

@@ -102,10 +102,22 @@ function promotionIdFromUrl(){
  if(!match)return null;
  try{return decodeURIComponent(match[1]);}catch{return null;}
 }
+function selectedIdsFromUrl(){
+ const oldId=promotionIdFromUrl();
+ if(oldId)return [oldId];
+ const query=new URLSearchParams(window.location.search);
+ if(!query.has("ids"))return null;
+ return [...new Set(query.get("ids").split(",").filter(Boolean))].slice(0,500);
+}
+function reportFiltersFromUrl(){
+ const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
+ const status=params.get("estado")||(selected!==null?"Todos":"Activa");
+ return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
+  year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected};
+}
 function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
- if(path==="promociones/seguimiento"||path==="seguimiento")return "seguimiento-global";
- if(promotionIdFromUrl())return "seguimiento-campana";
+ if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
  return ROUTES.has(path)?path:"promociones";
 }
 
@@ -126,7 +138,13 @@ function App(){
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
   const [pharmacyApiError,setPharmacyApiError]=useState("");
   const [savingPharmacy,setSavingPharmacy]=useState(false);
- const [selectedPromo,setSelectedPromo]=useState(()=>promotionIdFromUrl()||"P100");
+ const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
+ const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
+ const [reportSearch,setReportSearch]=useState("");
+ const [reportSelectedIds,setReportSelectedIds]=useState(()=>{
+  const ids=reportFiltersFromUrl().ids;
+  return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
+ });
  const [selectedPharmacy,setSelectedPharmacy]=useState("Todas");
  const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
@@ -136,16 +154,22 @@ function App(){
   useEffect(()=>{if(pharmacyBackendConfigured)void refreshPharmacies();},[]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
-   const onBackForward=()=>{const id=promotionIdFromUrl();if(id)setSelectedPromo(id);setPage(pageFromUrl());setSearch("");setMobileMenu(false);};
+   const onBackForward=()=>{
+   const filters=reportFiltersFromUrl();
+   setReportStatus(filters.status);setReportYear(filters.year);
+   setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
+   setReportSearch("");setSelectedPharmacy("Todas");
+   setPage(pageFromUrl());setSearch("");setMobileMenu(false);
+  };
    window.addEventListener("popstate",onBackForward);
    return ()=>window.removeEventListener("popstate",onBackForward);
  },[]);
  useEffect(()=>{
-   const label=page==="seguimiento-global"?"Promociones · Vista general":page==="seguimiento-campana"?"Promociones · Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
+   const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
  const {promos,pharmacies,users}=data;
- const selected=promos.find(p=>p.id===selectedPromo)||(page==="seguimiento-campana"?null:promos[0]);
+ 
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const filterText=search.toLocaleLowerCase("es");
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
@@ -155,12 +179,31 @@ function App(){
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
-  if(!ROUTES.has(id)&&!["seguimiento-global","seguimiento-campana"].includes(id))return;
-  if(id==="seguimiento-campana"&&!promoId)return;
-  const url=id==="seguimiento-global"?"/promociones/seguimiento":id==="seguimiento-campana"?"/promociones/"+encodeURIComponent(promoId)+"/seguimiento":"/"+id;
+  if(id==="seguimiento-campana"||id==="seguimiento-global"){
+   const p=promoId?data.promos.find(item=>item.id===promoId):null;
+   const status=p?p.status:"Activa",ids=p?[p.id]:data.promos.filter(item=>item.status==="Activa").map(item=>item.id);
+   setReportStatus(status);setReportYear("Todos");setReportSearch("");setReportSelectedIds(ids);setSelectedPharmacy("Todas");
+   const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
+   if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
+   setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
+  }
+  if(!ROUTES.has(id))return;
+  const url="/"+id;
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
-  if(promoId)setSelectedPromo(promoId);
-  setPage(id);setSearch("");setMobileMenu(false);setSelectedPharmacy("Todas");
+  setPage(id);setSearch("");setMobileMenu(false);
+ }
+ function updateReportScope(status,year){
+  setReportStatus(status);setReportYear(year);setSelectedPharmacy("Todas");
+  setReportSelectedIds(data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year)).map(p=>p.id));
+ }
+ function selectReportAll(){
+  setReportSelectedIds(prev=>[...new Set([...prev,...reportVisible.map(p=>p.id)])]);
+ }
+ function clearReportSelection(){
+  setReportSelectedIds(prev=>prev.filter(id=>!reportVisible.some(p=>p.id===id)));
+ }
+ function toggleReportCampaign(id){
+  setReportSelectedIds(prev=>prev.includes(id)?prev.filter(v=>v!==id):[...prev,id]);
  }
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){
@@ -182,8 +225,9 @@ function App(){
   try{await exportPromotionExcel(p,pharmaName);setToast("Excel de la promoción descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el Excel");}
  }
- async function exportAllPromos(){
-  try{await exportAllPromotionsZip(promos,pharmaName);setToast("ZIP con todos los Excel descargado");}
+ async function exportAllPromos(campaigns){
+  if(!campaigns.length)return setToast("Selecciona al menos una promoción");
+  try{await exportAllPromotionsZip(campaigns,pharmaName);setToast("ZIP con "+campaigns.length+" promociones descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el ZIP");}
  }
  function startUser(u){setEditingUser(u?.id||"nuevo");setUserForm(u?{...u,pharmacies:[...u.pharmacies]}:{id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});}

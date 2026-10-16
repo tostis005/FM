@@ -97,7 +97,7 @@ jobs:
             docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
             docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api
             for i in $(seq 1 25); do
-              if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q '"database":"connected"'; then exit 0; fi
+              if docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node -e "fetch(\\"http://127.0.0.1:8000/api/health/database\\").then(r => r.json()).then(j => process.exit(j.database === \\"connected\\" ? 0 : 1)).catch(() => process.exit(1))"; then exit 0; fi
               sleep 3
             done
             echo "API no confirma conexión local a PostgreSQL"

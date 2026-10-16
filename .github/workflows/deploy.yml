@@ -60,6 +60,15 @@ jobs:
       - name: Comprobar permisos de destino
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'test -d /opt/farmawao/web && test -w /opt/farmawao/web && cd /opt/farmawao && docker compose config --quiet && echo DESTINO_OK'
+      - name: Preparar maestro de farmacias PostgreSQL (sin borrar datos)
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
+            < api/src/migrations/001_farmacias.sql
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -A -t -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FROM public.farmacias WHERE id BETWEEN 1 AND 5;"' \
+            | grep -qx 5
       - name: Subir codigo React (sin tocar Postgres)
         run: |
           set -euo pipefail

@@ -26,4 +26,7 @@ Próximo paso: backend real para promociones y permisos, integración con Postgr
 
 ## Maestro de farmacias real
 
-Nueva API en `api/` y migración PostgreSQL idempotente. Cinco farmacias precargadas (ABA/EUR/BUE/EST/POL) con nombres editables. **No se ha desplegado el backend todavía**: requiere Entra ID, variables de entorno y adaptación del servicio API del VPS existente. Consulta [despliegue](docs/despliegue-farmacias.md) y [primera carga con DBeaver](docs/importacion-dbeaver.md).
+Nueva API en `api/` y migración PostgreSQL idempotente. Cinco farmacias precargadas con IDs numéricos 1–5 (ABA/EUR/BUE/EST/POL) y nombres editables. **No se ha desplegado el backend todavía**: requiere Entra ID, variables de entorno y adaptación del servicio API del VPS existente. Consulta [despliegue](docs/despliegue-farmacias.md) y [primera carga con DBeaver](docs/importacion-dbeaver.md).
+
+### Aplicación del maestro en Contabo
+Al fusionar a `main`, el despliegue automático aplica la migración **idempotente** de las tablas `farmacias` y `stock_farmacia` en el PostgreSQL existente y despliega React. No elimina datos, no modifica volúmenes y no sustituye todavía la API existente. La persistencia de edición desde React solo estará activa tras completar Microsoft Entra ID y desplegar la API autenticada. Si existe una tabla antigua con ID no numérico, el proceso se detendrá para exigir migración supervisada.

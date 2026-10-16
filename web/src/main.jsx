@@ -418,6 +418,11 @@ function App(){
  </div>
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacyIds===null?"Seguimiento consolidado de las promociones seleccionadas":effectivePharmacyIds.length===1?"Resultados de "+pharmaName(effectivePharmacyIds[0]):"Resultados de "+effectivePharmacyIds.length+" farmacias seleccionadas"} />
+  <section className="card report-pharmacy-totals report-pharmacy-highlight">
+   <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><span className="metrics-eyebrow">VISIÓN CONSOLIDADA</span><h2>Consolidado por farmacia</h2><p>Objetivos y ventas acumulados de las promociones seleccionadas, agrupados por farmacia.</p></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{EUR.format(reportSales)} uds.</strong></div><div><span>Avance global</span><strong>{percent(reportSales,reportGoal)}%</strong></div></div>
+   <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
+  </section>
   <section className="card list-card full-table-card">
    <div className="section-heading"><div><h2>Detalle de promociones</h2><p>Objetivo, vendido y progreso de la selección actual</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
    <div className="table-scroll"><table className="data-table campaign-table"><thead><tr><th>Promoción</th><th>Estado</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendido</th><th>Avance</th><th>Acción</th></tr></thead><tbody>
@@ -430,14 +435,11 @@ function App(){
    </tbody></table></div>
   </section>
   <section className="card report-goals-panel">
-   <div className="section-heading"><div><h2>Avance hacia los objetivos</h2><p>Una barra para cada promoción y cada farmacia. La línea del extremo derecho representa el 100 % de la meta.</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
+   <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2><p>Despliega cada promoción para conocer el progreso de las farmacias. Todas las barras llegan al 100 % en el extremo derecho.</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
-   <div className="goal-campaign-list">{reportFilteredCampaigns.slice(0,reportDetailLimit).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName}/>)}</div>
-   {reportFilteredCampaigns.length>reportDetailLimit&&<button className="report-more-goals" type="button" onClick={()=>setReportDetailLimit(v=>v+5)}><ChevronDown size={17}/> Mostrar {Math.min(5,reportFilteredCampaigns.length-reportDetailLimit)} campañas más</button>}
-  </section>
-  <section className="card report-pharmacy-totals">
-   <div className="section-heading"><div><h2>Consolidado por farmacia</h2><p>Objetivos sumados de las promociones seleccionadas por cada farmacia.</p></div><span className="count-label">{reportTargets.length} farmacias</span></div>
-   <div className="goal-pharmacy-summary">{reportTargets.map(([id,goal])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(goal)} sold={Number(combinedReport.sales?.[id]||0)}/></div>)}</div>
+   <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(reportFilteredCampaigns.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
+   <div className="goal-campaign-list">{reportFilteredCampaigns.slice(0,reportDetailLimit).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
+   {reportFilteredCampaigns.length>reportDetailLimit&&<button className="report-more-goals" type="button" onClick={()=>setReportDetailLimit(v=>v+15)}><ChevronDown size={17}/> Mostrar {Math.min(15,reportFilteredCampaigns.length-reportDetailLimit)} campañas más</button>}
   </section>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>Códigos nacionales incluidos</h2><p>Referencias únicas del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CN</span></div>

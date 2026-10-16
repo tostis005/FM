@@ -259,7 +259,11 @@ function App(){
   setSelectedPharmacyIds(null);setReportDetailLimit(15);setReportModal(null);
  }
  function toggleReportPharmacy(id){
-  setSelectedPharmacyIds(prev=>prev===null?[id]:prev.includes(id)?prev.filter(v=>v!==id):[...prev,id]);
+  setSelectedPharmacyIds(prev=>{
+   if(prev===null)return [id];
+   const next=prev.includes(id)?prev.filter(v=>v!==id):[...prev,id];
+   return next.length?next:null;
+  });
  }
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
@@ -397,7 +401,20 @@ function App(){
  </div>
  <div className="report-active-summary">
   <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Finalizadas":reportStatus==="Borrador"?"Borradores":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
-  <label className="report-quick-pharmacy"><Store size={15}/><span>Farmacia</span><select value={effectivePharmacy} onChange={e=>setSelectedPharmacy(e.target.value)} aria-label="Filtrar seguimiento por farmacia"><option value="Todas">Todas las farmacias</option>{pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+  <div className="report-quick-pharmacy" ref={pharmacySelectorRef}><Store size={15}/><span>Farmacias</span><div className="report-pharmacy-dropdown">
+   <button className="report-pharmacy-trigger" type="button" aria-haspopup="true" aria-expanded={pharmacySelectorOpen} aria-controls="report-pharmacy-options" onClick={()=>setPharmacySelectorOpen(v=>!v)}>
+    <span>{selectedPharmacyIds===null?"Todas las farmacias":effectivePharmacyIds.length===1?pharmaName(effectivePharmacyIds[0]):effectivePharmacyIds.length+" farmacias seleccionadas"}</span><ChevronDown size={15}/>
+   </button>
+   {pharmacySelectorOpen&&<div className="report-pharmacy-menu" id="report-pharmacy-options" role="group" aria-label="Seleccionar farmacias del seguimiento">
+    <div className="report-pharmacy-menu-head"><strong>Filtrar por farmacias</strong><button type="button" className="icon-btn" aria-label="Cerrar selección de farmacias" onClick={()=>setPharmacySelectorOpen(false)}><X size={15}/></button></div>
+    <label className="report-pharmacy-option"><input type="checkbox" checked={selectedPharmacyIds===null} onChange={()=>setSelectedPharmacyIds(null)}/><span>Todas las farmacias</span></label>
+    <div className="report-pharmacy-menu-divider"/>
+    {pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><label key={f.id} className="report-pharmacy-option">
+     <input type="checkbox" checked={selectedPharmacyIds!==null&&selectedPharmacyIds.includes(f.id)} onChange={()=>toggleReportPharmacy(f.id)}/><span>{f.name}</span>
+    </label>)}
+    <div className="report-pharmacy-menu-foot"><small>{selectedPharmacyIds===null?"Todas incluidas":effectivePharmacyIds.length+" de "+reportPharmacyIds.length+" seleccionadas"}</small><button type="button" className="btn btn-primary btn-sm" onClick={()=>setPharmacySelectorOpen(false)}>Listo</button></div>
+   </div>}
+  </div></div>
  </div>
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacyIds===null?"Seguimiento consolidado de las promociones seleccionadas":effectivePharmacyIds.length===1?"Resultados de "+pharmaName(effectivePharmacyIds[0]):"Resultados de "+effectivePharmacyIds.length+" farmacias seleccionadas"} />

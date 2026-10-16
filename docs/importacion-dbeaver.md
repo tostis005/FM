@@ -34,7 +34,7 @@ FROM OPENQUERY([192.168.14.11],
   'SELECT IdArticu, Descripcion, StockActual FROM Farmatic.dbo.Articu') AS p;
 ```
 
-**Aviso:** antes de cargar, verifica con el administrador que la tabla `Articu` tiene `Descripcion` y `StockActual` en todas las farmacias, y confirma que ABA/EUR/BUE/EST/POL corresponden a las cinco farmacias. La tabla `dbo.Articu` del servidor central (`alm` en el SQL aportado) parece representar otro stock y **no se ha confundido con una sexta farmacia**.
+**Aviso:** antes de cargar, verifica con el administrador que la tabla `Articu` tiene `Descripcion` y `StockActual` en todas las farmacias, y se ha confirmado que EUR es Europa y POL Valdemarías; verifica ABA/BUE/EST antes de importar. La tabla `dbo.Articu` del servidor central (`alm` en el SQL aportado) parece representar otro stock y **no se ha confundido con una sexta farmacia**.
 
 ## 3. Transferir los resultados
 1. Ejecuta la consulta y revisa el número de filas y las columnas.

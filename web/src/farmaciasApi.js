@@ -4,7 +4,7 @@ const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID;
 const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
 const apiScope = import.meta.env.VITE_ENTRA_API_SCOPE;
 const entraConfigured = Boolean(tenantId && clientId && apiScope);
-export const pharmacyBackendConfigured = entraConfigured || Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+export const pharmacyBackendConfigured = entraConfigured || Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID) || import.meta.env.VITE_LOCAL_LOGIN_ENABLED === "true";
 let appPromise;
 
 async function msal() {

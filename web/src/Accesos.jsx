@@ -164,7 +164,7 @@ export default function AccessAdmin({ onAuthenticated }) {
     </section>}
     {administrator && <>
       <section className="card access-section">
-        <div className="section-heading"><div><h2>Dominios permitidos</h2><p>El administrador decide qué dominios se aceptan y su farmacia predeterminada.</p></div><span className="count-label">{domains.length} dominios</span></div>
+        <div className="section-heading"><div><h2>Dominios permitidos</h2></div><span className="count-label">{domains.length} dominios</span></div>
         <form className="access-form-grid" onSubmit={saveDomain}>
           <label>Dominio
             <input required placeholder="farmaciaejemplo.es" value={domainForm.domain} onChange={e=>setDomainForm({...domainForm,domain:e.target.value})}/>
@@ -180,8 +180,11 @@ export default function AccessAdmin({ onAuthenticated }) {
         <ListTable rows={domains} rowKey={d=>d.domain} label="dominios" emptyText="No hay dominios permitidos"
  columns={[
   {key:"domain",label:"Dominio",value:d=>d.domain,render:d=><strong>@{d.domain}</strong>},
-  {key:"pharmacy",label:"Farmacia",value:d=>pharmacies.find(p=>String(p.id)===String(d.pharmacyId))?.name||"Sin asignar"},
-  {key:"active",label:"Estado",value:d=>d.active?"Habilitado":"Bloqueado"},
+  {key:"pharmacy",label:"Farmacia",filterMode:"multi",
+   filterValues:d=>[String(d.pharmacyId||"none")],
+   options:()=>[{value:"none",label:"Sin asignar"},...pharmacies.map(p=>({value:String(p.id),label:p.name}))],
+   value:d=>pharmacies.find(p=>String(p.id)===String(d.pharmacyId))?.name||"Sin asignar"},
+  {key:"active",label:"Estado",filterMode:"multi",value:d=>d.active?"Habilitado":"Bloqueado"},
   {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
    render:d=><div className="list-cell-actions">
       <button className="btn btn-secondary btn-sm" onClick={()=>setDomainForm(d)}>Editar</button>
@@ -192,7 +195,7 @@ export default function AccessAdmin({ onAuthenticated }) {
  ]}/>
       </section>
       <section className="card access-section">
-        <div className="section-heading"><div><h2>Correos autorizados individualmente</h2><p>Para cuentas Gmail, dominios externos y colaboradores; el permiso individual tiene preferencia sobre el dominio.</p></div><span className="count-label">{accounts.length} cuentas</span></div>
+        <div className="section-heading"><div><h2>Correos autorizados</h2></div><span className="count-label">{accounts.length} cuentas</span></div>
         <form className="access-form-grid" onSubmit={saveAccount}>
           <label>Correo electrónico
             <input type="email" required placeholder="colaborador@gmail.com" value={accountForm.email} onChange={e=>setAccountForm({...accountForm,email:e.target.value})}/>
@@ -221,9 +224,12 @@ export default function AccessAdmin({ onAuthenticated }) {
         <ListTable rows={accounts} rowKey={u=>u.email} label="cuentas" emptyText="No hay correos autorizados"
  columns={[
   {key:"email",label:"Correo",value:u=>u.email+" "+(u.name||""),render:u=><><strong>{u.email}</strong><small>{u.name}</small></>},
-  {key:"role",label:"Rol",value:u=>ROLES.find(([id])=>id===u.role)?.[1]||u.role},
-  {key:"pharmacies",label:"Farmacias",value:u=>u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(f=>String(f.id)===String(id))?.name||id).join(", ")||"—"},
-  {key:"active",label:"Estado",value:u=>u.active?"Activa":"Bloqueada"},
+  {key:"role",label:"Rol",filterMode:"multi",value:u=>ROLES.find(([id])=>id===u.role)?.[1]||u.role},
+  {key:"pharmacies",label:"Farmacias",filterMode:"multi",
+   filterValues:u=>u.role==="administrador"?pharmacies.map(f=>String(f.id)):u.pharmacies.map(String),
+   options:()=>pharmacies.map(f=>({value:String(f.id),label:f.name})),
+   value:u=>u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(f=>String(f.id)===String(id))?.name||id).join(", ")||"—"},
+  {key:"active",label:"Estado",filterMode:"multi",value:u=>u.active?"Activa":"Bloqueada"},
   {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
    render:u=><div className="list-cell-actions">
      <button className="btn btn-secondary btn-sm" onClick={()=>setAccountForm(u)}>Editar</button>

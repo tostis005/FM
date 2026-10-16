@@ -112,7 +112,8 @@ function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
  const status=params.get("estado")||(selected!==null?"Todos":"Activa");
  return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
-  year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected};
+  year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
+  pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
 }
 function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
@@ -142,7 +143,7 @@ function App(){
   const [reportModal,setReportModal]=useState(null);
  const [reportDetailLimit,setReportDetailLimit]=useState(15);
  const [expandedCampaignIds,setExpandedCampaignIds]=useState(()=>data.promos.filter(p=>p.status==="Activa").slice(0,2).map(p=>p.id));
- const [selectedPharmacyIds,setSelectedPharmacyIds]=useState(null);
+ const [selectedPharmacyIds,setSelectedPharmacyIds]=useState(()=>reportFiltersFromUrl().pharmacies);
  const [pharmacySelectorOpen,setPharmacySelectorOpen]=useState(false);
  const pharmacySelectorRef=useRef(null);
  const reportCloseRef=useRef(null);
@@ -162,7 +163,7 @@ function App(){
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
    setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
-   setSelectedPharmacyIds(null);setPharmacySelectorOpen(false);setReportDetailLimit(15);setReportModal(null);
+   setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportDetailLimit(15);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
    window.addEventListener("popstate",onBackForward);
@@ -348,9 +349,10 @@ function App(){
   params.set("estado",reportStatus);
   if(reportYear!=="Todos")params.set("anio",reportYear);
   params.set("ids",reportSelectedIds.join(","));
+   if(selectedPharmacyIds!==null)params.set("farmacias",selectedPharmacyIds.join(","));
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
- },[page,reportStatus,reportYear,reportSelectedIds]);
+ },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark"><Leaf size={23} strokeWidth={2.8}/></span><span>Farmetrica</span></button>

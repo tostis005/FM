@@ -74,3 +74,10 @@ export const loadPromotionSales = (promotions) => request("/api/ventas/seguimien
     id: String(p.id), start: p.start, end: p.end, cns: p.cns || [],
   })) }),
 });
+
+// Lecturas agrupadas: los tickets y credenciales nunca se envían al navegador.
+export const loadSalesCoverage = () => request("/api/ventas/estado");
+export const loadFeaturedCNs = () => request("/api/ventas/cns-destacados");
+export const loadSalesSummary = (promotions) => request("/api/ventas/resumen", {
+  method: "POST", body: JSON.stringify({ promotions }),
+});

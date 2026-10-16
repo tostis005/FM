@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, ArrowDownToLine, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
@@ -6,7 +6,6 @@ import {
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw
 } from "lucide-react";
-import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, Line } from "recharts";
 import "./styles.css";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer } from "./farmaciasApi.js";
@@ -140,8 +139,9 @@ function App(){
   const [savingPharmacy,setSavingPharmacy]=useState(false);
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
  const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
- const [reportSearch,setReportSearch]=useState("");
- const [reportPageLimit,setReportPageLimit]=useState(25);
+  const [reportModal,setReportModal]=useState(null);
+ const [reportDetailLimit,setReportDetailLimit]=useState(5);
+ const reportCloseRef=useRef(null);
  const [reportSelectedIds,setReportSelectedIds]=useState(()=>{
   const ids=reportFiltersFromUrl().ids;
   return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
@@ -159,12 +159,21 @@ function App(){
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
    setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
-   setReportSearch("");setSelectedPharmacy("Todas");
+   setSelectedPharmacy("Todas");setReportDetailLimit(5);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
    window.addEventListener("popstate",onBackForward);
    return ()=>window.removeEventListener("popstate",onBackForward);
  },[data.promos]);
+ useEffect(()=>{
+  if(!reportModal)return;
+  const old=document.body.style.overflow;
+  document.body.style.overflow="hidden";
+  reportCloseRef.current?.focus();
+  const onKeyDown=e=>{if(e.key==="Escape")setReportModal(null);};
+  window.addEventListener("keydown",onKeyDown);
+  return ()=>{document.body.style.overflow=old;window.removeEventListener("keydown",onKeyDown);};
+ },[Boolean(reportModal)]);
  useEffect(()=>{
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
@@ -179,8 +188,9 @@ function App(){
  const activePromos=promos.filter(p=>p.status==="Activa");
  const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
  const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
- const reportVisible=reportFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportSearch.toLocaleLowerCase("es")));
- const reportSelected=reportVisible.filter(p=>reportSelectedIds.includes(p.id));
+ const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
+ const draftFilterBase=reportModal?promos.filter(p=>(reportModal.status==="Todos"||p.status===reportModal.status)&&(reportModal.year==="Todos"||(p.start||"").slice(0,4)===reportModal.year)):[];
+ const draftVisible=reportModal?draftFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportModal.search.toLocaleLowerCase("es"))):[];
  const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
  const effectivePharmacy=reportPharmacyIds.includes(selectedPharmacy)?selectedPharmacy:"Todas";
  const reportFilteredCampaigns=reportSelected.map(p=>({
@@ -197,18 +207,13 @@ function App(){
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
  const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
- const reportChartData=useMemo(()=>{
-  const weights=[.10,.14,.19,.22,.16,.19];
-  let running=0;
-  return weights.map((w,i)=>{const sales=Math.round(reportSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(reportGoal*(i+1)/6)};});
- },[reportSales,reportGoal]);
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
    const p=promoId?data.promos.find(item=>item.id===promoId):null;
    const status=p?p.status:"Activa",ids=p?[p.id]:data.promos.filter(item=>item.status==="Activa").map(item=>item.id);
-   setReportStatus(status);setReportYear("Todos");setReportSearch("");setReportSelectedIds(ids);setSelectedPharmacy("Todas");
+   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportDetailLimit(5);setSelectedPharmacy("Todas");
    const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
    if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
@@ -218,23 +223,27 @@ function App(){
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
  }
- function updateReportScope(status,year){
-  setReportStatus(status);setReportYear(year);setReportSearch("");setReportPageLimit(25);setSelectedPharmacy("Todas");
-  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
-  setReportSelectedIds(prev=>{
-   const kept=prev.filter(id=>eligible.some(p=>p.id===id));
-   if(kept.length)return kept;
-   return (status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id);
+ function openReportFilters(){
+  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],limit:25});
+ }
+ function updateDraftScope(status,year){
+  setReportModal(prev=>{
+   if(!prev)return prev;
+   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+   const kept=prev.ids.filter(id=>eligible.some(p=>p.id===id));
+   return {...prev,status,year,search:"",limit:25,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
   });
  }
- function selectReportAll(){
-  setReportSelectedIds(prev=>[...new Set([...prev,...reportVisible.map(p=>p.id)])]);
- }
- function clearReportSelection(){
-  setReportSelectedIds(prev=>prev.filter(id=>!reportVisible.some(p=>p.id===id)));
- }
- function toggleReportCampaign(id){
-  setReportSelectedIds(prev=>prev.includes(id)?prev.filter(v=>v!==id):[...prev,id]);
+ function selectDraftAll(visible){setReportModal(prev=>prev?{...prev,ids:[...new Set([...prev.ids,...visible.map(p=>p.id)])]}:prev);}
+ function clearDraftVisible(visible){setReportModal(prev=>prev?{...prev,ids:prev.ids.filter(id=>!visible.some(p=>p.id===id))}:prev);}
+ function toggleDraftCampaign(id){setReportModal(prev=>prev?{...prev,ids:prev.ids.includes(id)?prev.ids.filter(v=>v!==id):[...prev.ids,id]}:prev);}
+ function applyReportFilters(){
+  if(!reportModal)return;
+  const {status,year,ids}=reportModal;
+  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+  setReportStatus(status);setReportYear(year);
+  setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
+  setSelectedPharmacy("Todas");setReportDetailLimit(5);setReportModal(null);
  }
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){

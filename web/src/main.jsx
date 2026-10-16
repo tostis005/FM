@@ -10,6 +10,8 @@ import "./styles.css";
 import AccessAdmin from "./Accesos.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
+import { applyObjectiveRows } from "./objetivosImportacion.js";
+import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
@@ -74,16 +76,21 @@ function readState(){
         const baseline=DEFAULT_PHARMACIES.find(p=>p.id===id);
         return {...baseline,...f,id,sourceCode:f.sourceCode||baseline?.sourceCode||"",sourceHost:f.sourceHost||"",sourceDatabase:f.sourceDatabase||"Farmatic"};
       });
-      return {
-        ...saved,pharmacies,
-        promos:saved.promos.map(p=>({...p,cns:normalizeStoredCNs(p.cns),targets:migrateSalesOrTargets(p.targets),sales:{},type:p.type||"sin_clasificar",discountPercent:p.discountPercent??""})),
+      const existing=saved.promos.map(p=>({...p,cns:normalizeStoredCNs(p.cns),
+        targets:migrateSalesOrTargets(p.targets),sales:{},type:p.type||"sin_clasificar",discountPercent:p.discountPercent??""}));
+      // Migración por navegador, una sola vez: conservar campañas, CNs, estados y ventas.
+      // Los objetivos del Excel prevalecen sobre las metas de demostración anteriores.
+      const shouldUpdate=saved.objectiveSeedVersion!==OCTOBER_2026_OBJECTIVES_VERSION;
+      const promos=shouldUpdate?applyObjectiveRows(existing,OCTOBER_2026_OBJECTIVE_ROWS).promotions:existing;
+      return {...saved,pharmacies,promos,
+        objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION,
         users:saved.users.map(u=>({...u,pharmacies:(u.pharmacies||[]).map(migratePharmacyId)})),
       };
     }
   }catch {}
-  return {promos:REAL_OCTOBER_EXAMPLES.map(p=>({...p,
-    targets:Object.fromEntries(DEFAULT_PHARMACIES.map(f=>[f.id,""]))})),
-    pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS};
+  const seeded=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions;
+  return {promos:seeded,pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS,
+    objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
 }
 function downloadCSV(name, rows) {
   const csv="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
@@ -216,9 +223,9 @@ function App(){
    const key="farmawao-oct2026-seed-v1";
    if(localStorage.getItem(key))return;
    setData(prev=>{
-     const {additions}=mergeImportedPromos(prev.promos,REAL_OCTOBER_EXAMPLES);
-     const entries=additions.map(p=>({...p,status:"Borrador",
-       targets:Object.fromEntries(prev.pharmacies.filter(f=>f.active).map(f=>[f.id,""]))}));
+     const fromExcel=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions;
+     const {additions}=mergeImportedPromos(prev.promos,fromExcel);
+     const entries=additions.map(p=>({...p,status:"Borrador"}));
      return entries.length?{...prev,promos:[...entries,...prev.promos]}:prev;
    });
    localStorage.setItem(key,"1");
@@ -447,13 +454,13 @@ function App(){
     try{
       const campaigns=await readPromotionExcel(file);
       const {additions,updates,duplicates,expanded,warnings}=mergeImportedPromos(data.promos,campaigns);
-      const newPromos=additions.map(p=>({...p,status:"Borrador",
-        targets:Object.fromEntries(pharmacies.filter(f=>f.active).map(f=>[f.id,""]))}));
+      const newPromos=additions.map(p=>({...p,status:"Borrador"}));
       if(newPromos.length||updates.length)setData(prev=>({...prev,promos:[
         ...newPromos,...prev.promos.map(old=>updates.find(u=>u.id===old.id)||old)
       ]}));
       setStatusFilter("Borrador");
-      setToast(newPromos.length+" nuevas, "+expanded+" ampliadas con CNs, "+duplicates+" duplicadas omitidas; "+warnings+" requieren revisión.");
+      setToast(newPromos.length+" nuevas, "+updates.length+" actualizadas (objetivos/CNs), "+
+        duplicates+" sin cambios; "+warnings+" requieren revisión.");
     }catch(error){setToast(error.message||"No se pudo importar el Excel");}
     finally{setImportBusy(false);event.target.value="";}
   }

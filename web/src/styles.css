@@ -356,3 +356,11 @@
 .lab-detail-empty{padding:20px;font-size:13px;color:#718078;text-align:center}
 @media(max-width:990px){.lab-detail-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.lab-detail-panel{padding:15px}.lab-detail-filters{grid-template-columns:1fr}.lab-detail-panel .section-heading{flex-wrap:wrap}}
+
+
+.import-cn-catalog{display:grid;gap:7px;padding:12px 14px;border:1px solid #d7e9dd;background:#f4fbf6;border-radius:11px;max-height:245px;overflow:auto;font-size:12px}
+.import-cn-catalog>strong{font-size:12px;color:#326a52;margin-bottom:5px}
+.import-cn-catalog>div{display:grid;grid-template-columns:63px 1fr;gap:12px;align-items:baseline;border-top:1px solid #e1eee5;padding-top:6px}
+.import-cn-catalog code{font-size:12px;font-weight:700;color:#1b7550}
+.import-cn-catalog span{color:#3e5c4e;line-height:1.4}
+.import-cn-catalog small{color:#63776d}

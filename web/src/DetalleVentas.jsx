@@ -36,7 +36,10 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
   const [columnFilters,setColumnFilters]=useState({});
   const [sort,setSort]=useState({key:"at",direction:"desc"});
   useEffect(()=>{
-    const timeout=setTimeout(()=>{setColumnFilters(columnDraft);setPage(0)},350);
+    const timeout=setTimeout(()=>{
+      setColumnFilters(prev=>({...Object.fromEntries(Object.entries(prev).filter(([,value])=>Array.isArray(value))),...columnDraft}));
+      setPage(0);
+    },350);
     return()=>clearTimeout(timeout);
   },[JSON.stringify(columnDraft)]);
   const filterSignature=JSON.stringify(columnFilters);

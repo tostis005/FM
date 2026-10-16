@@ -117,7 +117,7 @@ function validDates(from, to) {
     b >= a && b - a <= 366 * 86400000;
 }
 function validCodes(cns) {
-  return Array.isArray(cns) && cns.length <= 100 &&
+  return Array.isArray(cns) && cns.length <= 500 &&
     cns.every(cn => typeof cn === "string" && /^[0-9]{6}$/.test(cn));
 }
 const salesJoin = " FROM farmatic.lineaventa v JOIN public.farmacias f ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen ";
@@ -182,7 +182,7 @@ app.post("/api/ventas/seguimiento", requireAdmin, async (req, res, next) => {
 app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 100 } = req.body || {};
   if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
-      cns.length > 100 || typeof offset !== "number" || !Number.isInteger(offset) ||
+      cns.length > 500 || typeof offset !== "number" || !Number.isInteger(offset) ||
       offset < 0 || offset > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 500 ||
       (farmaciaId != null && farmaciaId !== "" && !/^[1-9]\d{0,5}$/.test(String(farmaciaId))) ||
       (ticket != null && (typeof ticket !== "string" || ticket.length > 60)) ||

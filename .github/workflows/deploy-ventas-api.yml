@@ -50,24 +50,26 @@ jobs:
           set -euo pipefail
           ready=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             set -eu
-            cd /opt/farmawao
-            test -f compose.yaml && test -f .env && test -d api && test -w api
+            if ! cd /opt/farmawao; then echo SIN_DIRECTORIO_FARMAWAO; exit 0; fi
+            if ! test -f compose.yaml; then echo SIN_COMPOSE; exit 0; fi
+            if ! test -f .env; then echo SIN_ENV; exit 0; fi
+            if ! test -d api || ! test -w api || ! test -w .; then echo SIN_PERMISOS_API; exit 0; fi
             for key in AZURE_TENANT_ID AZURE_API_CLIENT_ID ADMIN_OIDS VITE_ENTRA_TENANT_ID VITE_ENTRA_CLIENT_ID VITE_ENTRA_API_SCOPE; do
-              if ! grep -qE "^$key=.+$" .env; then echo PENDIENTE; exit 0; fi
+              if ! grep -qE "^$key=.+$" .env; then echo "PENDIENTE_ENTRA_$key"; exit 0; fi
             done
             if ! docker compose exec -T db psql -X -At -U farmawao -d farmawao -c "
               SELECT count(*) = 5 FROM information_schema.columns
               WHERE table_schema = '\''farmatic'\'' AND table_name = '\''lineaventa'\''
                 AND column_name IN ('\''farmacia_origen'\'','\''codigo'\'','\''descripcion'\'','\''fechahora'\'','\''cantidad'\'');
-            " | grep -qx t; then echo PENDIENTE; exit 0; fi
-            if ! docker compose config --quiet; then echo PENDIENTE; exit 0; fi
+            " | grep -qx t; then echo TABLA_FARMATIC_NO_LISTA; exit 0; fi
+            if ! docker compose config --quiet; then echo COMPOSE_INVALIDO; exit 0; fi
             echo LISTO
           ')
           if [[ "$ready" == LISTO ]]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::API sin desplegar: revisar Entra y las columnas de farmatic.lineaventa en el VPS"
+            echo "::notice::API sin desplegar; comprobación segura: $ready"
           fi
       - name: Copiar API y override (no modificar PostgreSQL)
         if: steps.verificar.outputs.ready == 'true'

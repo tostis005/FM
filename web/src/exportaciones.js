@@ -19,7 +19,7 @@ function columnName(index) {
   return result;
 }
 
-function worksheetXml(rows, widths = []) {
+function worksheetXml(rows, widths = [], dateCols = [], timeCols = []) {
   const columnWidths = widths.length
     ? "<cols>" + widths.map((width, index) => '<col min="' + (index + 1) +
       '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>').join("") + "</cols>"
@@ -28,7 +28,7 @@ function worksheetXml(rows, widths = []) {
     const cells = row.map((value, colIndex) => {
       if (value === null || value === undefined) return "";
       const ref = columnName(colIndex + 1) + (rowIndex + 1);
-      const style = rowIndex === 0 ? ' s="1"' : "";
+      const style = rowIndex === 0 || (dateCols.length && rowIndex === 1) ? ' s="1"' : (typeof value === "number" && dateCols.includes(colIndex) ? ' s="2"' : typeof value === "number" && timeCols.includes(colIndex) ? ' s="3"' : "");
       if (typeof value === "number" && Number.isFinite(value)) {
         return '<c r="' + ref + '"' + style + '><v>' + value + '</v></c>';
       }
@@ -79,10 +79,10 @@ async function workbook(sheets) {
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>' +
+    '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm:ss"/></numFmts><cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
     "</styleSheet>");
   sheets.forEach((sheet, index) => zip.file("xl/worksheets/sheet" + (index + 1) + ".xml",
-    worksheetXml(sheet.rows, sheet.widths)));
+    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [])));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
@@ -175,4 +175,54 @@ export async function exportAllPromotionsZip(promotions, pharmacyName) {
   }
   downloadBlob(await archive.generateAsync({ type: "blob", compression: "DEFLATE" }),
     "farmetrica-todas-las-promociones.zip");
+}
+
+
+const LAB_HEADERS = [
+  "NOMBRE FARMACIA","VENDEDOR","IdVenta","NumeroDoc","FECHA","HORA",
+  "Codigo","Descripcion","Pvp","Cantidad","ImporteBruto","DescuentoLinea",
+  "ImporteNeto","%DTO LINEA"
+];
+function madridParts(isoDate){
+  const formatter=new Intl.DateTimeFormat("en-GB",{
+    timeZone:"Europe/Madrid",year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"
+  });
+  const p=Object.fromEntries(formatter.formatToParts(new Date(isoDate)).map(x=>[x.type,x.value]));
+  const serial=Math.round((Date.UTC(+p.year,+p.month-1,+p.day)-Date.UTC(1899,11,30))/86400000);
+  const time=(Number(p.hour)*3600+Number(p.minute)*60+Number(p.second))/86400;
+  return {serial,time};
+}
+export async function exportLabSalesExcel(promo, lines, options={}){
+  ensureValidCNs(promo);
+  const ordered=[...lines].sort((a,b)=>new Date(a.at)-new Date(b.at));
+  const rows=[
+    ["","",promo.name],
+    LAB_HEADERS,
+    ...ordered.map(line=>{
+      const {serial,time}=madridParts(line.at);
+      const gross=Number(line.gross)||0,discount=Number(line.lineDiscount)||0;
+      return [
+        line.pharmacyName || line.pharmacyCode || "",
+        line.sellerId ? "ID "+line.sellerId : "Sin vendedor asignado",
+        line.saleId || "",line.ticket||"",serial,time,
+        line.cn||"",line.description||"",
+        Number(line.pvp)||0,Number(line.quantity)||0,
+        gross,discount,Number(line.net)||0,
+        gross!==0?Math.abs(discount/gross):0
+      ];
+    }),
+  ];
+  const products=[["Código","Descripción","P.v.p."],...Object.values(Object.fromEntries(
+    ordered.filter(l=>l.cn).map(l=>[l.cn,[l.cn,l.description||"",Number(l.pvp)||0]])
+  ))];
+  // Cabeceras, orden y nombres idénticos al Excel de laboratorio Vichy.
+  // No se modifican importes ni descuentos; vendedor se identifica por ID.
+  const blob=await workbook([
+    {name:"Export",rows,widths:[22,28,18,24,17,15,14,65,14,13,19,20,19,18],dateCols:[4],timeCols:[5]},
+    {name:"Hoja1",rows:products,widths:[17,72,16]},
+  ]);
+  const safe=String(promo.name||"promocion").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,65);
+  downloadBlob(blob,safe+"_laboratorio.xlsx");
 }

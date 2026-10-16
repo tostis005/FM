@@ -176,6 +176,30 @@ function App(){
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&(!from||p.end>=from)&&(!to||p.start<=to));
  const activePromos=promos.filter(p=>p.status==="Activa");
+ const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
+ const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
+ const reportVisible=reportFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportSearch.toLocaleLowerCase("es")));
+ const reportSelected=reportVisible.filter(p=>reportSelectedIds.includes(p.id));
+ const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
+ const reportFilteredCampaigns=reportSelected.map(p=>({
+  ...p,
+  targets:selectedPharmacy==="Todas"?p.targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>id===selectedPharmacy)),
+  sales:selectedPharmacy==="Todas"?p.sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>id===selectedPharmacy))
+ }));
+ const combinedReport=reportFilteredCampaigns.reduce((acc,p)=>{
+  Object.entries(p.targets||{}).forEach(([id,val])=>{acc.targets[id]=(acc.targets[id]||0)+(Number(val)||0);});
+  Object.entries(p.sales||{}).forEach(([id,val])=>{acc.sales[id]=(acc.sales[id]||0)+(Number(val)||0);});
+  return acc;
+ },{targets:{},sales:{}});
+ const reportTargets=Object.entries(combinedReport.targets);
+ const reportGoal=sum(combinedReport.targets);
+ const reportSales=sum(combinedReport.sales);
+ const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
+ const reportChartData=useMemo(()=>{
+  const weights=[.10,.14,.19,.22,.16,.19];
+  let running=0;
+  return weights.map((w,i)=>{const sales=Math.round(reportSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(reportGoal*(i+1)/6)};});
+ },[reportSales,reportGoal]);
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
@@ -277,19 +301,20 @@ function App(){
     finally{setSavingPharmacy(false);}
   }
   const cnParsed=parseCNs(cnText);
- const trackingTargets=selected?Object.entries(selected.targets).filter(([id])=>selectedPharmacy==="Todas"||selectedPharmacy===id):[];
- const trackingGoal=sum(Object.fromEntries(trackingTargets));
- const trackingSales=trackingTargets.reduce((n,[id])=>n+Number(selected?.sales?.[id]||0),0);
- const chartData=useMemo(()=>{
-  const weights=[0.10,0.14,0.19,0.22,0.16,0.19];
-  let running=0;
-  return weights.map((w,i)=>{const sales=Math.round(trackingSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(trackingGoal*(i+1)/6)};});
- },[trackingSales,trackingGoal]);
- const title=page==="seguimiento-global"?"Vista general":page==="seguimiento-campana"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Promociones";
+ const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Promociones";
+ useEffect(()=>{
+  if(page!=="seguimiento-global")return;
+  const params=new URLSearchParams();
+  params.set("estado",reportStatus);
+  if(reportYear!=="Todos")params.set("anio",reportYear);
+  params.set("ids",reportSelectedIds.join(","));
+  const url="/promociones/seguimiento?"+params.toString();
+  if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
+ },[page,reportStatus,reportYear,reportSelectedIds]);
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark"><Leaf size={23} strokeWidth={2.8}/></span><span>Farmetrica</span></button>
-   <nav className="side-nav">{NAV.map(item=><button key={item.id} className={"side-link "+((page===item.id||(item.id==="promociones"&&page.startsWith("seguimiento")))?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{(page===item.id||(item.id==="promociones"&&page.startsWith("seguimiento")))&&<span className="active-dot"/>}</button>)}</nav>
+   <nav className="side-nav">{NAV.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">

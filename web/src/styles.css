@@ -307,3 +307,33 @@
 .increase-controls input{width:64px;min-height:33px;padding:5px 7px;text-align:right;background:#fff;border:1px solid #d2e2d9;border-radius:7px}
 .increase-controls button{min-height:33px;border-radius:7px;background:#e4f6ed;color:#157a54;padding:6px 13px;border:1px solid #b9e0cc;font-weight:800;cursor:pointer}
 @media(max-width:700px){.sales-connection{align-items:flex-start}.increase-controls{justify-content:flex-start}.campaign-header-actions{flex-wrap:wrap}}
+
+
+/* Administración de acceso: reutiliza tarjetas, inputs y tipografía FARMAWAO. */
+.access-management{display:grid;gap:18px}
+.access-explainer{display:flex;gap:12px;align-items:flex-start;background:#e9f7f1;border:1px solid #c9ebdc;color:#225e4d;padding:15px 18px;border-radius:13px;font-size:13px;line-height:1.6}
+.access-explainer svg{flex-shrink:0}
+.access-section{padding:24px;display:grid;gap:20px;min-width:0}
+.access-section>h2{margin:0;font-size:20px}
+.access-section>p{margin:0;color:#54616b;font-size:14px;line-height:1.7}
+.access-section .section-heading{margin-bottom:0}
+.access-alert{display:flex;gap:9px;align-items:center;padding:13px 16px;background:#eaf7ee;border-radius:10px;color:#246149;font-size:13px}
+.access-alert-error{background:#fff2ef;color:#a12f28}
+.access-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:15px}
+.access-form-grid label,.access-code-login label{display:grid;gap:7px;font-size:13px;font-weight:600;color:#394956}
+.access-form-grid input:not([type=checkbox]),.access-form-grid select,.access-code-login input{border:1px solid #d6e1df;border-radius:10px;background:white;padding:11px 12px;min-height:42px;color:#142b27;font:inherit;width:100%}
+.access-form-grid input:focus,.access-form-grid select:focus,.access-code-login input:focus{outline:2px solid #52b797;outline-offset:1px}
+.access-form-grid .access-checkbox{display:flex;align-items:center;gap:9px;padding-bottom:9px}
+.access-checkbox input{width:18px;height:18px;accent-color:#118f6c}
+.access-full{grid-column:1/-1;display:grid;gap:9px}
+.access-full>strong{font-size:13px;color:#394956}
+.access-full>small,.access-hint{font-size:13px;color:#798781}
+.access-pharmacy-checks{display:flex;gap:13px;flex-wrap:wrap}
+.access-pharmacy-checks label{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:10px;background:#f2f8f5}
+.access-pharmacy-checks input{accent-color:#118f6c}
+.access-google-button{min-height:44px}
+.access-code-login{display:flex;gap:13px;flex-wrap:wrap;align-items:end}
+.access-code-login label{min-width:210px;flex:1}
+.access-management .data-table td:last-child{display:flex;gap:8px;flex-wrap:wrap}
+.access-management .data-table td small{display:block;font-size:11px;color:#7f9189;margin-top:3px}
+@media(max-width:760px){.access-form-grid{grid-template-columns:1fr}.access-section{padding:16px}.access-code-login{display:grid}.access-management .data-table{min-width:670px}}

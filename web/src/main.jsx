@@ -191,7 +191,10 @@ function App(){
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
  const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
   const [reportModal,setReportModal]=useState(null);
- const [reportDetailLimit,setReportDetailLimit]=useState(15);
+ const [reportPage,setReportPage]=useState(0);
+ const [reportPageSize,setReportPageSize]=useState(10);
+ const [reportListSearch,setReportListSearch]=useState("");
+ const [reportListSort,setReportListSort]=useState("name");
  const [expandedCampaignIds,setExpandedCampaignIds]=useState(()=>data.promos.filter(p=>p.status==="Activa").slice(0,2).map(p=>p.id));
  const [selectedPharmacyIds,setSelectedPharmacyIds]=useState(()=>reportFiltersFromUrl().pharmacies);
  const [pharmacySelectorOpen,setPharmacySelectorOpen]=useState(false);
@@ -285,7 +288,7 @@ function App(){
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
    setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
-   setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportDetailLimit(15);setReportModal(null);
+   setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
    window.addEventListener("popstate",onBackForward);
@@ -330,6 +333,9 @@ function App(){
  const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
  const draftFilterBase=reportModal?promos.filter(p=>(reportModal.status==="Todos"||p.status===reportModal.status)&&(reportModal.year==="Todos"||(p.start||"").slice(0,4)===reportModal.year)):[];
  const draftVisible=reportModal?draftFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportModal.search.toLocaleLowerCase("es"))):[];
+ const draftPageSize=reportModal?.pageSize||10;
+ const draftMaxPage=Math.max(0,Math.ceil(draftVisible.length/draftPageSize)-1);
+ const draftPage=Math.min(reportModal?.page||0,draftMaxPage);
  const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
  const effectivePharmacyIds=selectedPharmacyIds===null?reportPharmacyIds:selectedPharmacyIds.filter(id=>reportPharmacyIds.includes(id));
  const activePharmacySet=new Set(effectivePharmacyIds);
@@ -338,6 +344,17 @@ function App(){
   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id)))
  }));
+ const goalListFiltered=reportFilteredCampaigns.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" "))
+   .toLocaleLowerCase("es").includes(reportListSearch.toLocaleLowerCase("es"))).sort((a,b)=>{
+     const collate=(x,y)=>String(x).localeCompare(String(y),"es",{numeric:true});
+     if(reportListSort==="goal-desc")return sum(b.targets)-sum(a.targets)||collate(a.name,b.name);
+     if(reportListSort==="sales-desc")return sum(b.sales)-sum(a.sales)||collate(a.name,b.name);
+     if(reportListSort==="advance-desc")return percent(sum(b.sales),sum(b.targets))-percent(sum(a.sales),sum(a.targets))||collate(a.name,b.name);
+     if(reportListSort==="name-desc")return collate(b.name,a.name);
+     return collate(a.name,b.name);
+   });
+ const reportMaxPage=Math.max(0,Math.ceil(goalListFiltered.length/reportPageSize)-1);
+ const safeReportPage=Math.min(reportPage,reportMaxPage);
  const combinedReport=reportFilteredCampaigns.reduce((acc,p)=>{
   Object.entries(p.targets||{}).forEach(([id,val])=>{acc.targets[id]=(acc.targets[id]||0)+(Number(val)||0);});
   Object.entries(p.sales||{}).forEach(([id,val])=>{acc.sales[id]=(acc.sales[id]||0)+(Number(val)||0);});
@@ -354,7 +371,7 @@ function App(){
    const p=promoId?promos.find(item=>item.id===promoId):null;
    const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
    const status=p?p.status:defaultStatus,ids=p?[p.id]:data.promos.filter(item=>item.status===status).map(item=>item.id);
-   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportDetailLimit(15);setSelectedPharmacyIds(null);
+   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));
    const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
    if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
@@ -366,14 +383,14 @@ function App(){
   setPage(id);setSearch("");setMobileMenu(false);
  }
  function openReportFilters(){
-  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],limit:25});
+  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],page:0,pageSize:10});
  }
  function updateDraftScope(status,year){
   setReportModal(prev=>{
    if(!prev)return prev;
    const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
    const kept=prev.ids.filter(id=>eligible.some(p=>p.id===id));
-   return {...prev,status,year,search:"",limit:25,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
+   return {...prev,status,year,search:"",page:0,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
   });
  }
  function selectDraftAll(visible){setReportModal(prev=>prev?{...prev,ids:[...new Set([...prev.ids,...visible.map(p=>p.id)])]}:prev);}
@@ -385,7 +402,7 @@ function App(){
   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
   setReportStatus(status);setReportYear(year);
   setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
-  setSelectedPharmacyIds(null);setReportDetailLimit(15);setReportModal(null);
+  setSelectedPharmacyIds(null);setReportPage(0);setReportModal(null);
  }
  function toggleReportPharmacy(id){
   setSelectedPharmacyIds(prev=>{
@@ -621,9 +638,20 @@ function App(){
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2><p>Despliega cada promoción para conocer el progreso de las farmacias. Todas las barras llegan al 100 % en el extremo derecho.</p></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
-   <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(reportFilteredCampaigns.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
-   <div className="goal-campaign-list">{!reportFilteredCampaigns.length&&<div className="report-choice-empty">Ninguna campaña de esta selección incluye las farmacias filtradas.</div>}{reportFilteredCampaigns.slice(0,reportDetailLimit).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
-   {reportFilteredCampaigns.length>reportDetailLimit&&<button className="report-more-goals" type="button" onClick={()=>setReportDetailLimit(v=>v+15)}><ChevronDown size={17}/> Mostrar {Math.min(15,reportFilteredCampaigns.length-reportDetailLimit)} campañas más</button>}
+   <div className="list-options">
+     <label>Buscar campaña <input type="search" value={reportListSearch}
+        onChange={e=>{setReportListSearch(e.target.value);setReportPage(0)}} placeholder="Nombre, laboratorio o CN…"/></label>
+     <label>Ordenar <select value={reportListSort} onChange={e=>{setReportListSort(e.target.value);setReportPage(0)}}>
+       <option value="name">Campaña A-Z</option><option value="name-desc">Campaña Z-A</option>
+       <option value="goal-desc">Objetivo mayor</option><option value="sales-desc">Ventas mayores</option>
+       <option value="advance-desc">Avance mayor</option>
+     </select></label>
+   </div>
+   <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(goalListFiltered.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
+   <div className="goal-campaign-list">{!goalListFiltered.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados.</div>}{goalListFiltered.slice(safeReportPage*reportPageSize,(safeReportPage+1)*reportPageSize).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
+   <ListPagination total={goalListFiltered.length} page={safeReportPage} pageSize={reportPageSize}
+      label="campañas" onPageChange={setReportPage}
+      onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
   <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"}/>
   <section className="card campaign-cn-panel">
@@ -672,7 +700,7 @@ function App(){
       <Field label="Año de inicio"><select value={reportModal.year} onChange={e=>updateDraftScope(reportModal.status,e.target.value)}>
        <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
       </select></Field>
-      <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,limit:25}))}/></Field>
+      <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,page:0}))}/></Field>
      </div>
      <div className="report-modal-selection-head">
       <label className="report-select-all"><input type="checkbox" disabled={!draftVisible.length} checked={draftVisible.length>0&&draftVisible.every(p=>reportModal.ids.includes(p.id))} onChange={e=>e.target.checked?selectDraftAll(draftVisible):clearDraftVisible(draftVisible)}/> Seleccionar todas las campañas filtradas</label>
@@ -680,13 +708,15 @@ function App(){
       <button type="button" className="report-modal-clear" disabled={!draftVisible.some(p=>reportModal.ids.includes(p.id))} onClick={()=>clearDraftVisible(draftVisible)}>Limpiar visibles</button>
      </div>
      <div className="report-modal-campaigns">
-      {draftVisible.slice(0,reportModal.limit).map(p=><label className={"report-choice "+(reportModal.ids.includes(p.id)?"report-choice-checked":"")} key={p.id}>
+      {draftVisible.slice(draftPage*draftPageSize,(draftPage+1)*draftPageSize).map(p=><label className={"report-choice "+(reportModal.ids.includes(p.id)?"report-choice-checked":"")} key={p.id}>
        <input type="checkbox" checked={reportModal.ids.includes(p.id)} onChange={()=>toggleDraftCampaign(p.id)}/>
        <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span><Pill status={p.status}/>
       </label>)}
       {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, año o búsqueda.</div>}
      </div>
-     {draftVisible.length>reportModal.limit&&<button className="report-more" type="button" onClick={()=>setReportModal(prev=>({...prev,limit:prev.limit+25}))}><ChevronDown size={16}/> Ver otras {Math.min(25,draftVisible.length-reportModal.limit)} campañas</button>}
+     <ListPagination total={draftVisible.length} page={draftPage} pageSize={draftPageSize}
+        label="campañas" onPageChange={n=>setReportModal(prev=>({...prev,page:n}))}
+        onPageSizeChange={n=>setReportModal(prev=>({...prev,pageSize:n,page:0}))}/>
     </div>
     <div className="report-modal-bottom">
      <div className="report-modal-bottom-info"><strong>{draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length} {draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length===1?"campaña seleccionada":"campañas seleccionadas"}</strong><small>Los cambios se mostrarán al pulsar Aplicar filtros.</small></div>

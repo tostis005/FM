@@ -48,3 +48,7 @@ El botón **Filtrar campañas**, junto a **Descargar**, abre un modal amplio con
 ## Consolidado, acordeones y farmacias múltiples
 
 En Seguimiento, el **Consolidado por farmacia** se muestra destacado inmediatamente tras los KPI, antes de «Detalle de promociones» y de «Avance hacia los objetivos». El avance agrupa cada campaña en una tarjeta plegable: dos activas desplegadas inicialmente, **Plegar todas** / **Desplegar todas**, y carga visual de 15 campañas por tanda. El selector de **Farmacias** junto al resumen es multiselección con casillas y opción Todas; afecta a KPI, tabla, consolidado y objetivos, y se conserva en la URL. Cuando el filtro efectivo deja solo una farmacia, la tarjeta de campaña muestra una única barra de progreso para evitar duplicar el total. Las exportaciones siguen filtradas por campañas seleccionadas, no por farmacias, como se indica en la vista.
+
+## Formato de CNs
+
+Los **CNs** son cadenas de exactamente seis cifras (expresión `^[0-9]{6}$`), sin puntos ni otros caracteres. Las promociones predeterminadas se han actualizado; al cargar promociones antiguas del navegador, los valores con seis dígitos seguidos de punto y un dígito se convierten automáticamente a seis cifras. Los valores que no se ajustan a ninguno de esos dos patrones no se incluyen en el listado normalizado. El formulario bloquea guardar CNs inválidos y la exportación Excel/ZIP los rechaza. Pruebas: `node --test web/src/cns.test.js`.

@@ -84,4 +84,14 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && if test -f compose.farmacias.yml; then docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps web; else docker compose up -d --build --no-deps web; fi'
       - name: Comprobar respuesta en VPS
         run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'for i in $(seq 1 20); do if curl -fsS http://127.0.0.1:18080/ | grep -qi "Farmetrica"; then curl -fsS http://127.0.0.1:18080/usuarios | grep -qi "Farmetrica" && curl -fsS http://127.0.0.1:18080/farmacias | grep -qi "Farmetrica" && exit 0; fi; sleep 3; done; exit 1'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'for i in $(seq 1 20); do
+               status=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/ || true)
+               login=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/login || true)
+               private=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/index.html || true)
+               if [ "$status" = "302" ] && [ "$login" = "200" ] && [ "$private" = "302" ]; then
+                 curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a FARMAWAO" && exit 0
+               fi
+               sleep 3
+             done
+             echo "El login no responde o la SPA es accesible sin sesión"
+             exit 1'

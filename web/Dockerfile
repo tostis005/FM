@@ -8,8 +8,10 @@ ARG VITE_ENTRA_TENANT_ID
 ARG VITE_ENTRA_CLIENT_ID
 ARG VITE_ENTRA_API_SCOPE
 ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_LOCAL_LOGIN_ENABLED=true
 RUN npm run build
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY login.html /usr/share/nginx/html/login.html
 COPY --from=build /app/dist /usr/share/nginx/html

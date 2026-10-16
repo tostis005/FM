@@ -5,6 +5,8 @@ const clean = value => String(value ?? "").trim().replace(/\s+/g," ");
 const key = value => clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 function offerKey(value){
   const raw=clean(value).toUpperCase();
+  const decimal=Number(raw);
+  if(/^0\.\d+$/.test(raw) && decimal>0 && decimal<=1)return "pct:"+Math.round(decimal*100);
   const compact=key(raw);
   const units=raw.match(/\b([234])\s*X\s*([12])\b/);
   if(units)return "x"+units[1]+"_"+units[2];

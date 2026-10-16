@@ -107,7 +107,7 @@ function selectedIdsFromUrl(){
  if(oldId)return [oldId];
  const query=new URLSearchParams(window.location.search);
  if(!query.has("ids"))return null;
- return [...new Set(query.get("ids").split(",").filter(Boolean))].slice(0,500);
+ return [...new Set(query.get("ids").split(",").filter(Boolean))];
 }
 function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
@@ -164,7 +164,7 @@ function App(){
   };
    window.addEventListener("popstate",onBackForward);
    return ()=>window.removeEventListener("popstate",onBackForward);
- },[]);
+ },[data.promos]);
  useEffect(()=>{
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
@@ -258,6 +258,7 @@ function App(){
  }
  async function exportAllPromos(campaigns){
   if(!campaigns.length)return setToast("Selecciona al menos una promoción");
+  if(campaigns.length>10&&!window.confirm("¿Descargar los Excel de "+campaigns.length+" promociones seleccionadas en un ZIP?"))return;
   try{await exportAllPromotionsZip(campaigns,pharmaName);setToast("ZIP con "+campaigns.length+" promociones descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el ZIP");}
  }
@@ -360,7 +361,7 @@ function App(){
   <div><div className="eyebrow"><span className="eyebrow-dot"/> REPORTING DE PROMOCIONES</div>
    <h1>Seguimiento</h1><p>Selecciona una o varias campañas para analizar objetivos, ventas y progreso desde una sola pantalla.</p></div>
   <button className="btn btn-primary" disabled={!reportSelected.length} onClick={()=>{if(reportSelected.length===1){void exportPromo(reportSelected[0]);}else{void exportAllPromos(reportSelected);}}}>
-   <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar Excel":reportSelected.length?"Descargar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+   <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar Excel":reportSelected.length?"Descargar "+reportSelected.length+" campañas (ZIP)":"Selecciona campañas"}
   </button>
  </div>
  <section className="card report-selector">

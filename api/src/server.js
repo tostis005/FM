@@ -3,21 +3,23 @@ import helmet from "helmet";
 import pg from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
+import { setupAccess } from "./accesos.js";
 
 const { Pool } = pg;
 const {
   DATABASE_URL, AZURE_TENANT_ID, AZURE_API_CLIENT_ID,
-  ADMIN_OIDS = "", PORT = "8000",
+  ADMIN_OIDS = "", GOOGLE_CLIENT_ID = "", SESSION_SECRET = "", PORT = "8000",
 } = process.env;
 
-if (!DATABASE_URL || !AZURE_TENANT_ID || !AZURE_API_CLIENT_ID || !ADMIN_OIDS.trim()) {
-  console.error("Faltan DATABASE_URL, AZURE_TENANT_ID, AZURE_API_CLIENT_ID o ADMIN_OIDS. API cerrada por seguridad.");
+const azureEnabled = Boolean(AZURE_TENANT_ID && AZURE_API_CLIENT_ID && ADMIN_OIDS.trim());
+if (!DATABASE_URL || (!azureEnabled && !(GOOGLE_CLIENT_ID && SESSION_SECRET.length >= 32))) {
+  console.error("Falta PostgreSQL o algún proveedor de identidad seguro (Microsoft Entra o Google). API cerrada.");
   process.exit(1);
 }
 
 const admins = new Set(ADMIN_OIDS.split(",").map(s => s.trim().toLowerCase()).filter(Boolean));
-const issuer = `https://login.microsoftonline.com/${AZURE_TENANT_ID}/v2.0`;
-const jwks = createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${AZURE_TENANT_ID}/discovery/v2.0/keys`));
+const issuer = azureEnabled ? `https://login.microsoftonline.com/${AZURE_TENANT_ID}/v2.0` : null;
+const jwks = azureEnabled ? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${AZURE_TENANT_ID}/discovery/v2.0/keys`)) : null;
 const pool = new Pool({ connectionString: DATABASE_URL, max: 6, connectionTimeoutMillis: 5000 });
 const app = express();
 app.disable("x-powered-by");
@@ -27,7 +29,8 @@ app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
-async function requireAdmin(req, res, next) {
+async function requireEntraAdmin(req, res, next) {
+  if (!azureEnabled) return res.status(401).json({ error: "Microsoft Entra no está configurado" });
   const authorization = req.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return res.status(401).json({ error: "Inicia sesión con Microsoft 365" });
   try {
@@ -45,6 +48,8 @@ async function requireAdmin(req, res, next) {
     return res.status(401).json({ error: "Sesión no válida o caducada" });
   }
 }
+
+const { requireAdmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -183,6 +188,9 @@ app.use((err, req, res, next) => {
 try {
   const migration = await readFile(new URL("./migrations/001_farmacias.sql", import.meta.url), "utf8");
   await pool.query(migration);
+  const accessMigration = await readFile(new URL("./migrations/002_accesos.sql", import.meta.url), "utf8");
+  await pool.query(accessMigration);
+  await bootstrapAdmins();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`FARMAWAO API en puerto ${PORT}`));
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);

@@ -180,7 +180,7 @@ export default function AccessAdmin({ onAuthenticated }) {
         <ListTable rows={domains} rowKey={d=>d.domain} label="dominios" emptyText="No hay dominios permitidos"
  columns={[
   {key:"domain",label:"Dominio",value:d=>d.domain,render:d=><strong>@{d.domain}</strong>},
-  {key:"pharmacy",label:"Farmacia",value:d=>pharmacies.find(p=>p.id===d.pharmacyId)?.name||"Sin asignar"},
+  {key:"pharmacy",label:"Farmacia",value:d=>pharmacies.find(p=>String(p.id)===String(d.pharmacyId))?.name||"Sin asignar"},
   {key:"active",label:"Estado",value:d=>d.active?"Habilitado":"Bloqueado"},
   {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
    render:d=><div className="list-cell-actions">

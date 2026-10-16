@@ -2,7 +2,14 @@ export const searchText=value=>String(value??"").normalize("NFD")
   .replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("es");
 export function filterSortRows(rows,columns,filters={},sort=null){
   const result=(rows||[]).filter(row=>columns.every(col=>{
-    const term=searchText(filters[col.key]).trim();
+    const selected=filters[col.key];
+    if(Array.isArray(selected)){
+      if(!selected.length)return true;
+      const values=col.filterValues?col.filterValues(row):[col.value(row)];
+      const available=(Array.isArray(values)?values:[values]).map(value=>String(value??""));
+      return selected.some(value=>available.includes(String(value)));
+    }
+    const term=searchText(selected).trim();
     return !term||searchText(col.value(row)).includes(term);
   }));
   if(!sort?.key)return result;

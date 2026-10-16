@@ -415,3 +415,42 @@
 
 /* Mantener semántica de celda para los botones de acciones en listados de acceso. */
 .access-management .smart-table td:last-child{display:table-cell;min-width:150px}
+
+/* Filtros por valores: selector múltiple compacto en cabeceras desplazables. */
+.multi-filter-trigger{display:flex;align-items:center;justify-content:space-between;gap:7px;
+  width:100%;min-width:80px;max-width:210px;height:32px;padding:5px 8px;
+  background:#f7fbf9;border:1px solid #dce9e2;border-radius:7px;
+  color:#678577;font-size:11px;font-weight:700;cursor:pointer;text-align:left}
+.multi-filter-trigger>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.multi-filter-trigger svg{flex-shrink:0}
+.multi-filter-trigger:hover,.multi-filter-trigger[aria-expanded=true]{border-color:#10a976}
+.multi-filter-active{background:#e7f8ef;border-color:#71cba8;color:#0a825c}
+.multi-filter-popover{position:fixed;z-index:100;border:1px solid #dbeae2;border-radius:12px;
+  background:#fff;box-shadow:0 15px 40px #103f2b35;font-size:12px;
+  overflow:hidden;max-width:calc(100vw - 16px);color:#263e33}
+.multi-filter-top{display:flex;justify-content:space-between;align-items:center;
+  gap:10px;padding:11px 13px;border-bottom:1px solid #edf3ef}
+.multi-filter-top strong{font-size:12px}
+.multi-filter-top button{border:0;background:transparent;font-size:21px;color:#6a8378;cursor:pointer}
+.multi-filter-search{width:calc(100% - 24px);margin:9px 12px 3px;padding:9px;
+  border:1px solid #dbeae2;border-radius:8px;font-size:12px}
+.multi-filter-choices{max-height:min(260px,40vh);overflow-y:auto;padding:5px}
+.multi-filter-choice{display:flex;align-items:center;gap:10px;padding:9px 8px;
+  color:#354f42;font-size:12px;cursor:pointer;border-radius:7px}
+.multi-filter-choice:hover{background:#f2faf5}
+.multi-filter-choice input{width:16px;height:16px;flex:0 0 16px;accent-color:#0ca777}
+.multi-filter-choice span{min-width:0;overflow-wrap:anywhere}
+.multi-filter-empty{padding:12px;text-align:center;color:#91a79a}
+.multi-filter-bottom{border-top:1px solid #edf3ef;display:flex;align-items:center;
+  justify-content:space-between;gap:4px;padding:9px 8px}
+.multi-filter-bottom button{padding:7px 6px;border:0;border-radius:7px;background:#f1f8f4;
+  color:#197a56;font-size:10.5px;font-weight:800;cursor:pointer}
+.multi-filter-bottom button:disabled{opacity:.4;cursor:default}
+.multi-filter-bottom .multi-filter-done{background:#0ba977;color:#fff;padding:7px 10px}
+@media(max-width:600px){
+ .lab-detail-panel{gap:10px;padding:14px}
+ .lab-detail-panel .section-heading{padding:5px 0}
+ .lab-detail-filters{gap:10px}
+ .lab-detail-filters input,.lab-detail-filters select{min-height:40px}
+ .multi-filter-popover{border-radius:10px}
+}

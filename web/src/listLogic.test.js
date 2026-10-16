@@ -37,3 +37,22 @@ test("paginación configurable sin repetir ni perder filas",()=>{
  }
  assert.deepEqual(pageRows([],3,10),{page:0,items:[]});
 });
+
+test("desplegables multivalor: O dentro de columna, Y entre columnas, coincidencia exacta",()=>{
+ const campaignRows=[
+  {id:"1",name:"GUM",status:"Activa",cns:["000001","000002"],pharmacies:["1","3"]},
+  {id:"2",name:"VITIS",status:"Activa",cns:["000003"],pharmacies:["2"]},
+  {id:"3",name:"NUXE",status:"Borrador",cns:["000001"],pharmacies:["2","4"]},
+ ];
+ const columns=[
+  {key:"name",value:p=>p.name},
+  {key:"status",value:p=>p.status},
+  {key:"cns",value:p=>p.cns.length,filterValues:p=>p.cns},
+  {key:"pharmacies",value:p=>p.pharmacies.length,filterValues:p=>p.pharmacies},
+ ];
+ assert.deepEqual(filterSortRows(campaignRows,columns,{pharmacies:["1","2"]}).map(p=>p.id),["1","2","3"]);
+ assert.deepEqual(filterSortRows(campaignRows,columns,{pharmacies:["1","2"],cns:["000001"]}).map(p=>p.id),["1","3"]);
+ assert.deepEqual(filterSortRows(campaignRows,columns,{pharmacies:["2"],cns:["000001"],status:["Activa"]}).map(p=>p.id),[]);
+ assert.deepEqual(filterSortRows(campaignRows,columns,{cns:["00000"]}).map(p=>p.id),[]);
+ assert.equal(filterSortRows(campaignRows,columns,{pharmacies:[],status:[]}).length,3);
+});

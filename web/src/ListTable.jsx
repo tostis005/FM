@@ -1,5 +1,6 @@
 import React,{useMemo,useState} from "react";
 import {filterSortRows,pageRows} from "./listLogic.js";
+import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -45,6 +46,11 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           </th>)}</tr>
           <tr className="smart-filter-row">{columns.map(col=><th key={col.key}>
             {col.searchable===false?<span className="smart-filter-blank"/>:
+              col.filterMode==="multi"?<MultiSelectFilter label={col.label}
+                options={typeof col.options==="function"?col.options(rows):col.options||
+                  [...new Set(rows.flatMap(r=>col.filterValues?.(r)||[col.value(r)]))]}
+                value={Array.isArray(filters[col.key])?filters[col.key]:[]}
+                onChange={next=>changeFilter(col.key,next)}/>:
               <input className="smart-column-filter" type="search" value={filters[col.key]||""}
                 aria-label={"Buscar en "+col.label} placeholder="Buscar…" title={"Buscar en "+col.label}
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}

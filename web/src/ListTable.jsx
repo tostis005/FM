@@ -1,5 +1,5 @@
 import React,{useMemo,useState} from "react";
-import {filterSortRows} from "./listLogic.js";
+import {filterSortRows,pageRows} from "./listLogic.js";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -30,8 +30,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const [page,setPage]=useState(0);
   const [pageSize,setPageSize]=useState(10);
   const filtered=useMemo(()=>filterSortRows(rows,columns,filters,sort),[rows,columns,filters,sort]);
-  const safePage=Math.min(page,Math.max(0,Math.ceil(filtered.length/pageSize)-1));
-  const slice=filtered.slice(safePage*pageSize,(safePage+1)*pageSize);
+  const {page:safePage,items:slice}=pageRows(filtered,page,pageSize);
   const changeFilter=(key,value)=>{setFilters(p=>({...p,[key]:value}));setPage(0);};
   const changeSort=key=>{setSort(prev=>prev?.key!==key?{key,direction:"asc"}:prev.direction==="asc"?{key,direction:"desc"}:null);setPage(0);};
   return <>

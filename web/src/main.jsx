@@ -615,7 +615,7 @@ function App(){
   <SalesNotice status={salesStatus} error={salesError} coverage={salesCoverage} databaseStatus={databaseStatus} canConnect={databaseStatus==="connected"} onConnect={()=>nav("accesos")}/>
  <CampaignMetrics campaigns={activePromos} heading="Promociones activas" subtitle="Indicadores de las campañas en curso" salesLabel={salesStatus==="real"?"Unidades netas · Farmatic":"Sin conexión real"} />
  <section className="card list-card full-table-card">
-  <div className="section-heading"><div><h2>Listado de promociones</h2><p>Abre una campaña para editarla o consulta directamente sus resultados.</p></div><span className="count-label">{filteredPromos.length} promociones</span></div>
+  <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
   <div className="toolbar">
    <div className="search-wrap"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar promoción o CN..." aria-label="Buscar promociones"/></div>
    <div className="select-wrap"><Filter size={16}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filtrar estado"><option>Todos</option><option>Activa</option><option>Borrador</option><option>Finalizada</option></select></div>
@@ -625,18 +625,24 @@ function App(){
     tableClass="campaign-table" onRowClick={startPromo} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
-      {key:"type",label:"Tipo",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
-      {key:"status",label:"Estado",value:p=>p.status,render:p=><Pill status={p.status}/>},
+      {key:"type",label:"Tipo",filterMode:"multi",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
+      {key:"status",label:"Estado",filterMode:"multi",value:p=>p.status,render:p=><Pill status={p.status}/>},
       {key:"start",label:"Periodo",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{dateES(p.end)}</small></div>},
-      {key:"cns",label:"CN",value:p=>p.cns.length,render:p=><span className="td-number">{p.cns.length}</span>},
-      {key:"pharmacies",label:"Farmacias",value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
+      {key:"cns",label:"CN",filterMode:"multi",filterValues:p=>p.cns||[],
+  options:items=>[...new Set(items.flatMap(p=>p.cns||[]))].map(cn=>({value:cn,label:cn})),
+  value:p=>p.cns.length,render:p=><span className="td-number">{p.cns.length}</span>},
+      {key:"pharmacies",label:"Farmacias",filterMode:"multi",
+  filterValues:p=>Object.keys(p.targets||{}),
+  options:items=>pharmacies.filter(f=>items.some(p=>Object.hasOwn(p.targets||{},f.id)))
+    .map(f=>({value:f.id,label:f.name})),
+  value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{EUR.format(sum(p.targets))}</span>},
       {key:"sales",label:"Vendidas",value:p=>sum(p.sales),render:p=><span className="td-number">{EUR.format(sum(p.sales))}</span>},
       {key:"advance",label:"Avance",value:p=>percent(sum(p.sales),sum(p.targets)),render:p=><div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>},
       {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div>}
     ]}/>
  </section>
- <div className="note data-note"><CircleHelp size={16}/> Las promociones existentes siguen siendo ejemplos guardados en el navegador. Las cifras de ventas solo son reales si se confirma conexión a Farmatic.</div>
+
 </>}
 {page==="seguimiento-global"&&<>
  <div className="page-header report-page-header">
@@ -671,12 +677,12 @@ function App(){
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacyIds===null?"Seguimiento consolidado de las promociones seleccionadas":effectivePharmacyIds.length===1?"Resultados de "+pharmaName(effectivePharmacyIds[0]):"Resultados de "+effectivePharmacyIds.length+" farmacias seleccionadas"} salesLabel={salesStatus==="real"?"Unidades netas · Farmatic":"Sin conexión real"} />
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
-   <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2><p>Objetivos y ventas acumulados de las promociones seleccionadas, agrupados por farmacia.</p></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
+   <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
    <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{EUR.format(reportSales)} uds.</strong></div><div><span>Avance global</span><strong>{percent(reportSales,reportGoal)}%</strong></div></div>
    <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
   <section className="card report-goals-panel">
-   <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2><p>Despliega cada promoción para conocer el progreso de las farmacias. Todas las barras llegan al 100 % en el extremo derecho.</p></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
+   <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
    <div className="list-options">
      <label>Buscar campaña <input type="search" value={reportListSearch}
@@ -695,7 +701,7 @@ function App(){
   </section>
   <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"}/>
   <section className="card campaign-cn-panel">
-   <div className="section-heading"><div><h2>CNs incluidos</h2><p>Referencias únicas de seis dígitos del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CNs</span></div>
+   <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>
      <label>Ordenar <select value={cnSort} onChange={e=>{setCnSort(e.target.value);setCnPage(0)}}><option value="asc">CN ascendente</option><option value="desc">CN descendente</option></select></label></div>
    <div className="cn-chips">{orderedCNs.slice(safeCNPage*cnPageSize,(safeCNPage+1)*cnPageSize).map(cn=><span key={cn} className="cn-chip" title={reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||""}>{cn}</span>)}
@@ -706,24 +712,27 @@ function App(){
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
  <SalesNotice status={salesStatus} error={salesError} coverage={salesCoverage} databaseStatus={databaseStatus} canConnect={databaseStatus==="connected"} onConnect={()=>nav("accesos")}/>
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
+{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
-    {key:"name",label:"Nombre público",value:f=>f.name,render:f=><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div>},
-    {key:"code",label:"Origen",value:f=>f.sourceCode||"",render:f=><span className="id-code">{f.sourceCode||"—"}</span>},
+    {key:"name",label:"Nombre público",filterMode:"multi",value:f=>f.name,render:f=><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div>},
+    {key:"code",label:"Origen",filterMode:"multi",value:f=>f.sourceCode||"",render:f=><span className="id-code">{f.sourceCode||"—"}</span>},
     {key:"host",label:"Servidor SQL",value:f=>pharmacyApiStatus==="connected"?f.sourceHost||"Servidor local":"Sin conexión",render:f=>pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"— (demo)"},
-    {key:"active",label:"Estado",value:f=>f.active?"Activa":"Inactiva",render:f=><Pill status={f.active?"Activa":"Inactiva"}/>},
+    {key:"active",label:"Estado",filterMode:"multi",value:f=>f.active?"Activa":"Inactiva",render:f=><Pill status={f.active?"Activa":"Inactiva"}/>},
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="usuarios"&&<><div className="page-header"><div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2><p>Identidad, permisos y farmacias asignadas</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentUsers} rowKey={u=>u.id} label="usuarios"
+    {page==="usuarios"&&<><div className="page-header"><div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentUsers} rowKey={u=>u.id} label="usuarios"
   onRowClick={startUser} emptyText="No hay usuarios con esos filtros"
   columns={[
     {key:"name",label:"Usuario",value:u=>u.name+" "+u.email,render:u=><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div>},
-    {key:"role",label:"Rol",value:u=>ROLES[u.role],render:u=><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span>},
-    {key:"pharmacies",label:"Farmacias",value:u=>u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"},
-    {key:"active",label:"Estado",value:u=>u.active?"Activa":"Inactiva",render:u=><Pill status={u.active?"Activa":"Inactiva"}/>},
+    {key:"role",label:"Rol",filterMode:"multi",value:u=>ROLES[u.role],render:u=><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span>},
+    {key:"pharmacies",label:"Farmacias",filterMode:"multi",
+    filterValues:u=>u.role==="superadmin"?pharmacies.map(f=>f.id):u.pharmacies,
+    options:()=>pharmacies.map(f=>({value:f.id,label:f.name})),
+    value:u=>u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"},
+    {key:"active",label:"Estado",filterMode:"multi",value:u=>u.active?"Activa":"Inactiva",render:u=><Pill status={u.active?"Activa":"Inactiva"}/>},
     {key:"action",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2><p>Tres niveles de acceso</p></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

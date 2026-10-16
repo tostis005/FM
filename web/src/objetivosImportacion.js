@@ -4,29 +4,20 @@ const pharmacyIds = { ABADIA:"1", BUENAVISTA:"3", EUROPA:"2", VALDEMARIAS:"5" };
 const clean = value => String(value ?? "").trim().replace(/\s+/g," ");
 const key = value => clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 function offerKey(value){
-  const s=key(value).replace(/DESCUENTO/g,"DTO");
-  const x=s.match(/^(\d+)X(\d+)/);
-  if(x)return "x"+x[1]+"_"+x[2];
-  const p=s.match(/(\d{1,3})(?:DTO|UD)/);
-  const second=/2AUD|2UD|SEGUNDA|2UNIDAD|2UDEN|EN2/.test(s);
-  if(p&&s.includes("DTO"))return (second?"second_pct:":"pct:")+p[1];
-  return s;
+  const raw=clean(value).toUpperCase();
+  const compact=key(raw);
+  const units=raw.match(/\b([234])\s*X\s*([12])\b/);
+  if(units)return "x"+units[1]+"_"+units[2];
+  const percent=raw.match(/(\d{1,3})\s*%/);
+  const second=/2\s*[ªºA]?\s*(?:UD|UNIDAD)|SEGUNDA|2DA/.test(raw);
+  if(percent)return (second?"second_pct:":"pct:")+Number(percent[1]);
+  return compact;
 }
-function offerComparable(a,b) {
+function offerComparable(a,b){
   if(key(a)===key(b))return true;
-  const aKey=offerKey(a),bKey=offerKey(b);
-  // Solo para sufijos aclaratorios (p.ej. "3x2 regalo menor importe" y "3x2").
-  if(aKey.startsWith("x")&&bKey.startsWith("x"))return aKey===bKey;
-  if(aKey.startsWith("second_pct:")&&bKey.startsWith("second_pct:"))return aKey===bKey;
-  // "20% DTO" y "20% DTO INCLUIDOS DUPLOS" son la misma condición.
-  if(aKey.startsWith("pct:")&&bKey.startsWith("pct:"))return aKey===bKey;
-  if(aKey===bKey)return true;
-  // Importaciones antiguas pueden tener "50% 2ª UD" en vez de "50% DTO 2ª UD".
-  if(/^(\d{1,3})/.test(key(a)) && /^(\d{1,3})/.test(key(b))) {
-    const percA=key(a).match(/^(\d{1,3})/)[1],percB=key(b).match(/^(\d{1,3})/)[1];
-    if(percA===percB && (/2AUD|2UD|SEGUNDA/.test(key(a))) && (/2AUD|2UD|SEGUNDA/.test(key(b))))return true;
-  }
-  return false;
+  const ka=offerKey(a),kb=offerKey(b);
+  // Igualar descripciones largas sin confundir descuentos distintos.
+  return ka===kb && (/^x\d|^pct:|^second_pct:/.test(ka));
 }
 function objectiveQuantity(value) {
   if(value===null || value===undefined || clean(value)==="")return null;

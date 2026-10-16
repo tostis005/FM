@@ -105,13 +105,13 @@ function makeId(fingerprint){
   return "X"+(h>>>0).toString(16).toUpperCase().padStart(8,"0");
 }
 function cnOf(value){if(value===null||value===undefined)return "";return String(value).trim().replace(/\.0$/,"").padStart(6,"0");}
-function createCampaign(laboratory,range,offer,start,end,description,cns,source){
+function createCampaign(laboratory,range,offer,start,end,description,cns,source,cnDescriptions={}){
   const classification=typeInfo(offer,description);
   const promo={
     id:null,name:clean(range)+" · "+(typeof offer==="number" ? (offer>0&&offer<=1?Math.round(offer*100)+"% DTO":offer+"€ DTO") : clean(offer||"Promoción")),
     subtitle:clean(laboratory),laboratory:clean(laboratory),range:clean(range),
     description:clean(description||offer),originalOffer:clean(offer),
-    start,end,status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),
+    start,end,status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),cnDescriptions,
     targets:{},sales:{},...classification,
     source:"Excel octubre 2026",sourceSheet:source,
   };
@@ -131,8 +131,10 @@ function groupCnRows(rows){
     if(!isValidCN(cn)||!clean(lab)||!clean(range)||!clean(offer))continue;
     const start=excelDate(from),end=excelDate(to);
     const groupKey=[key(lab),key(range),key(offer),start,end].join("|");
-    if(!groups.has(groupKey))groups.set(groupKey,{lab,range,offer,start,end,cns:[],description});
-    groups.get(groupKey).cns.push(cn);
+    if(!groups.has(groupKey))groups.set(groupKey,{lab,range,offer,start,end,cns:[],description,cnDescriptions:{}});
+    const group=groups.get(groupKey);
+    group.cns.push(cn);
+    if(clean(description))group.cnDescriptions[cn]=clean(description);
   }
   return [...groups.values()];
 }
@@ -172,14 +174,14 @@ export function importCampaignRows(summaryRows,cnRows){
     const confident=best&&best.score>=0.72&&(!second||best.score-second.score>=0.12);
     const g=confident?cnGroups[best.index]:null;
     if(g)assigned.add(best.index);
-    const promo=createCampaign(lab,range,offer,start,end,description,g?.cns||[],"RESUMEN");
+    const promo=createCampaign(lab,range,offer,start,end,description,g?.cns||[],"RESUMEN",g?.cnDescriptions||{});
     if(!g && cnGroups.length)promo.importWarnings.push("No se ha podido asociar con seguridad el listado de CNs");
     campaigns.push(promo);
   }
   for(let i=0;i<cnGroups.length;i++){
     if(assigned.has(i))continue;
     const g=cnGroups[i];
-    const promo=createCampaign(g.lab,g.range,g.offer,g.start,g.end,g.description,g.cns,"LISTADO CN PROMOCIONES");
+    const promo=createCampaign(g.lab,g.range,g.offer,g.start,g.end,g.description,g.cns,"LISTADO CN PROMOCIONES",g.cnDescriptions||{});
     promo.importWarnings.push("Grupo de CN sin conciliación exacta con RESUMEN: revisar posible duplicado");
     campaigns.push(promo);
   }
@@ -189,6 +191,7 @@ export function importCampaignRows(summaryRows,cnRows){
     if(result.has(p.fingerprint)){
       const old=result.get(p.fingerprint);
       old.cns=[...new Set([...old.cns,...p.cns])];
+      old.cnDescriptions={...old.cnDescriptions,...p.cnDescriptions};
       old.importWarnings=[...new Set([...old.importWarnings,...p.importWarnings])];
     }else result.set(p.fingerprint,p);
   }
@@ -218,7 +221,7 @@ export function mergeImportedPromos(existing,incoming){
     if(same){
       const newCNs=[...new Set([...(same.cns||[]),...p.cns])];
       if(newCNs.length>(same.cns||[]).length){
-        updates.push({...same,cns:newCNs,importWarnings:[...new Set([...(same.importWarnings||[]),...(p.importWarnings||[])])]});
+        updates.push({...same,cns:newCNs,cnDescriptions:{...same.cnDescriptions,...p.cnDescriptions},importWarnings:[...new Set([...(same.importWarnings||[]),...(p.importWarnings||[])])]});
         expanded++;
       }else duplicates++;
       continue;

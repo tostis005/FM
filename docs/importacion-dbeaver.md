@@ -3,33 +3,33 @@
 ## 1. Conexiones
 - SQL Server: conexión VPN ya configurada en Windows, usuario de **solo lectura**.
 - PostgreSQL en Contabo: DBeaver con túnel SSH al VPS y conexión PostgreSQL a `127.0.0.1:15432` **en el lado del VPS**.
-- Base de datos: la del contenedor `farmawao-db-1`. La API crea el maestro `public.farmacias` y la tabla inicial `public.stock_farmacia` al arrancar, mediante la migración `api/src/migrations/001_farmacias.sql`. Si todavía no está desplegada, ejecuta esa migración en DBeaver conectado a PostgreSQL, una sola vez.
+- Base de datos: la del contenedor `farmawao-db-1`. La API crea el maestro `public.farmacias` y la tabla inicial `public.stock_farmacia` al arrancar, mediante la migración `api/src/migrations/001_farmacias.sql`. La migración se aplica en el despliegue de GitHub a producción. Antes de importarla, comprueba que exista la tabla mediante DBeaver.
 
 ## 2. Consulta SQL Server para un stock unificado inicial
 Ejecutar desde la conexión SQL Server **central** donde ya funcionan los linked servers del ejemplo. No crea ni modifica tablas de origen.
 
 ```sql
-SELECT 'F001' AS id_farmacia, CAST(a.IdArticu AS nvarchar(100)) AS id_articu,
+SELECT CAST(1 AS int) AS id_farmacia, CAST(a.IdArticu AS nvarchar(100)) AS id_articu,
        a.Descripcion AS descripcion, a.StockActual AS stock_actual
 FROM Farmatic.dbo.Articu AS a
 
 UNION ALL
-SELECT 'F002', CAST(e.IdArticu AS nvarchar(100)), e.Descripcion, e.StockActual
+SELECT CAST(2 AS int), CAST(e.IdArticu AS nvarchar(100)), e.Descripcion, e.StockActual
 FROM OPENQUERY([192.168.11.11],
   'SELECT IdArticu, Descripcion, StockActual FROM Farmatic.dbo.Articu') AS e
 
 UNION ALL
-SELECT 'F003', CAST(b.IdArticu AS nvarchar(100)), b.Descripcion, b.StockActual
+SELECT CAST(3 AS int), CAST(b.IdArticu AS nvarchar(100)), b.Descripcion, b.StockActual
 FROM OPENQUERY([192.168.13.11],
   'SELECT IdArticu, Descripcion, StockActual FROM Farmatic.dbo.Articu') AS b
 
 UNION ALL
-SELECT 'F004', CAST(s.IdArticu AS nvarchar(100)), s.Descripcion, s.StockActual
+SELECT CAST(4 AS int), CAST(s.IdArticu AS nvarchar(100)), s.Descripcion, s.StockActual
 FROM OPENQUERY([192.168.12.11],
   'SELECT IdArticu, Descripcion, StockActual FROM Farmatic.dbo.Articu') AS s
 
 UNION ALL
-SELECT 'F005', CAST(p.IdArticu AS nvarchar(100)), p.Descripcion, p.StockActual
+SELECT CAST(5 AS int), CAST(p.IdArticu AS nvarchar(100)), p.Descripcion, p.StockActual
 FROM OPENQUERY([192.168.14.11],
   'SELECT IdArticu, Descripcion, StockActual FROM Farmatic.dbo.Articu') AS p;
 ```
@@ -40,7 +40,7 @@ FROM OPENQUERY([192.168.14.11],
 1. Ejecuta la consulta y revisa el número de filas y las columnas.
 2. Clic derecho **sobre la cuadrícula de resultados** → **Export Resultset** (o **Export data**, según la versión).
 3. Destino **Database** → conexión PostgreSQL → tabla **existente** `public.stock_farmacia`.
-4. En el paso de mapeo, verifica que las columnas coinciden: `id_farmacia`, `id_articu`, `descripcion`, `stock_actual`. La columna `importado_en` toma su valor por defecto.
+4. En el paso de mapeo, verifica que las columnas coinciden: `id_farmacia` (entero), `id_articu`, `descripcion`, `stock_actual`. La columna `importado_en` toma su valor por defecto.
 5. Ejecuta la importación. La clave primaria es (`id_farmacia`,`id_articu`), por lo que **una segunda carga INSERT no es incremental**: daría duplicados. Para repetición, usar un upsert programado y tratamiento de bajas.
 
 ## 4. Comprobar en PostgreSQL

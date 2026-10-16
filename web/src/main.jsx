@@ -4,12 +4,12 @@ import {
   Activity, ArrowDownToLine, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, Leaf, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target,
-  Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw
+  Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database
 } from "lucide-react";
 import "./styles.css";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadSalesCatalog, loadSalesCoverage, loadPromotionSales } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -32,8 +32,16 @@ const DEFAULT_PROMOS = [
   {id:"P103",name:"Fotoprotección total",subtitle:"Protección solar",description:"Campaña de fotoprotección estacional.",status:"Finalizada",start:"2026-06-01",end:"2026-09-30",cns:["187345","198345"],targets:{1:90,2:100,3:110},sales:{1:94,2:103,3:108}},
   {id:"P104",name:"Noviembre esencial",subtitle:"Próxima campaña",description:"Campaña de impulso para productos esenciales de noviembre.",status:"Borrador",start:"2026-11-01",end:"2026-11-30",cns:["173982","165708"],targets:{2:120,4:120,5:110},sales:{}}
 ];
-const EMPTY_PROMO = {id:null,name:"",subtitle:"",description:"",status:"Borrador",start:"2026-10-16",end:"2026-11-30",cns:[],targets:{},sales:{}};
-const HISTORICAL = {1:110,2:95,3:105,4:80,5:90};
+const EMPTY_PROMO = {id:null,name:"",subtitle:"",description:"",status:"Borrador",start:"2026-10-16",end:"2026-11-30",cns:[],targets:{},sales:{},type:"sin_clasificar",discountPercent:""};
+const PROMOTION_TYPES = [
+  {id:"sin_clasificar",name:"Sin clasificar"},
+  {id:"dos_por_uno",name:"2×1"},
+  {id:"tres_por_dos",name:"3×2"},
+  {id:"segunda_porcentaje",name:"Segunda unidad al X %",needsPercent:true},
+  {id:"descuento_porcentaje",name:"Descuento del X %",needsPercent:true},
+  {id:"precio_especial",name:"Precio especial"},
+  {id:"otros",name:"Otros"}
+];
 const STORE_KEY = "farmetrica-prototype-v1";
 const ROLES = {superadmin:"Superadministrador",gestor:"Gestor de farmacias",farmacia:"Personal de farmacia"};
 const EUR = new Intl.NumberFormat("es-ES");
@@ -59,12 +67,12 @@ function readState(){
       });
       return {
         ...saved,pharmacies,
-        promos:saved.promos.map(p=>({...p,cns:normalizeStoredCNs(p.cns),targets:migrateSalesOrTargets(p.targets),sales:migrateSalesOrTargets(p.sales)})),
+        promos:saved.promos.map(p=>({...p,cns:normalizeStoredCNs(p.cns),targets:migrateSalesOrTargets(p.targets),sales:{},type:p.type||"sin_clasificar",discountPercent:p.discountPercent??""})),
         users:saved.users.map(u=>({...u,pharmacies:(u.pharmacies||[]).map(migratePharmacyId)})),
       };
     }
   }catch {}
-  return {promos:DEFAULT_PROMOS,pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS};
+  return {promos:DEFAULT_PROMOS.map(p=>({...p,sales:{},type:"sin_clasificar",discountPercent:""})),pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS};
 }
 function downloadCSV(name, rows) {
   const csv="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
@@ -73,7 +81,7 @@ function downloadCSV(name, rows) {
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
 function Kpi({icon:Icon,title,value,caption,kind="mint"}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{value}</div><div className="kpi-caption">{caption}</div></div></div>}
-function CampaignMetrics({campaigns,heading,subtitle}){
+function CampaignMetrics({campaigns,heading,subtitle,salesLabel="Pendiente de conexión"}){
  const goal=campaigns.reduce((n,p)=>n+sum(p.targets),0),sold=campaigns.reduce((n,p)=>n+sum(p.sales),0);
  const cns=new Set(campaigns.flatMap(p=>p.cns||[])).size;
  return <section className="card campaign-metrics"><div className="campaign-metrics-header"><div><h2>{heading}</h2><p>{subtitle}</p></div><span className="metrics-status"><span/> Seguimiento</span></div>
@@ -81,7 +89,7 @@ function CampaignMetrics({campaigns,heading,subtitle}){
    <div className="campaign-metric"><span>Promociones</span><strong>{EUR.format(campaigns.length)}</strong><small>Campañas</small></div>
    <div className="campaign-metric"><span>CNs</span><strong>{EUR.format(cns)}</strong><small>CNs únicos</small></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{EUR.format(goal)}</strong><small>Unidades previstas</small></div>
-   <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong><small>Datos ilustrativos</small></div>
+   <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong><small>{salesLabel}</small></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span><strong>{percent(sold,goal)}%</strong><Progress value={percent(sold,goal)}/></div>
   </div></section>;
 }
@@ -149,12 +157,43 @@ function App(){
   const ids=reportFiltersFromUrl().ids;
   return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
  });
+  const [salesStatus,setSalesStatus]=useState("sin_conexion");
+  const [salesError,setSalesError]=useState("");
+  const [salesCatalog,setSalesCatalog]=useState([]);
+  const [salesByPromotion,setSalesByPromotion]=useState({});
+  const [salesCoverage,setSalesCoverage]=useState([]);
+  const [targetIncrease,setTargetIncrease]=useState("5");
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
  useEffect(()=>{
-    localStorage.setItem(STORE_KEY,JSON.stringify({...data,pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
+    localStorage.setItem(STORE_KEY,JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
   },[data,pharmacyApiStatus]);
   useEffect(()=>{if(pharmacyBackendConfigured)void refreshPharmacies();},[]);
+   useEffect(()=>{
+     if(pharmacyApiStatus!=="connected"){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     let cancelled=false;
+     setSalesStatus("cargando");
+     const sync=async()=>{
+       try{
+         const chunks=[];
+         for(let i=0;i<data.promos.length;i+=25)chunks.push(data.promos.slice(i,i+25));
+         const [catalog,coverage,...results]=await Promise.all([
+           loadSalesCatalog(),loadSalesCoverage(),...chunks.map(chunk=>loadPromotionSales(chunk))
+         ]);
+         if(cancelled)return;
+         setSalesCatalog(catalog.products||[]);
+         setSalesCoverage(coverage.pharmacies||[]);
+         setSalesByPromotion(Object.assign({},...results.map(result=>result.sales||{})));
+         setSalesError("");
+         setSalesStatus("real");
+       }catch(error){
+         if(cancelled)return;
+         setSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
+       }
+     };
+     void sync();
+     return()=>{cancelled=true;};
+   },[pharmacyApiStatus,data.promos]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -188,7 +227,8 @@ function App(){
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
- const {promos,pharmacies,users}=data;
+ const {promos:storedPromos,pharmacies,users}=data;
+  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas reales de Farmatic · octubre 2026":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const filterText=search.toLocaleLowerCase("es");

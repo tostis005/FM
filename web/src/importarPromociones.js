@@ -123,13 +123,13 @@ function createCampaign(laboratory,range,offer,start,end,description,cns,source,
   if(promo.type==="sin_clasificar")promo.importWarnings.push("Tipo de promoción pendiente de clasificación");
   return promo;
 }
-function groupCnRows(rows){
+function groupCnRows(rows,year=PROMOTION_YEAR){
   const groups=new Map();
   for(const row of rows.slice(1)){
     const [lab,range,code,description,offer,from,to]=row;
     const cn=cnOf(code);
     if(!isValidCN(cn)||!clean(lab)||!clean(range)||!clean(offer))continue;
-    const start=excelDate(from),end=excelDate(to);
+    const start=excelDate(from,year),end=excelDate(to,year);
     const groupKey=[key(lab),key(range),key(offer),start,end].join("|");
     if(!groups.has(groupKey))groups.set(groupKey,{lab,range,offer,start,end,cns:[],description,cnDescriptions:{}});
     const group=groups.get(groupKey);
@@ -150,16 +150,16 @@ function comparableOffers(a,b){
   const x=typeInfo(a),y=typeInfo(b);
   return x.type===y.type&&(x.discountPercent===y.discountPercent||!x.discountPercent||!y.discountPercent);
 }
-export function importCampaignRows(summaryRows,cnRows){
+export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR){
   const summary=(summaryRows||[]).slice(1).filter(r=>clean(r[0])&&clean(r[1])&&r[2]!==null&&r[2]!==undefined&&r[2]!=="");
-  const cnGroups=groupCnRows(cnRows||[]);
+  const cnGroups=groupCnRows(cnRows||[],year);
   const assigned=new Set();
   const campaigns=[];
   for(const row of summary){
     const [lab,range,offer,from,to,description]=row;
     // Filas de material auxiliar, códigos sueltos o sin oferta no son promociones.
     if(typeof lab==="number" || !clean(offer))continue;
-    const start=excelDate(from),end=excelDate(to);
+    const start=excelDate(from,year),end=excelDate(to,year);
     const matches=cnGroups.map((g,index)=>{
       if(assigned.has(index)||!comparableOffers(offer,g.offer))return {index,score:0};
       const sameStart=!start||!g.start||start===g.start;
@@ -203,7 +203,8 @@ export async function readPromotionExcel(file){
   const sheets=await sheetsFromExcel(await file.arrayBuffer());
   if(!sheets["RESUMEN"] || !sheets["LISTADO CN PROMOCIONES"])
     throw Error("Excel no compatible: se necesitan las hojas RESUMEN y LISTADO CN PROMOCIONES");
-  const promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"]);
+  const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):PROMOTION_YEAR;
+  const promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year).map(p=>({...p,source:"Excel: "+file.name}));
   if(!promos.length)throw Error("No se encontraron promociones importables");
   return promos;
 }

@@ -167,6 +167,17 @@ function App(){
  const [editingPharmacy,setEditingPharmacy]=useState(null);
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
+  const [sessionUser,setSessionUser]=useState(null);
+  useEffect(()=>{
+    fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"})
+      .then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")))
+      .then(body=>{if(body.user)setSessionUser(body.user);else window.location.replace("/login");})
+      .catch(()=>window.location.replace("/login"));
+  },[]);
+  async function signOut(){
+    try{await fetch("/api/auth/logout",{method:"POST",credentials:"same-origin"});}
+    finally{window.location.replace("/login");}
+  }
   const [pharmacyApiError,setPharmacyApiError]=useState("");
   const [savingPharmacy,setSavingPharmacy]=useState(false);
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
@@ -293,7 +304,11 @@ function App(){
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
- const {promos:storedPromos,pharmacies,users}=data;
+ const {promos:storedPromos,pharmacies,users:storedUsers}=data;
+  const users=sessionUser?.role==="administrador"
+    ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
+       ...storedUsers.filter(user=>user.role!=="superadmin")]
+    : storedUsers;
   const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas reales de Farmatic · octubre 2026":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
@@ -521,7 +536,9 @@ function App(){
    <header className="topbar">
     <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
-    <div className="topbar-right"><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">LG</span><span className="top-user">Laura Gómez<small>Superadministrador</small></span><ChevronDown size={14} className="muted desktop-only"/></div>
+    <div className="topbar-right"><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
+       <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="administrador"?"Superadministrador":"Usuario autorizado"}</small></span>
+       <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
     {page==="promociones"&&<>

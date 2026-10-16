@@ -2,12 +2,28 @@ import React,{useEffect,useState} from "react";
 import {ArrowDownToLine,Filter,Search,Ticket,RefreshCcw} from "lucide-react";
 import {loadTicketLines} from "./farmaciasApi.js";
 import {exportLabSalesExcel} from "./exportaciones.js";
+import {ListPagination} from "./ListTable.jsx";
 
 const num=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:3}).format(Number(n)||0);
 const money=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(n)||0);
 const date=n=>new Intl.DateTimeFormat("es-ES",{dateStyle:"short",timeStyle:"medium",timeZone:"Europe/Madrid"}).format(new Date(n));
 const validDate=s=>/^20\d\d-\d\d-\d\d$/.test(s||"");
 const INITIAL={pharmacyId:"",cn:"",ticket:"",start:"",end:""};
+const TICKET_COLUMNS=[
+  ["pharmacy","Farmacia",v=>v.pharmacyName||v.pharmacyCode],
+  ["seller","Vendedor ID",v=>v.sellerId||"—"],
+  ["saleId","IdVenta",v=>v.saleId],
+  ["ticket","Ticket",v=>v.ticket||"—"],
+  ["at","Fecha y hora",v=>date(v.at)],
+  ["cn","CN",v=>v.cn],
+  ["description","Descripción",v=>v.description],
+  ["pvp","PVP",v=>money(v.pvp)],
+  ["quantity","Unidades",v=>num(v.quantity)],
+  ["gross","Bruto",v=>money(v.gross)],
+  ["lineDiscount","Descuento",v=>money(v.lineDiscount)],
+  ["net","Neto",v=>money(v.net)],
+  ["discountPercent","% Dto.",v=>(Number(v.gross)?Math.round(Math.abs(Number(v.lineDiscount)/Number(v.gross))*1000)/10:0)+"%"],
+];
 
 export default function DetalleVentas({promotions,pharmacies,connected}){
   const [promoId,setPromoId]=useState("");
@@ -15,11 +31,25 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
   const [applied,setApplied]=useState(INITIAL);
   const [result,setResult]=useState({rows:[],total:0,status:"idle",error:""});
   const [page,setPage]=useState(0);
+  const [pageSize,setPageSize]=useState(25);
+  const [columnDraft,setColumnDraft]=useState({});
+  const [columnFilters,setColumnFilters]=useState({});
+  const [sort,setSort]=useState({key:"at",direction:"desc"});
+  useEffect(()=>{
+    const timeout=setTimeout(()=>{setColumnFilters(columnDraft);setPage(0)},350);
+    return()=>clearTimeout(timeout);
+  },[JSON.stringify(columnDraft)]);
+  const filterSignature=JSON.stringify(columnFilters);
+  const toggleSort=key=>{
+    setSort(prev=>prev.key!==key?{key,direction:"asc"}:
+      prev.direction==="asc"?{key,direction:"desc"}:{key,direction:"asc"});
+    setPage(0);
+  };
   const [exporting,setExporting]=useState(false);
   const promo=promotions.find(p=>p.id===promoId);
   useEffect(()=>{
     if(promotions.length && !promotions.some(p=>p.id===promoId)){
-      setPromoId(promotions[0].id);setDraft(INITIAL);setApplied(INITIAL);setPage(0);
+      setPromoId(promotions[0].id);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({});
     }
     if(!promotions.length)setPromoId("");
   },[promotions.map(p=>p.id).join("|")]);
@@ -33,11 +63,11 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
     if(!eligible){setResult({rows:[],total:0,status:"idle",error:""});return;}
     let cancelled=false;
     setResult(prev=>({...prev,status:"loading"}));
-    loadTicketLines({...filters,offset:page*100,limit:100})
+    loadTicketLines({...filters,columnFilters,orderBy:sort.key,orderDir:sort.direction,offset:page*pageSize,limit:pageSize})
       .then(x=>{if(!cancelled)setResult({rows:x.rows||[],total:x.total||0,status:"ready",error:""});})
       .catch(err=>{if(!cancelled)setResult({rows:[],total:0,status:"error",error:err.message});});
     return()=>{cancelled=true;};
-  },[connected,promoId,page,applied.start,applied.end,applied.pharmacyId,applied.ticket,applied.cn,(promo?.cns||[]).join(",")]);
+  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,applied.start,applied.end,applied.pharmacyId,applied.ticket,applied.cn,(promo?.cns||[]).join(",")]);
   function applyFilters(e){
     e.preventDefault();setApplied({...draft});setPage(0);
   }
@@ -48,7 +78,7 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
       const records=[];
       let total=0;
       for(let offset=0;offset<10000;offset+=500){
-        const r=await loadTicketLines({...filters,offset,limit:500});
+        const r=await loadTicketLines({...filters,columnFilters,orderBy:sort.key,orderDir:sort.direction,offset,limit:500});
         total=r.total;
         records.push(...r.rows);
         if(records.length>=total)break;
@@ -72,7 +102,7 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
     {!connected&&<div className="access-alert access-alert-error">Para consultar tickets y exportarlos necesitas iniciar sesión como administrador y que la API de PostgreSQL esté activa.</div>}
     <form className="lab-detail-filters" onSubmit={applyFilters}>
       <label>Promoción
-        <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0)}}>
+        <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({})}}>
           {!promotions.length&&<option value="">Selecciona una promoción</option>}
           {promotions.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -102,20 +132,27 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
     </form>
     {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
-    <div className="lab-detail-count">{result.status==="loading"?"Consultando…":num(result.total)+" líneas de venta"} {result.total>0&&" · Página "+(page+1)}</div>
-    <div className="table-scroll"><table className="data-table lab-detail-table">
-      <thead><tr><th>Farmacia</th><th>Vendedor ID</th><th>IdVenta</th><th>Ticket</th><th>Fecha y hora</th><th>CN</th><th>Descripción</th><th>PVP</th><th>Unidades</th><th>Bruto</th><th>Descuento</th><th>Neto</th><th>% Dto.</th></tr></thead>
+    <div className="lab-detail-count">{result.status==="loading"?"Consultando…":num(result.total)+" líneas de venta"}
+      {" · Filtros y orden aplicados a todos los tickets de PostgreSQL"}</div>
+    <div className="table-scroll"><table className="data-table lab-detail-table smart-table">
+      <thead>
+        <tr>{TICKET_COLUMNS.map(([key,label])=><th key={key} aria-sort={sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+          <button className="smart-sort" type="button" onClick={()=>toggleSort(key)} aria-label={"Ordenar "+label}>
+            {label} <span aria-hidden="true" className="smart-sort-arrow">{sort.key===key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
+          </button>
+        </th>)}</tr>
+        <tr className="smart-filter-row">{TICKET_COLUMNS.map(([key,label])=><th key={key}>
+          <input type="search" className="smart-column-filter" aria-label={"Buscar en "+label}
+            placeholder="Buscar…" value={columnDraft[key]||""}
+            onChange={e=>setColumnDraft(prev=>({...prev,[key]:e.target.value}))}/>
+        </th>)}</tr>
+      </thead>
       <tbody>{result.rows.map((v,i)=><tr key={v.pharmacyCode+"-"+v.saleId+"-"+v.lineId+"-"+i}>
-        <td>{v.pharmacyName||v.pharmacyCode}</td><td>{v.sellerId||"—"}</td><td>{v.saleId}</td><td>{v.ticket||"—"}</td>
-        <td>{date(v.at)}</td><td>{v.cn}</td><td>{v.description}</td><td>{money(v.pvp)}</td>
-        <td>{num(v.quantity)}</td><td>{money(v.gross)}</td><td>{money(v.lineDiscount)}</td>
-        <td>{money(v.net)}</td><td>{Number(v.gross)?Math.round(Math.abs(Number(v.lineDiscount)/Number(v.gross))*1000)/10:0}%</td>
+        {TICKET_COLUMNS.map(([key,,render])=><td key={key}>{render(v)}</td>)}
       </tr>)}</tbody>
-    </table>{!result.rows.length&&<p className="lab-detail-empty">{connected?"Sin ventas para la promoción y filtros elegidos.":"Detalle disponible al conectar PostgreSQL y autenticarte."}</p>}</div>
-    {result.total>100&&<div className="lab-detail-pagination">
-      <button type="button" className="btn btn-secondary btn-sm" disabled={page<=0||result.status==="loading"} onClick={()=>setPage(p=>Math.max(0,p-1))}>Anterior</button>
-      <span>{page+1} / {Math.ceil(result.total/100)}</span>
-      <button type="button" className="btn btn-secondary btn-sm" disabled={(page+1)*100>=result.total||result.status==="loading"} onClick={()=>setPage(p=>p+1)}>Siguiente</button>
-    </div>}
+    </table>{!result.rows.length&&<p className="lab-detail-empty">{connected?"No hay tickets que coincidan con los filtros.":"Detalle disponible al conectar PostgreSQL y autenticarte."}</p>}</div>
+    <ListPagination total={result.total} page={page} pageSize={pageSize} loading={result.status==="loading"}
+      onPageChange={setPage} onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label="líneas"/>
+
   </section>;
 }

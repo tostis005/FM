@@ -9,6 +9,7 @@ import {
 import "./styles.css";
 import AccessAdmin from "./Accesos.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
+import ListTable, {ListPagination} from "./ListTable.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
 import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
@@ -190,7 +191,14 @@ function App(){
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
  const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
   const [reportModal,setReportModal]=useState(null);
- const [reportDetailLimit,setReportDetailLimit]=useState(15);
+ const [reportPage,setReportPage]=useState(0);
+ const [reportPageSize,setReportPageSize]=useState(10);
+ const [reportListSearch,setReportListSearch]=useState("");
+ const [reportListSort,setReportListSort]=useState("name");
+ const [cnSearch,setCnSearch]=useState("");
+ const [cnSort,setCnSort]=useState("asc");
+ const [cnPage,setCnPage]=useState(0);
+ const [cnPageSize,setCnPageSize]=useState(25);
  const [expandedCampaignIds,setExpandedCampaignIds]=useState(()=>data.promos.filter(p=>p.status==="Activa").slice(0,2).map(p=>p.id));
  const [selectedPharmacyIds,setSelectedPharmacyIds]=useState(()=>reportFiltersFromUrl().pharmacies);
  const [pharmacySelectorOpen,setPharmacySelectorOpen]=useState(false);
@@ -284,7 +292,7 @@ function App(){
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
    setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
-   setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportDetailLimit(15);setReportModal(null);
+   setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
    window.addEventListener("popstate",onBackForward);
@@ -329,6 +337,9 @@ function App(){
  const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
  const draftFilterBase=reportModal?promos.filter(p=>(reportModal.status==="Todos"||p.status===reportModal.status)&&(reportModal.year==="Todos"||(p.start||"").slice(0,4)===reportModal.year)):[];
  const draftVisible=reportModal?draftFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportModal.search.toLocaleLowerCase("es"))):[];
+ const draftPageSize=reportModal?.pageSize||10;
+ const draftMaxPage=Math.max(0,Math.ceil(draftVisible.length/draftPageSize)-1);
+ const draftPage=Math.min(reportModal?.page||0,draftMaxPage);
  const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
  const effectivePharmacyIds=selectedPharmacyIds===null?reportPharmacyIds:selectedPharmacyIds.filter(id=>reportPharmacyIds.includes(id));
  const activePharmacySet=new Set(effectivePharmacyIds);
@@ -337,6 +348,17 @@ function App(){
   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id)))
  }));
+ const goalListFiltered=reportFilteredCampaigns.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" "))
+   .toLocaleLowerCase("es").includes(reportListSearch.toLocaleLowerCase("es"))).sort((a,b)=>{
+     const collate=(x,y)=>String(x).localeCompare(String(y),"es",{numeric:true});
+     if(reportListSort==="goal-desc")return sum(b.targets)-sum(a.targets)||collate(a.name,b.name);
+     if(reportListSort==="sales-desc")return sum(b.sales)-sum(a.sales)||collate(a.name,b.name);
+     if(reportListSort==="advance-desc")return percent(sum(b.sales),sum(b.targets))-percent(sum(a.sales),sum(a.targets))||collate(a.name,b.name);
+     if(reportListSort==="name-desc")return collate(b.name,a.name);
+     return collate(a.name,b.name);
+   });
+ const reportMaxPage=Math.max(0,Math.ceil(goalListFiltered.length/reportPageSize)-1);
+ const safeReportPage=Math.min(reportPage,reportMaxPage);
  const combinedReport=reportFilteredCampaigns.reduce((acc,p)=>{
   Object.entries(p.targets||{}).forEach(([id,val])=>{acc.targets[id]=(acc.targets[id]||0)+(Number(val)||0);});
   Object.entries(p.sales||{}).forEach(([id,val])=>{acc.sales[id]=(acc.sales[id]||0)+(Number(val)||0);});
@@ -346,6 +368,9 @@ function App(){
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
  const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
+ const searchedCNs=reportCNs.filter(cn=>(cn+" "+(reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"")).toLowerCase().includes(cnSearch.toLowerCase()));
+ const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
+ const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
@@ -353,7 +378,7 @@ function App(){
    const p=promoId?promos.find(item=>item.id===promoId):null;
    const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
    const status=p?p.status:defaultStatus,ids=p?[p.id]:data.promos.filter(item=>item.status===status).map(item=>item.id);
-   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportDetailLimit(15);setSelectedPharmacyIds(null);
+   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));
    const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
    if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
@@ -365,14 +390,14 @@ function App(){
   setPage(id);setSearch("");setMobileMenu(false);
  }
  function openReportFilters(){
-  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],limit:25});
+  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],page:0,pageSize:10});
  }
  function updateDraftScope(status,year){
   setReportModal(prev=>{
    if(!prev)return prev;
    const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
    const kept=prev.ids.filter(id=>eligible.some(p=>p.id===id));
-   return {...prev,status,year,search:"",limit:25,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
+   return {...prev,status,year,search:"",page:0,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
   });
  }
  function selectDraftAll(visible){setReportModal(prev=>prev?{...prev,ids:[...new Set([...prev.ids,...visible.map(p=>p.id)])]}:prev);}
@@ -384,7 +409,7 @@ function App(){
   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
   setReportStatus(status);setReportYear(year);
   setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
-  setSelectedPharmacyIds(null);setReportDetailLimit(15);setReportModal(null);
+  setSelectedPharmacyIds(null);setReportPage(0);setReportModal(null);
  }
  function toggleReportPharmacy(id){
   setSelectedPharmacyIds(prev=>{
@@ -565,17 +590,20 @@ function App(){
    <div className="select-wrap"><Filter size={16}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filtrar estado"><option>Todos</option><option>Activa</option><option>Borrador</option><option>Finalizada</option></select></div>
    <div className="date-mini"><CalendarDays size={16}/><input type="date" title="Desde" value={from} onChange={e=>setFrom(e.target.value)}/><span>—</span><input type="date" title="Hasta" value={to} onChange={e=>setTo(e.target.value)}/></div>
   </div>
-  <div className="table-scroll"><table className="data-table campaign-table">
-   <thead><tr><th>Promoción</th><th>Tipo</th><th>Estado</th><th>Periodo</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendidas</th><th>Avance</th><th>Acciones</th></tr></thead>
-   <tbody>{filteredPromos.map(p=>{const goal=sum(p.targets),sold=sum(p.sales),pc=percent(sold,goal);return <tr key={p.id} className="click-row" onClick={()=>startPromo(p)}>
-    <td><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div></td>
-    <td><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span></td><td><Pill status={p.status}/></td><td><div className="small-stack">{dateES(p.start)}<small>{dateES(p.end)}</small></div></td>
-    <td className="td-number">{p.cns.length}</td><td className="td-number">{Object.keys(p.targets).length}</td>
-    <td className="td-number">{EUR.format(goal)}</td><td className="td-number">{EUR.format(sold)}</td>
-    <td><div className="table-progress"><Progress value={pc}/><span>{pc}%</span></div></td>
-    <td><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div></td>
-   </tr>})}</tbody>
-  </table>{!filteredPromos.length&&<div className="empty-state"><Search size={25}/><strong>No hay promociones con esos filtros</strong><p>Prueba con otra búsqueda o selecciona un periodo más amplio.</p></div>}</div>
+  <ListTable rows={filteredPromos} rowKey={p=>p.id} label="promociones"
+    tableClass="campaign-table" onRowClick={startPromo} emptyText="No hay promociones con estos filtros"
+    columns={[
+      {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
+      {key:"type",label:"Tipo",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
+      {key:"status",label:"Estado",value:p=>p.status,render:p=><Pill status={p.status}/>},
+      {key:"start",label:"Periodo",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{dateES(p.end)}</small></div>},
+      {key:"cns",label:"CN",value:p=>p.cns.length,render:p=><span className="td-number">{p.cns.length}</span>},
+      {key:"pharmacies",label:"Farmacias",value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
+      {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{EUR.format(sum(p.targets))}</span>},
+      {key:"sales",label:"Vendidas",value:p=>sum(p.sales),render:p=><span className="td-number">{EUR.format(sum(p.sales))}</span>},
+      {key:"advance",label:"Avance",value:p=>percent(sum(p.sales),sum(p.targets)),render:p=><div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>},
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div>}
+    ]}/>
  </section>
  <div className="note data-note"><CircleHelp size={16}/> Las promociones existentes siguen siendo ejemplos guardados en el navegador. Las cifras de ventas solo son reales si se confirma conexión a Farmatic.</div>
 </>}
@@ -617,20 +645,54 @@ function App(){
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2><p>Despliega cada promoción para conocer el progreso de las farmacias. Todas las barras llegan al 100 % en el extremo derecho.</p></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
-   <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(reportFilteredCampaigns.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
-   <div className="goal-campaign-list">{!reportFilteredCampaigns.length&&<div className="report-choice-empty">Ninguna campaña de esta selección incluye las farmacias filtradas.</div>}{reportFilteredCampaigns.slice(0,reportDetailLimit).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
-   {reportFilteredCampaigns.length>reportDetailLimit&&<button className="report-more-goals" type="button" onClick={()=>setReportDetailLimit(v=>v+15)}><ChevronDown size={17}/> Mostrar {Math.min(15,reportFilteredCampaigns.length-reportDetailLimit)} campañas más</button>}
+   <div className="list-options">
+     <label>Buscar campaña <input type="search" value={reportListSearch}
+        onChange={e=>{setReportListSearch(e.target.value);setReportPage(0)}} placeholder="Nombre, laboratorio o CN…"/></label>
+     <label>Ordenar <select value={reportListSort} onChange={e=>{setReportListSort(e.target.value);setReportPage(0)}}>
+       <option value="name">Campaña A-Z</option><option value="name-desc">Campaña Z-A</option>
+       <option value="goal-desc">Objetivo mayor</option><option value="sales-desc">Ventas mayores</option>
+       <option value="advance-desc">Avance mayor</option>
+     </select></label>
+   </div>
+   <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(goalListFiltered.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
+   <div className="goal-campaign-list">{!goalListFiltered.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados.</div>}{goalListFiltered.slice(safeReportPage*reportPageSize,(safeReportPage+1)*reportPageSize).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
+   <ListPagination total={goalListFiltered.length} page={safeReportPage} pageSize={reportPageSize}
+      label="campañas" onPageChange={setReportPage}
+      onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
   <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"}/>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2><p>Referencias únicas de seis dígitos del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CNs</span></div>
-   <div className="cn-chips">{reportCNs.slice(0,45).map(cn=><span key={cn} className="cn-chip" title={reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||""}>{cn}</span>)}{reportCNs.length>45&&<span className="cn-chip">+{reportCNs.length-45} más</span>}</div>
+   <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>
+     <label>Ordenar <select value={cnSort} onChange={e=>{setCnSort(e.target.value);setCnPage(0)}}><option value="asc">CN ascendente</option><option value="desc">CN descendente</option></select></label></div>
+   <div className="cn-chips">{orderedCNs.slice(safeCNPage*cnPageSize,(safeCNPage+1)*cnPageSize).map(cn=><span key={cn} className="cn-chip" title={reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||""}>{cn}</span>)}
+     {!orderedCNs.length&&<span className="empty-inline">No hay CNs para la búsqueda.</span>}</div>
+   <ListPagination total={orderedCNs.length} page={safeCNPage} pageSize={cnPageSize} label="CNs"
+     onPageChange={setCnPage} onPageSizeChange={n=>{setCnPageSize(n);setCnPage(0)}}/>
   </section>
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
  <SalesNotice status={salesStatus} error={salesError} coverage={salesCoverage} databaseStatus={databaseStatus} canConnect={databaseStatus==="connected"} onConnect={()=>nav("accesos")}/>
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>ID</th><th>Nombre público</th><th>Origen</th><th>Servidor SQL</th><th>Estado</th><th>Usuarios</th><th/></tr></thead><tbody>{currentPharmacies.map(f=><tr key={f.id} onClick={()=>startPharmacy(f)} className="click-row"><td><span className="id-code">{f.id}</span></td><td><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div></td><td><span className="id-code">{f.sourceCode||"—"}</span></td><td>{pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"— (demo)"}</td><td><Pill status={f.active?"Activa":"Inactiva"}/></td><td>{users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length}</td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div></div></>}
-    {page==="usuarios"&&<><div className="page-header"><div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2><p>Identidad, permisos y farmacias asignadas</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Farmacias</th><th>Estado</th><th/></tr></thead><tbody>{currentUsers.map(u=><tr className="click-row" key={u.id} onClick={()=>startUser(u)}><td><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div></td><td><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span></td><td>{u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"}</td><td><Pill status={u.active?"Activa":"Inactiva"}/></td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2><p>Tres niveles de acceso</p></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}
+{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
+  onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
+  columns={[
+    {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
+    {key:"name",label:"Nombre público",value:f=>f.name,render:f=><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div>},
+    {key:"code",label:"Origen",value:f=>f.sourceCode||"",render:f=><span className="id-code">{f.sourceCode||"—"}</span>},
+    {key:"host",label:"Servidor SQL",value:f=>pharmacyApiStatus==="connected"?f.sourceHost||"Servidor local":"Sin conexión",render:f=>pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"— (demo)"},
+    {key:"active",label:"Estado",value:f=>f.active?"Activa":"Inactiva",render:f=><Pill status={f.active?"Activa":"Inactiva"}/>},
+    {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
+    {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
+  ]}/></div></div></>}
+    {page==="usuarios"&&<><div className="page-header"><div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2><p>Identidad, permisos y farmacias asignadas</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentUsers} rowKey={u=>u.id} label="usuarios"
+  onRowClick={startUser} emptyText="No hay usuarios con esos filtros"
+  columns={[
+    {key:"name",label:"Usuario",value:u=>u.name+" "+u.email,render:u=><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div>},
+    {key:"role",label:"Rol",value:u=>ROLES[u.role],render:u=><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span>},
+    {key:"pharmacies",label:"Farmacias",value:u=>u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"},
+    {key:"active",label:"Estado",value:u=>u.active?"Activa":"Inactiva",render:u=><Pill status={u.active?"Activa":"Inactiva"}/>},
+    {key:"action",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
+  ]}/></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2><p>Tres niveles de acceso</p></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<><div className="page-header"><div><h1>Ajustes</h1><p>Estado del prototipo y próximas integraciones.</p></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Google y correos autorizados</h2><p>Inicio de sesión, dominios y cuentas gestionados desde Accesos.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>SQL Server → PostgreSQL, con cargas iniciales e incrementales y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div></>}
    </main>
@@ -650,7 +712,7 @@ function App(){
       <Field label="Año de inicio"><select value={reportModal.year} onChange={e=>updateDraftScope(reportModal.status,e.target.value)}>
        <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
       </select></Field>
-      <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,limit:25}))}/></Field>
+      <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,page:0}))}/></Field>
      </div>
      <div className="report-modal-selection-head">
       <label className="report-select-all"><input type="checkbox" disabled={!draftVisible.length} checked={draftVisible.length>0&&draftVisible.every(p=>reportModal.ids.includes(p.id))} onChange={e=>e.target.checked?selectDraftAll(draftVisible):clearDraftVisible(draftVisible)}/> Seleccionar todas las campañas filtradas</label>
@@ -658,13 +720,15 @@ function App(){
       <button type="button" className="report-modal-clear" disabled={!draftVisible.some(p=>reportModal.ids.includes(p.id))} onClick={()=>clearDraftVisible(draftVisible)}>Limpiar visibles</button>
      </div>
      <div className="report-modal-campaigns">
-      {draftVisible.slice(0,reportModal.limit).map(p=><label className={"report-choice "+(reportModal.ids.includes(p.id)?"report-choice-checked":"")} key={p.id}>
+      {draftVisible.slice(draftPage*draftPageSize,(draftPage+1)*draftPageSize).map(p=><label className={"report-choice "+(reportModal.ids.includes(p.id)?"report-choice-checked":"")} key={p.id}>
        <input type="checkbox" checked={reportModal.ids.includes(p.id)} onChange={()=>toggleDraftCampaign(p.id)}/>
        <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span><Pill status={p.status}/>
       </label>)}
       {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, año o búsqueda.</div>}
      </div>
-     {draftVisible.length>reportModal.limit&&<button className="report-more" type="button" onClick={()=>setReportModal(prev=>({...prev,limit:prev.limit+25}))}><ChevronDown size={16}/> Ver otras {Math.min(25,draftVisible.length-reportModal.limit)} campañas</button>}
+     <ListPagination total={draftVisible.length} page={draftPage} pageSize={draftPageSize}
+        label="campañas" onPageChange={n=>setReportModal(prev=>({...prev,page:n}))}
+        onPageSizeChange={n=>setReportModal(prev=>({...prev,pageSize:n,page:0}))}/>
     </div>
     <div className="report-modal-bottom">
      <div className="report-modal-bottom-info"><strong>{draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length} {draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length===1?"campaña seleccionada":"campañas seleccionadas"}</strong><small>Los cambios se mostrarán al pulsar Aplicar filtros.</small></div>

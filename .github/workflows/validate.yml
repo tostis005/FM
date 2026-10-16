@@ -32,5 +32,6 @@ jobs:
           npm install --no-audit --no-fund
           node --test src/importarPromociones.test.js
           node --test src/objetivosImportacion.test.js
+          node --test src/listLogic.test.js
           node check-login.mjs
           npm run build

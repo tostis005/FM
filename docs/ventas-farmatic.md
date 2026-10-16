@@ -74,3 +74,31 @@ ORDER BY f.id;
 
 No se han leído datos del VPS desde este chat. Las cifras solo se podrán
 confirmar en la web cuando la API autenticada esté desplegada y conectada.
+
+
+## PostgreSQL y Google son independientes
+
+PostgreSQL se aloja en la misma máquina de Contabo que FARMAWAO y está en el
+servicio Docker `db`. La API utiliza su `DATABASE_URL` privada (dentro de
+Docker, hostname `db`; `localhost` apuntaría al contenedor API, NO a PostgreSQL).
+
+El proceso de API **ya no necesita** Google OAuth ni Microsoft Entra para arrancar
+o comprobar PostgreSQL. El endpoint público `GET /api/health/database` devuelve
+únicamente si puede consultar `farmatic.lineaventa`, sin registros ni métricas.
+El workflow despliega exclusivamente la API si su conexión privada y la tabla
+Farmatic están preparadas; no reconstruye PostgreSQL ni la web y guarda una copia
+de seguridad del código anterior.
+
+**Seguridad:** hasta configurar Google y entrar como administrador, las rutas
+`/api/farmacias`, `/api/ventas/*`, `/api/admin/*` y el detalle de tickets
+devuelven 401/403. Que la API tenga conexión interna no hace público el contenido
+de las ventas. Google solo verifica la identidad: la aplicación no recibe ni
+almacena la contraseña de Google.
+
+Al verificar un despliegue, comprobar:
+```sh
+curl -fsS https://TU_HOST/api/health/database
+# {"status":"ok","database":"connected"}
+```
+El resultado anterior es el esperado, no una afirmación de que el VPS
+esté configurado hasta confirmar la ejecución del workflow.

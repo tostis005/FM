@@ -63,3 +63,14 @@ export const savePharmacyToServer = (pharmacy, isNew) => request(
   isNew ? "/api/farmacias" : `/api/farmacias/${encodeURIComponent(pharmacy.id)}`,
   { method: isNew ? "POST" : "PATCH", body: JSON.stringify(pharmacy) },
 );
+
+
+// Endpoints protegidos: la contraseña de PostgreSQL jamás llega al navegador.
+export const loadSalesCatalog = () => request("/api/ventas/catalogo?desde=2026-10-01&hasta=2026-10-31");
+export const loadSalesCoverage = () => request("/api/ventas/cobertura");
+export const loadPromotionSales = (promotions) => request("/api/ventas/seguimiento", {
+  method: "POST",
+  body: JSON.stringify({ promotions: promotions.map(p => ({
+    id: String(p.id), start: p.start, end: p.end, cns: p.cns || [],
+  })) }),
+});

@@ -111,7 +111,7 @@ function promotionSheets(promo, pharmacyName) {
       ["Objetivo (unidades)", goal],
       ["Vendidas (unidades)", sold],
       ["Cumplimiento (%)", completion(sold, goal)],
-      ["Origen de ventas", "Datos ilustrativos hasta activar la sincronización real"],
+      ["Origen de ventas", promo.salesSource || "Sin conexión de ventas reales"],
     ] },
     { name: "Farmacias", widths: [19, 34, 24, 24, 22], rows: [
       ["ID farmacia", "Farmacia", "Objetivo (uds.)", "Vendidas (uds.)", "Cumplimiento (%)"],

@@ -297,3 +297,13 @@
 
 /* Validación de CNs de exactamente seis dígitos */
 .cn-format-error{color:#a24332!important;background:#fff2ed;border:1px solid #f4cebe;border-radius:9px;padding:10px 12px}
+
+/* Integración Farmatic y controles de incremento de objetivos */
+.sales-connection{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;margin:12px 0 18px}
+.sales-connection span{flex:1;min-width:230px}
+.sales-connected{background:#f0fbf5;border:1px solid #bde8d2;color:#236149}
+.increase-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.increase-controls label{display:flex;align-items:center;gap:6px;color:#45675a;font-size:12px;font-weight:700}
+.increase-controls input{width:64px;min-height:33px;padding:5px 7px;text-align:right;background:#fff;border:1px solid #d2e2d9;border-radius:7px}
+.increase-controls button{min-height:33px;border-radius:7px;background:#e4f6ed;color:#157a54;padding:6px 13px;border:1px solid #b9e0cc;font-weight:800;cursor:pointer}
+@media(max-width:700px){.sales-connection{align-items:flex-start}.increase-controls{justify-content:flex-start}.campaign-header-actions{flex-wrap:wrap}}

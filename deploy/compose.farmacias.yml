@@ -1,15 +1,26 @@
-# Override complementario; NO reemplaza el compose.yaml de Contabo.
-# Valores definidos únicamente en /opt/farmawao/.env (nunca en GitHub).
+# Override complementario sin publicar secretos en Git.
+# Todos los valores se guardan únicamente en /opt/farmawao/.env.
 services:
   api:
     environment:
-      AZURE_TENANT_ID: ${AZURE_TENANT_ID:?Configure AZURE_TENANT_ID}
-      AZURE_API_CLIENT_ID: ${AZURE_API_CLIENT_ID:?Configure AZURE_API_CLIENT_ID}
-      ADMIN_OIDS: ${ADMIN_OIDS:?Configure ADMIN_OIDS}
-
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_API_CLIENT_ID: ${AZURE_API_CLIENT_ID:-}
+      ADMIN_OIDS: ${ADMIN_OIDS:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      ADMIN_BOOTSTRAP_EMAILS: ${ADMIN_BOOTSTRAP_EMAILS:-}
+      PUBLIC_APP_ORIGIN: ${PUBLIC_APP_ORIGIN:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
   web:
     build:
       args:
-        VITE_ENTRA_TENANT_ID: ${VITE_ENTRA_TENANT_ID:?Configure VITE_ENTRA_TENANT_ID}
-        VITE_ENTRA_CLIENT_ID: ${VITE_ENTRA_CLIENT_ID:?Configure VITE_ENTRA_CLIENT_ID}
-        VITE_ENTRA_API_SCOPE: ${VITE_ENTRA_API_SCOPE:?Configure VITE_ENTRA_API_SCOPE}
+        VITE_ENTRA_TENANT_ID: ${VITE_ENTRA_TENANT_ID:-}
+        VITE_ENTRA_CLIENT_ID: ${VITE_ENTRA_CLIENT_ID:-}
+        VITE_ENTRA_API_SCOPE: ${VITE_ENTRA_API_SCOPE:-}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}

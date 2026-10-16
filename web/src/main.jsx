@@ -524,24 +524,22 @@ function GoalProgressBar({goal,sold}){
   <div className="goal-progress-meta"><span>{EUR.format(sold)} / {EUR.format(goal)} uds.</span><span>{detail}</span></div>
  </div>;
 }
-function CampaignGoalCard({promo,pharmaName}){
+function CampaignGoalCard({promo,pharmaName,expanded,onToggle,singlePharmacy=false}){
  const goal=sum(promo.targets),sold=sum(promo.sales),entries=Object.entries(promo.targets||{});
- return <article className="goal-campaign-card">
-  <div className="goal-campaign-heading">
-   <div className="goal-campaign-title"><span className="goal-icon"><Tag size={17}/></span><div><h3>{promo.name}</h3><p>{entries.length} {entries.length===1?"farmacia":"farmacias"} · {promo.cns.length} CN · {promo.id}</p></div></div>
-   <Pill status={promo.status}/>
-  </div>
-  <div className="goal-campaign-total">
-   <div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div>
-   <GoalProgressBar goal={goal} sold={sold}/>
-  </div>
-  <div className="goal-farmacies-list">
-   {entries.map(([id,value])=><div key={id} className="goal-farm-row">
-    <div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div>
-    <GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)}/>
-   </div>)}
-   {!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}
-  </div>
+ const campaignPercent=goal>0?percent(sold,goal):null;
+ return <article className={"goal-campaign-card "+(expanded?"goal-campaign-open":"goal-campaign-closed")}>
+  <button type="button" className="goal-campaign-heading goal-campaign-toggle" aria-expanded={expanded} onClick={onToggle} aria-label={(expanded?"Plegar ":"Desplegar ")+promo.name}>
+   <span className="goal-campaign-title"><span className="goal-icon"><Tag size={17}/></span><span className="goal-title-copy"><strong>{promo.name}</strong><small>{entries.length} {entries.length===1?"farmacia":"farmacias"} · {promo.cns.length} CN · {promo.id}</small></span></span>
+   <span className="goal-campaign-side"><span className={"goal-accordion-pct "+(campaignPercent!==null&&campaignPercent>=100?"achieved":"")}>{campaignPercent===null?"Sin objetivo":campaignPercent+"%"}</span><Pill status={promo.status}/><ChevronDown size={18} className={"goal-chevron "+(expanded?"expanded":"")}/></span>
+  </button>
+  {expanded&&<div className="goal-campaign-expanded">
+   {singlePharmacy?
+    <div className="goal-campaign-total goal-single-pharmacy"><div className="goal-group-label"><span>{entries.length?pharmaName(entries[0][0]):"Farmacia sin objetivo"}</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold}/></div>
+    :<>
+     <div className="goal-campaign-total"><div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold}/></div>
+     <div className="goal-farmacies-list">{entries.map(([id,value])=><div key={id} className="goal-farm-row"><div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div><GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)}/></div>)}{!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}</div>
+    </>}
+  </div>}
  </article>;
 }
 createRoot(document.getElementById("root")).render(<App/>);

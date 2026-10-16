@@ -212,8 +212,15 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
       (cn != null && cn !== "" && (!/^\\d{6}$/.test(cn) || !cns.includes(cn))) ||
       !columnFilters || typeof columnFilters !== "object" || Array.isArray(columnFilters) ||
       Object.keys(columnFilters).length > 13 ||
-      Object.entries(columnFilters).some(([name,value]) =>
-        !Object.hasOwn(ticketColumns,name)||typeof value !== "string"||value.length > 80) ||
+      Object.entries(columnFilters).some(([name,value]) => {
+        if(!Object.hasOwn(ticketColumns,name))return true;
+        if(Array.isArray(value)){
+          if(!["pharmacy","cn"].includes(name) || value.length>500)return true;
+          return value.some(v=>typeof v!=="string"||
+            (name==="pharmacy"?!/^[1-9]\\d{0,5}$/.test(v):!/^\\d{6}$/.test(v)||!cns.includes(v)));
+        }
+        return typeof value!=="string"||value.length>80;
+      }) ||
       !Object.hasOwn(ticketColumns,orderBy) || !["asc","desc"].includes(orderDir)) {
     return res.status(400).json({ error: "Filtros de ventas inválidos" });
   }
@@ -231,9 +238,16 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
       ticket ? ticket.trim() : null, cn || null,
     ];
     for (const [column,value] of Object.entries(columnFilters)) {
-      if(!value.trim())continue;
-      params.push(value.trim());
-      filters.push(ticketColumns[column]+"::text ILIKE '%' || $"+params.length+" || '%'");
+      if(Array.isArray(value)){
+        if(!value.length)continue;
+        params.push(value);
+        filters.push((column==="pharmacy"?"f.id::text":"btrim(v.codigo::text)")+
+          " = ANY($"+params.length+"::text[])");
+      }else{
+        if(!value.trim())continue;
+        params.push(value.trim());
+        filters.push(ticketColumns[column]+"::text ILIKE '%' || $"+params.length+" || '%'");
+      }
     }
     const where = salesJoin + " WHERE " + filters.join(" AND ");
     const { rows: countRows } = await pool.query(

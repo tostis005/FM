@@ -12,8 +12,11 @@ const {
 } = process.env;
 
 const azureEnabled = Boolean(AZURE_TENANT_ID && AZURE_API_CLIENT_ID && ADMIN_OIDS.trim());
-if (!DATABASE_URL || (!azureEnabled && !(GOOGLE_CLIENT_ID && SESSION_SECRET.length >= 32))) {
-  console.error("Falta PostgreSQL o algún proveedor de identidad seguro (Microsoft Entra o Google). API cerrada.");
+// La conexión privada a PostgreSQL es independiente del inicio de sesión.
+// Aunque Google/Entra no estén configurados, requireAdmin deniega todas las
+// rutas con datos de farmacias y ventas hasta que exista una sesión válida.
+if (!DATABASE_URL) {
+  console.error("Falta DATABASE_URL para conectar PostgreSQL. API no iniciada.");
   process.exit(1);
 }
 
@@ -28,6 +31,18 @@ app.use(express.json({ limit: "16kb" }));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
+// Solo informa si la conexión privada tiene acceso a la tabla esperada.
+// No revela tickets, recuentos, credenciales ni otros datos de ventas.
+app.get("/api/health/database", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1 FROM farmatic.lineaventa LIMIT 1");
+    res.json({ status: "ok", database: "connected" });
+  } catch (error) {
+    console.error("Fallo de verificación de PostgreSQL", error.code || error.name);
+    res.status(503).json({ status: "unavailable", database: "disconnected" });
+  }
+});
 
 async function requireEntraAdmin(req, res, next) {
   if (!azureEnabled) return res.status(401).json({ error: "Microsoft Entra no está configurado" });

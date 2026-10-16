@@ -72,7 +72,7 @@ jobs:
              cp -r "$STAGING"/. /opt/farmawao/web/'
       - name: Reconstruir solo contenedor web
         run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose up -d --build --no-deps web'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && if test -f compose.farmacias.yml; then docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps web; else docker compose up -d --build --no-deps web; fi'
       - name: Comprobar respuesta en VPS
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'for i in $(seq 1 20); do curl -fsS http://127.0.0.1:18080/ | grep -qi "Farmétrica" && exit 0; sleep 3; done; exit 1'

@@ -433,10 +433,41 @@ function App(){
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
  </div>
 }
-function TrackingContent({selected,chartData,trackingTargets,trackingGoal,trackingSales,pharmaName,compact=false}){
- return <div className={"tracking-grid "+(compact?"tracking-compact":"")}>
-  <div className="chart-panel"><div className="chart-header"><h3>Evolución semanal</h3><div className="legend"><span><i className="legend-bar"/> Ventas</span><span><i className="legend-line"/> Objetivo acumulado</span></div></div><div className="chart-area"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData} margin={{top:10,right:8,left:-24,bottom:0}}><CartesianGrid stroke="#e7efec" strokeDasharray="3 4" vertical={false}/><XAxis dataKey="week" tick={{fontSize:11,fill:"#81918c"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#81918c"}} axisLine={false} tickLine={false}/><Tooltip formatter={(value)=>[EUR.format(value)+" uds.",""]} contentStyle={{borderRadius:12,border:"1px solid #e3ebe7",boxShadow:"0 12px 25px #15282010"}}/><Bar dataKey="ventas" fill="#bcecd9" radius={[6,6,0,0]} barSize={compact?29:43}/><Line type="monotone" dataKey="objetivo" stroke="#0aaf78" strokeWidth={3} dot={{r:3,fill:"#0aaf78",strokeWidth:0}}/></ComposedChart></ResponsiveContainer></div><div className="chart-disclaimer">Distribución semanal simulada para la demo</div></div>
-  <div className="pharma-progress-panel"><div className="chart-header"><h3>Avance por farmacia</h3><span className="mini-total">{EUR.format(trackingSales)} / {EUR.format(trackingGoal)} uds.</span></div><div className="pharma-progress-table"><div className="mini-table-head"><span>Farmacia</span><span>Vendido</span><span>Objetivo</span><span>Progreso</span></div>{trackingTargets.map(([id,t])=>{const sold=selected?.sales?.[id]||0;return <div key={id} className="mini-table-row"><strong>{pharmaName(id)}</strong><span>{EUR.format(sold)}</span><span>{EUR.format(t)}</span><div className="mini-progress"><Progress value={percent(sold,t)}/><b>{percent(sold,t)}%</b></div></div>})}{!trackingTargets.length&&<p className="empty-inline">Sin farmacias seleccionadas.</p>}</div></div>
+function GoalProgressBar({goal,sold}){
+ const pct=goal>0?Math.round(sold/goal*100):null;
+ const width=pct===null?0:Math.max(0,Math.min(100,pct));
+ const remaining=goal>0?Math.max(0,goal-sold):null;
+ const tone=pct===null?"empty":pct>=100?"done":pct>=80?"near":pct>=50?"mid":"low";
+ const detail=pct===null?"Sin objetivo":remaining>0?"Faltan "+EUR.format(remaining)+" uds.":pct>100?"Superado en "+EUR.format(sold-goal)+" uds.":"Objetivo cumplido";
+ return <div className={"goal-progress goal-"+tone}>
+  <div className="goal-track-wrap">
+   <div className="goal-track" role="progressbar" aria-label={pct===null?"Sin objetivo":"Cumplimiento del objetivo"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={width} aria-valuetext={pct===null?"Sin objetivo":pct+" por ciento, "+EUR.format(sold)+" de "+EUR.format(goal)+" unidades"}>
+    <div className="goal-track-fill" style={{width:width+"%"}}/>
+    <span className="goal-target-line"/>
+   </div>
+   <span className={"goal-pct "+(pct!==null&&pct>=100?"is-done":"")}>{pct===null?"—":pct+"%"}</span>
+  </div>
+  <div className="goal-progress-meta"><span>{EUR.format(sold)} / {EUR.format(goal)} uds.</span><span>{detail}</span></div>
  </div>;
+}
+function CampaignGoalCard({promo,pharmaName}){
+ const goal=sum(promo.targets),sold=sum(promo.sales),entries=Object.entries(promo.targets||{});
+ return <article className="goal-campaign-card">
+  <div className="goal-campaign-heading">
+   <div className="goal-campaign-title"><span className="goal-icon"><Tag size={17}/></span><div><h3>{promo.name}</h3><p>{entries.length} {entries.length===1?"farmacia":"farmacias"} · {promo.cns.length} CN · {promo.id}</p></div></div>
+   <Pill status={promo.status}/>
+  </div>
+  <div className="goal-campaign-total">
+   <div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div>
+   <GoalProgressBar goal={goal} sold={sold}/>
+  </div>
+  <div className="goal-farmacies-list">
+   {entries.map(([id,value])=><div key={id} className="goal-farm-row">
+    <div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div>
+    <GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)}/>
+   </div>)}
+   {!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}
+  </div>
+ </article>;
 }
 createRoot(document.getElementById("root")).render(<App/>);

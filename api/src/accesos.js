@@ -124,7 +124,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   app.get("/api/auth/check", async (req, res, next) => {
     try {
       const user = await sessionUser(req);
-      return user ? res.status(204).end() : res.status(401).end();
+      return user?.role === "administrador" ? res.status(204).end() : res.status(401).end();
     } catch (error) { next(error); }
   });
 

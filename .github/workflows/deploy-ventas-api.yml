@@ -1,4 +1,4 @@
-name: Desplegar API Farmatic cuando Entra esté preparado
+name: Desplegar API Farmatic y accesos cuando Google esté preparado
 
 on:
   push:
@@ -29,6 +29,7 @@ jobs:
       - name: Validar codigo API
         run: |
           node --check api/src/server.js
+          node --check api/src/accesos.js
       - name: Preparar SSH
         shell: bash
         run: |
@@ -54,9 +55,10 @@ jobs:
             if ! test -f compose.yaml; then echo SIN_COMPOSE; exit 0; fi
             if ! test -f .env; then echo SIN_ENV; exit 0; fi
             if ! test -d api; then echo SIN_DIRECTORIO_API; exit 0; fi
-            for key in AZURE_TENANT_ID AZURE_API_CLIENT_ID ADMIN_OIDS VITE_ENTRA_TENANT_ID VITE_ENTRA_CLIENT_ID VITE_ENTRA_API_SCOPE; do
-              if ! grep -qE "^$key=.+$" .env; then echo "PENDIENTE_ENTRA_$key"; exit 0; fi
+            for key in GOOGLE_CLIENT_ID SESSION_SECRET ADMIN_BOOTSTRAP_EMAILS PUBLIC_APP_ORIGIN; do
+              if ! grep -qE "^$key=.+$" .env; then echo "PENDIENTE_GOOGLE_$key"; exit 0; fi
             done
+            if ! grep -qE "^SESSION_SECRET=.{32,}$" .env; then echo SESSION_SECRET_INSUFICIENTE; exit 0; fi
             if ! docker compose exec -T db psql -X -At -U farmawao -d farmawao -c "
               SELECT count(*) = 5 FROM information_schema.columns
               WHERE table_schema = '\''farmatic'\'' AND table_name = '\''lineaventa'\''
@@ -84,14 +86,14 @@ jobs:
             tar -xzf - -C api
           '
           scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes deploy/compose.farmacias.yml "$VPS_USER@$VPS_HOST:/opt/farmawao/compose.farmacias.yml"
-      - name: Comprobar compose y desplegar API (sin tocar web ni base de datos)
+      - name: Comprobar compose y desplegar API y web (sin tocar base de datos)
         if: steps.verificar.outputs.ready == 'true'
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             set -eu
             cd /opt/farmawao
             docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
-            docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api
+            docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api web
             for i in $(seq 1 25); do
               if curl -fsS http://127.0.0.1:18080/api/health | grep -q ok; then exit 0; fi
               sleep 3

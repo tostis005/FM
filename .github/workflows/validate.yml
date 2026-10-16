@@ -18,7 +18,9 @@ jobs:
         with:
           node-version: "22"
       - name: Comprobar API
-        run: node --check api/src/server.js
+        run: |
+          node --check api/src/server.js
+          node --check api/src/accesos.js
       - name: Validar formato de CNs
         run: node --test web/src/cns.test.js
       - name: Compilar React

@@ -108,7 +108,7 @@ function cnOf(value){if(value===null||value===undefined)return "";return String(
 function createCampaign(laboratory,range,offer,start,end,description,cns,source){
   const classification=typeInfo(offer,description);
   const promo={
-    id:null,name:clean(range)+" · "+clean(offer||"Promoción"),
+    id:null,name:clean(range)+" · "+(typeof offer==="number" ? (offer>0&&offer<=1?Math.round(offer*100)+"% DTO":offer+"€ DTO") : clean(offer||"Promoción")),
     subtitle:clean(laboratory),laboratory:clean(laboratory),range:clean(range),
     description:clean(description||offer),originalOffer:clean(offer),
     start,end,status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),
@@ -205,21 +205,30 @@ export async function readPromotionExcel(file){
   return promos;
 }
 export function mergeImportedPromos(existing,incoming){
-  const keys=new Set(existing.map(p=>p.fingerprint||makeFingerprint({
+  const normalize=p=>p.fingerprint||makeFingerprint({
     laboratory:p.laboratory||p.subtitle,range:p.range||p.name,
     start:p.start,end:p.end,originalOffer:p.originalOffer||p.name
-  })));
-  let duplicates=0;
-  const additions=[];
+  });
+  const existingByFingerprint=new Map(existing.map(p=>[normalize(p),p]));
+  const existingIds=new Set(existing.map(p=>p.id));
+  let duplicates=0,expanded=0;
+  const additions=[],updates=[];
   for(const p of incoming){
-    const sameId=existing.some(e=>e.id===p.id);
+    const same=existingByFingerprint.get(p.fingerprint)||existing.find(x=>x.id===p.id);
+    if(same){
+      const newCNs=[...new Set([...(same.cns||[]),...p.cns])];
+      if(newCNs.length>(same.cns||[]).length){
+        updates.push({...same,cns:newCNs,importWarnings:[...new Set([...(same.importWarnings||[]),...(p.importWarnings||[])])]});
+        expanded++;
+      }else duplicates++;
+      continue;
+    }
     const overlapping=existing.some(e=>e.start===p.start&&e.end===p.end&&
       similarity(e.range||e.name,p.range)>0.82&&
       (e.cns||[]).length>0&&p.cns.length>0&&
       p.cns.filter(cn=>e.cns.includes(cn)).length/Math.min(p.cns.length,e.cns.length)>=0.75);
-    if(keys.has(p.fingerprint)||sameId||overlapping){duplicates++;continue;}
-    additions.push(p);
-    keys.add(p.fingerprint);
+    if(overlapping){duplicates++;continue;}
+    additions.push(p);existingByFingerprint.set(p.fingerprint,p);existingIds.add(p.id);
   }
-  return {additions,duplicates,warnings:additions.filter(p=>p.importWarnings.length).length};
+  return {additions,updates,duplicates,expanded,warnings:additions.filter(p=>p.importWarnings.length).length};
 }

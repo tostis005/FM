@@ -425,17 +425,6 @@ function App(){
    <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{EUR.format(reportSales)} uds.</strong></div><div><span>Avance global</span><strong>{percent(reportSales,reportGoal)}%</strong></div></div>
    <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>
-  <section className="card list-card full-table-card">
-   <div className="section-heading"><div><h2>Detalle de promociones</h2><p>Objetivo, vendido y progreso de la selección actual</p></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
-   <div className="table-scroll"><table className="data-table campaign-table"><thead><tr><th>Promoción</th><th>Estado</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendido</th><th>Avance</th><th>Acción</th></tr></thead><tbody>
-    {reportFilteredCampaigns.map(p=>{const goal=sum(p.targets),sold=sum(p.sales);return <tr key={p.id}>
-     <td><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)}</small></div></div></td>
-     <td><Pill status={p.status}/></td><td>{p.cns.length}</td><td>{Object.keys(p.targets||{}).length}</td><td>{EUR.format(goal)} uds.</td><td>{EUR.format(sold)} uds.</td>
-     <td><div className="table-progress"><Progress value={percent(sold,goal)}/><span>{percent(sold,goal)}%</span></div></td>
-     <td><button className="row-action" title={"Editar "+p.name} aria-label={"Editar "+p.name} onClick={()=>startPromo(p)}><Pencil size={16}/></button></td>
-    </tr>})}
-   </tbody></table></div>
-  </section>
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2><p>Despliega cada promoción para conocer el progreso de las farmacias. Todas las barras llegan al 100 % en el extremo derecho.</p></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>

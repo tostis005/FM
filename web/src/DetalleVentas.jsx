@@ -1,7 +1,6 @@
 import React,{useEffect,useState} from "react";
-import {ArrowDownToLine,Filter,Search,Ticket,RefreshCcw} from "lucide-react";
+import {Filter,Ticket} from "lucide-react";
 import {loadTicketLines} from "./farmaciasApi.js";
-import {exportLabSalesExcel} from "./exportaciones.js";
 import {ListPagination} from "./ListTable.jsx";
 
 const num=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:3}).format(Number(n)||0);
@@ -45,7 +44,6 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
       prev.direction==="asc"?{key,direction:"desc"}:{key,direction:"asc"});
     setPage(0);
   };
-  const [exporting,setExporting]=useState(false);
   const promo=promotions.find(p=>p.id===promoId);
   useEffect(()=>{
     if(promotions.length && !promotions.some(p=>p.id===promoId)){
@@ -71,35 +69,13 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
   function applyFilters(e){
     e.preventDefault();setApplied({...draft});setPage(0);
   }
-  async function download(){
-    if(!eligible||!promo||exporting)return;
-    setExporting(true);
-    try{
-      const records=[];
-      let total=0;
-      for(let offset=0;offset<10000;offset+=500){
-        const r=await loadTicketLines({...filters,columnFilters,orderBy:sort.key,orderDir:sort.direction,offset,limit:500});
-        total=r.total;
-        records.push(...r.rows);
-        if(records.length>=total)break;
-      }
-      if(total>10000){
-        const ok=window.confirm("Hay "+num(total)+" líneas. Esta descarga contiene solo las 10.000 primeras; para un informe completo habrá que dividir el periodo. ¿Continuar?");
-        if(!ok)return;
-      }
-      await exportLabSalesExcel(promo,records);
-    }catch(e){setResult(prev=>({...prev,error:"No se pudo exportar: "+e.message}));}
-    finally{setExporting(false);}
-  }
+
   return <section className="card lab-detail-panel">
     <div className="section-heading">
-      <div><h2>Detalle de ventas para laboratorio</h2><p>Tickets reales de Farmatic, por promoción. Datos originales de venta, sin descuentos promocionales simulados.</p></div>
-      <button className="btn btn-primary" type="button" onClick={download} disabled={!eligible||exporting||result.status==="loading"}>
-        <ArrowDownToLine size={17}/>{exporting?"Preparando Excel…":"Exportar formato laboratorio"}
-      </button>
+      <div><h2>Consulta de tickets</h2><p>Consulta y filtra las ventas reales de Farmatic. Para descargar el Excel del laboratorio utiliza el botón superior «Exportar Excel laboratorio» de Seguimiento.</p></div>
     </div>
     <div className="note data-note"><Ticket size={17}/> El vendedor se muestra por su ID de Farmatic; para mostrar nombres reales es necesario conectar el maestro de vendedores. En la exportación se conserva el mismo identificador.</div>
-    {!connected&&<div className="access-alert access-alert-error">Para consultar tickets y exportarlos necesitas iniciar sesión como administrador y que la API de PostgreSQL esté activa.</div>}
+    {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas una sesión de administrador y la conexión a PostgreSQL.</div>}
     <form className="lab-detail-filters" onSubmit={applyFilters}>
       <label>Promoción
         <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({})}}>

@@ -118,3 +118,114 @@
  .report-selector-footer{padding:12px 16px;line-height:1.6}
  .report-choice-scroll{max-height:340px}
 }
+
+
+/* Nuevo seguimiento: modal de selección y dashboard de metas por campaña/farmacia */
+.report-page-header{margin-bottom:17px}
+.report-button-count{display:inline-grid;place-items:center;background:#e0f6e9;color:#078d62;border-radius:7px;min-width:23px;height:22px;font-size:11px;padding:0 6px}
+.report-active-summary{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:21px;flex-wrap:wrap;padding:13px 18px;border:1px solid #e0ece6;background:#fff;border-radius:12px}
+.report-scope-info{display:flex;gap:9px;align-items:center;flex-wrap:wrap;color:#758b80;font-size:12px}
+.report-scope-info strong{color:#284d3d}
+.scope-indicator{width:8px;height:8px;border-radius:50%;background:#15ae7c;flex-shrink:0}
+.report-scope-separator{color:#bacbc1}
+.report-quick-pharmacy{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:800;color:#638477}
+.report-quick-pharmacy select{height:35px;border:1px solid #dcebe2;border-radius:8px;background:#f8fcfa;padding:5px 28px 5px 9px;color:#295242;max-width:220px;font-weight:700}
+
+.report-modal-backdrop{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(8,30,25,.64);backdrop-filter:blur(5px);padding:22px}
+.report-modal{width:min(1100px,100%);height:min(860px,calc(100dvh - 44px));display:flex;flex-direction:column;background:#fff;border-radius:20px;box-shadow:0 26px 110px #0b261d44;overflow:hidden}
+.report-modal-top{padding:24px 30px 22px;display:flex;align-items:flex-start;justify-content:space-between;gap:20px;border-bottom:1px solid #e8f0ea;background:linear-gradient(108deg,#f0fbf5,white 77%);flex-shrink:0}
+.report-modal-top h2{font-family:Manrope,sans-serif;font-size:27px;letter-spacing:-.8px;color:#1a3b30;margin:7px 0}
+.report-modal-top p{color:#759082;font-size:12px;margin:0;line-height:1.6}
+.report-modal-close{border:1px solid #d7e9df;border-radius:10px;background:#fff;flex-shrink:0}
+.report-modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;flex:1}
+.report-modal-filters{display:grid;grid-template-columns:minmax(145px,.8fr) minmax(145px,.8fr) minmax(240px,1.6fr);gap:18px;padding:24px 30px}
+.report-modal-filters .field{min-width:0}
+.report-modal-filters input,.report-modal-filters select{width:100%}
+.report-modal-selection-head{display:flex;align-items:center;gap:16px;padding:14px 30px;background:#f7fbf9;border-top:1px solid #edf3ee;border-bottom:1px solid #e9f0ea;flex-wrap:wrap}
+.report-modal-selection-head>span{color:#718b7c;font-size:11px;margin-left:auto}
+.report-modal-clear{border:0;background:transparent;color:#0b9365;font-size:11px;font-weight:800;cursor:pointer}
+.report-modal-clear:disabled{opacity:.38;cursor:default}
+.report-modal-campaigns .report-choice{padding:16px 30px}
+.report-modal-campaigns .report-choice-body strong{font-size:12.5px}
+.report-modal-campaigns .report-choice-body small{font-size:11px}
+.report-modal-bottom{padding:17px 30px;border-top:1px solid #e5ede8;display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;background:#fff;box-shadow:0 -8px 22px #152b1911;flex-shrink:0}
+.report-modal-bottom-info{display:flex;flex-direction:column;gap:4px}
+.report-modal-bottom-info strong{color:#16452e;font-size:12px}
+.report-modal-bottom-info small{color:#94a79a;font-size:11px}
+.report-modal-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.report-modal-actions .btn{min-height:42px}
+.report-goals-panel,.report-pharmacy-totals{overflow:hidden;margin-top:20px}
+.report-goals-panel .section-heading{padding-bottom:14px}
+.goal-chart-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 22px 17px;color:#81958a;font-size:10.5px}
+.goal-legend-fill{width:22px;height:8px;background:#0da877;border-radius:6px}
+.goal-legend-marker{height:16px;width:2px;background:#245444;margin-left:12px}
+.goal-legend-over{font-size:10px;color:#08885f;font-weight:900;background:#e8f8ed;padding:5px 7px;border-radius:6px;margin-left:11px}
+.goal-campaign-list{padding:0 22px 10px;display:grid;gap:15px}
+.goal-campaign-card{border:1px solid #e4eee8;border-radius:13px;overflow:hidden;background:#fff}
+.goal-campaign-heading{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#f8fbf9;border-bottom:1px solid #edf3ee;gap:12px}
+.goal-campaign-title{display:flex;align-items:center;gap:11px;min-width:0}
+.goal-icon{width:35px;height:35px;flex:0 0 35px;background:#e8f8f0;border-radius:10px;display:grid;place-items:center;color:#07976b}
+.goal-campaign-title h3{color:#223f33;font-size:12.5px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.goal-campaign-title p{font-size:10.5px;color:#8a9d92;margin:5px 0 0}
+.goal-campaign-total{padding:17px 18px 15px;background:#fff}
+.goal-group-label{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:800;color:#577a6a;margin-bottom:12px}
+.goal-100-label{color:#718a7c;white-space:nowrap;font-size:10px;letter-spacing:.45px}
+.goal-flag{display:inline-block;height:11px;width:2px;background:#2b5745;vertical-align:middle;margin-left:5px}
+.goal-progress{min-width:0}
+.goal-track-wrap{display:flex;align-items:center;gap:11px}
+.goal-track{height:15px;background:#e9f0ec;border-radius:5px;flex:1;position:relative;min-width:35px}
+.goal-track-fill{height:100%;background:#d3a67c;border-radius:5px 0 0 5px;transition:width .35s ease}
+.goal-mid .goal-track-fill{background:#e5b357}
+.goal-near .goal-track-fill{background:#48bb95}
+.goal-done .goal-track-fill{background:#049c70;border-radius:5px}
+.goal-empty .goal-track-fill{background:#c3cec9}
+.goal-target-line{position:absolute;right:-1px;top:-4px;bottom:-4px;width:3px;border-radius:2px;background:#395e50;box-shadow:0 0 0 2px #fff8}
+.goal-pct{font-family:Manrope,sans-serif;color:#2d5747;font-weight:800;font-size:12px;min-width:51px;text-align:right;white-space:nowrap}
+.goal-pct.is-done{color:#009366}
+.goal-progress-meta{display:flex;align-items:center;justify-content:space-between;gap:7px;font-size:10.5px;color:#7c9387;margin-top:8px}
+.goal-progress-meta span:last-child{color:#9e8d6d}
+.goal-done .goal-progress-meta span:last-child{color:#0c9467;font-weight:800}
+.goal-farmacies-list{background:#fbfdfb;border-top:1px dashed #e2ece5;padding:1px 18px 7px}
+.goal-farm-row{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr);align-items:center;gap:18px;padding:13px 0;border-bottom:1px solid #eef3ee}
+.goal-farm-row:last-child{border-bottom:0}
+.goal-farm-name{display:flex;align-items:center;gap:7px;min-width:0;font-size:11.5px;color:#516d60;font-weight:750}
+.goal-farm-name svg{flex-shrink:0;color:#6da994}
+.goal-farm-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goal-no-pharmacies{font-size:12px;color:#9aaba0;padding:9px 0}
+.report-more-goals{display:flex;gap:9px;align-items:center;justify-content:center;padding:14px;margin:5px auto 15px;border:1px solid #d7ece2;border-radius:9px;color:#07966b;background:#f3faf6;font-size:11px;font-weight:800;cursor:pointer}
+.goal-pharmacy-summary{padding:0 22px 20px;display:grid;gap:11px}
+.goal-summary-line{display:grid;grid-template-columns:minmax(120px,215px) minmax(0,1fr);gap:20px;padding:12px 14px;border:1px solid #e9f0ea;border-radius:10px;align-items:center;background:#fcfefc}
+.goal-summary-name{display:flex;align-items:center;gap:8px;min-width:0;color:#375646;font-size:12px}
+.goal-summary-name svg{color:#38a27c;flex-shrink:0}
+.goal-summary-name strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:850px){
+ .report-modal-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .report-modal-filters .field:last-child{grid-column:1/-1}
+ .goal-farm-row{grid-template-columns:minmax(95px,135px) minmax(0,1fr);gap:9px}
+}
+@media(max-width:620px){
+ .report-modal-backdrop{padding:0}
+ .report-modal{height:100dvh;width:100%;border-radius:0}
+ .report-modal-top{padding:19px 17px}
+ .report-modal-top h2{font-size:22px}
+ .report-modal-filters{padding:17px;gap:12px}
+ .report-modal-selection-head{padding:12px 17px}
+ .report-modal-selection-head>span{margin-left:0}
+ .report-modal-campaigns .report-choice{padding:13px 17px}
+ .report-modal-bottom{padding:14px 17px}
+ .report-modal-bottom-info{display:none}
+ .report-modal-actions{width:100%}
+ .report-modal-actions .btn{flex:1;min-width:0;justify-content:center}
+ .goal-campaign-list{padding:0 12px 10px}
+ .goal-campaign-heading{padding:12px}
+ .goal-campaign-total{padding:14px 12px}
+ .goal-farmacies-list{padding:1px 12px 8px}
+ .goal-farm-row{grid-template-columns:1fr;gap:8px}
+ .goal-progress-meta{font-size:10px}
+ .goal-pharmacy-summary{padding:0 12px 15px}
+ .goal-summary-line{grid-template-columns:1fr;gap:9px}
+ .goal-chart-legend{padding:0 12px 15px}
+ .report-active-summary{padding:13px}
+ .report-quick-pharmacy{width:100%}
+ .report-quick-pharmacy select{flex:1;max-width:none}
+}

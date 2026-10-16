@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, ArrowDownToLine, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
@@ -6,7 +6,6 @@ import {
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw
 } from "lucide-react";
-import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, Line } from "recharts";
 import "./styles.css";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer } from "./farmaciasApi.js";
@@ -140,8 +139,9 @@ function App(){
   const [savingPharmacy,setSavingPharmacy]=useState(false);
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
  const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
- const [reportSearch,setReportSearch]=useState("");
- const [reportPageLimit,setReportPageLimit]=useState(25);
+  const [reportModal,setReportModal]=useState(null);
+ const [reportDetailLimit,setReportDetailLimit]=useState(5);
+ const reportCloseRef=useRef(null);
  const [reportSelectedIds,setReportSelectedIds]=useState(()=>{
   const ids=reportFiltersFromUrl().ids;
   return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
@@ -159,12 +159,21 @@ function App(){
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
    setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
-   setReportSearch("");setSelectedPharmacy("Todas");
+   setSelectedPharmacy("Todas");setReportDetailLimit(5);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
    window.addEventListener("popstate",onBackForward);
    return ()=>window.removeEventListener("popstate",onBackForward);
  },[data.promos]);
+ useEffect(()=>{
+  if(!reportModal)return;
+  const old=document.body.style.overflow;
+  document.body.style.overflow="hidden";
+  reportCloseRef.current?.focus();
+  const onKeyDown=e=>{if(e.key==="Escape")setReportModal(null);};
+  window.addEventListener("keydown",onKeyDown);
+  return ()=>{document.body.style.overflow=old;window.removeEventListener("keydown",onKeyDown);};
+ },[Boolean(reportModal)]);
  useEffect(()=>{
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
@@ -179,8 +188,9 @@ function App(){
  const activePromos=promos.filter(p=>p.status==="Activa");
  const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
  const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
- const reportVisible=reportFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportSearch.toLocaleLowerCase("es")));
- const reportSelected=reportVisible.filter(p=>reportSelectedIds.includes(p.id));
+ const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
+ const draftFilterBase=reportModal?promos.filter(p=>(reportModal.status==="Todos"||p.status===reportModal.status)&&(reportModal.year==="Todos"||(p.start||"").slice(0,4)===reportModal.year)):[];
+ const draftVisible=reportModal?draftFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportModal.search.toLocaleLowerCase("es"))):[];
  const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
  const effectivePharmacy=reportPharmacyIds.includes(selectedPharmacy)?selectedPharmacy:"Todas";
  const reportFilteredCampaigns=reportSelected.map(p=>({
@@ -197,18 +207,13 @@ function App(){
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
  const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
- const reportChartData=useMemo(()=>{
-  const weights=[.10,.14,.19,.22,.16,.19];
-  let running=0;
-  return weights.map((w,i)=>{const sales=Math.round(reportSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(reportGoal*(i+1)/6)};});
- },[reportSales,reportGoal]);
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
    const p=promoId?data.promos.find(item=>item.id===promoId):null;
    const status=p?p.status:"Activa",ids=p?[p.id]:data.promos.filter(item=>item.status==="Activa").map(item=>item.id);
-   setReportStatus(status);setReportYear("Todos");setReportSearch("");setReportSelectedIds(ids);setSelectedPharmacy("Todas");
+   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportDetailLimit(5);setSelectedPharmacy("Todas");
    const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
    if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
@@ -218,23 +223,27 @@ function App(){
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
  }
- function updateReportScope(status,year){
-  setReportStatus(status);setReportYear(year);setReportSearch("");setReportPageLimit(25);setSelectedPharmacy("Todas");
-  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
-  setReportSelectedIds(prev=>{
-   const kept=prev.filter(id=>eligible.some(p=>p.id===id));
-   if(kept.length)return kept;
-   return (status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id);
+ function openReportFilters(){
+  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],limit:25});
+ }
+ function updateDraftScope(status,year){
+  setReportModal(prev=>{
+   if(!prev)return prev;
+   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+   const kept=prev.ids.filter(id=>eligible.some(p=>p.id===id));
+   return {...prev,status,year,search:"",limit:25,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
   });
  }
- function selectReportAll(){
-  setReportSelectedIds(prev=>[...new Set([...prev,...reportVisible.map(p=>p.id)])]);
- }
- function clearReportSelection(){
-  setReportSelectedIds(prev=>prev.filter(id=>!reportVisible.some(p=>p.id===id)));
- }
- function toggleReportCampaign(id){
-  setReportSelectedIds(prev=>prev.includes(id)?prev.filter(v=>v!==id):[...prev,id]);
+ function selectDraftAll(visible){setReportModal(prev=>prev?{...prev,ids:[...new Set([...prev.ids,...visible.map(p=>p.id)])]}:prev);}
+ function clearDraftVisible(visible){setReportModal(prev=>prev?{...prev,ids:prev.ids.filter(id=>!visible.some(p=>p.id===id))}:prev);}
+ function toggleDraftCampaign(id){setReportModal(prev=>prev?{...prev,ids:prev.ids.includes(id)?prev.ids.filter(v=>v!==id):[...prev.ids,id]}:prev);}
+ function applyReportFilters(){
+  if(!reportModal)return;
+  const {status,year,ids}=reportModal;
+  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+  setReportStatus(status);setReportYear(year);
+  setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
+  setSelectedPharmacy("Todas");setReportDetailLimit(5);setReportModal(null);
  }
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){
@@ -357,52 +366,24 @@ function App(){
  <div className="note data-note"><CircleHelp size={16}/> Las ventas mostradas son ilustrativas hasta disponer de las importaciones reales.</div>
 </>}
 {page==="seguimiento-global"&&<>
- <div className="page-header">
+ <div className="page-header report-page-header">
   <div><div className="eyebrow"><span className="eyebrow-dot"/> REPORTING DE PROMOCIONES</div>
-   <h1>Seguimiento</h1><p>Selecciona una o varias campañas para analizar objetivos, ventas y progreso desde una sola pantalla.</p></div>
-  <button className="btn btn-primary" disabled={!reportSelected.length} onClick={()=>{if(reportSelected.length===1){void exportPromo(reportSelected[0]);}else{void exportAllPromos(reportSelected);}}}>
-   <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar Excel":reportSelected.length?"Descargar "+reportSelected.length+" campañas (ZIP)":"Selecciona campañas"}
-  </button>
+   <h1>Seguimiento</h1><p>Consulta de un vistazo el avance de tus campañas y farmacias hacia sus objetivos.</p></div>
+  <div className="campaign-header-actions">
+   <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/> Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
+   <button className="btn btn-primary" disabled={!reportSelected.length} onClick={()=>{if(reportSelected.length===1){void exportPromo(reportSelected[0]);}else{void exportAllPromos(reportSelected);}}}>
+    <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar Excel":reportSelected.length?"Descargar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+   </button>
+  </div>
  </div>
- <section className="card report-selector">
-  <div className="section-heading report-selector-heading">
-   <div><h2>Seleccionar campañas</h2><p>Por defecto se muestran las activas. Filtra el histórico y marca únicamente las promociones que quieras analizar.</p></div>
-   <span className="count-label">{reportSelected.length} seleccionadas</span>
-  </div>
-  <div className="report-filter-grid">
-   <Field label="Estado"><select value={reportStatus} onChange={e=>updateReportScope(e.target.value,reportYear)}>
-    <option value="Activa">Activas</option><option value="Finalizada">Finalizadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
-   </select></Field>
-   <Field label="Año de inicio"><select value={reportYear} onChange={e=>updateReportScope(reportStatus,e.target.value)}>
-    <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
-   </select></Field>
-   <Field label="Buscar promoción o CN"><input type="search" value={reportSearch} onChange={e=>{setReportSearch(e.target.value);setReportPageLimit(25);}} placeholder="Nombre, referencia, CN…"/></Field>
-   <Field label="Farmacia"><select value={effectivePharmacy} onChange={e=>setSelectedPharmacy(e.target.value)}>
-    <option value="Todas">Todas las farmacias</option>{pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
-   </select></Field>
-  </div>
-  <div className="report-select-toolbar">
-   <label className="report-select-all"><input type="checkbox" checked={reportVisible.length>0&&reportVisible.every(p=>reportSelectedIds.includes(p.id))} onChange={e=>e.target.checked?selectReportAll():clearReportSelection()} disabled={!reportVisible.length}/> Seleccionar todas las filtradas</label>
-   <span className="report-selection-count">{reportSelected.length} de {reportVisible.length} seleccionadas en esta vista</span>
-   <button type="button" className="text-link" onClick={clearReportSelection} disabled={!reportSelected.length}>Limpiar selección</button>
-  </div>
-  <div className="report-choice-scroll">
-   {reportVisible.slice(0,reportPageLimit).map(p=><label className={"report-choice "+(reportSelectedIds.includes(p.id)?"report-choice-checked":"")} key={p.id}>
-    <input type="checkbox" checked={reportSelectedIds.includes(p.id)} onChange={()=>toggleReportCampaign(p.id)}/>
-    <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span>
-    <Pill status={p.status}/>
-   </label>)}
-   {!reportVisible.length&&<div className="report-choice-empty">No hay promociones con estos filtros. Prueba con otro estado, año o búsqueda.</div>}
-  </div>
-  {reportVisible.length>reportPageLimit&&<button className="report-more" type="button" onClick={()=>setReportPageLimit(v=>v+25)}>
-   Mostrar más campañas ({reportVisible.length-reportPageLimit} pendientes) <ChevronDown size={16}/>
-  </button>}
-  <div className="report-selector-footer">La exportación incluye <strong>solo las {reportSelected.length} campañas seleccionadas en los filtros actuales</strong>, no todo el histórico.</div>
- </section>
+ <div className="report-active-summary">
+  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Finalizadas":reportStatus==="Borrador"?"Borradores":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
+  <label className="report-quick-pharmacy"><Store size={15}/><span>Farmacia</span><select value={effectivePharmacy} onChange={e=>setSelectedPharmacy(e.target.value)} aria-label="Filtrar seguimiento por farmacia"><option value="Todas">Todas las farmacias</option>{pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+ </div>
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={effectivePharmacy==="Todas"?"Seguimiento consolidado de las promociones seleccionadas":"Resultados de la farmacia "+pharmaName(effectivePharmacy)} />
   <section className="card list-card full-table-card">
-   <div className="section-heading"><div><h2>Comparativa de promociones</h2><p>Objetivo, vendido y progreso de la selección actual</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
+   <div className="section-heading"><div><h2>Detalle de promociones</h2><p>Objetivo, vendido y progreso de la selección actual</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
    <div className="table-scroll"><table className="data-table campaign-table"><thead><tr><th>Promoción</th><th>Estado</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendido</th><th>Avance</th><th>Acción</th></tr></thead><tbody>
     {reportFilteredCampaigns.map(p=>{const goal=sum(p.targets),sold=sum(p.sales);return <tr key={p.id}>
      <td><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)}</small></div></div></td>
@@ -412,16 +393,22 @@ function App(){
     </tr>})}
    </tbody></table></div>
   </section>
-  <section className="card tracking-expanded report-tracking-panel">
-   <div className="section-heading"><div><h2>Avance por farmacia</h2><p>Resultados agregados de las campañas seleccionadas</p></div><span className="count-label">{reportTargets.length} farmacias</span></div>
-   <TrackingContent selected={combinedReport} chartData={reportChartData} trackingTargets={reportTargets} trackingGoal={reportGoal} trackingSales={reportSales} pharmaName={pharmaName}/>
+  <section className="card report-goals-panel">
+   <div className="section-heading"><div><h2>Avance hacia los objetivos</h2><p>Una barra para cada promoción y cada farmacia. La línea del extremo derecho representa el 100 % de la meta.</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
+   <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
+   <div className="goal-campaign-list">{reportFilteredCampaigns.slice(0,reportDetailLimit).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName}/>)}</div>
+   {reportFilteredCampaigns.length>reportDetailLimit&&<button className="report-more-goals" type="button" onClick={()=>setReportDetailLimit(v=>v+5)}><ChevronDown size={17}/> Mostrar {Math.min(5,reportFilteredCampaigns.length-reportDetailLimit)} campañas más</button>}
+  </section>
+  <section className="card report-pharmacy-totals">
+   <div className="section-heading"><div><h2>Consolidado por farmacia</h2><p>Objetivos sumados de las promociones seleccionadas por cada farmacia.</p></div><span className="count-label">{reportTargets.length} farmacias</span></div>
+   <div className="goal-pharmacy-summary">{reportTargets.map(([id,goal])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(goal)} sold={Number(combinedReport.sales?.[id]||0)}/></div>)}</div>
   </section>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>Códigos nacionales incluidos</h2><p>Referencias únicas del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CN</span></div>
    <div className="cn-chips">{reportCNs.slice(0,45).map(cn=><span key={cn} className="cn-chip">{cn}</span>)}{reportCNs.length>45&&<span className="cn-chip">+{reportCNs.length-45} más</span>}</div>
   </section>
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
- <div className="note data-note"><CircleHelp size={16}/> Los resultados de ventas y el gráfico semanal todavía son ilustrativos. La exportación utiliza las campañas seleccionadas, aunque hayas filtrado la visualización por farmacia.</div>
+ <div className="note data-note"><CircleHelp size={16}/> Las ventas actuales son ilustrativas hasta la sincronización real. Las barras indican el cumplimiento del objetivo; no representan una evolución temporal. Los Excel corresponden a las campañas seleccionadas.</div>
 </>}
 {page==="farmacias"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> ESTRUCTURA DE LA RED</div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={connectPharmacies}><ShieldCheck size={17}/> Conectar Microsoft 365</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración. Falta configurar Microsoft Entra ID y desplegar la API para activar PostgreSQL."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>ID</th><th>Nombre público</th><th>Origen</th><th>Servidor SQL</th><th>Estado</th><th>Usuarios</th><th/></tr></thead><tbody>{currentPharmacies.map(f=><tr key={f.id} onClick={()=>startPharmacy(f)} className="click-row"><td><span className="id-code">{f.id}</span></td><td><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div></td><td><span className="id-code">{f.sourceCode||"—"}</span></td><td>{pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"— (demo)"}</td><td><Pill status={f.active?"Activa":"Inactiva"}/></td><td>{users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length}</td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div></div></>}
     {page==="usuarios"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> EQUIPO Y PERMISOS</div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2><p>Identidad, permisos y farmacias asignadas</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Farmacias</th><th>Estado</th><th/></tr></thead><tbody>{currentUsers.map(u=><tr className="click-row" key={u.id} onClick={()=>startUser(u)}><td><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div></td><td><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span></td><td>{u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"}</td><td><Pill status={u.active?"Activa":"Inactiva"}/></td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2><p>Tres niveles de acceso</p></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}
@@ -429,6 +416,42 @@ function App(){
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica · Prototipo visual</span><span>Datos simulados · No conectado a ventas reales</span></footer>
   </div>
+  {reportModal&&<div className="report-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setReportModal(null)}}>
+   <section className="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+    <div className="report-modal-top">
+     <div><span className="metrics-eyebrow">PERSONALIZAR EL SEGUIMIENTO</span><h2 id="report-modal-title">Filtrar campañas</h2><p>Selecciona las promociones que quieres incluir en tus indicadores y gráficos.</p></div>
+     <button className="icon-btn report-modal-close" ref={reportCloseRef} onClick={()=>setReportModal(null)} aria-label="Cancelar y cerrar filtros" title="Cerrar sin aplicar"><X size={23}/></button>
+    </div>
+    <div className="report-modal-body">
+     <div className="report-modal-filters">
+      <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.year)}>
+       <option value="Activa">Activas</option><option value="Finalizada">Finalizadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
+      </select></Field>
+      <Field label="Año de inicio"><select value={reportModal.year} onChange={e=>updateDraftScope(reportModal.status,e.target.value)}>
+       <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
+      </select></Field>
+      <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,limit:25}))}/></Field>
+     </div>
+     <div className="report-modal-selection-head">
+      <label className="report-select-all"><input type="checkbox" disabled={!draftVisible.length} checked={draftVisible.length>0&&draftVisible.every(p=>reportModal.ids.includes(p.id))} onChange={e=>e.target.checked?selectDraftAll(draftVisible):clearDraftVisible(draftVisible)}/> Seleccionar todas las campañas filtradas</label>
+      <span>{draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length} elegidas · {draftVisible.length} resultados</span>
+      <button type="button" className="report-modal-clear" disabled={!draftVisible.some(p=>reportModal.ids.includes(p.id))} onClick={()=>clearDraftVisible(draftVisible)}>Limpiar visibles</button>
+     </div>
+     <div className="report-modal-campaigns">
+      {draftVisible.slice(0,reportModal.limit).map(p=><label className={"report-choice "+(reportModal.ids.includes(p.id)?"report-choice-checked":"")} key={p.id}>
+       <input type="checkbox" checked={reportModal.ids.includes(p.id)} onChange={()=>toggleDraftCampaign(p.id)}/>
+       <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span><Pill status={p.status}/>
+      </label>)}
+      {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, año o búsqueda.</div>}
+     </div>
+     {draftVisible.length>reportModal.limit&&<button className="report-more" type="button" onClick={()=>setReportModal(prev=>({...prev,limit:prev.limit+25}))}><ChevronDown size={16}/> Ver otras {Math.min(25,draftVisible.length-reportModal.limit)} campañas</button>}
+    </div>
+    <div className="report-modal-bottom">
+     <div className="report-modal-bottom-info"><strong>{draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length} {draftFilterBase.filter(p=>reportModal.ids.includes(p.id)).length===1?"campaña seleccionada":"campañas seleccionadas"}</strong><small>Los cambios se mostrarán al pulsar Aplicar filtros.</small></div>
+     <div className="report-modal-actions"><button className="btn btn-secondary" onClick={()=>setReportModal(null)}>Cancelar</button><button className="btn btn-primary" onClick={applyReportFilters}><Check size={17}/> Aplicar filtros y visualizar</button></div>
+    </div>
+   </section>
+  </div>}
   {editingPromo&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPromo(null)}}><div className="drawer"><div className="drawer-top"><div><span className="eyebrow">GESTIÓN DE CAMPAÑAS</span><h2>{editingPromo==="nuevo"?"Nueva promoción":"Editar promoción"}</h2><p>Configura productos y objetivos de venta por farmacia.</p></div><button className="icon-btn" aria-label="Cerrar" onClick={()=>setEditingPromo(null)}><X size={21}/></button></div><form onSubmit={savePromo} className="drawer-content">
    <Field label="Nombre de promoción"><input required placeholder="Ej.: Especial hidratación" value={promoForm.name} onChange={e=>setPromoForm({...promoForm,name:e.target.value})}/></Field>
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>
@@ -446,10 +469,41 @@ function App(){
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
  </div>
 }
-function TrackingContent({selected,chartData,trackingTargets,trackingGoal,trackingSales,pharmaName,compact=false}){
- return <div className={"tracking-grid "+(compact?"tracking-compact":"")}>
-  <div className="chart-panel"><div className="chart-header"><h3>Evolución semanal</h3><div className="legend"><span><i className="legend-bar"/> Ventas</span><span><i className="legend-line"/> Objetivo acumulado</span></div></div><div className="chart-area"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData} margin={{top:10,right:8,left:-24,bottom:0}}><CartesianGrid stroke="#e7efec" strokeDasharray="3 4" vertical={false}/><XAxis dataKey="week" tick={{fontSize:11,fill:"#81918c"}} axisLine={false} tickLine={false}/><YAxis tick={{fontSize:11,fill:"#81918c"}} axisLine={false} tickLine={false}/><Tooltip formatter={(value)=>[EUR.format(value)+" uds.",""]} contentStyle={{borderRadius:12,border:"1px solid #e3ebe7",boxShadow:"0 12px 25px #15282010"}}/><Bar dataKey="ventas" fill="#bcecd9" radius={[6,6,0,0]} barSize={compact?29:43}/><Line type="monotone" dataKey="objetivo" stroke="#0aaf78" strokeWidth={3} dot={{r:3,fill:"#0aaf78",strokeWidth:0}}/></ComposedChart></ResponsiveContainer></div><div className="chart-disclaimer">Distribución semanal simulada para la demo</div></div>
-  <div className="pharma-progress-panel"><div className="chart-header"><h3>Avance por farmacia</h3><span className="mini-total">{EUR.format(trackingSales)} / {EUR.format(trackingGoal)} uds.</span></div><div className="pharma-progress-table"><div className="mini-table-head"><span>Farmacia</span><span>Vendido</span><span>Objetivo</span><span>Progreso</span></div>{trackingTargets.map(([id,t])=>{const sold=selected?.sales?.[id]||0;return <div key={id} className="mini-table-row"><strong>{pharmaName(id)}</strong><span>{EUR.format(sold)}</span><span>{EUR.format(t)}</span><div className="mini-progress"><Progress value={percent(sold,t)}/><b>{percent(sold,t)}%</b></div></div>})}{!trackingTargets.length&&<p className="empty-inline">Sin farmacias seleccionadas.</p>}</div></div>
+function GoalProgressBar({goal,sold}){
+ const pct=goal>0?Math.round(sold/goal*100):null;
+ const width=pct===null?0:Math.max(0,Math.min(100,pct));
+ const remaining=goal>0?Math.max(0,goal-sold):null;
+ const tone=pct===null?"empty":pct>=100?"done":pct>=80?"near":pct>=50?"mid":"low";
+ const detail=pct===null?"Sin objetivo":remaining>0?"Faltan "+EUR.format(remaining)+" uds.":pct>100?"Superado en "+EUR.format(sold-goal)+" uds.":"Objetivo cumplido";
+ return <div className={"goal-progress goal-"+tone}>
+  <div className="goal-track-wrap">
+   <div className="goal-track" role="progressbar" aria-label={pct===null?"Sin objetivo":"Cumplimiento del objetivo"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={width} aria-valuetext={pct===null?"Sin objetivo":pct+" por ciento, "+EUR.format(sold)+" de "+EUR.format(goal)+" unidades"}>
+    <div className="goal-track-fill" style={{width:width+"%"}}/>
+    <span className="goal-target-line"/>
+   </div>
+   <span className={"goal-pct "+(pct!==null&&pct>=100?"is-done":"")}>{pct===null?"—":pct+"%"}</span>
+  </div>
+  <div className="goal-progress-meta"><span>{EUR.format(sold)} / {EUR.format(goal)} uds.</span><span>{detail}</span></div>
  </div>;
+}
+function CampaignGoalCard({promo,pharmaName}){
+ const goal=sum(promo.targets),sold=sum(promo.sales),entries=Object.entries(promo.targets||{});
+ return <article className="goal-campaign-card">
+  <div className="goal-campaign-heading">
+   <div className="goal-campaign-title"><span className="goal-icon"><Tag size={17}/></span><div><h3>{promo.name}</h3><p>{entries.length} {entries.length===1?"farmacia":"farmacias"} · {promo.cns.length} CN · {promo.id}</p></div></div>
+   <Pill status={promo.status}/>
+  </div>
+  <div className="goal-campaign-total">
+   <div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div>
+   <GoalProgressBar goal={goal} sold={sold}/>
+  </div>
+  <div className="goal-farmacies-list">
+   {entries.map(([id,value])=><div key={id} className="goal-farm-row">
+    <div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div>
+    <GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)}/>
+   </div>)}
+   {!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}
+  </div>
+ </article>;
 }
 createRoot(document.getElementById("root")).render(<App/>);

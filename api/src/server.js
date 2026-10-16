@@ -46,7 +46,7 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-const selectFields = `id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
+const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
   actualizado_en AS "updatedAt"`;
 
@@ -64,18 +64,18 @@ function normalize(body, id) {
   const sourceCode = typeof body.sourceCode === "string" ? body.sourceCode.trim().toUpperCase() : "";
   const sourceHost = typeof body.sourceHost === "string" ? body.sourceHost.trim() : "";
   const sourceDatabase = typeof body.sourceDatabase === "string" ? body.sourceDatabase.trim() : "";
-  if (!/^[A-Z0-9_-]{2,16}$/.test(id) || !name || name.length > 150 ||
+  if (!/^[1-9][0-9]{0,5}$/.test(id) || !name || name.length > 150 ||
       city.length > 150 || !/^[A-Z0-9_-]{2,16}$/.test(sourceCode) ||
       sourceHost.length > 255 || !sourceDatabase || sourceDatabase.length > 100 ||
       typeof body.active !== "boolean") {
     throw Error("Revisa nombre, código de origen, estado y servidor");
   }
-  return { id, name, city, active: body.active, sourceCode, sourceHost: sourceHost || null, sourceDatabase };
+  return { id: Number(id), name, city, active: body.active, sourceCode, sourceHost: sourceHost || null, sourceDatabase };
 }
 
 app.post("/api/farmacias", requireAdmin, async (req, res, next) => {
   try {
-    const id = String(req.body?.id || "").trim().toUpperCase();
+    const id = String(req.body?.id ?? "").trim();
     const f = normalize(req.body, id);
     const { rows } = await pool.query(
       `INSERT INTO public.farmacias (id, nombre, ciudad, activo, codigo_origen, host_origen, bd_origen)
@@ -88,7 +88,7 @@ app.post("/api/farmacias", requireAdmin, async (req, res, next) => {
 
 app.patch("/api/farmacias/:id", requireAdmin, async (req, res, next) => {
   try {
-    const id = String(req.params.id).trim().toUpperCase();
+    const id = String(req.params.id).trim();
     const f = normalize(req.body, id);
     const { rows } = await pool.query(
       `UPDATE public.farmacias SET nombre=$2, ciudad=$3, activo=$4, codigo_origen=$5,

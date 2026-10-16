@@ -53,7 +53,7 @@ jobs:
             if ! cd /opt/farmawao; then echo SIN_DIRECTORIO_FARMAWAO; exit 0; fi
             if ! test -f compose.yaml; then echo SIN_COMPOSE; exit 0; fi
             if ! test -f .env; then echo SIN_ENV; exit 0; fi
-            if ! test -d api || ! test -w api || ! test -w .; then echo SIN_PERMISOS_API; exit 0; fi
+            if ! test -d api; then echo SIN_DIRECTORIO_API; exit 0; fi
             for key in AZURE_TENANT_ID AZURE_API_CLIENT_ID ADMIN_OIDS VITE_ENTRA_TENANT_ID VITE_ENTRA_CLIENT_ID VITE_ENTRA_API_SCOPE; do
               if ! grep -qE "^$key=.+$" .env; then echo "PENDIENTE_ENTRA_$key"; exit 0; fi
             done
@@ -63,6 +63,7 @@ jobs:
                 AND column_name IN ('\''farmacia_origen'\'','\''codigo'\'','\''descripcion'\'','\''fechahora'\'','\''cantidad'\'');
             " | grep -qx t; then echo TABLA_FARMATIC_NO_LISTA; exit 0; fi
             if ! docker compose config --quiet; then echo COMPOSE_INVALIDO; exit 0; fi
+            if ! test -w api || ! test -w .; then echo SIN_PERMISOS_API; exit 0; fi
             echo LISTO
           ')
           if [[ "$ready" == LISTO ]]; then

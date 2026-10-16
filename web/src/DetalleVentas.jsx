@@ -78,7 +78,7 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
       const records=[];
       let total=0;
       for(let offset=0;offset<10000;offset+=500){
-        const r=await loadTicketLines({...filters,offset,limit:500});
+        const r=await loadTicketLines({...filters,columnFilters,orderBy:sort.key,orderDir:sort.direction,offset,limit:500});
         total=r.total;
         records.push(...r.rows);
         if(records.length>=total)break;

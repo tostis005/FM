@@ -3,11 +3,12 @@ import { PublicClientApplication, InteractionRequiredAuthError } from "@azure/ms
 const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID;
 const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
 const apiScope = import.meta.env.VITE_ENTRA_API_SCOPE;
-export const pharmacyBackendConfigured = Boolean(tenantId && clientId && apiScope);
+const entraConfigured = Boolean(tenantId && clientId && apiScope);
+export const pharmacyBackendConfigured = entraConfigured || Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 let appPromise;
 
 async function msal() {
-  if (!pharmacyBackendConfigured) throw new Error("Microsoft 365 no está configurado en el despliegue");
+  if (!entraConfigured) throw new Error("Microsoft 365 no está configurado en el despliegue");
   if (!appPromise) {
     appPromise = (async () => {
       const app = new PublicClientApplication({
@@ -22,7 +23,17 @@ async function msal() {
   return appPromise;
 }
 
+async function hasGoogleAdminSession() {
+  try {
+    const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) return false;
+    const data = await response.json();
+    return data.user?.role === "administrador";
+  } catch { return false; }
+}
 export async function hasPharmacySession() {
+  if (await hasGoogleAdminSession()) return true;
+  if (!entraConfigured) return false;
   const app = await msal();
   return Boolean(app.getAllAccounts().length);
 }
@@ -47,11 +58,14 @@ async function token() {
 }
 
 async function request(path, options = {}) {
-  const accessToken = await token();
+  const googleSession = await hasGoogleAdminSession();
+  const accessToken = googleSession ? null : entraConfigured ? await token() : null;
+  if (!googleSession && !accessToken) throw Error("Inicia sesión con una cuenta administradora autorizada");
   const response = await fetch(path, {
     ...options,
+    credentials: "same-origin",
     cache: "no-store",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...options.headers },
+    headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.error || `Error del servidor (${response.status})`);

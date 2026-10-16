@@ -177,6 +177,55 @@ app.post("/api/ventas/seguimiento", requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Detalle de tickets Farmatic, exclusivamente para administradores autenticados.
+// Mantener PVP, descuentos e importes exactamente como constan en PostgreSQL.
+app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
+  const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 100 } = req.body || {};
+  if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
+      cns.length > 100 || typeof offset !== "number" || !Number.isInteger(offset) ||
+      offset < 0 || offset > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 500 ||
+      (farmaciaId != null && farmaciaId !== "" && !/^[1-9]\d{0,5}$/.test(String(farmaciaId))) ||
+      (ticket != null && (typeof ticket !== "string" || ticket.length > 60)) ||
+      (cn != null && cn !== "" && (!/^\d{6}$/.test(cn) || !cns.includes(cn)))) {
+    return res.status(400).json({ error: "Filtros de ventas inválidos" });
+  }
+  try {
+    const filters = [
+      salesPeriod,
+      "btrim(v.codigo::text) = ANY($3::text[])",
+      "($4::integer IS NULL OR f.id=$4)",
+      "($5::text IS NULL OR v.numerodoc::text ILIKE '%' || $5 || '%')",
+      "($6::text IS NULL OR btrim(v.codigo::text)=$6)",
+    ];
+    const where = salesJoin + " WHERE " + filters.join(" AND ");
+    const params = [
+      start,end,cns,
+      farmaciaId == null || farmaciaId === "" ? null : Number(farmaciaId),
+      ticket ? ticket.trim() : null, cn || null,
+    ];
+    const { rows: countRows } = await pool.query(
+      "SELECT count(*)::integer AS total " + where, params);
+    const { rows } = await pool.query(
+      \`SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
+              v.idventa::text AS "saleId", v.idnlinea::text AS "lineId",
+              v.numerodoc::text AS "ticket",
+              v.fechahora AS "at",
+              btrim(v.codigo::text) AS "cn", v.descripcion AS "description",
+              v.xvend_idvendedor::text AS "sellerId",
+              v.pvp::float8 AS "pvp", v.cantidad::float8 AS "quantity",
+              v.importebruto::float8 AS "gross",
+              v.descuentolinea::float8 AS "lineDiscount",
+              v.importeneto::float8 AS "net"
+       \` + where +
+      " ORDER BY v.fechahora DESC, f.id, v.idventa DESC, v.idnlinea DESC LIMIT $7 OFFSET $8",
+      [...params,limit,offset]);
+    res.json({
+      rows, total:countRows[0]?.total||0, offset, limit,
+      origin:"farmatic.lineaventa", sellerNamesAvailable:false,
+    });
+  } catch(err){ next(err); }
+});
+
 app.use((err, req, res, next) => {
   if (err.message === "Datos inválidos" || err.message?.startsWith("Revisa")) return res.status(400).json({ error: err.message });
   if (err.code === "23505") return res.status(409).json({ error: "Ya existe ese ID o código de origen" });

@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { isValidCN } from "./cns.js";
+import { applyObjectiveRows } from "./objetivosImportacion.js";
 
 const MONTHS={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12,ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
 export const PROMOTION_YEAR=2026;
@@ -204,7 +205,10 @@ export async function readPromotionExcel(file){
   if(!sheets["RESUMEN"] || !sheets["LISTADO CN PROMOCIONES"])
     throw Error("Excel no compatible: se necesitan las hojas RESUMEN y LISTADO CN PROMOCIONES");
   const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):PROMOTION_YEAR;
-  const promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year).map(p=>({...p,source:"Excel: "+file.name}));
+  let promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year).map(p=>({...p,source:"Excel: "+file.name}));
+  if(sheets["OBJETIVOS OCTUBRE 2026"]) {
+    promos=applyObjectiveRows(promos,sheets["OBJETIVOS OCTUBRE 2026"],year).promotions;
+  }
   if(!promos.length)throw Error("No se encontraron promociones importables");
   return promos;
 }
@@ -221,9 +225,15 @@ export function mergeImportedPromos(existing,incoming){
     const same=existingByFingerprint.get(p.fingerprint)||existing.find(x=>x.id===p.id);
     if(same){
       const newCNs=[...new Set([...(same.cns||[]),...p.cns])];
-      if(newCNs.length>(same.cns||[]).length){
-        updates.push({...same,cns:newCNs,cnDescriptions:{...same.cnDescriptions,...p.cnDescriptions},importWarnings:[...new Set([...(same.importWarnings||[]),...(p.importWarnings||[])])]});
-        expanded++;
+      const targets={...(same.targets||{}),...(p.targets||{})};
+      const targetsChanged=Object.keys(p.targets||{}).some(id=>Number(same.targets?.[id])!==Number(p.targets[id])||same.targets?.[id]==="");
+      const cnChanged=newCNs.length>(same.cns||[]).length;
+      if(cnChanged || targetsChanged) {
+        updates.push({...same,cns:newCNs,targets,
+          objectivesSource: p.objectivesSource||same.objectivesSource,
+          cnDescriptions:{...same.cnDescriptions,...p.cnDescriptions},
+          importWarnings:[...new Set([...(same.importWarnings||[]),...(p.importWarnings||[])])]});
+        if(cnChanged)expanded++;
       }else duplicates++;
       continue;
     }

@@ -232,7 +232,7 @@ export async function exportLabSalesExcel(promo,lines) {
   const {blob,name}=await buildLabSalesExcel(promo,lines);
   downloadBlob(blob,name);
 }
-export async function exportLabSalesZip(items) {
+export async function buildLabSalesZip(items) {
   if(!items.length)throw new Error("Selecciona al menos una promoción");
   const archive=new JSZip();
   const seen=new Set();
@@ -245,5 +245,9 @@ export async function exportLabSalesZip(items) {
     archive.file(unique,await blob.arrayBuffer());
   }
   const blob=await archive.generateAsync({type:"blob",compression:"DEFLATE"});
-  downloadBlob(blob,"laboratorios_"+items.length+"_promociones.zip");
+  return {blob,name:"laboratorios_"+items.length+"_promociones.zip"};
+}
+export async function exportLabSalesZip(items) {
+  const {blob,name}=await buildLabSalesZip(items);
+  downloadBlob(blob,name);
 }

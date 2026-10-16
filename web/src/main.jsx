@@ -15,8 +15,9 @@ import { applyObjectiveRows } from "./objetivosImportacion.js";
 import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
-import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadSalesCatalog, loadSalesCoverage, loadPromotionSales } from "./farmaciasApi.js";
+import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
+import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadSalesCatalog, loadSalesCoverage, loadPromotionSales, loadTicketLines } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -225,6 +226,7 @@ function App(){
   const [targetIncrease,setTargetIncrease]=useState("5");
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
+  const [labExportBusy,setLabExportBusy]=useState(false);
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
  useEffect(()=>{
@@ -494,12 +496,41 @@ function App(){
   try{await exportPromotionExcel(p,pharmaName);setToast("Excel de la promoción descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el Excel");}
  }
- async function exportAllPromos(campaigns){
-  if(!campaigns.length)return setToast("Selecciona al menos una promoción");
-  if(campaigns.length>10&&!window.confirm("¿Descargar los Excel de "+campaigns.length+" promociones seleccionadas en un ZIP?"))return;
-  try{await exportAllPromotionsZip(campaigns,pharmaName);setToast("ZIP con "+campaigns.length+" promociones descargado");}
-  catch(error){console.error(error);setToast("No se pudo generar el ZIP");}
+ async function exportLabCampaigns(campaigns){
+  if(labExportBusy)return;
+  if(!campaigns.length){setToast("Selecciona alguna campaña para exportar");return;}
+  if(salesStatus!=="real"){
+    setToast("Para exportar al laboratorio es necesaria la conexión a ventas reales de PostgreSQL.");
+    return;
+  }
+  try{
+    // Validación global previa: no iniciar una exportación parcial.
+    campaigns.forEach(validateLabPromotion);
+  }catch(error){setToast(error.message);return;}
+  if(campaigns.length>10&&!window.confirm(
+    "¿Preparar "+campaigns.length+" Excel de laboratorio en un ZIP? Puede tardar unos minutos."))return;
+  setLabExportBusy(true);
+  try{
+    const items=[];
+    for(let i=0;i<campaigns.length;i++){
+      const promo=campaigns[i];
+      setToast("Preparando laboratorio "+(i+1)+"/"+campaigns.length+": "+promo.name);
+      const lines=await readFullLabSales(promo,loadTicketLines);
+      items.push({promo,lines});
+    }
+    // Se descarga cuando todas las promociones se han leído correctamente.
+    if(items.length===1){
+      await exportLabSalesExcel(items[0].promo,items[0].lines);
+      setToast("Excel para laboratorio descargado: "+items[0].promo.name);
+    }else{
+      await exportLabSalesZip(items);
+      setToast("ZIP para laboratorios descargado: "+items.length+" Excel, uno por campaña.");
+    }
+  }catch(error){
+    setToast("No se pudo exportar para laboratorio: "+(error.message||"Error inesperado"));
+  }finally{setLabExportBusy(false);}
  }
+
  function startUser(u){setEditingUser(u?.id||"nuevo");setUserForm(u?{...u,pharmacies:[...u.pharmacies]}:{id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});}
  function saveUser(e) {
   e.preventDefault();if(!userForm.name.trim()||!userForm.email.includes("@"))return setToast("Revisa el nombre y correo");
@@ -613,8 +644,10 @@ function App(){
    <h1>Seguimiento</h1><p>Consulta de un vistazo el avance de tus campañas y farmacias hacia sus objetivos.</p></div>
   <div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/> Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
-   <button className="btn btn-primary" disabled={!reportSelected.length} onClick={()=>{if(reportSelected.length===1){void exportPromo(reportSelected[0]);}else{void exportAllPromos(reportSelected);}}}>
-    <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar resumen Excel":reportSelected.length?"Descargar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+   <button className="btn btn-primary" type="button" disabled={!reportSelected.length||labExportBusy}
+     onClick={()=>void exportLabCampaigns(reportSelected)}
+     title="Exportar tickets reales de cada promoción con el formato del laboratorio">
+    <ArrowDownToLine size={17}/>{labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
    </button>
   </div>
  </div>

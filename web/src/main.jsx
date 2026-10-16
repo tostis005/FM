@@ -182,10 +182,11 @@ function App(){
  const reportVisible=reportFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportSearch.toLocaleLowerCase("es")));
  const reportSelected=reportVisible.filter(p=>reportSelectedIds.includes(p.id));
  const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
+ const effectivePharmacy=reportPharmacyIds.includes(selectedPharmacy)?selectedPharmacy:"Todas";
  const reportFilteredCampaigns=reportSelected.map(p=>({
   ...p,
-  targets:selectedPharmacy==="Todas"?p.targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>id===selectedPharmacy)),
-  sales:selectedPharmacy==="Todas"?p.sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>id===selectedPharmacy))
+  targets:effectivePharmacy==="Todas"?p.targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>id===effectivePharmacy)),
+  sales:effectivePharmacy==="Todas"?p.sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>id===effectivePharmacy))
  }));
  const combinedReport=reportFilteredCampaigns.reduce((acc,p)=>{
   Object.entries(p.targets||{}).forEach(([id,val])=>{acc.targets[id]=(acc.targets[id]||0)+(Number(val)||0);});
@@ -218,8 +219,13 @@ function App(){
   setPage(id);setSearch("");setMobileMenu(false);
  }
  function updateReportScope(status,year){
-  setReportStatus(status);setReportYear(year);setSelectedPharmacy("Todas");
-  setReportSelectedIds(data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year)).map(p=>p.id));
+  setReportStatus(status);setReportYear(year);setReportSearch("");setReportPageLimit(25);setSelectedPharmacy("Todas");
+  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+  setReportSelectedIds(prev=>{
+   const kept=prev.filter(id=>eligible.some(p=>p.id===id));
+   if(kept.length)return kept;
+   return (status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id);
+  });
  }
  function selectReportAll(){
   setReportSelectedIds(prev=>[...new Set([...prev,...reportVisible.map(p=>p.id)])]);
@@ -239,7 +245,7 @@ function App(){
   if(!Object.keys(promoForm.targets).length)return setToast("Selecciona al menos una farmacia");
   const result={...promoForm,id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(Object.entries(promoForm.targets).map(([id,v])=>[id,Math.max(0,Number(v)||0)]))};
   setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
-  setSelectedPromo(result.id);setEditingPromo(null);setToast("Promoción guardada en esta demostración");
+  setEditingPromo(null);setToast("Promoción guardada en esta demostración");
  }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]=HISTORICAL[id]||100;
@@ -370,7 +376,7 @@ function App(){
     <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
    </select></Field>
    <Field label="Buscar promoción o CN"><input type="search" value={reportSearch} onChange={e=>{setReportSearch(e.target.value);setReportPageLimit(25);}} placeholder="Nombre, referencia, CN…"/></Field>
-   <Field label="Farmacia"><select value={reportPharmacyIds.includes(selectedPharmacy)?selectedPharmacy:"Todas"} onChange={e=>setSelectedPharmacy(e.target.value)}>
+   <Field label="Farmacia"><select value={effectivePharmacy} onChange={e=>setSelectedPharmacy(e.target.value)}>
     <option value="Todas">Todas las farmacias</option>{pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
    </select></Field>
   </div>
@@ -393,7 +399,7 @@ function App(){
   <div className="report-selector-footer">La exportación incluye <strong>solo las {reportSelected.length} campañas seleccionadas en los filtros actuales</strong>, no todo el histórico.</div>
  </section>
  {reportSelected.length>0?<>
-  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacy==="Todas"?"Seguimiento consolidado de las promociones seleccionadas":"Resultados de la farmacia "+pharmaName(selectedPharmacy)} />
+  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={effectivePharmacy==="Todas"?"Seguimiento consolidado de las promociones seleccionadas":"Resultados de la farmacia "+pharmaName(effectivePharmacy)} />
   <section className="card list-card full-table-card">
    <div className="section-heading"><div><h2>Comparativa de promociones</h2><p>Objetivo, vendido y progreso de la selección actual</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
    <div className="table-scroll"><table className="data-table campaign-table"><thead><tr><th>Promoción</th><th>Estado</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendido</th><th>Avance</th><th>Acción</th></tr></thead><tbody>

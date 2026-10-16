@@ -217,7 +217,7 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
         if(Array.isArray(value)){
           if(!["pharmacy","cn"].includes(name) || value.length>500)return true;
           return value.some(v=>typeof v!=="string"||
-            (name==="pharmacy"?!/^[1-9]\\d{0,5}$/.test(v):!/^\\d{6}$/.test(v)||!cns.includes(v)));
+            (name==="pharmacy"?!/^[1-9]\d{0,5}$/.test(v):!/^\d{6}$/.test(v)||!cns.includes(v)));
         }
         return typeof value!=="string"||value.length>80;
       }) ||

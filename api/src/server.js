@@ -102,21 +102,20 @@ app.patch("/api/farmacias/:id", requireAdmin, async (req, res, next) => {
 });
 
 
-// Ventas reales de Farmatic: solo agregados, nunca datos personales ni tickets.
-// El ID de farmacia sigue siendo numérico en el maestro; farmacia_origen lo vincula.
+// Lectura autenticada, exclusivamente agregada, de ventas de Farmatic.
+// ID de farmacia 1-5 -> public.farmacias.codigo_origen -> venta.farmacia_origen.
 function validDates(from, to) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from || "") || !/^\d{4}-\d{2}-\d{2}$/.test(to || "")) return false;
-  const a = new Date(from + "T00:00:00Z");
-  const b = new Date(to + "T00:00:00Z");
+  const a = new Date(from + "T00:00:00Z"), b = new Date(to + "T00:00:00Z");
   return Number.isFinite(a.getTime()) && Number.isFinite(b.getTime()) &&
     a.toISOString().slice(0, 10) === from && b.toISOString().slice(0, 10) === to &&
-    b >= a && (b - a) <= 366 * 86400000;
+    b >= a && b - a <= 366 * 86400000;
 }
 function validCodes(cns) {
   return Array.isArray(cns) && cns.length <= 100 &&
     cns.every(cn => typeof cn === "string" && /^[0-9]{6}$/.test(cn));
 }
-const salesJoin = " FROM farmatic.lineaventa v JOIN public.farmacias f ON f.codigo_origen = upper(btrim(v.farmacia_origen::text)) ";
+const salesJoin = " FROM farmatic.lineaventa v JOIN public.farmacias f ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen ";
 const salesPeriod = " v.fechahora >= $1::date AND v.fechahora < ($2::date + interval '1 day') ";
 
 app.get("/api/ventas/cobertura", requireAdmin, async (req, res, next) => {
@@ -125,7 +124,7 @@ app.get("/api/ventas/cobertura", requireAdmin, async (req, res, next) => {
       "SELECT f.id::text AS farmacia_id, f.codigo_origen AS origen, " +
       "count(v.idventa)::bigint::text AS lineas, min(v.fechahora) AS primera, max(v.fechahora) AS ultima " +
       "FROM public.farmacias f LEFT JOIN farmatic.lineaventa v " +
-      "ON upper(btrim(v.farmacia_origen::text)) = f.codigo_origen " +
+      "ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen " +
       "GROUP BY f.id, f.codigo_origen ORDER BY f.id"
     );
     res.json({ pharmacies: rows });
@@ -142,24 +141,7 @@ app.get("/api/ventas/catalogo", requireAdmin, async (req, res, next) => {
       "max(nullif(btrim(v.descripcion::text), '')) AS descripcion, " +
       "coalesce(sum(v.cantidad),0)::float8 AS unidades, count(DISTINCT f.id)::int AS farmacias " +
       salesJoin + " WHERE " + salesPeriod +
-      " AND btrim(v.codigo::text) ~ '^[0-9]{6}
-  if (err.message === "Datos inválidos" || err.message?.startsWith("Revisa")) return res.status(400).json({ error: err.message });
-  if (err.code === "23505") return res.status(409).json({ error: "Ya existe ese ID o código de origen" });
-  if (err.code === "23503") return res.status(409).json({ error: "La farmacia tiene datos relacionados" });
-  console.error("Fallo de API", err.code || err.name);
-  res.status(500).json({ error: "No se pudo completar la operación" });
-});
-
-try {
-  const migration = await readFile(new URL("./migrations/001_farmacias.sql", import.meta.url), "utf8");
-  await pool.query(migration);
-  app.listen(Number(PORT), "0.0.0.0", () => console.log(`FARMAWAO API en puerto ${PORT}`));
-} catch (err) {
-  console.error("No se pudo iniciar la base de datos/API", err.message);
-  await pool.end();
-  process.exit(1);
-}
- " +
+      " AND btrim(v.codigo::text) ~ '^[0-9]{6}$' " +
       "GROUP BY btrim(v.codigo::text) HAVING sum(v.cantidad) > 0 " +
       "ORDER BY unidades DESC, cn LIMIT 50", [from, to]
     );

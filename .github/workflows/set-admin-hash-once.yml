@@ -1,0 +1,75 @@
+name: Activar nueva contraseña administrador FARMAWAO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/set-admin-hash-once.py"
+      - ".github/workflows/set-admin-hash-once.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: farmawao-one-time-admin-rotation
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar script sin secretos
+        run: python3 -m py_compile deploy/set-admin-hash-once.py
+      - name: Preparar conexión SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Copiar verificador sin transmitir la contraseña
+        run: |
+          scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            deploy/set-admin-hash-once.py \
+            "$VPS_USER@$VPS_HOST:/opt/farmawao/api/set-admin-hash-once.py"
+      - name: Actualizar configuracion privada del superadministrador
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            test -f /opt/farmawao/.env
+            docker run --rm \
+              --mount type=bind,src=/opt/farmawao,dst=/srv \
+              python:3.12-alpine python3 /srv/api/set-admin-hash-once.py
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
+            docker compose -f compose.yaml -f compose.farmacias.yml up -d --no-deps --force-recreate api
+          '
+      - name: Comprobar configuracion de la API y proteger login
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            for i in $(seq 1 25); do
+              if docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node -e "Promise.all([fetch(\"http://127.0.0.1:8000/api/auth/config\"), fetch(\"http://127.0.0.1:8000/api/health/database\")]).then(async ([a,b])=>{const x=await a.json();const y=await b.json();process.exit(x.temporaryLoginEnabled===true&&y.database===\"connected\"?0:1)}).catch(()=>process.exit(1))" ; then
+                break
+              fi
+              sleep 3
+            done
+            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node -e "Promise.all([fetch(\"http://127.0.0.1:8000/api/auth/config\"),fetch(\"http://127.0.0.1:8000/api/health/database\")]).then(async ([a,b])=>{const x=await a.json();const y=await b.json();process.exit(x.temporaryLoginEnabled===true&&y.database===\"connected\"?0:1)}).catch(()=>process.exit(1))"
+            status=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/)
+            test "$status" = "302"
+            echo "PASSWORD_VERIFIER_ACTIVE_LOGIN_PRIVATE_DATABASE_OK"
+          '

@@ -10,6 +10,7 @@ import "./styles.css";
 import AccessAdmin from "./Accesos.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
+import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadSalesCatalog, loadSalesCoverage, loadPromotionSales } from "./farmaciasApi.js";
@@ -187,6 +188,17 @@ function App(){
   const [importBusy,setImportBusy]=useState(false);
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
+ useEffect(()=>{
+   const key="farmawao-oct2026-seed-v1";
+   if(localStorage.getItem(key))return;
+   setData(prev=>{
+     const {additions}=mergeImportedPromos(prev.promos,REAL_OCTOBER_EXAMPLES);
+     const entries=additions.map(p=>({...p,status:"Borrador",
+       targets:Object.fromEntries(prev.pharmacies.filter(f=>f.active).map(f=>[f.id,""]))}));
+     return entries.length?{...prev,promos:[...entries,...prev.promos]}:prev;
+   });
+   localStorage.setItem(key,"1");
+ },[]);
  useEffect(()=>{
     localStorage.setItem(STORE_KEY,JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
   },[data,pharmacyApiStatus]);
@@ -405,12 +417,14 @@ function App(){
     setImportBusy(true);
     try{
       const campaigns=await readPromotionExcel(file);
-      const {additions,duplicates,warnings}=mergeImportedPromos(data.promos,campaigns);
+      const {additions,updates,duplicates,expanded,warnings}=mergeImportedPromos(data.promos,campaigns);
       const newPromos=additions.map(p=>({...p,status:"Borrador",
         targets:Object.fromEntries(pharmacies.filter(f=>f.active).map(f=>[f.id,""]))}));
-      if(newPromos.length)setData(prev=>({...prev,promos:[...newPromos,...prev.promos]}));
+      if(newPromos.length||updates.length)setData(prev=>({...prev,promos:[
+        ...newPromos,...prev.promos.map(old=>updates.find(u=>u.id===old.id)||old)
+      ]}));
       setStatusFilter("Borrador");
-      setToast(newPromos.length+" promociones importadas; "+duplicates+" duplicadas omitidas; "+warnings+" pendientes de revisión.");
+      setToast(newPromos.length+" nuevas, "+expanded+" ampliadas con CNs, "+duplicates+" duplicadas omitidas; "+warnings+" requieren revisión.");
     }catch(error){setToast(error.message||"No se pudo importar el Excel");}
     finally{setImportBusy(false);event.target.value="";}
   }

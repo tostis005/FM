@@ -165,10 +165,10 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
         text: "Tu código de acceso a FARMAWAO es " + code + ". Caduca en 10 minutos. Si no lo has solicitado, ignora este correo.",
       });
       await pool.query(
-        \`INSERT INTO public.acceso_codigos(email,codigo_hash,caduca_en,intentos,enviado_en)
+        `INSERT INTO public.acceso_codigos(email,codigo_hash,caduca_en,intentos,enviado_en)
          VALUES ($1,$2,now()+interval '10 minutes',0,now())
          ON CONFLICT (email) DO UPDATE SET codigo_hash=EXCLUDED.codigo_hash,
-           caduca_en=EXCLUDED.caduca_en,intentos=0,enviado_en=now()\`, [email, digest]);
+           caduca_en=EXCLUDED.caduca_en,intentos=0,enviado_en=now()`, [email, digest]);
       res.json(genericResponse);
     } catch (e) { next(e); }
   });
@@ -179,9 +179,9 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     try {
       // Un UPDATE atómico consume el intento y limita fuerza bruta por correo.
       const { rows } = await pool.query(
-        \`UPDATE public.acceso_codigos SET intentos=intentos+1
+        `UPDATE public.acceso_codigos SET intentos=intentos+1
          WHERE email=$1 AND caduca_en>now() AND intentos<5
-         RETURNING codigo_hash, intentos\`, [email]);
+         RETURNING codigo_hash, intentos`, [email]);
       if (!rows.length) return res.status(401).json({ error: "Código incorrecto o caducado" });
       const expected = Buffer.from(rows[0].codigo_hash, "hex");
       const supplied = createHmac("sha256", secret).update(email + ":" + code).digest();
@@ -210,10 +210,10 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       return res.status(400).json({ error: "Revisa el dominio y la farmacia" });
     try {
       const { rows } = await pool.query(
-        \`INSERT INTO public.acceso_dominios(dominio,activo,farmacia_id)
+        `INSERT INTO public.acceso_dominios(dominio,activo,farmacia_id)
          VALUES ($1,$2,$3) ON CONFLICT (dominio) DO UPDATE SET
          activo=EXCLUDED.activo,farmacia_id=EXCLUDED.farmacia_id,actualizado_en=now()
-         RETURNING dominio AS domain,activo AS active,farmacia_id::text AS "pharmacyId"\`,
+         RETURNING dominio AS domain,activo AS active,farmacia_id::text AS "pharmacyId"`,
         [domain,active,pharmacyId]);
       res.json(rows[0]);
     } catch (e) { next(e); }
@@ -248,11 +248,11 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
         if (rows.length !== unique.length) return res.status(400).json({ error: "Hay farmacias que no existen" });
       }
       const { rows } = await pool.query(
-        \`INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
+        `INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
          VALUES ($1,$2,$3,$4,$5)
          ON CONFLICT (email) DO UPDATE SET nombre=EXCLUDED.nombre,rol=EXCLUDED.rol,
            farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,actualizado_en=now()
-         RETURNING email,nombre AS name,rol AS role,farmacias::text[] AS pharmacies,activo AS active\`,
+         RETURNING email,nombre AS name,rol AS role,farmacias::text[] AS pharmacies,activo AS active`,
         [email,name,role,unique,active]);
       res.json(rows[0]);
     } catch (e) { next(e); }
@@ -272,9 +272,9 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       .filter(x=>EMAIL.test(x) && x.length<=254);
     for (const email of emails) {
       await pool.query(
-        \`INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
+        `INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
          VALUES ($1,'Administrador inicial','administrador','{}',TRUE)
-         ON CONFLICT (email) DO NOTHING\`, [email]);
+         ON CONFLICT (email) DO NOTHING`, [email]);
     }
   }
   return { requireAdmin, requireUser, bootstrapAdmins };

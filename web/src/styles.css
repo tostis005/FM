@@ -337,3 +337,22 @@
 .access-management .data-table td:last-child{display:flex;gap:8px;flex-wrap:wrap}
 .access-management .data-table td small{display:block;font-size:11px;color:#7f9189;margin-top:3px}
 @media(max-width:760px){.access-form-grid{grid-template-columns:1fr}.access-section{padding:16px}.access-code-login{display:grid}.access-management .data-table{min-width:670px}}
+
+
+/* Detalle de tickets con filtros equivalentes a la exportación del laboratorio */
+.lab-detail-panel{padding:22px;display:grid;gap:17px;min-width:0}
+.lab-detail-panel .section-heading{margin-bottom:0;gap:16px}
+.lab-detail-panel .section-heading .btn{flex-shrink:0}
+.lab-detail-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end}
+.lab-detail-filters label{display:grid;gap:6px;font-size:12px;font-weight:650;color:#4b5d57;min-width:0}
+.lab-detail-filters input,.lab-detail-filters select{min-height:41px;border:1px solid #d5e2dc;border-radius:9px;padding:9px 10px;background:#fff;color:#1c382c;width:100%;font:inherit}
+.lab-detail-count{font-weight:650;color:#304e44;font-size:13px}
+.lab-detail-table{min-width:1400px}
+.lab-detail-table th{white-space:nowrap}
+.lab-detail-table td{white-space:nowrap;font-variant-numeric:tabular-nums}
+.lab-detail-table td:nth-child(7){max-width:280px;white-space:normal;min-width:160px}
+.lab-detail-pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.lab-detail-pagination span{font-size:13px;font-weight:600;color:#4a5b55}
+.lab-detail-empty{padding:20px;font-size:13px;color:#718078;text-align:center}
+@media(max-width:990px){.lab-detail-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.lab-detail-panel{padding:15px}.lab-detail-filters{grid-template-columns:1fr}.lab-detail-panel .section-heading{flex-wrap:wrap}}

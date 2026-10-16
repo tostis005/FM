@@ -12,6 +12,16 @@ test("datos objetivos Excel: 135 metas y 1.755 unidades; ninguna de Estación",(
   assert.equal(records.reduce((v,x)=>v+x.qty,0),1755);
   assert.deepEqual([...new Set(records.map(x=>x.pharmacy))].sort(),["1","2","3","5"]);
 });
+test("las 135 asignaciones coinciden con campañas importadas del RESUMEN",()=>{
+  const real=OCTOBER_2026_OBJECTIVES.map((row,index)=>({
+    id:"X"+index,laboratory:row[0],range:row[1],originalOffer:row[2],targets:{},sales:{}
+  }));
+  const imported=applyObjectiveRows(real,OCTOBER_2026_OBJECTIVE_ROWS);
+  assert.equal(imported.assigned,135);
+  assert.equal(imported.unmatched,0);
+  assert.equal(imported.ambiguous,0);
+  assert.equal(imported.promotions.reduce((v,p)=>v+Object.values(p.targets).reduce((a,b)=>a+b,0),0),1755);
+});
 test("la campaña GUM concilia objetivos exactos por farmacia",()=>{
   const result=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS);
   const gum=result.promotions.find(p=>p.range==="GUM");

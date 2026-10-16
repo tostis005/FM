@@ -1,4 +1,5 @@
-import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomInt, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import nodemailer from "nodemailer";
 
@@ -6,6 +7,8 @@ const EMAIL = /^[a-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0
 const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const ROLES = new Set(["administrador", "gestor", "farmacia", "colaborador"]);
 const SESSION_NAME = "fm_session";
+const scryptAsync = promisify(scrypt);
+const HASH_PATTERN = /^scrypt\$16384\$8\$1\$[a-f0-9]{32}\$[a-f0-9]{128}$/;
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 const emailOf = x => typeof x === "string" ? x.trim().toLowerCase() : "";
 const domainOf = x => typeof x === "string" ? x.trim().toLowerCase().replace(/^@/, "") : "";
@@ -13,6 +16,11 @@ const domainOf = x => typeof x === "string" ? x.trim().toLowerCase().replace(/^@
 export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   const googleId = process.env.GOOGLE_CLIENT_ID || "";
   const secret = process.env.SESSION_SECRET || "";
+  const temporaryAdminEmail = emailOf(process.env.TEMP_ADMIN_EMAIL);
+  const temporaryPasswordHash = process.env.TEMP_ADMIN_PASSWORD_HASH || "";
+  const temporaryLoginEnabled = secret.length >= 32 &&
+    EMAIL.test(temporaryAdminEmail) && HASH_PATTERN.test(temporaryPasswordHash);
+  const attemptsByIp = new Map();
   const smtpReady = Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && (process.env.SMTP_USER ? process.env.SMTP_PASSWORD : true));
   const mailer = smtpReady ? nodemailer.createTransport({
     host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587),
@@ -75,7 +83,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   }
   function setCookie(res, value, maxAge) {
     res.setHeader("Set-Cookie", SESSION_NAME + "=" + value +
-      "; HttpOnly; SameSite=Lax; Path=/api; Max-Age=" + maxAge +
+      "; HttpOnly; SameSite=Lax; Path=/; Max-Age=" + maxAge +
       (cookieSecure ? "; Secure" : ""));
   }
   async function issueSession(res, user) {
@@ -109,8 +117,57 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   app.get("/api/auth/config", (_req, res) => res.json({
     googleClientId: secret.length >= 32 ? googleId : "",
     emailCodesAvailable: Boolean(secret.length >= 32 && mailer),
-    configured: secret.length >= 32 && Boolean(googleId || mailer),
+    configured: secret.length >= 32 && Boolean(googleId || mailer || temporaryLoginEnabled),
+    temporaryLoginEnabled,
   }));
+  // Nginx auth_request: 204 permite servir la SPA; 401 obliga a mostrar /login.
+  app.get("/api/auth/check", async (req, res, next) => {
+    try {
+      const user = await sessionUser(req);
+      return user?.role === "administrador" ? res.status(204).end() : res.status(401).end();
+    } catch (error) { next(error); }
+  });
+
+  // Acceso provisional: correo y hash scrypt configurados SOLO en el VPS.
+  app.post("/api/auth/local", async (req, res, next) => {
+    if (!temporaryLoginEnabled) return res.status(503).json({ error: "Acceso provisional pendiente de configurar" });
+    const email = emailOf(req.body?.email);
+    const password = req.body?.password;
+    if (!EMAIL.test(email) || typeof password !== "string" || password.length < 1 || password.length > 256) {
+      return res.status(400).json({ error: "Correo o contraseña incorrectos" });
+    }
+    const ip = (req.get("x-real-ip") || req.ip || "unknown").slice(0, 80);
+    const now = Date.now();
+    for (const [key, state] of attemptsByIp) {
+      if (state.until < now) attemptsByIp.delete(key);
+    }
+    if (attemptsByIp.size > 5000) attemptsByIp.clear();
+    const keys = ["ip:" + ip, "email:" + email];
+    if (keys.some(key => (attemptsByIp.get(key)?.count || 0) >= 5)) {
+      return res.status(429).json({ error: "Demasiados intentos. Vuelve a intentarlo en 15 minutos." });
+    }
+    try {
+      const [, , , , saltHex, keyHex] = temporaryPasswordHash.split("$");
+      const derived = await scryptAsync(password, Buffer.from(saltHex, "hex"), 64, {
+        N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024,
+      });
+      const matches = timingSafeEqual(derived, Buffer.from(keyHex, "hex"));
+      if (!matches || email !== temporaryAdminEmail) {
+        for (const key of keys) {
+          const state = attemptsByIp.get(key);
+          attemptsByIp.set(key, { count: (state?.until > now ? state.count : 0) + 1, until: now + 15 * 60_000 });
+        }
+        return res.status(401).json({ error: "Correo o contraseña incorrectos" });
+      }
+      const user = await resolveAccess(email);
+      if (!user || user.role !== "administrador") {
+        return res.status(403).json({ error: "La cuenta administradora no está activa" });
+      }
+      for (const key of keys) attemptsByIp.delete(key);
+      return issueSession(res, user);
+    } catch (error) { next(error); }
+  });
+
   app.get("/api/auth/me", async (req, res, next) => {
     try { res.json({ user: await sessionUser(req) }); } catch (e) { next(e); }
   });
@@ -268,7 +325,8 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   });
 
   async function bootstrapAdmins() {
-    const emails = (process.env.ADMIN_BOOTSTRAP_EMAILS || "").split(",").map(emailOf)
+    const emails = [...(process.env.ADMIN_BOOTSTRAP_EMAILS || "").split(","),
+      ...(temporaryLoginEnabled ? [temporaryAdminEmail] : [])].map(emailOf)
       .filter(x=>EMAIL.test(x) && x.length<=254);
     for (const email of emails) {
       await pool.query(

@@ -1,0 +1,170 @@
+import JSZip from "jszip";
+
+const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+
+function escapeXml(value) {
+  return String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
+function columnName(index) {
+  let result = "";
+  while (index > 0) {
+    index -= 1;
+    result = String.fromCharCode(65 + (index % 26)) + result;
+    index = Math.floor(index / 26);
+  }
+  return result;
+}
+
+function worksheetXml(rows, widths = []) {
+  const columnWidths = widths.length
+    ? "<cols>" + widths.map((width, index) => '<col min="' + (index + 1) +
+      '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>').join("") + "</cols>"
+    : "";
+  const body = rows.map((row, rowIndex) => {
+    const cells = row.map((value, colIndex) => {
+      if (value === null || value === undefined) return "";
+      const ref = columnName(colIndex + 1) + (rowIndex + 1);
+      const style = rowIndex === 0 ? ' s="1"' : "";
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return '<c r="' + ref + '"' + style + '><v>' + value + '</v></c>';
+      }
+      return '<c r="' + ref + '" t="inlineStr"' + style +
+        '><is><t xml:space="preserve">' + escapeXml(value) + '</t></is></c>';
+    }).join("");
+    return '<row r="' + (rowIndex + 1) + '">' + cells + "</row>";
+  }).join("");
+  return XML_HEADER + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+    columnWidths + "<sheetData>" + body + "</sheetData></worksheet>";
+}
+
+async function workbook(sheets) {
+  const zip = new JSZip();
+  const types = [
+    XML_HEADER,
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>',
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+    ...sheets.map((_, i) => '<Override PartName="/xl/worksheets/sheet' + (i + 1) +
+      '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'),
+    "</Types>",
+  ].join("");
+  zip.file("[Content_Types].xml", types);
+  zip.file("_rels/.rels", XML_HEADER +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+    "</Relationships>");
+  zip.file("xl/workbook.xml", XML_HEADER +
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+    sheets.map((sheet, index) => '<sheet name="' + escapeXml(sheet.name) + '" sheetId="' +
+      (index + 1) + '" r:id="rId' + (index + 1) + '"/>').join("") +
+    "</sheets></workbook>");
+  zip.file("xl/_rels/workbook.xml.rels", XML_HEADER +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    sheets.map((_, index) => '<Relationship Id="rId' + (index + 1) +
+      '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' +
+      (index + 1) + '.xml"/>').join("") +
+    '<Relationship Id="rId' + (sheets.length + 1) +
+    '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+    "</Relationships>");
+  zip.file("xl/styles.xml", XML_HEADER +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>' +
+    "</styleSheet>");
+  sheets.forEach((sheet, index) => zip.file("xl/worksheets/sheet" + (index + 1) + ".xml",
+    worksheetXml(sheet.rows, sheet.widths)));
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+}
+
+function total(values) {
+  return Object.values(values || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+}
+
+function completion(sold, goal) {
+  return goal > 0 ? Math.round((sold / goal) * 100) : 0;
+}
+
+function promotionSheets(promo, pharmacyName) {
+  const goal = total(promo.targets);
+  const sold = total(promo.sales);
+  return [
+    { name: "Resumen", widths: [29, 64], rows: [
+      ["Campo", "Valor"],
+      ["Promoción", promo.name],
+      ["Identificador", promo.id],
+      ["Estado", promo.status],
+      ["Descripción", promo.description],
+      ["Inicio", promo.start],
+      ["Fin", promo.end],
+      ["CN diferentes", (promo.cns || []).length],
+      ["Farmacias participantes", Object.keys(promo.targets || {}).length],
+      ["Objetivo (unidades)", goal],
+      ["Vendidas (unidades)", sold],
+      ["Cumplimiento (%)", completion(sold, goal)],
+      ["Origen de ventas", "Datos ilustrativos hasta activar la sincronización real"],
+    ] },
+    { name: "Farmacias", widths: [19, 34, 24, 24, 22], rows: [
+      ["ID farmacia", "Farmacia", "Objetivo (uds.)", "Vendidas (uds.)", "Cumplimiento (%)"],
+      ...Object.entries(promo.targets || {}).map(([id, target]) => {
+        const units = Number(promo.sales?.[id] || 0);
+        return [id, pharmacyName(id), Number(target) || 0, units, completion(units, Number(target) || 0)];
+      }),
+    ] },
+    { name: "Códigos nacionales", widths: [26], rows: [
+      ["Código nacional (CN)"], ...(promo.cns || []).map(cn => [cn]),
+    ] },
+  ];
+}
+
+function fileName(promo) {
+  const safe = String(promo.name || "promocion").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "").slice(0, 45);
+  return "promocion-" + String(promo.id).replace(/[^a-zA-Z0-9_-]/g, "") + "-" + safe + ".xlsx";
+}
+
+function downloadBlob(blob, name) {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+export async function exportPromotionExcel(promo, pharmacyName) {
+  const blob = await workbook(promotionSheets(promo, pharmacyName));
+  downloadBlob(blob, fileName(promo));
+}
+
+export async function exportAllPromotionsZip(promotions, pharmacyName) {
+  const archive = new JSZip();
+  const summary = [
+    ["ID", "Promoción", "Estado", "Inicio", "Fin", "CN", "Farmacias", "Objetivo (uds.)", "Vendidas (uds.)", "Cumplimiento (%)"],
+    ...promotions.map(promo => {
+      const goal = total(promo.targets);
+      const sold = total(promo.sales);
+      return [promo.id, promo.name, promo.status, promo.start, promo.end, (promo.cns || []).length,
+        Object.keys(promo.targets || {}).length, goal, sold, completion(sold, goal)];
+    }),
+  ];
+  archive.file("resumen-general.xlsx", await workbook([{
+    name: "Todas las campañas", widths: [16, 45, 20, 19, 19, 15, 18, 23, 23, 22], rows: summary,
+  }]));
+  for (const promo of promotions) {
+    archive.file(fileName(promo), await workbook(promotionSheets(promo, pharmacyName)));
+  }
+  downloadBlob(await archive.generateAsync({ type: "blob", compression: "DEFLATE" }),
+    "farmetrica-todas-las-promociones.zip");
+}

@@ -11,6 +11,7 @@ import stat
 import sys
 import tempfile
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 ENV=Path("/srv/.env")
@@ -104,6 +105,19 @@ def smoke():
                 headers=headers,method="POST" if body is not None else "GET")
         return urllib.request.urlopen(req,timeout=10)
 
+    # Anonymous access must never return the application or its bundles.
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+    no_redirect=urllib.request.build_opener(NoRedirect())
+    for route in ("/", "/index.html", "/farmacias"):
+        try:
+            no_redirect.open("http://127.0.0.1:18080"+route,timeout=10)
+        except urllib.error.HTTPError as err:
+            assert err.code == 302, "La web no redirige a login"
+        else:
+            raise AssertionError("La web se ha servido sin sesión")
+
     with request("/api/auth/config") as resp:
         config=json.load(resp)
         assert config.get("temporaryLoginEnabled") is True, "Acceso temporal no habilitado"
@@ -119,7 +133,20 @@ def smoke():
     with request("/api/ventas/cobertura",cookie=cookie) as resp:
         coverage=json.load(resp)
         assert len(coverage.get("pharmacies",[]))>=5, "Faltan farmacias reales"
-    print("LOGIN_ADMIN_OK; POSTGRES_VENTAS_OK; CINCO_FARMACIAS_OK")
+    with request("/api/ventas/seguimiento",{
+        "promotions":[{
+            "id":"gum-verificacion",
+            "start":"2026-10-01","end":"2026-10-31",
+            "cns":["339588","180678","179327","197003","176584",
+                   "176585","176587","211451","198676","201975",
+                   "306472","217842","170095","176082","176083",
+                   "208871","170097","316963","361279","361261",
+                   "156319","180036","180038","221655","218254"]
+        }]
+    },cookie=cookie) as resp:
+        result=json.load(resp)
+        assert isinstance(result.get("sales",{}).get("gum-verificacion"),dict), "Seguimiento Farmatic inválido"
+    print("LOGIN_ADMIN_OK; POSTGRES_VENTAS_OK; CINCO_FARMACIAS_OK; SEGUIMIENTO_REAL_OK; ANONIMO_BLOQUEADO_OK")
 
 if __name__=="__main__":
     try:

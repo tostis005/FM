@@ -88,3 +88,8 @@ export const loadPromotionSales = (promotions) => request("/api/ventas/seguimien
     id: String(p.id), start: p.start, end: p.end, cns: p.cns || [],
   })) }),
 });
+
+export const loadTicketLines = (filters) => request("/api/ventas/detalle", {
+  method: "POST",
+  body: JSON.stringify(filters),
+});

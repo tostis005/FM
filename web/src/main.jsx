@@ -318,7 +318,8 @@ function App(){
  function nav(id,promoId){
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
    const p=promoId?promos.find(item=>item.id===promoId):null;
-   const status=p?p.status:"Activa",ids=p?[p.id]:data.promos.filter(item=>item.status==="Activa").map(item=>item.id);
+   const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
+   const status=p?p.status:defaultStatus,ids=p?[p.id]:data.promos.filter(item=>item.status===status).map(item=>item.id);
    setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportDetailLimit(15);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));
    const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");

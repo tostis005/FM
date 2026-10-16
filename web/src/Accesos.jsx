@@ -98,10 +98,9 @@ export default function AccessAdmin({ onAuthenticated }) {
   async function requestCode(event) {
     event.preventDefault();
     await action(async () => {
-      const result = await api("/api/auth/request-code", { method: "POST", body: JSON.stringify({ email }) });
+      await api("/api/auth/request-code", { method: "POST", body: JSON.stringify({ email }) });
       setCodeRequested(true);
-      setMessage(result.message);
-    }, "");
+    }, "Si el correo está autorizado, recibirás un código válido durante 10 minutos.");
   }
   async function verifyCode(event) {
     event.preventDefault();

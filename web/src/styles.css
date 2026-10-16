@@ -294,3 +294,6 @@
  .goal-accordion-pct{font-size:13px}
  .goal-campaign-side .pill{display:none}
 }
+
+/* Validación de CNs de exactamente seis dígitos */
+.cn-format-error{color:#a24332!important;background:#fff2ed;border:1px solid #f4cebe;border-radius:9px;padding:10px 12px}

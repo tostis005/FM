@@ -7,6 +7,7 @@ import {
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw
 } from "lucide-react";
 import "./styles.css";
+import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer } from "./farmaciasApi.js";
 
@@ -25,20 +26,17 @@ const DEFAULT_USERS = [
   {id:"U05",name:"María López",email:"maria.lopez@demo.es",role:"farmacia",pharmacies:["2"],active:false}
 ];
 const DEFAULT_PROMOS = [
-  {id:"P100",name:"Rutina de hidratación",subtitle:"Cuidado facial · otoño",description:"Promoción especial en productos de hidratación facial para el cuidado diario de la piel.",status:"Activa",start:"2026-10-01",end:"2026-11-30",cns:["184579.6","188456.3","192334.1","203445.7"],targets:{1:120,2:95,3:100,4:85},sales:{1:92,2:71,3:64,4:56}},
-  {id:"P101",name:"Cuidado de invierno",subtitle:"Higiene y dermocosmética",description:"Objetivo de venta de referencias para el cuidado de la piel en invierno.",status:"Activa",start:"2026-10-05",end:"2026-12-31",cns:["165238.4","171625.6","182347.2"],targets:{1:140,2:120,5:110},sales:{1:86,2:79,5:49}},
-  {id:"P102",name:"Salud y bienestar",subtitle:"Vitaminas y complementos",description:"Campaña de complementos de bienestar para la red de farmacias.",status:"Activa",start:"2026-09-01",end:"2026-10-31",cns:["154235.7","145602.3","194510.5","190378.2"],targets:{1:140,2:130,3:130,4:120,5:100},sales:{1:124,2:102,3:81,4:88,5:64}},
-  {id:"P103",name:"Fotoprotección total",subtitle:"Protección solar",description:"Campaña de fotoprotección estacional.",status:"Finalizada",start:"2026-06-01",end:"2026-09-30",cns:["187345.6","198345.2"],targets:{1:90,2:100,3:110},sales:{1:94,2:103,3:108}},
-  {id:"P104",name:"Noviembre esencial",subtitle:"Próxima campaña",description:"Campaña de impulso para productos esenciales de noviembre.",status:"Borrador",start:"2026-11-01",end:"2026-11-30",cns:["173982.4","165708.9"],targets:{2:120,4:120,5:110},sales:{}}
+  {id:"P100",name:"Rutina de hidratación",subtitle:"Cuidado facial · otoño",description:"Promoción especial en productos de hidratación facial para el cuidado diario de la piel.",status:"Activa",start:"2026-10-01",end:"2026-11-30",cns:["184579","188456","192334","203445"],targets:{1:120,2:95,3:100,4:85},sales:{1:92,2:71,3:64,4:56}},
+  {id:"P101",name:"Cuidado de invierno",subtitle:"Higiene y dermocosmética",description:"Objetivo de venta de referencias para el cuidado de la piel en invierno.",status:"Activa",start:"2026-10-05",end:"2026-12-31",cns:["165238","171625","182347"],targets:{1:140,2:120,5:110},sales:{1:86,2:79,5:49}},
+  {id:"P102",name:"Salud y bienestar",subtitle:"Vitaminas y complementos",description:"Campaña de complementos de bienestar para la red de farmacias.",status:"Activa",start:"2026-09-01",end:"2026-10-31",cns:["154235","145602","194510","190378"],targets:{1:140,2:130,3:130,4:120,5:100},sales:{1:124,2:102,3:81,4:88,5:64}},
+  {id:"P103",name:"Fotoprotección total",subtitle:"Protección solar",description:"Campaña de fotoprotección estacional.",status:"Finalizada",start:"2026-06-01",end:"2026-09-30",cns:["187345","198345"],targets:{1:90,2:100,3:110},sales:{1:94,2:103,3:108}},
+  {id:"P104",name:"Noviembre esencial",subtitle:"Próxima campaña",description:"Campaña de impulso para productos esenciales de noviembre.",status:"Borrador",start:"2026-11-01",end:"2026-11-30",cns:["173982","165708"],targets:{2:120,4:120,5:110},sales:{}}
 ];
 const EMPTY_PROMO = {id:null,name:"",subtitle:"",description:"",status:"Borrador",start:"2026-10-16",end:"2026-11-30",cns:[],targets:{},sales:{}};
 const HISTORICAL = {1:110,2:95,3:105,4:80,5:90};
 const STORE_KEY = "farmetrica-prototype-v1";
 const ROLES = {superadmin:"Superadministrador",gestor:"Gestor de farmacias",farmacia:"Personal de farmacia"};
 const EUR = new Intl.NumberFormat("es-ES");
-function parseCNs(value) {
-  return [...new Set(value.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))];
-}
 function percent(s,t) {return t ? Math.round(s/t*100):0;}
 function sum(values){return Object.values(values||{}).reduce((a,b)=>a+(Number(b)||0),0);}
 function dateES(value){if(!value)return "—";const [y,m,d]=value.split("-");return d+"/"+m+"/"+y;}
@@ -61,7 +59,7 @@ function readState(){
       });
       return {
         ...saved,pharmacies,
-        promos:saved.promos.map(p=>({...p,targets:migrateSalesOrTargets(p.targets),sales:migrateSalesOrTargets(p.sales)})),
+        promos:saved.promos.map(p=>({...p,cns:normalizeStoredCNs(p.cns),targets:migrateSalesOrTargets(p.targets),sales:migrateSalesOrTargets(p.sales)})),
         users:saved.users.map(u=>({...u,pharmacies:(u.pharmacies||[]).map(migratePharmacyId)})),
       };
     }
@@ -81,7 +79,7 @@ function CampaignMetrics({campaigns,heading,subtitle}){
  return <section className="card campaign-metrics"><div className="campaign-metrics-header"><div><div className="metrics-eyebrow">RESUMEN DE CAMPAÑAS</div><h2>{heading}</h2><p>{subtitle}</p></div><span className="metrics-status"><span/> Seguimiento</span></div>
   <div className="campaign-metrics-grid">
    <div className="campaign-metric"><span>Promociones</span><strong>{EUR.format(campaigns.length)}</strong><small>Campañas</small></div>
-   <div className="campaign-metric"><span>Códigos nacionales</span><strong>{EUR.format(cns)}</strong><small>CN únicos</small></div>
+   <div className="campaign-metric"><span>CNs</span><strong>{EUR.format(cns)}</strong><small>CNs únicos</small></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{EUR.format(goal)}</strong><small>Unidades previstas</small></div>
    <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong><small>Datos ilustrativos</small></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span><strong>{percent(sold,goal)}%</strong><Progress value={percent(sold,goal)}/></div>
@@ -273,7 +271,9 @@ function App(){
  function savePromo(e){
   e.preventDefault();const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
-  if(!codes.length)return setToast("Añade al menos un código nacional");
+  if(!codes.length)return setToast("Añade al menos un CN de seis dígitos");
+   const invalid=codes.filter(cn=>!isValidCN(cn));
+   if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if(promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
   if(!Object.keys(promoForm.targets).length)return setToast("Selecciona al menos una farmacia");
   const result={...promoForm,id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(Object.entries(promoForm.targets).map(([id,v])=>[id,Math.max(0,Number(v)||0)]))};
@@ -433,7 +433,7 @@ function App(){
    {reportFilteredCampaigns.length>reportDetailLimit&&<button className="report-more-goals" type="button" onClick={()=>setReportDetailLimit(v=>v+15)}><ChevronDown size={17}/> Mostrar {Math.min(15,reportFilteredCampaigns.length-reportDetailLimit)} campañas más</button>}
   </section>
   <section className="card campaign-cn-panel">
-   <div className="section-heading"><div><h2>Códigos nacionales incluidos</h2><p>Referencias únicas del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CN</span></div>
+   <div className="section-heading"><div><h2>CNs incluidos</h2><p>Referencias únicas de seis dígitos del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="cn-chips">{reportCNs.slice(0,45).map(cn=><span key={cn} className="cn-chip">{cn}</span>)}{reportCNs.length>45&&<span className="cn-chip">+{reportCNs.length-45} más</span>}</div>
   </section>
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
@@ -486,7 +486,7 @@ function App(){
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>
    <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field><Field label="Fecha de fin"><input type="date" required value={promoForm.end} onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field></div>
    <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option>Finalizada</option></select></Field>
-   <div className="form-divider"/><div className="field-heading"><div><strong>Códigos nacionales (CN)</strong><small>Pega los códigos separados por líneas, comas o espacios.</small></div><span className="soft-counter">{cnParsed.length} CN</span></div><textarea rows="5" className="cn-area" placeholder={"184579.6\n188456.3\n192334.1"} value={cnText} onChange={e=>setCnText(e.target.value)}/><div className="parse-info"><CheckCircle2 size={15}/> Eliminamos automáticamente los códigos repetidos.</div>
+   <div className="form-divider"/><div className="field-heading"><div><strong>CNs (6 dígitos)</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
    <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
    {Object.keys(promoForm.targets).length>0&&<div className="target-list"><div className="target-head"><strong>Objetivos por farmacia</strong><button type="button" onClick={()=>{const obj={...promoForm.targets};Object.keys(obj).forEach(k=>obj[k]=HISTORICAL[k]||100);setPromoForm({...promoForm,targets:obj});}}><Sparkles size={15}/> Sugerir desde ejemplo</button></div>{Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}><div><strong>{pharmaName(id)}</strong><small>{id}</small></div><div className="numeric-input"><input type="number" min="0" value={value} onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})} aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div></div>)}<div className="target-total"><span>Objetivo total</span><strong>{EUR.format(sum(promoForm.targets))} uds.</strong></div><small className="hint">Las sugerencias son ficticias; después utilizaremos ventas históricas reales.</small></div>}

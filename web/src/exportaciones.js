@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { isValidCN } from "./cns.js";
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
@@ -105,7 +106,7 @@ function promotionSheets(promo, pharmacyName) {
       ["Descripción", promo.description],
       ["Inicio", promo.start],
       ["Fin", promo.end],
-      ["CN diferentes", (promo.cns || []).length],
+      ["CNs diferentes", (promo.cns || []).length],
       ["Farmacias participantes", Object.keys(promo.targets || {}).length],
       ["Objetivo (unidades)", goal],
       ["Vendidas (unidades)", sold],
@@ -119,8 +120,8 @@ function promotionSheets(promo, pharmacyName) {
         return [id, pharmacyName(id), Number(target) || 0, units, completion(units, Number(target) || 0)];
       }),
     ] },
-    { name: "Códigos nacionales", widths: [26], rows: [
-      ["Código nacional (CN)"], ...(promo.cns || []).map(cn => [cn]),
+    { name: "CNs", widths: [26], rows: [
+      ["CN (6 dígitos)"], ...(promo.cns || []).map(cn => [cn]),
     ] },
   ];
 }
@@ -143,12 +144,19 @@ function downloadBlob(blob, name) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+function ensureValidCNs(promo) {
+  if ((promo.cns || []).some(cn => !isValidCN(cn))) {
+    throw new Error("No se pueden exportar CNs que no tengan exactamente seis dígitos");
+  }
+}
 export async function exportPromotionExcel(promo, pharmacyName) {
+  ensureValidCNs(promo);
   const blob = await workbook(promotionSheets(promo, pharmacyName));
   downloadBlob(blob, fileName(promo));
 }
 
 export async function exportAllPromotionsZip(promotions, pharmacyName) {
+  promotions.forEach(ensureValidCNs);
   const archive = new JSZip();
   const summary = [
     ["ID", "Promoción", "Estado", "Inicio", "Fin", "CN", "Farmacias", "Objetivo (uds.)", "Vendidas (uds.)", "Cumplimiento (%)"],

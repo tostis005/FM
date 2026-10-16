@@ -19,6 +19,8 @@ jobs:
           node-version: "22"
       - name: Comprobar API
         run: node --check api/src/server.js
+      - name: Validar formato de CNs
+        run: node --test web/src/cns.test.js
       - name: Compilar React
         working-directory: web
         run: |

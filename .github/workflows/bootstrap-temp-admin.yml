@@ -1,0 +1,82 @@
+name: Activar acceso privado temporal FARMAWAO
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "deploy/bootstrap-temp-admin-vps.py"
+      - ".github/workflows/bootstrap-temp-admin.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: farmawao-temp-admin-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar sintaxis sin datos sensibles
+        run: python3 -m py_compile deploy/bootstrap-temp-admin-vps.py
+      - name: Preparar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Instalar asistente sin secretos en API
+        run: |
+          scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            deploy/bootstrap-temp-admin-vps.py \
+            "$VPS_USER@$VPS_HOST:/opt/farmawao/api/bootstrap_temp_admin_vps.py"
+      - name: Configurar correo, hash de contraseña y sesión solo en Contabo
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            test -f /opt/farmawao/.env
+            test -f /opt/farmawao/compose.farmacias.yml
+            docker run --rm \
+              --mount type=bind,src=/opt/farmawao,dst=/srv \
+              --mount type=bind,src=/root,dst=/root-host \
+              python:3.12-alpine \
+              python3 /srv/api/bootstrap_temp_admin_vps.py
+          '
+      - name: Aplicar login seguro a la API y web sin tocar PostgreSQL
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
+            docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api web
+          '
+      - name: Validar sesión admin y consultas reales sin mostrar credenciales
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            for i in $(seq 1 15); do
+              if docker run --rm \
+                --network host \
+                --mount type=bind,src=/opt/farmawao,dst=/srv,readonly \
+                --mount type=bind,src=/root,dst=/root-host,readonly \
+                python:3.12-alpine \
+                python3 /srv/api/bootstrap_temp_admin_vps.py --smoke; then exit 0; fi
+              sleep 3
+            done
+            exit 1
+          '

@@ -206,7 +206,7 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
     const { rows: countRows } = await pool.query(
       "SELECT count(*)::integer AS total " + where, params);
     const { rows } = await pool.query(
-      \`SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
+      `SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
               v.idventa::text AS "saleId", v.idnlinea::text AS "lineId",
               v.numerodoc::text AS "ticket",
               v.fechahora AS "at",
@@ -216,7 +216,7 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
               v.importebruto::float8 AS "gross",
               v.descuentolinea::float8 AS "lineDiscount",
               v.importeneto::float8 AS "net"
-       \` + where +
+       ` + where +
       " ORDER BY v.fechahora DESC, f.id, v.idventa DESC, v.idnlinea DESC LIMIT $7 OFFSET $8",
       [...params,limit,offset]);
     res.json({

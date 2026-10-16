@@ -81,7 +81,7 @@ export default function AccessAdmin({ onAuthenticated }) {
     let running = true;
     Promise.all([api("/api/auth/config"), api("/api/auth/me")])
       .then(async ([settings]) => { if (running) setConfig(settings); if (running) await refresh(); })
-      .catch(() => { if (running) setError("La API de acceso todavía no está disponible en el servidor. La lista solo podrá gestionarse cuando configuremos Google y despleguemos el backend."); });
+      .catch(() => { if (running) { setConfig({ googleClientId: "", emailCodesAvailable: false, configured: false }); setError("La API de acceso todavía no está disponible en el servidor. La lista solo podrá gestionarse cuando configuremos Google y despleguemos el backend."); } });
     return () => { running = false; };
   }, []);
   async function action(work, success) {

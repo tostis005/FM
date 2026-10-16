@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Bar, Line } from "recharts";
 import "./styles.css";
+import { exportPromotionExcel, exportAllPromotionsZip } from "./exportaciones.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
@@ -75,21 +76,39 @@ function downloadCSV(name, rows) {
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
 function Kpi({icon:Icon,title,value,caption,kind="mint"}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{value}</div><div className="kpi-caption">{caption}</div></div></div>}
+function CampaignMetrics({campaigns,heading,subtitle}){
+ const goal=campaigns.reduce((n,p)=>n+sum(p.targets),0),sold=campaigns.reduce((n,p)=>n+sum(p.sales),0);
+ const cns=new Set(campaigns.flatMap(p=>p.cns||[])).size;
+ return <section className="card campaign-metrics"><div className="campaign-metrics-header"><div><div className="metrics-eyebrow">RESUMEN DE CAMPAÑAS</div><h2>{heading}</h2><p>{subtitle}</p></div><span className="metrics-status"><span/> Seguimiento</span></div>
+  <div className="campaign-metrics-grid">
+   <div className="campaign-metric"><span>Promociones</span><strong>{EUR.format(campaigns.length)}</strong><small>Campañas</small></div>
+   <div className="campaign-metric"><span>Códigos nacionales</span><strong>{EUR.format(cns)}</strong><small>CN únicos</small></div>
+   <div className="campaign-metric"><span>Objetivo</span><strong>{EUR.format(goal)}</strong><small>Unidades previstas</small></div>
+   <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong><small>Datos ilustrativos</small></div>
+   <div className="campaign-metric metric-progress"><span>Cumplimiento</span><strong>{percent(sold,goal)}%</strong><Progress value={percent(sold,goal)}/></div>
+  </div></section>;
+}
 function Field({label,children,hint}) {return <label className="field"><span className="field-label">{label}</span>{children}{hint&&<small>{hint}</small>}</label>}
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
 const NAV = [
   {id:"promociones",label:"Promociones",icon:Tag},
-  {id:"seguimiento",label:"Seguimiento",icon:BarChart3},
   {id:"farmacias",label:"Farmacias",icon:Store},
   {id:"usuarios",label:"Usuarios",icon:Users},
   {id:"ajustes",label:"Ajustes",icon:Settings2}
 ];
 const ROUTES = new Set(NAV.map(item => item.id));
-
-function pageFromUrl() {
-  const pathname = window.location.pathname.replace(/^\/+|\/+$/g, "");
-  return ROUTES.has(pathname) ? pathname : "promociones";
+function promotionIdFromUrl(){
+ const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
+ if(!match)return null;
+ try{return decodeURIComponent(match[1]);}catch{return null;}
 }
+function pageFromUrl(){
+ const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
+ if(path==="promociones/seguimiento"||path==="seguimiento")return "seguimiento-global";
+ if(promotionIdFromUrl())return "seguimiento-campana";
+ return ROUTES.has(path)?path:"promociones";
+}
+
 function App(){
  const [data,setData]=useState(readState);
  const [page,setPage]=useState(pageFromUrl);
@@ -107,7 +126,7 @@ function App(){
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
   const [pharmacyApiError,setPharmacyApiError]=useState("");
   const [savingPharmacy,setSavingPharmacy]=useState(false);
- const [selectedPromo,setSelectedPromo]=useState("P100");
+ const [selectedPromo,setSelectedPromo]=useState(()=>promotionIdFromUrl()||"P100");
  const [selectedPharmacy,setSelectedPharmacy]=useState("Todas");
  const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
@@ -117,29 +136,31 @@ function App(){
   useEffect(()=>{if(pharmacyBackendConfigured)void refreshPharmacies();},[]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
-   const onBackForward=()=>{setPage(pageFromUrl());setSearch("");setMobileMenu(false);};
+   const onBackForward=()=>{const id=promotionIdFromUrl();if(id)setSelectedPromo(id);setPage(pageFromUrl());setSearch("");setMobileMenu(false);};
    window.addEventListener("popstate",onBackForward);
    return ()=>window.removeEventListener("popstate",onBackForward);
  },[]);
  useEffect(()=>{
-   const label=NAV.find(item=>item.id===page)?.label||"Promociones";
+   const label=page==="seguimiento-global"?"Promociones · Vista general":page==="seguimiento-campana"?"Promociones · Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
  const {promos,pharmacies,users}=data;
- const selected=promos.find(p=>p.id===selectedPromo)||promos[0];
+ const selected=promos.find(p=>p.id===selectedPromo)||(page==="seguimiento-campana"?null:promos[0]);
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const filterText=search.toLocaleLowerCase("es");
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&(!from||p.end>=from)&&(!to||p.start<=to));
- const totals={active:promos.filter(p=>p.status==="Activa").length,pharmacies:pharmacies.filter(f=>f.active).length,cns:new Set(promos.flatMap(p=>p.cns)).size,goal:promos.filter(p=>p.status!=="Borrador").reduce((n,p)=>n+sum(p.targets),0)};
+ const activePromos=promos.filter(p=>p.status==="Activa");
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
- function nav(id){
-  if(!ROUTES.has(id))return;
-  const url="/"+id;
+ function nav(id,promoId){
+  if(!ROUTES.has(id)&&!["seguimiento-global","seguimiento-campana"].includes(id))return;
+  if(id==="seguimiento-campana"&&!promoId)return;
+  const url=id==="seguimiento-global"?"/promociones/seguimiento":id==="seguimiento-campana"?"/promociones/"+encodeURIComponent(promoId)+"/seguimiento":"/"+id;
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
-  setPage(id);setSearch("");setMobileMenu(false);
+  if(promoId)setSelectedPromo(promoId);
+  setPage(id);setSearch("");setMobileMenu(false);setSelectedPharmacy("Todas");
  }
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){
@@ -157,15 +178,13 @@ function App(){
   setPromoForm({...promoForm,targets});
  }
  function copyPromo(p){startPromo({...p,id:null,name:p.name+" (copia)",status:"Borrador",sales:{}});setToast("Revisa la copia antes de guardarla");}
- function exportPromo(p) {
-  downloadCSV("promocion-"+p.id,[
-   ["Promoción",p.name,"Inicio",p.start,"Fin",p.end],
-   ["Descripción",p.description],
-   ["CN incluidos",p.cns.join(", ")],
-   [],
-   ["Código farmacia","Farmacia","Objetivo (unidades)","Ventas (unidades)","Avance (%)"],
-   ...Object.entries(p.targets).map(([id,target])=>[id,pharmaName(id),target,p.sales?.[id]||0,percent(p.sales?.[id]||0,target)])
-  ]);setToast("Archivo CSV compatible con Excel preparado");
+ async function exportPromo(p){
+  try{await exportPromotionExcel(p,pharmaName);setToast("Excel de la promoción descargado");}
+  catch(error){console.error(error);setToast("No se pudo generar el Excel");}
+ }
+ async function exportAllPromos(){
+  try{await exportAllPromotionsZip(promos,pharmaName);setToast("ZIP con todos los Excel descargado");}
+  catch(error){console.error(error);setToast("No se pudo generar el ZIP");}
  }
  function startUser(u){setEditingUser(u?.id||"nuevo");setUserForm(u?{...u,pharmacies:[...u.pharmacies]}:{id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});}
  function saveUser(e) {
@@ -222,23 +241,18 @@ function App(){
   let running=0;
   return weights.map((w,i)=>{const sales=Math.round(trackingSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(trackingGoal*(i+1)/6)};});
  },[trackingSales,trackingGoal]);
- const title=NAV.find(n=>n.id===page)?.label||"Promociones";
+ const title=page==="seguimiento-global"?"Vista general":page==="seguimiento-campana"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Promociones";
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark"><Leaf size={23} strokeWidth={2.8}/></span><span>Farmetrica</span></button>
-   <div className="side-section">ESPACIO DE TRABAJO</div>
-   <nav className="side-nav">{NAV.map(item=><button key={item.id} className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>)}</nav>
-   <div className="sidebar-bottom">
-    <div className="side-feature"><span className="side-feature-icon"><Sparkles size={21}/></span><strong>Más impacto,<br/>mejor seguimiento.</strong><p>Gestiona objetivos y mide el avance de tus campañas.</p><span className="side-feature-decoration"><Leaf size={60}/></span></div>
-    <div className="side-profile"><div className="avatar avatar-green">LG</div><div><strong>Laura Gómez</strong><span>Modo demostración</span></div><MoreHorizontal size={18}/></div>
-   </div>
+   <nav className="side-nav">{NAV.map(item=><button key={item.id} className={"side-link "+((page===item.id||(item.id==="promociones"&&page.startsWith("seguimiento")))?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{(page===item.id||(item.id==="promociones"&&page.startsWith("seguimiento")))&&<span className="active-dot"/>}</button>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
    <header className="topbar">
     <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
-    <div className="topbar-right"><span className="topbar-demo"><span/> {pharmacyApiStatus==="connected"&&page==="farmacias"?"Farmacias · PostgreSQL":"Promociones en demo"}</span><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">LG</span><span className="top-user">Laura Gómez<small>Superadministrador</small></span><ChevronDown size={14} className="muted desktop-only"/></div>
+    <div className="topbar-right"><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">LG</span><span className="top-user">Laura Gómez<small>Superadministrador</small></span><ChevronDown size={14} className="muted desktop-only"/></div>
    </header>
    <main className="main-content">
     {page==="promociones"&&<>

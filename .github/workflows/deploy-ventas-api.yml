@@ -67,7 +67,7 @@ jobs:
                 AND column_name IN ('\''farmacia_origen'\'','\''codigo'\'','\''descripcion'\'','\''fechahora'\'','\''cantidad'\'');
             " | grep -qx t; then echo TABLA_FARMATIC_NO_LISTA; exit 0; fi
             if ! docker compose config --quiet; then echo COMPOSE_INVALIDO; exit 0; fi
-            if ! test -w api || ! test -w .; then echo SIN_PERMISOS_API; exit 0; fi
+            if ! test -w api || ! test -d api_backups || ! test -w api_backups || ! test -f compose.farmacias.yml || ! test -w compose.farmacias.yml; then echo SIN_PERMISOS_API; exit 0; fi
             echo LISTO
           ')
           if [[ "$ready" == LISTO ]]; then
@@ -83,7 +83,7 @@ jobs:
           tar -czf - -C api . | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             set -eu
             cd /opt/farmawao
-            backup="api.backup.$(date +%Y%m%d%H%M%S)"
+            backup="/opt/farmawao/api_backups/api.$(date +%Y%m%d%H%M%S)"
             cp -a api "$backup"
             tar -xzf - -C api
           '

@@ -194,14 +194,27 @@ app.post("/api/ventas/seguimiento", requireAdmin, async (req, res, next) => {
 
 // Detalle de tickets Farmatic, exclusivamente para administradores autenticados.
 // Mantener PVP, descuentos e importes exactamente como constan en PostgreSQL.
+const ticketColumns = Object.freeze({
+  pharmacy:"f.nombre",seller:"v.xvend_idvendedor",saleId:"v.idventa",
+  ticket:"v.numerodoc",at:"v.fechahora",cn:"v.codigo",description:"v.descripcion",
+  pvp:"v.pvp",quantity:"v.cantidad",gross:"v.importebruto",
+  lineDiscount:"v.descuentolinea",net:"v.importeneto",
+  discountPercent:"COALESCE(ABS(v.descuentolinea / NULLIF(v.importebruto,0)),0)",
+});
 app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
-  const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 100 } = req.body || {};
+  const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
+    columnFilters = {}, orderBy = "at", orderDir = "desc" } = req.body || {};
   if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
       cns.length > 500 || typeof offset !== "number" || !Number.isInteger(offset) ||
       offset < 0 || offset > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 500 ||
-      (farmaciaId != null && farmaciaId !== "" && !/^[1-9]\d{0,5}$/.test(String(farmaciaId))) ||
+      (farmaciaId != null && farmaciaId !== "" && !/^[1-9]\\d{0,5}$/.test(String(farmaciaId))) ||
       (ticket != null && (typeof ticket !== "string" || ticket.length > 60)) ||
-      (cn != null && cn !== "" && (!/^\d{6}$/.test(cn) || !cns.includes(cn)))) {
+      (cn != null && cn !== "" && (!/^\\d{6}$/.test(cn) || !cns.includes(cn))) ||
+      !columnFilters || typeof columnFilters !== "object" || Array.isArray(columnFilters) ||
+      Object.keys(columnFilters).length > 13 ||
+      Object.entries(columnFilters).some(([name,value]) =>
+        !Object.hasOwn(ticketColumns,name)||typeof value !== "string"||value.length > 80) ||
+      !Object.hasOwn(ticketColumns,orderBy) || !["asc","desc"].includes(orderDir)) {
     return res.status(400).json({ error: "Filtros de ventas inválidos" });
   }
   try {
@@ -212,14 +225,21 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
       "($5::text IS NULL OR v.numerodoc::text ILIKE '%' || $5 || '%')",
       "($6::text IS NULL OR btrim(v.codigo::text)=$6)",
     ];
-    const where = salesJoin + " WHERE " + filters.join(" AND ");
     const params = [
       start,end,cns,
       farmaciaId == null || farmaciaId === "" ? null : Number(farmaciaId),
       ticket ? ticket.trim() : null, cn || null,
     ];
+    for (const [column,value] of Object.entries(columnFilters)) {
+      if(!value.trim())continue;
+      params.push(value.trim());
+      filters.push(ticketColumns[column]+"::text ILIKE '%' || $"+params.length+" || '%'");
+    }
+    const where = salesJoin + " WHERE " + filters.join(" AND ");
     const { rows: countRows } = await pool.query(
       "SELECT count(*)::integer AS total " + where, params);
+    const orderSql = " ORDER BY "+ticketColumns[orderBy]+" "+orderDir.toUpperCase()+
+      " NULLS LAST, v.fechahora DESC, f.id, v.idventa DESC, v.idnlinea DESC";
     const { rows } = await pool.query(
       `SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
               v.idventa::text AS "saleId", v.idnlinea::text AS "lineId",
@@ -231,8 +251,8 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
               v.importebruto::float8 AS "gross",
               v.descuentolinea::float8 AS "lineDiscount",
               v.importeneto::float8 AS "net"
-       ` + where +
-      " ORDER BY v.fechahora DESC, f.id, v.idventa DESC, v.idnlinea DESC LIMIT $7 OFFSET $8",
+       ` + where + orderSql +
+      " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
       [...params,limit,offset]);
     res.json({
       rows, total:countRows[0]?.total||0, offset, limit,

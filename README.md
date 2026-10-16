@@ -34,3 +34,7 @@ Al fusionar a `main`, el despliegue automático aplica la migración **idempoten
 ## Rutas de la aplicación
 
 Cada sección tiene URL propia: `/promociones`, `/seguimiento`, `/farmacias`, `/usuarios`, `/ajustes`. La navegación usa History API y permite volver/avanzar y recargar sin salir de la sección; Nginx reenvía las rutas a `index.html` sin cambiar el enrutamiento de `/api/`.
+
+## Seguimiento unificado
+
+El menú lateral muestra **Seguimiento** como submenú de **Promociones**. La ruta única de reporting es `/promociones/seguimiento`; las rutas antiguas `/seguimiento` y `/promociones/ID/seguimiento` se siguen aceptando, abriendo la misma interfaz con la campaña de la URL seleccionada. El selector permite multiselección mediante casillas, seleccionar todas las campañas filtradas o limpiar la selección; incluye estado (Activas por defecto), año de inicio, búsqueda por nombre/CN y farmacia para comparar los datos visualizados. El campo `ids` y los filtros de estado y año se mantienen en la URL para recarga y enlaces compartibles. El botón de exportación descarga un XLSX cuando hay una sola promoción seleccionada y un ZIP con resumen y XLSX individuales cuando hay varias; **nunca incluye campañas que estén fuera de la selección filtrada actual**. Las ventas actuales siguen siendo ficticias hasta la integración de SQL Server.

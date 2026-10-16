@@ -102,10 +102,22 @@ function promotionIdFromUrl(){
  if(!match)return null;
  try{return decodeURIComponent(match[1]);}catch{return null;}
 }
+function selectedIdsFromUrl(){
+ const oldId=promotionIdFromUrl();
+ if(oldId)return [oldId];
+ const query=new URLSearchParams(window.location.search);
+ if(!query.has("ids"))return null;
+ return [...new Set(query.get("ids").split(",").filter(Boolean))];
+}
+function reportFiltersFromUrl(){
+ const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
+ const status=params.get("estado")||(selected!==null?"Todos":"Activa");
+ return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
+  year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected};
+}
 function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
- if(path==="promociones/seguimiento"||path==="seguimiento")return "seguimiento-global";
- if(promotionIdFromUrl())return "seguimiento-campana";
+ if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
  return ROUTES.has(path)?path:"promociones";
 }
 
@@ -126,7 +138,14 @@ function App(){
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
   const [pharmacyApiError,setPharmacyApiError]=useState("");
   const [savingPharmacy,setSavingPharmacy]=useState(false);
- const [selectedPromo,setSelectedPromo]=useState(()=>promotionIdFromUrl()||"P100");
+ const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
+ const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
+ const [reportSearch,setReportSearch]=useState("");
+ const [reportPageLimit,setReportPageLimit]=useState(25);
+ const [reportSelectedIds,setReportSelectedIds]=useState(()=>{
+  const ids=reportFiltersFromUrl().ids;
+  return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
+ });
  const [selectedPharmacy,setSelectedPharmacy]=useState("Todas");
  const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
@@ -136,31 +155,86 @@ function App(){
   useEffect(()=>{if(pharmacyBackendConfigured)void refreshPharmacies();},[]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
-   const onBackForward=()=>{const id=promotionIdFromUrl();if(id)setSelectedPromo(id);setPage(pageFromUrl());setSearch("");setMobileMenu(false);};
+   const onBackForward=()=>{
+   const filters=reportFiltersFromUrl();
+   setReportStatus(filters.status);setReportYear(filters.year);
+   setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
+   setReportSearch("");setSelectedPharmacy("Todas");
+   setPage(pageFromUrl());setSearch("");setMobileMenu(false);
+  };
    window.addEventListener("popstate",onBackForward);
    return ()=>window.removeEventListener("popstate",onBackForward);
- },[]);
+ },[data.promos]);
  useEffect(()=>{
-   const label=page==="seguimiento-global"?"Promociones · Vista general":page==="seguimiento-campana"?"Promociones · Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
+   const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
  const {promos,pharmacies,users}=data;
- const selected=promos.find(p=>p.id===selectedPromo)||(page==="seguimiento-campana"?null:promos[0]);
+ 
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const filterText=search.toLocaleLowerCase("es");
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&(!from||p.end>=from)&&(!to||p.start<=to));
  const activePromos=promos.filter(p=>p.status==="Activa");
+ const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
+ const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
+ const reportVisible=reportFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportSearch.toLocaleLowerCase("es")));
+ const reportSelected=reportVisible.filter(p=>reportSelectedIds.includes(p.id));
+ const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
+ const effectivePharmacy=reportPharmacyIds.includes(selectedPharmacy)?selectedPharmacy:"Todas";
+ const reportFilteredCampaigns=reportSelected.map(p=>({
+  ...p,
+  targets:effectivePharmacy==="Todas"?p.targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>id===effectivePharmacy)),
+  sales:effectivePharmacy==="Todas"?p.sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>id===effectivePharmacy))
+ }));
+ const combinedReport=reportFilteredCampaigns.reduce((acc,p)=>{
+  Object.entries(p.targets||{}).forEach(([id,val])=>{acc.targets[id]=(acc.targets[id]||0)+(Number(val)||0);});
+  Object.entries(p.sales||{}).forEach(([id,val])=>{acc.sales[id]=(acc.sales[id]||0)+(Number(val)||0);});
+  return acc;
+ },{targets:{},sales:{}});
+ const reportTargets=Object.entries(combinedReport.targets);
+ const reportGoal=sum(combinedReport.targets);
+ const reportSales=sum(combinedReport.sales);
+ const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
+ const reportChartData=useMemo(()=>{
+  const weights=[.10,.14,.19,.22,.16,.19];
+  let running=0;
+  return weights.map((w,i)=>{const sales=Math.round(reportSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(reportGoal*(i+1)/6)};});
+ },[reportSales,reportGoal]);
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
-  if(!ROUTES.has(id)&&!["seguimiento-global","seguimiento-campana"].includes(id))return;
-  if(id==="seguimiento-campana"&&!promoId)return;
-  const url=id==="seguimiento-global"?"/promociones/seguimiento":id==="seguimiento-campana"?"/promociones/"+encodeURIComponent(promoId)+"/seguimiento":"/"+id;
+  if(id==="seguimiento-campana"||id==="seguimiento-global"){
+   const p=promoId?data.promos.find(item=>item.id===promoId):null;
+   const status=p?p.status:"Activa",ids=p?[p.id]:data.promos.filter(item=>item.status==="Activa").map(item=>item.id);
+   setReportStatus(status);setReportYear("Todos");setReportSearch("");setReportSelectedIds(ids);setSelectedPharmacy("Todas");
+   const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
+   if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
+   setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
+  }
+  if(!ROUTES.has(id))return;
+  const url="/"+id;
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
-  if(promoId)setSelectedPromo(promoId);
-  setPage(id);setSearch("");setMobileMenu(false);setSelectedPharmacy("Todas");
+  setPage(id);setSearch("");setMobileMenu(false);
+ }
+ function updateReportScope(status,year){
+  setReportStatus(status);setReportYear(year);setReportSearch("");setReportPageLimit(25);setSelectedPharmacy("Todas");
+  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+  setReportSelectedIds(prev=>{
+   const kept=prev.filter(id=>eligible.some(p=>p.id===id));
+   if(kept.length)return kept;
+   return (status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id);
+  });
+ }
+ function selectReportAll(){
+  setReportSelectedIds(prev=>[...new Set([...prev,...reportVisible.map(p=>p.id)])]);
+ }
+ function clearReportSelection(){
+  setReportSelectedIds(prev=>prev.filter(id=>!reportVisible.some(p=>p.id===id)));
+ }
+ function toggleReportCampaign(id){
+  setReportSelectedIds(prev=>prev.includes(id)?prev.filter(v=>v!==id):[...prev,id]);
  }
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{...(entry.sales||{})}});setCnText((entry.cns||[]).join("\n"));}
  function savePromo(e){
@@ -171,7 +245,7 @@ function App(){
   if(!Object.keys(promoForm.targets).length)return setToast("Selecciona al menos una farmacia");
   const result={...promoForm,id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(Object.entries(promoForm.targets).map(([id,v])=>[id,Math.max(0,Number(v)||0)]))};
   setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
-  setSelectedPromo(result.id);setEditingPromo(null);setToast("Promoción guardada en esta demostración");
+  setEditingPromo(null);setToast("Promoción guardada en esta demostración");
  }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]=HISTORICAL[id]||100;
@@ -182,8 +256,10 @@ function App(){
   try{await exportPromotionExcel(p,pharmaName);setToast("Excel de la promoción descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el Excel");}
  }
- async function exportAllPromos(){
-  try{await exportAllPromotionsZip(promos,pharmaName);setToast("ZIP con todos los Excel descargado");}
+ async function exportAllPromos(campaigns){
+  if(!campaigns.length)return setToast("Selecciona al menos una promoción");
+  if(campaigns.length>10&&!window.confirm("¿Descargar los Excel de "+campaigns.length+" promociones seleccionadas en un ZIP?"))return;
+  try{await exportAllPromotionsZip(campaigns,pharmaName);setToast("ZIP con "+campaigns.length+" promociones descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el ZIP");}
  }
  function startUser(u){setEditingUser(u?.id||"nuevo");setUserForm(u?{...u,pharmacies:[...u.pharmacies]}:{id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});}
@@ -233,19 +309,20 @@ function App(){
     finally{setSavingPharmacy(false);}
   }
   const cnParsed=parseCNs(cnText);
- const trackingTargets=selected?Object.entries(selected.targets).filter(([id])=>selectedPharmacy==="Todas"||selectedPharmacy===id):[];
- const trackingGoal=sum(Object.fromEntries(trackingTargets));
- const trackingSales=trackingTargets.reduce((n,[id])=>n+Number(selected?.sales?.[id]||0),0);
- const chartData=useMemo(()=>{
-  const weights=[0.10,0.14,0.19,0.22,0.16,0.19];
-  let running=0;
-  return weights.map((w,i)=>{const sales=Math.round(trackingSales*w);running+=sales;return {week:"Sem "+(i+1),ventas:sales,acumulado:running,objetivo:Math.round(trackingGoal*(i+1)/6)};});
- },[trackingSales,trackingGoal]);
- const title=page==="seguimiento-global"?"Vista general":page==="seguimiento-campana"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Promociones";
+ const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Promociones";
+ useEffect(()=>{
+  if(page!=="seguimiento-global")return;
+  const params=new URLSearchParams();
+  params.set("estado",reportStatus);
+  if(reportYear!=="Todos")params.set("anio",reportYear);
+  params.set("ids",reportSelectedIds.join(","));
+  const url="/promociones/seguimiento?"+params.toString();
+  if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
+ },[page,reportStatus,reportYear,reportSelectedIds]);
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark"><Leaf size={23} strokeWidth={2.8}/></span><span>Farmetrica</span></button>
-   <nav className="side-nav">{NAV.map(item=><button key={item.id} className={"side-link "+((page===item.id||(item.id==="promociones"&&page.startsWith("seguimiento")))?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{(page===item.id||(item.id==="promociones"&&page.startsWith("seguimiento")))&&<span className="active-dot"/>}</button>)}</nav>
+   <nav className="side-nav">{NAV.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
@@ -256,7 +333,7 @@ function App(){
    </header>
    <main className="main-content">
     {page==="promociones"&&<>
- <div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> CAMPAÑAS COMERCIALES</div><h1>Promociones</h1><p>Crea campañas, asigna objetivos y consulta su seguimiento.</p></div><div className="campaign-header-actions"><button className="btn btn-secondary" onClick={()=>nav("seguimiento-global")}><BarChart3 size={17}/> Vista general y exportaciones</button><button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button></div></div>
+ <div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> CAMPAÑAS COMERCIALES</div><h1>Promociones</h1><p>Crea campañas, asigna objetivos y consulta su seguimiento.</p></div><button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button></div>
  <CampaignMetrics campaigns={activePromos} heading="Promociones activas" subtitle="Indicadores de las campañas en curso" />
  <section className="card list-card full-table-card">
   <div className="section-heading"><div><h2>Listado de promociones</h2><p>Abre una campaña para editarla o consulta directamente sus resultados.</p></div><span className="count-label">{filteredPromos.length} promociones</span></div>
@@ -280,29 +357,71 @@ function App(){
  <div className="note data-note"><CircleHelp size={16}/> Las ventas mostradas son ilustrativas hasta disponer de las importaciones reales.</div>
 </>}
 {page==="seguimiento-global"&&<>
- <div className="page-header"><div><button className="back-link" onClick={()=>nav("promociones")}><ArrowRight size={15}/> Volver a promociones</button><div className="eyebrow"><span className="eyebrow-dot"/> SEGUIMIENTO CONSOLIDADO</div><h1>Vista general de campañas</h1><p>Objetivos, ventas y cumplimiento de todas las promociones.</p></div><button className="btn btn-primary" onClick={()=>void exportAllPromos()}><ArrowDownToLine size={17}/> Exportar todos los Excel (ZIP)</button></div>
- <CampaignMetrics campaigns={promos} heading="Todas las campañas" subtitle="Resumen consolidado de campañas activas, finalizadas y borradores" />
- <section className="card list-card full-table-card">
-  <div className="section-heading"><div><h2>Comparativa de campañas</h2><p>Selecciona una promoción para examinar el seguimiento.</p></div><span className="count-label">{promos.length} campañas</span></div>
-  <div className="table-scroll"><table className="data-table campaign-table"><thead><tr><th>Campaña</th><th>Estado</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendido</th><th>Avance</th><th>Acciones</th></tr></thead><tbody>
-   {promos.map(p=>{const goal=sum(p.targets),sold=sum(p.sales),pc=percent(sold,goal);return <tr key={p.id} className="click-row" onClick={()=>nav("seguimiento-campana",p.id)}>
-    <td><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)}</small></div></div></td>
-    <td><Pill status={p.status}/></td><td>{p.cns.length}</td><td>{Object.keys(p.targets).length}</td><td>{EUR.format(goal)} uds.</td><td>{EUR.format(sold)} uds.</td><td><div className="table-progress"><Progress value={pc}/><span>{pc}%</span></div></td>
-    <td><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Detalle</button><button className="row-action" title="Descargar Excel" aria-label={"Exportar Excel de "+p.name} onClick={e=>{e.stopPropagation();void exportPromo(p)}}><ArrowDownToLine size={16}/></button></div></td>
-   </tr>})}
-  </tbody></table></div>
+ <div className="page-header">
+  <div><div className="eyebrow"><span className="eyebrow-dot"/> REPORTING DE PROMOCIONES</div>
+   <h1>Seguimiento</h1><p>Selecciona una o varias campañas para analizar objetivos, ventas y progreso desde una sola pantalla.</p></div>
+  <button className="btn btn-primary" disabled={!reportSelected.length} onClick={()=>{if(reportSelected.length===1){void exportPromo(reportSelected[0]);}else{void exportAllPromos(reportSelected);}}}>
+   <ArrowDownToLine size={17}/>{reportSelected.length===1?"Descargar Excel":reportSelected.length?"Descargar "+reportSelected.length+" campañas (ZIP)":"Selecciona campañas"}
+  </button>
+ </div>
+ <section className="card report-selector">
+  <div className="section-heading report-selector-heading">
+   <div><h2>Seleccionar campañas</h2><p>Por defecto se muestran las activas. Filtra el histórico y marca únicamente las promociones que quieras analizar.</p></div>
+   <span className="count-label">{reportSelected.length} seleccionadas</span>
+  </div>
+  <div className="report-filter-grid">
+   <Field label="Estado"><select value={reportStatus} onChange={e=>updateReportScope(e.target.value,reportYear)}>
+    <option value="Activa">Activas</option><option value="Finalizada">Finalizadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
+   </select></Field>
+   <Field label="Año de inicio"><select value={reportYear} onChange={e=>updateReportScope(reportStatus,e.target.value)}>
+    <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
+   </select></Field>
+   <Field label="Buscar promoción o CN"><input type="search" value={reportSearch} onChange={e=>{setReportSearch(e.target.value);setReportPageLimit(25);}} placeholder="Nombre, referencia, CN…"/></Field>
+   <Field label="Farmacia"><select value={effectivePharmacy} onChange={e=>setSelectedPharmacy(e.target.value)}>
+    <option value="Todas">Todas las farmacias</option>{pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}
+   </select></Field>
+  </div>
+  <div className="report-select-toolbar">
+   <label className="report-select-all"><input type="checkbox" checked={reportVisible.length>0&&reportVisible.every(p=>reportSelectedIds.includes(p.id))} onChange={e=>e.target.checked?selectReportAll():clearReportSelection()} disabled={!reportVisible.length}/> Seleccionar todas las filtradas</label>
+   <span className="report-selection-count">{reportSelected.length} de {reportVisible.length} seleccionadas en esta vista</span>
+   <button type="button" className="text-link" onClick={clearReportSelection} disabled={!reportSelected.length}>Limpiar selección</button>
+  </div>
+  <div className="report-choice-scroll">
+   {reportVisible.slice(0,reportPageLimit).map(p=><label className={"report-choice "+(reportSelectedIds.includes(p.id)?"report-choice-checked":"")} key={p.id}>
+    <input type="checkbox" checked={reportSelectedIds.includes(p.id)} onChange={()=>toggleReportCampaign(p.id)}/>
+    <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span>
+    <Pill status={p.status}/>
+   </label>)}
+   {!reportVisible.length&&<div className="report-choice-empty">No hay promociones con estos filtros. Prueba con otro estado, año o búsqueda.</div>}
+  </div>
+  {reportVisible.length>reportPageLimit&&<button className="report-more" type="button" onClick={()=>setReportPageLimit(v=>v+25)}>
+   Mostrar más campañas ({reportVisible.length-reportPageLimit} pendientes) <ChevronDown size={16}/>
+  </button>}
+  <div className="report-selector-footer">La exportación incluye <strong>solo las {reportSelected.length} campañas seleccionadas en los filtros actuales</strong>, no todo el histórico.</div>
  </section>
- <div className="note data-note"><CircleHelp size={16}/> Las cifras de ventas todavía son ilustrativas. El ZIP incluye un resumen general y un Excel individual por campaña.</div>
-</>}
-{page==="seguimiento-campana"&&<>
- {selected?<>
-  <div className="page-header"><div><button className="back-link" onClick={()=>nav("seguimiento-global")}><ArrowRight size={15}/> Vista general de campañas</button><div className="eyebrow"><span className="eyebrow-dot"/> SEGUIMIENTO DE CAMPAÑA</div><h1>{selected.name}</h1><p>{dateES(selected.start)} — {dateES(selected.end)} · {selected.description||"Análisis por farmacia y objetivos"}</p></div><div className="campaign-header-actions"><button className="btn btn-secondary" onClick={()=>startPromo(selected)}><Pencil size={16}/> Editar</button><button className="btn btn-primary" onClick={()=>void exportPromo(selected)}><ArrowDownToLine size={17}/> Exportar Excel</button></div></div>
-  <div className="tracking-filters card"><Field label="Cambiar promoción"><select value={selectedPromo} onChange={e=>nav("seguimiento-campana",e.target.value)}>{promos.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></Field><Field label="Farmacia"><select value={selectedPharmacy} onChange={e=>setSelectedPharmacy(e.target.value)}><option value="Todas">Todas las farmacias</option>{pharmacies.filter(f=>f.id in (selected.targets||{})).map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></Field><Field label="Estado"><div className="static-input"><Pill status={selected.status}/></div></Field></div>
-  <div className="tracking-kpis"><Kpi icon={Package} title="Códigos nacionales" value={selected.cns.length} caption="Referencias en campaña" kind="blue"/><Kpi icon={Target} title="Objetivo de ventas" value={EUR.format(trackingGoal)} caption="Unidades previstas"/><Kpi icon={TrendingUp} title="Unidades vendidas" value={EUR.format(trackingSales)} caption="Datos ilustrativos"/><Kpi icon={Activity} title="Cumplimiento" value={percent(trackingSales,trackingGoal)+"%"} caption="Sobre objetivo"/></div>
-  <section className="card tracking-expanded"><div className="section-heading"><div><h2>Avance por farmacia</h2><p>{trackingTargets.length} farmacias en el filtro seleccionado</p></div><span className="count-label">{selected.id}</span></div><TrackingContent selected={selected} chartData={chartData} trackingTargets={trackingTargets} trackingGoal={trackingGoal} trackingSales={trackingSales} pharmaName={pharmaName}/></section>
-  <section className="card campaign-cn-panel"><div className="section-heading"><div><h2>Códigos nacionales</h2><p>Referencias incluidas en la promoción</p></div><span className="count-label">{selected.cns.length} CN</span></div><div className="cn-chips">{selected.cns.map(cn=><span key={cn} className="cn-chip">{cn}</span>)}</div></section>
-  <div className="note data-note"><CircleHelp size={16}/> Las ventas y la curva semanal son ilustrativas hasta importar datos reales.</div>
- </>:<section className="card empty-route"><h2>Promoción no encontrada</h2><p>La campaña no existe o este enlace no es válido.</p><button className="btn btn-primary" onClick={()=>nav("promociones")}>Volver a promociones</button></section>}
+ {reportSelected.length>0?<>
+  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={effectivePharmacy==="Todas"?"Seguimiento consolidado de las promociones seleccionadas":"Resultados de la farmacia "+pharmaName(effectivePharmacy)} />
+  <section className="card list-card full-table-card">
+   <div className="section-heading"><div><h2>Comparativa de promociones</h2><p>Objetivo, vendido y progreso de la selección actual</p></div><span className="count-label">{reportSelected.length} campañas</span></div>
+   <div className="table-scroll"><table className="data-table campaign-table"><thead><tr><th>Promoción</th><th>Estado</th><th>CN</th><th>Farmacias</th><th>Objetivo</th><th>Vendido</th><th>Avance</th><th>Acción</th></tr></thead><tbody>
+    {reportFilteredCampaigns.map(p=>{const goal=sum(p.targets),sold=sum(p.sales);return <tr key={p.id}>
+     <td><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{dateES(p.start)} — {dateES(p.end)}</small></div></div></td>
+     <td><Pill status={p.status}/></td><td>{p.cns.length}</td><td>{Object.keys(p.targets||{}).length}</td><td>{EUR.format(goal)} uds.</td><td>{EUR.format(sold)} uds.</td>
+     <td><div className="table-progress"><Progress value={percent(sold,goal)}/><span>{percent(sold,goal)}%</span></div></td>
+     <td><button className="row-action" title={"Editar "+p.name} aria-label={"Editar "+p.name} onClick={()=>startPromo(p)}><Pencil size={16}/></button></td>
+    </tr>})}
+   </tbody></table></div>
+  </section>
+  <section className="card tracking-expanded report-tracking-panel">
+   <div className="section-heading"><div><h2>Avance por farmacia</h2><p>Resultados agregados de las campañas seleccionadas</p></div><span className="count-label">{reportTargets.length} farmacias</span></div>
+   <TrackingContent selected={combinedReport} chartData={reportChartData} trackingTargets={reportTargets} trackingGoal={reportGoal} trackingSales={reportSales} pharmaName={pharmaName}/>
+  </section>
+  <section className="card campaign-cn-panel">
+   <div className="section-heading"><div><h2>Códigos nacionales incluidos</h2><p>Referencias únicas del conjunto seleccionado</p></div><span className="count-label">{reportCNs.length} CN</span></div>
+   <div className="cn-chips">{reportCNs.slice(0,45).map(cn=><span key={cn} className="cn-chip">{cn}</span>)}{reportCNs.length>45&&<span className="cn-chip">+{reportCNs.length-45} más</span>}</div>
+  </section>
+ </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
+ <div className="note data-note"><CircleHelp size={16}/> Los resultados de ventas y el gráfico semanal todavía son ilustrativos. La exportación utiliza las campañas seleccionadas, aunque hayas filtrado la visualización por farmacia.</div>
 </>}
 {page==="farmacias"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> ESTRUCTURA DE LA RED</div><h1>Maestro de farmacias</h1><p>Configura los identificadores y servidores de origen de cada farmacia.</p></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={connectPharmacies}><ShieldCheck size={17}/> Conectar Microsoft 365</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración. Falta configurar Microsoft Entra ID y desplegar la API para activar PostgreSQL."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2><p>Identificadores utilizados por las importaciones</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>ID</th><th>Nombre público</th><th>Origen</th><th>Servidor SQL</th><th>Estado</th><th>Usuarios</th><th/></tr></thead><tbody>{currentPharmacies.map(f=><tr key={f.id} onClick={()=>startPharmacy(f)} className="click-row"><td><span className="id-code">{f.id}</span></td><td><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div></td><td><span className="id-code">{f.sourceCode||"—"}</span></td><td>{pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"— (demo)"}</td><td><Pill status={f.active?"Activa":"Inactiva"}/></td><td>{users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length}</td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div></div></>}
     {page==="usuarios"&&<><div className="page-header"><div><div className="eyebrow"><span className="eyebrow-dot"/> EQUIPO Y PERMISOS</div><h1>Gestión de usuarios</h1><p>Organiza los roles y las farmacias asignadas a cada usuario.</p></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2><p>Identidad, permisos y farmacias asignadas</p></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><div className="table-scroll"><table className="data-table"><thead><tr><th>Usuario</th><th>Rol</th><th>Farmacias</th><th>Estado</th><th/></tr></thead><tbody>{currentUsers.map(u=><tr className="click-row" key={u.id} onClick={()=>startUser(u)}><td><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div></td><td><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span></td><td>{u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"}</td><td><Pill status={u.active?"Activa":"Inactiva"}/></td><td><Pencil size={16} className="muted"/></td></tr>)}</tbody></table></div></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2><p>Tres niveles de acceso</p></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}

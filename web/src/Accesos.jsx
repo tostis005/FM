@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CheckCircle2, KeyRound, LockKeyhole, Mail, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import ListTable from "./ListTable.jsx";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -176,16 +177,19 @@ export default function AccessAdmin({ onAuthenticated }) {
           <label className="access-checkbox"><input type="checkbox" checked={domainForm.active} onChange={e=>setDomainForm({...domainForm,active:e.target.checked})}/> Habilitado</label>
           <button type="submit" className="btn btn-primary" disabled={busy}><Plus size={16}/> Guardar dominio</button>
         </form>
-        <div className="table-scroll"><table className="data-table"><thead><tr><th>Dominio</th><th>Farmacia</th><th>Estado</th><th>Acciones</th></tr></thead>
-          <tbody>{domains.map(d=><tr key={d.domain}>
-            <td><strong>@{d.domain}</strong></td>
-            <td>{pharmacies.find(p=>p.id===d.pharmacyId)?.name || "Sin asignar"}</td>
-            <td>{d.active?"Habilitado":"Bloqueado"}</td>
-            <td><button className="btn btn-secondary btn-sm" onClick={()=>setDomainForm(d)}>Editar</button>
-              <button className="btn btn-secondary btn-sm" disabled={busy} onClick={()=>action(
-                () => api("/api/admin/domains/"+encodeURIComponent(d.domain),{method:"DELETE"}), "Dominio eliminado",
-              )}><Trash2 size={14}/> Eliminar</button></td>
-          </tr>)}</tbody></table>{!domains.length&&<p className="access-hint">Todavía no hay dominios añadidos. Ningún dominio tendrá acceso automático.</p>}</div>
+        <ListTable rows={domains} rowKey={d=>d.domain} label="dominios" emptyText="No hay dominios permitidos"
+ columns={[
+  {key:"domain",label:"Dominio",value:d=>d.domain,render:d=><strong>@{d.domain}</strong>},
+  {key:"pharmacy",label:"Farmacia",value:d=>pharmacies.find(p=>p.id===d.pharmacyId)?.name||"Sin asignar"},
+  {key:"active",label:"Estado",value:d=>d.active?"Habilitado":"Bloqueado"},
+  {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
+   render:d=><div className="list-cell-actions">
+      <button className="btn btn-secondary btn-sm" onClick={()=>setDomainForm(d)}>Editar</button>
+      <button className="btn btn-secondary btn-sm" disabled={busy} onClick={()=>action(
+        ()=>api("/api/admin/domains/"+encodeURIComponent(d.domain),{method:"DELETE"}),"Dominio eliminado"
+      )}><Trash2 size={14}/> Eliminar</button>
+   </div>}
+ ]}/>
       </section>
       <section className="card access-section">
         <div className="section-heading"><div><h2>Correos autorizados individualmente</h2><p>Para cuentas Gmail, dominios externos y colaboradores; el permiso individual tiene preferencia sobre el dominio.</p></div><span className="count-label">{accounts.length} cuentas</span></div>
@@ -214,17 +218,20 @@ export default function AccessAdmin({ onAuthenticated }) {
           <button className="btn btn-primary" type="submit" disabled={busy}><Mail size={16}/> Guardar correo autorizado</button>
           <button className="btn btn-secondary" type="button" onClick={()=>setAccountForm(EMPTY_ACCOUNT)}>Limpiar formulario</button>
         </form>
-        <div className="table-scroll"><table className="data-table"><thead><tr><th>Correo</th><th>Rol</th><th>Farmacias</th><th>Estado</th><th>Acciones</th></tr></thead>
-          <tbody>{accounts.map(u=><tr key={u.email}>
-            <td><strong>{u.email}</strong><small>{u.name}</small></td>
-            <td>{ROLES.find(([id])=>id===u.role)?.[1]||u.role}</td>
-            <td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(f=>f.id===id)?.name||id).join(", ")||"—"}</td>
-            <td>{u.active?"Activa":"Bloqueada"}</td>
-            <td><button className="btn btn-secondary btn-sm" onClick={()=>setAccountForm(u)}>Editar</button>
-              <button className="btn btn-secondary btn-sm" disabled={busy||u.email===user.email} onClick={()=>action(
-                () => api("/api/admin/accounts/"+encodeURIComponent(u.email),{method:"DELETE"}), "Cuenta desactivada",
-              )}><LockKeyhole size={14}/> Bloquear</button></td>
-          </tr>)}</tbody></table>{!accounts.length&&<p className="access-hint">Sin correos añadidos todavía.</p>}</div>
+        <ListTable rows={accounts} rowKey={u=>u.email} label="cuentas" emptyText="No hay correos autorizados"
+ columns={[
+  {key:"email",label:"Correo",value:u=>u.email+" "+(u.name||""),render:u=><><strong>{u.email}</strong><small>{u.name}</small></>},
+  {key:"role",label:"Rol",value:u=>ROLES.find(([id])=>id===u.role)?.[1]||u.role},
+  {key:"pharmacies",label:"Farmacias",value:u=>u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(f=>String(f.id)===String(id))?.name||id).join(", ")||"—"},
+  {key:"active",label:"Estado",value:u=>u.active?"Activa":"Bloqueada"},
+  {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
+   render:u=><div className="list-cell-actions">
+     <button className="btn btn-secondary btn-sm" onClick={()=>setAccountForm(u)}>Editar</button>
+     <button className="btn btn-secondary btn-sm" disabled={busy||u.email===user.email} onClick={()=>action(
+       ()=>api("/api/admin/accounts/"+encodeURIComponent(u.email),{method:"DELETE"}),"Cuenta desactivada"
+     )}><LockKeyhole size={14}/> Bloquear</button>
+   </div>}
+ ]}/>
       </section>
     </>}
   </div>;

@@ -412,3 +412,6 @@
  .list-page-buttons button{padding:7px 6px}
  .list-options{padding:12px;gap:8px}
 }
+
+/* Mantener semántica de celda para los botones de acciones en listados de acceso. */
+.access-management .smart-table td:last-child{display:table-cell;min-width:150px}

@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS public.acceso_cuentas (
 );
 CREATE INDEX IF NOT EXISTS idx_acceso_cuentas_activas ON public.acceso_cuentas(activo);
 
+-- Contraseña local rotada, exclusiva por cuenta. No se devuelve desde la API.
+ALTER TABLE public.acceso_cuentas ADD COLUMN IF NOT EXISTS clave_local_hash TEXT;
+
 CREATE TABLE IF NOT EXISTS public.acceso_codigos (
   email TEXT PRIMARY KEY REFERENCES public.acceso_cuentas(email) ON DELETE CASCADE,
   codigo_hash TEXT NOT NULL,

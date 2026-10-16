@@ -33,5 +33,6 @@ jobs:
           node --test src/importarPromociones.test.js
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
+          node --test src/laboratoryExport.test.js
           node check-login.mjs
           npm run build

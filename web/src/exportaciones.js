@@ -194,7 +194,7 @@ function madridParts(isoDate){
   const time=(Number(p.hour)*3600+Number(p.minute)*60+Number(p.second))/86400;
   return {serial,time};
 }
-export async function exportLabSalesExcel(promo, lines, options={}){
+export async function buildLabSalesExcel(promo,lines){
   ensureValidCNs(promo);
   const ordered=[...lines].sort((a,b)=>new Date(a.at)-new Date(b.at));
   const rows=[
@@ -217,13 +217,37 @@ export async function exportLabSalesExcel(promo, lines, options={}){
   const products=[["Código","Descripción","P.v.p."],...Object.values(Object.fromEntries(
     ordered.filter(l=>l.cn).map(l=>[l.cn,[l.cn,l.description||"",Number(l.pvp)||0]])
   ))];
-  // Cabeceras, orden y nombres idénticos al Excel de laboratorio Vichy.
-  // No se modifican importes ni descuentos; vendedor se identifica por ID.
+  // Plantilla utilizada para exportación a laboratorio, con importes originales.
   const blob=await workbook([
     {name:"Export",rows,widths:[22,28,18,24,17,15,14,65,14,13,19,20,19,18],dateCols:[4],timeCols:[5]},
     {name:"Hoja1",rows:products,widths:[17,72,16]},
   ]);
   const safe=String(promo.name||"promocion").normalize("NFD")
-    .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,65);
-  downloadBlob(blob,safe+"_laboratorio.xlsx");
+    .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,55);
+  const id=String(promo.id||"").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,24);
+  const name=(safe||"promocion")+(id?"_"+id:"")+"_laboratorio.xlsx";
+  return {blob,name};
+}
+export async function exportLabSalesExcel(promo,lines) {
+  const {blob,name}=await buildLabSalesExcel(promo,lines);
+  downloadBlob(blob,name);
+}
+export async function buildLabSalesZip(items) {
+  if(!items.length)throw new Error("Selecciona al menos una promoción");
+  const archive=new JSZip();
+  const seen=new Set();
+  for(const {promo,lines} of items){
+    const {blob,name}=await buildLabSalesExcel(promo,lines);
+    // Evitar sobrescrituras si varias promociones se llaman igual.
+    let unique=name,index=2;
+    while(seen.has(unique)){unique=name.replace(/\.xlsx$/,"_"+index+++".xlsx");}
+    seen.add(unique);
+    archive.file(unique,await blob.arrayBuffer());
+  }
+  const blob=await archive.generateAsync({type:"blob",compression:"DEFLATE"});
+  return {blob,name:"laboratorios_"+items.length+"_promociones.zip"};
+}
+export async function exportLabSalesZip(items) {
+  const {blob,name}=await buildLabSalesZip(items);
+  downloadBlob(blob,name);
 }

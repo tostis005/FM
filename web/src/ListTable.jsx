@@ -50,7 +50,9 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
           </th>)}</tr>
         </thead>
-        <tbody>{slice.map((row,i)=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
+        <tbody>{slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
+          tabIndex={onRowClick?0:undefined} aria-label={onRowClick?"Abrir registro":undefined}
+          onKeyDown={onRowClick?e=>{if(e.target===e.currentTarget&&(e.key==="Enter"||e.key===" ")){e.preventDefault();onRowClick(row);}}:undefined}
           onClick={onRowClick?()=>onRowClick(row):undefined}>
           {columns.map(col=><td key={col.key}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
         </tr>)}</tbody>

@@ -379,3 +379,36 @@
 @media(max-width:380px){
  .topbar-right .icon-btn:first-child{display:none}
 }
+
+/* Listados inteligentes: filtros individuales, orden accesible y paginación común. */
+.smart-table thead th{vertical-align:top;white-space:nowrap}
+.smart-table .smart-sort{display:inline-flex;gap:7px;align-items:center;justify-content:flex-start;color:inherit;font-size:inherit;font-weight:inherit;background:none;border:0;padding:0;text-align:left;cursor:pointer;white-space:nowrap}
+.smart-table .smart-sort:hover,.smart-table .smart-sort:focus-visible{color:#07966c}
+.smart-sort-arrow{color:#0ba877;font-size:10px}
+.smart-filter-row{background:#fff}
+.smart-filter-row th{padding:7px 7px 10px!important}
+.smart-filter-row th:first-child{padding-left:13px!important}
+.smart-column-filter{display:block;width:100%;min-width:76px;max-width:210px;height:32px;background:#f7fbf9;border:1px solid #dce9e2;border-radius:7px;padding:5px 8px;color:#284d3c;font-size:11px;font-weight:500;outline:0}
+.smart-column-filter:focus{border-color:#0ba877;box-shadow:0 0 0 2px #08a9761c}
+.smart-column-filter::placeholder{color:#a1b4a9}
+.smart-filter-blank{display:block;min-height:32px}
+.list-pagination{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px 20px;border-top:1px solid #edf2ee;color:#567164;font-size:11.5px;background:#fff;border-radius:0 0 13px 13px}
+.list-page-count{font-weight:750}
+.list-page-size{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.list-page-size select,.list-options select{border:1px solid #dce9e2;border-radius:7px;padding:6px 9px;background:#fff;color:#2d5a46;font-size:11.5px}
+.list-page-buttons{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.list-page-buttons button{border:1px solid #dce9e2;border-radius:7px;padding:7px 9px;background:#f8fcfa;color:#225b44;font-size:11px;font-weight:750;cursor:pointer}
+.list-page-buttons button:hover:not(:disabled){background:#eaf7f0}
+.list-page-buttons button:disabled{opacity:.4;cursor:default}
+.list-page-buttons span{padding:0 6px;white-space:nowrap}
+.list-cell-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.access-management .smart-table .list-cell-actions{display:flex}
+.list-options{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 20px}
+.list-options label{font-size:11px;font-weight:700;color:#426952;display:flex;align-items:center;gap:7px}
+.list-options input{min-width:145px;max-width:260px;border:1px solid #dce9e2;border-radius:7px;padding:8px 10px;background:#fff;font-size:11.5px}
+@media(max-width:620px){
+ .list-pagination{padding:12px;justify-content:flex-start}
+ .list-page-buttons{width:100%;justify-content:space-between}
+ .list-page-buttons button{padding:7px 6px}
+ .list-options{padding:12px;gap:8px}
+}

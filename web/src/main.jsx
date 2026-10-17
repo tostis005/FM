@@ -30,20 +30,6 @@ const DEFAULT_PHARMACIES = [
   {id:"4",name:"Estación",city:"",active:true,sourceCode:"EST",sourceHost:"",sourceDatabase:"Farmatic"},
   {id:"5",name:"Valdemarías",city:"",active:true,sourceCode:"POL",sourceHost:"",sourceDatabase:"Farmatic"}
 ];
-const DEFAULT_USERS = [
-  {id:"U01",name:"Laura Gómez",email:"laura.gomez@demo.es",role:"superadmin",pharmacies:[],active:true},
-  {id:"U02",name:"Carlos Martínez",email:"carlos.martinez@demo.es",role:"gestor",pharmacies:["1","4"],active:true},
-  {id:"U03",name:"Ana Torres",email:"ana.torres@demo.es",role:"farmacia",pharmacies:["1"],active:true},
-  {id:"U04",name:"Javier Ruiz",email:"javier.ruiz@demo.es",role:"gestor",pharmacies:["2","5"],active:true},
-  {id:"U05",name:"María López",email:"maria.lopez@demo.es",role:"farmacia",pharmacies:["2"],active:false}
-];
-const DEFAULT_PROMOS = [
-  {id:"P100",name:"Rutina de hidratación",subtitle:"Cuidado facial · otoño",description:"Promoción especial en productos de hidratación facial para el cuidado diario de la piel.",status:"Activa",start:"2026-10-01",end:"2026-11-30",cns:["184579","188456","192334","203445"],targets:{1:120,2:95,3:100,4:85},sales:{1:92,2:71,3:64,4:56}},
-  {id:"P101",name:"Cuidado de invierno",subtitle:"Higiene y dermocosmética",description:"Objetivo de venta de referencias para el cuidado de la piel en invierno.",status:"Activa",start:"2026-10-05",end:"2026-12-31",cns:["165238","171625","182347"],targets:{1:140,2:120,5:110},sales:{1:86,2:79,5:49}},
-  {id:"P102",name:"Salud y bienestar",subtitle:"Vitaminas y complementos",description:"Campaña de complementos de bienestar para la red de farmacias.",status:"Activa",start:"2026-09-01",end:"2026-10-31",cns:["154235","145602","194510","190378"],targets:{1:140,2:130,3:130,4:120,5:100},sales:{1:124,2:102,3:81,4:88,5:64}},
-  {id:"P103",name:"Fotoprotección total",subtitle:"Protección solar",description:"Campaña de fotoprotección estacional.",status:"Finalizada",start:"2026-06-01",end:"2026-09-30",cns:["187345","198345"],targets:{1:90,2:100,3:110},sales:{1:94,2:103,3:108}},
-  {id:"P104",name:"Noviembre esencial",subtitle:"Próxima campaña",description:"Campaña de impulso para productos esenciales de noviembre.",status:"Borrador",start:"2026-11-01",end:"2026-11-30",cns:["173982","165708"],targets:{2:120,4:120,5:110},sales:{}}
-];
 const EMPTY_PROMO = {id:null,name:"",subtitle:"",description:"",status:"Borrador",start:"2026-10-16",end:"2026-11-30",cns:[],targets:{},sales:{},type:"sin_clasificar",discountPercent:""};
 const PROMOTION_TYPES = [
   {id:"sin_clasificar",name:"Sin clasificar"},
@@ -111,31 +97,18 @@ function downloadCSV(name, rows) {
 }
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
-function Kpi({icon:Icon,title,value,caption,kind="mint"}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{value}</div><div className="kpi-caption">{caption}</div></div></div>}
+function Kpi({icon:Icon,title,value,caption,kind="mint"}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{value}</div></div></div>}
 function CampaignMetrics({campaigns,heading,subtitle,salesLabel="Pendiente de conexión"}){
  const goal=campaigns.reduce((n,p)=>n+sum(p.targets),0),sold=campaigns.reduce((n,p)=>n+sum(p.sales),0);
  const cns=new Set(campaigns.flatMap(p=>p.cns||[])).size;
  return <section className="card campaign-metrics"><div className="campaign-metrics-header"><div><h2>{heading}</h2></div></div>
   <div className="campaign-metrics-grid">
-   <div className="campaign-metric"><span>Promociones</span><strong>{EUR.format(campaigns.length)}</strong><small>Campañas</small></div>
-   <div className="campaign-metric"><span>CNs</span><strong>{EUR.format(cns)}</strong><small>CNs únicos</small></div>
-   <div className="campaign-metric"><span>Objetivo</span><strong>{EUR.format(goal)}</strong><small>Unidades previstas</small></div>
-   <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong><small>{salesLabel}</small></div>
+   <div className="campaign-metric"><span>Promociones</span><strong>{EUR.format(campaigns.length)}</strong></div>
+   <div className="campaign-metric"><span>CNs</span><strong>{EUR.format(cns)}</strong></div>
+   <div className="campaign-metric"><span>Objetivo</span><strong>{EUR.format(goal)}</strong></div>
+   <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span><strong>{percent(sold,goal)}%</strong><Progress value={percent(sold,goal)}/></div>
   </div></section>;
-}
-function SalesNotice({status,error,coverage,onConnect,canConnect,databaseStatus}){
-  const live=status==="real",count=(coverage||[]).filter(f=>Number(f.lineas)>0).length;
-  return <div className={"note data-note sales-connection "+(live?"sales-connected":"")}>
-    <Database size={17}/>
-    <span>{live?"Ventas reales de Farmatic conectadas. "+count+" de 5 farmacias con registros; unidades netas por CN y periodo.":
-      status==="cargando"?"Consultando ventas reales de PostgreSQL…":
-      status==="error"?"No se pudieron consultar las ventas reales: "+error:
-      databaseStatus==="connected"?"PostgreSQL y Farmatic están disponibles en el servidor. Inicia sesión desde Accesos para consultar ventas reales; los objetivos siguen siendo de demostración.":
-      databaseStatus==="unavailable"?"Aún no se ha confirmado la conexión de la API con PostgreSQL. Las ventas reales permanecen protegidas.":
-      "Comprobando PostgreSQL. Los objetivos son de demostración y no se muestran ventas ficticias."}</span>
-    {!live&&canConnect&&<button type="button" className="btn btn-secondary btn-sm" onClick={onConnect}>Ir a Accesos</button>}
-  </div>;
 }
 function Field({label,children,hint}) {return <label className="field"><span className="field-label">{label}</span>{children}{hint&&<small>{hint}</small>}</label>}
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
@@ -200,7 +173,7 @@ function App(){
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
  const [editingPharmacy,setEditingPharmacy]=useState(null);
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
-  const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
+  const [pharmacyApiStatus,setPharmacyApiStatus]=useState("sin_sesion");
   const [sessionUser,setSessionUser]=useState(null);
   const [tenantContext,setTenantContext]=useState(null);
   const [authError,setAuthError]=useState("");
@@ -533,16 +506,6 @@ function App(){
     setPromoForm({...promoForm,targets});
     setToast("Incremento aplicado. Puedes retocar cada objetivo antes de guardar");
   }
-  function addLiveExample(){
-    if(salesStatus!=="real" || !salesCatalog.length)return setToast("Conecta primero las ventas reales de Farmatic");
-    const cns=salesCatalog.slice(0,20).map(item=>item.cn);
-    const p={...EMPTY_PROMO,id:"PF"+Date.now(),name:"Selección real de "+cns.length+" CNs · octubre 2026",
-      subtitle:"Ejemplo con datos de Farmatic",
-      description:"CNs seleccionados por ventas netas en octubre de 2026. Pendiente de clasificar y de asignar objetivos. No se ha verificado que compartan proveedor.",
-      start:"2026-10-01",end:"2026-10-31",cns,targets:Object.fromEntries(pharmacies.filter(f=>f.active).map(f=>[f.id,""]))};
-    setData(prev=>({...prev,promos:[p,...prev.promos]}));startPromo(p);
-    setToast("Borrador con CNs reales; objetivos pendientes de asignar");
-  }
   async function importPromotionFile(event){
     const file=event.target.files?.[0];if(!file)return;
     setImportBusy(true);
@@ -757,7 +720,7 @@ function App(){
   </div></div>
  </div>
  {reportSelected.length>0?<>
-  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacyIds===null?"Seguimiento consolidado de las promociones seleccionadas":effectivePharmacyIds.length===1?"Resultados de "+pharmaName(effectivePharmacyIds[0]):"Resultados de "+effectivePharmacyIds.length+" farmacias seleccionadas"} salesLabel={salesStatus==="real"?"Unidades netas · Farmatic":"Sin conexión real"} />
+  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacyIds===null?"Seguimiento consolidado de las promociones seleccionadas":effectivePharmacyIds.length===1?"Resultados de "+pharmaName(effectivePharmacyIds[0]):"Resultados de "+effectivePharmacyIds.length+" farmacias seleccionadas"} salesLabel={salesStatus==="real"?"Unidades netas · Farmatic":"—"} />
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
    <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{EUR.format(reportSales)} uds.</strong></div><div><span>Avance global</span><strong>{percent(reportSales,reportGoal)}%</strong></div></div>
@@ -794,7 +757,7 @@ function App(){
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
  {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Clientes de datos" value={tenantContext.pharmacies.length} caption="Farmacias del cliente"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
+{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Clientes de datos" value={tenantContext.pharmacies.length} caption="Farmacias del cliente"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},

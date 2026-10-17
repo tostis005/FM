@@ -36,3 +36,21 @@ jobs:
           cd /opt/farmawao && docker compose config --quiet >/dev/null 2>&1 && echo "COMPOSE_OK=yes" || echo "COMPOSE_OK=no"
           command -v sudo >/dev/null && sudo -n docker compose version 2>&1 || true
           EOS
+      - name: Comprobar códigos HTTP de páginas públicas y privadas
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -s' <<'EOS'
+          for route in / /blog/ /blog/presentamos-farmetrica/ /marketing.css /favicon.svg /login /index.html /promociones /landing.html; do
+            printf 'RUTA:%s HTTP:' "$route"
+            curl -sS -o /dev/null -w '%{http_code} CONTENT-TYPE:%{content_type}\n' "http://127.0.0.1:18080$route" || true
+          done
+          for route in / /blog/ /login; do
+            printf 'MARCADORES:%s ' "$route"
+            if curl -fsS "http://127.0.0.1:18080$route" | grep -Eq 'Cada promoción cuenta|Buenas ideas|Acceder a Farmetrica'; then
+              echo OK
+            else
+              echo FALTA
+            fi
+          done
+          EOS

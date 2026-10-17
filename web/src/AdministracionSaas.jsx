@@ -16,8 +16,16 @@ async function api(path,options={}){
 }
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState("");
+ const [newClient,setNewClient]=useState({slug:"",name:""});
  async function refresh(){setClients(await api("/api/admin/clientes"))}
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
+ async function createClient(e){
+  e.preventDefault();setBusy("new");setError("");
+  try{
+   await api("/api/admin/clientes",{method:"POST",body:JSON.stringify(newClient)});
+   setNewClient({slug:"",name:""});await refresh();onUpdated?.();
+  }catch(error){setError(error.message)}finally{setBusy("")}
+ }
  async function toggle(slug,module,enabled){
   const id=slug+":"+module;setBusy(id);setError("");
   try{
@@ -30,6 +38,13 @@ export function ClientesPanel({onUpdated}){
   <div className="page-header"><div><h1>Clientes</h1><p>Administración global y módulos contratados o habilitados.</p></div></div>
   <div className="fm-demo-note"><ShieldCheck size={17}/> Solo los superadministradores pueden acceder a este apartado y cambiar módulos.</div>
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
+  <section className="card fm-manage-client"><div className="section-heading"><div><h2>Nuevo cliente</h2><p>Alta de organización y creación automática de esquema operativo.</p></div><Building2 size={19}/></div>
+   <form className="fm-manage-form" onSubmit={createClient}>
+    <label>Nombre comercial<input required maxLength={150} value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Grupo de farmacias"/></label>
+    <label>Identificador / esquema<input required pattern="[a-z][a-z0-9_]{1,62}" value={newClient.slug} onChange={e=>setNewClient({...newClient,slug:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")})} placeholder="grupo_farmacias"/></label>
+    <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>
+   </form>
+  </section>
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>

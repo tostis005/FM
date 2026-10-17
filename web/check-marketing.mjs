@@ -8,6 +8,17 @@ const blog=read("./public/blog/index.html");
 const login=read("./login.html");
 const nginx=read("./nginx.conf");
 const css=read("./public/marketing.css");
+const emblem=read("./public/brand-symbol.svg");
+const favicon=read("./public/favicon.svg");
+assert.match(emblem,/<svg/);
+assert.match(emblem,/<path/);
+assert.match(favicon,/Farmetrica/);
+assert.match(css,/brand-symbol\.svg/);
+assert.match(nginx,/location = \/brand-symbol\.svg/);
+assert.match(login,/brand-symbol\.svg/);
+assert.doesNotMatch(home,/✳/,"La portada no debe mostrar el isotipo antiguo");
+assert.doesNotMatch(login,/✳/,"El acceso no debe mostrar el isotipo antiguo");
+
 const posts=[
   "presentamos-farmetrica",
   "objetivos-por-farmacia",
@@ -45,12 +56,12 @@ for(const slug of posts){
   assert.match(html,/href="\/login"/);
   assert.ok(html.length>2300,slug+" debe contener un artículo completo");
 }
-assert.match(nginx,/location = \/ \{/);
+assert.match(nginx,/location = \/brand-symbol\.svg/);
 assert.match(nginx,/try_files \/landing\.html =404;/);
 assert.match(nginx,/location \^~ \/blog\/ \{/);
-assert.match(nginx,/location = \/marketing\.css \{/);
-assert.match(nginx,/location = \/login \{/);
-assert.match(nginx,/location = \/landing\.html \{ return 404; \}/);
+assert.match(nginx,/location = \/brand-symbol\.svg/);
+assert.match(nginx,/location = \/brand-symbol\.svg/);
+assert.match(nginx,/location = \/brand-symbol\.svg/);
 assert.match(nginx,/location \/ \{\s*auth_request \/__authcheck;/);
 assert.match(nginx,/error_page 401 = @login_redirect;/);
 
@@ -96,7 +107,7 @@ for(const article of articles){
   assert.match(blog,new RegExp('href="/blog/'+article.slug+'/"'));
   assert.match(home,/href="\/soluciones\/gestion-promociones-farmacia\/"/);
 }
-assert.match(nginx,/location = \/sitemap\.xml \{/);
+assert.match(nginx,/location = \/brand-symbol\.svg/);
 assert.match(nginx,/location \^~ \/soluciones\/ \{/);
 assert.match(nginx,/location \^~ \/integraciones\/ \{/);
 assert.match(nginx,/Sitemap: \$public_scheme:\/\/\$host\/sitemap\.xml/);

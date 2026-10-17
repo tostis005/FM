@@ -38,7 +38,7 @@ for(const slug of posts){
   assert.ok(html.length>2300,slug+" debe contener un artículo completo");
 }
 assert.match(nginx,/location = \/ \{/);
-assert.match(nginx,/alias \/usr\/share\/nginx\/html\/landing\.html;/);
+assert.match(nginx,/try_files \/landing\.html =404;/);
 assert.match(nginx,/location \^~ \/blog\/ \{/);
 assert.match(nginx,/location = \/marketing\.css \{/);
 assert.match(nginx,/location = \/login \{/);

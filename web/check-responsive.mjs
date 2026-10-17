@@ -44,6 +44,12 @@ async function mockApi(route){
  else if(path==="/api/tenant/usuarios")payload=[{email:user.email,name:user.name,role:"administrador",pharmacies:[],active:true}];
  else if(path==="/api/admin/domains"||path==="/api/admin/accounts")payload=[];
  else if(path==="/api/auth/config")payload={googleClientId:"",emailCodesAvailable:false,configured:true};
+ else if(path==="/api/analytics/ventas"){
+  const filter=url.searchParams.get("farmacias");
+  const count=filter?filter.split(",").length:pharmacies.length;
+  payload={monthly:[{month:"2026-10",ventas:count*1000,unidades:count*75}],
+    products:[],totalProducts:0,totalArticles:count*10};
+ }
  else if(path==="/api/ventas/catalogo")payload={products:[]};
  else if(path==="/api/ventas/cobertura")payload={pharmacies:[]};
  else if(path==="/api/ventas/seguimiento")payload={sales:{}};

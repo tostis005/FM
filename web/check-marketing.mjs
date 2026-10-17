@@ -122,3 +122,16 @@ assert.doesNotMatch(home,/FARMAWAO|FarmaWow|Farmétrica|Integración en estudio|
 assert.match(css,/\.suite-grid/);
 assert.match(css,/\.business-product-preview/);
 assert.match(css,/@media\(max-width:480px\)/);
+
+// Publicaciones SEO orientadas a intención de compra e integración técnica.
+for(const target of ["/soluciones/business-intelligence-farmacias/","/blog/integrar-farmatic-nixfarma-unycop-analitica/"]){
+ assert.match(nginx,new RegExp(target.replaceAll("/","\\/")));
+ const content=read("./public"+target+"index.html");
+ assert.match(content,/<h1>/);
+ assert.match(content,/Farmetrica/);
+ assert.ok(content.length>6500,target+" necesita contenido editorial propio");
+ assert.doesNotMatch(content,/integración universal|conector probado para todos|todos los sistemas conectados/i);
+}
+assert.match(home,/href="\/soluciones\/business-intelligence-farmacias\/"/);
+assert.match(home,/href="\/blog\/integrar-farmatic-nixfarma-unycop-analitica\/"/);
+assert.match(blog,/href="\/blog\/integrar-farmatic-nixfarma-unycop-analitica\/"/);

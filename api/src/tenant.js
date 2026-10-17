@@ -10,7 +10,7 @@ const asEmail = value => String(value || "").trim().toLowerCase();
 export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   async function resolve(req) {
     const slug = String(req.get("x-farmetrica-cliente") || req.query.cliente ||
-      req.user?.tenants?.[0]?.slug || "ampedia").toLowerCase();
+      req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
     if(!SLUG.test(slug)) return null;
     const {rows} = await pool.query(
       "SELECT slug,nombre,esquema_datos,activo FROM farmetrica.clientes WHERE slug=$1",[slug]);

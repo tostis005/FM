@@ -208,6 +208,153 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
   } catch (err) { next(err); }
 });
 
+// Agregados operativos reales: farmacias autorizadas, periodo y CN.
+const analyticsAccess=[...requireTenantModule("dashboard")];
+app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
+  try{
+    const from=String(req.query.desde||"2026-10-01");
+    const to=String(req.query.hasta||"2026-10-31");
+    const text=String(req.query.buscar||"").trim();
+    const raw=String(req.query.farmacias||"");
+    if(!validDates(from,to)||text.length>90||raw.length>2500||
+       (raw && raw.split(",").some(id=>!/^[1-9][0-9]{0,8}$/.test(id))))
+      return res.status(400).json({error:"Filtros de ventas inválidos"});
+    // Solo se admiten IDs presentes en el contexto autenticado.
+    const allowed=req.context.allowedPharmacyIds.map(Number);
+    const requested=raw?raw.split(",").map(Number):allowed;
+    if(requested.some(id=>!allowed.includes(id)))
+      return res.status(403).json({error:"Farmacia no autorizada"});
+    const ids=[...new Set(requested)];
+    if(!ids.length)return res.json({monthly:[],products:[],totalProducts:0});
+    const where=salesJoin(req)+
+       " WHERE "+salesPeriod+
+       " AND f.id=ANY($3::int[]) AND btrim(v.codigo::text) ~ '^[0-9]{6}
+// Mantener PVP, descuentos e importes exactamente como constan en PostgreSQL.
+const ticketColumns = Object.freeze({
+  pharmacy:"f.nombre",seller:"v.xvend_idvendedor",saleId:"v.idventa",
+  ticket:"v.numerodoc",at:"v.fechahora",cn:"v.codigo",description:"v.descripcion",
+  pvp:"v.pvp",quantity:"v.cantidad",gross:"v.importebruto",
+  lineDiscount:"v.descuentolinea",net:"v.importeneto",
+  discountPercent:"COALESCE(ABS(v.descuentolinea / NULLIF(v.importebruto,0)),0)",
+});
+app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
+  const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
+    columnFilters = {}, orderBy = "at", orderDir = "desc" } = req.body || {};
+  if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
+      cns.length > 500 || typeof offset !== "number" || !Number.isInteger(offset) ||
+      offset < 0 || offset > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 500 ||
+      (farmaciaId != null && farmaciaId !== "" && !/^[1-9]\\d{0,5}$/.test(String(farmaciaId))) ||
+      (ticket != null && (typeof ticket !== "string" || ticket.length > 60)) ||
+      (cn != null && cn !== "" && (!/^\\d{6}$/.test(cn) || !cns.includes(cn))) ||
+      !columnFilters || typeof columnFilters !== "object" || Array.isArray(columnFilters) ||
+      Object.keys(columnFilters).length > 13 ||
+      Object.entries(columnFilters).some(([name,value]) => {
+        if(!Object.hasOwn(ticketColumns,name))return true;
+        if(Array.isArray(value)){
+          if(!["pharmacy","cn"].includes(name) || value.length>500)return true;
+          return value.some(v=>typeof v!=="string"||
+            (name==="pharmacy"?!/^[1-9]\d{0,5}$/.test(v):!/^\d{6}$/.test(v)||!cns.includes(v)));
+        }
+        return typeof value!=="string"||value.length>80;
+      }) ||
+      !Object.hasOwn(ticketColumns,orderBy) || !["asc","desc"].includes(orderDir)) {
+    return res.status(400).json({ error: "Filtros de ventas inválidos" });
+  }
+  try {
+    const filters = [
+      salesPeriod,
+      "btrim(v.codigo::text) = ANY($3::text[])",
+      "($4::integer IS NULL OR f.id=$4)",
+      "($5::text IS NULL OR v.numerodoc::text ILIKE '%' || $5 || '%')",
+      "($6::text IS NULL OR btrim(v.codigo::text)=$6)",
+    ];
+    const params = [
+      start,end,cns,
+      farmaciaId == null || farmaciaId === "" ? null : Number(farmaciaId),
+      ticket ? ticket.trim() : null, cn || null,
+    ];
+    for (const [column,value] of Object.entries(columnFilters)) {
+      if(Array.isArray(value)){
+        if(!value.length)continue;
+        params.push(value);
+        filters.push((column==="pharmacy"?"f.id::text":"btrim(v.codigo::text)")+
+          " = ANY($"+params.length+"::text[])");
+      }else{
+        if(!value.trim())continue;
+        params.push(value.trim());
+        filters.push(ticketColumns[column]+"::text ILIKE '%' || $"+params.length+" || '%'");
+      }
+    }
+    const where = salesJoin(req) + " WHERE " + filters.join(" AND ");
+    const { rows: countRows } = await pool.query(
+      "SELECT count(*)::integer AS total " + where, params);
+    const orderSql = " ORDER BY "+ticketColumns[orderBy]+" "+orderDir.toUpperCase()+
+      " NULLS LAST, v.fechahora DESC, f.id, v.idventa DESC, v.idnlinea DESC";
+    const { rows } = await pool.query(
+      `SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
+              v.idventa::text AS "saleId", v.idnlinea::text AS "lineId",
+              v.numerodoc::text AS "ticket",
+              v.fechahora AS "at",
+              btrim(v.codigo::text) AS "cn", v.descripcion AS "description",
+              v.xvend_idvendedor::text AS "sellerId",
+              v.pvp::float8 AS "pvp", v.cantidad::float8 AS "quantity",
+              v.importebruto::float8 AS "gross",
+              v.descuentolinea::float8 AS "lineDiscount",
+              v.importeneto::float8 AS "net"
+       ` + where + orderSql +
+      " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
+      [...params,limit,offset]);
+    res.json({
+      rows, total:countRows[0]?.total||0, offset, limit,
+      origin:"farmatic.lineaventa", sellerNamesAvailable:false,
+    });
+  } catch(err){ next(err); }
+});
+
+app.use((err, req, res, next) => {
+  if (err.message === "Datos inválidos" || err.message?.startsWith("Revisa")) return res.status(400).json({ error: err.message });
+  if (err.code === "23505") return res.status(409).json({ error: "Ya existe ese ID o código de origen" });
+  if (err.code === "23503") return res.status(409).json({ error: "La farmacia tiene datos relacionados" });
+  console.error("Fallo de API", err.code || err.name);
+  res.status(500).json({ error: "No se pudo completar la operación" });
+});
+
+try {
+  const migration = await readFile(new URL("./migrations/001_farmacias.sql", import.meta.url), "utf8");
+  await pool.query(migration);
+  const accessMigration = await readFile(new URL("./migrations/002_accesos.sql", import.meta.url), "utf8");
+  await pool.query(accessMigration);
+  const tenantMigration = await readFile(new URL("./migrations/003_multitenant.sql", import.meta.url), "utf8");
+  await pool.query(tenantMigration);
+  const supplierMigration=await readFile(new URL("./migrations/005_proveedores.sql",import.meta.url),"utf8");
+  await pool.query(supplierMigration);
+  await bootstrapAdmins();
+  app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
+} catch (err) {
+  console.error("No se pudo iniciar la base de datos/API", err.message);
+  await pool.end();
+  process.exit(1);
+}
+ "+
+       " AND ($4::text='' OR btrim(v.codigo::text) ILIKE '%' || $4 || '%' OR v.descripcion::text ILIKE '%' || $4 || '%')";
+    const params=[from,to,ids,text];
+    const {rows:monthly}=await pool.query(
+      "SELECT to_char(date_trunc('month',v.fechahora),'YYYY-MM') AS month, "+
+      "sum(v.cantidad)::float8 AS unidades, sum(v.importeneto)::float8 AS ventas "+
+      where+" GROUP BY 1 ORDER BY 1",params);
+    const {rows:products}=await pool.query(
+      "SELECT f.id::text AS \"pharmacyId\", btrim(v.codigo::text) AS cn, "+
+      "max(nullif(btrim(v.descripcion::text),'')) AS name, "+
+      "sum(v.cantidad)::float8 AS units, sum(v.importeneto)::float8 AS value "+
+      where+" GROUP BY f.id,btrim(v.codigo::text) ORDER BY sum(v.importeneto) DESC NULLS LAST LIMIT 750",
+      params);
+    const {rows:counts}=await pool.query(
+      "SELECT count(*)::int AS n FROM (SELECT 1 "+where+" GROUP BY f.id,btrim(v.codigo::text)) x",
+      params);
+    res.json({monthly,products,totalProducts:counts[0]?.n||0,from,to});
+  }catch(err){next(err)}
+});
+
 // Detalle de tickets Farmatic, exclusivamente para administradores autenticados.
 // Mantener PVP, descuentos e importes exactamente como constan en PostgreSQL.
 const ticketColumns = Object.freeze({

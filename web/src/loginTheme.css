@@ -1,0 +1,255 @@
+/* Farmetrica — visual language shared with the secure login.
+   Overrides only presentation; existing data, routes and behaviour stay intact. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --fm-forest:#102f28;
+  --fm-deep:#0e4739;
+  --fm-green:#176a4b;
+  --fm-mint:#b7ecc9;
+  --fm-paper:#f2f6f3;
+  --fm-ink:#183229;
+  --fm-muted:#698076;
+  --fm-line:#dce8df;
+  font-family:Inter,"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color:var(--fm-ink);
+  background:var(--fm-paper);
+}
+body{background:var(--fm-paper);color:var(--fm-ink)}
+button,input,select,textarea{font-family:inherit}
+.app-shell{background:var(--fm-paper)}
+.workspace{background:linear-gradient(165deg,#f2f6f3 0%,#f9fbf9 56%,#eef5f0 100%)}
+
+/* A dark, gently textured navigation area mirrors the login brand panel. */
+.sidebar{
+  background:linear-gradient(155deg,#102f28 0%,#0e4739 62%,#145947 100%);
+  border-right:1px solid #315d4e;
+  box-shadow:8px 0 28px rgba(9,42,30,.08);
+  isolation:isolate;
+}
+.sidebar:before,.sidebar:after{
+  content:"";position:absolute;border:1px solid rgba(199,236,202,.15);
+  border-radius:50%;pointer-events:none;z-index:-1;
+}
+.sidebar:before{width:310px;height:310px;top:-192px;right:-176px}
+.sidebar:after{width:258px;height:258px;bottom:-145px;left:-146px;background:rgba(133,199,154,.035)}
+.sidebar .brand{
+  position:relative;color:#fff;letter-spacing:-.65px;
+  font-family:Inter,"DM Sans",sans-serif;font-size:21px;
+  padding-top:3px;padding-bottom:32px;
+}
+.sidebar .brand:hover{color:#e2ffec}
+.sidebar .brand-mark{
+  width:43px;height:43px;flex:0 0 43px;border-radius:13px;
+  transform:none;background:var(--fm-mint);color:#153d2e;
+  box-shadow:0 7px 20px rgba(7,22,14,.13);
+}
+.sidebar .brand-mark svg{transform:none;stroke-width:2.3}
+.sidebar .side-link{
+  color:#c0d7cb;border:1px solid transparent;
+  border-radius:11px;min-height:46px;
+  font-weight:600;transition:background .18s,color .18s,border-color .18s;
+}
+.sidebar .side-link svg{color:#a5c9b7;transition:color .18s}
+.sidebar .side-link:hover{background:rgba(209,248,224,.10);color:#fff}
+.sidebar .side-link:hover svg{color:#d9f7e6}
+.sidebar .side-link.active{
+  background:rgba(183,236,201,.16);
+  border-color:rgba(183,236,201,.21);
+  color:#f7fff9;
+  box-shadow:inset 3px 0 0 var(--fm-mint);
+}
+.sidebar .side-link.active svg{color:var(--fm-mint)}
+.sidebar .active-dot{background:#b7ecc9;box-shadow:0 0 0 4px #b7ecc91c}
+.sidebar .side-section{color:#a4c6b5}
+.sidebar .side-feature{
+  background:linear-gradient(130deg,rgba(183,236,201,.17),rgba(183,236,201,.05));
+  border-color:rgba(183,236,201,.17);color:#f3fff7;
+}
+.sidebar .side-feature p,.sidebar .side-profile span:not(.avatar){color:#c0d8c9}
+.sidebar .side-feature strong,.sidebar .side-profile strong{color:#fff}
+.sidebar .side-feature-icon{background:rgba(183,236,201,.22);color:var(--fm-mint)}
+.sidebar .side-profile{border-top:1px solid rgba(221,249,230,.13);margin-top:14px}
+.sidebar .side-profile>svg{color:#b7dfcb}
+
+/* The light half of the login becomes the workspace top bar. */
+.topbar{
+  background:rgba(255,255,255,.96);
+  border-bottom:1px solid #dce7df;
+  box-shadow:0 3px 18px rgba(16,47,40,.035);
+  min-width:0;
+}
+.topbar-title{min-width:0}
+.topbar-title strong{color:#193c2d;font-family:Inter,"DM Sans",sans-serif;font-weight:750}
+.topbar .bread{color:#56816c;font-weight:650}
+.topbar .bread svg{color:#96b5a3}
+.topbar .top-user{color:var(--fm-ink)}
+.topbar .top-user small{color:#839b8e}
+.topbar .avatar-green{background:linear-gradient(140deg,#d7f4df,#a5e0bc);color:#145c41}
+.topbar .icon-btn{color:#527769;border-radius:10px}
+.topbar .icon-btn:hover{background:#e9f4ec;color:#12563b}
+.topbar .icon-btn[aria-label="Cerrar sesión"]{border:1px solid #dbe9df;background:#f4f9f5}
+.topbar .icon-btn[aria-label="Cerrar sesión"]:hover{border-color:#add4ba;background:#e9f4eb}
+.topbar-divider{background:#e0eae2}
+
+/* Editorial green headers; decorative rings echo the login's soft circles. */
+.main-content{max-width:1580px}
+.page-header{
+  position:relative;isolation:isolate;overflow:hidden;
+  align-items:center;min-height:115px;padding:24px 28px;
+  background:linear-gradient(115deg,#102f28 0%,#0e4739 64%,#145947 100%);
+  border:1px solid rgba(22,88,58,.27);border-radius:19px;
+  box-shadow:0 12px 28px rgba(16,47,40,.10);
+  margin-bottom:23px;
+}
+.page-header:before,.page-header:after{
+  content:"";position:absolute;pointer-events:none;z-index:0;
+  border:1px solid rgba(199,236,202,.17);border-radius:50%;
+}
+.page-header:before{width:320px;height:320px;right:-145px;top:-210px}
+.page-header:after{width:225px;height:225px;right:55px;bottom:-200px;background:rgba(183,236,201,.025)}
+.page-header>*{position:relative;z-index:1;min-width:0}
+.page-header h1{
+  color:#fff;font-family:Inter,"DM Sans",sans-serif;
+  letter-spacing:-.95px;font-size:clamp(25px,2.2vw,31px);
+  line-height:1.22;margin:0;
+}
+.page-header p{color:#d0e3d7;margin-top:8px}
+.page-header .btn-secondary{
+  color:#174b34;background:rgba(255,255,255,.97);
+  border-color:rgba(255,255,255,.55);
+}
+.page-header .btn-secondary:hover:not(:disabled){background:#e9f7ed}
+.page-header .btn-primary{
+  background:var(--fm-mint);color:#12472f;border-color:var(--fm-mint);
+  box-shadow:0 8px 22px rgba(0,0,0,.11);
+}
+.page-header .btn-primary:hover:not(:disabled){background:#d2f7db}
+.page-header .report-button-count{background:#dfefe3;color:#15583d}
+
+/* Quiet, crafted surface treatment: rounded whites and green separators. */
+.card{
+  border:1px solid #e0e9e2;border-radius:17px;
+  box-shadow:0 5px 22px rgba(20,63,46,.055);
+  background:#fff;
+}
+.section-heading h2,.spotlight-head h2,.info-card h2,.role-card h2,
+.settings-card h2,.reset-card h2{
+  font-family:Inter,"DM Sans",sans-serif;color:#1d3a2f;letter-spacing:-.35px;
+}
+.section-heading{border-bottom-color:#eaf0eb}
+.section-heading p{color:var(--fm-muted)}
+.count-label{background:#eaf6ed;color:#176a4b;border:1px solid #d6eddd}
+.btn{border-radius:10px;transition:background .16s,color .16s,border-color .16s,box-shadow .16s,transform .16s}
+.btn-primary{
+  background:#176a4b;border-color:#176a4b;color:#fff;
+  box-shadow:0 5px 14px rgba(23,106,75,.16);
+}
+.btn-primary:hover:not(:disabled){background:#115a40;border-color:#115a40}
+.btn-secondary{border-color:#d9e7dd;color:#305844;background:#fff}
+.btn-secondary:hover:not(:disabled){background:#f0f8f2;border-color:#b8dbc5}
+.btn:focus-visible,.side-link:focus-visible,.brand:focus-visible,.icon-btn:focus-visible,
+.smart-sort:focus-visible,.multi-filter-trigger:focus-visible{
+  outline:3px solid #7dca9e;outline-offset:3px;
+}
+.kpi{
+  border-radius:16px;background:#fff;
+}
+.kpi-grid>.kpi:first-child{
+  background:linear-gradient(135deg,#edf8f0,#fff 80%);
+  border-color:#d4e7da;box-shadow:0 5px 22px #205c3510;
+}
+.kpi-icon{border-radius:13px}
+.kpi-mint,.promotion-icon,.store-mini{background:#e3f5e9;color:#197b53}
+.kpi-blue{background:#eaf3f3;color:#36817a}
+.kpi-amber{background:#faf1df;color:#b4863e}
+.kpi-value{color:#17392d;font-family:Inter,"DM Sans",sans-serif;letter-spacing:-.65px}
+.kpi-label{color:#657f70}.kpi-caption{color:#2b9464}
+.progress{background:#e7f0e9}
+.progress>div{background:linear-gradient(90deg,#79cba0,#176a4b)}
+.pill-activa{color:#176a4b;background:#e8f5eb}
+.pill-borrador{color:#916a24;background:#fff4e3}
+.pill-finalizada{color:#627d72;background:#e9f0ed}
+
+/* More restrained tables and filters without changing their layout. */
+.data-table thead{background:#f4f8f5}
+.data-table th{color:#527466}
+.data-table td{color:#546e61;border-bottom-color:#e8eee9}
+.data-table tbody tr:hover{background:#f5faf6}
+.promotion-cell strong,.user-cell strong,.pharma-cell strong{color:#193d2f}
+.smart-sort-arrow{color:#238159}
+.smart-column-filter,.multi-filter-trigger{
+  background:#fff;border:1px solid #d9e6dc;border-radius:8px;color:#37634b;
+}
+.smart-column-filter:focus,.multi-filter-trigger[aria-expanded=true]{border-color:#4fa879}
+.smart-filter-row{background:#f9fbf9}
+.search-wrap,.select-wrap,.date-mini{background:#f8fbf8;border-color:#dfeae1}
+.list-pagination{border-top-color:#e5ede7;color:#557465}
+.list-page-buttons button,.list-page-size select{border-color:#d5e7da;color:#225e43}
+.list-page-buttons button:hover:not(:disabled){background:#eaf5ed}
+.multi-filter-active{color:#176a4b;background:#eaf6ee;border-color:#8bc5a4}
+.multi-filter-done{background:#176a4b!important}
+
+/* Gentle variation for the sales and reporting surfaces. */
+.campaign-metrics{border-color:#dce9df}
+.campaign-metrics-header{
+  background:linear-gradient(105deg,#e9f5ec,#fff 87%);
+  border-bottom-color:#e1ece4;
+}
+.campaign-metrics-header h2{color:#1b4030}
+.report-active-summary,.goal-summary-line{border-color:#dce8df;background:#fff}
+.goal-campaign-card{border-color:#dde9e0}
+.goal-campaign-heading{background:#f4f9f5}
+.goal-campaign-open{border-color:#a8d5b9}
+.goal-summary-name,.goal-title-copy strong{color:#234b38}
+.report-modal-top{background:linear-gradient(108deg,#eaf6ed,#fff 85%)}
+.report-modal-top h2{color:#163f2c}
+.drawer-top{background:#f7faf7;border-bottom:1px solid #e2ebe4}
+.lab-detail-filters input,.lab-detail-filters select{
+  border-color:#d7e6db;border-radius:10px;
+}
+.lab-detail-filters input:focus,.lab-detail-filters select:focus,
+.drawer input:focus,.drawer select:focus,.drawer textarea:focus{
+  outline:2px solid rgba(58,161,101,.42);outline-offset:1px;
+  border-color:#49996e;
+}
+.app-footer{background:transparent;color:#7b9484;border-top:1px solid #e0e9e2}
+
+/* Responsive: preserve full viewport width and visible sign-out button. */
+@media(max-width:1150px){
+ .sidebar .brand{font-size:19px;gap:9px}
+ .sidebar .brand-mark{width:39px;height:39px;flex-basis:39px}
+ .page-header{padding:21px 23px;min-height:105px}
+}
+@media(max-width:790px){
+ .sidebar{box-shadow:14px 0 45px rgba(9,40,26,.25)}
+ .mobile-scrim{background:rgba(6,30,21,.65)}
+ .topbar{height:65px;padding:0 12px}
+ .topbar-title{flex:1 1 auto;overflow:hidden}
+ .topbar-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .topbar-right{flex-shrink:0;gap:4px}
+ .page-header{padding:20px;min-height:95px;border-radius:15px}
+ .page-header h1{font-size:26px}
+}
+@media(max-width:560px){
+ .main-content{padding:17px 12px 30px}
+ .page-header{padding:19px 17px;gap:15px;border-radius:14px;min-height:0}
+ .page-header:before{right:-205px;top:-240px}
+ .page-header h1{font-size:25px}
+ .page-header .campaign-header-actions,.page-header .pharmacy-header-actions{
+   width:100%;justify-content:flex-start;
+ }
+ .page-header .campaign-header-actions .btn{min-width:0}
+ .card{border-radius:14px}
+ .kpi-grid{gap:9px}
+ .kpi{padding:13px 10px;gap:9px}
+ .kpi-value{font-size:19px}
+ .section-heading{padding:16px 14px}
+ .list-pagination{padding:11px}
+ .topbar .topbar-right .icon-btn[aria-label="Cerrar sesión"]{
+   width:36px;min-width:36px;height:36px;
+ }
+}
+@media(prefers-reduced-motion:reduce){
+ .sidebar .side-link,.btn,.topbar .icon-btn{transition:none}
+}

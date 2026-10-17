@@ -21,3 +21,17 @@ test("filtra solo entradas de la lista y evita NaN y vacíos como objetivos",()=
  {id:"B",cns:["432100"],targets:{"1":500},sales:{"1":200}}];
  assert.deepEqual(promotionMetrics(rows.slice(0,1),true),{promotions:1,cnCount:1,target:10,units:-2,completion:-20});
 });
+
+test("Excel de octubre: las promociones con objetivos cuentan aunque estén en borrador",async()=>{
+ const {REAL_OCTOBER_EXAMPLES}=await import("./promocionesRealesOctubre.js");
+ const {OCTOBER_2026_OBJECTIVE_ROWS}=await import("./objetivosOctubre2026.js");
+ const {applyObjectiveRows}=await import("./objetivosImportacion.js");
+ const campaigns=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions;
+ assert.ok(campaigns.length>=10);
+ assert.ok(campaigns.every(p=>p.status==="Borrador"));
+ const metrics=promotionMetrics(campaigns,false);
+ assert.equal(metrics.promotions,campaigns.length);
+ assert.ok(metrics.cnCount>30);
+ assert.ok(metrics.target>0,"Los objetivos del Excel deben reflejarse en el resumen");
+ assert.equal(metrics.units,null);
+});

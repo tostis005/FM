@@ -319,7 +319,7 @@ function App(){
  },[Boolean(reportModal)]);
  useEffect(()=>{
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
-   document.title=`Farmétrica · ${label}`;
+   document.title=`Farmetrica · ${label}`;
  },[page]);
  const {promos:storedPromos,pharmacies,users:storedUsers}=data;
   const users=sessionUser?.role==="administrador"
@@ -591,14 +591,14 @@ function App(){
  },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
-   <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark"><Leaf size={23} strokeWidth={2.8}/></span><span>Farmétrica</span></button>
+   <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark"><Leaf size={23} strokeWidth={2.8}/></span><span>Farmetrica</span></button>
    <nav className="side-nav">{NAV.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
    <header className="topbar">
     <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
-    <div className="topbar-title"><span className="bread">Farmétrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
+    <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
     <div className="topbar-right"><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
        <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="administrador"?"Superadministrador":"Usuario autorizado"}</small></span>
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
@@ -738,7 +738,7 @@ function App(){
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<><div className="page-header"><div><h1>Ajustes</h1><p>Estado del prototipo y próximas integraciones.</p></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Google y correos autorizados</h2><p>Inicio de sesión, dominios y cuentas gestionados desde Accesos.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>SQL Server → PostgreSQL, con cargas iniciales e incrementales y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div></>}
    </main>
-   <footer className="app-footer"><span>© 2026 Farmétrica · Prototipo de promociones</span><span>{salesStatus==="real"?"Ventas agregadas reales · Farmatic / PostgreSQL":salesStatus==="error"?"Error al consultar ventas reales":"Ventas reales no disponibles · requiere acceso autorizado"}</span></footer>
+   <footer className="app-footer"><span>© 2026 Farmetrica · Prototipo de promociones</span><span>{salesStatus==="real"?"Ventas agregadas reales · Farmatic / PostgreSQL":salesStatus==="error"?"Error al consultar ventas reales":"Ventas reales no disponibles · requiere acceso autorizado"}</span></footer>
   </div>
   {reportModal&&<div className="report-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setReportModal(null)}}>
    <section className="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">

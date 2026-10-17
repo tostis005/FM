@@ -1,11 +1,10 @@
-name: Activar acceso privado temporal Farmétrica
+name: Activar acceso privado temporal Farmetrica
 
 on:
   push:
     branches: [main]
     paths:
       - "deploy/bootstrap-temp-admin-vps.py"
-      - ".github/workflows/bootstrap-temp-admin.yml"
   workflow_dispatch:
 
 permissions:

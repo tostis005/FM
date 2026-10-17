@@ -8,6 +8,17 @@ const blog=read("./public/blog/index.html");
 const login=read("./login.html");
 const nginx=read("./nginx.conf");
 const css=read("./public/marketing.css");
+const emblem=read("./public/brand-symbol.svg");
+const favicon=read("./public/favicon.svg");
+assert.match(emblem,/<svg/);
+assert.match(emblem,/rect/);
+assert.match(favicon,/Farmetrica/);
+assert.match(css,/brand-symbol\\.svg/);
+assert.match(nginx,/location = \\/brand-symbol\\.svg/);
+assert.match(login,/brand-symbol\\.svg/);
+assert.doesNotMatch(home,/✳/,"La portada no debe mostrar el isotipo antiguo");
+assert.doesNotMatch(login,/✳/,"El acceso no debe mostrar el isotipo antiguo");
+
 const posts=[
   "presentamos-farmetrica",
   "objetivos-por-farmacia",

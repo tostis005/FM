@@ -11,7 +11,7 @@ const css=read("./public/marketing.css");
 const emblem=read("./public/brand-symbol.svg");
 const favicon=read("./public/favicon.svg");
 assert.match(emblem,/<svg/);
-assert.match(emblem,/rect/);
+assert.match(emblem,/<path/);
 assert.match(favicon,/Farmetrica/);
 assert.match(css,/brand-symbol\.svg/);
 assert.match(nginx,/location = \/brand-symbol\.svg/);

@@ -43,6 +43,7 @@ button,input,select,textarea{font-family:inherit}
   width:43px;height:43px;flex:0 0 43px;border-radius:13px;
   transform:none;background:var(--fm-mint);color:#153d2e;
   box-shadow:0 7px 20px rgba(7,22,14,.13);
+  font-size:25px;font-weight:750;line-height:1;
 }
 .sidebar .brand-mark svg{transform:none;stroke-width:2.3}
 .sidebar .side-link{

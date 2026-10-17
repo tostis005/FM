@@ -454,3 +454,152 @@
  .lab-detail-filters input,.lab-detail-filters select{min-height:40px}
  .multi-filter-popover{border-radius:10px}
 }
+
+
+/* ================================================================
+   Responsive global · móvil, tablet y escritorio (octubre 2026).
+   Toda tabla ancha se desplaza DENTRO de su tarjeta, no toda la web.
+   ================================================================ */
+html,body,#root{width:100%;min-width:0;max-width:100%;margin:0}
+html,body{overflow-x:clip}
+.app-shell,.workspace,.main-content{min-width:0;max-width:100%}
+.app-shell{width:100%}
+.main-content{min-width:0}
+.main-content>*,
+.main-content .card,
+.main-content .full-width-grid,
+.main-content .content-grid,
+.main-content .report-goals-panel,
+.main-content .report-page-header,
+.main-content .access-management,
+.main-content .list-card{min-width:0;max-width:100%}
+.card,.section-heading,.page-header,.page-header>div,.toolbar,
+.report-active-summary,.report-scope-info,.report-pharmacy-dropdown,
+.campaign-metrics,.report-goals-panel,.report-consolidated-head,
+.report-modal,.report-modal-body,.report-modal-top,
+.goal-campaign-card,.goal-campaign-heading,.goal-campaign-title,
+.goal-title-copy,.goal-farm-row,.goal-summary-line{min-width:0}
+.page-header h1,.section-heading h2{overflow-wrap:break-word}
+.page-header .campaign-header-actions,.page-header .pharmacy-header-actions,
+.report-page-header .campaign-header-actions{max-width:100%;min-width:0}
+.btn{max-width:100%}
+.sidebar{min-height:0;max-height:100dvh}
+.side-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#cadbd2 transparent}
+.side-link{min-height:43px;flex:0 0 auto}
+.table-scroll{display:block;width:100%;max-width:100%;min-width:0;
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;scrollbar-width:thin}
+.table-scroll:focus-visible{outline:2px solid #0ba875;outline-offset:-2px}
+.table-scroll .data-table{width:100%}
+.table-scroll-hint{display:none;color:#718a7d;font-size:11px;font-weight:650;
+  padding:8px 13px 4px}
+.list-pagination{min-width:0;max-width:100%;flex-wrap:wrap}
+.list-page-buttons{min-width:0;max-width:100%;flex-wrap:wrap}
+.report-modal{max-width:calc(100vw - 20px)}
+.report-modal-actions{min-width:0;flex-wrap:wrap}
+.report-pharmacy-menu{max-width:calc(100vw - 32px)}
+.report-consolidated-stats strong,.campaign-metric>strong,
+.kpi-value,.report-scope-info{overflow-wrap:anywhere}
+.drawer,.drawer-content,.drawer-top{min-width:0}
+.drawer-content>*{min-width:0}
+.target-head,.target-row,.report-active-summary,.report-quick-pharmacy,
+.report-selection-count,.report-modal-selection-head{min-width:0}
+.topbar,.topbar-title,.topbar-right{min-width:0}
+.topbar-title{flex:1 1 auto}
+.topbar-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-right{flex:0 1 auto}
+.fm-client-selector{flex:0 1 165px;min-width:0;max-width:165px;width:165px;text-overflow:ellipsis}
+@media(max-width:1150px){
+  .sidebar{padding-inline:9px}
+  .side-link{padding-inline:12px}
+  .main-content{width:100%}
+  .settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:790px){
+  .sidebar{height:100dvh;max-height:100dvh;width:min(280px,85vw);
+    padding-bottom:env(safe-area-inset-bottom,14px)}
+  .mobile-toggle{flex-shrink:0}
+  .topbar-right{gap:5px;max-width:55%}
+  .topbar .fm-client-selector{width:clamp(92px,25vw,150px);max-width:150px;
+    height:36px;padding-inline:7px;font-size:11px}
+  .main-content{padding:20px 14px 32px}
+  .table-scroll-hint{display:block}
+  .table-scroll .data-table{min-width:max-content}
+  .table-scroll .campaign-table{min-width:840px}
+  .table-scroll .lab-detail-table{min-width:1180px}
+  .report-scope-info{display:flex;flex-wrap:wrap;gap:6px}
+  .report-active-summary{flex-wrap:wrap;gap:12px}
+  .report-quick-pharmacy{flex:1 1 200px;max-width:100%}
+  .report-pharmacy-trigger{width:100%;min-width:0;max-width:100%}
+  .report-page-header .campaign-header-actions{flex-wrap:wrap}
+  .report-page-header .campaign-header-actions .btn{min-width:0;white-space:normal;text-align:center}
+  .list-page-buttons{gap:6px}
+}
+@media(max-width:560px){
+  .main-content{padding:17px 12px 30px}
+  .page-header{gap:13px;margin-bottom:17px}
+  .page-header h1{font-size:clamp(21px,6vw,25px)}
+  .page-header .campaign-header-actions,.page-header .pharmacy-header-actions{width:100%}
+  .page-header .campaign-header-actions .btn,.page-header .pharmacy-header-actions .btn{width:100%}
+  .section-heading{gap:10px;flex-wrap:wrap}
+  .section-heading>div{min-width:0;flex:1 1 150px}
+  .section-heading .btn{max-width:100%;white-space:normal;text-align:center}
+  .kpi-grid,.tracking-kpis,.small-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi{min-width:0;gap:8px;padding:12px 10px}
+  .kpi>div:last-child{min-width:0}
+  .kpi-value{font-size:clamp(16px,4.7vw,20px)}
+  .kpi-caption,.kpi-label{overflow-wrap:anywhere}
+  .toolbar{gap:8px}
+  .toolbar .search-wrap{flex:1 1 100%;min-width:0}
+  .toolbar .select-wrap{flex:1}
+  .toolbar .date-mini{min-width:0;max-width:100%}
+  .report-consolidated-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .report-consolidated-stats>div{padding:12px;min-width:0}
+  .report-consolidated-stats>div:nth-child(2){border-right:0}
+  .report-consolidated-stats>div:last-child{grid-column:1/-1;border-top:1px solid #e3efe6}
+  .report-modal{height:100dvh;width:100%;max-width:100%;border-radius:0}
+  .report-modal-filters{grid-template-columns:minmax(0,1fr)}
+  .report-modal-filters .field:last-child{grid-column:auto}
+  .report-modal-selection-head{flex-wrap:wrap;gap:8px}
+  .report-modal-bottom{padding-bottom:max(14px,env(safe-area-inset-bottom,0px))}
+  .report-modal-actions .btn{min-width:0;white-space:normal}
+  .list-pagination{gap:10px;justify-content:space-between}
+  .list-page-buttons{width:100%;justify-content:center;gap:6px}
+  .list-page-buttons button{min-height:38px}
+  .list-page-buttons span{flex:1 1 100%;text-align:center;order:-1}
+  .list-page-count{overflow-wrap:anywhere}
+  .goal-campaign-side{gap:5px}
+  .goal-accordion-pct{font-size:13px}
+  .goal-campaign-heading{gap:7px}
+  .target-head{flex-wrap:wrap}
+  .increase-controls{min-width:0;flex-wrap:wrap}
+  .drawer-top{padding:19px 15px}
+  .drawer-content{padding:18px 15px 30px}
+  .field-row{grid-template-columns:minmax(0,1fr)}
+  .pharmacy-picker{grid-template-columns:minmax(0,1fr)}
+  .app-footer{overflow-wrap:anywhere}
+}
+@media(max-width:480px){
+  .topbar{padding-inline:10px;gap:6px}
+  .topbar-right>.icon-btn:first-of-type{display:none}
+  .topbar-right{max-width:58%;gap:3px}
+  .topbar-title strong{font-size:12px}
+  .topbar .fm-client-selector{width:104px;max-width:104px;font-size:10.5px}
+  .topbar-right .avatar{display:none}
+  .topbar-right>.icon-btn:last-child{width:38px;flex:0 0 38px}
+  .report-page-header .campaign-header-actions{flex-direction:column;width:100%}
+  .report-page-header .campaign-header-actions .btn{width:100%}
+}
+@media(max-width:355px){
+  .main-content{padding-inline:10px}
+  .topbar{padding-inline:8px}
+  .topbar .fm-client-selector{width:88px;max-width:88px}
+  .kpi-grid,.tracking-kpis,.small-kpis{grid-template-columns:minmax(0,1fr)}
+  .report-consolidated-stats{grid-template-columns:minmax(0,1fr)}
+  .report-consolidated-stats>div,.report-consolidated-stats>div:last-child{
+    grid-column:auto;border-right:0;border-top:1px solid #e3efe6}
+}
+@media(prefers-reduced-motion:reduce){
+  .sidebar{transition:none}
+}

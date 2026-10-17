@@ -7,6 +7,7 @@ import {
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database
 } from "lucide-react";
 import "./styles.css";
+import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";

@@ -59,7 +59,12 @@ const PROMOTION_TYPES = [
   {id:"otros",name:"Otros"}
 ];
 const STORE_KEY = "farmetrica-prototype-v1";
-const tenantStorageKey = slug => slug==="ampedia" ? STORE_KEY : STORE_KEY+":"+slug;
+const tenantStorageKey = (slug,email="") => {
+ const id=String(email).trim().toLowerCase();
+ // Conservar las campañas de la cuenta propietaria existente al migrar.
+ if(slug==="ampedia"&&id==="jose.fraga@gmail.com")return STORE_KEY;
+ return STORE_KEY+":"+slug+":"+(id||"anonymous");
+};
 const ROLES = {superadmin:"Superadministrador",gestor:"Gestor de farmacias",farmacia:"Personal de farmacia"};
 const EUR = new Intl.NumberFormat("es-ES");
 function percent(s,t) {return t ? Math.round(s/t*100):0;}
@@ -72,9 +77,9 @@ function migratePharmacyId(value){
 function migrateSalesOrTargets(obj={}){
   return Object.fromEntries(Object.entries(obj||{}).map(([key,value])=>[migratePharmacyId(key),value]));
 }
-function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia"){
+function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia",email=""){
   try {
-    const saved=JSON.parse(localStorage.getItem(tenantStorageKey(slug)));
+    const saved=JSON.parse(localStorage.getItem(tenantStorageKey(slug,email)));
     if(saved && Array.isArray(saved.promos) && Array.isArray(saved.pharmacies) && Array.isArray(saved.users)) {
       const oldDemo=saved.pharmacies.length===5 && saved.pharmacies.every(f=>["Farmacia Central","Farmacia Sol","Farmacia Europa","Farmacia Gran Vía","Farmacia Norte"].includes(f.name));
       const pharmacies=oldDemo?DEFAULT_PHARMACIES:saved.pharmacies.map(f=>{
@@ -214,7 +219,7 @@ function App(){
       .then(async body=>{
         if(!body.user){window.location.replace("/login");return;}
         const ctx=await loadContext(selected).catch(()=>loadContext(""));
-        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug));}
+        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
       })
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};
@@ -223,7 +228,7 @@ function App(){
     if(slug===tenantContext?.client.slug)return;
     try{
       const ctx=await loadContext(slug);
-      setData(readState(ctx.client.slug));
+      setData(readState(ctx.client.slug,sessionUser?.email));
       setSalesStatus("sin_conexion");setSalesByPromotion({});
       const initial=ctx.modules.promociones||sessionUser?.role==="superadministrador"?"promociones":
         Object.keys(ctx.modules).find(key=>ctx.modules[key])||"farmacias";
@@ -289,8 +294,9 @@ function App(){
    localStorage.setItem(key,"1");
  },[]);
  useEffect(()=>{
-    localStorage.setItem(tenantStorageKey(tenantContext?.client?.slug||localStorage.getItem("fm_active_tenant")||"ampedia"),JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
-  },[data,pharmacyApiStatus]);
+    if(!tenantContext || !sessionUser)return;
+    localStorage.setItem(tenantStorageKey(tenantContext.client.slug,sessionUser.email),JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
+  },[data,pharmacyApiStatus,tenantContext?.client?.slug,sessionUser?.email]);
   useEffect(()=>{
     if (pharmacyBackendConfigured) void refreshPharmacies();
     const onAuth = () => { if (pharmacyBackendConfigured) void refreshPharmacies(); };
@@ -376,7 +382,7 @@ function App(){
  const storedPromos=(rawPromos||[]).map(p=>({...p,
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
    sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
- }));
+ })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0);
 
   const users=sessionUser?.role==="superadministrador"
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},

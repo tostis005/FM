@@ -1,4 +1,4 @@
-# Acceso privado provisional a Farmétrica
+# Acceso privado provisional a Farmetrica
 
 El servidor Nginx exige sesión administrativa válida antes de entregar cualquier
 ruta o recurso de la aplicación React (incluidos `index.html`, JS y CSS).
@@ -17,7 +17,7 @@ python3 /opt/farmawao/api/src/setup_temp_login.py
 ```
 
 El asistente solicitará el correo del superadministrador, la contraseña
-provisional (dos veces, sin mostrarla) y el dominio HTTPS de Farmétrica. Guardará
+provisional (dos veces, sin mostrarla) y el dominio HTTPS de Farmetrica. Guardará
 solo un hash `scrypt` con sal aleatoria en `/opt/farmawao/.env`, generará
 `SESSION_SECRET` si no existe y configurará cookies Secure. Mantendrá el resto
 del archivo y sus permisos. No compartir el archivo `.env` ni el hash.

@@ -50,19 +50,18 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   });
 
   async function resolveAccess(email) {
-    const { rows: explicit } = await pool.query(
-      "SELECT email, nombre, rol, farmacias, activo FROM public.acceso_cuentas WHERE email=$1", [email]);
-    if (explicit.length) {
-      if (!explicit[0].activo) return null; // Denegación explícita prevalece sobre el dominio.
-      return { email, name: explicit[0].nombre, role: explicit[0].rol,
-        pharmacies: explicit[0].farmacias.map(String), source: "correo" };
-    }
-    const domain = email.split("@")[1];
-    const { rows } = await pool.query(
-      "SELECT farmacia_id FROM public.acceso_dominios WHERE dominio=$1 AND activo=TRUE", [domain]);
-    if (!rows.length) return null;
-    return { email, name: email.split("@")[0], role: "farmacia",
-      pharmacies: rows[0].farmacia_id ? [String(rows[0].farmacia_id)] : [], source: "dominio" };
+    const {rows:explicit}=await pool.query(
+      "SELECT email,nombre,rol,farmacias,activo FROM public.acceso_cuentas WHERE email=$1",[email]);
+    if(!explicit.length || !explicit[0].activo) return null;
+    const {rows:memberships}=await pool.query(
+      "SELECT cliente_slug AS slug,rol AS role,farmacias::text[] AS pharmacies,activo AS active FROM farmetrica.usuario_clientes WHERE email=$1",[email]);
+    const {rows:superRows}=await pool.query(
+      "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
+    const active=memberships.filter(m=>m.active);
+    if(!superRows.length && !active.length)return null;
+    return {email,name:explicit[0].nombre||email.split("@")[0],
+      role:superRows.length?"superadministrador":active[0].role,
+      tenants:memberships,source:"correo"};
   }
   function cookie(req) {
     const entries = (req.get("cookie") || "").split(";");
@@ -103,17 +102,16 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     } catch (e) { next(e); }
   }
   async function requireAdmin(req, res, next) {
-    if (legacyEnabled && req.get("authorization")?.startsWith("Bearer ")) {
-      return legacyAdmin(req, res, next);
-    }
     try {
       const user = await sessionUser(req);
       if (!user) return res.status(401).json({ error: "Inicia sesión con una cuenta autorizada" });
-      if (user.role !== "administrador") return res.status(403).json({ error: "Acceso reservado a administradores" });
+      if (user.role !== "superadministrador") return res.status(403).json({ error: "Acceso reservado al superadministrador" });
       req.user = user;
       next();
     } catch (e) { next(e); }
   }
+  // Operaciones globales: únicamente cuentas con concesión expresa de superadministración.
+  const requireSuperadmin=requireAdmin;
   app.get("/api/auth/config", (_req, res) => res.json({
     googleClientId: secret.length >= 32 ? googleId : "",
     emailCodesAvailable: Boolean(secret.length >= 32 && mailer),
@@ -124,7 +122,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
   app.get("/api/auth/check", async (req, res, next) => {
     try {
       const user = await sessionUser(req);
-      return user?.role === "administrador" ? res.status(204).end() : res.status(401).end();
+      return user ? res.status(204).end() : res.status(401).end();
     } catch (error) { next(error); }
   });
 
@@ -160,7 +158,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
         return res.status(401).json({ error: "Correo o contraseña incorrectos" });
       }
       const user = await resolveAccess(email);
-      if (!user || user.role !== "administrador") {
+      if (!user || user.role !== "superadministrador") {
         return res.status(403).json({ error: "La cuenta administradora no está activa" });
       }
       for (const key of keys) attemptsByIp.delete(key);
@@ -333,7 +331,19 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
         `INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
          VALUES ($1,'Administrador inicial','administrador','{}',TRUE)
          ON CONFLICT (email) DO NOTHING`, [email]);
+      await pool.query(
+        `INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo)
+         VALUES($1,'ampedia','administrador','{}',TRUE)
+         ON CONFLICT(email,cliente_slug) DO NOTHING`,[email]);
     }
+    // Privilegio global para la cuenta expresamente designada; solo se concede
+    // cuando la cuenta está registrada y activa en el servidor.
+    await pool.query(
+      `INSERT INTO farmetrica.superadministradores(email)
+       SELECT lower(email) FROM public.acceso_cuentas
+       WHERE lower(email)='jose.fraga@gmail.com' AND activo=true
+       ON CONFLICT(email) DO NOTHING`);
   }
-  return { requireAdmin, requireUser, bootstrapAdmins };
+
+  return { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins };
 }

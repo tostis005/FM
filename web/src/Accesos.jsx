@@ -70,7 +70,7 @@ export default function AccessAdmin({ onAuthenticated }) {
   async function refresh() {
     const data = await api("/api/auth/me");
     setUser(data.user || null);
-    if (data.user?.role === "administrador") {
+    if (data.user?.role === "superadministrador") {
       const [ds, us, fs] = await Promise.all([
         api("/api/admin/domains"), api("/api/admin/accounts"), api("/api/farmacias"),
       ]);
@@ -123,7 +123,7 @@ export default function AccessAdmin({ onAuthenticated }) {
     }), "Cuenta guardada");
     setAccountForm(EMPTY_ACCOUNT);
   }
-  const administrator = user?.role === "administrador";
+  const administrator = user?.role === "superadministrador";
   return <div className="access-management">
     <div className="page-header">
       <div><h1>Accesos y dominios</h1><p>Controla qué correos pueden entrar y a qué farmacias pertenecen.</p></div>

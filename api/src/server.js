@@ -4,6 +4,7 @@ import pg from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
+import { setupTenant } from "./tenant.js";
 
 const { Pool } = pg;
 const {
@@ -36,7 +37,7 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 // No revela tickets, recuentos, credenciales ni otros datos de ventas.
 app.get("/api/health/database", async (_req, res) => {
   try {
-    await pool.query("SELECT 1 FROM farmatic.lineaventa LIMIT 1");
+    await pool.query("SELECT 1 FROM farmetrica.clientes LIMIT 1");
     res.json({ status: "ok", database: "connected" });
   } catch (error) {
     console.error("Fallo de verificación de PostgreSQL", error.code || error.name);
@@ -64,13 +65,14 @@ async function requireEntraAdmin(req, res, next) {
   }
 }
 
-const { requireAdmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
+const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
+const { requireTenantModule } = setupTenant(app, pool, { requireUser, requireSuperadmin });
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
   actualizado_en AS "updatedAt"`;
 
-app.get("/api/farmacias", requireAdmin, async (req, res, next) => {
+app.get("/api/farmacias", requireSuperadmin, async (req, res, next) => {
   try {
     const { rows } = await pool.query(`SELECT ${selectFields} FROM public.farmacias ORDER BY id`);
     res.json(rows.map(row => ({ ...row, name: row.nombre, city: row.ciudad, active: row.activo })));
@@ -93,7 +95,7 @@ function normalize(body, id) {
   return { id: Number(id), name, city, active: body.active, sourceCode, sourceHost: sourceHost || null, sourceDatabase };
 }
 
-app.post("/api/farmacias", requireAdmin, async (req, res, next) => {
+app.post("/api/farmacias", requireSuperadmin, async (req, res, next) => {
   try {
     const id = String(req.body?.id ?? "").trim();
     const f = normalize(req.body, id);
@@ -106,7 +108,7 @@ app.post("/api/farmacias", requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-app.patch("/api/farmacias/:id", requireAdmin, async (req, res, next) => {
+app.patch("/api/farmacias/:id", requireSuperadmin, async (req, res, next) => {
   try {
     const id = String(req.params.id).trim();
     const f = normalize(req.body, id);
@@ -135,23 +137,37 @@ function validCodes(cns) {
   return Array.isArray(cns) && cns.length <= 500 &&
     cns.every(cn => typeof cn === "string" && /^[0-9]{6}$/.test(cn));
 }
-const salesJoin = " FROM farmatic.lineaventa v JOIN public.farmacias f ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen ";
+// SQL se acota al esquema del cliente y a farmacias autorizadas.
+function salesJoin(req) {
+  const schema=req.context.client.schema,tenant=req.context.client.slug;
+  if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!/^[a-z][a-z0-9_]{1,62}$/.test(tenant))
+    throw Error("Cliente inválido");
+  const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
+  return ` FROM "${schema}".lineaventa v JOIN farmetrica.farmacias f
+    ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen
+    AND f.cliente_slug='${tenant}' AND f.id IN (${ids.length?ids.join(","):"NULL"}) `;
+}
 const salesPeriod = " v.fechahora >= $1::date AND v.fechahora < ($2::date + interval '1 day') ";
 
-app.get("/api/ventas/cobertura", requireAdmin, async (req, res, next) => {
-  try {
-    const { rows } = await pool.query(
-      "SELECT f.id::text AS farmacia_id, f.codigo_origen AS origen, " +
-      "count(v.idventa)::bigint::text AS lineas, min(v.fechahora) AS primera, max(v.fechahora) AS ultima " +
-      "FROM public.farmacias f LEFT JOIN farmatic.lineaventa v " +
-      "ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen " +
-      "GROUP BY f.id, f.codigo_origen ORDER BY f.id"
-    );
-    res.json({ pharmacies: rows });
-  } catch (err) { next(err); }
+app.get("/api/ventas/cobertura", ...requireTenantModule("promociones"), async (req,res,next)=>{
+  try{
+    const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
+    const schema=req.context.client.schema;
+    const {rows}=await pool.query(
+      `SELECT f.id::text AS farmacia_id,f.codigo_origen AS origen,
+        count(v.idventa)::bigint::text AS lineas,
+        min(v.fechahora) AS primera,max(v.fechahora) AS ultima
+        FROM farmetrica.farmacias f
+        LEFT JOIN "${schema}".lineaventa v
+          ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen
+        WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
+        GROUP BY f.id,f.codigo_origen ORDER BY f.id`,
+      [req.context.client.slug,ids]);
+    res.json({pharmacies:rows});
+  }catch(e){next(e);}
 });
 
-app.get("/api/ventas/catalogo", requireAdmin, async (req, res, next) => {
+app.get("/api/ventas/catalogo", ...requireTenantModule("promociones"), async (req, res, next) => {
   try {
     const from = String(req.query.desde || "2026-10-01");
     const to = String(req.query.hasta || "2026-10-31");
@@ -160,7 +176,7 @@ app.get("/api/ventas/catalogo", requireAdmin, async (req, res, next) => {
       "SELECT btrim(v.codigo::text) AS cn, " +
       "max(nullif(btrim(v.descripcion::text), '')) AS descripcion, " +
       "coalesce(sum(v.cantidad),0)::float8 AS unidades, count(DISTINCT f.id)::int AS farmacias " +
-      salesJoin + " WHERE " + salesPeriod +
+      salesJoin(req) + " WHERE " + salesPeriod +
       " AND btrim(v.codigo::text) ~ '^[0-9]{6}$' " +
       "GROUP BY btrim(v.codigo::text) HAVING sum(v.cantidad) > 0 " +
       "ORDER BY unidades DESC, cn LIMIT 50", [from, to]
@@ -169,7 +185,7 @@ app.get("/api/ventas/catalogo", requireAdmin, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-app.post("/api/ventas/seguimiento", requireAdmin, async (req, res, next) => {
+app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async (req, res, next) => {
   try {
     const promotions = req.body?.promotions;
     if (!Array.isArray(promotions) || promotions.length > 25 ||
@@ -182,7 +198,7 @@ app.post("/api/ventas/seguimiento", requireAdmin, async (req, res, next) => {
       if (!p.cns.length) { summary[p.id] = {}; continue; }
       const { rows } = await pool.query(
         "SELECT f.id::text AS farmacia_id, coalesce(sum(v.cantidad),0)::float8 AS unidades " +
-        salesJoin + " WHERE " + salesPeriod +
+        salesJoin(req) + " WHERE " + salesPeriod +
         " AND btrim(v.codigo::text) = ANY($3::text[]) " +
         "GROUP BY f.id ORDER BY f.id", [p.start, p.end, p.cns]
       );
@@ -201,7 +217,7 @@ const ticketColumns = Object.freeze({
   lineDiscount:"v.descuentolinea",net:"v.importeneto",
   discountPercent:"COALESCE(ABS(v.descuentolinea / NULLIF(v.importebruto,0)),0)",
 });
-app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
+app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
     columnFilters = {}, orderBy = "at", orderDir = "desc" } = req.body || {};
   if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
@@ -249,7 +265,7 @@ app.post("/api/ventas/detalle", requireAdmin, async (req, res, next) => {
         filters.push(ticketColumns[column]+"::text ILIKE '%' || $"+params.length+" || '%'");
       }
     }
-    const where = salesJoin + " WHERE " + filters.join(" AND ");
+    const where = salesJoin(req) + " WHERE " + filters.join(" AND ");
     const { rows: countRows } = await pool.query(
       "SELECT count(*)::integer AS total " + where, params);
     const orderSql = " ORDER BY "+ticketColumns[orderBy]+" "+orderDir.toUpperCase()+
@@ -288,6 +304,8 @@ try {
   await pool.query(migration);
   const accessMigration = await readFile(new URL("./migrations/002_accesos.sql", import.meta.url), "utf8");
   await pool.query(accessMigration);
+  const tenantMigration = await readFile(new URL("./migrations/003_multitenant.sql", import.meta.url), "utf8");
+  await pool.query(tenantMigration);
   await bootstrapAdmins();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
 } catch (err) {

@@ -9,6 +9,8 @@ import {
 import "./styles.css";
 import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
+import ModuloDemo from "./ModuloDemo.jsx";
+import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
@@ -57,6 +59,12 @@ const PROMOTION_TYPES = [
   {id:"otros",name:"Otros"}
 ];
 const STORE_KEY = "farmetrica-prototype-v1";
+const tenantStorageKey = (slug,email="") => {
+ const id=String(email).trim().toLowerCase();
+ // Conservar las campañas de la cuenta propietaria existente al migrar.
+ if(slug==="ampedia"&&id==="jose.fraga@gmail.com")return STORE_KEY;
+ return STORE_KEY+":"+slug+":"+(id||"anonymous");
+};
 const ROLES = {superadmin:"Superadministrador",gestor:"Gestor de farmacias",farmacia:"Personal de farmacia"};
 const EUR = new Intl.NumberFormat("es-ES");
 function percent(s,t) {return t ? Math.round(s/t*100):0;}
@@ -69,9 +77,9 @@ function migratePharmacyId(value){
 function migrateSalesOrTargets(obj={}){
   return Object.fromEntries(Object.entries(obj||{}).map(([key,value])=>[migratePharmacyId(key),value]));
 }
-function readState(){
+function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia",email=""){
   try {
-    const saved=JSON.parse(localStorage.getItem(STORE_KEY));
+    const saved=JSON.parse(localStorage.getItem(tenantStorageKey(slug,email)));
     if(saved && Array.isArray(saved.promos) && Array.isArray(saved.pharmacies) && Array.isArray(saved.users)) {
       const oldDemo=saved.pharmacies.length===5 && saved.pharmacies.every(f=>["Farmacia Central","Farmacia Sol","Farmacia Europa","Farmacia Gran Vía","Farmacia Norte"].includes(f.name));
       const pharmacies=oldDemo?DEFAULT_PHARMACIES:saved.pharmacies.map(f=>{
@@ -91,6 +99,7 @@ function readState(){
       };
     }
   }catch {}
+  if(slug!=="ampedia")return {promos:[],pharmacies:[],users:[],objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
   const seeded=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions;
   return {promos:seeded,pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS,
     objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
@@ -129,13 +138,26 @@ function SalesNotice({status,error,coverage,onConnect,canConnect,databaseStatus}
 }
 function Field({label,children,hint}) {return <label className="field"><span className="field-label">{label}</span>{children}{hint&&<small>{hint}</small>}</label>}
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
-const NAV = [
-  {id:"promociones",label:"Promociones",icon:Tag},
-  {id:"farmacias",label:"Farmacias",icon:Store},
-  {id:"usuarios",label:"Usuarios",icon:Users},
-  {id:"accesos",label:"Accesos",icon:ShieldCheck},
-  {id:"ajustes",label:"Ajustes",icon:Settings2}
+const NAV=[
+ {id:"dashboard",label:"Dashboard",icon:LayoutDashboard,module:"dashboard"},
+ {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
+ {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
+ {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
+ {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
+ {id:"stock",label:"Stock",icon:Package,module:"stock"},
+ {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion"},
+ {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
+ {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
+ {id:"acciones",label:"Acciones",icon:ClipboardList,module:"acciones"},
+ {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes"},
+ {id:"asistente",label:"Asistente IA",icon:Sparkles,module:"asistente"},
+ {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
+ {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
+ {id:"clientes",label:"Clientes",icon:Database,super:true},
+ {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
+ {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true}
 ];
+const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes","asistente"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -178,12 +200,42 @@ function App(){
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
   const [sessionUser,setSessionUser]=useState(null);
+  const [tenantContext,setTenantContext]=useState(null);
+  const [authError,setAuthError]=useState("");
+  async function loadContext(slug){
+    const response=await fetch("/api/tenant/context"+(slug?"?cliente="+encodeURIComponent(slug):""),{
+      credentials:"same-origin",cache:"no-store"});
+    if(!response.ok)throw Error("No tienes acceso al cliente seleccionado");
+    const ctx=await response.json();
+    localStorage.setItem("fm_active_tenant",ctx.client.slug);
+    setTenantContext(ctx);
+    return ctx;
+  }
   useEffect(()=>{
+    let live=true;
+    const selected=localStorage.getItem("fm_active_tenant")||"";
     fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"})
       .then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")))
-      .then(body=>{if(body.user)setSessionUser(body.user);else window.location.replace("/login");})
-      .catch(()=>window.location.replace("/login"));
+      .then(async body=>{
+        if(!body.user){window.location.replace("/login");return;}
+        const ctx=await loadContext(selected).catch(()=>loadContext(""));
+        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
+      })
+      .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
+    return()=>{live=false};
   },[]);
+  async function activateClient(slug){
+    if(slug===tenantContext?.client.slug)return;
+    try{
+      const ctx=await loadContext(slug);
+      setData(readState(ctx.client.slug,sessionUser?.email));
+      setSalesStatus("sin_conexion");setSalesByPromotion({});
+      const initial=ctx.modules.promociones||sessionUser?.role==="superadministrador"?"promociones":
+        Object.keys(ctx.modules).find(key=>ctx.modules[key])||"farmacias";
+      window.history.pushState({page:initial},"","/"+initial);
+      setPage(initial);setMobileMenu(false);setAuthError("");
+    }catch(e){setAuthError(e.message)}
+  }
   async function signOut(){
     try{await fetch("/api/auth/logout",{method:"POST",credentials:"same-origin"});}
     finally{window.location.replace("/login");}
@@ -242,16 +294,17 @@ function App(){
    localStorage.setItem(key,"1");
  },[]);
  useEffect(()=>{
-    localStorage.setItem(STORE_KEY,JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
-  },[data,pharmacyApiStatus]);
+    if(!tenantContext || !sessionUser)return;
+    localStorage.setItem(tenantStorageKey(tenantContext.client.slug,sessionUser.email),JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
+  },[data,pharmacyApiStatus,tenantContext?.client?.slug,sessionUser?.email]);
   useEffect(()=>{
     if (pharmacyBackendConfigured) void refreshPharmacies();
     const onAuth = () => { if (pharmacyBackendConfigured) void refreshPharmacies(); };
     window.addEventListener("farmawao-auth-changed", onAuth);
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
-  },[]);
+  },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(pharmacyApiStatus!=="connected"){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(pharmacyApiStatus!=="connected"||(tenantContext && !tenantContext.modules.promociones && sessionUser?.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -288,7 +341,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[pharmacyApiStatus,data.promos]);
+   },[pharmacyApiStatus,data.promos,tenantContext?.client?.slug]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -322,8 +375,16 @@ function App(){
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
- const {promos:storedPromos,pharmacies,users:storedUsers}=data;
-  const users=sessionUser?.role==="administrador"
+ const {promos:rawPromos,users:storedUsers}=data;
+ // Ocultar objetivos y farmacias fuera del ámbito autorizado de esta sesión.
+ const pharmacies=tenantContext?.pharmacies||[];
+ const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
+ const storedPromos=(rawPromos||[]).map(p=>({...p,
+   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
+ })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0);
+
+  const users=sessionUser?.role==="superadministrador"
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]
     : storedUsers;
@@ -559,7 +620,7 @@ function App(){
   }
   async function savePharmacy(e) {
     e.preventDefault();const id=pharmacyForm.id.trim();
-    if(!/^[1-9][0-9]{0,5}$/.test(id)||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
+    if((editingPharmacy!=="nuevo"&&!/^[1-9][0-9]{0,8}$/.test(id))||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
     if(!/^[A-Z0-9_-]{2,16}$/.test((pharmacyForm.sourceCode||"").trim().toUpperCase()))return setToast("Indica un código de origen válido");
     if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
     const f={...pharmacyForm,id,name:pharmacyForm.name.trim(),sourceCode:pharmacyForm.sourceCode.trim().toUpperCase(),sourceHost:pharmacyForm.sourceHost?.trim()||"",sourceDatabase:pharmacyForm.sourceDatabase?.trim()||"Farmatic"};
@@ -590,18 +651,32 @@ function App(){
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
  },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
+ const role=tenantContext?.role;
+ const visibleNav=NAV.filter(item=>{
+   if(item.super)return sessionUser?.role==="superadministrador";
+   if(item.admin)return ["administrador","superadministrador"].includes(role);
+   if(item.module)return sessionUser?.role==="superadministrador"||tenantContext?.modules?.[item.module]===true;
+   return true;
+ });
+ const allowed=page==="seguimiento-global"
+   ? (sessionUser?.role==="superadministrador"||tenantContext?.modules?.promociones)
+   : visibleNav.some(item=>item.id===page);
+ useEffect(()=>{
+   if(tenantContext && !allowed)nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"promociones");
+ },[tenantContext,page,allowed]);
+ if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError||"Preparando tu espacio de trabajo…"}</main></div>;
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark" aria-hidden="true">✳</span><span>Farmetrica</span></button>
-   <nav className="side-nav">{NAV.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
+   <nav className="side-nav">{visibleNav.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
    <header className="topbar">
     <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
-    <div className="topbar-right"><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
-       <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="administrador"?"Superadministrador":"Usuario autorizado"}</small></span>
+    <div className="topbar-right">{tenantContext.clients.length>1&&<select className="fm-client-selector" aria-label="Cambiar de cliente" value={tenantContext.client.slug} onChange={e=>activateClient(e.target.value)}>{tenantContext.clients.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select>}<button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
+       <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="superadministrador"?"Superadministrador":tenantContext.role==="administrador"?"Administrador de cliente":"Usuario autorizado"}</small></span>
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
@@ -713,7 +788,7 @@ function App(){
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
  <SalesNotice status={salesStatus} error={salesError} coverage={salesCoverage} databaseStatus={databaseStatus} canConnect={databaseStatus==="connected"} onConnect={()=>nav("accesos")}/>
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Usuarios asignados" value={users.filter(u=>u.role!=="superadmin").length} caption="En la red"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
+{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div>{pharmacyApiStatus==="connected"?<div className="note"><CheckCircle2 size={17}/> Maestro conectado a PostgreSQL. Los cambios se guardan para todos los administradores.</div>:<div className="note"><CircleHelp size={17}/>{pharmacyBackendConfigured?(pharmacyApiError||"Inicia sesión para consultar y modificar las farmacias reales."):"Modo demostración: el acceso administrativo requiere configurar Google en Accesos. PostgreSQL se conecta a la API independientemente."}</div>}<div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Clientes de datos" value={tenantContext.pharmacies.length} caption="Farmacias del cliente"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
@@ -724,18 +799,9 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="usuarios"&&<><div className="page-header"><div><h1>Gestión de usuarios</h1></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentUsers} rowKey={u=>u.id} label="usuarios"
-  onRowClick={startUser} emptyText="No hay usuarios con esos filtros"
-  columns={[
-    {key:"name",label:"Usuario",value:u=>u.name+" "+u.email,render:u=><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div>},
-    {key:"role",label:"Rol",filterMode:"multi",value:u=>ROLES[u.role],render:u=><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span>},
-    {key:"pharmacies",label:"Farmacias",filterMode:"multi",
-    filterValues:u=>u.role==="superadmin"?pharmacies.map(f=>f.id):u.pharmacies,
-    options:()=>pharmacies.map(f=>({value:f.id,label:f.name})),
-    value:u=>u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"},
-    {key:"active",label:"Estado",filterMode:"multi",value:u=>u.active?"Activa":"Inactiva",render:u=><Pill status={u.active?"Activa":"Inactiva"}/>},
-    {key:"action",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
-  ]}/></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}
+    {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
+    {DEMO_MODULES.has(page)&&<ModuloDemo module={page} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<><div className="page-header"><div><h1>Ajustes</h1><p>Estado del prototipo y próximas integraciones.</p></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Google y correos autorizados</h2><p>Inicio de sesión, dominios y cuentas gestionados desde Accesos.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>SQL Server → PostgreSQL, con cargas iniciales e incrementales y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div></>}
    </main>
@@ -797,7 +863,7 @@ function App(){
    {editingPromo!=="nuevo"&&<div className="drawer-extra"><button type="button" className="btn btn-secondary" onClick={()=>{const p={...promoForm};setEditingPromo(null);copyPromo(p)}}><Copy size={16}/> Duplicar promoción</button><button type="button" className="btn btn-secondary" onClick={()=>exportPromo(promoForm)}><ArrowDownToLine size={16}/> Descargar ficha de promoción</button></div>}
   </form></div></div>}
   {editingUser&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingUser(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingUser==="nuevo"?"Nuevo usuario":"Editar usuario"}</h2><p>Asigna un rol y define las farmacias disponibles.</p></div><button className="icon-btn" onClick={()=>setEditingUser(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={saveUser} className="drawer-content"><Field label="Nombre completo"><input required value={userForm.name} onChange={e=>setUserForm({...userForm,name:e.target.value})}/></Field><Field label="Correo electrónico"><input type="email" required value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/></Field><Field label="Rol"><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="farmacia">Personal de farmacia</option><option value="gestor">Gestor de farmacias</option><option value="superadmin">Superadministrador</option></select></Field><Field label="Estado"><select value={String(userForm.active)} onChange={e=>setUserForm({...userForm,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></Field><div className="form-divider"/><div className="field-heading"><div><strong>Farmacias asignadas</strong><small>{userForm.role==="superadmin"?"Este rol tiene acceso a toda la red.":"Marca las farmacias a las que podrá acceder."}</small></div></div>{userForm.role!=="superadmin"&&<div className="pharmacy-picker">{pharmacies.map(f=><label key={f.id} className={"pharmacy-choice "+(userForm.pharmacies.includes(f.id)?"chosen":"")}><input type="checkbox" checked={userForm.pharmacies.includes(f.id)} onChange={()=>setUserForm({...userForm,pharmacies:userForm.pharmacies.includes(f.id)?userForm.pharmacies.filter(x=>x!==f.id):[...userForm.pharmacies,f.id]})}/><span className="choice-check">{userForm.pharmacies.includes(f.id)&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>}<div className="note small-note"><ShieldCheck size={16}/> Estas asignaciones son solo visuales hasta habilitar autenticación y autorización en el servidor.</div><FormActions onCancel={()=>setEditingUser(null)}/></form></div></div>}
-  {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El ID es numérico y debe coincidir con los datos importados.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content"><Field label="ID numérico de farmacia"><input required disabled={editingPharmacy!=="nuevo"} placeholder="6" value={pharmacyForm.id} onChange={e=>setPharmacyForm({...pharmacyForm,id:e.target.value})}/></Field><Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad (opcional)"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA" maxLength="16" value={pharmacyForm.sourceCode||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field><Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local" value={pharmacyForm.sourceHost||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field><Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field><div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)} label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/></form></div></div>}
+  {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El identificador se asigna automáticamente a las farmacias nuevas.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content">{editingPharmacy!=="nuevo"&&<Field label="ID de farmacia"><input disabled value={pharmacyForm.id}/></Field>}<Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad (opcional)"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA" maxLength="16" value={pharmacyForm.sourceCode||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field><Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local" value={pharmacyForm.sourceHost||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field><Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field><div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)} label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/></form></div></div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
  </div>
 }

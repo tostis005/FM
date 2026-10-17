@@ -296,7 +296,7 @@ function App(){
     const onAuth = () => { if (pharmacyBackendConfigured) void refreshPharmacies(); };
     window.addEventListener("farmawao-auth-changed", onAuth);
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
-  },[]);
+  },[tenantContext?.client?.slug]);
    useEffect(()=>{
      if(pharmacyApiStatus!=="connected"||(tenantContext && !tenantContext.modules.promociones && sessionUser?.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
@@ -637,18 +637,32 @@ function App(){
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
  },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
+ const role=tenantContext?.role;
+ const visibleNav=NAV.filter(item=>{
+   if(item.super)return sessionUser?.role==="superadministrador";
+   if(item.admin)return ["administrador","superadministrador"].includes(role);
+   if(item.module)return sessionUser?.role==="superadministrador"||tenantContext?.modules?.[item.module]===true;
+   return true;
+ });
+ const allowed=page==="seguimiento-global"
+   ? (sessionUser?.role==="superadministrador"||tenantContext?.modules?.promociones)
+   : visibleNav.some(item=>item.id===page);
+ useEffect(()=>{
+   if(tenantContext && !allowed)nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"promociones");
+ },[tenantContext,page,allowed]);
+ if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError||"Preparando tu espacio de trabajo…"}</main></div>;
  return <div className="app-shell">
   <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark" aria-hidden="true">✳</span><span>Farmetrica</span></button>
-   <nav className="side-nav">{NAV.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
+   <nav className="side-nav">{visibleNav.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
    <header className="topbar">
     <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
-    <div className="topbar-right"><button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
-       <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="administrador"?"Superadministrador":"Usuario autorizado"}</small></span>
+    <div className="topbar-right">{tenantContext.clients.length>1&&<select className="fm-client-selector" aria-label="Cambiar de cliente" value={tenantContext.client.slug} onChange={e=>activateClient(e.target.value)}>{tenantContext.clients.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select>}<button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
+       <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="superadministrador"?"Superadministrador":tenantContext.role==="administrador"?"Administrador de cliente":"Usuario autorizado"}</small></span>
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">

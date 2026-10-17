@@ -1,9 +1,7 @@
 name: Desplegar API PostgreSQL independiente de Google
 
+# El despliegue automático ahora se hace junto con web y DB en deploy.yml.
 on:
-  push:
-    branches: [main]
-    paths: ["api/**", ".github/workflows/deploy-ventas-api.yml"]
   workflow_dispatch:
 
 permissions:

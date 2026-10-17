@@ -449,3 +449,153 @@ sections:[
 related:["/soluciones/comparativa-genericos-farmacia/","/soluciones/analisis-compras-farmacia/","/soluciones/analisis-proveedores-farmacia/"]
 }
 );
+
+// Nuevas búsquedas de intención alta: BI en farmacia y validación de orígenes.
+solutions.push({
+  "slug": "business-intelligence-farmacias",
+  "category": "Business Intelligence",
+  "title": "Business intelligence para farmacias: ventas, compras y stock",
+  "description": "Business intelligence para farmacias y grupos: conecta ventas, compras, stock, proveedores, rentabilidad y promociones en un análisis comercial común.",
+  "hero": "Convierte los datos de tu farmacia en decisiones más claras.",
+  "lead": "Las farmacias acumulan datos de ventas, compras, inventario y proveedores. El reto no consiste en crear otro informe: consiste en cruzar esa información para detectar oportunidades y actuar. Farmetrica organiza las métricas comerciales en una misma plataforma, sujeta a la disponibilidad de cada origen.",
+  "value": "Una capa de análisis sobre tu software de farmacia, sin sustituirlo.",
+  "sections": [
+    {
+      "heading": "Qué debería ofrecer el BI de una farmacia",
+      "paragraphs": [
+        "Un cuadro de mando de farmacia debe explicar tanto la actividad como sus causas. La facturación muestra una parte; el coste de adquisición, las existencias y la rotación completan la visión. Los indicadores necesitan un periodo concreto, una farmacia identificada y reglas de cálculo comprensibles.",
+        "Farmetrica reúne áreas de ventas, compras, artículos, proveedores, stock, reposición, genéricos, rentabilidad y promociones. Cuando el origen proporciona los datos adecuados, estas áreas permiten pasar de una cifra agregada a las referencias o farmacias que la originan."
+      ],
+      "points": [
+        "Ventas y unidades por artículo y periodo.",
+        "Compras, coste unitario y proveedores.",
+        "Stock, rotación y cobertura.",
+        "Margen estimado cuando existe información suficiente de costes.",
+        "Objetivos de promociones por farmacia."
+      ]
+    },
+    {
+      "heading": "Preguntas reales que un cuadro de mando puede responder",
+      "paragraphs": [
+        "¿Qué referencias concentran el valor del stock y apenas se mueven? ¿En qué artículos ha cambiado el precio de compra? ¿Qué productos venden mucho, pero tienen un margen estimado limitado? ¿En qué puntos de venta una campaña está lejos de su objetivo?",
+        "Para responder no basta con mezclar tablas. Las unidades, los importes y las devoluciones deben interpretarse de la misma manera, y es necesario saber cuándo se han actualizado los movimientos del programa de gestión."
+      ],
+      "points": [
+        "Identificar artículos que requieren revisar su stock.",
+        "Localizar diferencias de coste de compra en referencias comparables.",
+        "Seguir campañas y objetivos sin repetir informes manuales."
+      ]
+    },
+    {
+      "heading": "BI para una farmacia o para un grupo",
+      "paragraphs": [
+        "Una sola farmacia busca tomar decisiones sobre su surtido, sus proveedores y su actividad diaria. Un grupo, además, necesita comparar centros y consolidar criterios sin perder la identidad de cada negocio.",
+        "El diseño multiempresa de Farmetrica contempla clientes, farmacias y permisos. La disponibilidad concreta de módulos y datos se configura por implantación; no se presume acceso universal a todas las fuentes."
+      ]
+    },
+    {
+      "heading": "No todos los programas ofrecen la misma conexión",
+      "paragraphs": [
+        "El modelo de negocio puede ser independiente del ERP, pero la extracción no lo es. Hay que comprobar la versión instalada, permisos, campos disponibles, identificadores de producto, devoluciones y frecuencia de sincronización.",
+        "Existe una conexión operativa en un entorno Farmatic para datos de ventas. En Nixfarma, Unycop y otros sistemas no debe darse por hecho un conector probado: se requiere análisis técnico antes de presentar una integración como operativa."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Farmetrica sustituye a mi programa de gestión?",
+      "No. Es una capa de análisis complementaria. La operativa de la farmacia permanece en el software de origen."
+    ],
+    [
+      "¿Puedo comparar varias farmacias?",
+      "La plataforma contempla la gestión de varias farmacias y la consolidación de indicadores, según los módulos habilitados y los datos disponibles."
+    ],
+    [
+      "¿La rentabilidad es siempre exacta?",
+      "No se debe confundir margen estimado con beneficio neto. La medición exige costes completos, devoluciones y criterios coherentes."
+    ],
+    [
+      "¿Funciona con Nixfarma, Farmatic y Unycop?",
+      "La conexión con datos de Farmatic está operativa en un entorno concreto. Otras integraciones deben validarse por versión e instalación."
+    ]
+  ],
+  "related": [
+    "/soluciones/cuadro-mando-farmacias/",
+    "/soluciones/analisis-compras-farmacia/",
+    "/soluciones/control-stock-farmacia/",
+    "/blog/integrar-farmatic-nixfarma-unycop-analitica/"
+  ]
+});
+articles.push({
+  "slug": "integrar-farmatic-nixfarma-unycop-analitica",
+  "category": "Sistemas de farmacia",
+  "title": "Cómo conectar Farmatic, Nixfarma o Unycop a una herramienta de análisis",
+  "description": "Guía para integrar datos de Farmatic, Nixfarma o Unycop con analítica: permisos, ventas, compras, stock, CN, devoluciones y comprobaciones técnicas.",
+  "hero": "Antes de conectar tu programa de farmacia, comprueba esto.",
+  "lead": "No existe un conector universal que funcione por arte de magia. Farmatic, Nixfarma y Unycop tienen productos, versiones y vías de acceso diferentes. La forma fiable de construir analítica empieza por una revisión de datos y permisos, no por una promesa de compatibilidad.",
+  "value": "Un buen proyecto de datos empieza por una conexión bien validada.",
+  "sections": [
+    {
+      "heading": "1. Identifica el origen y quién autoriza el acceso",
+      "paragraphs": [
+        "Documenta el programa, su versión y el modelo de instalación. Confirma si los datos se consultan mediante una base de datos, un servicio autorizado, una exportación o un intermediario. Evita depender de accesos improvisados que puedan dejar de funcionar tras una actualización.",
+        "Antes de mover información, define quién autoriza la consulta, qué farmacias están incluidas y qué campos son necesarios. La minimización de datos es especialmente relevante en el entorno sanitario."
+      ]
+    },
+    {
+      "heading": "2. Construye un diccionario común de ventas, compras y artículos",
+      "paragraphs": [
+        "El código de producto puede aparecer como CN, EAN u otro identificador de origen. Lo importante es conservar el identificador exacto, sus ceros iniciales y el vínculo inequívoco con el artículo. Las cantidades deben distinguir ventas y devoluciones.",
+        "Registra igualmente las fechas, unidades, precios, descuentos, coste unitario de compra, proveedor, farmacia y stock cuando estén disponibles. Un campo con el mismo nombre no implica necesariamente el mismo significado en dos sistemas."
+      ],
+      "points": [
+        "Identificadores de artículo sin conversiones destructivas.",
+        "Tickets, líneas y fecha de operación.",
+        "Importes antes y después de descuentos.",
+        "Compras, proveedores y costes, cuando existan.",
+        "Existencias y fecha de la fotografía de stock."
+      ]
+    },
+    {
+      "heading": "3. Verifica los números antes de publicar el cuadro de mando",
+      "paragraphs": [
+        "Selecciona varios días de ejemplo, una farmacia concreta y referencias conocidas. Compara la suma de unidades y ventas con informes del sistema de origen. Si los resultados no coinciden, revisa anulaciones, devoluciones, duplicados, zonas horarias y movimientos sin código.",
+        "La actualización también importa: un informe que se refresca cada hora no puede presentarse como seguimiento instantáneo. Indica el momento del último dato y prepara alertas cuando una carga falle."
+      ]
+    },
+    {
+      "heading": "4. Mantén la lógica independiente del fabricante",
+      "paragraphs": [
+        "Una vez validados los datos, las preguntas comerciales son comparables: qué se vende, qué se compra, qué margen estimado existe, dónde se concentra el stock y cómo avanzan las promociones. El esquema analítico común reduce el trabajo al incorporar nuevas farmacias.",
+        "En Farmetrica se ha validado un origen de ventas procedente de Farmatic. Las conexiones de Nixfarma y Unycop son posibilidades que deben estudiarse por instalación; esta guía no afirma que estén listas para utilizarse."
+      ]
+    },
+    {
+      "heading": "5. Cómo evaluar una integración antes de contratarla",
+      "paragraphs": [
+        "Pide una prueba con un conjunto limitado de datos reales y criterios de aceptación escritos. Una demostración visual no confirma que estén bien conciliadas las ventas ni que el margen esté calculado con costes correctos.",
+        "Compara también el mantenimiento: quién se responsabiliza de los cambios de esquema, las incidencias, la frecuencia de refresco y la separación de datos de cada farmacia o cliente."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Hay una clasificación objetiva de los programas más usados en España?",
+      "No disponemos de una estadística independiente y actualizada de cuota de mercado por programa que permita publicar un ranking fiable. La enumeración aquí no implica orden de utilización."
+    ],
+    [
+      "¿Puede utilizarse un CN como identificador?",
+      "Sí cuando el origen lo emplea; conviene conservar ceros iniciales y validar la equivalencia con otros códigos."
+    ],
+    [
+      "¿Es obligatorio copiar todos los datos del sistema?",
+      "No. Se deben consultar o extraer solo los campos necesarios para el análisis acordado y autorizado."
+    ]
+  ],
+  "related": [
+    "/integraciones/farmatic/",
+    "/integraciones/nixfarma/",
+    "/integraciones/unycop/",
+    "/soluciones/business-intelligence-farmacias/"
+  ]
+});

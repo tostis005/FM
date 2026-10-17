@@ -9,7 +9,12 @@ const records=[
  ...integrations.map(p=>({...p,type:"integration",url:"/integraciones/"+p.slug+"/"})),
  ...articles.map(p=>({...p,type:"article",url:"/blog/"+p.slug+"/"}))
 ];
-const byUrl=new Map(records.map(p=>[p.url,p]));
+const hubRecords=[
+ {url:"/soluciones/",title:"Todas las soluciones de Farmetrica",category:"Soluciones",description:"Explora las funcionalidades de gestión comercial y seguimiento de promociones."},
+ {url:"/integraciones/",title:"Programas de gestión e integraciones",category:"Integraciones",description:"Farmatic conectado en el entorno actual y otras integraciones en evaluación."},
+ {url:"/blog/",title:"Blog de Farmetrica",category:"Blog",description:"Guías prácticas para mejorar el seguimiento de campañas de farmacia."}
+];
+const byUrl=new Map([...records,...hubRecords].map(p=>[p.url,p]));
 const nav='<header class="site-nav"><div class="container"><a class="logo" href="/" aria-label="Farmetrica, inicio"><span class="logo-symbol" aria-hidden="true">✳</span>Farmetrica</a><nav class="nav-links" aria-label="Navegación"><a href="/soluciones/">Soluciones</a><a href="/integraciones/">Integraciones</a><a href="/blog/">Blog</a></nav><div class="nav-actions"><a class="login-button" href="/login">Acceder</a><details class="mobile-nav"><summary aria-label="Abrir menú de navegación">☰</summary><nav class="mobile-links"><a href="/">Inicio</a><a href="/soluciones/">Soluciones</a><a href="/integraciones/">Integraciones</a><a href="/blog/">Blog</a></nav></details></div></div></header>';
 const footer='<footer class="footer"><div class="container"><div class="footer-top"><a class="logo" href="/"><span class="logo-symbol" aria-hidden="true">✳</span>Farmetrica</a><nav class="footer-nav" aria-label="Pie de página"><a href="/soluciones/">Soluciones</a><a href="/integraciones/">Integraciones</a><a href="/blog/">Blog</a><a href="/login">Acceder</a></nav></div><div class="footer-small"><span>© 2026 Farmetrica · Inteligencia comercial para farmacias</span><span>Los datos de demostración son ilustrativos.</span></div></div></footer>';
 const jsonld=value=>'<script type="application/ld+json">'+JSON.stringify(value).replace(/</g,"\\u003c")+'</script>';

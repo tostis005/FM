@@ -66,7 +66,7 @@ async function requireEntraAdmin(req, res, next) {
 }
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
-const { requireTenantModule } = setupTenant(app, pool, { requireUser, requireSuperadmin });
+const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUser, requireSuperadmin });
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -209,7 +209,10 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
 });
 
 // Agregados operativos reales: farmacias autorizadas, periodo y CN.
-const analyticsAccess=[...requireTenantModule("dashboard")];
+const analyticsAccess=[...requireTenant(),(req,res,next)=>{
+  if(req.context.role==="superadministrador"||req.context.modules.dashboard||req.context.modules.ventas)return next();
+  return res.status(403).json({error:"Módulo de ventas no habilitado"});
+}];
 app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
   try{
     const from=String(req.query.desde||"2026-10-01");

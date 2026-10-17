@@ -4,7 +4,7 @@ const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID;
 const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
 const apiScope = import.meta.env.VITE_ENTRA_API_SCOPE;
 const entraConfigured = Boolean(tenantId && clientId && apiScope);
-export const pharmacyBackendConfigured = entraConfigured || Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID) || import.meta.env.VITE_LOCAL_LOGIN_ENABLED === "true";
+export const pharmacyBackendConfigured = true; // SPA protegida por sesión HTTP del backend.
 let appPromise;
 
 async function msal() {
@@ -28,7 +28,7 @@ async function hasGoogleAdminSession() {
     const response = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
     if (!response.ok) return false;
     const data = await response.json();
-    return data.user?.role === "administrador";
+    return Boolean(data.user);
   } catch { return false; }
 }
 export async function hasPharmacySession() {
@@ -60,21 +60,21 @@ async function token() {
 async function request(path, options = {}) {
   const googleSession = await hasGoogleAdminSession();
   const accessToken = googleSession ? null : entraConfigured ? await token() : null;
-  if (!googleSession && !accessToken) throw Error("Inicia sesión con una cuenta administradora autorizada");
+  if (!googleSession && !accessToken) throw Error("Inicia sesión con una cuenta autorizada");
   const response = await fetch(path, {
     ...options,
     credentials: "same-origin",
     cache: "no-store",
-    headers: { "Content-Type": "application/json", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
+    headers: { "Content-Type": "application/json", "X-Farmetrica-Cliente": localStorage.getItem("fm_active_tenant") || "ampedia", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.error || `Error del servidor (${response.status})`);
   return data;
 }
 
-export const loadPharmacies = () => request("/api/farmacias");
+export const loadPharmacies = () => request("/api/tenant/farmacias");
 export const savePharmacyToServer = (pharmacy, isNew) => request(
-  isNew ? "/api/farmacias" : `/api/farmacias/${encodeURIComponent(pharmacy.id)}`,
+  isNew ? "/api/tenant/farmacias" : `/api/tenant/farmacias/${encodeURIComponent(pharmacy.id)}`,
   { method: isNew ? "POST" : "PATCH", body: JSON.stringify(pharmacy) },
 );
 

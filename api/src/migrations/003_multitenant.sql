@@ -1,6 +1,6 @@
 -- 003 · Núcleo SaaS multiempresa (aditivo; conserva todas las tablas y datos existentes).
 -- IMPORTANTE: esta migración NO renombra farmatic. El cambio físico se hace con
--- 004_ampedia_cutover_MANUAL.sql después de comprobar dependencias y crear backup.
+-- 004_ampedia_cutover_MANUAL.sql después de comprobar dependencias.
 CREATE SCHEMA IF NOT EXISTS farmetrica;
 
 CREATE TABLE IF NOT EXISTS farmetrica.clientes (
@@ -85,7 +85,12 @@ SELECT lower(email),'ampedia',
   farmacias,activo FROM public.acceso_cuentas
 ON CONFLICT(email,cliente_slug) DO NOTHING;
 
--- Elevación explícita solicitada: solo si el correo ya existe y está habilitado.
+-- Preparación de la cuenta designada por el propietario del producto.
+INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
+VALUES ('jose.fraga@gmail.com','José Fraga','administrador','{}',TRUE)
+ON CONFLICT(email) DO NOTHING;
+
+-- Elevación explícita solicitada: solo si el correo existe y está habilitado.
 -- El correo por sí solo no autentica: siguen siendo necesarios Google verificado
 -- o el mecanismo de sesión que el servidor ya valida.
 INSERT INTO farmetrica.superadministradores(email)

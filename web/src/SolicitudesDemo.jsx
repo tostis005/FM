@@ -4,6 +4,10 @@ import "./moduleDemo.css";
 const STATUS=[["nueva","Nueva"],["contactada","Contactada"],["cerrada","Cerrada"]];
 const labels={farmatic:"Farmatic",nixfarma:"Nixfarma",unycop:"Unycop",bitfarma:"Bitfarma",farmanager:"Farmanager",otro:"Otro",no_se:"No indicado",vision_global:"Visión global",compras:"Compras y costes",ventas:"Ventas",stock:"Stock y reposición",promociones:"Promociones",multi_farmacia:"Grupo de farmacias"};
 export default function SolicitudesDemo(){
+ const [mode,setMode]=useState("comerciales");
+ return <><div className="fm-leads-tabs" role="group" aria-label="Tipo de solicitudes"><button type="button" className={"btn "+(mode==="comerciales"?"btn-primary":"btn-secondary")} onClick={()=>setMode("comerciales")}>Demostraciones</button><button type="button" className={"btn "+(mode==="privacidad"?"btn-primary":"btn-secondary")} onClick={()=>setMode("privacidad")}>Protección de datos</button></div>{mode==="comerciales"?<CommercialInbox/>:<PrivacyInbox/>}</>;
+}
+function CommercialInbox(){
  const [rows,setRows]=useState([]),[filter,setFilter]=useState("todas"),[loading,setLoading]=useState(false),[error,setError]=useState(""),[busy,setBusy]=useState("");
  async function refresh(){
   setLoading(true);setError("");
@@ -37,5 +41,40 @@ export default function SolicitudesDemo(){
     {l.mensaje&&<p className="fm-lead-note">{l.mensaje}</p>}
     <label className="fm-lead-action">Seguimiento <select disabled={busy===l.id} value={l.estado} onChange={e=>mark(l.id,e.target.value)}>{STATUS.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label>
    </article>)}</div>}
+ </div>;
+}
+
+function PrivacyInbox(){
+ const [rows,setRows]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState(""),[busy,setBusy]=useState("");
+ async function refresh(){
+  setLoading(true);setError("");
+  try{
+   const r=await fetch("/api/admin/privacidad",{credentials:"same-origin",cache:"no-store"});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(j.error||"No se pudieron consultar las solicitudes de privacidad");
+   setRows(j.rows||[]);
+  }catch(e){setError(e.message)}finally{setLoading(false)}
+ }
+ useEffect(()=>{refresh()},[]);
+ async function change(id,estado){
+  setBusy(id);setError("");
+  try{
+   const r=await fetch("/api/admin/privacidad/"+encodeURIComponent(id),{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({estado})});
+   const j=await r.json().catch(()=>({});
+   if(!r.ok)throw Error(j.error||"No se ha podido guardar");
+   await refresh();
+  }catch(e){setError(e.message)}finally{setBusy("")}
+ }
+ const types={acceso:"Acceso",rectificacion:"Rectificación",supresion:"Supresión",oposicion:"Oposición",limitacion:"Limitación",portabilidad:"Portabilidad",otro:"Consulta"};
+ return <div className="fm-management">
+  <div className="page-header"><div><h1>Protección de datos</h1><p>Solicitudes privadas recibidas por el canal específico de protección de datos.</p></div></div>
+  <div className="card fm-leads-toolbar"><strong>{rows.length} solicitudes</strong><button type="button" className="btn btn-secondary" disabled={loading} onClick={refresh}><RefreshCw size={16}/> Actualizar</button></div>
+  {error&&<div role="alert" className="fm-manage-feedback">{error}</div>}
+  {loading&&!rows.length?<div className="card" style={{padding:22}}>Cargando…</div>:!rows.length?<div className="card" style={{padding:22}}>No hay solicitudes de privacidad.</div>:<div className="fm-lead-grid">{rows.map(r=><article className="card fm-lead-card" key={r.id}>
+   <div className="fm-lead-top"><div><strong>{r.nombre}</strong><small>{new Date(r.createdAt).toLocaleString("es-ES")}</small></div><span className="fm-lead-state">{types[r.tipo]||r.tipo}</span></div>
+   <div className="fm-lead-details"><a href={"mailto:"+r.email}><Mail size={15}/>{r.email}</a><span>Referencia: {r.id}</span></div>
+   {r.detalle&&<p className="fm-lead-note">{r.detalle}</p>}
+   <label className="fm-lead-action">Estado <select value={r.estado} disabled={busy===r.id} onChange={e=>change(r.id,e.target.value)}><option value="pendiente">Pendiente</option><option value="en_tramite">En trámite</option><option value="atendida">Atendida</option></select></label>
+  </article>)}</div>}
  </div>;
 }

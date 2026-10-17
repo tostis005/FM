@@ -8,5 +8,7 @@ La web pública publica `/solicitar-demo/`. El formulario envía un POST JSON a 
 - Se ven solo mediante una sesión de superadministrador en el apartado **Solicitudes**, con estados Nueva, Contactada y Cerrada.
 - La referencia de respuesta confirma la inserción en PostgreSQL. No implica una reunión confirmada ni un correo de aviso.
 - No hay emails automáticos configurados por este cambio: la gestión y respuesta se realiza desde el panel de administración.
-- Establecer, antes de captación comercial a escala, el responsable del tratamiento, dirección de contacto, política formal de privacidad, periodos de conservación y borrado, y políticas de seguridad operativa.
+- Existe página pública `/privacidad/` y canal específico `/privacidad/solicitud/`, con registros separados en `farmetrica.solicitudes_privacidad` y bandeja privada del superadministrador. Queda **pendiente de confirmar con el titular** la identidad jurídica, NIF/CIF, domicilio, contacto legal y condiciones reales de proveedores de infraestructura para completar la información RGPD.
 - No se registra la IP del interesado en PostgreSQL. Las IP se usan solo temporalmente para los límites antifraude en memoria.
+
+- Al iniciar y cada 24 horas se purgan los contactos comerciales con más de 12 meses desde su última actualización y solicitudes de derechos con más de 24 meses desde su última actualización. Revisar estos plazos con el titular y su asesoría legal.

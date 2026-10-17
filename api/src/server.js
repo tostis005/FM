@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
+import { setupPrivacyRequests } from "./privacyRequests.js";
 
 const { Pool } = pg;
 const {
@@ -69,6 +70,7 @@ async function requireEntraAdmin(req, res, next) {
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
 const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUser, requireSuperadmin });
 setupPublicLeads(app,pool,{requireSuperadmin});
+setupPrivacyRequests(app,pool,{requireSuperadmin});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -351,7 +353,18 @@ try {
   await pool.query(supplierMigration);
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
   await pool.query(leadsMigration);
+  const privacyMigration=await readFile(new URL("./migrations/007_solicitudes_privacidad.sql",import.meta.url),"utf8");
+  await pool.query(privacyMigration);
   await bootstrapAdmins();
+  // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
+  const purgeExpiredPublicRequests=async()=>{
+    try{
+      await pool.query("DELETE FROM farmetrica.solicitudes_demo WHERE actualizado_en < now() - interval '12 months'");
+      await pool.query("DELETE FROM farmetrica.solicitudes_privacidad WHERE actualizado_en < now() - interval '24 months'");
+    }catch(e){console.error("Error depurando solicitudes antiguas",e.code||e.name);}
+  };
+  await purgeExpiredPublicRequests();
+  setInterval(purgeExpiredPublicRequests,24*60*60*1000).unref();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);

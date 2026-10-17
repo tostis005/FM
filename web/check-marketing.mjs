@@ -25,6 +25,9 @@ assert.match(demo,/consentimiento/);
 assert.match(demo,/name="programa"/);
 assert.match(leadScript,/\/api\/public\/solicitudes-demo/);
 assert.match(nginx,/location \^~ \/solicitar-demo\/ /);
+assert.match(nginx,/location \^~ \/privacidad\/ /);
+assert.match(read("./public/privacidad/index.html"),/Ejercicio de derechos|Ejercitar|ejerce|ejercer tus derechos/i);
+assert.match(read("./public/privacidad/solicitud/index.html"),/id="privacy-request-form"/);
 assert.match(nginx,/\/solicitar-demo\//);
 assert.match(home,/solicitar-demo\/\?origen=landing/);
 assert.match(css,/\.demo-form-shell/);
@@ -46,7 +49,7 @@ const posts=[
 for(const [name,html] of [["landing",home],["blog",blog]]){
   assert.match(html,/<html lang="es">/);
   assert.match(html,/<meta name="description"/);
-  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=5">/);
+  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=6">/);
   assert.match(html,/href="\/login"/);
   assert.doesNotMatch(html,/<script[^>]+src="\/assets\//);
 }

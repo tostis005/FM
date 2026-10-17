@@ -28,7 +28,8 @@ jobs:
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --check api/src/publicLeads.js
-          node --test api/src/publicLeads.test.js
+          node --check api/src/privacyRequests.js
+          node --test api/src/publicLeads.test.js api/src/privacyRequests.test.js
       - name: Instalar y compilar web
         working-directory: web
         run: |
@@ -39,6 +40,7 @@ jobs:
           node check-login.mjs
           node generate-seo.mjs
           node check-marketing.mjs
+          node check-public-links.mjs
           npm run build
 
   deploy:
@@ -86,7 +88,7 @@ jobs:
       - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 005_proveedores.sql 006_solicitudes_demo.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 005_proveedores.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
               'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
               < "api/src/migrations/$migration"
@@ -159,9 +161,16 @@ jobs:
                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset" && \
                    curl -fsS http://127.0.0.1:18080/ | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
-                   curl -fsS http://127.0.0.1:18080/marketing.css?v=5 | grep -q ".fm-emblem" && \
+                   curl -fsS http://127.0.0.1:18080/marketing.css?v=6 | grep -q ".fm-emblem" && \
                    curl -fsS http://127.0.0.1:18080/brand-logo.webp?v=4 | head -c 4 | grep -q "RIFF" && \
                    curl -fsS http://127.0.0.1:18080/solicitar-demo/ | grep -q "demo-request-form"; then
+                  # Comprobar absolutamente todas las páginas del sitemap y las integraciones.
+                  routes=$(curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -oE "<loc>[^<]*</loc>" | sed -E "s#<loc>https?://[^/]+([^<]*)</loc>#\1#")
+                  test -n "$routes"
+                  for path in $routes /integraciones/farmatic/ /integraciones/nixfarma/ /integraciones/unycop/ /integraciones/bitfarma/ /integraciones/farmanager/ /privacidad/ /privacidad/solicitud/; do
+                    status=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "http://127.0.0.1:18080$path" || true)
+                    if [ "$status" != 200 ]; then echo "::error::Enlace público roto: $path (HTTP $status)"; exit 1; fi
+                  done
                   exit 0
                 fi
               fi

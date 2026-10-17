@@ -84,6 +84,7 @@ export function buildAnalysis(tables,filters={},asOf=new Date()){
   ventas:round(sum(sales,"importeNeto")),unidades:sum(sales,"unidades"),
   compras:round(sum(purchases,"total")),proveedores:supplierRows.length,
   articulosVendidos:new Set(sales.filter(v=>v.unidades>0).map(v=>v.cn)).size,
+  articulosComprados:new Set(purchases.filter(v=>v.unidades>0).map(v=>v.cn)).size,
   stock:round(sum(stockRows,"value")),sobrestock:round(sum(stockRows,"excessValue")),
   stockSinRotacion:stockRows.filter(r=>r.sold===0&&r.units>0).length,
   roturas:stockRows.filter(r=>r.zero).length,

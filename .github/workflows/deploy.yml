@@ -154,10 +154,10 @@ jobs:
                 if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected && \
                    curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "Farmetrica" && \
                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset" && \
-                   curl -fsS http://127.0.0.1:18080/ | grep -q 'class="fm-emblem"' && \
-                   curl -fsS http://127.0.0.1:18080/login | grep -q 'class="fm-emblem"' && \
-                   curl -fsS http://127.0.0.1:18080/marketing.css?v=3 | grep -q '.fm-emblem' && \
-                   curl -fsS http://127.0.0.1:18080/favicon.svg?v=3 | grep -q '<svg'; then
+                   curl -fsS http://127.0.0.1:18080/ | grep -q "class=\"fm-emblem\""  && \
+                   curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
+                   curl -fsS http://127.0.0.1:18080/marketing.css?v=3 | grep -q ".fm-emblem" && \
+                   curl -fsS http://127.0.0.1:18080/favicon.svg?v=3 | grep -q "<svg"; then
                   exit 0
                 fi
               fi

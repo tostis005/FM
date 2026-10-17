@@ -13,11 +13,15 @@ const favicon=read("./public/favicon.svg");
 assert.match(emblem,/<svg/);
 assert.match(emblem,/<path/);
 assert.match(favicon,/Farmetrica/);
-assert.match(css,/brand-symbol\.svg/);
+assert.match(css,/\.fm-emblem/);
 assert.match(nginx,/location = \/brand-symbol\.svg/);
-assert.match(login,/brand-symbol\.svg/);
+assert.match(login,/<svg class="fm-emblem"/);
 assert.doesNotMatch(home,/✳/,"La portada no debe mostrar el isotipo antiguo");
 assert.doesNotMatch(login,/✳/,"El acceso no debe mostrar el isotipo antiguo");
+assert.match(home,/<svg class="fm-emblem"/,"La cabecera principal dibuja el nuevo logo");
+assert.match(blog,/<svg class="fm-emblem"/,"El blog dibuja el nuevo logo");
+assert.doesNotMatch(css,/mask:url\(\/"brand-symbol/,"No se debe depender de máscaras CSS");
+
 
 const posts=[
   "presentamos-farmetrica",
@@ -27,7 +31,7 @@ const posts=[
 for(const [name,html] of [["landing",home],["blog",blog]]){
   assert.match(html,/<html lang="es">/);
   assert.match(html,/<meta name="description"/);
-  assert.match(html,/<link rel="stylesheet" href="\/marketing.css">/);
+  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=3">/);
   assert.match(html,/href="\/login"/);
   assert.doesNotMatch(html,/<script[^>]+src="\/assets\//);
 }

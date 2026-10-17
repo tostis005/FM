@@ -1,20 +1,16 @@
-name: Build and deploy Farmetrica
+name: Build and deploy Farmetrica SaaS
 
 on:
   push:
-    branches:
-      - main
-      - preview/farmetrica-v1
-    paths:
-      - "web/**"
-      - ".github/workflows/deploy.yml"
+    branches: [main, preview/farmetrica-v1]
+    paths: ["web/**", "api/**", "deploy/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: farmetrica-web-${{ github.ref }}
+  group: farmawao-api-production
   cancel-in-progress: false
 
 jobs:
@@ -26,10 +22,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Comprobar instalacion y compilacion
+      - name: Validar API
+        run: |
+          node --check api/src/server.js
+          node --check api/src/accesos.js
+          node --check api/src/tenant.js
+      - name: Instalar y compilar web
         working-directory: web
         run: |
           npm install --no-audit --no-fund
+          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
+          node check-login.mjs
           node check-marketing.mjs
           npm run build
 
@@ -37,7 +40,7 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
       VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
@@ -48,8 +51,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY" || { echo "::error::Faltan VPS_HOST, VPS_USER o VPS_SSH_KEY"; exit 1; }
-          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || exit 1
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
@@ -57,52 +60,95 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
           test -s ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-      - name: Comprobar permisos de destino
+
+      - name: Verificaciones previas sin modificar datos
         run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'test -d /opt/farmawao/web && test -w /opt/farmawao/web && cd /opt/farmawao && docker compose config --quiet && echo DESTINO_OK'
-      - name: Preparar maestro de farmacias PostgreSQL (sin borrar datos)
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            test -f compose.yaml && test -d api && test -d web && test -f .env
+            test -w api && test -w web
+            docker compose config --quiet
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+              -c "SELECT count(*) FROM public.farmacias WHERE id BETWEEN 1 AND 5;" | grep -qx 5
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+              -c "SELECT CASE WHEN EXISTS(
+                SELECT 1 FROM information_schema.columns WHERE table_schema IN ('\''farmatic'\'','\''ampedia'\'')
+                AND table_name='\''lineaventa'\'' AND column_name='\''farmacia_origen'\''
+              ) THEN 1 ELSE 0 END;" | grep -qx 1
+          '
+
+      - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
-            < api/src/migrations/001_farmacias.sql
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -A -t -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FROM public.farmacias WHERE id BETWEEN 1 AND 5;"' \
-            | grep -qx 5
-      - name: Subir codigo React (sin tocar Postgres)
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql; do
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
+              < "api/src/migrations/$migration"
+          done
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+              -c "SELECT count(*) FROM farmetrica.superadministradores WHERE email='\''jose.fraga@gmail.com'\'';" | grep -qx 1
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+              -c "SELECT count(*) FROM farmetrica.cliente_modulos WHERE cliente_slug='\''ampedia'\'' AND habilitado AND modulo_clave='\''promociones'\'';" | grep -qx 1
+          '
+
+      - name: Renombrar farmatic a ampedia de forma transaccional
         run: |
           set -euo pipefail
+          state=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+              -c "SELECT CASE WHEN to_regclass('\''ampedia.lineaventa'\'') IS NOT NULL AND
+                          EXISTS (SELECT 1 FROM farmetrica.clientes WHERE slug='\''ampedia'\'' AND esquema_datos='\''ampedia'\'')
+                      THEN '\''ALREADY'\'' WHEN to_regclass('\''farmatic.lineaventa'\'') IS NOT NULL
+                          AND to_regclass('\''ampedia.lineaventa'\'') IS NULL THEN '\''RENAME'\'' ELSE '\''BLOCK'\'' END;"
+          ')
+          if [ "$state" = "RENAME" ]; then
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+              < api/src/migrations/004_ampedia_cutover_MANUAL.sql
+          elif [ "$state" != "ALREADY" ]; then
+            echo "::error::Estado inesperado de los esquemas. No se altera la base de datos."
+            exit 1
+          fi
+
+      - name: Actualizar API y web en el VPS
+        run: |
+          set -euo pipefail
+          tar -czf - -C api . | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && tar -xzf - -C api'
           tar -czf - -C web --exclude=node_modules --exclude=dist . | \
             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'set -eu
-             STAGING=$(mktemp -d)
-             trap "rm -rf \"$STAGING\"" EXIT
-             tar -xzf - -C "$STAGING"
-             cp -r "$STAGING"/. /opt/farmawao/web/'
-      - name: Reconstruir solo contenedor web
+            'cd /opt/farmawao && tar -xzf - -C web'
+          scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            deploy/compose.farmacias.yml "$VPS_USER@$VPS_HOST:/opt/farmawao/compose.farmacias.yml"
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
+            docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api web
+          '
+
+      - name: Comprobar API, PostgreSQL y rutas web
         run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && if test -f compose.farmacias.yml; then docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps web; else docker compose up -d --build --no-deps web; fi'
-      - name: Comprobar respuesta en VPS
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'for i in $(seq 1 20); do
-               status=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/ || true)
-               blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/ || true)
-               post=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/presentamos-farmetrica/ || true)
-               css=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/marketing.css || true)
-               favicon=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/favicon.svg || true)
-               login=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/login || true)
-               private=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/index.html || true)
-               panel=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/promociones || true)
-               if [ "$status" = "200" ] && [ "$blog" = "200" ] && [ "$post" = "200" ] && [ "$css" = "200" ] && [ "$favicon" = "200" ] && [ "$login" = "200" ] && [ "$private" = "302" ] && [ "$panel" = "302" ]; then
-                 if curl -fsS -D - -o /dev/null http://127.0.0.1:18080/login | tr -d "\r" | grep -Eqi "^content-type: text/html([;[:space:]]|$)" && \
-                    curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a Farmetrica" && \
-                    curl -fsS http://127.0.0.1:18080/ | grep -q "Cada promoción cuenta" && \
-                    curl -fsS http://127.0.0.1:18080/blog/ | grep -q "Buenas ideas"; then
-                   exit 0
-                 fi
-               fi
-               sleep 3
-             done
-             echo "Landing, blog, login o acceso privado no responden correctamente"
-             exit 1'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+              -c "SELECT esquema_datos FROM farmetrica.clientes WHERE slug='\''ampedia'\'';" | grep -qx ampedia
+            for i in $(seq 1 30); do
+              api=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/api/health/database || true)
+              web=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/ || true)
+              login=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/login || true)
+              panel=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/promociones || true)
+              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ]; then
+                if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected; then
+                  exit 0
+                fi
+              fi
+              sleep 3
+            done
+            echo "Falló la comprobación posterior del despliegue"
+            exit 1
+          '

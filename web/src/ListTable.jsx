@@ -52,7 +52,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
                 value={Array.isArray(filters[col.key])?filters[col.key]:[]}
                 onChange={next=>changeFilter(col.key,next)}/>:
               <input className="smart-column-filter" type="search" value={filters[col.key]||""}
-                aria-label={"Buscar en "+col.label} placeholder="Buscar…" title={"Buscar en "+col.label}
+                aria-label={"Buscar en "+col.label} placeholder={"Filtrar "+col.label.toLowerCase()} title={"Buscar en "+col.label}
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
           </th>)}</tr>
         </thead>

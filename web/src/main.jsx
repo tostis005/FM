@@ -282,6 +282,21 @@ function App(){
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
+ // Un menú móvil largo debe desplazarse sin mover la página de fondo.
+ useEffect(()=>{
+   if(!mobileMenu)return;
+   const previous=document.body.style.overflow;
+   document.body.style.overflow="hidden";
+   const close=e=>{if(e.key==="Escape")setMobileMenu(false);};
+   const onResize=()=>{if(window.innerWidth>790)setMobileMenu(false);};
+   window.addEventListener("keydown",close);
+   window.addEventListener("resize",onResize);
+   return()=>{
+     document.body.style.overflow=previous;
+     window.removeEventListener("keydown",close);
+     window.removeEventListener("resize",onResize);
+   };
+ },[mobileMenu]);
  useEffect(()=>{
    const key="farmawao-oct2026-seed-v1";
    if(localStorage.getItem(key))return;
@@ -666,14 +681,14 @@ function App(){
  },[tenantContext,page,allowed]);
  if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError||"Preparando tu espacio de trabajo…"}</main></div>;
  return <div className="app-shell">
-  <aside className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
+  <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark" aria-hidden="true">✳</span><span>Farmetrica</span></button>
-   <nav className="side-nav">{visibleNav.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
+   <nav className="side-nav" aria-label="Módulos">{visibleNav.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
-  {mobileMenu&&<button className="mobile-scrim" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
+  {mobileMenu&&<button className="mobile-scrim" type="button" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
    <header className="topbar">
-    <button className="mobile-toggle icon-btn" onClick={()=>setMobileMenu(true)} aria-label="Abrir menú"><LayoutDashboard size={20}/></button>
+    <button className="mobile-toggle icon-btn" type="button" aria-controls="farmetrica-sidebar" aria-expanded={mobileMenu} onClick={()=>setMobileMenu(v=>!v)} aria-label={mobileMenu?"Cerrar menú":"Abrir menú"><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
     <div className="topbar-right">{tenantContext.clients.length>1&&<select className="fm-client-selector" aria-label="Cambiar de cliente" value={tenantContext.client.slug} onChange={e=>activateClient(e.target.value)}>{tenantContext.clients.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select>}<button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
        <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="superadministrador"?"Superadministrador":tenantContext.role==="administrador"?"Administrador de cliente":"Usuario autorizado"}</small></span>

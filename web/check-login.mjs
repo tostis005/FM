@@ -9,4 +9,12 @@ new Script(script, { filename: "login.html:inline" });
 assert.match(page, /type="password"/);
 assert.match(script, /\/api\/auth\/local/);
 assert.doesNotMatch(page, /TEMP_ADMIN_PASSWORD_HASH|SESSION_SECRET/);
+const indexPage=readFileSync(new URL("./index.html", import.meta.url),"utf8");
+const appSource=readFileSync(new URL("./src/main.jsx", import.meta.url),"utf8");
+for(const [name,source] of [["login",page],["index",indexPage],["app",appSource]]){
+  assert.doesNotMatch(source, /FARMAWAO|FarmaWow|FarmaWao|Farmétrica/,name+" no debe tener marcas anteriores ni tildes");
+  assert.match(source,/Farmetrica/,name+" debe mostrar Farmetrica");
+}
+assert.match(page, /Acceder a Farmetrica/);
+
 console.log("Login HTML y JavaScript: sintaxis y controles básicos correctos");

@@ -186,3 +186,12 @@ for(const slug of promotedPages){
 const seoGenerator=read("./generate-seo.mjs");
 assert.match(seoGenerator,/Compras y proveedores\|Costes y oportunidades/);
 assert.match(seoGenerator,/Mejorar compras y márgenes/);
+
+// Comprobar toda la cobertura orgánica de funciones generales y preguntas de análisis.
+const intentSolutions=["software-analitica-farmacias","comparar-farmacias-red"];
+const intentArticles=["kpis-gestion-farmacia","excel-power-bi-farmacia","calcular-margen-farmacia","rotacion-cobertura-stock-farmacia","analizar-compras-proveedores-farmacia","ia-analisis-datos-farmacia"];
+for(const slug of intentSolutions){assert.ok(solutions.some(x=>x.slug===slug));assert.match(home,new RegExp('href="/soluciones/'+slug+'/"'));assert.ok(nginx.includes('/soluciones/'+slug+'/'));}
+for(const slug of intentArticles){assert.ok(articles.some(x=>x.slug===slug));assert.match(blog,new RegExp('href="/blog/'+slug+'/"'));assert.ok(nginx.includes('/blog/'+slug+'/'));}
+assert.match(home,/Software de análisis para farmacias/);
+assert.match(home,/id="herramientas-analisis"/);
+assert.ok(home.indexOf('/soluciones/ventas-farmacia/')<home.indexOf('/soluciones/gestion-promociones-farmacia/'));

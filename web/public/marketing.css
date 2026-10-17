@@ -333,3 +333,14 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 .demo-consent a{color:#11794f;text-decoration:underline;text-underline-offset:2px}
 @media(max-width:850px){.legal-layout{grid-template-columns:1fr;gap:34px}.legal-aside{position:static;grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.legal-aside{grid-template-columns:1fr}}
+
+/* Navegación editorial por problemas de negocio. */
+.discovery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:32px 0 20px}
+.discovery-link{position:relative;display:flex;flex-direction:column;gap:11px;min-height:165px;padding:25px 44px 25px 24px;background:#fff;border:1px solid #dfece2;border-radius:16px;text-decoration:none;transition:transform .15s,border-color .15s,box-shadow .15s}
+.discovery-link:hover{border-color:#8cba9d;transform:translateY(-2px);box-shadow:0 10px 30px #16503910}
+.discovery-link strong{font:800 16px/1.35 Manrope,sans-serif;color:#173f30}
+.discovery-link span{font-size:13px;line-height:1.7;color:#697f70}
+.discovery-link b{position:absolute;right:21px;top:21px;color:#21845a;font-size:18px}
+.discovery-bottom{font-size:12px;line-height:1.8;color:#64806a;max-width:900px}
+@media(max-width:980px){.discovery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:580px){.discovery-grid{grid-template-columns:1fr}.discovery-link{min-height:120px}}

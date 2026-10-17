@@ -569,3 +569,533 @@ articles.push({
     "/soluciones/business-intelligence-farmacias/"
   ]
 });
+
+
+// Captación orgánica por intención de búsqueda: analítica, redes, KPI, márgenes, stock y herramientas.
+// Todas las fichas explican límites del origen. Promociones es una función subordinada.
+solutions.push(
+{
+  "slug": "software-analitica-farmacias",
+  "category": "Software de análisis de farmacia",
+  "title": "Software de análisis y gestión de datos para farmacias",
+  "description": "Herramienta de analítica para farmacias y redes: ventas, compras, márgenes, stock y proveedores, sin sustituir el programa de gestión.",
+  "hero": "El software de tu farmacia registra operaciones. Farmetrica ayuda a entender el negocio.",
+  "lead": "Si buscas un programa para analizar tu farmacia, conviene distinguir la gestión diaria —ventas en mostrador, recetas o caja— del análisis de su información. Farmetrica se plantea como una capa de inteligencia de negocio sobre los datos autorizados de tu programa actual.",
+  "value": "Una plataforma analítica para identificar oportunidades comerciales, no un TPV ni un sustituto de tu ERP.",
+  "sections": [
+    {
+      "heading": "Qué debería responder una herramienta de análisis de farmacias",
+      "paragraphs": [
+        "La facturación total es un punto de partida, pero no explica qué artículos aportan margen, qué proveedores concentran las compras o cuánto capital permanece inmovilizado en existencias. Una herramienta útil relaciona las operaciones para estudiar decisiones, no solo para repetir informes del programa.",
+        "La visión de Farmetrica agrupa ventas, artículos, proveedores, compras, costes y stock dentro de un modelo común. El conjunto de indicadores depende de que las fuentes de cada cliente estén conectadas, actualizadas y correctamente validadas."
+      ],
+      "points": [
+        "Ventas y evolución por periodo, familia, artículo y farmacia.",
+        "Compras y costes por referencia y proveedor.",
+        "Stock, rotación y cobertura estimada.",
+        "Rentabilidad comercial según los costes disponibles.",
+        "Comparación de farmacias y perfiles de acceso."
+      ]
+    },
+    {
+      "heading": "Analítica y ERP cumplen funciones distintas",
+      "paragraphs": [
+        "Un programa de gestión de farmacia registra dispensaciones, tickets, pedidos y otras operaciones. Farmetrica no pretende reemplazar esas funciones: toma los datos que pueden consultarse legítimamente y los transforma en métricas comparables.",
+        "Esta separación es especialmente valiosa en redes con programas diferentes: se puede diseñar un lenguaje común de artículos, movimientos y fechas, siempre que cada integración respete sus identificadores, permisos y particularidades."
+      ],
+      "points": [
+        "No se exige cambiar de programa para solicitar una evaluación.",
+        "Las integraciones se prueban por versión e instalación.",
+        "Un mismo nombre de indicador requiere las mismas reglas de cálculo.",
+        "Los permisos determinan qué farmacias puede consultar cada usuario."
+      ]
+    },
+    {
+      "heading": "Cómo evaluar si te conviene",
+      "paragraphs": [
+        "Antes de comprar software, enumera tres decisiones que hoy tomas con información incompleta. Por ejemplo: a qué proveedor comprar, qué producto reponer o qué farmacia requiere revisar su surtido. Comprueba después que las fuentes contienen los datos para contestarlas.",
+        "Solicita una prueba de conciliación con movimientos reales: suma de ventas por periodo, devoluciones, correspondencia de artículos, costes con descuentos y existencias en una fecha conocida. Solo entonces podrás evaluar si el cuadro de mando responde a tu necesidad."
+      ]
+    },
+    {
+      "heading": "De una farmacia a varias",
+      "paragraphs": [
+        "Un responsable puede necesitar revisar un artículo concreto; la dirección de una red puede querer comparar establecimientos, periodos o proveedores. El modelo analítico debe permitir ambas perspectivas sin mezclar permisos ni atribuir datos a la farmacia equivocada.",
+        "Las campañas comerciales son un módulo posible del conjunto, junto a las áreas principales de ventas, compras, inventario, proveedores y rentabilidad. No definen por sí solas el alcance de la plataforma."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Farmetrica es un software de gestión de farmacia?",
+      "Es una plataforma web de análisis e inteligencia comercial. No reemplaza la facturación, dispensación, caja ni demás funciones del software de gestión."
+    ],
+    [
+      "¿Me sirve si uso Farmatic, Nixfarma o Unycop?",
+      "Existe un origen de ventas de Farmatic conectado en un entorno. Los demás sistemas requieren comprobar la instalación, los permisos y el acceso a sus datos antes de confirmar compatibilidad."
+    ],
+    [
+      "¿Necesito todos los módulos para empezar?",
+      "No. Puede empezarse por las fuentes e indicadores que se puedan validar; la cobertura del resto se amplía cuando exista información suficiente."
+    ],
+    [
+      "¿Puedo usarla para varias farmacias?",
+      "La plataforma contempla clientes, farmacias, roles y comparación por establecimiento, con la cobertura dependiente de las conexiones habilitadas."
+    ]
+  ],
+  "related": [
+    "/soluciones/business-intelligence-farmacias/",
+    "/soluciones/cuadro-mando-farmacias/",
+    "/integraciones/",
+    "/blog/kpis-gestion-farmacia/"
+  ]
+},
+{
+  "slug": "comparar-farmacias-red",
+  "category": "Análisis de varias farmacias",
+  "title": "Comparar ventas, stock y rentabilidad entre varias farmacias",
+  "description": "Cómo analizar una red de farmacias por centro: ventas, surtido, compras, proveedores, stock y márgenes con criterios homogéneos.",
+  "hero": "Cada farmacia es distinta. Compara con el mismo criterio.",
+  "lead": "Gestionar dos o cincuenta farmacias exige algo más que sumar facturación. La comparación útil separa el efecto del tamaño del establecimiento, las familias de producto, los costes de compra y la disponibilidad de stock.",
+  "value": "Consolidación comercial con desglose por farmacia y permisos diferenciados.",
+  "sections": [
+    {
+      "heading": "Una visión consolidada no elimina el detalle",
+      "paragraphs": [
+        "Un total de red puede crecer aunque algunas farmacias pierdan unidades en determinadas categorías. Conviene mostrar el consolidado y permitir el desglose por establecimiento, periodo, proveedor o familia, sin que una media esconda situaciones particulares.",
+        "En Farmetrica se han definido ámbitos de farmacia, perfiles de usuario y navegación por módulos. Para comparar resultados reales, cada centro necesita orígenes conectados y reglas de conciliación coherentes."
+      ]
+    },
+    {
+      "heading": "Cuatro comparaciones que aportan contexto",
+      "paragraphs": [
+        "Ventas: compara periodos equivalentes y analiza unidades además de importes. Compras: observa precio unitario y concentración por proveedor. Stock: relaciona existencias con ritmo de salida. Rentabilidad: interpreta el margen solo cuando el coste se ha validado.",
+        "No conviene convertir estas métricas en un ranking sin matices. Diferencias de tamaño, surtido, localización o estacionalidad pueden explicar por qué dos farmacias aparentemente similares evolucionan de manera distinta."
+      ],
+      "points": [
+        "Evolución de ventas y unidades por farmacia.",
+        "Costes de compra por proveedor y presentación.",
+        "Cobertura estimada y referencias sin movimiento.",
+        "Aportación comercial por artículo y familia.",
+        "Acceso segmentado a los establecimientos autorizados."
+      ]
+    },
+    {
+      "heading": "Datos de distintos programas, definiciones compartidas",
+      "paragraphs": [
+        "Una red puede trabajar con sistemas y versiones diferentes. El nombre del ERP es menos importante para el análisis que disponer de fechas, códigos de artículo, cantidades, precios y ámbito de farmacia fiables.",
+        "En España es habitual el código nacional; otros orígenes utilizan EAN/GTIN u otras referencias. La correspondencia debe validarse, sin asumir que dos códigos distintos representan siempre el mismo producto."
+      ]
+    },
+    {
+      "heading": "Cómo preparar la primera comparación",
+      "paragraphs": [
+        "Selecciona un periodo cerrado y dos farmacias con acceso a ventas, compras o existencias. Verifica primero los totales por separado. Define después las familias y los criterios de coste antes de mostrar diferencias entre centros.",
+        "Empezar por un conjunto reducido evita construir un cuadro de mando visualmente atractivo pero con sumas inconsistentes. Con datos verificados, las preguntas de gestión son mucho más concretas."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Puedo comparar farmacias con programas de gestión diferentes?",
+      "El modelo está diseñado para trabajar con orígenes distintos, pero cada instalación exige una integración y normalización previa."
+    ],
+    [
+      "¿Cómo se evitan comparaciones injustas entre farmacias?",
+      "Con periodos equivalentes, indicadores por unidad o familia cuando procede y contexto sobre las diferencias de surtido y tamaño."
+    ],
+    [
+      "¿Pueden los usuarios consultar solo sus farmacias?",
+      "La plataforma contempla ámbitos y roles; el acceso real depende de los permisos configurados para cada usuario."
+    ],
+    [
+      "¿Hay que tener stock y costes de todos los centros?",
+      "Para comparar stock y márgenes sí deben estar disponibles y validados los campos necesarios; de lo contrario solo deben mostrarse las métricas conectadas."
+    ]
+  ],
+  "related": [
+    "/soluciones/grupos-de-farmacias/",
+    "/soluciones/cuadro-mando-farmacias/",
+    "/soluciones/analisis-proveedores-farmacia/",
+    "/blog/kpis-gestion-farmacia/"
+  ]
+}
+);
+articles.push(
+{
+  "slug": "kpis-gestion-farmacia",
+  "category": "Indicadores de gestión",
+  "title": "KPIs de farmacia: qué indicadores medir y cómo interpretarlos",
+  "description": "Guía de KPIs para farmacias: ventas, margen, compras, rotación, cobertura de stock y proveedores. Fórmulas, límites y ejemplos.",
+  "hero": "¿Qué indicadores deberías mirar para dirigir mejor una farmacia?",
+  "lead": "Medir mucho no garantiza decidir mejor. Un cuadro de mando útil distingue indicadores de actividad, resultado, capital inmovilizado y eficiencia de compras, y permite comprobar de qué movimientos sale cada cifra.",
+  "value": "Una guía práctica de indicadores; su disponibilidad en Farmetrica depende de las fuentes validadas.",
+  "sections": [
+    {
+      "heading": "1. Ventas: facturación, unidades y comparación de periodos",
+      "paragraphs": [
+        "El importe vendido mide actividad, pero no explica por sí solo el rendimiento de cada referencia. Las unidades, la evolución por familia y la comparación interanual ayudan a separar cambios de volumen y cambios de precio.",
+        "Antes de calcular crecimientos, fija la misma base temporal y el mismo tratamiento de devoluciones. Compara periodos completos y no interpretes un mes parcial como si hubiese terminado."
+      ],
+      "points": [
+        "Ventas netas por periodo y farmacia.",
+        "Unidades netas vendidas.",
+        "Variación porcentual respecto a un periodo equivalente.",
+        "Concentración de ventas por artículo y familia."
+      ]
+    },
+    {
+      "heading": "2. Margen: no confundas facturación con rentabilidad",
+      "paragraphs": [
+        "El margen bruto en importe puede estimarse como ventas netas sin impuestos menos coste de mercancía vendida, siempre que el coste corresponda a esas unidades y se traten descuentos y devoluciones de forma consistente.",
+        "El porcentaje de margen bruto sobre ventas se calcula dividiendo ese margen por las ventas netas sin impuestos y multiplicando por cien. No equivale al beneficio neto de la farmacia: quedan gastos de personal, alquiler, financiación y otros costes."
+      ]
+    },
+    {
+      "heading": "3. Inventario: cobertura y rotación",
+      "paragraphs": [
+        "La cobertura estimada puede expresarse como unidades en stock divididas por la venta media diaria en unidades. Si una referencia tiene 60 unidades y vende 2 por día, su cobertura sería de aproximadamente 30 días; esa cifra no contempla estacionalidad ni faltas de suministro.",
+        "La rotación necesita un periodo definido y un criterio coherente para valorar las existencias. Un producto de salida lenta puede inmovilizar capital sin que eso signifique que deba retirarse automáticamente."
+      ]
+    },
+    {
+      "heading": "4. Compras y proveedores: interpreta el coste",
+      "paragraphs": [
+        "Comparar únicamente el precio de tarifa puede ocultar descuentos, rappels y condiciones de compra. Prioriza el coste unitario validado y separa proveedores, fechas y presentaciones comparables.",
+        "Un indicador útil es la variación del precio de compra de la misma referencia entre periodos. Complementa ese dato con concentración de proveedores y volumen de unidades, evitando extrapolar ahorros antes de comprobar condiciones reales."
+      ]
+    },
+    {
+      "heading": "5. Del indicador a una decisión verificable",
+      "paragraphs": [
+        "Selecciona pocos indicadores, asigna un responsable de revisión y define qué diferencia consideras relevante. Por ejemplo, investigar productos con cobertura elevada, cambios bruscos de coste o caída sostenida de unidades.",
+        "Farmetrica persigue reunir estos análisis en una visión comercial común. Solo deben considerarse datos operativos los que lleguen de fuentes realmente conectadas y contrastadas."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Cuáles son los KPI más importantes en farmacia?",
+      "Dependen de la decisión: ventas y unidades para actividad, margen bruto para contribución comercial, cobertura para stock, coste unitario para compras y comparación por farmacia para redes."
+    ],
+    [
+      "¿El margen bruto es el beneficio de la farmacia?",
+      "No. El margen bruto no descuenta todos los gastos y no debe presentarse como beneficio neto."
+    ],
+    [
+      "¿Puedo medir estos indicadores en Excel?",
+      "Sí, si los datos y las reglas son correctos. Una plataforma analítica puede facilitar la consistencia entre periodos, establecimientos y fuentes."
+    ]
+  ],
+  "related": [
+    "/soluciones/cuadro-mando-farmacias/",
+    "/soluciones/rentabilidad-farmacia/",
+    "/soluciones/control-stock-farmacia/",
+    "/blog/calcular-margen-farmacia/"
+  ]
+},
+{
+  "slug": "excel-power-bi-farmacia",
+  "category": "Digitalización y BI",
+  "title": "Excel, Power BI o plataforma especializada: cómo analizar tu farmacia",
+  "description": "Compara Excel, Power BI y software especializado para analizar ventas, compras, stock, márgenes y varias farmacias. Ventajas y límites.",
+  "hero": "Excel, Power BI o analítica para farmacias: ¿qué necesitas realmente?",
+  "lead": "No todos los problemas se resuelven comprando otra herramienta. La diferencia importante está en cómo obtienes los datos, quién mantiene las reglas, qué preguntas haces y cuánto tiempo empleas en cada actualización.",
+  "value": "Comparación orientativa de herramientas, sin afirmar una integración automática ni sustituir tu ERP.",
+  "sections": [
+    {
+      "heading": "Cuándo Excel es suficiente",
+      "paragraphs": [
+        "Una hoja de cálculo puede resolver una revisión puntual de ventas, un presupuesto o un análisis de costes con pocas referencias. Es flexible, conocida y permite hacer pruebas sin desarrollar una integración completa.",
+        "Sus límites aparecen cuando se copian ficheros con frecuencia, cambian las columnas, cada farmacia utiliza fórmulas distintas o varias personas necesitan consultar resultados simultáneamente. La disciplina de versiones y validaciones se vuelve esencial."
+      ]
+    },
+    {
+      "heading": "Qué aporta Power BI y qué no resuelve solo",
+      "paragraphs": [
+        "Power BI permite construir modelos, gráficos y filtros sobre distintas fuentes. Puede ser adecuado cuando la organización ya dispone de un equipo que modela, mantiene y gobierna los datos.",
+        "Por sí solo no determina qué es una venta neta, cómo comparar un CN, qué coste debe utilizarse ni qué permisos aplicar a cada farmacia. La conexión, actualización, licencias y modelo de datos siguen siendo decisiones del proyecto, no una propiedad automática del gráfico."
+      ]
+    },
+    {
+      "heading": "Qué cambia con una plataforma orientada a farmacias",
+      "paragraphs": [
+        "Una solución especializada puede concentrarse en problemas recurrentes: compras por proveedor, evolución de artículos, cobertura estimada, márgenes, red de farmacias y roles. La principal ventaja potencial es partir de un modelo funcional más cercano al negocio.",
+        "Farmetrica está diseñada con esa filosofía. No sustituye al programa de gestión y no promete que cada ERP tenga ya un conector listo. Los módulos se alimentan según las fuentes verificadas para cada cliente."
+      ]
+    },
+    {
+      "heading": "Cinco preguntas antes de elegir",
+      "paragraphs": [
+        "Pregunta quién se encarga de mantener la extracción, cómo se contrastan los resultados con el software original, si podrás ver el detalle detrás de los indicadores y qué ocurre cuando cambia el esquema del ERP.",
+        "También importa el coste de uso continuado: horas de preparación en Excel, mantenimiento de un modelo Power BI o configuración de una plataforma especializada. Pide una prueba que compare resultados reales, no solo pantallas."
+      ],
+      "points": [
+        "¿Qué datos están disponibles y con qué permisos?",
+        "¿Cuándo se actualizó cada fuente?",
+        "¿Son comparables los identificadores de producto?",
+        "¿Qué verá cada usuario de la red?",
+        "¿Quién corrige una discrepancia y en cuánto tiempo?"
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Puede Excel servir para gestionar los datos de una farmacia?",
+      "Sí, sobre todo para análisis puntuales. La dificultad crece con varias fuentes, periodos y usuarios."
+    ],
+    [
+      "¿Farmetrica sustituye a Power BI?",
+      "Son enfoques diferentes. Farmetrica ofrece una aplicación especializada en análisis farmacéutico; Power BI es una herramienta general de inteligencia de negocio."
+    ],
+    [
+      "¿Con una plataforma especializada ya no hay que validar los datos?",
+      "No. Cualquier producto analítico requiere comprobar origen, permisos, definiciones y calidad de los datos."
+    ]
+  ],
+  "related": [
+    "/soluciones/software-analitica-farmacias/",
+    "/soluciones/business-intelligence-farmacias/",
+    "/blog/kpis-gestion-farmacia/"
+  ]
+},
+{
+  "slug": "calcular-margen-farmacia",
+  "category": "Rentabilidad",
+  "title": "Cómo calcular el margen comercial y la rentabilidad de una farmacia",
+  "description": "Aprende a calcular el margen bruto de farmacia por artículo, distinguirlo del beneficio y revisar costes, impuestos y descuentos.",
+  "hero": "Vender más no siempre significa ganar más.",
+  "lead": "El margen es una de las cifras más útiles —y más fáciles de interpretar mal— en una farmacia. Depende del precio de venta neto, el coste de las unidades vendidas y las reglas con las que se registran descuentos y devoluciones.",
+  "value": "Ejemplos educativos de margen comercial; no equivalen a resultados contables ni a una medición automática del producto.",
+  "sections": [
+    {
+      "heading": "La fórmula del margen bruto",
+      "paragraphs": [
+        "Una aproximación al margen bruto comercial es: ventas netas sin impuestos menos coste de las mercancías vendidas. El margen porcentual sobre ventas se obtiene dividiendo esa diferencia entre las ventas netas sin impuestos.",
+        "Por ejemplo, si un artículo genera 100 euros netos de ventas y 72 euros de coste validado, su margen bruto sería de 28 euros y su margen sobre ventas del 28 %. El cálculo deja fuera otros gastos del negocio."
+      ]
+    },
+    {
+      "heading": "Margen y recargo no son lo mismo",
+      "paragraphs": [
+        "El recargo se calcula sobre el coste; el margen, sobre la venta. Con un coste de 72 euros y unas ventas de 100 euros, el recargo sería aproximadamente 38,9 %, mientras que el margen sobre ventas sería 28 %.",
+        "Esta diferencia explica por qué dos informes pueden mostrar porcentajes distintos aun utilizando importes compatibles. Antes de comparar farmacias, acuerda el denominador de cada KPI."
+      ]
+    },
+    {
+      "heading": "Qué errores distorsionan la rentabilidad",
+      "paragraphs": [
+        "El IVA, las devoluciones, los descuentos por línea, las bonificaciones y los rappels pueden alterar los resultados si no se tratan del mismo modo. También importa si el coste corresponde al producto vendido y al periodo estudiado.",
+        "Cuando falta el dato de coste, no es correcto asignarle automáticamente un margen de cero. Lo adecuado es indicar que el indicador no está disponible para esa referencia."
+      ]
+    },
+    {
+      "heading": "Del cálculo individual a la gestión del surtido",
+      "paragraphs": [
+        "Un buen análisis combina margen, unidades y rotación. Un producto con margen porcentual alto y pocas ventas puede contribuir menos que otro con margen menor y más volumen. El stock añade otra dimensión: cuánto capital queda inmovilizado.",
+        "Farmetrica aspira a permitir esta lectura conjunta a medida que se conectan y verifican ventas, compras y existencias. La decisión final debe incorporar criterios profesionales y comerciales, no solo un porcentaje."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Es igual margen bruto que beneficio neto?",
+      "No. El beneficio neto descuenta además otros costes y gastos de la actividad."
+    ],
+    [
+      "¿Qué coste debe utilizarse para calcular el margen por artículo?",
+      "Un coste consistente con las unidades vendidas y las reglas contables y comerciales acordadas. No basta con tomar siempre la última tarifa."
+    ],
+    [
+      "¿Qué hago si un artículo no tiene coste?",
+      "Marcar el cálculo como no disponible o pendiente de validación y evitar mostrarlo como margen real."
+    ]
+  ],
+  "related": [
+    "/soluciones/rentabilidad-farmacia/",
+    "/soluciones/analisis-compras-farmacia/",
+    "/blog/kpis-gestion-farmacia/"
+  ]
+},
+{
+  "slug": "rotacion-cobertura-stock-farmacia",
+  "category": "Stock e inventario",
+  "title": "Rotación y cobertura del stock de farmacia: fórmulas y errores",
+  "description": "Cómo medir la rotación, calcular días de cobertura y detectar stock inmovilizado en farmacia sin confundir falta de ventas con exceso de inventario.",
+  "hero": "Un inventario elevado no cuenta toda la historia.",
+  "lead": "El stock se debe interpretar junto con la salida de productos, la estacionalidad y el abastecimiento. Una cobertura alta puede señalar capital inmovilizado; una cobertura demasiado baja puede aumentar el riesgo de roturas.",
+  "value": "Análisis de existencias y demanda basado en datos de origen validados, no en recomendaciones automáticas de pedido.",
+  "sections": [
+    {
+      "heading": "Qué es la cobertura de stock",
+      "paragraphs": [
+        "Los días de cobertura se pueden estimar dividiendo las unidades disponibles por la venta media diaria de unidades del periodo de referencia. Con 90 unidades y una media de tres unidades diarias, el resultado sería de unos 30 días.",
+        "Ese cálculo es una aproximación. No garantiza que el consumo futuro sea igual al pasado ni contempla por sí mismo campañas estacionales, plazos de suministro, faltas o productos que no se venden todos los meses."
+      ]
+    },
+    {
+      "heading": "Qué significa rotación de inventario",
+      "paragraphs": [
+        "La rotación expresa cuántas veces se renueva el inventario en un periodo, utilizando habitualmente coste de mercancía vendida e inventario medio valorado. Si se mezclan euros y unidades, o periodos distintos, el indicador pierde sentido.",
+        "Un dato aparentemente bueno puede ocultar agotados frecuentes. Por eso interesa revisar cobertura, salidas y disponibilidad conjuntamente."
+      ]
+    },
+    {
+      "heading": "Identificar artículos de salida lenta",
+      "paragraphs": [
+        "Los artículos con existencias positivas y pocas ventas merecen revisión, pero no todos representan un error de compra. La estacionalidad, la función asistencial de la referencia y el tiempo de reposición pueden justificar mantener ciertas unidades.",
+        "Un informe debería permitir ordenar referencias por cobertura, último movimiento, valor de existencias y familia, cuando esa información esté disponible. Las decisiones sobre surtido corresponden a responsables autorizados."
+      ]
+    },
+    {
+      "heading": "Cómo transformar el indicador en una revisión útil",
+      "paragraphs": [
+        "Empieza por las referencias con valores extremos, verifica que su stock no incluya errores de inventario y analiza la venta de un periodo representativo. Anota después la decisión y revísala en el siguiente ciclo.",
+        "Farmetrica plantea reunir el análisis de stock con ventas, compras y proveedores, condicionado a la información conectada. El objetivo es ayudar a priorizar una revisión, no ejecutar pedidos automáticamente sin validación."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Qué es una buena cobertura de stock para una farmacia?",
+      "No existe un número universal: depende del producto, del proveedor, la demanda, la estacionalidad y el nivel de servicio buscado."
+    ],
+    [
+      "¿Rotación alta significa siempre buena gestión?",
+      "No necesariamente. Puede acompañarse de faltas frecuentes y pérdida de ventas."
+    ],
+    [
+      "¿Basta con las ventas para estudiar el inventario?",
+      "No. Hace falta al menos stock fiable y periodos coherentes; para valorar capital inmovilizado también se necesitan costes."
+    ]
+  ],
+  "related": [
+    "/soluciones/control-stock-farmacia/",
+    "/soluciones/reposicion-stock-farmacia/",
+    "/blog/stock-inmovilizado-farmacia/"
+  ]
+},
+{
+  "slug": "analizar-compras-proveedores-farmacia",
+  "category": "Compras y proveedores",
+  "title": "Cómo analizar compras y comparar proveedores de farmacia",
+  "description": "Guía para revisar compras de farmacia, coste unitario de compra, proveedores, descuentos, volúmenes y oportunidades de mejora.",
+  "hero": "Comprar con criterio empieza por entender el coste real.",
+  "lead": "Comparar dos proveedores no consiste únicamente en enfrentar dos listas de precios. Una decisión de compras necesita referencias equivalentes, importes comparables, fechas y condiciones comerciales.",
+  "value": "Evaluación de costes y proveedores con datos coherentes; no una comparación automática de ofertas externas en tiempo real.",
+  "sections": [
+    {
+      "heading": "Empieza por identificar exactamente el mismo artículo",
+      "paragraphs": [
+        "Antes de comparar costes, valida el identificador de la presentación. En España puede ser CN; según el origen o país también puede existir EAN/GTIN u otra referencia. Evita agrupar productos por descripciones parecidas sin revisar tamaño y presentación.",
+        "Una comparación fiable separa proveedor, periodo, unidades, devoluciones y bonificaciones. Si el coste refleja condiciones que no aplican a todos los pedidos, muestra esa limitación."
+      ]
+    },
+    {
+      "heading": "Coste unitario de compra frente a precio de tarifa",
+      "paragraphs": [
+        "El precio unitario de compra (PUC) puede ser más útil que la tarifa cuando se han descontado bonificaciones y ajustes correctamente. Para ello hay que conocer la definición exacta del coste y qué parte de los descuentos se ha imputado.",
+        "No deduzcas un ahorro por cambiar de proveedor solo porque un lote histórico aparece más barato. Revisa si las condiciones siguen vigentes, si la cantidad mínima es comparable y si el artículo es idéntico."
+      ]
+    },
+    {
+      "heading": "Cruza compras y ventas para decidir cantidades",
+      "paragraphs": [
+        "Comprar barato un producto que tarda en salir puede empeorar el capital inmovilizado. Combinar compras, ritmo de ventas y cobertura estimada ayuda a detectar compras concentradas que merecen una revisión.",
+        "Cuando solo están conectadas las ventas, todavía no es posible afirmar cuál es el proveedor óptimo. El análisis necesita los movimientos y costes de compra verificados."
+      ]
+    },
+    {
+      "heading": "Qué mirar en un informe de proveedores",
+      "paragraphs": [
+        "Organiza la compra por proveedor, artículo, periodo y unidades. Añade, cuando existan, variaciones de coste, concentración del gasto, composición de familias y relación con la rotación. Después compara farmacias de la red con criterios iguales.",
+        "Farmetrica agrupa estas preguntas en sus áreas de compras, proveedores y rentabilidad; la disponibilidad práctica depende de cada integración y de la calidad de sus datos."
+      ],
+      "points": [
+        "Coste unitario validado por referencia y proveedor.",
+        "Volumen comprado y evolución temporal.",
+        "Concentración de compras por proveedor.",
+        "Relación entre compras, ventas y stock.",
+        "Comparación entre farmacias con el mismo criterio."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Farmetrica compara tarifas actualizadas de todos los mayoristas?",
+      "No se anuncia un comparador universal de precios externos. El análisis parte de compras y costes obtenidos de los orígenes conectados."
+    ],
+    [
+      "¿Qué es el PUC?",
+      "Es una forma de referirse al precio o coste unitario de compra, cuya definición debe acordarse según descuentos, impuestos y bonificaciones."
+    ],
+    [
+      "¿Cómo puedo encontrar oportunidades de compra?",
+      "Analizando la variación de coste del mismo artículo, la concentración del gasto y la relación entre compra y rotación, siempre con datos comparables."
+    ]
+  ],
+  "related": [
+    "/soluciones/analisis-compras-farmacia/",
+    "/soluciones/analisis-proveedores-farmacia/",
+    "/blog/compras-inteligentes-farmacia/"
+  ]
+},
+{
+  "slug": "ia-analisis-datos-farmacia",
+  "category": "IA y análisis de datos",
+  "title": "IA para farmacias: preguntas útiles sobre ventas, stock y compras",
+  "description": "Qué puede y qué no debe hacer una IA aplicada a datos de farmacia: preguntas de negocio, fuentes verificadas, permisos y límites de interpretación.",
+  "hero": "La IA solo es útil si puede explicar de dónde vienen las cifras.",
+  "lead": "Preguntar en lenguaje natural por ventas, márgenes o stock resulta atractivo, pero antes de automatizar respuestas hay que asegurarse de que los datos están actualizados, los permisos son correctos y los cálculos son reproducibles.",
+  "value": "Contenido educativo sobre el uso de IA; no implica que el asistente de Farmetrica ya responda todas estas consultas con datos reales.",
+  "sections": [
+    {
+      "heading": "Qué preguntas merecen una respuesta basada en datos",
+      "paragraphs": [
+        "Un gerente puede preguntar qué familias pierden unidades respecto al año anterior, qué artículos tienen cobertura muy alta, dónde ha subido el coste de compra o qué diferencias hay entre farmacias. Estas preguntas necesitan consultas y reglas de negocio concretas.",
+        "Si el asistente no puede acceder a compras o stock, debe indicarlo en lugar de presentar una explicación convincente con cifras inventadas. La calidad de la respuesta empieza por reconocer qué fuentes están disponibles."
+      ]
+    },
+    {
+      "heading": "Qué comprobar antes de usar asistentes con datos de farmacia",
+      "paragraphs": [
+        "Define qué registros puede consultar cada usuario, si existen datos de pacientes y qué información es necesaria para una pregunta comercial. La minimización y la separación de permisos son requisitos básicos.",
+        "Una respuesta útil debería mostrar periodo, filtros, definición del KPI, origen y fecha de actualización. Sin esos elementos, incluso una cifra correcta puede llevar a una decisión equivocada."
+      ]
+    },
+    {
+      "heading": "Análisis descriptivo frente a recomendaciones automáticas",
+      "paragraphs": [
+        "Explicar por qué ha bajado la facturación es distinto de decidir compras, modificar precios o elegir un tratamiento. Una IA puede apoyar el análisis empresarial, pero la acción requiere revisión profesional y las autorizaciones correspondientes.",
+        "La plataforma Farmetrica está concebida como un modelo común de datos comerciales; las funcionalidades de IA deben desarrollarse y validarse sobre ese modelo antes de presentarlas como operativas."
+      ]
+    },
+    {
+      "heading": "Cómo empezar sin depender de una IA",
+      "paragraphs": [
+        "Primero define ventas netas, márgenes, unidades, stock y dimensiones por farmacia. Construye consultas reproducibles y contrasta los datos con el sistema original. Después estudia qué preguntas frecuentes merecen una interfaz conversacional.",
+        "Los cuadros de mando y las tablas fiables seguirán siendo necesarios: permiten verificar respuestas y estudiar el detalle de cada decisión."
+      ]
+    }
+  ],
+  "faq": [
+    [
+      "¿Puede una IA calcular el margen de una farmacia?",
+      "Puede ayudar si dispone de ventas, costes y reglas correctas, pero la validación de los datos y de los cálculos sigue siendo necesaria."
+    ],
+    [
+      "¿Farmetrica ya ofrece todas estas consultas mediante un asistente IA?",
+      "No debe asumirse. Este artículo explica casos de uso y criterios de implantación; la cobertura real depende del desarrollo y de las fuentes conectadas."
+    ],
+    [
+      "¿Se deben cargar datos de pacientes para el análisis comercial?",
+      "No. La analítica comercial descrita aquí debe basarse en la información mínima necesaria y autorizada."
+    ]
+  ],
+  "related": [
+    "/soluciones/business-intelligence-farmacias/",
+    "/soluciones/software-analitica-farmacias/",
+    "/blog/kpis-gestion-farmacia/"
+  ]
+}
+);

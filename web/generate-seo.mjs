@@ -41,7 +41,7 @@ function render(p){
  const sections=p.sections.map((s,i)=>'<section class="seo-detail-section" aria-labelledby="sech-'+i+'"><div class="seo-section-number">'+String(i+1).padStart(2,"0")+'</div><div><h2 id="sech-'+i+'">'+esc(s.heading)+'</h2>'+s.paragraphs.map(t=>'<p>'+esc(t)+'</p>').join('')+(s.points?.length?'<ul class="seo-checklist">'+s.points.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>':"")+'</div></section>').join('');
  const related=(p.related||[]).map(x=>byUrl.get(x)).filter(Boolean);
  const statusNote=p.type==="integration"?(p.slug==="farmatic"?"Origen Farmatic conectado":"Conexión sujeta a validación por instalación"):"Datos y alcance";
- const pendingDataModules=new Set(["analisis-compras-farmacia","rentabilidad-farmacia","control-stock-farmacia","reposicion-stock-farmacia","analisis-proveedores-farmacia","comparativa-genericos-farmacia","rendimiento-articulos-farmacia","business-intelligence-farmacias"]);
+ const pendingDataModules=new Set(["software-analitica-farmacias","comparar-farmacias-red","analisis-compras-farmacia","rentabilidad-farmacia","control-stock-farmacia","reposicion-stock-farmacia","analisis-proveedores-farmacia","comparativa-genericos-farmacia","rendimiento-articulos-farmacia","business-intelligence-farmacias"]);
  const dataNotice=p.type==="solution"&&pendingDataModules.has(p.slug)
   ? "Este análisis requiere fuentes de compras, inventario o costes conectadas, normalizadas y validadas. No se presentan como reales indicadores sin esos datos."
   :p.type==="solution"&&["gestion-promociones-farmacia","grupos-de-farmacias","objetivos-venta-farmacias"].includes(p.slug)
@@ -53,9 +53,9 @@ function render(p){
 function hub(kind){
  const solution=kind==="solution",path=solution?"/soluciones/":"/integraciones/";
  const items=(solution?[
- "ventas-farmacia","analisis-compras-farmacia","control-stock-farmacia","rentabilidad-farmacia",
+ "software-analitica-farmacias","ventas-farmacia","analisis-compras-farmacia","control-stock-farmacia","rentabilidad-farmacia",
  "analisis-proveedores-farmacia","reposicion-stock-farmacia","rendimiento-articulos-farmacia",
- "cuadro-mando-farmacias","grupos-de-farmacias","business-intelligence-farmacias",
+ "cuadro-mando-farmacias","grupos-de-farmacias","comparar-farmacias-red","business-intelligence-farmacias",
  "comparativa-genericos-farmacia","gestion-usuarios-farmacias","seguimiento-ventas-farmacia",
  "gestion-promociones-farmacia","objetivos-venta-farmacias","importar-campanas-excel","reporting-laboratorios"
 ].map(slug=>solutions.find(p=>p.slug===slug)).filter(Boolean):integrations).map(item=>({...item,url:path+item.slug+"/"}));

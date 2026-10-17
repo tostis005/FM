@@ -65,3 +65,62 @@
 @media(max-width:355px){
  .fm-demo-kpis{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Informes conectados por CN, farmacias y proveedores */
+.fm-demo-v2{grid-template-columns:minmax(0,1fr)}
+.fm-demo-v2 .page-header{margin-bottom:0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fm-demo-v2 .fm-demo-tag{font-size:10px;font-weight:700;letter-spacing:0;text-transform:none;padding:6px 10px;background:#f5f7f6;color:#748780;border-color:#e6ede8}
+.fm-demo-v2 .fm-demo-filters{grid-template-columns:repeat(2,minmax(0,1fr)) minmax(130px,.75fr) minmax(170px,1.3fr);align-items:end}
+.fm-demo-v2 .fm-filter-field{display:flex;flex-direction:column;gap:7px;min-width:0;color:#5a736b;font-size:12px;font-weight:650}
+.fm-demo-v2 .fm-filter-field>span{display:block}
+.fm-demo-v2 .fm-filter-field .multi-filter-trigger{width:100%;min-height:40px;height:40px;max-width:100%;border:1px solid #dde8e2;border-radius:10px;background:#fff;padding:0 10px;color:#233e33;font-size:13px}
+.fm-demo-v2 .fm-filter-field .multi-filter-trigger>span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fm-demo-v2 .fm-demo-kpis{grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:12px}
+.fm-demo-v2 .fm-demo-kpi{position:relative;min-width:0;text-align:left;align-items:flex-start;justify-content:center;width:100%;border:1px solid #edf1ee;background:white;font:inherit;cursor:default}
+.fm-demo-v2 .fm-kpi-active{cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
+.fm-demo-v2 .fm-kpi-active:hover,.fm-demo-v2 .fm-kpi-active:focus-visible{background:#f4fbf7;border-color:#9cdab8;transform:translateY(-2px)}
+.fm-demo-v2 .fm-demo-kpi:disabled{opacity:1}
+.fm-demo-v2 .fm-kpi-arrow{position:absolute;right:15px;top:17px;color:#13976b}
+.fm-demo-v2 .fm-demo-graph{min-width:0}
+.fm-demo-v2 .fm-demo-graph .section-heading{padding:5px 0 6px}
+.fm-demo-v2 .fm-demo-chart{height:265px}
+.fm-module-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.fm-module-link{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0;padding:16px;border:1px solid #e5eee8;background:#fff;text-align:left;cursor:pointer;color:#20533b}
+.fm-module-link:hover,.fm-module-link:focus-visible{border-color:#81c8a4;background:#f3faf6}
+.fm-module-link strong{font-size:13px;overflow-wrap:anywhere}
+.fm-module-link svg{flex-shrink:0}
+.fm-demo-v2 .fm-demo-table{min-width:0}
+.fm-demo-v2 .fm-demo-table>.section-heading{padding:5px 0 16px}
+.fm-link-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fm-report-link{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #e3eee8;background:white;border-radius:11px;padding:17px;text-align:left;color:#23513e;cursor:pointer;min-width:0}
+.fm-report-link:hover,.fm-report-link:focus-visible{border-color:#8dceaa;background:#f2fbf6}
+.fm-report-link span{display:grid;gap:4px;min-width:0}
+.fm-report-link strong{font-size:13px}
+.fm-report-link small{color:#82968c;font-size:11px}
+.fm-report-link svg{flex-shrink:0}
+@media(max-width:1020px){
+ .fm-demo-v2 .fm-demo-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-module-links{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:720px){
+ .fm-demo-v2 .fm-demo-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-module-links{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-link-list{grid-template-columns:minmax(0,1fr)}
+ .fm-demo-v2 .fm-demo-chart{height:225px}
+}
+@media(max-width:560px){
+ .fm-demo-v2 .fm-demo-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-demo-v2 .fm-demo-search{grid-column:1/-1}
+ .fm-demo-v2 .fm-filter-field{min-width:0}
+ .fm-demo-v2 .fm-demo-graph .section-heading{padding:3px 0}
+ .fm-demo-v2 .fm-demo-kpi{padding:14px!important}
+ .fm-demo-v2 .fm-demo-kpi strong{max-width:100%;overflow-wrap:anywhere}
+ .fm-demo-v2 .fm-kpi-arrow{right:8px;top:10px;width:14px}
+ .fm-module-link{padding:14px}
+}
+@media(max-width:375px){
+ .fm-demo-v2 .fm-demo-filters{grid-template-columns:minmax(0,1fr)}
+ .fm-demo-v2 .fm-demo-search{grid-column:auto}
+ .fm-demo-v2 .fm-demo-kpis,.fm-module-links{grid-template-columns:minmax(0,1fr)}
+}

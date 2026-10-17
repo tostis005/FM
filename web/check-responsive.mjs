@@ -82,6 +82,19 @@ try{
           !result.table.some(t=>t.content>t.viewport)){
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");
        }
+       if(path==="dashboard"&&viewport.width===375){
+         const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");
+         const before=await firstMetric.textContent();
+         await page.locator(".fm-filter-field .multi-filter-trigger").first().click();
+         const popup=page.locator(".multi-filter-popover");
+         await popup.getByText("Abadía",{exact:true}).click();
+         await popup.getByText("Europa",{exact:true}).click();
+         await popup.getByRole("button",{name:"Listo"}).click();
+         const after=await firstMetric.textContent();
+         if(before===after)throw Error("La selección de dos farmacias no recalcula los KPI");
+         await page.locator(".fm-demo-kpi").first().click();
+         await page.getByRole("heading",{name:"Ventas",exact:true}).waitFor();
+       }
        if(path==="promociones"&&viewport.width<=768){
          const toggle=page.locator(".mobile-toggle");
          await toggle.click();

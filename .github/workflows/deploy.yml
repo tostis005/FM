@@ -32,6 +32,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
+          node --test src/businessAnalytics.test.js
           node check-login.mjs
           node generate-seo.mjs
           node check-marketing.mjs

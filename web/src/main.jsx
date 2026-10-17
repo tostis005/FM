@@ -816,7 +816,9 @@ function App(){
   ]}/></div></div></>}
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
-    {DEMO_MODULES.has(page)&&<ModuloDemo module={page} pharmacies={tenantContext.pharmacies}/>}
+    {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug} module={page}
+      pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
+      onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<><div className="page-header"><div><h1>Ajustes</h1><p>Estado del prototipo y próximas integraciones.</p></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Google y correos autorizados</h2><p>Inicio de sesión, dominios y cuentas gestionados desde Accesos.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>SQL Server → PostgreSQL, con cargas iniciales e incrementales y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div></>}
    </main>

@@ -28,7 +28,7 @@ export default function ProveedoresMaestro({clientSlug}){
  return <div className="fm-management fm-production-panel">
    <header className="page-header"><h1>Maestro de proveedores</h1><button className="btn btn-primary" onClick={()=>setForm({...EMPTY})}><Plus size={16}/> Añadir proveedor</button></header>
    {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
-   <section className="card fm-demo-table">
+   <div className="fm-supplier-summary">{[["cooperativa","Cooperativas"],["laboratorio","Laboratorios"],["mayorista","Mayoristas"],["sin_clasificar","Sin clasificar"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{rows.filter(r=>r.type===id).length}</strong></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2><span className="count-label">{rows.length}</span></div>
     <div className="toolbar"><div className="search-wrap"><Search size={16}/><input placeholder="Buscar proveedor o código" aria-label="Buscar proveedor" value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
     <ListTable rows={visible} rowKey={r=>r.id} label="proveedores" emptyText="No hay proveedores registrados"

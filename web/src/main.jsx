@@ -289,7 +289,7 @@ function App(){
    localStorage.setItem(key,"1");
  },[]);
  useEffect(()=>{
-    localStorage.setItem(STORE_KEY,JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
+    localStorage.setItem(tenantStorageKey(tenantContext?.client?.slug||localStorage.getItem("fm_active_tenant")||"ampedia"),JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
   },[data,pharmacyApiStatus]);
   useEffect(()=>{
     if (pharmacyBackendConfigured) void refreshPharmacies();
@@ -298,7 +298,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[]);
    useEffect(()=>{
-     if(pharmacyApiStatus!=="connected"){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(pharmacyApiStatus!=="connected"||(tenantContext && !tenantContext.modules.promociones && sessionUser?.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -335,7 +335,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[pharmacyApiStatus,data.promos]);
+   },[pharmacyApiStatus,data.promos,tenantContext?.client?.slug]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -370,7 +370,7 @@ function App(){
    document.title=`Farmetrica · ${label}`;
  },[page]);
  const {promos:storedPromos,pharmacies,users:storedUsers}=data;
-  const users=sessionUser?.role==="administrador"
+  const users=sessionUser?.role==="superadministrador"
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]
     : storedUsers;
@@ -606,7 +606,7 @@ function App(){
   }
   async function savePharmacy(e) {
     e.preventDefault();const id=pharmacyForm.id.trim();
-    if(!/^[1-9][0-9]{0,5}$/.test(id)||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
+    if((editingPharmacy!=="nuevo"&&!/^[1-9][0-9]{0,8}$/.test(id))||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
     if(!/^[A-Z0-9_-]{2,16}$/.test((pharmacyForm.sourceCode||"").trim().toUpperCase()))return setToast("Indica un código de origen válido");
     if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
     const f={...pharmacyForm,id,name:pharmacyForm.name.trim(),sourceCode:pharmacyForm.sourceCode.trim().toUpperCase(),sourceHost:pharmacyForm.sourceHost?.trim()||"",sourceDatabase:pharmacyForm.sourceDatabase?.trim()||"Farmatic"};
@@ -771,18 +771,9 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="usuarios"&&<><div className="page-header"><div><h1>Gestión de usuarios</h1></div><button className="btn btn-primary" onClick={()=>startUser()}><Plus size={17}/> Nuevo usuario</button></div><div className="kpi-grid small-kpis"><Kpi icon={Users} title="Usuarios" value={users.length} caption="Registrados"/><Kpi icon={CheckCircle2} title="Activos" value={users.filter(u=>u.active).length} caption="Con acceso"/><Kpi icon={ShieldCheck} title="Roles" value="3" caption="Perfiles definidos" kind="blue"/></div><div className="content-grid admin-grid"><div className="card list-card"><div className="section-heading"><div><h2>Usuarios del sistema</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar usuario, correo o rol..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentUsers} rowKey={u=>u.id} label="usuarios"
-  onRowClick={startUser} emptyText="No hay usuarios con esos filtros"
-  columns={[
-    {key:"name",label:"Usuario",value:u=>u.name+" "+u.email,render:u=><div className="user-cell"><span className="avatar avatar-soft">{u.name.split(" ").slice(0,2).map(x=>x[0]).join("")}</span><div><strong>{u.name}</strong><small>{u.email}</small></div></div>},
-    {key:"role",label:"Rol",filterMode:"multi",value:u=>ROLES[u.role],render:u=><span className={"role-pill role-"+u.role}>{ROLES[u.role]}</span>},
-    {key:"pharmacies",label:"Farmacias",filterMode:"multi",
-    filterValues:u=>u.role==="superadmin"?pharmacies.map(f=>f.id):u.pharmacies,
-    options:()=>pharmacies.map(f=>({value:f.id,label:f.name})),
-    value:u=>u.role==="superadmin"?"Todas":u.pharmacies.map(pharmaName).join(", ")||"—"},
-    {key:"active",label:"Estado",filterMode:"multi",value:u=>u.active?"Activa":"Inactiva",render:u=><Pill status={u.active?"Activa":"Inactiva"}/>},
-    {key:"action",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
-  ]}/></div><div className="card role-card"><div className="section-heading"><div><h2>Roles del sistema</h2></div></div><div className="role-desc"><span className="role-icon role-bg-green"><Store/></span><div><strong>Personal de farmacia</strong><p>Consulta únicamente sus farmacias y el seguimiento asignado.</p></div></div><div className="role-desc"><span className="role-icon role-bg-blue"><Users/></span><div><strong>Gestor de farmacias</strong><p>Gestiona promociones y usuarios de las farmacias asignadas.</p></div></div><div className="role-desc"><span className="role-icon role-bg-purple"><ShieldCheck/></span><div><strong>Superadministrador</strong><p>Administra toda la red, usuarios, códigos y configuración.</p></div></div></div></div></>}
+    {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
+    {DEMO_MODULES.has(page)&&<ModuloDemo module={page} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<><div className="page-header"><div><h1>Ajustes</h1><p>Estado del prototipo y próximas integraciones.</p></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Google y correos autorizados</h2><p>Inicio de sesión, dominios y cuentas gestionados desde Accesos.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>SQL Server → PostgreSQL, con cargas iniciales e incrementales y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div></>}
    </main>

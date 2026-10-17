@@ -1,4 +1,4 @@
-# Farmétrica · Importación de promociones y exportación al laboratorio
+# Farmetrica · Importación de promociones y exportación al laboratorio
 
 ## Documentos fuente analizados
 - `PROMOCIONES ABADIA OCTUBRE 2026.xlsx`: hojas **RESUMEN** (65 entradas con contenido de laboratorio/gama), **LISTADO CN PROMOCIONES** (958 referencias, 44 grupos comerciales), **OBJETIVOS OCTUBRE 2026**, **TOP 10**, **INCENTIVOS**.

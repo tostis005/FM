@@ -165,40 +165,32 @@ faq:[
 related:["/integraciones/","/soluciones/seguimiento-ventas-farmacia/","/soluciones/reporting-laboratorios/"]
 },
 {
-slug:"nixfarma",category:"Compatibilidad en estudio",title:"Nixfarma y el análisis de promociones de farmacia",
-description:"Conoce qué necesitaría una conexión entre Nixfarma y Farmetrica para analizar campañas, objetivos y ventas. Integración en estudio, no disponible aún.",
-hero:"¿Trabajas con Nixfarma? Hablemos de tus datos comerciales.",
-lead:"Nixfarma es uno de los programas utilizados para gestionar la actividad diaria de una farmacia. Farmetrica estudia cómo ampliar su modelo de seguimiento a otros orígenes, pero la conexión con Nixfarma todavía no está desarrollada ni validada.",
-value:"Integración prevista: pendiente de análisis técnico y autorización.",
+slug:"nixfarma",category:"Ecosistema ERP",title:"Nixfarma y Farmetrica: analítica para tu farmacia",
+description:"Descubre cómo analizar ventas, compras, stock, proveedores y promociones con un modelo de datos independiente para farmacias que trabajan con Nixfarma.",
+hero:"Tus datos de Nixfarma pueden contar una historia comercial más completa.",
+lead:"Nixfarma resuelve el día a día operativo de muchas oficinas de farmacia. Farmetrica está diseñada para complementar al programa de gestión con análisis de ventas, compras, stock y rentabilidad, utilizando un modelo independiente del origen.",
+value:"Un criterio de análisis común, con conexión validada para cada instalación.",
 sections:[
-{heading:"Qué datos necesita el seguimiento de promociones",paragraphs:["Para contrastar ventas y objetivos hacen falta códigos de producto, fecha de operación, cantidades, farmacia de origen y un criterio consistente para las anulaciones o devoluciones.","El primer paso es comprobar qué datos puede proporcionar la instalación de Nixfarma de forma autorizada y cómo se mantienen actualizados."]},
-{heading:"Por qué no basta con decir que es compatible",paragraphs:["Nixfarma publica información sobre integraciones y conectores oficiales. La extracción de datos sin una vía mantenida y autorizada puede generar incoherencias o dejar de funcionar con una actualización.","Por eso Farmetrica distingue entre el sistema Farmatic ya conectado en su entorno actual y Nixfarma, cuya conexión forma parte de una evaluación posterior."]},
-{heading:"Cómo sería el análisis después de una integración validada",paragraphs:["El modelo previsto permitiría definir campañas por CN, asignar objetivos diferentes a las farmacias participantes y comparar resultados, siempre que el origen facilite los datos y permisos necesarios.","Mientras no exista esa conexión validada, no se ofrece como una funcionalidad operativa para Nixfarma."]}
+{heading:"Más preguntas, una sola visión de negocio",paragraphs:["Ventas, compras, existencias y artículos ganan valor cuando se pueden analizar conjuntamente. El objetivo es entender qué referencias funcionan, qué costes se pueden revisar y dónde se concentra el stock.","Farmetrica ofrece módulos comerciales para estas preguntas, con disponibilidad de datos según la integración que se configure para cada cliente."],points:["Ventas y rendimiento de productos.","Compras y proveedores.","Stock y cobertura.","Rentabilidad y promociones."]},
+{heading:"Tus datos conservan su contexto",paragraphs:["Para construir indicadores comparables hay que revisar códigos de producto, fechas, devoluciones, costes y pertenencia a cada farmacia.","Una conexión con Nixfarma exige comprobar la versión y la vía de acceso autorizada. No debe confundirse la existencia del programa con una integración ya desplegada de Farmetrica."]},
+{heading:"Pensado para una farmacia y redes",paragraphs:["Una vez disponible un origen validado, los mismos indicadores permiten analizar un punto de venta o consolidar varias farmacias, con filtros y ámbitos por usuario.","La implantación concreta debe definir qué información se proporciona, con qué frecuencia y con qué permisos."]}
 ],
-faq:[
-["¿Farmetrica se conecta hoy directamente con Nixfarma?","No. La integración con Nixfarma está prevista, pero pendiente de desarrollo y validación."],
-["¿Puedo cargar campañas en Excel aunque use Nixfarma?","La importación de información de campañas y objetivos es distinta de la integración de ventas. El seguimiento de tickets reales requiere una fuente conectada."],
-["¿Farmetrica es un producto oficial de Nixfarma?","No. Los nombres de programas se citan con fines descriptivos y no implican asociación comercial."]
-],
-related:["/integraciones/","/integraciones/farmatic/","/soluciones/importar-campanas-excel/"]
+faq:[["¿Nixfarma es un programa de gestión real?","Sí, Nixfarma es un programa comercial de gestión de farmacias."],["¿Existe ya un conector de Farmetrica validado con Nixfarma?","No consta una integración operativa validada; hay que revisar la instalación y los accesos disponibles."],["¿Farmetrica sustituye a Nixfarma?","No. El enfoque de Farmetrica es añadir análisis comercial a los datos del programa de farmacia."]],
+related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/control-stock-farmacia/"]
 },
 {
-slug:"unycop",category:"Compatibilidad en estudio",title:"Unycop y los cuadros de mando de promociones",
-description:"Análisis de posibles conexiones de Unycop WIN o NEXT con Farmetrica para objetivos y promociones. Integración aún no disponible.",
-hero:"Unycop y seguimiento comercial: qué conviene conectar.",
-lead:"Una farmacia que utiliza Unycop puede necesitar una lectura comercial específica de sus promociones. Farmetrica contempla ese caso de uso, aunque todavía no dispone de una integración con Unycop implantada y verificada.",
-value:"Posibilidad en evaluación, no conector disponible actualmente.",
+slug:"unycop",category:"Ecosistema ERP",title:"Unycop y Farmetrica: análisis comercial de farmacia",
+description:"Conoce las posibilidades de analítica de ventas, compras, stock y objetivos comerciales para una farmacia que utiliza el programa Unycop.",
+hero:"Tu sistema Unycop gestiona operaciones. Tus decisiones necesitan perspectiva.",
+lead:"Farmetrica organiza la inteligencia comercial del negocio en torno a ventas, compras, artículos, existencias y promociones. Esta lógica permite trabajar con distintos sistemas de origen, previa adaptación y validación de la conexión.",
+value:"Analítica independiente del ERP, con conectividad sujeta a la instalación.",
 sections:[
-{heading:"Objetivos, CN y ventas: las piezas que deben encajar",paragraphs:["La gestión promocional precisa relacionar las referencias implicadas, el periodo de vigencia y las unidades registradas por farmacia. También es necesario distinguir devoluciones, movimientos anulados y otras particularidades del origen.","El diseño de una integración debe tratar esas reglas antes de presentar indicadores como si fueran comparables entre programas."]},
-{heading:"Versiones y vías de conexión",paragraphs:["Unycop dispone de diferentes productos y versiones, como WIN y NEXT, con capacidades propias. El fabricante describe herramientas de exportación y APIs para algunos usos; eso no significa que ya exista un conector desarrollado por Farmetrica.","La viabilidad depende de la versión instalada, los datos accesibles, permisos y condiciones técnicas de integración."]},
-{heading:"El objetivo: conservar la lógica comercial",paragraphs:["Una vez validada una fuente de datos, el valor del panel se encuentra en comparar objetivos y ventas por farmacia, agrupar campañas y producir informes adecuados para el seguimiento con laboratorios.","Hasta entonces, la opción responsable es presentar Unycop como integración en estudio y no prometer compatibilidad universal."]}
+{heading:"Unificar información comercial",paragraphs:["El responsable necesita relacionar qué vende, qué compra, qué margen estimado obtiene y qué stock mantiene. Estas preguntas no dependen de la marca del ERP, sino de disponer de datos coherentes.","La estructura de Farmetrica permite analizar estas dimensiones por referencia, proveedor, farmacia y periodo."],points:["Visión comercial de ventas y compras.","Rendimiento de artículos y familias.","Cobertura y existencias.","Objetivos y campañas por farmacia."]},
+{heading:"Una conexión que respete tu sistema",paragraphs:["Unycop cuenta con distintas soluciones y versiones. La disponibilidad de los datos y sus mecanismos de acceso puede cambiar según el producto y la instalación.","Antes de dar por activa la integración hay que validar extracción, permisos, identificadores y reglas de negocio con el propietario autorizado de los datos."]},
+{heading:"De un punto de venta a la red",paragraphs:["La comparación entre farmacias cobra valor si los movimientos se interpretan de la misma forma, incluso cuando los orígenes son diferentes.","Farmetrica incorpora una estructura de clientes, farmacias, módulos y roles para organizar el análisis comercial de la red."]}
 ],
-faq:[
-["¿La integración con Unycop está operativa?","No. Actualmente es una posibilidad en estudio."],
-["¿Funciona igual con Unycop WIN y NEXT?","No puede darse por hecho; cada versión y sus mecanismos autorizados de acceso requieren evaluación."],
-["¿Se puede gestionar la definición de campañas sin conectar las ventas?","La creación e importación de campañas son funciones distintas del acceso a ventas reales. Sin integración no se debe presentar un seguimiento de tickets como actualizado."]
-],
-related:["/integraciones/","/integraciones/nixfarma/","/soluciones/gestion-promociones-farmacia/"]
+faq:[["¿Unycop es un ERP de farmacia?","Sí, Unycop es una familia comercial de software de gestión para farmacias."],["¿Farmetrica está conectada hoy a Unycop?","No consta una implantación con Unycop verificada. La conexión debe evaluarse y configurarse por instalación."],["¿El programa funciona igual con todas las versiones?","No se puede garantizar; la versión concreta y sus opciones técnicas condicionan la integración."]],
+related:["/integraciones/","/soluciones/grupos-de-farmacias/","/soluciones/analisis-compras-farmacia/"]
 }
 ];
 
@@ -264,3 +256,196 @@ faq:[["¿Puedo usar varios CNs en una campaña?","Sí. Una promoción puede incl
 related:["/soluciones/gestion-promociones-farmacia/","/soluciones/importar-campanas-excel/","/soluciones/seguimiento-ventas-farmacia/"]
 }
 ];
+
+
+// Arquitectura editorial ampliada: las distintas funciones son áreas del producto,
+// y cada fuente ERP se valida por separado antes de afirmar una conexión operativa.
+solutions.push(
+{
+slug:"ventas-farmacia",category:"Análisis de ventas",title:"Software de análisis de ventas para farmacias",
+description:"Analiza ventas de farmacia por artículo, periodo y punto de venta. Evolución comercial, unidades y rendimiento del surtido en Farmetrica.",
+hero:"No te conformes con saber cuánto vendes. Entiende qué mueve tus ventas.",
+lead:"Las ventas cuentan una historia distinta cuando las analizas por periodo, producto y farmacia. Farmetrica organiza esa información para que detectes tendencias, cambios en el surtido y oportunidades comerciales sin perderte entre informes.",
+value:"De la facturación a las decisiones de cada día.",
+sections:[
+{heading:"Conoce cómo evoluciona tu actividad comercial",paragraphs:["Revisa las unidades y el valor de las ventas por periodos, identifica qué referencias concentran la demanda y descubre dónde merece la pena profundizar.","Una visión agregada sirve para orientarse; el verdadero valor llega al bajar a cada producto, familia y farmacia y comparar periodos equivalentes."],points:["Evolución de ventas por periodo.","Análisis por artículo y familia.","Desglose por farmacia y ámbito autorizado.","Filtros y consultas detalladas."]},
+{heading:"Ve más allá de los productos que más se venden",paragraphs:["Un artículo con grandes unidades puede aportar un resultado económico muy diferente a otro con menor rotación. Por eso el análisis de ventas tiene más sentido cuando se relaciona con compras, costes y existencias.","Farmetrica reúne esas dimensiones en un modelo común de información comercial para ayudarte a formular mejores preguntas." ]},
+{heading:"Una farmacia o toda la red",paragraphs:["Cada farmacia tiene su propia demanda, surtido y ritmo. Analizarlas juntas y por separado permite detectar diferencias útiles sin convertir cada revisión en un nuevo Excel.","Las ventas registradas necesitan una fuente conectada y autorizada. En la implantación actual existe una conexión operativa con datos de Farmatic; la cobertura de otros sistemas se revisa caso por caso."]}
+],
+faq:[["¿Puedo analizar las ventas de varios puntos de venta?","La plataforma contempla filtros y ámbitos de farmacia, con vistas individuales y de red según los permisos de cada usuario."],["¿Qué diferencia hay entre ventas y rentabilidad?","Ventas describe la actividad comercial; rentabilidad requiere relacionar los ingresos con costes y criterios de margen adecuados."]],
+related:["/soluciones/rendimiento-articulos-farmacia/","/soluciones/rentabilidad-farmacia/","/soluciones/cuadro-mando-farmacias/"]
+},
+{
+slug:"analisis-compras-farmacia",category:"Compras",title:"Análisis de compras y coste de adquisición en farmacias",
+description:"Controla compras, PUC y precios de proveedores de farmacia. Compara artículos y detecta desviaciones de coste y oportunidades de negociación.",
+hero:"Compra con información. No solo con costumbre.",
+lead:"Lo que pagas por cada artículo influye directamente en el margen que puedes conseguir. Farmetrica te ayuda a poner las compras, los proveedores y los costes unitarios en perspectiva.",
+value:"Cada diferencia de coste merece una segunda mirada.",
+sections:[
+{heading:"Compara lo que compras y cuánto pagas",paragraphs:["Organiza compras por proveedor, farmacia, artículo y periodo; revisa el precio unitario de compra (PUC) y localiza desviaciones que pasan inadvertidas cuando solo se consulta el importe total.","Trabajar a nivel de referencia ayuda a distinguir un cambio real de precio de una variación en el volumen o el surtido."],points:["Importe comprado por periodo y proveedor.","PUC por artículo.","Comparación de costes entre referencias.","Oportunidades de mejora en compras."]},
+{heading:"Negociar mejor empieza por medir mejor",paragraphs:["Una negociación es más sólida cuando conoces el volumen adquirido, los proveedores que concentran la compra y qué artículos muestran diferencias de coste.","Los indicadores de potencial deben interpretarse con cautela: condiciones, rappels, disponibilidad, plazos e impuestos también forman parte de la decisión."]},
+{heading:"Relaciona las compras con lo que ocurre después",paragraphs:["Comprar barato no siempre significa comprar bien. Si el producto permanece inmovilizado, el coste financiero del stock también importa.","Por eso Farmetrica conecta el análisis de compras con stock, rotación, reposición y rendimiento comercial."]}
+],faq:[["¿Qué es el PUC?","Es el precio unitario de compra. Su interpretación concreta depende de cómo se registren descuentos, impuestos y bonificaciones."],["¿Puedo comparar compras entre farmacias?","La estructura del producto permite analizar información por farmacia y consolidada cuando los datos se encuentran disponibles."]],
+related:["/soluciones/analisis-proveedores-farmacia/","/soluciones/comparativa-genericos-farmacia/","/soluciones/rentabilidad-farmacia/"]
+},
+{
+slug:"rentabilidad-farmacia",category:"Rentabilidad",title:"Rentabilidad y márgenes de farmacia por artículo",
+description:"Comprende márgenes estimados, ventas, compras y contribución de artículos para mejorar la rentabilidad de farmacia con decisiones fundamentadas.",
+hero:"Facturar más no siempre significa ganar más.",
+lead:"El margen cambia según los precios de compra, las referencias vendidas y la composición del surtido. Farmetrica te ayuda a entender qué impulsa el resultado de tu negocio y qué decisiones merece la pena revisar.",
+value:"Más claridad sobre dónde se crea valor.",
+sections:[
+{heading:"Del volumen a la contribución",paragraphs:["Analizar solo facturación es quedarse a medias. Una referencia de alta venta puede presentar un margen unitario reducido; otra con menor demanda puede aportar una contribución más favorable.","Relaciona ingresos y costes de adquisición con criterios consistentes, y distingue los márgenes estimados de un beneficio contable completo."],points:["Margen bruto estimado y porcentaje.","Rentabilidad por artículo y familia.","Comparación entre centros o periodos.","Análisis combinado con compras y rotación."]},
+{heading:"El surtido y el inventario también afectan a la rentabilidad",paragraphs:["El capital atrapado en exceso de stock, los productos sin rotación y las necesidades de reposición condicionan la eficiencia del negocio.","La plataforma ayuda a cruzar existencias con actividad y márgenes para identificar oportunidades de mejora en el surtido."]},
+{heading:"Decisiones explicables",paragraphs:["Los márgenes fiables dependen de costes netos bien registrados, reglas de descuentos e impuestos y devoluciones. Farmetrica muestra la lógica comercial sobre los datos disponibles, sin convertir una estimación en una garantía.","La oportunidad real se valida con los datos y las condiciones de cada farmacia."]}
+],faq:[["¿Farmetrica calcula el beneficio neto contable?","El análisis de rentabilidad comercial y márgenes estimados no sustituye una cuenta de resultados contable completa."],["¿Puedo analizar la rentabilidad por producto?","Sí, el modelo relaciona artículos, ventas y compras cuando el origen incluye los costes necesarios."]],
+related:["/soluciones/rendimiento-articulos-farmacia/","/soluciones/analisis-compras-farmacia/","/soluciones/control-stock-farmacia/"]
+},
+{
+slug:"control-stock-farmacia",category:"Stock e inventario",title:"Control de stock, cobertura y rotación en farmacias",
+description:"Identifica stock de baja rotación, existencias excesivas y cobertura estimada por farmacia y artículo. Analiza capital inmovilizado con Farmetrica.",
+hero:"Que el stock trabaje para ti. No al revés.",
+lead:"Cada artículo que no rota representa espacio y recursos inmovilizados. Cada referencia que falta puede significar una venta que no llega. Farmetrica reúne stock, ventas y compras para ayudarte a encontrar el equilibrio.",
+value:"Inventario visible. Capital mejor orientado.",
+sections:[
+{heading:"Qué tienes y cómo se mueve",paragraphs:["Organiza existencias por farmacia y CN; compara unidades disponibles con el ritmo de venta del periodo y la cobertura estimada.","Distinguir referencias de rotación saludable, productos sin salida y situaciones de sobrestock es el punto de partida para una revisión inteligente."],points:["Unidades y valoración de existencias.","Cobertura estimada en días.","Referencias con baja o nula rotación.","Exceso de stock y alertas de revisión."]},
+{heading:"Reduce decisiones basadas en intuición",paragraphs:["No todas las farmacias demandan lo mismo. Una cobertura razonable en un centro puede resultar excesiva en otro.","La comparación por punto de venta ayuda a priorizar qué familias, referencias y compras necesitan seguimiento." ]},
+{heading:"Conecta inventario con reposición y compra",paragraphs:["Reponer no consiste solo en cubrir el stock mínimo: también intervienen ventas recientes, estacionalidad, disponibilidad y coste.","Los indicadores de Farmetrica permiten estudiar estas dimensiones cuando la fuente de datos ofrece las existencias y movimientos necesarios."]}
+],faq:[["¿Puede identificar artículos sin ventas?","El módulo contempla indicadores de baja o nula rotación a partir de existencias y ventas disponibles."],["¿Los datos de stock se actualizan automáticamente en todos los ERP?","La actualización depende del conector y la fuente concreta habilitada; no existe una conexión universal validada."]],
+related:["/soluciones/reposicion-stock-farmacia/","/soluciones/analisis-compras-farmacia/","/blog/stock-inmovilizado-farmacia/"]
+},
+{
+slug:"reposicion-stock-farmacia",category:"Reposición",title:"Análisis de reposición y necesidades de pedido en farmacias",
+description:"Relaciona ventas, existencias y necesidades de pedido de cada farmacia. Optimiza la reposición para equilibrar disponibilidad y capital inmovilizado.",
+hero:"Ni roturas que cuestan ventas, ni exceso que inmoviliza dinero.",
+lead:"La reposición gana precisión cuando considera el ritmo comercial y el inventario real. Farmetrica pone las necesidades de pedido en contexto para revisar dónde faltan unidades y dónde sobran.",
+value:"Más previsión. Menos decisiones a ciegas.",
+sections:[
+{heading:"Detecta las necesidades de reposición",paragraphs:["El análisis cruza referencias, farmacias, unidades en stock y patrones de venta para estimar necesidades de reposición.","Un cálculo de necesidad es apoyo a la decisión, no sustituye las reglas de proveedor, los plazos de entrega ni la revisión profesional del responsable."],points:["Stock actual por referencia.","Necesidad estimada de reposición.","Coste aproximado de pedido.","Filtros por farmacia, producto y periodo."]},
+{heading:"Las prioridades cambian según la farmacia",paragraphs:["La demanda de un producto puede variar enormemente entre barrios y establecimientos. El análisis individual evita tratar toda la red como un único almacén.","Una visión conjunta ayuda a detectar diferencias que merecen una revisión de surtido o aprovisionamiento."]},
+{heading:"Reponer mejor empieza por conocer el stock",paragraphs:["Los datos de reposición cobran sentido al relacionarlos con la cobertura, la rotación, los costes y las compras efectivas.","Así se reducen los cambios de criterio entre hojas de cálculo y se facilita la conversación con los responsables de cada punto de venta."]}
+],faq:[["¿Genera pedidos automáticamente al proveedor?","La funcionalidad descrita es de análisis de necesidades; una automatización de pedido depende de la integración y configuración del sistema de origen."],["¿Puedo comparar necesidades entre farmacias?","Sí, el modelo común permite desglosar indicadores por farmacia cuando se dispone de sus datos."]],
+related:["/soluciones/control-stock-farmacia/","/soluciones/analisis-proveedores-farmacia/","/blog/stock-inmovilizado-farmacia/"]
+},
+{
+slug:"analisis-proveedores-farmacia",category:"Proveedores",title:"Análisis de proveedores y concentración de compras en farmacia",
+description:"Analiza proveedores de farmacia, importes de compra, artículos y diferencias de coste. Mejora la negociación a partir de información contrastable.",
+hero:"Conoce a tus proveedores más allá de la factura.",
+lead:"Saber cuánto compras a cada proveedor es solo el principio. Farmetrica te ayuda a revisar el surtido adquirido, el coste por referencia, la concentración del gasto y las oportunidades de comparación.",
+value:"Una relación comercial más inteligente.",
+sections:[
+{heading:"Quién suministra qué, dónde y a qué coste",paragraphs:["La plataforma organiza la actividad de proveedores en relación con productos y compras para ayudar a identificar dependencias, categorías y niveles de gasto.","El maestro de proveedores ofrece una estructura común para trabajar de forma coherente entre varios puntos de venta."],points:["Volumen de compra por proveedor.","Artículos asociados.","Distribución del gasto.","Potencial de revisión de precios."]},
+{heading:"Compara alternativas con criterio",paragraphs:["No siempre conviene cambiar por el menor PUC. Disponibilidad, plazo, condiciones comerciales y fiabilidad del suministro pueden pesar tanto como el precio.","El análisis facilita localizar qué referencias revisar primero y preparar negociaciones con información consistente."]},
+{heading:"Una lectura para cada responsable",paragraphs:["El responsable local necesita conocer su compra; una dirección de grupo busca también concentración y oportunidades entre farmacias.","Farmetrica trabaja con ámbitos de datos por cliente, farmacia y usuario para organizar estas perspectivas."]}
+],faq:[["¿Permite ver el gasto por proveedor?","Sí, es uno de los indicadores del módulo de compras y proveedores."],["¿El software realiza negociaciones automáticamente?","No. Los informes ayudan a preparar y evaluar decisiones comerciales."]],
+related:["/soluciones/analisis-compras-farmacia/","/soluciones/comparativa-genericos-farmacia/","/blog/compras-inteligentes-farmacia/"]
+},
+{
+slug:"comparativa-genericos-farmacia",category:"Genéricos",title:"Comparativa de medicamentos genéricos y costes de compra",
+description:"Compara compras de medicamentos genéricos por grupo, referencia y proveedor para detectar diferencias de PUC y oportunidades de optimización.",
+hero:"En genéricos, pequeñas diferencias pueden merecer grandes decisiones.",
+lead:"Entre alternativas de un mismo grupo, el precio de adquisición, el proveedor y el histórico de compra importan. Farmetrica ayuda a encontrar diferencias y cuantificar oportunidades de revisión.",
+value:"Comparativas útiles para comprar con criterio.",
+sections:[
+{heading:"Compara grupos y referencias",paragraphs:["Organiza artículos marcados como genéricos por grupo, referencia y proveedor, y revisa costes unitarios de adquisición.","La comparabilidad depende de una clasificación correcta de presentaciones y grupos: no deben tratarse como equivalentes referencias que no lo son."],points:["Compra de genéricos por periodo.","Comparación de PUC.","Análisis por proveedor y grupo.","Potencial económico de revisión."]},
+{heading:"Decide considerando las condiciones reales",paragraphs:["Un precio menor por unidad puede resultar atractivo, pero también hay que valorar el suministro, disponibilidad, requisitos regulatorios y condiciones pactadas.","Los importes de potencial son estimaciones basadas en los datos y reglas del análisis, no ahorros garantizados."]},
+{heading:"Prioriza donde el volumen importa",paragraphs:["Un cambio pequeño en una referencia de alta rotación puede tener impacto comercial relevante. Pero esa oportunidad solo es visible cuando precio y volumen se analizan juntos.","Farmetrica reúne los datos necesarios para construir una comparativa útil de compras y productos."]}
+],faq:[["¿La plataforma decide qué genérico dispensar?","No. El módulo es de análisis comercial de compras, no de decisión clínica ni de sustitución terapéutica."],["¿Necesita datos de proveedores?","Sí, para comparar costes reales es necesario disponer de precios y proveedores consistentes."]],
+related:["/soluciones/analisis-compras-farmacia/","/soluciones/analisis-proveedores-farmacia/","/blog/estrategia-genericos-farmacia/"]
+},
+{
+slug:"rendimiento-articulos-farmacia",category:"Artículos",title:"Rendimiento de artículos y categorías en farmacias",
+description:"Descubre qué artículos y familias impulsan ventas, unidades y rentabilidad. Analiza el rendimiento por producto y farmacia con Farmetrica.",
+hero:"Cada referencia tiene una historia. Y un resultado.",
+lead:"Detrás del total de ventas hay referencias de alta rotación, productos que apenas se mueven y familias con comportamientos distintos. Farmetrica conecta ese detalle con compras y existencias.",
+value:"El surtido deja de ser una lista para convertirse en una decisión.",
+sections:[
+{heading:"Entiende el rendimiento de cada artículo",paragraphs:["Consulta referencias por CN, descripción o familia, y revisa unidades, facturación y evolución de su venta.","Cruzar esos datos con costes de adquisición ayuda a pasar del ranking de ventas a una evaluación económica del surtido."],points:["Unidades y valor vendidos.","Rendimiento por artículo y familia.","Relación con coste y margen estimado.","Comparación por farmacia y periodo."]},
+{heading:"Encuentra referencias que necesitan atención",paragraphs:["No todo lo que se vende poco debe retirarse, ni todo lo que se vende mucho debe reforzarse sin análisis. La cobertura, la contribución y la demanda pueden cambiar la conclusión.","Un buen informe ayuda a detectar los candidatos a revisar y deja la decisión al equipo comercial."]},
+{heading:"Una vista consistente entre departamentos",paragraphs:["Compras, stock y ventas deben referirse al mismo producto y al mismo periodo. Farmetrica utiliza una estructura común de identificadores para facilitar esa coherencia.","El origen de datos puede utilizar CN, códigos de barras u otros identificadores adaptados a cada país o ERP, siempre con su correspondencia validada."]}
+],faq:[["¿Puedo filtrar por CN o categoría?","La plataforma trabaja con referencias y familias de producto, con filtros por valores y búsqueda."],["¿Es una solución para una sola farmacia?","Sí. La misma lógica puede aplicarse a un punto de venta o a varios con acceso autorizado."]],
+related:["/soluciones/ventas-farmacia/","/soluciones/rentabilidad-farmacia/","/soluciones/control-stock-farmacia/"]
+}
+);
+integrations.push(
+{
+slug:"bitfarma",category:"Programas de gestión",title:"Bitfarma y el análisis comercial de Farmetrica",
+description:"Cómo se relaciona el software Bitfarma con un modelo independiente de analítica comercial y qué datos hacen falta para conectar ventas, compras y stock.",
+hero:"Trabajas con Bitfarma. Tu información comercial puede dar mucho más.",
+lead:"Bitfarma es un programa de gestión para oficinas de farmacia. Farmetrica utiliza un modelo de datos independiente del ERP para que las preguntas comerciales sigan siendo las mismas, cualquiera que sea el sistema de origen.",
+value:"Conexión a Bitfarma sujeta a comprobación de acceso, esquema y permisos.",
+sections:[
+{heading:"Una fuente de datos, muchas decisiones",paragraphs:["Para construir paneles de ventas, artículos, compras, stock y rentabilidad hacen falta movimientos e identificadores consistentes.","La viabilidad de la conexión depende de la instalación y de las vías autorizadas para disponer de los datos." ]},
+{heading:"Analiza con el mismo criterio",paragraphs:["El objetivo es mantener la misma lectura de ventas, costes y existencias, adaptando los identificadores y formatos de origen.","Farmetrica no se anuncia como conector oficial ni como integración automática con cualquier versión de Bitfarma."]},
+{heading:"Qué validar en la implantación",paragraphs:["El sistema de origen, permisos, frecuencia de actualización, anulaciones y correspondencias de referencias se revisan antes de habilitar un informe operativo.","Sin esa validación, una integración no puede considerarse implantada."]}
+],faq:[["¿Está conectado Bitfarma actualmente?","No consta una conexión operativa verificada de Farmetrica con Bitfarma. Cada instalación requiere validación técnica."],["¿Bitfarma es un software real?","Sí, Bitfarma es un software comercial de gestión de farmacias; se menciona con fines descriptivos."]],
+related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/control-stock-farmacia/"]
+},
+{
+slug:"farmanager",category:"Programas de gestión",title:"Farmanager de Cofares y analítica comercial para farmacias",
+description:"Farmanager, el software de farmacia desarrollado por Cofares, y los requisitos para relacionar su información comercial con Farmetrica.",
+hero:"Farmanager y una visión comercial de toda la farmacia.",
+lead:"Farmanager es un programa de farmacia desarrollado por Cofares. Farmetrica plantea un modelo de análisis común para relacionar ventas, compras, proveedores y stock, con independencia del ERP de origen.",
+value:"Una conexión con Farmanager exige evaluación técnica y autorización de cada instalación.",
+sections:[
+{heading:"El valor no está en duplicar tu ERP",paragraphs:["Un buen sistema de gestión resuelve operaciones diarias; una herramienta analítica ayuda a revisar decisiones comerciales con una visión transversal.","Analizar compras, márgenes o inventario requiere disponer de datos correctos, homologados y actualizados." ]},
+{heading:"Qué información es imprescindible",paragraphs:["Se necesitan referencias identificables, ventas y compras con fechas, costes coherentes y existencias por farmacia.","La disponibilidad de estos datos y sus métodos de acceso deben verificarse con las partes autorizadas."]},
+{heading:"Unificar preguntas entre farmacias",paragraphs:["Una red puede utilizar distintos sistemas, pero necesitar los mismos indicadores para cada establecimiento.","La correspondencia entre códigos, reglas y movimientos es parte esencial de una conexión fiable."]}
+],faq:[["¿Existe una conexión activa con Farmanager?","No consta una integración activa y validada de Farmetrica con Farmanager."],["¿Farmanager pertenece a Cofares?","Sí, Cofares identifica Farmanager como su solución tecnológica de gestión de farmacia."]],
+related:["/integraciones/","/soluciones/analisis-compras-farmacia/","/soluciones/grupos-de-farmacias/"]
+}
+);
+articles.push(
+{
+slug:"compras-inteligentes-farmacia",category:"Compras y proveedores",title:"Comprar mejor es ganar margen: cómo analizar proveedores y PUC",
+description:"Una guía práctica para comparar PUC, volumen de compras y proveedores en farmacia y detectar oportunidades de mejora sin caer en falsas economías.",
+hero:"La diferencia entre comprar y comprar bien está en los datos.",
+lead:"Negociar con proveedores sin conocer el coste real de cada referencia es avanzar a ciegas. Un análisis de compras bien planteado permite priorizar donde el potencial es mayor.",
+value:"Una buena comparativa tiene referencias, fechas y condiciones consistentes.",
+sections:[
+{heading:"Empieza por el coste unitario",paragraphs:["El precio unitario de compra (PUC) ayuda a comparar referencias adquiridas en distintos periodos y a distintos proveedores. Sin embargo, hay que aclarar si incorpora descuentos, bonificaciones e impuestos.","Una misma referencia no debe aparecer con costes aparentemente distintos solo porque los cálculos utilizan criterios diferentes."]},
+{heading:"Cruza precio con volumen",paragraphs:["Ahorrar unos céntimos en un artículo de alta rotación puede ser más relevante que reducir varios euros en un producto de movimiento excepcional.","La combinación de PUC, unidades compradas y valor de compra permite dirigir las negociaciones hacia oportunidades tangibles."]},
+{heading:"No olvides el inventario",paragraphs:["Comprar al mejor precio pierde parte de su valor si la mercancía permanece meses en la estantería.","Cruzar compras con ventas y stock evita analizar el precio de adquisición de forma aislada y da contexto a la decisión."]}
+],faq:[["¿Un menor PUC garantiza ahorro?","No siempre. También intervienen condiciones de suministro, volumen, bonificaciones y rotación."],["¿Por dónde empiezo?","Por las referencias de mayor volumen y las compras con diferencias de coste verificables."]],
+related:["/soluciones/analisis-compras-farmacia/","/soluciones/analisis-proveedores-farmacia/","/soluciones/rentabilidad-farmacia/"]
+},
+{
+slug:"stock-inmovilizado-farmacia",category:"Stock e inventario",title:"Stock inmovilizado: cómo encontrar dinero parado en las estanterías",
+description:"Aprende a detectar stock de baja rotación, cobertura excesiva y existencias inmovilizadas en tu farmacia utilizando ventas y stock.",
+hero:"Tu estantería puede esconder oportunidades de rentabilidad.",
+lead:"Un almacén lleno no garantiza disponibilidad inteligente. A veces significa capital concentrado en productos que tardan demasiado en rotar.",
+value:"La cobertura es un indicador; la decisión siempre necesita contexto.",
+sections:[
+{heading:"Qué significa que un artículo no rote",paragraphs:["Se considera de baja rotación cuando su salida es reducida respecto al periodo que estamos analizando. Es importante distinguir los productos nuevos, estacionales o de servicio de aquellos cuyo exceso es evitable.","Una fotografía aislada del stock resulta insuficiente: hay que mirar el histórico de ventas."]},
+{heading:"Relaciona existencias y demanda",paragraphs:["Los días de cobertura estimados ayudan a comparar referencias con necesidades diferentes.","Revisar artículos sin ventas y con unidades disponibles permite priorizar el análisis, pero no sustituye una política de surtido."]},
+{heading:"Convierte la detección en un plan",paragraphs:["Antes de volver a comprar una referencia, comprueba su salida reciente, la existencia disponible y las condiciones de pedido.","Farmetrica organiza los datos para que el responsable pueda evaluar exceso de stock y reposición desde una misma vista."]}
+],faq:[["¿La cobertura sirve para todos los productos?","Es orientativa y debe interpretarse según estacionalidad, demanda y necesidades de servicio."],["¿Se puede comparar entre farmacias?","Sí, siempre que las cifras de stock y ventas sean consistentes y comparables."]],
+related:["/soluciones/control-stock-farmacia/","/soluciones/reposicion-stock-farmacia/","/soluciones/rendimiento-articulos-farmacia/"]
+},
+{
+slug:"rentabilidad-por-articulo",category:"Rentabilidad",title:"Rentabilidad por artículo: las ventas no cuentan toda la historia",
+description:"Analiza facturación, PUC, costes de compra y márgenes estimados para entender qué artículos contribuyen más al resultado comercial de una farmacia.",
+hero:"Que se venda mucho no significa que aporte más margen.",
+lead:"El ranking de artículos por unidades o importe es útil, pero no basta para conocer el rendimiento real del surtido.",
+value:"Ventas, costes y rotación explican partes distintas del negocio.",
+sections:[
+{heading:"Distingue ingreso y margen",paragraphs:["La venta mide la actividad, mientras que el margen relaciona el importe obtenido con el coste de la mercancía.","Una comparativa exige mantener los mismos criterios de impuestos, descuentos y devoluciones para todas las referencias."]},
+{heading:"No compares artículos sin contexto",paragraphs:["Las referencias de alta rotación cumplen funciones distintas a los productos de compra ocasional. También hay artículos clave para mantener un surtido de servicio.","Comparar volumen y contribución, en vez de fijarse solo en una cifra, ayuda a tomar decisiones equilibradas."]},
+{heading:"Relaciónalo con compras y existencias",paragraphs:["Una buena contribución aparente puede perder atractivo si obliga a mantener demasiado inventario.","La mirada conjunta a compras, ventas y stock ayuda a identificar qué referencias merecen un análisis más detallado."]}
+],faq:[["¿Margen bruto significa beneficio neto?","No. El margen bruto no incorpora necesariamente todos los costes operativos, financieros y fiscales de la farmacia."]],
+related:["/soluciones/rentabilidad-farmacia/","/soluciones/rendimiento-articulos-farmacia/","/soluciones/analisis-compras-farmacia/"]
+},
+{
+slug:"estrategia-genericos-farmacia",category:"Genéricos",title:"Genéricos: compara costes y detecta oportunidades de compra",
+description:"Aprende a comparar compras de genéricos de grupos equivalentes, proveedores y precios unitarios sin perder de vista las condiciones comerciales.",
+hero:"En genéricos, la comparativa correcta comienza por referencias correctas.",
+lead:"No basta con ver dos precios y elegir el menor. La clasificación del producto, el volumen y las condiciones de suministro determinan si la comparación es realmente útil.",
+value:"Un análisis comercial de compras, no una recomendación clínica.",
+sections:[
+{heading:"Agrupa bien antes de comparar",paragraphs:["Los grupos y presentaciones deben estar correctamente identificados para no presentar como alternativas artículos que no son realmente comparables.","Conviene revisar CN, formato, dosis y los criterios que resulten pertinentes para el análisis comercial."]},
+{heading:"Combina precio unitario y volumen",paragraphs:["Un pequeño diferencial de PUC puede representar una oportunidad cuando se concentra en productos de compra frecuente.","La evaluación debe considerar además disponibilidad, acuerdos y continuidad del suministro."]},
+{heading:"Prioriza las acciones realistas",paragraphs:["Las estimaciones de mejora ayudan a preparar conversaciones con los proveedores, pero no son ahorros garantizados.","Farmetrica permite estructurar compras, grupos y PUC para identificar casos que merecen una revisión."]}
+],faq:[["¿La plataforma decide sustituciones farmacológicas?","No. El análisis se limita a datos comerciales y costes. Las decisiones asistenciales corresponden a los profesionales y normativa aplicable."]],
+related:["/soluciones/comparativa-genericos-farmacia/","/soluciones/analisis-compras-farmacia/","/soluciones/analisis-proveedores-farmacia/"]
+}
+);

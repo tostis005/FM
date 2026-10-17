@@ -184,3 +184,11 @@
 @media(max-width:380px){
  .fm-demo-v2 .fm-demo-filters{grid-template-columns:minmax(0,1fr)}
 }
+
+
+.fm-supplier-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.fm-supplier-summary-item{padding:15px;display:grid;gap:8px;min-width:0}
+.fm-supplier-summary-item span{font-size:12px;font-weight:650;color:#658274}
+.fm-supplier-summary-item strong{font:800 24px Manrope,sans-serif;color:#24513d}
+@media(max-width:790px){.fm-supplier-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:350px){.fm-supplier-summary{grid-template-columns:minmax(0,1fr)}}

@@ -30,6 +30,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
+          node generate-seo.mjs
           node check-marketing.mjs
           npm run build
 
@@ -89,16 +90,24 @@ jobs:
                status=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/ || true)
                blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/ || true)
                post=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/presentamos-farmetrica/ || true)
+               solutions=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/soluciones/ || true)
+               solution=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ || true)
+               integrations=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/integraciones/ || true)
+               farmatic=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/integraciones/farmatic/ || true)
+               guide=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/indicadores-promociones-farmacia/ || true)
+               sitemap=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/sitemap.xml || true)
                css=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/marketing.css || true)
                favicon=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/favicon.svg || true)
                login=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/login || true)
                private=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/index.html || true)
                panel=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/promociones || true)
-               if [ "$status" = "200" ] && [ "$blog" = "200" ] && [ "$post" = "200" ] && [ "$css" = "200" ] && [ "$favicon" = "200" ] && [ "$login" = "200" ] && [ "$private" = "302" ] && [ "$panel" = "302" ]; then
+               if [ "$status" = "200" ] && [ "$blog" = "200" ] && [ "$post" = "200" ] && [ "$solutions" = "200" ] && [ "$solution" = "200" ] && [ "$integrations" = "200" ] && [ "$farmatic" = "200" ] && [ "$guide" = "200" ] && [ "$sitemap" = "200" ] && [ "$css" = "200" ] && [ "$favicon" = "200" ] && [ "$login" = "200" ] && [ "$private" = "302" ] && [ "$panel" = "302" ]; then
                  if curl -fsS -D - -o /dev/null http://127.0.0.1:18080/login | tr -d "\r" | grep -Eqi "^content-type: text/html([;[:space:]]|$)" && \
                     curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a Farmetrica" && \
                     curl -fsS http://127.0.0.1:18080/ | grep -q "Cada promoción cuenta" && \
-                    curl -fsS http://127.0.0.1:18080/blog/ | grep -q "Buenas ideas"; then
+                    curl -fsS http://127.0.0.1:18080/blog/ | grep -q "Buenas ideas" && \
+                    curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "promociones" && \
+                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset"; then
                    exit 0
                  fi
                fi

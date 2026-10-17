@@ -88,6 +88,15 @@ try{
           !result.table.some(t=>t.content>t.viewport)){
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");
        }
+       if(path==="promociones"&&viewport.width===375){
+         const metrics=page.locator(".campaign-metrics .campaign-metric strong");
+         await metrics.first().waitFor({state:"visible",timeout:10000});
+         const count=Number((await metrics.nth(0).textContent()).replace(/\D/g,""));
+         const cn=Number((await metrics.nth(1).textContent()).replace(/\D/g,""));
+         const targets=Number((await metrics.nth(2).textContent()).replace(/\D/g,""));
+         if(!(count>0&&cn>0&&targets>0))
+           throw Error("Las campañas importadas no deben mostrar KPI en cero: "+count+"/"+cn+"/"+targets);
+       }
        if(path==="dashboard"&&viewport.width===375){
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");
          await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")?.textContent!=="—");

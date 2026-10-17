@@ -10,6 +10,7 @@ import "./styles.css";
 import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
 import ModuloDemo from "./ModuloDemo.jsx";
+import {promotionMetrics} from "./promotionMetrics.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
@@ -21,7 +22,7 @@ import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadSalesCatalog, loadSalesCoverage, loadPromotionSales, loadTicketLines } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -98,17 +99,21 @@ function downloadCSV(name, rows) {
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
 function Kpi({icon:Icon,title,value,caption,kind="mint"}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{value}</div></div></div>}
-function CampaignMetrics({campaigns,heading,subtitle,salesLabel="Pendiente de conexión"}){
- const goal=campaigns.reduce((n,p)=>n+sum(p.targets),0),sold=campaigns.reduce((n,p)=>n+sum(p.sales),0);
- const cns=new Set(campaigns.flatMap(p=>p.cns||[])).size;
- return <section className="card campaign-metrics"><div className="campaign-metrics-header"><div><h2>{heading}</h2></div></div>
+function CampaignMetrics({campaigns,heading,salesAvailable=false}){
+ const m=promotionMetrics(campaigns,salesAvailable);
+ const show=value=>value==null?"—":EUR.format(value);
+ return <section className="card campaign-metrics">
+  <div className="campaign-metrics-header"><h2>{heading}</h2></div>
   <div className="campaign-metrics-grid">
-   <div className="campaign-metric"><span>Promociones</span><strong>{EUR.format(campaigns.length)}</strong></div>
-   <div className="campaign-metric"><span>CNs</span><strong>{EUR.format(cns)}</strong></div>
-   <div className="campaign-metric"><span>Objetivo</span><strong>{EUR.format(goal)}</strong></div>
-   <div className="campaign-metric"><span>Vendidas</span><strong>{EUR.format(sold)}</strong></div>
-   <div className="campaign-metric metric-progress"><span>Cumplimiento</span><strong>{percent(sold,goal)}%</strong><Progress value={percent(sold,goal)}/></div>
-  </div></section>;
+   <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
+   <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
+   <div className="campaign-metric"><span>Objetivo</span><strong>{show(m.target)}</strong></div>
+   <div className="campaign-metric"><span>Vendidas</span><strong>{show(m.units)}</strong></div>
+   <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
+    <strong>{m.completion==null?"—":m.completion+"%"}</strong>{m.completion!=null&&<Progress value={m.completion}/>}
+   </div>
+  </div>
+ </section>;
 }
 function Field({label,children,hint}) {return <label className="field"><span className="field-label">{label}</span>{children}{hint&&<small>{hint}</small>}</label>}
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
@@ -148,7 +153,7 @@ function selectedIdsFromUrl(){
 }
 function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
- const status=params.get("estado")||(selected!==null?"Todos":"Activa");
+ const status=params.get("estado")||"Todos";
  return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
   year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
@@ -235,22 +240,11 @@ function App(){
  const reportCloseRef=useRef(null);
  const [reportSelectedIds,setReportSelectedIds]=useState(()=>{
   const ids=reportFiltersFromUrl().ids;
-  return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
+  return ids===null?data.promos.map(p=>p.id):ids;
  });
   const [salesStatus,setSalesStatus]=useState("sin_conexion");
-  const [databaseStatus,setDatabaseStatus]=useState("checking");
-  useEffect(()=>{
-    const controller=new AbortController();
-    fetch("/api/health/database",{signal:controller.signal,cache:"no-store"})
-      .then(r=>r.ok?r.json():Promise.reject(Error("Base de datos no disponible")))
-      .then(body=>setDatabaseStatus(body.database==="connected"?"connected":"unavailable"))
-      .catch(()=>{if(!controller.signal.aborted)setDatabaseStatus("unavailable")});
-    return ()=>controller.abort();
-  },[]);
   const [salesError,setSalesError]=useState("");
-  const [salesCatalog,setSalesCatalog]=useState([]);
   const [salesByPromotion,setSalesByPromotion]=useState({});
-  const [salesCoverage,setSalesCoverage]=useState([]);
   const [targetIncrease,setTargetIncrease]=useState("5");
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
@@ -283,7 +277,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(pharmacyApiStatus!=="connected"||(tenantContext && !tenantContext.modules.promociones && sessionUser?.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(!tenantContext||!sessionUser||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -298,9 +292,7 @@ function App(){
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
-         const [catalog,coverage,...results]=await Promise.all([
-           loadSalesCatalog(),loadSalesCoverage(),...chunks.map(chunk=>loadPromotionSales(chunk))
-         ]);
+         const results=await Promise.all(chunks.map(chunk=>loadPromotionSales(chunk)));
          if(cancelled)return;
          const byPromotion={};
          for(let i=0;i<segments.length;i++){
@@ -308,8 +300,7 @@ function App(){
            const out=byPromotion[seg.sourceId]||(byPromotion[seg.sourceId]={});
            for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
          }
-         setSalesCatalog(catalog.products||[]);
-         setSalesCoverage(coverage.pharmacies||[]);
+
          setSalesByPromotion(byPromotion);
          setSalesError("");
          setSalesStatus("real");
@@ -320,13 +311,13 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[pharmacyApiStatus,data.promos,tenantContext?.client?.slug]);
+   },[data.promos,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
-   setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
+   setReportSelectedIds(filters.ids===null?data.promos.map(p=>p.id):filters.ids);
    setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
@@ -374,7 +365,6 @@ function App(){
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&(!from||p.end>=from)&&(!to||p.start<=to));
- const activePromos=promos.filter(p=>p.status==="Activa");
  const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
  const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
  const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
@@ -643,7 +633,7 @@ function App(){
   <div className="workspace">
    <header className="topbar">
     <button className="mobile-toggle icon-btn" type="button" aria-controls="farmetrica-sidebar" aria-expanded={mobileMenu} onClick={()=>setMobileMenu(v=>!v)} aria-label={mobileMenu?"Cerrar menú":"Abrir menú"}><LayoutDashboard size={20}/></button>
-    <div className="topbar-title"><span className="bread">Farmetrica <ChevronRight size={13}/></span><strong>{title}</strong></div>
+    <div className="topbar-title"><strong className="topbar-wordmark">Farmetrica</strong></div>
     <div className="topbar-right">{tenantContext.clients.length>1&&<select className="fm-client-selector" aria-label="Cambiar de cliente" value={tenantContext.client.slug} onChange={e=>activateClient(e.target.value)}>{tenantContext.clients.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select>}<button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
        <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="superadministrador"?"Superadministrador":tenantContext.role==="administrador"?"Administrador de cliente":"Usuario autorizado"}</small></span>
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
@@ -658,7 +648,7 @@ function App(){
       <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
     </div></div>
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
- <CampaignMetrics campaigns={activePromos} heading="Promociones activas" subtitle="" salesLabel="" />
+ <CampaignMetrics campaigns={filteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"}/>
  <section className="card list-card full-table-card">
   <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
   <div className="toolbar">
@@ -682,8 +672,8 @@ function App(){
     .map(f=>({value:f.id,label:f.name})),
   value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{EUR.format(sum(p.targets))}</span>},
-      {key:"sales",label:"Vendidas",value:p=>sum(p.sales),render:p=><span className="td-number">{EUR.format(sum(p.sales))}</span>},
-      {key:"advance",label:"Avance",value:p=>percent(sum(p.sales),sum(p.targets)),render:p=><div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>},
+      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="real"?EUR.format(sum(p.sales)):"—"}</span>},
+      {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
       {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div>}
     ]}/>
  </section>
@@ -720,7 +710,7 @@ function App(){
   </div></div>
  </div>
  {reportSelected.length>0?<>
-  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Resumen de "+reportSelected.length+" campañas"} subtitle={selectedPharmacyIds===null?"Seguimiento consolidado de las promociones seleccionadas":effectivePharmacyIds.length===1?"Resultados de "+pharmaName(effectivePharmacyIds[0]):"Resultados de "+effectivePharmacyIds.length+" farmacias seleccionadas"} salesLabel={salesStatus==="real"?"Unidades netas · Farmatic":"—"} />
+  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
    <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{EUR.format(reportSales)} uds.</strong></div><div><span>Avance global</span><strong>{percent(reportSales,reportGoal)}%</strong></div></div>

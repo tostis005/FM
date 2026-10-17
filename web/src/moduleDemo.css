@@ -124,3 +124,63 @@
  .fm-demo-v2 .fm-demo-search{grid-column:auto}
  .fm-demo-v2 .fm-demo-kpis,.fm-module-links{grid-template-columns:minmax(0,1fr)}
 }
+
+
+/* Farmetrica — encabezados discretos y controles definitivos */
+.fm-demo-v2 .page-header,.fm-production-panel>.page-header{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:0;padding:0;background:transparent;box-shadow:none;border:0;border-radius:0;
+}
+.fm-demo-v2 .page-header h1,.fm-production-panel>.page-header h1{
+  margin:0;color:#1c3930;font-family:Manrope,sans-serif;font-weight:800;
+  font-size:clamp(19px,2vw,24px);letter-spacing:-.6px;line-height:1.35;
+}
+.fm-demo-v2 .fm-demo-tag{display:none}
+.fm-demo-v2 .fm-demo-filters{grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr))}
+.fm-demo-v2 .fm-demo-filters>*,.fm-demo-v2 .fm-filter-field{min-width:0}
+.fm-demo-v2 .fm-demo-filters select,.fm-demo-v2 .fm-demo-filters input{
+  color:#284a3b;font-size:13px
+}
+.fm-demo-v2 .fm-demo-kpi>span{font-size:12px;font-weight:650;max-width:100%;padding-right:17px}
+.fm-demo-v2 .fm-demo-kpi>strong{font-size:clamp(20px,2vw,27px)}
+.fm-visible-date-filters{
+  display:flex;align-items:end;gap:9px;flex-wrap:wrap;max-width:100%;
+}
+.fm-visible-date-filters label{
+  display:flex;flex-direction:column;gap:5px;color:#587164;font-size:11px;
+  font-weight:750;min-width:130px;flex:1 1 130px;
+}
+.fm-visible-date-filters input{
+  height:40px;width:100%;min-width:0;padding:8px 10px;
+  background:#f8faf9;border:1px solid #e5eeea;border-radius:9px;
+  color:#28473b;outline-offset:2px;
+}
+.fm-inline-status{margin:8px 0;color:#667f72;font-size:12px;line-height:1.4}
+.campaign-metrics-header{padding-bottom:14px}
+.campaign-metrics-header h2{font-size:15px}
+.campaign-metric small,.metrics-status{display:none}
+.fm-production-panel .page-header{margin:0 0 10px}
+.fm-production-panel .fm-demo-table{min-width:0}
+.fm-provider-form{display:grid;gap:16px;margin-top:20px}
+.fm-provider-form label{display:grid;gap:6px;font-size:12px;font-weight:750;color:#456351}
+.fm-provider-form input,.fm-provider-form select{
+  min-height:43px;width:100%;border:1px solid #d6e7dc;border-radius:9px;
+  padding:10px 12px;color:#284a38;background:#fff;font:inherit
+}
+@media(max-width:790px){
+ .fm-demo-v2 .fm-demo-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-production-panel>.page-header{align-items:flex-start}
+}
+@media(max-width:560px){
+ .fm-demo-v2 .page-header h1,.fm-production-panel>.page-header h1{font-size:20px}
+ .fm-demo-v2 .page-header{padding:0 1px;margin-bottom:1px}
+ .fm-demo-v2 .fm-demo-filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-visible-date-filters{width:100%}
+ .fm-visible-date-filters label{min-width:0;flex-basis:calc(50% - 5px)}
+ .toolbar .fm-visible-date-filters{flex:1 1 100%}
+ .fm-production-panel>.page-header{flex-direction:column}
+ .fm-production-panel>.page-header .btn{width:100%}
+}
+@media(max-width:380px){
+ .fm-demo-v2 .fm-demo-filters{grid-template-columns:minmax(0,1fr)}
+}

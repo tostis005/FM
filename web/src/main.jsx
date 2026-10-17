@@ -369,7 +369,15 @@ function App(){
    const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
    document.title=`Farmetrica · ${label}`;
  },[page]);
- const {promos:storedPromos,pharmacies,users:storedUsers}=data;
+ const {promos:rawPromos,users:storedUsers}=data;
+ // Ocultar objetivos y farmacias fuera del ámbito autorizado de esta sesión.
+ const pharmacies=tenantContext?.pharmacies||[];
+ const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
+ const storedPromos=(rawPromos||[]).map(p=>({...p,
+   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
+ }));
+
   const users=sessionUser?.role==="superadministrador"
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]

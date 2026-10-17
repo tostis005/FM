@@ -214,3 +214,14 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 @media(max-width:740px){.section-head-spread{display:block}.section-head-spread>p{max-width:100%;margin-top:20px}.suite-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.intelligence-layout{grid-template-columns:1fr}.audience-grid{grid-template-columns:1fr}.benefit-strip .container{grid-template-columns:repeat(2,minmax(0,1fr))}.erp-wall{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-benefits{gap:10px 15px}}
 @media(max-width:480px){.hero-business .container{padding:58px 0 74px;gap:34px}.hero-business h1{font-size:clamp(35px,10vw,49px)}.hero-business .hero-copy{font-size:14px}.hero-benefits{display:grid;gap:9px}.business-product-preview{grid-template-columns:78px minmax(0,1fr);min-height:320px;border-radius:11px}.bp-side{padding:13px 4px}.bp-brand{font-size:8px;gap:3px;margin-bottom:8px}.bp-brand span{width:18px;height:18px;font-size:12px}.bp-link{padding:8px 3px;font-size:7px;letter-spacing:-.02em}.bp-side-foot{font-size:6px}.bp-main{padding:16px 9px}.bp-main h2{font-size:15px;margin:20px 0 6px}.bp-main>p{font-size:8px;margin-bottom:15px}.bp-header{font-size:9px}.bp-period{font-size:7px;padding:5px}.bp-insights{gap:4px}.bp-insights>div{padding:8px 4px;min-height:72px}.bp-insights span{font-size:7px}.bp-insights strong{font-size:9px}.bp-bottom{grid-template-columns:1fr}.bp-actions{display:none}.bp-chart{min-height:125px}.business-floating{bottom:-18px;right:1px;padding:10px;gap:6px}.business-floating strong{font-size:9px}.business-floating small{font-size:8px}.floating-asterisk{font-size:20px}.suite-grid{grid-template-columns:1fr}.suite-card{min-height:205px}.suite-card h3{margin-top:21px}.erp-wall{grid-template-columns:1fr 1fr}.erp-wall strong{font-size:16px}.erp-wall a{padding:17px 13px}.editorial-business .story-grid{grid-template-columns:1fr}.benefit-strip .container>div{padding-left:10px}.benefit-strip b{font-size:12px}.benefit-strip span{font-size:10px}}
 @media(max-width:350px){.bp-link{font-size:6px}.hero-business .button{width:100%}.erp-wall{grid-template-columns:1fr}}
+
+/* Cabecera 320px: reservar espacio real al login y al menú móvil. */
+@media(max-width:370px){
+ .site-nav .container{gap:6px}
+ .site-nav .logo{font-size:16px;letter-spacing:-.8px;gap:6px;min-width:0}
+ .site-nav .logo-symbol{width:31px;height:31px;font-size:21px;flex:none}
+ .site-nav .nav-actions{gap:5px;min-width:0;flex-shrink:0}
+ .site-nav .nav-actions .login-button{padding:9px 8px;font-size:11px;gap:5px}
+ .site-nav .mobile-nav summary{padding:8px 8px}
+ .site-nav .mobile-links{right:0}
+}

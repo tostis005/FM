@@ -118,10 +118,10 @@ jobs:
         run: |
           set -euo pipefail
           tar -czf - -C api . | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && tar -xzf - -C api'
+            'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. api/'
           tar -czf - -C web --exclude=node_modules --exclude=dist . | \
             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && tar -xzf - -C web'
+            'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. web/'
           scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
             deploy/compose.farmacias.yml "$VPS_USER@$VPS_HOST:/opt/farmawao/compose.farmacias.yml"
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '

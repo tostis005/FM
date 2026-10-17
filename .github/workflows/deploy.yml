@@ -86,15 +86,22 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'for i in $(seq 1 20); do
                status=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/ || true)
+               blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/ || true)
+               post=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/presentamos-farmetrica/ || true)
+               css=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/marketing.css || true)
+               favicon=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/favicon.svg || true)
                login=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/login || true)
                private=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/index.html || true)
-               if [ "$status" = "302" ] && [ "$login" = "200" ] && [ "$private" = "302" ]; then
+               panel=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/promociones || true)
+               if [ "$status" = "200" ] && [ "$blog" = "200" ] && [ "$post" = "200" ] && [ "$css" = "200" ] && [ "$favicon" = "200" ] && [ "$login" = "200" ] && [ "$private" = "302" ] && [ "$panel" = "302" ]; then
                  if curl -fsS -D - -o /dev/null http://127.0.0.1:18080/login | tr -d "\r" | grep -Eqi "^content-type: text/html([;[:space:]]|$)" && \
-                    curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a Farmetrica"; then
+                    curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a Farmetrica" && \
+                    curl -fsS http://127.0.0.1:18080/ | grep -q "Cada promoción cuenta" && \
+                    curl -fsS http://127.0.0.1:18080/blog/ | grep -q "Buenas ideas"; then
                    exit 0
                  fi
                fi
                sleep 3
              done
-             echo "El login no responde o la SPA es accesible sin sesión"
+             echo "Landing, blog, login o acceso privado no responden correctamente"
              exit 1'

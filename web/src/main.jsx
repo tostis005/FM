@@ -153,7 +153,7 @@ function selectedIdsFromUrl(){
 }
 function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
- const status=params.get("estado")||(selected!==null?"Todos":"Activa");
+ const status=params.get("estado")||"Todos";
  return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
   year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
@@ -240,7 +240,7 @@ function App(){
  const reportCloseRef=useRef(null);
  const [reportSelectedIds,setReportSelectedIds]=useState(()=>{
   const ids=reportFiltersFromUrl().ids;
-  return ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):ids;
+  return ids===null?data.promos.map(p=>p.id):ids;
  });
   const [salesStatus,setSalesStatus]=useState("sin_conexion");
   const [salesError,setSalesError]=useState("");
@@ -317,7 +317,7 @@ function App(){
    const onBackForward=()=>{
    const filters=reportFiltersFromUrl();
    setReportStatus(filters.status);setReportYear(filters.year);
-   setReportSelectedIds(filters.ids===null?data.promos.filter(p=>p.status==="Activa").map(p=>p.id):filters.ids);
+   setReportSelectedIds(filters.ids===null?data.promos.map(p=>p.id):filters.ids);
    setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };

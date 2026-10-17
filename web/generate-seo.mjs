@@ -10,6 +10,7 @@ const records=[
  ...articles.map(p=>({...p,type:"article",url:"/blog/"+p.slug+"/"}))
 ];
 const hubRecords=[
+ {url:"/",title:"Conoce Farmetrica",category:"Inicio",description:"Inteligencia comercial, promociones y objetivos para farmacias."},
  {url:"/soluciones/",title:"Todas las soluciones de Farmetrica",category:"Soluciones",description:"Explora las funcionalidades de gestión comercial y seguimiento de promociones."},
  {url:"/integraciones/",title:"Programas de gestión e integraciones",category:"Integraciones",description:"Farmatic conectado en el entorno actual y otras integraciones en evaluación."},
  {url:"/blog/",title:"Blog de Farmetrica",category:"Blog",description:"Guías prácticas para mejorar el seguimiento de campañas de farmacia."}

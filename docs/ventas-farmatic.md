@@ -1,4 +1,4 @@
-# Ventas reales de Farmatic · FARMAWAO (octubre 2026)
+# Ventas reales de Farmatic · Farmétrica (octubre 2026)
 
 ## Fuente y correspondencia
 
@@ -78,7 +78,7 @@ confirmar en la web cuando la API autenticada esté desplegada y conectada.
 
 ## PostgreSQL y Google son independientes
 
-PostgreSQL se aloja en la misma máquina de Contabo que FARMAWAO y está en el
+PostgreSQL se aloja en la misma máquina de Contabo que Farmétrica y está en el
 servicio Docker `db`. La API utiliza su `DATABASE_URL` privada (dentro de
 Docker, hostname `db`; `localhost` apuntaría al contenedor API, NO a PostgreSQL).
 

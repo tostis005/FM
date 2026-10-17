@@ -138,3 +138,90 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 .seo-blog-end{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;padding:34px 0 10px}.seo-blog-end p{color:#315a43;font-size:16px;font-weight:800;margin:0}
 .seo-old-blog-links{display:flex;align-items:center;gap:10px 19px;flex-wrap:wrap;padding:19px 0;margin:20px 0;border-top:1px solid #dfe8dd;border-bottom:1px solid #dfe8dd}.seo-old-blog-links strong{font-size:12px;color:#225a3d}.seo-old-blog-links a{font-size:12px;color:#15815a;font-weight:800}
 @media(max-width:640px){.integration-links{flex-direction:column;align-items:flex-start}.seo-blog-end{align-items:flex-start}}
+
+/* Farmetrica: experiencia comercial completa, inspirada en el acceso privado. */
+.hero-business{background:radial-gradient(circle at 96% 3%,#267a5e 0%,transparent 42%),linear-gradient(133deg,#0d2b24,#104736 70%,#155b47)}
+.hero-business .container{grid-template-columns:minmax(0,1.03fr) minmax(0,1fr);gap:36px;padding:107px 0 118px}
+.hero-business h1{max-width:680px;font-size:clamp(44px,4.8vw,73px);line-height:1.105;letter-spacing:-.071em}
+.hero-business .hero-copy{max-width:565px}
+.hero-business .button{line-height:1.35}
+.hero-benefits{margin-top:39px;display:flex;flex-wrap:wrap;gap:10px 21px;color:#badbc9;font-size:11px;font-weight:750}
+.business-visual{position:relative;transform:perspective(1100px) rotateY(-4deg) rotateX(2deg);filter:drop-shadow(0 30px 50px #071b173b);background:none;padding:0}
+.business-product-preview{position:relative;overflow:hidden;display:grid;grid-template-columns:148px minmax(0,1fr);min-height:430px;border:1px solid #d7f2e6a9;border-radius:18px;background:#f8faf7;box-shadow:0 35px 70px #0018114d}
+.bp-side{background:#103e31;padding:22px 10px;display:flex;flex-direction:column;gap:8px;color:#b9d8c6}
+.bp-brand{display:flex;align-items:center;gap:9px;font:800 13px "Manrope",sans-serif;color:#fff;margin:5px 0 23px;padding:0 5px}.bp-brand span{display:grid;place-items:center;width:23px;height:23px;background:#b7ecc9;color:#134b39;border-radius:7px;font-size:17px}
+.bp-link{padding:11px 8px;border-radius:7px;font-size:10px;font-weight:750;white-space:nowrap}
+.bp-selected{background:#1c624a;color:#fff}
+.bp-side-foot{margin-top:auto;padding:0 4px 8px;color:#76af8f;font-size:9px;line-height:1.5}
+.bp-main{min-width:0;padding:26px 22px;color:#163c2b}
+.bp-header{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;font-weight:800;color:#5c7968}
+.bp-period{padding:7px 10px;background:#eaf3eb;color:#287457;border-radius:7px;font-size:9px;white-space:nowrap}
+.bp-main h2{font:800 clamp(17px,2vw,23px)/1.25 "Manrope",sans-serif;letter-spacing:-.052em;margin:25px 0 8px}
+.bp-main>p{font-size:10px;color:#7c9887;line-height:1.6;margin-bottom:23px}
+.bp-insights{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.bp-insights>div{min-width:0;min-height:92px;background:#fff;border:1px solid #dfebe1;border-radius:11px;padding:13px 10px;display:flex;flex-direction:column;gap:10px}
+.bp-insights span{font-size:9px;color:#7c9887;font-weight:750}.bp-insights strong{font:800 12px "Manrope";letter-spacing:-.03em;color:#245741}
+.bp-spark{margin-top:auto;height:4px;border-radius:99px;background:linear-gradient(90deg,#d8f2df 15%,#76cfa1 80%);width:65%}.bp-spark.s2{width:83%}.bp-spark.s3{width:49%}
+.bp-bottom{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:9px;margin-top:10px}
+.bp-chart,.bp-actions{min-width:0;min-height:148px;background:#fff;border:1px solid #dfebe1;border-radius:11px;padding:12px}
+.bp-block-title{display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:800;white-space:nowrap}
+.bp-block-title span{color:#0da573}
+.bp-bars{height:76px;display:flex;align-items:flex-end;gap:9px;padding:4px 0}.bp-bars i{flex:1;background:linear-gradient(#53c493,#def6e4);border-radius:5px 5px 0 0;min-width:0}
+.bp-axis{font-size:8px;color:#8ca391}
+.bp-actions{display:grid;align-content:start;gap:12px}.bp-actions>div:not(.bp-block-title){font-size:9px;font-weight:750;display:flex;align-items:center;gap:6px;line-height:1.4}.bp-actions>div:not(.bp-block-title) span{background:#e7f7ea;color:#188354;border-radius:6px;width:22px;height:21px;display:grid;place-items:center;flex:none}
+.business-floating{position:absolute;bottom:-26px;right:-20px;display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #dbebdc;box-shadow:0 15px 38px #03150f35;border-radius:13px;padding:15px 20px;color:#1d4c38;transform:rotate(3deg)}.floating-asterisk{font-size:31px;color:#2db77a}
+.business-floating div{display:grid;gap:4px}.business-floating strong{font-size:12px}.business-floating small{font-size:10px;color:#739484}
+.benefit-strip{background:#f4f8f3;border-bottom:1px solid #dbe9dd}.benefit-strip .container{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:29px 0;gap:17px}
+.benefit-strip .container>div{display:grid;gap:5px;padding-left:22px;border-left:2px solid #93d1b0}.benefit-strip b{font:800 14px "Manrope";color:#1e513a}.benefit-strip span{font-size:11px;color:#718b7b;line-height:1.5}
+.section-head-spread{display:flex;align-items:end;justify-content:space-between;gap:30px;max-width:none}.section-head-spread>div{max-width:650px}
+.section-head-spread>p{max-width:360px;margin:0 0 4px}
+.section-head h2 em,.intelligence-section h2 em,.business-cta h2 em{font-style:normal;color:#29a877}
+.suite-section{padding:105px 0}.suite-section .section-head h2{max-width:720px}
+.suite-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.suite-card{position:relative;min-width:0;min-height:270px;display:flex;flex-direction:column;background:linear-gradient(156deg,#f9fcf8,#eff7f0);border:1px solid #dce9dd;border-radius:15px;padding:21px 18px 24px;transition:border-color .2s,transform .2s,box-shadow .2s;overflow:hidden}
+.suite-card:hover,.suite-card:focus-visible{transform:translateY(-4px);border-color:#80c9a1;box-shadow:0 18px 35px #153d2520}
+.suite-number{display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:.09em;font-weight:850;color:#61a280}
+.suite-symbol{font-size:26px;color:#23845e;line-height:1}
+.suite-card h3{font:800 17px/1.25 "Manrope";letter-spacing:-.035em;color:#143d2e;margin:33px 0 12px}
+.suite-card p{font-size:11.5px;line-height:1.8;color:#567362;margin:0}
+.suite-detail{color:#227e57;margin-top:auto;padding-top:23px;font-size:10px;font-weight:800;line-height:1.5;max-width:90%}
+.suite-arrow{position:absolute;bottom:21px;right:18px;color:#1f9d69;font-size:18px}
+.suite-footer{margin-top:30px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:15px}
+.suite-footer>span{font-size:12px;color:#64806f;max-width:550px}
+.intelligence-section{background:radial-gradient(circle at 7% 13%,#1f654a,transparent 37%),linear-gradient(138deg,#113b30,#092d25)}
+.intelligence-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:90px;align-items:center}
+.intelligence-section h2{font:800 clamp(36px,4vw,57px)/1.15 "Manrope";letter-spacing:-.065em;margin:21px 0}.intelligence-section h2 em{color:var(--mint)}
+.intelligence-section p{font-size:15px;line-height:1.9;color:#bddacb}
+.intelligence-cases{display:grid;gap:10px}.case{display:flex;gap:17px;align-items:flex-start;background:#ffffff0c;border:1px solid #b7ecc929;border-radius:13px;padding:20px;color:#fff}
+.case-icon{width:37px;height:37px;flex:0 0 37px;display:grid;place-items:center;background:#b9ecc926;color:#b7ecc9;font-size:11px;font-weight:850;border-radius:9px}
+.case strong{font:800 14px/1.4 "Manrope";display:block}.case p{font-size:12px;line-height:1.7;color:#b6d2c2;margin:8px 0 0}
+.audience-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:17px}
+.audience-card{background:#fff;border:1px solid #dce9dd;border-radius:17px;padding:32px;min-height:325px;display:flex;flex-direction:column}
+.audience-card>span{font-size:11px;font-weight:800;letter-spacing:.1em;color:#2a9362}.audience-card h3{font:800 25px/1.25 "Manrope";letter-spacing:-.05em;color:#1a4230;margin:35px 0 16px}
+.audience-card p{font-size:13px;color:#637d6d;line-height:1.83}.audience-card a{margin-top:auto;color:#16835b;font-size:12px;font-weight:850}
+.integration-business{background:#fcfdfb}.integration-business .section-head{max-width:855px}
+.erp-wall{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px}
+.erp-wall a{display:grid;gap:10px;padding:26px 17px;border:1px solid #d9e6dd;border-radius:13px;background:#f7faf6;min-width:0;transition:background .2s}
+.erp-wall a:hover{background:#eaf6ed}.erp-wall strong{font:800 21px "Manrope";letter-spacing:-.04em;color:#224a38;overflow-wrap:anywhere}
+.erp-wall span{font-size:11px;color:#6a8978;line-height:1.5}.integration-business-note{margin:22px 0 0;font-size:12px;color:#6d8474;line-height:1.85}
+.integration-business-note a{color:#13754e;font-weight:850;text-decoration:underline;text-underline-offset:3px}
+.editorial-business{padding-top:45px}.editorial-business .story-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.editorial-business .story{min-width:0}.editorial-business .story-body{padding:20px}.editorial-business .story-body h3{font-size:17px}
+.editorial-business .text-link{display:inline-block;margin-top:30px}
+.business-cta{background:radial-gradient(circle at 95% 0%,#23664f,transparent 35%),linear-gradient(130deg,#102f28,#0c3c30)}.business-cta h2 em{color:var(--mint)}
+@media(max-width:1190px){.suite-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.business-visual{transform:none}.business-floating{right:4px}}
+@media(max-width:1020px){.hero-business .container{grid-template-columns:1fr;gap:48px;padding:78px 0 93px}.hero-business .hero-text{max-width:760px}.business-visual{max-width:750px;margin:auto;width:100%}.suite-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.intelligence-layout{gap:38px}.erp-wall{grid-template-columns:repeat(3,minmax(0,1fr))}.editorial-business .story-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){.section-head-spread{display:block}.section-head-spread>p{max-width:100%;margin-top:20px}.suite-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.intelligence-layout{grid-template-columns:1fr}.audience-grid{grid-template-columns:1fr}.benefit-strip .container{grid-template-columns:repeat(2,minmax(0,1fr))}.erp-wall{grid-template-columns:repeat(2,minmax(0,1fr))}.hero-benefits{gap:10px 15px}}
+@media(max-width:480px){.hero-business .container{padding:58px 0 74px;gap:34px}.hero-business h1{font-size:clamp(35px,10vw,49px)}.hero-business .hero-copy{font-size:14px}.hero-benefits{display:grid;gap:9px}.business-product-preview{grid-template-columns:78px minmax(0,1fr);min-height:320px;border-radius:11px}.bp-side{padding:13px 4px}.bp-brand{font-size:8px;gap:3px;margin-bottom:8px}.bp-brand span{width:18px;height:18px;font-size:12px}.bp-link{padding:8px 3px;font-size:7px;letter-spacing:-.02em}.bp-side-foot{font-size:6px}.bp-main{padding:16px 9px}.bp-main h2{font-size:15px;margin:20px 0 6px}.bp-main>p{font-size:8px;margin-bottom:15px}.bp-header{font-size:9px}.bp-period{font-size:7px;padding:5px}.bp-insights{gap:4px}.bp-insights>div{padding:8px 4px;min-height:72px}.bp-insights span{font-size:7px}.bp-insights strong{font-size:9px}.bp-bottom{grid-template-columns:1fr}.bp-actions{display:none}.bp-chart{min-height:125px}.business-floating{bottom:-18px;right:1px;padding:10px;gap:6px}.business-floating strong{font-size:9px}.business-floating small{font-size:8px}.floating-asterisk{font-size:20px}.suite-grid{grid-template-columns:1fr}.suite-card{min-height:205px}.suite-card h3{margin-top:21px}.erp-wall{grid-template-columns:1fr 1fr}.erp-wall strong{font-size:16px}.erp-wall a{padding:17px 13px}.editorial-business .story-grid{grid-template-columns:1fr}.benefit-strip .container>div{padding-left:10px}.benefit-strip b{font-size:12px}.benefit-strip span{font-size:10px}}
+@media(max-width:350px){.bp-link{font-size:6px}.hero-business .button{width:100%}.erp-wall{grid-template-columns:1fr}}
+
+/* Cabecera 320px: reservar espacio real al login y al menú móvil. */
+@media(max-width:370px){
+ .site-nav .container{gap:6px}
+ .site-nav .logo{font-size:16px;letter-spacing:-.8px;gap:6px;min-width:0}
+ .site-nav .logo-symbol{width:31px;height:31px;font-size:21px;flex:none}
+ .site-nav .nav-actions{gap:5px;min-width:0;flex-shrink:0}
+ .site-nav .nav-actions .login-button{padding:9px 8px;font-size:11px;gap:5px}
+ .site-nav .mobile-nav summary{padding:8px 8px}
+ .site-nav .mobile-links{right:0}
+}

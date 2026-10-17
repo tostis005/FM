@@ -24,14 +24,21 @@ assert.match(home,/<h1 id="hero-title">/);
 assert.match(home,/Farmatic/);
 assert.match(home,/Nixfarma/);
 assert.match(home,/Unycop/);
-assert.match(home,/Vista ilustrativa/);
-assert.match(home,/Integración en estudio/);
+assert.match(home,/Vende mejor/);
+assert.match(home,/Compra con criterio/);
+assert.match(home,/Stock e inventario/);
+assert.match(home,/Proveedores/);
+assert.match(home,/Genéricos/);
+assert.match(home,/Rentabilidad/);
+assert.match(home,/Una farmacia/);
+assert.match(home,new RegExp('href="/integraciones/bitfarma/"'));
+assert.match(home,new RegExp('href="/integraciones/farmanager/"'));
+assert.match(home,/la conexión depende de la versión, permisos y validación técnica/);
 assert.match(css,/@media\(max-width:700px\)/);
 assert.match(login,/query\.get\("next"\) \|\| "\/promociones"/);
 assert.match(login,/next === "\/" \? "\/promociones"/);
 for(const slug of posts){
   const html=read("./public/blog/"+slug+"/index.html");
-  assert.match(home,new RegExp('href="/blog/'+slug+'/?"'));
   assert.match(blog,new RegExp('href="/blog/'+slug+'/?"'));
   assert.match(html,/Equipo Farmetrica/);
   assert.match(html,/<article class="article-wrap">/);
@@ -72,8 +79,8 @@ for(const {p,url,type} of pages){
   assert.ok(!descriptionSet.has(p.description),"Descripción duplicada: "+url);descriptionSet.add(p.description);
   if(type==="article")assert.match(html,/"@type":"BlogPosting"/);
   if(type==="integration"){
-    assert.match(html,/Integración: (operativa|en estudio)/);
-    if(p.slug!=="farmatic")assert.match(html,/Integración: en estudio/);
+    assert.match(html,/Origen Farmatic conectado|Conexión sujeta a validación por instalación/);
+    if(p.slug!=="farmatic")assert.match(html,/Conexión sujeta a validación por instalación/);
   }
   for(const related of p.related||[])assert.ok(allUrls.has(related)||["/","/soluciones/","/integraciones/","/blog/"].includes(related),"Enlace contextual desconocido: "+related);
   assert.ok(nginx.includes(url),"Sitemap: falta "+url);
@@ -96,3 +103,22 @@ assert.match(nginx,/Sitemap: \$public_scheme:\/\/\$host\/sitemap\.xml/);
 assert.match(nginx,/location \/ \{\s*auth_request \/__authcheck;/);
 
 console.log("Marketing público y panel privado: estructura y navegación verificadas");
+
+const commercialModules=["ventas-farmacia","analisis-compras-farmacia","rentabilidad-farmacia","control-stock-farmacia",
+  "reposicion-stock-farmacia","analisis-proveedores-farmacia","comparativa-genericos-farmacia","rendimiento-articulos-farmacia"];
+for(const slug of commercialModules){
+ assert.match(home,new RegExp('href="/soluciones/'+slug+'/"'),"Landing sin solución "+slug);
+ assert.ok(solutions.some(p=>p.slug===slug),"Ficha SEO ausente "+slug);
+}
+for(const slug of ["bitfarma","farmanager"]){
+ assert.ok(integrations.some(p=>p.slug===slug));
+ assert.match(home,new RegExp('href="/integraciones/'+slug+'/"'));
+}
+for(const slug of ["compras-inteligentes-farmacia","stock-inmovilizado-farmacia","rentabilidad-por-articulo","estrategia-genericos-farmacia"]){
+ assert.ok(articles.some(p=>p.slug===slug));
+ assert.match(blog,new RegExp('href="/blog/'+slug+'/"'));
+}
+assert.doesNotMatch(home,/FARMAWAO|FarmaWow|Farmétrica|Integración en estudio|Vista de ejemplo|prototipo/i);
+assert.match(css,/\.suite-grid/);
+assert.match(css,/\.business-product-preview/);
+assert.match(css,/@media\(max-width:480px\)/);

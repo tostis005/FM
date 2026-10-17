@@ -255,10 +255,9 @@ button,input,select,textarea{font-family:inherit}
  .sidebar .side-link,.btn,.topbar .icon-btn{transition:none}
 }
 
-/* Isotipo analítico Farmetrica — consistente con la web pública y el login. */
-.sidebar .brand-mark{position:relative;font-size:0!important}
-.sidebar .brand-mark::after{
-  content:"";display:block;width:65%;height:65%;background:#153d2e;
-  -webkit-mask:url("/brand-symbol.svg?v=2") center/contain no-repeat;
-  mask:url("/brand-symbol.svg?v=2") center/contain no-repeat;
+/* Icono SVG visible en todas las densidades de pantalla. */
+.sidebar .brand-mark{position:relative}
+.sidebar .brand-mark .fm-emblem{
+  display:block;width:65%;height:65%;flex:none;
+  color:#153d2e;transform:none;stroke-width:initial;
 }

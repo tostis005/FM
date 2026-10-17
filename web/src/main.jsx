@@ -757,7 +757,7 @@ function App(){
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
  {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Clientes de datos" value={tenantContext.pharmacies.length} caption="Farmacias del cliente"/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
+{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
@@ -775,9 +775,16 @@ function App(){
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
-     {page==="ajustes"&&<><div className="page-header"><div><h1>Ajustes</h1></div></div><div className="settings-grid"><div className="card settings-card"><span className="settings-icon"><ShieldCheck/></span><h2>Google y correos autorizados</h2><p>Inicio de sesión, dominios y cuentas gestionados desde Accesos.</p><span className="soon">Próxima fase</span></div><div className="card settings-card"><span className="settings-icon"><RefreshCcw/></span><h2>Sincronización de ventas</h2><p>SQL Server → PostgreSQL, con cargas iniciales e incrementales y trazabilidad.</p><span className="soon">Pendiente de conexión</span></div><div className="card settings-card"><span className="settings-icon"><Activity/></span><h2>Asistente con IA</h2><p>Chat con consultas validadas para analizar beneficios y ventas reales.</p><span className="soon">Futura fase</span></div></div></>}
+     {page==="ajustes"&&<div className="fm-production-settings">
+      <div className="page-header"><h1>Ajustes</h1></div>
+      <div className="fm-module-links">
+       {[["usuarios","Usuarios"],["farmacias","Farmacias"],["proveedores-maestro","Proveedores"],["clientes","Clientes"],["accesos","Accesos"]]
+        .filter(([id])=>visibleNav.some(item=>item.id===id))
+        .map(([id,label])=><button className="card fm-module-link" key={id} onClick={()=>nav(id)}><strong>{label}</strong><ArrowRight size={17}/></button>)}
+      </div>
+     </div>}
    </main>
-   <footer className="app-footer"><span>© 2026 Farmetrica</span><span>{salesStatus==="real"?"Ventas agregadas reales · Farmatic / PostgreSQL":salesStatus==="error"?"Error al consultar ventas reales":"Estado de sincronización"}</span></footer>
+   <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>
   </div>
   {reportModal&&<div className="report-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setReportModal(null)}}>
    <section className="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">

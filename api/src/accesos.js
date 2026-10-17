@@ -102,9 +102,6 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     } catch (e) { next(e); }
   }
   async function requireAdmin(req, res, next) {
-    if (legacyEnabled && req.get("authorization")?.startsWith("Bearer ")) {
-      return legacyAdmin(req, res, next);
-    }
     try {
       const user = await sessionUser(req);
       if (!user) return res.status(401).json({ error: "Inicia sesión con una cuenta autorizada" });

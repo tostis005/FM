@@ -35,7 +35,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const changeFilter=(key,value)=>{setFilters(p=>({...p,[key]:value}));setPage(0);};
   const changeSort=key=>{setSort(prev=>prev?.key!==key?{key,direction:"asc"}:prev.direction==="asc"?{key,direction:"desc"}:null);setPage(0);};
   return <>
-    <div className="table-scroll">
+    <div className="table-scroll" role="region" tabIndex={0} aria-label={"Tabla desplazable de "+label}>
       <table className={"data-table smart-table "+tableClass}>
         <thead>
           <tr>{columns.map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
@@ -65,6 +65,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
       </table>
       {!filtered.length&&<div className="empty-state"><strong>{emptyText}</strong>{rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </div>
+    <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
     <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={setPage}
       onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label={label}/>
   </>;

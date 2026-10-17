@@ -41,7 +41,7 @@ def main() -> None:
             name, value = line.split("=", 1)
             values[name.strip()] = value.strip().strip('"').strip("'")
 
-    origin = input("URL HTTPS de FARMAWAO (ejemplo https://app.ejemplo.es): ").strip().rstrip("/")
+    origin = input("URL HTTPS de Farmétrica (ejemplo https://app.ejemplo.es): ").strip().rstrip("/")
     parsed = urlsplit(origin)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment:
         sys.exit("El origen debe ser una URL HTTPS sin ruta, barra final ni parámetros.")

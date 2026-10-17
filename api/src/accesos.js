@@ -218,8 +218,8 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       const digest = createHmac("sha256", secret).update(email + ":" + code).digest("hex");
       await mailer.sendMail({
         from: process.env.SMTP_FROM, to: email,
-        subject: "Código de acceso a FARMAWAO",
-        text: "Tu código de acceso a FARMAWAO es " + code + ". Caduca en 10 minutos. Si no lo has solicitado, ignora este correo.",
+        subject: "Código de acceso a Farmétrica",
+        text: "Tu código de acceso a Farmétrica es " + code + ". Caduca en 10 minutos. Si no lo has solicitado, ignora este correo.",
       });
       await pool.query(
         `INSERT INTO public.acceso_codigos(email,codigo_hash,caduca_en,intentos,enviado_en)

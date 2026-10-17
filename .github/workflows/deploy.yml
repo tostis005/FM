@@ -1,4 +1,4 @@
-name: Build and deploy Farmetrica
+name: Build and deploy Farmétrica
 
 on:
   push:
@@ -90,7 +90,7 @@ jobs:
                private=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/index.html || true)
                if [ "$status" = "302" ] && [ "$login" = "200" ] && [ "$private" = "302" ]; then
                  if curl -fsS -D - -o /dev/null http://127.0.0.1:18080/login | tr -d "\r" | grep -Eqi "^content-type: text/html([;[:space:]]|$)" && \
-                    curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a FARMAWAO"; then
+                    curl -fsS http://127.0.0.1:18080/login | grep -q "Acceder a Farmétrica"; then
                    exit 0
                  fi
                fi

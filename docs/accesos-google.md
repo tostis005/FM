@@ -1,4 +1,4 @@
-# Autenticación y administración de accesos — FARMAWAO
+# Autenticación y administración de accesos — Farmétrica
 
 ## Objetivo
 El administrador gestiona desde **Accesos** (ruta `/accesos`) un catálogo de dominios autorizados y cuentas individuales, sin fijar dominios en el código. Se puede habilitar `farmacia-ejemplo.es` y vincularlo al ID del maestro `public.farmacias`; también permitir `consultor@gmail.com` o `colaborador@externo.es` individualmente.
@@ -19,7 +19,7 @@ En `/opt/farmawao/.env`, añadir:
 GOOGLE_CLIENT_ID=TU_CLIENT_ID.apps.googleusercontent.com
 SESSION_SECRET=VALOR_ALEATORIO_MINIMO_32_CARACTERES
 ADMIN_BOOTSTRAP_EMAILS=tu.correo@dominio.com
-PUBLIC_APP_ORIGIN=https://DOMINIO_ACTUAL_FARMAWAO
+PUBLIC_APP_ORIGIN=https://DOMINIO_ACTUAL_FARMETRICA
 COOKIE_SECURE=true
 ```
 **Opcional** para enviar códigos a cualquier dirección expresamente autorizada (incluidos dominios que no sean Google):

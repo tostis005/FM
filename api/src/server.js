@@ -289,7 +289,7 @@ try {
   const accessMigration = await readFile(new URL("./migrations/002_accesos.sql", import.meta.url), "utf8");
   await pool.query(accessMigration);
   await bootstrapAdmins();
-  app.listen(Number(PORT), "0.0.0.0", () => console.log(`FARMAWAO API en puerto ${PORT}`));
+  app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmétrica API en puerto ${PORT}`));
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);
   await pool.end();

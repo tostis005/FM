@@ -35,10 +35,10 @@ export function ClientesPanel({onUpdated}){
   }catch(e){setError(e.message)}finally{setBusy("")}
  }
  return <div className="fm-management">
-  <div className="page-header"><div><h1>Clientes</h1><p>Administración global y módulos contratados o habilitados.</p></div></div>
-  <div className="fm-demo-note"><ShieldCheck size={17}/> Solo los superadministradores pueden acceder a este apartado y cambiar módulos.</div>
+  <div className="page-header"><h1>Clientes</h1></div>
+  
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
-  <section className="card fm-manage-client"><div className="section-heading"><div><h2>Nuevo cliente</h2><p>Alta de organización y creación automática de esquema operativo.</p></div><Building2 size={19}/></div>
+  <section className="card fm-manage-client"><div className="section-heading"><h2>Nuevo cliente</h2><Building2 size={19}/></div>
    <form className="fm-manage-form" onSubmit={createClient}>
     <label>Nombre comercial<input required maxLength={150} value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Grupo de farmacias"/></label>
     <label>Identificador / esquema<input required pattern="[a-z][a-z0-9_]{1,62}" value={newClient.slug} onChange={e=>setNewClient({...newClient,slug:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")})} placeholder="grupo_farmacias"/></label>
@@ -69,9 +69,9 @@ export function EquipoCliente({client,pharmacies=[]}){
   }catch(error){setFeedback(error.message)}finally{setBusy(false)}
  }
  return <div className="fm-management">
-  <div className="page-header"><div><h1>Equipo y permisos</h1><p>Asigna usuarios a las farmacias de este cliente, con permisos independientes de otros clientes.</p></div></div>
+  <div className="page-header"><h1>Equipo y permisos</h1></div>
   {feedback&&<div className="fm-manage-feedback" role="status">{feedback}</div>}
-  <section className="card fm-manage-client"><div className="section-heading"><div><h2>Alta o modificación de usuarios</h2><p>El mismo correo puede pertenecer a varios clientes.</p></div><Users size={20}/></div>
+  <section className="card fm-manage-client"><div className="section-heading"><h2>Alta o modificación de usuarios</h2><Users size={20}/></div>
    <form className="fm-manage-form" onSubmit={save}>
     <label>Correo<input type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="nombre@empresa.com"/></label>
     <label>Nombre<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nombre y apellidos"/></label>

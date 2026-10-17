@@ -66,7 +66,7 @@ async function requireEntraAdmin(req, res, next) {
 }
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
-const { requireTenantModule } = setupTenant(app, pool, { requireUser, requireSuperadmin });
+const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUser, requireSuperadmin });
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -208,6 +208,45 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
   } catch (err) { next(err); }
 });
 
+// Agregados reales de ventas; todas las consultas se restringen al cliente activo.
+const analyticsAccess=[...requireTenant(),(req,res,next)=>{
+ if(req.context.role==="superadministrador"||req.context.modules.dashboard||req.context.modules.ventas)return next();
+ return res.status(403).json({error:"Módulo de ventas no habilitado"});
+}];
+app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
+ try{
+  const from=String(req.query.desde||"2026-10-01"),to=String(req.query.hasta||"2026-10-31");
+  const search=String(req.query.buscar||"").trim(),raw=String(req.query.farmacias||"");
+  if(!validDates(from,to)||search.length>90||raw.length>2500||
+     (raw&&raw.split(",").some(id=>!/^[1-9][0-9]{0,8}$/.test(id))))
+    return res.status(400).json({error:"Filtros de ventas inválidos"});
+  const allowed=req.context.allowedPharmacyIds.map(Number);
+  const requested=raw?raw.split(",").map(Number):allowed;
+  if(requested.some(id=>!allowed.includes(id)))
+    return res.status(403).json({error:"Farmacia no autorizada"});
+  const ids=[...new Set(requested)];
+  if(!ids.length)return res.json({monthly:[],products:[],totalProducts:0,totalArticles:0,from,to});
+  const where=salesJoin(req)+" WHERE "+salesPeriod+
+    " AND f.id=ANY($3::int[]) AND btrim(v.codigo::text) ~ '^[0-9]{6}$' "+
+    " AND ($4::text='' OR btrim(v.codigo::text) ILIKE '%' || $4 || '%' OR v.descripcion::text ILIKE '%' || $4 || '%')";
+  const params=[from,to,ids,search];
+  const {rows:monthly}=await pool.query(
+    "SELECT to_char(date_trunc('month',v.fechahora),'YYYY-MM') AS month, "+
+    "sum(v.cantidad)::float8 AS unidades, sum(v.importeneto)::float8 AS ventas "+
+    where+" GROUP BY 1 ORDER BY 1",params);
+  const {rows:products}=await pool.query(
+    'SELECT f.id::text AS "pharmacyId", btrim(v.codigo::text) AS cn, '+
+    "max(nullif(btrim(v.descripcion::text),'')) AS name, "+
+    "sum(v.cantidad)::float8 AS units, sum(v.importeneto)::float8 AS value "+
+    where+" GROUP BY f.id,btrim(v.codigo::text) ORDER BY sum(v.importeneto) DESC NULLS LAST LIMIT 750",params);
+  const {rows:counts}=await pool.query(
+    "SELECT count(*)::int AS n,count(DISTINCT cn)::int AS articulos FROM "+
+    "(SELECT btrim(v.codigo::text) AS cn "+where+" GROUP BY f.id,btrim(v.codigo::text)) x",params);
+  res.json({monthly,products,totalProducts:counts[0]?.n||0,
+    totalArticles:counts[0]?.articulos||0,from,to});
+ }catch(err){next(err)}
+});
+
 // Detalle de tickets Farmatic, exclusivamente para administradores autenticados.
 // Mantener PVP, descuentos e importes exactamente como constan en PostgreSQL.
 const ticketColumns = Object.freeze({
@@ -306,6 +345,8 @@ try {
   await pool.query(accessMigration);
   const tenantMigration = await readFile(new URL("./migrations/003_multitenant.sql", import.meta.url), "utf8");
   await pool.query(tenantMigration);
+  const supplierMigration=await readFile(new URL("./migrations/005_proveedores.sql",import.meta.url),"utf8");
+  await pool.query(supplierMigration);
   await bootstrapAdmins();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
 } catch (err) {

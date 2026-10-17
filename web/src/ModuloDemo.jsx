@@ -3,7 +3,7 @@ import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from
 import {ArrowDownToLine,ArrowRight,Search,X} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
-import {buildDemoTables,normalizeTables,money,number} from "./businessDemoData.js";
+import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
 import {buildAnalysis} from "./businessAnalytics.js";
 import "./moduleDemo.css";
 
@@ -72,7 +72,7 @@ function columnsFor(module,pharmacyMap){
   case "reposicion":return [...common,num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
   case "rentabilidad":return [...common,euro("value","Ventas"),euro("margin","Margen estimado"),C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
-  case "acciones":return [C("action","Acción","action"),...common,euro("impact","Importe asociado")];
+  case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
   default:return [...common,euro("value","Ventas")];
  }
 }
@@ -102,9 +102,31 @@ function readFilters(client){
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
  const [filters,setFilters]=useState(()=>readFilters(clientSlug));
  const [detail,setDetail]=useState(null);
+ const [realSales,setRealSales]=useState(null);
+ const [salesError,setSalesError]=useState("");
+ const [loading,setLoading]=useState(false);
  const asOf=useMemo(()=>new Date(),[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
- const tables=useMemo(()=>realTables?normalizeTables(realTables):buildDemoTables(pharmacies,asOf),[realTables,ids,asOf]);
+ const tables=useMemo(()=>realTables?normalizeTables(realTables):
+  {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
+ useEffect(()=>{
+  const controller=new AbortController();
+  if(!["dashboard","ventas"].includes(module)){setRealSales(null);return ()=>controller.abort()}
+  const params=new URLSearchParams();
+  params.set("desde",monthAt(asOf,1-Number(filters.period))+"-01");
+  params.set("hasta",new Date(Date.UTC(asOf.getUTCFullYear(),asOf.getUTCMonth()+1,0)).toISOString().slice(0,10));
+  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  if(filters.search)params.set("buscar",filters.search);
+  setLoading(true);setSalesError("");setRealSales(null);
+  fetch("/api/analytics/ventas?"+params,{credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar las ventas");return b})
+   .then(data=>{if(!controller.signal.aborted)setRealSales(data)})
+   .catch(e=>{if(!controller.signal.aborted)setSalesError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
+  return ()=>controller.abort();
+ },[module,clientSlug,ids,filters.period,filters.pharmacyIds.join(","),filters.search,asOf]);
+
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
  useEffect(()=>{sessionStorage.setItem(STORAGE+clientSlug,JSON.stringify(filters))},[filters,clientSlug]);
@@ -112,23 +134,44 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const pharmacyOptions=pharmacies.map(p=>({label:p.name,value:String(p.id)}));
  const change=(field,value)=>setFilters(f=>({...f,[field]:value}));
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
- const cards=metricCards(module,analysis.kpis);
+ const hasSales=realSales!==null;
+ const canShowKpi=key=>{
+  if(realTables)return true;
+  return hasSales&&["ventas","unidades","articulosVendidos"].includes(key)&&["dashboard","ventas"].includes(module);
+ };
+ const realRevenue=realSales?.monthly?.some(r=>r.ventas!=null)?
+   realSales.monthly.reduce((t,r)=>t+Number(r.ventas||0),0):null;
+ const realUnits=realSales?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
+ const realKpis={...analysis.kpis,ventas:realRevenue,unidades:realUnits,articulosVendidos:realSales?.totalArticles||0};
+ const cards=metricCards(module,realKpis);
  const isDashboard=module==="dashboard",isReports=module==="informes",isAssistant=module==="asistente";
  const datasets={ventas:analysis.salesRows,compras:analysis.buyRows,
   proveedores:analysis.supplierRows,stock:analysis.stockRows,
   reposicion:analysis.replenishmentRows,genericos:analysis.genericRows,
   rentabilidad:analysis.profitRows,acciones:analysis.actions,
   dashboard:analysis.actions};
- const rows=datasets[module]||[];
+ const liveSalesRows=(realSales?.products||[]).map((r,i)=>({
+   id:String(r.pharmacyId)+"|"+r.cn,pharmacyId:String(r.pharmacyId),
+   cn:r.cn,name:r.name||r.cn,family:"",units:Number(r.units)||0,
+   value:r.value==null?null:Number(r.value),margin:null,marginPct:null
+ }));
+ const rows=module==="ventas"?liveSalesRows:(datasets[module]||[]);
  const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap);
  const chartConfig=SERIES[module]||SERIES.dashboard;
- const chart=analysis.monthly.map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
+ const chart=(["dashboard","ventas"].includes(module)&&realSales?
+   realSales.monthly.map(r=>({month:r.month,ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0})):
+   realTables?analysis.monthly:[])
+   .map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
+ const available=realTables||(["dashboard","ventas"].includes(module)&&hasSales);
+ const chartSeries=module==="dashboard"&&!realTables?["ventas",null,"Ventas por mes"]:chartConfig;
+
  return <div className="fm-demo fm-demo-v2">
   <div className="page-header"><h1>{TITLES[module]||"Dashboard"}</h1>
-   {!realTables&&<span className="fm-demo-tag">Datos de ejemplo</span>}</div>
+   {module==="proveedores"&&canNavigate("proveedores-maestro")&&
+    <button className="btn btn-secondary" onClick={()=>go("proveedores-maestro")}>Maestro de proveedores <ArrowRight size={16}/></button>}</div>
   <div className="fm-demo-filters">
-   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>change("pharmacyIds",v)}/></div>
-   <div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>
+   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>change("pharmacyIds",v)}/></div>
+   {familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
    <label><span>Periodo</span><select value={filters.period} onChange={e=>change("period",e.target.value)}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label>
    <label className="fm-demo-search"><span>Artículo o CN</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </div>
@@ -136,22 +179,24 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    const active=Boolean(c.link&&canNavigate(c.link));
    return <button key={c.label+c.key} type="button" className={"card fm-demo-kpi fm-kpi-link "+(active?"fm-kpi-active":"")}
     disabled={!active} onClick={()=>go(c.link)} aria-label={active?c.label+": abrir "+TITLES[c.link]:c.label}>
-    <span>{c.label}</span><strong>{format(c.value,c.unit)}</strong>{active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
+    <span>{c.label}</span><strong>{canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>{active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>
   {isDashboard&&<section className="fm-module-links" aria-label="Acceso a módulos">
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
-  {!isAssistant&&<section className="card fm-demo-graph">
-    <div className="section-heading"><h2>{chartConfig[2]}</h2></div>
+  {salesError&&<p role="alert" className="fm-inline-status">{salesError}</p>}
+  {loading&&<p className="fm-inline-status">Cargando ventas…</p>}
+  {!isAssistant&&chart.length>0&&<section className="card fm-demo-graph">
+    <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
     <div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
       <YAxis tickLine={false} axisLine={false} width={48} fontSize={10}/>
       <Tooltip formatter={(v,key)=>[key==="unidades"?number(v):money(v),TITLES[key]||key]}/>
-      <Bar dataKey={chartConfig[0]} name={chartConfig[0]} fill="#159c70" radius={[5,5,0,0]}/>
-      {chartConfig[1]&&<Bar dataKey={chartConfig[1]} name={chartConfig[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
+      <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
+      {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
      </BarChart>
     </ResponsiveContainer></div>
    </section>}
@@ -165,8 +210,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":TITLES[module]+" por artículo"}</h2>
-    <button className="btn btn-secondary" type="button" onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable rows={rows} rowKey={r=>r.id} label="registros" emptyText="Sin resultados"
+    <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
+   <ListTable rows={rows} rowKey={r=>r.id} label="registros" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard?go(row.targetModule):setDetail(row)} columns={columns}/>
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>

@@ -83,7 +83,7 @@ jobs:
       - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 005_proveedores.sql; do
             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
               'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
               < "api/src/migrations/$migration"

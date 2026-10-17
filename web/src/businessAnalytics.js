@@ -64,10 +64,27 @@ export function buildAnalysis(tables,filters={},asOf=new Date()){
  const replenishmentRows=stockRows.filter(r=>r.need>0).sort((a,b)=>b.need-a.need);
  const genericRows=buyRows.filter(r=>r.generico);
  const profitRows=salesRows.filter(r=>r.margin!=null).sort((a,b)=>a.marginPct-b.marginPct);
+ // Comparación homogénea: mismo CN y farmacia, entre proveedores observados.
+ // No comparar referencias distintas ni sumar estos importes a otros indicadores.
+ const comparisons=[];
+ for(const [id,options] of group(buyRows,r=>key(r.pharmacyId,r.cn))){
+  if(options.length<2)continue;
+  const ranked=options.filter(r=>r.puc>0).sort((a,b)=>a.puc-b.puc);
+  const best=ranked[0];
+  if(!best)continue;
+  for(const row of ranked.slice(1)){
+   const difference=round((row.puc-best.puc)*Math.max(0,row.units));
+   if(difference<=0)continue;
+   comparisons.push({...row,action:"Concentrar compra",targetSupplier:best.supplier,
+     targetProviderId:best.providerId,targetPuc:best.puc,
+     originSupplier:row.supplier,impact:difference,targetModule:"proveedores"});
+  }
+ }
  const actions=[
-  ...buyRows.filter(r=>r.potential>0).map(r=>({...r,action:"Revisar PUC",targetModule:"compras",impact:r.potential})),
+  ...comparisons,
+  ...buyRows.filter(r=>r.potential>0).map(r=>({...r,action:"Negociar precio de compra",targetModule:"compras",impact:r.potential})),
   ...stockRows.filter(r=>(r.excessValue||0)>0).map(r=>({...r,action:"Reducir sobrestock",targetModule:"stock",impact:r.excessValue})),
-  ...replenishmentRows.map(r=>({...r,action:"Reponer",targetModule:"reposicion",impact:r.needValue||0}))
+  ...replenishmentRows.map(r=>({...r,action:"Reponer producto",targetModule:"reposicion",impact:r.needValue||0}))
  ].sort((a,b)=>b.impact-a.impact);
  const monthly=months.map(month=>{
   const ms=sales.filter(v=>v.fecha.startsWith(month)),mp=purchases.filter(v=>v.fecha.startsWith(month));
@@ -99,6 +116,6 @@ export function buildAnalysis(tables,filters={},asOf=new Date()){
   acciones:actions.length
  };
  return {period,months,monthly,kpis,salesRows,buyRows,supplierRows,stockRows,
-  replenishmentRows,genericRows,profitRows,actions,selectedArticles,articles:articleMap,
+  replenishmentRows,genericRows,profitRows,actions,comparisons,selectedArticles,articles:articleMap,
   suppliers:supplierMap,pharmacies:allowedIds};
 }

@@ -44,6 +44,12 @@ async function mockApi(route){
  else if(path==="/api/tenant/usuarios")payload=[{email:user.email,name:user.name,role:"administrador",pharmacies:[],active:true}];
  else if(path==="/api/admin/domains"||path==="/api/admin/accounts")payload=[];
  else if(path==="/api/auth/config")payload={googleClientId:"",emailCodesAvailable:false,configured:true};
+ else if(path==="/api/analytics/ventas"){
+  const filter=url.searchParams.get("farmacias");
+  const count=filter?filter.split(",").length:pharmacies.length;
+  payload={monthly:[{month:"2026-10",ventas:count*1000,unidades:count*75}],
+    products:[],totalProducts:0,totalArticles:count*10};
+ }
  else if(path==="/api/ventas/catalogo")payload={products:[]};
  else if(path==="/api/ventas/cobertura")payload={pharmacies:[]};
  else if(path==="/api/ventas/seguimiento")payload={sales:{}};
@@ -84,12 +90,14 @@ try{
        }
        if(path==="dashboard"&&viewport.width===375){
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");
+         await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")?.textContent!=="—");
          const before=await firstMetric.textContent();
          await page.locator(".fm-filter-field .multi-filter-trigger").first().click();
          const popup=page.locator(".multi-filter-popover");
          await popup.getByText("Abadía",{exact:true}).click();
          await popup.getByText("Europa",{exact:true}).click();
          await popup.getByRole("button",{name:"Listo"}).click();
+         await page.waitForFunction(previous=>{const now=document.querySelector(".fm-demo-kpi strong")?.textContent;return Boolean(now&&now!==previous&&now!=="—");},before,{timeout:10000});
          const after=await firstMetric.textContent();
          if(before===after)throw Error("La selección de dos farmacias no recalcula los KPI");
          await page.locator(".fm-demo-kpi").first().click();

@@ -165,40 +165,32 @@ faq:[
 related:["/integraciones/","/soluciones/seguimiento-ventas-farmacia/","/soluciones/reporting-laboratorios/"]
 },
 {
-slug:"nixfarma",category:"Compatibilidad en estudio",title:"Nixfarma y el análisis de promociones de farmacia",
-description:"Conoce qué necesitaría una conexión entre Nixfarma y Farmetrica para analizar campañas, objetivos y ventas. Integración en estudio, no disponible aún.",
-hero:"¿Trabajas con Nixfarma? Hablemos de tus datos comerciales.",
-lead:"Nixfarma es uno de los programas utilizados para gestionar la actividad diaria de una farmacia. Farmetrica estudia cómo ampliar su modelo de seguimiento a otros orígenes, pero la conexión con Nixfarma todavía no está desarrollada ni validada.",
-value:"Integración prevista: pendiente de análisis técnico y autorización.",
+slug:"nixfarma",category:"Ecosistema ERP",title:"Nixfarma y Farmetrica: analítica para tu farmacia",
+description:"Descubre cómo analizar ventas, compras, stock, proveedores y promociones con un modelo de datos independiente para farmacias que trabajan con Nixfarma.",
+hero:"Tus datos de Nixfarma pueden contar una historia comercial más completa.",
+lead:"Nixfarma resuelve el día a día operativo de muchas oficinas de farmacia. Farmetrica está diseñada para complementar al programa de gestión con análisis de ventas, compras, stock y rentabilidad, utilizando un modelo independiente del origen.",
+value:"Un criterio de análisis común, con conexión validada para cada instalación.",
 sections:[
-{heading:"Qué datos necesita el seguimiento de promociones",paragraphs:["Para contrastar ventas y objetivos hacen falta códigos de producto, fecha de operación, cantidades, farmacia de origen y un criterio consistente para las anulaciones o devoluciones.","El primer paso es comprobar qué datos puede proporcionar la instalación de Nixfarma de forma autorizada y cómo se mantienen actualizados."]},
-{heading:"Por qué no basta con decir que es compatible",paragraphs:["Nixfarma publica información sobre integraciones y conectores oficiales. La extracción de datos sin una vía mantenida y autorizada puede generar incoherencias o dejar de funcionar con una actualización.","Por eso Farmetrica distingue entre el sistema Farmatic ya conectado en su entorno actual y Nixfarma, cuya conexión forma parte de una evaluación posterior."]},
-{heading:"Cómo sería el análisis después de una integración validada",paragraphs:["El modelo previsto permitiría definir campañas por CN, asignar objetivos diferentes a las farmacias participantes y comparar resultados, siempre que el origen facilite los datos y permisos necesarios.","Mientras no exista esa conexión validada, no se ofrece como una funcionalidad operativa para Nixfarma."]}
+{heading:"Más preguntas, una sola visión de negocio",paragraphs:["Ventas, compras, existencias y artículos ganan valor cuando se pueden analizar conjuntamente. El objetivo es entender qué referencias funcionan, qué costes se pueden revisar y dónde se concentra el stock.","Farmetrica ofrece módulos comerciales para estas preguntas, con disponibilidad de datos según la integración que se configure para cada cliente."],points:["Ventas y rendimiento de productos.","Compras y proveedores.","Stock y cobertura.","Rentabilidad y promociones."]},
+{heading:"Tus datos conservan su contexto",paragraphs:["Para construir indicadores comparables hay que revisar códigos de producto, fechas, devoluciones, costes y pertenencia a cada farmacia.","Una conexión con Nixfarma exige comprobar la versión y la vía de acceso autorizada. No debe confundirse la existencia del programa con una integración ya desplegada de Farmetrica."]},
+{heading:"Pensado para una farmacia y redes",paragraphs:["Una vez disponible un origen validado, los mismos indicadores permiten analizar un punto de venta o consolidar varias farmacias, con filtros y ámbitos por usuario.","La implantación concreta debe definir qué información se proporciona, con qué frecuencia y con qué permisos."]}
 ],
-faq:[
-["¿Farmetrica se conecta hoy directamente con Nixfarma?","No. La integración con Nixfarma está prevista, pero pendiente de desarrollo y validación."],
-["¿Puedo cargar campañas en Excel aunque use Nixfarma?","La importación de información de campañas y objetivos es distinta de la integración de ventas. El seguimiento de tickets reales requiere una fuente conectada."],
-["¿Farmetrica es un producto oficial de Nixfarma?","No. Los nombres de programas se citan con fines descriptivos y no implican asociación comercial."]
-],
-related:["/integraciones/","/integraciones/farmatic/","/soluciones/importar-campanas-excel/"]
+faq:[["¿Nixfarma es un programa de gestión real?","Sí, Nixfarma es un programa comercial de gestión de farmacias."],["¿Existe ya un conector de Farmetrica validado con Nixfarma?","No consta una integración operativa validada; hay que revisar la instalación y los accesos disponibles."],["¿Farmetrica sustituye a Nixfarma?","No. El enfoque de Farmetrica es añadir análisis comercial a los datos del programa de farmacia."]],
+related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/control-stock-farmacia/"]
 },
 {
-slug:"unycop",category:"Compatibilidad en estudio",title:"Unycop y los cuadros de mando de promociones",
-description:"Análisis de posibles conexiones de Unycop WIN o NEXT con Farmetrica para objetivos y promociones. Integración aún no disponible.",
-hero:"Unycop y seguimiento comercial: qué conviene conectar.",
-lead:"Una farmacia que utiliza Unycop puede necesitar una lectura comercial específica de sus promociones. Farmetrica contempla ese caso de uso, aunque todavía no dispone de una integración con Unycop implantada y verificada.",
-value:"Posibilidad en evaluación, no conector disponible actualmente.",
+slug:"unycop",category:"Ecosistema ERP",title:"Unycop y Farmetrica: análisis comercial de farmacia",
+description:"Conoce las posibilidades de analítica de ventas, compras, stock y objetivos comerciales para una farmacia que utiliza el programa Unycop.",
+hero:"Tu sistema Unycop gestiona operaciones. Tus decisiones necesitan perspectiva.",
+lead:"Farmetrica organiza la inteligencia comercial del negocio en torno a ventas, compras, artículos, existencias y promociones. Esta lógica permite trabajar con distintos sistemas de origen, previa adaptación y validación de la conexión.",
+value:"Analítica independiente del ERP, con conectividad sujeta a la instalación.",
 sections:[
-{heading:"Objetivos, CN y ventas: las piezas que deben encajar",paragraphs:["La gestión promocional precisa relacionar las referencias implicadas, el periodo de vigencia y las unidades registradas por farmacia. También es necesario distinguir devoluciones, movimientos anulados y otras particularidades del origen.","El diseño de una integración debe tratar esas reglas antes de presentar indicadores como si fueran comparables entre programas."]},
-{heading:"Versiones y vías de conexión",paragraphs:["Unycop dispone de diferentes productos y versiones, como WIN y NEXT, con capacidades propias. El fabricante describe herramientas de exportación y APIs para algunos usos; eso no significa que ya exista un conector desarrollado por Farmetrica.","La viabilidad depende de la versión instalada, los datos accesibles, permisos y condiciones técnicas de integración."]},
-{heading:"El objetivo: conservar la lógica comercial",paragraphs:["Una vez validada una fuente de datos, el valor del panel se encuentra en comparar objetivos y ventas por farmacia, agrupar campañas y producir informes adecuados para el seguimiento con laboratorios.","Hasta entonces, la opción responsable es presentar Unycop como integración en estudio y no prometer compatibilidad universal."]}
+{heading:"Unificar información comercial",paragraphs:["El responsable necesita relacionar qué vende, qué compra, qué margen estimado obtiene y qué stock mantiene. Estas preguntas no dependen de la marca del ERP, sino de disponer de datos coherentes.","La estructura de Farmetrica permite analizar estas dimensiones por referencia, proveedor, farmacia y periodo."],points:["Visión comercial de ventas y compras.","Rendimiento de artículos y familias.","Cobertura y existencias.","Objetivos y campañas por farmacia."]},
+{heading:"Una conexión que respete tu sistema",paragraphs:["Unycop cuenta con distintas soluciones y versiones. La disponibilidad de los datos y sus mecanismos de acceso puede cambiar según el producto y la instalación.","Antes de dar por activa la integración hay que validar extracción, permisos, identificadores y reglas de negocio con el propietario autorizado de los datos."]},
+{heading:"De un punto de venta a la red",paragraphs:["La comparación entre farmacias cobra valor si los movimientos se interpretan de la misma forma, incluso cuando los orígenes son diferentes.","Farmetrica incorpora una estructura de clientes, farmacias, módulos y roles para organizar el análisis comercial de la red."]}
 ],
-faq:[
-["¿La integración con Unycop está operativa?","No. Actualmente es una posibilidad en estudio."],
-["¿Funciona igual con Unycop WIN y NEXT?","No puede darse por hecho; cada versión y sus mecanismos autorizados de acceso requieren evaluación."],
-["¿Se puede gestionar la definición de campañas sin conectar las ventas?","La creación e importación de campañas son funciones distintas del acceso a ventas reales. Sin integración no se debe presentar un seguimiento de tickets como actualizado."]
-],
-related:["/integraciones/","/integraciones/nixfarma/","/soluciones/gestion-promociones-farmacia/"]
+faq:[["¿Unycop es un ERP de farmacia?","Sí, Unycop es una familia comercial de software de gestión para farmacias."],["¿Farmetrica está conectada hoy a Unycop?","No consta una implantación con Unycop verificada. La conexión debe evaluarse y configurarse por instalación."],["¿El programa funciona igual con todas las versiones?","No se puede garantizar; la versión concreta y sus opciones técnicas condicionan la integración."]],
+related:["/integraciones/","/soluciones/grupos-de-farmacias/","/soluciones/analisis-compras-farmacia/"]
 }
 ];
 

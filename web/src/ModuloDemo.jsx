@@ -139,7 +139,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   if(realTables)return true;
   return hasSales&&["ventas","unidades","articulosVendidos"].includes(key)&&["dashboard","ventas"].includes(module);
  };
- const realRevenue=realSales?.monthly?.reduce((t,r)=>t+Number(r.ventas||0),0)||0;
+ const realRevenue=realSales?.monthly?.some(r=>r.ventas!=null)?
+   realSales.monthly.reduce((t,r)=>t+Number(r.ventas||0),0):null;
  const realUnits=realSales?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...analysis.kpis,ventas:realRevenue,unidades:realUnits,articulosVendidos:realSales?.totalArticles||0};
  const cards=metricCards(module,realKpis);

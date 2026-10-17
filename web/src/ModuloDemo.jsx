@@ -103,7 +103,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const [filters,setFilters]=useState(()=>readFilters(clientSlug));
  const [detail,setDetail]=useState(null);
  const asOf=useMemo(()=>new Date(),[]);
- const ids=pharmacies.map(p=>String(p.id)).join(",");
+ const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
  const tables=useMemo(()=>realTables?normalizeTables(realTables):buildDemoTables(pharmacies,asOf),[realTables,ids,asOf]);
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);

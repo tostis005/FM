@@ -4,7 +4,7 @@ import {ChevronDown} from "lucide-react";
 import {searchText} from "./listLogic.js";
 
 // Portal: el desplegable no se recorta dentro del scroll horizontal de la tabla.
-export function MultiSelectFilter({label,options=[],value=[],onChange}){
+export function MultiSelectFilter({label,options=[],value=[],onChange,placeholder}){
   const [open,setOpen]=useState(false);
   const [query,setQuery]=useState("");
   const [position,setPosition]=useState({top:0,left:0,width:230});
@@ -51,7 +51,7 @@ export function MultiSelectFilter({label,options=[],value=[],onChange}){
     <button type="button" ref={trigger} className={"multi-filter-trigger "+(selected.length?"multi-filter-active":"")}
       aria-label={"Filtrar por "+label} aria-haspopup="dialog" aria-expanded={open}
       title={"Filtrar por "+label} onClick={()=>{setOpen(v=>!v);setQuery("");}}>
-      <span>{!selected.length?"Todos":selected.length===1?(unique.find(x=>x.value===selected[0])?.label||"1 seleccionado"):selected.length+" seleccionados"}</span><ChevronDown size={14}/>
+      <span>{!selected.length?(placeholder||"Filtrar "+label.toLocaleLowerCase("es")):selected.length===1?(unique.find(x=>x.value===selected[0])?.label||"1 seleccionado"):selected.length+" seleccionados"}</span><ChevronDown size={14}/>
     </button>
     {open&&createPortal(<div className="multi-filter-popover" ref={menu} role="dialog"
         aria-label={"Seleccionar "+label} style={{top:position.top,left:position.left,width:position.width}}>

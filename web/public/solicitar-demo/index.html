@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#102f28"><meta name="robots" content="index,follow">
+<meta name="description" content="Solicita una demostración de Farmetrica para tu farmacia o red. Descubre cómo analizar ventas, compras, stock y promociones con un modelo independiente del programa de gestión.">
+<meta property="og:type" content="website"><meta property="og:title" content="Solicitar demostración | Farmetrica">
+<meta property="og:description" content="Cuéntanos qué programa utilizas y qué quieres analizar. Estudiaremos la conexión y las posibilidades para tu farmacia.">
+<title>Solicitar demostración de Farmetrica | Analítica para farmacias</title>
+<link rel="canonical" href="/solicitar-demo/">
+<link rel="icon" type="image/webp" href="/brand-logo.webp?v=4">
+<link rel="stylesheet" href="/marketing.css?v=5">
+<script defer src="/solicitar-demo/formulario.js?v=1"></script>
+</head>
+<body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<header class="site-nav"><div class="container">
+<a class="logo" href="/" aria-label="Farmetrica, inicio"><span class="logo-symbol" aria-hidden="true"><img class="fm-emblem" src="/brand-logo.webp?v=4" alt=""></span>Farmetrica</a>
+<nav class="nav-links" aria-label="Navegación"><a href="/#plataforma">La plataforma</a><a href="/soluciones/">Soluciones</a><a href="/integraciones/">Integraciones</a><a href="/blog/">Blog</a></nav>
+<div class="nav-actions"><a class="login-button" href="/login">Acceder</a><details class="mobile-nav"><summary aria-label="Abrir menú de navegación">☰</summary><nav class="mobile-links"><a href="/">Inicio</a><a href="/soluciones/">Soluciones</a><a href="/integraciones/">Integraciones</a><a href="/blog/">Blog</a></nav></details></div>
+</div></header>
+<main id="contenido">
+<section class="demo-hero">
+<div class="container demo-hero-layout">
+<div class="demo-pitch">
+<nav class="breadcrumb demo-breadcrumb" aria-label="Ruta de navegación"><a href="/">Inicio</a> / <span aria-current="page">Solicitar demostración</span></nav>
+<span class="demo-eyebrow"><span class="demo-green-dot"></span> Descubre Farmetrica</span>
+<h1>Descubre qué pueden contar <em>los datos de tu farmacia.</em></h1>
+<p class="demo-intro">Una conversación sobre tus necesidades, el programa de gestión que utilizas y las decisiones que quieres mejorar. Te enseñaremos el enfoque de Farmetrica y estudiaremos qué conexión es viable en tu instalación.</p>
+<div class="demo-trust-points">
+<div><span aria-hidden="true">01</span><div><strong>Entendemos tu punto de partida</strong><p>Farmacia individual, grupo de farmacias o equipo gestor.</p></div></div>
+<div><span aria-hidden="true">02</span><div><strong>Revisamos la compatibilidad</strong><p>Farmatic es el origen conectado actualmente; otros ERP requieren valoración técnica.</p></div></div>
+<div><span aria-hidden="true">03</span><div><strong>Te mostramos el potencial</strong><p>Promociones, ventas y los análisis que permitan tus datos de compras, costes y stock.</p></div></div>
+</div>
+<div class="demo-privacy-hint">Sin compromiso de contratación. No necesitas cambiar de programa de gestión ni facilitar datos de pacientes para solicitar información.</div>
+</div>
+<div class="demo-form-shell">
+<div class="demo-form-head"><span class="demo-form-step">Contacto comercial</span><h2>Solicita una demostración</h2><p>Déjanos tus datos y el contexto de tu farmacia para poder responderte.</p></div>
+<form id="demo-request-form" class="demo-form" method="post" action="/api/public/solicitudes-demo">
+<div class="demo-form-two">
+<label for="demo-name">Nombre y apellidos <span aria-hidden="true">*</span><input id="demo-name" name="nombre" type="text" autocomplete="name" maxlength="120" minlength="2" required placeholder="Tu nombre"></label>
+<label for="demo-email">Correo profesional <span aria-hidden="true">*</span><input id="demo-email" name="email" type="email" autocomplete="email" maxlength="254" required placeholder="nombre@farmacia.es"></label>
+</div>
+<div class="demo-form-two">
+<label for="demo-phone">Teléfono <small>Opcional</small><input id="demo-phone" name="telefono" type="tel" autocomplete="tel" maxlength="40" placeholder="+34 600 000 000"></label>
+<label for="demo-country">País <span aria-hidden="true">*</span><input id="demo-country" name="pais" type="text" maxlength="80" autocomplete="country-name" required value="España"></label>
+</div>
+<div class="demo-form-two">
+<label for="demo-pharmacies">Número de farmacias <span aria-hidden="true">*</span><select id="demo-pharmacies" name="farmacias" required><option value="" selected disabled>Selecciona una opción</option><option value="1">1 farmacia</option><option value="2-5">2 a 5 farmacias</option><option value="6-20">6 a 20 farmacias</option><option value="21-50">21 a 50 farmacias</option><option value="50+">Más de 50</option></select></label>
+<label for="demo-erp">Programa de gestión <span aria-hidden="true">*</span><select id="demo-erp" name="programa" required><option value="" selected disabled>¿Qué programa utilizas?</option><option value="farmatic">Farmatic</option><option value="nixfarma">Nixfarma</option><option value="unycop">Unycop</option><option value="bitfarma">Bitfarma</option><option value="farmanager">Farmanager</option><option value="otro">Otro sistema</option><option value="no_se">No lo sé / varios</option></select></label>
+</div>
+<label for="demo-interest">¿Qué te interesa mejorar? <span aria-hidden="true">*</span><select id="demo-interest" name="interes" required><option value="" selected disabled>Selecciona tu prioridad</option><option value="vision_global">Visión global de la farmacia</option><option value="compras">Compras y costes</option><option value="ventas">Ventas y rendimiento comercial</option><option value="stock">Stock y reposición</option><option value="promociones">Promociones y objetivos</option><option value="multi_farmacia">Gestión de un grupo de farmacias</option><option value="otro">Otra necesidad</option></select></label>
+<label for="demo-message">Cuéntanos algo más <small>Opcional</small><textarea id="demo-message" name="mensaje" maxlength="1500" rows="3" placeholder="Por ejemplo, qué decisiones te gustaría tomar con más información…"></textarea></label>
+<div class="demo-honeypot" aria-hidden="true"><label for="demo-website">Página web<input id="demo-website" name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
+<label class="demo-consent"><input id="demo-consent" name="consentimiento" type="checkbox" required><span>Autorizo el uso de los datos que envío exclusivamente para gestionar y responder a esta solicitud de información. <strong>*</strong></span></label>
+<p class="demo-data-note">Los datos facilitados se almacenan para gestionar el contacto comercial. No pedimos credenciales, datos de pacientes ni acceso a tu programa de farmacia. No se suscribe tu correo a listas comerciales.</p>
+<p id="demo-feedback" class="demo-feedback" role="status" aria-live="polite" hidden></p>
+<button id="demo-submit" class="button button-mint demo-submit" type="submit">Enviar solicitud <span aria-hidden="true">↗</span></button>
+<p class="demo-required">* Campos obligatorios. Enviaremos tu solicitud al equipo responsable para su revisión; no confirma automáticamente una reunión.</p>
+</form>
+<div id="demo-success" class="demo-success" hidden role="status"><span class="demo-success-icon" aria-hidden="true">✓</span><h3>Solicitud recibida</h3><p>Hemos registrado tus datos correctamente. El equipo comercial podrá revisarlos y ponerse en contacto contigo.</p><p id="demo-reference" class="demo-reference"></p><a class="button button-dark" href="/">Volver al inicio →</a></div>
+</div>
+</div></section>
+<section class="section section-white demo-method"><div class="container"><div class="section-head"><span class="section-label">De tu sistema a mejores decisiones</span><h2>Cómo funciona Farmetrica</h2><p>La plataforma complementa el programa de gestión que ya usas. No todos los sistemas permiten la misma integración: validamos cada fuente antes de dar por disponible un análisis.</p></div>
+<div class="demo-method-grid"><article><span>01</span><h3>Conectamos la información</h3><p>Se evalúa el acceso autorizado a ventas, compras, artículos, proveedores y existencias disponibles en tu sistema.</p></article><article><span>02</span><h3>Unificamos los datos</h3><p>Normalizamos los identificadores y las reglas comerciales para comparar productos, periodos y farmacias con criterio.</p></article><article><span>03</span><h3>Analizas y actúas</h3><p>Accedes a informes y seguimientos de las áreas que estén conectadas y validadas, con permisos según tu perfil.</p></article></div></div></section>
+<section class="demo-faq section section-cream"><div class="container"><div class="section-head"><span class="section-label">Preguntas frecuentes</span><h2>Antes de empezar</h2></div><div class="seo-faq-list">
+<details><summary>¿Debo cambiar mi programa de farmacia?</summary><p>No. Farmetrica está diseñada para complementar las soluciones existentes. Cada integración requiere estudiar permisos, versión y disponibilidad de los datos.</p></details>
+<details><summary>¿Está conectada a cualquier programa?</summary><p>La integración de ventas con Farmatic está implantada en un entorno. Otros sistemas, como Nixfarma, Unycop, Bitfarma o Farmanager, requieren validación técnica por instalación.</p></details>
+<details><summary>¿Necesito preparar datos para pedir la demostración?</summary><p>No. Basta con explicar tu situación. No compartas credenciales ni información de pacientes a través de este formulario.</p></details>
+</div></div></section>
+</main>
+<footer class="footer"><div class="container"><div class="footer-top"><a class="logo" href="/"><span class="logo-symbol" aria-hidden="true"><img class="fm-emblem" src="/brand-logo.webp?v=4" alt=""></span>Farmetrica</a><nav class="footer-nav" aria-label="Pie de página"><a href="/soluciones/">Soluciones</a><a href="/integraciones/">Integraciones</a><a href="/blog/">Blog</a><a href="/login">Acceder</a></nav></div><div class="footer-small"><span>© 2026 Farmetrica · Inteligencia comercial para farmacias.</span><span>Las integraciones dependen de cada instalación.</span></div></div></footer>
+</body></html>

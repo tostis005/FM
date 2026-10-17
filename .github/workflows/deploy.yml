@@ -27,6 +27,8 @@ jobs:
           node --check api/src/server.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/publicLeads.js
+          node --test api/src/publicLeads.test.js
       - name: Instalar y compilar web
         working-directory: web
         run: |
@@ -84,7 +86,7 @@ jobs:
       - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 005_proveedores.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 005_proveedores.sql 006_solicitudes_demo.sql; do
             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
               'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
               < "api/src/migrations/$migration"
@@ -150,14 +152,16 @@ jobs:
               integration=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/integraciones/nixfarma/ || true)
               blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/indicadores-promociones-farmacia/ || true)
               sitemap=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/sitemap.xml || true)
-              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ] && [ "$solutions" = 200 ] && [ "$solution" = 200 ] && [ "$integration" = 200 ] && [ "$blog" = 200 ] && [ "$sitemap" = 200 ]; then
+              demo=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/solicitar-demo/ || true)
+              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ] && [ "$solutions" = 200 ] && [ "$solution" = 200 ] && [ "$integration" = 200 ] && [ "$blog" = 200 ] && [ "$sitemap" = 200 ] && [ "$demo" = 200 ]; then
                 if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected && \
                    curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "Farmetrica" && \
                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset" && \
                    curl -fsS http://127.0.0.1:18080/ | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
-                   curl -fsS http://127.0.0.1:18080/marketing.css?v=4 | grep -q ".fm-emblem" && \
-                   curl -fsS http://127.0.0.1:18080/brand-logo.webp?v=4 | head -c 4 | grep -q "RIFF"; then
+                   curl -fsS http://127.0.0.1:18080/marketing.css?v=5 | grep -q ".fm-emblem" && \
+                   curl -fsS http://127.0.0.1:18080/brand-logo.webp?v=4 | head -c 4 | grep -q "RIFF" && \
+                   curl -fsS http://127.0.0.1:18080/solicitar-demo/ | grep -q "demo-request-form"; then
                   exit 0
                 fi
               fi

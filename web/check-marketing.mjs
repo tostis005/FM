@@ -18,6 +18,17 @@ assert.match(emblem,/<svg/);
 assert.match(emblem,/<path/);
 assert.match(favicon,/Farmetrica/);
 assert.match(css,/\.fm-emblem/);
+const demo=read("./public/solicitar-demo/index.html");
+const leadScript=read("./public/solicitar-demo/formulario.js");
+assert.match(demo,/id="demo-request-form"/);
+assert.match(demo,/consentimiento/);
+assert.match(demo,/name="programa"/);
+assert.match(leadScript,/\/api\/public\/solicitudes-demo/);
+assert.match(nginx,/location \^~ \/solicitar-demo\/ /);
+assert.match(nginx,/\/solicitar-demo\//);
+assert.match(home,/solicitar-demo\/\?origen=landing/);
+assert.match(css,/\.demo-form-shell/);
+assert.match(read("./generate-seo.mjs"),/Solicitar demo/);
 assert.match(nginx,/location = \/brand-symbol\.svg/);
 assert.match(login,/<img class="fm-emblem" src="\/brand-logo\.webp\?v=4"/);
 assert.doesNotMatch(home,/✳/,"La portada no debe mostrar el isotipo antiguo");
@@ -35,7 +46,7 @@ const posts=[
 for(const [name,html] of [["landing",home],["blog",blog]]){
   assert.match(html,/<html lang="es">/);
   assert.match(html,/<meta name="description"/);
-  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=4">/);
+  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=5">/);
   assert.match(html,/href="\/login"/);
   assert.doesNotMatch(html,/<script[^>]+src="\/assets\//);
 }

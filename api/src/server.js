@@ -5,6 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
+import { setupPublicLeads } from "./publicLeads.js";
 
 const { Pool } = pg;
 const {
@@ -67,6 +68,7 @@ async function requireEntraAdmin(req, res, next) {
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
 const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUser, requireSuperadmin });
+setupPublicLeads(app,pool,{requireSuperadmin});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -347,6 +349,8 @@ try {
   await pool.query(tenantMigration);
   const supplierMigration=await readFile(new URL("./migrations/005_proveedores.sql",import.meta.url),"utf8");
   await pool.query(supplierMigration);
+  const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
+  await pool.query(leadsMigration);
   await bootstrapAdmins();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
 } catch (err) {

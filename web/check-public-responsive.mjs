@@ -3,7 +3,7 @@ import {chromium} from "playwright";
 import {mkdir} from "node:fs/promises";
 
 const base=process.env.PUBLIC_RESPONSIVE_BASE_URL||"http://127.0.0.1:4176";
-const routes=["/landing.html","/soluciones/","/integraciones/","/blog/",
+const routes=["/landing.html","/solicitar-demo/","/soluciones/","/integraciones/","/blog/",
   "/soluciones/rentabilidad-farmacia/","/soluciones/control-stock-farmacia/",
   "/blog/compras-inteligentes-farmacia/"];
 const viewports=[

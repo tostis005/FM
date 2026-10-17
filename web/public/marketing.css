@@ -254,3 +254,68 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 
 /* Transparencia editorial: requisitos de las fuentes para cada solución. */
 .seo-status .seo-data-notice{margin-top:16px;padding-top:14px;border-top:1px solid rgba(26,82,60,.22);font-size:12px;line-height:1.7;opacity:.9}
+
+
+/* Captación comercial: navegación y página de demostración. */
+.nav-demo-button{display:inline-flex;align-items:center;gap:6px;padding:12px 16px;border-radius:10px;background:#174d3a;color:#fff;font-size:12px;font-weight:850;white-space:nowrap;box-shadow:0 4px 15px #0f47221c;transition:background .15s}
+.nav-demo-button:hover{background:#247651;color:#fff}
+.demo-hero{position:relative;overflow:hidden;background:radial-gradient(ellipse at 5% 16%,#205e4d 0%,transparent 50%),linear-gradient(130deg,#0e3028 0%,#124333 62%,#0c332b 100%);color:#fff}
+.demo-hero:before{content:"";pointer-events:none;position:absolute;right:-280px;top:-420px;height:760px;width:760px;border:1px solid #b9d7c624;border-radius:50%}
+.demo-hero-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(420px,.93fr);align-items:start;gap:clamp(34px,5vw,83px);padding-top:84px;padding-bottom:93px}
+.demo-breadcrumb{font-size:12px;color:#c9e1d2;margin-bottom:65px}.demo-breadcrumb a{text-decoration:underline;text-underline-offset:3px}
+.demo-eyebrow{display:flex;gap:10px;align-items:center;color:#b8ebce;text-transform:uppercase;font-size:11px;letter-spacing:.12em;font-weight:800;margin-bottom:20px}
+.demo-green-dot{width:7px;height:7px;border-radius:50%;background:#b7ecc9;box-shadow:0 0 0 5px #b7ecc91f}
+.demo-pitch h1{font:800 clamp(40px,4.25vw,65px)/1.1 Manrope,sans-serif;letter-spacing:-.06em;margin:0 0 27px;max-width:660px}
+.demo-pitch h1 em{font-style:normal;color:#b7ecc9}
+.demo-intro{font-size:16px;line-height:1.88;color:#d4e5d9;max-width:620px;margin:0}
+.demo-trust-points{display:grid;gap:24px;margin:54px 0 39px;max-width:565px}
+.demo-trust-points>div{display:flex;gap:17px;align-items:flex-start}
+.demo-trust-points>div>span{width:39px;height:39px;border:1px solid #a0c8b547;display:grid;place-items:center;border-radius:12px;flex:none;color:#b7ecc9;font-size:11px;font-weight:800}
+.demo-trust-points strong{display:block;font:800 14px Manrope,sans-serif;margin-bottom:8px}
+.demo-trust-points p{color:#bfcfc4;font-size:13px;line-height:1.7;margin:0}
+.demo-privacy-hint{font-size:12px;line-height:1.8;color:#b3d3bf;border-top:1px solid #b4dcc237;max-width:540px;padding-top:24px}
+.demo-form-shell{position:relative;background:#fff;border:1px solid #e1ece1;border-radius:24px;padding:36px 37px;box-shadow:0 36px 90px #051b1755;color:#18382c}
+.demo-form-step{display:inline-flex;background:#e9f8eb;color:#1a7552;padding:8px 11px;border-radius:8px;font-weight:800;font-size:11px;letter-spacing:.03em;margin-bottom:15px}
+.demo-form-head h2{font:800 clamp(22px,2.2vw,30px)/1.2 Manrope,sans-serif;letter-spacing:-.045em;margin:0 0 11px}
+.demo-form-head p{color:#70887b;line-height:1.7;font-size:13px;margin:0}
+.demo-form{margin-top:27px;display:grid;gap:17px}
+.demo-form-two{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.demo-form label:not(.demo-consent){display:flex;flex-direction:column;gap:8px;color:#28483a;font-size:12px;font-weight:800}
+.demo-form label>span[aria-hidden]{color:#22815b}
+.demo-form label small{color:#8a9c92;font-weight:500}
+.demo-form input:not([type=checkbox]),.demo-form select,.demo-form textarea{font:500 13px "DM Sans",sans-serif;min-height:44px;width:100%;border:1px solid #d7e4db;border-radius:9px;padding:11px 12px;background:#fdfefd;color:#1d4231;outline-offset:2px}
+.demo-form textarea{resize:vertical;min-height:82px}
+.demo-form input:focus-visible,.demo-form textarea:focus-visible,.demo-form select:focus-visible{outline:2px solid #38a676;border-color:transparent}
+.demo-form .demo-consent{display:flex;align-items:flex-start;gap:12px;color:#486c55;font-size:12px;font-weight:550;line-height:1.6;cursor:pointer}
+.demo-consent input{accent-color:#177951;width:17px;height:17px;flex:none;margin-top:1px}
+.demo-data-note,.demo-required{font-size:11px;line-height:1.7;color:#7e9283;margin:0}
+.demo-submit{width:100%;border:0;cursor:pointer;min-height:52px;font-size:14px;box-shadow:none}
+.demo-submit:disabled{opacity:.65;cursor:wait}
+.demo-required{text-align:center}
+.demo-honeypot{position:absolute!important;left:-9999px!important;height:1px!important;width:1px!important;overflow:hidden!important}
+.demo-feedback{background:#e6f7ea;border-radius:9px;padding:12px;color:#146944;font-size:13px;line-height:1.5;margin:0}
+.demo-feedback-error{background:#fff0e9;color:#a94325}
+.demo-success{text-align:center;padding:70px 4px;line-height:1.75;color:#335747}
+.demo-success-icon{display:grid;place-items:center;width:62px;height:62px;border-radius:50%;background:#dbf6e5;color:#13734e;font-size:30px;margin:0 auto 22px}
+.demo-success h3{font:800 27px Manrope,sans-serif;letter-spacing:-.03em;margin-bottom:16px}
+.demo-success p{font-size:14px;color:#647d6c}
+.demo-reference{font-weight:800}
+.demo-success .button{margin-top:18px}
+.demo-method{background:#fff}
+.demo-method-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.demo-method-grid article{border:1px solid #dce9dd;border-radius:16px;background:#f9fcf8;padding:30px 26px;min-height:220px}
+.demo-method-grid article>span{display:inline-flex;font:800 11px Manrope,sans-serif;color:#18845a;letter-spacing:.08em;margin-bottom:22px}
+.demo-method-grid h3{font:800 17px/1.35 Manrope,sans-serif;color:#173b2a;letter-spacing:-.025em;margin-bottom:13px}
+.demo-method-grid p{font-size:13px;line-height:1.8;color:#6f8476;margin:0}
+.demo-method-end{display:flex;justify-content:space-between;align-items:center;gap:25px;border-radius:17px;background:#eff6ef;margin-top:22px;padding:20px 26px}
+.demo-method-end p{margin:0;color:#476d55;font-size:13px;font-weight:700;line-height:1.7}
+.demo-method-end .button{flex:none}
+.demo-faq .seo-faq-list{max-width:920px}
+.fm-lead-hidden{display:none}
+@media(max-width:1100px){.demo-hero-layout{grid-template-columns:minmax(0,1fr) minmax(375px,.95fr);gap:30px}.demo-form-shell{padding:30px}.demo-pitch h1{font-size:44px}.demo-method-grid article{padding:24px}}
+@media(max-width:920px){.demo-hero-layout{grid-template-columns:1fr;gap:48px}.demo-pitch{max-width:780px}.demo-breadcrumb{margin-bottom:32px}.demo-trust-points{grid-template-columns:1fr 1fr;gap:22px;max-width:none}.demo-form-shell{max-width:670px;width:100%;margin:0 auto}.demo-method-grid{grid-template-columns:1fr 1fr}.nav-demo-button{padding:11px 12px}}
+@media(max-width:740px){.demo-hero-layout{padding-top:42px;padding-bottom:69px}.demo-pitch h1{font-size:clamp(35px,8vw,48px)}.demo-intro{font-size:14px}.demo-trust-points{grid-template-columns:1fr}.demo-method-grid{grid-template-columns:1fr}.demo-method-grid article{min-height:0}.demo-method-end{align-items:flex-start;flex-direction:column}.nav-demo-button{padding:11px 9px;font-size:11px}.nav-actions .login-button:after{display:none}}
+@media(max-width:410px){.demo-form-shell{padding:24px 17px;border-radius:15px}.demo-form-two{grid-template-columns:1fr}.demo-hero-layout{padding-top:35px}.demo-breadcrumb{margin-bottom:28px}.demo-trust-points{margin-top:35px}.site-nav .logo{font-size:15px}.nav-demo-button{font-size:10px;padding:10px 8px}.nav-actions .login-button{padding:9px 8px}}
+
+/* El CTA permanece accesible en el menú móvil y el hero. */
+@media(max-width:700px){.site-nav .nav-demo-button{display:none}}

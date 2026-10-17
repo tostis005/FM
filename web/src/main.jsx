@@ -4,7 +4,7 @@ import {
   Activity, ArrowDownToLine, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target,
-  Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database
+  Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
@@ -14,6 +14,7 @@ import {promotionMetrics} from "./promotionMetrics.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
+import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
@@ -134,6 +135,7 @@ const NAV=[
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
+ {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true}
 ];
@@ -761,6 +763,7 @@ function App(){
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
+    {page==="solicitudes"&&<SolicitudesDemo/>}
     {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
@@ -768,7 +771,7 @@ function App(){
      {page==="ajustes"&&<div className="fm-production-settings">
       <div className="page-header"><h1>Ajustes</h1></div>
       <div className="fm-module-links">
-       {[["usuarios","Usuarios"],["farmacias","Farmacias"],["proveedores-maestro","Proveedores"],["clientes","Clientes"],["accesos","Accesos"]]
+       {[["usuarios","Usuarios"],["farmacias","Farmacias"],["proveedores-maestro","Proveedores"],["clientes","Clientes"],["solicitudes","Solicitudes"],["accesos","Accesos"]]
         .filter(([id])=>visibleNav.some(item=>item.id===id))
         .map(([id,label])=><button className="card fm-module-link" key={id} onClick={()=>nav(id)}><strong>{label}</strong><ArrowRight size={17}/></button>)}
       </div>

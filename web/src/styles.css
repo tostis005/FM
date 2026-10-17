@@ -697,3 +697,14 @@ html,body{overflow-x:clip}
 /* Cruz verde y flecha ascendente blancas: isotipo corporativo oficial. */
 .sidebar .brand-mark{background:transparent;transform:none;box-shadow:none;overflow:visible}
 .sidebar .brand-mark .fm-emblem{display:block;width:100%;height:100%;object-fit:contain;transform:none}
+
+/* Bandeja de solicitudes comerciales del superadministrador. */
+.fm-leads-toolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;padding:17px 20px;margin-bottom:20px}
+.fm-leads-toolbar label,.fm-lead-action{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:800;color:#446657}
+.fm-leads-toolbar select,.fm-lead-action select{background:white;border:1px solid #cdded4;border-radius:9px;padding:10px;color:#173a2f}
+.fm-lead-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.fm-lead-card{padding:22px;min-width:0}.fm-lead-top{display:flex;align-items:start;justify-content:space-between;gap:15px;margin-bottom:16px}.fm-lead-top strong{display:block;font-size:18px}.fm-lead-top small{display:block;margin-top:6px;color:#6b8375;font-size:11px}
+.fm-lead-state{background:#e5f4e9;color:#176c4a;border-radius:100px;padding:6px 11px;font-size:11px;font-weight:800}
+.fm-lead-details{display:grid;gap:9px;color:#425e50;font-size:12px;overflow-wrap:anywhere}.fm-lead-details a{display:inline-flex;align-items:center;gap:7px;color:#147956;text-decoration:underline}
+.fm-lead-note{margin:17px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6;border-top:1px solid #e5ede7;padding-top:14px}.fm-lead-action{margin-top:20px}
+@media(max-width:800px){.fm-lead-grid{grid-template-columns:1fr}}

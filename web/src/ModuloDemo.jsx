@@ -34,7 +34,7 @@ function metricCards(module,k){
   dashboard:shared,
   ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Artículos vendidos","articulosVendidos","n"),shared[3]],
   compras:[shared[1],shared[4],CARD("Proveedores","proveedores","n","proveedores"),CARD("Compra de genéricos","compraGenericos","€","genericos")],
-  proveedores:[CARD("Proveedores","proveedores","n"),shared[1],shared[4],CARD("CN con compras","articulosVendidos","n","compras")],
+  proveedores:[CARD("Proveedores","proveedores","n"),shared[1],shared[4],CARD("CN con compras","articulosComprados","n","compras")],
   stock:[shared[2],CARD("Sobrestock estimado","sobrestock","€","acciones"),CARD("Sin ventas en periodo","stockSinRotacion","n"),CARD("Roturas detectadas","roturas","n","reposicion")],
   reposicion:[shared[5],CARD("Coste de reposición","reposicionCoste","€"),CARD("Roturas","roturas","n"),shared[2]],
   genericos:[CARD("Compra de genéricos","compraGenericos","€"),CARD("Potencial de precio","potencialGenericos","€","compras"),shared[1],CARD("Proveedores","proveedores","n","proveedores")],

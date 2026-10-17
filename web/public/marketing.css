@@ -225,3 +225,13 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
  .site-nav .mobile-nav summary{padding:8px 8px}
  .site-nav .mobile-links{right:0}
 }
+
+/* Enlace editorial a Business Intelligence: continuación de la identidad visual de la portada. */
+.seo-bi-highlight{padding:80px 0}
+.seo-bi-inner{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(270px,.85fr);gap:54px;align-items:center;padding:46px 52px;background:#eff7ef;border:1px solid #d5e9d7;border-radius:22px}
+.seo-bi-inner h2{font:800 clamp(30px,3.4vw,44px)/1.18 "Manrope",sans-serif;letter-spacing:-.045em;max-width:610px;margin:12px 0 18px;color:#123c2d}
+.seo-bi-inner p{max-width:590px;font-size:14px;line-height:1.8;color:#597363;margin-bottom:24px}
+.seo-bi-features{display:grid;gap:11px}
+.seo-bi-features span{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #d8e8dc;border-radius:11px;padding:16px 20px;font-size:13px;font-weight:800;color:#1a5b42;box-shadow:0 4px 12px #183d2810}
+@media(max-width:800px){.seo-bi-inner{grid-template-columns:1fr;gap:24px;padding:34px}.seo-bi-features{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.seo-bi-highlight{padding:54px 0}.seo-bi-inner{padding:24px 20px;gap:23px;border-radius:15px}.seo-bi-features{grid-template-columns:1fr}.seo-bi-features span{padding:13px 14px}}

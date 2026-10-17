@@ -352,9 +352,9 @@ try {
       where+" GROUP BY f.id,btrim(v.codigo::text) ORDER BY sum(v.importeneto) DESC NULLS LAST LIMIT 750",
       params);
     const {rows:counts}=await pool.query(
-      "SELECT count(*)::int AS n FROM (SELECT 1 "+where+" GROUP BY f.id,btrim(v.codigo::text)) x",
+      "SELECT count(*)::int AS n,count(DISTINCT cn)::int AS articulos FROM (SELECT btrim(v.codigo::text) AS cn "+where+" GROUP BY f.id,btrim(v.codigo::text)) x",
       params);
-    res.json({monthly,products,totalProducts:counts[0]?.n||0,from,to});
+    res.json({monthly,products,totalProducts:counts[0]?.n||0,totalArticles:counts[0]?.articulos||0,from,to});
   }catch(err){next(err)}
 });
 

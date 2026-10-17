@@ -85,11 +85,11 @@
       const error = document.getElementById("error");
       const submit = document.getElementById("submit");
       const query = new URLSearchParams(location.search);
-      const original = query.get("next") || "/promociones";
+      const original = query.get("next") || "/dashboard";
       const next = original.startsWith("/") && !original.startsWith("//") && !original.startsWith("/\\") ? original : "/";
       const showError = message => { error.textContent = message; error.classList.add("show"); };
       const clearError = () => { error.textContent = ""; error.classList.remove("show"); };
-      const finish = () => location.replace(next.startsWith("/login") || next === "/" ? "/promociones" : next);
+      const finish = () => location.replace(next.startsWith("/login") || next === "/" ? "/dashboard" : next);
       const authPost = async (endpoint, body) => {
         const response = await fetch(endpoint, {
           method: "POST", credentials: "same-origin", cache: "no-store",

@@ -120,7 +120,6 @@ function Field({label,children,hint}) {return <label className="field"><span cla
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
 const NAV=[
  {id:"dashboard",label:"Dashboard",icon:LayoutDashboard,module:"dashboard"},
- {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
  {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
  {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
@@ -130,6 +129,7 @@ const NAV=[
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
  {id:"acciones",label:"Acciones",icon:ClipboardList,module:"acciones"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes"},
+ {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
  {id:"asistente",label:"Asistente IA",icon:Sparkles,module:"asistente"},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
@@ -163,7 +163,7 @@ function reportFiltersFromUrl(){
 function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
  if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
- return ROUTES.has(path)?path:"promociones";
+ return ROUTES.has(path)?path:"dashboard";
 }
 
 function App(){
@@ -212,8 +212,8 @@ function App(){
       const ctx=await loadContext(slug);
       setData(readState(ctx.client.slug,sessionUser?.email));
       setSalesStatus("sin_conexion");setSalesByPromotion({});
-      const initial=ctx.modules.promociones||sessionUser?.role==="superadministrador"?"promociones":
-        Object.keys(ctx.modules).find(key=>ctx.modules[key])||"farmacias";
+      const initial=ctx.modules.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
+        NAV.find(item=>item.module&&ctx.modules[item.module])?.id||"farmacias";
       window.history.pushState({page:initial},"","/"+initial);
       setPage(initial);setMobileMenu(false);setAuthError("");
     }catch(e){setAuthError(e.message)}
@@ -344,7 +344,7 @@ function App(){
   return ()=>{document.body.style.overflow=old;window.removeEventListener("keydown",onKeyDown);};
  },[Boolean(reportModal)]);
  useEffect(()=>{
-   const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Promociones";
+   const label=page==="seguimiento-global"?"Seguimiento":NAV.find(item=>item.id===page)?.label||"Dashboard";
    document.title=`Farmetrica · ${label}`;
  },[page]);
  const {promos:rawPromos,users:storedUsers}=data;
@@ -601,7 +601,7 @@ function App(){
     finally{setSavingPharmacy(false);}
   }
   const cnParsed=parseCNs(cnText);
- const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Promociones";
+ const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Dashboard";
  useEffect(()=>{
   if(page!=="seguimiento-global")return;
   const params=new URLSearchParams();
@@ -623,12 +623,12 @@ function App(){
    ? (sessionUser?.role==="superadministrador"||tenantContext?.modules?.promociones)
    : visibleNav.some(item=>item.id===page);
  useEffect(()=>{
-   if(tenantContext && !allowed)nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"promociones");
+   if(tenantContext && !allowed)nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard");
  },[tenantContext,page,allowed]);
  if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError||"Preparando tu espacio de trabajo…"}</main></div>;
  return <div className="app-shell">
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
-   <button className="brand" onClick={()=>nav("promociones")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
+   <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
    <nav className="side-nav" aria-label="Módulos">{visibleNav.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" type="button" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}

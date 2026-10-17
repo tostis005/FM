@@ -56,22 +56,14 @@ faq:[
 related:["/soluciones/objetivos-venta-farmacias/","/soluciones/reporting-laboratorios/","/blog/indicadores-promociones-farmacia/"]
 },
 {
-slug:"cuadro-mando-farmacias",category:"Analítica",title:"Cuadro de mando comercial para farmacias",
-description:"KPIs comerciales de campañas y farmacias: objetivos, ventas, porcentaje de avance y seguimiento consolidado con filtros y desglose.",
-hero:"Una visión clara de lo que está ocurriendo en tu farmacia.",
-lead:"Los cuadros de mando útiles no son los que muestran más gráficos, sino los que ayudan a encontrar una respuesta. Farmetrica está pensado para analizar campañas por farmacia sin perder la posibilidad de bajar al detalle.",
-value:"Del indicador al porqué.",
-sections:[
-{heading:"Indicadores que importan al responsable",paragraphs:["El cuadro de mando pone en relación campañas activas, unidades objetivo, unidades vendidas y avance. El responsable puede ver el conjunto y profundizar en las farmacias que necesitan una revisión.","No se trata de calcular un beneficio que no esté sustentado por los datos. El seguimiento actual está centrado en unidades y progreso comercial; para medir margen o rentabilidad económica es necesario contar también con costes y criterios adecuados."],points:["Número y estado de campañas.","Objetivos previstos por farmacia.","Ventas y cumplimiento, cuando existe integración.","Detalle por promoción y códigos nacionales."]},
-{heading:"Comparación sin perder matices",paragraphs:["Un agregado puede ocultar comportamientos muy distintos. Una farmacia con menos unidades vendidas puede estar alcanzando mejor su objetivo; otra puede concentrar el volumen, pero quedarse por debajo de la meta fijada.","Los filtros ayudan a distinguir ambos escenarios y a preparar un seguimiento razonado, especialmente en grupos de farmacias."]},
-{heading:"Un panel orientado a la acción",paragraphs:["La navegación permite acceder al listado de campañas, abrir su detalle y revisar los resultados de cada farmacia. La información se presenta con tablas ordenables, paginación y filtros por valores conocidos.","El objetivo es que el cuadro de mando forme parte de la rutina comercial, no que se convierta en una tarea adicional de mantenimiento de informes."]}
-],
-faq:[
-["¿Farmetrica sustituye al programa de gestión?","No. Está diseñada para complementar el sistema de farmacia utilizando su información comercial cuando existe una conexión habilitada."],
-["¿Puedo usarla para varias farmacias?","Sí. El seguimiento contempla distintas farmacias y una visión conjunta de campañas."],
-["¿Muestra márgenes o beneficios calculados?","El seguimiento descrito se centra en ventas, unidades y objetivos. Un análisis económico fiable requiere datos adicionales de costes y reglas de negocio."]
-],
-related:["/soluciones/grupos-de-farmacias/","/soluciones/seguimiento-ventas-farmacia/","/blog/indicadores-promociones-farmacia/"]
+slug:"cuadro-mando-farmacias",category:"Analítica",title:"Cuadro de mando e inteligencia de negocio para farmacias",
+description:"Analiza ventas, compras, stock, proveedores, artículos y rentabilidad de tu farmacia o red, según las fuentes conectadas y validadas.",
+hero:"Toda tu farmacia de un vistazo. El detalle para decidir.",
+lead:"Un cuadro de mando útil ayuda a relacionar actividad, costes, productos y existencias para identificar dónde actuar. Farmetrica organiza esas áreas en una plataforma, incorporando información a medida que se conectan fuentes verificadas.",
+value:"Una visión de negocio, desde el indicador hasta cada artículo.",
+sections:[{"heading":"Los indicadores del negocio, en contexto","paragraphs":["Consulta tendencias de ventas y actividad comercial por periodo y farmacia. Cuando están disponibles las compras y el inventario, amplía el análisis a costes, proveedores, stock y márgenes.","Una instalación puede disponer solo de ventas al principio. Farmetrica debe distinguir las fuentes conectadas de los módulos que requieren completar su integración."],"points":["Ventas, unidades y evolución.","Compras y costes por proveedor, con datos disponibles.","Stock, rotación y necesidades de reposición, con inventario validado.","Rendimiento de artículos y rentabilidad, con costes y criterios verificados."]},{"heading":"De la red al establecimiento","paragraphs":["Los indicadores consolidados ganan valor cuando permiten explorar cada punto de venta, artículo y periodo.","La visibilidad y las comparaciones dependen de las farmacias y módulos autorizados para cada usuario."]},{"heading":"Información para decidir, no gráficos por acumular","paragraphs":["El objetivo es encontrar oportunidades de ahorro, diferencias de precios, referencias de baja rotación y tendencias de rentabilidad.","Las promociones y los objetivos comerciales constituyen una función adicional, no el núcleo del cuadro de mando."]}],
+faq:[["¿Farmetrica es solo una herramienta de promociones?","No. La visión de producto abarca ventas, compras, proveedores, artículos, stock y rentabilidad; las campañas son un módulo complementario."],["¿Puedo analizar varias farmacias?","El modelo contempla una visión individual y consolidada con los permisos y datos efectivamente disponibles."],["¿Los márgenes están siempre disponibles?","No. Requieren costes y reglas de negocio validados. La conexión confirmada actualmente proporciona datos de ventas de Farmatic."]],
+related:["/soluciones/ventas-farmacia/","/soluciones/analisis-compras-farmacia/","/soluciones/rentabilidad-farmacia/"]
 },
 {
 slug:"reporting-laboratorios",category:"Reporting",title:"Informes de ventas para laboratorios farmacéuticos",
@@ -92,21 +84,14 @@ faq:[
 related:["/soluciones/seguimiento-ventas-farmacia/","/soluciones/gestion-promociones-farmacia/","/blog/como-preparar-informe-laboratorio/"]
 },
 {
-slug:"grupos-de-farmacias",category:"Redes y grupos",title:"Software comercial para grupos y redes de farmacias",
-description:"Coordina promociones, objetivos y seguimiento de ventas de varias farmacias desde una visión conjunta con desglose por punto de venta.",
-hero:"Muchas farmacias. Una estrategia comercial comprensible.",
-lead:"En un grupo de farmacias, la coordinación comercial se complica cuando cada punto de venta utiliza una hoja distinta. Farmetrica reúne campañas y seguimiento para ofrecer un marco compartido de trabajo.",
-value:"Coordinar la red sin perder la realidad local.",
-sections:[
-{heading:"La misma campaña, metas diferentes",paragraphs:["La promoción puede negociarse para un grupo y ejecutarse en farmacias de tamaños muy distintos. Por eso conviene asignar una meta específica a cada participante, sin depender exclusivamente de un objetivo agregado.","Farmetrica contempla la participación por farmacia, el objetivo de unidades y un seguimiento comercial relacionado con las referencias y periodos de cada campaña."]},
-{heading:"Visión global y revisión por farmacia",paragraphs:["La red necesita una lectura conjunta para saber cuánto avanza, pero los responsables locales requieren cifras de su propio establecimiento. Un panel puede presentar ambas vistas sin obligar a mantener informes paralelos.","Cuando se seleccionan varias campañas, el consolidado permite observar el conjunto; el detalle de cada promoción ayuda a estudiar diferencias."]},
-{heading:"Organización y acceso",paragraphs:["La aplicación incorpora un módulo de usuarios y accesos, con ámbitos de gestión por farmacia previstos en el modelo de la plataforma. Los permisos efectivos dependen de la configuración de cada cliente y de los controles aplicados en el servidor.","La implantación debe validar roles, identidad, origen de datos y responsables antes de incorporar nuevas farmacias."]}],
-faq:[
-["¿Pueden participar solo algunas farmacias en una promoción?","Sí. Las campañas contemplan farmacias participantes y objetivos particulares."],
-["¿Hay una vista conjunta de todas las ventas?","Existe seguimiento consolidado para varias campañas y detalle por farmacia en entornos con ventas conectadas."],
-["¿Sirve para grupos con programas de gestión diferentes?","Es un objetivo de evolución de la plataforma, pero cada integración distinta de Farmatic necesita evaluación y validación técnica."]
-],
-related:["/soluciones/cuadro-mando-farmacias/","/soluciones/gestion-promociones-farmacia/","/integraciones/"]
+slug:"grupos-de-farmacias",category:"Redes y grupos",title:"Inteligencia de negocio para grupos y redes de farmacias",
+description:"Compara ventas, compras, stock, proveedores, artículos y rentabilidad de varias farmacias, con un modelo de datos común y permisos por usuario.",
+hero:"Toda tu red, con una visión global y el detalle de cada farmacia.",
+lead:"Una red necesita entender el conjunto sin perder las particularidades de cada establecimiento. Farmetrica organiza datos comerciales de distintas farmacias para comparar actividad, compras, inventario y resultados cuando existen fuentes verificadas.",
+value:"Un criterio común para comparar sin perder el contexto local.",
+sections:[{"heading":"Una visión de conjunto","paragraphs":["Unifica criterios de análisis para revisar actividad, periodos y referencias en cada punto de venta y en toda la red.","Cada farmacia puede tener distinta demanda, surtido y estructura de datos. La comparación requiere normalizarlos."]},{"heading":"Compras, proveedores y stock","paragraphs":["Cuando se dispone de compras y existencias verificadas, el grupo puede contrastar precios de adquisición, concentración de proveedores y cobertura entre farmacias.","La rentabilidad exige además costes adecuados, impuestos y criterios de cálculo compartidos."]},{"heading":"Responsabilidades y acceso","paragraphs":["Los clientes, farmacias, módulos y usuarios cuentan con una estructura de permisos que debe validarse en cada implantación.","La organización de promociones y objetivos por farmacia sigue existiendo como una función adicional, sin definir el alcance completo de la plataforma."]}],
+faq:[["¿Se pueden comparar farmacias?","Sí, cuando los establecimientos tengan fuentes de datos conectadas y ámbitos de acceso configurados."],["¿Se consolida también el stock?","Requiere un origen de inventario conectado y validado para cada farmacia."],["¿Se admiten programas de gestión diferentes?","El diseño es independiente del origen, pero cada integración necesita adaptación y pruebas técnicas."]],
+related:["/soluciones/cuadro-mando-farmacias/","/soluciones/analisis-proveedores-farmacia/","/integraciones/"]
 },
 {
 slug:"importar-campanas-excel",category:"Importaciones",title:"Importar promociones y objetivos desde Excel",
@@ -127,42 +112,27 @@ faq:[
 related:["/soluciones/gestion-promociones-farmacia/","/soluciones/objetivos-venta-farmacias/","/blog/errores-al-definir-objetivos/"]
 },
 {
-slug:"gestion-usuarios-farmacias",category:"Accesos",title:"Usuarios y accesos para plataformas de grupos de farmacias",
-description:"Organiza usuarios, roles y permisos de acceso a una plataforma de promociones con varias farmacias y distintas responsabilidades.",
+slug:"gestion-usuarios-farmacias",category:"Accesos",title:"Usuarios, roles y permisos para grupos de farmacias",
+description:"Gestiona accesos y permisos de equipos y responsables a los distintos módulos de análisis y gestión de una red de farmacias.",
 hero:"La información correcta para cada responsabilidad.",
-lead:"No todas las personas necesitan ver lo mismo. Una red puede tener responsables comerciales, gestores y equipos de farmacia con tareas distintas. La organización de accesos forma parte del diseño del sistema.",
+lead:"Los equipos de farmacia necesitan acceder a diferentes datos y módulos según su responsabilidad. Farmetrica organiza clientes, usuarios, farmacias y ámbitos autorizados.",
 value:"Una plataforma compartida requiere control de accesos.",
-sections:[
-{heading:"Perfiles y permisos con propósito",paragraphs:["El panel administrativo contempla gestión de usuarios, correos autorizados, dominios y roles. La configuración de permisos debe vincular las responsabilidades de cada usuario con los datos que realmente necesita consultar.","Los cambios de acceso deben protegerse en el servidor y no depender solo de ocultar una opción en el navegador."]},
-{heading:"Farmacias asignadas y responsables de red",paragraphs:["Un gestor de grupo puede necesitar una visión completa para coordinar campañas, mientras que un responsable local se centra en sus farmacias. Asignar ámbitos claros permite diseñar una experiencia menos confusa y más apropiada.","Antes de desplegar un sistema multiempresa hay que verificar también el aislamiento de datos entre clientes; un selector visual por sí solo no ofrece esa seguridad."]},
-{heading:"Autenticación y seguridad operativa",paragraphs:["El acceso privado de Farmetrica dispone de una página de inicio de sesión diferenciada de la web comercial. Las capacidades de autenticación disponibles dependen de la configuración del entorno.","Las integraciones de identidad corporativa y el SSO requieren sus correspondientes credenciales y una implantación específica; no conviene confundir esa posibilidad con una conexión universal lista de serie."]}
-],
-faq:[
-["¿La landing pública da acceso a ventas?","No. Los recursos del panel privado siguen sujetos a autenticación."],
-["¿Puedo organizar usuarios por farmacia?","La plataforma dispone de entidades de usuario y farmacia para configurar ámbitos y responsables."],
-["¿El SSO corporativo está activado por defecto?","No. Es necesario configurar el proveedor de identidad y verificar cada implantación."]
-],
+sections:[{"heading":"Una experiencia adaptada a cada rol","paragraphs":["Los administradores configuran usuarios, roles y módulos, y delimitan el ámbito de los datos que deben consultar.","Los permisos se validan en el servidor; ocultar una pantalla no sustituye a la autorización."]},{"heading":"Visión local y de grupo","paragraphs":["Un responsable local trabaja con las farmacias a las que tiene acceso. Un gestor de red puede necesitar información consolidada cuando su perfil lo permita.","Este modelo se aplica a ventas, compras, stock, proveedores y otras áreas de análisis."]},{"heading":"Autenticación segura","paragraphs":["La aplicación privada está separada del sitio público y requiere acceso autenticado.","Los mecanismos de SSO corporativo dependen de la identidad y configuración de cada instalación."]}],
+faq:[["¿Puedo asignar usuarios por farmacia?","La estructura de clientes y farmacias permite configurar ámbitos y responsabilidades."],["¿Puede cada usuario consultar todos los módulos?","Solo los habilitados en su cliente y perfil."],["¿El sitio público muestra datos privados?","No. El acceso a datos operativos requiere autenticación y permisos."]],
 related:["/soluciones/grupos-de-farmacias/","/soluciones/cuadro-mando-farmacias/","/"]
 }
 ];
 
 export const integrations=[
 {
-slug:"farmatic",category:"Origen conectado",title:"Farmetrica y Farmatic: seguimiento comercial de ventas",
-description:"Cómo usa Farmetrica las ventas originadas en Farmatic y consultadas en PostgreSQL para medir objetivos y promociones por farmacia.",
-hero:"Aprovecha los datos de Farmatic para seguir tus promociones.",
-lead:"El entorno actual de Farmetrica tiene una conexión operativa con datos de ventas procedentes de Farmatic, disponibles para consulta en PostgreSQL. Esa información alimenta indicadores y detalle de campañas.",
-value:"Integración operativa en el entorno actual, no garantía de conexión automática a cualquier instalación.",
-sections:[
-{heading:"Qué se analiza",paragraphs:["Los CNs, fechas y farmacias definidos en cada campaña delimitan las ventas relevantes. A partir de esas líneas se calculan unidades vendidas y porcentajes de avance sobre los objetivos asignados.","El detalle disponible puede incluir documento de venta, fecha, descripción del producto, cantidades e importes, sujeto a la información de origen y a los permisos de acceso."]},
-{heading:"Cómo se organiza la información",paragraphs:["Farmetrica no sustituye a Farmatic como programa de farmacia. El enfoque consiste en aprovechar la información de ventas ya existente y ofrecer una capa de seguimiento comercial orientada a promociones y objetivos.","La carga de datos, frecuencia de actualización y permisos se validan en cada instalación. La conexión operativa demostrada en el entorno actual no significa compatibilidad automática con todas las versiones."]},
-{heading:"Del ticket al Excel de laboratorio",paragraphs:["En los entornos conectados, las campañas pueden exportarse con detalle de líneas de venta. Una campaña genera un Excel y varias campañas pueden agruparse en un ZIP con un archivo independiente por cada una.","Este proceso aporta trazabilidad a la revisión comercial, sin alterar las operaciones originales del programa de farmacia."]}
-],
-faq:[
-["¿Farmetrica sustituye a Farmatic?","No, complementa su información para analizar campañas comerciales y objetivos."],
-["¿La conexión está disponible para cualquier instalación?","La integración actual está operativa en un entorno concreto. Cada instalación requiere comprobar accesos, estructuras y actualización de datos."]
-],
-related:["/integraciones/","/soluciones/seguimiento-ventas-farmacia/","/soluciones/reporting-laboratorios/"]
+slug:"farmatic",category:"Origen conectado",title:"Farmatic y Farmetrica: análisis de datos de farmacia",
+description:"Cómo se aprovechan las ventas de Farmatic en Farmetrica y qué requiere ampliar el análisis a compras, stock, proveedores y rentabilidad.",
+hero:"Tus datos de Farmatic, con otra perspectiva de negocio.",
+lead:"Farmetrica cuenta con una conexión operativa a datos de ventas procedentes de Farmatic, consultados desde PostgreSQL en una instalación. El análisis integral requiere incorporar otras fuentes de compras, costes e inventario después de validarlas.",
+value:"Ventas conectadas en un entorno; ampliación condicionada a nuevas fuentes.",
+sections:[{"heading":"Ventas con el detalle necesario","paragraphs":["Los movimientos de ventas se consultan por producto, fecha y farmacia, respetando las referencias y permisos de origen.","Las devoluciones y los importes dependen del contrato de datos disponible y de las reglas validadas para la instalación."]},{"heading":"Hacia el análisis completo de la farmacia","paragraphs":["Un modelo común puede relacionar ventas con compras, proveedores, existencias y márgenes cuando todas esas fuentes se han conectado y validado.","La conexión operativa de ventas no implica que compras o inventario estén integrados de manera automática."]},{"heading":"Complementar, no sustituir","paragraphs":["Farmetrica no reemplaza a Farmatic: ofrece una capa adicional de análisis comercial sobre los datos autorizados.","El seguimiento de campañas y la exportación para laboratorios constituyen casos específicos de uso de las ventas conectadas."]}],
+faq:[["¿Farmetrica sustituye a Farmatic?","No. Complementa la información del software de gestión con una capa de análisis."],["¿Ya se analizan compras y stock de Farmatic?","La fuente validada actualmente es de ventas. El resto requiere integración y verificación."],["¿Funciona con cualquier instalación?","Cada versión y sistema debe comprobarse técnicamente antes de ofrecer la conexión."]],
+related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/business-intelligence-farmacias/"]
 },
 {
 slug:"nixfarma",category:"Ecosistema ERP",title:"Nixfarma y Farmetrica: analítica para tu farmacia",

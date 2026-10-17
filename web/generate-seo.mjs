@@ -10,10 +10,10 @@ const records=[
  ...articles.map(p=>({...p,type:"article",url:"/blog/"+p.slug+"/"}))
 ];
 const hubRecords=[
- {url:"/",title:"Conoce Farmetrica",category:"Inicio",description:"Análisis de ventas, compras, márgenes, stock, proveedores y promociones para farmacias."},
- {url:"/soluciones/",title:"Todas las soluciones de Farmetrica",category:"Soluciones",description:"Todas las soluciones de ventas, compras, stock, reposición, proveedores, genéricos, artículos, rentabilidad y promociones."},
+ {url:"/",title:"Conoce Farmetrica",category:"Inicio",description:"Inteligencia de negocio para farmacias: ventas, compras, márgenes, stock, proveedores y rendimiento de artículos."},
+ {url:"/soluciones/",title:"Todas las soluciones de Farmetrica",category:"Soluciones",description:"Soluciones de análisis de ventas, compras, stock, reposición, proveedores, artículos y rentabilidad para farmacias."},
  {url:"/integraciones/",title:"Programas de gestión e integraciones",category:"Integraciones",description:"Modelo de conexión a sistemas de farmacia, con origen Farmatic implantado y evaluación técnica por ERP."},
- {url:"/blog/",title:"Blog de Farmetrica",category:"Blog",description:"Consejos prácticos sobre compras, stock, rentabilidad, proveedores, ventas y promociones de farmacia."}
+ {url:"/blog/",title:"Blog de Farmetrica",category:"Blog",description:"Guías sobre ventas, compras, proveedores, stock y rentabilidad para gestionar mejor la farmacia."}
 ];
 const byUrl=new Map([...records,...hubRecords].map(p=>[p.url,p]));
 const brandIcon='<img class="fm-emblem" src="/brand-logo.webp?v=4" alt="" loading="eager" decoding="async">';
@@ -26,11 +26,11 @@ function head(title,description,canonical,type,extra=""){
 function cards(items){
  return '<div class="seo-card-grid">'+items.map(p=>'<a class="seo-card" href="'+p.url+'"><span class="seo-card-eyebrow">'+esc(p.category)+'</span><h3>'+esc(p.title)+'</h3><p>'+esc(p.description)+'</p><span class="seo-card-link">Descubrir más <span aria-hidden="true">↗</span></span></a>').join("")+'</div>';
 }
-const cta='<div class="seo-cta"><div><span class="section-label">Farmetrica</span><h2>Una visión completa. Decisiones que importan.</h2><p>Una visión que puede reunir ventas, compras, stock, proveedores, márgenes y campañas cuando sus fuentes están conectadas y validadas.</p></div><div class="seo-cta-buttons"><a class="button button-mint" href="/solicitar-demo/?origen=seo">Solicitar demostración ↗</a><a class="button button-outline" href="/soluciones/">Explorar soluciones →</a></div></div>';
+const cta='<div class="seo-cta"><div><span class="section-label">Farmetrica</span><h2>Una visión completa. Decisiones que importan.</h2><p>Analiza ventas, compras, existencias, proveedores y rentabilidad con datos coherentes, cuando las fuentes necesarias están conectadas y validadas.</p></div><div class="seo-cta-buttons"><a class="button button-mint" href="/solicitar-demo/?origen=seo">Solicitar demostración ↗</a><a class="button button-outline" href="/soluciones/">Explorar soluciones →</a></div></div>';
 function hero(p,crumbs){
  const crumbsHtml=crumbs.slice(0,-1).map(c=>'<a href="'+c.href+'">'+esc(c.name)+'</a>').join(' <span aria-hidden="true">/</span> ');
  return '<section class="seo-hero"><div class="container"><nav class="breadcrumb seo-crumb" aria-label="Ruta de navegación">'+crumbsHtml+' <span aria-hidden="true">/</span> <span aria-current="page">'+esc(p.category)+'</span></nav><div class="seo-hero-layout"><div><span class="seo-kicker"><span class="seo-kicker-dot"></span>'+esc(p.category)+'</span><h1>'+esc(p.hero)+'</h1><p>'+esc(p.lead)+'</p><div class="hero-actions"><a class="button button-mint" href="#detalle">'+(p.type==="article"?"Leer guía":"Conocer la solución")+' <span aria-hidden="true">↓</span></a><a class="button button-outline" href="/solicitar-demo/?origen=seo">Solicitar demo ↗</a></div></div><div class="seo-diagram" aria-label="Ejemplo ilustrativo del proceso comercial"><span class="seo-diagram-meta">ANÁLISIS COMERCIAL · VISTA GLOBAL</span>'+
- ['Referencias identificadas|Códigos de origen, periodo y condiciones|⌗','Objetivos por farmacia|Metas de unidades individuales|◎','Seguimiento y resultados|Ventas de origen conectado|↗'].map((item,i)=>{const parts=item.split("|");return (i?'<div class="seo-diagram-link" aria-hidden="true"></div>':'')+'<div class="seo-diagram-top"><span class="seo-diagram-icon">'+parts[2]+'</span><div><strong>'+parts[0]+'</strong><small>'+parts[1]+'</small></div><span>0'+(i+1)+'</span></div>';}).join('')+
+ ['Ventas y artículos|Evolución y referencias|↗','Compras y proveedores|Costes y oportunidades|⇄','Stock y rentabilidad|Cobertura y márgenes|◎'].map((item,i)=>{const parts=item.split("|");return (i?'<div class="seo-diagram-link" aria-hidden="true"></div>':'')+'<div class="seo-diagram-top"><span class="seo-diagram-icon">'+parts[2]+'</span><div><strong>'+parts[0]+'</strong><small>'+parts[1]+'</small></div><span>0'+(i+1)+'</span></div>';}).join('')+
  '<span class="seo-diagram-caption">Una mirada a tu negocio</span></div></div></div></section>';
 }
 function render(p){
@@ -52,11 +52,17 @@ function render(p){
 }
 function hub(kind){
  const solution=kind==="solution",path=solution?"/soluciones/":"/integraciones/";
- const items=(solution?solutions:integrations).map(item=>({...item,url:path+item.slug+"/"}));
+ const items=(solution?[
+ "ventas-farmacia","analisis-compras-farmacia","control-stock-farmacia","rentabilidad-farmacia",
+ "analisis-proveedores-farmacia","reposicion-stock-farmacia","rendimiento-articulos-farmacia",
+ "cuadro-mando-farmacias","grupos-de-farmacias","business-intelligence-farmacias",
+ "comparativa-genericos-farmacia","gestion-usuarios-farmacias","seguimiento-ventas-farmacia",
+ "gestion-promociones-farmacia","objetivos-venta-farmacias","importar-campanas-excel","reporting-laboratorios"
+].map(slug=>solutions.find(p=>p.slug===slug)).filter(Boolean):integrations).map(item=>({...item,url:path+item.slug+"/"}));
  const title=solution?"Soluciones de inteligencia de negocio para farmacias":"Sistemas de gestión e integraciones de farmacia";
- const description=solution?"Explora Farmetrica: ventas, compras, rentabilidad, stock, proveedores, genéricos, reposición, artículos y promociones.":"Conoce cómo conecta Farmetrica datos de programas de gestión de farmacia y qué requiere cada instalación.";
- const intro=solution?"Cada decisión merece una perspectiva diferente. Reúne datos de ventas, compras, inventario, rentabilidad y actividad comercial para gestionar mejor tu farmacia o una red.":"Farmetrica aprovecha los datos del software que ya utilizas y los organiza en un modelo comercial común. Farmatic está conectado en una instalación; otros programas requieren validar la conexión de cada cliente.";
- const proof=solution?["Analizar las ventas","Comparar compras y márgenes","Controlar stock y reposición","Coordinar promociones y farmacias"]:["Farmatic / Consoft","Nixfarma","Unycop","Bitfarma y Farmanager"];
+ const description=solution?"Descubre las áreas de inteligencia de negocio de Farmetrica: ventas, compras, rentabilidad, stock, artículos, reposición, proveedores y gestión de redes.":"Conoce cómo conecta Farmetrica datos de programas de gestión de farmacia y qué requiere cada instalación.";
+ const intro=solution?"Cada decisión merece una perspectiva diferente. Relaciona ventas, compras, existencias, rentabilidad y rendimiento de artículos para tomar decisiones con una visión del negocio, tanto en una farmacia como en una red.":"Farmetrica aprovecha los datos del software que ya utilizas y los organiza en un modelo comercial común. Farmatic está conectado en una instalación; otros programas requieren validar la conexión de cada cliente.";
+ const proof=solution?["Analizar las ventas","Mejorar compras y márgenes","Controlar stock y reposición","Comparar farmacias y proveedores"]:["Farmatic / Consoft","Nixfarma","Unycop","Bitfarma y Farmanager"];
  const note=solution?"Las capacidades de análisis se ajustan a la información disponible en el origen. Farmetrica complementa el programa de gestión de cada farmacia.":"La conexión operativa verificada utiliza Farmatic en el entorno actual. La disponibilidad de otros conectores depende de la versión, los permisos y la implantación. Los nombres citados pertenecen a sus titulares.";
  return head(title,description,path,"website")+'<main id="contenido"><section class="seo-hero seo-hub-hero"><div class="container"><nav class="breadcrumb seo-crumb"><a href="/">Inicio</a> / <span>'+(solution?"Soluciones":"Integraciones")+'</span></nav><div class="seo-hub-heading"><span class="seo-kicker"><span class="seo-kicker-dot"></span>'+(solution?"Un producto, diferentes necesidades":"Conectividad responsable")+'</span><h1>'+esc(title)+'</h1><p>'+esc(intro)+'</p><div class="hero-actions"><a class="button button-mint" href="#catalogo">Explorar páginas ↓</a><a class="button button-outline" href="/solicitar-demo/?origen=seo">Solicitar demo ↗</a></div></div></div></section><section class="seo-hub-body" id="catalogo"><div class="container"><div class="seo-title-row"><span class="section-label">Explora cada apartado</span><h2>'+(solution?"Encuentra la solución para tu necesidad":"Conoce el estado de cada conexión")+'</h2></div>'+cards(items)+'<div class="seo-proof-grid">'+proof.map((x,i)=>'<div><strong>'+String(i+1).padStart(2,"0")+'</strong><span>'+esc(x)+'</span></div>').join('')+'</div><p class="seo-hub-note">'+esc(note)+'</p></div></section><section class="seo-cta-section"><div class="container">'+cta+'</div></section></main>'+footer+'</body></html>';
 }

@@ -30,6 +30,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
+          node check-marketing.mjs
           npm run build
 
   deploy:

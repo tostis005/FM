@@ -33,6 +33,7 @@ jobs:
           npm install --no-audit --no-fund
           node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
           node check-login.mjs
+          node generate-seo.mjs
           node check-marketing.mjs
           npm run build
 
@@ -142,8 +143,15 @@ jobs:
               web=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/ || true)
               login=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/login || true)
               panel=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/promociones || true)
-              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ]; then
-                if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected; then
+              solutions=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/soluciones/ || true)
+              solution=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ || true)
+              integration=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/integraciones/nixfarma/ || true)
+              blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/indicadores-promociones-farmacia/ || true)
+              sitemap=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/sitemap.xml || true)
+              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ] && [ "$solutions" = 200 ] && [ "$solution" = 200 ] && [ "$integration" = 200 ] && [ "$blog" = 200 ] && [ "$sitemap" = 200 ]; then
+                if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected && \
+                   curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "Farmetrica" && \
+                   curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset"; then
                   exit 0
                 fi
               fi

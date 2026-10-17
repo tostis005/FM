@@ -135,6 +135,44 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       res.json(rows[0]);
     }catch(e){next(e);}
   });
+  app.get("/api/tenant/proveedores",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      const {rows}=await pool.query(
+        'SELECT id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1 ORDER BY nombre,codigo_origen',
+        [req.context.client.slug]);
+      res.json(rows);
+    }catch(e){next(e)}
+  });
+  app.post("/api/tenant/proveedores",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      const code=String(req.body?.sourceCode||"").trim().toUpperCase(),
+        name=String(req.body?.name||"").trim(),
+        type=String(req.body?.type||"sin_clasificar"),active=req.body?.active;
+      if(!/^[A-Z0-9_.-]{1,60}$/.test(code)||!name||name.length>200||
+         !["cooperativa","laboratorio","mayorista","otros","sin_clasificar"].includes(type)||
+         typeof active!=="boolean")return res.status(400).json({error:"Revisa los datos del proveedor"});
+      const {rows}=await pool.query(
+        'INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo,activo) VALUES($1,$2,$3,$4,$5) RETURNING id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active',
+        [req.context.client.slug,code,name,type,active]);
+      res.status(201).json(rows[0]);
+    }catch(e){next(e)}
+  });
+  app.patch("/api/tenant/proveedores/:id",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      if(!/^[1-9][0-9]{0,17}$/.test(req.params.id))return res.status(400).json({error:"Proveedor inválido"});
+      const code=String(req.body?.sourceCode||"").trim().toUpperCase(),
+        name=String(req.body?.name||"").trim(),
+        type=String(req.body?.type||"sin_clasificar"),active=req.body?.active;
+      if(!/^[A-Z0-9_.-]{1,60}$/.test(code)||!name||name.length>200||
+         !["cooperativa","laboratorio","mayorista","otros","sin_clasificar"].includes(type)||
+         typeof active!=="boolean")return res.status(400).json({error:"Revisa los datos del proveedor"});
+      const {rows}=await pool.query(
+        'UPDATE farmetrica.proveedores_maestro SET codigo_origen=$3,nombre=$4,tipo=$5,activo=$6,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active',
+        [req.params.id,req.context.client.slug,code,name,type,active]);
+      if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
+      res.json(rows[0]);
+    }catch(e){next(e)}
+  });
   app.get("/api/tenant/farmacias",...requireTenant(),(req,res)=>res.json(req.context.pharmacies));
   app.post("/api/tenant/farmacias",...requireTenantAdmin(),async(req,res,next)=>{
     try{

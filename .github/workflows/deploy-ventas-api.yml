@@ -63,7 +63,7 @@ jobs:
             fi
             if ! docker compose exec -T db psql -X -At -U farmawao -d farmawao -c "
               SELECT count(*) = 5 FROM information_schema.columns
-              WHERE table_schema = '\''farmatic'\'' AND table_name = '\''lineaventa'\''
+              WHERE table_schema IN ('\''farmatic'\'','\''ampedia'\'') AND table_name = '\''lineaventa'\''
                 AND column_name IN ('\''farmacia_origen'\'','\''codigo'\'','\''descripcion'\'','\''fechahora'\'','\''cantidad'\'');
             " | grep -qx t; then echo TABLA_FARMATIC_NO_LISTA; exit 0; fi
             if ! docker compose config --quiet; then echo COMPOSE_INVALIDO; exit 0; fi

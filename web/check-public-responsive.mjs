@@ -2,7 +2,7 @@
 import {chromium} from "playwright";
 import {mkdir} from "node:fs/promises";
 
-const base=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
+const base=process.env.PUBLIC_RESPONSIVE_BASE_URL||"http://127.0.0.1:4176";
 const routes=["/landing.html","/soluciones/","/integraciones/","/blog/",
   "/soluciones/rentabilidad-farmacia/","/soluciones/control-stock-farmacia/",
   "/blog/compras-inteligentes-farmacia/"];
@@ -29,7 +29,8 @@ try{
       const nav=document.querySelector(".site-nav");
       const rect=el=>el?.getBoundingClientRect();
       return {width,html,body,login:rect(login),h1:rect(h1),nav:rect(nav),
-        links:[...document.querySelectorAll('a[href^="/"]')].length};
+        links:[...document.querySelectorAll('a[href^="/"]')].length,
+        offenders:[...document.querySelectorAll("body *")].map(e=>({tag:e.tagName,cls:e.className?.baseVal||e.className||"",text:e.textContent?.slice(0,30),right:Math.round(e.getBoundingClientRect().right)})).filter(x=>x.right>width+3).slice(0,18)};
     });
     if(Math.max(details.html,details.body)-viewport.width>3)
       throw Error("Scroll horizontal global: "+JSON.stringify(details));

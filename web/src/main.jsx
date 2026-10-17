@@ -198,7 +198,7 @@ function App(){
   const [tenantContext,setTenantContext]=useState(null);
   const [authError,setAuthError]=useState("");
   async function loadContext(slug){
-    const response=await fetch("/api/tenant/context?cliente="+encodeURIComponent(slug||"ampedia"),{
+    const response=await fetch("/api/tenant/context"+(slug?"?cliente="+encodeURIComponent(slug):""),{
       credentials:"same-origin",cache:"no-store"});
     if(!response.ok)throw Error("No tienes acceso al cliente seleccionado");
     const ctx=await response.json();
@@ -208,15 +208,15 @@ function App(){
   }
   useEffect(()=>{
     let live=true;
-    const selected=localStorage.getItem("fm_active_tenant")||"ampedia";
+    const selected=localStorage.getItem("fm_active_tenant")||"";
     fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"})
       .then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")))
       .then(async body=>{
         if(!body.user){window.location.replace("/login");return;}
-        const ctx=await loadContext(selected).catch(()=>loadContext("ampedia"));
+        const ctx=await loadContext(selected).catch(()=>loadContext(""));
         if(live){setSessionUser(body.user);setData(readState(ctx.client.slug));}
       })
-      .catch(e=>{if(live)setAuthError(e.message)});
+      .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};
   },[]);
   async function activateClient(slug){

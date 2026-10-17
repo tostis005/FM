@@ -156,7 +156,7 @@ jobs:
               blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/indicadores-promociones-farmacia/ || true)
               sitemap=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/sitemap.xml || true)
               demo=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/solicitar-demo/ || true)
-              rejected=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" --data '{"nombre":"X"}' http://127.0.0.1:18080/api/public/solicitudes-demo || true)
+              rejected=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" --data "{}" http://127.0.0.1:18080/api/public/solicitudes-demo || true)
               if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ] && [ "$solutions" = 200 ] && [ "$solution" = 200 ] && [ "$integration" = 200 ] && [ "$blog" = 200 ] && [ "$sitemap" = 200 ] && [ "$demo" = 200 ] && [ "$rejected" = 400 ]; then
                 if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected && \
                    curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "Farmetrica" && \
@@ -180,6 +180,7 @@ jobs:
               fi
               sleep 3
             done
+            echo "::error::Falló el chequeo HTTP: API=$api web=$web login=$login privada=$panel soluciones=$solutions ficha=$solution ERP=$integration blog=$blog sitemap=$sitemap demo=$demo rechazado=$rejected"
             echo "Falló la comprobación posterior del despliegue"
             exit 1
           '

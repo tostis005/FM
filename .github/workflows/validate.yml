@@ -76,6 +76,7 @@ jobs:
           for sql in api/src/migrations/001_farmacias.sql api/src/migrations/002_accesos.sql api/src/migrations/003_multitenant.sql; do
             psql_test --single-transaction < "$sql"
           done
+          psql_test --single-transaction < api/src/migrations/005_proveedores.sql
           psql_test < api/src/migrations/004_ampedia_cutover_MANUAL.sql
           psql_test --single-transaction < api/src/migrations/003_multitenant.sql
           result=$(psql_test -At -c "SELECT
@@ -86,6 +87,8 @@ jobs:
             AND (SELECT count(*) FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND habilitado) = 1
             AND (SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='ampedia') = 5;")
           test "$result" = t
+          psql_test -At -c "INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo) VALUES (\x27ampedia\x27,\x27COOP01\x27,\x27Cooperativa de prueba CI\x27,\x27cooperativa\x27);" >/dev/null
+          psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_maestro WHERE cliente_slug=\x27ampedia\x27 AND tipo=\x27cooperativa\x27;" | grep -qx 1
 
 
   validar_responsive:

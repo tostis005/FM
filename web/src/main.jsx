@@ -9,6 +9,8 @@ import {
 import "./styles.css";
 import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
+import ModuloDemo from "./ModuloDemo.jsx";
+import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
@@ -57,6 +59,7 @@ const PROMOTION_TYPES = [
   {id:"otros",name:"Otros"}
 ];
 const STORE_KEY = "farmetrica-prototype-v1";
+const tenantStorageKey = slug => slug==="ampedia" ? STORE_KEY : STORE_KEY+":"+slug;
 const ROLES = {superadmin:"Superadministrador",gestor:"Gestor de farmacias",farmacia:"Personal de farmacia"};
 const EUR = new Intl.NumberFormat("es-ES");
 function percent(s,t) {return t ? Math.round(s/t*100):0;}
@@ -69,9 +72,9 @@ function migratePharmacyId(value){
 function migrateSalesOrTargets(obj={}){
   return Object.fromEntries(Object.entries(obj||{}).map(([key,value])=>[migratePharmacyId(key),value]));
 }
-function readState(){
+function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia"){
   try {
-    const saved=JSON.parse(localStorage.getItem(STORE_KEY));
+    const saved=JSON.parse(localStorage.getItem(tenantStorageKey(slug)));
     if(saved && Array.isArray(saved.promos) && Array.isArray(saved.pharmacies) && Array.isArray(saved.users)) {
       const oldDemo=saved.pharmacies.length===5 && saved.pharmacies.every(f=>["Farmacia Central","Farmacia Sol","Farmacia Europa","Farmacia Gran Vía","Farmacia Norte"].includes(f.name));
       const pharmacies=oldDemo?DEFAULT_PHARMACIES:saved.pharmacies.map(f=>{
@@ -91,6 +94,7 @@ function readState(){
       };
     }
   }catch {}
+  if(slug!=="ampedia")return {promos:[],pharmacies:[],users:[],objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
   const seeded=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions;
   return {promos:seeded,pharmacies:DEFAULT_PHARMACIES,users:DEFAULT_USERS,
     objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
@@ -129,13 +133,26 @@ function SalesNotice({status,error,coverage,onConnect,canConnect,databaseStatus}
 }
 function Field({label,children,hint}) {return <label className="field"><span className="field-label">{label}</span>{children}{hint&&<small>{hint}</small>}</label>}
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
-const NAV = [
-  {id:"promociones",label:"Promociones",icon:Tag},
-  {id:"farmacias",label:"Farmacias",icon:Store},
-  {id:"usuarios",label:"Usuarios",icon:Users},
-  {id:"accesos",label:"Accesos",icon:ShieldCheck},
-  {id:"ajustes",label:"Ajustes",icon:Settings2}
+const NAV=[
+ {id:"dashboard",label:"Dashboard",icon:LayoutDashboard,module:"dashboard"},
+ {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
+ {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
+ {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
+ {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
+ {id:"stock",label:"Stock",icon:Package,module:"stock"},
+ {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion"},
+ {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
+ {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
+ {id:"acciones",label:"Acciones",icon:ClipboardList,module:"acciones"},
+ {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes"},
+ {id:"asistente",label:"Asistente IA",icon:Sparkles,module:"asistente"},
+ {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
+ {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
+ {id:"clientes",label:"Clientes",icon:Database,super:true},
+ {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
+ {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true}
 ];
+const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes","asistente"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -178,12 +195,42 @@ function App(){
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState(pharmacyBackendConfigured?"sin_sesion":"demo");
   const [sessionUser,setSessionUser]=useState(null);
+  const [tenantContext,setTenantContext]=useState(null);
+  const [authError,setAuthError]=useState("");
+  async function loadContext(slug){
+    const response=await fetch("/api/tenant/context?cliente="+encodeURIComponent(slug||"ampedia"),{
+      credentials:"same-origin",cache:"no-store"});
+    if(!response.ok)throw Error("No tienes acceso al cliente seleccionado");
+    const ctx=await response.json();
+    localStorage.setItem("fm_active_tenant",ctx.client.slug);
+    setTenantContext(ctx);
+    return ctx;
+  }
   useEffect(()=>{
+    let live=true;
+    const selected=localStorage.getItem("fm_active_tenant")||"ampedia";
     fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"})
       .then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")))
-      .then(body=>{if(body.user)setSessionUser(body.user);else window.location.replace("/login");})
-      .catch(()=>window.location.replace("/login"));
+      .then(async body=>{
+        if(!body.user){window.location.replace("/login");return;}
+        const ctx=await loadContext(selected).catch(()=>loadContext("ampedia"));
+        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug));}
+      })
+      .catch(e=>{if(live)setAuthError(e.message)});
+    return()=>{live=false};
   },[]);
+  async function activateClient(slug){
+    if(slug===tenantContext?.client.slug)return;
+    try{
+      const ctx=await loadContext(slug);
+      setData(readState(ctx.client.slug));
+      setSalesStatus("sin_conexion");setSalesByPromotion({});
+      const initial=ctx.modules.promociones||sessionUser?.role==="superadministrador"?"promociones":
+        Object.keys(ctx.modules).find(key=>ctx.modules[key])||"farmacias";
+      window.history.pushState({page:initial},"","/"+initial);
+      setPage(initial);setMobileMenu(false);setAuthError("");
+    }catch(e){setAuthError(e.message)}
+  }
   async function signOut(){
     try{await fetch("/api/auth/logout",{method:"POST",credentials:"same-origin"});}
     finally{window.location.replace("/login");}

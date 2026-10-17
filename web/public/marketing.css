@@ -236,19 +236,14 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 @media(max-width:800px){.seo-bi-inner{grid-template-columns:1fr;gap:24px;padding:34px}.seo-bi-features{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.seo-bi-highlight{padding:54px 0}.seo-bi-inner{padding:24px 20px;gap:23px;border-radius:15px}.seo-bi-features{grid-template-columns:1fr}.seo-bi-features span{padding:13px 14px}}
 
-/* Isotipo Farmetrica v2 — datos que ascienden, no la antigua flor. */
-.logo-symbol,.bp-brand span,.dash-mark span{
-  position:relative;font-size:0!important;line-height:0;overflow:hidden;
+/* Isotipo Farmetrica: SVG real, sin máscaras dependientes de recursos externos. */
+.logo-symbol,.bp-brand span,.dash-mark span,.floating-asterisk{
+  display:grid;place-items:center;position:relative;font-size:0!important;line-height:0;overflow:hidden;
 }
-.logo-symbol::after,.bp-brand span::after,.dash-mark span::after{
-  content:"";display:block;width:65%;height:65%;background:var(--mint);
-  -webkit-mask:url("/brand-symbol.svg?v=2") center/contain no-repeat;
-  mask:url("/brand-symbol.svg?v=2") center/contain no-repeat;
+.logo-symbol .fm-emblem,.bp-brand span .fm-emblem,.dash-mark span .fm-emblem,.floating-asterisk .fm-emblem{
+  display:block;width:66%;height:66%;flex:none;color:var(--mint);
 }
-.footer .logo-symbol::after,.bp-brand span::after{background:#153b29}
+.footer .logo-symbol .fm-emblem,.bp-brand span .fm-emblem{color:#153b29}
 .dash-mark span{width:20px;height:20px;flex:0 0 20px}
-.dash-mark span::after{width:100%;height:100%}
-.floating-asterisk{font-size:0!important;display:inline-grid;place-items:center}
-.floating-asterisk::after{content:"";display:block;width:70%;height:70%;
-  background:#176a4b;-webkit-mask:url("/brand-symbol.svg?v=2") center/contain no-repeat;
-  mask:url("/brand-symbol.svg?v=2") center/contain no-repeat}
+.dash-mark span .fm-emblem{width:100%;height:100%}
+.floating-asterisk .fm-emblem{color:#176a4b;width:70%;height:70%}

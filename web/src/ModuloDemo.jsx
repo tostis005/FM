@@ -72,7 +72,7 @@ function columnsFor(module,pharmacyMap){
   case "reposicion":return [...common,num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
   case "rentabilidad":return [...common,euro("value","Ventas"),euro("margin","Margen estimado"),C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
-  case "acciones":return [C("action","Acción","action"),...common,euro("impact","Importe asociado")];
+  case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
   default:return [...common,euro("value","Ventas")];
  }
 }
@@ -169,8 +169,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    {module==="proveedores"&&canNavigate("proveedores-maestro")&&
     <button className="btn btn-secondary" onClick={()=>go("proveedores-maestro")}>Maestro de proveedores <ArrowRight size={16}/></button>}</div>
   <div className="fm-demo-filters">
-   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>change("pharmacyIds",v)}/></div>
-   {familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
+   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>change("pharmacyIds",v)}/></div>
+   {familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
    <label><span>Periodo</span><select value={filters.period} onChange={e=>change("period",e.target.value)}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label>
    <label className="fm-demo-search"><span>Artículo o CN</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </div>

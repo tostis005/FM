@@ -90,12 +90,14 @@ try{
        }
        if(path==="dashboard"&&viewport.width===375){
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");
+         await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")?.textContent!=="—");
          const before=await firstMetric.textContent();
          await page.locator(".fm-filter-field .multi-filter-trigger").first().click();
          const popup=page.locator(".multi-filter-popover");
          await popup.getByText("Abadía",{exact:true}).click();
          await popup.getByText("Europa",{exact:true}).click();
          await popup.getByRole("button",{name:"Listo"}).click();
+         await page.waitForFunction(previous=>{const now=document.querySelector(".fm-demo-kpi strong")?.textContent;return Boolean(now&&now!==previous&&now!=="—");},before,{timeout:10000});
          const after=await firstMetric.textContent();
          if(before===after)throw Error("La selección de dos farmacias no recalcula los KPI");
          await page.locator(".fm-demo-kpi").first().click();

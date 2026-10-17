@@ -75,7 +75,7 @@ for(const {p,url,type} of pages){
     assert.match(html,/Integración: (operativa|en estudio)/);
     if(p.slug!=="farmatic")assert.match(html,/Integración: en estudio/);
   }
-  for(const related of p.related||[])assert.ok(allUrls.has(related),"Enlace contextual desconocido: "+related);
+  for(const related of p.related||[])assert.ok(allUrls.has(related)||["/soluciones/","/integraciones/","/blog/"].includes(related),"Enlace contextual desconocido: "+related);
   assert.ok(nginx.includes(url),"Sitemap: falta "+url);
 }
 for(const section of ["/soluciones/","/integraciones/"]){

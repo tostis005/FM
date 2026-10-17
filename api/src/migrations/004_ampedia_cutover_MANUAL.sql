@@ -29,7 +29,7 @@ UPDATE farmetrica.clientes SET esquema_datos='ampedia'
 -- ordinario. Los clientes que usen COPY FROM sobre la tabla anterior deberán
 -- actualizar su destino a ampedia.*.
 CREATE SCHEMA farmatic;
-DO $
+DO $compat$
 DECLARE relation record;
 BEGIN
   FOR relation IN
@@ -38,7 +38,7 @@ BEGIN
     EXECUTE format('CREATE VIEW farmatic.%I AS SELECT * FROM ampedia.%I',
       relation.tablename,relation.tablename);
   END LOOP;
-END $;
+END $compat$;
 COMMIT;
 
 -- IMPORTANTE: referencias SQL literales, procedimientos, ETLs y aplicaciones externas

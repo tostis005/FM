@@ -10,16 +10,20 @@ const nginx=read("./nginx.conf");
 const css=read("./public/marketing.css");
 const emblem=read("./public/brand-symbol.svg");
 const favicon=read("./public/favicon.svg");
+const logoBinary=readFileSync(new URL("./public/brand-logo.webp",import.meta.url));
+assert.equal(logoBinary.toString("ascii",0,4),"RIFF");
+assert.equal(logoBinary.toString("ascii",8,12),"WEBP");
+assert.match(nginx,/location = \/brand-logo\.webp/);
 assert.match(emblem,/<svg/);
 assert.match(emblem,/<path/);
 assert.match(favicon,/Farmetrica/);
 assert.match(css,/\.fm-emblem/);
 assert.match(nginx,/location = \/brand-symbol\.svg/);
-assert.match(login,/<svg class="fm-emblem"/);
+assert.match(login,/<img class="fm-emblem" src="\/brand-logo\.webp\?v=4"/);
 assert.doesNotMatch(home,/✳/,"La portada no debe mostrar el isotipo antiguo");
 assert.doesNotMatch(login,/✳/,"El acceso no debe mostrar el isotipo antiguo");
-assert.match(home,/<svg class="fm-emblem"/,"La cabecera principal dibuja el nuevo logo");
-assert.match(blog,/<svg class="fm-emblem"/,"El blog dibuja el nuevo logo");
+assert.match(home,/<img class="fm-emblem" src="\/brand-logo\.webp\?v=4"/,"La cabecera principal dibuja el nuevo logo");
+assert.match(blog,/<img class="fm-emblem" src="\/brand-logo\.webp\?v=4"/,"El blog dibuja el nuevo logo");
 assert.doesNotMatch(css,/mask:url\(\/"brand-symbol/,"No se debe depender de máscaras CSS");
 
 
@@ -31,7 +35,7 @@ const posts=[
 for(const [name,html] of [["landing",home],["blog",blog]]){
   assert.match(html,/<html lang="es">/);
   assert.match(html,/<meta name="description"/);
-  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=3">/);
+  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=4">/);
   assert.match(html,/href="\/login"/);
   assert.doesNotMatch(html,/<script[^>]+src="\/assets\//);
 }

@@ -1,9 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Farmetrica">
-  <rect width="64" height="64" rx="17" fill="#102f28"/>
-  <g fill="#b7ecc9">
-    <rect x="12" y="35" width="9" height="15" rx="2"/>
-    <rect x="26" y="27" width="9" height="23" rx="2"/>
-    <rect x="40" y="18" width="9" height="32" rx="2"/>
-  </g>
-  <path d="m12 29 14-11 11 3 14-13m-8 0h8v8" fill="none" stroke="#b7ecc9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+ <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#50bb9e"/><stop offset="1" stop-color="#00605a"/></linearGradient></defs>
+ <path d="M23 3h18a5 5 0 0 1 5 5v10h10a5 5 0 0 1 5 5v18a5 5 0 0 1-5 5H46v10a5 5 0 0 1-5 5H23a5 5 0 0 1-5-5V46H8a5 5 0 0 1-5-5V23a5 5 0 0 1 5-5h10V8a5 5 0 0 1 5-5Z" fill="url(#g)"/>
+ <path d="M9 43c12 0 16-15 25-13 7 2 9 9 23-10" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+ <path d="m42 20 17-7-3 17-5-7z" fill="#fff"/>
 </svg>

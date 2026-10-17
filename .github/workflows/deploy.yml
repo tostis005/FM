@@ -156,8 +156,8 @@ jobs:
                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset" && \
                    curl -fsS http://127.0.0.1:18080/ | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
-                   curl -fsS http://127.0.0.1:18080/marketing.css?v=3 | grep -q ".fm-emblem" && \
-                   curl -fsS http://127.0.0.1:18080/favicon.svg?v=3 | grep -q "<svg"; then
+                   curl -fsS http://127.0.0.1:18080/marketing.css?v=4 | grep -q ".fm-emblem" && \
+                   curl -fsS http://127.0.0.1:18080/brand-logo.webp?v=4 | head -c 4 | grep -q "RIFF"; then
                   exit 0
                 fi
               fi

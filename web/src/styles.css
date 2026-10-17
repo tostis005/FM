@@ -693,3 +693,7 @@ html,body{overflow-x:clip}
 @media(max-width:355px){
  .main-content .page-header .campaign-header-actions{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Cruz verde y flecha ascendente blancas: isotipo corporativo oficial. */
+.sidebar .brand-mark{background:transparent;transform:none;box-shadow:none;overflow:visible}
+.sidebar .brand-mark .fm-emblem{display:block;width:100%;height:100%;object-fit:contain;transform:none}

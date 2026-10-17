@@ -60,7 +60,7 @@ function PrivacyInbox(){
   setBusy(id);setError("");
   try{
    const r=await fetch("/api/admin/privacidad/"+encodeURIComponent(id),{method:"PATCH",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({estado})});
-   const j=await r.json().catch(()=>({});
+   const j=await r.json().catch(()=>({}));
    if(!r.ok)throw Error(j.error||"No se ha podido guardar");
    await refresh();
   }catch(e){setError(e.message)}finally{setBusy("")}

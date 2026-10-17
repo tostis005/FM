@@ -52,3 +52,89 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 @media(max-width:1010px){.hero .container{grid-template-columns:1fr;gap:20px;padding:79px 0}.hero h1{max-width:720px}.visual-shell{max-width:650px;margin:10px auto 0;width:100%}.nav-links{gap:17px}.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.integration-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:700px){.container{width:min(100% - 34px,560px)}.site-nav .container{min-height:70px}.nav-links{display:none}.mobile-nav{display:block}.logo{font-size:20px}.logo-symbol{width:37px;height:37px;font-size:25px}.nav-actions{gap:7px}.nav-actions .login-button{padding:10px 13px;font-size:12px}.hero .container{padding:68px 0 63px}.hero h1{font-size:clamp(38px,9vw,54px)}.hero-copy{font-size:15px}.visual-shell{padding:10px 0;max-width:485px}.dashboard{min-height:320px;grid-template-columns:80px 1fr}.dash-content{padding:15px 10px}.dash-sidebar{padding:15px 7px}.dash-kpi{padding:8px 6px}.dash-kpi strong{font-size:13px}.dash-kpis{gap:5px}.dash-side-item{font-size:7px}.dash-hello{font-size:14px}.dash-chart{padding:10px}.bars{height:75px;gap:7px}.dash-list{padding:8px}.section{padding:77px 0}.feature-grid,.steps,.integration-grid,.story-grid{grid-template-columns:1fr}.feature{min-height:unset;padding:23px}.trust-bar .container{gap:12px}.trust-items{gap:18px}.trust-item{font-size:14px}.cta{padding:64px 0}.cta .container{align-items:flex-start;flex-direction:column}.footer-top{align-items:flex-start;flex-direction:column}.page-hero{padding:64px 0}.blog-main{padding:50px 0 75px}.article-wrap{padding:50px 0 72px}.article-wrap h2{font-size:24px}.article-wrap .lead{font-size:17px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+
+/* Páginas de captación SEO: coherencia visual con login y sitio comercial. */
+.seo-hero{position:relative;isolation:isolate;background:radial-gradient(ellipse at 94% 10%,#246b52 0%,transparent 44%),linear-gradient(140deg,#102f28,#0f493b);color:#fff;overflow:hidden}
+.seo-hero:before,.seo-hero:after{position:absolute;z-index:-1;pointer-events:none;content:"";width:570px;height:570px;border:1px solid #b7ecc926;border-radius:50%;right:-170px;top:-330px}
+.seo-hero:after{width:370px;height:370px;right:-80px;top:-220px;background:#b7ecc908}
+.seo-hero .container{padding-top:29px;padding-bottom:90px}
+.seo-crumb{font-size:11px;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:70px;color:#d4ecdd}
+.seo-crumb a{text-decoration:underline;text-decoration-color:#ffffff55;text-underline-offset:3px}
+.seo-hero-layout{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(340px,.85fr);gap:78px;align-items:center}
+.seo-kicker{display:inline-flex;align-items:center;gap:11px;color:#beeccb;text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:800}
+.seo-kicker-dot{width:8px;height:8px;background:#b7ecc9;box-shadow:0 0 0 5px #b7ecc921;border-radius:50%}
+.seo-hero h1{font:800 clamp(37px,4.4vw,58px)/1.12 "Manrope",sans-serif;letter-spacing:-.06em;margin:21px 0 22px}
+.seo-hero-layout>div:first-child>p,.seo-hub-heading>p{max-width:660px;color:#d1e5d8;font-size:16px;line-height:1.9;margin:0}
+.seo-hero .button-outline:hover{background:#ffffff1d}
+.seo-diagram{border:1px solid #e3f9e94c;border-radius:18px;padding:24px;background:#f6fffafa;box-shadow:0 25px 60px #00181145;color:#173a2a;transform:rotate(1.7deg)}
+.seo-diagram-meta{display:block;color:#6b947c;letter-spacing:.095em;font-size:10px;font-weight:800;margin-bottom:22px}
+.seo-diagram-top{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid #daeee0;padding:15px;border-radius:12px;box-shadow:0 8px 18px #164a2e0c}
+.seo-diagram-icon{width:39px;height:39px;border-radius:11px;display:grid;place-items:center;background:#e4f7e9;color:#267f58;font-size:22px;flex:none}
+.seo-diagram-top div{display:grid;gap:4px;flex:1;min-width:0}
+.seo-diagram-top strong{font-size:12px;font-weight:800}
+.seo-diagram-top small{font-size:10px;color:#698579;line-height:1.4}
+.seo-diagram-top>span:last-child{font-size:10px;color:#93b6a0;font-weight:800}
+.seo-diagram-link{height:18px;width:1px;background:#aed9c0;margin-left:32px}
+.seo-diagram-caption{display:block;font-size:10px;color:#688573;text-align:right;margin-top:17px}
+.seo-content{padding:99px 0 104px;background:#fff}
+.seo-detail-grid{display:grid;grid-template-columns:minmax(0,760px) minmax(230px,295px);justify-content:space-between;gap:75px}
+.seo-main-copy{min-width:0}.seo-intro-title{font:800 clamp(29px,3vw,41px)/1.22 "Manrope";letter-spacing:-.048em;color:#153f32;margin-bottom:16px}
+.seo-intro{font-size:16px;color:#5f7a6b;line-height:1.9;margin-bottom:53px}
+.seo-detail-section{display:grid;grid-template-columns:48px minmax(0,1fr);gap:22px;border-top:1px solid #e0eae2;padding:38px 0}
+.seo-detail-section:first-of-type{border-top:0}.seo-section-number{font:800 15px "Manrope";color:#40a36c;padding-top:4px}
+.seo-detail-section h2{font:800 clamp(20px,2.2vw,27px)/1.35 "Manrope";letter-spacing:-.036em;color:#153b30;margin-bottom:17px}
+.seo-detail-section p{font-size:14px;line-height:1.96;color:#566e61;margin:0 0 14px}
+.seo-checklist{margin:23px 0 7px;padding:0;list-style:none;display:grid;gap:13px}
+.seo-checklist li{position:relative;color:#235741;font-size:13px;font-weight:700;line-height:1.7;padding-left:29px}
+.seo-checklist li:before{content:"✓";position:absolute;left:0;top:0;display:grid;place-items:center;background:#dcf4e3;color:#18865b;border-radius:50%;width:19px;height:19px;font-size:11px}
+.seo-aside{align-self:start;position:sticky;top:20px;display:grid;gap:17px}
+.seo-status{background:linear-gradient(145deg,#eaf7ed,#f8fbf6);padding:27px;border:1px solid #d7e9de;border-radius:17px}
+.seo-status:before{content:"◎";display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#c6ecd3;color:#195f40;font-size:26px;margin-bottom:23px}
+.seo-status strong{font:800 17px "Manrope";line-height:1.45;display:block;margin-bottom:11px;color:#173f2f}
+.seo-status p{font-size:12px;line-height:1.85;color:#527461;margin:0}
+.seo-aside-links{background:#fcfdfb;border:1px solid #e2ece4;border-radius:16px;padding:25px}
+.seo-aside-links h3{font:800 13px "Manrope";margin:0 0 15px;color:#244e3b}
+.seo-aside-links a{display:block;padding:11px 0;border-top:1px solid #e4eee7;font-size:12px;font-weight:700;color:#137750}
+.seo-faq{padding:93px 0;background:#f4f8f3}
+.seo-title-row{max-width:790px;margin-bottom:34px}
+.seo-title-row h2{font:800 clamp(27px,3vw,40px)/1.25 "Manrope";letter-spacing:-.05em;color:#193d2e;margin:0}
+.seo-faq-list{max-width:870px;display:grid;gap:12px}
+.seo-faq-list details{background:#fff;border:1px solid #dbeae0;border-radius:12px;padding:0 23px}
+.seo-faq-list summary{cursor:pointer;padding:19px 0;color:#1d4635;font-weight:800;font-size:14px;list-style-position:inside}
+.seo-faq-list p{font-size:13px;color:#607a6c;line-height:1.85;padding:0 0 22px;margin:0}
+.seo-related{padding:94px 0;background:#fff}
+.seo-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.seo-card{display:flex;flex-direction:column;border:1px solid #dae9df;border-radius:17px;padding:28px;min-height:262px;background:#fdfefb;transition:transform .2s,box-shadow .2s,border-color .2s}
+.seo-card:hover,.seo-card:focus-visible{transform:translateY(-4px);box-shadow:0 16px 35px #0e47392a;border-color:#90caaa}
+.seo-card-eyebrow{font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.11em;color:#25966a;margin-bottom:21px}
+.seo-card h3{font:800 18px/1.4 "Manrope";letter-spacing:-.038em;color:#153c2d;margin-bottom:13px}
+.seo-card p{color:#648173;font-size:12.5px;line-height:1.75}
+.seo-card-link{margin-top:auto;padding-top:23px;color:#147951;font-size:12px;font-weight:800}
+.seo-cta-section{background:#eff6ef;padding:0 0 90px}
+.seo-cta{background:radial-gradient(circle at 100% 0%,#246d50,transparent 40%),linear-gradient(135deg,#11352b,#165742);border-radius:21px;padding:57px 60px;color:#fff;display:flex;justify-content:space-between;align-items:center;gap:27px}
+.seo-cta .section-label{color:#b7ecc9}.seo-cta h2{font:800 clamp(25px,3vw,37px)/1.2 "Manrope";letter-spacing:-.05em;max-width:580px;margin-bottom:13px}
+.seo-cta p{font-size:13px;color:#c0dccb;line-height:1.7;max-width:560px;margin:0}
+.seo-cta-buttons{display:grid;gap:11px;min-width:194px}
+.seo-cta .button{white-space:nowrap}
+.seo-hub-heading{max-width:860px;margin:0 auto;text-align:center;padding:5px 0 21px}
+.seo-hub-heading .hero-actions{justify-content:center}
+.seo-hub-hero .container{padding-bottom:80px}
+.seo-hub-body{padding:95px 0;background:#fbfcf8}
+.seo-hub-body .seo-title-row{max-width:750px}
+.seo-hub-body .seo-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.seo-proof-grid{margin-top:49px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.seo-proof-grid>div{padding:21px;background:#e8f5ea;border-radius:13px;min-height:110px}
+.seo-proof-grid strong{font:800 20px "Manrope";color:#187954;display:block;margin-bottom:10px}
+.seo-proof-grid span{font-size:11px;color:#466c53;font-weight:700;line-height:1.6}
+.seo-hub-note{margin:35px auto 0;max-width:900px;color:#5c7966;font-size:13px;line-height:1.85}
+@media(max-width:980px){.seo-hero-layout{grid-template-columns:1fr;gap:40px}.seo-diagram{max-width:570px;transform:none}.seo-detail-grid{grid-template-columns:minmax(0,1fr);gap:25px}.seo-aside{position:static;display:grid;grid-template-columns:1fr 1fr}.seo-card-grid,.seo-hub-body .seo-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.seo-cta{padding:44px;flex-wrap:wrap}.seo-cta-buttons{display:flex;flex-wrap:wrap}.seo-proof-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.seo-hero .container{padding-top:22px;padding-bottom:56px}.seo-crumb{margin-bottom:42px}.seo-hero h1{font-size:clamp(32px,9vw,45px)}.seo-hero-layout>div:first-child>p,.seo-hub-heading>p{font-size:14px;line-height:1.8}.seo-diagram{padding:15px}.seo-content{padding:60px 0}.seo-detail-section{grid-template-columns:1fr;gap:7px;padding:30px 0}.seo-section-number{padding:0}.seo-aside{grid-template-columns:1fr}.seo-faq,.seo-related,.seo-hub-body{padding:60px 0}.seo-card-grid,.seo-hub-body .seo-card-grid{grid-template-columns:1fr}.seo-card{min-height:auto}.seo-proof-grid{grid-template-columns:1fr 1fr}.seo-cta{padding:32px 23px;border-radius:15px}.seo-cta-buttons{display:grid;width:100%}.seo-cta-section{padding-bottom:60px}.seo-diagram-top strong{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.seo-card,.button{transition:none}}
+
+/* Enlaces editoriales entre el blog y las páginas de producto. */
+.home-solutions{background:#fdfefa}.home-solutions .seo-card-grid{margin-bottom:7px}
+.integration-links{display:flex;flex-wrap:wrap;gap:13px 19px;margin-top:25px}.integration-links a{color:#15714f;font-size:12px;font-weight:800;border-bottom:1px solid #b9d8c4;padding-bottom:5px}.integration-links a:hover{color:#0a4631}
+.seo-blog-end{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:15px;padding:34px 0 10px}.seo-blog-end p{color:#315a43;font-size:16px;font-weight:800;margin:0}
+.seo-old-blog-links{display:flex;align-items:center;gap:10px 19px;flex-wrap:wrap;padding:19px 0;margin:20px 0;border-top:1px solid #dfe8dd;border-bottom:1px solid #dfe8dd}.seo-old-blog-links strong{font-size:12px;color:#225a3d}.seo-old-blog-links a{font-size:12px;color:#15815a;font-weight:800}
+@media(max-width:640px){.integration-links{flex-direction:column;align-items:flex-start}.seo-blog-end{align-items:flex-start}}

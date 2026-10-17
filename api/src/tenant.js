@@ -46,7 +46,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   const requireTenant=()=>middleware();
   const requireTenantAdmin=()=>middleware(ctx=>["administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
-  app.get("/api/tenant/context",...requireTenant(),async(req,res)=>{
+  app.get("/api/tenant/context",...requireTenant(),async(req,res,next)=>{
+    try{
     const {rows}=await pool.query(
       "SELECT slug,nombre AS name FROM farmetrica.clientes WHERE activo=true ORDER BY nombre");
     const clients=isSuper(req.user)?rows:rows.filter(c=>req.user.tenants.some(t=>t.slug===c.slug&&t.active));
@@ -54,6 +55,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
     res.json({user:{email:req.user.email,name:req.user.name,role:req.user.role},
       clients,client:ctx.client,role:ctx.role,modules:ctx.modules,
       pharmacies:ctx.pharmacies});
+    }catch(e){next(e)}
   });
   app.get("/api/admin/clientes",requireSuperadmin,async(_req,res,next)=>{
     try{

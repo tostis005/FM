@@ -87,8 +87,8 @@ jobs:
             AND (SELECT count(*) FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND habilitado) = 1
             AND (SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='ampedia') = 5;")
           test "$result" = t
-          psql_test -At -c "INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo) VALUES (\x27ampedia\x27,\x27COOP01\x27,\x27Cooperativa de prueba CI\x27,\x27cooperativa\x27);" >/dev/null
-          psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_maestro WHERE cliente_slug=\x27ampedia\x27 AND tipo=\x27cooperativa\x27;" | grep -qx 1
+          psql_test -At -c "INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo) VALUES ('ampedia','COOP01','Cooperativa de prueba CI','cooperativa');" >/dev/null
+          psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND tipo='cooperativa';" | grep -qx 1
 
 
   validar_responsive:

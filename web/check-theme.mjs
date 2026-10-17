@@ -8,10 +8,10 @@ const app=read("./src/main.jsx");
 const index=read("./index.html");
 assert.match(app,/import "\.\/styles\.css";\s*import "\.\/loginTheme\.css";/,
   "El tema debe importarse después de los estilos existentes");
-assert.match(app,/className="brand-mark" aria-hidden="true"\s*\/>/,
+assert.match(app,/className="brand-mark" aria-hidden="true"><svg className="fm-emblem"/,
   "La marca interior debe mostrar el nuevo icono vectorial");
-assert.match(theme,/brand-symbol\.svg/,"El tema interior usa el logo de Farmetrica");
-assert.match(login,/brand-symbol\.svg/,"El acceso usa el mismo logotipo");
+assert.match(theme,/\.fm-emblem/,"El tema interior usa el logo de Farmetrica");
+assert.match(login,/<svg class="fm-emblem"/,"El acceso usa el mismo logotipo");
 assert.doesNotMatch(app,/✳/,"No se muestra el icono anterior en la aplicación");
 for(const color of ["#102f28","#0e4739","#145947","#b7ecc9"]){
   assert.ok(login.includes(color),"Falta el color del login: "+color);

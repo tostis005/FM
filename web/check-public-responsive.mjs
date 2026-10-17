@@ -27,8 +27,10 @@ try{
       const main=document.querySelector("#contenido");
       const h1=main?.querySelector("h1");
       const nav=document.querySelector(".site-nav");
+      const logo=document.querySelector(".site-nav .logo-symbol .fm-emblem");
+      const logoStyle=logo&&getComputedStyle(logo);
       const rect=el=>el?.getBoundingClientRect();
-      return {width,html,body,login:rect(login),h1:rect(h1),nav:rect(nav),
+      return {width,html,body,login:rect(login),h1:rect(h1),nav:rect(nav),logo:rect(logo),logoVisible:logoStyle?.visibility!=="hidden"&&logoStyle?.display!=="none",
         links:[...document.querySelectorAll('a[href^="/"]')].length,
         offenders:[...document.querySelectorAll("body *")].map(e=>({tag:e.tagName,cls:e.className?.baseVal||e.className||"",text:e.textContent?.slice(0,30),right:Math.round(e.getBoundingClientRect().right)})).filter(x=>x.right>width+3).slice(0,18)};
     });
@@ -38,6 +40,9 @@ try{
       throw Error("Titular fuera del viewport: "+JSON.stringify(details));
     if(!details.login||details.login.right>viewport.width+2||details.login.left<0)
       throw Error("Acceso fuera de cabecera: "+JSON.stringify(details));
+    if(!details.logo||details.logo.width<10||details.logo.height<10||
+       details.logo.right<=0||details.logo.left>viewport.width||!details.logoVisible)
+      throw Error("El nuevo logotipo no se muestra: "+JSON.stringify(details));
     if(!details.links)throw Error("Página pública sin navegación");
     if(path==="/landing.html"){
       if(!await page.getByRole("heading",{level:1}).count())throw Error("Falta H1");

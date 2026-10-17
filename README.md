@@ -1,4 +1,4 @@
-# Farmétrica · prototipo
+# Farmetrica · prototipo
 
 Primera interfaz interactiva para la gestión de promociones de la red de farmacias. Diseño basado en el estilo visual verde/blanco acordado.
 

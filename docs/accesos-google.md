@@ -1,4 +1,4 @@
-# Autenticación y administración de accesos — Farmétrica
+# Autenticación y administración de accesos — Farmetrica
 
 ## Objetivo
 El administrador gestiona desde **Accesos** (ruta `/accesos`) un catálogo de dominios autorizados y cuentas individuales, sin fijar dominios en el código. Se puede habilitar `farmacia-ejemplo.es` y vincularlo al ID del maestro `public.farmacias`; también permitir `consultor@gmail.com` o `colaborador@externo.es` individualmente.

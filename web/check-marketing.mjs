@@ -31,15 +31,14 @@ assert.match(home,/Proveedores/);
 assert.match(home,/Genéricos/);
 assert.match(home,/Rentabilidad/);
 assert.match(home,/Una farmacia/);
-assert.match(home,//integraciones\/bitfarma\//);
-assert.match(home,//integraciones\/farmanager\//);
+assert.match(home,new RegExp('href="/integraciones/bitfarma/"'));
+assert.match(home,new RegExp('href="/integraciones/farmanager/"'));
 assert.match(home,/la conexión depende de la versión, permisos y validación técnica/);
 assert.match(css,/@media\(max-width:700px\)/);
 assert.match(login,/query\.get\("next"\) \|\| "\/promociones"/);
 assert.match(login,/next === "\/" \? "\/promociones"/);
 for(const slug of posts){
   const html=read("./public/blog/"+slug+"/index.html");
-  assert.match(blog,new RegExp('href="/blog/'+slug+'/?"'));
   assert.match(blog,new RegExp('href="/blog/'+slug+'/?"'));
   assert.match(html,/Equipo Farmetrica/);
   assert.match(html,/<article class="article-wrap">/);

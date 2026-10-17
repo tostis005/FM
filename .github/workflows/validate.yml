@@ -35,6 +35,7 @@ jobs:
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
           node --test src/businessAnalytics.test.js
+          node --test src/promotionMetrics.test.js
           node --test src/laboratoryExport.test.js
           node check-login.mjs
           node generate-seo.mjs

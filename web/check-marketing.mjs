@@ -195,3 +195,9 @@ for(const slug of intentArticles){assert.ok(articles.some(x=>x.slug===slug));ass
 assert.match(home,/Software de análisis para farmacias/);
 assert.match(home,/id="herramientas-analisis"/);
 assert.ok(home.indexOf('/soluciones/ventas-farmacia/')<home.indexOf('/soluciones/gestion-promociones-farmacia/'));
+
+// No depender de proveedores analíticos externos ni de cookies.
+assert.match(read("./public/metricas.js"),/api\/public\/metricas/);
+assert.match(read("./public/landing.html"),/src="\/metricas\.js\?v=1"/);
+assert.match(read("./public/solicitar-demo/index.html"),/src="\/metricas\.js\?v=1"/);
+assert.match(nginx,/location = \/metricas\.js/);

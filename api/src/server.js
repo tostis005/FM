@@ -361,6 +361,7 @@ try {
     try{
       await pool.query("DELETE FROM farmetrica.solicitudes_demo WHERE actualizado_en < now() - interval '12 months'");
       await pool.query("DELETE FROM farmetrica.solicitudes_privacidad WHERE actualizado_en < now() - interval '24 months'");
+      await pool.query("DELETE FROM farmetrica.visitas_publicas WHERE dia < current_date - interval '13 months'");
     }catch(e){console.error("Error depurando solicitudes antiguas",e.code||e.name);}
   };
   await purgeExpiredPublicRequests();

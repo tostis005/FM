@@ -24,6 +24,7 @@ jobs:
           node-version: "22"
       - name: Validar API
         run: |
+          npm install --prefix api --no-audit --no-fund
           node --check api/src/server.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
@@ -155,7 +156,8 @@ jobs:
               blog=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/blog/indicadores-promociones-farmacia/ || true)
               sitemap=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/sitemap.xml || true)
               demo=$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/solicitar-demo/ || true)
-              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ] && [ "$solutions" = 200 ] && [ "$solution" = 200 ] && [ "$integration" = 200 ] && [ "$blog" = 200 ] && [ "$sitemap" = 200 ] && [ "$demo" = 200 ]; then
+              rejected=$(curl -sS -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" --data '{"nombre":"X"}' http://127.0.0.1:18080/api/public/solicitudes-demo || true)
+              if [ "$api" = 200 ] && [ "$web" = 200 ] && [ "$login" = 200 ] && [ "$panel" = 302 ] && [ "$solutions" = 200 ] && [ "$solution" = 200 ] && [ "$integration" = 200 ] && [ "$blog" = 200 ] && [ "$sitemap" = 200 ] && [ "$demo" = 200 ] && [ "$rejected" = 400 ]; then
                 if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected && \
                    curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "Farmetrica" && \
                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset" && \
@@ -163,7 +165,9 @@ jobs:
                    curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/marketing.css?v=6 | grep -q ".fm-emblem" && \
                    curl -fsS http://127.0.0.1:18080/brand-logo.webp?v=4 | head -c 4 | grep -q "RIFF" && \
-                   curl -fsS http://127.0.0.1:18080/solicitar-demo/ | grep -q "demo-request-form"; then
+                   curl -fsS http://127.0.0.1:18080/solicitar-demo/ | grep -q "demo-request-form" && \
+                   curl -fsS http://127.0.0.1:18080/metricas.js | grep -q "api/public/metricas" && \
+                   [ "$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/api/admin/metricas-web)" != 200 ]; then
                   # Comprobar absolutamente todas las páginas del sitemap y las integraciones.
                   routes=$(curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -oE "<loc>[^<]*</loc>" | sed -E "s#<loc>https?://[^/]+([^<]*)</loc>#\1#")
                   test -n "$routes"

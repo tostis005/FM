@@ -30,6 +30,7 @@ function CommercialInbox(){
   }catch(e){setError(e.message)}finally{setBusy("")}
  }
  return <div className="fm-management">
+  <WebTrafficSummary/>
   <div className="page-header"><div><h1>Solicitudes de demostración</h1><p>Interesados que han enviado el formulario público. Acceso exclusivo del superadministrador.</p></div></div>
   <div className="card fm-leads-toolbar"><label>Estado <select value={filter} onChange={e=>setFilter(e.target.value)}><option value="todas">Todas</option>{STATUS.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label><button className="btn btn-secondary" type="button" onClick={refresh} disabled={loading}><RefreshCw size={16}/> Actualizar</button><span>{rows.length} solicitudes{rows.length===200?" (últimas 200)":""}</span></div>
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
@@ -77,4 +78,31 @@ function PrivacyInbox(){
    <label className="fm-lead-action">Estado <select value={r.estado} disabled={busy===r.id} onChange={e=>change(r.id,e.target.value)}><option value="pendiente">Pendiente</option><option value="en_tramite">En trámite</option><option value="atendida">Atendida</option></select></label>
   </article>)}</div>}
  </div>;
+}
+
+function WebTrafficSummary(){
+ const [data,setData]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(false);
+ async function load(){
+  setLoading(true);setError("");
+  try{
+   const r=await fetch("/api/admin/metricas-web",{credentials:"same-origin",cache:"no-store"});
+   const j=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(j.error||"No se pudieron consultar las métricas");
+   setData(j);
+  }catch(e){setError(e.message)}finally{setLoading(false)}
+ }
+ useEffect(()=>{load()},[]);
+ const totalViews=(data?.dias||[]).reduce((n,d)=>n+Number(d.visitas||0),0);
+ const leads=Number(data?.totalSolicitudes||0);
+ const demoViews=Number((data?.paginas||[]).find(p=>p.ruta==="/solicitar-demo/")?.visitas||0);
+ return <section className="card fm-traffic">
+  <div className="fm-traffic-head"><div><h2>Captación web</h2><p>Últimos 30 días. Recuento agregado de páginas, sin cookies ni identificación de visitantes.</p></div><button className="btn btn-secondary" type="button" onClick={load} disabled={loading}><RefreshCw size={15}/> Actualizar</button></div>
+  {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
+  {!data?<p>{loading?"Cargando medición…":"No hay métricas disponibles."}</p>:<>
+   <div className="fm-traffic-kpis"><div><span>Vistas de páginas</span><strong>{totalViews.toLocaleString("es-ES")}</strong></div><div><span>Visitas a «Solicitar demo»</span><strong>{demoViews.toLocaleString("es-ES")}</strong></div><div><span>Solicitudes recibidas</span><strong>{leads.toLocaleString("es-ES")}</strong></div></div>
+   <p className="fm-traffic-caveat">Son vistas de páginas, no personas únicas. Algunas visitas pueden no contarse si bloquean JavaScript; las solicitudes proceden del registro real en PostgreSQL. No se atribuyen usuarios individuales.</p>
+   <div className="fm-traffic-columns"><div><h3>Páginas consultadas</h3>{!data.paginas?.length?<p>Aún no hay visitas registradas.</p>:<table className="fm-traffic-table"><thead><tr><th>Página</th><th>Vistas</th></tr></thead><tbody>{data.paginas.map(p=><tr key={p.ruta}><td>{p.ruta}</td><td>{p.visitas}</td></tr>)}</tbody></table>}</div><div><h3>Solicitudes por procedencia</h3>{!data.solicitudesPorOrigen?.length?<p>Aún no hay solicitudes.</p>:<table className="fm-traffic-table"><thead><tr><th>Origen</th><th>Contactos</th></tr></thead><tbody>{data.solicitudesPorOrigen.map(p=><tr key={p.origen}><td>{p.origen}</td><td>{p.solicitudes}</td></tr>)}</tbody></table>}
+   <h3>Avisos por correo</h3><p>Comercial: {data.avisoCorreo?.comercial?"configurado":"pendiente de configurar"} · Privacidad: {data.avisoCorreo?.privacidad?"configurado":"pendiente de configurar"}.</p></div></div>
+  </>}
+ </section>;
 }

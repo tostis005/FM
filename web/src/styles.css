@@ -708,3 +708,20 @@ html,body{overflow-x:clip}
 .fm-lead-details{display:grid;gap:9px;color:#425e50;font-size:12px;overflow-wrap:anywhere}.fm-lead-details a{display:inline-flex;align-items:center;gap:7px;color:#147956;text-decoration:underline}
 .fm-lead-note{margin:17px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.6;border-top:1px solid #e5ede7;padding-top:14px}.fm-lead-action{margin-top:20px}
 @media(max-width:800px){.fm-lead-grid{grid-template-columns:1fr}}
+
+/* Captación web: cuadro interno de métricas agregadas, sin cookies. */
+.fm-traffic{padding:22px;margin-bottom:24px;min-width:0}
+.fm-traffic-head{display:flex;justify-content:space-between;align-items:start;gap:15px;flex-wrap:wrap}
+.fm-traffic-head h2{font-size:19px;font-weight:850;margin:0 0 8px}
+.fm-traffic-head p{font-size:12px;color:#66836f;line-height:1.65;margin:0}
+.fm-traffic-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}
+.fm-traffic-kpis>div{padding:15px;border:1px solid #e1ebe2;border-radius:12px;background:#fafdfa}
+.fm-traffic-kpis span{display:block;font-size:12px;color:#68816d;margin-bottom:8px}
+.fm-traffic-kpis strong{font-size:23px;font-weight:850;color:#18513a}
+.fm-traffic-caveat{font-size:11px;line-height:1.75;color:#748779}
+.fm-traffic-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin-top:22px}
+.fm-traffic-columns h3{font-size:14px;margin:0 0 12px}.fm-traffic-columns p{font-size:12px;line-height:1.7}
+.fm-traffic-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+.fm-traffic-table th,.fm-traffic-table td{padding:9px 5px;text-align:left;border-bottom:1px solid #edf1ed;overflow-wrap:anywhere}
+.fm-traffic-table td:last-child,.fm-traffic-table th:last-child{text-align:right;width:70px}
+@media(max-width:760px){.fm-traffic-columns{grid-template-columns:1fr}.fm-traffic-kpis{grid-template-columns:1fr}}

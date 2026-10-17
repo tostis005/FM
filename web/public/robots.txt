@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /blog/
+Disallow: /login
+Disallow: /promociones
+Disallow: /seguimiento
+Disallow: /farmacias
+Disallow: /usuarios
+Disallow: /accesos
+Disallow: /ajustes
+Disallow: /index.html
+Disallow: /assets/

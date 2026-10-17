@@ -72,6 +72,7 @@ assert.match(nginx,/location = \/brand-symbol\.svg/);
 assert.match(nginx,/location = \/brand-symbol\.svg/);
 assert.match(nginx,/location \/ \{\s*auth_request \/__authcheck;/);
 assert.match(nginx,/error_page 401 = @login_redirect;/);
+assert.match(nginx,/Disallow: \/dashboard/, "Las áreas privadas no deben indexarse");
 
 const pages=[
   ...solutions.map(x=>({p:x,url:"/soluciones/"+x.slug+"/",type:"solution"})),

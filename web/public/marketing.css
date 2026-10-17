@@ -251,3 +251,6 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 /* Logotipo corporativo oficial, con transparencia original. */
 .logo-symbol,.footer .logo-symbol,.bp-brand span{background:transparent;box-shadow:none;border-radius:0;overflow:visible}
 .logo-symbol .fm-emblem,.bp-brand span .fm-emblem,.dash-mark span .fm-emblem,.floating-asterisk .fm-emblem{display:block;width:100%;height:100%;object-fit:contain;flex:none;transform:none}
+
+/* Transparencia editorial: requisitos de las fuentes para cada solución. */
+.seo-status .seo-data-notice{margin-top:16px;padding-top:14px;border-top:1px solid rgba(26,82,60,.22);font-size:12px;line-height:1.7;opacity:.9}

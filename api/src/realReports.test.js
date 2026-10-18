@@ -127,7 +127,7 @@ test("los módulos ahorran consultas ajenas a sus indicadores y conservan los da
    "No marcar proveedores como truncado cuando se omitieron ventas deliberadamente");
  assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".ventas t')),
    "Proveedores no debe escanear todas las ventas");
- assert.ok(!a.queries.some(q=>q.sql.includes('AS "pharmacyId"')&&q.sql.includes('.compras')),
+ assert.ok(!a.queries.some(q=>q.sql.includes(' AS supplier,')&&q.sql.includes('.compras')),
    "Proveedores no debe ejecutar de nuevo el detalle de compras");
  assert.ok(!a.queries.some(q=>q.sql.includes("SELECT DISTINCT familia")),
    "Las familias se consultan sólo cuando se filtran productos");

@@ -132,10 +132,10 @@ export function setupRealReports(app,pool,{requireTenant}){
     pharmacy:"max(f.nombre)",products:`count(DISTINCT ${cn})`,
     units:"sum(t.unidades)",value:"sum(t.importe)"
    };
-   const reportOrder=(orders,fallback)=>{
+   const reportOrder=(orders,fallback,tie=cn)=>{
     const expression=orders[f.sortKey]||orders[fallback];
     const dir=orders[f.sortKey]?direction:"DESC";
-    return `ORDER BY ${expression} ${dir} NULLS LAST,f.id,${cn}`;
+    return `ORDER BY ${expression} ${dir} NULLS LAST,f.id,${tie}`;
    };
    const stockSortExpressions={
     name:"max(a.nombre)",cn:"coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))",
@@ -255,7 +255,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      sum(t.unidades)::float8 AS units,
      count(DISTINCT ${cn})::int AS products
      ${purchasesByArticle} ${provider} WHERE ${articleFilter}
-     GROUP BY f.id,t.proveedor_id ${reportOrder(supplierOrders,"value")} LIMIT 1000`;
+     GROUP BY f.id,t.proveedor_id ${reportOrder(supplierOrders,"value","t.proveedor_id")} LIMIT 1000`;
    // Cada informe ejecuta solamente la información que presenta. Esto
    // evita recorrer compras, catálogo y proveedores innecesariamente en Stock,
    // y evita las ventas completas al consultar solamente proveedores.

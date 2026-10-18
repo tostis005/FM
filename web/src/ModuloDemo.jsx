@@ -420,7 +420,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
-    onRowClick={row=>isDashboard?go(row.targetModule):setDetail(row)} columns={columns}/>
+    onRowClick={row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}
       onClick={()=>setDetailPage(n=>n+1)}>

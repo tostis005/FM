@@ -118,13 +118,16 @@ test("los módulos ahorran consultas ajenas a sus indicadores y conservan los da
  const provider=await a.call({query:{...a.req.query,modulo:"proveedores"}});
  assert.equal(provider.status,200);
  assert.equal(provider.result.supplierRows.length,1);
- assert.equal(provider.result.kpis.articulosComprados,1,"Proveedores debe contar compras completas sin necesitar ventas");
+ assert.equal(provider.result.kpis.articulosComprados,null,"Proveedores no necesita repetir un detalle de compras");
+ assert.equal(provider.result.kpis.compras,60,"Los totales deben salir del período completo");
  assert.equal(provider.result.kpis.ventas,null);
  assert.equal(provider.result.kpis.lineasCompra,4);
  assert.equal(provider.result.availability.rowsTruncated,false,
    "No marcar proveedores como truncado cuando se omitieron ventas deliberadamente");
  assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".ventas t')),
    "Proveedores no debe escanear todas las ventas");
+ assert.ok(!a.queries.some(q=>q.sql.includes('AS "pharmacyId"')&&q.sql.includes('.compras')),
+   "Proveedores no debe ejecutar de nuevo el detalle de compras");
  assert.ok(!a.queries.some(q=>q.sql.includes("SELECT DISTINCT familia")),
    "Las familias se consultan sólo cuando se filtran productos");
 

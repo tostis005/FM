@@ -170,16 +170,35 @@ export function setupRealReports(app,pool,{requireTenant}){
    const periodWithArticleFilter=Boolean(f.search||f.families.length);
    const periodParams=periodWithArticleFilter?pars:[f.from,f.to,pharmacyIds,req.context.client.slug];
    const periodTenantParam=periodWithArticleFilter?"$6":"$4";
-   const sqlPeriod=table=>`SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
-     sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount
-     FROM ${quoted}.${table} t
-     JOIN farmetrica.farmacias f ON f.cliente_slug=${periodTenantParam}
-       AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-     ${periodWithArticleFilter?article:""}
-     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
-       AND f.id=ANY($3::int[])
-       ${periodWithArticleFilter?`AND ${articleFilter}`:""}
-     GROUP BY 1 ORDER BY 1`;
+   const sqlPeriod=table=>{
+    // Sin filtros de artículo: consultar únicamente movimientos, sin catálogo.
+    // Con filtros: resumir primero por mes, farmacia y artículo ERP. El lookup
+    // del catálogo se realiza una vez por artículo y mes, no por cada línea.
+    const legacy=table==="compras"&&legacyBuys;
+    const fromJoin=legacy?`JOIN farmetrica.farmacias f ON f.id=t.farmacia_id
+       AND f.cliente_slug=${periodTenantParam}`:`JOIN farmetrica.farmacias f ON f.cliente_slug=${periodTenantParam}
+       AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
+    const amount=legacy?"t.total":"t.importe";
+    if(!periodWithArticleFilter)return `SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
+       sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount
+       FROM ${quoted}.${table} t ${fromJoin}
+       WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
+         AND f.id=ANY($3::int[])
+       GROUP BY 1 ORDER BY 1`;
+    return `SELECT t.month,sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount
+       FROM (
+         SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
+           ${legacy?pharmacyDataCodeSQL("f"):"upper(btrim(t.farmacia_codigo))"} AS farmacia_codigo,
+           ${legacy?"t.producto_id":"t.articulo_id"} AS articulo_id,
+           sum(t.unidades) AS unidades,sum(${amount}) AS importe
+         FROM ${quoted}.${table} t ${fromJoin}
+         WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
+           AND f.id=ANY($3::int[])
+         GROUP BY 1,2,3
+       ) t ${article}
+       WHERE ${articleFilter}
+       GROUP BY t.month ORDER BY t.month`;
+   };
    const sqlProv=`SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId",
      max(coalesce(nullif(t.proveedor_nombre,''),${suppliers?"prov.nombre,":""}t.proveedor_id)) AS name,
      sum(t.importe)::float8 AS value,

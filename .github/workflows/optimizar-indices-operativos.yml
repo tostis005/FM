@@ -66,7 +66,7 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ServerAliveInterval=20 -o ServerAliveCountMax=15 "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
-            < api/src/migrations/013_indices_consultas_operativas.sql
+            < ops/indices-consultas-operativas.sql
       - name: Comprobar todos los índices válidos
         shell: bash
         run: |

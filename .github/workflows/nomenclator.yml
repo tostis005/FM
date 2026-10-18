@@ -112,6 +112,14 @@ jobs:
           ACTUAL=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT (SELECT count(*) FROM farmetrica.nomenclator_presentaciones), (SELECT count(*) FROM farmetrica.nomenclator_presentaciones WHERE generico), (SELECT sha256 FROM farmetrica.nomenclator_versiones WHERE activo LIMIT 1), (SELECT count(*) FROM (SELECT dcpf FROM farmetrica.nomenclator_presentaciones WHERE generico GROUP BY dcpf HAVING count(*) > 1) conjuntos)"' | tr -d ' ')
           IFS='|' read -r PRESENTATIONS GENERICS HASH GROUPS <<< "$ACTUAL"
-          test "$PRESENTATIONS|$GENERICS|$HASH" = "$EXPECTED"
-          test "$GROUPS" -gt 0
+          echo "Nomenclátor activo: $PRESENTATIONS presentaciones, $GENERICS genéricos, $GROUPS agrupaciones DCPF con varios genéricos; SHA=$HASH"
+          echo "Fuente descargada esperada: $EXPECTED"
+          if [ "$PRESENTATIONS|$GENERICS|$HASH" != "$EXPECTED" ]; then
+            echo "::error::El catálogo activo no coincide con la versión oficial descargada"
+            exit 1
+          fi
+          if [ "${GROUPS:-0}" -le 0 ]; then
+            echo "::error::No se encontraron DCPF con varios códigos genéricos; revisar la correspondencia oficial"
+            exit 1
+          fi
           echo "Catálogo verificado: $PRESENTATIONS presentaciones, $GENERICS genéricos y $GROUPS conjuntos con varios CN."

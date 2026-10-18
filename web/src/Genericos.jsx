@@ -30,17 +30,17 @@ function downloadRows(rows){
  const a=document.createElement("a");a.href=url;a.download="farmetrica-genericos-conjuntos.csv";a.click();
  setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function GroupDetail({group,query}){
+function GroupDetail({group,query,clientSlug}){
  const [data,setData]=useState(null),[error,setError]=useState("");
  useEffect(()=>{
   let cancel=false;const controller=new AbortController();
   setData(null);setError("");
   fetch("/api/genericos/conjuntos/"+encodeURIComponent(group.dcpf)+"?"+query,{
-   credentials:"same-origin",cache:"no-store",signal:controller.signal})
+   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudo cargar el conjunto");return j})
    .then(d=>{if(!cancel)setData(d)}).catch(e=>{if(!cancel)setError(e.message)});
   return()=>{cancel=true;controller.abort()};
- },[group.dcpf,query]);
+ },[group.dcpf,query,clientSlug]);
  if(error)return <div role="alert" className="fm-generic-detail-error">{error}</div>;
  if(!data)return <LoadingPanel kind="table" label="Consultando los CN del conjunto…" rows={4}/>;
  const saleMap=new Map(data.sales.map(r=>[r.cn,r]));
@@ -200,7 +200,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
       {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={8}>
-       <GroupDetail group={g} query={query}/>
+       <GroupDetail group={g} query={query} clientSlug={clientSlug}/>
       </td></tr>}
      </React.Fragment>)}</tbody>
     </table></div>}

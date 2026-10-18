@@ -703,8 +703,8 @@ function App(){
     <div className="campaign-header-actions">
       <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
       <button className="btn btn-secondary" type="button" disabled={importBusy} onClick={()=>importFileRef.current?.click()}><Upload size={17}/>{importBusy?"Importando…":"Importar Excel"}</button>
-      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>
-      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={exportLocalPromos} title="Exportar respaldo de las promociones anteriores a la sincronización con PostgreSQL"><ArrowDownToLine size={16}/> Copia local</button>}}
+      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>}
+      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={exportLocalPromos} title="Exportar respaldo de las promociones anteriores a la sincronización con PostgreSQL"><ArrowDownToLine size={16}/> Copia local</button>}
       
       <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
     </div></div>

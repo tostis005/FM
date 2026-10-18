@@ -2,7 +2,7 @@
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 const DAY=86400000;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
-const validDate=s=>ISO.test(s)&&new Date(s+"T00:00:00Z").toISOString().slice(0,10)===s;
+const validDate=s=>{if(!ISO.test(s))return false;const d=new Date(s+"T00:00:00Z");return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s;};
 const round=(n,d=2)=>Math.round(Number(n)*10**d)/10**d;
 const sum=(arr,key)=>arr.reduce((t,r)=>t+Number(typeof key==="function"?key(r):r[key]||0),0);
 const key=(...parts)=>parts.map(String).join("|");

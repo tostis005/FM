@@ -56,7 +56,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
     tableColumns(pool,req.context.client.schema,"productos",["id","cn"]),
     tableColumns(pool,req.context.client.schema,"proveedores",["id","nombre"]),
    ]);
-   const params=[q.from,q.to,q.ids,q.search,tenant];
+   const params=[q.from,q.to,q.ids,tenant];
    // Se muestran TODOS los conjuntos que tienen al menos un CN oficialmente
    // clasificado como genérico; el grupo incluye otras presentaciones equivalentes
    // para analizar alternativas, pero NO mezcla dosis/envases.
@@ -66,7 +66,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    let salesSql=`SELECT n.dcpf,
         sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue
      FROM ${schema}.ventas v
-     JOIN farmetrica.farmacias f ON f.cliente_slug=$5 AND
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND
        upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
      JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(v.articulo_id::text)
      WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'

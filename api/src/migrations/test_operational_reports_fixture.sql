@@ -26,6 +26,8 @@ VALUES ('ABA','B1','2026-10-01','ART-01','PR1',10,2,20,'Mayorista 1'),
        ('ABA','B6','2026-10-08','ART-02','PR2',10,1.3,13,'Mayorista 2');
 INSERT INTO ampedia.ventas(farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
 VALUES ('ABA','V2','2026-10-10','ART-02',2,16);
+INSERT INTO farmetrica.nomenclator_versiones(fuente,sha256,total_presentaciones,total_genericos,fichero,activo)
+VALUES ('Fixture AEMPS','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',2,2,'test.zip',true);
 INSERT INTO farmetrica.nomenclator_presentaciones(cn,nombre,dcpf,dcp,generico)
 VALUES ('654321','Omeprazol A','123456789','123456',true),
        ('654322','Omeprazol B','123456789','123456',true);

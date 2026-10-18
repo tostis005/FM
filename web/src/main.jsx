@@ -113,7 +113,7 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
    <div className="campaign-metric"><span>Objetivo</span><strong>{show(m.target)}</strong></div>
    <div className="campaign-metric"><span>Vendidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:show(m.units)}</strong></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
-    <strong>{m.completion==null?"—":m.completion+"%"}</strong>{m.completion!=null&&<Progress value={m.completion}/>}
+    <strong>{salesLoading?<SkeletonLine width="64%" height="24px"/>:m.completion==null?"—":m.completion+"%"}</strong>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
   </div>
  </section>;
@@ -621,6 +621,7 @@ function App(){
   setEditingUser(null);setToast("Usuario guardado");
  }
  async function refreshPharmacies(){
+    setPharmacyApiStatus("cargando");
     try {
       if (!(await hasPharmacySession())) {setPharmacyApiStatus("sin_sesion");return;}
       const records=await loadPharmacies();

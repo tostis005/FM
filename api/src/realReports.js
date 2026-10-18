@@ -158,17 +158,26 @@ export function setupRealReports(app,pool,{requireTenant}){
      count(DISTINCT ${cn})::int AS products
      ${purchasesByArticle} ${provider} WHERE ${articleFilter}
      GROUP BY f.id,t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT 1000`;
+   // Cada informe ejecuta solamente la información que presenta. Esto
+   // evita recorrer compras, catálogo y proveedores innecesariamente en Stock,
+   // y evita las ventas completas al consultar solamente proveedores.
+   // No guardar ni precalcular resultados: todas las lecturas son SQL reales.
+   const readSalesRows=f.module!=="proveedores";
+   const readSalesPeriod=!["compras","proveedores","acciones"].includes(f.module);
+   const readBuyPeriod=!["stock","reposicion"].includes(f.module);
+   const readSupplierRows=["compras","proveedores"].includes(f.module);
+   const needFamilies=f.module==="ventas";
    const queries=[
-    sales&&pharmacyIds.length?pool.query(sqlSales,pars):{rows:[]},
+    sales&&pharmacyIds.length&&readSalesRows?pool.query(sqlSales,pars):{rows:[]},
     buyers&&pharmacyIds.length?pool.query(sqlBuy,pars):{rows:[]},
-    sales&&pharmacyIds.length?pool.query(sqlPeriod("ventas"),periodParams):{rows:[]},
-    buyers&&pharmacyIds.length?pool.query(sqlPeriod("compras"),periodParams):{rows:[]},
-    buyers&&pharmacyIds.length?pool.query(sqlProv,pars):{rows:[]},
-    pool.query(`SELECT DISTINCT familia FROM ${quoted}.articulos
+    sales&&pharmacyIds.length&&readSalesPeriod?pool.query(sqlPeriod("ventas"),periodParams):{rows:[]},
+    buyers&&pharmacyIds.length&&readBuyPeriod?pool.query(sqlPeriod("compras"),periodParams):{rows:[]},
+    buyers&&pharmacyIds.length&&readSupplierRows?pool.query(sqlProv,pars):{rows:[]},
+    needFamilies?pool.query(`SELECT DISTINCT familia FROM ${quoted}.articulos
       WHERE familia IS NOT NULL AND familia<>'' AND
        upper(btrim(farmacia_codigo))=ANY($1::text[]) ORDER BY familia LIMIT 250`,
       [req.context.pharmacies.filter(p=>pharmacyIds.includes(Number(p.id)))
-       .map(p=>(p.databaseCode||p.sourceCode).toUpperCase())])
+       .map(p=>(p.databaseCode||p.sourceCode).toUpperCase())]):{rows:[]}
    ];
    const [sale,buys,saleM,buyM,providers,families]=await Promise.all(queries);
    const salesRows=sale.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn),
@@ -410,17 +419,17 @@ export function setupRealReports(app,pool,{requireTenant}){
    const kpis={
     stockArticulos:snapshotAvailable?stockSummary?.articles??null:null,
     stockUnidades:snapshotAvailable?stockSummary?.units??null:null,
-    ventas:sales?round(sum(saleM.rows,"amount")):null,
-    unidades:sales?sum(saleM.rows,"units"):null,
-    compras:buyers?round(sum(buyM.rows,"amount")):null,
-    articulosVendidos:complete?new Set(salesRows.map(r=>r.cn)).size:null,
+    ventas:sales&&readSalesPeriod?round(sum(saleM.rows,"amount")):null,
+    unidades:sales&&readSalesPeriod?sum(saleM.rows,"units"):null,
+    compras:buyers&&readBuyPeriod?round(sum(buyM.rows,"amount")):null,
+    articulosVendidos:readSalesRows&&complete?new Set(salesRows.map(r=>r.cn)).size:null,
     articulosComprados:complete?new Set(buyRows.map(r=>r.cn)).size:null,
-    proveedores:buyers&&providers.rows.length<1000?supplierRows.length:null,
+    proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:null,
     stock:stockSummary
       ?(stockSummary.unpriced===0?round(stockSummary.value):null)
       :completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
-    margen:sales&&complete&&coveredItems===salesRows.length?round(coveredMargin):null,
-    margenPct:sales&&complete&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
+    margen:readSalesRows&&sales&&complete&&coveredItems===salesRows.length?round(coveredMargin):null,
+    margenPct:readSalesRows&&sales&&complete&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
     coberturaCostes:sales&&complete&&salesRows.length?round(100*coveredItems/salesRows.length):null,
     reposiciones:completeStock&&complete?replenishmentRows.length:null,
     reposicionCoste:completeStock&&complete&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,

@@ -23,9 +23,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
- async function request(path,params={},body={}){
+ async function request(path,params={},payload={}){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...params},
-    params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"},body};
+    params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"},body:payload};
   let status=200,body;
   const res={status(n){status=n;return res},json(data){body=data;return res}};
   const handler=routes[path]||(path.startsWith("/api/genericos/reales/")?routes["/api/genericos/reales/:dcpf"]:null);

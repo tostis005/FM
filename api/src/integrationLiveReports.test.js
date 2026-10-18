@@ -5,6 +5,7 @@ import {setupRealReports} from "./realReports.js";
 import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
+import {setupSalesDetail} from "./salesDetail.js";
 import {setupGenericosReales} from "./genericosReales.js";
 const enabled=Boolean(process.env.TEST_DB_URL);
 test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF",{
@@ -16,6 +17,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupSalesSummary(app,pool,{requireTenant:()=>[]});
  setupSalesTotals(app,pool,{requireTenant:()=>[]});
  setupSalesInsights(app,pool,{requireTenant:()=>[]});
+ setupSalesDetail(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
@@ -96,6 +98,16 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const allHistory=await request("/api/analytics/ventas/totales",{
    farmacias:"5",desde:"1900-01-01",hasta:"2026-10-18"});
   assert.equal(allHistory.kpis.ventas,28);
+  const detailVal=await request("/api/analytics/ventas/detalle",{
+   farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18",pagina:"1"});
+  assert.ok(detailVal.products.some(p=>p.pharmacyId==="5"&&p.cn==="654321"&&p.abcdClass==="A"));
+  assert.equal(detailVal.hasMore,false);
+  const detailFamily=await request("/api/analytics/ventas/detalle",{
+   farmacias:"5",familias:"Digestivo",desde:"2025-11-01",hasta:"2026-10-18"});
+  assert.equal(detailFamily.products.length,1);
+  const detailNext=await request("/api/analytics/ventas/detalle",{
+   farmacias:"5",pagina:"2",desde:"2025-11-01",hasta:"2026-10-18"});
+  assert.equal(detailNext.products.length,0);
   // Una consulta SQL agrega gráfico, indicadores y ABCD sin peticiones adicionales.
   const salesSummary=await request("/api/analytics/ventas/resumen",{
    farmacias:"5",granularidad:"month"});

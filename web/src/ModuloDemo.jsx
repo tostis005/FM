@@ -112,7 +112,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const [loading,setLoading]=useState(()=>["dashboard","ventas"].includes(module));
  const [reloadKey,setReloadKey]=useState(0);
  const [lastUpdated,setLastUpdated]=useState(null);
- const asOf=useMemo(()=>new Date(),[]);
+ const [asOf,setAsOf]=useState(()=>new Date());
+ useEffect(()=>{
+  const onVisible=()=>{if(document.visibilityState==="visible")setAsOf(new Date())};
+  document.addEventListener("visibilitychange",onVisible);
+  return()=>document.removeEventListener("visibilitychange",onVisible);
+ },[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
  const salesModule=["dashboard","ventas"].includes(module);
  const tz=clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -202,7 +207,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
       aria-pressed={filters.period===key} onClick={()=>pickPeriod(key)}>{label}</button>)}
    </div>
    <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}
-     onClick={()=>setReloadKey(x=>x+1)}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
+     onClick={()=>{setAsOf(new Date());setReloadKey(x=>x+1)}}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
    {period.valid&&<span className="fm-sales-period-info">{period.from===period.to?period.from:period.from+" → "+period.to}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
   </div>}
   {salesModule&&filters.period==="custom"&&<div className="fm-sales-custom-dates">

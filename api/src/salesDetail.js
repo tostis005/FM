@@ -3,7 +3,52 @@
 import {approvedAnalysisRange} from "./salesAnalysisPeriod.js";
 const VALID=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
-export function buildSalesDetailSQL(schema){
+// Columnas permitidas para ordenar todo el universo SQL, antes del LIMIT/OFFSET.
+export const SALES_DETAIL_SORT_KEYS=["name","cn","family","pharmacy","abcdClass",
+ "pvp","purchaseCost","costSource","saleUnitPrice","unitMargin","units",
+ "value","margin","marginPct"];
+export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
+ if(!SALES_DETAIL_SORT_KEYS.includes(sortKey)||!["asc","desc"].includes(sortDir))
+  throw Error("Ordenación de ventas inválida");
+ const needsGlobalCosts=["purchaseCost","costSource","unitMargin","margin","marginPct"].includes(sortKey);
+ const directions=sortDir.toUpperCase();
+ const sortExpressions={
+  name:"name",cn:"cn",family:"family",
+  pharmacy:'(SELECT fp.nombre FROM farmetrica.farmacias fp WHERE fp.id::text="pharmacyId")',
+  abcdClass:'"abcdClass"',pvp:"pvp",units:"units",value:"value",
+  saleUnitPrice:"value/NULLIF(units,0)",
+  purchaseCost:'"globalPurchaseCost"',costSource:'"globalCostSource"',
+  unitMargin:'"globalUnitMargin"',margin:'"globalMargin"',marginPct:'"globalMarginPct"'
+ };
+ const globalCosts=needsGlobalCosts?`
+ global_costs AS (
+   SELECT c."pharmacyId",c.cn,
+    sum(b.unidades*b.coste_unitario) FILTER(
+      WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS cost,
+    sum(b.unidades) FILTER(
+      WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS priced_units
+   FROM visible v JOIN catalog c
+     ON c."pharmacyId"=v."pharmacyId" AND c.cn=v.cn
+   JOIN "${schema}".compras b ON upper(btrim(b.farmacia_codigo))=c.code
+     AND b.articulo_id=c.articulo_id
+     AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')
+   GROUP BY c."pharmacyId",c.cn
+ ),
+ with_cost_sort AS (
+   SELECT v.*,
+    CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END AS "globalPurchaseCost",
+    CASE WHEN gc.priced_units>0 THEN 'Compras ponderadas'
+      WHEN v.pmc IS NOT NULL THEN 'PMC catálogo' ELSE NULL END AS "globalCostSource",
+    v.value/NULLIF(v.units,0)-
+      (CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END) AS "globalUnitMargin",
+    v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END) AS "globalMargin",
+    100*(v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END))
+      /NULLIF(v.value,0) AS "globalMarginPct"
+   FROM visible v LEFT JOIN global_costs gc
+     ON gc."pharmacyId"=v."pharmacyId" AND gc.cn=v.cn
+ ),
+ `:"";
+
  if(!VALID.test(schema))throw Error("Esquema no permitido");
  const t='"'+schema+'"';
  const unitCost=`(CASE WHEN co.priced_units>0 THEN co.cost/co.priced_units ELSE p.pmc END)`;
@@ -56,9 +101,12 @@ export function buildSalesDetailSQL(schema){
   WHERE ($5::text='' OR r.cn ILIKE '%'||$5||'%' OR r.name ILIKE '%'||$5||'%')
     AND (cardinality($6::text[])=0 OR r.family=ANY($6::text[]))
  ),
+ ${globalCosts}
  page AS MATERIALIZED (
-  SELECT "pharmacyId",cn,name,family,units,value,pmc,pvp,"abcdClass"
-  FROM visible ORDER BY value DESC NULLS LAST,"pharmacyId",cn
+  SELECT "pharmacyId",cn,name,family,units,value,pmc,pvp,"abcdClass",
+    ${sortExpressions[sortKey]} AS "__order"
+  FROM ${needsGlobalCosts?"with_cost_sort":"visible"}
+  ORDER BY "__order" ${directions} NULLS LAST,"pharmacyId",cn
   LIMIT $7::int OFFSET $8::int
  ),
  costs AS (
@@ -88,7 +136,7 @@ export function buildSalesDetailSQL(schema){
     round((100*(p.value-p.units*${unitCost})/p.value)::numeric,2)::float8 ELSE NULL END AS "marginPct"
  FROM page p LEFT JOIN costs co
    ON co."pharmacyId"=p."pharmacyId" AND co.cn=p.cn
- ORDER BY p.value DESC NULLS LAST,p."pharmacyId",p.cn`;
+ ORDER BY p."__order" ${directions} NULLS LAST,p."pharmacyId",p.cn`;
 }
 export function setupSalesDetail(app,pool,{requireTenant}){
  app.get("/api/analytics/ventas/detalle",...requireTenant(),async(req,res,next)=>{
@@ -100,8 +148,11 @@ export function setupSalesDetail(app,pool,{requireTenant}){
    const raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim();
    const families=String(req.query.familias||"").split(",").filter(Boolean);
    const page=Number(req.query.pagina||1);
+   const order=String(req.query.orden||"value");
+   const direction=String(req.query.direccion||"desc").toLowerCase();
    if(!approvedAnalysisRange(from,to,req.context.client.analysisMonths)||
      !Number.isSafeInteger(page)||page<1||page>1000||
+     !SALES_DETAIL_SORT_KEYS.includes(order)||!["asc","desc"].includes(direction)||
      raw.length>2000||search.length>100||families.length>30||
      families.some(x=>x.length>80)||(raw&&raw.split(",").some(s=>!/^[1-9]\d{0,8}$/.test(s))))
     return res.status(400).json({error:"Filtros de detalle no válidos"});
@@ -118,7 +169,7 @@ export function setupSalesDetail(app,pool,{requireTenant}){
    if(!VALID.test(schema))throw Error("Esquema no permitido");
    if(!ids.length)return res.json({products:[],hasMore:false,page});
    const pageSize=200;
-   const {rows}=await pool.query(buildSalesDetailSQL(schema),
+   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
      pageSize+1,(page-1)*pageSize]);
    res.json({products:rows.slice(0,pageSize).map(x=>({

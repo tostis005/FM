@@ -33,7 +33,33 @@ jobs:
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
           chmod 600 ~/.ssh/id_fm
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Detectar índices ya instalados
+        id: existing
+        shell: bash
+        run: |
+          set -euo pipefail
+          valid=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SELECT count(*) FROM pg_class idx
+           JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+           JOIN pg_index ix ON ix.indexrelid=idx.oid
+          WHERE ns.nspname='ampedia'
+           AND idx.relname=ANY(ARRAY[
+            'fm_ventas_codigo_fecha_idx','fm_articulos_codigo_id_sync_idx',
+            'fm_compras_codigo_fecha_idx','fm_proveedores_codigo_id_sync_idx',
+            'fm_ventas_codigo_articulo_fecha_idx','fm_compras_codigo_articulo_fecha_idx'])
+           AND ix.indisvalid AND ix.indisready;
+          SQL
+          )
+          if [ "$valid" = 6 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Todos los índices ya están instalados. No se reconstruyen ni se analizan las tablas."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Se van a instalar los índices pendientes (validados: $valid de 6)."
+          fi
       - name: Crear índices concurrentes en PostgreSQL sin bloquear la sincronización
+        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail

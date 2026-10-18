@@ -56,3 +56,17 @@ test("no permite farmacias ajenas ni recuentos del histórico completo",async()=
  const noModule={...ctx,role:"farmacia",modules:{ventas:false,dashboard:false}};
  assert.equal((await call("familias",{farmacias:"5"},noModule)).status,403);
 });
+
+test("recuentos repetidos reaprovechan una única consulta por tenant y admiten refresco",async()=>{
+ const {call,calls}=make();
+ const filters={farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18"};
+ const [a,b]=await Promise.all([call("recuento",filters),call("recuento",filters)]);
+ assert.equal(a.data.totalProducts,b.data.totalProducts);
+ assert.equal(calls.length,1,"las peticiones simultáneas deben compartir SQL");
+ await call("recuento",filters);
+ assert.equal(calls.length,1,"un recuento sin cambios debe servirse desde memoria");
+ await call("recuento",{...filters,refrescar:"1"});
+ assert.equal(calls.length,2,"actualizar debe saltarse la caché");
+ await call("recuento",{...filters,farmacias:"1"});
+ assert.equal(calls.length,3,"las farmacias deben tener claves de caché aisladas");
+});

@@ -15,6 +15,7 @@ import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
+import SyncVentas from "./SyncVentas.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
@@ -135,6 +136,7 @@ const NAV=[
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
+  {id:"sincronizacion",label:"Sincronización",icon:RefreshCcw,admin:true},
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true}
@@ -360,7 +362,7 @@ function App(){
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]
     : storedUsers;
-  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas reales de Farmatic · octubre 2026":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas reales sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const filterText=search.toLocaleLowerCase("es");
@@ -763,6 +765,7 @@ function App(){
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
+    {page==="sincronizacion"&&<SyncVentas client={tenantContext.client.slug}/>}
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}

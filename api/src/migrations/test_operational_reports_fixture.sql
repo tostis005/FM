@@ -43,3 +43,11 @@ VALUES ('EUR','B7','2026-10-06','ART-03','PR1',10,1.8,18,'Mayorista Europa');
 INSERT INTO public.stock_farmacia(id_farmacia,id_articu,descripcion,stock_actual,importado_en)
 VALUES (1,'ART-01','Omeprazol A',8,now()),
        (2,'ART-03','Omeprazol C',9,now()-interval '4 days');
+
+-- Valdemarías en el origen real utiliza VAL, nunca POL.
+INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,familia,laboratorio,pvp,puc,pmc)
+VALUES ('VAL','V-1','Omeprazol Valdemarías','654321','Digestivo','Lab A',7,2.2,2.8);
+INSERT INTO ampedia.ventas(farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
+VALUES ('VAL','V-01','2026-10-11','V-1',4,28);
+INSERT INTO ampedia.proveedores(farmacia_codigo,origen_id,nombre)
+VALUES ('VAL','PV1','Mayorista Valdemarías');

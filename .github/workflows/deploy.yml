@@ -35,6 +35,7 @@ jobs:
           node --check api/src/realReports.js
           node --check api/src/pricePolicy.js
           node --test api/src/pricePolicy.test.js
+          node --test api/src/realReports.test.js
           node --test api/src/genericos.test.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js

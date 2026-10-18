@@ -153,7 +153,8 @@ export function setupRealReports(app,pool,{requireTenant}){
    ];
    const [sale,buys,saleM,buyM,providers,families]=await Promise.all(queries);
    const salesRows=sale.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn),
-      units:Number(r.units),value:Number(r.value),margin:null,marginPct:null}));
+      unitSalePrice:Number(r.units)>0?Number(r.value)/Number(r.units):null,
+      units:Number(r.units),value:Number(r.value),margin:null,marginPct:null,purchaseCost:null,unitMargin:null}));
    const buyRows=buys.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn,r.providerId),
       units:Number(r.units),value:Number(r.value),puc:Number(r.pricedUnits)>0?Number(r.cost)/Number(r.pricedUnits):null,
       target:null,potential:null}));
@@ -168,7 +169,8 @@ export function setupRealReports(app,pool,{requireTenant}){
     const c=costs.get(key(r.pharmacyId,r.cn));
     const cost=c&&c.units>0?c.total/c.units:nullable(r.pmc);
     if(cost!=null && Number.isFinite(cost)){
-     r.purchaseCost=cost;r.margin=round(r.value-r.units*cost);
+     r.purchaseCost=cost;r.unitMargin=r.unitSalePrice!=null?round(r.unitSalePrice-cost):null;
+     r.margin=round(r.value-r.units*cost);
      r.marginPct=r.value?round(r.margin/r.value*100):null;
      coveredMargin+=r.margin;coveredRevenue+=r.value;coveredItems++;
     }
@@ -270,7 +272,11 @@ export function setupRealReports(app,pool,{requireTenant}){
     family:"",products:Number(r.products),units:Number(r.units),
     value:Number(r.value),potential:null}));
    const replenishmentRows=stockRows.filter(r=>r.need>0);
+   const negativeMargins=salesRows.filter(r=>r.margin!=null&&r.margin<0).map(r=>({
+    ...r,action:"Revisar margen negativo",impact:Math.abs(r.margin),targetModule:"rentabilidad"
+   }));
    const actions=[
+    ...negativeMargins,
     ...replenishmentRows.filter(r=>r.needValue!=null).map(r=>({
      ...r,action:"Reponer existencias",impact:r.needValue,targetModule:"reposicion"})),
     ...stockRows.filter(r=>r.excessValue>0).map(r=>({
@@ -297,7 +303,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     stockSinRotacion:completeStock&&complete?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
     roturas:completeStock&&complete?stockRows.filter(r=>r.zero).length:null,
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
-    acciones:completeStock&&complete?actions.length:null
+    acciones:complete?actions.length:null
    };
    res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows.filter(r=>r.margin!=null),

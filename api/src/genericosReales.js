@@ -269,7 +269,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    groups=sortGenericGroups(groups,f.order,f.direction);
    const summary={totalGroups:groups.length,salesUnits:count(groups,"salesUnits"),
     revenue:round(count(groups,"revenue"),2),purchases:round(count(groups,"spent"),2),
-    savings:round(count(groups,"indicativeSavings"),2)};
+    savings:groups.some(g=>g.indicativeSavings!=null)?round(count(groups,"indicativeSavings"),2):null};
    res.json({version:version.rows[0],groups:groups.slice(0,500),topGroups,totalGroups:groups.length,
     summary,policy,sales:{available:hasSales},purchases:{available:hasBuys},
     note:"Coste real: media ponderada por unidades; ahorro orientativo: mejores precios por proveedor y CN, dentro de DCPF y período histórico configurado, con muestra mínima de 3 compras."});

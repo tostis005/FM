@@ -30,7 +30,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
       WHERE b.unidades>0 AND ${purchasePrice}>0)::float8 AS cost,
     sum(b.unidades) FILTER(
       WHERE b.unidades>0 AND ${purchasePrice}>0)::float8 AS priced_units
-   FROM ${source} JOIN catalog c ON c."pharmacyId"=source."pharmacyId" AND c.cn=${source}.cn
+   FROM ${source} JOIN catalog c ON c."pharmacyId"=${source}."pharmacyId" AND c.cn=${source}.cn
    ${purchaseJoin}
    GROUP BY c."pharmacyId",c.cn`;
  const articleJoin=articles==="normalized"?

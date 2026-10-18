@@ -213,13 +213,14 @@ export function setupRealReports(app,pool,{requireTenant}){
    // y evita las ventas completas al consultar solamente proveedores.
    // No guardar ni precalcular resultados: todas las lecturas son SQL reales.
    const readSalesRows=f.module!=="proveedores";
+   const readBuyRows=f.module!=="proveedores";
    const readSalesPeriod=!["compras","proveedores","acciones"].includes(f.module);
    const readBuyPeriod=!["stock","reposicion"].includes(f.module);
    const readSupplierRows=["compras","proveedores"].includes(f.module);
    const needFamilies=f.module==="ventas"&&articles&&articleCols.has("familia");
    const queries=[
     sales&&pharmacyIds.length&&readSalesRows?pool.query(sqlSales,pars):{rows:[]},
-    buyers&&pharmacyIds.length?pool.query(sqlBuy,pars):{rows:[]},
+    buyers&&pharmacyIds.length&&readBuyRows?pool.query(sqlBuy,pars):{rows:[]},
     sales&&pharmacyIds.length&&readSalesPeriod?pool.query(sqlPeriod("ventas"),periodParams):{rows:[]},
     buyers&&pharmacyIds.length&&readBuyPeriod?pool.query(sqlPeriod("compras"),periodParams):{rows:[]},
     buyers&&pharmacyIds.length&&readSupplierRows?pool.query(sqlProv,pars):{rows:[]},
@@ -480,7 +481,8 @@ export function setupRealReports(app,pool,{requireTenant}){
    // búsqueda o de la familia elegida para mostrar los resultados.
    // Evitamos una segunda consulta cuando sqlSales ya devuelve el universo completo.
    let abcdUniverse=sale.rows;
-   if(sales&&pharmacyIds.length&&(f.search||f.families.length||sale.rows.length>=rowLimit)){
+   if(sales&&readSalesRows&&pharmacyIds.length&&
+      (f.search||f.families.length||sale.rows.length>=rowLimit)){
     const unfilteredSales=`SELECT f.id::text AS "pharmacyId",${cn} AS cn,
       sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
       ${salesByArticle}
@@ -535,7 +537,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    // La cobertura de cada catálogo se comprueba por separado: una farmacia
    // con muchas ventas no debe ocultar el recuento completo de compras, ni al revés.
    const completeSales=!readSalesRows||!sales||sale.rows.length<rowLimit;
-   const completeBuys=!buyers||buys.rows.length<rowLimit;
+   const completeBuys=!readBuyRows||!buyers||buys.rows.length<rowLimit;
    const complete=completeSales&&completeBuys;
    const stockRowsTruncated=Boolean(snapshotAvailable&&stockRows.length>=rowLimit);
    const completeStock=snapshotAvailable&&!stockRowsTruncated;
@@ -547,10 +549,10 @@ export function setupRealReports(app,pool,{requireTenant}){
     unidades:sales&&readSalesPeriod?sum(saleM.rows,"units"):null,
     compras:buyers&&readBuyPeriod?round(sum(buyM.rows,"amount")):null,
     articulosVendidos:readSalesRows&&sales&&completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
-    articulosComprados:buyers&&completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
+    articulosComprados:readBuyRows&&buyers&&completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
     unidadesCompradas:buyers&&readBuyPeriod?sum(buyM.rows,"units"):null,
     lineasCompra:buyers&&readBuyPeriod?sum(buyM.rows,"lines"):null,
-    costeMedioCompra:buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
+    costeMedioCompra:readBuyRows&&buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
       round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:null,
     stock:stockSummary

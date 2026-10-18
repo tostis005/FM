@@ -1,5 +1,5 @@
 // Consulta ligera: SUM y GROUPING SETS sobre ventas, sin catálogo ni compras.
-const dateRx=/^20\d{2}-\d{2}-\d{2}$/;
+const dateRx=/^(?:19|20)\d{2}-\d{2}-\d{2}$/;
 function validDate(s){
  if(!dateRx.test(s))return false;
  const d=new Date(s+"T00:00:00Z");
@@ -52,7 +52,7 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    const raw=String(req.query.farmacias||"");
    const granularity=String(req.query.granularidad||"month");
    if(!validDate(from)||!validDate(to)||from>to||
-     Date.parse(to)-Date.parse(from)>36525*86400000||
+     Date.parse(to)-Date.parse(from)>73050*86400000||
      raw.length>2000||!["hour","day","month"].includes(granularity)||
      (raw&&raw.split(",").some(n=>!/^[1-9]\d{0,8}$/.test(n))))
     return res.status(400).json({error:"Fechas o farmacias no válidas"});

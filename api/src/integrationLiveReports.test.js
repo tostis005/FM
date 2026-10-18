@@ -18,7 +18,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
     params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"}};
   let status=200,body;
   const res={status(n){status=n;return res},json(data){body=data;return res}};
-  let error;await routes[path](req,res,e=>{error=e});
+  const handler=routes[path]||(path.startsWith("/api/genericos/reales/")?routes["/api/genericos/reales/:dcpf"]:null);
+  assert.equal(typeof handler,"function","Ruta de prueba no registrada: "+path);
+  let error;await handler(req,res,e=>{error=e});
   if(error)throw error;
   assert.equal(status,200,JSON.stringify(body));
   return body;

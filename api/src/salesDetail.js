@@ -76,6 +76,8 @@ export function buildSalesDetailSQL(schema){
   GROUP BY c."pharmacyId",c.cn
  )
  SELECT p."pharmacyId",p.cn,p.name,p.family,p.units,p.value,p.pvp,p."abcdClass",
+  CASE WHEN co.priced_units>0 THEN 'Compras ponderadas'
+    WHEN p.pmc IS NOT NULL THEN 'PMC catálogo' ELSE NULL END AS "costSource",
   CASE WHEN ${unitCost} IS NOT NULL THEN round(${unitCost}::numeric,4)::float8 ELSE NULL END AS "purchaseCost",
   CASE WHEN ${soldPrice} IS NOT NULL THEN round(${soldPrice}::numeric,4)::float8 ELSE NULL END AS "saleUnitPrice",
   CASE WHEN ${soldPrice} IS NOT NULL AND ${unitCost} IS NOT NULL THEN

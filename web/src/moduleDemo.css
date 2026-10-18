@@ -192,3 +192,30 @@
 .fm-supplier-summary-item strong{font:800 24px Manrope,sans-serif;color:#24513d}
 @media(max-width:790px){.fm-supplier-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:350px){.fm-supplier-summary{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Ventas estilo Power BI: cada visual explica su propio estado de consulta. */
+.fm-demo-v2 .fm-demo-kpi{position:relative;min-height:108px;justify-content:space-between}
+.fm-demo-v2 .fm-demo-kpi[aria-busy="true"]{cursor:progress}
+.fm-kpi-spinner{display:inline-flex;align-items:center;gap:10px;min-height:32px;color:#187558;max-width:100%}
+.fm-kpi-spinner .fm-load-spinner{width:21px;height:21px;border-width:3px}
+.fm-kpi-spinner small{font-size:12px;font-weight:750;white-space:nowrap}
+.fm-demo-kpi>small{color:#789488;line-height:1.35}
+.fm-sales-timebar{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:-5px;min-width:0}
+.fm-sales-shortcuts{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.fm-sales-chip{font-family:inherit;font-size:12px;font-weight:700;padding:9px 13px;border-radius:999px;
+ border:1px solid #d5e6dc;background:#fff;color:#326552;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.fm-sales-chip:hover{border-color:#0d9870;color:#087f5d}
+.fm-sales-chip.is-selected{color:#fff;background:#147d59;border-color:#147d59}
+.fm-sales-chip:focus-visible,.fm-sales-refresh:focus-visible{outline:3px solid #63c59c;outline-offset:2px}
+.fm-sales-period-info{display:inline-flex;align-items:center;flex-wrap:wrap;gap:9px;font-size:12px;color:#61776d;font-variant-numeric:tabular-nums;margin-left:auto}
+.fm-sales-period-info small{font-size:11px;color:#7b8e84}
+.fm-sales-custom-dates{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:-5px 0 2px}
+.fm-sales-custom-dates label{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:700;color:#486b5b}
+.fm-sales-custom-dates input{font:inherit;max-width:200px;min-height:38px;padding:7px 10px;border:1px solid #d5e6dc;border-radius:9px;background:#fff}
+.fm-sales-no-chart{display:grid;place-items:center;min-height:230px;text-align:center;color:#789084;font-size:13px;padding:24px}
+.fm-demo-graph[aria-busy="true"],.fm-demo-table:has([aria-busy="true"]){cursor:progress}
+@media(max-width:650px){.fm-sales-timebar{align-items:flex-start}.fm-sales-period-info{margin-left:0;flex-basis:100%}
+ .fm-sales-shortcuts{gap:6px}.fm-sales-chip{font-size:11px;padding:8px 10px}
+ .fm-sales-custom-dates label{width:100%;justify-content:space-between}.fm-sales-custom-dates input{flex:1}}
+@media(prefers-reduced-motion:reduce){.fm-sales-chip{transition:none}}

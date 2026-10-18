@@ -5,6 +5,7 @@ import {buildSalesTotalsSql} from "./salesTotals.js";
 if(process.env.FM_BENCHMARK_READONLY!=="1")throw Error("Benchmark solo con activación explícita");
 const client=new pg.Client({connectionString:process.env.DATABASE_URL,
  connectionTimeoutMillis:5000});
+const codesById=new Map([[1,"ABA"],[2,"EUR"],[3,"BUE"],[4,"EST"],[5,"VAL"]]);
 const cases=[{label:"Abadía",ids:[1]},{label:"Valdemarías",ids:[5]},
  {label:"Red seleccionada",ids:[1,2,3,4,5]}];
 try{
@@ -16,10 +17,10 @@ try{
   const begin=process.hrtime.bigint();
   try{
    const {rows}=await client.query(buildSalesTotalsSql("ampedia","month"),
-    ["2025-11-01","2026-10-18",item.ids,"ampedia"]);
+    ["2025-11-01","2026-10-18",item.ids.map(id=>codesById.get(id))]);
    const ms=Number(process.hrtime.bigint()-begin)/1e6;
    console.log("SUM 12 meses "+item.label+": "+ms.toFixed(0)+
-    " ms; "+rows.filter(r=>r.tipo==="month").length+" meses; sin importes");
+    " ms; "+rows.filter(r=>r.tipo==="month"||r.month!=null).length+" meses; sin importes");
   }catch(e){
    console.error("SUM 12 meses "+item.label+": ERROR "+String(e.code||e.name));
    throw e;

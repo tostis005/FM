@@ -180,7 +180,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const insightFailureMessage=insightFailure?.scope===insightScope?insightFailure.message:null;
  const insightLoading=module==="ventas"&&period.valid&&!insightData&&!insightFailureMessage;
  useEffect(()=>{
-  if(module!=="ventas"||!period.valid)return;
+  if(module!=="ventas"||!period.valid||(!fastSales&&!fastFailed))return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:recentPeriod.from,hasta:recentPeriod.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
@@ -191,7 +191,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    .then(data=>{if(!controller.signal.aborted)setInsightResult({scope:insightScope,data})})
    .catch(e=>{if(!controller.signal.aborted)setInsightFailure({scope:insightScope,message:e.message})});
   return()=>controller.abort();
- },[module,insightScope,period.valid]);
+ },[module,insightScope,period.valid,fastSales,fastFailed]);
  const singleFamilyPharmacy=module==="ventas"&&filters.pharmacyIds.length===1;
  const familyScope=[clientSlug,filters.pharmacyIds.join(","),ids].join("|");
  const familyData=familyResult?.scope===familyScope?familyResult.data:null;
@@ -215,7 +215,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   const controller=new AbortController();
   if(!salesModule){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
-  // SUM, recuento y página del detalle se solicitan de forma independiente.
+  // Prioridad al SUM histórico: no competir con el trabajo pesado hasta
+  // que el total y gráfico estén listos; después detalle y recuento van EN PARALELO.
+  if(module==="ventas"&&fastEligible&&!fastSales&&!fastFailed){
+   setLoading(true);setRealReport(null);
+   return ()=>controller.abort();
+  }
   const params=new URLSearchParams();
   params.set("desde",module==="ventas"?recentPeriod.from:period.from);
   params.set("hasta",module==="ventas"?recentPeriod.to:period.to);
@@ -248,7 +253,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage,fastEligible,fastSales,fastFailed]);
 
  useEffect(()=>{
   if(module==="ventas"){setReportLoading(false);return}

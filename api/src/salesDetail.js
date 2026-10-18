@@ -28,7 +28,7 @@ export function buildSalesDetailSQL(schema){
     coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc,a.pvp::float8 AS pvp
   FROM raw r JOIN pharmacy_map pm ON pm.code=r.code
   LEFT JOIN LATERAL (
-    SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc FROM ${t}.articulos a
+    SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc,a.pvp FROM ${t}.articulos a
     WHERE upper(btrim(a.farmacia_codigo))=r.code
       AND a.origen_id=r.articulo_id
     ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1

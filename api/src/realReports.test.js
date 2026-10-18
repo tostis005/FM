@@ -26,7 +26,7 @@ function create({missingCost=false,truncatedBuys=false}={}){
    return {rows:[{pharmacyId:"1",providerId:"2",name:"Distribuidora",value:60,units:30,products:1}]};
   if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".compras")){
    if(missingCost)return {rows:[]};
-   if(sql.includes('sum(t.cost)::float8 AS cost'))
+   if(sql.includes('sum(t.cost)::float8 AS cost')&&!sql.includes(' AS "providerId"'))
     return {rows:[{pharmacyId:"1",cn:"654321",cost:300,pricedUnits:100}]};
    const sample={pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
     pvp:6,pmc:1,laboratory:"Lab A",providerId:"2",supplier:"Distribuidora",

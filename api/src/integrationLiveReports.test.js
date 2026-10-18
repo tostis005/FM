@@ -68,5 +68,12 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(abc.value>0);
   assert.ok(eur.value>0);
   assert.ok(freshStock.kpis.stock>0);
+  // VAL debe corresponder a farmacia 5 incluso cuando el maestro original era POL.
+  const val=await request("/api/analytics/reportes",{modulo:"ventas",farmacias:"5"});
+  assert.equal(val.kpis.ventas,28);
+  assert.ok(val.salesRows.some(r=>r.pharmacyId==="5"&&r.cn==="654321"&&r.units===4));
+  assert.equal(val.kpis.compras,0); // No inventar compras donde el ERP no ha sincronizado.
+  const master=await pool.query("SELECT codigo_origen FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND id=5");
+  assert.equal(master.rows[0].codigo_origen,"VAL");
  }finally{await pool.end()}
 });

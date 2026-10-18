@@ -72,15 +72,25 @@ function columnsFor(module,pharmacyMap){
    title="Prioridad por contribución a las ventas de esta farmacia y período">{r.abcdClass}</span>:"—"};
  const common=[article,cn,pharmacy,abcd];
  switch(module){
-  case "ventas":return [...common,family,num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen estimado")];
-  case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),C("puc","PUC","puc",v=>v==null?"—":money(v)),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
+  case "ventas":return [...common,family,euro("pvp","PVP catálogo"),
+    euro("purchaseCost","PUC compra"),euro("saleUnitPrice","Venta/ud."),
+    euro("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
+    euro("value","Ventas"),euro("margin","Margen total"),
+    C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
+  case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),
+    euro("pvp","PVP catálogo"),C("puc","PUC compra","puc",v=>v==null?"—":money(v)),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
   case "proveedores":return [C("name","Proveedor","name"),pharmacy,num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
-  case "stock":return [...common,num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
-  case "reposicion":return [...common,num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
+  case "stock":return [...common,euro("unitCost","Coste/ud."),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
+  case "reposicion":return [...common,euro("unitCost","Coste/ud."),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
-  case "rentabilidad":return [...common,euro("value","Ventas"),euro("margin","Margen estimado"),C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
+  case "rentabilidad":return [...common,euro("pvp","PVP catálogo"),
+    euro("purchaseCost","PUC compra"),euro("saleUnitPrice","Venta/ud."),
+    euro("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
+    euro("value","Ventas"),euro("margin","Margen total"),
+    C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
-  default:return [...common,euro("value","Ventas")];
+  default:return [...common,euro("pvp","PVP catálogo"),euro("purchaseCost","PUC compra"),
+    num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen")];
  }
 }
 const REPORTS=[
@@ -298,16 +308,19 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   ventas:realReport?.salesRows||[],compras:realReport?.buyRows||[],
   proveedores:realReport?.supplierRows||[],stock:realReport?.stockRows||[],
   reposicion:realReport?.replenishmentRows||[],rentabilidad:realReport?.profitRows||[],
-  acciones:realReport?.actions||[],dashboard:realReport?.actions||[]
+  acciones:realReport?.actions||[],dashboard:realReport?.salesRows||[],
+  informes:realReport?.salesRows||[],asistente:realReport?.salesRows||[]
  };
  const liveSalesRows=(realSales?.products||[]).map((r,i)=>({
    id:String(r.pharmacyId)+"|"+r.cn,pharmacyId:String(r.pharmacyId),
    cn:r.cn,name:r.name||r.cn,family:"",units:Number(r.units)||0,
-   value:r.value==null?null:Number(r.value),margin:null,marginPct:null
+   value:r.value==null?null:Number(r.value),margin:null,marginPct:null,
+   pvp:r.pvp??null,purchaseCost:r.purchaseCost??null,unitMargin:r.unitMargin??null,
+   saleUnitPrice:r.saleUnitPrice??null
  }));
  const rows=module==="ventas"?(realReport?.salesRows||liveSalesRows):(datasets[module]||[]);
  // Los códigos de familia no son comparables entre farmacias distintas.
- const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap)
+ const columns=columnsFor(module==="dashboard"?"informes":module,pharmacyMap)
    .filter(col=>!(module==="ventas"&&!singleFamilyPharmacy&&col.key==="family"));
  const chartConfig=SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;

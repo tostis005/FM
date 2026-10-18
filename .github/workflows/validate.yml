@@ -152,6 +152,7 @@ jobs:
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace JOIN pg_index x ON x.indexrelid=i.oid WHERE n.nspname='ampedia' AND i.relname LIKE 'fm_%_idx' AND x.indisvalid;")" = 6
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
 
 
   validar_responsive:

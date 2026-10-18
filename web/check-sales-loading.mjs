@@ -49,22 +49,24 @@ await page.route("**/api/**",async route=>{
 });
 const totals=()=>requests.filter(r=>r.path==="/api/analytics/ventas/totales");
 async function verifyPeriod(expected){
- const count=totals().length;
- await page.waitForFunction(()=>document.querySelector(".fm-demo-graph .fm-loading-panel")!==null,
-   {timeout:4000});
- await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")!==null,
-   {timeout:10000});
+ // El spinner puede ser efímero si React termina la navegación más tarde.
+ // Probar el estado estable real y la concurrencia con detalle todavía pendiente.
+ await page.waitForFunction(()=>{
+   const graph=document.querySelector(".fm-demo-graph");
+   const kpi=document.querySelector(".fm-demo-kpi strong");
+   return graph?.getAttribute("aria-busy")==="false"&&
+     Boolean(kpi&&kpi.textContent?.trim()!=="—");
+ },null,{timeout:14000});
  // La cifra y el gráfico ya son visibles mientras el detalle aún se procesa.
- await page.locator(".fm-demo-graph .fm-loading-panel").waitFor({state:"detached",timeout:11000});
+ const latest=totals().at(-1);
+ if(!latest||latest.query.granularidad!==expected)
+  throw Error("Granularidad del SUM incorrecta: "+JSON.stringify(latest));
  const detailLoading=await page.locator(".fm-demo-table .fm-loading-panel").count();
  if(detailLoading!==1)
   throw Error("La tabla debe seguir cargando después de recibir el SUM");
  await page.locator(".fm-demo-table .fm-loading-panel").waitFor({state:"detached",timeout:11000});
  await page.getByText("Artículo",{exact:true}).first().waitFor({state:"visible",timeout:10000});
- const latest=totals().at(-1);
- if(!latest||latest.query.granularidad!==expected)
-  throw Error("Granularidad del SUM incorrecta: "+JSON.stringify(latest));
- return count;
+ return totals().length;
 }
 try{
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});

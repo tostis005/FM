@@ -23,7 +23,7 @@ function filters(req,res){
  return {from,to,ids:[...new Set(ids)],search,families,granularity,schema,tenant:req.context.client.slug};
 }
 
-export function buildSalesSummarySql(schema,granularity){
+export function buildSalesSummarySql(schema,granularity,hasProductFilters=false){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!["hour","day","month"].includes(granularity))
   throw Error("Identificador SQL inválido");
  const tbl='"'+schema+'"';
@@ -41,27 +41,32 @@ export function buildSalesSummarySql(schema,granularity){
   WHERE f.id=ANY($3::int[]) AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'
     AND nullif(btrim(v.articulo_id),'') IS NOT NULL
  ),
- keys AS MATERIALIZED (
-  SELECT DISTINCT pharmacy_id,source_code,articulo_id FROM sales_scope
+ raw_products AS MATERIALIZED (
+  SELECT pharmacy_id,source_code,articulo_id,
+   sum(unidades)::float8 AS units,sum(importe)::float8 AS value
+  FROM sales_scope GROUP BY pharmacy_id,source_code,articulo_id
  ),
  catalog AS MATERIALIZED (
-  SELECT k.pharmacy_id,k.source_code,k.articulo_id,
+  SELECT k.pharmacy_id,k.source_code,k.articulo_id,k.units,k.value,
     coalesce(nullif(btrim(a.codigo_nacional),''),btrim(k.articulo_id)) AS cn,
     coalesce(nullif(a.nombre,''),k.articulo_id) AS name,
     coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc
-  FROM keys k LEFT JOIN LATERAL (
+  FROM raw_products k LEFT JOIN LATERAL (
     SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc FROM ${tbl}.articulos a
     WHERE upper(btrim(a.farmacia_codigo))=k.source_code AND a.origen_id=k.articulo_id
     ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
   ) a ON true
  ),
- filtered AS MATERIALIZED (
-  SELECT s.pharmacy_id,s.articulo_id,s.fecha,s.unidades,s.importe,c.cn,c.name,c.family,c.pmc
-  FROM sales_scope s JOIN catalog c
-    ON c.pharmacy_id=s.pharmacy_id AND c.source_code=s.source_code AND c.articulo_id=s.articulo_id
-  WHERE ($5::text='' OR c.cn ILIKE '%'||$5||'%' OR c.name ILIKE '%'||$5||'%'
-    OR s.articulo_id ILIKE '%'||$5||'%')
+ active_products AS MATERIALIZED (
+  SELECT * FROM catalog c WHERE
+    ($5::text='' OR c.cn ILIKE '%'||$5||'%' OR c.name ILIKE '%'||$5||'%'
+     OR c.articulo_id ILIKE '%'||$5||'%')
     AND (cardinality($6::text[])=0 OR c.family=ANY($6::text[]))
+ ),
+ filtered AS MATERIALIZED (
+  SELECT s.fecha,s.unidades,s.importe FROM sales_scope s
+  ${hasProductFilters?`JOIN active_products c ON c.pharmacy_id=s.pharmacy_id
+     AND c.source_code=s.source_code AND c.articulo_id=s.articulo_id`:""}
  ),
  monthly AS MATERIALIZED (
   SELECT to_char(date_trunc('month',fecha),'YYYY-MM') AS month,
@@ -71,8 +76,13 @@ export function buildSalesSummarySql(schema,granularity){
  series AS (${seriesSql}),
  product_groups AS MATERIALIZED (
   SELECT pharmacy_id AS "pharmacyId",cn,max(name) AS name,max(family) AS family,max(pmc) AS pmc,
-    sum(unidades)::float8 AS units,sum(importe)::float8 AS value
-  FROM filtered GROUP BY pharmacy_id,cn
+    sum(units)::float8 AS units,sum(value)::float8 AS value
+  FROM catalog GROUP BY pharmacy_id,cn
+ ),
+ visible_groups AS MATERIALIZED (
+  SELECT pharmacy_id AS "pharmacyId",cn,max(name) AS name,max(family) AS family,max(pmc) AS pmc,
+    sum(units)::float8 AS units,sum(value)::float8 AS value
+  FROM active_products GROUP BY pharmacy_id,cn
  ),
  ranking AS (
   SELECT p.*,sum(greatest(p.value,0)) OVER(PARTITION BY p."pharmacyId") AS total_positive,
@@ -89,11 +99,14 @@ export function buildSalesSummarySql(schema,granularity){
   FROM ranking r
  ),
  top_products AS (
-  SELECT "pharmacyId",cn,name,family,units,value,"abcdClass",pmc FROM classified
-  ORDER BY value DESC NULLS LAST LIMIT 3000
+  SELECT v."pharmacyId",v.cn,v.name,v.family,v.units,v.value,
+    c."abcdClass",v.pmc
+  FROM visible_groups v JOIN classified c
+    ON c."pharmacyId"=v."pharmacyId" AND c.cn=v.cn
+  ORDER BY v.value DESC NULLS LAST LIMIT 3000
  ),
  counts AS (
-  SELECT count(*)::int AS total_products,count(DISTINCT cn)::int AS total_articles FROM product_groups
+  SELECT count(*)::int AS total_products,count(DISTINCT cn)::int AS total_articles FROM visible_groups
  ),
  purchase_costs AS (
   SELECT f.id::text AS pharmacy_id,b.articulo_id,
@@ -149,7 +162,7 @@ export function setupSalesSummary(app,pool,{requireTenant}){
    if(!f.ids.length)return res.json({monthly:[],series:[],products:[],families:[],
     totalProducts:0,totalArticles:0,granularity:f.granularity,
     kpis:{ventas:0,unidades:0,articulosVendidos:0,margen:null},from:f.from,to:f.to});
-   const {rows}=await pool.query(buildSalesSummarySql(f.schema,f.granularity),
+   const {rows}=await pool.query(buildSalesSummarySql(f.schema,f.granularity,Boolean(f.search||f.families.length)),
     [f.from,f.to,f.ids,f.tenant,f.search,f.families]);
    const data=rows[0]||{};
    const totalProducts=Number(data.counts?.total_products||0);

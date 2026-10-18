@@ -35,7 +35,7 @@ function GroupDetail({group,query,clientSlug}){
  useEffect(()=>{
   let cancel=false;const controller=new AbortController();
   setData(null);setError("");
-  fetch("/api/genericos/conjuntos/"+encodeURIComponent(group.dcpf)+"?"+query,{
+  fetch("/api/genericos/"+(clientSlug==="ampedia"?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query,{
    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudo cargar el conjunto");return j})
    .then(d=>{if(!cancel)setData(d)}).catch(e=>{if(!cancel)setError(e.message)});
@@ -56,8 +56,9 @@ function GroupDetail({group,query,clientSlug}){
    <tbody>{data.products.map(product=>{
     const sales=saleMap.get(product.cn),bought=purchaseMap.get(product.cn)||[];
     const buyQty=bought.reduce((v,r)=>v+Number(r.units||0),0);
-    const buyAmount=bought.reduce((v,r)=>v+Number(r.spend||0),0);
-    const avg=buyQty>0?buyAmount/buyQty:null;
+    const buyAmount=bought.reduce((v,r)=>v+Number(r.cost??r.spend??0),0);
+    const pricedQty=bought.reduce((v,r)=>v+Number(r.pricedUnits??r.units??0),0);
+    const avg=pricedQty>0?buyAmount/pricedQty:null;
     return <tr key={product.cn}><td className="fm-generic-code">{product.cn}</td>
      <td>{product.nombre}</td><td>{product.laboratorio||product.laboratorio_codigo||"—"}</td>
      <td>{product.generico?"Genérico":"Equivalente de referencia"}</td>
@@ -71,13 +72,13 @@ function GroupDetail({group,query,clientSlug}){
   {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras y coste unitario integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
    <div className="fm-generic-table-scroll"><table>
-    <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC medio ponderado</th><th>Importe</th></tr></thead>
+    <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC real ponderado</th><th>Referencia histórica (percentil)</th><th>Importe</th></tr></thead>
     <tbody>{data.purchases.map((r,i)=><tr key={r.cn+"_"+r.supplierCode+"_"+i}>
      <td className="fm-generic-code">{r.cn}</td><td>{r.supplier||r.supplierCode||"Sin proveedor"}</td>
-     <td>{number(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{money(r.spend)}</td>
+     <td>{number(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{unitPrice(r.referencePuc)}</td><td>{money(r.spend)}</td>
     </tr>)}</tbody>
    </table></div>}
-  <Note>Los proveedores de compra no necesariamente son los laboratorios fabricantes. Los PUC se calculan a partir de compras reales, sin simular ofertas de otros laboratorios.</Note>
+  <Note>Coste real = unidades compradas × coste unitario, dividido entre las unidades con coste válido. La referencia histórica procede del percentil configurado por proveedor y CN; no es una oferta comercial ni sustituye al PUC real. El laboratorio fabricante y el proveedor al que compramos son conceptos distintos.</Note>
  </div>;
 }
 export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
@@ -101,7 +102,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
   if(!query){setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
   setLoading(true);setError("");setActive(null);setPage(0);
-  fetch("/api/genericos/conjuntos?"+query,{credentials:"same-origin",cache:"no-store",
+  fetch("/api/genericos/"+(clientSlug==="ampedia"?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");return j})
    .then(j=>{if(mounted)setData(j)}).catch(e=>{if(mounted)setError(e.message)})
@@ -132,6 +133,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
      loading?"Comprobando la última versión oficial…":"Catálogo pendiente de primera importación."}</p></div>
    <a href="https://cima.aemps.es/cima/publico/nomenclator.html" target="_blank" rel="noopener noreferrer">Fuente oficial <ArrowUpRight size={15}/></a>
   </div>
+  {data?.policy&&<div className="fm-generic-note"><Info size={17}/><span>Precio de referencia: percentil {data.policy.global.percentile}% de unidades más económicas durante los últimos {data.policy.global.months} meses. {data.policy.overrides?.length?"Hay "+data.policy.overrides.length+" excepciones configuradas por farmacia.":""} Puedes modificarlo en <strong>Ajustes</strong>. Los costes pagados siguen calculándose con todas las compras del período seleccionado.</span></div>}
   <div className="card fm-generics-filters">
    <label>Periodo<select value={periodKey} onChange={e=>{
     const k=e.target.value;setPeriodKey(k);
@@ -150,7 +152,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
    <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption="Agrupaciones DCPF del catálogo"/>
    <Metric label="Unidades vendidas" loading={loading} value={number(totals.units)} caption={salesEnabled?"Venta real por conjunto":"Sin ventas conectadas"}/>
    <Metric label="Ventas netas" loading={loading} value={money(totals.revenue)} caption={salesEnabled?"Importe del período":"Sin ventas conectadas"}/>
-   <Metric label="Compras a coste" loading={loading} value={money(totals.spend)} caption={buysEnabled?"PUC real sincronizado":"Pendiente de conectar compras"}/>
+   <Metric label="Compras registradas" loading={loading} value={money(totals.spend)} caption={buysEnabled?"Importes reales de compras":"Pendiente de conectar compras"}/>
+   <Metric label="Ahorro potencial" loading={loading} value={data?.summary?.savings==null?"—":money(data.summary.savings)} caption="Referencia ponderada de compras anteriores"/>
   </div>
   {data&&!data.version&&!loading&&<div className="card fm-generic-empty"><Package size={25}/>
     <h2>Pendiente de cargar el Nomenclátor</h2><p>La importación mensual del ZIP oficial incorporará las correspondencias CN → DCPF. No se muestran equivalencias inventadas mientras el catálogo no esté disponible.</p></div>}
@@ -187,19 +190,20 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
     !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <div className="fm-generic-table-scroll"><table>
      <thead><tr><th>Conjunto DCPF / molécula</th><th>Códigos</th><th>Venta (uds.)</th>
-      <th>Ventas</th><th>PUC medio</th><th>Mejor PUC</th><th>Ahorro orientativo</th><th/></tr></thead>
+      <th>Ventas</th><th>PUC medio</th><th>PVP medio</th><th>Margen PVP (%)</th><th>Precio ref.</th><th>Ahorro potencial</th><th/></tr></thead>
      <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
        <td>{number(g.skuCount)} <small>({g.genericCount} EFG)</small></td>
        <td>{number(g.salesUnits)}</td><td>{money(g.revenue)}</td>
-       <td>{unitPrice(g.averagePuc)}</td><td>{unitPrice(g.bestPuc)}</td>
-       <td>{money(g.indicativeSavings)}</td>
+       <td>{unitPrice(g.averagePuc)}</td><td>{unitPrice(g.averagePvp)}</td>
+       <td>{g.pvpMarginPct==null?"—":number(g.pvpMarginPct)+" %"}</td>
+       <td>{unitPrice(g.bestPuc)}</td><td>{money(g.indicativeSavings)}</td>
        <td><button type="button" className="fm-generic-expand" aria-label={"Desplegar conjunto "+g.dcpf}
         aria-expanded={active===g.dcpf} onClick={e=>{e.stopPropagation();setActive(active===g.dcpf?null:g.dcpf)}}>
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
-      {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={8}>
+      {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={10}>
        <GroupDetail group={g} query={query} clientSlug={clientSlug}/>
       </td></tr>}
      </React.Fragment>)}</tbody>
@@ -210,6 +214,6 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
     <button disabled={(page+1)*20>=groups.length} type="button" onClick={()=>{setPage(x=>x+1);setActive(null)}}>Siguiente</button>
    </div>}
   </section>
-  <Note>Fuente: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS), Nomenclátor de Prescripción. Datos técnicos de identificación y correspondencia; las cifras de venta y coste son exclusivamente de tus farmacias. Ahorro orientativo calculado con los mejores PUC observados, no ofertas comerciales verificadas.</Note>
+  <Note>Fuente: AEMPS, Nomenclátor de Prescripción. Datos operativos exclusivamente de tus farmacias. El PUC real es ponderado por unidades, y el margen PVP es bruto orientativo, sin ajustes fiscales ni bonificaciones adicionales. El ahorro compara referencias históricas dentro de DCPF, sujetas a muestra mínima de compras; no significa disponibilidad ni precio ofertado.</Note>
  </div>;
 }

@@ -102,6 +102,8 @@ function readFilters(client){
 }
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
  const [filters,setFilters]=useState(()=>readFilters(clientSlug));
+ const [searchReady,setSearchReady]=useState(()=>readFilters(clientSlug).search);
+ useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [detail,setDetail]=useState(null);
  const [realSales,setRealSales]=useState(null);
  const [salesError,setSalesError]=useState("");
@@ -117,7 +119,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   params.set("desde",monthAt(asOf,1-Number(filters.period))+"-01");
   params.set("hasta",new Date(Date.UTC(asOf.getUTCFullYear(),asOf.getUTCMonth()+1,0)).toISOString().slice(0,10));
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
-  if(filters.search)params.set("buscar",filters.search);
+  if(searchReady)params.set("buscar",searchReady);
   setLoading(true);setSalesError("");setRealSales(null);
   fetch("/api/analytics/ventas?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
@@ -126,7 +128,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    .catch(e=>{if(!controller.signal.aborted)setSalesError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return ()=>controller.abort();
- },[module,clientSlug,ids,filters.period,filters.pharmacyIds.join(","),filters.search,asOf]);
+ },[module,clientSlug,ids,filters.period,filters.pharmacyIds.join(","),searchReady,asOf]);
 
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
@@ -136,7 +138,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const change=(field,value)=>setFilters(f=>({...f,[field]:value}));
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null;
- const isFetchingSales=loading&&["dashboard","ventas"].includes(module)&&!realTables;
+ const isFetchingSales=(loading||filters.search!==searchReady)&&["dashboard","ventas"].includes(module)&&!realTables;
  const canShowKpi=key=>{
   if(realTables)return true;
   return hasSales&&["ventas","unidades","articulosVendidos"].includes(key)&&["dashboard","ventas"].includes(module);

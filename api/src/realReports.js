@@ -231,9 +231,12 @@ export function setupRealReports(app,pool,{requireTenant}){
        .map(p=>(p.databaseCode||p.sourceCode).toUpperCase())]):{rows:[]}
    ];
    const [sale,buys,saleM,buyM,providers,families]=await Promise.all(queries);
-   const salesRows=sale.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn),
-      unitSalePrice:Number(r.units)>0?Number(r.value)/Number(r.units):null,
-      units:Number(r.units),value:Number(r.value),margin:null,marginPct:null,purchaseCost:null,unitMargin:null}));
+   const salesRows=sale.rows.map(r=>{
+    const saleUnitPrice=Number(r.units)>0?Number(r.value)/Number(r.units):null;
+    return {...r,id:key(r.pharmacyId,r.cn),saleUnitPrice,unitSalePrice:saleUnitPrice,
+      units:Number(r.units),value:Number(r.value),margin:null,marginPct:null,
+      purchaseCost:null,unitMargin:null};
+   });
    const buyRows=buys.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn,r.providerId),
       units:Number(r.units),value:Number(r.value),puc:Number(r.pricedUnits)>0?Number(r.cost)/Number(r.pricedUnits):null,
       target:null,potential:null}));

@@ -196,10 +196,69 @@ export function setupRealReports(app,pool,{requireTenant}){
     r.pvpMarginPct=r.pvp!=null&&cost!=null&&Number(r.pvp)>0?
        round(100*(Number(r.pvp)-cost)/Number(r.pvp)):null;
    }
-   // Solo la instantánea existente de Ampedia; nunca declarar stock actual
-   // cuando su última importación no es suficientemente reciente.
+   // Preferir el stock real sincronizado dentro del catálogo de cada ERP.
+   // Cada farmacia debe tener carga reciente y cobertura suficiente; no mezclar
+   // stock de otras farmacias ni interpretar NULL como cero.
    let snapshotAvailable=false,stockAsOf=null,stockRows=[];
-   if(req.context.client.slug==="ampedia"&&pharmacyIds.length){
+   let stockSource=null;
+   const catalogHasStock=pharmacyIds.length&&await hasColumns(pool,schema,"articulos",
+     ["farmacia_codigo","origen_id","codigo_nacional","nombre","familia",
+      "stock_actual","sincronizado_en","pmc"]);
+   if(catalogHasStock&&pharmacyIds.length){
+    const chosen=req.context.pharmacies.filter(p=>pharmacyIds.includes(Number(p.id)));
+    const codes=chosen.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase());
+    const {rows:catalogStamps}=await pool.query(`
+      SELECT upper(btrim(farmacia_codigo)) AS code,
+        max(sincronizado_en) AS last,
+        count(*)::int AS total,
+        count(*) FILTER (WHERE stock_actual IS NOT NULL)::int AS priced
+      FROM ${quoted}.articulos
+      WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
+      GROUP BY 1`,[codes]);
+    const stampMap=new Map(catalogStamps.map(r=>[r.code,r]));
+    const times=codes.map(code=>stampMap.get(code)?.last?new Date(stampMap.get(code).last).getTime():NaN);
+    const timeNow=Date.now();
+    snapshotAvailable=times.length===pharmacyIds.length&&times.every(t=>
+      Number.isFinite(t)&&timeNow-t>=-3600000&&timeNow-t<=48*3600000)
+      &&codes.every(code=>{
+        const s=stampMap.get(code);
+        return s&&s.total>0&&s.priced/s.total>=0.9;
+      });
+    stockAsOf=times.every(Number.isFinite)?new Date(Math.min(...times)).toISOString():null;
+    if(snapshotAvailable){
+     const {rows:current}=await pool.query(`
+       WITH latest AS MATERIALIZED (
+        SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id)
+          a.farmacia_codigo,a.origen_id,a.codigo_nacional,a.nombre,a.familia,
+          a.pmc,a.pvp,a.stock_actual
+        FROM ${quoted}.articulos a
+        WHERE upper(btrim(a.farmacia_codigo))=ANY($1::text[])
+        ORDER BY upper(btrim(a.farmacia_codigo)),a.origen_id,
+          a.sincronizado_en DESC NULLS LAST
+       )
+       SELECT f.id::text AS "pharmacyId",
+         coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id)) AS cn,
+         max(a.nombre) AS name,max(coalesce(a.familia,'')) AS family,
+         max(a.pmc)::float8 AS pmc,max(a.pvp)::float8 AS pvp,
+         sum(a.stock_actual)::float8 AS units
+       FROM latest a JOIN farmetrica.farmacias f ON f.cliente_slug=$4
+         AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+       WHERE f.id=ANY($2::int[]) AND a.stock_actual IS NOT NULL
+         AND ($3::text='' OR a.codigo_nacional ILIKE '%'||$3||'%'
+           OR a.origen_id ILIKE '%'||$3||'%'
+           OR a.nombre ILIKE '%'||$3||'%')
+       GROUP BY f.id,coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))
+       ORDER BY sum(a.stock_actual) DESC LIMIT ${rowLimit}`,
+       [codes,pharmacyIds,f.search,req.context.client.slug]);
+     stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
+       units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,
+       need:null,needValue:null}));
+     stockSource="articulos";
+    }
+   }
+   // Compatibilidad: si la importación de fichas no incluye stock, consultar
+   // la instantánea de inventario existente únicamente para Ampedia.
+   if(!stockSource&&!catalogHasStock&&req.context.client.slug==="ampedia"&&pharmacyIds.length){
     const {rows:stockTable}=await pool.query("SELECT to_regclass('public.stock_farmacia')::text AS tbl");
     if(stockTable[0]?.tbl){
      // Una actualización reciente en ABA NO hace que el stock viejo de EUR
@@ -320,7 +379,9 @@ export function setupRealReports(app,pool,{requireTenant}){
      row.abcdClass=sales?(abcd.get(key(row.pharmacyId,row.cn))||"D"):null;
     }
    }
-   const sold=new Map(salesRows.map(r=>[r.id,r]));
+   // ABCD utiliza el universo completo aunque el listado esté truncado.
+   // Reutilizarlo también para demanda de stock y evitar falsos «sin rotación».
+   const sold=new Map(abcdUniverse.map(r=>[key(r.pharmacyId,r.cn),r]));
    for(const s of stockRows){
     const sale=sold.get(s.id);
     s.sold=sale?.units||0;
@@ -381,7 +442,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows.filter(r=>r.margin!=null),
     actions,families:families.rows.map(r=>r.familia),
-    availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,
+    availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockSource,
      snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
      rowsTruncated:!complete,marginCoverage:coveredItems}});
   }catch(e){next(e)}

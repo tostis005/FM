@@ -36,6 +36,7 @@ jobs:
           node --check api/src/salesDetail.js
           node --check api/src/salesAnalysisPeriod.js
           node --test api/src/salesAnalysisPeriod.test.js
+          node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
           node --test api/src/pricePolicy.test.js

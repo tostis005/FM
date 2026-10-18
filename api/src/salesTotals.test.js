@@ -9,6 +9,9 @@ function make(){
   calls.push({sql,params});
   const max=Math.max(0,...[...sql.matchAll(/\$(\d+)/g)].map(x=>+x[1]));
   assert.equal(max,params.length);
+  if(sql.includes("sum(sum(v.importe)) OVER()"))
+   return {rows:[{month:"2026-10",ventas:220,unidades:9,
+     total_ventas:220,total_unidades:9}]};
   return {rows:[{tipo:"month",month:"2026-10",bucket:null,ventas:220,unidades:9},
    {tipo:"total",month:null,bucket:null,ventas:220,unidades:9}]};
  }};
@@ -27,15 +30,16 @@ function make(){
  }
  return {calls,call};
 }
-test("12 meses: un SUM y GROUPING SETS sin consulta de artículos ni compras",async()=>{
+test("12 meses: un SUM mensual y total SQL sin consulta de artículos ni compras",async()=>{
  const {calls,call}=make();
  const {status,data}=await call();
  assert.equal(status,200);
  assert.equal(calls.length,1);
  assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",[5],"ampedia"]);
  assert.match(calls[0].sql,/f.id=ANY\(\$3::int\[\]\)/);
- assert.match(calls[0].sql,/GROUP BY GROUPING SETS \(\(mes\),\(\)\)/);
- assert.match(calls[0].sql,/coalesce\(sum\(importe\),0\)::float8/);
+ assert.match(calls[0].sql,/GROUP BY date_trunc\(\x27month\x27,v.fecha\)/);
+ assert.match(calls[0].sql,/sum\(sum\(v.importe\)\) OVER\(\)/);
+ assert.match(calls[0].sql,/sum\(v.importe\)::float8/);
  assert.doesNotMatch(calls[0].sql,/\.compras|\.articulos|LATERAL|count\(DISTINCT|ROW_NUMBER/i);
  assert.equal(data.kpis.ventas,220);
  assert.equal(data.kpis.unidades,9);

@@ -12,7 +12,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupRealReports(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
-  modules:{},allowedPharmacyIds:[1,2],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"}]};
+  modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"VAL"}]};
  async function request(path,params={}){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...params},
     params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"}};

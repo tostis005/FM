@@ -24,6 +24,8 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
+          node --check api/src/genericos.js
+          python3 -m unittest discover -s deploy/nomenclator -p 'test_*.py'
           python3 -m py_compile deploy/bootstrap-temp-admin-vps.py
           python3 -m py_compile api/src/setup_temp_login.py
           docker run --rm -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
@@ -84,6 +86,9 @@ jobs:
           psql_test < api/src/migrations/004_ampedia_cutover_MANUAL.sql
           psql_test --single-transaction < api/src/migrations/003_multitenant.sql
           psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql
+          psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
+          psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
+          test "$(psql_test -At -c "SELECT CASE WHEN to_regclass('farmetrica.nomenclator_presentaciones') IS NOT NULL AND EXISTS(SELECT 1 FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND modulo_clave='genericos' AND habilitado) THEN 1 ELSE 0 END;")" = 1
           psql_test -At -c "INSERT INTO ampedia.fm_promociones(id,documento,fuente) VALUES
             ('PRUEBA_SYNC',jsonb_build_object('id','PRUEBA_SYNC','name','Campaña test'),'CI');
             CREATE TABLE ampedia.ventas (

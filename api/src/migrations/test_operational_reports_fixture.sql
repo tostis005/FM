@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS ampedia.articulos (
  familia text,laboratorio text,pvp numeric,puc numeric,pmc numeric,
  sincronizado_en timestamptz DEFAULT now()
 );
+ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS stock_actual numeric;
 CREATE TABLE IF NOT EXISTS ampedia.compras (
  farmacia_codigo text,origen_id text,fecha timestamp,articulo_id text,
  proveedor_id text,unidades numeric,coste_unitario numeric,importe numeric,

@@ -69,7 +69,7 @@ function columnsFor(module,pharmacyMap){
  switch(module){
   case "ventas":return [...common,family,num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen estimado")];
   case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),C("puc","PUC","puc",v=>v==null?"—":money(v)),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
-  case "proveedores":return [C("name","Proveedor","name"),C("family","Tipo","family"),num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
+  case "proveedores":return [C("name","Proveedor","name"),pharmacy,num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
   case "stock":return [...common,num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
   case "reposicion":return [...common,num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];

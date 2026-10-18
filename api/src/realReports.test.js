@@ -22,6 +22,8 @@ function create(){
   if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".ventas"))
    return {rows:[{pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
     pvp:6,pmc:1,laboratory:"Lab A",units:20,value:120}]};
+  if(sql.includes('SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId"'))
+   return {rows:[{pharmacyId:"1",providerId:"2",name:"Distribuidora",value:60,units:30,products:1}]};
   if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".compras"))
    return {rows:[{pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
     pvp:6,pmc:1,laboratory:"Lab A",providerId:"2",supplier:"Distribuidora",
@@ -30,8 +32,7 @@ function create(){
    return {rows:[{month:"2026-10",units:20,amount:120}]};
   if(sql.includes("date_trunc('month'")&&sql.includes(".compras"))
    return {rows:[{month:"2026-10",units:30,amount:60}]};
-  if(sql.includes("AS \"providerId\"")&&sql.includes(".compras"))
-   return {rows:[{providerId:"2",name:"Distribuidora",value:60,units:30,products:1}]};
+
   throw Error("SQL inesperado: "+sql.slice(0,180));
  }};
  setupRealReports(app,pool,{requireTenant:()=>[]});
@@ -58,6 +59,8 @@ test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()
  assert.equal(result.salesRows[0].pvpMarginPct,75);
  assert.equal(result.buyRows[0].puc,1.5);
  assert.equal(result.supplierRows[0].name,"Distribuidora");
+ assert.equal(result.supplierRows[0].id,"1|2");
+ assert.ok(queries.some(x=>x.sql.includes("GROUP BY f.id,t.proveedor_id")));
  assert.equal(result.availability.stock,false);
  assert.equal(result.kpis.stock,null);
  assert.ok(queries.some(x=>x.sql.includes(".articulos")));

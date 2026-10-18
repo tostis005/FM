@@ -31,3 +31,15 @@ VALUES ('Fixture AEMPS','aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 INSERT INTO farmetrica.nomenclator_presentaciones(cn,nombre,dcpf,dcp,generico)
 VALUES ('654321','Omeprazol A','123456789','123456',true),
        ('654322','Omeprazol B','123456789','123456',true);
+
+-- Los IDs de ERP son LOCALES: PR1 y ART-03 en EUR no se deben mezclar con ABA.
+INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,familia,laboratorio,pvp,puc,pmc)
+VALUES ('EUR','ART-03','Omeprazol C','654321','Digestivo','Lab C',7,1.8,2.4);
+INSERT INTO ampedia.proveedores(farmacia_codigo,origen_id,nombre)
+VALUES ('EUR','PR1','Mayorista Europa');
+INSERT INTO ampedia.compras(farmacia_codigo,origen_id,fecha,articulo_id,proveedor_id,unidades,coste_unitario,importe,proveedor_nombre)
+VALUES ('EUR','B7','2026-10-06','ART-03','PR1',10,1.8,18,'Mayorista Europa');
+-- Una farmacia con stock reciente no debe refrescar la antigüedad de otra.
+INSERT INTO public.stock_farmacia(id_farmacia,id_articu,descripcion,stock_actual,importado_en)
+VALUES (1,'ART-01','Omeprazol A',8,now()),
+       (2,'ART-03','Omeprazol C',9,now()-interval '4 days');

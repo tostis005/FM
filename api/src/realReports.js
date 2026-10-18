@@ -98,13 +98,13 @@ export function setupRealReports(app,pool,{requireTenant}){
    const sqlPeriod=table=>`SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount
      ${baseTable(table)} WHERE ${filter} GROUP BY 1 ORDER BY 1`;
-   const sqlProv=`SELECT t.proveedor_id AS "providerId",
+   const sqlProv=`SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId",
      max(coalesce(nullif(t.proveedor_nombre,''),${suppliers?"prov.nombre,":""}t.proveedor_id)) AS name,
      sum(t.importe)::float8 AS value,
      sum(t.unidades)::float8 AS units,
      count(DISTINCT ${cn})::int AS products
      ${baseTable("compras")} ${provider} WHERE ${filter}
-     GROUP BY t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT 1000`;
+     GROUP BY f.id,t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT 1000`;
    const queries=[
     sales&&pharmacyIds.length?pool.query(sqlSales,pars):{rows:[]},
     buyers&&pharmacyIds.length?pool.query(sqlBuy,pars):{rows:[]},
@@ -144,23 +144,49 @@ export function setupRealReports(app,pool,{requireTenant}){
    // Solo la instantánea existente de Ampedia; nunca declarar stock actual
    // cuando su última importación no es suficientemente reciente.
    let snapshotAvailable=false,stockAsOf=null,stockRows=[];
-   if(req.context.client.slug==="ampedia"){
-    const {rows:x}=await pool.query("SELECT to_regclass('public.stock_farmacia')::text AS tbl");
-    if(x[0]?.tbl){
-     const {rows:st}=await pool.query(`SELECT max(importado_en) AS last FROM public.stock_farmacia
-       WHERE id_farmacia=ANY($1::int[])`,[pharmacyIds]);
-     stockAsOf=st[0]?.last||null;
-     snapshotAvailable=Boolean(stockAsOf && Date.now()-new Date(stockAsOf).getTime()<=48*3600000);
-     if(snapshotAvailable && pharmacyIds.length){
+   if(req.context.client.slug==="ampedia"&&pharmacyIds.length){
+    const {rows:stockTable}=await pool.query("SELECT to_regclass('public.stock_farmacia')::text AS tbl");
+    if(stockTable[0]?.tbl){
+     // Una actualización reciente en ABA NO hace que el stock viejo de EUR
+     // parezca actual. Todas las farmacias seleccionadas deben disponer de
+     // instantánea dentro de las 48 h.
+     const {rows:stamps}=await pool.query(`SELECT id_farmacia::int AS id,
+       max(importado_en) AS last
+       FROM public.stock_farmacia WHERE id_farmacia=ANY($1::int[])
+       GROUP BY id_farmacia`,[pharmacyIds]);
+     const valid=stamps.filter(r=>r.last&&Number.isFinite(new Date(r.last).getTime()));
+     stockAsOf=valid.length?new Date(Math.min(...valid.map(r=>new Date(r.last).getTime()))).toISOString():null;
+     snapshotAvailable=valid.length===pharmacyIds.length &&
+       valid.every(r=>Date.now()-new Date(r.last).getTime()<=48*3600000&&
+         Date.now()-new Date(r.last).getTime()>=-3600000);
+     if(snapshotAvailable){
+      // public.stock_farmacia.id_articu es el ID DEL ERP, no el código
+      // nacional. Convertir mediante la ficha de artículo de la misma farmacia
+      // antes de cruzar demanda, PMC y coste de compras.
+      const stockCn="coalesce(nullif(btrim(art.codigo_nacional),''),btrim(s.id_articu))";
       const {rows:sr}=await pool.query(`
-       SELECT s.id_farmacia::text AS "pharmacyId",s.id_articu AS cn,
-        max(s.descripcion) AS name,sum(s.stock_actual)::float8 AS units,
+       SELECT s.id_farmacia::text AS "pharmacyId",${stockCn} AS cn,
+        max(coalesce(art.nombre,s.descripcion)) AS name,
+        max(coalesce(art.familia,'')) AS family,
+        max(art.pmc)::float8 AS pmc,
+        sum(s.stock_actual)::float8 AS units,
         max(s.importado_en) AS "asOf"
        FROM public.stock_farmacia s
+       JOIN farmetrica.farmacias f ON f.id=s.id_farmacia AND f.cliente_slug=$4
+       LEFT JOIN LATERAL (
+        SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc
+        FROM ${quoted}.articulos a
+        WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+          AND a.origen_id=s.id_articu
+        ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+       ) art ON true
        WHERE s.id_farmacia=ANY($1::int[]) AND
-         ($2::text='' OR s.id_articu ILIKE '%'||$2||'%' OR s.descripcion ILIKE '%'||$2||'%')
-       GROUP BY s.id_farmacia,s.id_articu
-       ORDER BY sum(s.stock_actual) DESC LIMIT ${rowLimit}`,[pharmacyIds,f.search]);
+         ($2::text='' OR ${stockCn} ILIKE '%'||$2||'%' OR
+           coalesce(art.nombre,s.descripcion,'') ILIKE '%'||$2||'%')
+         AND (cardinality($3::text[])=0 OR coalesce(art.familia,'')=ANY($3::text[]))
+       GROUP BY s.id_farmacia,${stockCn}
+       ORDER BY sum(s.stock_actual) DESC LIMIT ${rowLimit}`,
+       [pharmacyIds,f.search,f.families,req.context.client.slug]);
       stockRows=sr.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,need:null,needValue:null}));
      }
@@ -170,7 +196,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    for(const s of stockRows){
     const sale=sold.get(s.id);
     s.sold=sale?.units||0;
-    const cost=costs.get(s.id),unitCost=cost&&cost.units>0?cost.total/cost.units:nullable(sale?.pmc);
+    const cost=costs.get(s.id),unitCost=cost&&cost.units>0?cost.total/cost.units:nullable(s.pmc);
     s.unitCost=unitCost;
     s.value=unitCost==null?null:round(s.units*unitCost);
     const days=(Date.parse(f.to)-Date.parse(f.from))/DAY+1;
@@ -187,7 +213,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     unidades:sum(saleM.rows.filter(r=>r.month===month),"units"),
     margen:null
    }));
-   const supplierRows=providers.rows.map(r=>({...r,id:r.providerId,
+   const supplierRows=providers.rows.map(r=>({...r,id:key(r.pharmacyId,r.providerId),
     family:"",products:Number(r.products),units:Number(r.units),
     value:Number(r.value),potential:null}));
    const replenishmentRows=stockRows.filter(r=>r.need>0);
@@ -198,6 +224,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      ...r,action:"Revisar exceso de stock",impact:r.excessValue,targetModule:"stock"}))
    ].sort((a,b)=>b.impact-a.impact);
    const complete=sale.rows.length<rowLimit&&buys.rows.length<rowLimit;
+   const completeStock=snapshotAvailable&&stockRows.length<rowLimit;
    const pricedStock=stockRows.filter(r=>r.value!=null);
    const kpis={
     ventas:sales?round(sum(saleM.rows,"amount")):null,
@@ -205,15 +232,19 @@ export function setupRealReports(app,pool,{requireTenant}){
     compras:buyers?round(sum(buyM.rows,"amount")):null,
     articulosVendidos:complete?new Set(salesRows.map(r=>r.cn)).size:null,
     articulosComprados:complete?new Set(buyRows.map(r=>r.cn)).size:null,
-    proveedores:buyers?supplierRows.length:null,
-    stock:snapshotAvailable&&stockRows.length<rowLimit&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
+    proveedores:buyers&&providers.rows.length<1000?supplierRows.length:null,
+    stock:completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
     margen:sales&&complete&&coveredItems===salesRows.length?round(coveredMargin):null,
     margenPct:sales&&complete&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
     coberturaCostes:sales&&complete&&salesRows.length?round(100*coveredItems/salesRows.length):null,
-    reposiciones:snapshotAvailable&&stockRows.length<rowLimit?replenishmentRows.length:null,
-    reposicionCoste:snapshotAvailable&&stockRows.length<rowLimit&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
-    sobregstock:null,sobrestock:null,stockSinRotacion:null,roturas:null,
-    potencialCompra:null,compraGenericos:null,potencialGenericos:null,acciones:snapshotAvailable?actions.length:null
+    reposiciones:completeStock&&complete?replenishmentRows.length:null,
+    reposicionCoste:completeStock&&complete&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
+    sobrestock:completeStock&&complete&&stockRows.every(r=>r.excessUnits==null||r.excessValue!=null)?
+       round(sum(stockRows,"excessValue")):null,
+    stockSinRotacion:completeStock&&complete?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
+    roturas:completeStock&&complete?stockRows.filter(r=>r.zero).length:null,
+    potencialCompra:null,compraGenericos:null,potencialGenericos:null,
+    acciones:completeStock&&complete?actions.length:null
    };
    res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows.filter(r=>r.margin!=null),

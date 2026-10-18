@@ -44,6 +44,14 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(reports.buyRows.some(r=>r.cn==="654321"&&r.puc>0));
   assert.ok(reports.salesRows.some(r=>r.cn==="654322"));
   assert.ok(reports.supplierRows.some(r=>r.name==="Mayorista 2"));
+  // Smoke test del resto de reportes usando datos reales del fixture:
+  // se comprueban módulos, esquema, importes y estructuras sin generar mocks.
+  for(const module of ["dashboard","rentabilidad","reposicion","acciones","informes","asistente"]){
+   const report=await request("/api/analytics/reportes",{modulo:module});
+   assert.equal(report.available,true,"Debe estar operativo "+module);
+   assert.ok(report.kpis&&typeof report.kpis==="object",module+" debe incluir indicadores");
+   assert.ok(Array.isArray(report.monthly),module+" debe devolver serie temporal");
+  }
   const groups=await request("/api/genericos/reales");
   assert.ok(groups.groups.find(r=>r.dcpf==="123456789"&&r.genericCount===2));
   const g=groups.groups.find(r=>r.dcpf==="123456789");

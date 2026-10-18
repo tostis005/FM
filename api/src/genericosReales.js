@@ -3,14 +3,17 @@
 import {readPricePolicy} from "./pricePolicy.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {classifyAbcd} from "./abcd.js";
+import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 function dayValid(v){if(!ISO.test(v))return false;const d=new Date(v+"T00:00:00Z");return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function getFilter(req,res){
  const from=String(req.query.desde||""),to=String(req.query.hasta||""),
   raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim(),
-  abcd=String(req.query.abcd||"all").toUpperCase();
+  abcd=String(req.query.abcd||"all").toUpperCase(),
+  order=String(req.query.orden||"revenue"),direction=String(req.query.direccion||"desc").toLowerCase();
  if(!dayValid(from)||!dayValid(to)||from>to||
-  (Date.parse(to)-Date.parse(from))/86400000>366||search.length>100||raw.length>2000||!["ALL","A","B","C","D"].includes(abcd)){
+  (Date.parse(to)-Date.parse(from))/86400000>366||search.length>100||raw.length>2000||!["ALL","A","B","C","D"].includes(abcd)||
+  !GENERIC_GROUP_SORT_KEYS.includes(order)||!["asc","desc"].includes(direction)){
   res.status(400).json({error:"Fechas o filtros inválidos"});return null;
  }
  const allowed=req.context.allowedPharmacyIds.map(Number);
@@ -18,7 +21,7 @@ function getFilter(req,res){
  if(ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id))){
   res.status(403).json({error:"Farmacia no autorizada"});return null;
  }
- return {from,to,ids:[...new Set(ids)],search,abcd};
+ return {from,to,ids:[...new Set(ids)],search,abcd,order,direction};
 }
 const round=(v,dec=4)=>Math.round(Number(v)*10**dec)/10**dec;
 const count=(rows,k)=>rows.reduce((n,r)=>n+Number(r[k]||0),0);
@@ -244,11 +247,12 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
    }
    if(f.abcd!=="ALL")groups=groups.filter(g=>g.abcdClass===f.abcd);
-   groups.sort((a,b)=>b.revenue-a.revenue);
+   const topGroups=sortGenericGroups(groups,"revenue","desc").slice(0,12);
+   groups=sortGenericGroups(groups,f.order,f.direction);
    const summary={totalGroups:groups.length,salesUnits:count(groups,"salesUnits"),
     revenue:round(count(groups,"revenue"),2),purchases:round(count(groups,"spent"),2),
     savings:round(count(groups,"indicativeSavings"),2)};
-   res.json({version:version.rows[0],groups:groups.slice(0,500),totalGroups:groups.length,
+   res.json({version:version.rows[0],groups:groups.slice(0,500),topGroups,totalGroups:groups.length,
     summary,policy,sales:{available:true},purchases:{available:true},
     note:"Coste real: media ponderada por unidades; ahorro orientativo: mejores precios por proveedor y CN, dentro de DCPF y período histórico configurado, con muestra mínima de 3 compras."});
   }catch(e){throw e}

@@ -1,5 +1,6 @@
 // Informes agregados sobre las tablas reales normalizadas del cliente.
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 const DAY=86400000;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const validDate=s=>{if(!ISO.test(s))return false;const d=new Date(s+"T00:00:00Z");return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s;};
@@ -73,7 +74,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const args=[f.from,f.to,pharmacyIds,f.search,f.families];
    const baseTable=(name,alias="t")=>`FROM ${quoted}.${name} ${alias}
        JOIN farmetrica.farmacias f ON f.cliente_slug=$6
-        AND upper(btrim(${alias}.farmacia_codigo))=upper(btrim(f.codigo_origen))
+        AND upper(btrim(${alias}.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
        ${article}`;
    const pars=[...args,req.context.client.slug];
    const columns=`${cn} AS cn,max(coalesce(art.nombre,t.articulo_id)) AS name,
@@ -115,7 +116,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       WHERE familia IS NOT NULL AND familia<>'' AND
        upper(btrim(farmacia_codigo))=ANY($1::text[]) ORDER BY familia LIMIT 250`,
       [req.context.pharmacies.filter(p=>pharmacyIds.includes(Number(p.id)))
-       .map(p=>p.sourceCode.toUpperCase())])
+       .map(p=>p.databaseCode.toUpperCase())])
    ];
    const [sale,buys,saleM,buyM,providers,families]=await Promise.all(queries);
    const salesRows=sale.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn),
@@ -176,7 +177,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        LEFT JOIN LATERAL (
         SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc
         FROM ${quoted}.articulos a
-        WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+        WHERE upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
           AND a.origen_id=s.id_articu
         ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
        ) art ON true

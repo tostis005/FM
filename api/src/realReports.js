@@ -116,7 +116,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       WHERE familia IS NOT NULL AND familia<>'' AND
        upper(btrim(farmacia_codigo))=ANY($1::text[]) ORDER BY familia LIMIT 250`,
       [req.context.pharmacies.filter(p=>pharmacyIds.includes(Number(p.id)))
-       .map(p=>p.databaseCode.toUpperCase())])
+       .map(p=>(p.databaseCode||p.sourceCode).toUpperCase())])
    ];
    const [sale,buys,saleM,buyM,providers,families]=await Promise.all(queries);
    const salesRows=sale.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn),

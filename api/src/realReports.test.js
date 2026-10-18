@@ -116,6 +116,7 @@ test("los módulos ahorran consultas ajenas a sus indicadores y conservan los da
  const provider=await a.call({query:{...a.req.query,modulo:"proveedores"}});
  assert.equal(provider.status,200);
  assert.equal(provider.result.supplierRows.length,1);
+ assert.equal(provider.result.kpis.articulosComprados,1,"Proveedores debe contar compras completas sin necesitar ventas");
  assert.equal(provider.result.kpis.ventas,null);
  assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".ventas t')),
    "Proveedores no debe escanear todas las ventas");

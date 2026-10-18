@@ -76,6 +76,19 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(legacyReport.buyRows[0].cn,"123456");
   assert.equal(legacyReport.buyRows[0].puc,2.5);
   assert.equal(legacyReport.supplierRows[0].name,"Proveedor legado");
+  await pool.query(`CREATE TABLE legacy_reports_ci.stock (
+    farmacia_id integer NOT NULL,producto_id text NOT NULL,
+    unidades numeric,coste_unitario numeric,fecha_referencia timestamptz NOT NULL)`);
+  await pool.query(`INSERT INTO legacy_reports_ci.stock
+    VALUES ($1,'ID01',4,2.5,now())`,[legacyPharmacy.id]);
+  const legacyStockReport=await request("/api/analytics/reportes",
+    {modulo:"stock",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
+  assert.equal(legacyStockReport.availability.stock,true);
+  assert.equal(legacyStockReport.availability.stockSource,"stock");
+  assert.equal(legacyStockReport.stockRows[0].cn,"123456");
+  assert.equal(legacyStockReport.stockRows[0].value,10);
+  assert.equal(legacyStockReport.kpis.stock,10);
+
   const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
   assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");
   assert.ok(reports.buyRows.some(r=>r.cn==="654321"&&r.puc>0));

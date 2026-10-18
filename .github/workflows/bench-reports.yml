@@ -2,7 +2,7 @@ name: Verificar informes operativos reales
 on:
   push:
     branches: [main]
-    paths: [".github/workflows/bench-reports.yml"]
+    paths: [".github/workflows/bench-reports.yml", "api/src/benchReports.js"]
   workflow_dispatch:
 permissions:
   contents: read

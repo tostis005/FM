@@ -59,7 +59,7 @@ function GroupDetail({group,query,clientSlug}){
     const buyAmount=bought.reduce((v,r)=>v+Number(r.spend||0),0);
     const avg=buyQty>0?buyAmount/buyQty:null;
     return <tr key={product.cn}><td className="fm-generic-code">{product.cn}</td>
-     <td>{product.nombre}</td><td>{product.laboratorio||product.cn&&"—"}</td>
+     <td>{product.nombre}</td><td>{product.laboratorio||product.laboratorio_codigo||"—"}</td>
      <td>{product.generico?"Genérico":"Equivalente de referencia"}</td>
      <td>{data.salesAvailable?number(sales?.units||0):"—"}</td>
      <td>{data.salesAvailable?money(sales?.revenue||0):"—"}</td>

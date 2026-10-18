@@ -34,7 +34,17 @@ async function assertRoute(route,title){
  await page.goto(BASE+route,{waitUntil:"domcontentloaded"});
  await page.waitForTimeout(200);
  assert.equal(new URL(page.url()).pathname,route,"La ruta no puede cambiar mientras se carga el usuario");
- await page.getByRole("heading",{name:title,exact:true}).first().waitFor({state:"visible",timeout:10000});
+ try{
+  await page.getByRole("heading",{name:title,exact:true}).first().waitFor({state:"visible",timeout:10000});
+ }catch(e){
+  const state=await page.evaluate(()=>({
+    pathname:location.pathname,headings:[...document.querySelectorAll("h1,h2")].map(x=>x.textContent),
+    text:document.querySelector("main")?.innerText?.slice(0,380),
+    nav:document.querySelector("nav")?.innerText?.slice(0,240)
+  })).catch(()=>({}));
+  console.error("Estado de ruta F5:",JSON.stringify(state));
+  throw e;
+ }
  assert.equal(new URL(page.url()).pathname,route,"La ruta debe mantenerse tras autenticar");
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:title,exact:true}).first().waitFor({state:"visible",timeout:10000});

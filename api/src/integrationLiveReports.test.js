@@ -97,6 +97,11 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(stockFromArticles.stockRows.find(r=>r.pharmacyId==="1"&&r.cn==="654321").units,8);
   assert.equal(stockFromArticles.stockRows.find(r=>r.pharmacyId==="2"&&r.cn==="654321").units,9);
   assert.ok(stockFromArticles.kpis.stock>0);
+  assert.equal(stockFromArticles.kpis.stockArticulos,3);
+  assert.equal(stockFromArticles.kpis.stockUnidades,20);
+  assert.equal(stockFromArticles.kpis.stock,48.5);
+  assert.equal(stockFromArticles.availability.stockSummaryBasis,"PMC de ficha (todos los artículos)");
+
   const stockFromDemo=await request("/api/analytics/reportes",{modulo:"reposicion",farmacias:"1,2"});
   assert.ok(Array.isArray(stockFromDemo.replenishmentRows));
 
@@ -182,6 +187,18 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const {rows:sourceCount}=await pool.query("SELECT count(*)::int AS n FROM ampedia.ventas WHERE farmacia_codigo='VAL'");
   const {rows:demoCount}=await pool.query("SELECT count(*)::int AS n FROM demo_ci_qa.ventas WHERE farmacia_codigo='VAL'");
   assert.equal(demoCount[0].n,sourceCount[0].n,"Demo comparte datos vivos en solo lectura");
+  // Más de 3.000 referencias: no confundir el límite visual con el inventario
+  // real. El SUM y el contador se calculan sobre todas las fichas seleccionadas.
+  await pool.query(`INSERT INTO ampedia.articulos
+    (farmacia_codigo,origen_id,nombre,codigo_nacional,familia,pmc,pvp,stock_actual)
+    SELECT 'ABA','BULK-'||i,'Inventario prueba '||i,
+      'EXTRA-'||i,'Prueba',1,3,1 FROM generate_series(1,3005) i`);
+  const completeCount=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
+  assert.equal(completeCount.stockRows.length,3000);
+  assert.equal(completeCount.kpis.stockArticulos,3008);
+  assert.equal(completeCount.kpis.stockUnidades,3025);
+  assert.equal(completeCount.kpis.stock,3053.5);
+
 
  }finally{await pool.end()}
 });

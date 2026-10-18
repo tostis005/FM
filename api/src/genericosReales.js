@@ -111,38 +111,51 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    ]);
    // No confundir período de visualización y ventana de referencia:
    // esta última termina el mismo día del informe y utiliza meses/pct por farmacia.
+   // Agrupar compras por farmacia, artículo, proveedor y PUC ANTES de
+   // consultar el catálogo. Para el percentil no importan fechas ni orden de
+   // líneas al mismo precio: la ponderación por unidades es idéntica.
+   // Conservar count(*) permite exigir el mismo mínimo de 3 compras reales.
    const refs=f.ids.length?await pool.query(`
-    WITH raw AS (
-     SELECT f.id::int AS pharmacy,n.dcpf,n.cn,c.proveedor_id AS supplier,
-       c.unidades::float8 AS qty,c.coste_unitario::float8 AS price,
-       coalesce(pl.percentil,pg.percentil,20)::float8 AS pct,
-       c.fecha,c.origen_id
-     FROM ${schema}.compras c
-     JOIN farmetrica.farmacias f ON f.cliente_slug=$3
-       AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-     ${art}
-     ${nJoin}
-     LEFT JOIN farmetrica.politica_precios pg ON pg.cliente_slug=$3 AND pg.farmacia_id=0
-     LEFT JOIN farmetrica.politica_precios pl ON pl.cliente_slug=$3 AND pl.farmacia_id=f.id
-     WHERE f.id=ANY($2::int[]) AND c.fecha <= $1::date+interval '1 day'
-       AND c.fecha >= ($1::date-make_interval(months=>coalesce(pl.meses,pg.meses,6)))
-       AND c.unidades>0 AND c.coste_unitario>0
+    WITH c AS MATERIALIZED (
+      SELECT f.id::int AS pharmacy,c.farmacia_codigo,c.articulo_id,
+        c.proveedor_id,c.coste_unitario::float8 AS price,
+        coalesce(pl.percentil,pg.percentil,20)::float8 AS pct,
+        sum(c.unidades)::float8 AS qty,count(*)::int AS lines
+      FROM ${schema}.compras c
+      JOIN farmetrica.farmacias f ON f.cliente_slug=$3
+        AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+      LEFT JOIN farmetrica.politica_precios pg
+        ON pg.cliente_slug=$3 AND pg.farmacia_id=0
+      LEFT JOIN farmetrica.politica_precios pl
+        ON pl.cliente_slug=$3 AND pl.farmacia_id=f.id
+      WHERE f.id=ANY($2::int[]) AND c.fecha <= $1::date+interval '1 day'
+        AND c.fecha >= ($1::date-make_interval(months=>coalesce(pl.meses,pg.meses,6)))
+        AND c.unidades>0 AND c.coste_unitario>0
+      GROUP BY f.id,c.farmacia_codigo,c.articulo_id,c.proveedor_id,
+        c.coste_unitario,coalesce(pl.percentil,pg.percentil,20)
+    ), raw AS (
+      SELECT c.pharmacy,n.dcpf,n.cn,c.proveedor_id AS supplier,
+        c.qty,c.price,c.pct,c.lines
+      FROM c
+      ${art}
+      ${nJoin}
     ), ranked AS (
-     SELECT raw.*,
-       sum(qty) OVER (PARTITION BY pharmacy,dcpf,cn,supplier) AS total_qty,
-       sum(qty) OVER (PARTITION BY pharmacy,dcpf,cn,supplier
-         ORDER BY price,fecha,origen_id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumul
-     FROM raw
+      SELECT raw.*,
+        sum(qty) OVER (PARTITION BY pharmacy,dcpf,cn,supplier) AS total_qty,
+        sum(qty) OVER (PARTITION BY pharmacy,dcpf,cn,supplier
+          ORDER BY price,cn
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cumul
+      FROM raw
     ), eligible AS (
-     SELECT *,greatest(0,least(qty,total_qty*pct/100-(cumul-qty))) AS selected_qty
-     FROM ranked
+      SELECT *,greatest(0,least(qty,total_qty*pct/100-(cumul-qty))) AS selected_qty
+      FROM ranked
     )
     SELECT pharmacy AS "pharmacyId",dcpf,cn,supplier AS "supplierCode",
       (sum(price*selected_qty)/nullif(sum(selected_qty),0))::float8 AS "referencePuc",
-      count(*)::int AS "sampleLines",sum(qty)::float8 AS "sampleUnits"
+      sum(lines)::int AS "sampleLines",sum(qty)::float8 AS "sampleUnits"
     FROM eligible
     GROUP BY pharmacy,dcpf,cn,supplier
-    HAVING count(*)>=3 AND sum(selected_qty)>0
+    HAVING sum(lines)>=3 AND sum(selected_qty)>0
    `,[f.to,f.ids,req.context.client.slug]):{rows:[]};
    const refByGroup=new Map();
    for(const r of refs.rows){

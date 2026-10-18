@@ -112,6 +112,12 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const detailVal=await request("/api/analytics/ventas/detalle",{
    farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18",pagina:"1"});
   assert.ok(detailVal.products.some(p=>p.pharmacyId==="5"&&p.cn==="654321"&&p.abcdClass==="A"));
+  const priced=detailVal.products.find(p=>p.pharmacyId==="5"&&p.cn==="654321");
+  assert.ok(priced.pvp>0,"PVP de la ficha de artículo");
+  assert.equal(priced.saleUnitPrice,7,"Importe de ventas dividido por unidades");
+  assert.ok(priced.purchaseCost>0,"PUC real ponderado o PMC");
+  assert.ok(Math.abs(priced.unitMargin-(priced.saleUnitPrice-priced.purchaseCost))<.0002);
+  assert.ok(Math.abs(priced.margin-(priced.value-priced.units*priced.purchaseCost))<.02);
   assert.equal(detailVal.hasMore,false);
   const detailFamily=await request("/api/analytics/ventas/detalle",{
    farmacias:"5",familias:"Digestivo",desde:"2025-11-01",hasta:"2026-10-18"});

@@ -84,6 +84,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
  </div>;
 }
 export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
+ const useReal=clientSlug==="ampedia"||Boolean(demo);
  const [periodKey,setPeriodKey]=useState("3");
  const [customFrom,setCustomFrom]=useState(""),[customTo,setCustomTo]=useState("");
  const [ids,setIds]=useState([]),[search,setSearch]=useState(""),[queryText,setQueryText]=useState("");

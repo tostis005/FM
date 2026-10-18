@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
-          SET statement_timeout = '20s';
+          SET statement_timeout = '25s';
           SELECT id AS farmacia_id, nombre, codigo_origen, activo
           FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id;
           SELECT tablename,attname,most_common_vals,most_common_freqs
@@ -45,10 +45,15 @@ jobs:
             (SELECT id_farmacia,count(*) filas,max(importado_en) ultima_importacion
              FROM public.stock_farmacia GROUP BY id_farmacia) st ON st.id_farmacia=f.id
           WHERE f.cliente_slug='ampedia' ORDER BY f.id;
-          SELECT schemaname,tablename,indexname,indexdef FROM pg_indexes
-          WHERE schemaname IN ('ampedia','farmetrica') AND
-            tablename IN ('ventas','compras','articulos','proveedores','farmacias')
-          ORDER BY schemaname,tablename,indexname;
+          SELECT ns.nspname AS esquema,tab.relname AS tabla,
+             idx.relname AS indice, pi.indisvalid AS valido,
+             pi.indisready AS preparado
+          FROM pg_class tab JOIN pg_namespace ns ON ns.oid=tab.relnamespace
+          JOIN pg_index pi ON pi.indrelid=tab.oid
+          JOIN pg_class idx ON idx.oid=pi.indexrelid
+          WHERE ns.nspname IN ('ampedia','farmetrica')
+            AND tab.relname IN ('ventas','compras','articulos','proveedores','farmacias')
+          ORDER BY ns.nspname,tab.relname,idx.relname;
           SELECT schemaname,relname,n_live_tup,n_dead_tup,last_analyze,last_autoanalyze,
             seq_scan,idx_scan,pg_size_pretty(pg_total_relation_size(relid)) AS tamaño_total
           FROM pg_stat_user_tables WHERE schemaname='ampedia'

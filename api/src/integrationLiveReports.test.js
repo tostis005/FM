@@ -4,6 +4,7 @@ import pg from "pg";
 import {setupRealReports} from "./realReports.js";
 import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
+import {setupSalesInsights} from "./salesInsights.js";
 import {setupGenericosReales} from "./genericosReales.js";
 const enabled=Boolean(process.env.TEST_DB_URL);
 test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF",{
@@ -14,6 +15,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupRealReports(app,pool,{requireTenant:()=>[]});
  setupSalesSummary(app,pool,{requireTenant:()=>[]});
  setupSalesTotals(app,pool,{requireTenant:()=>[]});
+ setupSalesInsights(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
@@ -83,6 +85,17 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
    farmacias:"1,5",granularidad:"day"});
   assert.ok(fastTwo.kpis.ventas>28);
   assert.ok(fastTwo.series.some(r=>r.bucket==="2026-10-11"));
+  const counters=await request("/api/analytics/ventas/recuento",{
+   farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18"});
+  assert.equal(counters.totalProducts,1);
+  assert.equal(counters.totalArticles,1);
+  const families=await request("/api/analytics/ventas/familias",{farmacias:"5"});
+  assert.deepEqual(families.families.map(f=>f.code),["Digestivo"]);
+  const networkFamilies=await request("/api/analytics/ventas/familias",{farmacias:"1,5"});
+  assert.deepEqual(networkFamilies.families,[]);
+  const allHistory=await request("/api/analytics/ventas/totales",{
+   farmacias:"5",desde:"1900-01-01",hasta:"2026-10-18"});
+  assert.equal(allHistory.kpis.ventas,28);
   // Una consulta SQL agrega gráfico, indicadores y ABCD sin peticiones adicionales.
   const salesSummary=await request("/api/analytics/ventas/resumen",{
    farmacias:"5",granularidad:"month"});

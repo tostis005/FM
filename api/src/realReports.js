@@ -201,11 +201,13 @@ export function setupRealReports(app,pool,{requireTenant}){
    // Cada farmacia debe tener carga reciente y cobertura suficiente; no mezclar
    // stock de otras farmacias ni interpretar NULL como cero.
    let snapshotAvailable=false,stockAsOf=null,stockRows=[];
-   let stockSource=null;
+   let stockSource=null,stockSummary=null;
+   // Compras y proveedores no necesitan recorrer todo el inventario.
+   const needsStock=["dashboard","stock","reposicion","acciones","informes","asistente"].includes(f.module);
    const catalogHasStock=pharmacyIds.length&&await hasColumns(pool,schema,"articulos",
      ["farmacia_codigo","origen_id","codigo_nacional","nombre","familia",
       "stock_actual","sincronizado_en","pmc"]);
-   if(catalogHasStock&&pharmacyIds.length){
+   if(needsStock&&catalogHasStock&&pharmacyIds.length){
     const chosen=req.context.pharmacies.filter(p=>pharmacyIds.includes(Number(p.id)));
     const codes=chosen.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase());
     const {rows:catalogStamps}=await pool.query(`
@@ -256,11 +258,42 @@ export function setupRealReports(app,pool,{requireTenant}){
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,
        need:null,needValue:null}));
      stockSource="articulos";
+     // Totales exactos sobre TODO el inventario, independientemente del límite
+     // de 3.000 filas del listado. El valor agregado usa únicamente PMC de ficha
+     // y se omite si hay alguna unidad sin coste disponible.
+     const {rows:summary}=await pool.query(`
+       WITH latest AS MATERIALIZED (
+        SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id)
+          a.farmacia_codigo,a.origen_id,a.codigo_nacional,a.nombre,a.familia,
+          a.pmc,a.stock_actual
+        FROM ${quoted}.articulos a
+        WHERE upper(btrim(a.farmacia_codigo))=ANY($1::text[])
+        ORDER BY upper(btrim(a.farmacia_codigo)),a.origen_id,
+          a.sincronizado_en DESC NULLS LAST
+       )
+       SELECT count(*)::int AS articles,
+         coalesce(sum(a.stock_actual),0)::float8 AS units,
+         count(*) FILTER (
+           WHERE a.stock_actual<>0 AND (a.pmc IS NULL OR a.pmc<=0)
+         )::int AS unpriced,
+         coalesce(sum(a.stock_actual*a.pmc),0)::float8 AS value
+       FROM latest a JOIN farmetrica.farmacias f ON f.cliente_slug=$4
+         AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+       WHERE f.id=ANY($2::int[]) AND a.stock_actual IS NOT NULL
+         AND ($3::text='' OR a.codigo_nacional ILIKE '%'||$3||'%'
+           OR a.origen_id ILIKE '%'||$3||'%' OR a.nombre ILIKE '%'||$3||'%')
+         AND (cardinality($5::text[])=0 OR coalesce(a.familia,'')=ANY($5::text[]))
+      `,[codes,pharmacyIds,f.search,req.context.client.slug,f.families]);
+     stockSummary={articles:Number(summary[0]?.articles||0),
+       units:Number(summary[0]?.units||0),
+       unpriced:Number(summary[0]?.unpriced||0),
+       value:Number(summary[0]?.value||0)};
+
     }
    }
    // Compatibilidad: si la importación de fichas no incluye stock, consultar
    // la instantánea de inventario existente únicamente para Ampedia.
-   if(!stockSource&&req.context.client.slug==="ampedia"&&pharmacyIds.length){
+   if(needsStock&&!stockSource&&req.context.client.slug==="ampedia"&&pharmacyIds.length){
     const {rows:stockTable}=await pool.query("SELECT to_regclass('public.stock_farmacia')::text AS tbl");
     if(stockTable[0]?.tbl){
      // Una actualización reciente en ABA NO hace que el stock viejo de EUR
@@ -369,13 +402,17 @@ export function setupRealReports(app,pool,{requireTenant}){
    const completeStock=snapshotAvailable&&stockRows.length<rowLimit;
    const pricedStock=stockRows.filter(r=>r.value!=null);
    const kpis={
+    stockArticulos:snapshotAvailable?stockSummary?.articles??null:null,
+    stockUnidades:snapshotAvailable?stockSummary?.units??null:null,
     ventas:sales?round(sum(saleM.rows,"amount")):null,
     unidades:sales?sum(saleM.rows,"units"):null,
     compras:buyers?round(sum(buyM.rows,"amount")):null,
     articulosVendidos:complete?new Set(salesRows.map(r=>r.cn)).size:null,
     articulosComprados:complete?new Set(buyRows.map(r=>r.cn)).size:null,
     proveedores:buyers&&providers.rows.length<1000?supplierRows.length:null,
-    stock:completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
+    stock:stockSummary
+      ?(stockSummary.unpriced===0?round(stockSummary.value):null)
+      :completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
     margen:sales&&complete&&coveredItems===salesRows.length?round(coveredMargin):null,
     margenPct:sales&&complete&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
     coberturaCostes:sales&&complete&&salesRows.length?round(100*coveredItems/salesRows.length):null,
@@ -393,6 +430,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     actions,families:families.rows.map(r=>r.familia),
     availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,
      snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
+     stockSummaryBasis:stockSummary?"PMC de ficha (todos los artículos)":null,
      rowsTruncated:!complete,marginCoverage:coveredItems}});
   }catch(e){next(e)}
  });

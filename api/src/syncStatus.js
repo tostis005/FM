@@ -14,8 +14,9 @@ export function setupSyncStatus(app,pool,{requireTenant}) {
     const schema=req.context.client.schema;
     if(!SCHEMA.test(schema))return res.status(400).json({error:"Esquema de cliente no válido"});
     const permitted=(req.context.pharmacies||[]).map(p=>String(p.sourceCode||"").trim().toUpperCase()).filter(Boolean);
-    const db=await pool.connect();
+    let db;
     try{
+      db=await pool.connect();
       await db.query("BEGIN READ ONLY");
       await db.query("SET LOCAL statement_timeout = '20000'");
       const {rows:exists}=await db.query("SELECT to_regclass($1)::text AS name",[schema+".ventas"]);
@@ -65,7 +66,7 @@ export function setupSyncStatus(app,pool,{requireTenant}) {
       res.json({schema,connection:true,tableExists:true,metrics:metrics[0],
         pharmacies,preview,checkedAt:new Date().toISOString(),
         note:"La hora de recepción es la marca sincronizado_en de cada fila. Si no hay ventas nuevas, no demuestra que el sincronizador esté detenido."});
-    }catch(err){await db.query("ROLLBACK").catch(()=>{});next(err);}
-    finally{db.release();}
+    }catch(err){if(db)await db.query("ROLLBACK").catch(()=>{});next(err);}
+    finally{db?.release();}
   });
 }

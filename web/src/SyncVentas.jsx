@@ -1,4 +1,5 @@
-import React,{useEffect,useState,useCallback} from "react";
+import React,{useEffect,useState,useCallback,useRef} from "react";
+import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
 
 const n=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(Number(value||0));
@@ -7,8 +8,10 @@ const date=value=>value?new Intl.DateTimeFormat("es-ES",{
 }).format(new Date(value)):"—";
 
 export default function SyncVentas({client}){
- const [status,setStatus]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [status,setStatus]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState("");
+ const version=useRef(0);
  const refresh=useCallback(async()=>{
+  const current=++version.current;
   setBusy(true);
   try{
    const response=await fetch("/api/ventas/sincronizacion",{
@@ -17,14 +20,14 @@ export default function SyncVentas({client}){
    });
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(data.error||"No se pudo consultar PostgreSQL");
-   setStatus(data);setError("");
-  }catch(e){setError(e.message);setStatus(null);}
-  finally{setBusy(false);}
+   if(current===version.current){setStatus(data);setError("");}
+  }catch(e){if(current===version.current)setError(e.message);}
+  finally{if(current===version.current)setBusy(false);}
  },[client]);
  useEffect(()=>{
   void refresh();
   const id=setInterval(()=>{void refresh();},60000);
-  return()=>clearInterval(id);
+  return()=>{clearInterval(id);version.current++;};
  },[refresh]);
  const stats=status?.metrics;
  const fresh=Number(stats?.ultimos90min||0)>0;
@@ -36,9 +39,12 @@ export default function SyncVentas({client}){
   </div>
   {error&&<div className="access-alert access-alert-error" role="alert">
    <AlertTriangle size={17}/> {error}</div>}
+  {busy&&status&&<div className="fm-loading-message"><LoadingStatus label="Actualizando datos de sincronización…"/></div>}
+  {!status&&busy&&<><SkeletonKpis count={5}/><section className="card"><LoadingPanel kind="table" label="Consultando las ventas del sincronizador…" rows={5}/></section></>}
   {status?.message&&<div className="access-alert" role="status">{status.message}
    {status.missingColumns?.length>0&&<div>Columnas que faltan: {status.missingColumns.join(", ")}</div>}
   </div>}
+  <LoadingFrame loading={busy&&Boolean(status)} label="Actualizando indicadores y líneas de venta…">
   {status?.tableExists&&stats&&<div className="card fm-sync-overview">
    <div className="fm-sync-state">{fresh?<CheckCircle2 size={21}/>:<Clock3 size={21}/>}
     <strong>{fresh?"Hay filas recibidas en los últimos 90 minutos":"No constan filas nuevas en los últimos 90 minutos"}</strong>
@@ -80,5 +86,6 @@ export default function SyncVentas({client}){
     </div>
    </section>
   </>}
+  </LoadingFrame>
  </div>;
 }

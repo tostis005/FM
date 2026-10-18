@@ -1,0 +1,29 @@
+/* Sistema de carga unificado: indicadores, tablas, gráficas y peticiones en curso. */
+.fm-load-status{display:inline-flex;align-items:center;gap:10px;color:#2e6b55;font-size:13px;font-weight:700;line-height:1.5}
+.fm-load-compact{background:#fff;border:1px solid #dbece2;box-shadow:0 8px 24px #16352a17;border-radius:999px;padding:10px 15px;max-width:calc(100% - 24px)}
+.fm-load-spinner{display:inline-block;flex:0 0 auto;width:17px;height:17px;border:2.5px solid #c5e7d8;border-top-color:#128b64;border-radius:50%;animation:fm-load-spin .8s linear infinite}
+.fm-skeleton{display:block;max-width:100%;background:#e7f0eb;border-radius:6px;position:relative;overflow:hidden}
+.fm-skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,#fff9,transparent);animation:fm-load-shine 1.55s ease-in-out infinite}
+.fm-skeleton-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;min-width:0}
+.fm-skeleton-kpi{min-height:98px;padding:19px!important;display:flex;flex-direction:column;justify-content:space-around;gap:17px}
+.fm-loading-panel{display:grid;gap:21px;min-width:0;width:100%;padding:20px 10px}
+.fm-skeleton-rows{display:grid;gap:15px;max-width:100%}
+.fm-skeleton-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:23px;padding:6px 4px;border-bottom:1px solid #edf2ef}
+.fm-skeleton-chart{height:220px;display:flex;align-items:flex-end;gap:5%;padding:20px 15px 4px;border-bottom:1px solid #e8eee9}
+.fm-skeleton-chart>.fm-skeleton{flex:1;min-width:0;border-radius:7px 7px 0 0}
+.fm-loading-frame{min-width:0;position:relative;isolation:isolate}
+.fm-is-loading{cursor:progress}
+.fm-loading-overlay{position:absolute;inset:0;z-index:5;display:flex;align-items:flex-start;justify-content:center;padding:24px 8px;background:#ffffffb8;backdrop-filter:blur(1.5px);pointer-events:auto;border-radius:inherit}
+.fm-loading-overlay .fm-load-status{position:sticky;top:100px}
+.fm-inline-loader{display:inline-flex;gap:8px;align-items:center}
+.fm-inline-loader .fm-load-spinner{height:15px;width:15px}
+.fm-loading-message{margin:8px 0;padding:10px 13px;border:1px solid #d9e9df;background:#f5fbf7;border-radius:10px}
+@keyframes fm-load-spin{to{transform:rotate(360deg)}}
+@keyframes fm-load-shine{to{transform:translateX(100%)}}
+@media(max-width:600px){.fm-skeleton-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-loading-overlay{padding-top:14px}.fm-skeleton-chart{height:175px}}
+@media(prefers-reduced-motion:reduce){.fm-load-spinner,.fm-skeleton::after{animation:none}.fm-load-spinner{border-color:#77b6a0;border-top-color:#128b64}}
+
+/* Una vez disponibles los datos, el progreso cambia sin saltos bruscos. */
+.goal-track-fill,.table-progress .progress>div,.progress>div{transition:width .5s cubic-bezier(.22,1,.36,1)}
+.fm-skeleton-kpi strong,.fm-demo-kpi strong{min-width:0}
+@media(prefers-reduced-motion:reduce){.goal-track-fill,.table-progress .progress>div,.progress>div{transition:none}}

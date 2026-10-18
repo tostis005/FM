@@ -2,6 +2,7 @@ import React,{useMemo,useState,useEffect} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
 import {ArrowDownToLine,ArrowRight,Search,X} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import {LoadingPanel,LoadingStatus,SkeletonLine} from "./LoadingState.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
 import {buildAnalysis} from "./businessAnalytics.js";
@@ -101,22 +102,24 @@ function readFilters(client){
 }
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
  const [filters,setFilters]=useState(()=>readFilters(clientSlug));
+ const [searchReady,setSearchReady]=useState(()=>readFilters(clientSlug).search);
+ useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [detail,setDetail]=useState(null);
  const [realSales,setRealSales]=useState(null);
  const [salesError,setSalesError]=useState("");
- const [loading,setLoading]=useState(false);
+ const [loading,setLoading]=useState(()=>["dashboard","ventas"].includes(module));
  const asOf=useMemo(()=>new Date(),[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
  const tables=useMemo(()=>realTables?normalizeTables(realTables):
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
  useEffect(()=>{
   const controller=new AbortController();
-  if(!["dashboard","ventas"].includes(module)){setRealSales(null);return ()=>controller.abort()}
+  if(!["dashboard","ventas"].includes(module)){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   const params=new URLSearchParams();
   params.set("desde",monthAt(asOf,1-Number(filters.period))+"-01");
   params.set("hasta",new Date(Date.UTC(asOf.getUTCFullYear(),asOf.getUTCMonth()+1,0)).toISOString().slice(0,10));
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
-  if(filters.search)params.set("buscar",filters.search);
+  if(searchReady)params.set("buscar",searchReady);
   setLoading(true);setSalesError("");setRealSales(null);
   fetch("/api/analytics/ventas?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
@@ -125,7 +128,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    .catch(e=>{if(!controller.signal.aborted)setSalesError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return ()=>controller.abort();
- },[module,clientSlug,ids,filters.period,filters.pharmacyIds.join(","),filters.search,asOf]);
+ },[module,clientSlug,ids,filters.period,filters.pharmacyIds.join(","),searchReady,asOf]);
 
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
@@ -135,6 +138,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const change=(field,value)=>setFilters(f=>({...f,[field]:value}));
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null;
+ const isFetchingSales=(loading||filters.search!==searchReady)&&["dashboard","ventas"].includes(module)&&!realTables;
  const canShowKpi=key=>{
   if(realTables)return true;
   return hasSales&&["ventas","unidades","articulosVendidos"].includes(key)&&["dashboard","ventas"].includes(module);
@@ -175,21 +179,21 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    <label><span>Periodo</span><select value={filters.period} onChange={e=>change("period",e.target.value)}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label>
    <label className="fm-demo-search"><span>Artículo o CN</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </div>
-  <div className="fm-demo-kpis">{cards.map(c=>{
+  <div className="fm-demo-kpis" aria-busy={isFetchingSales}>{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
    return <button key={c.label+c.key} type="button" className={"card fm-demo-kpi fm-kpi-link "+(active?"fm-kpi-active":"")}
     disabled={!active} onClick={()=>go(c.link)} aria-label={active?c.label+": abrir "+TITLES[c.link]:c.label}>
-    <span>{c.label}</span><strong>{canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>{active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
+    <span>{c.label}</span><strong>{isFetchingSales&&["ventas","unidades","articulosVendidos"].includes(c.key)?<SkeletonLine width="85%" height="29px"/>:canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>{active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>
   {isDashboard&&<section className="fm-module-links" aria-label="Acceso a módulos">
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {salesError&&<p role="alert" className="fm-inline-status">{salesError}</p>}
-  {loading&&<p className="fm-inline-status">Cargando ventas…</p>}
-  {!isAssistant&&chart.length>0&&<section className="card fm-demo-graph">
+  {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label="Consultando ventas y actualizando indicadores…"/></div>}
+  {!isAssistant&&(chart.length>0||isFetchingSales)&&<section className="card fm-demo-graph" aria-busy={isFetchingSales}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    <div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {isFetchingSales?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
@@ -198,7 +202,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
       <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
       {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
      </BarChart>
-    </ResponsiveContainer></div>
+    </ResponsiveContainer></div>}
    </section>}
   {isReports?<section className="card fm-demo-table">
    <div className="section-heading"><h2>Informes por área</h2></div>
@@ -211,7 +215,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable rows={rows} rowKey={r=>r.id} label="registros" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
+   <ListTable rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&module==="ventas"} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard?go(row.targetModule):setDetail(row)} columns={columns}/>
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>

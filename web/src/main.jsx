@@ -17,6 +17,7 @@ import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import SyncVentas from "./SyncVentas.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
+import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
 import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
@@ -100,8 +101,8 @@ function downloadCSV(name, rows) {
 }
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
-function Kpi({icon:Icon,title,value,caption,kind="mint"}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{value}</div></div></div>}
-function CampaignMetrics({campaigns,heading,salesAvailable=false}){
+function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div></div></div>}
+function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=false}){
  const m=promotionMetrics(campaigns,salesAvailable);
  const show=value=>value==null?"—":EUR.format(value);
  return <section className="card campaign-metrics">
@@ -110,9 +111,9 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false}){
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{show(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Vendidas</span><strong>{show(m.units)}</strong></div>
+   <div className="campaign-metric"><span>Vendidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:show(m.units)}</strong></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
-    <strong>{m.completion==null?"—":m.completion+"%"}</strong>{m.completion!=null&&<Progress value={m.completion}/>}
+    <strong>{salesLoading?<SkeletonLine width="64%" height="24px"/>:m.completion==null?"—":m.completion+"%"}</strong>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
   </div>
  </section>;
@@ -182,7 +183,7 @@ function App(){
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
  const [editingPharmacy,setEditingPharmacy]=useState(null);
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
-  const [pharmacyApiStatus,setPharmacyApiStatus]=useState("sin_sesion");
+  const [pharmacyApiStatus,setPharmacyApiStatus]=useState("cargando");
   const [sessionUser,setSessionUser]=useState(null);
   const [tenantContext,setTenantContext]=useState(null);
   const [authError,setAuthError]=useState("");
@@ -620,6 +621,7 @@ function App(){
   setEditingUser(null);setToast("Usuario guardado");
  }
  async function refreshPharmacies(){
+    setPharmacyApiStatus("cargando");
     try {
       if (!(await hasPharmacySession())) {setPharmacyApiStatus("sin_sesion");return;}
       const records=await loadPharmacies();
@@ -682,7 +684,7 @@ function App(){
  useEffect(()=>{
    if(tenantContext && !allowed)nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard");
  },[tenantContext,page,allowed]);
- if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError||"Preparando tu espacio de trabajo…"}</main></div>;
+ if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError?<p role="alert">{authError}</p>:<><SkeletonKpis count={4}/><LoadingPanel kind="table" label="Preparando tu espacio de trabajo y sus permisos…"/></>}</main></div>;
  return <div className="app-shell">
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
@@ -702,14 +704,15 @@ function App(){
  <div className="page-header"><div><h1>Promociones</h1></div>
     <div className="campaign-header-actions">
       <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
-      <button className="btn btn-secondary" type="button" disabled={importBusy} onClick={()=>importFileRef.current?.click()}><Upload size={17}/>{importBusy?"Importando…":"Importar Excel"}</button>
+      <button className="btn btn-secondary" type="button" disabled={importBusy} aria-busy={importBusy} onClick={()=>importFileRef.current?.click()}>{importBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<Upload size={17}/>} {importBusy?"Importando y guardando…":"Importar Excel"}</button>
       {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>}
       {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={exportLocalPromos} title="Exportar respaldo de las promociones anteriores a la sincronización con PostgreSQL"><ArrowDownToLine size={16}/> Copia local</button>}
       
       <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
     </div></div>
+  {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
- <CampaignMetrics campaigns={filteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"}/>
+ <CampaignMetrics campaigns={filteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
  <section className="card list-card full-table-card">
   <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
   <div className="toolbar">
@@ -717,7 +720,7 @@ function App(){
    <div className="select-wrap"><Filter size={16}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filtrar estado"><option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option><option>Finalizada</option></select></div>
    <div className="fm-visible-date-filters"><label>Fecha de inicio<input type="date" aria-label="Fecha de inicio" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Fecha de fin<input type="date" aria-label="Fecha de fin" value={to} onChange={e=>setTo(e.target.value)}/></label></div>
   </div>
-  <ListTable rows={filteredPromos} rowKey={p=>p.id} label="promociones"
+  <ListTable rows={filteredPromos} rowKey={p=>p.id} label="promociones" loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
     tableClass="campaign-table" onRowClick={startPromo} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
@@ -733,8 +736,8 @@ function App(){
     .map(f=>({value:f.id,label:f.name})),
   value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{EUR.format(sum(p.targets))}</span>},
-      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="real"?EUR.format(sum(p.sales)):"—"}</span>},
-      {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
+      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?EUR.format(sum(p.sales)):"—"}</span>},
+      {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
       {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div>}
     ]}/>
  </section>
@@ -749,7 +752,7 @@ function App(){
    <button className="btn btn-primary" type="button" disabled={!reportSelected.length||labExportBusy}
      onClick={()=>void exportLabCampaigns(reportSelected)}
      title="Exportar tickets reales de cada promoción con el formato del laboratorio">
-    <ArrowDownToLine size={17}/>{labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+    {labExportBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<ArrowDownToLine size={17}/>} {labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
    </button>
   </div>
  </div>
@@ -771,11 +774,11 @@ function App(){
   </div></div>
  </div>
  {reportSelected.length>0?<>
-  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"}/>
+  <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{EUR.format(reportSales)} uds.</strong></div><div><span>Avance global</span><strong>{percent(reportSales,reportGoal)}%</strong></div></div>
-   <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?EUR.format(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
+   <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
@@ -790,12 +793,12 @@ function App(){
      </select></label>
    </div>
    <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(goalListFiltered.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
-   <div className="goal-campaign-list">{!goalListFiltered.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados.</div>}{goalListFiltered.slice(safeReportPage*reportPageSize,(safeReportPage+1)*reportPageSize).map(p=><CampaignGoalCard key={p.id} promo={p} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
+   <div className="goal-campaign-list">{!goalListFiltered.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados.</div>}{goalListFiltered.slice(safeReportPage*reportPageSize,(safeReportPage+1)*reportPageSize).map(p=><CampaignGoalCard key={p.id} promo={p} salesLoading={salesStatus==="cargando"} salesAvailable={salesStatus==="real"} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
    <ListPagination total={goalListFiltered.length} page={safeReportPage} pageSize={reportPageSize}
       label="campañas" onPageChange={setReportPage}
       onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
-  <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"}/>
+  <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>
@@ -806,9 +809,10 @@ function App(){
      onPageChange={setCnPage} onPageSizeChange={n=>{setCnPageSize(n);setCnPage(0)}}/>
   </section>
  </>:<section className="card report-empty-state"><Package size={27}/><h2>Selecciona alguna campaña para ver su seguimiento</h2><p>Puedes marcar una, varias o todas las que aparezcan en los filtros.</p></section>}
- {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
+ {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
+  {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={currentPharmacies} rowKey={f=>f.id} label="farmacias"
+{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" loading={pharmacyApiStatus==="cargando"} value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={pharmacyApiStatus==="cargando"?[]:currentPharmacies} rowKey={f=>f.id} label="farmacias" loading={pharmacyApiStatus==="cargando"} loadingLabel="Sincronizando maestro de farmacias…"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
@@ -822,7 +826,7 @@ function App(){
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
-    {page==="sincronizacion"&&<SyncVentas client={tenantContext.client.slug}/>}
+    {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug}/>} 
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
@@ -899,7 +903,9 @@ function App(){
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
  </div>
 }
-function GoalProgressBar({goal,sold}){
+function GoalProgressBar({goal,sold,loading=false,available=true}){
+ if(!loading&&!available)return <div className="goal-progress"><span className="fm-inline-status">Sin datos de ventas disponibles</span><small>Objetivo: {EUR.format(goal)} uds.</small></div>;
+ if(loading)return <div className="goal-progress" role="status" aria-label="Cargando avance de ventas"><SkeletonLine width="100%" height="14px"/><SkeletonLine width="65%" height="13px"/></div>;
  const pct=goal>0?Math.round(sold/goal*100):null;
  const width=pct===null?0:Math.max(0,Math.min(100,pct));
  const remaining=goal>0?Math.max(0,goal-sold):null;
@@ -916,20 +922,20 @@ function GoalProgressBar({goal,sold}){
   <div className="goal-progress-meta"><span>{EUR.format(sold)} / {EUR.format(goal)} uds.</span><span>{detail}</span></div>
  </div>;
 }
-function CampaignGoalCard({promo,pharmaName,expanded,onToggle,singlePharmacy=false}){
+function CampaignGoalCard({promo,pharmaName,expanded,onToggle,singlePharmacy=false,salesLoading=false,salesAvailable=true}){
  const goal=sum(promo.targets),sold=sum(promo.sales),entries=Object.entries(promo.targets||{});
  const campaignPercent=goal>0?percent(sold,goal):null;
  return <article className={"goal-campaign-card "+(expanded?"goal-campaign-open":"goal-campaign-closed")}>
   <button type="button" className="goal-campaign-heading goal-campaign-toggle" aria-expanded={expanded} onClick={onToggle} aria-label={(expanded?"Plegar ":"Desplegar ")+promo.name}>
    <span className="goal-campaign-title"><span className="goal-icon"><Tag size={17}/></span><span className="goal-title-copy"><strong>{promo.name}</strong><small>{entries.length} {entries.length===1?"farmacia":"farmacias"} · {promo.cns.length} CN · {promo.id}</small></span></span>
-   <span className="goal-campaign-side"><span className={"goal-accordion-pct "+(campaignPercent!==null&&campaignPercent>=100?"achieved":"")}>{campaignPercent===null?"Sin objetivo":campaignPercent+"%"}</span><Pill status={promo.status}/><ChevronDown size={18} className={"goal-chevron "+(expanded?"expanded":"")}/></span>
+   <span className="goal-campaign-side"><span className={"goal-accordion-pct "+(campaignPercent!==null&&campaignPercent>=100?"achieved":"")}>{salesLoading?<SkeletonLine width="60px" height="19px"/>:!salesAvailable?"Sin datos":campaignPercent===null?"Sin objetivo":campaignPercent+"%"}</span><Pill status={promo.status}/><ChevronDown size={18} className={"goal-chevron "+(expanded?"expanded":"")}/></span>
   </button>
   {expanded&&<div className="goal-campaign-expanded">
    {singlePharmacy?
-    <div className="goal-campaign-total goal-single-pharmacy"><div className="goal-group-label"><span>{entries.length?pharmaName(entries[0][0]):"Farmacia sin objetivo"}</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold}/></div>
+    <div className="goal-campaign-total goal-single-pharmacy"><div className="goal-group-label"><span>{entries.length?pharmaName(entries[0][0]):"Farmacia sin objetivo"}</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold} loading={salesLoading} available={salesAvailable}/></div>
     :<>
-     <div className="goal-campaign-total"><div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold}/></div>
-     <div className="goal-farmacies-list">{entries.map(([id,value])=><div key={id} className="goal-farm-row"><div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div><GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)}/></div>)}{!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}</div>
+     <div className="goal-campaign-total"><div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold} loading={salesLoading} available={salesAvailable}/></div>
+     <div className="goal-farmacies-list">{entries.map(([id,value])=><div key={id} className="goal-farm-row"><div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div><GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)} loading={salesLoading} available={salesAvailable}/></div>)}{!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}</div>
     </>}
   </div>}
  </article>;

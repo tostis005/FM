@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from "react";
 import {Mail,RefreshCw} from "lucide-react";
 import "./moduleDemo.css";
+import {LoadingPanel,LoadingStatus,SkeletonKpis,LoadingFrame} from "./LoadingState.jsx";
 const STATUS=[["nueva","Nueva"],["contactada","Contactada"],["cerrada","Cerrada"]];
 const labels={farmatic:"Farmatic",nixfarma:"Nixfarma",unycop:"Unycop",bitfarma:"Bitfarma",farmanager:"Farmanager",otro:"Otro",no_se:"No indicado",vision_global:"Visión global",compras:"Compras y costes",ventas:"Ventas",stock:"Stock y reposición",promociones:"Promociones",multi_farmacia:"Grupo de farmacias"};
 export default function SolicitudesDemo(){
@@ -8,7 +9,7 @@ export default function SolicitudesDemo(){
  return <><div className="fm-leads-tabs" role="group" aria-label="Tipo de solicitudes"><button type="button" className={"btn "+(mode==="comerciales"?"btn-primary":"btn-secondary")} onClick={()=>setMode("comerciales")}>Demostraciones</button><button type="button" className={"btn "+(mode==="privacidad"?"btn-primary":"btn-secondary")} onClick={()=>setMode("privacidad")}>Protección de datos</button></div>{mode==="comerciales"?<CommercialInbox/>:<PrivacyInbox/>}</>;
 }
 function CommercialInbox(){
- const [rows,setRows]=useState([]),[filter,setFilter]=useState("todas"),[loading,setLoading]=useState(false),[error,setError]=useState(""),[busy,setBusy]=useState("");
+ const [rows,setRows]=useState([]),[filter,setFilter]=useState("todas"),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState("");
  async function refresh(){
   setLoading(true);setError("");
   try{
@@ -32,10 +33,10 @@ function CommercialInbox(){
  return <div className="fm-management">
   <WebTrafficSummary/>
   <div className="page-header"><div><h1>Solicitudes de demostración</h1><p>Interesados que han enviado el formulario público. Acceso exclusivo del superadministrador.</p></div></div>
-  <div className="card fm-leads-toolbar"><label>Estado <select value={filter} onChange={e=>setFilter(e.target.value)}><option value="todas">Todas</option>{STATUS.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label><button className="btn btn-secondary" type="button" onClick={refresh} disabled={loading}><RefreshCw size={16}/> Actualizar</button><span>{rows.length} solicitudes{rows.length===200?" (últimas 200)":""}</span></div>
+  <div className="card fm-leads-toolbar"><label>Estado <select value={filter} onChange={e=>setFilter(e.target.value)}><option value="todas">Todas</option>{STATUS.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label><button className="btn btn-secondary" type="button" onClick={refresh} disabled={loading}><RefreshCw size={16}/> Actualizar</button><span>{loading?<LoadingStatus compact label="Consultando solicitudes…"/>:rows.length+" solicitudes"+(rows.length===200?" (últimas 200)":"")}</span></div>
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
-  {loading&&!rows.length?<div className="card" style={{padding:22}}>Cargando solicitudes…</div>:
-   !rows.length?<div className="card" style={{padding:22}}>No hay solicitudes con este estado.</div>:
+  {loading&&!rows.length?<div className="card"><LoadingPanel kind="table" label="Cargando solicitudes de demostración…"/></div>:
+   !rows.length&&!loading?<div className="card" style={{padding:22}}>No hay solicitudes con este estado.</div>:
    <div className="fm-lead-grid">{rows.map(l=><article className="card fm-lead-card" key={l.id}>
     <div className="fm-lead-top"><div><strong>{l.nombre}</strong><small>{new Date(l.createdAt).toLocaleString("es-ES")}</small></div><span className="fm-lead-state">{STATUS.find(x=>x[0]===l.estado)?.[1]||l.estado}</span></div>
     <div className="fm-lead-details"><a href={"mailto:"+l.email}><Mail size={15}/>{l.email}</a>{l.telefono&&<a href={"tel:"+l.telefono.replace(/[^+0-9]/g,"")}>{l.telefono}</a>}<span>{l.pais} · {l.farmacias} farmacias</span><span>ERP: {labels[l.programa]||l.programa}</span><span>Interés: {labels[l.interes]||l.interes}</span><span>Origen: {l.origen}</span></div>
@@ -46,7 +47,7 @@ function CommercialInbox(){
 }
 
 function PrivacyInbox(){
- const [rows,setRows]=useState([]),[loading,setLoading]=useState(false),[error,setError]=useState(""),[busy,setBusy]=useState("");
+ const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState("");
  async function refresh(){
   setLoading(true);setError("");
   try{
@@ -69,9 +70,9 @@ function PrivacyInbox(){
  const types={acceso:"Acceso",rectificacion:"Rectificación",supresion:"Supresión",oposicion:"Oposición",limitacion:"Limitación",portabilidad:"Portabilidad",otro:"Consulta"};
  return <div className="fm-management">
   <div className="page-header"><div><h1>Protección de datos</h1><p>Solicitudes privadas recibidas por el canal específico de protección de datos.</p></div></div>
-  <div className="card fm-leads-toolbar"><strong>{rows.length} solicitudes</strong><button type="button" className="btn btn-secondary" disabled={loading} onClick={refresh}><RefreshCw size={16}/> Actualizar</button></div>
+  <div className="card fm-leads-toolbar"><strong>{loading?<LoadingStatus compact label="Consultando solicitudes…"/>:rows.length+" solicitudes"}</strong><button type="button" className="btn btn-secondary" disabled={loading} onClick={refresh}><RefreshCw size={16}/> Actualizar</button></div>
   {error&&<div role="alert" className="fm-manage-feedback">{error}</div>}
-  {loading&&!rows.length?<div className="card" style={{padding:22}}>Cargando…</div>:!rows.length?<div className="card" style={{padding:22}}>No hay solicitudes de privacidad.</div>:<div className="fm-lead-grid">{rows.map(r=><article className="card fm-lead-card" key={r.id}>
+  {loading&&!rows.length?<div className="card"><LoadingPanel kind="table" label="Consultando solicitudes de privacidad…"/></div>:!rows.length&&!loading?<div className="card" style={{padding:22}}>No hay solicitudes de privacidad.</div>:<div className="fm-lead-grid">{rows.map(r=><article className="card fm-lead-card" key={r.id}>
    <div className="fm-lead-top"><div><strong>{r.nombre}</strong><small>{new Date(r.createdAt).toLocaleString("es-ES")}</small></div><span className="fm-lead-state">{types[r.tipo]||r.tipo}</span></div>
    <div className="fm-lead-details"><a href={"mailto:"+r.email}><Mail size={15}/>{r.email}</a><span>Referencia: {r.id}</span></div>
    {r.detalle&&<p className="fm-lead-note">{r.detalle}</p>}
@@ -81,7 +82,7 @@ function PrivacyInbox(){
 }
 
 function WebTrafficSummary(){
- const [data,setData]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(false);
+ const [data,setData]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  async function load(){
   setLoading(true);setError("");
   try{
@@ -98,11 +99,11 @@ function WebTrafficSummary(){
  return <section className="card fm-traffic">
   <div className="fm-traffic-head"><div><h2>Captación web</h2><p>Últimos 30 días. Recuento agregado de páginas, sin cookies ni identificación de visitantes.</p></div><button className="btn btn-secondary" type="button" onClick={load} disabled={loading}><RefreshCw size={15}/> Actualizar</button></div>
   {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
-  {!data?<p>{loading?"Cargando medición…":"No hay métricas disponibles."}</p>:<>
+  {!data?(loading?<SkeletonKpis count={3}/>:<p>No hay métricas disponibles.</p>):<LoadingFrame loading={loading} label="Actualizando las métricas de la web…">
    <div className="fm-traffic-kpis"><div><span>Vistas de páginas</span><strong>{totalViews.toLocaleString("es-ES")}</strong></div><div><span>Visitas a «Solicitar demo»</span><strong>{demoViews.toLocaleString("es-ES")}</strong></div><div><span>Solicitudes recibidas</span><strong>{leads.toLocaleString("es-ES")}</strong></div></div>
    <p className="fm-traffic-caveat">Son vistas de páginas, no personas únicas. Algunas visitas pueden no contarse si bloquean JavaScript; las solicitudes proceden del registro real en PostgreSQL. No se atribuyen usuarios individuales.</p>
    <div className="fm-traffic-columns"><div><h3>Páginas consultadas</h3>{!data.paginas?.length?<p>Aún no hay visitas registradas.</p>:<table className="fm-traffic-table"><thead><tr><th>Página</th><th>Vistas</th></tr></thead><tbody>{data.paginas.map(p=><tr key={p.ruta}><td>{p.ruta}</td><td>{p.visitas}</td></tr>)}</tbody></table>}</div><div><h3>Solicitudes por procedencia</h3>{!data.solicitudesPorOrigen?.length?<p>Aún no hay solicitudes.</p>:<table className="fm-traffic-table"><thead><tr><th>Origen</th><th>Contactos</th></tr></thead><tbody>{data.solicitudesPorOrigen.map(p=><tr key={p.origen}><td>{p.origen}</td><td>{p.solicitudes}</td></tr>)}</tbody></table>}
    <h3>Avisos por correo</h3><p>Comercial: {data.avisoCorreo?.comercial?"configurado":"pendiente de configurar"} · Privacidad: {data.avisoCorreo?.privacidad?"configurado":"pendiente de configurar"}.</p></div></div>
-  </>}
+  </LoadingFrame>}
  </section>;
 }

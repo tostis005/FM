@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from "react";
 import {Building2,CheckCircle2,ShieldCheck,Users} from "lucide-react";
 import "./moduleDemo.css";
+import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 const MODULES=[
  ["dashboard","Dashboard"],["promociones","Promociones"],["ventas","Ventas"],
  ["compras","Compras"],["proveedores","Proveedores"],["stock","Stock"],
@@ -15,9 +16,9 @@ async function api(path,options={}){
  return json;
 }
 export function ClientesPanel({onUpdated}){
- const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState("");
+ const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const [newClient,setNewClient]=useState({slug:"",name:""});
- async function refresh(){setClients(await api("/api/admin/clientes"))}
+ async function refresh(){setLoading(true);try{setClients(await api("/api/admin/clientes"))}finally{setLoading(false)}}
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
  async function createClient(e){
   e.preventDefault();setBusy("new");setError("");
@@ -45,6 +46,7 @@ export function ClientesPanel({onUpdated}){
     <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>
    </form>
   </section>
+  {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
@@ -52,15 +54,16 @@ export function ClientesPanel({onUpdated}){
       onChange={e=>toggle(c.slug,id,e.target.checked)} aria-label={"Habilitar "+label+" para "+c.name}/>
     </label>)}</div>
   </section>)}
-  {!clients.length&&!error&&<section className="card fm-manage-client">Consultando clientes…</section>}
+  {!clients.length&&loading&&<section className="card fm-manage-client"><LoadingPanel kind="table" label="Cargando clientes y módulos…"/></section>}
+  {!clients.length&&!loading&&!error&&<section className="card fm-manage-client">No hay clientes configurados.</section>}
  </div>;
 }
 const initial={email:"",name:"",role:"farmacia",pharmacies:[],active:true};
 const ROLES=[["administrador","Administrador del cliente"],["gestor","Gestor"],["farmacia","Personal de farmacia"],["colaborador","Colaborador externo"]];
 export function EquipoCliente({client,pharmacies=[]}){
- const [users,setUsers]=useState([]),[form,setForm]=useState(initial),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState("");
+ const [users,setUsers]=useState([]),[form,setForm]=useState(initial),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
  const headers={"X-Farmetrica-Cliente":client};
- async function refresh(){setUsers(await api("/api/tenant/usuarios",{headers}))}
+ async function refresh(){setLoading(true);try{setUsers(await api("/api/tenant/usuarios",{headers}))}finally{setLoading(false)}}
  useEffect(()=>{refresh().catch(e=>setFeedback(e.message))},[client]);
  async function save(e){
   e.preventDefault();setBusy(true);setFeedback("");
@@ -81,10 +84,10 @@ export function EquipoCliente({client,pharmacies=[]}){
     <div className="fm-manage-wide"><button className="btn btn-primary" disabled={busy} type="submit"><CheckCircle2 size={16}/>{busy?"Guardando…":"Guardar usuario"}</button></div>
    </form>
   </section>
-  <section className="card fm-manage-client"><div className="section-heading"><div><h2>Usuarios asignados</h2></div><span>{users.length} personas</span></div>
-   <div style={{overflowX:"auto"}}><table style={{width:"100%",textAlign:"left",borderCollapse:"collapse"}}><thead><tr>{["Correo","Rol","Farmacias","Estado",""].map(h=><th key={h} style={{padding:"11px",borderBottom:"1px solid #dcebe2"}}>{h}</th>)}</tr></thead>
-    <tbody>{users.map(u=><tr key={u.email}><td style={{padding:11}}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></td><td>{ROLES.find(x=>x[0]===u.role)?.[1]||u.role}</td><td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—"}</td><td>{u.active?"Activo":"Bloqueado"}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setForm({...u})}>Editar</button></td></tr>)}</tbody></table></div>
-   {!users.length&&<p>No hay usuarios asignados a este cliente.</p>}
+  <section className="card fm-manage-client"><div className="section-heading"><div><h2>Usuarios asignados</h2></div><span>{loading?<LoadingStatus compact label="Cargando equipo…"/>:users.length+" personas"}</span></div>
+   {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:<div style={{overflowX:"auto"}}><table style={{width:"100%",textAlign:"left",borderCollapse:"collapse"}}><thead><tr>{["Correo","Rol","Farmacias","Estado",""].map(h=><th key={h} style={{padding:"11px",borderBottom:"1px solid #dcebe2"}}>{h}</th>)}</tr></thead>
+    <tbody>{users.map(u=><tr key={u.email}><td style={{padding:11}}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></td><td>{ROLES.find(x=>x[0]===u.role)?.[1]||u.role}</td><td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—"}</td><td>{u.active?"Activo":"Bloqueado"}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setForm({...u})}>Editar</button></td></tr>)}</tbody></table></div>}
+   {!users.length&&!loading&&<p>No hay usuarios asignados a este cliente.</p>}
   </section>
  </div>;
 }

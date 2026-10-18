@@ -65,7 +65,11 @@ function columnsFor(module,pharmacyMap){
  const article=C("name","Artículo","name"),cn=C("cn","CN","cn");
  const family={key:"family",label:"Familia",filterMode:"multi",value:r=>r.family||"—"};
  const euro=(key,label)=>C(key,label,key,v=>v==null?"—":money(v)),num=(key,label)=>C(key,label,key,v=>v==null?"—":number(v));
- const common=[article,cn,pharmacy];
+ const abcd={key:"abcdClass",label:"ABCD",filterMode:"multi",
+  value:r=>r.abcdClass||"—",
+  render:r=>r.abcdClass?<span className={"fm-abcd fm-abcd-"+r.abcdClass}
+   title="Prioridad por contribución a las ventas de esta farmacia y período">{r.abcdClass}</span>:"—"};
+ const common=[article,cn,pharmacy,abcd];
  switch(module){
   case "ventas":return [...common,family,num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen estimado")];
   case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),C("puc","PUC","puc",v=>v==null?"—":money(v)),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
@@ -118,9 +122,15 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const [lastUpdated,setLastUpdated]=useState(null);
  const [asOf,setAsOf]=useState(()=>new Date());
  useEffect(()=>{
-  const onVisible=()=>{if(document.visibilityState==="visible")setAsOf(new Date())};
+  const onVisible=()=>{if(document.visibilityState==="visible"){
+    setAsOf(new Date());setReloadKey(n=>n+1);
+  }};
+  // Los informes se consultan a PostgreSQL: refresco automático sin botón de cálculo.
+  const timer=setInterval(()=>{if(document.visibilityState==="visible"){
+    setAsOf(new Date());setReloadKey(n=>n+1);
+  }},5*60*1000);
   document.addEventListener("visibilitychange",onVisible);
-  return()=>document.removeEventListener("visibilitychange",onVisible);
+  return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",onVisible)};
  },[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
  const salesModule=["dashboard","ventas"].includes(module);

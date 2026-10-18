@@ -31,33 +31,9 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
-          SET statement_timeout = '35s';
+          SET statement_timeout = '20s';
           SELECT id AS farmacia_id, nombre, codigo_origen, activo
           FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id;
-          -- Muestra de bloques físicos: evita escanear todas las ventas en producción.
-          SELECT tabla,codigo_origen_original,codigo_normalizado,filas_muestra,
-            coalesce(f.nombre,'SIN CORRESPONDENCIA') AS farmacia_asignada,f.id AS id_asignado,
-            ultimo_movimiento_muestra
-          FROM (
-            SELECT 'ventas' AS tabla,farmacia_codigo AS codigo_origen_original,
-              upper(btrim(farmacia_codigo)) AS codigo_normalizado,
-              count(*) AS filas_muestra,max(fecha)::text AS ultimo_movimiento_muestra
-              FROM ampedia.ventas TABLESAMPLE SYSTEM (0.25) GROUP BY farmacia_codigo
-            UNION ALL
-            SELECT 'compras',farmacia_codigo,upper(btrim(farmacia_codigo)),
-              count(*),max(fecha)::text
-              FROM ampedia.compras TABLESAMPLE SYSTEM (0.5) GROUP BY farmacia_codigo
-            UNION ALL
-            SELECT 'articulos',farmacia_codigo,upper(btrim(farmacia_codigo)),
-              count(*),max(sincronizado_en)::text
-              FROM ampedia.articulos TABLESAMPLE SYSTEM (0.5) GROUP BY farmacia_codigo
-            UNION ALL
-            SELECT 'proveedores',farmacia_codigo,upper(btrim(farmacia_codigo)),
-              count(*),max(sincronizado_en)::text
-              FROM ampedia.proveedores TABLESAMPLE SYSTEM (3) GROUP BY farmacia_codigo
-          ) movimientos LEFT JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
-             AND upper(btrim(f.codigo_origen))=movimientos.codigo_normalizado
-          ORDER BY tabla,codigo_normalizado,codigo_origen_original;
           SELECT tablename,attname,most_common_vals,most_common_freqs
           FROM pg_stats WHERE schemaname='ampedia'
             AND tablename IN ('ventas','compras','articulos','proveedores')

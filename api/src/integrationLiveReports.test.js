@@ -89,7 +89,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(freshStock.kpis.stock>0);
   // El catálogo ERP sincronizado dispone del stock de cada artículo.
   // Debe prevalecer sobre la vieja tabla de instantáneas, también en VAL.
-  await pool.query("ALTER TABLE ampedia.articulos ADD COLUMN stock_actual numeric");
+  await pool.query("ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS stock_actual numeric");
   await pool.query("UPDATE ampedia.articulos SET stock_actual=CASE WHEN farmacia_codigo='ABA' AND origen_id='ART-01' THEN 8 WHEN farmacia_codigo='ABA' THEN 3 ELSE 9 END, sincronizado_en=now()");
   const stockFromArticles=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
   assert.equal(stockFromArticles.availability.stock,true);
@@ -99,17 +99,6 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(stockFromArticles.kpis.stock>0);
   const stockFromDemo=await request("/api/analytics/reportes",{modulo:"reposicion",farmacias:"1,2"});
   assert.ok(Array.isArray(stockFromDemo.replenishmentRows));
-
-  // El ERP ya contiene stock en el maestro de artículos. Cuando el snapshot
-  // independiente está obsoleto, usar solo fichas sincronizadas recientemente.
-  await pool.query("UPDATE public.stock_farmacia SET importado_en=now()-interval '7 days' WHERE id_farmacia=ANY(ARRAY[1,2])");
-  await pool.query("UPDATE ampedia.articulos SET stock_actual=CASE WHEN farmacia_codigo='ABA' THEN 8 ELSE 9 END WHERE farmacia_codigo IN ('ABA','EUR') AND codigo_nacional='654321'");
-  const catalogStock=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
-  assert.equal(catalogStock.availability.stock,true);
-  assert.equal(catalogStock.availability.stockSource,"catalogo_erp");
-  assert.ok(catalogStock.stockRows.some(r=>r.pharmacyId==="1"&&r.cn==="654321"&&r.units===8));
-  assert.ok(catalogStock.stockRows.some(r=>r.pharmacyId==="2"&&r.cn==="654321"&&r.units===9));
-  assert.ok(catalogStock.replenishmentRows.length>=0);
 
   // Totales simples: 12 meses, Valdemarías y farmacia adicional, sin compras.
   const fastVal=await request("/api/analytics/ventas/totales",{

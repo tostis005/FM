@@ -5,7 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
-    paths: ["api/src/realReports.js", "api/src/salesSummary.js", "api/src/salesTotals.js", "api/src/salesInsights.js", "api/src/salesDetail.js", "web/src/salesPeriods.js", "api/src/server.js", "api/src/pharmacyCodes.js", "web/src/ModuloDemo.jsx", "web/src/reportFilterScopes.js", ".github/workflows/validate.yml"]
+    paths: ["api/**", "web/**", ".github/workflows/validate.yml"]
   workflow_dispatch:
 
 permissions:
@@ -28,6 +28,9 @@ jobs:
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
           node --check api/src/genericos.js
+          node --check api/src/genericosReales.js
+          node --check api/src/demoClients.js
+          node --check api/src/internalPassword.js
           node --check api/src/genericosReales.js
           node --check api/src/realReports.js
           node --check api/src/salesSummary.js

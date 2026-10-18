@@ -1,6 +1,7 @@
 import React,{useMemo,useState} from "react";
 import {filterSortRows,pageRows} from "./listLogic.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
+import {LoadingPanel,LoadingFrame} from "./LoadingState.jsx";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -25,7 +26,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass=""}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…"}){
   const [filters,setFilters]=useState({});
   const [sort,setSort]=useState(null);
   const [page,setPage]=useState(0);
@@ -35,6 +36,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const changeFilter=(key,value)=>{setFilters(p=>({...p,[key]:value}));setPage(0);};
   const changeSort=key=>{setSort(prev=>prev?.key!==key?{key,direction:"asc"}:prev.direction==="asc"?{key,direction:"desc"}:null);setPage(0);};
   return <>
+    <LoadingFrame loading={loading&&rows.length>0} label={loadingLabel}>
     <div className="table-scroll" role="region" tabIndex={0} aria-label={"Tabla desplazable de "+label}>
       <table className={"data-table smart-table "+tableClass}>
         <thead>
@@ -56,17 +58,18 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
           </th>)}</tr>
         </thead>
-        <tbody>{slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
+        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(pageSize,5)}/></td></tr>:slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
           tabIndex={onRowClick?0:undefined} aria-label={onRowClick?"Abrir registro":undefined}
           onKeyDown={onRowClick?e=>{if(e.target===e.currentTarget&&(e.key==="Enter"||e.key===" ")){e.preventDefault();onRowClick(row);}}:undefined}
           onClick={onRowClick?()=>onRowClick(row):undefined}>
           {columns.map(col=><td key={col.key}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
         </tr>)}</tbody>
       </table>
-      {!filtered.length&&<div className="empty-state"><strong>{emptyText}</strong>{rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
+      {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </div>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
     <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={setPage}
-      onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label={label}/>
+      onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label={label} loading={loading}/>
+    </LoadingFrame>
   </>;
 }

@@ -5,7 +5,22 @@
 -- IF NOT EXISTS vuelve idempotentes las ejecuciones sucesivas. El workflow
 -- comprueba indisvalid / indisready al terminar y no silencia índices inválidos.
 
-SET lock_timeout = '60s';
+-- CREATE INDEX CONCURRENTLY puede dejar un índice incompleto tras deadlock,
+-- lock_timeout o cancelación. Borrar SOLAMENTE nuestros seis índices inválidos
+-- antes de reiniciar; los válidos y los PK nunca se tocan.
+\set ON_ERROR_STOP on
+SET lock_timeout = '12s';
+SELECT format('DROP INDEX CONCURRENTLY IF EXISTS %I.%I;',ns.nspname,idx.relname)
+FROM pg_class idx
+JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+JOIN pg_index ix ON ix.indexrelid=idx.oid
+WHERE ns.nspname='ampedia'
+  AND idx.relname=ANY(ARRAY[
+   'fm_ventas_codigo_fecha_idx','fm_articulos_codigo_id_sync_idx',
+   'fm_compras_codigo_fecha_idx','fm_proveedores_codigo_id_sync_idx',
+   'fm_ventas_codigo_articulo_fecha_idx','fm_compras_codigo_articulo_fecha_idx'])
+  AND (NOT ix.indisvalid OR NOT ix.indisready)
+\gexec
 SET statement_timeout = '40min';
 
 -- Dashboard, informes y detalle: códigos ERP normalizados + ventana de fecha.

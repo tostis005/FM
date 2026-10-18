@@ -145,6 +145,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const familyOptions=[...new Set(tables.articulos.map(a=>a.familia))].sort().map(v=>({label:v,value:v}));
  const pharmacyOptions=pharmacies.map(p=>({label:p.name,value:String(p.id)}));
  const change=(field,value)=>setFilters(f=>({...f,[field]:value}));
+ const pickPeriod=value=>setFilters(f=>{
+  if(value!=="custom")return {...f,period:value};
+  const initial=resolveSalesPeriod("this_month",new Date(),{},tz);
+  return {...f,period:"custom",customFrom:f.customFrom||initial.from,customTo:f.customTo||initial.to};
+ });
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null;
  const isFetchingSales=(loading||filters.search!==searchReady)&&salesModule&&!realTables&&period.valid;
@@ -186,14 +191,35 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   <div className="fm-demo-filters">
    <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>change("pharmacyIds",v)}/></div>
    {familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
-   <label><span>Periodo</span><select value={filters.period} onChange={e=>change("period",e.target.value)}><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label>
+   <label><span>Periodo</span><select value={filters.period} onChange={e=>salesModule?pickPeriod(e.target.value):change("period",e.target.value)}>
+    {(salesModule?SALES_PERIODS:[["3","3 meses"],["6","6 meses"],["12","12 meses"]]).map(([key,label])=><option key={key} value={key}>{label}</option>)}
+   </select></label>
    <label className="fm-demo-search"><span>Artículo o CN</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </div>
-  <div className="fm-demo-kpis" aria-busy={isFetchingSales}>{cards.map(c=>{
+  {salesModule&&<div className="fm-sales-timebar">
+   <div className="fm-sales-shortcuts" role="group" aria-label="Períodos rápidos de ventas">
+    {SALES_PERIODS.slice(0,5).map(([key,label])=><button key={key} type="button" className={"fm-sales-chip "+(filters.period===key?"is-selected":"")}
+      aria-pressed={filters.period===key} onClick={()=>pickPeriod(key)}>{label}</button>)}
+   </div>
+   <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}
+     onClick={()=>setReloadKey(x=>x+1)}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
+   {period.valid&&<span className="fm-sales-period-info">{period.from===period.to?period.from:period.from+" → "+period.to}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
+  </div>}
+  {salesModule&&filters.period==="custom"&&<div className="fm-sales-custom-dates">
+   <label>Desde<input aria-label="Ventas desde" type="date" value={filters.customFrom} onChange={e=>change("customFrom",e.target.value)}/></label>
+   <label>Hasta<input aria-label="Ventas hasta" type="date" value={filters.customTo} onChange={e=>change("customTo",e.target.value)}/></label>
+  </div>}
+  {salesModule&&!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
+  <div className="fm-demo-kpis">{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
    return <button key={c.label+c.key} type="button" className={"card fm-demo-kpi fm-kpi-link "+(active?"fm-kpi-active":"")}
-    disabled={!active} onClick={()=>go(c.link)} aria-label={active?c.label+": abrir "+TITLES[c.link]:c.label}>
-    <span>{c.label}</span><strong>{isFetchingSales&&["ventas","unidades","articulosVendidos"].includes(c.key)?<SkeletonLine width="85%" height="29px"/>:canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>{active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
+    disabled={!active||isFetchingSales} aria-busy={isFetchingSales} onClick={()=>go(c.link)} aria-label={c.label+(isFetchingSales?", cargando":active?": abrir "+TITLES[c.link]:"")}>
+    <span>{c.label}</span>
+    {isFetchingSales?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
+       <span className="fm-load-spinner" aria-hidden="true"/><small>Cargando…</small>
+     </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>}
+    {!isFetchingSales&&salesModule&&c.key==="margen"&&!realTables&&<small>Sin datos de costes</small>}
+    {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>
   {isDashboard&&<section className="fm-module-links" aria-label="Acceso a módulos">
@@ -201,9 +227,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   </section>}
   {salesError&&<p role="alert" className="fm-inline-status">{salesError}</p>}
   {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label="Consultando ventas y actualizando indicadores…"/></div>}
-  {!isAssistant&&(chart.length>0||isFetchingSales)&&<section className="card fm-demo-graph" aria-busy={isFetchingSales}>
+  {!isAssistant&&(chart.length>0||isFetchingSales||salesModule)&&<section className="card fm-demo-graph" aria-busy={isFetchingSales}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    {isFetchingSales?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {isFetchingSales?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:!chart.length?<div className="fm-sales-no-chart">No hay ventas registradas para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>

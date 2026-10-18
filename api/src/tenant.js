@@ -77,23 +77,23 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         "SELECT 1 FROM pg_namespace WHERE nspname=$1",[slug]);
       if(exists.length){await db.query("ROLLBACK");return res.status(409).json({error:"Ya existe un esquema con ese identificador"});}
       await db.query(`CREATE SCHEMA "${slug}"`);
-      await db.query(`CREATE TABLE "${slug}".lineaventa (
-        idventa bigint NOT NULL,
-        idnlinea bigint NOT NULL,
-        farmacia_origen text NOT NULL,
-        codigo text NOT NULL,
-        descripcion text,
-        fechahora timestamptz NOT NULL,
-        cantidad numeric(18,3) NOT NULL DEFAULT 0,
-        numerodoc text,
-        xvend_idvendedor text,
-        pvp numeric(18,4),
-        importebruto numeric(18,4),
-        descuentolinea numeric(18,4),
-        importeneto numeric(18,4),
-        PRIMARY KEY (farmacia_origen,idventa,idnlinea)
+      // Contrato de ventas normalizado, independiente del origen o país.
+      await db.query(`CREATE TABLE "${slug}".ventas (
+        farmacia_codigo text NOT NULL,
+        origen_id text NOT NULL,
+        fecha timestamp NOT NULL,
+        articulo_id text,
+        unidades numeric(18,4) NOT NULL DEFAULT 0,
+        precio_unitario numeric(18,4),
+        importe numeric(18,4) NOT NULL DEFAULT 0,
+        numero_ticket text,
+        descuento_linea numeric(18,4),
+        descuento_operacion numeric(18,4),
+        sincronizado_en timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (farmacia_codigo,origen_id)
       )`);
-      await db.query(`CREATE INDEX ON "${slug}".lineaventa (fechahora,codigo)`);
+      await db.query(`CREATE INDEX ON "${slug}".ventas (farmacia_codigo,fecha,articulo_id)`);
+      await db.query(`CREATE INDEX ON "${slug}".ventas (sincronizado_en DESC)`);
       await db.query(`CREATE TABLE "${slug}".productos (
         id text PRIMARY KEY, cn text, descripcion text NOT NULL,
         familia text, activo boolean NOT NULL DEFAULT true
@@ -113,6 +113,20 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         fecha_referencia timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY(farmacia_id,producto_id)
       )`);
+      await db.query(`CREATE TABLE "${slug}".fm_promociones (
+        id text PRIMARY KEY,
+        documento jsonb NOT NULL,
+        fuente text,creado_por text,actualizado_por text,
+        creado_en timestamptz NOT NULL DEFAULT now(),
+        actualizado_en timestamptz NOT NULL DEFAULT now()
+      )`);
+      await db.query(`CREATE TABLE "${slug}".fm_promocion_revisiones (
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        promocion_id text NOT NULL,documento_anterior jsonb NOT NULL,
+        cambiado_por text NOT NULL,cambiado_en timestamptz NOT NULL DEFAULT now()
+      )`);
+      await db.query(`CREATE INDEX ON "${slug}".fm_promociones (actualizado_en DESC)`);
+      await db.query(`CREATE INDEX ON "${slug}".fm_promocion_revisiones (promocion_id,cambiado_en DESC)`);
       await db.query("INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos) VALUES($1,$2,$1)",
         [slug,name]);
       await db.query("INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado) SELECT $1,clave,false FROM farmetrica.modulos",[slug]);

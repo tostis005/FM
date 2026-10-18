@@ -28,6 +28,8 @@ jobs:
           node --check api/src/server.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/syncStatus.js
+          node --check api/src/promocionesTenant.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js
           node --test api/src/publicLeads.test.js api/src/privacyRequests.test.js
@@ -82,7 +84,8 @@ jobs:
             docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
               -c "SELECT CASE WHEN EXISTS(
                 SELECT 1 FROM information_schema.columns WHERE table_schema IN ('\''farmatic'\'','\''ampedia'\'')
-                AND table_name='\''lineaventa'\'' AND column_name='\''farmacia_origen'\''
+                AND ((table_name='\''lineaventa'\'' AND column_name='\''farmacia_origen'\'')
+                  OR (table_name='\''ventas'\'' AND column_name='\''farmacia_codigo'\''))
               ) THEN 1 ELSE 0 END;" | grep -qx 1
           '
 
@@ -108,8 +111,11 @@ jobs:
           state=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
-              -c "SELECT CASE WHEN to_regclass('\''ampedia.lineaventa'\'') IS NOT NULL AND
-                          EXISTS (SELECT 1 FROM farmetrica.clientes WHERE slug='\''ampedia'\'' AND esquema_datos='\''ampedia'\'')
+              -c "SELECT CASE WHEN
+                          (to_regclass('\''ampedia.lineaventa'\'') IS NOT NULL
+                           OR to_regclass('\''ampedia.ventas'\'') IS NOT NULL)
+                          AND EXISTS (SELECT 1 FROM farmetrica.clientes
+                            WHERE slug='\''ampedia'\'' AND esquema_datos='\''ampedia'\'')
                       THEN '\''ALREADY'\'' WHEN to_regclass('\''farmatic.lineaventa'\'') IS NOT NULL
                           AND to_regclass('\''ampedia.lineaventa'\'') IS NULL THEN '\''RENAME'\'' ELSE '\''BLOCK'\'' END;"
           ')
@@ -121,6 +127,12 @@ jobs:
             echo "::error::Estado inesperado de los esquemas. No se altera la base de datos."
             exit 1
           fi
+
+      - name: Preparar conservación de promociones de Ampedia
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
+            < api/src/migrations/009_promociones_cliente.sql
 
       - name: Actualizar API y web en el VPS
         run: |

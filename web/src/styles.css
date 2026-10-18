@@ -725,3 +725,19 @@ html,body{overflow-x:clip}
 .fm-traffic-table th,.fm-traffic-table td{padding:9px 5px;text-align:left;border-bottom:1px solid #edf1ed;overflow-wrap:anywhere}
 .fm-traffic-table td:last-child,.fm-traffic-table th:last-child{text-align:right;width:70px}
 @media(max-width:760px){.fm-traffic-columns{grid-template-columns:1fr}.fm-traffic-kpis{grid-template-columns:1fr}}
+
+
+/* Monitor de la recepción de ventas (consulta privada, solo lectura) */
+.fm-sync{display:grid;gap:18px}
+.fm-sync .page-header{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.fm-sync .page-header p{margin-top:6px;color:var(--text-muted,#64748b)}
+.fm-sync-overview{padding:22px}
+.fm-sync-state{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:18px;color:var(--text,#1f4534)}
+.fm-sync-state span{font-size:12px;font-weight:400;color:#64748b;margin-left:auto}
+.fm-sync-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:18px}
+.fm-sync-metrics>div{display:flex;flex-direction:column;gap:8px}
+.fm-sync-metrics span{font-size:12px;color:#6b7d75}
+.fm-sync-metrics strong{font-size:18px;font-variant-numeric:tabular-nums}
+.fm-sync .data-table td{white-space:nowrap;font-variant-numeric:tabular-nums}
+.fm-sync-note{font-size:13px;color:#64748b;margin:16px 0 0}
+@media(max-width:600px){.fm-sync-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-sync-state span{margin-left:0;flex-basis:100%}}

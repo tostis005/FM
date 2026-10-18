@@ -12,17 +12,17 @@ const INITIAL={start:"",end:""};
 const TICKET_COLUMNS=[
   ["pharmacy","Farmacia",v=>v.pharmacyName||v.pharmacyCode],
   ["seller","Vendedor ID",v=>v.sellerId||"—"],
-  ["saleId","IdVenta",v=>v.saleId],
+  ["saleId","ID origen",v=>v.saleId],
   ["ticket","Ticket",v=>v.ticket||"—"],
   ["at","Fecha y hora",v=>date(v.at)],
-  ["cn","CN",v=>v.cn],
+  ["cn","Artículo",v=>v.cn],
   ["description","Descripción",v=>v.description],
-  ["pvp","PVP",v=>money(v.pvp)],
+  ["pvp","Precio unidad",v=>v.pvp==null?"—":money(v.pvp)],
   ["quantity","Unidades",v=>num(v.quantity)],
-  ["gross","Bruto",v=>money(v.gross)],
-  ["lineDiscount","Descuento",v=>money(v.lineDiscount)],
+  ["gross","Bruto",v=>v.gross==null?"—":money(v.gross)],
+  ["lineDiscount","Descuento",v=>v.lineDiscount==null?"—":money(v.lineDiscount)],
   ["net","Neto",v=>money(v.net)],
-  ["discountPercent","% Dto.",v=>(Number(v.gross)?Math.round(Math.abs(Number(v.lineDiscount)/Number(v.gross))*1000)/10:0)+"%"],
+  ["discountPercent","% Dto.",v=>v.gross==null||v.lineDiscount==null?"—":(Number(v.gross)?Math.round(Math.abs(Number(v.lineDiscount)/Number(v.gross))*1000)/10:0)+"%"],
 ];
 
 export default function DetalleVentas({promotions,pharmacies,connected}){

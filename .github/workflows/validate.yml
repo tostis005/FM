@@ -22,6 +22,8 @@ jobs:
           node --check api/src/server.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/syncStatus.js
+          node --check api/src/promocionesTenant.js
           python3 -m py_compile deploy/bootstrap-temp-admin-vps.py
           python3 -m py_compile api/src/setup_temp_login.py
           docker run --rm -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
@@ -80,6 +82,22 @@ jobs:
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql
           psql_test < api/src/migrations/004_ampedia_cutover_MANUAL.sql
           psql_test --single-transaction < api/src/migrations/003_multitenant.sql
+          psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql
+          psql_test -At -c "INSERT INTO ampedia.fm_promociones(id,documento,fuente) VALUES
+            ('PRUEBA_SYNC',jsonb_build_object('id','PRUEBA_SYNC','name','Campaña test'),'CI');
+            CREATE TABLE ampedia.ventas (
+              farmacia_codigo text NOT NULL,origen_id text NOT NULL,
+              fecha timestamp NOT NULL,articulo_id text,unidades numeric,
+              importe numeric,precio_unitario numeric,numero_ticket text,
+              descuento_linea numeric,descuento_operacion numeric,
+              sincronizado_en timestamptz NOT NULL DEFAULT now(),
+              PRIMARY KEY(farmacia_codigo,origen_id)
+            );
+            INSERT INTO ampedia.ventas(farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
+            VALUES ('ABA','1',now(),'ART-01',2,10);" >/dev/null
+          psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql
+          test "$(psql_test -At -c "SELECT count(*) FROM ampedia.fm_promociones WHERE id='PRUEBA_SYNC'")" = 1
+          test "$(psql_test -At -c "SELECT count(*) FROM ampedia.ventas WHERE farmacia_codigo='ABA' AND articulo_id='ART-01'")" = 1
           result=$(psql_test -At -c "SELECT
             (SELECT count(*) FROM ampedia.lineaventa) = 1
             AND (SELECT count(*) FROM farmatic.lineaventa) = 1

@@ -93,3 +93,12 @@ export const loadTicketLines = (filters) => request("/api/ventas/detalle", {
   method: "POST",
   body: JSON.stringify(filters),
 });
+
+
+// Promociones compartidas del esquema operativo de cada cliente.
+// Las campañas antiguas del navegador se conservan y se importan explícitamente.
+export const loadStoredPromotions = () => request("/api/tenant/promociones");
+export const saveStoredPromotion = (promotion) => request(
+  "/api/tenant/promociones/"+encodeURIComponent(promotion.id), {
+    method:"PUT",body:JSON.stringify({promotion}),
+  });

@@ -247,9 +247,10 @@ export function setupRealReports(app,pool,{requireTenant}){
          AND ($3::text='' OR a.codigo_nacional ILIKE '%'||$3||'%'
            OR a.origen_id ILIKE '%'||$3||'%'
            OR a.nombre ILIKE '%'||$3||'%')
+         AND (cardinality($5::text[])=0 OR coalesce(a.familia,'')=ANY($5::text[]))
        GROUP BY f.id,coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))
        ORDER BY sum(a.stock_actual) DESC LIMIT ${rowLimit}`,
-       [codes,pharmacyIds,f.search,req.context.client.slug]);
+       [codes,pharmacyIds,f.search,req.context.client.slug,f.families]);
      stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,
        need:null,needValue:null}));

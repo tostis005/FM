@@ -26,7 +26,7 @@ const TICKET_COLUMNS=[
   ["discountPercent","% Dto.",v=>v.gross==null||v.lineDiscount==null?"—":(Number(v.gross)?Math.round(Math.abs(Number(v.lineDiscount)/Number(v.gross))*1000)/10:0)+"%"],
 ];
 
-export default function DetalleVentas({promotions,pharmacies,connected}){
+export default function DetalleVentas({promotions,pharmacies,connected,loading=false}){
   const [promoId,setPromoId]=useState("");
   const [draft,setDraft]=useState(INITIAL);
   const [applied,setApplied]=useState(INITIAL);
@@ -74,6 +74,7 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
     e.preventDefault();setApplied({...draft});setPage(0);
   }
 
+  if(loading)return <section className="card lab-detail-panel"><div className="section-heading"><h2>Consulta de tickets</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
   return <section className="card lab-detail-panel">
     <div className="section-heading"><div><h2>Consulta de tickets</h2></div></div>
     {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas una sesión de administrador y la conexión a PostgreSQL.</div>}

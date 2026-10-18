@@ -182,8 +182,30 @@ export function setupSalesDetail(app,pool,{requireTenant}){
    const schema=req.context.client.schema;
    if(!VALID.test(schema))throw Error("Esquema no permitido");
    if(!ids.length)return res.json({products:[],hasMore:false,page});
+   let source={articles:"normalized",purchases:"normalized"};
+   if(req.context.client.slug!=="ampedia"){
+    const {rows:fields}=await pool.query(
+      "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[])",
+      [schema,["ventas","articulos","productos","compras"]]);
+    const byTable=new Map();
+    for(const field of fields){
+     if(!byTable.has(field.table_name))byTable.set(field.table_name,new Set());
+     byTable.get(field.table_name).add(field.column_name);
+    }
+    const has=(table,...cols)=>cols.every(c=>byTable.get(table)?.has(c));
+    if(!has("ventas","farmacia_codigo","articulo_id","fecha","unidades","importe"))
+     return res.status(422).json({error:"No hay ventas normalizadas sincronizadas para este cliente"});
+    source={
+     articles:has("articulos","farmacia_codigo","origen_id","codigo_nacional",
+       "nombre","familia","pmc","pvp","sincronizado_en")?"normalized":
+       has("productos","id","descripcion","cn","familia")?"legacy":"none",
+     purchases:has("compras","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario")?
+       "normalized":
+       has("compras","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"
+    };
+   }
    const pageSize=200;
-   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction),
+   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
      pageSize+1,(page-1)*pageSize]);
    res.json({products:rows.slice(0,pageSize).map(x=>({

@@ -41,7 +41,7 @@ export function resolveSalesPeriod(period,now=new Date(),custom={},timeZone="Eur
    const start=new Date(custom.from+"T00:00:00Z"),end=new Date(custom.to+"T00:00:00Z");
    if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||iso(start)!==custom.from||iso(end)!==custom.to||start>end)
     return {valid:false,reason:"La fecha final debe ser igual o posterior a la inicial."};
-   if((end-start)/86400000>730)return {valid:false,reason:"El período máximo es de dos años."};
+   if((end-start)/86400000>366)return {valid:false,reason:"El período máximo es de 12 meses."};
    from=start;to=end;
    const days=(end-start)/86400000;
    granularity=days<=1?"hour":days<=90?"day":"month";

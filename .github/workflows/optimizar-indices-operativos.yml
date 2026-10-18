@@ -1,5 +1,8 @@
 name: Crear índices operativos de Farmétrica
 on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/optimizar-indices-operativos.yml", "ops/indices-consultas-operativas.sql"]
   workflow_run:
     workflows: ["Build and deploy Farmetrica SaaS"]
     types: [completed]
@@ -12,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   indices:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -63,10 +66,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=20 -o ServerAliveCountMax=15 "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
-            < ops/indices-consultas-operativas.sql
+          # Ante DDL/ETL concurrentes, PostgreSQL puede rechazar una construcción
+          # con deadlock. Reintentar sin bloquear a los sincronizadores y limpiar
+          # índices invalidos de intentos anteriores desde el SQL controlado.
+          for attempt in 1 2 3; do
+            if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ServerAliveInterval=20 -o ServerAliveCountMax=15 "$VPS_USER@$VPS_HOST" \
+                'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+                < ops/indices-consultas-operativas.sql; then
+              echo "La construcción concurrente terminó (intento $attempt)."
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::Creación de índices cancelada tras tres intentos; revisar bloqueos de DDL/ETL."
+              exit 1
+            fi
+            delay=$((attempt*30))
+            echo "::warning::Conflicto con otra transacción; reintento tras $delay segundos."
+            sleep "$delay"
+          done
       - name: Comprobar todos los índices válidos
         shell: bash
         run: |

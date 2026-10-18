@@ -9,6 +9,7 @@ import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
 import { setupRealReports } from "./realReports.js";
 import { setupPricePolicy } from "./pricePolicy.js";
+import { setupGenericosReales } from "./genericosReales.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
@@ -81,6 +82,7 @@ setupTenantPromotions(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
 setupRealReports(app,pool,{requireTenant});
 setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
+setupGenericosReales(app,pool,{requireTenantModule});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",

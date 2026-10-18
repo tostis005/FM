@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupRealReports} from "./realReports.js";
 
-function create(){
+function create({missingCost=false,truncatedBuys=false}={}){
  const routes={};const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  const tableFields={
   articulos:["farmacia_codigo","origen_id","nombre","codigo_nacional","familia","pvp","pmc"],
@@ -21,13 +21,18 @@ function create(){
   if(sql.includes("SELECT DISTINCT familia"))return {rows:[{familia:"Antibióticos"}]};
   if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".ventas"))
    return {rows:[{pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
-    pvp:6,pmc:1,laboratory:"Lab A",units:20,value:120}]};
+    pvp:6,pmc:missingCost?0:1,laboratory:"Lab A",units:20,value:120}]};
   if(sql.includes('SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId"'))
    return {rows:[{pharmacyId:"1",providerId:"2",name:"Distribuidora",value:60,units:30,products:1}]};
-  if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".compras"))
-   return {rows:[{pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
+  if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".compras")){
+   if(missingCost)return {rows:[]};
+   if(sql.includes('sum(t.cost)::float8 AS cost'))
+    return {rows:[{pharmacyId:"1",cn:"654321",cost:300,pricedUnits:100}]};
+   const sample={pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
     pvp:6,pmc:1,laboratory:"Lab A",providerId:"2",supplier:"Distribuidora",
-    units:30,value:60,cost:45,pricedUnits:30,lines:4}]};
+    units:30,value:60,cost:45,pricedUnits:30,lines:4};
+   return {rows:truncatedBuys?Array.from({length:3000},(_,i)=>({...sample,providerId:String(i)})):[sample]};
+  }
   if(sql.includes("date_trunc('month'")&&sql.includes(".ventas"))
    return {rows:[{month:"2026-10",units:20,amount:120}]};
   if(sql.includes("date_trunc('month'")&&sql.includes(".compras"))
@@ -161,4 +166,27 @@ test("compra y proveedores ordenan globalmente ANTES del LIMIT, sin interpolar t
  const a=create();
  const invalid=await a.call({query:{...a.req.query,orden:"value;DROP"}});
  assert.equal(invalid.status,400);
+});
+
+test("rentabilidad no oculta ventas cuando no existe un coste verificable",async()=>{
+ const {call,req}=create({missingCost:true});
+ const {result,status}=await call({query:{...req.query,modulo:"rentabilidad"}});
+ assert.equal(status,200);
+ assert.equal(result.salesRows.length,1);
+ assert.equal(result.profitRows.length,1);
+ assert.equal(result.profitRows[0].margin,null);
+ assert.equal(result.profitRows[0].purchaseCost,null,"PMC 0 no equivale a coste de adquisición gratuito");
+ assert.equal(result.kpis.margen,null,"no publicar margen inventado");
+ assert.equal(result.kpis.coberturaCostes,0);
+});
+test("margen no depende del top-3000 de compras ordenado por otro campo",async()=>{
+ const {call,req,queries}=create({truncatedBuys:true});
+ const {result,status}=await call({query:{...req.query,modulo:"rentabilidad"}});
+ assert.equal(status,200);
+ assert.equal(result.availability.rowsTruncated,true);
+ assert.equal(result.salesRows[0].purchaseCost,3);
+ assert.equal(result.salesRows[0].margin,60);
+ assert.equal(result.kpis.margen,60,"suma calculada con costes completos y ventas completas");
+ assert.ok(queries.some(x=>x.sql.includes('sum(t.cost)::float8 AS cost')),
+  "calcular costes de todo el universo, independientemente del orden y del LIMIT");
 });

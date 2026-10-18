@@ -8,6 +8,7 @@ import { setupTenant } from "./tenant.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
 import { setupRealReports } from "./realReports.js";
+import {setupSalesSummary} from "./salesSummary.js";
 import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
@@ -82,6 +83,7 @@ setupSyncStatus(app,pool,{requireTenant});
 setupTenantPromotions(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
 setupRealReports(app,pool,{requireTenant});
+setupSalesSummary(app,pool,{requireTenant});
 setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
 setupGenericosReales(app,pool,{requireTenantModule});
 

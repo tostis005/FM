@@ -1,3 +1,4 @@
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import React,{useEffect,useState,useCallback,useRef} from "react";
 import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
@@ -62,18 +63,18 @@ export default function SyncVentas({client,pharmacies=[]}){
   {status?.tableExists&&stats&&<>
    <section className="card">
     <div className="section-heading"><h2>Farmacias identificadas en {status.schema}.ventas</h2><Database size={19}/></div>
-    <div className="table-scroll"><table className="data-table"><thead><tr>
+    <HorizontalTableScroll className="table-scroll" label="sincronización"><table className="data-table"><thead><tr>
      <th>Farmacia</th><th>Líneas recibidas</th><th>Última recepción</th><th>Última venta</th>
     </tr></thead><tbody>{(status.pharmacies||[]).map(p=><tr key={p.codigo}>
      <td><strong>{pharmacyName(p.codigo)}</strong></td><td>{n(p.total)}</td>
      <td>{date(p.ultima_recepcion)}</td><td>{date(p.ultima_venta)}</td>
     </tr>)}</tbody></table>
     {!status.pharmacies?.length&&<p className="fm-sync-note">No hay ventas correspondientes a las farmacias configuradas para este cliente.</p>}
-    </div>
+    </HorizontalTableScroll>
    </section>
    <section className="card">
     <div className="section-heading"><h2>Últimas 20 líneas sincronizadas</h2></div>
-    <div className="table-scroll"><table className="data-table"><thead><tr>
+    <HorizontalTableScroll className="table-scroll" label="sincronización"><table className="data-table"><thead><tr>
      <th>Recepción</th><th>Farmacia</th><th>ID origen</th><th>Fecha venta</th><th>Artículo</th>
      <th>Unidades</th><th>Precio unidad</th><th>Importe</th><th>Descuento línea</th><th>Descuento operación</th>
     </tr></thead><tbody>{(status.preview||[]).map((v,i)=><tr key={v.origen_id+"-"+i}>
@@ -84,7 +85,7 @@ export default function SyncVentas({client,pharmacies=[]}){
      <td>{v.descuento_operacion==null?"—":n(v.descuento_operacion)}</td>
     </tr>)}</tbody></table>
     {!status.preview?.length&&<p className="fm-sync-note">Todavía no se han recibido líneas de venta.</p>}
-    </div>
+    </HorizontalTableScroll>
    </section>
   </>}
   </LoadingFrame>

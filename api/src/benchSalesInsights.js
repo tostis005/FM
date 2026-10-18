@@ -2,6 +2,7 @@
 import pg from "pg";
 import {buildRecentProductCountSQL} from "./salesInsights.js";
 import {buildSalesTotalsSql} from "./salesTotals.js";
+import {buildSalesDetailSQL} from "./salesDetail.js";
 if(process.env.FM_BENCHMARK_READONLY!=="1")throw Error("Solo benchmarking explícito");
 const db=new pg.Client({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:5000});
 const cases=[["Valdemarías",["VAL"]],["Red",["ABA","EUR","BUE","EST","VAL"]]];
@@ -11,6 +12,16 @@ try{
  await db.query("SET LOCAL statement_timeout='20000ms'");
  await db.query("SET LOCAL lock_timeout='4000ms'");
  for(const [name,codes] of cases){
+  const pharmacyIds=codes.map(code=>String(({ABA:1,EUR:2,BUE:3,EST:4,VAL:5})[code]));
+  const tPage=process.hrtime.bigint();
+  try{
+   const result=await db.query(buildSalesDetailSQL("ampedia"),
+     ["2025-11-01","2026-10-18",codes,pharmacyIds,"",[],201,0]);
+   console.log(name+" tabla primera página ABCD y margen: "+
+    (Number(process.hrtime.bigint()-tPage)/1e6).toFixed(0)+
+    " ms; "+result.rows.length+" artículos paginados");
+  }catch(error){console.log(name+" tabla: ERROR "+(error.code||error.name));throw error;}
+
   for(const [label,sql,args] of [
     ["recuento 12 meses",buildRecentProductCountSQL("ampedia"),[codes,"2025-11-01","2026-10-18"]],
     ["ventas 5 años",buildSalesTotalsSql("ampedia","month"),["2021-11-01","2026-10-18",codes]],

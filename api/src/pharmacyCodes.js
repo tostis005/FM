@@ -7,8 +7,14 @@ export function pharmacyDataCodeSQL(alias="f"){
    AND upper(btrim(${alias}.codigo_origen)) IN ('POL','VAL') THEN 'VAL'
    ELSE upper(btrim(${alias}.codigo_origen)) END)`;
 }
-export function decoratePharmacy(slug,pharmacy){
+export function decoratePharmacy(slug,pharmacy,{demo=false,ordinal=0}={}){
  const master=String(pharmacy.sourceCode||"").trim().toUpperCase();
+ if(demo){
+  const fake="DEMO"+String(ordinal||Number(pharmacy.id)).padStart(2,"0");
+  return {...pharmacy,sourceCode:fake,displayCode:fake,
+    databaseCode:master,sourceHost:"",sourceDatabase:"",
+    name:pharmacy.name};
+ }
  const isVal=slug==="ampedia"&&Number(pharmacy.id)===5&&["POL","VAL"].includes(master);
  return {
   ...pharmacy,

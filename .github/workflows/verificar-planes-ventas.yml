@@ -90,6 +90,23 @@ jobs:
               AND v.fecha>=DATE '2026-07-18' AND v.fecha<DATE '2026-10-19'
               AND a.origen_id IS NOT NULL
           ) AS articulos_encontrados;
+          \echo '=== Plan SUM directo 12 meses Valdemarías sin joins ==='
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
+          SELECT sum(importe),sum(unidades)
+          FROM ampedia.ventas
+          WHERE upper(btrim(farmacia_codigo))='VAL'
+            AND fecha >= DATE '2025-11-01' AND fecha < DATE '2026-10-19';
+          \echo '=== Plan SUM por mes 12 meses Valdemarías sin joins ==='
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
+          SELECT date_trunc('month',fecha) AS mes,sum(importe),sum(unidades)
+          FROM ampedia.ventas
+          WHERE upper(btrim(farmacia_codigo))='VAL'
+            AND fecha >= DATE '2025-11-01' AND fecha < DATE '2026-10-19'
+          GROUP BY 1;
+          \echo '=== Estadísticas planificación (sin datos de movimientos) ==='
+          SELECT relname,n_live_tup,n_dead_tup,n_mod_since_analyze,last_analyze,last_autoanalyze,
+             seq_scan,idx_scan,pg_size_pretty(pg_relation_size(relid)) AS tabla_bytes
+          FROM pg_stat_user_tables WHERE schemaname='ampedia' AND relname='ventas';
           \echo '=== Compras Abadía: filtro por código ERP y día ==='
           EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
           SELECT count(*),sum(importe)

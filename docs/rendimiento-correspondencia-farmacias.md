@@ -10,9 +10,9 @@ Se consultaron **metadatos y estadísticas** (sin acceder a tickets ni datos per
 | Europa (2) | `EUR` | `EUR` |
 | Buenavista (3) | `BUE` | `BUE` |
 | Estación (4) | `EST` | `EST` |
-| Valdemarías (5) | `POL` **incorrecto** | `VAL` **real** |
+| Valdemarías (5) | `POL` **código público** | `VAL` **código real del sincronizador** |
 
-`pg_stats` detecta `VAL` en `ampedia.ventas`, `ampedia.articulos` y `ampedia.proveedores`. La migración `012_valdemarias_val.sql` actualiza de forma idempotente y acotada los dos catálogos de farmacias (`farmetrica.farmacias` y `public.farmacias`) sin mover, borrar ni transformar compras, artículos ni ventas. La interfaz usa `VAL` también en el catálogo de respaldo. El maestro provisional `POL` impedía enlazar esos movimientos al ID 5.
+`pg_stats` detecta `VAL` en `ampedia.ventas`, `ampedia.articulos` y `ampedia.proveedores`. **No se modifican las tablas maestras** ni los identificadores de usuario: Valdemarías conserva `POL` como código visible y Farmétrica resuelve explícitamente `VAL` como código del sincronizador para el cliente `ampedia`, farmacia 5. Esto corrige los cruces sin alterar registros ni otros clientes.
 
 **Cobertura de datos:** las estadísticas actuales de `ampedia.compras` solo incluyen `ABA`; no debe interpretarse la ausencia de compras en Valdemarías como fallo de código ni inventarse compras. La tabla `public.stock_farmacia` no tiene filas de existencias para ninguna de las cinco farmacias; las pantallas de stock y reposición deben seguir mostrando ausencia de instantánea.
 
@@ -20,7 +20,7 @@ Se consultaron **metadatos y estadísticas** (sin acceder a tickets ni datos per
 
 La auditoría del catálogo `pg_index` confirmó que `ampedia.ventas`, `ampedia.compras`, `ampedia.articulos` y `ampedia.proveedores` tenían únicamente sus índices primarios. No existían índices por **fecha, farmacia normalizada, artículo y proveedor**. Una agrupación exhaustiva de fuentes superó un timeout de 110 segundos. No implica que una consulta individual siempre tarde 110 segundos, pero es una señal inequívoca de que hay recorridos masivos costosos.
 
-El SQL `013_indices_consultas_operativas.sql` crea seis índices B-tree **CONCURRENTLY**, sin bloquear las altas de las sincronizaciones. Las claves funcionales reproducen `upper(btrim(farmacia_codigo))` usado por la API (un índice simple sobre `farmacia_codigo` no cubriría igual ese filtro):
+El SQL `ops/indices-consultas-operativas.sql` crea seis índices B-tree **CONCURRENTLY**, sin bloquear las altas de las sincronizaciones. Las claves funcionales reproducen `upper(btrim(farmacia_codigo))` usado por la API (un índice simple sobre `farmacia_codigo` no cubriría igual ese filtro):
 
 1. Ventas: (farmacia normalizada, fecha DESC).
 2. Artículos: (farmacia normalizada, ID de origen, sincronizado_en DESC) para los LATERAL del catálogo.
@@ -33,8 +33,8 @@ El script reanaliza estadísticas del optimizador tras crear los índices. Debid
 
 ## Comprobaciones de aceptación
 
-- `farmetrica.farmacias` y `public.farmacias`: ID 5 tiene código `VAL`.
+- `farmetrica.farmacias` y `public.farmacias`: el ID 5 conserva el código público `POL`, pero el contexto de Farmétrica informa `databaseCode=VAL`.
 - Filtrar `ventas` por ID 5 devuelve exclusivamente líneas sincronizadas con `farmacia_codigo='VAL'`.
 - `pg_index.indisvalid=true` e `indisready=true` para los seis índices con prefijo `fm_`.
-- PostgreSQL CI ejecuta dos veces las migraciones 012 y 013, simula movimientos de `VAL` y comprueba que las ventas pasan a la farmacia correcta sin mezclar farmacias.
+- PostgreSQL CI prueba de forma repetible los índices operativos, simula movimientos de `VAL` y comprueba que las ventas se asignan a la farmacia 5 sin mezclar códigos públicos con códigos de datos.
 - La mejora exacta de latencia debe medirse sobre consultas y períodos equivalentes; no se garantiza un tiempo específico sin un benchmark posterior.

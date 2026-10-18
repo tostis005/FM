@@ -7,9 +7,10 @@ const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 function dayValid(v){if(!ISO.test(v))return false;const d=new Date(v+"T00:00:00Z");return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function getFilter(req,res){
  const from=String(req.query.desde||""),to=String(req.query.hasta||""),
-  raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim();
+  raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim(),
+  abcd=String(req.query.abcd||"all").toUpperCase();
  if(!dayValid(from)||!dayValid(to)||from>to||
-  (Date.parse(to)-Date.parse(from))/86400000>366||search.length>100||raw.length>2000){
+  (Date.parse(to)-Date.parse(from))/86400000>366||search.length>100||raw.length>2000||!["ALL","A","B","C","D"].includes(abcd)){
   res.status(400).json({error:"Fechas o filtros inválidos"});return null;
  }
  const allowed=req.context.allowedPharmacyIds.map(Number);
@@ -17,7 +18,7 @@ function getFilter(req,res){
  if(ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id))){
   res.status(403).json({error:"Farmacia no autorizada"});return null;
  }
- return {from,to,ids:[...new Set(ids)],search};
+ return {from,to,ids:[...new Set(ids)],search,abcd};
 }
 const round=(v,dec=4)=>Math.round(Number(v)*10**dec)/10**dec;
 const count=(rows,k)=>rows.reduce((n,r)=>n+Number(r[k]||0),0);
@@ -204,6 +205,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     const ids=new Set(matched.map(x=>x.dcpf));
     groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
    }
+   if(f.abcd!=="ALL")groups=groups.filter(g=>g.abcdClass===f.abcd);
    groups.sort((a,b)=>b.revenue-a.revenue);
    const summary={totalGroups:groups.length,salesUnits:count(groups,"salesUnits"),
     revenue:round(count(groups,"revenue"),2),purchases:round(count(groups,"spent"),2),

@@ -18,10 +18,10 @@ export function setupDemoClients(app,pool,{requireSuperadmin}){
    const {rows:src}=await db.query(
     "SELECT slug,esquema_datos,analisis_abcd_meses FROM farmetrica.clientes WHERE slug=$1 AND activo=true AND demo_origen_slug IS NULL FOR SHARE",
     [sourceSlug]);
-   if(!src.length)return res.status(400).json({error:"El cliente de origen no existe o ya es una demo"});
+   if(!src.length){await db.query("ROLLBACK");return res.status(400).json({error:"El cliente de origen no existe o ya es una demo"});}
    if(!SLUG.test(src[0].esquema_datos))throw Error("Esquema de origen inválido");
    const {rows:existing}=await db.query("SELECT 1 FROM pg_namespace WHERE nspname=$1",[slug]);
-   if(existing.length)return res.status(409).json({error:"Ya existe un esquema con ese identificador"});
+   if(existing.length){await db.query("ROLLBACK");return res.status(409).json({error:"Ya existe un esquema con ese identificador"});}
    const origin=src[0].esquema_datos;
    await db.query(`CREATE SCHEMA "${slug}"`);
    // Múltiples entradas en FROM: vistas PostgreSQL NO actualizables. El mismo

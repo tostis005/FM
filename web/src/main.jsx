@@ -11,6 +11,7 @@ import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
 import ModuloDemo from "./ModuloDemo.jsx";
 import Genericos from "./Genericos.jsx";
+import ConfiguracionPrecios from "./ConfiguracionPrecios.jsx";
 import {promotionMetrics} from "./promotionMetrics.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
@@ -844,6 +845,7 @@ function App(){
         .filter(([id])=>visibleNav.some(item=>item.id===id))
         .map(([id,label])=><button className="card fm-module-link" key={id} onClick={()=>nav(id)}><strong>{label}</strong><ArrowRight size={17}/></button>)}
       </div>
+      <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
      </div>}
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>

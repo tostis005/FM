@@ -31,7 +31,7 @@ export function buildSalesTotalsSql(schema,granularity){
      AND v.fecha < ($2::date + interval '1 day')
  ) movimientos
  GROUP BY GROUPING SETS ${sets}
- ORDER BY tipo,mes,periodo`;
+ ORDER BY tipo,mes${granularity==="month"?"":",periodo"}`;
 }
 export function setupSalesTotals(app,pool,{requireTenant}){
  app.get("/api/analytics/ventas/totales",...requireTenant(),async(req,res,next)=>{

@@ -2,6 +2,7 @@
 // El percentil de referencia afecta solo a la estimación, nunca al coste observado.
 import {readPricePolicy} from "./pricePolicy.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {classifyAbcd} from "./abcd.js";
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 function dayValid(v){if(!ISO.test(v))return false;const d=new Date(v+"T00:00:00Z");return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function getFilter(req,res){
@@ -169,6 +170,12 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     g.indicativeSavings=g.referenceAvailable?round(g.savings,2):null;
     delete g.paidCost;delete g.pricedUnits;delete g.pvpValue;delete g.pvpUnits;delete g.savings;
    }
+   // Priorización viva de conjuntos completos DCPF, antes de filtrar o paginar.
+   // Los CN equivalentes se han agregado a nivel de conjunto en sums.
+   const classes=classifyAbcd([...sums.values()],{
+    identity:g=>g.dcpf,revenue:g=>g.revenue,units:g=>g.salesUnits
+   });
+   for(const g of sums.values())g.abcdClass=classes.get("_all|"+g.dcpf)||"D";
    if(detail){
     const g=sums.get(selectedDcpf);
     if(!g)return res.status(404).json({error:"Conjunto desconocido"});

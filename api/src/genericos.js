@@ -116,7 +116,13 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
       averagePuc:avg,bestPuc:best,
       indicativeSavings:avg!=null&&best!=null?Math.max(0,(avg-best)*Math.max(0,qty)):null};
    }).sort((a,b)=>(b.revenue??-1)-(a.revenue??-1));
-   res.json({version:status.rows[0],groups:groups.slice(0,500),totalGroups:groups.length,
+   const summary={
+    totalGroups:groups.length,
+    salesUnits:hasSales?groups.reduce((n,g)=>n+Number(g.salesUnits||0),0):null,
+    revenue:hasSales?groups.reduce((n,g)=>n+Number(g.revenue||0),0):null,
+    purchases:hasPurchases?groups.reduce((n,g)=>n+Number(g.spent||0),0):null,
+   };
+   res.json({version:status.rows[0],groups:groups.slice(0,500),totalGroups:groups.length,summary,
     sales:hasSales?{available:true}:noData("No existe la tabla canónica de ventas"),
     purchases:hasPurchases?{available:true}:noData("No existen compras canónicas con PUC"),
     note:"Comparación por DCPF (misma dosis, forma y envase). Ahorro orientativo: no descuenta condiciones comerciales y no equivale a oferta vigente."});

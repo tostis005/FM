@@ -101,7 +101,8 @@ function columnsFor(module,pharmacyMap){
     unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
-  case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
+  case "acciones":return [C("action","Acción","action"),...common,
+    euro("impact","Importe a revisar")];
   default:return [...common,unit("pvp","PVP catálogo"),unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),
     num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen")];
  }

@@ -76,23 +76,23 @@ function columnsFor(module,pharmacyMap){
  const common=[article,cn,pharmacy,abcd];
  switch(module){
   case "ventas":return [...common,family,unit("pvp","PVP catálogo"),
-    unit("purchaseCost","PUC compra"),unit("saleUnitPrice","Venta/ud."),
+    unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),unit("saleUnitPrice","Venta/ud."),
     unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),
     unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
   case "proveedores":return [C("name","Proveedor","name"),pharmacy,num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
-  case "stock":return [...common,unit("unitCost","Coste/ud."),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
-  case "reposicion":return [...common,unit("unitCost","Coste/ud."),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
+  case "stock":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
+  case "reposicion":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
   case "rentabilidad":return [...common,unit("pvp","PVP catálogo"),
-    unit("purchaseCost","PUC compra"),unit("saleUnitPrice","Venta/ud."),
+    unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),unit("saleUnitPrice","Venta/ud."),
     unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
-  default:return [...common,unit("pvp","PVP catálogo"),unit("purchaseCost","PUC compra"),
+  default:return [...common,unit("pvp","PVP catálogo"),unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),
     num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen")];
  }
 }

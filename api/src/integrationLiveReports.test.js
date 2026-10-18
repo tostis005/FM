@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import {setupRealReports} from "./realReports.js";
 import {setupSalesSummary} from "./salesSummary.js";
+import {setupSalesTotals} from "./salesTotals.js";
 import {setupGenericosReales} from "./genericosReales.js";
 const enabled=Boolean(process.env.TEST_DB_URL);
 test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF",{
@@ -12,6 +13,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  setupRealReports(app,pool,{requireTenant:()=>[]});
  setupSalesSummary(app,pool,{requireTenant:()=>[]});
+ setupSalesTotals(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
@@ -70,6 +72,17 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(abc.value>0);
   assert.ok(eur.value>0);
   assert.ok(freshStock.kpis.stock>0);
+  // Totales simples: 12 meses, Valdemarías y farmacia adicional, sin compras.
+  const fastVal=await request("/api/analytics/ventas/totales",{
+   farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18",granularidad:"month"});
+  assert.equal(fastVal.kpis.ventas,28);
+  assert.equal(fastVal.kpis.unidades,4);
+  assert.ok(fastVal.monthly.some(r=>r.month==="2026-10"&&r.ventas===28));
+  assert.ok(fastVal.series.some(r=>r.bucket==="2026-10"&&r.ventas===28));
+  const fastTwo=await request("/api/analytics/ventas/totales",{
+   farmacias:"1,5",granularidad:"day"});
+  assert.ok(fastTwo.kpis.ventas>28);
+  assert.ok(fastTwo.series.some(r=>r.bucket==="2026-10-18"));
   // Una consulta SQL agrega gráfico, indicadores y ABCD sin peticiones adicionales.
   const salesSummary=await request("/api/analytics/ventas/resumen",{
    farmacias:"5",granularidad:"month"});

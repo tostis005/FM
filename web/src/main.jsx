@@ -12,6 +12,7 @@ import AccessAdmin from "./Accesos.jsx";
 import ModuloDemo from "./ModuloDemo.jsx";
 import Genericos from "./Genericos.jsx";
 import ConfiguracionPrecios from "./ConfiguracionPrecios.jsx";
+import ConfiguracionAnalisisVentas from "./ConfiguracionAnalisisVentas.jsx";
 import {promotionMetrics} from "./promotionMetrics.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
@@ -836,6 +837,7 @@ function App(){
     {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
+      analysisMonths={tenantContext.client.analysisMonths}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">
@@ -845,6 +847,9 @@ function App(){
         .filter(([id])=>visibleNav.some(item=>item.id===id))
         .map(([id,label])=><button className="card fm-module-link" key={id} onClick={()=>nav(id)}><strong>{label}</strong><ArrowRight size={17}/></button>)}
       </div>
+      <ConfiguracionAnalisisVentas clientSlug={tenantContext.client.slug}
+       initialMonths={tenantContext.client.analysisMonths}
+       onSaved={()=>loadContext(tenantContext.client.slug)}/>
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
      </div>}
    </main>

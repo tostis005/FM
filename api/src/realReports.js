@@ -259,7 +259,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    }
    // Compatibilidad: si la importación de fichas no incluye stock, consultar
    // la instantánea de inventario existente únicamente para Ampedia.
-   if(!stockSource&&!catalogHasStock&&req.context.client.slug==="ampedia"&&pharmacyIds.length){
+   if(!stockSource&&req.context.client.slug==="ampedia"&&pharmacyIds.length){
     const {rows:stockTable}=await pool.query("SELECT to_regclass('public.stock_farmacia')::text AS tbl");
     if(stockTable[0]?.tbl){
      // Una actualización reciente en ABA NO hace que el stock viejo de EUR
@@ -304,61 +304,8 @@ export function setupRealReports(app,pool,{requireTenant}){
        [pharmacyIds,f.search,f.families,req.context.client.slug]);
       stockRows=sr.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,need:null,needValue:null}));
+      stockSource="instantanea";
      }
-    }
-   }
-   // Muchos ERP entregan inventario directamente en la ficha de artículo.
-   // Utilizarlo cuando la antigua tabla de instantáneas no está completa o
-   // actualizada; comprobar frescura Y cobertura de cada farmacia.
-   // No mezclar inventario antiguo de una farmacia con el reciente de otra.
-   let stockSource=snapshotAvailable?"instantanea":"sin datos";
-   if(!snapshotAvailable&&pharmacyIds.length&&await hasColumns(pool,schema,"articulos",
-     ["farmacia_codigo","origen_id","stock_actual","sincronizado_en","codigo_nacional","nombre","pmc"])){
-    const {rows:catalogStatus}=await pool.query(`
-      SELECT f.id::int AS id,max(a.sincronizado_en) AS last,
-        count(*)::int AS total,count(a.stock_actual)::int AS filled
-      FROM ${quoted}.articulos a
-      JOIN farmetrica.farmacias f ON f.cliente_slug=$1
-        AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-      WHERE f.id=ANY($2::int[]) GROUP BY f.id`,
-      [req.context.client.slug,pharmacyIds]);
-    const validCatalog=catalogStatus.length===pharmacyIds.length&&
-      catalogStatus.every(r=>r.last&&r.total>0&&r.filled/r.total>=.8&&
-        Date.now()-new Date(r.last).getTime()<=48*3600000&&
-        Date.now()-new Date(r.last).getTime()>=-3600000);
-    if(validCatalog){
-     // Elegir solo la última ficha por artículo ERP antes de sumar stock.
-     // La identidad del CN siempre se resuelve dentro de la farmacia.
-     const {rows:catalogStock}=await pool.query(`
-       WITH latest AS MATERIALIZED (
-        SELECT DISTINCT ON(f.id,a.origen_id)
-          f.id::text AS "pharmacyId",a.origen_id,
-          coalesce(nullif(btrim(a.codigo_nacional),''),a.origen_id) AS cn,
-          coalesce(nullif(a.nombre,''),a.origen_id) AS name,
-          coalesce(a.familia,'') AS family,
-          a.pmc::float8 AS pmc,a.stock_actual,a.sincronizado_en
-        FROM ${quoted}.articulos a
-        JOIN farmetrica.farmacias f ON f.cliente_slug=$4
-         AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-        WHERE f.id=ANY($1::int[]) AND a.origen_id IS NOT NULL
-        ORDER BY f.id,a.origen_id,a.sincronizado_en DESC NULLS LAST
-       )
-       SELECT "pharmacyId",cn,max(name) AS name,max(family) AS family,
-        max(pmc)::float8 AS pmc,sum(stock_actual)::float8 AS units,
-        max(sincronizado_en) AS "asOf"
-       FROM latest
-       WHERE stock_actual IS NOT NULL
-        AND ($2::text='' OR cn ILIKE '%'||$2||'%' OR name ILIKE '%'||$2||'%')
-        AND (cardinality($3::text[])=0 OR family=ANY($3::text[]))
-       GROUP BY "pharmacyId",cn
-       ORDER BY sum(stock_actual) DESC NULLS LAST LIMIT ${rowLimit}`,
-       [pharmacyIds,f.search,f.families,req.context.client.slug]);
-     stockRows=catalogStock.map(r=>({...r,id:key(r.pharmacyId,r.cn),
-       units:Number(r.units),value:null,coverage:null,excessValue:null,
-       sold:0,need:null,needValue:null}));
-     snapshotAvailable=true;
-     stockSource="catalogo_erp";
-     stockAsOf=new Date(Math.min(...catalogStatus.map(r=>new Date(r.last).getTime()))).toISOString();
     }
    }
    // ABCD se deriva de las ventas PostgreSQL en cada consulta, sin botón de recálculo.
@@ -443,7 +390,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows.filter(r=>r.margin!=null),
     actions,families:families.rows.map(r=>r.familia),
-    availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockSource,
+    availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,
      snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
      rowsTruncated:!complete,marginCoverage:coveredItems}});
   }catch(e){next(e)}

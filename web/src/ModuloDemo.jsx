@@ -182,7 +182,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const realRevenue=hasSales?realSales.monthly.reduce((t,r)=>t+Number(r.ventas||0),0):null;
  const realUnits=realSales?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...realReport?.kpis};
- if(hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;realKpis.articulosVendidos=realSales?.totalArticles||0;}
+ if(!realReport&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;realKpis.articulosVendidos=realSales?.totalArticles||0;}
  const cards=metricCards(module,realKpis);
  const isDashboard=module==="dashboard",isReports=module==="informes",isAssistant=module==="asistente";
  const datasets={
@@ -199,7 +199,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const rows=module==="ventas"?(realReport?.salesRows||liveSalesRows):(datasets[module]||[]);
  const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap);
  const chartConfig=SERIES[module]||SERIES.dashboard;
- const chart=salesModule&&realSales?
+ const chart=salesModule&&realSales&&!filters.families.length&&!searchReady?
    (realSales.series||realSales.monthly.map(r=>({...r,bucket:r.month}))).map(r=>({
     month:formatSalesBucket(r.bucket,realSales.granularity||"month"),
     ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0

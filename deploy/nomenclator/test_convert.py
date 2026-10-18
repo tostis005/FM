@@ -20,7 +20,7 @@ class ConverterTest(unittest.TestCase):
             root=Path(d); src=root/"prescripcion.zip"
             sample=[
                 dict(cod_nacion="654321",cod_dcpf="123456789",cod_dcp="98765",
-                     cod_dcsa="101",des_prese="Medicamento A",sw_generico="1",
+                     cod_dcsa="101",des_prese="Medicamento A\n presentación especial",sw_generico="1",
                      sw_comercializado="1",laboratorio_comercializador="LAB01",
                      listprescriptiondate="18/10/2026"),
                 dict(cod_nacion="654322",cod_dcpf="123456789",cod_dcp="98765",
@@ -43,6 +43,7 @@ class ConverterTest(unittest.TestCase):
             self.assertEqual(len(rows),3)
             self.assertEqual([r["dcpf"] for r in rows],["123456789"]*3)
             self.assertEqual(rows[0]["laboratorio"],"Laboratorio Alfa")
+            self.assertEqual(rows[0]["nombre"],"Medicamento A presentación especial")
             self.assertEqual(rows[0]["principio_activo"],"Omeprazol")
             self.assertEqual(rows[0]["generico"],"true")
             self.assertEqual(rows[2]["generico"],"false")

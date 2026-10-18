@@ -777,8 +777,8 @@ function App(){
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:EUR.format(reportSales)+" uds."}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:percent(reportSales,reportGoal)+"%"}</strong></div></div>
-   <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?EUR.format(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
+   <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
@@ -793,7 +793,7 @@ function App(){
      </select></label>
    </div>
    <div className="goal-accordion-actions"><button type="button" onClick={()=>setExpandedCampaignIds(goalListFiltered.map(p=>p.id))}>Desplegar todas</button><span>·</span><button type="button" onClick={()=>setExpandedCampaignIds([])}>Plegar todas</button></div>
-   <div className="goal-campaign-list">{!goalListFiltered.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados.</div>}{goalListFiltered.slice(safeReportPage*reportPageSize,(safeReportPage+1)*reportPageSize).map(p=><CampaignGoalCard key={p.id} promo={p} salesLoading={salesStatus==="cargando"} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
+   <div className="goal-campaign-list">{!goalListFiltered.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados.</div>}{goalListFiltered.slice(safeReportPage*reportPageSize,(safeReportPage+1)*reportPageSize).map(p=><CampaignGoalCard key={p.id} promo={p} salesLoading={salesStatus==="cargando"} salesAvailable={salesStatus==="real"} pharmaName={pharmaName} expanded={expandedCampaignIds.includes(p.id)} onToggle={()=>toggleCampaignExpanded(p.id)} singlePharmacy={effectivePharmacyIds.length===1}/>)}</div>
    <ListPagination total={goalListFiltered.length} page={safeReportPage} pageSize={reportPageSize}
       label="campañas" onPageChange={setReportPage}
       onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
@@ -903,7 +903,8 @@ function App(){
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
  </div>
 }
-function GoalProgressBar({goal,sold,loading=false}){
+function GoalProgressBar({goal,sold,loading=false,available=true}){
+ if(!loading&&!available)return <div className="goal-progress"><span className="fm-inline-status">Sin datos de ventas disponibles</span><small>Objetivo: {EUR.format(goal)} uds.</small></div>;
  if(loading)return <div className="goal-progress" role="status" aria-label="Cargando avance de ventas"><SkeletonLine width="100%" height="14px"/><SkeletonLine width="65%" height="13px"/></div>;
  const pct=goal>0?Math.round(sold/goal*100):null;
  const width=pct===null?0:Math.max(0,Math.min(100,pct));
@@ -921,20 +922,20 @@ function GoalProgressBar({goal,sold,loading=false}){
   <div className="goal-progress-meta"><span>{EUR.format(sold)} / {EUR.format(goal)} uds.</span><span>{detail}</span></div>
  </div>;
 }
-function CampaignGoalCard({promo,pharmaName,expanded,onToggle,singlePharmacy=false,salesLoading=false}){
+function CampaignGoalCard({promo,pharmaName,expanded,onToggle,singlePharmacy=false,salesLoading=false,salesAvailable=true}){
  const goal=sum(promo.targets),sold=sum(promo.sales),entries=Object.entries(promo.targets||{});
  const campaignPercent=goal>0?percent(sold,goal):null;
  return <article className={"goal-campaign-card "+(expanded?"goal-campaign-open":"goal-campaign-closed")}>
   <button type="button" className="goal-campaign-heading goal-campaign-toggle" aria-expanded={expanded} onClick={onToggle} aria-label={(expanded?"Plegar ":"Desplegar ")+promo.name}>
    <span className="goal-campaign-title"><span className="goal-icon"><Tag size={17}/></span><span className="goal-title-copy"><strong>{promo.name}</strong><small>{entries.length} {entries.length===1?"farmacia":"farmacias"} · {promo.cns.length} CN · {promo.id}</small></span></span>
-   <span className="goal-campaign-side"><span className={"goal-accordion-pct "+(campaignPercent!==null&&campaignPercent>=100?"achieved":"")}>{salesLoading?<SkeletonLine width="60px" height="19px"/>:campaignPercent===null?"Sin objetivo":campaignPercent+"%"}</span><Pill status={promo.status}/><ChevronDown size={18} className={"goal-chevron "+(expanded?"expanded":"")}/></span>
+   <span className="goal-campaign-side"><span className={"goal-accordion-pct "+(campaignPercent!==null&&campaignPercent>=100?"achieved":"")}>{salesLoading?<SkeletonLine width="60px" height="19px"/>:!salesAvailable?"Sin datos":campaignPercent===null?"Sin objetivo":campaignPercent+"%"}</span><Pill status={promo.status}/><ChevronDown size={18} className={"goal-chevron "+(expanded?"expanded":"")}/></span>
   </button>
   {expanded&&<div className="goal-campaign-expanded">
    {singlePharmacy?
-    <div className="goal-campaign-total goal-single-pharmacy"><div className="goal-group-label"><span>{entries.length?pharmaName(entries[0][0]):"Farmacia sin objetivo"}</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold} loading={salesLoading}/></div>
+    <div className="goal-campaign-total goal-single-pharmacy"><div className="goal-group-label"><span>{entries.length?pharmaName(entries[0][0]):"Farmacia sin objetivo"}</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold} loading={salesLoading} available={salesAvailable}/></div>
     :<>
-     <div className="goal-campaign-total"><div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold} loading={salesLoading}/></div>
-     <div className="goal-farmacies-list">{entries.map(([id,value])=><div key={id} className="goal-farm-row"><div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div><GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)} loading={salesLoading}/></div>)}{!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}</div>
+     <div className="goal-campaign-total"><div className="goal-group-label"><span>Objetivo total de la promoción</span><span className="goal-100-label">META 100 % <span className="goal-flag"/></span></div><GoalProgressBar goal={goal} sold={sold} loading={salesLoading} available={salesAvailable}/></div>
+     <div className="goal-farmacies-list">{entries.map(([id,value])=><div key={id} className="goal-farm-row"><div className="goal-farm-name"><Store size={14}/><span>{pharmaName(id)}</span></div><GoalProgressBar goal={Number(value)||0} sold={Number(promo.sales?.[id]||0)} loading={salesLoading} available={salesAvailable}/></div>)}{!entries.length&&<p className="goal-no-pharmacies">No hay farmacias con objetivos para esta selección.</p>}</div>
     </>}
   </div>}
  </article>;

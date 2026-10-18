@@ -113,10 +113,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
  const buysEnabled=data?.purchases?.available===true;
  const totals=useMemo(()=>({
   count:data?.totalGroups||0,
-  units:salesEnabled?groups.reduce((v,g)=>v+Number(g.salesUnits||0),0):null,
-  revenue:salesEnabled?groups.reduce((v,g)=>v+Number(g.revenue||0),0):null,
-  spend:buysEnabled?groups.reduce((v,g)=>v+Number(g.spent||0),0):null,
- }),[data]);
+  units:salesEnabled?data?.summary?.salesUnits??0:null,
+  revenue:salesEnabled?data?.summary?.revenue??0:null,
+  spend:buysEnabled?data?.summary?.purchases??0:null,
+ }),[data,salesEnabled,buysEnabled]);
  const top=groups.filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
   name:(g.principle||g.name||g.dcpf).slice(0,28),revenue:Number(g.revenue),dcpf:g.dcpf}));
  const chunk=groups.slice(page*20,(page+1)*20);

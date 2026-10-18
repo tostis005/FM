@@ -24,7 +24,7 @@ import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -186,6 +186,20 @@ function App(){
   const [sessionUser,setSessionUser]=useState(null);
   const [tenantContext,setTenantContext]=useState(null);
   const [authError,setAuthError]=useState("");
+  const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
+  async function tenantState(ctx,email){
+    const local=readState(ctx.client.slug,email);
+    try{
+      const server=await loadStoredPromotions();
+      const remote=server.promotions||[];
+      const existing=new Set(remote.map(p=>String(p.id)));
+      setPromotionStoreStatus("connected");
+      return {...local,promos:[...remote,...local.promos.filter(p=>!existing.has(String(p.id)))]};
+    }catch{
+      setPromotionStoreStatus("error");
+      return local; // Nunca descartar importaciones ya guardadas en el navegador.
+    }
+  }
   async function loadContext(slug){
     const response=await fetch("/api/tenant/context"+(slug?"?cliente="+encodeURIComponent(slug):""),{
       credentials:"same-origin",cache:"no-store"});
@@ -203,7 +217,8 @@ function App(){
       .then(async body=>{
         if(!body.user){window.location.replace("/login");return;}
         const ctx=await loadContext(selected).catch(()=>loadContext(""));
-        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
+        const loaded=await tenantState(ctx,body.user.email);
+        if(live){setSessionUser(body.user);setData(loaded);}
       })
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};
@@ -212,7 +227,7 @@ function App(){
     if(slug===tenantContext?.client.slug)return;
     try{
       const ctx=await loadContext(slug);
-      setData(readState(ctx.client.slug,sessionUser?.email));
+      setData(await tenantState(ctx,sessionUser?.email));
       setSalesStatus("sin_conexion");setSalesByPromotion({});
       const initial=ctx.modules.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
         NAV.find(item=>item.module&&ctx.modules[item.module])?.id||"farmacias";
@@ -459,7 +474,7 @@ function App(){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
  function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
- function savePromo(e){
+ async function savePromo(e){
   e.preventDefault();const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
   if(!codes.length&&promoForm.status!=="Borrador")return setToast("Añade al menos un CN antes de activar");
@@ -483,7 +498,11 @@ function App(){
      return setToast("Los objetivos deben ser unidades enteras no negativas");
   const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
-  setEditingPromo(null);setToast("Promoción guardada");
+  setEditingPromo(null);
+   if(["administrador","superadministrador"].includes(tenantContext?.role)) {
+     try{await saveStoredPromotion(result);setToast("Promoción guardada en PostgreSQL");}
+     catch(err){setToast("Guardada en este navegador; pendiente de servidor: "+err.message);}
+   } else setToast("Promoción guardada únicamente en este navegador");
  }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
@@ -511,10 +530,33 @@ function App(){
         ...newPromos,...prev.promos.map(old=>updates.find(u=>u.id===old.id)||old)
       ]}));
       setStatusFilter("Borrador");
-      setToast(newPromos.length+" nuevas, "+updates.length+" actualizadas (objetivos/CNs), "+
-        duplicates+" sin cambios; "+warnings+" requieren revisión.");
+      const message=newPromos.length+" nuevas, "+updates.length+" actualizadas; "+duplicates+" sin cambios. ";
+      if(["administrador","superadministrador"].includes(tenantContext?.role)){
+        const changed=[...newPromos,...updates];let errors=0;
+        for(let i=0;i<changed.length;i+=5){
+          const responses=await Promise.allSettled(changed.slice(i,i+5).map(p=>saveStoredPromotion(p)));
+          errors+=responses.filter(r=>r.status==="rejected").length;
+        }
+        setToast(message+(errors?errors+" promociones solo en el navegador; revisa la conexión.":"Importación guardada en PostgreSQL.")+
+          (warnings?" "+warnings+" requieren revisión.":""));
+      }else setToast(message+"Guardado solo en este navegador.");
     }catch(error){setToast(error.message||"No se pudo importar el Excel");}
     finally{setImportBusy(false);event.target.value="";}
+  }
+  async function saveExistingLocalPromos(){
+    try{
+      const remote=await loadStoredPromotions();
+      const ids=new Set((remote.promotions||[]).map(p=>String(p.id)));
+      const missing=data.promos.filter(p=>!ids.has(String(p.id)));
+      if(!missing.length){setToast("Todas las promociones locales ya están en PostgreSQL.");return;}
+      if(!window.confirm("Guardar "+missing.length+" promociones de este navegador en PostgreSQL sin sobrescribir campañas existentes?"))return;
+      let failures=0;
+      for(let i=0;i<missing.length;i+=5){
+        const results=await Promise.allSettled(missing.slice(i,i+5).map(p=>saveStoredPromotion(p)));
+        failures+=results.filter(r=>r.status==="rejected").length;
+      }
+      setToast(failures?failures+" promociones siguen pendientes; permanecen en este navegador.":missing.length+" promociones transferidas a PostgreSQL.");
+    }catch(err){setToast("No se pudo transferir: "+err.message);}
   }
   function copyPromo(p){startPromo({...p,id:null,name:p.name+" (copia)",status:"Borrador",sales:{}});setToast("Revisa la copia antes de guardarla");}
  async function exportPromo(p){
@@ -648,6 +690,7 @@ function App(){
     <div className="campaign-header-actions">
       <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
       <button className="btn btn-secondary" type="button" disabled={importBusy} onClick={()=>importFileRef.current?.click()}><Upload size={17}/>{importBusy?"Importando…":"Importar Excel"}</button>
+      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>}
       
       <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
     </div></div>

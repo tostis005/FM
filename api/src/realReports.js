@@ -373,6 +373,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     s.sold=sale?.units||0;
     const cost=costs.get(s.id),unitCost=cost&&cost.units>0?cost.total/cost.units:nullable(s.pmc);
     s.unitCost=unitCost;
+    s.costSource=unitCost==null?null:cost&&cost.units>0?"Compras ponderadas":"PMC catálogo";
     s.value=unitCost==null?null:round(s.units*unitCost);
     const days=(Date.parse(f.to)-Date.parse(f.from))/DAY+1;
     s.coverage=s.sold>0?round(s.units/(s.sold/days)):null;

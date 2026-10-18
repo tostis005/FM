@@ -614,6 +614,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       Number(s.pmc)>0?Number(s.pmc):null;
     s.costSource=s.unitCost==null?null:
       stockSource==="stock"?"Coste inventario":"PMC catálogo";
+    const unitCost=s.unitCost;
     const days=(Date.parse(f.to)-Date.parse(f.from))/DAY+1;
     s.coverage=s.sold>0?round(s.units/(s.sold/days)):null;
     s.zero=Boolean(sales&&s.units<=0&&s.sold>0);

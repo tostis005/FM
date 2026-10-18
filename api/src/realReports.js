@@ -142,10 +142,10 @@ export function setupRealReports(app,pool,{requireTenant}){
     pharmacy:"max(f.nombre)",family:"max(coalesce(a.familia,''))",
     pvp:"max(a.pvp)",units:"sum(a.stock_actual)"
    };
-   const stockOrder=(expressions,cnExpression,fallback="units")=>{
+   const stockOrder=(expressions,cnExpression,fallback="units",pharmacyTie="f.id")=>{
     const expression=expressions[f.sortKey]||expressions[fallback];
     const dir=expressions[f.sortKey]?direction:"DESC";
-    return `ORDER BY ${expression} ${dir} NULLS LAST,f.id,${cnExpression}`;
+    return `ORDER BY ${expression} ${dir} NULLS LAST,${pharmacyTie},${cnExpression}`;
    };
    // Evitar un lookup de catálogo por CADA línea de venta. Primero agrupamos
    // movimientos por farmacia + ID local de ERP y resolvemos el artículo una vez
@@ -527,7 +527,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          name:"max(coalesce(art.nombre,s.descripcion))",cn:stockCn,
          pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
          units:"sum(s.stock_actual)"
-       },stockCn)} LIMIT ${rowLimit}`,
+       },stockCn,"units","s.id_farmacia")} LIMIT ${rowLimit}`,
        [pharmacyIds,f.search,f.families,req.context.client.slug]);
       stockRows=sr.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,need:null,needValue:null}));

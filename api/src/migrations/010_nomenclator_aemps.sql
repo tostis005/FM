@@ -33,3 +33,7 @@ CREATE INDEX IF NOT EXISTS nomenclator_presentaciones_dcp
  ON farmetrica.nomenclator_presentaciones(dcp) WHERE generico;
 CREATE INDEX IF NOT EXISTS nomenclator_presentaciones_generico
  ON farmetrica.nomenclator_presentaciones(generico);
+
+-- Habilitar el nuevo módulo para el cliente piloto sin afectar a otros clientes.
+UPDATE farmetrica.cliente_modulos SET habilitado=true
+WHERE cliente_slug='ampedia' AND modulo_clave='genericos';

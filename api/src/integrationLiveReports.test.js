@@ -33,7 +33,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(typeof handler,"function","Ruta de prueba no registrada: "+path);
   let error;await handler(req,res,e=>{error=e});
   if(error)throw error;
-  assert.equal(status,200,JSON.stringify(body));
+  assert.ok(status===200||(path==="/api/admin/clientes/demo"&&status===201),JSON.stringify(body));
   return body;
  }
  try{

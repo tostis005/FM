@@ -15,7 +15,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
     if(!SLUG.test(slug)) return null;
     const {rows} = await pool.query(
-      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses FROM farmetrica.clientes WHERE slug=$1",[slug]);
+      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses,demo_origen_slug FROM farmetrica.clientes WHERE slug=$1",[slug]);
     const cliente = rows[0];
     if(!cliente || !cliente.activo || !SLUG.test(cliente.esquema_datos)) return null;
     const membership=req.user?.tenants?.find(item=>item.slug===slug && item.active);
@@ -31,9 +31,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
     const ids = all ? pharmacies.map(p=>Number(p.id)):
       (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
-        analysisMonths:Number(cliente.analisis_abcd_meses)},
+        analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug)},
       role, modules:Object.fromEntries(modules.map(m=>[m.id,m.enabled])),
-      pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))).map(p=>decoratePharmacy(slug,p)), allowedPharmacyIds:ids};
+      pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))).map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})), allowedPharmacyIds:ids};
   }
   function middleware(predicate=()=>true) {
     return [requireUser,async(req,res,next)=>{
@@ -77,7 +77,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.get("/api/admin/clientes",requireSuperadmin,async(_req,res,next)=>{
     try{
       const {rows}=await pool.query(
-        "SELECT c.slug,c.nombre AS name,c.esquema_datos AS schema,c.activo AS active, coalesce(jsonb_object_agg(m.modulo_clave,m.habilitado) FILTER (WHERE m.modulo_clave IS NOT NULL),'{}'::jsonb) AS modules FROM farmetrica.clientes c LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug GROUP BY c.slug ORDER BY c.nombre");
+        "SELECT c.slug,c.nombre AS name,c.esquema_datos AS schema,c.activo AS active,c.demo_origen_slug AS \"demoSourceSlug\",coalesce(jsonb_object_agg(m.modulo_clave,m.habilitado) FILTER (WHERE m.modulo_clave IS NOT NULL),'{}'::jsonb) AS modules FROM farmetrica.clientes c LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug GROUP BY c.slug ORDER BY c.nombre");
       res.json(rows);
     }catch(e){next(e);}
   });
@@ -207,6 +207,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.get("/api/tenant/farmacias",...requireTenant(),(req,res)=>res.json(req.context.pharmacies));
   app.post("/api/tenant/farmacias",...requireTenantAdmin(),async(req,res,next)=>{
     try{
+      if(req.context.client.demo)return res.status(403).json({error:"Las farmacias demo se crean desde el cliente de origen"});
       const f=validatePharmacy(req.body);
       const {rows}=await pool.query(
         'INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',

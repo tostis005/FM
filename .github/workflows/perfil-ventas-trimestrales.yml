@@ -35,8 +35,9 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
           SET default_transaction_read_only=on;
-          SET lock_timeout='3s';
+          SET lock_timeout='8s';
           SET statement_timeout='20s';
+          \set ON_ERROR_STOP off
           \echo '--- Conteos estimados, estadísticas, escaneos e índices ---'
           SELECT schemaname,relname,n_live_tup,n_dead_tup,last_autoanalyze,last_analyze,seq_scan,idx_scan,
             pg_size_pretty(pg_relation_size(relid)) AS tabla

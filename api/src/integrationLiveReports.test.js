@@ -87,6 +87,17 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(abc.value>0);
   assert.ok(eur.value>0);
   assert.ok(freshStock.kpis.stock>0);
+  // El ERP ya contiene stock en el maestro de artículos. Cuando el snapshot
+  // independiente está obsoleto, usar solo fichas sincronizadas recientemente.
+  await pool.query("UPDATE public.stock_farmacia SET importado_en=now()-interval '7 days' WHERE id_farmacia=ANY(ARRAY[1,2])");
+  await pool.query("UPDATE ampedia.articulos SET stock_actual=CASE WHEN farmacia_codigo='ABA' THEN 8 ELSE 9 END WHERE farmacia_codigo IN ('ABA','EUR') AND codigo_nacional='654321'");
+  const catalogStock=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
+  assert.equal(catalogStock.availability.stock,true);
+  assert.equal(catalogStock.availability.stockSource,"catalogo_erp");
+  assert.ok(catalogStock.stockRows.some(r=>r.pharmacyId==="1"&&r.cn==="654321"&&r.units===8));
+  assert.ok(catalogStock.stockRows.some(r=>r.pharmacyId==="2"&&r.cn==="654321"&&r.units===9));
+  assert.ok(catalogStock.replenishmentRows.length>=0);
+
   // Totales simples: 12 meses, Valdemarías y farmacia adicional, sin compras.
   const fastVal=await request("/api/analytics/ventas/totales",{
    farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18",granularidad:"month"});

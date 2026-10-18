@@ -183,7 +183,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch("/api/analytics/ventas/totales?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
-   .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar los totales");return b})
+   .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar los totales");if(!Array.isArray(b.monthly)||!b.kpis)throw Error("Respuesta de totales incompleta");return b})
    .then(data=>{if(!controller.signal.aborted){setFastResult({scope:fastScope,data});setLastUpdated(new Date())}})
    .catch(e=>{if(!controller.signal.aborted)setFastFailure({scope:fastScope,message:e.message})});
   return ()=>controller.abort();
@@ -338,7 +338,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      item.ventas+=Number(r.ventas||0);item.unidades+=Number(r.unidades||0);
      return acc;
     },[]):
-    (chartData.series||chartData.monthly.map(r=>({...r,bucket:r.month}))).map(r=>({
+    (Array.isArray(chartData.series)?chartData.series:Array.isArray(chartData.monthly)?chartData.monthly.map(r=>({...r,bucket:r.month})):[]).map(r=>({
      month:formatSalesBucket(r.bucket,chartData.granularity||"month"),
      ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0
     }))):

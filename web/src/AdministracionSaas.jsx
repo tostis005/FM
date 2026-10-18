@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from "react";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {Building2,CheckCircle2,ShieldCheck,Users} from "lucide-react";
 import "./moduleDemo.css";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
@@ -146,8 +147,8 @@ export function EquipoCliente({client,pharmacies=[]}){
    </form>
   </section>
   <section className="card fm-manage-client"><div className="section-heading"><div><h2>Usuarios asignados</h2></div><span>{loading?<LoadingStatus compact label="Cargando equipo…"/>:users.length+" personas"}</span></div>
-   {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:<div style={{overflowX:"auto"}}><table style={{width:"100%",textAlign:"left",borderCollapse:"collapse"}}><thead><tr>{["Correo","Acceso","Rol","Farmacias","Estado",""].map(h=><th key={h} style={{padding:"11px",borderBottom:"1px solid #dcebe2"}}>{h}</th>)}</tr></thead>
-    <tbody>{users.map(u=><tr key={u.email}><td style={{padding:11}}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></td><td>{u.authType==="interno"?"Interno":"Google"}</td><td>{ROLES.find(x=>x[0]===u.role)?.[1]||u.role}</td><td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—"}</td><td>{u.active?"Activo":"Bloqueado"}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setForm({...u,password:""})}>Editar</button></td></tr>)}</tbody></table></div>}
+   {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:<HorizontalTableScroll className="table-scroll" label="usuarios"><table style={{width:"100%",textAlign:"left",borderCollapse:"collapse"}}><thead><tr>{["Correo","Acceso","Rol","Farmacias","Estado",""].map(h=><th key={h} style={{padding:"11px",borderBottom:"1px solid #dcebe2"}}>{h}</th>)}</tr></thead>
+    <tbody>{users.map(u=><tr key={u.email}><td style={{padding:11}}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></td><td>{u.authType==="interno"?"Interno":"Google"}</td><td>{ROLES.find(x=>x[0]===u.role)?.[1]||u.role}</td><td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—"}</td><td>{u.active?"Activo":"Bloqueado"}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setForm({...u,password:""})}>Editar</button></td></tr>)}</tbody></table></HorizontalTableScroll>}
    {!users.length&&!loading&&<p>No hay usuarios asignados a este cliente.</p>}
   </section>
  </div>;

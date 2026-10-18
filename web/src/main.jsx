@@ -189,6 +189,12 @@ function App(){
   const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
   async function tenantState(ctx,email){
     const local=readState(ctx.client.slug,email);
+    // Copia recuperable antes de reconciliar con las promociones compartidas.
+    try{
+      const key="fm_promos_respaldo_v1:"+ctx.client.slug+":"+String(email||"").toLowerCase();
+      if(local.promos.length&&!localStorage.getItem(key))
+        localStorage.setItem(key,JSON.stringify(local.promos));
+    }catch{} // La cuota local nunca debe bloquear el acceso.
     try{
       const server=await loadStoredPromotions();
       const remote=server.promotions||[];
@@ -543,6 +549,13 @@ function App(){
     }catch(error){setToast(error.message||"No se pudo importar el Excel");}
     finally{setImportBusy(false);event.target.value="";}
   }
+  function exportLocalPromos(){
+    const key="fm_promos_respaldo_v1:"+tenantContext?.client?.slug+":"+String(sessionUser?.email||"").toLowerCase();
+    const backup=localStorage.getItem(key)||JSON.stringify(data.promos);
+    const url=URL.createObjectURL(new Blob([backup],{type:"application/json;charset=utf-8"}));
+    const a=document.createElement("a");a.href=url;a.download="farmetrica-promociones-respaldo.json";a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
   async function saveExistingLocalPromos(){
     try{
       const remote=await loadStoredPromotions();
@@ -690,7 +703,8 @@ function App(){
     <div className="campaign-header-actions">
       <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
       <button className="btn btn-secondary" type="button" disabled={importBusy} onClick={()=>importFileRef.current?.click()}><Upload size={17}/>{importBusy?"Importando…":"Importar Excel"}</button>
-      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>}
+      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>
+      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={exportLocalPromos} title="Exportar respaldo de las promociones anteriores a la sincronización con PostgreSQL"><ArrowDownToLine size={16}/> Copia local</button>}}
       
       <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
     </div></div>

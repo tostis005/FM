@@ -412,7 +412,11 @@ export function setupRealReports(app,pool,{requireTenant}){
     ...stockRows.filter(r=>r.excessValue>0).map(r=>({
      ...r,action:"Revisar exceso de stock",impact:r.excessValue,targetModule:"stock"}))
    ].sort((a,b)=>b.impact-a.impact);
-   const complete=sale.rows.length<rowLimit&&buys.rows.length<rowLimit;
+   // La cobertura de cada catálogo se comprueba por separado: una farmacia
+   // con muchas ventas no debe ocultar el recuento completo de compras, ni al revés.
+   const completeSales=readSalesRows&&sale.rows.length<rowLimit;
+   const completeBuys=buys.rows.length<rowLimit;
+   const complete=completeSales&&completeBuys;
    const stockRowsTruncated=Boolean(snapshotAvailable&&stockRows.length>=rowLimit);
    const completeStock=snapshotAvailable&&!stockRowsTruncated;
    const pricedStock=stockRows.filter(r=>r.value!=null);
@@ -422,8 +426,8 @@ export function setupRealReports(app,pool,{requireTenant}){
     ventas:sales&&readSalesPeriod?round(sum(saleM.rows,"amount")):null,
     unidades:sales&&readSalesPeriod?sum(saleM.rows,"units"):null,
     compras:buyers&&readBuyPeriod?round(sum(buyM.rows,"amount")):null,
-    articulosVendidos:readSalesRows&&complete?new Set(salesRows.map(r=>r.cn)).size:null,
-    articulosComprados:complete?new Set(buyRows.map(r=>r.cn)).size:null,
+    articulosVendidos:completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
+    articulosComprados:completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:null,
     stock:stockSummary
       ?(stockSummary.unpriced===0?round(stockSummary.value):null)
@@ -431,12 +435,12 @@ export function setupRealReports(app,pool,{requireTenant}){
     margen:readSalesRows&&sales&&complete&&coveredItems===salesRows.length?round(coveredMargin):null,
     margenPct:readSalesRows&&sales&&complete&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
     coberturaCostes:sales&&complete&&salesRows.length?round(100*coveredItems/salesRows.length):null,
-    reposiciones:completeStock&&complete?replenishmentRows.length:null,
+    reposiciones:completeStock?replenishmentRows.length:null,
     reposicionCoste:completeStock&&complete&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
     sobrestock:completeStock&&complete&&stockRows.every(r=>r.excessUnits==null||r.excessValue!=null)?
        round(sum(stockRows,"excessValue")):null,
-    stockSinRotacion:completeStock&&complete?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
-    roturas:completeStock&&complete?stockRows.filter(r=>r.zero).length:null,
+    stockSinRotacion:completeStock?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
+    roturas:completeStock?stockRows.filter(r=>r.zero).length:null,
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
     acciones:complete&&!stockRowsTruncated?actions.length:null
    };

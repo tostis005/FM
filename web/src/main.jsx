@@ -145,6 +145,7 @@ const NAV=[
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true}
 ];
+const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","clientes","sincronizacion","solicitudes","accesos","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes","asistente"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
@@ -280,6 +281,7 @@ function App(){
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
+ const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
  // Un menú móvil largo debe desplazarse sin mover la página de fondo.
  useEffect(()=>{
    if(!mobileMenu)return;
@@ -674,6 +676,7 @@ function App(){
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
  },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
+ useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true)},[page]);
  const role=tenantContext?.role;
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
@@ -694,7 +697,27 @@ function App(){
  return <div className="app-shell">
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
-   <nav className="side-nav" aria-label="Módulos">{visibleNav.map(item=><React.Fragment key={item.id}><button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}><item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}</button>{item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}</React.Fragment>)}</nav>
+   <nav className="side-nav" aria-label="Módulos">
+    {visibleNav.filter(item=>!CONFIG_IDS.has(item.id)).map(item=><React.Fragment key={item.id}>
+     <button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}>
+      <item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}
+     </button>
+     {item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}
+    </React.Fragment>)}
+    {visibleNav.some(item=>CONFIG_IDS.has(item.id))&&<>
+     <button className={"side-link "+(CONFIG_IDS.has(page)?"active":"")} type="button"
+      aria-expanded={settingsOpen} aria-controls="fm-settings-nav" onClick={()=>setSettingsOpen(v=>!v)}>
+      <Settings2 size={19}/><span>Configuración</span>
+      <ChevronDown size={15} className={"side-settings-chevron"+(settingsOpen?" open":"")}/>
+     </button>
+     {settingsOpen&&<div id="fm-settings-nav" className="side-settings-children">
+      {visibleNav.filter(item=>CONFIG_IDS.has(item.id)).map(item=>
+       <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
+        onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
+        {page===item.id&&<span className="active-dot"/>}</button>)}
+     </div>}
+    </>}
+   </nav>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" type="button" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">

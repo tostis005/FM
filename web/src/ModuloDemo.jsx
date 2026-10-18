@@ -35,7 +35,7 @@ function metricCards(module,k){
  ];
  const map={
   dashboard:shared,
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia (12 m)","productosFarmacia","n"),CARD("Artículos únicos (12 m)","articulosVendidos","n"),CARD("Margen estimado (12 m)","margen","€","rentabilidad")],
+  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia (12 m)","productosFarmacia","n"),CARD("Artículos únicos (12 m)","articulosVendidos","n")],
   compras:[shared[1],shared[4],CARD("Proveedores","proveedores","n","proveedores"),CARD("Compra de genéricos","compraGenericos","€","genericos")],
   proveedores:[CARD("Proveedores","proveedores","n"),shared[1],shared[4],CARD("CN con compras","articulosComprados","n","compras")],
   stock:[shared[2],CARD("Sobrestock estimado","sobrestock","€","acciones"),CARD("Sin ventas en periodo","stockSinRotacion","n"),CARD("Roturas detectadas","roturas","n","reposicion")],

@@ -72,10 +72,13 @@ function GroupDetail({group,query,clientSlug}){
   {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras y coste unitario integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
    <div className="fm-generic-table-scroll"><table>
-    <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC real ponderado</th><th>Referencia histórica (percentil)</th><th>Importe</th></tr></thead>
+    <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC real ponderado</th><th>Referencia histórica</th><th>Objetivo equivalente</th><th>Proveedor objetivo</th><th>Ahorro estimado</th><th>Importe</th></tr></thead>
     <tbody>{data.purchases.map((r,i)=><tr key={r.cn+"_"+r.supplierCode+"_"+i}>
      <td className="fm-generic-code">{r.cn}</td><td>{r.supplier||r.supplierCode||"Sin proveedor"}</td>
-     <td>{number(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{unitPrice(r.referencePuc)}</td><td>{money(r.spend)}</td>
+     <td>{number(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{unitPrice(r.referencePuc)}</td>
+     <td>{unitPrice(r.targetPuc)}</td>
+     <td>{r.targetSupplier?(r.targetSupplier+(r.targetCn?" · CN "+r.targetCn:"")):"—"}</td>
+     <td>{money(r.potential)}</td><td>{money(r.spend)}</td>
     </tr>)}</tbody>
    </table></div>}
   <Note>Coste real = unidades compradas × coste unitario, dividido entre las unidades con coste válido. La referencia histórica procede del percentil configurado por proveedor y CN; no es una oferta comercial ni sustituye al PUC real. El laboratorio fabricante y el proveedor al que compramos son conceptos distintos.</Note>

@@ -834,7 +834,7 @@ function App(){
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>} 
     {page==="solicitudes"&&<SolicitudesDemo/>}
-    {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}/>}
     {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}

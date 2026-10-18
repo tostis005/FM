@@ -45,3 +45,28 @@ test("familias, paginación y farmacias no autorizadas",async()=>{
  assert.equal((await request({desde:"2020-01-01"})).status,400);
  assert.throws(()=>buildSalesDetailSQL("ampedia;DROP"));
 });
+
+test("ordena todo el universo ANTES de paginar y conserva ese orden en la salida",async()=>{
+ const {request,calls}=make();
+ const r=await request({orden:"units",direccion:"asc",pagina:"2"});
+ assert.equal(r.status,200);
+ const sql=calls[0].sql;
+ assert.match(sql,/FROM visible\s+ORDER BY "__order" ASC NULLS LAST/);
+ assert.match(sql,/units AS "__order"/);
+ assert.match(sql,/ORDER BY p\."__order" ASC NULLS LAST/);
+ assert.match(sql,/LIMIT \$7::int OFFSET \$8::int/);
+ assert.ok(sql.indexOf('ORDER BY "__order"')<sql.indexOf("LIMIT $7"));
+ assert.equal((await request({orden:"no_permitido"})).status,400);
+ assert.equal((await request({direccion:"no_permitida"})).status,400);
+});
+test("margen, PUC y coste exigen ordenar los costes ponderados de TODO el conjunto",()=>{
+ for(const key of ["purchaseCost","unitMargin","margin","marginPct","costSource"]){
+  const sql=buildSalesDetailSQL("ampedia",key,"desc");
+  assert.match(sql,/global_costs AS/);
+  assert.match(sql,/with_cost_sort AS/);
+  assert.match(sql,/FROM with_cost_sort\s+ORDER BY "__order" DESC NULLS LAST/);
+  assert.ok(sql.indexOf("global_costs AS")<sql.indexOf("LIMIT $7"));
+ }
+ const defaultSql=buildSalesDetailSQL("ampedia");
+ assert.doesNotMatch(defaultSql,/global_costs AS/,"El ranking normal no cruza compras de todo el universo");
+});

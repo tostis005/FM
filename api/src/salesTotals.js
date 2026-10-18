@@ -10,6 +10,20 @@ export function buildSalesTotalsSql(schema,granularity){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!["hour","day","month"].includes(granularity))
   throw Error("Parámetro SQL no válido");
  const table='"'+schema+'"';
+ // Para 12/6/3 meses basta un GROUP BY mensual. La ventana suma solo los
+ // 12 resultados agregados y evita GROUPING SETS y una segunda lectura.
+ if(granularity==="month")return `
+ SELECT to_char(date_trunc('month',v.fecha),'YYYY-MM') AS month,
+   sum(v.importe)::float8 AS ventas,sum(v.unidades)::float8 AS unidades,
+   sum(sum(v.importe)) OVER()::float8 AS total_ventas,
+   sum(sum(v.unidades)) OVER()::float8 AS total_unidades
+ FROM ${table}.ventas v JOIN farmetrica.farmacias f
+   ON f.cliente_slug=$4
+      AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+ WHERE f.id=ANY($3::int[])
+   AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
+ GROUP BY date_trunc('month',v.fecha)
+ ORDER BY month`;
  const fmt=granularity==="hour"?'YYYY-MM-DD"T"HH24:MI':granularity==="day"?"YYYY-MM-DD":"YYYY-MM";
  const sets=granularity==="month"?"((mes),())":"((mes),(periodo),())";
  return `
@@ -60,13 +74,15 @@ export function setupSalesTotals(app,pool,{requireTenant}){
      kpis:{ventas:0,unidades:0}});
    const {rows}=await pool.query(buildSalesTotalsSql(schema,granularity),
      [from,to,ids,req.context.client.slug]);
-   const months=rows.filter(x=>x.tipo==="month").map(x=>({
+   const months=(granularity==="month"?rows:rows.filter(x=>x.tipo==="month")).map(x=>({
     month:x.month,ventas:Number(x.ventas),unidades:Number(x.unidades)}));
    const series=granularity==="month"?
     months.map(x=>({bucket:x.month,ventas:x.ventas,unidades:x.unidades})):
     rows.filter(x=>x.tipo==="series").map(x=>({
      bucket:x.bucket,ventas:Number(x.ventas),unidades:Number(x.unidades)}));
-   const total=rows.find(x=>x.tipo==="total");
+   const total=granularity==="month"?
+    {ventas:rows[0]?.total_ventas,unidades:rows[0]?.total_unidades}:
+    rows.find(x=>x.tipo==="total");
    res.json({from,to,granularity,monthly:months,series,
      kpis:{ventas:Number(total?.ventas||0),unidades:Number(total?.unidades||0)}});
   }catch(e){next(e)}

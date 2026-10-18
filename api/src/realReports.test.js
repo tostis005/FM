@@ -143,3 +143,22 @@ test("los módulos ahorran consultas ajenas a sus indicadores y conservan los da
  assert.ok(!b.queries.some(q=>q.sql.includes('GROUP BY f.id,t.proveedor_id')),
    "Stock no debe cargar un ranking de proveedores");
 });
+
+test("compra y proveedores ordenan globalmente ANTES del LIMIT, sin interpolar texto del navegador",async()=>{
+ for(const [module,order,direction,pattern] of [
+  ["compras","puc","asc",/ORDER BY sum\(t\.cost\)\/NULLIF\(sum\(t\.priced_units\),0\) ASC NULLS LAST/],
+  ["proveedores","products","desc",/ORDER BY count\(DISTINCT /]
+ ]){
+  const x=create();
+  const {status}=await x.call({query:{...x.req.query,modulo:module,orden:order,direccion:direction}});
+  assert.equal(status,200);
+  const sql=x.queries.find(q=>module==="compras"?
+    q.sql.includes(" AS supplier,"):q.sql.includes('AS "providerId"')&&q.sql.includes(" AS products"));
+  assert.ok(sql);
+  assert.match(sql.sql,pattern);
+  assert.ok(sql.sql.indexOf("ORDER BY")<sql.sql.lastIndexOf("LIMIT"));
+ }
+ const a=create();
+ const invalid=await a.call({query:{...a.req.query,orden:"value;DROP"}});
+ assert.equal(invalid.status,400);
+});

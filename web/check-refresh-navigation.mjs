@@ -28,6 +28,13 @@ await page.route("**/api/**",async route=>{
   result={promotions:[]};
  }else if(path==="/api/analytics/ventas")result={
   monthly:[],series:[],granularity:"month",products:[],totalProducts:0,totalArticles:0};
+ else if(path==="/api/analytics/ventas/totales")result={
+  monthly:[],series:[],granularity:"month",kpis:{ventas:0,unidades:0}};
+ else if(path==="/api/analytics/ventas/detalle")result={
+  products:[],hasMore:false,page:1};
+ else if(path==="/api/analytics/ventas/recuento")result={
+  totalProducts:0,totalArticles:0};
+ else if(path==="/api/analytics/ventas/familias")result={families:[]};
  else if(path==="/api/tenant/farmacias")result=pharmacies;
  await route.fulfill({status:200,contentType:"application/json",
   headers:{"cache-control":"no-store"},body:JSON.stringify(result)});

@@ -3,6 +3,9 @@ name: Validar frontend y API
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
+    paths: ["api/src/realReports.js", "api/src/pharmacyCodes.js", "web/src/ModuloDemo.jsx", "web/src/reportFilterScopes.js", ".github/workflows/validate.yml"]
   workflow_dispatch:
 
 permissions:
@@ -46,6 +49,7 @@ jobs:
           node --test src/importarPromociones.test.js
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
+          node --test src/reportFilterScopes.test.js
           node --test src/businessAnalytics.test.js
           node --test src/salesPeriods.test.js
           node --test src/promotionMetrics.test.js

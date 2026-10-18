@@ -392,6 +392,8 @@ try {
   await pool.query(accessMigration);
   const tenantMigration = await readFile(new URL("./migrations/003_multitenant.sql", import.meta.url), "utf8");
   await pool.query(tenantMigration);
+  const analysisMigration=await readFile(new URL("./migrations/012_analisis_ventas_cliente.sql",import.meta.url),"utf8");
+  await pool.query(analysisMigration);
   const supplierMigration=await readFile(new URL("./migrations/005_proveedores.sql",import.meta.url),"utf8");
   await pool.query(supplierMigration);
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");

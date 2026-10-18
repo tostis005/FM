@@ -42,3 +42,4 @@ export default function ConfiguracionAnalisisVentas({clientSlug,initialMonths=12
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
   {success&&<p role="status" className="fm-settings-success">{success}</p>}
  </section>;
+}

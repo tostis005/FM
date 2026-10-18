@@ -161,11 +161,11 @@ app.get("/api/ventas/cobertura", ...requireTenantModule("promociones"), async (r
     const schema=req.context.client.schema;
     const {rows}=await pool.query(
       `SELECT f.id::text AS farmacia_id,f.codigo_origen AS origen,
-        count(v.idventa)::bigint::text AS lineas,
-        min(v.fechahora) AS primera,max(v.fechahora) AS ultima
+        count(v.origen_id)::bigint::text AS lineas,
+        min(v.fecha) AS primera,max(v.fecha) AS ultima
         FROM farmetrica.farmacias f
-        LEFT JOIN "${schema}".lineaventa v
-          ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen
+        LEFT JOIN "${schema}".ventas v
+          ON upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
         WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
         GROUP BY f.id,f.codigo_origen ORDER BY f.id`,
       [req.context.client.slug,ids]);
@@ -179,12 +179,12 @@ app.get("/api/ventas/catalogo", ...requireTenantModule("promociones"), async (re
     const to = String(req.query.hasta || "2026-10-31");
     if (!validDates(from, to)) return res.status(400).json({ error: "Periodo inválido" });
     const { rows } = await pool.query(
-      "SELECT btrim(v.codigo::text) AS cn, " +
-      "max(nullif(btrim(v.descripcion::text), '')) AS descripcion, " +
-      "coalesce(sum(v.cantidad),0)::float8 AS unidades, count(DISTINCT f.id)::int AS farmacias " +
+      "SELECT btrim(v.articulo_id::text) AS cn, " +
+      "NULL::text AS descripcion, " +
+      "coalesce(sum(v.unidades),0)::float8 AS unidades, count(DISTINCT f.id)::int AS farmacias " +
       salesJoin(req) + " WHERE " + salesPeriod +
-      " AND btrim(v.codigo::text) ~ '^[0-9]{6}$' " +
-      "GROUP BY btrim(v.codigo::text) HAVING sum(v.cantidad) > 0 " +
+      " AND btrim(v.articulo_id::text) <> '' " +
+      "GROUP BY btrim(v.articulo_id::text) HAVING sum(v.unidades) > 0 " +
       "ORDER BY unidades DESC, cn LIMIT 50", [from, to]
     );
     res.json({ desde: from, hasta: to, products: rows });
@@ -233,18 +233,18 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
   const ids=[...new Set(requested)];
   if(!ids.length)return res.json({monthly:[],products:[],totalProducts:0,totalArticles:0,from,to});
   const where=salesJoin(req)+" WHERE "+salesPeriod+
-    " AND f.id=ANY($3::int[]) AND btrim(v.codigo::text) ~ '^[0-9]{6}$' "+
-    " AND ($4::text='' OR btrim(v.codigo::text) ILIKE '%' || $4 || '%' OR v.descripcion::text ILIKE '%' || $4 || '%')";
+    " AND f.id=ANY($3::int[]) AND btrim(v.articulo_id::text) <> '' "+
+    " AND ($4::text='' OR btrim(v.articulo_id::text) ILIKE '%' || $4 || '%' OR v.articulo_id::text ILIKE '%' || $4 || '%')";
   const params=[from,to,ids,search];
   const {rows:monthly}=await pool.query(
-    "SELECT to_char(date_trunc('month',v.fechahora),'YYYY-MM') AS month, "+
-    "sum(v.cantidad)::float8 AS unidades, sum(v.importeneto)::float8 AS ventas "+
+    "SELECT to_char(date_trunc('month',v.fecha),'YYYY-MM') AS month, "+
+    "sum(v.unidades)::float8 AS unidades, sum(v.importe)::float8 AS ventas "+
     where+" GROUP BY 1 ORDER BY 1",params);
   const {rows:products}=await pool.query(
-    'SELECT f.id::text AS "pharmacyId", btrim(v.codigo::text) AS cn, '+
-    "max(nullif(btrim(v.descripcion::text),'')) AS name, "+
-    "sum(v.cantidad)::float8 AS units, sum(v.importeneto)::float8 AS value "+
-    where+" GROUP BY f.id,btrim(v.codigo::text) ORDER BY sum(v.importeneto) DESC NULLS LAST LIMIT 750",params);
+    'SELECT f.id::text AS "pharmacyId", btrim(v.articulo_id::text) AS cn, '+
+    "max(nullif(btrim(v.articulo_id::text),'')) AS name, "+
+    "sum(v.unidades)::float8 AS units, sum(v.importe)::float8 AS value "+
+    where+" GROUP BY f.id,btrim(v.articulo_id::text) ORDER BY sum(v.importe) DESC NULLS LAST LIMIT 750",params);
   const {rows:counts}=await pool.query(
     "SELECT count(*)::int AS n,count(DISTINCT cn)::int AS articulos FROM "+
     "(SELECT btrim(v.articulo_id::text) AS cn "+where+" GROUP BY f.id,btrim(v.articulo_id::text)) x",params);
@@ -317,15 +317,15 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
       " NULLS LAST, v.fecha DESC, f.id, v.origen_id DESC";
     const { rows } = await pool.query(
       `SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
-              v.idventa::text AS "saleId", v.idnlinea::text AS "lineId",
-              v.numerodoc::text AS "ticket",
-              v.fechahora AS "at",
-              btrim(v.codigo::text) AS "cn", v.descripcion AS "description",
-              v.xvend_idvendedor::text AS "sellerId",
-              v.pvp::float8 AS "pvp", v.cantidad::float8 AS "quantity",
-              v.importebruto::float8 AS "gross",
-              v.descuentolinea::float8 AS "lineDiscount",
-              v.importeneto::float8 AS "net"
+              v.origen_id::text AS "saleId", v.origen_id::text AS "lineId",
+              v.numero_ticket::text AS "ticket",
+              v.fecha AS "at",
+              btrim(v.articulo_id::text) AS "cn", NULL::text AS "description",
+              NULL::text AS "sellerId",
+              v.precio_unitario::float8 AS "pvp", v.unidades::float8 AS "quantity",
+              NULL::float8 AS "gross",
+              v.descuento_linea::float8 AS "lineDiscount",
+              v.importe::float8 AS "net"
        ` + where + orderSql +
       " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
       [...params,limit,offset]);

@@ -43,24 +43,6 @@ export function buildSalesTotalsSql(schema,granularity){
  ORDER BY tipo,mes${granularity==="month"?"":",periodo"}`;
 }
 export function setupSalesTotals(app,pool,{requireTenant}){
- // El histórico completo puede implicar millones de filas. Compartir
- // consultas simultáneas idénticas y reutilizar resultados exactos hasta 2 min.
- // Aislar caché por tenant, esquema, códigos ERP autorizados y período.
- const totalsCache=new Map(), ttlMs=120000;
- async function getTotals(key,sql,params,refresh){
-  const now=Date.now(),hit=totalsCache.get(key);
-  if(!refresh&&hit&&hit.expires>now)return hit.promise;
-  if(totalsCache.size>=128){
-   for(const [k,v] of totalsCache)if(v.expires<=now)totalsCache.delete(k);
-   if(totalsCache.size>=128)totalsCache.delete(totalsCache.keys().next().value);
-  }
-  const promise=pool.query(sql,params).then(({rows})=>rows).catch(error=>{
-   if(totalsCache.get(key)?.promise===promise)totalsCache.delete(key);
-   throw error;
-  });
-  totalsCache.set(key,{promise,expires:now+ttlMs});
-  return promise;
- }
  app.get("/api/analytics/ventas/totales",...requireTenant(),async(req,res,next)=>{
   try{
    if(req.context.role!=="superadministrador"&&
@@ -92,9 +74,8 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))throw Error("Esquema no válido");
    if(!ids.length)return res.json({from,to,granularity,monthly:[],series:[],
      kpis:{ventas:0,unidades:0}});
-   const key=JSON.stringify([req.context.client.slug,schema,[...codes].sort(),from,to,granularity]);
-   const rows=await getTotals(key,buildSalesTotalsSql(schema,granularity),
-     [from,to,codes],String(req.query.refrescar||"")==="1");
+   // Siempre leer PostgreSQL: sin cachés de importes ni series.
+   const {rows}=await pool.query(buildSalesTotalsSql(schema,granularity),[from,to,codes]);
    const months=(granularity==="month"?rows:rows.filter(x=>x.tipo==="month")).map(x=>({
     month:x.month,ventas:Number(x.ventas),unidades:Number(x.unidades)}));
    const series=granularity==="month"?

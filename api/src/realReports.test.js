@@ -89,3 +89,24 @@ test("ABCD usa ventas completas por farmacia aunque haya filtro de búsqueda/fam
   sql.includes('AS "pharmacyId"')&&sql.includes(".ventas")&&!sql.includes("ILIKE")),
   "el ranking no debe recortarse a los artículos visibles");
 });
+
+test("consultas trimestrales preagrupan ventas por artículo antes de resolver CN",async()=>{
+ const {call,queries}=create();
+ await call();
+ const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".ventas t'));
+ assert.ok(sales,"se ejecuta la consulta de ventas por artículo");
+ assert.match(sales.sql,/GROUP BY f\.id,upper\(btrim\(t\.farmacia_codigo\)\),t\.articulo_id/);
+ assert.match(sales.sql,/\) t\s+JOIN farmetrica\.farmacias f/);
+ assert.match(sales.sql,/LEFT JOIN LATERAL/);
+ const monthly=queries.find(x=>x.sql.includes("date_trunc('month'")&&x.sql.includes('"ampedia".ventas t'));
+ assert.ok(monthly);
+ assert.doesNotMatch(monthly.sql,/LEFT JOIN LATERAL/,"los totales mensuales no necesitan fichas de artículos");
+});
+test("filtro de artículos conserva la restricción por fecha y farmacia antes de agrupar",async()=>{
+ const {call,queries,req}=create();
+ await call({query:{...req.query,buscar:"amoxicilina",familias:"Antibióticos"}});
+ const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".ventas t'));
+ assert.match(sales.sql,/f\.id=ANY\(\$3::int\[\]\)/);
+ assert.match(sales.sql,/t\.fecha >= \$1::date/);
+ assert.match(sales.sql,/coalesce\(art\.familia,''\)=ANY\(\$5::text\[\]\)/);
+});

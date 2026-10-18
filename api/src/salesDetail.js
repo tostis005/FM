@@ -16,7 +16,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
   name:"name",cn:"cn",family:"family",
   pharmacy:'(SELECT fp.nombre FROM farmetrica.farmacias fp WHERE fp.id::text="pharmacyId")',
   abcdClass:'"abcdClass"',pvp:"pvp",units:"units",value:"value",
-  saleUnitPrice:"value/NULLIF(units,0)",
+  saleUnitPrice:"CASE WHEN units>0 THEN value/units ELSE NULL END",
   purchaseCost:'"globalPurchaseCost"',costSource:'"globalCostSource"',
   unitMargin:'"globalUnitMargin"',margin:'"globalMargin"',marginPct:'"globalMarginPct"'
  };
@@ -39,8 +39,9 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
     CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END AS "globalPurchaseCost",
     CASE WHEN gc.priced_units>0 THEN 'Compras ponderadas'
       WHEN v.pmc IS NOT NULL THEN 'PMC catálogo' ELSE NULL END AS "globalCostSource",
-    v.value/NULLIF(v.units,0)-
-      (CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END) AS "globalUnitMargin",
+    CASE WHEN v.units>0 THEN v.value/v.units-
+      (CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END)
+      ELSE NULL END AS "globalUnitMargin",
     v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END) AS "globalMargin",
     100*(v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END))
       /NULLIF(v.value,0) AS "globalMarginPct"

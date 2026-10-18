@@ -2,6 +2,7 @@ import { createHmac, randomInt, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import nodemailer from "nodemailer";
+import {verifyInternalPassword} from "./internalPassword.js";
 
 const EMAIL = /^[a-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
@@ -49,19 +50,20 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     next();
   });
 
-  async function resolveAccess(email) {
+  async function resolveAccess(email,loginMethod="google") {
     const {rows:explicit}=await pool.query(
       "SELECT email,nombre,rol,farmacias,activo FROM public.acceso_cuentas WHERE email=$1",[email]);
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
-      "SELECT cliente_slug AS slug,rol AS role,farmacias::text[] AS pharmacies,activo AS active FROM farmetrica.usuario_clientes WHERE email=$1",[email]);
+      "SELECT cliente_slug AS slug,rol AS role,farmacias::text[] AS pharmacies,activo AS active,metodo_acceso AS login_method FROM farmetrica.usuario_clientes WHERE email=$1",[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
-    const active=memberships.filter(m=>m.active);
+    const active=memberships.filter(m=>m.active&&(loginMethod!=="interno"||m.login_method==="interno")&&(loginMethod!=="google"||m.login_method==="google"));
+    if(loginMethod==="interno"&&!active.length)return null;
     if(!superRows.length && !active.length)return null;
     return {email,name:explicit[0].nombre||email.split("@")[0],
-      role:superRows.length?"superadministrador":active[0].role,
-      tenants:memberships,source:"correo"};
+      role:loginMethod!=="interno"&&superRows.length?"superadministrador":active[0]?.role,
+      tenants:memberships.filter(m=>m.login_method===loginMethod||loginMethod==="correo"),source:loginMethod};
   }
   function cookie(req) {
     const entries = (req.get("cookie") || "").split(";");
@@ -77,7 +79,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
         issuer: "farmawao", audience: "farmawao-web", algorithms: ["HS256"],
       });
       if (typeof payload.email !== "string") return null;
-      return await resolveAccess(payload.email);
+      return await resolveAccess(payload.email,payload.loginMethod||"google");
     } catch { return null; }
   }
   function setCookie(res, value, maxAge) {
@@ -86,7 +88,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       (cookieSecure ? "; Secure" : ""));
   }
   async function issueSession(res, user) {
-    const jwt = await new SignJWT({ email: user.email })
+    const jwt = await new SignJWT({ email: user.email,loginMethod:user.source||"google" })
       .setProtectedHeader({ alg: "HS256" }).setIssuedAt()
       .setIssuer("farmawao").setAudience("farmawao-web").setExpirationTime("8h")
       .sign(key);
@@ -117,6 +119,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     emailCodesAvailable: Boolean(secret.length >= 32 && mailer),
     configured: secret.length >= 32 && Boolean(googleId || mailer || temporaryLoginEnabled),
     temporaryLoginEnabled,
+    internalPasswordEnabled: secret.length >= 32,
   }));
   // Nginx auth_request: 204 permite servir la SPA; 401 obliga a mostrar /login.
   app.get("/api/auth/check", async (req, res, next) => {
@@ -166,6 +169,37 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     } catch (error) { next(error); }
   });
 
+  // Usuario interno creado por un administrador de cliente. No altera
+  // Google, códigos de correo, ni el acceso provisional del superadministrador.
+  app.post("/api/auth/password",async(req,res,next)=>{
+    if(secret.length<32)return res.status(503).json({error:"Acceso interno no configurado"});
+    const email=emailOf(req.body?.email),password=req.body?.password;
+    if(!EMAIL.test(email)||typeof password!=="string"||password.length>256)
+      return res.status(400).json({error:"Correo o contraseña incorrectos"});
+    const now=Date.now();
+    const keys=["internal-ip:"+String(req.get("x-real-ip")||req.ip||"unknown").slice(0,80),
+      "internal-email:"+email];
+    for(const [id,state] of attemptsByIp)if(state.until<now)attemptsByIp.delete(id);
+    if(keys.some(id=>(attemptsByIp.get(id)?.count||0)>=5))
+      return res.status(429).json({error:"Demasiados intentos; inténtalo en 15 minutos"});
+    try{
+      const {rows}=await pool.query(
+        "SELECT password_hash FROM farmetrica.credenciales_locales WHERE email=$1 AND activo=true",
+        [email]);
+      const match=rows.length>0&&await verifyInternalPassword(password,rows[0].password_hash);
+      const user=match?await resolveAccess(email,"interno"):null;
+      if(!user){
+        for(const id of keys){
+          const previous=attemptsByIp.get(id);
+          attemptsByIp.set(id,{count:(previous?.until>now?previous.count:0)+1,
+            until:now+15*60*1000});
+        }
+        return res.status(401).json({error:"Correo o contraseña incorrectos"});
+      }
+      for(const id of keys)attemptsByIp.delete(id);
+      return issueSession(res,user);
+    }catch(e){next(e)}
+  });
   app.get("/api/auth/me", async (req, res, next) => {
     try { res.json({ user: await sessionUser(req) }); } catch (e) { next(e); }
   });

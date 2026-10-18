@@ -117,16 +117,20 @@ export function setupRealReports(app,pool,{requireTenant}){
      ${baseTable("compras")} ${provider} WHERE ${filter}
      GROUP BY f.id,${cn},t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT ${rowLimit}`;
    // Los totales mensuales sin búsqueda/familia no necesitan consultar
-   // millones de fichas de artículo: bastan la farmacia autorizada y la fecha.
+   // millones de fichas de artículo. Sus parámetros también deben coincidir
+   // exactamente con los placeholders SQL: PostgreSQL rechaza $4/$5 sin tipo.
+   const periodWithArticleFilter=Boolean(f.search||f.families.length);
+   const periodParams=periodWithArticleFilter?pars:[f.from,f.to,pharmacyIds,req.context.client.slug];
+   const periodTenantParam=periodWithArticleFilter?"$6":"$4";
    const sqlPeriod=table=>`SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount
      FROM ${quoted}.${table} t
-     JOIN farmetrica.farmacias f ON f.cliente_slug=$6
+     JOIN farmetrica.farmacias f ON f.cliente_slug=${periodTenantParam}
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-     ${f.search||f.families.length?article:""}
+     ${periodWithArticleFilter?article:""}
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[])
-       ${f.search||f.families.length?`AND ${articleFilter}`:""}
+       ${periodWithArticleFilter?`AND ${articleFilter}`:""}
      GROUP BY 1 ORDER BY 1`;
    const sqlProv=`SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId",
      max(coalesce(nullif(t.proveedor_nombre,''),${suppliers?"prov.nombre,":""}t.proveedor_id)) AS name,
@@ -138,8 +142,8 @@ export function setupRealReports(app,pool,{requireTenant}){
    const queries=[
     sales&&pharmacyIds.length?pool.query(sqlSales,pars):{rows:[]},
     buyers&&pharmacyIds.length?pool.query(sqlBuy,pars):{rows:[]},
-    sales&&pharmacyIds.length?pool.query(sqlPeriod("ventas"),pars):{rows:[]},
-    buyers&&pharmacyIds.length?pool.query(sqlPeriod("compras"),pars):{rows:[]},
+    sales&&pharmacyIds.length?pool.query(sqlPeriod("ventas"),periodParams):{rows:[]},
+    buyers&&pharmacyIds.length?pool.query(sqlPeriod("compras"),periodParams):{rows:[]},
     buyers&&pharmacyIds.length?pool.query(sqlProv,pars):{rows:[]},
     pool.query(`SELECT DISTINCT familia FROM ${quoted}.articulos
       WHERE familia IS NOT NULL AND familia<>'' AND

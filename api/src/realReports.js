@@ -575,7 +575,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     actions,families:families.rows.map(r=>r.familia),
     availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockRowsTruncated,
      snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
-     stockSummaryBasis:stockSummary?"PMC de ficha (todos los artículos)":null,
+     stockSummaryBasis:stockSummary?(stockSource==="stock"?"Coste unitario del inventario (todos los artículos)":"PMC de ficha (todos los artículos)"):null,
      rowsTruncated:!complete,marginCoverage:coveredItems}});
   }catch(e){next(e)}
  });

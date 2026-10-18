@@ -1,3 +1,4 @@
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import React,{useEffect,useState} from "react";
 import {Mail,RefreshCw} from "lucide-react";
 import "./moduleDemo.css";
@@ -102,7 +103,7 @@ function WebTrafficSummary(){
   {!data?(loading?<SkeletonKpis count={3}/>:<p>No hay métricas disponibles.</p>):<LoadingFrame loading={loading} label="Actualizando las métricas de la web…">
    <div className="fm-traffic-kpis"><div><span>Vistas de páginas</span><strong>{totalViews.toLocaleString("es-ES")}</strong></div><div><span>Visitas a «Solicitar demo»</span><strong>{demoViews.toLocaleString("es-ES")}</strong></div><div><span>Solicitudes recibidas</span><strong>{leads.toLocaleString("es-ES")}</strong></div></div>
    <p className="fm-traffic-caveat">Son vistas de páginas, no personas únicas. Algunas visitas pueden no contarse si bloquean JavaScript; las solicitudes proceden del registro real en PostgreSQL. No se atribuyen usuarios individuales.</p>
-   <div className="fm-traffic-columns"><div><h3>Páginas consultadas</h3>{!data.paginas?.length?<p>Aún no hay visitas registradas.</p>:<table className="fm-traffic-table"><thead><tr><th>Página</th><th>Vistas</th></tr></thead><tbody>{data.paginas.map(p=><tr key={p.ruta}><td>{p.ruta}</td><td>{p.visitas}</td></tr>)}</tbody></table>}</div><div><h3>Solicitudes por procedencia</h3>{!data.solicitudesPorOrigen?.length?<p>Aún no hay solicitudes.</p>:<table className="fm-traffic-table"><thead><tr><th>Origen</th><th>Contactos</th></tr></thead><tbody>{data.solicitudesPorOrigen.map(p=><tr key={p.origen}><td>{p.origen}</td><td>{p.solicitudes}</td></tr>)}</tbody></table>}
+   <div className="fm-traffic-columns"><div><h3>Páginas consultadas</h3>{!data.paginas?.length?<p>Aún no hay visitas registradas.</p>:<HorizontalTableScroll className="table-scroll" label="estadísticas de visitas"><table className="fm-traffic-table"><thead><tr><th>Página</th><th>Vistas</th></tr></thead><tbody>{data.paginas.map(p=><tr key={p.ruta}><td>{p.ruta}</td><td>{p.visitas}</td></tr>)}</tbody></table></HorizontalTableScroll>}</div><div><h3>Solicitudes por procedencia</h3>{!data.solicitudesPorOrigen?.length?<p>Aún no hay solicitudes.</p>:<HorizontalTableScroll className="table-scroll" label="estadísticas de visitas"><table className="fm-traffic-table"><thead><tr><th>Origen</th><th>Contactos</th></tr></thead><tbody>{data.solicitudesPorOrigen.map(p=><tr key={p.origen}><td>{p.origen}</td><td>{p.solicitudes}</td></tr>)}</tbody></table></HorizontalTableScroll>}
    <h3>Avisos por correo</h3><p>Comercial: {data.avisoCorreo?.comercial?"configurado":"pendiente de configurar"} · Privacidad: {data.avisoCorreo?.privacidad?"configurado":"pendiente de configurar"}.</p></div></div>
   </LoadingFrame>}
  </section>;

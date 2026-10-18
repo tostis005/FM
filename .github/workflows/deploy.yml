@@ -138,9 +138,8 @@ jobs:
 
       - name: Preparar catálogo de genéricos aditivo
         run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \\
-            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \\
-            < api/src/migrations/010_nomenclator_aemps.sql
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' < api/src/migrations/010_nomenclator_aemps.sql
 
       - name: Actualizar API y web en el VPS
         run: |

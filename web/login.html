@@ -82,6 +82,7 @@
   <script>
     (() => {
       const form = document.getElementById("form");
+      let loginConfig={temporaryLoginEnabled:false};
       const error = document.getElementById("error");
       const submit = document.getElementById("submit");
       const query = new URLSearchParams(location.search);
@@ -96,7 +97,7 @@
           headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw Error(data.error || "No se pudo iniciar sesión");
+        if (!response.ok){const err=Error(data.error || "No se pudo iniciar sesión");err.status=response.status;throw err;}
         finish();
       };
       form.addEventListener("submit", async event => {
@@ -104,16 +105,25 @@
         clearError();
         submit.disabled = true;
         try {
-          await authPost("/api/auth/local", {
+          const credentials={
             email: document.getElementById("email").value.trim(),
             password: document.getElementById("password").value,
-          });
+          };
+          try{
+            await authPost("/api/auth/password",credentials);
+          }catch(e){
+            // Conservar el acceso provisional del superadministrador; los
+            // usuarios internos siempre se validan primero por la nueva ruta.
+            if(!loginConfig.temporaryLoginEnabled||e.status!==401)throw e;
+            await authPost("/api/auth/local",credentials);
+          }
         } catch (e) { showError(e.message || "No se pudo iniciar sesión"); }
         finally { submit.disabled = false; document.getElementById("password").value = ""; }
       });
       fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" })
         .then(r => r.ok ? r.json() : null).then(data => { if (data?.user) finish(); }).catch(() => {});
       fetch("/api/auth/config", { cache: "no-store" }).then(r => r.json()).then(config => {
+        loginConfig=config;
         if (!config.googleClientId) return;
         const script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";

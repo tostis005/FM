@@ -315,10 +315,18 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const chartLoading=module==="ventas"&&fastEligible?
    (fastLoading||(!fastSales&&isFetchingSales)):isFetchingSales;
  const chart=salesModule&&chartData&&(module==="ventas"||(!filters.families.length&&!searchReady))?
-   (chartData.series||chartData.monthly.map(r=>({...r,bucket:r.month}))).map(r=>({
-    month:formatSalesBucket(r.bucket,chartData.granularity||"month"),
-    ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0
-   })):
+   (module==="ventas"&&filters.period==="all"?
+    [...(chartData.series||[])].reduce((acc,r)=>{
+     const year=String(r.bucket||"").slice(0,4);
+     if(!acc.some(x=>x.month===year))acc.push({month:year,ventas:0,unidades:0});
+     const item=acc.find(x=>x.month===year);
+     item.ventas+=Number(r.ventas||0);item.unidades+=Number(r.unidades||0);
+     return acc;
+    },[]):
+    (chartData.series||chartData.monthly.map(r=>({...r,bucket:r.month}))).map(r=>({
+     month:formatSalesBucket(r.bucket,chartData.granularity||"month"),
+     ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0
+    }))):
    (realReport?.monthly||[]).map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
  const available=Boolean(realReport?.available||(["dashboard","ventas"].includes(module)&&hasSales));
  const chartSeries=module==="dashboard"&&!realReport?["ventas",null,"Evolución de ventas"]:chartConfig;
@@ -342,7 +350,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    </div>
    <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}
      onClick={()=>{setAsOf(new Date());setReloadKey(x=>x+1)}}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
-   {period.valid&&<span className="fm-sales-period-info">{period.from===period.to?period.from:period.from+" → "+period.to}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
+   {period.valid&&<span className="fm-sales-period-info">{module==="ventas"&&filters.period==="all"?"Todo el histórico hasta "+period.to:period.from===period.to?period.from:period.from+" → "+period.to}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
   </div>}
   {filters.period==="custom"&&<div className="fm-sales-custom-dates">
    <label>Desde<input aria-label="Ventas desde" type="date" value={filters.customFrom} onChange={e=>change("customFrom",e.target.value)}/></label>

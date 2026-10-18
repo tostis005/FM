@@ -168,6 +168,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,granularidad:period.granularity});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  if(reloadKey>0)params.set("refrescar","1");
   fetch("/api/analytics/ventas/totales?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar los totales");return b})

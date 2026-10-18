@@ -307,7 +307,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    value:r.value==null?null:Number(r.value),margin:null,marginPct:null
  }));
  const rows=module==="ventas"?(realReport?.salesRows||liveSalesRows):(datasets[module]||[]);
- const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap);
+ // Los códigos de familia no son comparables entre farmacias distintas.
+ const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap)
+   .filter(col=>!(module==="ventas"&&!singleFamilyPharmacy&&col.key==="family"));
  const chartConfig=SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;
  const chartLoading=module==="ventas"&&fastEligible?

@@ -16,21 +16,21 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/context")data=context;
  else if(p==="/api/tenant/promociones")data={promotions:[]};
  else if(p==="/api/tenant/farmacias")data=pharmacies;
- else if(p==="/api/genericos/conjuntos"){
+ else if(p==="/api/genericos/reales"){
   await new Promise(resolve=>setTimeout(resolve,650));
   data={version:{sha256:"aa",fecha_fuente:"2026-10-18",importado_en:"2026-10-18",total_genericos:6000},
-    totalGroups:1,summary:{salesUnits:22,revenue:240,purchases:118},
+    totalGroups:1,summary:{salesUnits:22,revenue:240,purchases:118,savings:19.68},policy:{global:{percentile:20,months:6},overrides:[]},
     groups:[{dcpf:"123456789",principle:"Omeprazol",name:"Omeprazol 20 mg 28 cápsulas",
       skuCount:2,genericCount:2,salesUnits:22,revenue:240,
-      purchaseUnits:12,spent:118,averagePuc:9.84,bestPuc:8.2,indicativeSavings:19.68}],
+      purchaseUnits:12,spent:118,averagePuc:9.84,averagePvp:15,pvpMarginPct:34.4,bestPuc:8.2,indicativeSavings:19.68}],
     sales:{available:true},purchases:{available:true}};
  }
- else if(p==="/api/genericos/conjuntos/123456789"){
+ else if(p==="/api/genericos/reales/123456789"){
   headerSeen=req.headers()["x-farmetrica-cliente"]==="ampedia";
   data={products:[{cn:"654321",nombre:"Omeprazol A 20 mg",laboratorio:"Lab A",generico:true},
      {cn:"654322",nombre:"Omeprazol B 20 mg",laboratorio:"Lab B",generico:true}],
    sales:[{cn:"654321",units:22,revenue:240}],
-   purchases:[{cn:"654321",supplierCode:"P1",supplier:"Proveedor A",units:12,spend:118,puc:9.84}],
+   purchases:[{cn:"654321",supplierCode:"P1",supplier:"Proveedor A",units:12,pricedUnits:12,cost:118,spend:118,puc:9.84,referencePuc:8.2}],
    salesAvailable:true,purchasesAvailable:true};
  }
  else if(p==="/api/ventas/seguimiento")data={sales:{}};
@@ -39,7 +39,7 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/genericos",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Genéricos",exact:true}).waitFor();
- await page.waitForFunction(()=>document.querySelectorAll(".fm-generic-metric .fm-kpi-spinner").length===4,
+ await page.waitForFunction(()=>document.querySelectorAll(".fm-generic-metric .fm-kpi-spinner").length===5,
   {timeout:7000});
  assert.equal(await page.locator(".fm-generic-chart .fm-loading-panel").count(),1);
  assert.equal(await page.locator(".fm-generic-list .fm-loading-panel").count(),1);

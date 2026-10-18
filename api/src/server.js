@@ -7,6 +7,9 @@ import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
+import { setupRealReports } from "./realReports.js";
+import { setupPricePolicy } from "./pricePolicy.js";
+import { setupGenericosReales } from "./genericosReales.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
@@ -71,12 +74,15 @@ async function requireEntraAdmin(req, res, next) {
 }
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
-const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUser, requireSuperadmin });
+const { requireTenantModule,requireTenant,requireTenantAdmin } = setupTenant(app, pool, { requireUser, requireSuperadmin });
 setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
 setupTenantPromotions(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
+setupRealReports(app,pool,{requireTenant});
+setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
+setupGenericosReales(app,pool,{requireTenantModule});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",

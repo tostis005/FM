@@ -5,7 +5,8 @@ export const SALES_PERIODS=[
  ["last_week","Semana pasada"],["this_month","Este mes"],
  ["last_month","Mes pasado"],["last_7","Últimos 7 días"],
  ["last_30","Últimos 30 días"],["3","3 meses"],["6","6 meses"],
- ["12","12 meses"],["custom","Personalizado"]
+ ["12","12 meses"],["24","2 años"],["36","3 años"],["60","5 años"],
+ ["all","Todo el histórico"],["custom","Personalizado"]
 ];
 const iso=d=>d.toISOString().slice(0,10);
 const add=(date,{days=0,months=0}={})=>{
@@ -41,14 +42,15 @@ export function resolveSalesPeriod(period,now=new Date(),custom={},timeZone="Eur
    const start=new Date(custom.from+"T00:00:00Z"),end=new Date(custom.to+"T00:00:00Z");
    if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||iso(start)!==custom.from||iso(end)!==custom.to||start>end)
     return {valid:false,reason:"La fecha final debe ser igual o posterior a la inicial."};
-   if((end-start)/86400000>366)return {valid:false,reason:"El período máximo es de 12 meses."};
+   if((end-start)/86400000>36525)return {valid:false,reason:"El rango personalizado no puede superar 100 años."};
    from=start;to=end;
    const days=(end-start)/86400000;
    granularity=days<=1?"hour":days<=90?"day":"month";
    break;
   }
+  case "all":from=new Date(Date.UTC(1900,0,1));granularity="month";break;
   default:{
-   const months=["3","6","12"].includes(String(period))?Number(period):6;
+   const months=["3","6","12","24","36","60"].includes(String(period))?Number(period):6;
    from=add(firstMonth,{months:1-months});granularity="month";
   }
  }

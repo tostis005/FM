@@ -21,9 +21,9 @@ function Metric({label,value,caption,loading}){
  </div>;
 }
 function downloadRows(rows){
- const data=[["Conjunto DCPF","Nombre","Molécula","Códigos","Ventas (€)","Unidades vendidas",
+ const data=[["Conjunto DCPF","Nombre","Molécula","Códigos","ABCD","Ventas (€)","Unidades vendidas",
    "Compras (€)","PUC medio","Mejor PUC","Ahorro orientativo"],
-  ...rows.map(g=>[g.dcpf,g.name,g.principle,g.skuCount,g.revenue,g.salesUnits,g.spent,
+  ...rows.map(g=>[g.dcpf,g.name,g.principle,g.skuCount,g.abcdClass,g.revenue,g.salesUnits,g.spent,
     g.averagePuc,g.bestPuc,g.indicativeSavings])];
  const csv="\ufeff"+data.map(r=>r.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
@@ -88,6 +88,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
  const [periodKey,setPeriodKey]=useState("3");
  const [customFrom,setCustomFrom]=useState(""),[customTo,setCustomTo]=useState("");
  const [ids,setIds]=useState([]),[search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
+ const [abcdFilter,setAbcdFilter]=useState("all");
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
  const [active,setActive]=useState(null),[page,setPage]=useState(0),[reload,setReload]=useState(0);
  const asOf=useMemo(()=>new Date(),[reload]);
@@ -99,12 +100,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
   const p=new URLSearchParams({desde:range.from,hasta:range.to});
   if(ids.length)p.set("farmacias",ids.join(","));
   if(queryText.trim())p.set("buscar",queryText.trim());
+  if(abcdFilter!=="all")p.set("abcd",abcdFilter);
   return p.toString();
- },[range.from,range.to,range.valid,ids.join(","),queryText]);
+ },[range.from,range.to,range.valid,ids.join(","),queryText,abcdFilter]);
  useEffect(()=>{
   if(!query){setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
-  setLoading(true);setError("");setActive(null);setPage(0);
+  setLoading(true);setError("");
   fetch("/api/genericos/"+(clientSlug==="ampedia"?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");return j})
@@ -112,6 +114,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
    .finally(()=>{if(mounted)setLoading(false)});
   return()=>{mounted=false;controller.abort()};
  },[query,clientSlug,reload]);
+ useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
+ useEffect(()=>{
+  const refresh=()=>{if(document.visibilityState==="visible")setReload(n=>n+1)};
+  const timer=setInterval(refresh,5*60*1000);
+  document.addEventListener("visibilitychange",refresh);
+  return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",refresh)};
+ },[]);
  const groups=data?.groups||[];
  const salesEnabled=data?.sales?.available===true;
  const buysEnabled=data?.purchases?.available===true;
@@ -146,6 +155,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
     <label>Hasta<input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></>}
    <label>Farmacias<MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
     options={pharmacies.map(f=>({label:f.name,value:String(f.id)}))} value={ids} onChange={setIds}/></label>
+   <label>Prioridad ABCD<select value={abcdFilter} onChange={e=>setAbcdFilter(e.target.value)} aria-label="Filtrar clasificación ABCD">
+    <option value="all">Todas</option><option value="A">A · Principal</option><option value="B">B · Relevante</option>
+    <option value="C">C · Menor</option><option value="D">D · Sin ventas</option>
+   </select></label>
    <label>Molécula, presentación o CN<div className="fm-generic-search"><Search size={16}/>
     <input placeholder="Buscar conjunto…" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
   </div>
@@ -192,12 +205,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
     !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <div className="fm-generic-table-scroll"><table>
-     <thead><tr><th>Conjunto DCPF / molécula</th><th>Códigos</th><th>Venta (uds.)</th>
+     <thead><tr><th>Conjunto DCPF / molécula</th><th>Códigos</th><th>ABCD</th><th>Venta (uds.)</th>
       <th>Ventas</th><th>PUC medio</th><th>PVP medio</th><th>Margen PVP (%)</th><th>Precio ref.</th><th>Ahorro potencial</th><th/></tr></thead>
      <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
        <td>{number(g.skuCount)} <small>({g.genericCount} EFG)</small></td>
+       <td>{g.abcdClass?<span className={"fm-abcd fm-abcd-"+g.abcdClass} title="Clasificación por peso de ventas del conjunto en el período">{g.abcdClass}</span>:"—"}</td>
        <td>{number(g.salesUnits)}</td><td>{money(g.revenue)}</td>
        <td>{unitPrice(g.averagePuc)}</td><td>{unitPrice(g.averagePvp)}</td>
        <td>{g.pvpMarginPct==null?"—":number(g.pvpMarginPct)+" %"}</td>
@@ -206,7 +220,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
         aria-expanded={active===g.dcpf} onClick={e=>{e.stopPropagation();setActive(active===g.dcpf?null:g.dcpf)}}>
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
-      {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={10}>
+      {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={11}>
        <GroupDetail group={g} query={query} clientSlug={clientSlug}/>
       </td></tr>}
      </React.Fragment>)}</tbody>

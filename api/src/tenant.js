@@ -218,6 +218,17 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.patch("/api/tenant/farmacias/:id",...requireTenantAdmin(),async(req,res,next)=>{
     try{
       if(!/^[1-9]\d{0,8}$/.test(req.params.id))return res.status(400).json({error:"Farmacia inválida"});
+      if(req.context.client.demo){
+        const name=String(req.body?.name||"").trim(),city=String(req.body?.city||"").trim();
+        if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean")
+          return res.status(400).json({error:"Datos de farmacia demo inválidos"});
+        const {rows}=await pool.query(
+          'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
+          [Number(req.params.id),req.context.client.slug,name,city,req.body.active]);
+        if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
+        return res.json(decoratePharmacy(req.context.client.slug,rows[0],
+          {demo:true,ordinal:req.context.pharmacies.findIndex(p=>p.id===String(req.params.id))+1}));
+      }
       const f=validatePharmacy(req.body);
       const {rows}=await pool.query(
         'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_origen=$6,host_origen=$7,bd_origen=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',

@@ -5,6 +5,9 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["ops/indices-consultas-operativas.sql", ".github/workflows/optimizar-indices-operativos.yml"]
 permissions:
   contents: read
 concurrency:
@@ -12,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   indices:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -63,10 +66,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o ServerAliveInterval=20 -o ServerAliveCountMax=15 "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
-            < ops/indices-consultas-operativas.sql
+          # PostgreSQL puede abortar un CREATE INDEX CONCURRENTLY por deadlocks
+          # transitorios de la sincronización ERP. En cada reintento, el SQL
+          # elimina únicamente los índices de Farmétrica incompletos.
+          for intento in 1 2 3 4 5 6; do
+            if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ServerAliveInterval=20 -o ServerAliveCountMax=15 "$VPS_USER@$VPS_HOST" \
+              'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+              < ops/indices-consultas-operativas.sql; then
+              echo "Índices instalados en intento $intento."
+              break
+            fi
+            if [ "$intento" = 6 ]; then
+              echo "::error::Índices sin instalar tras seis intentos sin bloquear compras/ventas."
+              exit 1
+            fi
+            echo "::warning::Bloqueo/contención PostgreSQL en intento $intento; reintentando."
+            sleep $((intento*25))
+          done
       - name: Comprobar todos los índices válidos
         shell: bash
         run: |

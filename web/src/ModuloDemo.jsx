@@ -7,6 +7,7 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
 import {buildAnalysis} from "./businessAnalytics.js";
 import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods.js";
+import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import "./moduleDemo.css";
 
 const TITLES={
@@ -132,7 +133,18 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   document.addEventListener("visibilitychange",onVisible);
   return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",onVisible)};
  },[]);
- const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
+ const ids=pharmacies.map(p=>String(p.id)+":"+p.name+":"+(p.databaseCode||p.sourceCode||"")).join(",");
+ // Una sesión antigua puede haber guardado POL/VAL o códigos que ya no pertenecen
+ // al ámbito autorizado. Traducirlos a IDs reales antes de solicitar informes.
+ useEffect(()=>{
+  if(!pharmacies.length)return;
+  setFilters(prev=>{
+   const normalized=reconcilePharmacyIds(prev.pharmacyIds,pharmacies);
+   const before=(prev.pharmacyIds||[]).map(String);
+   return before.length===normalized.length&&before.every((id,i)=>id===normalized[i])
+    ?prev:{...prev,pharmacyIds:normalized,families:[],search:""};
+  });
+ },[ids]);
  const salesModule=["dashboard","ventas"].includes(module);
  const tz=clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
  const period=resolveSalesPeriod(filters.period,asOf,{from:filters.customFrom,to:filters.customTo},tz);
@@ -223,7 +235,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    {module==="proveedores"&&canNavigate("proveedores-maestro")&&
     <button className="btn btn-secondary" onClick={()=>go("proveedores-maestro")}>Maestro de proveedores <ArrowRight size={16}/></button>}</div>
   <div className="fm-demo-filters">
-   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>change("pharmacyIds",v)}/></div>
+   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>{setFilters(f=>({...f,pharmacyIds:reconcilePharmacyIds(v,pharmacies),families:[],search:""}));setSearchReady("");}}/></div>
    {familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
    <label><span>Periodo</span><select value={filters.period} onChange={e=>pickPeriod(e.target.value)}>
     {SALES_PERIODS.map(([key,label])=><option key={key} value={key}>{label}</option>)}
@@ -287,7 +299,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
+   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard?go(row.targetModule):setDetail(row)} columns={columns}/>
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>

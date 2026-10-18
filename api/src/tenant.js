@@ -113,6 +113,20 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         fecha_referencia timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY(farmacia_id,producto_id)
       )`);
+      await db.query(`CREATE TABLE "${slug}".fm_promociones (
+        id text PRIMARY KEY,
+        documento jsonb NOT NULL,
+        fuente text,creado_por text,actualizado_por text,
+        creado_en timestamptz NOT NULL DEFAULT now(),
+        actualizado_en timestamptz NOT NULL DEFAULT now()
+      )`);
+      await db.query(`CREATE TABLE "${slug}".fm_promocion_revisiones (
+        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        promocion_id text NOT NULL,documento_anterior jsonb NOT NULL,
+        cambiado_por text NOT NULL,cambiado_en timestamptz NOT NULL DEFAULT now()
+      )`);
+      await db.query(`CREATE INDEX ON "${slug}".fm_promociones (actualizado_en DESC)`);
+      await db.query(`CREATE INDEX ON "${slug}".fm_promocion_revisiones (promocion_id,cambiado_en DESC)`);
       await db.query("INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos) VALUES($1,$2,$1)",
         [slug,name]);
       await db.query("INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado) SELECT $1,clave,false FROM farmetrica.modulos",[slug]);

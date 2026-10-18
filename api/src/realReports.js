@@ -403,7 +403,8 @@ export function setupRealReports(app,pool,{requireTenant}){
      ...r,action:"Revisar exceso de stock",impact:r.excessValue,targetModule:"stock"}))
    ].sort((a,b)=>b.impact-a.impact);
    const complete=sale.rows.length<rowLimit&&buys.rows.length<rowLimit;
-   const completeStock=snapshotAvailable&&stockRows.length<rowLimit;
+   const stockRowsTruncated=Boolean(snapshotAvailable&&stockRows.length>=rowLimit);
+   const completeStock=snapshotAvailable&&!stockRowsTruncated;
    const pricedStock=stockRows.filter(r=>r.value!=null);
    const kpis={
     stockArticulos:snapshotAvailable?stockSummary?.articles??null:null,
@@ -427,12 +428,12 @@ export function setupRealReports(app,pool,{requireTenant}){
     stockSinRotacion:completeStock&&complete?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
     roturas:completeStock&&complete?stockRows.filter(r=>r.zero).length:null,
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
-    acciones:complete?actions.length:null
+    acciones:complete&&!stockRowsTruncated?actions.length:null
    };
    res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows.filter(r=>r.margin!=null),
     actions,families:families.rows.map(r=>r.familia),
-    availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,
+    availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockRowsTruncated,
      snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
      stockSummaryBasis:stockSummary?"PMC de ficha (todos los artículos)":null,
      rowsTruncated:!complete,marginCoverage:coveredItems}});

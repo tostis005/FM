@@ -202,7 +202,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        GROUP BY t.month ORDER BY t.month`;
    };
    const sqlProv=`SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId",
-     max(coalesce(nullif(t.proveedor_nombre,''),${suppliers?"prov.nombre,":""}t.proveedor_id)) AS name,
+     max(coalesce(nullif(t.proveedor_nombre,''),${providerFallback}t.proveedor_id)) AS name,
      sum(t.importe)::float8 AS value,
      sum(t.unidades)::float8 AS units,
      count(DISTINCT ${cn})::int AS products

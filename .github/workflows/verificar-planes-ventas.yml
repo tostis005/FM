@@ -57,6 +57,30 @@ jobs:
                 THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END)
           WHERE f.id=5 AND v.fecha >= DATE '2026-10-17'
             AND v.fecha < DATE '2026-10-18';
+          \echo '=== Valdemarías: existencia de ventas reales en los últimos 90 días ==='
+          SELECT EXISTS(
+            SELECT 1 FROM ampedia.ventas v
+            JOIN farmetrica.farmacias f ON f.id=5 AND f.cliente_slug='ampedia'
+              AND upper(btrim(v.farmacia_codigo))=
+                 (CASE WHEN f.cliente_slug='ampedia' AND f.id=5
+                    AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+                    THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END)
+            WHERE v.fecha>=DATE '2026-07-18' AND v.fecha<DATE '2026-10-19'
+              AND btrim(v.articulo_id::text)<>''
+          ) AS hay_ventas_y_articulo;
+          \echo '=== Valdemarías: existencia de artículo y CN enlazado a ventas ==='
+          SELECT EXISTS(
+            SELECT 1 FROM ampedia.ventas v
+            LEFT JOIN LATERAL(
+              SELECT a.origen_id FROM ampedia.articulos a
+              WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(v.farmacia_codigo))
+                AND a.origen_id=v.articulo_id
+              ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+            ) a ON true
+            WHERE upper(btrim(v.farmacia_codigo))='VAL'
+              AND v.fecha>=DATE '2026-07-18' AND v.fecha<DATE '2026-10-19'
+              AND a.origen_id IS NOT NULL
+          ) AS articulos_encontrados;
           \echo '=== Compras Abadía: filtro por código ERP y día ==='
           EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
           SELECT count(*),sum(importe)

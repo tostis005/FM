@@ -68,7 +68,9 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      FROM ${schema}.ventas v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND
        upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
-     JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(v.articulo_id::text)
+     ${hasProducts?`LEFT JOIN ${schema}.productos pv ON pv.id=btrim(v.articulo_id::text)`:""}
+     JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
+       ${hasProducts?"coalesce(nullif(btrim(pv.cn),''),btrim(v.articulo_id::text))":"btrim(v.articulo_id::text)"}
      WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[]) ${conditions}
      GROUP BY n.dcpf`;
@@ -151,7 +153,9 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      FROM ${schema}.ventas v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$5
        AND upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
-     JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(v.articulo_id::text)
+     ${hasProducts?`LEFT JOIN ${schema}.productos pv ON pv.id=btrim(v.articulo_id::text)`:""}
+     JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
+       ${hasProducts?"coalesce(nullif(btrim(pv.cn),''),btrim(v.articulo_id::text))":"btrim(v.articulo_id::text)"}
      WHERE n.dcpf=$4 AND f.id=ANY($3::int[])
        AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'
      GROUP BY n.cn`,params):{rows:[]};

@@ -5,6 +5,7 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingState.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import "./genericos.css";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 
 const money=value=>value==null?"—":new Intl.NumberFormat("es-ES",
  {style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(value));
@@ -49,7 +50,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
  }
  return <div className="fm-generic-detail">
   <p>Presentaciones agrupadas por <strong>DCPF {group.dcpf}</strong>. El precio de compra procede exclusivamente de movimientos reales sincronizados.</p>
-  <div className="fm-generic-table-scroll"><table>
+  <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
    <thead><tr><th>CN</th><th>Presentación</th><th>Laboratorio</th><th>Tipo</th>
     <th>Vendidas</th><th>Ventas</th><th>Compradas</th><th>PUC observado</th></tr></thead>
    <tbody>{data.products.map(product=>{
@@ -66,11 +67,11 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
      <td>{data.purchasesAvailable?number(buyQty):"—"}</td>
      <td>{unitPrice(avg)}</td></tr>;
    })}</tbody>
-  </table></div>
+  </table></HorizontalTableScroll>
   <h3>Comparativa de compras por CN y proveedor</h3>
   {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras y coste unitario integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
-   <div className="fm-generic-table-scroll"><table>
+   <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
     <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC real ponderado</th><th>Referencia histórica</th><th>Objetivo equivalente</th><th>Proveedor objetivo</th><th>Ahorro estimado</th><th>Importe</th></tr></thead>
     <tbody>{data.purchases.map((r,i)=><tr key={r.cn+"_"+r.supplierCode+"_"+i}>
      <td className="fm-generic-code">{r.cn}</td><td>{r.supplier||r.supplierCode||"Sin proveedor"}</td>
@@ -79,7 +80,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
      <td>{r.targetSupplier?(r.targetSupplier+(r.targetCn?" · CN "+r.targetCn:"")):"—"}</td>
      <td>{money(r.potential)}</td><td>{money(r.spend)}</td>
     </tr>)}</tbody>
-   </table></div>}
+   </table></HorizontalTableScroll>}
  </div>;
 }
 export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
@@ -186,7 +187,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
      onClick={()=>downloadRows(groups)}><Download size={16}/> CSV</button></div>
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
     !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
-    <div className="fm-generic-table-scroll"><table>
+    <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
      <thead><tr><th>Conjunto DCPF / molécula</th><th>Códigos</th><th>ABCD</th><th>Venta (uds.)</th>
       <th>Ventas</th><th>PUC medio</th><th>PVP medio</th><th>Margen PVP (%)</th><th>Precio ref.</th><th>Ahorro potencial</th><th/></tr></thead>
      <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
@@ -206,7 +207,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
        <GroupDetail group={g} query={query} clientSlug={clientSlug} useReal={useReal}/>
       </td></tr>}
      </React.Fragment>)}</tbody>
-    </table></div>}
+    </table></HorizontalTableScroll>}
    {!loading&&groups.length>20&&<div className="fm-generic-pager">
     <span>Mostrando {page*20+1}–{Math.min(groups.length,(page+1)*20)} de {groups.length}</span>
     <button disabled={page===0} type="button" onClick={()=>{setPage(x=>x-1);setActive(null)}}>Anterior</button>

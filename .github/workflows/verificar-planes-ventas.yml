@@ -1,0 +1,71 @@
+name: Verificar uso de índices en ventas
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verificar-planes-ventas.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  planes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar acceso PostgreSQL de solo lectura
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Explicar planes de búsquedas reales sin extraer transacciones
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SET default_transaction_read_only = on;
+          SET statement_timeout = '35s';
+          SET lock_timeout = '5s';
+          \echo '=== Índices disponibles en producción ==='
+          SELECT idx.relname AS indice,tab.relname AS tabla,pi.indisvalid AS valido,pi.indisready AS preparado
+            FROM pg_class idx JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+            JOIN pg_index pi ON pi.indexrelid=idx.oid
+            JOIN pg_class tab ON tab.oid=pi.indrelid
+            WHERE ns.nspname='ampedia' AND idx.relname LIKE 'fm_%_idx'
+            ORDER BY tab.relname,idx.relname;
+          \echo '=== Ventas Valdemarías: filtro por código ERP y día ==='
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
+          SELECT count(*),sum(importe)
+          FROM ampedia.ventas
+          WHERE upper(btrim(farmacia_codigo))='VAL'
+            AND fecha >= DATE '2026-10-17' AND fecha < DATE '2026-10-18';
+          \echo '=== Ventas Valdemarías: join utilizado por el API ==='
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
+          SELECT count(*),sum(v.importe)
+          FROM ampedia.ventas v JOIN farmetrica.farmacias f
+            ON f.cliente_slug='ampedia'
+            AND upper(btrim(v.farmacia_codigo))=
+              (CASE WHEN f.cliente_slug='ampedia' AND f.id=5
+                 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+                THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END)
+          WHERE f.id=5 AND v.fecha >= DATE '2026-10-17'
+            AND v.fecha < DATE '2026-10-18';
+          \echo '=== Compras Abadía: filtro por código ERP y día ==='
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
+          SELECT count(*),sum(importe)
+          FROM ampedia.compras
+          WHERE upper(btrim(farmacia_codigo))='ABA'
+            AND fecha >= DATE '2026-10-17' AND fecha < DATE '2026-10-18';
+          \echo '=== Catálogo Valdemarías: búsqueda ERP artículo ==='
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)
+          SELECT origen_id FROM ampedia.articulos
+          WHERE upper(btrim(farmacia_codigo))='VAL'
+          ORDER BY origen_id LIMIT 20;
+          SQL

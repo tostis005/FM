@@ -405,14 +405,19 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
+  {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
+  {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
+   <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}
+  {realReport?.available&&realReport.availability?.sales===false&&["dashboard","rentabilidad"].includes(module)&&
+   <p role="status" className="fm-inline-status">No hay una fuente de ventas compatible para este cliente. Los indicadores que dependen de ella no se pueden calcular.</p>}
    {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&<p role="status" className="fm-inline-status">El stock no se muestra como actual porque no hay una importación de inventario suficientemente reciente en las últimas 48 horas.</p>}
    {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<p className="fm-sales-period-info">La valoración total usa el PMC de todas las fichas con stock; si faltan costes, el importe permanece sin calcular. El listado puede mostrar menos referencias sin afectar a los recuentos.</p>}
    {realReport?.availability?.rowsTruncated&&module!=="ventas"&&<p role="status" className="fm-inline-status">El listado está limitado a las primeras 3.000 referencias. Los totales de ventas y compras proceden de todas las operaciones.</p>}
    {realReport?.availability?.stockRowsTruncated&&["stock","reposicion","acciones"].includes(module)&&<p role="status" className="fm-inline-status">El listado de existencias está limitado a 3.000 referencias. Los recuentos y unidades del inventario se calculan sobre todas las fichas; la reposición mostrada no incluye necesariamente todas las necesidades.</p>}
-  {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label="Consultando ventas y actualizando indicadores…"/></div>}
+  {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label={"Consultando "+(module==="compras"||module==="proveedores"?"compras":module==="stock"||module==="reposicion"?"inventario":"informes")+" y actualizando indicadores…"}/></div>}
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    {chartLoading?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {chartLoading?<LoadingPanel kind="chart" label={"Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas")+"…"}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
@@ -434,7 +439,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
+   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}

@@ -52,7 +52,7 @@ test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()
  const {call,queries}=create();
  const {status,result}=await call();
  assert.equal(status,200);
- assert.equal(result.kpis.ventas,120);
+ assert.equal(result.kpis.ventas,null,"Compras no debe fingir una venta total cuando no solicita esa serie");
  assert.equal(result.kpis.compras,60);
  assert.equal(result.kpis.margen,90);
  assert.equal(result.salesRows[0].purchaseCost,1.5);
@@ -91,8 +91,8 @@ test("ABCD usa ventas completas por farmacia aunque haya filtro de búsqueda/fam
 });
 
 test("consultas trimestrales preagrupan ventas por artículo antes de resolver CN",async()=>{
- const {call,queries}=create();
- await call();
+ const {call,queries,req}=create();
+ await call({query:{...req.query,modulo:"dashboard"}});
  const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".ventas t'));
  assert.ok(sales,"se ejecuta la consulta de ventas por artículo");
  assert.match(sales.sql,/GROUP BY f\.id,upper\(btrim\(t\.farmacia_codigo\)\),t\.articulo_id/);
@@ -109,4 +109,27 @@ test("filtro de artículos conserva la restricción por fecha y farmacia antes d
  assert.match(sales.sql,/f\.id=ANY\(\$3::int\[\]\)/);
  assert.match(sales.sql,/t\.fecha >= \$1::date/);
  assert.match(sales.sql,/coalesce\(art\.familia,''\)=ANY\(\$5::text\[\]\)/);
+});
+
+test("los módulos ahorran consultas ajenas a sus indicadores y conservan los datos operativos",async()=>{
+ const a=create();
+ const provider=await a.call({query:{...a.req.query,modulo:"proveedores"}});
+ assert.equal(provider.status,200);
+ assert.equal(provider.result.supplierRows.length,1);
+ assert.equal(provider.result.kpis.ventas,null);
+ assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".ventas t')),
+   "Proveedores no debe escanear todas las ventas");
+ assert.ok(!a.queries.some(q=>q.sql.includes("SELECT DISTINCT familia")),
+   "Las familias se consultan sólo cuando se filtran productos");
+
+ const b=create();
+ const stock=await b.call({query:{...b.req.query,modulo:"stock"}});
+ assert.equal(stock.status,200);
+ assert.equal(stock.result.salesRows.length,1,"Stock necesita demanda real");
+ assert.equal(stock.result.buyRows.length,1,"Stock necesita compras para coste unitario");
+ assert.equal(stock.result.kpis.compras,null,"Stock no solicita el gasto mensual");
+ assert.ok(!b.queries.some(q=>q.sql.includes("date_trunc('month'")&&
+   q.sql.includes('"ampedia".compras')),"Stock no necesita serie mensual de compras");
+ assert.ok(!b.queries.some(q=>q.sql.includes('GROUP BY f.id,t.proveedor_id')),
+   "Stock no debe cargar un ranking de proveedores");
 });

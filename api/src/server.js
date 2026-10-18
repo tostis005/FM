@@ -86,7 +86,7 @@ setupDemoClients(app,pool,{requireSuperadmin});
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas
 // administrativas registradas arriba y nunca escriben en el origen.
 app.use("/api", (req,res,next)=>{
- if(["GET","HEAD","OPTIONS"].includes(req.method))return next();
+ if(["GET","HEAD","OPTIONS"].includes(req.method)||req.path.startsWith("/public/"))return next();
  const test=requireTenant();
  test[0](req,res,error=>{
   if(error)return next(error);

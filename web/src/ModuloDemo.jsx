@@ -160,17 +160,34 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   params.set("granularidad",period.granularity);
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   if(searchReady)params.set("buscar",searchReady);
+  if(module==="ventas"&&filters.families.length)params.set("familias",filters.families.join(","));
   setLoading(true);setSalesError("");setRealSales(null);
-  fetch("/api/analytics/ventas?"+params,{credentials:"same-origin",cache:"no-store",
+  // La pantalla de Ventas pide un único agregado para gráfico, KPI, ABCD y tabla.
+  // Dashboard conserva sus endpoints actuales porque muestra otras áreas.
+  const endpoint=module==="ventas"?"/api/analytics/ventas/resumen":"/api/analytics/ventas";
+  fetch(endpoint+"?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar las ventas");return b})
-   .then(data=>{if(!controller.signal.aborted){setRealSales(data);setLastUpdated(new Date())}})
-   .catch(e=>{if(!controller.signal.aborted)setSalesError(e.message)})
-   .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
+   .then(data=>{if(!controller.signal.aborted){
+    setRealSales(data);
+    if(module==="ventas"){
+     setRealReport({available:true,salesRows:data.products||[],kpis:data.kpis||{},
+      families:data.families||[],monthly:(data.monthly||[]).map(m=>({...m,compras:0})),
+      availability:{sales:true,rowsTruncated:Boolean(data.truncated)}});
+     setReportError("");
+    }
+    setLastUpdated(new Date());
+   }})
+   .catch(e=>{if(!controller.signal.aborted){
+    setSalesError(e.message);
+    if(module==="ventas")setRealReport(null);
+   }})
+   .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),searchReady,reloadKey]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey]);
 
  useEffect(()=>{
+  if(module==="ventas"){setReportLoading(false);return}
   if(!period.valid){setReportLoading(false);setRealReport(null);return}
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,modulo:module});
@@ -221,7 +238,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const rows=module==="ventas"?(realReport?.salesRows||liveSalesRows):(datasets[module]||[]);
  const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap);
  const chartConfig=SERIES[module]||SERIES.dashboard;
- const chart=salesModule&&realSales&&!filters.families.length&&!searchReady?
+ const chart=salesModule&&realSales&&(module==="ventas"||(!filters.families.length&&!searchReady))?
    (realSales.series||realSales.monthly.map(r=>({...r,bucket:r.month}))).map(r=>({
     month:formatSalesBucket(r.bucket,realSales.granularity||"month"),
     ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0

@@ -24,9 +24,18 @@ test("personalizado valida el rango y escoge puntos horarios, diarios o mensuale
  assert.deepEqual([v("2026-10-04","2026-10-04").granularity,v("2026-10-01","2026-10-18").granularity,v("2026-01-01","2026-10-18").granularity],["hour","day","month"]);
  assert.equal(v("2026-10-19","2026-10-01").valid,false);
  assert.equal(v("2026-02-30","2026-03-01").valid,false);
- assert.equal(v("2023-01-01","2026-01-01").valid,false);
+ assert.equal(v("2023-01-01","2026-01-01").valid,true);
+ assert.equal(v("1900-01-01","2026-10-18").valid,false);
  assert.equal(v("","2026-10-18").valid,false);
- assert.equal(SALES_PERIODS.length,12);
+ assert.equal(SALES_PERIODS.length,16);
  assert.equal(formatSalesBucket("2026-10-18T09:00","hour"),"09:00");
  assert.equal(formatSalesBucket("2026-10-18","day"),"18/10");
+});
+
+test("períodos históricos de dos, tres, cinco años y todo el registro",()=>{
+ assert.equal(resolve("24").from,"2024-11-01");
+ assert.equal(resolve("36").from,"2023-11-01");
+ assert.equal(resolve("60").from,"2021-11-01");
+ assert.equal(resolve("all").from,"1900-01-01");
+ assert.equal(resolve("all").granularity,"month");
 });

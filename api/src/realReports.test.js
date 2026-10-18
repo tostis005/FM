@@ -58,6 +58,7 @@ test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()
  assert.equal(result.kpis.lineasCompra,4);
  assert.equal(result.kpis.margen,90);
  assert.equal(result.salesRows[0].purchaseCost,1.5);
+ assert.equal(result.salesRows[0].saleUnitPrice,6);
  assert.equal(result.salesRows[0].pvpMarginPct,75);
  assert.equal(result.buyRows[0].puc,1.5);
  assert.equal(result.salesRows[0].abcdClass,"A");

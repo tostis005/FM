@@ -187,6 +187,28 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(Math.abs(priced.unitMargin-(priced.saleUnitPrice-priced.purchaseCost))<.0002);
   assert.ok(Math.abs(priced.margin-(priced.value-priced.units*priced.purchaseCost))<.02);
   assert.equal(detailVal.hasMore,false);
+  // Probar en PostgreSQL real que ORDER BY se ejecuta ANTES de limitar
+  // y que los campos derivados se pueden ordenar sin depender de la página.
+  for(const order of ["purchaseCost","unitMargin","margin","marginPct",
+    "costSource","saleUnitPrice","name","pharmacy"]){
+   const sorted=await request("/api/analytics/ventas/detalle",{
+    farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18",
+    orden:order,direccion:"asc"});
+   assert.equal(sorted.products.length,1,"Ordenación SQL válida para "+order);
+  }
+  const purchasesOrdered=await request("/api/analytics/reportes",{
+   modulo:"compras",orden:"puc",direccion:"asc"});
+  const pucValues=purchasesOrdered.buyRows.map(r=>r.puc).filter(v=>v!=null);
+  assert.deepEqual(pucValues,[...pucValues].sort((a,b)=>a-b),
+   "Las compras se ordenan globalmente por PUC ponderado");
+  const providersOrdered=await request("/api/analytics/reportes",{
+   modulo:"proveedores",orden:"products",direccion:"desc"});
+  assert.ok(providersOrdered.supplierRows.length>0);
+  const groupsByName=await request("/api/genericos/reales",{
+   orden:"name",direccion:"asc"});
+  const names=groupsByName.groups.map(g=>g.principle||g.name||g.dcpf);
+  assert.deepEqual(names,[...names].sort((a,b)=>a.localeCompare(b,"es",{numeric:true,sensitivity:"base"})));
+
   const detailFamily=await request("/api/analytics/ventas/detalle",{
    farmacias:"5",familias:"Digestivo",desde:"2025-11-01",hasta:"2026-10-18"});
   assert.equal(detailFamily.products.length,1);

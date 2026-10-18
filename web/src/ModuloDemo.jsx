@@ -182,7 +182,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const realRevenue=hasSales?realSales.monthly.reduce((t,r)=>t+Number(r.ventas||0),0):null;
  const realUnits=realSales?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...realReport?.kpis};
- if(!realReport&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;realKpis.articulosVendidos=realSales?.totalArticles||0;}
+ if(!realReport?.kpis&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;realKpis.articulosVendidos=realSales?.totalArticles||0;}
  const cards=metricCards(module,realKpis);
  const isDashboard=module==="dashboard",isReports=module==="informes",isAssistant=module==="asistente";
  const datasets={

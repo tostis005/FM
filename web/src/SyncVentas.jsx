@@ -8,7 +8,7 @@ const date=value=>value?new Intl.DateTimeFormat("es-ES",{
 }).format(new Date(value)):"—";
 
 export default function SyncVentas({client}){
- const [status,setStatus]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [status,setStatus]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState("");
  const version=useRef(0);
  const refresh=useCallback(async()=>{
   const current=++version.current;

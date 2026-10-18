@@ -22,3 +22,8 @@
 @keyframes fm-load-shine{to{transform:translateX(100%)}}
 @media(max-width:600px){.fm-skeleton-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-loading-overlay{padding-top:14px}.fm-skeleton-chart{height:175px}}
 @media(prefers-reduced-motion:reduce){.fm-load-spinner,.fm-skeleton::after{animation:none}.fm-load-spinner{border-color:#77b6a0;border-top-color:#128b64}}
+
+/* Una vez disponibles los datos, el progreso cambia sin saltos bruscos. */
+.goal-track-fill,.table-progress .progress>div,.progress>div{transition:width .5s cubic-bezier(.22,1,.36,1)}
+.fm-skeleton-kpi strong,.fm-demo-kpi strong{min-width:0}
+@media(prefers-reduced-motion:reduce){.goal-track-fill,.table-progress .progress>div,.progress>div{transition:none}}

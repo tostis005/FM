@@ -132,7 +132,9 @@ def convert(zip_path, csv_path, meta_path, min_records):
         writer = csv.DictWriter(handle, fieldnames=COLUMNS)
         writer.writeheader()
         for row in extracted:
-            writer.writerow({key: row[key] for key in COLUMNS})
+            # La fuente puede contener saltos CR/LF en los textos XML; el COPY
+            # remoto de psql exige una fila física por registro del CSV.
+            writer.writerow({key: " ".join(str(row[key]).split()) for key in COLUMNS})
     date_text = extracted[0].get("_source_date", "")
     source_date = None
     for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%Y%m%d"):

@@ -214,7 +214,11 @@ export function setupRealReports(app,pool,{requireTenant}){
       SELECT upper(btrim(farmacia_codigo)) AS code,
         max(sincronizado_en) AS last,
         count(*)::int AS total,
-        count(*) FILTER (WHERE stock_actual IS NOT NULL)::int AS priced
+        count(*) FILTER (WHERE stock_actual IS NOT NULL)::int AS priced,
+        count(*) FILTER (
+          WHERE stock_actual IS NOT NULL AND sincronizado_en>=now()-interval '48 hours'
+            AND sincronizado_en<=now()+interval '1 hour'
+        )::int AS recent
       FROM ${quoted}.articulos
       WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
       GROUP BY 1`,[codes]);
@@ -225,7 +229,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       Number.isFinite(t)&&timeNow-t>=-3600000&&timeNow-t<=48*3600000)
       &&codes.every(code=>{
         const s=stampMap.get(code);
-        return s&&s.total>0&&s.priced/s.total>=0.9;
+        return s&&s.total>0&&s.priced/s.total>=0.9&&s.recent/s.total>=0.9;
       });
     stockAsOf=times.every(Number.isFinite)?new Date(Math.min(...times)).toISOString():null;
     if(snapshotAvailable){

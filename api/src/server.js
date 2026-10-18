@@ -5,6 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
+import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
 import { setupRealReports } from "./realReports.js";
@@ -80,6 +81,25 @@ async function requireEntraAdmin(req, res, next) {
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
 const { requireTenantModule,requireTenant,requireTenantAdmin } = setupTenant(app, pool, { requireUser, requireSuperadmin });
+setupDemoClients(app,pool,{requireSuperadmin});
+// Impedir mutaciones de datos reales desde un tenant demo enlazado.
+// Las configuraciones de equipo/farmacias propias del demo usan sus rutas
+// administrativas registradas arriba y nunca escriben en el origen.
+app.use("/api", (req,res,next)=>{
+ if(["GET","HEAD","OPTIONS"].includes(req.method))return next();
+ const test=requireTenant();
+ test[0](req,res,error=>{
+  if(error)return next(error);
+  if(res.headersSent)return;
+  test[1](req,res,e=>{
+   if(e)return next(e);
+   if(res.headersSent)return;
+   if(req.context.client.demo)return res.status(403).json({
+     error:"Entorno demo de consulta: no se permiten cambios operativos"});
+   next();
+  });
+ });
+});
 setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
@@ -394,6 +414,10 @@ try {
   await pool.query(tenantMigration);
   const analysisMigration=await readFile(new URL("./migrations/012_analisis_ventas_cliente.sql",import.meta.url),"utf8");
   await pool.query(analysisMigration);
+  for(const filename of ["013_accesos_locales.sql","014_clientes_demo.sql"]){
+    const sql=await readFile(new URL("./migrations/"+filename,import.meta.url),"utf8");
+    await pool.query(sql);
+  }
   const supplierMigration=await readFile(new URL("./migrations/005_proveedores.sql",import.meta.url),"utf8");
   await pool.query(supplierMigration);
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");

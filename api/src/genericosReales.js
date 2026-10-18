@@ -179,7 +179,13 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
      sales:sales.rows.filter(r=>r.dcpf===selectedDcpf),
      purchases:purchases.rows.filter(r=>r.dcpf===selectedDcpf).map(p=>({
       ...p,puc:Number(p.pricedUnits)>0?round(Number(p.cost)/Number(p.pricedUnits)):null,
-      referencePuc:relevant.find(r=>String(r.pharmacyId)===String(p.pharmacyId)&&r.cn===p.cn&&r.supplierCode===p.supplierCode)?.referencePuc??null
+      referencePuc:relevant.find(r=>String(r.pharmacyId)===String(p.pharmacyId)&&r.cn===p.cn&&r.supplierCode===p.supplierCode)?.referencePuc??null,
+      targetPuc:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.referencePuc??null,
+      targetSupplier:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.supplierCode??null,
+      targetCn:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.cn??null,
+      potential:Number(p.pricedUnits)>0&&refByGroup.has(String(p.pharmacyId)+"|"+p.dcpf)?
+       round(Math.max(0,Number(p.cost)/Number(p.pricedUnits)-
+         Number(refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf).referencePuc))*Number(p.pricedUnits),2):null
      })),references:relevant,salesAvailable:true,purchasesAvailable:true,policy});
    }
    const term=f.search.toLocaleLowerCase("es");

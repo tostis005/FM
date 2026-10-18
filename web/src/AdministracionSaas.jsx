@@ -17,14 +17,14 @@ async function api(path,options={}){
 }
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
- const [newClient,setNewClient]=useState({slug:"",name:""});
+ const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:""});
  async function refresh(){setLoading(true);try{setClients(await api("/api/admin/clientes"))}finally{setLoading(false)}}
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
  async function createClient(e){
   e.preventDefault();setBusy("new");setError("");
   try{
-   await api("/api/admin/clientes",{method:"POST",body:JSON.stringify(newClient)});
-   setNewClient({slug:"",name:""});await refresh();onUpdated?.();
+   await api(newClient.sourceSlug?"/api/admin/clientes/demo":"/api/admin/clientes",{method:"POST",body:JSON.stringify(newClient)});
+   setNewClient({slug:"",name:"",sourceSlug:""});await refresh();onUpdated?.();
   }catch(error){setError(error.message)}finally{setBusy("")}
  }
  async function toggle(slug,module,enabled){
@@ -42,13 +42,24 @@ export function ClientesPanel({onUpdated}){
   <section className="card fm-manage-client"><div className="section-heading"><h2>Nuevo cliente</h2><Building2 size={19}/></div>
    <form className="fm-manage-form" onSubmit={createClient}>
     <label>Nombre comercial<input required maxLength={150} value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Grupo de farmacias"/></label>
+    <label>Datos del cliente
+     <select value={newClient.sourceSlug} onChange={e=>setNewClient({...newClient,sourceSlug:e.target.value})}>
+      <option value="">Nuevo cliente · base de datos independiente</option>
+      {clients.filter(x=>!x.demoSourceSlug&&x.active).map(x=>
+        <option key={x.slug} value={x.slug}>Demo enlazada a {x.name} · datos reales</option>)}
+     </select>
+    </label>
+    {newClient.sourceSlug&&<p className="fm-manage-wide" role="note">
+     Demo privada con datos operativos reales, aunque las farmacias tengan nombres ficticios.
+     No debe publicarse sin anonimizar también los datos comerciales.
+    </p>}
     <label>Identificador / esquema<input required pattern="[a-z][a-z0-9_]{1,62}" value={newClient.slug} onChange={e=>setNewClient({...newClient,slug:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")})} placeholder="grupo_farmacias"/></label>
     <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>
    </form>
   </section>
   {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
-   <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
+   <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
     <input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.[id])}
       onChange={e=>toggle(c.slug,id,e.target.checked)} aria-label={"Habilitar "+label+" para "+c.name}/>

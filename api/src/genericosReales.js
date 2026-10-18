@@ -38,8 +38,6 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    return res.status(400).json({error:"Conjunto inválido"});
   try{
    const schema='"'+req.context.client.schema+'"';
-   if(req.context.client.slug!=="ampedia")
-    return res.status(409).json({error:"El origen operativo de este cliente todavía no está adaptado al Nomenclátor español"});
    const [version,catalog,policy]=await Promise.all([
     pool.query("SELECT sha256,fecha_fuente,importado_en,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo LIMIT 1"),
     pool.query(`SELECT dcpf,min(coalesce(nullif(principio_activo,''),nombre)) AS principle,
@@ -64,24 +62,51 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    const ph=`JOIN farmetrica.farmacias f ON f.cliente_slug=$4
       AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
    const [sales,purchases]=await Promise.all([
-    f.ids.length?pool.query(`SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
-      sum(c.unidades)::float8 AS units,sum(c.importe)::float8 AS revenue
-      FROM ${schema}.ventas c ${ph} ${art} ${nJoin}
-      WHERE f.id=ANY($3::int[]) AND c.fecha>=$1::date AND c.fecha<$2::date+interval '1 day'
-      GROUP BY n.dcpf,n.cn,f.id`,args):{rows:[]},
-    f.ids.length?pool.query(`SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
+    f.ids.length?pool.query(`
+      WITH c AS MATERIALIZED (
+        SELECT v.farmacia_codigo,v.articulo_id,
+          sum(v.unidades) AS unidades,sum(v.importe) AS importe
+        FROM ${schema}.ventas v
+        JOIN farmetrica.farmacias scope ON scope.cliente_slug=$4
+          AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("scope")}
+        WHERE scope.id=ANY($3::int[])
+          AND v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day'
+        GROUP BY v.farmacia_codigo,v.articulo_id
+      )
+      SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
+        sum(c.unidades)::float8 AS units,sum(c.importe)::float8 AS revenue
+      FROM c ${ph} ${art} ${nJoin}
+      WHERE f.id=ANY($3::int[]) GROUP BY n.dcpf,n.cn,f.id`,args):{rows:[]},
+    f.ids.length?pool.query(`
+      WITH c AS MATERIALIZED (
+        SELECT v.farmacia_codigo,v.articulo_id,v.proveedor_id,
+          max(v.proveedor_nombre) AS proveedor_nombre,
+          sum(v.unidades) AS unidades,sum(v.importe) AS importe,
+          sum(v.coste_unitario*v.unidades) FILTER(
+            WHERE v.unidades>0 AND v.coste_unitario>0) AS paid_cost,
+          sum(v.unidades) FILTER(
+            WHERE v.unidades>0 AND v.coste_unitario>0) AS paid_units,
+          count(*)::int AS lines
+        FROM ${schema}.compras v
+        JOIN farmetrica.farmacias scope ON scope.cliente_slug=$4
+          AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("scope")}
+        WHERE scope.id=ANY($3::int[]) AND v.fecha>=$1::date
+          AND v.fecha<$2::date+interval '1 day'
+        GROUP BY v.farmacia_codigo,v.articulo_id,v.proveedor_id
+      )
+      SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
       c.proveedor_id AS "supplierCode",
       max(coalesce(nullif(c.proveedor_nombre,''),c.proveedor_id)) AS supplier,
       max(n.nombre) AS name,max(n.laboratorio) AS laboratory,
       sum(c.unidades) FILTER(WHERE c.unidades>0)::float8 AS units,
       sum(c.importe)::float8 AS spend,
-      sum(c.coste_unitario*c.unidades) FILTER(WHERE c.unidades>0 AND c.coste_unitario>0)::float8 AS cost,
-      sum(c.unidades) FILTER(WHERE c.unidades>0 AND c.coste_unitario>0)::float8 AS "pricedUnits",
+      sum(c.paid_cost)::float8 AS cost,
+      sum(c.paid_units)::float8 AS "pricedUnits",
       sum(a.pvp*c.unidades) FILTER(WHERE c.unidades>0 AND a.pvp>0)::float8 AS "pvpCost",
       sum(c.unidades) FILTER(WHERE c.unidades>0 AND a.pvp>0)::float8 AS "pvpUnits",
-      count(*)::int AS "purchaseLines"
-      FROM ${schema}.compras c ${ph} ${art} ${nJoin}
-      WHERE f.id=ANY($3::int[]) AND c.fecha>=$1::date AND c.fecha<$2::date+interval '1 day'
+      sum(c.lines)::int AS "purchaseLines"
+      FROM c ${ph} ${art} ${nJoin}
+      WHERE f.id=ANY($3::int[])
       GROUP BY n.dcpf,n.cn,f.id,c.proveedor_id`,args):{rows:[]}
    ]);
    // No confundir período de visualización y ventana de referencia:

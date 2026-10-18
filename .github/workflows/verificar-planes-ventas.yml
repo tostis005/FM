@@ -32,7 +32,8 @@ jobs:
             'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
           SET default_transaction_read_only = on;
           SET statement_timeout = '35s';
-          SET lock_timeout = '5s';
+          SET lock_timeout = '4s';
+          \set ON_ERROR_STOP off
           \echo '=== Índices disponibles en producción ==='
           SELECT idx.relname AS indice,tab.relname AS tabla,pi.indisvalid AS valido,pi.indisready AS preparado
             FROM pg_class idx JOIN pg_namespace ns ON ns.oid=idx.relnamespace

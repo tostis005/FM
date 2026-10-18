@@ -225,6 +225,9 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
  try{
   const from=String(req.query.desde||"2026-10-01"),to=String(req.query.hasta||"2026-10-31");
   const search=String(req.query.buscar||"").trim(),raw=String(req.query.farmacias||"");
+  const granularity=String(req.query.granularidad||"month");
+  if(!["hour","day","month"].includes(granularity))
+    return res.status(400).json({error:"Agrupación de ventas no válida"});
   if(!validDates(from,to)||search.length>90||raw.length>2500||
      (raw&&raw.split(",").some(id=>!/^[1-9][0-9]{0,8}$/.test(id))))
     return res.status(400).json({error:"Filtros de ventas inválidos"});
@@ -233,7 +236,7 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
   if(requested.some(id=>!allowed.includes(id)))
     return res.status(403).json({error:"Farmacia no autorizada"});
   const ids=[...new Set(requested)];
-  if(!ids.length)return res.json({monthly:[],products:[],totalProducts:0,totalArticles:0,from,to});
+  if(!ids.length)return res.json({monthly:[],series:[],granularity,products:[],totalProducts:0,totalArticles:0,from,to});
   const where=salesJoin(req)+" WHERE "+salesPeriod+
     " AND f.id=ANY($3::int[]) AND btrim(v.articulo_id::text) <> '' "+
     " AND ($4::text='' OR btrim(v.articulo_id::text) ILIKE '%' || $4 || '%' OR v.articulo_id::text ILIKE '%' || $4 || '%')";
@@ -242,6 +245,18 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
     "SELECT to_char(date_trunc('month',v.fecha),'YYYY-MM') AS month, "+
     "sum(v.unidades)::float8 AS unidades, sum(v.importe)::float8 AS ventas "+
     where+" GROUP BY 1 ORDER BY 1",params);
+  // Agrupación cerrada y validada: horas (hoy/ayer), días (semanas) o meses.
+  const bucket={
+    hour:{group:"date_trunc('hour',v.fecha)",format:"'YYYY-MM-DD\"T\"HH24:MI'"},
+    day:{group:"date_trunc('day',v.fecha)",format:"'YYYY-MM-DD'"},
+    month:{group:"date_trunc('month',v.fecha)",format:"'YYYY-MM'"},
+  }[granularity];
+  const {rows:series}=granularity==="month"?
+    {rows:monthly.map(r=>({bucket:r.month,ventas:r.ventas,unidades:r.unidades}))}:
+    await pool.query(
+      "SELECT to_char("+bucket.group+","+bucket.format+") AS bucket, "+
+      "sum(v.unidades)::float8 AS unidades, sum(v.importe)::float8 AS ventas "+
+      where+" GROUP BY 1 ORDER BY 1",params);
   const {rows:products}=await pool.query(
     'SELECT f.id::text AS "pharmacyId", btrim(v.articulo_id::text) AS cn, '+
     "max(nullif(btrim(v.articulo_id::text),'')) AS name, "+
@@ -250,7 +265,7 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
   const {rows:counts}=await pool.query(
     "SELECT count(*)::int AS n,count(DISTINCT cn)::int AS articulos FROM "+
     "(SELECT btrim(v.articulo_id::text) AS cn "+where+" GROUP BY f.id,btrim(v.articulo_id::text)) x",params);
-  res.json({monthly,products,totalProducts:counts[0]?.n||0,
+  res.json({monthly,series,granularity,products,totalProducts:counts[0]?.n||0,
     totalArticles:counts[0]?.articulos||0,from,to});
  }catch(err){next(err)}
 });

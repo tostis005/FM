@@ -828,7 +828,7 @@ function App(){
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug}/>} 
     {page==="solicitudes"&&<SolicitudesDemo/>}
-    {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug} module={page}
+    {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

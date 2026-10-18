@@ -33,7 +33,7 @@ VALUES
  (2, 'Europa', '', true, 'EUR', '192.168.11.11', 'Farmatic'),
  (3, 'Buenavista', '', true, 'BUE', '192.168.13.11', 'Farmatic'),
  (4, 'Estación', '', true, 'EST', '192.168.12.11', 'Farmatic'),
- (5, 'Valdemarías', '', true, 'VAL', '192.168.14.11', 'Farmatic')
+ (5, 'Valdemarías', '', true, 'POL', '192.168.14.11', 'Farmatic')
 ON CONFLICT (id) DO NOTHING;
 
 -- Solo actualiza antiguos nombres provisionales; respeta nombres personalizados.

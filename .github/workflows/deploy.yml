@@ -35,6 +35,7 @@ jobs:
           node --check api/src/realReports.js
           node --check api/src/salesSummary.js
           node --check api/src/salesTotals.js
+          node --check api/src/salesInsights.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
           node --test api/src/pricePolicy.test.js
@@ -42,6 +43,7 @@ jobs:
           node --test api/src/realReports.test.js
           node --test api/src/salesSummary.test.js
           node --test api/src/salesTotals.test.js
+          node --test api/src/salesInsights.test.js
           node --test api/src/genericos.test.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js

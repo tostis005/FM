@@ -17,7 +17,9 @@ function make(){
  }};
  setupSalesTotals(app,pool,{requireTenant:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1,5],
-  role:"administrador",modules:{ventas:true}};
+  role:"administrador",modules:{ventas:true},pharmacies:[
+   {id:"1",sourceCode:"ABA",databaseCode:"ABA"},
+   {id:"5",sourceCode:"POL",databaseCode:"VAL"}]};
  async function call(query={},context=ctx){
   let status=200,data;
   const res={status(n){status=n;return res},json(obj){data=obj;return res}};
@@ -35,8 +37,9 @@ test("12 meses: un SUM mensual y total SQL sin consulta de artículos ni compras
  const {status,data}=await call();
  assert.equal(status,200);
  assert.equal(calls.length,1);
- assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",[5],"ampedia"]);
- assert.match(calls[0].sql,/f.id=ANY\(\$3::int\[\]\)/);
+ assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",["VAL"]]);
+ assert.match(calls[0].sql,/upper\(btrim\(v.farmacia_codigo\)\)=ANY\(\$3::text\[\]\)/);
+ assert.doesNotMatch(calls[0].sql,/JOIN farmetrica\.farmacias/);
  assert.match(calls[0].sql,/GROUP BY date_trunc\(\x27month\x27,v.fecha\)/);
  assert.match(calls[0].sql,/sum\(sum\(v.importe\)\) OVER\(\)/);
  assert.match(calls[0].sql,/sum\(v.importe\)::float8/);
@@ -67,5 +70,5 @@ test("permisos y filtros se aplican en servidor",async()=>{
 test("varias farmacias autorizadas usan el mismo sumatorio",async()=>{
  const {calls,call}=make();
  await call({farmacias:"1,5"});
- assert.deepEqual(calls[0].params[2],[1,5]);
+ assert.deepEqual(calls[0].params[2],["ABA","VAL"]);
 });

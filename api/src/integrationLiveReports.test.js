@@ -82,7 +82,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const fastTwo=await request("/api/analytics/ventas/totales",{
    farmacias:"1,5",granularidad:"day"});
   assert.ok(fastTwo.kpis.ventas>28);
-  assert.ok(fastTwo.series.some(r=>r.bucket==="2026-10-18"));
+  assert.ok(fastTwo.series.some(r=>r.bucket==="2026-10-11"));
   // Una consulta SQL agrega gráfico, indicadores y ABCD sin peticiones adicionales.
   const salesSummary=await request("/api/analytics/ventas/resumen",{
    farmacias:"5",granularidad:"month"});

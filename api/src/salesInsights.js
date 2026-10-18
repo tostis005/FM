@@ -1,5 +1,6 @@
 // Recuentos recientes sin márgenes/ABCD y catálogo de familias por farmacia.
 // La selección de códigos ERP se resuelve desde req.context, nunca del navegador.
+import {approvedAnalysisRange} from "./salesAnalysisPeriod.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 export function buildRecentProductCountSQL(schema){
@@ -64,9 +65,8 @@ export function setupSalesInsights(app,pool,{requireTenant}){
   try{
    const s=scope(req,res);if(!s)return;
    const from=String(req.query.desde||""),to=String(req.query.hasta||"");
-   if(!ISO.test(from)||!ISO.test(to)||from>to||
-      (Date.parse(to)-Date.parse(from))>366*86400000)
-    return res.status(400).json({error:"Recuento limitado a un máximo de 12 meses"});
+   if(!approvedAnalysisRange(from,to,req.context.client.analysisMonths))
+    return res.status(400).json({error:"El recuento debe usar el período ABCD establecido por administración"});
    if(!s.ids.length)return res.json({totalProducts:0,totalArticles:0,from,to});
    // Una consulta real para cada petición; no conservar recuentos en memoria.
    const {rows}=await pool.query(buildRecentProductCountSQL(s.schema),[s.codes,from,to]);

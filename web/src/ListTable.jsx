@@ -27,15 +27,26 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…"}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange}){
   const [filters,setFilters]=useState({});
-  const [sort,setSort]=useState(null);
+  const [localSort,setLocalSort]=useState(defaultSort);
+  const remote=serverSort!==undefined&&typeof onSortChange==="function";
+  const sort=remote?serverSort:localSort;
   const [page,setPage]=useState(0);
   const [pageSize,setPageSize]=useState(10);
-  const filtered=useMemo(()=>filterSortRows(rows,columns,filters,sort),[rows,columns,filters,sort]);
+  // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
+  // Ordenar solamente la respuesta truncada produciría resultados engañosos.
+  const filtered=useMemo(()=>filterSortRows(rows,columns,filters,remote?null:sort),
+    [rows,columns,filters,sort,remote]);
   const {page:safePage,items:slice}=pageRows(filtered,page,pageSize);
   const changeFilter=(key,value)=>{setFilters(p=>({...p,[key]:value}));setPage(0);};
-  const changeSort=key=>{setSort(prev=>prev?.key!==key?{key,direction:"asc"}:prev.direction==="asc"?{key,direction:"desc"}:null);setPage(0);};
+  const changeSort=key=>{
+    const next=sort?.key!==key?{key,direction:"asc"}:
+      sort.direction==="asc"?{key,direction:"desc"}:
+      remote?{key,direction:"asc"}:null;
+    if(remote)onSortChange(next);else setLocalSort(next);
+    setPage(0);
+  };
   return <>
     <LoadingFrame loading={loading&&rows.length>0} label={loadingLabel}>
     <HorizontalTableScroll className="table-scroll" label={label}>

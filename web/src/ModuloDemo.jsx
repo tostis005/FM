@@ -93,8 +93,8 @@ const QUESTIONS=[
  ["¿Qué acciones tienen mayor importe asociado?","acciones"]
 ];
 const STORAGE="fm_analytics_filters_";
-function readFilters(client){
- try{const saved=JSON.parse(sessionStorage.getItem(STORAGE+client)||"null");
+function readFilters(key){
+ try{const saved=JSON.parse(sessionStorage.getItem(key)||"null");
   if(saved&&typeof saved==="object")return {period:saved.period||"6",
     customFrom:String(saved.customFrom||""),customTo:String(saved.customTo||""),
     pharmacyIds:Array.isArray(saved.pharmacyIds)?saved.pharmacyIds:[],
@@ -103,8 +103,9 @@ function readFilters(client){
  return {period:"6",customFrom:"",customTo:"",pharmacyIds:[],families:[],search:""};
 }
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
- const [filters,setFilters]=useState(()=>readFilters(clientSlug));
- const [searchReady,setSearchReady]=useState(()=>readFilters(clientSlug).search);
+ const storageKey=STORAGE+clientSlug+(["dashboard","ventas"].includes(module)?"_sales":"");
+ const [filters,setFilters]=useState(()=>readFilters(storageKey));
+ const [searchReady,setSearchReady]=useState(()=>readFilters(storageKey).search);
  useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [detail,setDetail]=useState(null);
  const [realSales,setRealSales]=useState(null);
@@ -146,7 +147,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
 
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
- useEffect(()=>{sessionStorage.setItem(STORAGE+clientSlug,JSON.stringify(filters))},[filters,clientSlug]);
+ useEffect(()=>{sessionStorage.setItem(storageKey,JSON.stringify(filters))},[filters,storageKey]);
  const familyOptions=[...new Set(tables.articulos.map(a=>a.familia))].sort().map(v=>({label:v,value:v}));
  const pharmacyOptions=pharmacies.map(p=>({label:p.name,value:String(p.id)}));
  const change=(field,value)=>setFilters(f=>({...f,[field]:value}));

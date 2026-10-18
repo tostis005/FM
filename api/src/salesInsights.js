@@ -60,6 +60,28 @@ function scope(req,res){
  return {ids,codes:[...new Set(ids.map(id=>codeById.get(id)))],schema};
 }
 export function setupSalesInsights(app,pool,{requireTenant}){
+ // Los recuentos exactos consultan catálogo y ventas; cache acotada por tenant,
+ // códigos autorizados y ventana. Comparte la consulta entre peticiones iguales.
+ const countCache=new Map();
+ const ttlMs=60000;
+ async function recentCount(key,s,from,to,force){
+  const now=Date.now();
+  const cached=countCache.get(key);
+  if(!force&&cached&&cached.expires>now)return cached.promise;
+  if(countCache.size>=128){
+   for(const [k,v] of countCache)if(v.expires<=now)countCache.delete(k);
+   if(countCache.size>=128)countCache.delete(countCache.keys().next().value);
+  }
+  const promise=pool.query(buildRecentProductCountSQL(s.schema),[s.codes,from,to])
+    .then(({rows})=>({totalProducts:Number(rows[0]?.totalProducts||0),
+      totalArticles:Number(rows[0]?.totalArticles||0),from,to}))
+    .catch(error=>{
+      if(countCache.get(key)?.promise===promise)countCache.delete(key);
+      throw error;
+    });
+  countCache.set(key,{promise,expires:now+ttlMs});
+  return promise;
+ }
  app.get("/api/analytics/ventas/recuento",...requireTenant(),async(req,res,next)=>{
   try{
    const s=scope(req,res);if(!s)return;
@@ -68,9 +90,8 @@ export function setupSalesInsights(app,pool,{requireTenant}){
       (Date.parse(to)-Date.parse(from))>366*86400000)
     return res.status(400).json({error:"Recuento limitado a un máximo de 12 meses"});
    if(!s.ids.length)return res.json({totalProducts:0,totalArticles:0,from,to});
-   const {rows}=await pool.query(buildRecentProductCountSQL(s.schema),[s.codes,from,to]);
-   res.json({totalProducts:Number(rows[0]?.totalProducts||0),
-     totalArticles:Number(rows[0]?.totalArticles||0),from,to});
+   const key=JSON.stringify([req.context.client.slug,s.schema,[...s.codes].sort(),from,to]);
+   res.json(await recentCount(key,s,from,to,String(req.query.refrescar||"")==="1"));
   }catch(e){next(e)}
  });
  app.get("/api/analytics/ventas/familias",...requireTenant(),async(req,res,next)=>{

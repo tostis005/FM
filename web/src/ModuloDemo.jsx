@@ -61,10 +61,13 @@ function csvExport(module,columns,rows){
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 const C=(key,label,field,fmt)=>({key,label,value:r=>r[field],render:fmt?r=>fmt(r[field]):undefined});
+const unitEuro=value=>value==null?"—":new Intl.NumberFormat("es-ES",
+ {style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:4}).format(value);
 function columnsFor(module,pharmacyMap){
  const pharmacy={key:"pharmacy",label:"Farmacia",filterMode:"multi",value:r=>pharmacyMap.get(String(r.pharmacyId))||"—"};
  const article=C("name","Artículo","name"),cn=C("cn","CN","cn");
  const family={key:"family",label:"Familia",filterMode:"multi",value:r=>r.family||"—"};
+ const unit=(key,label)=>C(key,label,key,unitEuro);
  const euro=(key,label)=>C(key,label,key,v=>v==null?"—":money(v)),num=(key,label)=>C(key,label,key,v=>v==null?"—":number(v));
  const abcd={key:"abcdClass",label:"ABCD",filterMode:"multi",
   value:r=>r.abcdClass||"—",
@@ -72,24 +75,24 @@ function columnsFor(module,pharmacyMap){
    title="Prioridad por contribución a las ventas de esta farmacia y período">{r.abcdClass}</span>:"—"};
  const common=[article,cn,pharmacy,abcd];
  switch(module){
-  case "ventas":return [...common,family,euro("pvp","PVP catálogo"),
-    euro("purchaseCost","PUC compra"),euro("saleUnitPrice","Venta/ud."),
-    euro("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
+  case "ventas":return [...common,family,unit("pvp","PVP catálogo"),
+    unit("purchaseCost","PUC compra"),unit("saleUnitPrice","Venta/ud."),
+    unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),
-    euro("pvp","PVP catálogo"),C("puc","PUC compra","puc",v=>v==null?"—":money(v)),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
+    unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
   case "proveedores":return [C("name","Proveedor","name"),pharmacy,num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
-  case "stock":return [...common,euro("unitCost","Coste/ud."),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
-  case "reposicion":return [...common,euro("unitCost","Coste/ud."),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
+  case "stock":return [...common,unit("unitCost","Coste/ud."),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
+  case "reposicion":return [...common,unit("unitCost","Coste/ud."),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
-  case "rentabilidad":return [...common,euro("pvp","PVP catálogo"),
-    euro("purchaseCost","PUC compra"),euro("saleUnitPrice","Venta/ud."),
-    euro("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
+  case "rentabilidad":return [...common,unit("pvp","PVP catálogo"),
+    unit("purchaseCost","PUC compra"),unit("saleUnitPrice","Venta/ud."),
+    unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
-  default:return [...common,euro("pvp","PVP catálogo"),euro("purchaseCost","PUC compra"),
+  default:return [...common,unit("pvp","PVP catálogo"),unit("purchaseCost","PUC compra"),
     num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen")];
  }
 }

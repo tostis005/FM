@@ -6,6 +6,7 @@ import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
 import {setupSalesDetail} from "./salesDetail.js";
+import {setupDemoClients} from "./demoClients.js";
 import {setupGenericosReales} from "./genericosReales.js";
 const enabled=Boolean(process.env.TEST_DB_URL);
 test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF",{
@@ -18,12 +19,13 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupSalesTotals(app,pool,{requireTenant:()=>[]});
  setupSalesInsights(app,pool,{requireTenant:()=>[]});
  setupSalesDetail(app,pool,{requireTenant:()=>[]});
+ setupDemoClients(app,pool,{requireSuperadmin:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
- async function request(path,params={}){
+ async function request(path,params={},body={}){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...params},
-    params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"}};
+    params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"},body};
   let status=200,body;
   const res={status(n){status=n;return res},json(data){body=data;return res}};
   const handler=routes[path]||(path.startsWith("/api/genericos/reales/")?routes["/api/genericos/reales/:dcpf"]:null);
@@ -135,5 +137,23 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(val.kpis.compras,0); // No inventar compras donde el ERP no ha sincronizado.
   const master=await pool.query("SELECT codigo_origen FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND id=5");
   assert.equal(master.rows[0].codigo_origen,"POL");
+  // Demo privada sin copia de movimientos: esquema propio + vistas no
+  // actualizables y farmacias con nombres ficticios. No se tocan datos reales.
+  const created=await request("/api/admin/clientes/demo",{},
+    {slug:"demo_ci_qa",name:"Demo de comprobación",sourceSlug:"ampedia"});
+  assert.equal(created.demo,true);
+  const {rows:fake}=await pool.query(
+    "SELECT nombre,codigo_origen FROM farmetrica.farmacias WHERE cliente_slug='demo_ci_qa' ORDER BY id");
+  assert.ok(fake.length>=2);
+  assert.ok(fake.every(x=>x.nombre.startsWith("Farmacia Demo ")));
+  assert.equal(fake.find(x=>x.codigo_origen==="VAL")?.nombre.startsWith("Farmacia Demo "),true);
+  const {rows:views}=await pool.query(
+    "SELECT c.relname,pg_relation_is_updatable(c.oid,false) AS rights FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='demo_ci_qa' AND c.relname IN ('ventas','compras','articulos')");
+  assert.equal(views.length,3);
+  assert.ok(views.every(x=>Number(x.rights)===0),"Las vistas demo no deben aceptar INSERT/UPDATE/DELETE");
+  const {rows:sourceCount}=await pool.query("SELECT count(*)::int AS n FROM ampedia.ventas WHERE farmacia_codigo='VAL'");
+  const {rows:demoCount}=await pool.query("SELECT count(*)::int AS n FROM demo_ci_qa.ventas WHERE farmacia_codigo='VAL'");
+  assert.equal(demoCount[0].n,sourceCount[0].n,"Demo comparte datos vivos en solo lectura");
+
  }finally{await pool.end()}
 });

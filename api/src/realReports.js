@@ -43,10 +43,10 @@ export function setupRealReports(app,pool,{requireTenant}){
   try{
    const schema=req.context.client.schema,quoted='"'+schema+'"',
      pharmacyIds=f.ids,
-     [articleCols,saleCols,buyCols,providerCols,legacyProductCols]=await Promise.all([
+     [articleCols,saleCols,buyCols,providerCols,legacyProductCols,legacyStockCols]=await Promise.all([
       tableColumns(pool,schema,"articulos"),tableColumns(pool,schema,"ventas"),
       tableColumns(pool,schema,"compras"),tableColumns(pool,schema,"proveedores"),
-      tableColumns(pool,schema,"productos")
+      tableColumns(pool,schema,"productos"),tableColumns(pool,schema,"stock")
      ]);
    const articles=has(articleCols,"farmacia_codigo","origen_id","nombre","codigo_nacional");
    const legacyArticles=!articles&&has(legacyProductCols,"id","descripcion","cn");
@@ -353,6 +353,76 @@ export function setupRealReports(app,pool,{requireTenant}){
        value:Number(summary[0]?.value||0)};
 
     }
+   }
+   // Clientes anteriores al catálogo normalizado almacenan inventario en
+   // stock(farmacia_id,producto_id). No confundir ID ERP con CN y exigir una
+   // instantánea completa y reciente en cada farmacia autorizada.
+   if(needsStock&&!stockSource&&pharmacyIds.length&&has(legacyStockCols,
+     "farmacia_id","producto_id","unidades","coste_unitario","fecha_referencia")){
+     const {rows:stamps}=await pool.query(`
+       SELECT s.farmacia_id::int AS id,max(s.fecha_referencia) AS last,
+         count(*)::int AS total,
+         count(*) FILTER(WHERE s.unidades IS NOT NULL)::int AS present,
+         count(*) FILTER(WHERE s.unidades IS NOT NULL
+           AND s.fecha_referencia>=now()-interval '48 hours'
+           AND s.fecha_referencia<=now()+interval '1 hour')::int AS recent
+       FROM ${quoted}.stock s
+       JOIN farmetrica.farmacias f ON f.id=s.farmacia_id AND f.cliente_slug=$2
+       WHERE s.farmacia_id=ANY($1::int[])
+       GROUP BY s.farmacia_id`,[pharmacyIds,req.context.client.slug]);
+     const byId=new Map(stamps.map(r=>[Number(r.id),r]));
+     const times=pharmacyIds.map(id=>byId.get(id)?.last?
+       new Date(byId.get(id).last).getTime():NaN);
+     snapshotAvailable=times.length===pharmacyIds.length&&times.every(t=>
+       Number.isFinite(t)&&Date.now()-t<=48*3600000&&Date.now()-t>=-3600000)
+       &&pharmacyIds.every(id=>{
+         const stamp=byId.get(id);
+         return stamp&&stamp.total>0&&stamp.present/stamp.total>=0.9&&
+           stamp.recent/stamp.total>=0.9;
+       });
+     stockAsOf=times.every(Number.isFinite)?
+       new Date(Math.min(...times)).toISOString():null;
+     if(snapshotAvailable){
+       const fromStock=`FROM (
+         SELECT s.farmacia_id,${pharmacyDataCodeSQL("f")} AS farmacia_codigo,
+           s.producto_id AS articulo_id,s.unidades,s.coste_unitario
+         FROM ${quoted}.stock s
+         JOIN farmetrica.farmacias f ON f.id=s.farmacia_id AND f.cliente_slug=$4
+         WHERE s.farmacia_id=ANY($1::int[]) AND s.unidades IS NOT NULL
+       ) t JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$4
+       ${article}
+       WHERE ($2::text='' OR ${cn} ILIKE '%'||$2||'%' OR
+         coalesce(art.nombre,'') ILIKE '%'||$2||'%')
+         AND (cardinality($3::text[])=0 OR coalesce(art.familia,'')=ANY($3::text[]))`;
+       const params=[pharmacyIds,f.search,f.families,req.context.client.slug];
+       const {rows:current}=await pool.query(`
+         SELECT f.id::text AS "pharmacyId",${cn} AS cn,
+           max(coalesce(art.nombre,t.articulo_id)) AS name,
+           max(coalesce(art.familia,'')) AS family,
+           max(coalesce(t.coste_unitario,art.pmc))::float8 AS pmc,
+           max(art.pvp)::float8 AS pvp,sum(t.unidades)::float8 AS units
+         ${fromStock}
+         GROUP BY f.id,${cn}
+         ORDER BY sum(t.unidades) DESC LIMIT ${rowLimit}`,params);
+       stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
+         units:Number(r.units),value:null,coverage:null,excessValue:null,
+         sold:0,need:null,needValue:null}));
+       stockSource="stock";
+       const {rows:[summary]}=await pool.query(`
+         SELECT count(*)::int AS articles,
+           coalesce(sum(units),0)::float8 AS units,
+           count(*) FILTER(WHERE units<>0 AND (pmc IS NULL OR pmc<=0))::int AS unpriced,
+           coalesce(sum(units*pmc),0)::float8 AS value
+         FROM (
+           SELECT sum(t.unidades) AS units,
+             max(coalesce(t.coste_unitario,art.pmc)) AS pmc
+           ${fromStock}
+           GROUP BY f.id,${cn}
+         ) grouped`,params);
+       stockSummary={articles:Number(summary.articles),
+         units:Number(summary.units),unpriced:Number(summary.unpriced),
+         value:Number(summary.value)};
+     }
    }
    // Compatibilidad: si la importación de fichas no incluye stock, consultar
    // la instantánea de inventario existente únicamente para Ampedia.

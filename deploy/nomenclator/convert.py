@@ -40,7 +40,7 @@ def text_or(d, *keys):
 def dictionary(archive, name, code_aliases, label_aliases):
     """Busca pares código/etiqueta; los XML de diccionarios cambian según edición."""
     file = next((x for x in archive.namelist()
-                 if Path(x).name.upper() == name), None)
+                 if Path(x).name.upper() == name.upper()), None)
     if not file:
         return {}
     result = {}

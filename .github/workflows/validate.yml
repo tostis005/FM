@@ -84,7 +84,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/003_multitenant.sql
           psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql
           psql_test -At -c "INSERT INTO ampedia.fm_promociones(id,documento,fuente) VALUES
-            ('PRUEBA_SYNC','{\\\"id\\\":\\\"PRUEBA_SYNC\\\",\\\"name\\\":\\\"Campaña test\\\"}'::jsonb,'CI');
+            ('PRUEBA_SYNC',jsonb_build_object('id','PRUEBA_SYNC','name','Campaña test'),'CI');
             CREATE TABLE ampedia.ventas (
               farmacia_codigo text NOT NULL,origen_id text NOT NULL,
               fecha timestamp NOT NULL,articulo_id text,unidades numeric,

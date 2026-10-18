@@ -109,7 +109,7 @@ jobs:
             AND (SELECT count(*) FROM farmatic.lineaventa) = 1
             AND (SELECT esquema_datos FROM farmetrica.clientes WHERE slug='ampedia') = 'ampedia'
             AND (SELECT count(*) FROM farmetrica.superadministradores WHERE email='jose.fraga@gmail.com') = 1
-            AND (SELECT count(*) FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND habilitado) = 1
+            AND (SELECT count(*) FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND habilitado) = 2
             AND (SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='ampedia') = 5;")
           test "$result" = t
           psql_test -At -c "INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo) VALUES ('ampedia','COOP01','Cooperativa de prueba CI','cooperativa');" >/dev/null

@@ -15,6 +15,46 @@ async function api(path,options={}){
  if(!result.ok)throw Error(json.error||"No se pudo completar la operación");
  return json;
 }
+// Alias de farmacia editables solo dentro del cliente demo, sin tocar
+// códigos ERP ni el maestro del cliente original.
+function DemoFarmacias({clientSlug}){
+ const [open,setOpen]=useState(false),[items,setItems]=useState([]),
+  [loading,setLoading]=useState(false),[saving,setSaving]=useState(""),
+  [error,setError]=useState("");
+ const headers={"X-Farmetrica-Cliente":clientSlug};
+ async function load(){
+  setLoading(true);setError("");
+  try{setItems(await api("/api/tenant/farmacias",{headers}))}
+  catch(e){setError(e.message)}finally{setLoading(false)}
+ }
+ async function save(item){
+  setSaving(String(item.id));setError("");
+  try{
+   const saved=await api("/api/tenant/farmacias/"+item.id,{
+    method:"PATCH",headers,body:JSON.stringify({
+     name:item.name,city:item.city||"",active:Boolean(item.active)
+    })});
+   setItems(old=>old.map(row=>row.id===saved.id?saved:row));
+  }catch(e){setError(e.message)}finally{setSaving("")}
+ }
+ return <div className="fm-manage-wide" style={{padding:"12px 0"}}>
+  <button type="button" className="btn btn-secondary" onClick={()=>{
+   setOpen(!open);if(!open)void load();
+  }}>{open?"Ocultar farmacias demo":"Editar nombres de farmacias demo"}</button>
+  {open&&<div style={{marginTop:14}}>
+   {loading&&<LoadingStatus label="Consultando farmacias demo…"/>}
+   {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
+   {items.map(p=><div key={p.id} className="fm-manage-form" style={{margin:"12px 0"}}>
+    <label>Farmacia {p.displayCode}
+     <input aria-label={"Nombre demo "+p.id} value={p.name}
+      onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}/>
+    </label>
+    <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()}
+     onClick={()=>save(p)}>{saving===p.id?"Guardando…":"Guardar nombre"}</button>
+   </div>)}
+  </div>}
+ </div>;
+}
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:""});
@@ -60,6 +100,7 @@ export function ClientesPanel({onUpdated}){
   {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
+   {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
     <input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.[id])}
       onChange={e=>toggle(c.slug,id,e.target.checked)} aria-label={"Habilitar "+label+" para "+c.name}/>

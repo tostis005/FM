@@ -31,6 +31,7 @@ jobs:
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
           node --check api/src/genericos.js
+          node --test api/src/genericos.test.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js
           node --test api/src/publicLeads.test.js api/src/privacyRequests.test.js

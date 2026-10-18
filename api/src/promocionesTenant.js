@@ -46,8 +46,9 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     const ids=new Set(req.context.pharmacies.map(p=>String(p.id)));
     const document=cleanDocument(req.body?.promotion,id,ids);
     if(!document)return res.status(400).json({error:"Comprueba nombre, identificadores y farmacias de la promoción"});
-    const db=await pool.connect();
+    let db;
     try{
+      db=await pool.connect();
       await db.query("BEGIN");
       const {rows:old}=await db.query(
         `SELECT documento FROM "${schema}".fm_promociones WHERE id=$1 FOR UPDATE`,[id]);
@@ -64,7 +65,7 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
         [id,JSON.stringify(document),String(document.source||"").slice(0,200),req.user.email]);
       await db.query("COMMIT");
       res.json({id,saved:true});
-    }catch(e){await db.query("ROLLBACK").catch(()=>{});next(e);}
-    finally{db.release();}
+    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
+    finally{db?.release();}
   });
 }

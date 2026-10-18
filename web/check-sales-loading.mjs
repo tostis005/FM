@@ -1,16 +1,17 @@
-// Regresión de la experiencia tipo Power BI: cada visual tiene spinner propio
-// y los períodos rápidos cambian las fechas/granularidad de las ventas reales.
+// Prueba de carga progresiva real: SUM primero, recuentos y detalle después,
+// sin reutilizar resultados entre selecciones ni asumir spinners simultáneos.
 import {chromium} from "playwright";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1280,height:850}});
 const requests=[];
 const user={email:"admin@test.example",role:"superadministrador",name:"Administrador"};
-const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",active:true}];
+const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",databaseCode:"ABA",active:true}];
 const modules=Object.fromEntries(["dashboard","ventas","promociones"].map(x=>[x,true]));
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
- client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},role:"superadministrador",
- pharmacies,modules};
+ client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
+ role:"superadministrador",pharmacies,modules};
+const delay=ms=>new Promise(done=>setTimeout(done,ms));
 await page.route("**/api/**",async route=>{
  const url=new URL(route.request().url()),p=url.pathname;
  let body={};
@@ -18,53 +19,73 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/context")body=context;
  else if(p==="/api/tenant/promociones")body={promotions:[]};
  else if(p==="/api/tenant/farmacias")body=pharmacies;
- else if(p==="/api/analytics/ventas"){
-  requests.push(Object.fromEntries(url.searchParams.entries()));
-  await new Promise(done=>setTimeout(done,900));
+ else if(p==="/api/analytics/ventas/totales"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  await delay(450);
   const granularity=url.searchParams.get("granularidad")||"month";
-  const bucket=granularity==="hour"?url.searchParams.get("desde")+"T12:00":
-    granularity==="day"?url.searchParams.get("desde"):url.searchParams.get("desde").slice(0,7);
-  body={monthly:[{month:url.searchParams.get("desde").slice(0,7),ventas:234.5,unidades:12}],
-   series:[{bucket,ventas:234.5,unidades:12}],granularity,
-   products:[{pharmacyId:"1",cn:"123456",name:"Artículo",units:12,value:234.5}],
-   totalArticles:1,totalProducts:1};
+  const from=url.searchParams.get("desde");
+  const bucket=granularity==="hour"?from+"T12:00":
+    granularity==="day"?from:from.slice(0,7);
+  body={from,to:url.searchParams.get("hasta"),granularity,
+   monthly:[{month:from.slice(0,7),ventas:234.5,unidades:12}],
+   series:[{bucket,ventas:234.5,unidades:12}],
+   kpis:{ventas:234.5,unidades:12}};
  }
- else if(p==="/api/ventas/seguimiento")body={sales:{}};
+ else if(p==="/api/analytics/ventas/recuento"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  await delay(1100);
+  body={totalProducts:3,totalArticles:2};
+ }
+ else if(p==="/api/analytics/ventas/detalle"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  await delay(1450);
+  body={products:[{id:"1|123456",pharmacyId:"1",cn:"123456",name:"Artículo",
+    units:12,value:234.5,pvp:25,purchaseCost:8,saleUnitPrice:19.54,
+    unitMargin:11.54,margin:138.48,abcdClass:"A"}],hasMore:false,page:1};
+ }
+ else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/health/database")body={status:"ok",database:"connected"};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
+const totals=()=>requests.filter(r=>r.path==="/api/analytics/ventas/totales");
+async function verifyPeriod(expected){
+ const count=totals().length;
+ await page.waitForFunction(()=>document.querySelector(".fm-demo-graph .fm-loading-panel")!==null,
+   {timeout:4000});
+ await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")!==null,
+   {timeout:10000});
+ // La cifra y el gráfico ya son visibles mientras el detalle aún se procesa.
+ await page.locator(".fm-demo-graph .fm-loading-panel").waitFor({state:"detached",timeout:11000});
+ const detailLoading=await page.locator(".fm-demo-table .fm-loading-panel").count();
+ if(detailLoading!==1)
+  throw Error("La tabla debe seguir cargando después de recibir el SUM");
+ await page.locator(".fm-demo-table .fm-loading-panel").waitFor({state:"detached",timeout:11000});
+ await page.getByText("Artículo",{exact:true}).first().waitFor({state:"visible",timeout:10000});
+ const latest=totals().at(-1);
+ if(!latest||latest.query.granularidad!==expected)
+  throw Error("Granularidad del SUM incorrecta: "+JSON.stringify(latest));
+ return count;
+}
 try{
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});
  await page.locator(".fm-demo-kpi").first().waitFor({state:"visible",timeout:15000});
- const verifyLoading=async()=>{
-  await page.waitForFunction(()=>document.querySelectorAll(".fm-demo-kpi .fm-kpi-spinner").length===4,{timeout:4000});
-  if(await page.locator(".fm-demo-graph .fm-loading-panel").count()!==1)
-    throw Error("El gráfico no tiene cargador propio");
-  if(await page.locator(".fm-demo-table .fm-loading-panel").count()!==1)
-    throw Error("La tabla no tiene cargador propio");
- };
- await verifyLoading();
- await page.locator(".fm-demo-kpi .fm-kpi-spinner").first().waitFor({state:"detached",timeout:12000});
- if(await page.locator(".fm-demo-kpi").first().locator("strong").count()!==1)
-  throw Error("Los indicadores no se recuperan después de la carga");
+ await verifyPeriod("month");
+ if(totals().length!==1)throw Error("Se esperaba una consulta SQL mensual");
  await page.getByRole("button",{name:"Hoy",exact:true}).click();
- await verifyLoading();
- await page.locator(".fm-demo-kpi .fm-kpi-spinner").first().waitFor({state:"detached",timeout:12000});
- const today=requests.at(-1);
- if(today.granularidad!=="hour"||today.desde!==today.hasta)
-  throw Error("Hoy no agrupa por horas o no filtra un día: "+JSON.stringify(today));
+ await verifyPeriod("hour");
+ let t=totals().at(-1).query;
+ if(t.desde!==t.hasta)throw Error("Hoy debe solicitar un solo día");
  await page.getByRole("button",{name:"Esta semana",exact:true}).click();
- await verifyLoading();
- await page.locator(".fm-demo-kpi .fm-kpi-spinner").first().waitFor({state:"detached",timeout:12000});
- if(requests.at(-1).granularidad!=="day")
-  throw Error("Esta semana debe mostrar agregados diarios");
+ await verifyPeriod("day");
  await page.locator(".fm-demo-filters select").first().selectOption("custom");
  await page.getByLabel("Ventas desde").fill("2026-10-05");
  await page.getByLabel("Ventas hasta").fill("2026-10-12");
- await page.waitForFunction(()=>document.querySelectorAll(".fm-demo-kpi .fm-kpi-spinner").length===0&&
-  [...document.querySelectorAll(".fm-sales-period-info")].some(n=>n.textContent.includes("2026-10-12")),{timeout:16000});
- const custom=requests.at(-1);
- if(custom.desde!=="2026-10-05"||custom.hasta!=="2026-10-12"||custom.granularidad!=="day")
-  throw Error("Personalizado no propaga fechas al backend: "+JSON.stringify(custom));
- console.log("OK: spinners independientes, período Hoy, Esta semana y fechas personalizadas");
+ await page.waitForFunction(()=>document.querySelector(".fm-sales-period-info")?.textContent.includes("2026-10-12"),
+  {timeout:8000});
+ await page.waitForFunction(()=>document.querySelector(".fm-demo-graph .fm-loading-panel")===null,
+  {timeout:11000});
+ t=totals().at(-1).query;
+ if(t.desde!=="2026-10-05"||t.hasta!=="2026-10-12"||t.granularidad!=="day")
+  throw Error("Fechas personalizadas incorrectas: "+JSON.stringify(t));
+ console.log("OK: SUM visible antes que ABCD, doble carga independiente y períodos reales");
 }finally{await browser.close()}

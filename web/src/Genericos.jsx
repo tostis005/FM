@@ -29,17 +29,17 @@ function downloadRows(rows){
  const a=document.createElement("a");a.href=url;a.download="farmetrica-genericos-conjuntos.csv";a.click();
  setTimeout(()=>URL.revokeObjectURL(url),500);
 }
-function GroupDetail({group,query,clientSlug}){
+function GroupDetail({group,query,clientSlug,useReal=false}){
  const [data,setData]=useState(null),[error,setError]=useState("");
  useEffect(()=>{
   let cancel=false;const controller=new AbortController();
   setData(null);setError("");
-  fetch("/api/genericos/"+(clientSlug==="ampedia"?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query,{
+  fetch("/api/genericos/"+(useReal?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query,{
    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudo cargar el conjunto");return j})
    .then(d=>{if(!cancel)setData(d)}).catch(e=>{if(!cancel)setError(e.message)});
   return()=>{cancel=true;controller.abort()};
- },[group.dcpf,query,clientSlug]);
+ },[group.dcpf,query,clientSlug,useReal]);
  if(error)return <div role="alert" className="fm-generic-detail-error">{error}</div>;
  if(!data)return <LoadingPanel kind="table" label="Consultando los CN del conjunto…" rows={4}/>;
  const saleMap=new Map(data.sales.map(r=>[r.cn,r]));
@@ -82,7 +82,7 @@ function GroupDetail({group,query,clientSlug}){
    </table></div>}
  </div>;
 }
-export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
+export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
  const [periodKey,setPeriodKey]=useState("3");
  const [customFrom,setCustomFrom]=useState(""),[customTo,setCustomTo]=useState("");
  const [ids,setIds]=useState([]),[search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
@@ -105,13 +105,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
   if(!query){setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
   setLoading(true);setError("");
-  fetch("/api/genericos/"+(clientSlug==="ampedia"?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
+  fetch("/api/genericos/"+(useReal?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");return j})
    .then(j=>{if(mounted)setData(j)}).catch(e=>{if(mounted)setError(e.message)})
    .finally(()=>{if(mounted)setLoading(false)});
   return()=>{mounted=false;controller.abort()};
- },[query,clientSlug,reload]);
+ },[query,clientSlug,reload,useReal]);
  useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
  useEffect(()=>{
   const refresh=()=>{if(document.visibilityState==="visible")setReload(n=>n+1)};
@@ -203,7 +203,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
       {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={11}>
-       <GroupDetail group={g} query={query} clientSlug={clientSlug}/>
+       <GroupDetail group={g} query={query} clientSlug={clientSlug} useReal={useReal}/>
       </td></tr>}
      </React.Fragment>)}</tbody>
     </table></div>}

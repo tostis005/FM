@@ -741,3 +741,18 @@ html,body{overflow-x:clip}
 .fm-sync .data-table td{white-space:nowrap;font-variant-numeric:tabular-nums}
 .fm-sync-note{font-size:13px;color:#64748b;margin:16px 0 0}
 @media(max-width:600px){.fm-sync-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-sync-state span{margin-left:0;flex-basis:100%}}
+
+/* Barra gemela de desplazamiento horizontal en TODOS los listados. */
+.fm-dual-scroll{min-width:0;max-width:100%;width:100%}
+.fm-dual-scroll-top{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;
+ height:16px;scrollbar-width:auto;scrollbar-color:#a6bcb0 #edf3ef;
+ -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.fm-dual-scroll-top>div{min-height:1px;pointer-events:none}
+.fm-dual-scroll>.table-scroll,.fm-dual-scroll>.fm-generic-table-scroll{
+ width:100%;max-width:100%;overflow-x:auto;scrollbar-width:auto;
+ scrollbar-color:#a6bcb0 #edf3ef;-webkit-overflow-scrolling:touch}
+.fm-dual-scroll-top:focus-visible{outline:2px solid #0a9971;outline-offset:-2px}
+.side-settings-children{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.side-settings-children .side-link{padding-left:42px;min-height:38px;font-size:11.5px}
+.side-settings-chevron{margin-left:auto;transition:transform .16s ease}
+.side-settings-chevron.open{transform:rotate(180deg)}

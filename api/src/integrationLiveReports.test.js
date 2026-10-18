@@ -24,9 +24,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
- async function request(path,params={},payload={}){
+ async function request(path,params={},payload={},context=ctx){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...params},
-    params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"},body:payload};
+    params:{dcpf:"123456789"},context,user:{email:"qa@example.com"},body:payload};
   let status=200,body;
   const res={status(n){status=n;return res},json(data){body=data;return res}};
   const handler=routes[path]||(path.startsWith("/api/genericos/reales/")?routes["/api/genericos/reales/:dcpf"]:null);
@@ -41,6 +41,41 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(reports.available,true);
   assert.ok(reports.kpis.compras>0);
   assert.equal(reports.kpis.ventas,null,"Compras no solicita la serie mensual de ventas");
+  // Regresión: los clientes creados con la estructura antigua también
+  // deben mostrar compras reales aunque carezcan de tabla articulos/ventas.
+  await pool.query(`CREATE SCHEMA legacy_reports_ci`);
+  await pool.query(`CREATE TABLE legacy_reports_ci.productos (
+    id text PRIMARY KEY, cn text, descripcion text NOT NULL, familia text)`);
+  await pool.query(`CREATE TABLE legacy_reports_ci.proveedores (
+    id text PRIMARY KEY, nombre text NOT NULL)`);
+  await pool.query(`CREATE TABLE legacy_reports_ci.compras (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    farmacia_id integer NOT NULL, proveedor_id text, producto_id text,
+    fecha timestamptz NOT NULL, unidades numeric, puc numeric, total numeric)`);
+  await pool.query(`INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos)
+    VALUES ('legacy_reports_ci','Tenant legado CI','legacy_reports_ci')`);
+  const {rows:[legacyPharmacy]}=await pool.query(`INSERT INTO farmetrica.farmacias
+    (cliente_slug,nombre,codigo_origen) VALUES
+    ('legacy_reports_ci','Farmacia legado','LGC') RETURNING id`);
+  await pool.query(`INSERT INTO legacy_reports_ci.productos VALUES
+    ('ID01','123456','Producto legado','Test')`);
+  await pool.query(`INSERT INTO legacy_reports_ci.proveedores VALUES
+    ('PR1','Proveedor legado')`);
+  await pool.query(`INSERT INTO legacy_reports_ci.compras
+    (farmacia_id,proveedor_id,producto_id,fecha,unidades,puc,total)
+    VALUES ($1,'PR1','ID01','2026-10-10',6,2.5,15)`,[legacyPharmacy.id]);
+  const legacyContext={client:{slug:"legacy_reports_ci",schema:"legacy_reports_ci"},
+    role:"superadministrador",modules:{},allowedPharmacyIds:[legacyPharmacy.id],
+    pharmacies:[{id:String(legacyPharmacy.id),sourceCode:"LGC"}]};
+  const legacyReport=await request("/api/analytics/reportes",
+    {modulo:"compras",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
+  assert.equal(legacyReport.available,true);
+  assert.equal(legacyReport.kpis.compras,15);
+  assert.equal(legacyReport.kpis.unidadesCompradas,6);
+  assert.equal(legacyReport.kpis.lineasCompra,1);
+  assert.equal(legacyReport.buyRows[0].cn,"123456");
+  assert.equal(legacyReport.buyRows[0].puc,2.5);
+  assert.equal(legacyReport.supplierRows[0].name,"Proveedor legado");
   const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
   assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");
   assert.ok(reports.buyRows.some(r=>r.cn==="654321"&&r.puc>0));

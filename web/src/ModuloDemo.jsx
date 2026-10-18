@@ -445,8 +445,13 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
   {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
    <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}
-  {realReport?.available&&realReport.availability?.sales===false&&["dashboard","rentabilidad"].includes(module)&&
-   <p role="status" className="fm-inline-status">No hay una fuente de ventas compatible para este cliente. Los indicadores que dependen de ella no se pueden calcular.</p>}
+  {realReport?.available&&realReport.availability?.sales===false&&["dashboard","rentabilidad","stock","reposicion","acciones"].includes(module)&&
+   <p role="status" className="fm-inline-status">No hay una fuente de ventas compatible. Los indicadores de rotación, ABCD, reposición y márgenes que requieren ventas no se pueden calcular; no se interpretan como cero.</p>}
+  {realReport?.available&&module==="rentabilidad"&&realReport.salesRows?.length>0&&
+    realReport.availability?.marginCoverage<realReport.salesRows.length&&
+   <p role="status" className="fm-inline-status">Hay {realReport.salesRows.length-realReport.availability.marginCoverage} artículos visibles sin coste de adquisición comprobable. Se muestran sus ventas, pero no se inventa su margen. Los totales del margen permanecen sin calcular si la cobertura no es completa.</p>}
+  {realReport?.availability?.supplierRowsTruncated&&["proveedores","compras"].includes(module)&&
+   <p role="status" className="fm-inline-status">El ranking de proveedores muestra los primeros 1.000. El importe total de compras incluye todos los proveedores; no interpretes la suma de filas visibles como total de la red.</p>
    {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&<p role="status" className="fm-inline-status">El stock no se muestra como actual porque no hay una importación de inventario suficientemente reciente en las últimas 48 horas.</p>}
    {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<p className="fm-sales-period-info">Base de valoración: {realReport.availability.stockSummaryBasis}. Si faltan costes, el importe permanece sin calcular. El listado puede mostrar menos referencias sin afectar a los recuentos.</p>}
    {realReport?.availability?.rowsTruncated&&module!=="ventas"&&<p role="status" className="fm-inline-status">El listado está limitado a las primeras 3.000 referencias. Los totales de ventas y compras proceden de todas las operaciones.</p>}

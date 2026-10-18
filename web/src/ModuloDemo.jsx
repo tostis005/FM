@@ -177,9 +177,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const insightScope=[clientSlug,recentPeriod.from,recentPeriod.to,filters.pharmacyIds.join(","),ids,reloadKey].join("|");
  const insightData=insightResult?.scope===insightScope?insightResult.data:null;
  const insightFailureMessage=insightFailure?.scope===insightScope?insightFailure.message:null;
- const insightLoading=module==="ventas"&&period.valid&&Boolean(fastSales)&&!insightData&&!insightFailureMessage;
+ const insightLoading=module==="ventas"&&period.valid&&!insightData&&!insightFailureMessage;
  useEffect(()=>{
-  if(module!=="ventas"||!fastSales||!period.valid)return;
+  if(module!=="ventas"||!period.valid)return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:recentPeriod.from,hasta:recentPeriod.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
@@ -189,7 +189,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    .then(data=>{if(!controller.signal.aborted)setInsightResult({scope:insightScope,data})})
    .catch(e=>{if(!controller.signal.aborted)setInsightFailure({scope:insightScope,message:e.message})});
   return()=>controller.abort();
- },[module,fastSales,insightScope,period.valid]);
+ },[module,insightScope,period.valid]);
  const singleFamilyPharmacy=module==="ventas"&&filters.pharmacyIds.length===1;
  const familyScope=[clientSlug,filters.pharmacyIds.join(","),ids].join("|");
  const familyData=familyResult?.scope===familyScope?familyResult.data:null;
@@ -213,15 +213,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   const controller=new AbortController();
   if(!salesModule){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
-  // Los contadores sin márgenes preceden a la tabla completa; ésta solo usa 12 meses.
-  if(module==="ventas"&&fastEligible&&!fastSales&&!fastFailed){
-   setLoading(true);setRealSales(null);setRealReport(null);
-   return ()=>controller.abort();
-  }
-  if(module==="ventas"&&!insightData&&!insightFailureMessage){
-   setLoading(true);setRealSales(null);setRealReport(null);
-   return ()=>controller.abort();
-  }
+  // SUM, recuento y página del detalle se solicitan de forma independiente.
   const params=new URLSearchParams();
   params.set("desde",module==="ventas"?recentPeriod.from:period.from);
   params.set("hasta",module==="ventas"?recentPeriod.to:period.to);
@@ -253,7 +245,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,fastEligible,fastSales,fastFailed,recentPeriod.from,recentPeriod.to,insightData,insightFailureMessage,detailPage]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage]);
 
  useEffect(()=>{
   if(module==="ventas"){setReportLoading(false);return}

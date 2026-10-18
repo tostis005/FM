@@ -139,7 +139,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    <label>Periodo<select value={periodKey} onChange={e=>{
     const k=e.target.value;setPeriodKey(k);
     if(k==="custom"&&!customFrom){setCustomFrom(range.from||"");setCustomTo(range.to||"");}
-   }}>{SALES_PERIODS.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
+   }}>{SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
    {periodKey==="custom"&&<><label>Desde<input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label>
     <label>Hasta<input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></>}
    <label>Farmacias<MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"

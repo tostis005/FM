@@ -64,6 +64,7 @@ export default function AccessAdmin({ onAuthenticated }) {
   const [accountForm, setAccountForm] = useState(EMPTY_ACCOUNT);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [internalPassword,setInternalPassword]=useState("");
   const [codeRequested, setCodeRequested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -97,6 +98,13 @@ export default function AccessAdmin({ onAuthenticated }) {
     "Sesión iniciada correctamente",
   );
   const googleError = () => setError("No se ha podido cargar el inicio de sesión Google.");
+  async function loginInternal(event){
+    event.preventDefault();
+    await action(()=>api("/api/auth/password",{
+      method:"POST",body:JSON.stringify({email,password:internalPassword})
+    }),"Sesión iniciada");
+    setInternalPassword("");
+  }
   async function requestCode(event) {
     event.preventDefault();
     await action(async () => {
@@ -145,6 +153,19 @@ export default function AccessAdmin({ onAuthenticated }) {
       <p>Utiliza tu cuenta Google autorizada, incluso si no termina en gmail.com. Los colaboradores con una cuenta individual también podrán solicitar un código por correo electrónico.</p>
       {config.googleClientId ? <GoogleSignIn clientId={config.googleClientId} onCredential={googleCallback} onError={googleError}/> :
         <p className="access-hint">Google pendiente de configurar en el servidor.</p>}
+      {config.internalPasswordEnabled&&<form className="access-code-login" onSubmit={loginInternal}>
+        <label>Cuenta interna
+          <input type="email" required autoComplete="username" placeholder="correo@ejemplo.com"
+            value={email} onChange={e=>setEmail(e.target.value)}/>
+        </label>
+        <label>Contraseña
+          <input type="password" required autoComplete="current-password"
+            value={internalPassword} onChange={e=>setInternalPassword(e.target.value)}/>
+        </label>
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          <KeyRound size={16}/> Entrar con contraseña
+        </button>
+      </form>}
       {config.emailCodesAvailable && <form onSubmit={codeRequested ? verifyCode : requestCode} className="access-code-login">
         <label>Correo autorizado
           <input type="email" required placeholder="persona@ejemplo.com" value={email} onChange={e=>{setEmail(e.target.value);setCodeRequested(false);setCode("");}}/>

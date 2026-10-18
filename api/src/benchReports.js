@@ -45,7 +45,10 @@ try{
     farmacias:ids.join(",")},context:{
      allowedPharmacyIds:[1,2,3,4,5],
      client:{slug:"ampedia",schema:"ampedia"},
-     role:"superadministrador",modules:{} }};
+     role:"superadministrador",modules:{},
+     pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},
+       {id:"3",sourceCode:"BUE"},{id:"4",sourceCode:"EST"},
+       {id:"5",sourceCode:"POL",databaseCode:"VAL"}] }};
   let response,error,status=200;
   const res={status(v){status=v;return res},json(v){response=v;return res}};
   const now=process.hrtime.bigint();

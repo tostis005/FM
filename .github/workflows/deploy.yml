@@ -28,6 +28,8 @@ jobs:
           node --check api/src/server.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/syncStatus.js
+          node --check api/src/promocionesTenant.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js
           node --test api/src/publicLeads.test.js api/src/privacyRequests.test.js
@@ -121,6 +123,12 @@ jobs:
             echo "::error::Estado inesperado de los esquemas. No se altera la base de datos."
             exit 1
           fi
+
+      - name: Preparar conservación de promociones de Ampedia
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
+            < api/src/migrations/009_promociones_cliente.sql
 
       - name: Actualizar API y web en el VPS
         run: |

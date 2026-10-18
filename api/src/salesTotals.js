@@ -16,7 +16,7 @@ export function buildSalesTotalsSql(schema,granularity){
  SELECT CASE WHEN GROUPING(mes)=0 THEN 'month'
    ${granularity==="month"?"":"WHEN GROUPING(periodo)=0 THEN 'series'"} ELSE 'total' END AS tipo,
    to_char(mes,'YYYY-MM') AS month,
-   to_char(periodo,'${fmt}') AS bucket,
+   ${granularity==="month"?"NULL::text":"to_char(periodo,'"+fmt+"')"} AS bucket,
    coalesce(sum(importe),0)::float8 AS ventas,
    coalesce(sum(unidades),0)::float8 AS unidades
  FROM (

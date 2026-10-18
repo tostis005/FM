@@ -30,6 +30,7 @@ function catalogData(pool){
  return pool.query("SELECT sha256,fecha_fuente,importado_en,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo=true LIMIT 1");
 }
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {classifyAbcd} from "./abcd.js";
 export function setupGenericAnalytics(app,pool,{requireTenantModule}){
  const guard=requireTenantModule("genericos");
  app.get("/api/genericos/estado",...guard,async(req,res,next)=>{
@@ -102,6 +103,10 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    ]);
    const sm=new Map(sales.rows.map(x=>[x.dcpf,x]));
    const pm=new Map(purchases.rows.map(x=>[x.dcpf,x]));
+   const classes=hasSales?classifyAbcd(catalog.rows.map(g=>({
+    dcpf:g.dcpf,revenue:Number(sm.get(g.dcpf)?.revenue||0),
+    salesUnits:Number(sm.get(g.dcpf)?.units||0)
+   })),{identity:g=>g.dcpf,revenue:g=>g.revenue,units:g=>g.salesUnits}):new Map();
    // Permite buscar también un CN individual sin limitar la suma del conjunto.
    const matched=q.search?await pool.query(`SELECT DISTINCT dcpf FROM farmetrica.nomenclator_presentaciones
      WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%' OR
@@ -112,7 +117,8 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    groups=groups.map(g=>{
     const s=sm.get(g.dcpf),p=pm.get(g.dcpf);
     const avg=p?.avg_puc??null,best=p?.best_puc??null,qty=p?.units??0;
-    return {...g,salesUnits:s?Number(s.units):hasSales?0:null,
+    return {...g,abcdClass:hasSales?(classes.get("_all|"+g.dcpf)||"D"):null,
+     salesUnits:s?Number(s.units):hasSales?0:null,
       revenue:s?Number(s.revenue):hasSales?0:null,
       purchaseUnits:p?Number(p.units):hasPurchases?0:null,
       spent:p?Number(p.spend):hasPurchases?0:null,

@@ -57,16 +57,21 @@ test("no permite farmacias ajenas ni recuentos del histórico completo",async()=
  assert.equal((await call("familias",{farmacias:"5"},noModule)).status,403);
 });
 
-test("recuentos repetidos reaprovechan una única consulta por tenant y admiten refresco",async()=>{
+test("sin caché: cada recuento va a PostgreSQL",async()=>{
  const {call,calls}=make();
  const filters={farmacias:"5",desde:"2025-11-01",hasta:"2026-10-18"};
  const [a,b]=await Promise.all([call("recuento",filters),call("recuento",filters)]);
  assert.equal(a.data.totalProducts,b.data.totalProducts);
- assert.equal(calls.length,1,"las peticiones simultáneas deben compartir SQL");
+ assert.equal(calls.length,2);
  await call("recuento",filters);
- assert.equal(calls.length,1,"un recuento sin cambios debe servirse desde memoria");
- await call("recuento",{...filters,refrescar:"1"});
- assert.equal(calls.length,2,"actualizar debe saltarse la caché");
+ assert.equal(calls.length,3,"consulta nueva incluso con filtros idénticos");
  await call("recuento",{...filters,farmacias:"1"});
- assert.equal(calls.length,3,"las farmacias deben tener claves de caché aisladas");
+ assert.equal(calls.length,4,"farmacia diferente sigue autorizada");
+});
+test("un usuario no puede ampliar desde la URL la ventana ABCD del administrador",async()=>{
+ const {call,calls,ctx}=make();
+ assert.equal((await call("recuento",{farmacias:"5",desde:"2026-08-01",hasta:"2026-10-18"})).status,400);
+ const c24={...ctx,client:{...ctx.client,analysisMonths:24}};
+ assert.equal((await call("recuento",{farmacias:"5",desde:"2024-11-01",hasta:"2026-10-18"},c24)).status,200);
+ assert.equal(calls.length,1);
 });

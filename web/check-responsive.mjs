@@ -50,6 +50,35 @@ async function mockApi(route){
   payload={monthly:[{month:"2026-10",ventas:count*1000,unidades:count*75}],
     products:[],totalProducts:0,totalArticles:count*10};
  }
+ else if(path==="/api/analytics/reportes"){
+  const selected=url.searchParams.get("farmacias");
+  const count=selected?selected.split(",").length:pharmacies.length;
+  const money=count*1000;
+  const product={id:"1|654321",pharmacyId:"1",cn:"654321",name:"Artículo real de prueba",
+   pvp:8,purchaseCost:2,saleUnitPrice:7,unitMargin:5,units:3,value:21,margin:15};
+  payload={available:true,monthly:[{month:"2026-10",ventas:money,compras:money/2,unidades:count*75}],
+   kpis:{ventas:money,compras:money/2,unidades:count*75,proveedores:count,
+    articulosVendidos:count,stock:null,margen:15},
+   salesRows:[product],buyRows:[],supplierRows:[],stockRows:[],replenishmentRows:[],
+   profitRows:[product],actions:[],families:[],
+   availability:{sales:true,purchases:true,stock:false,rowsTruncated:false}};
+ }
+ else if(path==="/api/analytics/ventas/totales"){
+  const selected=url.searchParams.get("farmacias");
+  const count=selected?selected.split(",").length:pharmacies.length;
+  payload={monthly:[{month:"2026-10",ventas:count*1000,unidades:count*75}],
+   series:[{bucket:"2026-10",ventas:count*1000,unidades:count*75}],
+   granularity:"month",kpis:{ventas:count*1000,unidades:count*75}};
+ }
+ else if(path==="/api/analytics/ventas/recuento")payload={totalProducts:30,totalArticles:25};
+ else if(path==="/api/analytics/ventas/detalle")
+  payload={products:[{id:"1|654321",pharmacyId:"1",name:"Artículo de prueba",
+   cn:"654321",units:3,value:21,pvp:8,purchaseCost:2,
+   saleUnitPrice:7,unitMargin:5,margin:15,abcdClass:"A"}],hasMore:false,page:1};
+ else if(path==="/api/analytics/ventas/familias")payload={families:[]};
+ else if(path==="/api/genericos/reales"||path==="/api/genericos/conjuntos")
+  payload={groups:[],totalGroups:0,summary:{salesUnits:0,revenue:0,purchases:0},
+   sales:{available:true},purchases:{available:true}};
  else if(path==="/api/ventas/catalogo")payload={products:[]};
  else if(path==="/api/ventas/cobertura")payload={pharmacies:[]};
  else if(path==="/api/ventas/seguimiento")payload={sales:{}};
@@ -64,6 +93,7 @@ try{
  for(const viewport of sizes){
    const ctx=await browser.newContext({viewport,deviceScaleFactor:1});
    const page=await ctx.newPage();
+   page.on("pageerror",err=>console.error("Error React en pruebas responsive:",err.message));
    await page.route("**/api/**",mockApi);
    for(const path of routes){
      try{
@@ -87,6 +117,17 @@ try{
        if(path==="promociones"&&viewport.width<=560&&
           !result.table.some(t=>t.content>t.viewport)){
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");
+       }
+       if(path==="promociones"&&viewport.width===375){
+         const paired=await page.locator(".fm-dual-scroll").first().evaluate(root=>{
+           const top=root.querySelector(".fm-dual-scroll-top");
+           const bottom=root.querySelector(".table-scroll");
+           if(!top||!bottom)return {ok:false,reason:"faltan barras"};
+           top.scrollLeft=85;top.dispatchEvent(new Event("scroll"));
+           return {ok:Math.abs(bottom.scrollLeft-top.scrollLeft)<=1&&
+            top.scrollWidth>top.clientWidth,reason:"barras no sincronizadas"};
+         });
+         if(!paired.ok)throw Error("El scroll superior e inferior debe estar sincronizado: "+paired.reason);
        }
        if(path==="promociones"&&viewport.width===375){
          const metrics=page.locator(".campaign-metrics .campaign-metric strong");

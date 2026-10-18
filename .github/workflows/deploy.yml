@@ -47,6 +47,7 @@ jobs:
           node --test api/src/salesInsights.test.js
           node --test api/src/salesAnalysisPeriod.test.js
           node --test api/src/tenantAnalysisPolicy.test.js
+          node --test api/src/internalPassword.test.js
           node --test api/src/salesDetail.test.js
           node --test api/src/genericos.test.js
           node --check api/src/publicLeads.js
@@ -112,7 +113,7 @@ jobs:
       - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 012_analisis_ventas_cliente.sql 005_proveedores.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 014_clientes_demo.sql 005_proveedores.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
             ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
               'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
               < "api/src/migrations/$migration"

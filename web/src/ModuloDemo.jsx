@@ -1,11 +1,12 @@
 import React,{useMemo,useState,useEffect} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
-import {ArrowDownToLine,ArrowRight,Search,X} from "lucide-react";
+import {ArrowDownToLine,ArrowRight,Search,X,RefreshCw} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,SkeletonLine} from "./LoadingState.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
 import {buildAnalysis} from "./businessAnalytics.js";
+import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods.js";
 import "./moduleDemo.css";
 
 const TITLES={
@@ -95,10 +96,11 @@ const STORAGE="fm_analytics_filters_";
 function readFilters(client){
  try{const saved=JSON.parse(sessionStorage.getItem(STORAGE+client)||"null");
   if(saved&&typeof saved==="object")return {period:saved.period||"6",
+    customFrom:String(saved.customFrom||""),customTo:String(saved.customTo||""),
     pharmacyIds:Array.isArray(saved.pharmacyIds)?saved.pharmacyIds:[],
     families:Array.isArray(saved.families)?saved.families:[],search:String(saved.search||"")};
  }catch{}
- return {period:"6",pharmacyIds:[],families:[],search:""};
+ return {period:"6",customFrom:"",customTo:"",pharmacyIds:[],families:[],search:""};
 }
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
  const [filters,setFilters]=useState(()=>readFilters(clientSlug));
@@ -108,27 +110,34 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const [realSales,setRealSales]=useState(null);
  const [salesError,setSalesError]=useState("");
  const [loading,setLoading]=useState(()=>["dashboard","ventas"].includes(module));
+ const [reloadKey,setReloadKey]=useState(0);
+ const [lastUpdated,setLastUpdated]=useState(null);
  const asOf=useMemo(()=>new Date(),[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
+ const salesModule=["dashboard","ventas"].includes(module);
+ const tz=clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
+ const period=resolveSalesPeriod(filters.period,asOf,{from:filters.customFrom,to:filters.customTo},tz);
  const tables=useMemo(()=>realTables?normalizeTables(realTables):
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
  useEffect(()=>{
   const controller=new AbortController();
-  if(!["dashboard","ventas"].includes(module)){setRealSales(null);setLoading(false);return ()=>controller.abort()}
+  if(!salesModule){setRealSales(null);setLoading(false);return ()=>controller.abort()}
+  if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   const params=new URLSearchParams();
-  params.set("desde",monthAt(asOf,1-Number(filters.period))+"-01");
-  params.set("hasta",new Date(Date.UTC(asOf.getUTCFullYear(),asOf.getUTCMonth()+1,0)).toISOString().slice(0,10));
+  params.set("desde",period.from);
+  params.set("hasta",period.to);
+  params.set("granularidad",period.granularity);
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   if(searchReady)params.set("buscar",searchReady);
   setLoading(true);setSalesError("");setRealSales(null);
   fetch("/api/analytics/ventas?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar las ventas");return b})
-   .then(data=>{if(!controller.signal.aborted)setRealSales(data)})
+   .then(data=>{if(!controller.signal.aborted){setRealSales(data);setLastUpdated(new Date())}})
    .catch(e=>{if(!controller.signal.aborted)setSalesError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return ()=>controller.abort();
- },[module,clientSlug,ids,filters.period,filters.pharmacyIds.join(","),searchReady,asOf]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),searchReady,reloadKey]);
 
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
@@ -138,13 +147,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const change=(field,value)=>setFilters(f=>({...f,[field]:value}));
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null;
- const isFetchingSales=(loading||filters.search!==searchReady)&&["dashboard","ventas"].includes(module)&&!realTables;
+ const isFetchingSales=(loading||filters.search!==searchReady)&&salesModule&&!realTables&&period.valid;
  const canShowKpi=key=>{
   if(realTables)return true;
-  return hasSales&&["ventas","unidades","articulosVendidos"].includes(key)&&["dashboard","ventas"].includes(module);
+  return hasSales&&["ventas","unidades","articulosVendidos"].includes(key)&&salesModule;
  };
- const realRevenue=realSales?.monthly?.some(r=>r.ventas!=null)?
-   realSales.monthly.reduce((t,r)=>t+Number(r.ventas||0),0):null;
+ const realRevenue=hasSales?realSales.monthly.reduce((t,r)=>t+Number(r.ventas||0),0):null;
  const realUnits=realSales?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...analysis.kpis,ventas:realRevenue,unidades:realUnits,articulosVendidos:realSales?.totalArticles||0};
  const cards=metricCards(module,realKpis);
@@ -162,12 +170,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const rows=module==="ventas"?liveSalesRows:(datasets[module]||[]);
  const columns=columnsFor(module==="dashboard"?"acciones":module,pharmacyMap);
  const chartConfig=SERIES[module]||SERIES.dashboard;
- const chart=(["dashboard","ventas"].includes(module)&&realSales?
-   realSales.monthly.map(r=>({month:r.month,ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0})):
-   realTables?analysis.monthly:[])
-   .map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
+ const chart=salesModule&&realSales?
+   (realSales.series||realSales.monthly.map(r=>({...r,bucket:r.month}))).map(r=>({
+    month:formatSalesBucket(r.bucket,realSales.granularity||"month"),
+    ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0
+   })):
+   (realTables?analysis.monthly:[]).map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
  const available=realTables||(["dashboard","ventas"].includes(module)&&hasSales);
- const chartSeries=module==="dashboard"&&!realTables?["ventas",null,"Ventas por mes"]:chartConfig;
+ const chartSeries=module==="dashboard"&&!realTables?["ventas",null,"Evolución de ventas"]:chartConfig;
 
  return <div className="fm-demo fm-demo-v2">
   <div className="page-header"><h1>{TITLES[module]||"Dashboard"}</h1>

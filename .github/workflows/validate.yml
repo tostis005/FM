@@ -122,6 +122,9 @@ jobs:
           test "$result" = t
           psql_test -At -c "INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo) VALUES ('ampedia','COOP01','Cooperativa de prueba CI','cooperativa');" >/dev/null
           psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND tipo='cooperativa';" | grep -qx 1
+          psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
+          npm install --prefix api --no-audit --no-fund
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js
 
 
   validar_responsive:

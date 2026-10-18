@@ -2,6 +2,16 @@
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {classifyAbcd} from "./abcd.js";
+// Solo expresiones SQL conocidas; los nombres de columnas del navegador nunca se interpolan.
+const REPORT_ORDER_KEYS={
+ compras:["name","cn","pharmacy","family","pvp","supplier","units","puc","value","lines"],
+ proveedores:["name","pharmacy","products","units","value"],
+ stock:["name","cn","pharmacy","family","pvp","units"],
+ rentabilidad:["name","cn","pharmacy","family","pvp","units","value","saleUnitPrice"],
+ dashboard:["name","cn","pharmacy","family","pvp","units","value","saleUnitPrice"],
+ informes:["name","cn","pharmacy","family","pvp","units","value","saleUnitPrice"],
+ asistente:["name","cn","pharmacy","family","pvp","units","value","saleUnitPrice"]
+};
 const DAY=86400000;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const validDate=s=>{if(!ISO.test(s))return false;const d=new Date(s+"T00:00:00Z");return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s;};
@@ -17,11 +27,14 @@ const has=(columns,...required)=>required.every(column=>columns.has(column));
 function getFilters(req,res){
  const from=String(req.query.desde||""),to=String(req.query.hasta||""),
    raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim(),
-   module=String(req.query.modulo||"dashboard");
+   module=String(req.query.modulo||"dashboard"),
+   sortKey=String(req.query.orden||"value"),sortDir=String(req.query.direccion||"desc").toLowerCase();
  const families=String(req.query.familias||"").split(",").filter(Boolean);
  if(!validDate(from)||!validDate(to)||Date.parse(to)<Date.parse(from)||
     Date.parse(to)-Date.parse(from)>366*DAY||raw.length>2000||search.length>100||
-    families.length>30||families.some(f=>f.length>80)||![
+    families.length>30||families.some(f=>f.length>80)||
+    !["asc","desc"].includes(sortDir)||
+    (req.query.orden!=null&&!(REPORT_ORDER_KEYS[module]||[]).includes(sortKey))||![
      "dashboard","ventas","compras","proveedores","stock","reposicion",
      "rentabilidad","acciones","informes","asistente"].includes(module)){
   res.status(400).json({error:"Filtros de informes no válidos"});return null;
@@ -35,7 +48,7 @@ function getFilters(req,res){
     !req.context.modules[module]&&!(module==="dashboard"&&req.context.modules.dashboard)){
   res.status(403).json({error:"Módulo no habilitado"});return null;
  }
- return {from,to,ids:[...new Set(ids)],search,families,module};
+ return {from,to,ids:[...new Set(ids)],search,families,module,sortKey,sortDir};
 }
 export function setupRealReports(app,pool,{requireTenant}){
  app.get("/api/analytics/reportes",...requireTenant(),async(req,res,next)=>{
@@ -99,6 +112,41 @@ export function setupRealReports(app,pool,{requireTenant}){
      max(coalesce(art.familia,'')) AS family,max(art.pvp)::float8 AS pvp,
      max(art.pmc)::float8 AS pmc, max(art.laboratorio) AS laboratory`;
    const rowLimit=3000;
+   const direction=f.sortDir.toUpperCase();
+   const saleOrders={
+    name:"max(coalesce(art.nombre,t.articulo_id))",cn,
+    pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
+    pvp:"max(art.pvp)",units:"sum(t.unidades)",value:"sum(t.importe)",
+    saleUnitPrice:"sum(t.importe)/NULLIF(sum(t.unidades),0)"
+   };
+   const purchaseOrders={
+    name:"max(coalesce(art.nombre,t.articulo_id))",cn,
+    pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
+    pvp:"max(art.pvp)",
+    supplier:`max(coalesce(nullif(t.proveedor_nombre,''),${providerFallback}t.proveedor_id))`,
+    units:"sum(t.unidades)",puc:"sum(t.cost)/NULLIF(sum(t.priced_units),0)",
+    value:"sum(t.importe)",lines:"sum(t.lines)"
+   };
+   const supplierOrders={
+    name:`max(coalesce(nullif(t.proveedor_nombre,''),${providerFallback}t.proveedor_id))`,
+    pharmacy:"max(f.nombre)",products:`count(DISTINCT ${cn})`,
+    units:"sum(t.unidades)",value:"sum(t.importe)"
+   };
+   const reportOrder=(orders,fallback,tie=cn)=>{
+    const expression=orders[f.sortKey]||orders[fallback];
+    const dir=orders[f.sortKey]?direction:"DESC";
+    return `ORDER BY ${expression} ${dir} NULLS LAST,f.id,${tie}`;
+   };
+   const stockSortExpressions={
+    name:"max(a.nombre)",cn:"coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))",
+    pharmacy:"max(f.nombre)",family:"max(coalesce(a.familia,''))",
+    pvp:"max(a.pvp)",units:"sum(a.stock_actual)"
+   };
+   const stockOrder=(expressions,cnExpression,fallback="units",pharmacyTie="f.id")=>{
+    const expression=expressions[f.sortKey]||expressions[fallback];
+    const dir=expressions[f.sortKey]?direction:"DESC";
+    return `ORDER BY ${expression} ${dir} NULLS LAST,${pharmacyTie},${cnExpression}`;
+   };
    // Evitar un lookup de catálogo por CADA línea de venta. Primero agrupamos
    // movimientos por farmacia + ID local de ERP y resolvemos el artículo una vez
    // por referencia. Dos IDs ERP pueden compartir CN: el GROUP BY exterior mantiene
@@ -121,7 +169,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const sqlSales=`SELECT f.id::text AS "pharmacyId",${columns},
      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
      ${salesByArticle} WHERE ${articleFilter}
-     GROUP BY f.id,${cn} ORDER BY sum(t.importe) DESC LIMIT ${rowLimit}`;
+     GROUP BY f.id,${cn} ${reportOrder(saleOrders,"value")} LIMIT ${rowLimit}`;
    // La tabla de compras supera cientos de miles de movimientos. Unir el
    // catálogo y el proveedor una vez por artículo/proveedor, no por línea.
    const purchasesByArticle=legacyBuys?`FROM (
@@ -163,7 +211,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      sum(t.priced_units)::float8 AS "pricedUnits",
      sum(t.lines)::int AS lines
      ${purchasesByArticle} ${provider} WHERE ${articleFilter}
-     GROUP BY f.id,${cn},t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT ${rowLimit}`;
+     GROUP BY f.id,${cn},t.proveedor_id ${reportOrder(purchaseOrders,"value")},t.proveedor_id LIMIT ${rowLimit}`;
    // Los totales mensuales sin búsqueda/familia no necesitan consultar
    // millones de fichas de artículo. Sus parámetros también deben coincidir
    // exactamente con los placeholders SQL: PostgreSQL rechaza $4/$5 sin tipo.
@@ -207,7 +255,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      sum(t.unidades)::float8 AS units,
      count(DISTINCT ${cn})::int AS products
      ${purchasesByArticle} ${provider} WHERE ${articleFilter}
-     GROUP BY f.id,t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT 1000`;
+     GROUP BY f.id,t.proveedor_id ${reportOrder(supplierOrders,"value","t.proveedor_id")} LIMIT 1000`;
    // Cada informe ejecuta solamente la información que presenta. Esto
    // evita recorrer compras, catálogo y proveedores innecesariamente en Stock,
    // y evita las ventas completas al consultar solamente proveedores.
@@ -319,7 +367,7 @@ export function setupRealReports(app,pool,{requireTenant}){
            OR a.nombre ILIKE '%'||$3||'%')
          AND (cardinality($5::text[])=0 OR coalesce(a.familia,'')=ANY($5::text[]))
        GROUP BY f.id,coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))
-       ORDER BY sum(a.stock_actual) DESC LIMIT ${rowLimit}`,
+       ${stockOrder(stockSortExpressions,"coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))")} LIMIT ${rowLimit}`,
        [codes,pharmacyIds,f.search,req.context.client.slug,f.families]);
      stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,
@@ -407,7 +455,11 @@ export function setupRealReports(app,pool,{requireTenant}){
            max(art.pvp)::float8 AS pvp,sum(t.unidades)::float8 AS units
          ${fromStock}
          GROUP BY f.id,${cn}
-         ORDER BY sum(t.unidades) DESC LIMIT ${rowLimit}`,params);
+         ${stockOrder({
+           name:"max(coalesce(art.nombre,t.articulo_id))",cn,
+           pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
+           units:"sum(t.unidades)"
+         },cn)} LIMIT ${rowLimit}`,params);
        stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
          units:Number(r.units),value:null,coverage:null,excessValue:null,
          sold:0,need:null,needValue:null}));
@@ -471,7 +523,11 @@ export function setupRealReports(app,pool,{requireTenant}){
            coalesce(art.nombre,s.descripcion,'') ILIKE '%'||$2||'%')
          AND (cardinality($3::text[])=0 OR coalesce(art.familia,'')=ANY($3::text[]))
        GROUP BY s.id_farmacia,${stockCn}
-       ORDER BY sum(s.stock_actual) DESC LIMIT ${rowLimit}`,
+       ${stockOrder({
+         name:"max(coalesce(art.nombre,s.descripcion))",cn:stockCn,
+         pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
+         units:"sum(s.stock_actual)"
+       },stockCn,"units","s.id_farmacia")} LIMIT ${rowLimit}`,
        [pharmacyIds,f.search,f.families,req.context.client.slug]);
       stockRows=sr.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,need:null,needValue:null}));

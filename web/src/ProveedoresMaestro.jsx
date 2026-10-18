@@ -32,7 +32,7 @@ export default function ProveedoresMaestro({clientSlug}){
    <div className="fm-supplier-summary">{[["cooperativa","Cooperativas"],["laboratorio","Laboratorios"],["mayorista","Mayoristas"],["sin_clasificar","Sin clasificar"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:rows.filter(r=>r.type===id).length}</strong></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     <div className="toolbar"><div className="search-wrap"><Search size={16}/><input placeholder="Buscar proveedor o código" aria-label="Buscar proveedor" value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
-    <ListTable rows={visible} rowKey={r=>r.id} label="proveedores" loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
+    <ListTable rows={visible} rowKey={r=>r.id} label="proveedores" defaultSort={{key:"name",direction:"asc"}} loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
      onRowClick={setForm} columns={[
       {key:"sourceCode",label:"Código",value:r=>r.sourceCode},
       {key:"name",label:"Proveedor",value:r=>r.name,render:r=><strong>{r.name}</strong>},

@@ -7,16 +7,18 @@ function dateValid(s){return DATE.test(s)&&Number.isFinite(Date.parse(s))&&
 function filters(req,res){
  const from=String(req.query.desde||"").trim(),to=String(req.query.hasta||"").trim();
  const search=String(req.query.buscar||"").trim(),raw=String(req.query.farmacias||""),
-  abcd=String(req.query.abcd||"all").toUpperCase();
+  abcd=String(req.query.abcd||"all").toUpperCase(),
+  order=String(req.query.orden||"revenue"),direction=String(req.query.direccion||"desc").toLowerCase();
  if(!dateValid(from)||!dateValid(to)||
     Date.parse(to)<Date.parse(from)||Date.parse(to)-Date.parse(from)>366*86400000||
-    search.length>100||raw.length>2000||!["ALL","A","B","C","D"].includes(abcd))
+    search.length>100||raw.length>2000||!["ALL","A","B","C","D"].includes(abcd)||
+    !GENERIC_GROUP_SORT_KEYS.includes(order)||!["asc","desc"].includes(direction))
    {res.status(400).json({error:"Fechas o filtros no válidos"});return null;}
  const allowed=req.context.allowedPharmacyIds.map(Number);
  const wanted=raw?raw.split(",").map(Number):allowed;
  if(wanted.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id)))
    {res.status(403).json({error:"Farmacias no autorizadas"});return null;}
- return {from,to,search,ids:[...new Set(wanted)],abcd};
+ return {from,to,search,ids:[...new Set(wanted)],abcd,order,direction};
 }
 function tenantSchema(req){return '"'+req.context.client.schema+'"';}
 async function tableColumns(pool,schema,table,fields){
@@ -32,6 +34,7 @@ function catalogData(pool){
 }
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {classifyAbcd} from "./abcd.js";
+import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
 export function setupGenericAnalytics(app,pool,{requireTenantModule}){
  const guard=requireTenantModule("genericos");
  app.get("/api/genericos/estado",...guard,async(req,res,next)=>{
@@ -125,15 +128,17 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
       spent:p?Number(p.spend):hasPurchases?0:null,
       averagePuc:avg,bestPuc:best,
       indicativeSavings:avg!=null&&best!=null?Math.max(0,(avg-best)*Math.max(0,qty)):null};
-   }).sort((a,b)=>(b.revenue??-1)-(a.revenue??-1));
+   });
    if(q.abcd!=="ALL")groups=groups.filter(g=>g.abcdClass===q.abcd);
+   const topGroups=sortGenericGroups(groups,"revenue","desc").slice(0,12);
+   groups=sortGenericGroups(groups,q.order,q.direction);
    const summary={
     totalGroups:groups.length,
     salesUnits:hasSales?groups.reduce((n,g)=>n+Number(g.salesUnits||0),0):null,
     revenue:hasSales?groups.reduce((n,g)=>n+Number(g.revenue||0),0):null,
     purchases:hasPurchases?groups.reduce((n,g)=>n+Number(g.spent||0),0):null,
    };
-   res.json({version:status.rows[0],groups:groups.slice(0,500),totalGroups:groups.length,summary,
+   res.json({version:status.rows[0],groups:groups.slice(0,500),topGroups,totalGroups:groups.length,summary,
     sales:hasSales?{available:true}:noData("No existe la tabla canónica de ventas"),
     purchases:hasPurchases?{available:true}:noData("No existen compras canónicas con PUC"),
     note:"Comparación por DCPF (misma dosis, forma y envase). Ahorro orientativo: no descuenta condiciones comerciales y no equivale a oferta vigente."});

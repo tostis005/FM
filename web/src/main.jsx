@@ -681,10 +681,13 @@ function App(){
  const allowed=page==="seguimiento-global"
    ? (sessionUser?.role==="superadministrador"||tenantContext?.modules?.promociones)
    : visibleNav.some(item=>item.id===page);
+ // Durante la carga, el cliente puede estar listo antes que el usuario.
+ // No redirigir de /ventas a /promociones mientras el rol aún no está resuelto.
  useEffect(()=>{
-   if(tenantContext && !allowed)nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard");
- },[tenantContext,page,allowed]);
- if(!tenantContext||!allowed)return <div className="app-shell"><main className="main-content">{authError?<p role="alert">{authError}</p>:<><SkeletonKpis count={4}/><LoadingPanel kind="table" label="Preparando tu espacio de trabajo y sus permisos…"/></>}</main></div>;
+   if(tenantContext && sessionUser && !allowed)
+     nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard");
+ },[tenantContext,sessionUser,page,allowed]);
+ if(!tenantContext||!sessionUser||!allowed)return <div className="app-shell"><main className="main-content">{authError?<p role="alert">{authError}</p>:<><SkeletonKpis count={4}/><LoadingPanel kind="table" label="Preparando tu espacio de trabajo y sus permisos…"/></>}</main></div>;
  return <div className="app-shell">
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>

@@ -69,3 +69,12 @@
 @media(max-width:1050px){.fm-generics .fm-generic-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.fm-generics .fm-generic-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
 .fm-price-settings-grid{grid-template-columns:1fr}.fm-price-settings{padding:15px!important}}
+
+/* Clasificación ABCD: prioridad comercial por contribución a ventas. */
+.fm-abcd{display:inline-flex;justify-content:center;align-items:center;min-width:29px;
+ border-radius:7px;border:1px solid #d4e3da;background:#f5f9f6;color:#355a45;
+ padding:4px 8px;font-size:12px;font-weight:800;white-space:nowrap}
+.fm-abcd-A{background:#e9f7f0;border-color:#b9e3cb;color:#156942}
+.fm-abcd-B{background:#eef5ff;border-color:#c8d9f4;color:#265a9b}
+.fm-abcd-C{background:#fff7e6;border-color:#f5dfae;color:#946009}
+.fm-abcd-D{background:#f3f4f5;border-color:#e1e4e8;color:#657077}

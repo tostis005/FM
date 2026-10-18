@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import { setupSyncStatus } from "./syncStatus.js";
+import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 
@@ -31,7 +32,7 @@ const pool = new Pool({ connectionString: DATABASE_URL, max: 6, connectionTimeou
 const app = express();
 app.disable("x-powered-by");
 app.use(helmet());
-app.use(express.json({ limit: "16kb" }));
+app.use(express.json({ limit: "128kb" }));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
@@ -73,6 +74,7 @@ const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUs
 setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
+setupTenantPromotions(app,pool,{requireTenantModule});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -357,6 +359,8 @@ try {
   await pool.query(leadsMigration);
   const privacyMigration=await readFile(new URL("./migrations/007_solicitudes_privacidad.sql",import.meta.url),"utf8");
   await pool.query(privacyMigration);
+  const promosMigration=await readFile(new URL("./migrations/009_promociones_cliente.sql",import.meta.url),"utf8");
+  await pool.query(promosMigration);
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

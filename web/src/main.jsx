@@ -10,6 +10,7 @@ import "./styles.css";
 import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
 import ModuloDemo from "./ModuloDemo.jsx";
+import Genericos from "./Genericos.jsx";
 import {promotionMetrics} from "./promotionMetrics.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
@@ -831,7 +832,8 @@ function App(){
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug}/>} 
     {page==="solicitudes"&&<SolicitudesDemo/>}
-    {DEMO_MODULES.has(page)&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
+    {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

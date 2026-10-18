@@ -30,6 +30,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
+          node --check api/src/genericos.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js
           node --test api/src/publicLeads.test.js api/src/privacyRequests.test.js
@@ -40,6 +41,7 @@ jobs:
           node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
           node --test src/businessAnalytics.test.js
           node --test src/promotionMetrics.test.js
+          node --test src/salesPeriods.test.js
           node check-login.mjs
           node generate-seo.mjs
           node check-marketing.mjs
@@ -133,6 +135,12 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
             < api/src/migrations/009_promociones_cliente.sql
+
+      - name: Preparar catálogo de genéricos aditivo
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \\
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \\
+            < api/src/migrations/010_nomenclator_aemps.sql
 
       - name: Actualizar API y web en el VPS
         run: |

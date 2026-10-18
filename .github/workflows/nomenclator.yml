@@ -1,0 +1,91 @@
+name: Actualizar Nomenclator AEMPS
+
+on:
+  push:
+    branches: [main]
+    paths: ["deploy/nomenclator/**", ".github/workflows/nomenclator.yml"]
+  schedule:
+    - cron: "22 5 4 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nomenclator-aemps-production
+  cancel-in-progress: false
+
+jobs:
+  importar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar ZIP oficial AEMPS de forma verificada
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/nomenclator
+          curl --fail --show-error --silent --location \
+            --connect-timeout 20 --max-time 250 --retry 3 \
+            "https://listadomedicamentos.aemps.gob.es/prescripcion.zip" \
+            --output /tmp/nomenclator/prescripcion.zip
+          file /tmp/nomenclator/prescripcion.zip
+          python3 -m zipfile -t /tmp/nomenclator/prescripcion.zip
+          python3 deploy/nomenclator/convert.py /tmp/nomenclator/prescripcion.zip \
+            --csv /tmp/nomenclator/catalogo.csv --meta /tmp/nomenclator/meta.json
+      - name: Preparar SSH del VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Crear esquema aditivo de catálogo
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
+            < api/src/migrations/010_nomenclator_aemps.sql
+      - name: Comprobar si cambió el archivo oficial
+        id: change
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA=$(python3 -c 'import json;print(json.load(open("/tmp/nomenclator/meta.json"))["sha256"])')
+          [[ "$SHA" =~ ^[0-9a-f]{64}$ ]]
+          EXISTING=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \"SELECT CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_versiones WHERE sha256='$SHA') THEN 1 ELSE 0 END;\"")
+          if [ "$EXISTING" = "1" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Nomenclátor ya importado; sin cambios."
+          else
+            test "$EXISTING" = "0"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Importar catálogo transaccionalmente sin borrar ventas
+        if: steps.change.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 deploy/nomenclator/import_sql.py \
+            /tmp/nomenclator/meta.json /tmp/nomenclator/catalogo.csv | \
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao'
+      - name: Comprobar versión activa
+        shell: bash
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            "cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \
+            \"SELECT importado_en,fecha_fuente,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo;\""

@@ -58,7 +58,7 @@ export function ClientesPanel({onUpdated}){
   {!clients.length&&!loading&&!error&&<section className="card fm-manage-client">No hay clientes configurados.</section>}
  </div>;
 }
-const initial={email:"",name:"",role:"farmacia",pharmacies:[],active:true};
+const initial={email:"",name:"",role:"farmacia",pharmacies:[],active:true,authType:"google",password:""};
 const ROLES=[["administrador","Administrador del cliente"],["gestor","Gestor"],["farmacia","Personal de farmacia"],["colaborador","Colaborador externo"]];
 export function EquipoCliente({client,pharmacies=[]}){
  const [users,setUsers]=useState([]),[form,setForm]=useState(initial),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
@@ -78,6 +78,15 @@ export function EquipoCliente({client,pharmacies=[]}){
    <form className="fm-manage-form" onSubmit={save}>
     <label>Correo<input type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="nombre@empresa.com"/></label>
     <label>Nombre<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nombre y apellidos"/></label>
+    <label>Acceso<select value={form.authType||"google"} onChange={e=>setForm({...form,authType:e.target.value,password:""})}>
+      <option value="google">Google autorizado</option>
+      <option value="interno">Usuario interno (contraseña)</option>
+     </select></label>
+     {form.authType==="interno"&&<label>Contraseña
+      <input type="password" autoComplete="new-password" minLength={12} maxLength={128}
+       placeholder="Mínimo 12 caracteres; vacío al editar" value={form.password||""}
+       onChange={e=>setForm({...form,password:e.target.value})}/>
+     </label>}
     <label>Rol<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{ROLES.map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></label>
     <label>Estado<select value={String(form.active)} onChange={e=>setForm({...form,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Bloqueado en este cliente</option></select></label>
     <div className="fm-manage-wide"><strong>Farmacias autorizadas</strong><div className="fm-manage-checkboxes">{pharmacies.map(p=><label key={p.id}><input type="checkbox" checked={form.pharmacies.includes(String(p.id))} onChange={e=>setForm(v=>({...v,pharmacies:e.target.checked?[...v.pharmacies,String(p.id)]:v.pharmacies.filter(id=>id!==String(p.id))}))}/>{p.name}</label>)}</div></div>
@@ -85,8 +94,8 @@ export function EquipoCliente({client,pharmacies=[]}){
    </form>
   </section>
   <section className="card fm-manage-client"><div className="section-heading"><div><h2>Usuarios asignados</h2></div><span>{loading?<LoadingStatus compact label="Cargando equipo…"/>:users.length+" personas"}</span></div>
-   {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:<div style={{overflowX:"auto"}}><table style={{width:"100%",textAlign:"left",borderCollapse:"collapse"}}><thead><tr>{["Correo","Rol","Farmacias","Estado",""].map(h=><th key={h} style={{padding:"11px",borderBottom:"1px solid #dcebe2"}}>{h}</th>)}</tr></thead>
-    <tbody>{users.map(u=><tr key={u.email}><td style={{padding:11}}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></td><td>{ROLES.find(x=>x[0]===u.role)?.[1]||u.role}</td><td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—"}</td><td>{u.active?"Activo":"Bloqueado"}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setForm({...u})}>Editar</button></td></tr>)}</tbody></table></div>}
+   {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:<div style={{overflowX:"auto"}}><table style={{width:"100%",textAlign:"left",borderCollapse:"collapse"}}><thead><tr>{["Correo","Acceso","Rol","Farmacias","Estado",""].map(h=><th key={h} style={{padding:"11px",borderBottom:"1px solid #dcebe2"}}>{h}</th>)}</tr></thead>
+    <tbody>{users.map(u=><tr key={u.email}><td style={{padding:11}}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></td><td>{u.authType==="interno"?"Interno":"Google"}</td><td>{ROLES.find(x=>x[0]===u.role)?.[1]||u.role}</td><td>{u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—"}</td><td>{u.active?"Activo":"Bloqueado"}</td><td><button className="btn btn-secondary btn-sm" onClick={()=>setForm({...u,password:""})}>Editar</button></td></tr>)}</tbody></table></div>}
    {!users.length&&!loading&&<p>No hay usuarios asignados a este cliente.</p>}
   </section>
  </div>;

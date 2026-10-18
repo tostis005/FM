@@ -40,7 +40,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const reports=await request("/api/analytics/reportes",{modulo:"compras"});
   assert.equal(reports.available,true);
   assert.ok(reports.kpis.compras>0);
-  assert.ok(reports.kpis.ventas>0);
+  assert.equal(reports.kpis.ventas,null,"Compras no solicita la serie mensual de ventas");
+  const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
+  assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");
   assert.ok(reports.buyRows.some(r=>r.cn==="654321"&&r.puc>0));
   assert.ok(reports.salesRows.some(r=>r.cn==="654322"));
   assert.ok(reports.supplierRows.some(r=>r.name==="Mayorista 2"));

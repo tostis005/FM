@@ -8,6 +8,8 @@ const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const context=await browser.newContext({viewport:{width:1280,height:850}});
 const page=await context.newPage();
+page.on("pageerror",e=>console.error("ERROR página restauración:",e.stack||e.message));
+page.on("console",m=>{if(m.type()==="error")console.error("Consola navegador:",m.text())});
 let role="superadministrador";
 const pharmacies=[{id:"1",name:"Farmacia de prueba",active:true,sourceCode:"ABA"}];
 const modules={promociones:true,dashboard:false,ventas:false,stock:false,compras:false};
@@ -40,7 +42,8 @@ async function assertRoute(route,title){
   const state=await page.evaluate(()=>({
     pathname:location.pathname,headings:[...document.querySelectorAll("h1,h2")].map(x=>x.textContent),
     text:document.querySelector("main")?.innerText?.slice(0,380),
-    nav:document.querySelector("nav")?.innerText?.slice(0,240)
+    nav:document.querySelector("nav")?.innerText?.slice(0,240),
+    body:document.body?.innerText?.slice(0,450),html:document.body?.innerHTML?.slice(0,420)
   })).catch(()=>({}));
   console.error("Estado de ruta F5:",JSON.stringify(state));
   throw e;

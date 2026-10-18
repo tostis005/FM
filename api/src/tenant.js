@@ -115,15 +115,42 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         id text PRIMARY KEY, cn text, descripcion text NOT NULL,
         familia text, activo boolean NOT NULL DEFAULT true
       )`);
+      // Maestro y movimientos normalizados: mismos nombres que usa la API
+      // para Ampedia y para cualquier farmacia/ERP de otros países.
+      await db.query(`CREATE TABLE "${slug}".articulos (
+        farmacia_codigo text NOT NULL, origen_id text NOT NULL,
+        nombre text NOT NULL, codigo_nacional text, familia text,
+        laboratorio text, pvp numeric(18,5), puc numeric(18,5),
+        pmc numeric(18,5), stock_actual numeric(18,4),
+        sincronizado_en timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY(farmacia_codigo,origen_id)
+      )`);
       await db.query(`CREATE TABLE "${slug}".proveedores (
-        id text PRIMARY KEY, nombre text NOT NULL, tipo text
+        farmacia_codigo text NOT NULL, origen_id text NOT NULL,
+        nombre text NOT NULL, tipo text,
+        sincronizado_en timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY(farmacia_codigo,origen_id)
       )`);
       await db.query(`CREATE TABLE "${slug}".compras (
-        id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, farmacia_id integer NOT NULL,
-        proveedor_id text, producto_id text, fecha timestamptz NOT NULL,
-        unidades numeric(18,3) NOT NULL DEFAULT 0, puc numeric(18,5),
-        total numeric(18,2)
+        farmacia_codigo text NOT NULL, origen_id text NOT NULL,
+        fecha timestamp NOT NULL, articulo_id text, proveedor_id text,
+        proveedor_nombre text, unidades numeric(18,4) NOT NULL DEFAULT 0,
+        coste_unitario numeric(18,5), importe numeric(18,4),
+        sincronizado_en timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY(farmacia_codigo,origen_id)
       )`);
+      // Los filtros usan el código normalizado (ERP) y la fecha. Los índices
+      // simples de texto no sirven para upper(btrim(farmacia_codigo)).
+      await db.query(`CREATE INDEX ON "${slug}".ventas
+        ((upper(btrim(farmacia_codigo))), fecha DESC)`);
+      await db.query(`CREATE INDEX ON "${slug}".compras
+        ((upper(btrim(farmacia_codigo))), fecha DESC)`);
+      await db.query(`CREATE INDEX ON "${slug}".compras
+        ((upper(btrim(farmacia_codigo))), articulo_id, fecha DESC)`);
+      await db.query(`CREATE INDEX ON "${slug}".articulos
+        ((upper(btrim(farmacia_codigo))), origen_id, sincronizado_en DESC)`);
+      await db.query(`CREATE INDEX ON "${slug}".proveedores
+        ((upper(btrim(farmacia_codigo))), origen_id, sincronizado_en DESC)`);
       await db.query(`CREATE TABLE "${slug}".stock (
         farmacia_id integer NOT NULL, producto_id text NOT NULL,
         unidades numeric(18,3), coste_unitario numeric(18,5),

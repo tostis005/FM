@@ -34,15 +34,23 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
  const map={
-  dashboard:shared,
+  dashboard:[shared[0],shared[1],shared[2],shared[3],
+   CARD("Unidades compradas","unidadesCompradas","n","compras"),
+   CARD("Líneas de compra","lineasCompra","n","compras")],
   ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia ("+analysisMonths+" m)","productosFarmacia","n"),CARD("Artículos únicos ("+analysisMonths+" m)","articulosVendidos","n")],
-  compras:[shared[1],shared[4],CARD("Proveedores","proveedores","n","proveedores"),CARD("Compra de genéricos","compraGenericos","€","genericos")],
-  proveedores:[CARD("Proveedores","proveedores","n"),shared[1],shared[4],CARD("CN con compras","articulosComprados","n","compras")],
+  compras:[shared[1],CARD("Unidades compradas","unidadesCompradas","n"),
+   CARD("Proveedores","proveedores","n","proveedores"),
+   CARD("Líneas de compra","lineasCompra","n")],
+  proveedores:[CARD("Proveedores","proveedores","n"),shared[1],
+   CARD("Unidades compradas","unidadesCompradas","n"),
+   CARD("Líneas de compra","lineasCompra","n")],
   stock:[CARD("Artículos con stock informado","stockArticulos","n"),CARD("Unidades en inventario","stockUnidades","n"),shared[2],CARD("Sin ventas en periodo","stockSinRotacion","n")],
   reposicion:[shared[5],CARD("Unidades en inventario","stockUnidades","n"),CARD("Coste de reposición","reposicionCoste","€"),CARD("Roturas","roturas","n")],
   genericos:[CARD("Compra de genéricos","compraGenericos","€"),CARD("Potencial de precio","potencialGenericos","€","compras"),shared[1],CARD("Proveedores","proveedores","n","proveedores")],
   rentabilidad:[shared[3],CARD("Margen estimado","margenPct","%"),CARD("Cobertura de costes","coberturaCostes","%"),shared[0]],
-  acciones:[CARD("Acciones identificadas","acciones","n"),shared[4],CARD("Sobrestock","sobrestock","€","stock"),shared[5]],
+  acciones:[CARD("Acciones identificadas","acciones","n"),
+   CARD("Roturas","roturas","n","reposicion"),
+   CARD("Sobrestock","sobrestock","€","stock"),shared[5]],
   informes:shared.slice(0,4),asistente:shared.slice(0,4)
  };
  return (map[module]||shared).map(c=>({...c,value:k[c.key]}));
@@ -81,8 +89,10 @@ function columnsFor(module,pharmacyMap){
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),
-    unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
-  case "proveedores":return [C("name","Proveedor","name"),pharmacy,num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
+    unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),
+    euro("value","Compras"),num("lines","Líneas de compra")];
+  case "proveedores":return [C("name","Proveedor","name"),pharmacy,
+    num("products","Artículos"),num("units","Unidades"),euro("value","Compras")];
   case "stock":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
   case "reposicion":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];

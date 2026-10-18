@@ -36,6 +36,7 @@ jobs:
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
           node --test api/src/pricePolicy.test.js
+          node --test api/src/abcd.test.js
           node --test api/src/realReports.test.js
           node --test api/src/genericos.test.js
           node --check api/src/publicLeads.js

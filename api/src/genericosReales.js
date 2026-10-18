@@ -1,6 +1,7 @@
 // Conjuntos DCPF de la AEMPS combinados con ventas/compras/artículos REALES de Ampedia.
 // El percentil de referencia afecta solo a la estimación, nunca al coste observado.
 import {readPricePolicy} from "./pricePolicy.js";
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 function dayValid(v){if(!ISO.test(v))return false;const d=new Date(v+"T00:00:00Z");return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function getFilter(req,res){
@@ -59,7 +60,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    const nJoin=`JOIN farmetrica.nomenclator_presentaciones n ON
      n.cn=coalesce(nullif(btrim(a.codigo_nacional),''),btrim(c.articulo_id))`;
    const ph=`JOIN farmetrica.farmacias f ON f.cliente_slug=$4
-      AND upper(btrim(c.farmacia_codigo))=upper(btrim(f.codigo_origen))`;
+      AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
    const [sales,purchases]=await Promise.all([
     f.ids.length?pool.query(`SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
       sum(c.unidades)::float8 AS units,sum(c.importe)::float8 AS revenue
@@ -91,7 +92,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
        c.fecha,c.origen_id
      FROM ${schema}.compras c
      JOIN farmetrica.farmacias f ON f.cliente_slug=$3
-       AND upper(btrim(c.farmacia_codigo))=upper(btrim(f.codigo_origen))
+       AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      ${art}
      ${nJoin}
      LEFT JOIN farmetrica.politica_precios pg ON pg.cliente_slug=$3 AND pg.farmacia_id=0

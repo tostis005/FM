@@ -266,16 +266,23 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
       "SELECT to_char("+bucket.group+","+bucket.format+") AS bucket, "+
       "sum(v.unidades)::float8 AS unidades, sum(v.importe)::float8 AS ventas "+
       where+" GROUP BY 1 ORDER BY 1",params);
-  const {rows:products}=await pool.query(
-    'SELECT f.id::text AS "pharmacyId", btrim(v.articulo_id::text) AS cn, '+
+  // Reutilizar el mismo agregado de artículos para la tabla y sus recuentos.
+  // Antes se escaneaban y agrupaban las mismas ventas POR CUARTA VEZ solo
+  // para contar artículos cuando el usuario seleccionaba tres meses.
+  const {rows:productResult}=await pool.query(
+    'WITH grouped AS (SELECT f.id::text AS "pharmacyId", '+
+    'btrim(v.articulo_id::text) AS cn, '+
     "max(nullif(btrim(v.articulo_id::text),'')) AS name, "+
     "sum(v.unidades)::float8 AS units, sum(v.importe)::float8 AS value "+
-    where+" GROUP BY f.id,btrim(v.articulo_id::text) ORDER BY sum(v.importe) DESC NULLS LAST LIMIT 750",params);
-  const {rows:counts}=await pool.query(
-    "SELECT count(*)::int AS n,count(DISTINCT cn)::int AS articulos FROM "+
-    "(SELECT btrim(v.articulo_id::text) AS cn "+where+" GROUP BY f.id,btrim(v.articulo_id::text)) x",params);
-  res.json({monthly,series,granularity,products,totalProducts:counts[0]?.n||0,
-    totalArticles:counts[0]?.articulos||0,from,to});
+    where+' GROUP BY f.id,btrim(v.articulo_id::text)), '+
+    'totals AS (SELECT count(*)::int AS "totalProducts", '+
+    'count(DISTINCT cn)::int AS "totalArticles" FROM grouped) '+
+    'SELECT grouped.*,totals."totalProducts",totals."totalArticles" '+
+    'FROM grouped CROSS JOIN totals ORDER BY grouped.value DESC NULLS LAST LIMIT 750',params);
+  const totalProducts=productResult[0]?.totalProducts||0;
+  const totalArticles=productResult[0]?.totalArticles||0;
+  const products=productResult.map(({totalProducts:count,totalArticles:articleCount,...row})=>row);
+  res.json({monthly,series,granularity,products,totalProducts,totalArticles,from,to});
  }catch(err){next(err)}
 });
 

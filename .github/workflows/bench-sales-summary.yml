@@ -1,4 +1,4 @@
-name: Benchmark SUM anual directo en PostgreSQL
+name: Benchmark recuentos y periodos históricos
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
           chmod 600 ~/.ssh/id_fm
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-      - name: Medir SUM de 12 meses por farmacia sin catálogo ni compras
+      - name: Medir recuento 12 meses y ventas 5 años/histórico en solo lectura
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose exec -T -e FM_BENCHMARK_READONLY=1 -e FM_BENCHMARK_FAST_ONLY=1 api node src/benchSalesSummary.js'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose exec -T -e FM_BENCHMARK_READONLY=1 api node src/benchSalesInsights.js'

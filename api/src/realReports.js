@@ -9,11 +9,11 @@ const round=(n,d=2)=>Math.round(Number(n)*10**d)/10**d;
 const sum=(arr,key)=>arr.reduce((t,r)=>t+Number(typeof key==="function"?key(r):r[key]||0),0);
 const key=(...parts)=>parts.map(String).join("|");
 const nullable=v=>v==null?null:Number(v);
-async function hasColumns(pool,schema,table,fields){
+async function tableColumns(pool,schema,table){
  const {rows}=await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2",[schema,table]);
- const got=new Set(rows.map(r=>r.column_name));
- return fields.every(c=>got.has(c));
+ return new Set(rows.map(r=>r.column_name));
 }
+const has=(columns,...required)=>required.every(column=>columns.has(column));
 function getFilters(req,res){
  const from=String(req.query.desde||""),to=String(req.query.hasta||""),
    raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim(),
@@ -43,45 +43,61 @@ export function setupRealReports(app,pool,{requireTenant}){
   try{
    const schema=req.context.client.schema,quoted='"'+schema+'"',
      pharmacyIds=f.ids,
-     [articles,sales,buyers,suppliers]=await Promise.all([
-      hasColumns(pool,schema,"articulos",["farmacia_codigo","origen_id","nombre","codigo_nacional","familia","pvp","pmc"]),
-      hasColumns(pool,schema,"ventas",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
-      hasColumns(pool,schema,"compras",["farmacia_codigo","articulo_id","proveedor_id","unidades","coste_unitario","importe","fecha"]),
-      hasColumns(pool,schema,"proveedores",["farmacia_codigo","origen_id","nombre"])
+     [articleCols,saleCols,buyCols,providerCols,legacyProductCols]=await Promise.all([
+      tableColumns(pool,schema,"articulos"),tableColumns(pool,schema,"ventas"),
+      tableColumns(pool,schema,"compras"),tableColumns(pool,schema,"proveedores"),
+      tableColumns(pool,schema,"productos")
      ]);
-   if(!articles)return res.json({available:false,reason:"La tabla real de artículos aún no está disponible para este cliente",kpis:{},monthly:[],
-      salesRows:[],buyRows:[],supplierRows:[],stockRows:[],replenishmentRows:[],profitRows:[],actions:[],families:[]});
+   const articles=has(articleCols,"farmacia_codigo","origen_id","nombre","codigo_nacional");
+   const legacyArticles=!articles&&has(legacyProductCols,"id","descripcion","cn");
+   const sales=has(saleCols,"farmacia_codigo","articulo_id","fecha","unidades","importe");
+   const normalizedBuys=has(buyCols,"farmacia_codigo","articulo_id","proveedor_id","unidades","coste_unitario","importe","fecha");
+   const legacyBuys=!normalizedBuys&&has(buyCols,"farmacia_id","producto_id","proveedor_id","unidades","puc","total","fecha");
+   const buyers=normalizedBuys||legacyBuys;
+   const suppliers=has(providerCols,"farmacia_codigo","origen_id","nombre");
+   const legacySuppliers=!suppliers&&has(providerCols,"id","nombre");
+   if(!sales&&!buyers)return res.json({available:false,
+     reason:"No hay tablas de ventas o compras compatibles con el contrato de este cliente",kpis:{},monthly:[],
+     salesRows:[],buyRows:[],supplierRows:[],stockRows:[],replenishmentRows:[],profitRows:[],actions:[],families:[]});
    // LATERAL + DISTINCT evita multiplicar movimientos por múltiples copias de un artículo.
-   const article=`LEFT JOIN LATERAL (
-     SELECT a.nombre,a.codigo_nacional,a.familia,a.pvp,a.pmc,a.puc,a.laboratorio,a.origen_id
+   // Resolver referencias una vez por artículo y farmacia. Las tablas legadas
+   // también se soportan en lectura, sin mover ni transformar compras reales.
+   const col=(alias,name,kind="text")=>articleCols.has(name)?alias+"."+name:"NULL::"+kind;
+   const article=articles?`LEFT JOIN LATERAL (
+     SELECT a.nombre,a.codigo_nacional,${col("a","familia")} AS familia,
+       ${col("a","pvp","numeric")} AS pvp,${col("a","pmc","numeric")} AS pmc,
+       ${col("a","laboratorio")} AS laboratorio
      FROM ${quoted}.articulos a
      WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(t.farmacia_codigo))
        AND a.origen_id=t.articulo_id
-     ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+     ${articleCols.has("sincronizado_en")?"ORDER BY a.sincronizado_en DESC NULLS LAST":""}
+     LIMIT 1
+   ) art ON true`:legacyArticles?`LEFT JOIN LATERAL (
+     SELECT p.descripcion AS nombre,p.cn AS codigo_nacional,
+       ${legacyProductCols.has("familia")?"p.familia":"NULL::text"} AS familia,
+       NULL::numeric AS pvp,NULL::numeric AS pmc,NULL::text AS laboratorio
+     FROM ${quoted}.productos p WHERE p.id=t.articulo_id LIMIT 1
+   ) art ON true`:`LEFT JOIN LATERAL (
+     SELECT NULL::text AS nombre,NULL::text AS codigo_nacional,
+       NULL::text AS familia,NULL::numeric AS pvp,NULL::numeric AS pmc,
+       NULL::text AS laboratorio WHERE false
    ) art ON true`;
    const provider=suppliers?`LEFT JOIN LATERAL (
      SELECT p.nombre FROM ${quoted}.proveedores p
      WHERE upper(btrim(p.farmacia_codigo))=upper(btrim(t.farmacia_codigo))
        AND p.origen_id=t.proveedor_id
-     ORDER BY p.sincronizado_en DESC NULLS LAST LIMIT 1
+     ${providerCols.has("sincronizado_en")?"ORDER BY p.sincronizado_en DESC NULLS LAST":""}
+     LIMIT 1
+   ) prov ON true`:legacySuppliers?`LEFT JOIN LATERAL (
+     SELECT p.nombre FROM ${quoted}.proveedores p WHERE p.id=t.proveedor_id LIMIT 1
    ) prov ON true`:"";
+   const providerFallback=suppliers||legacySuppliers?"prov.nombre,":"";
    const cn="coalesce(nullif(btrim(art.codigo_nacional),''),btrim(t.articulo_id))";
-   const pvp="art.pvp";
-   const filter=` t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
-       AND f.id=ANY($3::int[])
-       AND ($4::text='' OR ${cn} ILIKE '%'||$4||'%' OR
-          coalesce(art.nombre,'') ILIKE '%'||$4||'%')
-       AND (cardinality($5::text[])=0 OR coalesce(art.familia,'')=ANY($5::text[]))`;
    const args=[f.from,f.to,pharmacyIds,f.search,f.families];
-   const baseTable=(name,alias="t")=>`FROM ${quoted}.${name} ${alias}
-       JOIN farmetrica.farmacias f ON f.cliente_slug=$6
-        AND upper(btrim(${alias}.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-       ${article}`;
    const pars=[...args,req.context.client.slug];
    const columns=`${cn} AS cn,max(coalesce(art.nombre,t.articulo_id)) AS name,
      max(coalesce(art.familia,'')) AS family,max(art.pvp)::float8 AS pvp,
      max(art.pmc)::float8 AS pmc, max(art.laboratorio) AS laboratory`;
-   const empty=[];
    const rowLimit=3000;
    // Evitar un lookup de catálogo por CADA línea de venta. Primero agrupamos
    // movimientos por farmacia + ID local de ERP y resolvemos el artículo una vez
@@ -108,9 +124,22 @@ export function setupRealReports(app,pool,{requireTenant}){
      GROUP BY f.id,${cn} ORDER BY sum(t.importe) DESC LIMIT ${rowLimit}`;
    // La tabla de compras supera cientos de miles de movimientos. Unir el
    // catálogo y el proveedor una vez por artículo/proveedor, no por línea.
-   const purchasesByArticle=`FROM (
+   const purchasesByArticle=legacyBuys?`FROM (
+     SELECT f.id AS pharmacy_id,${pharmacyDataCodeSQL("f")} AS farmacia_codigo,
+       t.producto_id AS articulo_id,t.proveedor_id,NULL::text AS proveedor_nombre,
+       sum(t.unidades) AS unidades,sum(t.total) AS importe,
+       sum(t.unidades*t.puc) FILTER(WHERE t.unidades>0 AND t.puc>0) AS cost,
+       sum(t.unidades) FILTER(WHERE t.unidades>0 AND t.puc>0) AS priced_units,
+       count(*)::int AS lines
+     FROM ${quoted}.compras t
+     JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$6
+     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
+       AND f.id=ANY($3::int[])
+     GROUP BY f.id,${pharmacyDataCodeSQL("f")},t.producto_id,t.proveedor_id
+   ) t JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
+   ${article}`:`FROM (
      SELECT f.id AS pharmacy_id,upper(btrim(t.farmacia_codigo)) AS farmacia_codigo,
-       t.articulo_id,t.proveedor_id,max(t.proveedor_nombre) AS proveedor_nombre,
+       t.articulo_id,t.proveedor_id,${buyCols.has("proveedor_nombre")?"max(t.proveedor_nombre)":"NULL::text"} AS proveedor_nombre,
        sum(t.unidades) AS unidades,sum(t.importe) AS importe,
        sum(t.unidades*t.coste_unitario) FILTER(
          WHERE t.unidades>0 AND t.coste_unitario>0) AS cost,
@@ -127,7 +156,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    ${article}`;
    const sqlBuy=`SELECT f.id::text AS "pharmacyId",${columns},
      t.proveedor_id AS "providerId",
-     max(coalesce(nullif(t.proveedor_nombre,''),${suppliers?"prov.nombre,":""}t.proveedor_id)) AS supplier,
+     max(coalesce(nullif(t.proveedor_nombre,''),${providerFallback}t.proveedor_id)) AS supplier,
      sum(t.unidades)::float8 AS units,
      sum(t.importe)::float8 AS value,
      sum(t.cost)::float8 AS cost,
@@ -166,7 +195,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const readSalesPeriod=!["compras","proveedores","acciones"].includes(f.module);
    const readBuyPeriod=!["stock","reposicion"].includes(f.module);
    const readSupplierRows=["compras","proveedores"].includes(f.module);
-   const needFamilies=f.module==="ventas";
+   const needFamilies=f.module==="ventas"&&articles&&articleCols.has("familia");
    const queries=[
     sales&&pharmacyIds.length&&readSalesRows?pool.query(sqlSales,pars):{rows:[]},
     buyers&&pharmacyIds.length?pool.query(sqlBuy,pars):{rows:[]},
@@ -213,9 +242,9 @@ export function setupRealReports(app,pool,{requireTenant}){
    let stockSource=null,stockSummary=null;
    // Compras y proveedores no necesitan recorrer todo el inventario.
    const needsStock=["dashboard","stock","reposicion","acciones","informes","asistente"].includes(f.module);
-   const catalogHasStock=needsStock&&pharmacyIds.length&&await hasColumns(pool,schema,"articulos",
-     ["farmacia_codigo","origen_id","codigo_nacional","nombre","familia",
-      "stock_actual","sincronizado_en","pmc"]);
+   const catalogHasStock=needsStock&&pharmacyIds.length&&has(articleCols,
+     "farmacia_codigo","origen_id","codigo_nacional","nombre","familia",
+     "stock_actual","sincronizado_en","pmc");
    if(needsStock&&catalogHasStock&&pharmacyIds.length){
     const chosen=req.context.pharmacies.filter(p=>pharmacyIds.includes(Number(p.id)));
     const codes=chosen.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase());
@@ -414,8 +443,8 @@ export function setupRealReports(app,pool,{requireTenant}){
    ].sort((a,b)=>b.impact-a.impact);
    // La cobertura de cada catálogo se comprueba por separado: una farmacia
    // con muchas ventas no debe ocultar el recuento completo de compras, ni al revés.
-   const completeSales=readSalesRows&&sale.rows.length<rowLimit;
-   const completeBuys=buys.rows.length<rowLimit;
+   const completeSales=!readSalesRows||!sales||sale.rows.length<rowLimit;
+   const completeBuys=!buyers||buys.rows.length<rowLimit;
    const complete=completeSales&&completeBuys;
    const stockRowsTruncated=Boolean(snapshotAvailable&&stockRows.length>=rowLimit);
    const completeStock=snapshotAvailable&&!stockRowsTruncated;
@@ -426,8 +455,11 @@ export function setupRealReports(app,pool,{requireTenant}){
     ventas:sales&&readSalesPeriod?round(sum(saleM.rows,"amount")):null,
     unidades:sales&&readSalesPeriod?sum(saleM.rows,"units"):null,
     compras:buyers&&readBuyPeriod?round(sum(buyM.rows,"amount")):null,
-    articulosVendidos:completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
-    articulosComprados:completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
+    articulosVendidos:readSalesRows&&sales&&completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
+    articulosComprados:buyers&&completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
+    unidadesCompradas:buyers&&readBuyPeriod?sum(buyM.rows,"units"):null,
+    costeMedioCompra:buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
+      round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:null,
     stock:stockSummary
       ?(stockSummary.unpriced===0?round(stockSummary.value):null)

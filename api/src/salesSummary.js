@@ -32,12 +32,12 @@ export function buildSalesSummarySql(schema,granularity){
  const seriesSql=monthSeries?"SELECT month AS bucket,unidades,ventas FROM monthly":
    "SELECT to_char(date_trunc('"+granularity+"',fecha),'"+bucket+"') AS bucket, "+
    "sum(unidades)::float8 AS unidades,sum(importe)::float8 AS ventas FROM filtered GROUP BY 1";
- return \`
+ return `
  WITH sales_scope AS MATERIALIZED (
   SELECT f.id::text AS pharmacy_id,upper(btrim(v.farmacia_codigo)) AS source_code,
     v.articulo_id,v.fecha,v.unidades,v.importe
-  FROM \${tbl}.ventas v JOIN farmetrica.farmacias f
-    ON f.cliente_slug=$4 AND upper(btrim(v.farmacia_codigo))=\${pharmacyDataCodeSQL("f")}
+  FROM ${tbl}.ventas v JOIN farmetrica.farmacias f
+    ON f.cliente_slug=$4 AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
   WHERE f.id=ANY($3::int[]) AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'
     AND nullif(btrim(v.articulo_id),'') IS NOT NULL
  ),
@@ -50,7 +50,7 @@ export function buildSalesSummarySql(schema,granularity){
     coalesce(nullif(a.nombre,''),k.articulo_id) AS name,
     coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc
   FROM keys k LEFT JOIN LATERAL (
-    SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc FROM \${tbl}.articulos a
+    SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc FROM ${tbl}.articulos a
     WHERE upper(btrim(a.farmacia_codigo))=k.source_code AND a.origen_id=k.articulo_id
     ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
   ) a ON true
@@ -68,7 +68,7 @@ export function buildSalesSummarySql(schema,granularity){
     sum(unidades)::float8 AS unidades,sum(importe)::float8 AS ventas
   FROM filtered GROUP BY 1
  ),
- series AS (\${seriesSql}),
+ series AS (${seriesSql}),
  product_groups AS MATERIALIZED (
   SELECT pharmacy_id AS "pharmacyId",cn,max(name) AS name,max(family) AS family,max(pmc) AS pmc,
     sum(unidades)::float8 AS units,sum(importe)::float8 AS value
@@ -99,8 +99,8 @@ export function buildSalesSummarySql(schema,granularity){
   SELECT f.id::text AS pharmacy_id,b.articulo_id,
     sum(b.unidades*b.coste_unitario) FILTER(WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS cost,
     sum(b.unidades) FILTER(WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS priced_units
-  FROM \${tbl}.compras b JOIN farmetrica.farmacias f
-    ON f.cliente_slug=$4 AND upper(btrim(b.farmacia_codigo))=\${pharmacyDataCodeSQL("f")}
+  FROM ${tbl}.compras b JOIN farmetrica.farmacias f
+    ON f.cliente_slug=$4 AND upper(btrim(b.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
   WHERE f.id=ANY($3::int[]) AND b.fecha >= $1::date AND b.fecha < $2::date+interval '1 day'
   GROUP BY f.id,b.articulo_id
  ),
@@ -137,7 +137,7 @@ export function buildSalesSummarySql(schema,granularity){
   (SELECT to_jsonb(counts) FROM counts) AS counts,
   (SELECT to_jsonb(totals) FROM totals) AS totals,
   (SELECT to_jsonb(coverage) FROM coverage) AS coverage
- \`;
+ `;
 }
 export function setupSalesSummary(app,pool,{requireTenant}){
  app.get("/api/analytics/ventas/resumen",...requireTenant(),async(req,res,next)=>{

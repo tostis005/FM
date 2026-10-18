@@ -14,7 +14,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
     if(!SLUG.test(slug)) return null;
     const {rows} = await pool.query(
-      "SELECT slug,nombre,esquema_datos,activo FROM farmetrica.clientes WHERE slug=$1",[slug]);
+      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses FROM farmetrica.clientes WHERE slug=$1",[slug]);
     const cliente = rows[0];
     if(!cliente || !cliente.activo || !SLUG.test(cliente.esquema_datos)) return null;
     const membership=req.user?.tenants?.find(item=>item.slug===slug && item.active);
@@ -29,7 +29,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
     const all = role==="superadministrador"||role==="administrador";
     const ids = all ? pharmacies.map(p=>Number(p.id)):
       (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
-    return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos},
+    return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
+        analysisMonths:Number(cliente.analisis_abcd_meses)},
       role, modules:Object.fromEntries(modules.map(m=>[m.id,m.enabled])),
       pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))).map(p=>decoratePharmacy(slug,p)), allowedPharmacyIds:ids};
   }
@@ -47,6 +48,20 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   const requireTenant=()=>middleware();
   const requireTenantAdmin=()=>middleware(ctx=>["administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
+  // Política de ABCD y márgenes persistida para todo el cliente.
+  // Únicamente administrador o superadministrador pueden cambiarla.
+  app.put("/api/tenant/configuracion-ventas",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      const months=req.body?.analysisMonths;
+      if(!Number.isInteger(months)||![3,6,12,24,36].includes(months))
+        return res.status(400).json({error:"Selecciona 3, 6, 12, 24 o 36 meses"});
+      const {rows}=await pool.query(
+        "UPDATE farmetrica.clientes SET analisis_abcd_meses=$1 WHERE slug=$2 RETURNING analisis_abcd_meses",
+        [months,req.context.client.slug]);
+      if(!rows.length)return res.status(404).json({error:"Cliente no encontrado"});
+      return res.json({analysisMonths:Number(rows[0].analisis_abcd_meses)});
+    }catch(e){next(e)}
+  });
   app.get("/api/tenant/context",...requireTenant(),async(req,res,next)=>{
     try{
     const {rows}=await pool.query(

@@ -40,8 +40,11 @@ try{
     ": "+row.entries+" filas de inventario, última carga "+
     (row.ultima?new Date(row.ultima).toISOString().slice(0,10):"sin datos"));
  }
- for(const [name,ids] of [["Valdemarías",[5]],["Cinco farmacias",[1,2,3,4,5]]]){
-  const req={query:{desde:"2026-07-18",hasta:"2026-10-18",modulo:"dashboard",
+ for(const [name,ids,modules] of [
+  ["Valdemarías",[5],["dashboard","compras","proveedores","stock","reposicion","rentabilidad"]],
+  ["Cinco farmacias",[1,2,3,4,5],["dashboard","stock"]]
+ ])for(const modulo of modules){
+  const req={query:{desde:"2026-07-18",hasta:"2026-10-18",modulo,
     farmacias:ids.join(",")},context:{
      allowedPharmacyIds:[1,2,3,4,5],
      client:{slug:"ampedia",schema:"ampedia"},
@@ -55,7 +58,7 @@ try{
   await routes.get("/api/analytics/reportes")(req,res,e=>{error=e});
   if(error)throw error;
   if(status!==200)throw Error("HTTP "+status);
-  console.log("Informe "+name+": "+(Number(process.hrtime.bigint()-now)/1e6).toFixed(0)+
+  console.log("Informe "+name+" / "+modulo+": "+(Number(process.hrtime.bigint()-now)/1e6).toFixed(0)+
     " ms. Ventas productos="+response.salesRows?.length+
     ", Compras productos="+response.buyRows?.length+
     ", Proveedores="+response.supplierRows?.length+
@@ -63,7 +66,10 @@ try{
     ", Rentabilidad="+response.profitRows?.length+
     ", Acciones="+response.actions?.length+
     ", Meses="+response.monthly?.length+
-    ", Inventario actualizado="+Boolean(response.availability?.stock));
+    ", Inventario actualizado="+Boolean(response.availability?.stock)+
+    ", Artículos stock="+(response.kpis?.stockArticulos??"n/d")+
+    ", Unidades stock="+(response.kpis?.stockUnidades??"n/d")+
+    ", Origen stock="+(response.availability?.stockSource||"no disponible"));
  }
 }catch(e){console.log("Diagnóstico interrumpido, código "+(e.code||e.name)+"; "+String(e.stack||"").slice(0,1100));process.exitCode=1;
 }finally{await pool.end()}

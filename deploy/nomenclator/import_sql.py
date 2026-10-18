@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emite un flujo psql transaccional (metadatos saneados + CSV) a stdout."""
+"""Emite importación psql transaccional por lotes sin COPY ni ficheros persistentes."""
 import csv
 import json
 import re
@@ -25,10 +25,33 @@ def main():
           "cn text,nombre text,laboratorio_codigo text,laboratorio text,"
           "principio_activo text,dcpf text,dcp text,dcsa text,"
           "generico boolean,comercializado boolean) ON COMMIT DROP;")
-    print("COPY fm_nomen_stage ("+FIELDS+") FROM STDIN WITH (FORMAT csv,HEADER true);")
-    with csv_path.open("r",encoding="utf-8",newline="") as handle:
-        sys.stdout.write(handle.read().rstrip("\n")+"\n")
-    print(r"\.")
+    # PostgreSQL COPY FROM STDIN puede fallar con finales de línea de los XML
+    # oficiales al atravesar psql+SSH. Insertar lotes SQL bien escapados evita
+    # la terminación ambigua del flujo; todo sigue dentro de una transacción.
+    def literal(value):
+        if value is None or value == "":
+            return "NULL"
+        if "\\x00" in value:
+            raise ValueError("Entrada XML contiene NUL")
+        return "'" + value.replace("'", "''") + "'"
+
+    batch = []
+    actual = 0
+    with csv_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for item in reader:
+            actual += 1
+            vals = [literal(item.get(field)) for field in FIELDS.split(",")]
+            batch.append("(" + ",".join(vals) + ")")
+            if len(batch) >= 250:
+                print("INSERT INTO fm_nomen_stage ("+FIELDS+") VALUES " +
+                      ",".join(batch) + ";")
+                batch.clear()
+        if batch:
+            print("INSERT INTO fm_nomen_stage ("+FIELDS+") VALUES " +
+                  ",".join(batch) + ";")
+    if actual != rows:
+        raise ValueError(f"Recuento CSV inconsistente: {actual} frente a {rows}")
     print("""DO $nomen$
       BEGIN
         IF (SELECT count(*) FROM fm_nomen_stage)<5000 OR

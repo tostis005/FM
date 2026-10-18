@@ -1,5 +1,4 @@
 // Consulta ligera: SUM y GROUPING SETS sobre ventas, sin catálogo ni compras.
-import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 const dateRx=/^20\d{2}-\d{2}-\d{2}$/;
 function validDate(s){
  if(!dateRx.test(s))return false;
@@ -17,10 +16,8 @@ export function buildSalesTotalsSql(schema,granularity){
    sum(v.importe)::float8 AS ventas,sum(v.unidades)::float8 AS unidades,
    sum(sum(v.importe)) OVER()::float8 AS total_ventas,
    sum(sum(v.unidades)) OVER()::float8 AS total_unidades
- FROM ${table}.ventas v JOIN farmetrica.farmacias f
-   ON f.cliente_slug=$4
-      AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
- WHERE f.id=ANY($3::int[])
+ FROM ${table}.ventas v
+ WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
    AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
  GROUP BY date_trunc('month',v.fecha)
  ORDER BY month`;
@@ -37,10 +34,8 @@ export function buildSalesTotalsSql(schema,granularity){
    SELECT date_trunc('month',v.fecha) AS mes,
      date_trunc('${granularity}',v.fecha) AS periodo,
      v.importe,v.unidades
-   FROM ${table}.ventas v JOIN farmetrica.farmacias f
-     ON f.cliente_slug=$4
-       AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-   WHERE f.id=ANY($3::int[])
+   FROM ${table}.ventas v
+   WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
      AND v.fecha >= $1::date
      AND v.fecha < ($2::date + interval '1 day')
  ) movimientos
@@ -68,12 +63,19 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    if(requested.some(id=>!allowed.includes(id)))
     return res.status(403).json({error:"Farmacia no autorizada"});
    const ids=[...new Set(requested)];
+   // Los códigos reales vienen EXCLUSIVAMENTE del contexto autorizado de la
+   // sesión (p.ej. Valdemarías: visible POL -> ERP VAL). Nunca del navegador.
+   const codeById=new Map((req.context.pharmacies||[]).map(p=>[
+    Number(p.id),String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()]));
+   const codes=[...new Set(ids.map(id=>codeById.get(id)).filter(Boolean))];
+   if(ids.length&&!codes.length)return res.status(503).json({error:"No hay códigos ERP para las farmacias autorizadas"});
+   if(ids.some(id=>!codeById.get(id)))return res.status(503).json({error:"Falta correspondencia ERP de una farmacia"});
    const schema=req.context.client.schema;
    if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))throw Error("Esquema no válido");
    if(!ids.length)return res.json({from,to,granularity,monthly:[],series:[],
      kpis:{ventas:0,unidades:0}});
    const {rows}=await pool.query(buildSalesTotalsSql(schema,granularity),
-     [from,to,ids,req.context.client.slug]);
+     [from,to,codes]);
    const months=(granularity==="month"?rows:rows.filter(x=>x.tipo==="month")).map(x=>({
     month:x.month,ventas:Number(x.ventas),unidades:Number(x.unidades)}));
    const series=granularity==="month"?

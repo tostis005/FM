@@ -89,6 +89,19 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const [customFrom,setCustomFrom]=useState(""),[customTo,setCustomTo]=useState("");
  const [ids,setIds]=useState([]),[search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
  const [abcdFilter,setAbcdFilter]=useState("all");
+ const [sort,setSort]=useState({key:"revenue",direction:"desc"});
+ const sortColumns=[
+  ["name","Conjunto DCPF / molécula"],["skuCount","Códigos"],
+  ["abcdClass","ABCD"],["salesUnits","Venta (uds.)"],["revenue","Ventas"],
+  ["averagePuc","PUC medio"],["averagePvp","PVP medio"],["unitMargin","Margen/ud."],
+  ["pvpMarginPct","Margen PVP (%)"],["bestPuc","Precio ref."],
+  ["indicativeSavings","Ahorro potencial"]
+ ];
+ const changeSort=key=>{
+  setSort(prev=>prev.key===key?{key,direction:prev.direction==="asc"?"desc":"asc"}:
+   {key,direction:"asc"});
+  setPage(0);setActive(null);
+ };
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
  const [active,setActive]=useState(null),[page,setPage]=useState(0),[reload,setReload]=useState(0);
  const asOf=useMemo(()=>new Date(),[reload]);
@@ -101,8 +114,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   if(ids.length)p.set("farmacias",ids.join(","));
   if(queryText.trim())p.set("buscar",queryText.trim());
   if(abcdFilter!=="all")p.set("abcd",abcdFilter);
+  p.set("orden",sort.key);p.set("direccion",sort.direction);
   return p.toString();
- },[range.from,range.to,range.valid,ids.join(","),queryText,abcdFilter]);
+ },[range.from,range.to,range.valid,ids.join(","),queryText,abcdFilter,sort.key,sort.direction]);
  useEffect(()=>{
   if(!query){setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
@@ -130,7 +144,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   revenue:salesEnabled?data?.summary?.revenue??0:null,
   spend:buysEnabled?data?.summary?.purchases??0:null,
  }),[data,salesEnabled,buysEnabled]);
- const top=groups.filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
+ const top=(data?.topGroups||groups).filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
   name:(g.principle||g.name||g.dcpf).slice(0,28),revenue:Number(g.revenue),dcpf:g.dcpf}));
  const chunk=groups.slice(page*20,(page+1)*20);
  return <div className="fm-generics">
@@ -189,8 +203,14 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
     !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
-     <thead><tr><th>Conjunto DCPF / molécula</th><th>Códigos</th><th>ABCD</th><th>Venta (uds.)</th>
-      <th>Ventas</th><th>PUC medio</th><th>PVP medio</th><th>Margen/ud.</th><th>Margen PVP (%)</th><th>Precio ref.</th><th>Ahorro potencial</th><th/></tr></thead>
+     <thead><tr>{sortColumns.map(([key,label])=><th key={key} scope="col"
+       aria-sort={sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+       <button type="button" className="smart-sort" onClick={()=>changeSort(key)}
+        aria-label={"Ordenar "+label}>
+        <span>{label}</span><span aria-hidden="true" className="smart-sort-arrow">
+         {sort.key===key?(sort.direction==="asc"?"▲":"▼"):"↕"}
+        </span>
+       </button></th>)}<th/></tr></thead>
      <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>

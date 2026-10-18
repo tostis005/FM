@@ -21,6 +21,16 @@ try{
  const snapshots=await pool.query(`
   SELECT to_regclass('public.stock_farmacia')::text AS rel`);
  console.log("Tabla de existencias sincronizada: "+Boolean(snapshots.rows[0]?.rel));
+ const articleStatus=await pool.query(`SELECT upper(btrim(farmacia_codigo)) AS codigo,
+   count(*)::int AS articulos,
+   count(stock_actual)::int AS con_stock,
+   max(sincronizado_en) AS ultima
+  FROM ampedia.articulos
+  GROUP BY 1 ORDER BY 1`);
+ for(const row of articleStatus.rows)console.log("Catálogo ERP "+row.codigo+
+    ": fichas="+row.articulos+", stock informado="+row.con_stock+
+    ", última sincronización "+(row.ultima?String(row.ultima).slice(0,24):"ninguna"));
+
  if(snapshots.rows[0]?.rel){
   const rows=await pool.query(`SELECT id_farmacia,
      count(*)::int AS entries,max(importado_en) AS ultima
@@ -52,5 +62,5 @@ try{
     ", Meses="+response.monthly?.length+
     ", Inventario actualizado="+Boolean(response.availability?.stock));
  }
-}catch(e){console.log("Diagnóstico interrumpido, código "+(e.code||e.name));process.exitCode=1;
+}catch(e){console.log("Diagnóstico interrumpido, código "+(e.code||e.name)+"; "+String(e.stack||"").slice(0,1100));process.exitCode=1;
 }finally{await pool.end()}

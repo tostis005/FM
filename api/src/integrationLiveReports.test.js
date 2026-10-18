@@ -12,7 +12,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupRealReports(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
-  modules:{},allowedPharmacyIds:[1],pharmacies:[{id:"1",sourceCode:"ABA"}]};
+  modules:{},allowedPharmacyIds:[1,2],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"}]};
  async function request(path,params={}){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...params},
     params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"}};
@@ -44,5 +44,29 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(detail.products.length,2);
   assert.equal(detail.purchases.length,2);
   assert.ok(detail.purchases.some(r=>r.referencePuc>0));
+  // IDs proveedor iguales en ERP diferentes no comparten nombre ni gasto.
+  const multi=await request("/api/analytics/reportes",{modulo:"proveedores",farmacias:"1,2"});
+  const sameCode=multi.supplierRows.filter(r=>r.providerId==="PR1");
+  assert.equal(sameCode.length,2);
+  assert.equal(new Set(sameCode.map(r=>r.id)).size,2);
+  assert.deepEqual(new Set(sameCode.map(r=>r.name)),new Set(["Mayorista 1","Mayorista Europa"]));
+  assert.deepEqual(new Set(sameCode.map(r=>r.pharmacyId)),new Set(["1","2"]));
+  // Existencias: no basta con que una de las farmacias se haya refrescado.
+  const oldStock=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
+  assert.equal(oldStock.availability.stock,false);
+  assert.equal(oldStock.stockRows.length,0);
+  assert.equal(oldStock.kpis.stock,null);
+  // Una vez ambas farmacias están frescas, el ID ART-03 debe resolverse al CN
+  // de su propia farmacia para relacionarlo con el PUC real y el PMC.
+  await pool.query("UPDATE public.stock_farmacia SET importado_en=now() WHERE id_farmacia=2");
+  const freshStock=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
+  assert.equal(freshStock.availability.stock,true);
+  const abc=freshStock.stockRows.find(r=>r.pharmacyId==="1"&&r.cn==="654321");
+  const eur=freshStock.stockRows.find(r=>r.pharmacyId==="2"&&r.cn==="654321");
+  assert.equal(abc.units,8);
+  assert.equal(eur.units,9);
+  assert.ok(abc.value>0);
+  assert.ok(eur.value>0);
+  assert.ok(freshStock.kpis.stock>0);
  }finally{await pool.end()}
 });

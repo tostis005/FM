@@ -97,7 +97,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
       GROUP BY dcpf HAVING bool_or(generico)
       ORDER BY min(coalesce(nullif(principio_activo,''),nombre)),dcpf`),
     hasSales&&q.ids.length?pool.query(salesSql,params):{rows:[]},
-    hasPurchases&&q.ids.length?pool.query(purchasesSql,params):{rows:[]},
+    hasPurchases&&q.ids.length?pool.query(purchasesSql,params.slice(0,3)):{rows:[]},
    ]);
    const sm=new Map(sales.rows.map(x=>[x.dcpf,x]));
    const pm=new Map(purchases.rows.map(x=>[x.dcpf,x]));

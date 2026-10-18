@@ -1,5 +1,6 @@
 // Detalle de ventas paginado: ABCD de últimos 12 meses, márgenes SOLO de la página.
 // No se recalculan aquí gráficos, totales históricos ni indicadores de recuento.
+import {approvedAnalysisRange} from "./salesAnalysisPeriod.js";
 const VALID=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 export function buildSalesDetailSQL(schema){
@@ -92,8 +93,7 @@ export function setupSalesDetail(app,pool,{requireTenant}){
    const raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim();
    const families=String(req.query.familias||"").split(",").filter(Boolean);
    const page=Number(req.query.pagina||1);
-   if(!ISO.test(from)||!ISO.test(to)||from>to||
-     Date.parse(to)-Date.parse(from)>366*86400000||
+   if(!approvedAnalysisRange(from,to,req.context.client.analysisMonths)||
      !Number.isSafeInteger(page)||page<1||page>1000||
      raw.length>2000||search.length>100||families.length>30||
      families.some(x=>x.length>80)||(raw&&raw.split(",").some(s=>!/^[1-9]\d{0,8}$/.test(s))))

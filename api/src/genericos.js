@@ -60,8 +60,9 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    // Se muestran TODOS los conjuntos que tienen al menos un CN oficialmente
    // clasificado como genérico; el grupo incluye otras presentaciones equivalentes
    // para analizar alternativas, pero NO mezcla dosis/envases.
-   const conditions=` AND ($4::text='' OR n.nombre ILIKE '%'||$4||'%' OR
-      coalesce(n.principio_activo,'') ILIKE '%'||$4||'%' OR n.cn ILIKE '%'||$4||'%') `;
+   // Los filtros de texto seleccionan conjuntos COMPLETOS, nunca recortan
+   // las ventas de CN hermanos en un mismo DCPF.
+   const conditions="";
    let salesSql=`SELECT n.dcpf,
         sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue
      FROM ${schema}.ventas v
@@ -98,7 +99,12 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    ]);
    const sm=new Map(sales.rows.map(x=>[x.dcpf,x]));
    const pm=new Map(purchases.rows.map(x=>[x.dcpf,x]));
-   let groups=catalog.rows.filter(g=>!q.search||sm.has(g.dcpf)||pm.has(g.dcpf)||
+   // Permite buscar también un CN individual sin limitar la suma del conjunto.
+   const matched=q.search?await pool.query(`SELECT DISTINCT dcpf FROM farmetrica.nomenclator_presentaciones
+     WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%' OR
+       coalesce(principio_activo,'') ILIKE '%'||$1||'%'`,[q.search]):{rows:[]};
+   const matchedIds=new Set(matched.rows.map(x=>x.dcpf));
+   let groups=catalog.rows.filter(g=>!q.search||matchedIds.has(g.dcpf)||
      (g.principle+" "+g.name).toLocaleLowerCase("es").includes(q.search.toLocaleLowerCase("es")));
    groups=groups.map(g=>{
     const s=sm.get(g.dcpf),p=pm.get(g.dcpf);

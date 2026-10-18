@@ -219,3 +219,12 @@
  .fm-sales-shortcuts{gap:6px}.fm-sales-chip{font-size:11px;padding:8px 10px}
  .fm-sales-custom-dates label{width:100%;justify-content:space-between}.fm-sales-custom-dates input{flex:1}}
 @media(prefers-reduced-motion:reduce){.fm-sales-chip{transition:none}}
+
+/* Clasificación ABCD: prioridad comercial por contribución a ventas. */
+.fm-abcd{display:inline-flex;justify-content:center;align-items:center;min-width:29px;
+ border-radius:7px;border:1px solid #d4e3da;background:#f5f9f6;color:#355a45;
+ padding:4px 8px;font-size:12px;font-weight:800;white-space:nowrap}
+.fm-abcd-A{background:#e9f7f0;border-color:#b9e3cb;color:#156942}
+.fm-abcd-B{background:#eef5ff;border-color:#c8d9f4;color:#265a9b}
+.fm-abcd-C{background:#fff7e6;border-color:#f5dfae;color:#946009}
+.fm-abcd-D{background:#f3f4f5;border-color:#e1e4e8;color:#657077}

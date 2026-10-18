@@ -8,6 +8,7 @@ assert.ok(script, "La página de login debe tener el controlador de acceso");
 new Script(script, { filename: "login.html:inline" });
 assert.match(page, /type="password"/);
 assert.match(script, /\/api\/auth\/local/);
+assert.match(script, /\/api\/auth\/password/);
 assert.doesNotMatch(page, /TEMP_ADMIN_PASSWORD_HASH|SESSION_SECRET/);
 const indexPage=readFileSync(new URL("./index.html", import.meta.url),"utf8");
 const appSource=readFileSync(new URL("./src/main.jsx", import.meta.url),"utf8");

@@ -87,6 +87,19 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(abc.value>0);
   assert.ok(eur.value>0);
   assert.ok(freshStock.kpis.stock>0);
+  // El catálogo ERP sincronizado dispone del stock de cada artículo.
+  // Debe prevalecer sobre la vieja tabla de instantáneas, también en VAL.
+  await pool.query("ALTER TABLE ampedia.articulos ADD COLUMN stock_actual numeric");
+  await pool.query("UPDATE ampedia.articulos SET stock_actual=CASE WHEN farmacia_codigo='ABA' AND origen_id='ART-01' THEN 8 WHEN farmacia_codigo='ABA' THEN 3 ELSE 9 END, sincronizado_en=now()");
+  const stockFromArticles=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
+  assert.equal(stockFromArticles.availability.stock,true);
+  assert.equal(stockFromArticles.availability.stockSource,"articulos");
+  assert.equal(stockFromArticles.stockRows.find(r=>r.pharmacyId==="1"&&r.cn==="654321").units,8);
+  assert.equal(stockFromArticles.stockRows.find(r=>r.pharmacyId==="2"&&r.cn==="654321").units,9);
+  assert.ok(stockFromArticles.kpis.stock>0);
+  const stockFromDemo=await request("/api/analytics/reportes",{modulo:"reposicion",farmacias:"1,2"});
+  assert.ok(Array.isArray(stockFromDemo.replenishmentRows));
+
   // El ERP ya contiene stock en el maestro de artículos. Cuando el snapshot
   // independiente está obsoleto, usar solo fichas sincronizadas recientemente.
   await pool.query("UPDATE public.stock_farmacia SET importado_en=now()-interval '7 days' WHERE id_farmacia=ANY(ARRAY[1,2])");

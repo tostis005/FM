@@ -189,7 +189,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
     !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
      <thead><tr><th>Conjunto DCPF / molécula</th><th>Códigos</th><th>ABCD</th><th>Venta (uds.)</th>
-      <th>Ventas</th><th>PUC medio</th><th>PVP medio</th><th>Margen PVP (%)</th><th>Precio ref.</th><th>Ahorro potencial</th><th/></tr></thead>
+      <th>Ventas</th><th>PUC medio</th><th>PVP medio</th><th>Margen/ud.</th><th>Margen PVP (%)</th><th>Precio ref.</th><th>Ahorro potencial</th><th/></tr></thead>
      <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
@@ -197,13 +197,14 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
        <td>{g.abcdClass?<span className={"fm-abcd fm-abcd-"+g.abcdClass} title="Clasificación por peso de ventas del conjunto en el período">{g.abcdClass}</span>:"—"}</td>
        <td>{number(g.salesUnits)}</td><td>{money(g.revenue)}</td>
        <td>{unitPrice(g.averagePuc)}</td><td>{unitPrice(g.averagePvp)}</td>
+       <td>{g.averagePvp!=null&&g.averagePuc!=null?unitPrice(g.averagePvp-g.averagePuc):"—"}</td>
        <td>{g.pvpMarginPct==null?"—":number(g.pvpMarginPct)+" %"}</td>
        <td>{unitPrice(g.bestPuc)}</td><td>{money(g.indicativeSavings)}</td>
        <td><button type="button" className="fm-generic-expand" aria-label={"Desplegar conjunto "+g.dcpf}
         aria-expanded={active===g.dcpf} onClick={e=>{e.stopPropagation();setActive(active===g.dcpf?null:g.dcpf)}}>
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
-      {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={11}>
+      {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={12}>
        <GroupDetail group={g} query={query} clientSlug={clientSlug} useReal={useReal}/>
       </td></tr>}
      </React.Fragment>)}</tbody>

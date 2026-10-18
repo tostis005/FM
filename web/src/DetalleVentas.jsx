@@ -3,6 +3,7 @@ import {Filter} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {loadTicketLines} from "./farmaciasApi.js";
 import {ListPagination} from "./ListTable.jsx";
+import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 
 const num=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:3}).format(Number(n)||0);
 const money=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(n)||0);
@@ -93,8 +94,8 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
     </form>
     {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
-    <div className="lab-detail-count">{result.status==="loading"?"Consultando…":num(result.total)+" líneas de venta"}</div>
-    <div className="table-scroll"><table className="data-table lab-detail-table smart-table">
+    <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
+    <div className="table-scroll" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>
         <tr>{TICKET_COLUMNS.map(([key,label])=><th key={key} aria-sort={sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
           <button className="smart-sort" type="button" onClick={()=>toggleSort(key)} aria-label={"Ordenar "+label}>
@@ -114,10 +115,10 @@ export default function DetalleVentas({promotions,pharmacies,connected}){
             onChange={e=>setColumnDraft(prev=>({...prev,[key]:e.target.value}))}/>}
         </th>)}</tr>
       </thead>
-      <tbody>{result.rows.map((v,i)=><tr key={v.pharmacyCode+"-"+v.saleId+"-"+v.lineId+"-"+i}>
+      <tbody>{result.status==="loading"?<tr><td colSpan={TICKET_COLUMNS.length}><LoadingPanel kind="table" label="Cargando registros de tickets…" rows={5}/></td></tr>:result.rows.map((v,i)=><tr key={v.pharmacyCode+"-"+v.saleId+"-"+v.lineId+"-"+i}>
         {TICKET_COLUMNS.map(([key,,render])=><td key={key}>{render(v)}</td>)}
       </tr>)}</tbody>
-    </table>{!result.rows.length&&<p className="lab-detail-empty">{connected?"No hay tickets que coincidan con los filtros.":"Detalle disponible al conectar PostgreSQL y autenticarte."}</p>}</div>
+    </table>{!result.rows.length&&result.status!=="loading"&&<p className="lab-detail-empty">{connected?"No hay tickets que coincidan con los filtros.":"Detalle disponible al conectar PostgreSQL y autenticarte."}</p>}</div>
     <ListPagination total={result.total} page={page} pageSize={pageSize} loading={result.status==="loading"}
       onPageChange={setPage} onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label="líneas"/>
 

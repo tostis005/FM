@@ -5,7 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
-    paths: ["api/src/realReports.js", "api/src/pharmacyCodes.js", "web/src/ModuloDemo.jsx", "web/src/reportFilterScopes.js", ".github/workflows/validate.yml"]
+    paths: ["api/src/realReports.js", "api/src/salesSummary.js", "api/src/server.js", "api/src/pharmacyCodes.js", "web/src/ModuloDemo.jsx", "web/src/reportFilterScopes.js", ".github/workflows/validate.yml"]
   workflow_dispatch:
 
 permissions:
@@ -30,11 +30,13 @@ jobs:
           node --check api/src/genericos.js
           node --check api/src/genericosReales.js
           node --check api/src/realReports.js
+          node --check api/src/salesSummary.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
           node --test api/src/pricePolicy.test.js
           node --test api/src/abcd.test.js
           node --test api/src/realReports.test.js
+          node --test api/src/salesSummary.test.js
           node --test api/src/genericos.test.js
           python3 -m unittest discover -s deploy/nomenclator -p 'test_*.py'
           python3 -m py_compile deploy/bootstrap-temp-admin-vps.py

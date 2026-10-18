@@ -1,0 +1,33 @@
+name: Benchmark ventas trimestrales consolidadas
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/bench-sales-summary.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  medir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Acceso seguro al servidor de aplicación
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Medir 3 meses con consulta única y transacción solo lectura
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose exec -T -e FM_BENCHMARK_READONLY=1 api node src/benchSalesSummary.js'

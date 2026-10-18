@@ -107,14 +107,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const [detail,setDetail]=useState(null);
  const [realSales,setRealSales]=useState(null);
  const [salesError,setSalesError]=useState("");
- const [loading,setLoading]=useState(false);
+ const [loading,setLoading]=useState(()=>["dashboard","ventas"].includes(module));
  const asOf=useMemo(()=>new Date(),[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name).join(",");
  const tables=useMemo(()=>realTables?normalizeTables(realTables):
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
  useEffect(()=>{
   const controller=new AbortController();
-  if(!["dashboard","ventas"].includes(module)){setRealSales(null);return ()=>controller.abort()}
+  if(!["dashboard","ventas"].includes(module)){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   const params=new URLSearchParams();
   params.set("desde",monthAt(asOf,1-Number(filters.period))+"-01");
   params.set("hasta",new Date(Date.UTC(asOf.getUTCFullYear(),asOf.getUTCMonth()+1,0)).toISOString().slice(0,10));

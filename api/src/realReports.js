@@ -204,7 +204,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    let stockSource=null,stockSummary=null;
    // Compras y proveedores no necesitan recorrer todo el inventario.
    const needsStock=["dashboard","stock","reposicion","acciones","informes","asistente"].includes(f.module);
-   const catalogHasStock=pharmacyIds.length&&await hasColumns(pool,schema,"articulos",
+   const catalogHasStock=needsStock&&pharmacyIds.length&&await hasColumns(pool,schema,"articulos",
      ["farmacia_codigo","origen_id","codigo_nacional","nombre","familia",
       "stock_actual","sincronizado_en","pmc"]);
    if(needsStock&&catalogHasStock&&pharmacyIds.length){

@@ -73,21 +73,19 @@ test("varias farmacias autorizadas usan el mismo sumatorio",async()=>{
  assert.deepEqual(calls[0].params[2],["ABA","VAL"]);
 });
 
-test("totales de 5 años e histórico se reutilizan por farmacia y refresco manual",async()=>{
+test("sin caché: cada total de ventas se obtiene de PostgreSQL",async()=>{
  const {calls,call}=make();
  const filters={desde:"2021-11-01",hasta:"2026-10-18",farmacias:"5"};
  const [a,b]=await Promise.all([call(filters),call(filters)]);
  assert.equal(a.data.kpis.ventas,220);
  assert.equal(b.data.kpis.ventas,220);
- assert.equal(calls.length,1);
- await call(filters);
- assert.equal(calls.length,1);
- await call({...filters,refrescar:"1"});
  assert.equal(calls.length,2);
+ await call(filters);
+ assert.equal(calls.length,3,"consulta real incluso con mismo período");
  await call({...filters,farmacias:"1"});
- assert.equal(calls.length,3,"no mezclar cachés entre farmacias");
+ assert.equal(calls.length,4);
  await call({...filters,desde:"1900-01-01"});
- assert.equal(calls.length,4,"todo el histórico debe usar su propia clave");
+ assert.equal(calls.length,5);
  assert.equal((await call({...filters,farmacias:"99"})).status,403);
- assert.equal(calls.length,4,"la caché no debe evitar comprobar permisos");
+ assert.equal(calls.length,5);
 });

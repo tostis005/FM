@@ -177,6 +177,14 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   </div>
   {!range.valid&&<p role="alert" className="fm-generic-detail-error">{range.reason}</p>}
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
+  {data?.version&&!loading&&!salesEnabled&&<p role="status" className="fm-inline-status">
+   No hay una fuente de ventas compatible para calcular rotación, ABCD e importe vendido de genéricos.
+   Los valores que faltan no representan ventas cero.
+  </p>}
+  {data?.version&&!loading&&!buysEnabled&&<p role="status" className="fm-inline-status">
+   No hay compras y costes unitarios normalizados disponibles para este origen.
+   El precio medio de compra y las oportunidades de ahorro no se pueden calcular.
+  </p>}
   <div className="fm-generic-metrics">
    <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption=""/>
    <Metric label="Unidades vendidas" loading={loading} value={number(totals.units)} caption=""/>

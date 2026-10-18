@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
-import {ChevronDown,RefreshCw,Search,Package,ArrowUpRight,Download,Info} from "lucide-react";
+import {ChevronDown,RefreshCw,Search,Package,Download} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingState.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
@@ -13,7 +13,6 @@ const number=value=>value==null?"—":new Intl.NumberFormat("es-ES",
 const unitPrice=value=>value==null?"—":new Intl.NumberFormat("es-ES",
  {style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(value));
 const labelDate=d=>d?new Date(d).toLocaleDateString("es-ES"):"—";
-function Note({children}){return <div className="fm-generic-note"><Info size={17}/><span>{children}</span></div>}
 function Metric({label,value,caption,loading}){
  return <div className="card fm-generic-metric" aria-busy={loading}>
    <span>{label}</span>{loading?<div role="status" aria-label={"Cargando "+label} className="fm-kpi-spinner"><span className="fm-load-spinner"/><small>Cargando…</small></div>:
@@ -81,7 +80,6 @@ function GroupDetail({group,query,clientSlug}){
      <td>{money(r.potential)}</td><td>{money(r.spend)}</td>
     </tr>)}</tbody>
    </table></div>}
-  <Note>Coste real = unidades compradas × coste unitario, dividido entre las unidades con coste válido. La referencia histórica procede del percentil configurado por proveedor y CN; no es una oferta comercial ni sustituye al PUC real. El laboratorio fabricante y el proveedor al que compramos son conceptos distintos.</Note>
  </div>;
 }
 export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
@@ -134,18 +132,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
   name:(g.principle||g.name||g.dcpf).slice(0,28),revenue:Number(g.revenue),dcpf:g.dcpf}));
  const chunk=groups.slice(page*20,(page+1)*20);
  return <div className="fm-generics">
-  <div className="page-header"><div><h1>Genéricos</h1>
-   <p>Análisis por conjuntos equivalentes del Nomenclátor de Prescripción.</p></div>
+  <div className="page-header"><h1>Genéricos</h1>
    <button className="btn btn-secondary" type="button" disabled={loading}
     onClick={()=>setReload(x=>x+1)}><RefreshCw size={16}/> Actualizar</button></div>
-  <div className="card fm-generics-source">
-   <div><strong>Nomenclátor AEMPS · Agrupación DCPF</strong>
-    <p>{data?.version?("Fuente: "+(data.version.fecha_fuente||"versión sin fecha")+" · "+
-     number(data.version.total_genericos)+" presentaciones genéricas · Actualizado el "+labelDate(data.version.importado_en)):
-     loading?"Comprobando la última versión oficial…":"Catálogo pendiente de primera importación."}</p></div>
-   <a href="https://cima.aemps.es/cima/publico/nomenclator.html" target="_blank" rel="noopener noreferrer">Fuente oficial <ArrowUpRight size={15}/></a>
-  </div>
-  {data?.policy&&<div className="fm-generic-note"><Info size={17}/><span>Precio de referencia: percentil {data.policy.global.percentile}% de unidades más económicas durante los últimos {data.policy.global.months} meses. {data.policy.overrides?.length?"Hay "+data.policy.overrides.length+" excepciones configuradas por farmacia.":""} Puedes modificarlo en <strong>Ajustes</strong>. Los costes pagados siguen calculándose con todas las compras del período seleccionado.</span></div>}
   <div className="card fm-generics-filters">
    <label>Periodo<select value={periodKey} onChange={e=>{
     const k=e.target.value;setPeriodKey(k);
@@ -165,15 +154,14 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
   {!range.valid&&<p role="alert" className="fm-generic-detail-error">{range.reason}</p>}
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
   <div className="fm-generic-metrics">
-   <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption="Agrupaciones DCPF del catálogo"/>
-   <Metric label="Unidades vendidas" loading={loading} value={number(totals.units)} caption={salesEnabled?"Venta real por conjunto":"Sin ventas conectadas"}/>
-   <Metric label="Ventas netas" loading={loading} value={money(totals.revenue)} caption={salesEnabled?"Importe del período":"Sin ventas conectadas"}/>
-   <Metric label="Compras registradas" loading={loading} value={money(totals.spend)} caption={buysEnabled?"Importes reales de compras":"Pendiente de conectar compras"}/>
-   <Metric label="Ahorro potencial" loading={loading} value={data?.summary?.savings==null?"—":money(data.summary.savings)} caption="Referencia ponderada de compras anteriores"/>
+   <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption=""/>
+   <Metric label="Unidades vendidas" loading={loading} value={number(totals.units)} caption=""/>
+   <Metric label="Ventas netas" loading={loading} value={money(totals.revenue)} caption=""/>
+   <Metric label="Compras registradas" loading={loading} value={money(totals.spend)} caption=""/>
+   <Metric label="Ahorro potencial" loading={loading} value={data?.summary?.savings==null?"—":money(data.summary.savings)} caption=""/>
   </div>
   {data&&!data.version&&!loading&&<div className="card fm-generic-empty"><Package size={25}/>
     <h2>Pendiente de cargar el Nomenclátor</h2><p>La importación mensual del ZIP oficial incorporará las correspondencias CN → DCPF. No se muestran equivalencias inventadas mientras el catálogo no esté disponible.</p></div>}
-  {data?.version&&!buysEnabled&&<Note>La correspondencia de genéricos ya está disponible. Para comparar precios entre laboratorios necesitamos sincronizar las compras de las farmacias con producto, unidades, coste unitario, proveedor y fecha. No se mostrarán ahorros estimados sin esos datos.</Note>}
   <div className="fm-generic-panels">
    <section className="card fm-generic-chart" aria-busy={loading}>
     <div className="section-heading"><h2>Conjuntos con mayor venta</h2></div>
@@ -190,13 +178,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
       </BarChart>
      </ResponsiveContainer></div>}
    </section>
-   <section className="card fm-generic-explainer">
-    <h2>Comparación homogénea</h2>
-    <p><strong>DCSA</strong> agrupa moléculas, <strong>DCP</strong> añade dosis y forma, y <strong>DCPF</strong> también el tamaño del envase.</p>
-    <p>Usamos <strong>DCPF</strong> para que las comparaciones de coste sean entre presentaciones equivalentes y no entre formatos diferentes.</p>
-    <p>Una misma agrupación puede incluir varios códigos nacionales y laboratorios. Despliega cada conjunto para consultar todos sus CN y los proveedores a los que has comprado.</p>
-   </section>
-  </div>
+   </div>
   <section className="card fm-generic-list">
    <div className="section-heading"><div><h2>Conjuntos genéricos</h2>
     <p>{loading?"Consultando catálogo…":number(data?.totalGroups||0)+" conjuntos · "+number(groups.length)+" visibles en la consulta"}</p></div>
@@ -231,6 +213,5 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[]}){
     <button disabled={(page+1)*20>=groups.length} type="button" onClick={()=>{setPage(x=>x+1);setActive(null)}}>Siguiente</button>
    </div>}
   </section>
-  <Note>Fuente: AEMPS, Nomenclátor de Prescripción. Datos operativos exclusivamente de tus farmacias. El PUC real es ponderado por unidades, y el margen PVP es bruto orientativo, sin ajustes fiscales ni bonificaciones adicionales. El ahorro compara referencias históricas dentro de DCPF, sujetas a muestra mínima de compras; no significa disponibilidad ni precio ofertado.</Note>
  </div>;
 }

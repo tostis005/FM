@@ -188,7 +188,8 @@ export function setupRealReports(app,pool,{requireTenant}){
     const c=costs.get(key(r.pharmacyId,r.cn));
     const cost=c&&c.units>0?c.total/c.units:nullable(r.pmc);
     if(cost!=null && Number.isFinite(cost)){
-     r.purchaseCost=cost;r.unitMargin=r.unitSalePrice!=null?round(r.unitSalePrice-cost):null;
+     r.purchaseCost=cost;r.costSource=c&&c.units>0?"Compras ponderadas":"PMC catálogo";
+     r.unitMargin=r.unitSalePrice!=null?round(r.unitSalePrice-cost):null;
      r.margin=round(r.value-r.units*cost);
      r.marginPct=r.value?round(r.margin/r.value*100):null;
      coveredMargin+=r.margin;coveredRevenue+=r.value;coveredItems++;

@@ -146,6 +146,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(g.pvpMarginPct>0);
   assert.ok(g.bestPuc>0);
   assert.ok(g.indicativeSavings>0);
+  const withoutPurchases=await request("/api/genericos/reales",{farmacias:"5"});
+  assert.equal(withoutPurchases.summary.savings,null,
+    "Sin muestra de compras y referencias válidas, ahorro desconocido no es 0");
   const detail=await request("/api/genericos/reales/123456789");
   assert.equal(detail.products.length,2);
   assert.equal(detail.purchases.length,2);

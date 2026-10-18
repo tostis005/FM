@@ -37,6 +37,7 @@ jobs:
           node --check api/src/salesAnalysisPeriod.js
           node --test api/src/salesAnalysisPeriod.test.js
           node --test api/src/tenantAnalysisPolicy.test.js
+          node --test api/src/internalPassword.test.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
           node --test api/src/pricePolicy.test.js
@@ -112,6 +113,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
           psql_test --single-transaction < api/src/migrations/012_analisis_ventas_cliente.sql
+          psql_test --single-transaction < api/src/migrations/013_accesos_locales.sql
+          psql_test --single-transaction < api/src/migrations/014_clientes_demo.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
           psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
           test "$(psql_test -At -c "SELECT CASE WHEN to_regclass('farmetrica.nomenclator_presentaciones') IS NOT NULL AND EXISTS(SELECT 1 FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND modulo_clave='genericos' AND habilitado) THEN 1 ELSE 0 END;")" = 1

@@ -8,6 +8,7 @@ const isSuper = user => user?.role === "superadministrador";
 const asEmail = value => String(value || "").trim().toLowerCase();
 
 import {decoratePharmacy} from "./pharmacyCodes.js";
+import {hashInternalPassword,validInternalPassword} from "./internalPassword.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   async function resolve(req) {
     const slug = String(req.get("x-farmetrica-cliente") || req.query.cliente ||
@@ -227,7 +228,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.get("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{
     try{
       const {rows}=await pool.query(
-        'SELECT uc.email,coalesce(a.nombre,\'\') AS name,uc.rol AS role,uc.farmacias::text[] AS pharmacies,uc.activo AS active FROM farmetrica.usuario_clientes uc LEFT JOIN public.acceso_cuentas a ON a.email=uc.email WHERE uc.cliente_slug=$1 ORDER BY uc.email',
+        'SELECT uc.email,coalesce(a.nombre,\'\') AS name,uc.rol AS role,uc.farmacias::text[] AS pharmacies,uc.activo AS active,uc.metodo_acceso AS "authType" FROM farmetrica.usuario_clientes uc LEFT JOIN public.acceso_cuentas a ON a.email=uc.email WHERE uc.cliente_slug=$1 ORDER BY uc.email',
         [req.context.client.slug]);
       res.json(rows);
     }catch(e){next(e);}
@@ -235,7 +236,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.put("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{
     const email=asEmail(req.body?.email),name=String(req.body?.name||"").trim(),role=req.body?.role;
     const pharmacies=req.body?.pharmacies,active=req.body?.active;
+    const authType=req.body?.authType||"google",password=req.body?.password;
     if(!EMAIL.test(email)||email.length>254||name.length>150||!ROLES.has(role)||
+      !["google","interno"].includes(authType)||
+      (password!==undefined&&password!==""&&!validInternalPassword(password))||
       typeof active!=="boolean"||!Array.isArray(pharmacies)||pharmacies.length>100||
       pharmacies.some(id=>!/^[1-9]\d{0,8}$/.test(String(id))))
       return res.status(400).json({error:"Datos de usuario inválidos"});
@@ -244,17 +248,30 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       return res.status(400).json({error:"Selecciona al menos una farmacia"});
     if(ids.some(id=>!req.context.pharmacies.some(p=>Number(p.id)===id)))
       return res.status(403).json({error:"No puedes asignar farmacias ajenas al cliente"});
+    const hashed=authType==="interno"&&password?await hashInternalPassword(password):null;
     const db=await pool.connect();
     try{
       await db.query("BEGIN");
+      if(authType==="interno"&&!hashed){
+        const {rows:existing}=await db.query(
+          "SELECT 1 FROM farmetrica.credenciales_locales WHERE email=$1 AND activo=true",
+          [email]);
+        if(!existing.length){
+          await db.query("ROLLBACK");
+          return res.status(400).json({error:"Establece una contraseña de al menos 12 caracteres"});
+        }
+      }
       await db.query(
         "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES ($1,$2,$3,'{}',TRUE) ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre",
         [email,name,role]);
       await db.query(
-        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo) VALUES($1,$2,$3,$4,$5) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo",
-        [email,req.context.client.slug,role,ids,active]);
+        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso",
+        [email,req.context.client.slug,role,ids,active,authType]);
+      if(hashed)await db.query(
+        "INSERT INTO farmetrica.credenciales_locales(email,password_hash,activo) VALUES($1,$2,true) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,activo=true,actualizado_en=now()",
+        [email,hashed]);
       await db.query("COMMIT");
-      res.json({email,name,role,pharmacies:ids.map(String),active});
+      res.json({email,name,role,pharmacies:ids.map(String),active,authType});
     }catch(e){await db.query("ROLLBACK");next(e);}
     finally{db.release();}
   });

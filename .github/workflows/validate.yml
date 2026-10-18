@@ -25,6 +25,7 @@ jobs:
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
           node --check api/src/genericos.js
+          node --test api/src/genericos.test.js
           python3 -m unittest discover -s deploy/nomenclator -p 'test_*.py'
           python3 -m py_compile deploy/bootstrap-temp-admin-vps.py
           python3 -m py_compile api/src/setup_temp_login.py

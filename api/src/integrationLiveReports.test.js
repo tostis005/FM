@@ -101,6 +101,30 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(onlyStock.kpis.stockSinRotacion,null);
   assert.equal(onlyStock.kpis.reposiciones,null);
   assert.equal(onlyStock.kpis.roturas,null);
+  // El detalle de ventas también ha de funcionar sin fichas normalizadas
+  // ni compras, y resolver PUC cuando el cliente conserva compras legacy.
+  await pool.query(`CREATE TABLE legacy_reports_ci.ventas (
+    farmacia_codigo text,articulo_id text,fecha timestamp,
+    unidades numeric,importe numeric)`);
+  await pool.query(`INSERT INTO legacy_reports_ci.ventas
+    VALUES ('LGC','ID01','2026-10-10',2,10)`);
+  const oldSale=await request("/api/analytics/ventas/detalle",{
+    farmacias:String(legacyPharmacy.id),desde:"2025-11-01",hasta:"2026-10-18"
+  },{},legacyContext);
+  assert.equal(oldSale.products.length,1);
+  assert.equal(oldSale.products[0].cn,"123456");
+  assert.equal(oldSale.products[0].saleUnitPrice,5);
+  assert.equal(oldSale.products[0].purchaseCost,null);
+  assert.equal(oldSale.products[0].margin,null);
+  await pool.query("ALTER TABLE legacy_reports_ci.compras_previas_ci RENAME TO compras");
+  const legacySale=await request("/api/analytics/ventas/detalle",{
+    farmacias:String(legacyPharmacy.id),desde:"2025-11-01",hasta:"2026-10-18",
+    orden:"margin",direccion:"desc"
+  },{},legacyContext);
+  assert.equal(legacySale.products.length,1);
+  assert.equal(legacySale.products[0].purchaseCost,2.5);
+  assert.equal(legacySale.products[0].margin,5);
+
 
   const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
   assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");

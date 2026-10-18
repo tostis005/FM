@@ -1,0 +1,54 @@
+name: Diagnosticar bloqueos PostgreSQL ventas
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/diagnosticar-bloqueos-ventas.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar acceso
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Auditar bloqueos y sesiones sin mostrar datos ni consultas SQL
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SET default_transaction_read_only=on;
+          SET statement_timeout='10s';
+          SELECT now() AS fecha_revision;
+          SELECT l.pid,l.mode,l.granted,
+                 a.application_name,a.backend_type,a.state,
+                 a.wait_event_type,a.wait_event,
+                 extract(epoch FROM now()-a.xact_start)::int AS edad_transaccion_s,
+                 extract(epoch FROM now()-a.query_start)::int AS edad_consulta_s
+          FROM pg_locks l LEFT JOIN pg_stat_activity a ON a.pid=l.pid
+          WHERE l.relation=to_regclass('ampedia.ventas')
+          ORDER BY granted,edad_transaccion_s DESC NULLS LAST LIMIT 40;
+          SELECT a.pid,a.application_name,a.backend_type,a.state,a.wait_event_type,a.wait_event,
+                 pg_blocking_pids(a.pid) AS bloqueadores,
+                 extract(epoch FROM now()-a.xact_start)::int AS edad_transaccion_s
+          FROM pg_stat_activity a
+          WHERE a.wait_event_type='Lock' AND a.datname=current_database()
+          ORDER BY edad_transaccion_s DESC NULLS LAST LIMIT 40;
+          SELECT pid,relid::regclass,phase,blocks_total,blocks_done
+          FROM pg_stat_progress_create_index
+          WHERE relid=to_regclass('ampedia.ventas');
+          SQL

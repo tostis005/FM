@@ -103,3 +103,15 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             "cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \
             \"SELECT importado_en,fecha_fuente,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo;\""
+
+      - name: Verificar integridad de presentaciones y agrupaciones DCPF importadas
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED=$(python3 -c 'import json;m=json.load(open("/tmp/nomenclator/meta.json"));print(str(m["total_presentaciones"])+"|"+str(m["total_genericos"])+"|"+m["sha256"])')
+          ACTUAL=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT (SELECT count(*) FROM farmetrica.nomenclator_presentaciones), (SELECT count(*) FROM farmetrica.nomenclator_presentaciones WHERE generico), (SELECT sha256 FROM farmetrica.nomenclator_versiones WHERE activo LIMIT 1), (SELECT count(*) FROM (SELECT dcpf FROM farmetrica.nomenclator_presentaciones WHERE generico GROUP BY dcpf HAVING count(*) > 1) conjuntos)"' | tr -d ' ')
+          IFS='|' read -r PRESENTATIONS GENERICS HASH GROUPS <<< "$ACTUAL"
+          test "$PRESENTATIONS|$GENERICS|$HASH" = "$EXPECTED"
+          test "$GROUPS" -gt 0
+          echo "Catálogo verificado: $PRESENTATIONS presentaciones, $GENERICS genéricos y $GROUPS conjuntos con varios CN."

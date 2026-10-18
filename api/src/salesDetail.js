@@ -6,6 +6,8 @@ const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 export function buildSalesDetailSQL(schema){
  if(!VALID.test(schema))throw Error("Esquema no permitido");
  const t='"'+schema+'"';
+ const unitCost=`(CASE WHEN co.priced_units>0 THEN co.cost/co.priced_units ELSE p.pmc END)`;
+ const soldPrice=`(CASE WHEN p.units>0 THEN p.value/p.units ELSE NULL END)`;
  return `
  WITH pharmacy_map AS (
   SELECT * FROM unnest($3::text[],$4::text[]) AS p(code,pharmacy_id)
@@ -23,7 +25,7 @@ export function buildSalesDetailSQL(schema){
   SELECT pm.pharmacy_id AS "pharmacyId",r.code,r.articulo_id,r.units,r.value,
     coalesce(nullif(btrim(a.codigo_nacional),''),btrim(r.articulo_id)) AS cn,
     coalesce(nullif(a.nombre,''),r.articulo_id) AS name,
-    coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc
+    coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc,a.pvp::float8 AS pvp
   FROM raw r JOIN pharmacy_map pm ON pm.code=r.code
   LEFT JOIN LATERAL (
     SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc FROM ${t}.articulos a
@@ -34,7 +36,7 @@ export function buildSalesDetailSQL(schema){
  ),
  grouped AS MATERIALIZED (
   SELECT "pharmacyId",cn,max(name) AS name,max(family) AS family,
-    max(pmc) AS pmc,sum(units)::float8 AS units,sum(value)::float8 AS value
+    max(pmc) AS pmc,max(pvp) AS pvp,sum(units)::float8 AS units,sum(value)::float8 AS value
   FROM catalog GROUP BY "pharmacyId",cn
  ),
  ranked AS (
@@ -55,7 +57,7 @@ export function buildSalesDetailSQL(schema){
     AND (cardinality($6::text[])=0 OR r.family=ANY($6::text[]))
  ),
  page AS MATERIALIZED (
-  SELECT "pharmacyId",cn,name,family,units,value,pmc,"abcdClass"
+  SELECT "pharmacyId",cn,name,family,units,value,pmc,pvp,"abcdClass"
   FROM visible ORDER BY value DESC NULLS LAST,"pharmacyId",cn
   LIMIT $7::int OFFSET $8::int
  ),
@@ -73,12 +75,15 @@ export function buildSalesDetailSQL(schema){
        AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')
   GROUP BY c."pharmacyId",c.cn
  )
- SELECT p."pharmacyId",p.cn,p.name,p.family,p.units,p.value,p."abcdClass",
-  CASE WHEN co.priced_units>0 THEN
-    round((p.value-p.units*(co.cost/co.priced_units))::numeric,2)::float8
-   WHEN p.pmc IS NOT NULL THEN
-    round((p.value-p.units*p.pmc)::numeric,2)::float8
-   ELSE NULL END AS margin
+ SELECT p."pharmacyId",p.cn,p.name,p.family,p.units,p.value,p.pvp,p."abcdClass",
+  CASE WHEN ${unitCost} IS NOT NULL THEN round(${unitCost}::numeric,4)::float8 ELSE NULL END AS "purchaseCost",
+  CASE WHEN ${soldPrice} IS NOT NULL THEN round(${soldPrice}::numeric,4)::float8 ELSE NULL END AS "saleUnitPrice",
+  CASE WHEN ${soldPrice} IS NOT NULL AND ${unitCost} IS NOT NULL THEN
+    round((${soldPrice}-${unitCost})::numeric,4)::float8 ELSE NULL END AS "unitMargin",
+  CASE WHEN ${unitCost} IS NOT NULL THEN
+    round((p.value-p.units*${unitCost})::numeric,2)::float8 ELSE NULL END AS margin,
+  CASE WHEN p.value<>0 AND ${unitCost} IS NOT NULL THEN
+    round((100*(p.value-p.units*${unitCost})/p.value)::numeric,2)::float8 ELSE NULL END AS "marginPct"
  FROM page p LEFT JOIN costs co
    ON co."pharmacyId"=p."pharmacyId" AND co.cn=p.cn
  ORDER BY p.value DESC NULLS LAST,p."pharmacyId",p.cn`;

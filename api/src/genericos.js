@@ -174,7 +174,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      WHERE n.dcpf=$4 AND c.farmacia_id=ANY($3::int[])
        AND c.fecha >= $1::date AND c.fecha < $2::date+interval '1 day'
      GROUP BY n.cn,c.proveedor_id::text
-     ORDER BY puc NULLS LAST,n.cn`,params):{rows:[]};
+     ORDER BY puc NULLS LAST,n.cn`,params.slice(0,4)):{rows:[]};
    res.json({products:products.rows,sales:sales.rows,purchases:purchases.rows,
       salesAvailable:hasSales,purchasesAvailable:hasPurchases});
   }catch(e){next(e);}

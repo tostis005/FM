@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
 import {setupRealReports} from "./realReports.js";
+import {setupSalesSummary} from "./salesSummary.js";
 import {setupGenericosReales} from "./genericosReales.js";
 const enabled=Boolean(process.env.TEST_DB_URL);
 test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF",{
@@ -10,6 +11,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  const pool=new pg.Pool({connectionString:process.env.TEST_DB_URL});
  const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  setupRealReports(app,pool,{requireTenant:()=>[]});
+ setupSalesSummary(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
   modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
@@ -68,6 +70,26 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(abc.value>0);
   assert.ok(eur.value>0);
   assert.ok(freshStock.kpis.stock>0);
+  // Una consulta SQL agrega gráfico, indicadores y ABCD sin peticiones adicionales.
+  const salesSummary=await request("/api/analytics/ventas/resumen",{
+   farmacias:"5",granularidad:"month"});
+  assert.equal(salesSummary.kpis.ventas,28);
+  assert.equal(salesSummary.kpis.unidades,4);
+  assert.equal(salesSummary.kpis.articulosVendidos,1);
+  assert.equal(salesSummary.totalProducts,1);
+  assert.equal(salesSummary.totalArticles,1);
+  assert.equal(salesSummary.products[0].pharmacyId,"5");
+  assert.equal(salesSummary.products[0].abcdClass,"A");
+  assert.equal(salesSummary.products[0].cn,"654321");
+  assert.ok(salesSummary.series.length>0);
+  assert.ok(salesSummary.monthly.length>0);
+  const byFamily=await request("/api/analytics/ventas/resumen",{
+   farmacias:"5",granularidad:"day",familias:"Digestivo"});
+  assert.equal(byFamily.kpis.ventas,28);
+  const noMatch=await request("/api/analytics/ventas/resumen",{
+   farmacias:"5",buscar:"SIN-COINCIDENCIAS"});
+  assert.equal(noMatch.kpis.ventas,0);
+  assert.equal(noMatch.totalArticles,0);
   // Datos VAL deben corresponder a farmacia 5 sin modificar el maestro POL.
   const val=await request("/api/analytics/reportes",{modulo:"ventas",farmacias:"5"});
   assert.equal(val.kpis.ventas,28);

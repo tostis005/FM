@@ -70,3 +70,20 @@ test("margen, PUC y coste exigen ordenar los costes ponderados de TODO el conjun
  const defaultSql=buildSalesDetailSQL("ampedia");
  assert.doesNotMatch(defaultSql,/global_costs AS/,"El ranking normal no cruza compras de todo el universo");
 });
+
+test("detalle de ventas soporta catálogo y compras antiguas y fuente ausente",()=>{
+ const legacy=buildSalesDetailSQL("farmacia_legado","margin","desc",
+  {articles:"legacy",purchases:"legacy"});
+ assert.match(legacy,/FROM "farmacia_legado"\.productos p/);
+ assert.match(legacy,/b\.farmacia_id::text=c\."pharmacyId"/);
+ assert.match(legacy,/b\.producto_id=c\.articulo_id/);
+ assert.match(legacy,/b\.puc>0/);
+ assert.doesNotMatch(legacy,/FROM "farmacia_legado"\.articulos/);
+ const stockOnly=buildSalesDetailSQL("farmacia_legado","margin","asc",
+  {articles:"none",purchases:"none"});
+ assert.match(stockOnly,/NULL::float8 AS cost/);
+ assert.doesNotMatch(stockOnly,/JOIN "farmacia_legado"\.compras/);
+ assert.doesNotMatch(stockOnly,/FROM "farmacia_legado"\.articulos/);
+ assert.throws(()=>buildSalesDetailSQL("farmacia_legado","margin","desc",
+  {articles:"otro",purchases:"legacy"}));
+});

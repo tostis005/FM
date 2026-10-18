@@ -84,7 +84,10 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
  </div>;
 }
 export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
- const useReal=clientSlug==="ampedia"||Boolean(demo);
+ // El contrato normalizado funciona en TODOS los clientes, no solo Ampedia.
+ // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
+ const [useReal,setUseReal]=useState(true);
+ useEffect(()=>{setUseReal(true);setData(null)},[clientSlug]);
  const [periodKey,setPeriodKey]=useState("3");
  const [customFrom,setCustomFrom]=useState(""),[customTo,setCustomTo]=useState("");
  const [ids,setIds]=useState([]),[search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
@@ -123,8 +126,13 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   setLoading(true);setError("");
   fetch("/api/genericos/"+(useReal?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
-   .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");return j})
-   .then(j=>{if(mounted)setData(j)}).catch(e=>{if(mounted)setError(e.message)})
+   .then(async r=>{
+    const j=await r.json().catch(()=>({}));
+    if(r.status===422&&useReal){setUseReal(false);return null;}
+    if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");
+    return j;
+   })
+   .then(j=>{if(mounted&&j)setData(j)}).catch(e=>{if(mounted)setError(e.message)})
    .finally(()=>{if(mounted)setLoading(false)});
   return()=>{mounted=false;controller.abort()};
  },[query,clientSlug,reload,useReal]);
@@ -169,6 +177,14 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   </div>
   {!range.valid&&<p role="alert" className="fm-generic-detail-error">{range.reason}</p>}
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
+  {data?.version&&!loading&&!salesEnabled&&<p role="status" className="fm-inline-status">
+   No hay una fuente de ventas compatible para calcular rotación, ABCD e importe vendido de genéricos.
+   Los valores que faltan no representan ventas cero.
+  </p>}
+  {data?.version&&!loading&&!buysEnabled&&<p role="status" className="fm-inline-status">
+   No hay compras y costes unitarios normalizados disponibles para este origen.
+   El precio medio de compra y las oportunidades de ahorro no se pueden calcular.
+  </p>}
   <div className="fm-generic-metrics">
    <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption=""/>
    <Metric label="Unidades vendidas" loading={loading} value={number(totals.units)} caption=""/>

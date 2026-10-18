@@ -7,9 +7,50 @@ const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 export const SALES_DETAIL_SORT_KEYS=["name","cn","family","pharmacy","abcdClass",
  "pvp","purchaseCost","costSource","saleUnitPrice","unitMargin","units",
  "value","margin","marginPct"];
-export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
- if(!SALES_DETAIL_SORT_KEYS.includes(sortKey)||!["asc","desc"].includes(sortDir))
-  throw Error("Ordenación de ventas inválida");
+export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
+ {articles="normalized",purchases="normalized"}={}){
+ if(!VALID.test(schema))throw Error("Esquema no permitido");
+ if(!SALES_DETAIL_SORT_KEYS.includes(sortKey)||!["asc","desc"].includes(sortDir)||
+   !["normalized","legacy","none"].includes(articles)||
+   !["normalized","legacy","none"].includes(purchases))
+  throw Error("Ordenación o formato de detalle de ventas inválido");
+ const t='"'+schema+'"';
+ const purchasePrice=purchases==="legacy"?"b.puc":"b.coste_unitario";
+ const purchaseJoin=purchases==="legacy"?`JOIN ${t}.compras b
+     ON b.farmacia_id::text=c."pharmacyId" AND b.producto_id=c.articulo_id
+       AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')`:
+   `JOIN ${t}.compras b ON upper(btrim(b.farmacia_codigo))=c.code
+     AND b.articulo_id=c.articulo_id
+     AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')`;
+ const purchaseCosts=source=>purchases==="none"?
+  `SELECT c."pharmacyId",c.cn,NULL::float8 AS cost,
+    NULL::float8 AS priced_units FROM catalog c WHERE false`:
+  `SELECT c."pharmacyId",c.cn,
+    sum(b.unidades*${purchasePrice}) FILTER(
+      WHERE b.unidades>0 AND ${purchasePrice}>0)::float8 AS cost,
+    sum(b.unidades) FILTER(
+      WHERE b.unidades>0 AND ${purchasePrice}>0)::float8 AS priced_units
+   FROM ${source} JOIN catalog c ON c."pharmacyId"=${source}."pharmacyId" AND c.cn=${source}.cn
+   ${purchaseJoin}
+   GROUP BY c."pharmacyId",c.cn`;
+ const articleJoin=articles==="normalized"?
+   `LEFT JOIN LATERAL (
+    SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc,a.pvp FROM ${t}.articulos a
+    WHERE upper(btrim(a.farmacia_codigo))=r.code
+      AND a.origen_id=r.articulo_id
+    ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+   ) a ON true`:
+  articles==="legacy"?`LEFT JOIN LATERAL (
+    SELECT p.cn AS codigo_nacional,p.descripcion AS nombre,
+      p.familia,NULL::numeric AS pmc,NULL::numeric AS pvp
+    FROM ${t}.productos p WHERE p.id=r.articulo_id LIMIT 1
+   ) a ON true`:
+  `LEFT JOIN LATERAL (
+     SELECT NULL::text AS codigo_nacional,NULL::text AS nombre,
+       NULL::text AS familia,NULL::numeric AS pmc,NULL::numeric AS pvp
+     WHERE false
+   ) a ON true`;
+ const catalogCost=v=>`CASE WHEN ${v}.pmc>0 THEN ${v}.pmc ELSE NULL END`;
  const needsGlobalCosts=["purchaseCost","costSource","unitMargin","margin","marginPct"].includes(sortKey);
  const directions=sortDir.toUpperCase();
  const sortExpressions={
@@ -22,37 +63,24 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
  };
  const globalCosts=needsGlobalCosts?`
  global_costs AS (
-   SELECT c."pharmacyId",c.cn,
-    sum(b.unidades*b.coste_unitario) FILTER(
-      WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS cost,
-    sum(b.unidades) FILTER(
-      WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS priced_units
-   FROM visible v JOIN catalog c
-     ON c."pharmacyId"=v."pharmacyId" AND c.cn=v.cn
-   JOIN "${schema}".compras b ON upper(btrim(b.farmacia_codigo))=c.code
-     AND b.articulo_id=c.articulo_id
-     AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')
-   GROUP BY c."pharmacyId",c.cn
+   ${purchaseCosts("visible")}
  ),
  with_cost_sort AS (
    SELECT v.*,
-    CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END AS "globalPurchaseCost",
+    CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE ${catalogCost("v")} END AS "globalPurchaseCost",
     CASE WHEN gc.priced_units>0 THEN 'Compras ponderadas'
-      WHEN v.pmc IS NOT NULL THEN 'PMC catálogo' ELSE NULL END AS "globalCostSource",
+      WHEN v.pmc>0 THEN 'PMC catálogo' ELSE NULL END AS "globalCostSource",
     CASE WHEN v.units>0 THEN v.value/v.units-
-      (CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END)
+      (CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE ${catalogCost("v")} END)
       ELSE NULL END AS "globalUnitMargin",
-    v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END) AS "globalMargin",
-    100*(v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE v.pmc END))
+    v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE ${catalogCost("v")} END) AS "globalMargin",
+    100*(v.value-v.units*(CASE WHEN gc.priced_units>0 THEN gc.cost/gc.priced_units ELSE ${catalogCost("v")} END))
       /NULLIF(v.value,0) AS "globalMarginPct"
    FROM visible v LEFT JOIN global_costs gc
      ON gc."pharmacyId"=v."pharmacyId" AND gc.cn=v.cn
  ),
  `:"";
-
- if(!VALID.test(schema))throw Error("Esquema no permitido");
- const t='"'+schema+'"';
- const unitCost=`(CASE WHEN co.priced_units>0 THEN co.cost/co.priced_units ELSE p.pmc END)`;
+ const unitCost=`(CASE WHEN co.priced_units>0 THEN co.cost/co.priced_units ELSE ${catalogCost("p")} END)`;
  const soldPrice=`(CASE WHEN p.units>0 THEN p.value/p.units ELSE NULL END)`;
  return `
  WITH pharmacy_map AS (
@@ -73,12 +101,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
     coalesce(nullif(a.nombre,''),r.articulo_id) AS name,
     coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc,a.pvp::float8 AS pvp
   FROM raw r JOIN pharmacy_map pm ON pm.code=r.code
-  LEFT JOIN LATERAL (
-    SELECT a.codigo_nacional,a.nombre,a.familia,a.pmc,a.pvp FROM ${t}.articulos a
-    WHERE upper(btrim(a.farmacia_codigo))=r.code
-      AND a.origen_id=r.articulo_id
-    ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
-  ) a ON true
+  ${articleJoin}
  ),
  grouped AS MATERIALIZED (
   SELECT "pharmacyId",cn,max(name) AS name,max(family) AS family,
@@ -111,22 +134,12 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc"){
   LIMIT $7::int OFFSET $8::int
  ),
  costs AS (
-  SELECT c."pharmacyId",c.cn,
-    sum(b.unidades*b.coste_unitario) FILTER(
-     WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS cost,
-    sum(b.unidades) FILTER(
-     WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS priced_units
-  FROM page p JOIN catalog c
-    ON c."pharmacyId"=p."pharmacyId" AND c.cn=p.cn
-  JOIN ${t}.compras b
-    ON upper(btrim(b.farmacia_codigo))=c.code
-       AND b.articulo_id=c.articulo_id
-       AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')
-  GROUP BY c."pharmacyId",c.cn
+   ${purchaseCosts("page")}
  )
+
  SELECT p."pharmacyId",p.cn,p.name,p.family,p.units,p.value,p.pvp,p."abcdClass",
   CASE WHEN co.priced_units>0 THEN 'Compras ponderadas'
-    WHEN p.pmc IS NOT NULL THEN 'PMC catálogo' ELSE NULL END AS "costSource",
+    WHEN p.pmc>0 THEN 'PMC catálogo' ELSE NULL END AS "costSource",
   CASE WHEN ${unitCost} IS NOT NULL THEN round(${unitCost}::numeric,4)::float8 ELSE NULL END AS "purchaseCost",
   CASE WHEN ${soldPrice} IS NOT NULL THEN round(${soldPrice}::numeric,4)::float8 ELSE NULL END AS "saleUnitPrice",
   CASE WHEN ${soldPrice} IS NOT NULL AND ${unitCost} IS NOT NULL THEN
@@ -169,8 +182,30 @@ export function setupSalesDetail(app,pool,{requireTenant}){
    const schema=req.context.client.schema;
    if(!VALID.test(schema))throw Error("Esquema no permitido");
    if(!ids.length)return res.json({products:[],hasMore:false,page});
+   let source={articles:"normalized",purchases:"normalized"};
+   if(req.context.client.slug!=="ampedia"){
+    const {rows:fields}=await pool.query(
+      "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[])",
+      [schema,["ventas","articulos","productos","compras"]]);
+    const byTable=new Map();
+    for(const field of fields){
+     if(!byTable.has(field.table_name))byTable.set(field.table_name,new Set());
+     byTable.get(field.table_name).add(field.column_name);
+    }
+    const has=(table,...cols)=>cols.every(c=>byTable.get(table)?.has(c));
+    if(!has("ventas","farmacia_codigo","articulo_id","fecha","unidades","importe"))
+     return res.status(422).json({error:"No hay ventas normalizadas sincronizadas para este cliente"});
+    source={
+     articles:has("articulos","farmacia_codigo","origen_id","codigo_nacional",
+       "nombre","familia","pmc","pvp","sincronizado_en")?"normalized":
+       has("productos","id","descripcion","cn","familia")?"legacy":"none",
+     purchases:has("compras","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario")?
+       "normalized":
+       has("compras","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"
+    };
+   }
    const pageSize=200;
-   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction),
+   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
      pageSize+1,(page-1)*pageSize]);
    res.json({products:rows.slice(0,pageSize).map(x=>({

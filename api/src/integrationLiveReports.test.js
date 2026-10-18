@@ -88,6 +88,43 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(legacyStockReport.stockRows[0].cn,"123456");
   assert.equal(legacyStockReport.stockRows[0].value,10);
   assert.equal(legacyStockReport.kpis.stock,10);
+  assert.equal(legacyStockReport.stockRows[0].unitCost,2.5);
+  assert.equal(legacyStockReport.stockRows[0].costSource,"Coste inventario");
+  // Un cliente puede tener exclusivamente stock sincronizado. No debe recibir
+  // available:false ni inventar ausencia de rotación sin fuente de ventas.
+  await pool.query("ALTER TABLE legacy_reports_ci.compras RENAME TO compras_previas_ci");
+  const onlyStock=await request("/api/analytics/reportes",
+    {modulo:"stock",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
+  assert.equal(onlyStock.available,true);
+  assert.equal(onlyStock.kpis.stock,10);
+  assert.equal(onlyStock.stockRows.length,1);
+  assert.equal(onlyStock.kpis.stockSinRotacion,null);
+  assert.equal(onlyStock.kpis.reposiciones,null);
+  assert.equal(onlyStock.kpis.roturas,null);
+  // El detalle de ventas también ha de funcionar sin fichas normalizadas
+  // ni compras, y resolver PUC cuando el cliente conserva compras legacy.
+  await pool.query(`CREATE TABLE legacy_reports_ci.ventas (
+    farmacia_codigo text,articulo_id text,fecha timestamp,
+    unidades numeric,importe numeric)`);
+  await pool.query(`INSERT INTO legacy_reports_ci.ventas
+    VALUES ('LGC','ID01','2026-10-10',2,10)`);
+  const oldSale=await request("/api/analytics/ventas/detalle",{
+    farmacias:String(legacyPharmacy.id),desde:"2025-11-01",hasta:"2026-10-18"
+  },{},legacyContext);
+  assert.equal(oldSale.products.length,1);
+  assert.equal(oldSale.products[0].cn,"123456");
+  assert.equal(oldSale.products[0].saleUnitPrice,5);
+  assert.equal(oldSale.products[0].purchaseCost,null);
+  assert.equal(oldSale.products[0].margin,null);
+  await pool.query("ALTER TABLE legacy_reports_ci.compras_previas_ci RENAME TO compras");
+  const legacySale=await request("/api/analytics/ventas/detalle",{
+    farmacias:String(legacyPharmacy.id),desde:"2025-11-01",hasta:"2026-10-18",
+    orden:"margin",direccion:"desc"
+  },{},legacyContext);
+  assert.equal(legacySale.products.length,1);
+  assert.equal(legacySale.products[0].purchaseCost,2.5);
+  assert.equal(legacySale.products[0].margin,5);
+
 
   const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
   assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");
@@ -109,6 +146,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(g.pvpMarginPct>0);
   assert.ok(g.bestPuc>0);
   assert.ok(g.indicativeSavings>0);
+  const withoutPurchases=await request("/api/genericos/reales",{farmacias:"5"});
+  assert.equal(withoutPurchases.summary.savings,null,
+    "Sin muestra de compras y referencias válidas, ahorro desconocido no es 0");
   const detail=await request("/api/genericos/reales/123456789");
   assert.equal(detail.products.length,2);
   assert.equal(detail.purchases.length,2);
@@ -150,6 +190,11 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(stockFromArticles.kpis.stockArticulos,3);
   assert.equal(stockFromArticles.kpis.stockUnidades,20);
   assert.equal(stockFromArticles.kpis.stock,48.5);
+  assert.equal(stockFromArticles.stockRows.reduce((n,r)=>n+Number(r.value||0),0),
+    stockFromArticles.kpis.stock,"Listado y KPI valoran el mismo stock");
+  assert.ok(stockFromArticles.stockRows.every(r=>r.costSource==="PMC catálogo"));
+  assert.ok(stockFromArticles.stockRows.every(r=>r.units===0||
+    Math.abs(Number(r.unitCost)*r.units-Number(r.value))<.01));
   assert.equal(stockFromArticles.availability.stockSummaryBasis,"PMC de ficha (todos los artículos)");
 
   const stockFromDemo=await request("/api/analytics/reportes",{modulo:"reposicion",farmacias:"1,2"});

@@ -25,6 +25,11 @@ function getFilter(req,res){
 }
 const round=(v,dec=4)=>Math.round(Number(v)*10**dec)/10**dec;
 const count=(rows,k)=>rows.reduce((n,r)=>n+Number(r[k]||0),0);
+async function fields(pool,schema,table){
+ const {rows}=await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2",
+  [schema,table]);
+ return new Set(rows.map(r=>r.column_name));
+}
 function mapCatalog(catalog){
  return new Map(catalog.map(g=>[g.dcpf,{...g,salesUnits:0,revenue:0,purchaseUnits:0,
   spent:0,averagePuc:null,bestPuc:null,referenceSupplier:null,
@@ -53,6 +58,19 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    ]);
    if(!version.rows.length)return res.json({version:null,groups:[],totalGroups:0,summary:{},
      sales:{available:false},purchases:{available:false},policy});
+   // Los orígenes pueden sincronizarse por separado.
+   const [artCols,saleCols,buyCols]=await Promise.all([
+    fields(pool,req.context.client.schema,"articulos"),
+    fields(pool,req.context.client.schema,"ventas"),
+    fields(pool,req.context.client.schema,"compras")
+   ]);
+   const hasCols=(cols,...needed)=>needed.every(c=>cols.has(c));
+   const hasArt=hasCols(artCols,"farmacia_codigo","origen_id","codigo_nacional","sincronizado_en","pvp","pmc","nombre");
+   const hasSales=hasArt&&hasCols(saleCols,"farmacia_codigo","articulo_id","unidades","importe","fecha");
+   const hasBuys=hasArt&&hasCols(buyCols,"farmacia_codigo","articulo_id","proveedor_id","proveedor_nombre","unidades","importe","coste_unitario","fecha");
+   if(!hasArt||(!hasSales&&!hasBuys)){
+    return res.status(422).json({error:"Este cliente todavía no dispone del contrato normalizado para genéricos"});
+   }
    const args=[f.from,f.to,f.ids,req.context.client.slug];
    const art=`LEFT JOIN LATERAL(
       SELECT codigo_nacional,pvp,pmc,nombre FROM ${schema}.articulos a
@@ -65,7 +83,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    const ph=`JOIN farmetrica.farmacias f ON f.cliente_slug=$4
       AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
    const [sales,purchases]=await Promise.all([
-    f.ids.length?pool.query(`
+    hasSales&&f.ids.length?pool.query(`
       WITH c AS MATERIALIZED (
         SELECT v.farmacia_codigo,v.articulo_id,
           sum(v.unidades) AS unidades,sum(v.importe) AS importe
@@ -80,7 +98,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
         sum(c.unidades)::float8 AS units,sum(c.importe)::float8 AS revenue
       FROM c ${ph} ${art} ${nJoin}
       WHERE f.id=ANY($3::int[]) GROUP BY n.dcpf,n.cn,f.id`,args):{rows:[]},
-    f.ids.length?pool.query(`
+    hasBuys&&f.ids.length?pool.query(`
       WITH c AS MATERIALIZED (
         SELECT v.farmacia_codigo,v.articulo_id,v.proveedor_id,
           max(v.proveedor_nombre) AS proveedor_nombre,
@@ -118,7 +136,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    // consultar el catálogo. Para el percentil no importan fechas ni orden de
    // líneas al mismo precio: la ponderación por unidades es idéntica.
    // Conservar count(*) permite exigir el mismo mínimo de 3 compras reales.
-   const refs=f.ids.length?await pool.query(`
+   const refs=hasBuys&&f.ids.length?await pool.query(`
     WITH c AS MATERIALIZED (
       SELECT f.id::int AS pharmacy,c.farmacia_codigo,c.articulo_id,
         c.proveedor_id,c.coste_unitario::float8 AS price,
@@ -217,7 +235,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    const classes=classifyAbcd([...sums.values()],{
     identity:g=>g.dcpf,revenue:g=>g.revenue,units:g=>g.salesUnits
    });
-   for(const g of sums.values())g.abcdClass=classes.get("_all|"+g.dcpf)||"D";
+   for(const g of sums.values())g.abcdClass=hasSales?(classes.get("_all|"+g.dcpf)||"D"):null;
    if(detail){
     const g=sums.get(selectedDcpf);
     if(!g)return res.status(404).json({error:"Conjunto desconocido"});
@@ -236,7 +254,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       potential:Number(p.pricedUnits)>0&&refByGroup.has(String(p.pharmacyId)+"|"+p.dcpf)?
        round(Math.max(0,Number(p.cost)/Number(p.pricedUnits)-
          Number(refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf).referencePuc))*Number(p.pricedUnits),2):null
-     })),references:relevant,salesAvailable:true,purchasesAvailable:true,policy});
+     })),references:relevant,salesAvailable:hasSales,purchasesAvailable:hasBuys,policy});
    }
    const term=f.search.toLocaleLowerCase("es");
    let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
@@ -251,9 +269,9 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    groups=sortGenericGroups(groups,f.order,f.direction);
    const summary={totalGroups:groups.length,salesUnits:count(groups,"salesUnits"),
     revenue:round(count(groups,"revenue"),2),purchases:round(count(groups,"spent"),2),
-    savings:round(count(groups,"indicativeSavings"),2)};
+    savings:groups.some(g=>g.indicativeSavings!=null)?round(count(groups,"indicativeSavings"),2):null};
    res.json({version:version.rows[0],groups:groups.slice(0,500),topGroups,totalGroups:groups.length,
-    summary,policy,sales:{available:true},purchases:{available:true},
+    summary,policy,sales:{available:hasSales},purchases:{available:hasBuys},
     note:"Coste real: media ponderada por unidades; ahorro orientativo: mejores precios por proveedor y CN, dentro de DCPF y período histórico configurado, con muestra mínima de 3 compras."});
   }catch(e){throw e}
  }

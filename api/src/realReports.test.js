@@ -58,6 +58,8 @@ test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()
  assert.equal(result.salesRows[0].purchaseCost,1.5);
  assert.equal(result.salesRows[0].pvpMarginPct,75);
  assert.equal(result.buyRows[0].puc,1.5);
+ assert.equal(result.salesRows[0].abcdClass,"A");
+ assert.equal(result.buyRows[0].abcdClass,"A");
  assert.equal(result.supplierRows[0].name,"Distribuidora");
  assert.equal(result.supplierRows[0].id,"1|2");
  assert.ok(queries.some(x=>x.sql.includes("GROUP BY f.id,t.proveedor_id")));
@@ -76,4 +78,14 @@ test("no accede a módulo no autorizado",async()=>{
  const {status,result}=await call({context:{...req.context,role:"farmacia",
   modules:{ventas:true}},query:{...req.query,modulo:"compras"}});
  assert.equal(status,403);assert.match(result.error,/no habilitado/i);
+});
+
+test("ABCD usa ventas completas por farmacia aunque haya filtro de búsqueda/familia",async()=>{
+ const {call,queries,req}=create();
+ const {status,result}=await call({query:{...req.query,buscar:"amoxicilina",familias:"Antibióticos"}});
+ assert.equal(status,200);
+ assert.equal(result.salesRows[0].abcdClass,"A");
+ assert.ok(queries.some(({sql})=>sql.includes('GROUP BY f.id,')&&
+  sql.includes('AS "pharmacyId"')&&sql.includes(".ventas")&&!sql.includes("ILIKE")),
+  "el ranking no debe recortarse a los artículos visibles");
 });

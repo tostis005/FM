@@ -34,15 +34,23 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
  const map={
-  dashboard:shared,
+  dashboard:[shared[0],shared[1],shared[2],shared[3],
+   CARD("Unidades compradas","unidadesCompradas","n","compras"),
+   CARD("Líneas de compra","lineasCompra","n","compras")],
   ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia ("+analysisMonths+" m)","productosFarmacia","n"),CARD("Artículos únicos ("+analysisMonths+" m)","articulosVendidos","n")],
-  compras:[shared[1],shared[4],CARD("Proveedores","proveedores","n","proveedores"),CARD("Compra de genéricos","compraGenericos","€","genericos")],
-  proveedores:[CARD("Proveedores","proveedores","n"),shared[1],shared[4],CARD("CN con compras","articulosComprados","n","compras")],
+  compras:[shared[1],CARD("Unidades compradas","unidadesCompradas","n"),
+   CARD("Proveedores","proveedores","n","proveedores"),
+   CARD("Líneas de compra","lineasCompra","n")],
+  proveedores:[CARD("Proveedores","proveedores","n"),shared[1],
+   CARD("Unidades compradas","unidadesCompradas","n"),
+   CARD("Líneas de compra","lineasCompra","n")],
   stock:[CARD("Artículos con stock informado","stockArticulos","n"),CARD("Unidades en inventario","stockUnidades","n"),shared[2],CARD("Sin ventas en periodo","stockSinRotacion","n")],
   reposicion:[shared[5],CARD("Unidades en inventario","stockUnidades","n"),CARD("Coste de reposición","reposicionCoste","€"),CARD("Roturas","roturas","n")],
   genericos:[CARD("Compra de genéricos","compraGenericos","€"),CARD("Potencial de precio","potencialGenericos","€","compras"),shared[1],CARD("Proveedores","proveedores","n","proveedores")],
   rentabilidad:[shared[3],CARD("Margen estimado","margenPct","%"),CARD("Cobertura de costes","coberturaCostes","%"),shared[0]],
-  acciones:[CARD("Acciones identificadas","acciones","n"),shared[4],CARD("Sobrestock","sobrestock","€","stock"),shared[5]],
+  acciones:[CARD("Acciones identificadas","acciones","n"),
+   CARD("Roturas","roturas","n","reposicion"),
+   CARD("Sobrestock","sobrestock","€","stock"),shared[5]],
   informes:shared.slice(0,4),asistente:shared.slice(0,4)
  };
  return (map[module]||shared).map(c=>({...c,value:k[c.key]}));
@@ -81,8 +89,10 @@ function columnsFor(module,pharmacyMap){
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),
-    unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("value","Compras"),euro("potential","Potencial de precio")];
-  case "proveedores":return [C("name","Proveedor","name"),pharmacy,num("products","Artículos"),euro("value","Compras"),euro("potential","Potencial de precio")];
+    unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),
+    euro("value","Compras"),num("lines","Líneas de compra")];
+  case "proveedores":return [C("name","Proveedor","name"),pharmacy,
+    num("products","Artículos"),num("units","Unidades"),euro("value","Compras")];
   case "stock":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
   case "reposicion":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
   case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
@@ -91,7 +101,8 @@ function columnsFor(module,pharmacyMap){
     unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
     euro("value","Ventas"),euro("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
-  case "acciones":return [C("action","Acción","action"),...common,C("originSupplier","Proveedor actual","originSupplier"),C("targetSupplier","Proveedor recomendado","targetSupplier"),euro("impact","Importe potencial")];
+  case "acciones":return [C("action","Acción","action"),...common,
+    euro("impact","Importe a revisar")];
   default:return [...common,unit("pvp","PVP catálogo"),unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),
     num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen")];
  }
@@ -395,14 +406,19 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
+  {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
+  {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
+   <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}
+  {realReport?.available&&realReport.availability?.sales===false&&["dashboard","rentabilidad"].includes(module)&&
+   <p role="status" className="fm-inline-status">No hay una fuente de ventas compatible para este cliente. Los indicadores que dependen de ella no se pueden calcular.</p>}
    {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&<p role="status" className="fm-inline-status">El stock no se muestra como actual porque no hay una importación de inventario suficientemente reciente en las últimas 48 horas.</p>}
-   {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<p className="fm-sales-period-info">La valoración total usa el PMC de todas las fichas con stock; si faltan costes, el importe permanece sin calcular. El listado puede mostrar menos referencias sin afectar a los recuentos.</p>}
+   {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<p className="fm-sales-period-info">Base de valoración: {realReport.availability.stockSummaryBasis}. Si faltan costes, el importe permanece sin calcular. El listado puede mostrar menos referencias sin afectar a los recuentos.</p>}
    {realReport?.availability?.rowsTruncated&&module!=="ventas"&&<p role="status" className="fm-inline-status">El listado está limitado a las primeras 3.000 referencias. Los totales de ventas y compras proceden de todas las operaciones.</p>}
    {realReport?.availability?.stockRowsTruncated&&["stock","reposicion","acciones"].includes(module)&&<p role="status" className="fm-inline-status">El listado de existencias está limitado a 3.000 referencias. Los recuentos y unidades del inventario se calculan sobre todas las fichas; la reposición mostrada no incluye necesariamente todas las necesidades.</p>}
-  {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label="Consultando ventas y actualizando indicadores…"/></div>}
+  {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label={"Consultando "+(module==="compras"||module==="proveedores"?"compras":module==="stock"||module==="reposicion"?"inventario":"informes")+" y actualizando indicadores…"}/></div>}
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    {chartLoading?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {chartLoading?<LoadingPanel kind="chart" label={"Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas")+"…"}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
@@ -424,7 +440,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
+   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}

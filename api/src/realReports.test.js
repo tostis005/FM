@@ -31,7 +31,7 @@ function create(){
   if(sql.includes("date_trunc('month'")&&sql.includes(".ventas"))
    return {rows:[{month:"2026-10",units:20,amount:120}]};
   if(sql.includes("date_trunc('month'")&&sql.includes(".compras"))
-   return {rows:[{month:"2026-10",units:30,amount:60}]};
+   return {rows:[{month:"2026-10",units:30,amount:60,lines:4}]};
 
   throw Error("SQL inesperado: "+sql.slice(0,180));
  }};
@@ -54,8 +54,11 @@ test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()
  assert.equal(status,200);
  assert.equal(result.kpis.ventas,null,"Compras no debe fingir una venta total cuando no solicita esa serie");
  assert.equal(result.kpis.compras,60);
+ assert.equal(result.kpis.unidadesCompradas,30);
+ assert.equal(result.kpis.lineasCompra,4);
  assert.equal(result.kpis.margen,90);
  assert.equal(result.salesRows[0].purchaseCost,1.5);
+ assert.equal(result.salesRows[0].saleUnitPrice,6);
  assert.equal(result.salesRows[0].pvpMarginPct,75);
  assert.equal(result.buyRows[0].puc,1.5);
  assert.equal(result.salesRows[0].abcdClass,"A");
@@ -116,10 +119,16 @@ test("los módulos ahorran consultas ajenas a sus indicadores y conservan los da
  const provider=await a.call({query:{...a.req.query,modulo:"proveedores"}});
  assert.equal(provider.status,200);
  assert.equal(provider.result.supplierRows.length,1);
- assert.equal(provider.result.kpis.articulosComprados,1,"Proveedores debe contar compras completas sin necesitar ventas");
+ assert.equal(provider.result.kpis.articulosComprados,null,"Proveedores no necesita repetir un detalle de compras");
+ assert.equal(provider.result.kpis.compras,60,"Los totales deben salir del período completo");
  assert.equal(provider.result.kpis.ventas,null);
+ assert.equal(provider.result.kpis.lineasCompra,4);
+ assert.equal(provider.result.availability.rowsTruncated,false,
+   "No marcar proveedores como truncado cuando se omitieron ventas deliberadamente");
  assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".ventas t')),
    "Proveedores no debe escanear todas las ventas");
+ assert.ok(!a.queries.some(q=>q.sql.includes(' AS supplier,')&&q.sql.includes('.compras')),
+   "Proveedores no debe ejecutar de nuevo el detalle de compras");
  assert.ok(!a.queries.some(q=>q.sql.includes("SELECT DISTINCT familia")),
    "Las familias se consultan sólo cuando se filtran productos");
 

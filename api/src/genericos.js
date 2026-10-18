@@ -29,6 +29,7 @@ const noData = status=>({available:false,reason:status});
 function catalogData(pool){
  return pool.query("SELECT sha256,fecha_fuente,importado_en,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo=true LIMIT 1");
 }
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 export function setupGenericAnalytics(app,pool,{requireTenantModule}){
  const guard=requireTenantModule("genericos");
  app.get("/api/genericos/estado",...guard,async(req,res,next)=>{
@@ -67,7 +68,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
         sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue
      FROM ${schema}.ventas v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND
-       upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
+       upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
      ${hasProducts?`LEFT JOIN ${schema}.productos pv ON pv.id=btrim(v.articulo_id::text)`:""}
      JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
        ${hasProducts?"coalesce(nullif(btrim(pv.cn),''),btrim(v.articulo_id::text))":"btrim(v.articulo_id::text)"}
@@ -152,7 +153,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      SELECT n.cn,sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue
      FROM ${schema}.ventas v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$5
-       AND upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
+       AND upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
      ${hasProducts?`LEFT JOIN ${schema}.productos pv ON pv.id=btrim(v.articulo_id::text)`:""}
      JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
        ${hasProducts?"coalesce(nullif(btrim(pv.cn),''),btrim(v.articulo_id::text))":"btrim(v.articulo_id::text)"}

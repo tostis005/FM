@@ -7,6 +7,7 @@ const ROLES = new Set(["administrador","gestor","farmacia","colaborador"]);
 const isSuper = user => user?.role === "superadministrador";
 const asEmail = value => String(value || "").trim().toLowerCase();
 
+import {decoratePharmacy} from "./pharmacyCodes.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   async function resolve(req) {
     const slug = String(req.get("x-farmetrica-cliente") || req.query.cliente ||
@@ -30,7 +31,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos},
       role, modules:Object.fromEntries(modules.map(m=>[m.id,m.enabled])),
-      pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))), allowedPharmacyIds:ids};
+      pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))).map(p=>decoratePharmacy(slug,p)), allowedPharmacyIds:ids};
   }
   function middleware(predicate=()=>true) {
     return [requireUser,async(req,res,next)=>{
@@ -194,7 +195,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       const {rows}=await pool.query(
         'INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
         [req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase]);
-      res.status(201).json(rows[0]);
+      res.status(201).json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}
   });
   app.patch("/api/tenant/farmacias/:id",...requireTenantAdmin(),async(req,res,next)=>{
@@ -205,7 +206,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_origen=$6,host_origen=$7,bd_origen=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
         [Number(req.params.id),req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase]);
       if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
-      res.json(rows[0]);
+      res.json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}
   });
   app.get("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{

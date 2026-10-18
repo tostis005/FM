@@ -6,6 +6,7 @@ const REQUIRED = [
   "unidades","importe","sincronizado_en",
 ];
 const OPTIONAL = ["precio_unitario","numero_ticket","descuento_linea","descuento_operacion"];
+import {decoratePharmacy} from "./pharmacyCodes.js";
 export function setupSyncStatus(app,pool,{requireTenant}) {
   app.get("/api/ventas/sincronizacion",...requireTenant(),async(req,res,next)=>{
     // El estado del sincronizador contiene información operacional de la red.
@@ -13,7 +14,7 @@ export function setupSyncStatus(app,pool,{requireTenant}) {
       return res.status(403).json({error:"Solo los administradores pueden comprobar la sincronización."});
     const schema=req.context.client.schema;
     if(!SCHEMA.test(schema))return res.status(400).json({error:"Esquema de cliente no válido"});
-    const permitted=(req.context.pharmacies||[]).map(p=>String(p.sourceCode||"").trim().toUpperCase()).filter(Boolean);
+    const permitted=(req.context.pharmacies||[]).map(p=>String(p.databaseCode||decoratePharmacy(req.context.client.slug,p).databaseCode||"").trim().toUpperCase()).filter(Boolean);
     let db;
     try{
       db=await pool.connect();

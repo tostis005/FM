@@ -10,6 +10,7 @@ import { setupGenericAnalytics } from "./genericos.js";
 import { setupRealReports } from "./realReports.js";
 import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
@@ -160,7 +161,7 @@ function salesJoin(req) {
     throw Error("Cliente inválido");
   const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
   return ` FROM "${schema}".ventas v JOIN farmetrica.farmacias f
-    ON upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
+    ON upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
     AND f.cliente_slug='${tenant}' AND f.id IN (${ids.length?ids.join(","):"NULL"}) `;
 }
 const salesPeriod = " v.fecha >= $1::date AND v.fecha < ($2::date + interval '1 day') ";
@@ -175,7 +176,7 @@ app.get("/api/ventas/cobertura", ...requireTenantModule("promociones"), async (r
         min(v.fecha) AS primera,max(v.fecha) AS ultima
         FROM farmetrica.farmacias f
         LEFT JOIN "${schema}".ventas v
-          ON upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
+          ON upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
         WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
         GROUP BY f.id,f.codigo_origen ORDER BY f.id`,
       [req.context.client.slug,ids]);

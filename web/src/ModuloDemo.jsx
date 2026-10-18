@@ -24,7 +24,7 @@ const SERIES={
  acciones:["compras",null,"Compras por periodo"],informes:["ventas","compras","Ventas y compras"]
 };
 const CARD=(label,key,unit,link)=>({label,key,unit,link});
-function metricCards(module,k){
+function metricCards(module,k,analysisMonths="12"){
  const shared=[
   CARD("Ventas", "ventas","€","ventas"),
   CARD("Compras","compras","€","compras"),
@@ -35,7 +35,7 @@ function metricCards(module,k){
  ];
  const map={
   dashboard:shared,
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia (12 m)","productosFarmacia","n"),CARD("Artículos únicos (12 m)","articulosVendidos","n")],
+  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia ("+analysisMonths+" m)","productosFarmacia","n"),CARD("Artículos únicos ("+analysisMonths+" m)","articulosVendidos","n")],
   compras:[shared[1],shared[4],CARD("Proveedores","proveedores","n","proveedores"),CARD("Compra de genéricos","compraGenericos","€","genericos")],
   proveedores:[CARD("Proveedores","proveedores","n"),shared[1],shared[4],CARD("CN con compras","articulosComprados","n","compras")],
   stock:[shared[2],CARD("Sobrestock estimado","sobrestock","€","acciones"),CARD("Sin ventas en periodo","stockSinRotacion","n"),CARD("Roturas detectadas","roturas","n","reposicion")],
@@ -101,11 +101,12 @@ const STORAGE="fm_analytics_filters_";
 function readFilters(key){
  try{const saved=JSON.parse(sessionStorage.getItem(key)||"null");
   if(saved&&typeof saved==="object")return {period:saved.period||"6",
+    analysisMonths:["3","6","12"].includes(String(saved.analysisMonths))?String(saved.analysisMonths):"12",
     customFrom:String(saved.customFrom||""),customTo:String(saved.customTo||""),
     pharmacyIds:Array.isArray(saved.pharmacyIds)?saved.pharmacyIds:[],
     families:Array.isArray(saved.families)?saved.families:[],search:String(saved.search||"")};
  }catch{}
- return {period:"6",customFrom:"",customTo:"",pharmacyIds:[],families:[],search:""};
+ return {period:"6",analysisMonths:"12",customFrom:"",customTo:"",pharmacyIds:[],families:[],search:""};
 }
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
  const storageKey=STORAGE+clientSlug+"_"+module;
@@ -157,7 +158,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
  const tz=clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
  const period=resolveSalesPeriod(filters.period,asOf,{from:filters.customFrom,to:filters.customTo},tz);
  const fastEligible=module==="ventas"&&period.valid;
- const recentPeriod=resolveSalesPeriod("12",asOf,{},tz);
+ const recentPeriod=resolveSalesPeriod(filters.analysisMonths||"12",asOf,{},tz);
  const fastScope=[clientSlug,period.from,period.to,period.granularity,filters.pharmacyIds.join(","),reloadKey].join("|");
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
@@ -183,6 +184,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   const controller=new AbortController();
   const params=new URLSearchParams({desde:recentPeriod.from,hasta:recentPeriod.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  if(reloadKey>0)params.set("refrescar","1");
   fetch("/api/analytics/ventas/recuento?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||"Error al contar artículos");return data})
@@ -222,6 +224,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   if(searchReady)params.set("buscar",searchReady);
   if(module==="ventas"&&filters.families.length)params.set("familias",filters.families.join(","));
   setLoading(true);setSalesError("");setRealSales(null);
+  if(module==="ventas"&&detailPage===1)setRealReport(null);
   // El detalle paginado no repite la agregación histórica ni los recuentos.
   if(module==="ventas")params.set("pagina",String(detailPage));
   const endpoint=module==="ventas"?"/api/analytics/ventas/detalle":"/api/analytics/ventas";
@@ -285,7 +288,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    productosFarmacia:insightData.totalProducts,articulosVendidos:insightData.totalArticles
   }:{}),...(fastSales?.kpis||{})};
  if(!realReport?.kpis&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;}
- const cards=metricCards(module,realKpis);
+ const cards=metricCards(module,realKpis,filters.analysisMonths||"12");
  const isDashboard=module==="dashboard",isReports=module==="informes",isAssistant=module==="asistente";
  const datasets={
   ventas:realReport?.salesRows||[],compras:realReport?.buyRows||[],
@@ -333,6 +336,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    <label><span>Periodo</span><select value={filters.period} onChange={e=>pickPeriod(e.target.value)}>
     {SALES_PERIODS.filter(([key])=>module==="ventas"||!["24","36","60","all"].includes(key)).map(([key,label])=><option key={key} value={key}>{label}</option>)}
    </select></label>
+   {module==="ventas"&&<label><span>Análisis ABCD y márgenes</span>
+     <select value={filters.analysisMonths||"12"} onChange={e=>change("analysisMonths",e.target.value)}>
+      <option value="3">Últimos 3 meses</option>
+      <option value="6">Últimos 6 meses</option>
+      <option value="12">Últimos 12 meses</option>
+     </select></label>}
    <label className="fm-demo-search"><span>Artículo o CN</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </div>
   {<div className="fm-sales-timebar">
@@ -349,7 +358,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    <label>Hasta<input aria-label="Ventas hasta" type="date" value={filters.customTo} onChange={e=>change("customTo",e.target.value)}/></label>
   </div>}
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
-  {module==="ventas"&&<p className="fm-sales-period-info">Los totales y el gráfico corresponden al período seleccionado. Productos, artículos, ABCD y margen se calculan solo sobre los últimos 12 meses. Las familias son específicas de cada farmacia.</p>}
+  {module==="ventas"&&<p className="fm-sales-period-info">Los totales y el gráfico corresponden al período seleccionado. Productos, artículos, ABCD y margen se calculan sobre los últimos {filters.analysisMonths||"12"} meses. Las familias son específicas de cada farmacia.</p>}
   {module==="ventas"&&(searchReady||filters.families.length>0)&&<p className="fm-sales-period-info">La búsqueda y las familias filtran el detalle reciente, pero no modifican el total histórico mostrado.</p>}
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
@@ -397,7 +406,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
   </section>:<section className="card fm-demo-table">
-   <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":module==="ventas"?"Artículos y ABCD — últimos 12 meses":TITLES[module]+" por artículo"}</h2>
+   <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":module==="ventas"?"Artículos y ABCD — últimos "+(filters.analysisMonths||"12")+" meses":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard?go(row.targetModule):setDetail(row)} columns={columns}/>
@@ -406,7 +415,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
       onClick={()=>setDetailPage(n=>n+1)}>
       {isFetchingSales?"Cargando artículos…":"Cargar 200 artículos más"}
     </button></div>}
-   {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {rows.length} referencias. El CSV exporta únicamente las páginas cargadas. ABCD y costes: últimos 12 meses.</small>}
+   {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {rows.length} referencias. El CSV exporta únicamente las páginas cargadas. ABCD y costes: últimos {filters.analysisMonths||"12"} meses.</small>}
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>
    <div className="fm-demo-detail" role="dialog" aria-modal="true" aria-label="Detalle de registro">

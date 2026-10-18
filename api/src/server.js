@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import { setupSyncStatus } from "./syncStatus.js";
+import { setupGenericAnalytics } from "./genericos.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
@@ -75,6 +76,7 @@ setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
 setupTenantPromotions(app,pool,{requireTenantModule});
+setupGenericAnalytics(app,pool,{requireTenantModule});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",

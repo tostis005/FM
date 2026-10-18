@@ -25,19 +25,6 @@ jobs:
       VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Descargar ZIP oficial AEMPS de forma verificada
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/nomenclator
-          curl --fail --show-error --silent --location \
-            --connect-timeout 20 --max-time 250 --retry 3 \
-            "https://listadomedicamentos.aemps.gob.es/prescripcion.zip" \
-            --output /tmp/nomenclator/prescripcion.zip
-          file /tmp/nomenclator/prescripcion.zip
-          python3 -m zipfile -t /tmp/nomenclator/prescripcion.zip
-          python3 deploy/nomenclator/convert.py /tmp/nomenclator/prescripcion.zip \
-            --csv /tmp/nomenclator/catalogo.csv --meta /tmp/nomenclator/meta.json
       - name: Preparar SSH del VPS
         shell: bash
         run: |
@@ -51,6 +38,33 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
           test -s ~/.ssh/known_hosts
+      - name: Descargar y validar ZIP oficial (GitHub o VPS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/nomenclator
+          DEST=/tmp/nomenclator/prescripcion.zip
+          URL=https://listadomedicamentos.aemps.gob.es/prescripcion.zip
+          if ! curl --fail --show-error --silent --location \
+                --connect-timeout 20 --max-time 200 --retry 1 \
+                --user-agent "Mozilla/5.0 (compatible; Farmetrica/1.0; fuente AEMPS)" \
+                "$URL" --output "$DEST"; then
+            echo "::warning::AEMPS rechaza descarga desde GitHub Actions; probando VPS de producción."
+            # No almacena el ZIP en el VPS ni lo expone mediante HTTP:
+            # transferencia efímera por SSH al runner que lo valida.
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              "$VPS_USER@$VPS_HOST" \
+              'set -eu; TMP=$(mktemp); trap "rm -f \"$TMP\"" EXIT;
+               curl --fail --show-error --silent --location --connect-timeout 20 \
+                 --max-time 200 --user-agent "Mozilla/5.0" \
+                 https://listadomedicamentos.aemps.gob.es/prescripcion.zip \
+                 -o "$TMP"; cat "$TMP"' > "$DEST"
+          fi
+          test -s "$DEST"
+          file "$DEST"
+          python3 -m zipfile -t "$DEST"
+          python3 deploy/nomenclator/convert.py "$DEST" \
+            --csv /tmp/nomenclator/catalogo.csv --meta /tmp/nomenclator/meta.json
       - name: Crear esquema aditivo de catálogo
         shell: bash
         run: |

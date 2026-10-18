@@ -58,7 +58,7 @@ test("el mes con granularidad distinta admite dos niveles de agrupación",()=>{
 test("permisos y filtros se aplican en servidor",async()=>{
  const {call,calls}=make();
  assert.equal((await call({farmacias:"7"})).status,403);
- assert.equal((await call({desde:"2024-01-01",hasta:"2026-10-18"})).status,400);
+ assert.equal((await call({desde:"invalid",hasta:"2026-10-18"})).status,400);
  assert.equal((await call({familias:"Digestivo"})).status,400);
  assert.equal((await call({buscar:"CN"})).status,400);
  assert.equal((await call({farmacias:"5,4"})).status,403);

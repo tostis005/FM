@@ -7,7 +7,7 @@ const date=value=>value?new Intl.DateTimeFormat("es-ES",{
   dateStyle:"short",timeStyle:"medium",
 }).format(new Date(value)):"—";
 
-export default function SyncVentas({client}){
+export default function SyncVentas({client,pharmacies=[]}){
  const [status,setStatus]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState("");
  const version=useRef(0);
  const refresh=useCallback(async()=>{
@@ -29,6 +29,7 @@ export default function SyncVentas({client}){
   const id=setInterval(()=>{void refresh();},60000);
   return()=>{clearInterval(id);version.current++;};
  },[refresh]);
+ const pharmacyName=code=>pharmacies.find(p=>(p.databaseCode||p.sourceCode||"").trim().toUpperCase()===String(code||"").trim().toUpperCase())?.name||code||"—";
  const stats=status?.metrics;
  const fresh=Number(stats?.ultimos90min||0)>0;
  return <div className="fm-sync">
@@ -62,9 +63,9 @@ export default function SyncVentas({client}){
    <section className="card">
     <div className="section-heading"><h2>Farmacias identificadas en {status.schema}.ventas</h2><Database size={19}/></div>
     <div className="table-scroll"><table className="data-table"><thead><tr>
-     <th>Código de farmacia</th><th>Líneas recibidas</th><th>Última recepción</th><th>Última venta</th>
+     <th>Farmacia</th><th>Líneas recibidas</th><th>Última recepción</th><th>Última venta</th>
     </tr></thead><tbody>{(status.pharmacies||[]).map(p=><tr key={p.codigo}>
-     <td><strong>{p.codigo}</strong></td><td>{n(p.total)}</td>
+     <td><strong>{pharmacyName(p.codigo)}</strong></td><td>{n(p.total)}</td>
      <td>{date(p.ultima_recepcion)}</td><td>{date(p.ultima_venta)}</td>
     </tr>)}</tbody></table>
     {!status.pharmacies?.length&&<p className="fm-sync-note">No hay ventas correspondientes a las farmacias configuradas para este cliente.</p>}
@@ -76,7 +77,7 @@ export default function SyncVentas({client}){
      <th>Recepción</th><th>Farmacia</th><th>ID origen</th><th>Fecha venta</th><th>Artículo</th>
      <th>Unidades</th><th>Precio unidad</th><th>Importe</th><th>Descuento línea</th><th>Descuento operación</th>
     </tr></thead><tbody>{(status.preview||[]).map((v,i)=><tr key={v.origen_id+"-"+i}>
-     <td>{date(v.sincronizado_en)}</td><td>{v.farmacia_codigo}</td><td>{v.origen_id}</td>
+     <td>{date(v.sincronizado_en)}</td><td>{pharmacyName(v.farmacia_codigo)}</td><td>{v.origen_id}</td>
      <td>{date(v.fecha)}</td><td>{v.articulo_id}</td><td>{n(v.unidades)}</td>
      <td>{v.precio_unitario==null?"—":n(v.precio_unitario)}</td><td>{n(v.importe)}</td>
      <td>{v.descuento_linea==null?"—":n(v.descuento_linea)}</td>

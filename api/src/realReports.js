@@ -69,8 +69,11 @@ export function setupRealReports(app,pool,{requireTenant}){
    const buyers=normalizedBuys||legacyBuys;
    const suppliers=has(providerCols,"farmacia_codigo","origen_id","nombre");
    const legacySuppliers=!suppliers&&has(providerCols,"id","nombre");
-   if(!sales&&!buyers)return res.json({available:false,
-     reason:"No hay tablas de ventas o compras compatibles con el contrato de este cliente",kpis:{},monthly:[],
+   const hasStockSource=has(articleCols,"farmacia_codigo","origen_id","stock_actual","sincronizado_en")||
+     has(legacyStockCols,"farmacia_id","producto_id","unidades","fecha_referencia")||
+     (req.context.client.slug==="ampedia"&&articles);
+   if(!sales&&!buyers&&!hasStockSource)return res.json({available:false,
+     reason:"No hay tablas compatibles de ventas, compras o existencias para este cliente",kpis:{},monthly:[],
      salesRows:[],buyRows:[],supplierRows:[],stockRows:[],replenishmentRows:[],profitRows:[],actions:[],families:[]});
    // LATERAL + DISTINCT evita multiplicar movimientos por múltiples copias de un artículo.
    // Resolver referencias una vez por artículo y farmacia. Las tablas legadas
@@ -288,16 +291,38 @@ export function setupRealReports(app,pool,{requireTenant}){
    const buyRows=buys.rows.map(r=>({...r,id:key(r.pharmacyId,r.cn,r.providerId),
       units:Number(r.units),value:Number(r.value),puc:Number(r.pricedUnits)>0?Number(r.cost)/Number(r.pricedUnits):null,
       target:null,potential:null}));
+   // Nunca mezclar costes de los primeros 3.000 proveedores/artículos con el
+   // denominador de TODAS las compras: eso altera márgenes según el orden.
+   const buyDetailComplete=buys.rows.length<rowLimit;
+   let fullCostsCalculated=false;
    const costs=new Map();
    for(const r of buyRows){
     if(r.puc==null)continue;
     const k=key(r.pharmacyId,r.cn),old=costs.get(k)||{units:0,total:0};
     old.units+=Number(r.pricedUnits);old.total+=Number(r.cost);costs.set(k,old);
    }
+   if(buyers&&!buyDetailComplete&&pharmacyIds.length){
+    // Segunda agregación compacta por farmacia+CN, independiente de la
+    // paginación, proveedor o columna de orden del informe.
+    const {rows:allCosts}=await pool.query(`SELECT f.id::text AS "pharmacyId",
+       ${cn} AS cn,sum(t.cost)::float8 AS cost,
+       sum(t.priced_units)::float8 AS "pricedUnits"
+       ${purchasesByArticle}
+       WHERE ${articleFilter}
+       GROUP BY f.id,${cn}`,pars);
+    costs.clear();
+    for(const row of allCosts){
+     if(Number(row.pricedUnits)>0)
+      costs.set(key(row.pharmacyId,row.cn),
+       {units:Number(row.pricedUnits),total:Number(row.cost)});
+    }
+    fullCostsCalculated=true;
+   }
    let coveredRevenue=0,coveredMargin=0,coveredItems=0;
    for(const r of salesRows){
     const c=costs.get(key(r.pharmacyId,r.cn));
-    const cost=c&&c.units>0?c.total/c.units:nullable(r.pmc);
+    const cost=c&&c.units>0?c.total/c.units:
+      Number(r.pmc)>0?Number(r.pmc):null;
     if(cost!=null && Number.isFinite(cost)){
      r.purchaseCost=cost;r.costSource=c&&c.units>0?"Compras ponderadas":"PMC catálogo";
      r.unitMargin=r.unitSalePrice!=null?round(r.unitSalePrice-cost):null;
@@ -358,7 +383,12 @@ export function setupRealReports(app,pool,{requireTenant}){
          coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id)) AS cn,
          max(a.nombre) AS name,max(coalesce(a.familia,'')) AS family,
          max(a.pmc)::float8 AS pmc,max(a.pvp)::float8 AS pvp,
-         sum(a.stock_actual)::float8 AS units
+         sum(a.stock_actual)::float8 AS units,
+         sum(a.stock_actual*a.pmc) FILTER (
+           WHERE a.stock_actual<>0 AND a.pmc>0)::float8 AS "stockValue",
+         count(*) FILTER(
+           WHERE a.stock_actual<>0 AND (a.pmc IS NULL OR a.pmc<=0)
+         )::int AS "unpricedItems"
        FROM latest a JOIN farmetrica.farmacias f ON f.cliente_slug=$4
          AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
        WHERE f.id=ANY($2::int[]) AND a.stock_actual IS NOT NULL
@@ -452,7 +482,12 @@ export function setupRealReports(app,pool,{requireTenant}){
            max(coalesce(art.nombre,t.articulo_id)) AS name,
            max(coalesce(art.familia,'')) AS family,
            max(coalesce(t.coste_unitario,art.pmc))::float8 AS pmc,
-           max(art.pvp)::float8 AS pvp,sum(t.unidades)::float8 AS units
+           max(art.pvp)::float8 AS pvp,sum(t.unidades)::float8 AS units,
+           sum(t.unidades*coalesce(nullif(t.coste_unitario,0),nullif(art.pmc,0)))
+             FILTER(WHERE t.unidades<>0)::float8 AS "stockValue",
+           count(*) FILTER(WHERE t.unidades<>0 AND
+             coalesce(nullif(t.coste_unitario,0),nullif(art.pmc,0)) IS NULL)
+             ::int AS "unpricedItems"
          ${fromStock}
          GROUP BY f.id,${cn}
          ${stockOrder({
@@ -467,11 +502,15 @@ export function setupRealReports(app,pool,{requireTenant}){
        const {rows:[summary]}=await pool.query(`
          SELECT count(*)::int AS articles,
            coalesce(sum(units),0)::float8 AS units,
-           count(*) FILTER(WHERE units<>0 AND (pmc IS NULL OR pmc<=0))::int AS unpriced,
-           coalesce(sum(units*pmc),0)::float8 AS value
+           coalesce(sum(unpriced),0)::int AS unpriced,
+           coalesce(sum(value),0)::float8 AS value
          FROM (
            SELECT sum(t.unidades) AS units,
-             max(coalesce(t.coste_unitario,art.pmc)) AS pmc
+             count(*) FILTER(WHERE t.unidades<>0 AND
+               coalesce(nullif(t.coste_unitario,0),nullif(art.pmc,0)) IS NULL)
+               ::int AS unpriced,
+             sum(t.unidades*coalesce(nullif(t.coste_unitario,0),nullif(art.pmc,0)))
+               AS value
            ${fromStock}
            GROUP BY f.id,${cn}
          ) grouped`,params);
@@ -508,6 +547,10 @@ export function setupRealReports(app,pool,{requireTenant}){
         max(coalesce(art.familia,'')) AS family,
         max(art.pmc)::float8 AS pmc,
         sum(s.stock_actual)::float8 AS units,
+        sum(s.stock_actual*art.pmc) FILTER(WHERE s.stock_actual<>0 AND art.pmc>0)
+          ::float8 AS "stockValue",
+        count(*) FILTER(WHERE s.stock_actual<>0 AND (art.pmc IS NULL OR art.pmc<=0))
+          ::int AS "unpricedItems",
         max(s.importado_en) AS "asOf"
        FROM public.stock_farmacia s
        JOIN farmetrica.farmacias f ON f.id=s.id_farmacia AND f.cliente_slug=$4
@@ -560,14 +603,20 @@ export function setupRealReports(app,pool,{requireTenant}){
    const sold=new Map(abcdUniverse.map(r=>[key(r.pharmacyId,r.cn),r]));
    for(const s of stockRows){
     const sale=sold.get(s.id);
-    s.sold=sale?.units||0;
-    const cost=costs.get(s.id),unitCost=cost&&cost.units>0?cost.total/cost.units:nullable(s.pmc);
-    s.unitCost=unitCost;
-    s.costSource=unitCost==null?null:cost&&cost.units>0?"Compras ponderadas":"PMC catálogo";
-    s.value=unitCost==null?null:round(s.units*unitCost);
+    s.sold=sales?(sale?.units||0):null;
+    // La valoración por fila y el KPI global utilizan la MISMA base:
+    // PMC de ficha o coste de la instantánea, no PUC de compras históricas.
+    // Si varias referencias ERP comparten CN, sumar sus valores antes de
+    // calcular coste medio; max(PMC)*sum(unidades) sobrevalora el stock.
+    const hasValue=Number(s.unpricedItems||0)===0;
+    s.value=hasValue?round(Number(s.stockValue||0)):null;
+    s.unitCost=hasValue&&s.units!==0?round(Number(s.stockValue||0)/s.units,4):
+      Number(s.pmc)>0?Number(s.pmc):null;
+    s.costSource=s.unitCost==null?null:
+      stockSource==="stock"?"Coste inventario":"PMC catálogo";
     const days=(Date.parse(f.to)-Date.parse(f.from))/DAY+1;
     s.coverage=s.sold>0?round(s.units/(s.sold/days)):null;
-    s.zero=s.units<=0&&s.sold>0;
+    s.zero=Boolean(sales&&s.units<=0&&s.sold>0);
     s.need=s.sold>0?Math.max(0,Math.ceil(s.sold/days*15-s.units)):null;
     s.needValue=s.need!=null&&unitCost!=null?round(s.need*unitCost):null;
     s.excessUnits=s.sold>0?Math.max(0,s.units-Math.ceil(s.sold/days*60)):null;
@@ -596,8 +645,9 @@ export function setupRealReports(app,pool,{requireTenant}){
    // La cobertura de cada catálogo se comprueba por separado: una farmacia
    // con muchas ventas no debe ocultar el recuento completo de compras, ni al revés.
    const completeSales=!readSalesRows||!sales||sale.rows.length<rowLimit;
-   const completeBuys=!readBuyRows||!buyers||buys.rows.length<rowLimit;
+   const completeBuys=!readBuyRows||!buyers||buyDetailComplete;
    const complete=completeSales&&completeBuys;
+   const completeMargins=completeSales&&(!buyers||completeBuys||fullCostsCalculated);
    const stockRowsTruncated=Boolean(snapshotAvailable&&stockRows.length>=rowLimit);
    const completeStock=snapshotAvailable&&!stockRowsTruncated;
    const pricedStock=stockRows.filter(r=>r.value!=null);
@@ -617,25 +667,26 @@ export function setupRealReports(app,pool,{requireTenant}){
     stock:stockSummary
       ?(stockSummary.unpriced===0?round(stockSummary.value):null)
       :completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
-    margen:readSalesRows&&sales&&complete&&coveredItems===salesRows.length?round(coveredMargin):null,
-    margenPct:readSalesRows&&sales&&complete&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
-    coberturaCostes:sales&&complete&&salesRows.length?round(100*coveredItems/salesRows.length):null,
-    reposiciones:completeStock?replenishmentRows.length:null,
-    reposicionCoste:completeStock&&complete&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
-    sobrestock:completeStock&&complete&&stockRows.every(r=>r.excessUnits==null||r.excessValue!=null)?
+    margen:readSalesRows&&sales&&completeMargins&&coveredItems===salesRows.length?round(coveredMargin):null,
+    margenPct:readSalesRows&&sales&&completeMargins&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
+    coberturaCostes:sales&&completeMargins&&salesRows.length?round(100*coveredItems/salesRows.length):null,
+    reposiciones:completeStock&&sales?replenishmentRows.length:null,
+    reposicionCoste:completeStock&&sales&&completeSales&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
+    sobrestock:completeStock&&sales&&completeSales&&stockRows.every(r=>r.excessUnits==null||r.excessValue!=null)?
        round(sum(stockRows,"excessValue")):null,
-    stockSinRotacion:completeStock?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
-    roturas:completeStock?stockRows.filter(r=>r.zero).length:null,
+    stockSinRotacion:completeStock&&sales?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
+    roturas:completeStock&&sales?stockRows.filter(r=>r.zero).length:null,
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
-    acciones:complete&&!stockRowsTruncated?actions.length:null
+    acciones:completeSales&&(!needsStock||completeStock)&&sales?actions.length:null
    };
    res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
-    supplierRows,stockRows,replenishmentRows,profitRows:salesRows.filter(r=>r.margin!=null),
+    supplierRows,stockRows,replenishmentRows,profitRows:salesRows,
     actions,families:families.rows.map(r=>r.familia),
     availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockRowsTruncated,
      snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
      stockSummaryBasis:stockSummary?(stockSource==="stock"?"Coste unitario del inventario (todos los artículos)":"PMC de ficha (todos los artículos)"):null,
-     rowsTruncated:!complete,marginCoverage:coveredItems}});
+     rowsTruncated:!complete,supplierRowsTruncated:readSupplierRows&&providers.rows.length>=1000,
+     marginCoverage:coveredItems}});
   }catch(e){next(e)}
  });
 }

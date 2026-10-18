@@ -2,6 +2,7 @@ import React,{useMemo,useState} from "react";
 import {filterSortRows,pageRows} from "./listLogic.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingFrame} from "./LoadingState.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -37,7 +38,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const changeSort=key=>{setSort(prev=>prev?.key!==key?{key,direction:"asc"}:prev.direction==="asc"?{key,direction:"desc"}:null);setPage(0);};
   return <>
     <LoadingFrame loading={loading&&rows.length>0} label={loadingLabel}>
-    <div className="table-scroll" role="region" tabIndex={0} aria-label={"Tabla desplazable de "+label}>
+    <HorizontalTableScroll className="table-scroll" label={label}>
       <table className={"data-table smart-table "+tableClass}>
         <thead>
           <tr>{columns.map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
@@ -66,7 +67,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
         </tr>)}</tbody>
       </table>
       {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
-    </div>
+    </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
     <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={setPage}
       onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label={label} loading={loading}/>

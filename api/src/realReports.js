@@ -180,17 +180,19 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
     const amount=legacy?"t.total":"t.importe";
     if(!periodWithArticleFilter)return `SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
-       sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount
+       sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount,
+       count(*)::float8 AS lines
        FROM ${quoted}.${table} t ${fromJoin}
        WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
          AND f.id=ANY($3::int[])
        GROUP BY 1 ORDER BY 1`;
-    return `SELECT t.month,sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount
+    return `SELECT t.month,sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount,
+       sum(t.lines)::float8 AS lines
        FROM (
          SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
            ${legacy?pharmacyDataCodeSQL("f"):"upper(btrim(t.farmacia_codigo))"} AS farmacia_codigo,
            ${legacy?"t.producto_id":"t.articulo_id"} AS articulo_id,
-           sum(t.unidades) AS unidades,sum(${amount}) AS importe
+           sum(t.unidades) AS unidades,sum(${amount}) AS importe,count(*) AS lines
          FROM ${quoted}.${table} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
            AND f.id=ANY($3::int[])
@@ -477,6 +479,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     articulosVendidos:readSalesRows&&sales&&completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
     articulosComprados:buyers&&completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
     unidadesCompradas:buyers&&readBuyPeriod?sum(buyM.rows,"units"):null,
+    lineasCompra:buyers&&readBuyPeriod?sum(buyM.rows,"lines"):null,
     costeMedioCompra:buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
       round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:null,

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CheckCircle2, KeyRound, LockKeyhole, Mail, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -137,7 +138,8 @@ export default function AccessAdmin({ onAuthenticated }) {
     </div>
     {error && <div className="access-alert access-alert-error" role="alert">{error}</div>}
     {message && <div className="access-alert" role="status"><CheckCircle2 size={16}/>{message}</div>}
-    {!config && <section className="card access-section"><p>Comprobando el acceso al backend…</p></section>}
+    {busy&&<div className="fm-loading-message"><LoadingStatus label="Guardando y actualizando permisos…"/></div>}
+    {!config && <section className="card access-section"><LoadingPanel kind="table" label="Comprobando permisos y conexión al servidor…"/></section>}
     {config && !user && <section className="card access-section">
       <h2>Iniciar sesión</h2>
       <p>Utiliza tu cuenta Google autorizada, incluso si no termina en gmail.com. Los colaboradores con una cuenta individual también podrán solicitar un código por correo electrónico.</p>

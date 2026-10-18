@@ -19,7 +19,7 @@ const SERIES={
  ventas:["ventas",null,"Evolución de ventas"],compras:["compras",null,"Evolución de compras"],
  proveedores:["compras",null,"Compras por periodo"],stock:["unidades",null,"Unidades vendidas"],
  reposicion:["unidades",null,"Demanda por periodo"],genericos:["genericos",null,"Compras de genéricos"],
- rentabilidad:["margen",null,"Margen estimado por periodo"],
+ rentabilidad:["ventas","compras","Ventas y compras (margen estimado en indicadores)"],
  acciones:["compras",null,"Compras por periodo"],informes:["ventas","compras","Ventas y compras"]
 };
 const CARD=(label,key,unit,link)=>({label,key,unit,link});
@@ -242,7 +242,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
     {isFetchingSales?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
        <span className="fm-load-spinner" aria-hidden="true"/><small>Cargando…</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>}
-    {!isFetchingSales&&salesModule&&c.key==="margen"&&!realTables&&<small>Sin datos de costes</small>}
+    {!isFetchingSales&&c.key==="margen"&&realKpis.margen==null&&<small>Sin coste de compra suficiente para estimar el margen</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>
@@ -255,7 +255,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label="Consultando ventas y actualizando indicadores…"/></div>}
   {!isAssistant&&(chart.length>0||isFetchingSales||salesModule)&&<section className="card fm-demo-graph" aria-busy={isFetchingSales}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    {isFetchingSales?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:!chart.length?<div className="fm-sales-no-chart">No hay ventas registradas para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {isFetchingSales?<LoadingPanel kind="chart" label="Cargando evolución de ventas…"/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
@@ -277,7 +277,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",on
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&module==="ventas"} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
+   <ListTable rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard?go(row.targetModule):setDetail(row)} columns={columns}/>
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>

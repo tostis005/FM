@@ -1,0 +1,71 @@
+name: Auditar farmacias e índices operativos
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/audit-correspondencia-rendimiento.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Auditar correspondencias reales y configuración de índices sin modificar datos
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SET statement_timeout = '110s';
+          SELECT id AS farmacia_id, nombre, codigo_origen, activo
+          FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id;
+          SELECT tabla,codigo_origen_original,codigo_normalizado,filas,ultima_fecha,
+            coalesce(f.nombre,'SIN CORRESPONDENCIA') AS farmacia_asignada,f.id AS id_asignado
+          FROM (
+            SELECT 'ventas' AS tabla,farmacia_codigo AS codigo_origen_original,
+              upper(btrim(farmacia_codigo)) AS codigo_normalizado,
+              count(*) AS filas,max(fecha)::text AS ultima_fecha
+              FROM ampedia.ventas GROUP BY farmacia_codigo
+            UNION ALL
+            SELECT 'compras',farmacia_codigo,upper(btrim(farmacia_codigo)),
+              count(*),max(fecha)::text FROM ampedia.compras GROUP BY farmacia_codigo
+            UNION ALL
+            SELECT 'articulos',farmacia_codigo,upper(btrim(farmacia_codigo)),
+              count(*),max(sincronizado_en)::text FROM ampedia.articulos GROUP BY farmacia_codigo
+            UNION ALL
+            SELECT 'proveedores',farmacia_codigo,upper(btrim(farmacia_codigo)),
+              count(*),max(sincronizado_en)::text FROM ampedia.proveedores GROUP BY farmacia_codigo
+          ) movimientos LEFT JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+             AND upper(btrim(f.codigo_origen))=movimientos.codigo_normalizado
+          ORDER BY tabla,codigo_normalizado,codigo_origen_original;
+          SELECT f.id,f.nombre,f.codigo_origen,coalesce(st.filas,0) AS stocks,
+            st.ultima_importacion
+          FROM farmetrica.farmacias f LEFT JOIN
+            (SELECT id_farmacia,count(*) filas,max(importado_en) ultima_importacion
+             FROM public.stock_farmacia GROUP BY id_farmacia) st ON st.id_farmacia=f.id
+          WHERE f.cliente_slug='ampedia' ORDER BY f.id;
+          SELECT schemaname,tablename,indexname,indexdef FROM pg_indexes
+          WHERE schemaname IN ('ampedia','farmetrica') AND
+            tablename IN ('ventas','compras','articulos','proveedores','farmacias')
+          ORDER BY schemaname,tablename,indexname;
+          SELECT schemaname,relname,n_live_tup,n_dead_tup,last_analyze,last_autoanalyze,
+            seq_scan,idx_scan,pg_size_pretty(pg_total_relation_size(relid)) AS tamaño_total
+          FROM pg_stat_user_tables WHERE schemaname='ampedia'
+            AND relname IN ('ventas','compras','articulos','proveedores')
+          ORDER BY relname;
+          SQL

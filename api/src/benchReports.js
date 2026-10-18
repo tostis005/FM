@@ -1,0 +1,56 @@
+// Diagnóstico real, READ ONLY. Imprime únicamente tiempos y cantidades de filas,
+// jamás códigos nacionales, nombres, precios ni importes.
+import pg from "pg";
+import {setupRealReports} from "./realReports.js";
+if(process.env.FM_BENCHMARK_READONLY!=="1")throw Error("Se requiere modo read-only explícito");
+const pool=new pg.Pool({
+ connectionString:process.env.DATABASE_URL,max:6,connectionTimeoutMillis:5000,
+ options:"-c statement_timeout=30000 -c lock_timeout=4000"
+});
+const routes=new Map();
+setupRealReports({get:(path,...handlers)=>routes.set(path,handlers.at(-1))},pool,
+ {requireTenant:()=>[]});
+try{
+ const cols=await pool.query(`SELECT column_name FROM information_schema.columns
+  WHERE table_schema='ampedia' AND table_name='articulos'
+    AND (column_name ILIKE '%stock%' OR column_name ILIKE '%exist%'
+      OR column_name ILIKE '%pvp%' OR column_name ILIKE '%cost%')
+  ORDER BY column_name`);
+ console.log("Artículos: columnas de inventario y precios = "+
+  cols.rows.map(x=>x.column_name).join(", "));
+ const snapshots=await pool.query(`
+  SELECT to_regclass('public.stock_farmacia')::text AS rel`);
+ console.log("Tabla de existencias sincronizada: "+Boolean(snapshots.rows[0]?.rel));
+ if(snapshots.rows[0]?.rel){
+  const rows=await pool.query(`SELECT id_farmacia,
+     count(*)::int AS entries,max(importado_en) AS ultima
+     FROM public.stock_farmacia WHERE id_farmacia=ANY($1::int[])
+     GROUP BY id_farmacia ORDER BY id_farmacia`,[[1,2,3,4,5]]);
+  for(const row of rows.rows)console.log("Farmacia "+row.id_farmacia+
+    ": "+row.entries+" filas de inventario, última carga "+
+    (row.ultima?new Date(row.ultima).toISOString().slice(0,10):"sin datos"));
+ }
+ for(const [name,ids] of [["Valdemarías",[5]],["Cinco farmacias",[1,2,3,4,5]]]){
+  const req={query:{desde:"2026-07-18",hasta:"2026-10-18",modulo:"dashboard",
+    farmacias:ids.join(",")},context:{
+     allowedPharmacyIds:[1,2,3,4,5],
+     client:{slug:"ampedia",schema:"ampedia"},
+     role:"superadministrador",modules:{} }};
+  let response,error,status=200;
+  const res={status(v){status=v;return res},json(v){response=v;return res}};
+  const now=process.hrtime.bigint();
+  await routes.get("/api/analytics/reportes")(req,res,e=>{error=e});
+  if(error)throw error;
+  if(status!==200)throw Error("HTTP "+status);
+  console.log("Informe "+name+": "+(Number(process.hrtime.bigint()-now)/1e6).toFixed(0)+
+    " ms. Ventas productos="+response.salesRows?.length+
+    ", Compras productos="+response.buyRows?.length+
+    ", Proveedores="+response.supplierRows?.length+
+    ", Stock="+response.stockRows?.length+
+    ", Rentabilidad="+response.profitRows?.length+
+    ", Acciones="+response.actions?.length+
+    ", Meses="+response.monthly?.length+
+    ", Inventario actualizado="+Boolean(response.availability?.stock));
+ }
+}catch(e){console.log("Diagnóstico interrumpido, código "+(e.code||e.name));process.exitCode=1;
+}finally{await pool.end()}

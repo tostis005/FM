@@ -1,0 +1,84 @@
+name: Perfilar consultas reales de ventas trimestrales
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/perfil-ventas-trimestrales.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar acceso seguro
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Medir PostgreSQL y planes de 90 días (solo lectura, consultas limitadas en tiempo)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SET default_transaction_read_only=on;
+          SET lock_timeout='3s';
+          SET statement_timeout='20s';
+          \echo '--- Conteos estimados, estadísticas, escaneos e índices ---'
+          SELECT schemaname,relname,n_live_tup,n_dead_tup,last_autoanalyze,last_analyze,seq_scan,idx_scan,
+            pg_size_pretty(pg_relation_size(relid)) AS tabla
+          FROM pg_stat_user_tables WHERE schemaname='ampedia' AND relname IN ('ventas','articulos','compras','proveedores');
+          SELECT indexrelname,idx_scan,idx_tup_read FROM pg_stat_user_indexes
+          WHERE schemaname='ampedia' AND indexrelname LIKE 'fm_%_idx'
+          ORDER BY indexrelname;
+          \echo '--- Plan original: ventas 90 días con LATERAL por línea (límite 20 s) ---'
+          \set ON_ERROR_STOP off
+          EXPLAIN (ANALYZE,BUFFERS,TIMING OFF)
+          SELECT COALESCE(NULLIF(btrim(art.codigo_nacional),''),btrim(t.articulo_id)) AS cn,
+            SUM(t.unidades) AS units,SUM(t.importe) AS value
+          FROM ampedia.ventas t
+          JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia' AND f.id=1
+            AND upper(btrim(t.farmacia_codigo))=upper(btrim(f.codigo_origen))
+          LEFT JOIN LATERAL(
+            SELECT a.codigo_nacional,a.nombre FROM ampedia.articulos a
+            WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(t.farmacia_codigo))
+              AND a.origen_id=t.articulo_id
+            ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+          ) art ON true
+          WHERE t.fecha >= DATE '2026-07-18' AND t.fecha < DATE '2026-10-19'
+          GROUP BY cn ORDER BY SUM(t.importe) DESC LIMIT 3000;
+          \echo '--- Plan candidato: agregar ventas ANTES del cruce con artículos (límite 20 s) ---'
+          EXPLAIN (ANALYZE,BUFFERS,TIMING OFF)
+          WITH ventas_por_articulo AS MATERIALIZED (
+            SELECT t.articulo_id,upper(btrim(t.farmacia_codigo)) AS farmacia,
+              SUM(t.unidades) AS units,SUM(t.importe) AS value
+            FROM ampedia.ventas t
+            WHERE upper(btrim(t.farmacia_codigo))='ABA'
+              AND t.fecha >= DATE '2026-07-18' AND t.fecha < DATE '2026-10-19'
+            GROUP BY t.articulo_id,upper(btrim(t.farmacia_codigo))
+          )
+          SELECT COALESCE(NULLIF(btrim(art.codigo_nacional),''),btrim(t.articulo_id)) AS cn,
+            SUM(t.units) AS units,SUM(t.value) AS value
+          FROM ventas_por_articulo t
+          LEFT JOIN LATERAL (
+            SELECT a.codigo_nacional FROM ampedia.articulos a
+            WHERE upper(btrim(a.farmacia_codigo))=t.farmacia AND a.origen_id=t.articulo_id
+            ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+          ) art ON true
+          GROUP BY cn ORDER BY SUM(t.value) DESC LIMIT 3000;
+          \set ON_ERROR_STOP on
+          \echo 'Fin de diagnóstico: ninguna operación SQL de escritura.'
+          SQL

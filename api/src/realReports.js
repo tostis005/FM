@@ -83,9 +83,28 @@ export function setupRealReports(app,pool,{requireTenant}){
      max(art.pmc)::float8 AS pmc, max(art.laboratorio) AS laboratory`;
    const empty=[];
    const rowLimit=3000;
+   // Evitar un lookup de catálogo por CADA línea de venta. Primero agrupamos
+   // movimientos por farmacia + ID local de ERP y resolvemos el artículo una vez
+   // por referencia. Dos IDs ERP pueden compartir CN: el GROUP BY exterior mantiene
+   // la agregación comercial original sin sumar dos veces.
+   const salesByArticle=`FROM (
+     SELECT f.id AS pharmacy_id,upper(btrim(t.farmacia_codigo)) AS farmacia_codigo,
+       t.articulo_id,sum(t.unidades) AS unidades,sum(t.importe) AS importe
+     FROM ${quoted}.ventas t
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$6
+       AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
+       AND f.id=ANY($3::int[])
+     GROUP BY f.id,upper(btrim(t.farmacia_codigo)),t.articulo_id
+   ) t
+   JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
+   ${article}`;
+   const articleFilter=`($4::text='' OR ${cn} ILIKE '%'||$4||'%' OR
+      coalesce(art.nombre,'') ILIKE '%'||$4||'%')
+      AND (cardinality($5::text[])=0 OR coalesce(art.familia,'')=ANY($5::text[]))`;
    const sqlSales=`SELECT f.id::text AS "pharmacyId",${columns},
      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
-     ${baseTable("ventas")} WHERE ${filter}
+     ${salesByArticle} WHERE ${articleFilter}
      GROUP BY f.id,${cn} ORDER BY sum(t.importe) DESC LIMIT ${rowLimit}`;
    const sqlBuy=`SELECT f.id::text AS "pharmacyId",${columns},
      t.proveedor_id AS "providerId",
@@ -97,9 +116,18 @@ export function setupRealReports(app,pool,{requireTenant}){
      count(*)::int AS lines
      ${baseTable("compras")} ${provider} WHERE ${filter}
      GROUP BY f.id,${cn},t.proveedor_id ORDER BY sum(t.importe) DESC LIMIT ${rowLimit}`;
+   // Los totales mensuales sin búsqueda/familia no necesitan consultar
+   // millones de fichas de artículo: bastan la farmacia autorizada y la fecha.
    const sqlPeriod=table=>`SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount
-     ${baseTable(table)} WHERE ${filter} GROUP BY 1 ORDER BY 1`;
+     FROM ${quoted}.${table} t
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$6
+       AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     ${f.search||f.families.length?article:""}
+     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
+       AND f.id=ANY($3::int[])
+       ${f.search||f.families.length?`AND ${articleFilter}`:""}
+     GROUP BY 1 ORDER BY 1`;
    const sqlProv=`SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId",
      max(coalesce(nullif(t.proveedor_nombre,''),${suppliers?"prov.nombre,":""}t.proveedor_id)) AS name,
      sum(t.importe)::float8 AS value,
@@ -202,9 +230,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    if(sales&&pharmacyIds.length&&(f.search||f.families.length||sale.rows.length>=rowLimit)){
     const unfilteredSales=`SELECT f.id::text AS "pharmacyId",${cn} AS cn,
       sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
-      ${baseTable("ventas")}
-      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
-        AND f.id=ANY($3::int[])
+      ${salesByArticle}
       GROUP BY f.id,${cn}`;
     const universe=await pool.query(unfilteredSales,[f.from,f.to,pharmacyIds,"",[],req.context.client.slug]);
     abcdUniverse=universe.rows;

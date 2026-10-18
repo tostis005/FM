@@ -145,7 +145,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    ]);
    if(!v.rows.length)return res.status(404).json({error:"Conjunto no encontrado"});
    const products=await pool.query(
-     'SELECT cn,nombre,laboratorio,principio_activo,generico,comercializado FROM farmetrica.nomenclator_presentaciones WHERE dcpf=$1 ORDER BY generico DESC,nombre,cn',
+     'SELECT cn,nombre,laboratorio,laboratorio_codigo,principio_activo,generico,comercializado FROM farmetrica.nomenclator_presentaciones WHERE dcpf=$1 ORDER BY generico DESC,nombre,cn',
      [dcpf]);
    const params=[q.from,q.to,q.ids,dcpf,tenant];
    const sales=hasSales&&q.ids.length?await pool.query(`

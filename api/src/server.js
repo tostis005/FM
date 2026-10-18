@@ -5,6 +5,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
+import { setupSyncStatus } from "./syncStatus.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 
@@ -71,6 +72,7 @@ const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins } = setupA
 const { requireTenantModule,requireTenant } = setupTenant(app, pool, { requireUser, requireSuperadmin });
 setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
+setupSyncStatus(app,pool,{requireTenant});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",
@@ -128,8 +130,8 @@ app.patch("/api/farmacias/:id", requireSuperadmin, async (req, res, next) => {
 });
 
 
-// Lectura autenticada, exclusivamente agregada, de ventas de Farmatic.
-// ID de farmacia 1-5 -> public.farmacias.codigo_origen -> venta.farmacia_origen.
+// Lectura autenticada de ventas del sincronizador normalizado.
+// Los IDs internos de farmacia se relacionan con farmacia_codigo del origen.
 function validDates(from, to) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from || "") || !/^\d{4}-\d{2}-\d{2}$/.test(to || "")) return false;
   const a = new Date(from + "T00:00:00Z"), b = new Date(to + "T00:00:00Z");
@@ -147,11 +149,11 @@ function salesJoin(req) {
   if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!/^[a-z][a-z0-9_]{1,62}$/.test(tenant))
     throw Error("Cliente inválido");
   const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
-  return ` FROM "${schema}".lineaventa v JOIN farmetrica.farmacias f
-    ON upper(btrim(v.farmacia_origen::text))=f.codigo_origen
+  return ` FROM "${schema}".ventas v JOIN farmetrica.farmacias f
+    ON upper(btrim(v.farmacia_codigo::text))=upper(btrim(f.codigo_origen))
     AND f.cliente_slug='${tenant}' AND f.id IN (${ids.length?ids.join(","):"NULL"}) `;
 }
-const salesPeriod = " v.fechahora >= $1::date AND v.fechahora < ($2::date + interval '1 day') ";
+const salesPeriod = " v.fecha >= $1::date AND v.fecha < ($2::date + interval '1 day') ";
 
 app.get("/api/ventas/cobertura", ...requireTenantModule("promociones"), async (req,res,next)=>{
   try{
@@ -201,14 +203,14 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
     for (const p of promotions) {
       if (!p.cns.length) { summary[p.id] = {}; continue; }
       const { rows } = await pool.query(
-        "SELECT f.id::text AS farmacia_id, coalesce(sum(v.cantidad),0)::float8 AS unidades " +
+        "SELECT f.id::text AS farmacia_id, coalesce(sum(v.unidades),0)::float8 AS unidades " +
         salesJoin(req) + " WHERE " + salesPeriod +
-        " AND btrim(v.codigo::text) = ANY($3::text[]) " +
+        " AND btrim(v.articulo_id::text) = ANY($3::text[]) " +
         "GROUP BY f.id ORDER BY f.id", [p.start, p.end, p.cns]
       );
       summary[p.id] = Object.fromEntries(rows.map(row => [row.farmacia_id, Number(row.unidades)]));
     }
-    res.json({ sales: summary, origin: "farmatic.lineaventa", updatedAt: new Date().toISOString() });
+    res.json({ sales: summary, origin: req.context.client.schema+".ventas", updatedAt: new Date().toISOString() });
   } catch (err) { next(err); }
 });
 
@@ -245,20 +247,20 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
     where+" GROUP BY f.id,btrim(v.codigo::text) ORDER BY sum(v.importeneto) DESC NULLS LAST LIMIT 750",params);
   const {rows:counts}=await pool.query(
     "SELECT count(*)::int AS n,count(DISTINCT cn)::int AS articulos FROM "+
-    "(SELECT btrim(v.codigo::text) AS cn "+where+" GROUP BY f.id,btrim(v.codigo::text)) x",params);
+    "(SELECT btrim(v.articulo_id::text) AS cn "+where+" GROUP BY f.id,btrim(v.articulo_id::text)) x",params);
   res.json({monthly,products,totalProducts:counts[0]?.n||0,
     totalArticles:counts[0]?.articulos||0,from,to});
  }catch(err){next(err)}
 });
 
-// Detalle de tickets Farmatic, exclusivamente para administradores autenticados.
-// Mantener PVP, descuentos e importes exactamente como constan en PostgreSQL.
+// Detalle de líneas sincronizadas. No inventar vendedor ni bruto si no vienen del origen.
+// Cada importe y descuento se presenta con el contrato canónico que recibió PostgreSQL.
 const ticketColumns = Object.freeze({
-  pharmacy:"f.nombre",seller:"v.xvend_idvendedor",saleId:"v.idventa",
-  ticket:"v.numerodoc",at:"v.fechahora",cn:"v.codigo",description:"v.descripcion",
-  pvp:"v.pvp",quantity:"v.cantidad",gross:"v.importebruto",
-  lineDiscount:"v.descuentolinea",net:"v.importeneto",
-  discountPercent:"COALESCE(ABS(v.descuentolinea / NULLIF(v.importebruto,0)),0)",
+  pharmacy:"f.nombre",seller:"NULL::text",saleId:"v.origen_id",
+  ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",description:"NULL::text",
+  pvp:"v.precio_unitario",quantity:"v.unidades",gross:"NULL::numeric",
+  lineDiscount:"v.descuento_linea",net:"v.importe",
+  discountPercent:"NULL::numeric",
 });
 app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
@@ -286,10 +288,10 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
   try {
     const filters = [
       salesPeriod,
-      "btrim(v.codigo::text) = ANY($3::text[])",
+      "btrim(v.articulo_id::text) = ANY($3::text[])",
       "($4::integer IS NULL OR f.id=$4)",
-      "($5::text IS NULL OR v.numerodoc::text ILIKE '%' || $5 || '%')",
-      "($6::text IS NULL OR btrim(v.codigo::text)=$6)",
+      "($5::text IS NULL OR v.numero_ticket::text ILIKE '%' || $5 || '%')",
+      "($6::text IS NULL OR btrim(v.articulo_id::text)=$6)",
     ];
     const params = [
       start,end,cns,
@@ -300,7 +302,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
       if(Array.isArray(value)){
         if(!value.length)continue;
         params.push(value);
-        filters.push((column==="pharmacy"?"f.id::text":"btrim(v.codigo::text)")+
+        filters.push((column==="pharmacy"?"f.id::text":"btrim(v.articulo_id::text)")+
           " = ANY($"+params.length+"::text[])");
       }else{
         if(!value.trim())continue;
@@ -312,7 +314,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
     const { rows: countRows } = await pool.query(
       "SELECT count(*)::integer AS total " + where, params);
     const orderSql = " ORDER BY "+ticketColumns[orderBy]+" "+orderDir.toUpperCase()+
-      " NULLS LAST, v.fechahora DESC, f.id, v.idventa DESC, v.idnlinea DESC";
+      " NULLS LAST, v.fecha DESC, f.id, v.origen_id DESC";
     const { rows } = await pool.query(
       `SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName", f.codigo_origen AS "pharmacyCode",
               v.idventa::text AS "saleId", v.idnlinea::text AS "lineId",
@@ -329,7 +331,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
       [...params,limit,offset]);
     res.json({
       rows, total:countRows[0]?.total||0, offset, limit,
-      origin:"farmatic.lineaventa", sellerNamesAvailable:false,
+      origin:req.context.client.schema+".ventas", sellerNamesAvailable:false,
     });
   } catch(err){ next(err); }
 });

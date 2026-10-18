@@ -1,6 +1,7 @@
 // Informes agregados sobre las tablas reales normalizadas del cliente.
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {classifyAbcd} from "./abcd.js";
 const DAY=86400000;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const validDate=s=>{if(!ISO.test(s))return false;const d=new Date(s+"T00:00:00Z");return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s;};
@@ -191,6 +192,27 @@ export function setupRealReports(app,pool,{requireTenant}){
       stockRows=sr.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,need:null,needValue:null}));
      }
+    }
+   }
+   // ABCD se deriva de las ventas PostgreSQL en cada consulta, sin botón de recálculo.
+   // Su universo es toda la farmacia en el período, independientemente de la
+   // búsqueda o de la familia elegida para mostrar los resultados.
+   // Evitamos una segunda consulta cuando sqlSales ya devuelve el universo completo.
+   let abcdUniverse=sale.rows;
+   if(sales&&pharmacyIds.length&&(f.search||f.families.length||sale.rows.length>=rowLimit)){
+    const unfilteredSales=`SELECT f.id::text AS "pharmacyId",${cn} AS cn,
+      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
+      ${baseTable("ventas")}
+      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
+        AND f.id=ANY($3::int[])
+      GROUP BY f.id,${cn}`;
+    const universe=await pool.query(unfilteredSales,[f.from,f.to,pharmacyIds,"",[],req.context.client.slug]);
+    abcdUniverse=universe.rows;
+   }
+   const abcd=classifyAbcd(abcdUniverse,{scope:r=>r.pharmacyId});
+   for(const collection of [salesRows,buyRows,stockRows]){
+    for(const row of collection){
+     row.abcdClass=sales?(abcd.get(key(row.pharmacyId,row.cn))||"D"):null;
     }
    }
    const sold=new Map(salesRows.map(r=>[r.id,r]));

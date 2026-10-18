@@ -52,7 +52,7 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    const raw=String(req.query.farmacias||"");
    const granularity=String(req.query.granularidad||"month");
    if(!validDate(from)||!validDate(to)||from>to||
-     Date.parse(to)-Date.parse(from)>366*86400000||
+     Date.parse(to)-Date.parse(from)>36525*86400000||
      raw.length>2000||!["hour","day","month"].includes(granularity)||
      (raw&&raw.split(",").some(n=>!/^[1-9]\d{0,8}$/.test(n))))
     return res.status(400).json({error:"Fechas o farmacias no válidas"});

@@ -417,7 +417,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
   </section>:<section className="card fm-demo-table">
-   <div className="section-heading"><h2>{isDashboard?"Acciones prioritarias":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
+   <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel="Cargando detalle de ventas…" emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
@@ -427,6 +427,16 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       {isFetchingSales?"Cargando artículos…":"Cargar 200 artículos más"}
     </button></div>}
    {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {rows.length} referencias. El CSV exporta únicamente las páginas cargadas. ABCD y costes: últimos {effectiveAnalysisMonths} meses.</small>}
+  </section>}
+  {(isReports||isAssistant)&&<section className="card fm-demo-table">
+   <div className="section-heading"><h2>Artículos vendidos en el período</h2>
+    <button className="btn btn-secondary" type="button" disabled={!rows.length}
+      onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button>
+   </div>
+   <ListTable key={[module,filters.pharmacyIds.join(","),period.from,period.to].join("|")}
+    rows={rows} rowKey={r=>r.id} columns={columns} label="artículos"
+    onRowClick={setDetail} emptyText="No hay ventas para estos filtros"
+    loading={reportLoading} loadingLabel="Cargando artículos reales de PostgreSQL…"/>
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>
    <div className="fm-demo-detail" role="dialog" aria-modal="true" aria-label="Detalle de registro">

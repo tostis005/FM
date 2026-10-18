@@ -13,7 +13,8 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  skip:!enabled
 },async()=>{
  const pool=new pg.Pool({connectionString:process.env.TEST_DB_URL});
- const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
+ const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)},
+  post(path,...handlers){routes[path]=handlers.at(-1)}};
  setupRealReports(app,pool,{requireTenant:()=>[]});
  setupSalesSummary(app,pool,{requireTenant:()=>[]});
  setupSalesTotals(app,pool,{requireTenant:()=>[]});

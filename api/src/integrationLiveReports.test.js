@@ -12,7 +12,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupRealReports(app,pool,{requireTenant:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
-  modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"VAL"}]};
+  modules:{},allowedPharmacyIds:[1,2,5],pharmacies:[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"},{id:"5",sourceCode:"POL",databaseCode:"VAL",displayCode:"POL"}]};
  async function request(path,params={}){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...params},
     params:{dcpf:"123456789"},context:ctx,user:{email:"qa@example.com"}};
@@ -68,12 +68,12 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(abc.value>0);
   assert.ok(eur.value>0);
   assert.ok(freshStock.kpis.stock>0);
-  // VAL debe corresponder a farmacia 5 incluso cuando el maestro original era POL.
+  // Datos VAL deben corresponder a farmacia 5 sin modificar el maestro POL.
   const val=await request("/api/analytics/reportes",{modulo:"ventas",farmacias:"5"});
   assert.equal(val.kpis.ventas,28);
   assert.ok(val.salesRows.some(r=>r.pharmacyId==="5"&&r.cn==="654321"&&r.units===4));
   assert.equal(val.kpis.compras,0); // No inventar compras donde el ERP no ha sincronizado.
   const master=await pool.query("SELECT codigo_origen FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND id=5");
-  assert.equal(master.rows[0].codigo_origen,"VAL");
+  assert.equal(master.rows[0].codigo_origen,"POL");
  }finally{await pool.end()}
 });

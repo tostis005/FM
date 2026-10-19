@@ -51,6 +51,17 @@ const META={
    ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["lines","Líneas",r=>UNITS(r.lines)],
    ["units","Unidades",r=>UNITS(r.units)],["amount","Venta neta",r=>EUR(r.amount)],
    ["seller","Vendedor (código ERP)",r=>TXT(r.sellerId)] ]},
+ "compras-recepciones":{title:"Recepciones completas",
+  desc:"Albaranes y recepciones obtenidos de sus cabeceras y líneas documentales.",
+  note:"Cada documento se cuenta una sola vez. Los importes y unidades proceden de las líneas recibidas; se excluyen proveedores marcados para ignorar en informes.",
+  cols:[
+   ["reference","Albarán",r=>TXT(r.reference)],["at","Fecha",r=>DATE(r.at)],
+   ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],
+   ["supplier","Proveedor",r=>TXT(r.supplierName||r.supplierCode)],
+   ["orderNumber","Pedido",r=>TXT(r.orderNumber)],
+   ["lines","Líneas",r=>UNITS(r.lines)],["units","Unidades netas",r=>UNITS(r.units)],
+   ["amount","Importe neto",r=>EUR(r.amount)]
+  ]},
  "ventas-devoluciones":{title:"Devoluciones y anulaciones de venta",
   desc:"Movimientos negativos, documentos anulados y líneas anuladas registrados por el ERP.",
   note:"Los documentos anulados no generan importes de devolución; solo se contabilizan las líneas de devolución.",
@@ -89,6 +100,7 @@ const META={
 const SORT_FIELD={
  "productos":{cn:"cn",sourceId:"sourceId",name:"name",family:"family",pvp:"pvp",pmc:"pmc",stock:"stock"},
  "ventas-tickets":{ticket:"ticket",at:"at",lines:"lines",units:"units",amount:"amount"},
+ "compras-recepciones":{reference:"reference",at:"at",supplier:"supplier",lines:"lines",units:"units",amount:"amount"},
  "stock-historico":{at:"at",pharmacy:"pharmacy",purchases:"purchases",sales:"sales",net:"net",tickets:"tickets",receipts:"receipts"},
  "ventas-devoluciones":{reference:"reference",at:"at",units:"units",amount:"amount",kind:"kind"},
  "compras-devoluciones":{reference:"reference",at:"at",units:"units",amount:"amount",supplier:"supplier"},
@@ -101,6 +113,7 @@ function Metrics({section,data,pharmacies}){
   "productos":[["Referencias encontradas",UNITS(n)],["Farmacias seleccionadas",UNITS(pharmacies.length)]],
   "stock-historico":[["Días con movimientos",UNITS(n)],["Unidades vendidas netas",UNITS(s.value)],["Unidades recibidas netas",UNITS(s.units)],["Variación documental",UNITS(s.other)]],
   "ventas-tickets":[["Tickets",UNITS(n)],["Ventas netas",EUR(s.value)],["Ticket medio",n&&s.value!=null?EUR(s.value/n):"—"],["Unidades",UNITS(s.units)]],
+  "compras-recepciones":[["Recepciones",UNITS(n)],["Compras netas",EUR(s.value)],["Unidades netas",UNITS(s.units)],["Líneas",UNITS(s.other)]],
   "ventas-devoluciones":[["Movimientos",UNITS(n)],["Importes devueltos",EUR(s.value)],["Unidades devueltas",UNITS(s.units)],["Anulaciones",UNITS(s.other)]],
   "compras-devoluciones":[["Líneas devueltas",UNITS(n)],["Importe devuelto",EUR(s.value)],["Unidades devueltas",UNITS(s.units)]],
   "proveedores-condiciones":[["Proveedor y farmacia",UNITS(n)],["Compras netas",EUR(s.value)],["Recepciones",UNITS(s.other)],["Unidades",UNITS(s.units)]],
@@ -110,7 +123,7 @@ function Metrics({section,data,pharmacies}){
   <span>{label}</span><strong>{value}</strong>
  </article>)}</div>;
 }
-function GridTable({section,rows,sort,setSort,onOpenTicket}){
+function GridTable({section,rows,sort,setSort,onOpenTicket,onOpenReceipt}){
  const cols=META[section].cols;
  return <HorizontalTableScroll className="fm-preview-scroll" label="registros">
   <table className="fm-unified-table fm-real-screen-table"><thead><tr>{cols.map(([id,label])=>{
@@ -120,12 +133,14 @@ function GridTable({section,rows,sort,setSort,onOpenTicket}){
       setSort(old=>({key,direction:old.key===key&&old.direction==="asc"?"desc":"asc"}))}>
        {label}<span className="smart-sort-arrow" aria-hidden="true">{active?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
       </button>:label}</th>;
-  })}{section==="ventas-tickets"&&<th scope="col">Detalle</th>}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr
+  })}{["ventas-tickets","compras-recepciones"].includes(section)&&<th scope="col">Detalle</th>}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr
    key={[r.pharmacyId,r.sourceSystem,r.documentId,r.lineId,r.sourceId,r.supplierCode,r.family,i].join("|")}>
     {cols.map(([id,,format])=><td key={id}>{format(r)}</td>)}
     {section==="ventas-tickets"&&<td><button type="button" className="btn btn-secondary btn-sm"
-     onClick={()=>onOpenTicket(r)}>Ver líneas</button></td>}</tr>):
-   <tr><td colSpan={cols.length+(section==="ventas-tickets"?1:0)}>No hay registros para el periodo y los filtros seleccionados.</td></tr>}</tbody></table>
+     onClick={()=>onOpenTicket(r)}>Ver líneas</button></td>}
+    {section==="compras-recepciones"&&<td><button type="button" className="btn btn-secondary btn-sm"
+     onClick={()=>onOpenReceipt(r)}>Ver líneas</button></td>}</tr>):
+   <tr><td colSpan={cols.length+(["ventas-tickets","compras-recepciones"].includes(section)?1:0)}>No hay registros para el periodo y los filtros seleccionados.</td></tr>}</tbody></table>
  </HorizontalTableScroll>;
 }
 export default function PantallasReales({section,pharmacies=[],clientSlug="ampedia"}){
@@ -138,12 +153,13 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
  const [page,setPage]=useState(1),[size,setSize]=useState(25),[reload,setReload]=useState(0);
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
  const [ticketDetail,setTicketDetail]=useState(null);
+ const [receiptDetail,setReceiptDetail]=useState(null);
  const period=useMemo(()=>resolveSalesPeriod(periodKey,new Date(),custom,nowZone(clientSlug)),
   [periodKey,custom.from,custom.to,clientSlug,reload]);
  const pharmacyKey=ids.join(",");
  useEffect(()=>{const timer=setTimeout(()=>setReadySearch(search),320);return()=>clearTimeout(timer)},[search]);
  useEffect(()=>setPage(1),[pharmacyKey,readySearch,period.from,period.to,sort.key,sort.direction,section,size]);
- useEffect(()=>setTicketDetail(null),[page,pharmacyKey,readySearch,period.from,period.to,section]);
+ useEffect(()=>{setTicketDetail(null);setReceiptDetail(null)},[page,pharmacyKey,readySearch,period.from,period.to,section]);
  useEffect(()=>{
   if(!period.valid){setLoading(false);return;}
   const controller=new AbortController();
@@ -173,6 +189,20 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    setTicketDetail({ticket,loading:false,lines:body.lines||[],error:"",
     truncated:Boolean(body.truncated)});
   }catch(e){setTicketDetail({ticket,loading:false,lines:[],error:e.message});}
+ }
+ async function openReceipt(receipt){
+  setReceiptDetail({receipt,loading:true,lines:[],error:""});
+  const params=new URLSearchParams({desde:period.from,hasta:period.to,
+   farmacia:String(receipt.pharmacyId),farmacias:String(receipt.pharmacyId),
+   sistema:String(receipt.sourceSystem),documento:String(receipt.documentId)});
+  try{
+   const response=await fetch("/api/analytics/pantallas/compras-recepciones/lineas?"+params,{
+    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug}});
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(body.error||"No se pudo recuperar la recepción");
+   setReceiptDetail({receipt,loading:false,lines:body.lines||[],error:"",
+    truncated:Boolean(body.truncated)});
+  }catch(e){setReceiptDetail({receipt,loading:false,lines:[],error:e.message});}
  }
  if(!config)return null;
  const selected=ids.length?pharmacies.filter(p=>ids.includes(String(p.id))):pharmacies;
@@ -208,7 +238,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
     <section className="card fm-preview-panel">
      <div className="fm-preview-panel-head"><h2>Resultados</h2>
       <span className="fm-real-count">{UNITS(count)} registros encontrados</span></div>
-     <GridTable section={section} rows={data?.rows||[]} sort={sort} setSort={setSort} onOpenTicket={openTicket}/>
+     <GridTable section={section} rows={data?.rows||[]} sort={sort} setSort={setSort} onOpenTicket={openTicket} onOpenReceipt={openReceipt}/>
       {section==="ventas-tickets"&&ticketDetail&&<section className="fm-ticket-detail" aria-label="Desglose del ticket">
        <div className="fm-preview-panel-head"><h3>Ticket {TXT(ticketDetail.ticket.ticket)} · Líneas</h3>
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
@@ -222,6 +252,22 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
          {!ticketDetail.lines.length&&<tr><td colSpan="8">El documento no tiene líneas visibles.</td></tr>}
         </tbody></table></HorizontalTableScroll>}
        {ticketDetail.truncated&&<p role="status">El ticket tiene más de 500 líneas; se muestran las primeras 500.</p>}
+      </section>}
+     {section==="compras-recepciones"&&receiptDetail&&<section className="fm-ticket-detail"
+       aria-label="Desglose de la recepción">
+       <div className="fm-preview-panel-head"><h3>Recepción {TXT(receiptDetail.receipt.reference)} · Líneas</h3>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setReceiptDetail(null)}>Cerrar detalle</button></div>
+       {receiptDetail.loading?<p role="status">Cargando líneas…</p>:receiptDetail.error?<p role="alert">{receiptDetail.error}</p>:
+        <HorizontalTableScroll className="fm-preview-scroll" label="líneas de la recepción">
+         <table className="fm-unified-table fm-real-screen-table"><thead><tr>
+          {["Línea","Código de artículo","Unidades netas","Precio bruto/ud.","Coste neto/ud.","Importe neto"].map(v=><th key={v}>{v}</th>)}
+         </tr></thead><tbody>{receiptDetail.lines.map(line=><tr key={line.lineId}>
+          <td>{TXT(line.lineId)}</td><td>{TXT(line.articleId)}</td>
+          <td>{UNITS(line.units)}</td><td>{EUR(line.unitPrice)}</td>
+          <td>{EUR(line.netUnitCost)}</td><td>{EUR(line.amount)}</td></tr>)}
+          {!receiptDetail.lines.length&&<tr><td colSpan="6">El documento no tiene líneas visibles.</td></tr>}
+         </tbody></table></HorizontalTableScroll>}
+       {receiptDetail.truncated&&<p role="status">Se muestran las primeras 500 líneas de la recepción.</p>}
       </section>}
      <div className="fm-real-pagination">
       <span>Página {page} de {pages}</span>

@@ -22,6 +22,7 @@ import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import SyncVentas from "./SyncVentas.jsx";
 import OperativaPreview,{PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
 import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
+import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
@@ -127,30 +128,30 @@ function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <
 const NAV=[
  {id:"dashboard",label:"Inicio",icon:LayoutDashboard,module:"dashboard"},
  {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
- {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas",preview:true},
- {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas",preview:true},
+ {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas"},
+ {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas"},
  {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
  {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion",childOf:"compras"},
- {id:"compras-preparador",label:"Preparador de pedidos",icon:ShoppingCart,module:"compras",childOf:"compras",preview:true},
- {id:"compras-pendientes",label:"Pendientes de asignar",icon:ClipboardList,module:"compras",childOf:"compras",preview:true},
- {id:"compras-pedidos",label:"Pedidos preparados",icon:Package,module:"compras",childOf:"compras",preview:true},
- {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras",preview:true},
+ {id:"compras-preparador",label:"Preparador de pedidos",icon:ShoppingCart,module:"compras",childOf:"compras"},
+ {id:"compras-pendientes",label:"Pendientes de asignar",icon:ClipboardList,module:"compras",childOf:"compras"},
+ {id:"compras-pedidos",label:"Pedidos preparados",icon:Package,module:"compras",childOf:"compras"},
+ {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras"},
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock",preview:true},
- {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock",preview:true},
- {id:"productos",label:"Productos",icon:Package,module:"stock",preview:true},
+ {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
+ {id:"productos",label:"Productos",icon:Package,module:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
- {id:"proveedores-condiciones",label:"Condiciones comerciales",icon:ClipboardList,module:"proveedores",childOf:"proveedores",preview:true},
+ {id:"proveedores-condiciones",label:"Análisis de proveedores",icon:ClipboardList,module:"proveedores",childOf:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
- {id:"rentabilidad-segmentos",label:"Por segmento",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad",preview:true},
- {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad",preview:true},
+ {id:"rentabilidad-segmentos",label:"Por familia",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
+ {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
  {id:"acciones",label:"Oportunidades",icon:ClipboardList,module:"acciones"},
- {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones",preview:true},
- {id:"alertas",label:"Alertas",icon:Bell,module:"acciones",preview:true},
- {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas",preview:true},
+ {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
+ {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
+ {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
@@ -938,7 +939,9 @@ function App(){
     {REAL_SECTIONS.has(page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
       pharmacies={tenantContext.pharmacies}/>}
-    {PREVIEW_SECTIONS[page]&&!REAL_SECTIONS.has(page)&&<OperativaPreview key={tenantContext.client.slug+":"+page}
+    {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
+      section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {PREVIEW_SECTIONS[page]&&!REAL_SECTIONS.has(page)&&!DOCUMENT_SCREENS.has(page)&&<OperativaPreview key={tenantContext.client.slug+":"+page}
       section={page} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">

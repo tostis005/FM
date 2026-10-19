@@ -685,6 +685,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button>
    </div>
    <ListTable key={[module,filters.pharmacyIds.join(","),period.from,period.to].join("|")}
+    serverFilters={globalColumnFiltering?tableFilters:null}
+    onServerFiltersChange={globalColumnFiltering?changeTableFilters:null}
+    filterOptions={{pharmacy:pharmacies.map(p=>p.name),family:fullFamilyOptions}}
     rows={rows} rowKey={r=>r.id} columns={columns} label="artículos"
     sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort}
     onRowClick={setDetail} emptyText="No hay ventas para estos filtros"

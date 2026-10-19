@@ -9,7 +9,7 @@ import {euro,quantity,integer,percentage,dateES} from "./localeES.js";
 import {buildAnalysis} from "./businessAnalytics.js";
 import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
-import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
+import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import "./moduleDemo.css";
 
 const TITLES={
@@ -183,6 +183,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     ...readFilters(storageKey),
     ...readSharedReportFilters(clientSlug,module==="ventas"?undefined:COMMON_PERIOD_KEYS)
   }));
+ useEffect(()=>initializeSharedReportFilters(clientSlug,{
+    period:filters.period,customFrom:filters.customFrom,customTo:filters.customTo,
+    pharmacyIds:reconcilePharmacyIds(filters.pharmacyIds,pharmacies)
+  }),[clientSlug]);
  const [searchReady,setSearchReady]=useState(()=>readFilters(storageKey).search);
  useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [detail,setDetail]=useState(null);

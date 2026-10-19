@@ -128,7 +128,7 @@ function columnsFor(module,pharmacyMap){
  const common=[cn,article,pharmacy,abcd];
  switch(module){
   case "ventas":return [...common,unit("pvp","PVP catálogo"),
-    unit("saleUnitPrice","Precio real venta/ud."),
+    unit("saleUnitPrice","Precio venta/ud."),
     unit("purchaseCost","Coste medio/ud."),unit("unitMargin","Margen/ud."),
     num("units","Uds. vendidas"),euroCol("value","Ventas netas"),
     euroCol("margin","Margen total")];
@@ -697,7 +697,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     rows={rows} rowKey={r=>r.id} columns={columns} label="artículos"
     sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort}
     onRowClick={setDetail} emptyText="No hay ventas para estos filtros"
-    loading={reportLoading} loadingLabel="Cargando artículos reales de PostgreSQL…"/>
+    loading={reportLoading} loadingLabel="Cargando artículos…"/>
   </section>}
   {detail&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setDetail(null)}}>
    <div className="fm-demo-detail" role="dialog" aria-modal="true" aria-label="Detalle de registro">

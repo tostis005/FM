@@ -64,13 +64,26 @@ try{
  await assertRoute("/ventas","Ventas");
  await assertRoute("/dashboard","Inicio");
  await assertRoute("/compras","Compras");
- // Las rutas internas deben seguir funcionando al usar los botones de la SPA.
- await page.getByRole("button",{name:"Ventas",exact:true}).first().click();
+ // Simular una pantalla muy larga para comprobar el scroll real del documento.
+ // La navegación SPA debe llevar arriba aunque el usuario estuviera al final.
+ await page.evaluate(()=>{
+  document.querySelector(".main-content").style.minHeight="2600px";
+  window.scrollTo(0,1050);
+ });
+ assert.ok(await page.evaluate(()=>window.scrollY)>900,"Precondición: estar desplazado en Compras");
+ // Ir desde la navegación lateral a otro módulo, no hacer una recarga completa.
+ await page.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Ventas",exact:true}).first().click();
  assert.equal(new URL(page.url()).pathname,"/ventas");
+ await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
+ // El historial también debe volver al inicio en vez de restaurar la posición anterior.
+ await page.evaluate(()=>window.scrollTo(0,900));
  await page.goBack({waitUntil:"domcontentloaded"});
  assert.equal(new URL(page.url()).pathname,"/compras","Atrás debe volver al módulo anterior");
+ await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
+ await page.evaluate(()=>window.scrollTo(0,850));
  await page.goForward({waitUntil:"domcontentloaded"});
  assert.equal(new URL(page.url()).pathname,"/ventas","Adelante debe respetar la navegación");
+ await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
  // A diferencia del caso temporal, un módulo REALMENTE no autorizado sí redirige.
  role="farmacia";
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});

@@ -15,6 +15,35 @@ Los reportes consultan PostgreSQL por el contexto autenticado del cliente. El or
 
 Los códigos nacionales para el Nomenclátor se recuperan con `articulos.codigo_nacional`; cuando falta, solo puede usarse `articulo_id` si coincide directamente con un CN. Nunca se interpreta automáticamente cualquier ID de ERP como un CN.
 
+## Estado verificado de compras en producción (19 octubre 2026)
+
+**El contrato estructural no garantiza que se hayan importado las líneas de compra.**
+La auditoría READ ONLY sobre `ampedia.compras` para los últimos seis meses confirmó que en
+las cinco farmacias **el 100 % de los registros carecen de `articulo_id`,
+`unidades`, `coste_unitario` e `importe`**; contienen principalmente
+identificadores de proveedor y fecha. Se importaron registros, pero **no son
+movimientos de compra por producto**. La tabla de artículos puede estar completa y
+no permite reconstruir el PUC de una compra que nunca fue recibida.
+
+Farmétrica distingue ahora:
+- **Registro de origen**: llegó una cabecera o relación con un proveedor.
+- **Línea de compra válida**: incluye identificador de artículo y datos que
+  permiten calcular las unidades, precio e importe realmente disponibles.
+- **Sin precio**: no se muestra un cero ficticio como PUC, margen o gasto.
+
+El informe de Compras **no debe mostrar una cabecera con artículo vacío**
+como si fuera un producto. La API `/api/analytics/compras/resumen` comunica
+`hasArticleLines`, `hasAmounts` y `sourceRows`; los KPI dependientes de datos
+no importados se devuelven como `null`.
+
+**Acción necesaria fuera de esta API:** revisar en el sincronizador la consulta
+al ERP que extrae las **líneas de albarán/factura de compra**, su identificación
+de artículo y farmacia, las unidades, el coste unitario y el importe de la
+línea, manteniendo IDs de origen estables y sin añadir importes simulados.
+Solo después de sincronizar esas líneas se obtendrán precios ponderados,
+márgenes basados en compras y análisis de genéricos fiables. La API no puede
+crear esos datos a partir de registros de proveedor.
+
 ## API de informes
 
 `GET /api/analytics/reportes?desde=YYYY-MM-DD&hasta=YYYY-MM-DD&modulo=compras&farmacias=1,2`:

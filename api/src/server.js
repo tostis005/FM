@@ -41,7 +41,13 @@ if (!DATABASE_URL) {
 const admins = new Set(ADMIN_OIDS.split(",").map(s => s.trim().toLowerCase()).filter(Boolean));
 const issuer = azureEnabled ? `https://login.microsoftonline.com/${AZURE_TENANT_ID}/v2.0` : null;
 const jwks = azureEnabled ? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${AZURE_TENANT_ID}/discovery/v2.0/keys`)) : null;
-const pool = new Pool({ connectionString: DATABASE_URL, max: 6, connectionTimeoutMillis: 5000 });
+// Las consultas y el login fallan de forma acotada si el sincronizador bloquea una tabla.
+// No se espera indefinidamente a un lock ni se comparten conexiones con el servicio Windows.
+const pool = new Pool({
+  connectionString: DATABASE_URL, max: 6, connectionTimeoutMillis: 5000,
+  statement_timeout: 30000, query_timeout: 35000,
+  options: "-c lock_timeout=3s",
+});
 const app = express();
 app.disable("x-powered-by");
 app.use(helmet());

@@ -1,0 +1,91 @@
+name: Farmetrica Sync · Windows
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integrations/farmetrica-sync/**'
+      - '.github/workflows/farmetrica-sync-windows.yml'
+      - 'api/src/migrations/016_modelo_documental.sql'
+      - 'api/src/migrations/modeloDocumental.integration.test.js'
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/farmetrica-sync/**'
+      - '.github/workflows/farmetrica-sync-windows.yml'
+      - 'api/src/migrations/016_modelo_documental.sql'
+      - 'api/src/migrations/modeloDocumental.integration.test.js'
+permissions:
+  contents: read
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/farmetrica-sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Comprobar interfaz y contratos
+        run: node tests/ui-smoke.cjs
+      - name: Probar SQL Farmatic y migración de consultas anteriores
+        run: dotnet run --project tests/SqlTemplateRegression/SqlTemplateRegression.csproj --configuration Release
+      - name: Probar clasificación ES sin confundir EAN ni IDs locales
+        run: dotnet run --project tests/ProductClassificationRegression/ProductClassificationRegression.csproj --configuration Release
+      - name: Probar cabeceras y líneas de consultas JOIN
+        run: dotnet run --project tests/DocumentNormalizerRegression/DocumentNormalizerRegression.csproj --configuration Release
+      - name: Verificar lectura no bloqueante del historial y login
+        run: dotnet run --project tests/ConfigStoreRegression/ConfigStoreRegression.csproj --configuration Release
+      - name: Publicar Windows autocontenido
+        run: dotnet publish src/FarmetricaSync/FarmetricaSync.csproj -r win-x64 -c Release --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o dist/win-x64
+      - name: Empaquetar el servicio
+        run: |
+          mkdir -p dist/paquete/windows
+          cp -r dist/win-x64/. dist/paquete/windows/
+          cp -r scripts dist/paquete/
+          cp README.md dist/paquete/
+          cd dist/paquete && zip -qr ../farmetrica-sync-windows.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: farmetrica-sync-win-x64
+          path: integrations/farmetrica-sync/dist/farmetrica-sync-windows.zip
+          if-no-files-found: error
+
+  validar_postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fm_test
+          POSTGRES_PASSWORD: fm_test
+          POSTGRES_DB: fm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fm_test -d fm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FM_TEST_DATABASE_URL: postgres://fm_test:fm_test@127.0.0.1:5432/fm_test
+      FM_TEST_NPGSQL: Host=127.0.0.1;Port=5432;Database=fm_test;Username=fm_test;Password=fm_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias para PG
+        run: npm install --prefix api --no-audit --no-fund
+      - name: Probar tablas documentales con PostgreSQL 16
+        run: node --test api/src/migrations/modeloDocumental.integration.test.js
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Probar importación JOIN de extremo a extremo
+        run: dotnet run --project integrations/farmetrica-sync/tests/JoinedDocumentPgRegression/JoinedDocumentPgRegression.csproj --configuration Release

@@ -586,7 +586,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </div>}
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
 
-  {module==="ventas"&&(searchReady||filters.families.length>0)&&<p className="fm-sales-period-info">La búsqueda y las familias filtran el detalle reciente, pero no modifican el total histórico mostrado.</p>}
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
@@ -612,12 +611,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
   {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
   {module==="compras"&&receiptMode&&
-   <p role="status" className="fm-inline-status">
-    Se han sincronizado {integer(fastPurchase.sourceRows)} registros de recepción.
-    Puedes consultar sus fechas, farmacias, proveedores y documentos y buscar en
-    todos ellos. Aún faltan las líneas de artículo, unidades e importes del ERP:
-    las compras en euros y los costes unitarios no se pueden calcular hasta importar ese detalle.
-   </p>}
+   <details className="fm-data-details">
+    <summary>Recepciones: {integer(fastPurchase.sourceRows)} · Faltan líneas e importes</summary>
+    <p>No se pueden calcular compras ni costes por artículo sin el detalle del ERP.</p>
+   </details>}
   {module==="compras"&&receiptError&&<p role="alert" className="fm-inline-status">
     Error al cargar recepciones: {receiptError}
    </p>}
@@ -626,11 +623,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     Se han importado referencias de artículos, pero faltan importes de compra.
     Los indicadores de gasto y los precios que dependen del coste no están disponibles.
    </p>}
-  {module==="compras"&&searchReady&&<p className="fm-sales-period-info">
-   La búsqueda filtra todas las referencias disponibles de la tabla. Los indicadores y el gráfico resumen
-   todas las compras del período seleccionado.
-  </p>}
-  {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
+  {module==="compras"&&period.valid&&<details className="fm-data-details">
+   <summary>{purchaseStateError?"Error en estado de compras":purchaseState?.hasPurchases?"Cobertura por farmacia":"Estado de importaciones"}</summary>
+   <div className="fm-inline-status" role="status">
    {purchaseStateError?
     <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:
     !purchaseState?
@@ -648,7 +643,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {purchaseSlow&&purchaseState?.hasPurchases&&<small style={{display:"block",marginTop:8}}>
     El informe sigue calculando el detalle; los registros existen. Puede haber una consulta lenta, no falta de datos.
    </small>}
-  </div>}
+  </div></details>}
   {module==="proveedores"&&realReport?.available&&realReport.kpis?.lineasCompra==null&&
    <p role="status" className="fm-inline-status">
     Hay referencias de proveedor, pero no se han importado líneas de compra con
@@ -665,7 +660,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {realReport?.availability?.supplierRowsTruncated&&["proveedores","compras"].includes(module)&&
    <p role="status" className="fm-inline-status">El ranking de proveedores muestra los primeros 1.000. El importe total de compras incluye todos los proveedores; no interpretes la suma de filas visibles como total de la red.</p>}
    {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&<p role="status" className="fm-inline-status">El stock no se muestra como actual porque no hay una importación de inventario suficientemente reciente en las últimas 48 horas.</p>}
-   {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<p className="fm-sales-period-info">Base de valoración: {realReport.availability.stockSummaryBasis}. Si faltan costes, el importe permanece sin calcular. El listado puede mostrar menos referencias sin afectar a los recuentos.</p>}
+   {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<details className="fm-data-details"><summary>Base de valoración</summary><p>{realReport.availability.stockSummaryBasis}</p></details>}
    {realReport?.availability?.rowsTruncated&&module!=="ventas"&&<p role="status" className="fm-inline-status">El listado está limitado a las primeras 3.000 referencias. Los totales de ventas y compras proceden de todas las operaciones.</p>}
    {realReport?.availability?.stockRowsTruncated&&["stock","reposicion","acciones"].includes(module)&&<p role="status" className="fm-inline-status">El listado de existencias está limitado a 3.000 referencias. Los recuentos y unidades del inventario se calculan sobre todas las fichas; la reposición mostrada no incluye necesariamente todas las necesidades.</p>}
 

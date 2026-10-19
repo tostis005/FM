@@ -16,6 +16,12 @@ await page.route("**/api/**",async route=>{
    clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules};
  else if(path==="/api/tenant/promociones")body={promotions:[]};
  else if(path==="/api/tenant/farmacias")body=pharmacies;
+ else if(path==="/api/analytics/pantallas/ventas-tickets/lineas"){
+  body={lines:[
+    {lineId:"1",articleId:"ART-01",units:2,unitPrice:6,discount:0,amount:12,historicalCost:2},
+    {lineId:"2",articleId:"ART-02",units:1,unitPrice:3,discount:0,amount:3,historicalCost:1}
+   ],truncated:false};
+ }
  else if(path.startsWith("/api/analytics/pantallas/")){
   const section=path.split("/").at(-1),q=url.searchParams;
   requests.push({section,query:Object.fromEntries(q.entries())});
@@ -58,6 +64,11 @@ try{
  }
  await page.goto(BASE+"/ventas-tickets",{waitUntil:"domcontentloaded"});
  await page.getByText("T-REAL",{exact:true}).waitFor();
+ await page.getByRole("button",{name:"Ver líneas"}).first().click();
+ await page.getByRole("region",{name:"Desglose del ticket"}).getByText("ART-01").waitFor();
+ assert.equal(await page.getByRole("region",{name:"Desglose del ticket"}).locator("tbody tr").count(),2);
+ await page.getByRole("button",{name:"Cerrar detalle"}).click();
+
  const before=requests.length;
  await page.getByRole("button",{name:"Página siguiente"}).click();
  await page.waitForFunction(()=>document.querySelector(".fm-real-pagination")?.textContent.includes("Página 2"));

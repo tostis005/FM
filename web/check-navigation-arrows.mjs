@@ -32,17 +32,29 @@ try{
   assert.equal(await caret.count(),1,group+" necesita flecha desplegable");
   assert.equal(await caret.getAttribute("aria-expanded"),"false");
  }
- // El chevrón debe ser reconocible incluso sin hover ni selección.
+ // Un chevrón legible pero discreto: sin fondo ni borde de botón grande.
  const visual=await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).evaluate(button=>{
   const buttonStyle=getComputedStyle(button),icon=button.querySelector("svg");
   const svgStyle=getComputedStyle(icon);
   return {background:buttonStyle.backgroundColor,color:buttonStyle.color,border:buttonStyle.borderTopWidth,
-   width:icon.getBoundingClientRect().width,stroke:svgStyle.strokeWidth};
+   width:icon.getBoundingClientRect().width,stroke:svgStyle.strokeWidth,hitWidth:button.getBoundingClientRect().width};
  });
- assert.notEqual(visual.background,"rgba(0, 0, 0, 0)","La flecha necesita un fondo visible");
- assert.equal(visual.border,"1px","El contorno debe distinguirse del menú");
- assert.ok(visual.width>=20,"El icono no debe ser demasiado pequeño");
- assert.equal(Number.parseFloat(visual.stroke),3,"Trazo grueso y legible");
+ assert.equal(visual.background,"rgba(0, 0, 0, 0)","La flecha debe ir sin pastilla");
+ assert.equal(visual.border,"0px","La flecha no debe tener contorno de botón");
+ assert.ok(visual.width>=16&&visual.width<=18,"Icono pequeño y legible");
+ assert.equal(Number.parseFloat(visual.stroke),2.5,"Trazo discreto sin perder visibilidad");
+ assert.ok(visual.hitWidth>=30,"Mantener una zona de clic cómoda aunque invisible");
+ for(const groupId of ["fm-settings-nav","fm-admin-nav"]){
+  const arrow=await page.locator('.side-nav>.side-link[aria-controls="'+groupId+'"] svg').evaluate(svg=>{
+   const css=getComputedStyle(svg);
+   return {background:css.backgroundColor,border:css.borderTopWidth,
+    width:svg.getBoundingClientRect().width,stroke:css.strokeWidth};
+  });
+  assert.equal(arrow.background,"rgba(0, 0, 0, 0)",groupId+" sin fondo");
+  assert.equal(arrow.border,"0px",groupId+" sin borde");
+  assert.ok(arrow.width>=16&&arrow.width<=18,groupId+" del mismo tamaño");
+  assert.equal(Number.parseFloat(arrow.stroke),2.5,groupId+" de trazo uniforme");
+ }
  const before=new URL(page.url()).pathname;
  await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).click();
  assert.equal(new URL(page.url()).pathname,before,"desplegar no cambia de pantalla");

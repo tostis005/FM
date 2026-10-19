@@ -26,7 +26,8 @@ import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
-import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
+import {resolveSalesPeriod} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
@@ -461,6 +462,18 @@ function App(){
   const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
+ const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
+  Intl.DateTimeFormat().resolvedOptions().timeZone;
+ const promotionQuickPeriod=QUICK_PERIODS.find(([key])=>{
+  const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
+  return range.valid&&range.from===from&&range.to===to;
+ })?.[0]||"";
+ function selectPromotionQuickPeriod(key){
+  const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
+  if(!range.valid)return;
+  setFrom(range.from);setTo(range.to);
+  updateSharedReportFilters(tenantContext?.client?.slug,{period:key});
+ }
  const filterText=search.toLocaleLowerCase("es");
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
@@ -885,6 +898,7 @@ function App(){
    <main className="main-content">
     {page==="promociones"&&<>
  <ReportPageHeader title="Promociones" updatedAt={salesLastUpdated}
+  period={from&&to&&from<=to?{valid:true,from,to}:null}
   actions={<div className="campaign-header-actions">
    <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
    <button className="btn btn-secondary" type="button" disabled={importBusy}
@@ -895,7 +909,8 @@ function App(){
     <Plus size={18}/> Nueva promoción</button>
   </div>}/>
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}
-  onPharmacyChange={selectSharedPharmacies}>
+  onPharmacyChange={selectSharedPharmacies}
+  quickPeriodKey={promotionQuickPeriod} onQuickPeriodChange={selectPromotionQuickPeriod}>
   <label className="fm-unified-filter">Buscar promoción o CN
    <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, laboratorio o CN…"/></label>
   <label className="fm-unified-filter">Estado

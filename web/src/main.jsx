@@ -562,7 +562,7 @@ function App(){
   if(deletingPromoId)return;
   const confirmed=window.confirm(
    '¿Eliminar definitivamente la promoción "'+p.name+'"?\n\n'+
-   'Se borrará de Farmétrica para todas las personas de este cliente. No se puede deshacer.'
+   'Se borrará de Farmetrica para todas las personas de este cliente. No se puede deshacer.'
   );
   if(!confirmed)return;
   setDeletingPromoId(p.id);
@@ -573,7 +573,7 @@ function App(){
    setReportSelectedIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
    setExpandedCampaignIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
    if(String(promoForm.id)===String(p.id))setEditingPromo(null);
-   setToast("Promoción eliminada de Farmétrica");
+   setToast("Promoción eliminada de Farmetrica");
   }catch(err){
    setToast("No se pudo eliminar la promoción: "+err.message);
   }finally{setDeletingPromoId(null);}

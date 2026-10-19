@@ -4,7 +4,7 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
-import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
+import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaPreview.css";
 import "./pantallasReales.css";
 
@@ -154,6 +154,9 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
   return {from:saved.customFrom||"",to:saved.customTo||""};
  });
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
+ useEffect(()=>initializeSharedReportFilters(clientSlug,{
+  period:periodKey,customFrom:custom.from,customTo:custom.to,pharmacyIds:ids
+ }),[clientSlug]);
  const [search,setSearch]=useState(""),[readySearch,setReadySearch]=useState("");
  const [sort,setSort]=useState(()=>({key:section==="productos"?"name":
    section==="proveedores-condiciones"?"amount":section==="rentabilidad-segmentos"?"sales":"at",

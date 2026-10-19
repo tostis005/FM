@@ -316,7 +316,7 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
       req.context.modules?.compras!==true&&req.context.modules?.proveedores!==true)
     return res.status(403).json({error:"Módulo no habilitado"});
    const farmacia=String(req.query.farmacia||"");
-   if(!/^[1-9]\\d{0,8}$/.test(farmacia))
+   if(!/^[1-9]\d{0,8}$/.test(farmacia))
     return res.status(400).json({error:"Farmacia inválida"});
    const items=await listCommercialSuppliers(pool,req.context,Number(farmacia));
    res.json({items});

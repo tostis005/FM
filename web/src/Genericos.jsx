@@ -5,7 +5,7 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingState.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
-import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
+import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
@@ -94,6 +94,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
  const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
+ useEffect(()=>initializeSharedReportFilters(clientSlug,{
+  period:periodKey,customFrom,customTo,pharmacyIds:ids
+ }),[clientSlug]);
  const [search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
  const [abcdFilter,setAbcdFilter]=useState("all");
  const [sort,setSort]=useState({key:"revenue",direction:"desc"});

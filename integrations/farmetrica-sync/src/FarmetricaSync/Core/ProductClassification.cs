@@ -10,7 +10,7 @@ public sealed record ProductCategory(string Segment, string Subcategory, string 
 public static class ProductClassification
 {
     private static readonly Regex SpanishCn = new(
-        @"^([0-9]{6})(?:\\.?[0-9])?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        @"^([0-9]{6})(?:\.?[0-9])?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static ProductCategory InferFromCn(string? originalCn, string? countryCode)
     {

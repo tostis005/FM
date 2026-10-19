@@ -145,17 +145,29 @@ foreach (var (source, alias) in new[] {
 if (SqlTemplates.IsLegacyOptional("articulos", "stock_actual") ||
     SqlTemplates.IsLegacyOptional("articulos", "stock_minimo"))
     throw new Exception("Las cantidades de existencias son obligatorias en los SELECT de artículos, no se deben importar como NULL por omisión.");
-if (SqlTemplates.All.Count != 5 || entities.Count != 5)
-    throw new Exception("Se esperan cinco entidades Farmatic; stock integrado en artículos.");
-var legacyArticleSql=articulo.Replace(
+if (SqlTemplates.All.Count != 5 || entities.Count != 7 ||
+    !entities.ContainsKey("ventas_completas") || !entities.ContainsKey("recepciones_completas") ||
+    SqlTemplates.All.Any(t => t.Entity is "ventas_completas" or "recepciones_completas"))
+    throw new Exception("Cinco plantillas Farmatic existentes y dos flujos JOIN sin SELECT inventado.");
+const string classification = """
+    CAST(NULL AS varchar(50)) AS segmento_comercial,
+    CAST(NULL AS varchar(100)) AS subcategoria,
+    CAST(NULL AS varchar(40)) AS clasificacion_origen,
+    CAST(NULL AS decimal(18,4)) AS clasificacion_confianza,
+    CAST(NULL AS varchar(12)) AS cn_normalizado,
+""";
+var previousArticleSql = articulo.Replace(classification + "\n", "");
+var legacyArticleSql=previousArticleSql.Replace(
     "    TRY_CONVERT(datetime2, a.FechaUltimaSalida) AS fecha_ultima_salida,\n" +
     "    TRY_CONVERT(decimal(18,4), a.StockActual) AS stock_actual,\n" +
     "    TRY_CONVERT(decimal(18,4), a.StockMinimo) AS stock_minimo,\n" +
     "    TRY_CONVERT(decimal(18,4), a.StockMaximo) AS stock_maximo,\n" +
     "    TRY_CONVERT(decimal(18,4), a.LoteOptimo) AS lote_optimo",
     "    TRY_CONVERT(datetime2, a.FechaUltimaSalida) AS fecha_ultima_salida");
-if (SqlTemplates.UpgradeStandardArticleSql(legacyArticleSql) != articulo)
-    throw new Exception("La plantilla antigua de artículos se debe actualizar sin perder el trabajo.");
+if (SqlTemplates.UpgradeStandardArticleSql(previousArticleSql) != articulo ||
+    SqlTemplates.UpgradeStandardArticleSql(legacyArticleSql) != articulo)
+    throw new Exception("Las plantillas conocidas de artículos deben migrarse sin borrar trabajos.");
+
 if (SqlTemplates.UpgradeStandardArticleSql("SELECT origen_id FROM personalizado") != "SELECT origen_id FROM personalizado")
     throw new Exception("No se debe sobrescribir SQL personalizado de artículos.");
 // Familias: coincidencia de alias, tipos y relaciones entre las tres fuentes.

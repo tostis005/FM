@@ -115,14 +115,25 @@ FROM {{TABLE:dbo.Articu}} AS a
     // permanecen intactas y tienen acción explícita "Actualizar desde esquema".
     public static string UpgradeStandardArticleSql(string sql)
     {
-        var legacy = ArticlesSnapshot.Replace(
+        // Actualizar solo plantillas que reconozcamos como antiguas. Las
+        // consultas manuales nunca se sobrescriben automáticamente.
+        const string classification = """
+    CAST(NULL AS varchar(50)) AS segmento_comercial,
+    CAST(NULL AS varchar(100)) AS subcategoria,
+    CAST(NULL AS varchar(40)) AS clasificacion_origen,
+    CAST(NULL AS decimal(18,4)) AS clasificacion_confianza,
+    CAST(NULL AS varchar(12)) AS cn_normalizado,
+""";
+        var previous = ArticlesSnapshot.Replace(classification + "\n", "");
+        var previousWithoutStock = previous.Replace(
             "    TRY_CONVERT(datetime2, a.FechaUltimaSalida) AS fecha_ultima_salida,\n" +
             "    TRY_CONVERT(decimal(18,4), a.StockActual) AS stock_actual,\n" +
             "    TRY_CONVERT(decimal(18,4), a.StockMinimo) AS stock_minimo,\n" +
             "    TRY_CONVERT(decimal(18,4), a.StockMaximo) AS stock_maximo,\n" +
             "    TRY_CONVERT(decimal(18,4), a.LoteOptimo) AS lote_optimo",
             "    TRY_CONVERT(datetime2, a.FechaUltimaSalida) AS fecha_ultima_salida");
-        return sql.Trim().Equals(legacy.Trim(), StringComparison.Ordinal)
+        return sql.Trim().Equals(previous.Trim(), StringComparison.Ordinal) ||
+               sql.Trim().Equals(previousWithoutStock.Trim(), StringComparison.Ordinal)
             ? ArticlesSnapshot.TrimEnd() : sql;
     }
 

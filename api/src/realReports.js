@@ -105,19 +105,23 @@ export function setupRealReports(app,pool,{requireTenant}){
     const identifier=legacy?"t.farmacia_id=$3::int":"upper(btrim(t.farmacia_codigo))=$3::text";
     const value=legacy?Number(pharmacy.id):code;
     const dateWindow=`t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'`;
+    const ignore=includedPurchaseSupplier({tenant:"$4",code:"t.proveedor_id",
+      name:columns.has("proveedor_nombre")?"t.proveedor_nombre":null});
     // Un registro basta. ORDER BY fecha DESC puede aprovechar el índice
     // (farmacia,fecha) y nunca devuelve detalles comerciales.
     const inPeriod=await pool.query({text:`
       SELECT t.fecha FROM ${quoted}.compras t
-      WHERE ${dateWindow} AND ${identifier}
+      WHERE ${dateWindow} AND ${identifier} AND ${ignore}
       ORDER BY t.fecha DESC LIMIT 1`,
-      values:[f.from,f.to,value],query_timeout:12000});
+      values:[f.from,f.to,value,req.context.client.slug],query_timeout:12000});
     let lastOutside=null;
     if(!inPeriod.rows.length){
      const last=await pool.query({text:`
        SELECT t.fecha FROM ${quoted}.compras t
        WHERE ${legacy?"t.farmacia_id=$1::int":"upper(btrim(t.farmacia_codigo))=$1::text"}
-       ORDER BY t.fecha DESC LIMIT 1`,values:[value],query_timeout:12000});
+         AND ${includedPurchaseSupplier({tenant:"$2",code:"t.proveedor_id",
+           name:columns.has("proveedor_nombre")?"t.proveedor_nombre":null})}
+       ORDER BY t.fecha DESC LIMIT 1`,values:[value,req.context.client.slug],query_timeout:12000});
      lastOutside=last.rows[0]?.fecha||null;
     }
     return {pharmacyId:String(pharmacy.id),name:pharmacy.name||"Farmacia "+pharmacy.id,

@@ -620,7 +620,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    </p>}
   {module==="compras"&&receiptError&&<p role="alert" className="fm-inline-status">
     Error al cargar recepciones: {receiptError}
-   </p>
+   </p>}
   {module==="compras"&&fastPurchase?.hasArticleLines===true&&fastPurchase?.hasAmounts===false&&
    <p role="status" className="fm-inline-status">
     Se han importado referencias de artículos, pero faltan importes de compra.

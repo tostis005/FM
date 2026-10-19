@@ -1,8 +1,8 @@
 // Contrato estricto para filtros de columnas enviados desde las tablas.
 // Se ejecutan sobre TODO el conjunto antes de paginar, nunca sobre las 400 filas.
 export const TEXT_SALES_COLUMNS=["cn","name","pvp","saleUnitPrice","purchaseCost",
- "unitMargin","units","value","margin","pharmacy","marginPct"];
-export const MULTI_SALES_COLUMNS=["abcdClass","family"];
+ "unitMargin","units","value","margin","marginPct"];
+export const MULTI_SALES_COLUMNS=["abcdClass","family","pharmacy"];
 const allowed=new Set([...TEXT_SALES_COLUMNS,...MULTI_SALES_COLUMNS]);
 export function parseSalesColumnFilters(raw){
  if(raw==null||raw==="")return {};
@@ -33,7 +33,9 @@ export function salesColumnWhereSQL(alias="x",arg="$9",filters={}){
   text("value",alias+".value"),
   text("saleUnitPrice",`(CASE WHEN ${alias}.units>0 THEN ${alias}.value/${alias}.units ELSE NULL END)`),
 
-  text("pharmacy",`(SELECT f.nombre FROM farmetrica.farmacias f WHERE f.id::text=${alias}."pharmacyId")`),
+  `(NOT (${arg}::jsonb ? 'pharmacy') OR
+    (SELECT f.nombre FROM farmetrica.farmacias f WHERE f.id::text=${alias}."pharmacyId") IN
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'pharmacy'))`,
   `(NOT (${arg}::jsonb ? 'abcdClass') OR ${alias}."abcdClass" IN
     (SELECT jsonb_array_elements_text(${arg}::jsonb->'abcdClass'))`,
   `(NOT (${arg}::jsonb ? 'family') OR ${alias}.family IN
@@ -49,8 +51,9 @@ export function salesCacheColumnWhereSQL(alias="i",arg="$8"){
  // Las columnas persistidas son las mismas que devuelve la consulta viva.
  const j=(key)=>`${alias}.detalle->>'${key}'`;
  const text=key=>`(NOT (${arg}::jsonb ? '${key}') OR ${j(key)} ILIKE '%'||(${arg}::jsonb->>'${key}')||'%')`;
- return [...TEXT_SALES_COLUMNS.map(key=>key==="pharmacy"?
-  `(NOT (${arg}::jsonb ? 'pharmacy') OR f.nombre ILIKE '%'||(${arg}::jsonb->>'pharmacy')||'%')`:text(key)),
+ return [...TEXT_SALES_COLUMNS.map(text),
+  `(NOT (${arg}::jsonb ? 'pharmacy') OR f.nombre IN
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'pharmacy'))`,
   `(NOT (${arg}::jsonb ? 'abcdClass') OR ${j("abcdClass")} IN
     (SELECT jsonb_array_elements_text(${arg}::jsonb->'abcdClass'))`,
   `(NOT (${arg}::jsonb ? 'family') OR ${j("family")} IN

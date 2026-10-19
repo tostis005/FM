@@ -282,9 +282,12 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND f.cliente_slug=${periodTenantParam}`:`JOIN farmetrica.farmacias f ON f.cliente_slug=${periodTenantParam}
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
     const amount=legacy?"t.total":"t.importe";
+    const countedLines=table==="compras"?
+      `count(*) FILTER (WHERE NULLIF(btrim(${legacy?"t.producto_id":"t.articulo_id"}::text),'') IS NOT NULL)`:
+      "count(*)";
     if(!periodWithArticleFilter)return `SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
        sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount,
-       count(*)::float8 AS lines
+       ${countedLines}::float8 AS lines
        FROM ${quoted}.${table} t ${fromJoin}
        WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
          AND f.id=ANY($3::int[])
@@ -295,7 +298,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
            ${legacy?pharmacyDataCodeSQL("f"):"upper(btrim(t.farmacia_codigo))"} AS farmacia_codigo,
            ${legacy?"t.producto_id":"t.articulo_id"} AS articulo_id,
-           sum(t.unidades) AS unidades,sum(${amount}) AS importe,count(*) AS lines
+           sum(t.unidades) AS unidades,sum(${amount}) AS importe,${countedLines} AS lines
          FROM ${quoted}.${table} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
            AND f.id=ANY($3::int[])
@@ -725,8 +728,8 @@ export function setupRealReports(app,pool,{requireTenant}){
       (buyM.rows.length>0&&buyM.rows.every(r=>r.units==null)?null:sum(buyM.rows,"units")):null,
     // Una cabecera de proveedor sin articulo_id no es una línea de compra
     // de artículo. El resumen rápido comunica si ese detalle existe.
-    lineasCompra:buyers&&readBuyPeriod&&buyRows.length?
-      sum(buyM.rows,"lines"):buyers&&readBuyPeriod&&buyM.rows.length===0?0:null,
+    lineasCompra:buyers&&readBuyPeriod?
+      (buyM.rows.length>0&&sum(buyM.rows,"lines")===0?null:sum(buyM.rows,"lines")):null,
     costeMedioCompra:readBuyRows&&buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
       round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:

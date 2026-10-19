@@ -428,7 +428,9 @@ static SyncJob ApplyJob(SyncJob job, JobRequest r, AppConfig config)
     job.Sql = SqlTemplates.NormalizeForMode(pharmacy.SystemType, entity.Name, r.Mode, r.Sql ?? "");
     job.FullSql = r.FullSql ?? ""; job.Mode = r.Mode;
     SqlTemplates.ValidateKnownSourceColumns(pharmacy.SystemType, entity.Name, job.Mode, job.Sql);
-    job.EveryMinutes = r.EveryMinutes; job.RetryMinutes = r.RetryMinutes; job.BatchSize = r.BatchSize; job.InitialFromUtc = r.InitialFromUtc.ToUniversalTime();
+    job.EveryMinutes = r.EveryMinutes; job.RetryMinutes = r.RetryMinutes;
+    job.DailyAtLocal = string.IsNullOrWhiteSpace(r.DailyAtLocal) ? null : r.DailyAtLocal.Trim();
+    job.BatchSize = r.BatchSize; job.InitialFromUtc = r.InitialFromUtc.ToUniversalTime();
     job.Enabled = r.Enabled;
     job.ReplayMinutes = r.ReplayMinutes; job.SafetyDelayMinutes = r.SafetyDelayMinutes; job.AlertRecipients = r.AlertRecipients?.Trim() ?? "";
     Validation.Query(job);

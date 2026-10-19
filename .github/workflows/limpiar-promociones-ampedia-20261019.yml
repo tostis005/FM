@@ -1,0 +1,60 @@
+name: Limpieza única promociones Ampedia (2026-10-19)
+on:
+  push:
+    branches: [main]
+    paths:
+      - ops/limpieza-promociones-ampedia-20261019.sql
+permissions:
+  contents: read
+concurrency:
+  group: farmetrica-ampedia-promotions-maintenance
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    if: github.event.head_commit.message == 'ops: ejecutar limpieza única promociones Ampedia 2026-10-19'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar servidor y preparar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Guardar respaldo y limpiar solamente ampedia.fm_promociones
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+            < ops/limpieza-promociones-ampedia-20261019.sql
+      - name: Verificar registro de ejecución y recuentos posteriores
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS(
+              SELECT 1 FROM ampedia.fm_promocion_revisiones
+              WHERE promocion_id='__CATALOG_RESET_20261019__'
+            ) THEN RAISE EXCEPTION 'No se registró la limpieza de Ampedia'; END IF;
+            IF EXISTS(SELECT 1 FROM ampedia.fm_promociones) THEN
+              RAISE EXCEPTION 'Quedan promociones en Ampedia'; END IF;
+          END $$;
+          SELECT count(*) AS promociones_actuales FROM ampedia.fm_promociones;
+          SELECT count(*) AS promociones_respaldo
+          FROM ampedia.fm_promociones_respaldo_20261019;
+          SQL

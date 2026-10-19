@@ -24,14 +24,14 @@ import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
 import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
-import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
+import { readPromotionExcel, mergeImportedPromos, importedPromotionStatus } from "./importarPromociones.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
 import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -88,7 +88,7 @@ function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia",emai
       // Los objetivos del Excel prevalecen sobre las metas de demostración anteriores.
       const shouldUpdate=saved.objectiveSeedVersion!==OCTOBER_2026_OBJECTIVES_VERSION;
       const promos=shouldUpdate?applyObjectiveRows(existing,OCTOBER_2026_OBJECTIVE_ROWS).promotions:existing;
-      return {...saved,pharmacies,promos:promos.length?promos:applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions,
+      return {...saved,pharmacies,promos, // Conservar un listado vacío tras eliminar todas las promociones.
         objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION,
         users:saved.users.map(u=>({...u,pharmacies:(u.pharmacies||[]).map(migratePharmacyId)})),
       };
@@ -103,7 +103,7 @@ function downloadCSV(name, rows) {
   const csv="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));a.download=name+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
-function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status}</span>;}
+function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status==="Finalizada"?"Archivada":status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
 function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div></div></div>}
 function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=false}){
@@ -319,6 +319,7 @@ function App(){
   const [importBusy,setImportBusy]=useState(false);
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [toast,setToast]=useState("");
+ const [deletingPromoId,setDeletingPromoId]=useState(null);
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
  const [adminOpen,setAdminOpen]=useState(()=>ADMIN_IDS.has(pageFromUrl()));
@@ -556,6 +557,27 @@ function App(){
      catch(err){setToast("Guardada en este navegador; pendiente de servidor: "+err.message);}
    } else setToast("Promoción guardada únicamente en este navegador");
  }
+ async function removePromotion(p){
+  if(!["administrador","superadministrador"].includes(tenantContext?.role))return;
+  if(deletingPromoId)return;
+  const confirmed=window.confirm(
+   '¿Eliminar definitivamente la promoción "'+p.name+'"?\n\n'+
+   'Se borrará de Farmétrica para todas las personas de este cliente. No se puede deshacer.'
+  );
+  if(!confirmed)return;
+  setDeletingPromoId(p.id);
+  try{
+   // Solo quitar la campaña de la lista tras confirmar la operación del servidor.
+   await deleteStoredPromotion(p.id);
+   setData(prev=>({...prev,promos:prev.promos.filter(x=>String(x.id)!==String(p.id))}));
+   setReportSelectedIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
+   setExpandedCampaignIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
+   if(String(promoForm.id)===String(p.id))setEditingPromo(null);
+   setToast("Promoción eliminada de Farmétrica");
+  }catch(err){
+   setToast("No se pudo eliminar la promoción: "+err.message);
+  }finally{setDeletingPromoId(null);}
+ }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
   setPromoForm({...promoForm,targets});
@@ -577,14 +599,21 @@ function App(){
     try{
       const campaigns=await readPromotionExcel(file);
       const {additions,updates,duplicates,expanded,warnings}=mergeImportedPromos(data.promos,campaigns);
-      const newPromos=additions.map(p=>({...p,status:"Borrador"}));
-      if(newPromos.length||updates.length)setData(prev=>({...prev,promos:[
-        ...newPromos,...prev.promos.map(old=>updates.find(u=>u.id===old.id)||old)
+      const timeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
+        Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const newPromos=additions.map(p=>({...p,
+        status:importedPromotionStatus(p,new Date(),timeZone)}));
+      // Al completar objetivos pendientes se actualiza también un borrador
+      // existente; nunca sobrescribir estados editados manualmente.
+      const revised=updates.map(p=>({...p,status:p.status==="Borrador"?
+        importedPromotionStatus(p,new Date(),timeZone):p.status}));
+      if(newPromos.length||revised.length)setData(prev=>({...prev,promos:[
+        ...newPromos,...prev.promos.map(old=>revised.find(u=>u.id===old.id)||old)
       ]}));
-      setStatusFilter("Borrador");
+      setStatusFilter("Todos");
       const message=newPromos.length+" nuevas, "+updates.length+" actualizadas; "+duplicates+" sin cambios. ";
       if(["administrador","superadministrador"].includes(tenantContext?.role)){
-        const changed=[...newPromos,...updates];let errors=0;
+        const changed=[...newPromos,...revised];let errors=0;
         for(let i=0;i<changed.length;i+=5){
           const responses=await Promise.allSettled(changed.slice(i,i+5).map(p=>saveStoredPromotion(p)));
           errors+=responses.filter(r=>r.status==="rejected").length;
@@ -836,7 +865,7 @@ function App(){
   <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
   <div className="toolbar">
    <div className="search-wrap"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar promoción o CN..." aria-label="Buscar promociones"/></div>
-   <div className="select-wrap"><Filter size={16}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filtrar estado"><option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option><option>Finalizada</option></select></div>
+   <div className="select-wrap"><Filter size={16}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filtrar estado"><option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></div>
    <div className="fm-visible-date-filters"><label>Fecha de inicio<input type="date" aria-label="Fecha de inicio" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Fecha de fin<input type="date" aria-label="Fecha de fin" value={to} onChange={e=>setTo(e.target.value)}/></label></div>
   </div>
   <ListTable rows={filteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
@@ -857,7 +886,7 @@ function App(){
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
       {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
-      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div>}
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button>{["administrador","superadministrador"].includes(tenantContext?.role)&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
     ]}/>
  </section>
 
@@ -982,7 +1011,7 @@ function App(){
     <div className="report-modal-body">
      <div className="report-modal-filters">
       <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.year)}>
-       <option value="Activa">Activas</option><option value="Finalizada">Finalizadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
+       <option value="Activa">Activas</option><option value="Finalizada">Archivadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
       </select></Field>
       <Field label="Año de inicio"><select value={reportModal.year} onChange={e=>updateDraftScope(reportModal.status,e.target.value)}>
        <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
@@ -1015,7 +1044,7 @@ function App(){
    <Field label="Nombre de promoción"><input required placeholder="Ej.: Especial hidratación" value={promoForm.name} onChange={e=>setPromoForm({...promoForm,name:e.target.value})}/></Field>
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>
    <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field><Field label="Fecha de fin"><input type="date" required value={promoForm.end} onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field></div>
-   <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option>Finalizada</option></select></Field>
+   <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></Field>
     <Field label="Tipo de promoción"><select value={promoForm.type||"sin_clasificar"} onChange={e=>setPromoForm({...promoForm,type:e.target.value,discountPercent:PROMOTION_TYPES.find(t=>t.id===e.target.value)?.needsPercent?promoForm.discountPercent:""})}>{PROMOTION_TYPES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&<Field label="Importe de descuento (€)"><input type="number" min="0.01" step="0.01" value={promoForm.discountAmount||""} onChange={e=>setPromoForm({...promoForm,discountAmount:e.target.value})}/></Field>}
     {promoForm.importWarnings?.length>0&&<div className="note data-note"><CircleHelp size={16}/> Pendiente de revisar: {promoForm.importWarnings.join(" · ")}</div>}

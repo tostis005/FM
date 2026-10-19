@@ -71,7 +71,7 @@ const META={
    ["refs","Referencias con PMC / total",r=>UNITS(r.costedReferences)+" / "+UNITS(r.references)] ]}
 };
 const SORT_FIELD={
- "productos":{cn:"cn",sourceId:"name",name:"name",family:"family",pvp:"pvp",pmc:"pmc",stock:"stock"},
+ "productos":{cn:"cn",sourceId:"sourceId",name:"name",family:"family",pvp:"pvp",pmc:"pmc",stock:"stock"},
  "ventas-tickets":{ticket:"ticket",at:"at",lines:"lines",units:"units",amount:"amount"},
  "ventas-devoluciones":{reference:"reference",at:"at",units:"units",amount:"amount",kind:"kind"},
  "compras-devoluciones":{reference:"reference",at:"at",units:"units",amount:"amount",supplier:"supplier"},

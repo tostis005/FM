@@ -38,6 +38,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
   const [recording, setRecording] = useState(false);
+  const [requesting, setRequesting] = useState(false);
   const [recorded, setRecorded] = useState(null);
   const [seconds, setSeconds] = useState(0);
   const [audioError, setAudioError] = useState("");
@@ -98,6 +99,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
       if (event.key === "Escape") {
         event.preventDefault();
         finishRecording(true);
+        setRequesting(false);
         setOpen(false);
         launcherRef.current?.focus();
       }
@@ -132,14 +134,15 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }, []);
 
   function closeAssistant() {
-    if (recording) finishRecording(true);
+    finishRecording(true);
+    setRequesting(false);
     setOpen(false);
     launcherRef.current?.focus();
   }
 
   function sendText(text = draft) {
     const question = text.trim();
-    if (!question || recording) return;
+    if (!question || recording || requesting) return;
     setMessages(previous => [
       ...previous,
       createMessage("user", question),
@@ -151,6 +154,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }
 
   async function startRecording() {
+    if (recording || requesting) return;
     setAudioError("");
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setAudioError("Este navegador no permite grabar audio aquí. Comprueba que utilizas HTTPS y que el micrófono está disponible.");
@@ -158,6 +162,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     }
     if (recorded) { revokeUrl(recorded.url); setRecorded(null); }
     const currentRequest = ++requestRef.current;
+    setRequesting(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (currentRequest !== requestRef.current) {
@@ -183,10 +188,16 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
         setRecorded({ url, size: blob.size });
       };
       recorder.start();
+      setRequesting(false);
       setSeconds(0);
       setRecording(true);
-      tickerRef.current = window.setInterval(() => setSeconds(value => value + 1), 1000);
+      tickerRef.current = window.setInterval(() => setSeconds(value => {
+        if (value >= 119) { finishRecording(false); return 120; }
+        return value + 1;
+      }), 1000);
     } catch (error) {
+      if (currentRequest !== requestRef.current) return;
+      setRequesting(false);
       stopTracks();
       setRecording(false);
       setAudioError(error?.name === "NotAllowedError"
@@ -214,7 +225,8 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }
 
   function newConversation() {
-    if (recording) finishRecording(true);
+    finishRecording(true);
+    setRequesting(false);
     if (recorded) revokeUrl(recorded.url);
     createdUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
     createdUrlsRef.current.clear();
@@ -305,6 +317,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
               </div>
               <div className="fm-ai-bottom">
                 {audioError && <div className="fm-ai-error" role="alert">{audioError}</div>}
+                {requesting && <div className="fm-ai-recording" role="status"><span className="fm-ai-rec-dot"/> Solicitando permiso del micrófono… <button type="button" onClick={() => { finishRecording(true); setRequesting(false); }}>Cancelar</button></div>}
                 {recording && <div className="fm-ai-recording" role="status">
                   <span className="fm-ai-rec-dot"/><span>Grabando audio</span><strong>{timerLabel(seconds)}</strong>
                   <button type="button" onClick={() => finishRecording(true)} title="Descartar grabación"><Trash2 size={16}/> Descartar</button>
@@ -320,10 +333,10 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                   <textarea
                     ref={inputRef}
                     aria-label="Escribe tu pregunta"
-                    placeholder={recording ? "Termina la grabación para escribir..." : "Escribe una pregunta sobre tus farmacias..."}
+                    placeholder={recording || requesting ? "Termina la grabación para escribir..." : "Escribe una pregunta sobre tus farmacias..."}
                     rows={2}
                     maxLength={2000}
-                    disabled={recording}
+                    disabled={recording || requesting}
                     value={draft}
                     onChange={event => setDraft(event.target.value)}
                     onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendText(); } }}
@@ -331,8 +344,8 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                   <div className="fm-ai-composer-actions">
                     <span>Intro para enviar · Mayús + Intro para nueva línea</span>
                     <div>
-                      <button type="button" className="fm-ai-icon-btn" title="Grabar mensaje de voz" aria-label="Grabar mensaje de voz" disabled={recording || Boolean(recorded)} onClick={startRecording}><Mic size={19}/></button>
-                      <button type="button" className="fm-ai-send" disabled={!draft.trim() || recording} aria-label="Enviar mensaje" title="Enviar mensaje" onClick={() => sendText()}><ArrowUp size={19}/></button>
+                      <button type="button" className="fm-ai-icon-btn" title="Grabar mensaje de voz" aria-label="Grabar mensaje de voz" disabled={recording || requesting || Boolean(recorded)} onClick={startRecording}><Mic size={19}/></button>
+                      <button type="button" className="fm-ai-send" disabled={!draft.trim() || recording || requesting} aria-label="Enviar mensaje" title="Enviar mensaje" onClick={() => sendText()}><ArrowUp size={19}/></button>
                     </div>
                   </div>
                 </div>

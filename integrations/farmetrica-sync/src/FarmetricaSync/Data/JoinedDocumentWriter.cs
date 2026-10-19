@@ -84,7 +84,7 @@ public static class JoinedDocumentWriter
     public static async Task<SyncWriteResult> WriteAsync(
         NpgsqlConnection conn, string schema, Pharmacy pharmacy, EntityDefinition entity,
         IAsyncEnumerable<IReadOnlyList<Dictionary<string, object?>>> rawBatches,
-        Action<SyncWriteProgress>? progress, CancellationToken ct)
+        Action<SyncWriteProgress>? progress, CancellationToken ct, bool isFull = false)
     {
         if (!Supports(entity.Name)) throw new ArgumentException("Flujo documental desconocido");
         Validation.Id(schema, "Esquema PostgreSQL");
@@ -161,7 +161,12 @@ public static class JoinedDocumentWriter
             batches++;
             progress?.Invoke(new("Staging privado preparado", rows, batches, 0, 0, 0, 0));
         }
-        if (rows == 0) return new(0, 0, 0, 0, 0);
+        if (rows == 0)
+        {
+            if (isFull) throw new InvalidOperationException(
+                "Carga completa de documentos vacía: revisar el SELECT antes de confirmar el cursor.");
+            return new(0, 0, 0, 0, 0);
+        }
 
         // Validar el JOIN ENTERO, no solo lotes: duplicar líneas de otros
         // lotes o cambiar totales entre filas de un ticket es un error de origen.

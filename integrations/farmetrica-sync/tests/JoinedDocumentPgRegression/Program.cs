@@ -77,4 +77,11 @@ var withLine = await JoinedDocumentWriter.WriteAsync(db,"ampedia",pharmacy,recei
 Check(withLine.Inserted==1,"La línea tardía no debe duplicar cabecera");
 Check(await Count(db,"SELECT count(*) FROM ampedia.fm_recepciones_cabeceras WHERE documento_id='RECEIPT-JOIN'")==1,
     "La cabecera de recepción se ha duplicado");
+try
+{
+    await JoinedDocumentWriter.WriteAsync(db,"ampedia",pharmacy,sales,
+        Batches(),null,CancellationToken.None,true);
+    throw new Exception("Se permitió confirmar una carga completa vacía");
+}
+catch (InvalidOperationException e) when (e.Message.Contains("completa de documentos vacía")) { }
 Console.WriteLine("PostgreSQL JOIN writer: atomicidad, idempotencia, cambios y recuperación OK");

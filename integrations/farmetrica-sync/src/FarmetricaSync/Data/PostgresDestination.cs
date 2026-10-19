@@ -265,7 +265,7 @@ WHERE a."origen_id" IS NULL
             // No se crea la tabla heredada de filas de venta para este flujo.
             await using var docSession = await OpenAsync(dest, ct);
             return await JoinedDocumentWriter.WriteAsync(docSession.Connection, dest.Schema,
-                pharmacy, entity, rawBatches, onProgress, ct);
+                pharmacy, entity, rawBatches, onProgress, ct, mode == "snapshot");
         }
 
         string target = Validation.Q(dest.Schema) + "." + Validation.Q(entity.Name);

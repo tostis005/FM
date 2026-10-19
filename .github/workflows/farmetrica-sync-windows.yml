@@ -1,0 +1,49 @@
+name: Farmetrica Sync · Windows
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integrations/farmetrica-sync/**'
+      - '.github/workflows/farmetrica-sync-windows.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'integrations/farmetrica-sync/**'
+      - '.github/workflows/farmetrica-sync-windows.yml'
+permissions:
+  contents: read
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/farmetrica-sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Comprobar interfaz y contratos
+        run: node tests/ui-smoke.cjs
+      - name: Probar SQL Farmatic y migración de consultas anteriores
+        run: dotnet run --project tests/SqlTemplateRegression/SqlTemplateRegression.csproj --configuration Release
+      - name: Verificar lectura no bloqueante del historial y login
+        run: dotnet run --project tests/ConfigStoreRegression/ConfigStoreRegression.csproj --configuration Release
+      - name: Publicar Windows autocontenido
+        run: dotnet publish src/FarmetricaSync/FarmetricaSync.csproj -r win-x64 -c Release --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o dist/win-x64
+      - name: Empaquetar el servicio
+        run: |
+          mkdir -p dist/paquete/windows
+          cp -r dist/win-x64/. dist/paquete/windows/
+          cp -r scripts dist/paquete/
+          cp README.md dist/paquete/
+          cd dist/paquete && zip -qr ../farmetrica-sync-windows.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: farmetrica-sync-win-x64
+          path: integrations/farmetrica-sync/dist/farmetrica-sync-windows.zip
+          if-no-files-found: error

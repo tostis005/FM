@@ -744,7 +744,7 @@ function App(){
         aria-expanded={expanded} aria-controls={submenuId}
         onClick={()=>setExpandedNavIds(previous=>expanded?
          previous.filter(id=>id!==item.id):[...previous,item.id])}>
-         <ChevronDown size={16} className={"side-settings-chevron"+(expanded?" open":"")}/>
+         <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(expanded?" open":"")}/>
         </button>}
       </div>
       {hasChildren&&<div id={submenuId} className="side-nav-submenu" hidden={!expanded}>
@@ -768,7 +768,7 @@ function App(){
      <button className={"side-link "+(CONFIG_IDS.has(page)?"active":"")} type="button"
       aria-expanded={settingsOpen} aria-controls="fm-settings-nav" onClick={()=>setSettingsOpen(v=>!v)}>
       <Settings2 size={19}/><span>Configuración</span>
-      <ChevronDown size={15} className={"side-settings-chevron"+(settingsOpen?" open":"")}/>
+      <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(settingsOpen?" open":"")}/>
      </button>
      {settingsOpen&&<div id="fm-settings-nav" className="side-settings-children">
       {visibleNav.filter(item=>CONFIG_IDS.has(item.id)).map(item=>
@@ -781,7 +781,7 @@ function App(){
      <button className={"side-link "+(ADMIN_IDS.has(page)?"active":"")} type="button"
       aria-expanded={adminOpen} aria-controls="fm-admin-nav" onClick={()=>setAdminOpen(v=>!v)}>
       <ShieldCheck size={19}/><span>Administración</span>
-      <ChevronDown size={15} className={"side-settings-chevron"+(adminOpen?" open":"")}/>
+      <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(adminOpen?" open":"")}/>
      </button>
      {adminOpen&&<div id="fm-admin-nav" className="side-settings-children">
       {visibleNav.filter(item=>ADMIN_IDS.has(item.id)).map(item=>

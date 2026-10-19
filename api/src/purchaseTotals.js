@@ -3,6 +3,7 @@
 import {getFilters} from "./realReports.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {nameCommercialRows} from "./commercialNames.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function setupPurchaseTotals(app,pool,{requireTenant}){
  // Registros de recepción importados desde el ERP, paginados de verdad.
@@ -93,11 +94,12 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     SELECT documents.*,count(*) OVER()::int AS total FROM documents
     ORDER BY "documentDate" DESC,"sourceId" DESC
     LIMIT ${limit}::int OFFSET ${offset}::int`,values);
+   const named=await nameCommercialRows(pool,req.context,rows,{supplierCode:"supplierId"});
    res.json({available:true,from:f.from,to:f.to,page,pageSize:size,
     total:Number(rows[0]?.total||0),
-    rows:rows.map((r,i)=>({id:String(r.pharmacyId)+"|"+String(r.sourceId||r.reference||"recepcion")+"|"+((page-1)*size+i),
+    rows:named.map((r,i)=>({id:String(r.pharmacyId)+"|"+String(r.sourceId||r.reference||"recepcion")+"|"+((page-1)*size+i),
      pharmacyId:String(r.pharmacyId),sourceId:r.sourceId,reference:r.reference,date:r.date,
-     supplier:r.supplier||null,supplierId:r.supplierId||null,
+     supplier:r.supplierName||r.supplier||null,supplierId:r.supplierId||null,
      orderNumber:r.orderNumber||null,receiptNumber:r.receiptNumber||null}))});
   }catch(e){next(e)}
  });

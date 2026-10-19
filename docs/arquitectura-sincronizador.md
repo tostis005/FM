@@ -26,6 +26,22 @@ La API configura tiempos máximos de conexión, consulta y espera por bloqueo. E
 
 - Tickets: SELECT de cabeceras, SELECT de líneas, claves comunes, fecha/modificación/estado y descuentos.
 - Recepciones: SELECT de cabeceras, SELECT de líneas, claves comunes, fecha/modificación/estado y descuentos/bonificaciones.
-- Pedidos: cabeceras y líneas, si Farmatic los expone.
+- Maestro de artículos: completar o verificar SELECT que aporte CN y EAN/GTIN
+  reales. La plantilla Farmatic actual devuelve `NULL` en ambos campos porque
+  no se verificaron esos nombres en el origen; sin CN no puede clasificarse bien.
+- Pedidos: cabeceras y líneas, si Farmatic los expone. Son necesarios para que
+  el preparador no recomiende volver a comprar unidades ya pedidas.
 
 No inventar columnas del ERP. Mantener plantillas compatibles con los SELECT existentes hasta validar esquemas reales.
+
+## Estado de implementación
+
+El conector ya dispone de estructura y pruebas de publicación JOIN,
+idempotencia, detección de duplicados y cabeceras pendientes, pero no está
+listo para uso real sin validar SELECT del ERP. Quedan también la conciliación
+de cantidades/importes contra Farmatic, la comprobación de cambios históricos,
+los permisos y conexiones de todas las farmacias y el despliegue Windows + VPS.
+
+La PR permite revisar los cambios, pero no instala ni valida producción.
+No fusionar a ciegas: el código se ha trasladado desde un repositorio
+privado a otro de visibilidad pública.

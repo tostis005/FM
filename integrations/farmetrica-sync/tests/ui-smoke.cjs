@@ -60,6 +60,12 @@ assert.match(templateCode,/fa\.IdFamilia = f\.IdFamilia/);
 assert.match(templateCode,/sf\.IdSuperFamilia = fa\.IdSuperFamilia/);
 assert.match(src,/Preparar familias/);
 assert.match(src,/createFamilyJobs/);
+assert.match(src,/createVendorJobs/);
+assert.match(src,/Preparar vendedores/);
+assert.match(src,/\/jobs\/vendedores\/create-missing/);
+assert.match(backendCode,/\/jobs\/vendedores\/create-missing/);
+assert.match(templateCode,/\{\{TABLE:dbo\.Vendedor\}\}/);
+
 assert.match(backendCode,/\/jobs\/familias\/create-missing/);
 assert.match(tunnelSource,/FingerPrintSHA256/);
 assert.match(tunnelSource,/ForwardedPortLocal\("127\.0\.0\.1"/);

@@ -65,7 +65,7 @@ assert.match(home,/<h1 id="hero-title">/);
 assert.match(home,/Farmatic/);
 assert.match(home,/Nixfarma/);
 assert.match(home,/Unycop/);
-assert.match(home,/Toda tu farmacia, <em>en una sola visión/);
+assert.match(home,/Conoce tu farmacia\. <em>Descubre dónde mejorar/);
 assert.match(home,/Mejores decisiones/);
 assert.match(home,/Stock e inventario/);
 assert.match(home,/Proveedores/);
@@ -74,7 +74,7 @@ assert.match(home,/Rentabilidad/);
 assert.match(home,/Una farmacia/);
 assert.match(home,new RegExp('href="/integraciones/bitfarma/"'));
 assert.match(home,new RegExp('href="/integraciones/farmanager/"'));
-assert.match(home,/la conexión depende de la versión, permisos y validación técnica/);
+assert.match(home,/la disponibilidad se determina según versión, permisos y configuración/);
 assert.match(css,/@media\(max-width:700px\)/);
 assert.match(login,/query\.get\("next"\) \|\| "\/dashboard"/);
 assert.match(login,/next === "\/" \? "\/dashboard"/);
@@ -179,7 +179,7 @@ assert.match(home,/href="\/blog\/integrar-farmatic-nixfarma-unycop-analitica\/"/
 assert.match(blog,/href="\/blog\/integrar-farmatic-nixfarma-unycop-analitica\/"/);
 
 // La narrativa principal es inteligencia de negocio, no únicamente campañas.
-assert.match(home,/Toda tu farmacia, <em>en una sola visión/);
+assert.match(home,/Conoce tu farmacia\. <em>Descubre dónde mejorar/);
 assert.match(login,/espacio de inteligencia de negocio/);
 assert.doesNotMatch(login,/panel de promociones y seguimiento/);
 assert.match(blog,/Presentamos Farmetrica: una visión integral de tu farmacia/);

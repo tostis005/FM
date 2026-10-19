@@ -24,7 +24,7 @@ test("la consulta cacheada conserva filtro, orden global, aislamiento y página 
  const data=await cache.read(args);
  assert.equal(data.cache,true);assert.equal(data.stale,false);
  assert.equal(data.products.length,2);
- assert.deepEqual(calls[1].args,["ampedia",12,[1,2],"6543",["Digestivo"],401,400]);
+ assert.deepEqual(calls[1].args,["ampedia",12,[1,2],"6543",["Digestivo"],401,400,"{}"]);
  assert.match(calls[1].sql,/ORDER BY \(i\.detalle->>'value'\)::double precision DESC/);
  assert.equal((await cache.read({...args,sortKey:"DROP"})),null);
  assert.equal((await cache.read({...args,to:"2026-10-18"})),null);
@@ -70,4 +70,26 @@ test("refresco de ventas inserta instantánea y fecha de forma transaccional",as
  assert.ok(!queries.some(x=>x.sql==="ROLLBACK"));
  const input=queries.find(x=>x.sql.includes("jsonb_to_recordset"));
  assert.equal(JSON.parse(input.args[3])[0].detalle.abcdClass,"A");
+});
+
+test("la caché SQL filtra las categorías B/C antes de ordenar y paginar",async()=>{
+ const queries=[];
+ const pool={async query(sql,params){
+  queries.push({sql,params});
+  if(sql.includes("ventas_analitica_estado"))return {rows:[
+   {farmacia_id:1,calculado_en:"2026-10-19T08:00:00Z",hasta:"2026-10-19"}]};
+  return {rows:[{detalle:{cn:"653333",abcdClass:"B",units:2},__totalFiltered:1}]};
+ }};
+ const res=await createSalesCache(pool,{now:frozen,autoRun:false,logger:{}}).read({
+  slug:"ampedia",ids:[1],months:12,from:"2025-11-01",to:"2026-10-19",
+  sortKey:"value",sortDir:"desc",page:1,pageSize:400,
+  columnFilters:{abcdClass:["B","C"],cn:"653"}
+ });
+ assert.equal(res.products[0].abcdClass,"B");
+ assert.equal(res.totalFiltered,1);
+ assert.deepEqual(JSON.parse(queries.at(-1).params.at(-1)),{abcdClass:["B","C"],cn:"653"});
+ assert.match(queries.at(-1).sql,/jsonb_array_elements_text\(\$8::jsonb->'abcdClass'\)/);
+ assert.ok(queries.at(-1).sql.indexOf("jsonb_array_elements_text")<
+    queries.at(-1).sql.indexOf("LIMIT $6"));
+ assert.match(queries.at(-1).sql,/units'\)::float8>0/);
 });

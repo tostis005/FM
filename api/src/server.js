@@ -434,6 +434,8 @@ try {
   }
   const supplierMigration=await readFile(new URL("./migrations/005_proveedores.sql",import.meta.url),"utf8");
   await pool.query(supplierMigration);
+  const supplierFlagsMigration=await readFile(new URL("./migrations/017_proveedores_visibilidad.sql",import.meta.url),"utf8");
+  await pool.query(supplierFlagsMigration);
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
   await pool.query(leadsMigration);
   const privacyMigration=await readFile(new URL("./migrations/007_solicitudes_privacidad.sql",import.meta.url),"utf8");

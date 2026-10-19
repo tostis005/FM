@@ -147,7 +147,7 @@ try{
          await quick.getByRole("button",{name:"Este mes",exact:true}).click();
          const dates=await page.locator(".fm-unified-filters input[type=date]").evaluateAll(
            els=>els.map(el=>el.value));
-         if(dates.length!==2||!dates.every(date=>/^20\\d{2}-\\d{2}-\\d{2}$/.test(date)))
+         if(dates.length!==2||!dates.every(date=>/^20\d{2}-\d{2}-\d{2}$/.test(date)))
            throw Error("Los accesos de promociones deben aplicar las fechas Desde/Hasta");
          if(await quick.getByRole("button",{name:"Este mes",exact:true}).getAttribute("aria-pressed")!=="true")
            throw Error("El acceso rápido debe mostrarse seleccionado");

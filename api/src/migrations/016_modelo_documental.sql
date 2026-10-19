@@ -26,8 +26,9 @@ BEGIN
  )',q);
  EXECUTE format('CREATE TABLE IF NOT EXISTS %s.fm_ventas_lineas (
    farmacia_codigo text NOT NULL, sistema_origen text NOT NULL, documento_id text NOT NULL,
-   linea_id text NOT NULL, articulo_origen_id text NOT NULL,
+   linea_id text NOT NULL, articulo_origen_id text,
    cantidad numeric(20,6) NOT NULL, precio_unitario numeric(20,6),
+   tipo_linea_origen text,
    descuento_linea numeric(20,6), descuento_linea_tipo text,
    importe_neto numeric(20,6), impuestos numeric(20,6),
    coste_historico numeric(20,6), devuelta boolean, anulada boolean,
@@ -38,6 +39,11 @@ BEGIN
      REFERENCES %s.fm_ventas_cabeceras(farmacia_codigo,sistema_origen,documento_id)
      DEFERRABLE INITIALLY IMMEDIATE
  )',q,q);
+
+ -- Adaptación aditiva de esquemas anteriores: no borra registros ni
+ -- cambia el significado de ningún código de artículo.
+ EXECUTE format('ALTER TABLE %s.fm_ventas_lineas ALTER COLUMN articulo_origen_id DROP NOT NULL',q);
+ EXECUTE format('ALTER TABLE %s.fm_ventas_lineas ADD COLUMN IF NOT EXISTS tipo_linea_origen text',q);
 
  EXECUTE format('CREATE TABLE IF NOT EXISTS %s.fm_recepciones_cabeceras (
    farmacia_codigo text NOT NULL, sistema_origen text NOT NULL, documento_id text NOT NULL,

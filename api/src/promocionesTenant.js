@@ -33,7 +33,20 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
         if(all)return p;
         return {...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>allowed.has(String(id)))),sales:{}};
       });
-      return res.json({promotions:promos});
+      // Un borrado confirmado no puede revivir en otro navegador que conserve
+      // una copia local anterior. Las revisiones de borrado son los tombstones.
+      let deletedIds=[];
+      if(all){
+        const deleted=await pool.query(
+          `SELECT DISTINCT r.promocion_id
+           FROM "${schema}".fm_promocion_revisiones r
+           WHERE r.documento_anterior ? 'deletedAt'
+             AND NOT EXISTS (SELECT 1 FROM "${schema}".fm_promociones p
+               WHERE p.id=r.promocion_id)
+           LIMIT 2000`);
+        deletedIds=deleted.rows.map(r=>r.promocion_id);
+      }
+      return res.json({promotions:promos,deletedIds});
     }catch(e){next(e);}
   });
   // El borrado solo puede realizarlo un administrador del cliente.

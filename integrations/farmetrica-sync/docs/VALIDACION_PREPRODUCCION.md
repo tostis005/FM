@@ -1,0 +1,23 @@
+# Validación preproducción — lista de aceptación
+
+- [ ] Compilar en Windows con .NET 10 SDK (`publicar-win-x64.ps1`) sin errores ni advertencias críticas.
+- [ ] Instalar y comprobar inicio/reinicio del servicio Windows con cuenta de servicio aprobada.
+- [ ] Panel admin solo en `127.0.0.1:5080`; primera contraseña creada, sesión protegida, sin acceso sin autenticación.
+- [ ] SQL Server accesible con certificado TLS confiable desde la identidad real del servicio.
+- [ ] Linked Server verificado y permisos SELECT sobre tablas remotas de cada farmacia.
+- [ ] PostgreSQL de pruebas: autenticación, SSL y permisos mínimos verificados.
+- [ ] Contratos de columnas y consultas reales revisados con técnico de Farmatic.
+- [ ] Alta de una farmacia y prueba de conexión, sin afectar al SQL original.
+- [ ] Snapshot de stock y artículos: contar filas, importes y comparar muestras con SQL origen.
+- [ ] Incremental de ventas/compras: primera carga, segunda sin cambios, altas con igual fecha y distintos identificadores, alta tardía dentro/fuera de solapamiento y nueva venta.
+- [ ] Corte de red simulado: falla, mantiene watermark anterior, reintenta y evita duplicados.
+- [ ] Reinicio del servicio durante operación: transacciones consistentes y reintento posterior.
+- [ ] Verificar alertas SMTP de fallo y control de un aviso máximo por hora/consulta.
+- [ ] Medir el volumen histórico, tiempos de consulta y bloqueo en SQL Server; evitar cargas en horas críticas.
+- [ ] Cuadrar diferencias de unidades, descuentos, devoluciones, IVA y zona horaria.
+- [ ] Confirmar que fuentes incrementales son realmente inmutables y registran la **fecha efectiva de inserción**.
+- [ ] Confirmar la mayor latencia de publicación y verificar que está cubierta por ReplayMinutes.
+- [ ] Confirmar gestión de bajas/borrados únicamente para fuentes snapshot.
+- [ ] Añadir una entidad propia desde la interfaz y validar DDL normalizado.
+- [ ] Documentar procedimientos de backup/restore de PostgreSQL, estado, claves y credenciales.
+- [ ] Ajustar integración con la web Farmétrica para consumir las tablas reales y gestionar metadatos nuevos.

@@ -33,6 +33,8 @@ jobs:
           node --check api/src/genericos.js
           node --check api/src/genericosReales.js
           node --check api/src/realReports.js
+          node --check api/src/purchaseTotals.js
+          node --test api/src/purchaseTotals.test.js
           node --check api/src/salesSummary.js
           node --check api/src/salesTotals.js
           node --check api/src/salesInsights.js

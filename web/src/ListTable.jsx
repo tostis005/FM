@@ -28,8 +28,10 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange}){
-  const [filters,setFilters]=useState({});
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null}){
+  const [localFilters,setLocalFilters]=useState({});
+ const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
+ const filters=remotelyFiltered?serverFilters:localFilters;
   const [localSort,setLocalSort]=useState(defaultSort);
   const remote=serverSort!==undefined&&typeof onSortChange==="function";
   const sort=remote?serverSort:localSort;
@@ -37,10 +39,15 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const [pageSize,setPageSize]=useState(50);
   // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
   // Ordenar solamente la respuesta truncada produciría resultados engañosos.
-  const filtered=useMemo(()=>filterSortRows(rows,columns,filters,remote?null:sort),
-    [rows,columns,filters,sort,remote]);
+  const filtered=useMemo(()=>remotelyFiltered?rows:filterSortRows(rows,columns,filters,remote?null:sort),
+    [rows,columns,filters,sort,remote,remotelyFiltered]);
   const {page:safePage,items:slice}=pageRows(filtered,page,pageSize);
-  const changeFilter=(key,value)=>{setFilters(p=>({...p,[key]:value}));setPage(0);};
+  const changeFilter=(key,value)=>{
+  const next={...filters,[key]:value};
+  if(remotelyFiltered)onServerFiltersChange(next);
+  else setLocalFilters(next);
+  setPage(0);
+ };
   const changeSort=key=>{
     const next=sort?.key!==key?{key,direction:"asc"}:
       sort.direction==="asc"?{key,direction:"desc"}:
@@ -62,8 +69,9 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           <tr className="smart-filter-row">{columns.map(col=><th key={col.key}>
             {col.searchable===false?<span className="smart-filter-blank"/>:
               col.filterMode==="multi"?<MultiSelectFilter label={col.label}
-                options={typeof col.options==="function"?col.options(rows):col.options||
-                  [...new Set(rows.flatMap(r=>col.filterValues?.(r)||[col.value(r)]))]}
+                options={filterOptions?.[col.key]||
+                  (typeof col.options==="function"?col.options(rows):col.options||
+                  [...new Set(rows.flatMap(r=>col.filterValues?.(r)||[col.value(r)]))])}
                 value={Array.isArray(filters[col.key])?filters[col.key]:[]}
                 onChange={next=>changeFilter(col.key,next)}/>:
               <input className="smart-column-filter" type="search" value={filters[col.key]||""}
@@ -78,7 +86,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           {columns.map(col=><td key={col.key}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
         </tr>)}</tbody>
       </table>
-      {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
+      {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{!remotelyFiltered&&rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
     <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={setPage}

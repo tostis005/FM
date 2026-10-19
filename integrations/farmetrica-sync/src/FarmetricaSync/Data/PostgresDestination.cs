@@ -314,6 +314,35 @@ WHERE a."origen_id" IS NULL
                     throw new InvalidOperationException("origen_id nulo o vacío en el origen.");
                 dedup[key] = row;
             }
+            // Los identificadores internos del ERP no se usan como CN. País obligatorio
+            // en la farmacia; la regla de prefijos ES es una sugerencia reversible.
+            if (entity.Name == "articulos" && entity.Columns.Any(c => c.Name == "segmento_comercial"))
+            {
+                foreach (var row in dedup.Values)
+                {
+                    row.TryGetValue("codigo_nacional", out var rawCn);
+                    var inferred = ProductClassification.InferFromCn(
+                        Convert.ToString(rawCn, CultureInfo.InvariantCulture), pharmacy.CountryCode);
+                    row.TryGetValue("segmento_comercial", out var sourceSegment);
+                    if (string.IsNullOrWhiteSpace(Convert.ToString(sourceSegment, CultureInfo.InvariantCulture)))
+                    {
+                        row["segmento_comercial"] = inferred.Segment;
+                        row["subcategoria"] = inferred.Subcategory;
+                        row["clasificacion_origen"] = inferred.Origin;
+                        row["clasificacion_confianza"] = inferred.Confidence;
+                    }
+                    else
+                    {
+                        row.TryGetValue("clasificacion_origen", out var sourceOrigin);
+                        row.TryGetValue("clasificacion_confianza", out var sourceConfidence);
+                        if (string.IsNullOrWhiteSpace(Convert.ToString(sourceOrigin)))
+                            row["clasificacion_origen"] = "erp";
+                        if (sourceConfidence is null)
+                            row["clasificacion_confianza"] = 0.90m;
+                    }
+                    row["cn_normalizado"] = inferred.NormalizedCn;
+                }
+            }
             if (mode == "incremental") duplicates += batch.Count - dedup.Count;
             string copy = $"COPY {stageBatch} ({cols}) FROM STDIN (FORMAT BINARY)";
             await using (var writer = await conn.BeginBinaryImportAsync(copy, ct))

@@ -54,6 +54,7 @@ public sealed class Pharmacy
     public string Code { get; set; } = "";
     public string Name { get; set; } = "";
     public string SystemType { get; set; } = "farmatic";
+    public string CountryCode { get; set; } = "ES"; // ISO 3166-1 alfa-2; reglas CN solo ES
     public string ConnectionMode { get; set; } = "linked"; // linked | direct
     public string Server { get; set; } = "."; // SQL Server accesible desde el servicio
     public string Database { get; set; } = ""; // BD remota si linked
@@ -162,6 +163,7 @@ public static class CanonicalEntities
             ("hora_recepcion", "text"), ("fecha_hora_recepcion", "timestamp"), ("numero_pedido", "text"), ("albaran_id", "text"), ("condicion_id", "text"), ("vendedor_id", "text"), ("recepcion_actualizada", "bool"), ("recepcion_demorada", "bool"), ("proveedor_nombre", "text"), ("descripcion", "text")),
         E("articulos", "Catálogo y existencias actuales por artículo", ("nombre", "text"), ("codigo_nacional", "text"), ("ean", "text"), ("familia", "text"), ("laboratorio", "text"), ("pvp", "numeric"),
             ("presentacion", "text"), ("situacion", "text"), ("puc", "numeric"), ("pmc", "numeric"), ("proveedor_habitual_id", "text"), ("fecha_ultima_entrada", "timestamp"), ("fecha_ultima_salida", "timestamp"),
+            ("segmento_comercial", "text"), ("subcategoria", "text"), ("clasificacion_origen", "text"), ("clasificacion_confianza", "numeric"), ("cn_normalizado", "text"),
             ("stock_actual", "numeric"), ("stock_minimo", "numeric"), ("stock_maximo", "numeric"), ("lote_optimo", "numeric")),
         E("familias", "Familias y superfamilias de artículos Farmatic", ("nombre", "text"),
             ("superfamilia_id", "text"), ("superfamilia_nombre", "text"),
@@ -187,6 +189,6 @@ public sealed record DestinationRequest(string Host, int Port, string Database, 
     string SshAuthMode = "password", string? SshPassword = null, string SshPrivateKeyPath = "",
     string? SshKeyPassphrase = null, string SshHostKeySha256 = "");
 public sealed record MailRequest(bool Enabled, string Host, int Port, string Username, string? Password, string From, string To, bool NotifyRecovery = false);
-public sealed record PharmacyRequest(string Code, string Name, string SystemType, string ConnectionMode, string Server, string Database, string LinkedServer, string AuthMode, string Username, string? Password, string TimeZoneId, bool TrustServerCertificate, bool Enabled);
+public sealed record PharmacyRequest(string Code, string Name, string SystemType, string ConnectionMode, string Server, string Database, string LinkedServer, string AuthMode, string Username, string? Password, string TimeZoneId, bool TrustServerCertificate, bool Enabled, string CountryCode = "ES");
 public sealed record JobRequest(Guid PharmacyId, Guid EntityId, string Sql, string FullSql, string Mode, int EveryMinutes, DateTime InitialFromUtc, bool Enabled, int BatchSize = 5000, int ReplayMinutes = 180, int SafetyDelayMinutes = 5, string AlertRecipients = "", int RetryMinutes = 5);
 public sealed record PasswordRequest(string Password);

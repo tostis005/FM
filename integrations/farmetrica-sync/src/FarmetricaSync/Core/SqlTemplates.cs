@@ -98,6 +98,11 @@ SELECT
     CONVERT(varchar(100), a.ProveedorHabitual) AS proveedor_habitual_id,
     TRY_CONVERT(datetime2, a.FechaUltimaEntrada) AS fecha_ultima_entrada,
     TRY_CONVERT(datetime2, a.FechaUltimaSalida) AS fecha_ultima_salida,
+    CAST(NULL AS varchar(50)) AS segmento_comercial,
+    CAST(NULL AS varchar(100)) AS subcategoria,
+    CAST(NULL AS varchar(40)) AS clasificacion_origen,
+    CAST(NULL AS decimal(18,4)) AS clasificacion_confianza,
+    CAST(NULL AS varchar(12)) AS cn_normalizado,
     TRY_CONVERT(decimal(18,4), a.StockActual) AS stock_actual,
     TRY_CONVERT(decimal(18,4), a.StockMinimo) AS stock_minimo,
     TRY_CONVERT(decimal(18,4), a.StockMaximo) AS stock_maximo,
@@ -171,7 +176,7 @@ LEFT JOIN {{TABLE:dbo.SuperFamilia}} AS sf
     {
         ["ventas"] = new(StringComparer.OrdinalIgnoreCase) { "descuento_linea", "descuento_operacion" },
         ["compras"] = new(StringComparer.OrdinalIgnoreCase) { "hora_recepcion", "fecha_hora_recepcion", "numero_pedido", "albaran_id", "condicion_id", "proveedor_nombre", "descripcion", "vendedor_id", "recepcion_actualizada", "recepcion_demorada" },
-        ["articulos"] = new(StringComparer.OrdinalIgnoreCase) { "presentacion", "situacion", "puc", "pmc", "proveedor_habitual_id", "fecha_ultima_entrada", "fecha_ultima_salida" },
+        ["articulos"] = new(StringComparer.OrdinalIgnoreCase) { "presentacion", "situacion", "puc", "pmc", "proveedor_habitual_id", "fecha_ultima_entrada", "fecha_ultima_salida", "segmento_comercial", "subcategoria", "clasificacion_origen", "clasificacion_confianza", "cn_normalizado" },
         ["proveedores"] = new(StringComparer.OrdinalIgnoreCase) { "direccion", "codigo_postal", "poblacion", "provincia", "web", "descuento" }
     };
     public static bool IsLegacyOptional(string entity, string column) =>

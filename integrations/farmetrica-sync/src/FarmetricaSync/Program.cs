@@ -152,7 +152,7 @@ api.MapGet("/config", (ConfigStore store, SyncWorker worker) =>
             sshKeyPassphrasePresent = c.Destination.SshKeyPassphraseProtected.Length > 0 },
         mail = new { c.Mail.Enabled, c.Mail.Host, c.Mail.Port, c.Mail.Username, c.Mail.From,
             c.Mail.To, c.Mail.NotifyRecovery, passwordPresent = c.Mail.PasswordProtected.Length > 0 },
-        pharmacies = c.Pharmacies.Select(p => new { p.Id, p.Code, p.Name, p.SystemType, p.ConnectionMode,
+        pharmacies = c.Pharmacies.Select(p => new { p.Id, p.Code, p.Name, p.SystemType, p.CountryCode, p.ConnectionMode,
             p.Server, p.Database, p.LinkedServer, p.AuthMode, p.Username, p.TimeZoneId, p.TrustServerCertificate, p.Enabled,
             passwordPresent = p.PasswordProtected.Length > 0 }),
         entities = c.Entities,
@@ -288,6 +288,8 @@ static void ValidatePharmacy(PharmacyRequest r)
 {
     if (!Regex.IsMatch(r.Code ?? "", "^[a-zA-Z0-9_-]{1,40}$") || string.IsNullOrWhiteSpace(r.Name))
         throw new ArgumentException("Código (hasta 40 letras/números/_/-) y nombre son obligatorios.");
+    if (!Regex.IsMatch(r.CountryCode ?? "", "^[A-Z]{2}$", RegexOptions.IgnoreCase))
+        throw new ArgumentException("El país debe ser un código ISO de dos letras.");
     if (r.SystemType != "farmatic") throw new ArgumentException("Por ahora solo está disponible Farmatic.");
     if (r.ConnectionMode is not ("linked" or "direct")) throw new ArgumentException("Tipo de conexión no válido.");
     if (r.AuthMode is not ("integrated" or "sql")) throw new ArgumentException("Autenticación no válida.");
@@ -301,6 +303,7 @@ static void ValidatePharmacy(PharmacyRequest r)
 static Pharmacy Apply(Pharmacy p, PharmacyRequest r, Secrets secrets)
 {
     p.Code = r.Code.Trim(); p.Name = r.Name.Trim(); p.SystemType = r.SystemType;
+    p.CountryCode = r.CountryCode.Trim().ToUpperInvariant();
     p.ConnectionMode = r.ConnectionMode; p.Server = r.Server.Trim(); p.Database = r.Database.Trim();
     p.LinkedServer = r.LinkedServer.Trim(); p.AuthMode = r.AuthMode; p.Username = r.Username.Trim();
     p.TimeZoneId = r.TimeZoneId; p.TrustServerCertificate = r.TrustServerCertificate; p.Enabled = r.Enabled;

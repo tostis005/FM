@@ -1,6 +1,7 @@
 // Informes agregados sobre las tablas reales normalizadas del cliente.
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {classifyAbcd} from "./abcd.js";
 import {parseReportColumnFilters,wrapReportTableSQL} from "./reportTableFilters.js";
 // Solo expresiones SQL conocidas; los nombres de columnas del navegador nunca se interpolan.
@@ -278,6 +279,8 @@ export function setupRealReports(app,pool,{requireTenant}){
      JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$6
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[])
+       AND ${includedPurchaseSupplier({tenant:"$6",code:"t.proveedor_id",
+        name:buyCols.has("proveedor_nombre")?"t.proveedor_nombre":null})}
      GROUP BY f.id,${pharmacyDataCodeSQL("f")},t.producto_id,t.proveedor_id
    ) t JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
    ${article}`:`FROM (
@@ -294,6 +297,8 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[])
+       AND ${includedPurchaseSupplier({tenant:"$6",code:"t.proveedor_id",
+        name:buyCols.has("proveedor_nombre")?"t.proveedor_nombre":null})}
      GROUP BY f.id,upper(btrim(t.farmacia_codigo)),t.articulo_id,t.proveedor_id
    ) t JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
    ${article}`;
@@ -323,6 +328,9 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND f.cliente_slug=${periodTenantParam}`:`JOIN farmetrica.farmacias f ON f.cliente_slug=${periodTenantParam}
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
     const amount=legacy?"t.total":"t.importe";
+    const supplierFilter=table==="compras"?
+      " AND "+includedPurchaseSupplier({tenant:periodTenantParam,code:"t.proveedor_id",
+        name:!legacy&&buyCols.has("proveedor_nombre")?"t.proveedor_nombre":null}):"";
     const countedLines=table==="compras"?
       `count(*) FILTER (WHERE NULLIF(btrim(${legacy?"t.producto_id":"t.articulo_id"}::text),'') IS NOT NULL)`:
       "count(*)";
@@ -331,7 +339,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        ${countedLines}::float8 AS lines
        FROM ${quoted}.${table} t ${fromJoin}
        WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
-         AND f.id=ANY($3::int[])
+         AND f.id=ANY($3::int[]) ${supplierFilter}
        GROUP BY 1 ORDER BY 1`;
     return `SELECT t.month,sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS amount,
        sum(t.lines)::float8 AS lines
@@ -342,7 +350,7 @@ export function setupRealReports(app,pool,{requireTenant}){
            sum(t.unidades) AS unidades,sum(${amount}) AS importe,${countedLines} AS lines
          FROM ${quoted}.${table} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
-           AND f.id=ANY($3::int[])
+           AND f.id=ANY($3::int[]) ${supplierFilter}
          GROUP BY 1,2,3
        ) t ${article}
        WHERE ${articleFilter}

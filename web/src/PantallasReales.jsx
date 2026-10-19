@@ -8,7 +8,7 @@ import "./pantallasReales.css";
 
 // Solo documentos o catálogos persistidos; esta pantalla nunca ofrece muestras.
 export const DOCUMENT_SCREENS=new Set([
- "productos","ventas-tickets","ventas-devoluciones","compras-recepciones","stock-historico",
+ "productos","ventas-tickets","ventas-devoluciones","compras-recepciones","compras-devoluciones","stock-historico",
  "proveedores-condiciones","rentabilidad-segmentos"
 ]);
 const DATE=v=>v?new Date(v).toLocaleString("es-ES",{day:"2-digit",month:"2-digit",year:"numeric",

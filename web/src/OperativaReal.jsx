@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
 import OperativaPreview,{PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import "./operativaReal.css";
 
 const MAP={"compras-preparador":"pedidos","compras-pendientes":"pedidos","compras-pedidos":"pedidos",
@@ -35,10 +36,7 @@ function exportPlan(plan){
  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function Table({headers,rows,empty="Todavía no hay registros para esta farmacia."}){
- return <div className="fm-preview-scroll" tabIndex={0} role="region" aria-label="Tabla de registros">
- <table className="fm-preview-table"><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead>
- <tbody>{rows.length?rows.map((r,i)=><tr key={i}>{r.map((v,j)=><td key={j}>{v}</td>)}</tr>):
-  <tr><td colSpan={headers.length}>{empty}</td></tr>}</tbody></table></div>;
+ return <SortableDataTable headers={headers} rows={rows} empty={empty} label="registros"/>;
 }
 function Cards({entries}){return <div className="fm-preview-kpis">
  {entries.map(([k,v])=><article className="card fm-preview-kpi" key={k}><span>{k}</span><strong>{v}</strong></article>)}

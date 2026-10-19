@@ -117,3 +117,33 @@ test("dos promociones URIAGE separadas por su descripción mantienen ambos CN y 
  assert.deepEqual(x[0].cns,["189666","152281"]);
  assert.deepEqual(x[1].cns,["199837","217776"]);
 });
+
+test("si el cruce principal no aporta CN, comparar solo Marca y Gama, ignorando laboratorio y oferta",()=>{
+ const resumen=[
+  ["LABORATORIO","MARCA","NOMBRE PROMOCIÓN","INICIO","FIN"],
+  ["MARCA DISTRIBUIDORA","CAPILAR","3€ DTO 1 UD","1 OCTUBRE","31 OCTUBRE"],
+  ["OTRA MARCA","GAMA COSMETICA PEDIATRICA","20% DTO","1 OCTUBRE","31 OCTUBRE"],
+  [],
+  ["NO HACER ESTAS PROMOCIONES", "NUXE HAIR", "20% DTO", "1 OCTUBRE", "31 OCTUBRE"]
+ ];
+ const cns=[
+  ["LABORATORIO","GAMA","CN","DESCRIPCIÓN","OFERTA"],
+  ["NUXE","NUXE HAIR","112233","Champú Nuxe","OFERTA DIFERENTE"],
+  ["SUAVINEX","SUAVINEX COSMETICA","112234","Suavinex gel",0.2],
+  ["SIN PROMOCIÓN","NUXE HAIR","998877","Otra gama igual pero oferta distinta","3X2"]
+ ];
+ const campaigns=importCampaignRows(resumen,cns);
+ assert.equal(campaigns.length,2,"solo filas anteriores a la primera fila en blanco");
+ assert.deepEqual(campaigns[0].cns,["112233","998877"],"al usar solo gama se incluyen las coincidencias de gama");
+ assert.deepEqual(campaigns[1].cns,["112234"]);
+ assert.ok(campaigns.every(p=>p.importWarnings.some(w=>w.includes("MARCA y GAMA"))));
+});
+test("el segundo intento nunca se ejecuta si ya hay CN por laboratorio y marca",()=>{
+ const resumen=[["LAB","MARCA","OFERTA","INICIO","FIN"],["SUNSTAR","GUM","3X2","1 OCTUBRE","31 OCTUBRE"]];
+ const listado=[["LAB","GAMA","CN","DESC","OFERTA"],
+   ["SUNSTAR","GUM","123456","GUM","3X2"],
+   ["OTRA","GUM","456789","Una gama igual de otro laboratorio","50% DTO"]];
+ const out=importCampaignRows(resumen,listado);
+ assert.deepEqual(out[0].cns,["123456"]);
+ assert.ok(!out[0].importWarnings.some(w=>w.includes("MARCA y GAMA")));
+});

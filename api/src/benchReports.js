@@ -37,6 +37,41 @@ try{
    ", movimientos en 6 meses="+Boolean(response?.hasPurchases)+
    ", respuesta="+Math.round(performance.now()-start)+"ms");
  }
+ // Verificar calidad del mapeo de compras, sin exponer ni un importe, CN,
+ // nombre, proveedor ni movimiento individual en los logs.
+ const {rows:buyHealth}=await pool.query(`
+  SELECT upper(btrim(farmacia_codigo)) AS code,count(*)::int AS total,
+   count(*) FILTER(WHERE articulo_id IS NULL OR btrim(articulo_id)='')::int AS sin_articulo,
+   count(*) FILTER(WHERE proveedor_id IS NULL OR btrim(proveedor_id)='')::int AS sin_proveedor,
+   count(*) FILTER(WHERE coste_unitario IS NULL OR coste_unitario<=0)::int AS sin_coste,
+   count(*) FILTER(WHERE unidades IS NULL OR unidades=0)::int AS sin_unidades,
+   count(*) FILTER(WHERE importe IS NULL)::int AS sin_importe,
+   count(DISTINCT articulo_id)::int AS articulos_distintos,
+   count(DISTINCT proveedor_id)::int AS proveedores_distintos
+  FROM ampedia.compras
+  WHERE fecha >= $1::date AND fecha < $2::date+interval '1 day'
+  GROUP BY 1 ORDER BY 1`,[from,today]);
+ for(const r of buyHealth)console.log("CALIDAD_COMPRAS "+r.code+
+  ": movimientos="+r.total+", sin_articulo="+r.sin_articulo+
+  ", sin_coste="+r.sin_coste+", sin_proveedor="+r.sin_proveedor+
+  ", sin_unidades="+r.sin_unidades+", sin_importe="+r.sin_importe+
+  ", articulos_distintos="+r.articulos_distintos+
+  ", proveedores_distintos="+r.proveedores_distintos);
+ const {rows:[match]}=await pool.query(`
+  SELECT count(*)::int AS referencias,
+    count(a.origen_id)::int AS vinculadas
+  FROM (
+   SELECT DISTINCT articulo_id FROM ampedia.compras
+   WHERE upper(btrim(farmacia_codigo))='VAL'
+    AND fecha >= $1::date AND fecha < $2::date+interval '1 day'
+  ) b LEFT JOIN LATERAL (
+   SELECT origen_id FROM ampedia.articulos a
+   WHERE upper(btrim(a.farmacia_codigo))='VAL'
+     AND a.origen_id=b.articulo_id
+   LIMIT 1
+  ) a ON true`,[from,today]);
+ console.log("VINCULACION_COMPRAS_VAL: referencias="+match.referencias+
+   ", encontradas_en_catalogo="+match.vinculadas);
  const cols=await pool.query(`SELECT column_name FROM information_schema.columns
   WHERE table_schema='ampedia' AND table_name='articulos'
     AND (column_name ILIKE '%stock%' OR column_name ILIKE '%exist%'

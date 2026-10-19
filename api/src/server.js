@@ -22,6 +22,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
+import {setupOperativa} from "./operativa.js";
 
 const { Pool } = pg;
 const {
@@ -122,6 +123,7 @@ setupSalesInsights(app,pool,{requireTenant});
 const salesCache=createSalesCache(pool);
 setupSalesDetail(app,pool,{requireTenant,cache:salesCache});
 setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
+setupOperativa(app,pool,{requireTenant});
 setupGenericosReales(app,pool,{requireTenantModule});
 setupAssistant(app,pool,{requireTenant});
 
@@ -440,6 +442,8 @@ try {
   await pool.query(promosMigration);
   const cacheMigration=await readFile(new URL("./migrations/015_cache_analitica_ventas.sql",import.meta.url),"utf8");
   await pool.query(cacheMigration);
+  const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
+  await pool.query(operationalMigration);
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

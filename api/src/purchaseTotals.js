@@ -21,35 +21,51 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    const legacy=!normalized&&supports("farmacia_id","fecha","producto_id","proveedor_id","unidades","total","puc");
    if(!normalized&&!legacy)return res.json({available:false,kpis:{},monthly:[]});
    if(!f.ids.length)return res.json({available:true,
-    kpis:{compras:0,unidadesCompradas:0,lineasCompra:0,proveedores:0},monthly:[]});
+    kpis:{compras:0,unidadesCompradas:0,lineasCompra:0,proveedores:0},
+    hasArticleLines:false,hasAmounts:false,sourceRows:0,monthly:[]});
    const join=legacy?
     "JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$4":
     `JOIN farmetrica.farmacias f ON f.cliente_slug=$4
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
    const amount=legacy?"t.total":"t.importe";
+   const productId=legacy?"t.producto_id":"t.articulo_id";
    const {rows}=await pool.query(`
     SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
      f.id::text AS pharmacy,t.proveedor_id::text AS supplier,
      sum(${amount})::float8 AS amount,
-     sum(t.unidades)::float8 AS units,count(*)::float8 AS lines
+     count(${amount})::int AS "amountRows",
+     sum(t.unidades)::float8 AS units,count(t.unidades)::int AS "unitRows",
+     count(*)::int AS "sourceRows",
+     count(*) FILTER(WHERE nullif(btrim(${productId}::text),'') IS NOT NULL)::int AS lines
     FROM "${schema}".compras t ${join}
     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
      AND f.id=ANY($3::int[])
     GROUP BY 1,f.id,t.proveedor_id ORDER BY 1`,
     [f.from,f.to,f.ids,req.context.client.slug]);
    const months=new Map(),suppliers=new Set();
-   let purchases=0,units=0,lines=0;
+   let purchases=0,units=0,lines=0,sourceRows=0,amountRows=0,unitRows=0;
    for(const r of rows){
     const amount=Number(r.amount||0),qty=Number(r.units||0),count=Number(r.lines||0);
     purchases+=amount;units+=qty;lines+=count;
+    sourceRows+=Number(r.sourceRows||0);
+    amountRows+=Number(r.amountRows??(r.amount==null?0:1));
+    unitRows+=Number(r.unitRows??(r.units==null?0:1));
     if(r.supplier!=null&&r.supplier!=="")suppliers.add(r.pharmacy+"|"+r.supplier);
     const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null};
-    m.compras+=amount;months.set(r.month,m);
+    m.compras=(m.compras??0)+amount;
+    m.hasAmounts=(m.hasAmounts||false)||Number(r.amountRows??(r.amount==null?0:1))>0;
+    months.set(r.month,m);
    }
    res.json({available:true,kpis:{
-    compras:Math.round(purchases*100)/100,
-    unidadesCompradas:units,lineasCompra:lines,proveedores:suppliers.size
-   },monthly:[...months.values()]});
+    compras:sourceRows>0&&amountRows===0?null:Math.round(purchases*100)/100,
+    unidadesCompradas:sourceRows>0&&unitRows===0?null:units,
+    lineasCompra:sourceRows>0&&lines===0?null:lines,
+    proveedores:suppliers.size
+   },hasArticleLines:lines>0,hasAmounts:amountRows>0,sourceRows,
+   monthly:[...months.values()].map(m=>({
+    month:m.month,ventas:m.ventas,compras:m.hasAmounts?m.compras:null,
+    unidades:m.unidades,margen:m.margen
+   }))});
   }catch(e){next(e)}
  });
 }

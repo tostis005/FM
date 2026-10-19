@@ -54,9 +54,27 @@ const pharmacyJoin=(alias="v")=>`JOIN farmetrica.farmacias f ON f.cliente_slug=$
  AND f.id=ANY($3::int[])`;
 const period=alias=>`${alias}.fecha >= $1::date AND ${alias}.fecha < $2::date+interval '1 day'`;
 const slice="LIMIT $6::int OFFSET $7::int";
-export function buildDocumentScreenSQL(section,schema,columns=new Set()){
+// Las cabeceras ordenan sobre TODO el conjunto antes de paginar.
+export const DOCUMENT_SORT={
+ "ventas-tickets":{at:'"at"',ticket:'"ticket"',lines:'"lines"',units:'"units"',amount:'"amount"'},
+ "ventas-devoluciones":{at:'v."at"',reference:'v.reference',units:'v.units',amount:'v.amount',kind:'v.kind'},
+ "compras-devoluciones":{at:'v.fecha',reference:'v.numero_albaran',units:'v.unidades',amount:'v.importe',supplier:'v.proveedor_id'},
+ "productos":{name:'name',cn:'cn',family:'family',pvp:'pvp',pmc:'pmc',stock:'stock'},
+ "proveedores-condiciones":{amount:'amount',units:'units',products:'products',receipts:'receipts',lastAt:'"lastAt"',supplier:'"supplierCode"'},
+ "rentabilidad-segmentos":{sales:'sales',margin:'margin',units:'units',family:'family'}
+};
+
+export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='default',direction='desc'){
  if(!SCHEMA.test(schema)||!Object.hasOwn(DOCUMENT_SECTIONS,section))throw Error("Pantalla o esquema inválido");
  const q='"'+schema+'"', join=pharmacyJoin("v"), range=period("v");
+ const mapping=DOCUMENT_SORT[section],defaultKey={
+  "ventas-tickets":"at","ventas-devoluciones":"at","compras-devoluciones":"at",
+  productos:"name","proveedores-condiciones":"amount","rentabilidad-segmentos":"sales"
+ }[section];
+ const requested=order==="default"?defaultKey:order;
+ if(!Object.hasOwn(mapping,requested)||!["asc","desc"].includes(direction))
+  throw Error("Orden incorrecto");
+ const sort=`ORDER BY ${mapping[requested]} ${direction.toUpperCase()} NULLS LAST`;
  if(section==="ventas-tickets")return `
  WITH documents AS (
   SELECT f.id::text AS "pharmacyId",max(f.nombre) AS "pharmacyName",
@@ -75,7 +93,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
   sum("amount") OVER()::float8 AS "summaryValue",
   sum("units") OVER()::float8 AS "summaryUnits",
   NULL::float8 AS "summaryOther"
- FROM documents ORDER BY "at" DESC,"pharmacyId","documentId" DESC ${slice}`;
+ FROM documents ${sort},"pharmacyId","documentId" DESC ${slice}`;
  if(section==="ventas-devoluciones")return `
  WITH events AS (
   SELECT h.farmacia_codigo,h.fecha AS "at",h.sistema_origen AS "sourceSystem",
@@ -112,7 +130,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
   AND ($5::text='' OR f.nombre ILIKE '%'||$5||'%' OR
     v.reference ILIKE '%'||$5||'%' OR v."documentId" ILIKE '%'||$5||'%' OR
     coalesce(v.article,'') ILIKE '%'||$5||'%')
- ORDER BY v."at" DESC,v."documentId" DESC,v."lineId" DESC NULLS LAST ${slice}`;
+ ${sort},v."documentId" DESC,v."lineId" DESC NULLS LAST ${slice}`;
  if(section==="compras-devoluciones")return `
  SELECT f.id::text AS "pharmacyId",f.nombre AS "pharmacyName",
   v.fecha AS "at",v.sistema_origen AS "sourceSystem",v.documento_id AS "documentId",
@@ -131,7 +149,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
    coalesce(v.numero_albaran,'') ILIKE '%'||$5||'%' OR
    v.articulo_id ILIKE '%'||$5||'%' OR
    coalesce(v.proveedor_id,'') ILIKE '%'||$5||'%')
- ORDER BY v.fecha DESC,v.documento_id DESC,v.linea_id DESC ${slice}`;
+ ${sort},v.documento_id DESC,v.linea_id DESC ${slice}`;
  if(section==="productos"){
   const col=(field,cast="text")=>columns.has(field)?`a."${field}"`:`NULL::${cast}`;
   const stamp=columns.has("sincronizado_en")?"a.sincronizado_en DESC NULLS LAST":"a.origen_id";
@@ -158,7 +176,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
  FROM catalog
  WHERE ($5::text='' OR cn ILIKE '%'||$5||'%' OR name ILIKE '%'||$5||'%' OR
    "sourceId" ILIKE '%'||$5||'%' OR family ILIKE '%'||$5||'%')
- ORDER BY name,"pharmacyId","sourceId" ${slice}`;
+ ${sort},"pharmacyId","sourceId" ${slice}`;
  }
  if(section==="proveedores-condiciones")return `
  WITH suppliers AS (
@@ -181,7 +199,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
   sum(amount) OVER()::float8 AS "summaryValue",
   sum(units) OVER()::float8 AS "summaryUnits",
   sum(receipts) OVER()::float8 AS "summaryOther"
- FROM suppliers ORDER BY amount DESC NULLS LAST,"supplierCode" ${slice}`;
+ FROM suppliers ${sort},"supplierCode" ${slice}`;
  if(section==="rentabilidad-segmentos"){
   // La familia del catálogo es REAL. Nunca atribuir costes a líneas sin PMC.
   const family=columns.has("familia")?"a.familia":"NULL::text";
@@ -216,7 +234,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
   sum(units) OVER()::float8 AS "summaryUnits",
   sum(margin) OVER()::float8 AS "summaryOther"
  FROM sections WHERE ($5::text='' OR family ILIKE '%'||$5||'%')
- ORDER BY sales DESC NULLS LAST,family ${slice}`;
+ ${sort},family ${slice}`;
  }
  throw Error("Pantalla no soportada");
 }
@@ -239,7 +257,8 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
      return res.json({section,available:false,rows:[],total:0,
       message:"El catálogo de artículos todavía no está sincronizado para esta farmacia."});
    }
-   const sql=buildDocumentScreenSQL(section,f.schema,columns);
+   const sql=buildDocumentScreenSQL(section,f.schema,columns,
+    String(req.query.orden||"default"),String(req.query.direccion||"desc"));
    const {rows}=await pool.query({text:sql,values:[f.from,f.to,f.ids,f.slug,f.search,f.size,(f.page-1)*f.size]});
    res.json(result(rows,f,section,
     section==="rentabilidad-segmentos"?"El margen es estimado y solo utiliza referencias con PMC del catálogo.":""));

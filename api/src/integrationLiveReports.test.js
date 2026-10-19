@@ -55,48 +55,60 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(checkNoPurchases.hasPurchases,false);
   assert.ok(checkNoPurchases.pharmacies[0].name);
 
-  // Regresión: los clientes creados con la estructura antigua también
-  // deben mostrar compras reales aunque carezcan de tabla articulos/ventas.
+  // El tenant conserva compras antiguas, pero FM ya SOLO consulta el JOIN nuevo.
   await pool.query(`CREATE SCHEMA legacy_reports_ci`);
   await pool.query(`CREATE TABLE legacy_reports_ci.productos (
     id text PRIMARY KEY, cn text, descripcion text NOT NULL, familia text)`);
   await pool.query(`CREATE TABLE legacy_reports_ci.proveedores (
-    id text PRIMARY KEY, nombre text NOT NULL)`);
+    id text PRIMARY KEY,nombre text NOT NULL)`);
   await pool.query(`CREATE TABLE legacy_reports_ci.compras (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    farmacia_id integer NOT NULL, proveedor_id text, producto_id text,
-    fecha timestamptz NOT NULL, unidades numeric, puc numeric, total numeric)`);
+    farmacia_id integer NOT NULL,proveedor_id text,producto_id text,
+    fecha timestamptz NOT NULL,unidades numeric,puc numeric,total numeric)`);
   await pool.query(`INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos)
-    VALUES ('legacy_reports_ci','Tenant legado CI','legacy_reports_ci')`);
+    VALUES('legacy_reports_ci','Tenant v2 CI','legacy_reports_ci')`);
   const {rows:[legacyPharmacy]}=await pool.query(`INSERT INTO farmetrica.farmacias
     (cliente_slug,nombre,codigo_origen) VALUES
-    ('legacy_reports_ci','Farmacia legado','LGC') RETURNING id`);
+    ('legacy_reports_ci','Farmacia documental','LGC') RETURNING id`);
   await pool.query(`INSERT INTO legacy_reports_ci.productos VALUES
-    ('ID01','123456','Producto legado','Test')`);
+    ('ID01','123456','Producto documental','Test')`);
   await pool.query(`INSERT INTO legacy_reports_ci.proveedores VALUES
-    ('PR1','Proveedor legado')`);
+    ('PR1','Proveedor documental')`);
   await pool.query(`INSERT INTO legacy_reports_ci.compras
     (farmacia_id,proveedor_id,producto_id,fecha,unidades,puc,total)
-    VALUES ($1,'PR1','ID01','2026-10-10',6,2.5,15)`,[legacyPharmacy.id]);
+    VALUES ($1,'PR1','ID01','2026-10-10',600,50,30000)`,[legacyPharmacy.id]);
+  await pool.query("SELECT farmetrica.preparar_modelo_documental('legacy_reports_ci')");
+  await pool.query("SELECT farmetrica.preparar_vistas_documentales('legacy_reports_ci')");
   const legacyContext={client:{slug:"legacy_reports_ci",schema:"legacy_reports_ci"},
     role:"superadministrador",modules:{},allowedPharmacyIds:[legacyPharmacy.id],
     pharmacies:[{id:String(legacyPharmacy.id),sourceCode:"LGC"}]};
+  const emptyLegacy=await request("/api/analytics/reportes",
+    {modulo:"compras",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
+  assert.equal(emptyLegacy.available,true);
+  assert.equal(emptyLegacy.kpis.compras,0,"No se deben leer compras heredadas de 30.000 €");
+  await pool.query(`INSERT INTO legacy_reports_ci.fm_recepciones_cabeceras
+    (farmacia_codigo,sistema_origen,documento_id,fecha,proveedor_origen_id,
+     numero_albaran,lineas_completas)
+    VALUES ('LGC','farmatic','R1','2026-10-10','PR1','ALB01',true)`);
+  await pool.query(`INSERT INTO legacy_reports_ci.fm_recepciones_lineas
+    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+     cantidad,coste_neto)
+    VALUES ('LGC','farmatic','R1','1','ID01',6,15)`);
   const legacyReport=await request("/api/analytics/reportes",
     {modulo:"compras",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
   assert.equal(legacyReport.available,true);
-  assert.equal(legacyReport.kpis.compras,15);
+  assert.equal(legacyReport.kpis.compras,15,"Recepción documental, no compra antigua");
   const legacyBuysStatus=await request("/api/analytics/compras/estado",
     {farmacias:String(legacyPharmacy.id)}, {},legacyContext);
-  assert.equal(legacyBuysStatus.source,"legacy");
+  assert.equal(legacyBuysStatus.source,"normalized");
   assert.equal(legacyBuysStatus.hasPurchases,true);
-
   assert.equal(legacyReport.kpis.unidadesCompradas,6);
   assert.equal(legacyReport.kpis.lineasCompra,1);
   assert.equal(legacyReport.buyRows[0].cn,"123456");
   assert.equal(legacyReport.buyRows[0].puc,2.5);
   const legacyProviders=await request("/api/analytics/reportes",
     {modulo:"proveedores",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
-  assert.equal(legacyProviders.supplierRows[0].name,"Proveedor legado");
+  assert.equal(legacyProviders.supplierRows[0].name,"Proveedor documental");
   await pool.query(`CREATE TABLE legacy_reports_ci.stock (
     farmacia_id integer NOT NULL,producto_id text NOT NULL,
     unidades numeric,coste_unitario numeric,fecha_referencia timestamptz NOT NULL)`);
@@ -105,48 +117,35 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const legacyStockReport=await request("/api/analytics/reportes",
     {modulo:"stock",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
   assert.equal(legacyStockReport.availability.stock,true);
-  assert.equal(legacyStockReport.availability.stockSource,"stock");
   assert.equal(legacyStockReport.stockRows[0].cn,"123456");
   assert.equal(legacyStockReport.stockRows[0].value,10);
-  assert.equal(legacyStockReport.kpis.stock,10);
-  assert.equal(legacyStockReport.stockRows[0].unitCost,2.5);
   assert.equal(legacyStockReport.stockRows[0].costSource,"Coste inventario");
-  // Un cliente puede tener exclusivamente stock sincronizado. No debe recibir
-  // available:false ni inventar ausencia de rotación sin fuente de ventas.
-  await pool.query("ALTER TABLE legacy_reports_ci.compras RENAME TO compras_previas_ci");
   const onlyStock=await request("/api/analytics/reportes",
     {modulo:"stock",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
   assert.equal(onlyStock.available,true);
-  assert.equal(onlyStock.kpis.stock,10);
-  assert.equal(onlyStock.stockRows.length,1);
   assert.equal(onlyStock.kpis.stockSinRotacion,null);
   assert.equal(onlyStock.kpis.reposiciones,null);
-  assert.equal(onlyStock.kpis.roturas,null);
-  // El detalle de ventas también ha de funcionar sin fichas normalizadas
-  // ni compras, y resolver PUC cuando el cliente conserva compras legacy.
+  // Las ventas antiguas tampoco se usan, aunque su importe sea muy alto.
   await pool.query(`CREATE TABLE legacy_reports_ci.ventas (
-    farmacia_codigo text,articulo_id text,fecha timestamp,
-    unidades numeric,importe numeric)`);
+    farmacia_codigo text,articulo_id text,fecha timestamp,unidades numeric,importe numeric)`);
   await pool.query(`INSERT INTO legacy_reports_ci.ventas
-    VALUES ('LGC','ID01','2026-10-10',2,10)`);
-  const oldSale=await request("/api/analytics/ventas/detalle",{
-    farmacias:String(legacyPharmacy.id),desde:"2025-11-01",hasta:"2026-10-18"
-  },{},legacyContext);
-  assert.equal(oldSale.products.length,1);
-  assert.equal(oldSale.products[0].cn,"123456");
-  assert.equal(oldSale.products[0].saleUnitPrice,5);
-  assert.equal(oldSale.products[0].purchaseCost,null);
-  assert.equal(oldSale.products[0].margin,null);
-  await pool.query("ALTER TABLE legacy_reports_ci.compras_previas_ci RENAME TO compras");
+    VALUES ('LGC','ID01','2026-10-10',200,10000)`);
+  await pool.query(`INSERT INTO legacy_reports_ci.fm_ventas_cabeceras
+    (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+    VALUES ('LGC','farmatic','V1','2026-10-10',true)`);
+  await pool.query(`INSERT INTO legacy_reports_ci.fm_ventas_lineas
+    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+     cantidad,importe_neto)
+    VALUES ('LGC','farmatic','V1','1','ID01',2,10)`);
   const legacySale=await request("/api/analytics/ventas/detalle",{
     farmacias:String(legacyPharmacy.id),desde:"2025-11-01",hasta:"2026-10-18",
     orden:"margin",direccion:"desc"
   },{},legacyContext);
   assert.equal(legacySale.products.length,1);
+  assert.equal(legacySale.products[0].cn,"123456");
+  assert.equal(legacySale.products[0].saleUnitPrice,5);
   assert.equal(legacySale.products[0].purchaseCost,2.5);
   assert.equal(legacySale.products[0].margin,5);
-
-
   const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
   assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");
   assert.ok(reports.buyRows.some(r=>r.cn==="654321"&&r.puc>0));

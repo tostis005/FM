@@ -32,6 +32,16 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   if(exception)throw exception;
   return {body,status};
  }
+ async function ticketLines(params={},ctx=context){
+  const req={query:{desde:"2026-10-01",hasta:"2026-10-19",farmacias:"1",
+    farmacia:"1",sistema:"farmatic",documento:"SCREEN-CI-V1",...params},
+    params:{},context:ctx,user:{role:ctx.role,email:"test@example.invalid"}};
+  let body,status=200;const res={status(x){status=x;return res},json(x){body=x;return res}};
+  let exception;
+  await routes["/api/analytics/pantallas/ventas-tickets/lineas"](req,res,e=>{exception=e});
+  if(exception)throw exception;
+  return {body,status};
+ }
  try{
   await db.query("BEGIN");
   await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
@@ -62,6 +72,18 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   assert.equal(ticket.body.rows[0].lines,2);
   assert.equal(Number(ticket.body.rows[0].amount),15);
   assert.equal(Number(ticket.body.rows[0].units),3);
+  const lines=await ticketLines();
+  assert.equal(lines.status,200);
+  assert.equal(lines.body.lines.length,2,"El ticket real debe mostrar todas sus líneas");
+  assert.equal(Number(lines.body.lines.reduce((v,x)=>v+Number(x.amount),0)),15);
+  const noAccess=await ticketLines({farmacia:"99",farmacias:"99"});
+  assert.equal(noAccess.status,403,"No se pueden abrir tickets de farmacias ajenas");
+  const missing=await ticketLines({documento:"DOCUMENTO-INEXISTENTE"});
+  assert.equal(missing.status,200);
+  assert.equal(missing.body.lines.length,0);
+  const badDoc=await ticketLines({documento:""});
+  assert.equal(badDoc.status,400);
+
   const returned=await call("ventas-devoluciones",{buscar:"SCREEN-CI-DEV"});
   assert.equal(returned.body.total,1);
   assert.equal(returned.body.rows[0].kind,"Devolución");

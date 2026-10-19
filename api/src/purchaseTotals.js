@@ -130,9 +130,14 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
    const amount=legacy?"t.total":"t.importe";
    const productId=legacy?"t.producto_id":"t.articulo_id";
+   // Inicio necesita agregación mensual, no un cubo por farmacia+proveedor:
+   // menos grupos que ordenar y menos memoria para un período corto.
+   const dashboard=f.module==="dashboard";
+   const groupBy=dashboard?"GROUP BY 1 ORDER BY 1":"GROUP BY 1,f.id,t.proveedor_id ORDER BY 1";
    const {rows}=await pool.query(`
     SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
-     f.id::text AS pharmacy,t.proveedor_id::text AS supplier,
+     ${dashboard?"NULL::text":"f.id::text"} AS pharmacy,
+     ${dashboard?"NULL::text":"t.proveedor_id::text"} AS supplier,
      sum(${amount})::float8 AS amount,
      count(${amount})::int AS "amountRows",
      sum(t.unidades)::float8 AS units,count(t.unidades)::int AS "unitRows",
@@ -144,7 +149,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
      AND f.id=ANY($3::int[])
      AND ${includedPurchaseSupplier({tenant:"$4",code:"t.proveedor_id",
        name:names.has("proveedor_nombre")?"t.proveedor_nombre":null})}
-    GROUP BY 1,f.id,t.proveedor_id ORDER BY 1`,
+    ${groupBy}`,
     [f.from,f.to,f.ids,req.context.client.slug]);
    const months=new Map(),suppliers=new Set();
    let purchases=0,units=0,lines=0,receipts=0,sourceRows=0,amountRows=0,unitRows=0;

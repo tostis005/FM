@@ -264,6 +264,7 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
     section==="rentabilidad-segmentos"?"El margen es estimado y solo utiliza referencias con PMC del catálogo.":""));
   }catch(e){
    if(e.status)return res.status(e.status).json({error:e.message});
+   if(e.message==="Orden incorrecto")return res.status(400).json({error:e.message});
    next(e);
   }
  });

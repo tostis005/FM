@@ -72,6 +72,16 @@ try{
   ) a ON true`,[from,today]);
  console.log("VINCULACION_COMPRAS_VAL: referencias="+match.referencias+
    ", encontradas_en_catalogo="+match.vinculadas);
+ // Descubrir posibles tablas de detalle del ERP sin leer datos sensibles.
+ const {rows:tableColumns}=await pool.query(`SELECT table_name,
+   string_agg(column_name,',' ORDER BY ordinal_position) AS columns
+   FROM information_schema.columns
+   WHERE table_schema='ampedia' AND
+     (table_name ILIKE '%compra%' OR table_name ILIKE '%recep%'
+      OR table_name ILIKE '%pedido%' OR table_name ILIKE '%entrada%')
+   GROUP BY table_name ORDER BY table_name`);
+ for(const row of tableColumns)console.log("TABLA_ORIGEN_COMPRAS "+row.table_name+
+   ": columnas="+row.columns);
  const cols=await pool.query(`SELECT column_name FROM information_schema.columns
   WHERE table_schema='ampedia' AND table_name='articulos'
     AND (column_name ILIKE '%stock%' OR column_name ILIKE '%exist%'
@@ -102,8 +112,8 @@ try{
     (row.ultima?new Date(row.ultima).toISOString().slice(0,10):"sin datos"));
  }
  for(const [name,ids,modules] of [
-  ["Valdemarías",[5],["dashboard","compras","proveedores","stock","reposicion","rentabilidad"]],
-  ["Cinco farmacias",[1,2,3,4,5],["dashboard","stock"]]
+  ["Valdemarías",[5],["compras","proveedores"]],
+  ["Cinco farmacias",[1,2,3,4,5],["compras"]]
  ])for(const modulo of modules){
   const req={query:{desde:"2026-07-18",hasta:"2026-10-18",modulo,
     farmacias:ids.join(",")},context:{

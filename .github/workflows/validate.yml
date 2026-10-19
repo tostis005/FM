@@ -197,6 +197,7 @@ jobs:
           node check-recepciones.mjs
           node check-refresh-navigation.mjs
           node check-genericos.mjs
+          node check-operativa.mjs
           python3 -m http.server 4176 --bind 127.0.0.1 --directory public > /tmp/farmetrica-public.log 2>&1 &
           for i in $(seq 1 25); do if curl --silent --fail http://127.0.0.1:4176/landing.html >/dev/null; then break; fi; sleep 1; done
           node check-public-responsive.mjs

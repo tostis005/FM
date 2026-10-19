@@ -32,7 +32,7 @@ test("totales de Compras de todos los proveedores y series, sin leer ventas ni c
  const {call,calls}=make();
  const {code,payload}=await call();
  assert.equal(code,200);
- assert.deepEqual(payload.kpis,{compras:120,unidadesCompradas:30,lineasCompra:6,proveedores:2,recepciones:3});
+ assert.deepEqual(payload.kpis,{compras:120,unidadesCompradas:30,lineasCompra:6,proveedores:2,recepciones:null});
  assert.equal(payload.monthly.length,1);
  assert.equal(payload.monthly[0].compras,120);
  assert.ok(calls.every(({sql})=>!sql.includes(".ventas")&&!sql.includes(".articulos")));

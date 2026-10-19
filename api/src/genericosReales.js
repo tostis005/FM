@@ -2,6 +2,7 @@
 // El percentil de referencia afecta solo a la estimación, nunca al coste observado.
 import {readPricePolicy} from "./pricePolicy.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {classifyAbcd} from "./abcd.js";
 import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
@@ -113,6 +114,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
           AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("scope")}
         WHERE scope.id=ANY($3::int[]) AND v.fecha>=$1::date
           AND v.fecha<$2::date+interval '1 day'
+          AND ${includedPurchaseSupplier({tenant:"$4",code:"v.proveedor_id",name:"v.proveedor_nombre"})}
         GROUP BY v.farmacia_codigo,v.articulo_id,v.proveedor_id
       )
       SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
@@ -152,6 +154,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       WHERE f.id=ANY($2::int[]) AND c.fecha <= $1::date+interval '1 day'
         AND c.fecha >= ($1::date-make_interval(months=>coalesce(pl.meses,pg.meses,6)))
         AND c.unidades>0 AND c.coste_unitario>0
+        AND ${includedPurchaseSupplier({tenant:"$3",code:"c.proveedor_id",name:"c.proveedor_nombre"})}
       GROUP BY f.id,c.farmacia_codigo,c.articulo_id,c.proveedor_id,
         c.coste_unitario,coalesce(pl.percentil,pg.percentil,20)
     ), raw AS (

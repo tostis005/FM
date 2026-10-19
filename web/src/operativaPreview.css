@@ -38,3 +38,10 @@
 
 .fm-preview-data-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;color:#627168;font-size:12px}
 .fm-preview-data-hint .fm-preview-badge{padding:4px 9px;font-size:11px}
+
+
+.fm-preview-kpi{min-width:0;max-width:100%;overflow:hidden}
+.fm-preview-kpi strong{
+ display:block;max-width:100%;font-size:clamp(16px,1.8vw,25px);
+ font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere;line-height:1.25}
+.fm-preview-scroll{min-width:0;max-width:100%;width:100%}

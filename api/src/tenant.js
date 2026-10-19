@@ -9,6 +9,7 @@ const asEmail = value => String(value || "").trim().toLowerCase();
 
 import {decoratePharmacy} from "./pharmacyCodes.js";
 import {hashInternalPassword,validInternalPassword} from "./internalPassword.js";
+import {sourceSupplierRows} from "./supplierReporting.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   async function resolve(req) {
     const slug = String(req.get("x-farmetrica-cliente") || req.query.cliente ||
@@ -195,12 +196,79 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       res.json(rows[0]);
     }catch(e){next(e);}
   });
+  const supplierSelect='id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active,cooperativa AS cooperative,ignorar_informes AS "ignoreReports"';
   app.get("/api/tenant/proveedores",...requireTenantAdmin(),async(req,res,next)=>{
     try{
-      const {rows}=await pool.query(
-        'SELECT id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1 ORDER BY nombre,codigo_origen',
+      const slug=req.context.client.slug,schema=req.context.client.schema;
+      if(!SLUG.test(schema))return res.status(400).json({error:"Esquema inválido"});
+      const {rows:master}=await pool.query(
+        'SELECT '+supplierSelect+' FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1 ORDER BY nombre,codigo_origen',[slug]);
+      const codes=[...new Set(req.context.pharmacies.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()).filter(Boolean))];
+      let external=[];
+      if(codes.length){
+        const {rows:fields}=await pool.query(
+          "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name IN ('proveedores','compras')",
+          [schema]);
+        const has=(table,...cols)=>cols.every(col=>fields.some(f=>f.table_name===table&&f.column_name===col));
+        if(has("proveedores","farmacia_codigo","origen_id","nombre")){
+          const result=await pool.query(`SELECT upper(btrim(origen_id::text)) AS "sourceCode",
+            min(nullif(btrim(nombre::text),'')) AS name
+            FROM "${schema}".proveedores WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
+            AND nullif(btrim(origen_id::text),'') IS NOT NULL
+            GROUP BY 1`,[codes]);
+          external=result.rows;
+        }
+        if(!external.length&&has("proveedores","id","nombre")){
+          const result=await pool.query(`SELECT upper(btrim(id::text)) AS "sourceCode",
+            min(nullif(btrim(nombre::text),'')) AS name
+            FROM "${schema}".proveedores WHERE nullif(btrim(id::text),'') IS NOT NULL
+            GROUP BY 1`);
+          external=result.rows;
+        }
+        // Si el origen todavía no envía el maestro, identificar proveedores
+        // de sus recepciones, sin fabricar registros ni alterar las compras.
+        if(!external.length&&has("compras","proveedor_id")&&
+           (has("compras","farmacia_codigo")||has("compras","farmacia_id"))){
+          const supplierName=has("compras","proveedor_nombre")?
+            "min(nullif(btrim(proveedor_nombre::text),''))":"NULL::text";
+          const localIds=req.context.pharmacies.map(p=>Number(p.id)).filter(Number.isInteger);
+          const legacySource=has("compras","farmacia_codigo")? "upper(btrim(farmacia_codigo))=ANY($1::text[])":
+            "farmacia_id=ANY($1::int[])";
+          const result=await pool.query(`SELECT upper(btrim(proveedor_id::text)) AS "sourceCode",
+            ${supplierName} AS name
+            FROM "${schema}".compras WHERE ${legacySource}
+             AND nullif(btrim(proveedor_id::text),'') IS NOT NULL
+            GROUP BY 1`,[has("compras","farmacia_codigo")?codes:localIds]);
+          external=result.rows;
+        }
+      }
+      res.json(sourceSupplierRows(master,external));
+    }catch(e){next(e)}
+  });
+  // Un solo clic guarda el indicador. Un proveedor importado sin ficha manual
+  // crea únicamente su ficha de configuración, sin tocar los datos del ERP.
+  app.patch("/api/tenant/proveedores/indicadores",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      const sourceCode=String(req.body?.sourceCode||"").trim().toUpperCase();
+      const name=String(req.body?.name||"").trim();
+      const field=req.body?.field;
+      const value=req.body?.value;
+      if(!/^[A-Z0-9_.-]{1,60}$/.test(sourceCode)||!name||name.length>200||
+       !["cooperative","ignoreReports"].includes(field)||typeof value!=="boolean")
+        return res.status(400).json({error:"Indicador de proveedor inválido"});
+      const flag=field==="cooperative"?"cooperativa":"ignorar_informes";
+      const query=`INSERT INTO farmetrica.proveedores_maestro
+        (cliente_slug,codigo_origen,nombre,${flag})
+        VALUES($1,$2,$3,$4)
+        ON CONFLICT(cliente_slug,codigo_origen) DO UPDATE
+        SET ${flag}=EXCLUDED.${flag},actualizado_en=now()
+        RETURNING ${supplierSelect}`;
+      const {rows}=await pool.query(query,[req.context.client.slug,sourceCode,name,value]);
+      // Invalidar márgenes precalculados: la exclusión afecta al coste
+      // histórico que alimenta ABCD y rentabilidad. La recarga lo reconstruye.
+      await pool.query("UPDATE farmetrica.ventas_analitica_estado SET calculado_en=to_timestamp(0) WHERE cliente_slug=$1",
         [req.context.client.slug]);
-      res.json(rows);
+      res.json(rows[0]);
     }catch(e){next(e)}
   });
   app.post("/api/tenant/proveedores",...requireTenantAdmin(),async(req,res,next)=>{
@@ -211,9 +279,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       if(!/^[A-Z0-9_.-]{1,60}$/.test(code)||!name||name.length>200||
          !["cooperativa","laboratorio","mayorista","otros","sin_clasificar"].includes(type)||
          typeof active!=="boolean")return res.status(400).json({error:"Revisa los datos del proveedor"});
+      const coop=req.body?.cooperative===undefined?type==="cooperativa":req.body.cooperative;
+      const ignored=req.body?.ignoreReports??false;
+      if(typeof coop!=="boolean"||typeof ignored!=="boolean")
+        return res.status(400).json({error:"Indicadores inválidos"});
       const {rows}=await pool.query(
-        'INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo,activo) VALUES($1,$2,$3,$4,$5) RETURNING id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active',
-        [req.context.client.slug,code,name,type,active]);
+        'INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo,activo,cooperativa,ignorar_informes) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING '+supplierSelect,
+        [req.context.client.slug,code,name,type,active,coop,ignored]);
       res.status(201).json(rows[0]);
     }catch(e){next(e)}
   });
@@ -226,9 +298,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       if(!/^[A-Z0-9_.-]{1,60}$/.test(code)||!name||name.length>200||
          !["cooperativa","laboratorio","mayorista","otros","sin_clasificar"].includes(type)||
          typeof active!=="boolean")return res.status(400).json({error:"Revisa los datos del proveedor"});
+      const coop=req.body?.cooperative===undefined?type==="cooperativa":req.body.cooperative;
+      const ignored=req.body?.ignoreReports??false;
+      if(typeof coop!=="boolean"||typeof ignored!=="boolean")
+        return res.status(400).json({error:"Indicadores inválidos"});
       const {rows}=await pool.query(
-        'UPDATE farmetrica.proveedores_maestro SET codigo_origen=$3,nombre=$4,tipo=$5,activo=$6,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active',
-        [req.params.id,req.context.client.slug,code,name,type,active]);
+        'UPDATE farmetrica.proveedores_maestro SET codigo_origen=$3,nombre=$4,tipo=$5,activo=$6,cooperativa=$7,ignorar_informes=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING '+supplierSelect,
+        [req.params.id,req.context.client.slug,code,name,type,active,coop,ignored]);
       if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
       res.json(rows[0]);
     }catch(e){next(e)}

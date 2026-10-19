@@ -217,7 +217,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const period=resolveSalesPeriod(filters.period,asOf,{from:filters.customFrom,to:filters.customTo},tz);
  const fastEligible=module==="ventas"&&period.valid;
  const effectiveAnalysisMonths=[3,6,12,24,36].includes(Number(analysisMonths))?Number(analysisMonths):12;
- const recentPeriod=resolveSalesPeriod(String(effectiveAnalysisMonths),asOf,{},tz);
  const fastScope=[clientSlug,period.from,period.to,period.granularity,filters.pharmacyIds.join(","),reloadKey].join("|");
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
@@ -480,7 +479,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    </div>
    <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}
      onClick={()=>{setAsOf(new Date());setReloadKey(x=>x+1)}}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
-   {period.valid&&<span className="fm-sales-period-info">{module==="ventas"&&filters.period==="all"?"Todo el histórico hasta "+period.to:period.from===period.to?dateES(period.from):dateES(period.from)+" → "+dateES(period.to)}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
+   {period.valid&&<span className="fm-sales-period-info">{module==="ventas"&&filters.period==="all"?"Todo el histórico hasta "+dateES(period.to):period.from===period.to?dateES(period.from):dateES(period.from)+" → "+dateES(period.to)}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
   </div>}
   {filters.period==="custom"&&<div className="fm-sales-custom-dates">
    <label>Desde<input aria-label="Ventas desde" type="date" value={filters.customFrom} onChange={e=>change("customFrom",e.target.value)}/></label>

@@ -281,7 +281,11 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 .demo-form{margin-top:27px;display:grid;gap:17px}
 .demo-form-two{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .demo-form label:not(.demo-consent){display:flex;flex-direction:column;gap:8px;color:#28483a;font-size:12px;font-weight:800}
-.demo-form label>span[aria-hidden]{color:#22815b}
+.demo-form .field-label{display:inline-flex;align-items:baseline;justify-content:flex-start;gap:5px;flex-wrap:wrap;min-width:0;line-height:1.4}
+.demo-form .field-label .required-mark{display:inline;color:#167950;font-weight:900;line-height:1}
+.demo-form .field-label small{display:inline;margin-left:2px;white-space:nowrap}
+.demo-form :is(input,select,textarea):not([type=checkbox]):hover{border-color:#a7c8b4}
+.demo-form :is(input,select,textarea):not([type=checkbox]):disabled{background:#edf3ee;color:#5d7767}
 .demo-form label small{color:#8a9c92;font-weight:500}
 .demo-form input:not([type=checkbox]),.demo-form select,.demo-form textarea{font:500 13px "DM Sans",sans-serif;min-height:44px;width:100%;border:1px solid #d7e4db;border-radius:9px;padding:11px 12px;background:#fdfefd;color:#1d4231;outline-offset:2px}
 .demo-form textarea{resize:vertical;min-height:82px}
@@ -315,6 +319,7 @@ h1,h2,h3,h4,p{margin-top:0}.hero h1{font:800 clamp(42px,4.7vw,69px)/1.09 "Manrop
 @media(max-width:1100px){.demo-hero-layout{grid-template-columns:minmax(0,1fr) minmax(375px,.95fr);gap:30px}.demo-form-shell{padding:30px}.demo-pitch h1{font-size:44px}.demo-method-grid article{padding:24px}}
 @media(max-width:920px){.demo-hero-layout{grid-template-columns:1fr;gap:48px}.demo-pitch{max-width:780px}.demo-breadcrumb{margin-bottom:32px}.demo-trust-points{grid-template-columns:1fr 1fr;gap:22px;max-width:none}.demo-form-shell{max-width:670px;width:100%;margin:0 auto}.demo-method-grid{grid-template-columns:1fr 1fr}.nav-demo-button{padding:11px 12px}}
 @media(max-width:740px){.demo-hero-layout{padding-top:42px;padding-bottom:69px}.demo-pitch h1{font-size:clamp(35px,8vw,48px)}.demo-intro{font-size:14px}.demo-trust-points{grid-template-columns:1fr}.demo-method-grid{grid-template-columns:1fr}.demo-method-grid article{min-height:0}.demo-method-end{align-items:flex-start;flex-direction:column}.nav-demo-button{padding:11px 9px;font-size:11px}.nav-actions .login-button:after{display:none}}
+@media(max-width:580px){.demo-form-two{grid-template-columns:1fr}}
 @media(max-width:410px){.demo-form-shell{padding:24px 17px;border-radius:15px}.demo-form-two{grid-template-columns:1fr}.demo-hero-layout{padding-top:35px}.demo-breadcrumb{margin-bottom:28px}.demo-trust-points{margin-top:35px}.site-nav .logo{font-size:15px}.nav-demo-button{font-size:10px;padding:10px 8px}.nav-actions .login-button{padding:9px 8px}}
 
 /* El CTA permanece accesible en el menú móvil y el hero. */

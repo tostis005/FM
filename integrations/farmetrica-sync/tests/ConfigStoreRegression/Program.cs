@@ -77,6 +77,11 @@ try
         SyncSchedule.IsDue(daily,todayFailed,local,slot.AddDays(1).AddMinutes(-1)) ||
         !SyncSchedule.IsDue(daily,todayFailed,local,slot.AddDays(1)))
         throw new Exception("Un fallo a las 08:30 no permite un segundo intento hasta el día siguiente.");
+    var crossing = new SyncState {
+        LastAttemptUtc=slot.AddMinutes(-5),LastCompletedUtc=slot.AddHours(1),LastStatus="error"
+    };
+    if (SyncSchedule.IsDue(daily,crossing,local,slot.AddHours(1).AddMinutes(1)))
+        throw new Exception("Una carga larga que atraviesa la hora fija no debe reintentarse inmediatamente.");
     // Hora de Madrid, incluso si el sincronizador Windows está en otra zona.
     var madrid=new Pharmacy{TimeZoneId="Europe/Madrid"};
     var spring=new SyncJob{EveryMinutes=1440,DailyAtLocal="02:30"};

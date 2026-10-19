@@ -35,3 +35,6 @@
 .side-preview-group{display:flex;flex-direction:column;gap:3px}
 @media(max-width:1200px){.fm-preview-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.fm-preview-kpis{grid-template-columns:1fr}.fm-preview-panel{padding:13px}.fm-preview-heading h1{font-size:24px}.fm-preview-scroll{max-width:calc(100vw - 64px)}}
+
+.fm-preview-data-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;color:#627168;font-size:12px}
+.fm-preview-data-hint .fm-preview-badge{padding:4px 9px;font-size:11px}

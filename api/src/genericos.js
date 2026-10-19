@@ -33,6 +33,7 @@ function catalogData(pool){
  return pool.query("SELECT sha256,fecha_fuente,importado_en,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo=true LIMIT 1");
 }
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {classifyAbcd} from "./abcd.js";
 import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
 export function setupGenericAnalytics(app,pool,{requireTenantModule}){
@@ -93,6 +94,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
        ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.producto_id::text))":"btrim(c.producto_id::text)"}
      WHERE c.fecha >= $1::date AND c.fecha < $2::date+interval '1 day'
        AND c.farmacia_id=ANY($3::int[]) ${conditions}
+       AND ${includedPurchaseSupplier({tenant:"$4",code:"c.proveedor_id"})}
      GROUP BY n.dcpf`;
    const [catalog,sales,purchases]=await Promise.all([
     pool.query(`SELECT dcpf,min(coalesce(nullif(principio_activo,''),nombre)) AS principle,
@@ -103,7 +105,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
       GROUP BY dcpf HAVING bool_or(generico)
       ORDER BY min(coalesce(nullif(principio_activo,''),nombre)),dcpf`),
     hasSales&&q.ids.length?pool.query(salesSql,params):{rows:[]},
-    hasPurchases&&q.ids.length?pool.query(purchasesSql,params.slice(0,3)):{rows:[]},
+    hasPurchases&&q.ids.length?pool.query(purchasesSql,[...params.slice(0,3),req.context.client.slug]):{rows:[]},
    ]);
    const sm=new Map(sales.rows.map(x=>[x.dcpf,x]));
    const pm=new Map(purchases.rows.map(x=>[x.dcpf,x]));
@@ -187,8 +189,9 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
        ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.producto_id::text))":"btrim(c.producto_id::text)"}
      WHERE n.dcpf=$4 AND c.farmacia_id=ANY($3::int[])
        AND c.fecha >= $1::date AND c.fecha < $2::date+interval '1 day'
+       AND ${includedPurchaseSupplier({tenant:"$5",code:"c.proveedor_id",name:hasSuppliers?"sp.nombre":null})}
      GROUP BY n.cn,c.proveedor_id::text
-     ORDER BY puc NULLS LAST,n.cn`,params.slice(0,4)):{rows:[]};
+     ORDER BY puc NULLS LAST,n.cn`,[...params.slice(0,4),req.context.client.slug]):{rows:[]};
    res.json({products:products.rows,sales:sales.rows,purchases:purchases.rows,
       salesAvailable:hasSales,purchasesAvailable:hasPurchases});
   }catch(e){next(e);}

@@ -1,6 +1,7 @@
 // Detalle paginado del período solicitado: ABCD de ese rango, márgenes de la página.
 // No se recalculan aquí gráficos, totales históricos ni indicadores de recuento.
 import {validSalesDateRange} from "./salesAnalysisPeriod.js";
+import {parseSalesColumnFilters,salesColumnWhereSQL} from "./salesColumnFilters.js";
 const VALID=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 // Columnas permitidas para ordenar todo el universo SQL, antes del LIMIT/OFFSET.
@@ -8,7 +9,7 @@ export const SALES_DETAIL_SORT_KEYS=["name","cn","family","pharmacy","abcdClass"
  "pvp","purchaseCost","costSource","saleUnitPrice","unitMargin","units",
  "value","margin","marginPct"];
 export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
- {articles="normalized",purchases="normalized"}={}){
+ {articles="normalized",purchases="normalized"}={},columnFilters={}){
  if(!VALID.test(schema))throw Error("Esquema no permitido");
  if(!SALES_DETAIL_SORT_KEYS.includes(sortKey)||!["asc","desc"].includes(sortDir)||
    !["normalized","legacy","none"].includes(articles)||
@@ -51,7 +52,8 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
      WHERE false
    ) a ON true`;
  const catalogCost=v=>`CASE WHEN ${v}.pmc>0 THEN ${v}.pmc ELSE NULL END`;
- const needsGlobalCosts=["purchaseCost","costSource","unitMargin","margin","marginPct"].includes(sortKey);
+ const needsGlobalCosts=["purchaseCost","costSource","unitMargin","margin","marginPct"].includes(sortKey)||
+  ["purchaseCost","unitMargin","margin","marginPct"].some(field=>Boolean(columnFilters[field]));
  const directions=sortDir.toUpperCase();
  const sortExpressions={
   name:"name",cn:"cn",family:"family",
@@ -106,7 +108,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
  grouped AS MATERIALIZED (
   SELECT "pharmacyId",cn,max(name) AS name,max(family) AS family,
     max(pmc) AS pmc,max(pvp) AS pvp,sum(units)::float8 AS units,sum(value)::float8 AS value
-  FROM catalog GROUP BY "pharmacyId",cn
+  FROM catalog GROUP BY "pharmacyId",cn HAVING sum(units)>0
  ),
  ranked AS (
   SELECT g.*,sum(greatest(g.value,0)) OVER(PARTITION BY "pharmacyId") AS total_positive,
@@ -126,10 +128,15 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
     AND (cardinality($6::text[])=0 OR r.family=ANY($6::text[]))
  ),
  ${globalCosts}
+ filtered AS (
+  SELECT x.* FROM ${needsGlobalCosts?"with_cost_sort":"visible"} x
+  WHERE ${salesColumnWhereSQL("x","$9",columnFilters)}
+ ),
  page AS MATERIALIZED (
   SELECT "pharmacyId",cn,name,family,units,value,pmc,pvp,"abcdClass",
+    count(*) OVER()::int AS "__totalFiltered",
     ${sortExpressions[sortKey]} AS "__order"
-  FROM ${needsGlobalCosts?"with_cost_sort":"visible"}
+  FROM filtered
   ORDER BY "__order" ${directions} NULLS LAST,"pharmacyId",cn
   LIMIT $7::int OFFSET $8::int
  ),
@@ -137,7 +144,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
    ${purchaseCosts("page")}
  )
 
- SELECT p."pharmacyId",p.cn,p.name,p.family,p.units,p.value,p.pvp,p."abcdClass",
+ SELECT p."pharmacyId",p.cn,p.name,p.family,p.units,p.value,p.pvp,p."abcdClass",p."__totalFiltered",
   CASE WHEN co.priced_units>0 THEN 'Compras ponderadas'
     WHEN p.pmc>0 THEN 'PMC catálogo' ELSE NULL END AS "costSource",
   CASE WHEN ${unitCost} IS NOT NULL THEN round(${unitCost}::numeric,4)::float8 ELSE NULL END AS "purchaseCost",
@@ -162,6 +169,9 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
    const raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim();
    const families=String(req.query.familias||"").split(",").filter(Boolean);
    const page=Number(req.query.pagina||1);
+   let columnFilters;
+   try{columnFilters=parseSalesColumnFilters(req.query.columnas)}
+   catch(e){return res.status(400).json({error:e.message})}
    const order=String(req.query.orden||"value");
    const direction=String(req.query.direccion||"desc").toLowerCase();
    if(!validSalesDateRange(from,to)||
@@ -207,7 +217,7 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
    const pageSize=400;
    if(cache){
     const args={slug:req.context.client.slug,ids,months:Number(req.context.client.analysisMonths||12),
-     from,to,search,families,sortKey:order,sortDir:direction,page,pageSize};
+     from,to,search,families,sortKey:order,sortDir:direction,page,pageSize,columnFilters};
     const cached=await cache.read(args);
     const refresh=()=>{
      for(const id of ids)cache.schedule({
@@ -223,10 +233,10 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
     if(cache.isCacheRange?.(args)&&typeof res.once==="function")
      res.once("finish",refresh);
    }
-   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
+   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source,columnFilters),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
-     pageSize+1,(page-1)*pageSize]);
-   res.json({products:rows.slice(0,pageSize).map(x=>({
+     pageSize+1,(page-1)*pageSize,JSON.stringify(columnFilters)]);
+   res.json({totalFiltered:Number(rows[0]?.__totalFiltered||0),products:rows.slice(0,pageSize).map(x=>({
     ...x,id:x.pharmacyId+"|"+x.cn,pharmacyId:String(x.pharmacyId)
    })),hasMore:rows.length>pageSize,page,from,to});
   }catch(e){next(e)}

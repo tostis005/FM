@@ -107,6 +107,7 @@ setupSyncStatus(app,pool,{requireTenant});
 setupTenantPromotions(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
 setupRealReports(app,pool,{requireTenant});
+setupPurchaseTotals(app,pool,{requireTenant});
 setupSalesSummary(app,pool,{requireTenant});
 setupSalesTotals(app,pool,{requireTenant});
 setupSalesInsights(app,pool,{requireTenant});

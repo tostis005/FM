@@ -144,7 +144,7 @@ try{
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");
          await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")?.textContent!=="—");
          const before=await firstMetric.textContent();
-         await page.locator(".fm-filter-field .multi-filter-trigger").first().click();
+         await page.locator(".fm-unified-filters .multi-filter-trigger").first().click();
          const popup=page.locator(".multi-filter-popover");
          await popup.getByText("Abadía",{exact:true}).click();
          await popup.getByText("Europa",{exact:true}).click();

@@ -44,6 +44,12 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   const [audioError, setAudioError] = useState("");
   const [transcriptionReady, setTranscriptionReady] = useState(false);
   const [sessionNumber, setSessionNumber] = useState(1);
+  const [assistantStatus, setAssistantStatus] = useState(null);
+  const [chatBusy, setChatBusy] = useState(false);
+  const chatAbortRef = useRef(null);
+  const voiceRecorderRef = useRef(null);
+  const voiceStreamRef = useRef(null);
+  const voiceAbortRef = useRef(null);
   const inputRef = useRef(null);
   const conversationRef = useRef(null);
   const dialogRef = useRef(null);
@@ -69,6 +75,16 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }
 
   function cancelDictation() {
+    const recorder=voiceRecorderRef.current;
+    voiceRecorderRef.current=null;
+    if(recorder){
+      recorder.onstop=null;recorder.ondataavailable=null;
+      try{if(recorder.state!=="inactive")recorder.stop();}catch{}
+    }
+    if(voiceStreamRef.current)voiceStreamRef.current.getTracks().forEach(track=>track.stop());
+    voiceStreamRef.current=null;
+    voiceAbortRef.current?.abort();
+    voiceAbortRef.current=null;
     dictationTokenRef.current += 1; // Ignorar resultados tardíos al descartar, cerrar o cambiar de conversación.
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
@@ -104,6 +120,14 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }
 
   function stopDictation() {
+    if(voiceRecorderRef.current){
+      if(dictationStatus==="finishing")return;
+      setDictationStatus("finishing");
+      clearTicker();
+      try{voiceRecorderRef.current.stop();}
+      catch{cancelDictation();setAudioError("No se ha podido detener el dictado");}
+      return;
+    }
     const recognition = recognitionRef.current;
     if (!recognition || dictationStatus === "finishing") return;
     setDictationStatus("finishing");
@@ -112,8 +136,74 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     catch { completeDictation(dictationTokenRef.current); }
   }
 
+  async function startLocalDictation(){
+    if(typeof MediaRecorder==="undefined"||!navigator.mediaDevices?.getUserMedia){
+      setAudioError("Este navegador no permite grabar audio. Comprueba HTTPS y los permisos.");return;
+    }
+    setAudioError("");
+    setTranscriptionReady(false);
+    const token=++dictationTokenRef.current;
+    setDictationStatus("starting");
+    let stream;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(token!==dictationTokenRef.current){stream.getTracks().forEach(track=>track.stop());return;}
+      const mime=["audio/webm;codecs=opus","audio/webm","audio/mp4"].find(t=>MediaRecorder.isTypeSupported(t));
+      const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
+      const chunks=[];
+      voiceStreamRef.current=stream;
+      voiceRecorderRef.current=recorder;
+      baseDraftRef.current=draft;
+      recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
+      recorder.onstop=async()=>{
+        stream.getTracks().forEach(track=>track.stop());
+        voiceStreamRef.current=null;voiceRecorderRef.current=null;
+        if(token!==dictationTokenRef.current)return;
+        const audio=new Blob(chunks,{type:recorder.mimeType||"audio/webm"});
+        if(audio.size<512){setAudioError("No se ha detectado audio.");setDictationStatus("idle");return;}
+        const controller=new AbortController();
+        voiceAbortRef.current=controller;
+        try{
+          const response=await fetch("/api/asistente/transcribir",{
+            method:"POST",credentials:"same-origin",signal:controller.signal,
+            headers:{"Content-Type":audio.type,"X-Farmetrica-Cliente":localStorage.getItem("fm_active_tenant")||"ampedia"},
+            body:audio
+          });
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok)throw Error(result.error||"No se pudo transcribir");
+          if(token!==dictationTokenRef.current)return;
+          setDraft(mergeDictationDraft(baseDraftRef.current,result.text));
+          setTranscriptionReady(true);
+          setAudioError("");
+          inputRef.current?.focus();
+        }catch(error){
+          if(!controller.signal.aborted&&token===dictationTokenRef.current)
+            setAudioError(error.message||"Error al transcribir");
+        }finally{
+          if(token===dictationTokenRef.current){
+            voiceAbortRef.current=null;setDictationStatus("idle");setDictationPreview("");
+          }
+        }
+      };
+      recorder.start();
+      setSeconds(0);durationRef.current=0;setDictationPreview("");
+      setDictationStatus("listening");
+      tickerRef.current=window.setInterval(()=>{
+        durationRef.current+=1;setSeconds(durationRef.current);
+        if(durationRef.current>=120)stopDictation();
+      },1000);
+    }catch(error){
+      stream?.getTracks().forEach(track=>track.stop());
+      if(token===dictationTokenRef.current){
+        setDictationStatus("idle");
+        setAudioError(error?.name==="NotAllowedError"?"Permite el micrófono para dictar.":"No se ha podido iniciar la grabación.");
+      }
+    }
+  }
+
   function startDictation() {
     if (isDictating) return;
+    if(assistantStatus?.voiceEnabled){void startLocalDictation();return;}
     setAudioError("");
     setTranscriptionReady(false);
     const BrowserRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -209,6 +299,17 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }, [open]);
 
   useEffect(() => {
+    if (!open) return undefined;
+    const controller = new AbortController();
+    fetch("/api/asistente/estado", {
+      credentials: "same-origin", cache:"no-store", signal:controller.signal,
+      headers: {"X-Farmetrica-Cliente":localStorage.getItem("fm_active_tenant")||"ampedia"}
+    }).then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")))
+      .then(setAssistantStatus).catch(()=>setAssistantStatus({enabled:false,voiceEnabled:false}));
+    return ()=>controller.abort();
+  }, [open]);
+
+  useEffect(() => {
     if (open && conversationRef.current) conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
   }, [messages, open]);
 
@@ -223,29 +324,61 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
       recognition.onerror = null;
       try { recognition.abort(); } catch {}
     }
+    chatAbortRef.current?.abort();
+    voiceAbortRef.current?.abort();
+    if(voiceRecorderRef.current){voiceRecorderRef.current.onstop=null;try{voiceRecorderRef.current.stop();}catch{}}
+    voiceStreamRef.current?.getTracks().forEach(track=>track.stop());
   }, []);
 
   function closeAssistant() {
+    chatAbortRef.current?.abort();
+    setChatBusy(false);
     cancelDictation();
     setOpen(false);
     launcherRef.current?.focus();
   }
 
-  function sendText(text = draft) {
+  async function sendText(text = draft) {
     const question = text.trim();
-    if (!question || isDictating) return;
-    setMessages(previous => [
-      ...previous,
-      createMessage("user", question),
-      createMessage("assistant", demoReply(question))
-    ]);
+    if (!question || isDictating || chatBusy) return;
+    const history = messages.filter(m=>m.role==="user"||m.role==="assistant")
+      .slice(-8).map(m=>({role:m.role,content:m.text}));
+    setMessages(previous=>[...previous,createMessage("user",question)]);
     setDraft("");
     setAudioError("");
     setTranscriptionReady(false);
     inputRef.current?.focus();
+    if (!assistantStatus?.enabled) {
+      setMessages(previous=>[...previous,createMessage("assistant",
+        "La interfaz está preparada, pero todavía falta activar el modelo en el servidor. Cuando se configure Ollama, responderé con los datos de tus farmacias.")]);
+      return;
+    }
+    setChatBusy(true);
+    const controller=new AbortController();
+    chatAbortRef.current=controller;
+    try{
+      const response=await fetch("/api/asistente/chat",{
+        method:"POST",credentials:"same-origin",signal:controller.signal,
+        headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":localStorage.getItem("fm_active_tenant")||"ampedia"},
+        body:JSON.stringify({question,history,section})
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(result.error||"No se pudo completar la consulta");
+      if(controller.signal.aborted)return;
+      const sources=Array.isArray(result.sources)?result.sources.filter(x=>x.available).map(x=>x.label).join(" · "):"";
+      setMessages(previous=>[...previous,createMessage("assistant",result.answer+
+        (sources?"\n\nFuentes: "+sources:""))]);
+    }catch(error){
+      if(controller.signal.aborted)return;
+      setMessages(previous=>[...previous,createMessage("assistant","No se pudo responder: "+(error.message||"Error del servidor"))]);
+    }finally{
+      if(chatAbortRef.current===controller){chatAbortRef.current=null;setChatBusy(false);}
+    }
   }
 
   function newConversation() {
+    chatAbortRef.current?.abort();
+    setChatBusy(false);
     cancelDictation();
     setMessages([]);
     setDraft("");
@@ -261,19 +394,19 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
         ref={launcherRef}
         className="fm-ai-launcher"
         type="button"
-        aria-label="Abrir asistente de Farmétrica (demo)"
+        aria-label="Abrir asistente de Farmétrica"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
       >
         <Sparkles size={23} aria-hidden="true" />
-        <span className="fm-ai-launcher-label">Asistente IA</span>
+        <span className="fm-ai-launcher-label">Asistente</span>
       </button>
       {open && (
         <div className="fm-ai-root">
           <section className="fm-ai-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="fm-ai-title">
             <aside className="fm-ai-rail" aria-label="Opciones del asistente">
-              <div className="fm-ai-rail-brand"><span className="fm-ai-logo"><Sparkles size={23}/></span><span>Farmétrica <strong>IA</strong></span></div>
+              <div className="fm-ai-rail-brand"><span className="fm-ai-logo"><Sparkles size={23}/></span><span>Farmétrica</span></div>
               <button type="button" className="fm-ai-new" onClick={newConversation}><Plus size={17}/> Nueva conversación</button>
               <div className="fm-ai-rail-label">ESTÁS CONSULTANDO</div>
               <div className="fm-ai-rail-context"><Database size={17}/><span>{section}</span></div>
@@ -285,16 +418,16 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                   </button>
                 ))}
               </div>
-              <div className="fm-ai-rail-footer"><ShieldCheck size={16}/><span>Versión demo: sin acceso a los datos ni motor de IA conectado.</span></div>
+              <div className="fm-ai-rail-footer"><ShieldCheck size={16}/><span>{assistantStatus?.enabled?"Consultas autorizadas según tu cliente y tus permisos.":"El motor de IA todavía no está activado."}</span></div>
             </aside>
             <div className="fm-ai-workspace">
               <header className="fm-ai-topbar">
                 <div className="fm-ai-heading">
                   <div className="fm-ai-heading-icon"><Sparkles size={19}/></div>
-                  <div><h1 id="fm-ai-title">Asistente Farmétrica</h1><p>Tu espacio de análisis en lenguaje natural</p></div>
+                  <div><h1 id="fm-ai-title">Asistente</h1><p>Tu espacio de análisis en lenguaje natural</p></div>
                 </div>
                 <div className="fm-ai-top-actions">
-                  <span className="fm-ai-demo-status"><span/> Modo demo</span>
+                  <span className="fm-ai-demo-status"><span/> {assistantStatus?.enabled?"Conectado":"Por activar"}</span>
                   <button type="button" className="fm-ai-icon-btn fm-ai-mobile-new" title="Nueva conversación" aria-label="Nueva conversación" onClick={newConversation}><RotateCcw size={19}/></button>
                   <button type="button" className="fm-ai-icon-btn" aria-label="Cerrar asistente" title="Cerrar asistente" onClick={closeAssistant}><X size={22}/></button>
                 </div>
@@ -338,7 +471,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                     <div className="fm-ai-dictation-icon"><Mic size={25}/></div>
                     <div className="fm-ai-dictation-copy">
                       <strong>{dictationStatus === "starting" ? "Preparando micrófono…" : dictationStatus === "finishing" ? "Terminando el dictado…" : "Te escucho"}</strong>
-                      <span aria-live="polite">{dictationPreview || (dictationStatus === "finishing" ? "Pasando el dictado a texto" : "Habla de forma natural. Tu pregunta aparecerá aquí mientras la dictas.")}</span>
+                      <span aria-live="polite">{dictationPreview || (dictationStatus === "finishing" ? "Pasando el dictado a texto" : "Habla de forma natural. Al terminar, aparecerá el texto en la caja de escritura.")}</span>
                     </div>
                     <div className="fm-ai-dictation-timer">{timerLabel(seconds)}</div>
                   </div>
@@ -351,6 +484,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                     </button>
                   </div>
                 </section>}
+                {chatBusy && <p className="fm-ai-transcription-ready" role="status">Analizando la consulta…</p>}
                 {transcriptionReady && !isDictating && <p className="fm-ai-transcription-ready" role="status">Transcripción lista: revísala o edítala antes de enviarla.</p>}
                 <div className="fm-ai-composer">
                   <textarea
@@ -367,12 +501,12 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                   <div className="fm-ai-composer-actions">
                     <span>Intro para enviar · Mayús + Intro para nueva línea</span>
                     <div>
-                      <button type="button" className="fm-ai-icon-btn" title="Dictar una pregunta" aria-label="Dictar una pregunta" disabled={isDictating} onClick={startDictation}><Mic size={19}/></button>
-                      <button type="button" className="fm-ai-send" disabled={!draft.trim() || isDictating} aria-label="Enviar mensaje" title="Enviar mensaje" onClick={() => sendText()}><ArrowUp size={19}/></button>
+                      <button type="button" className="fm-ai-icon-btn" title="Dictar una pregunta" aria-label="Dictar una pregunta" disabled={isDictating || chatBusy} onClick={startDictation}><Mic size={19}/></button>
+                      <button type="button" className="fm-ai-send" disabled={!draft.trim() || isDictating || chatBusy} aria-label="Enviar mensaje" title="Enviar mensaje" onClick={() => sendText()}><ArrowUp size={19}/></button>
                     </div>
                   </div>
                 </div>
-                <p className="fm-ai-disclaimer"><MessageCircle size={13}/> Modo demo: el chat no consulta datos. El dictado utiliza el reconocimiento del navegador, que puede procesar la voz en un servicio externo según el dispositivo.</p>
+                <p className="fm-ai-disclaimer"><MessageCircle size={13}/> {assistantStatus?.enabled?"Las respuestas se generan con el modelo configurado y consultas autorizadas.":"Modelo pendiente de activar."} {assistantStatus?.voiceEnabled?"La voz se transcribe mediante el servicio local configurado.":"El dictado del navegador puede usar servicios externos."}</p>
               </div>
             </div>
           </section>

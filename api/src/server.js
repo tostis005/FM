@@ -13,6 +13,7 @@ import {setupPurchaseTotals} from "./purchaseTotals.js";
 import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
+import { setupAssistant } from "./assistant.js";
 import {setupSalesDetail} from "./salesDetail.js";
 import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
@@ -116,6 +117,7 @@ const salesCache=createSalesCache(pool);
 setupSalesDetail(app,pool,{requireTenant,cache:salesCache});
 setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
 setupGenericosReales(app,pool,{requireTenantModule});
+setupAssistant(app,pool,{requireTenant});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
   host_origen AS "sourceHost", bd_origen AS "sourceDatabase",

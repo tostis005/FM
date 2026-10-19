@@ -1,0 +1,43 @@
+# Activación opcional para /opt/farmawao, junto al compose.yaml existente.
+# No publica los servicios de IA en puertos del host. Volúmenes separados de PostgreSQL.
+services:
+  api:
+    environment:
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_MODEL: ${AI_MODEL:-qwen3:1.7b}
+      AI_OLLAMA_URL: http://ollama:11434
+      AI_VOICE_ENABLED: ${AI_VOICE_ENABLED:-false}
+      AI_WHISPER_URL: http://whisper:8080
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_MAX_QUEUE: "1"
+      OLLAMA_KEEP_ALIVE: 30s
+      OLLAMA_CONTEXT_LENGTH: "2048"
+    volumes:
+      - farmetrica_ollama_models:/root/.ollama
+    mem_limit: 3g
+    cpus: 1.5
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+  whisper:
+    profiles: ["voice"]
+    image: ghcr.io/ggml-org/whisper.cpp:main
+    restart: unless-stopped
+    command: ["whisper-server","--host","0.0.0.0","--port","8080","--threads","2","-m","/models/ggml-base.bin"]
+    volumes:
+      - farmetrica_whisper_models:/models
+    mem_limit: 1200m
+    cpus: 1.0
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  farmetrica_ollama_models:
+  farmetrica_whisper_models:

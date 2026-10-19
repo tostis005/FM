@@ -23,6 +23,9 @@ jobs:
       - name: Comprobar API
         run: |
           node --check api/src/server.js
+          node --check api/src/assistant.js
+          node --check api/src/assistantAnalytics.js
+          node --test api/src/assistant.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --check api/src/syncStatus.js

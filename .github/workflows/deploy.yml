@@ -185,6 +185,8 @@ jobs:
             'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. web/'
           scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
             deploy/compose.farmacias.yml "$VPS_USER@$VPS_HOST:/opt/farmawao/compose.farmacias.yml"
+          scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            deploy/compose.asistente.yml "$VPS_USER@$VPS_HOST:/opt/farmawao/compose.asistente.yml"
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             docker compose -f compose.yaml -f compose.farmacias.yml config --quiet

@@ -357,7 +357,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     const k=key(r.pharmacyId,r.cn),old=costs.get(k)||{units:0,total:0};
     old.units+=Number(r.pricedUnits);old.total+=Number(r.cost);costs.set(k,old);
    }
-   if(buyers&&!buyDetailComplete&&pharmacyIds.length){
+   if(buyers&&!buyDetailComplete&&pharmacyIds.length&&readSalesRows){
     // Segunda agregación compacta por farmacia+CN, independiente de la
     // paginación, proveedor o columna de orden del informe.
     const {rows:allCosts}=await pool.query(`SELECT f.id::text AS "pharmacyId",

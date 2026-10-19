@@ -70,8 +70,8 @@ try{
   assert.equal(m.whiteSpace,"nowrap","No partir importes");
   assert.ok(m.scroll<=m.width+3,"Importe desborda la tarjeta: "+JSON.stringify(m));
  }
- await page.getByRole("button",{name:"Este año",exact:true}).click();
- await page.waitForFunction(()=>document.querySelector(".fm-sales-chip.is-selected")?.textContent==="Este año");
+ await page.locator(".fm-unified-filters select").first().selectOption("this_year");
+ await page.waitForFunction(()=>document.querySelector(".fm-unified-filters select")?.value==="this_year");
  await page.waitForTimeout(200);
  const dashboardYear=by("/api/analytics/ventas/totales").at(-1)?.query.desde;
  assert.ok(/^\d{4}-01-01$/.test(dashboardYear||""),"Este año debe empezar en enero");

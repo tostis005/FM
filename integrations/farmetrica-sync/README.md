@@ -156,7 +156,7 @@ El servicio escribe **directamente en PostgreSQL**, tal como se acordó. Si el d
 - Las configuraciones previas no se sobreescriben. Si la consulta de ventas antigua omite descuentos, se rellenan `NULL` hasta que se modifique su SELECT.
 - Para asegurar continuidad incremental con el filtro `FechaHora`, verificar que es fiable como timestamp de alta inmutable y que no se publican filas después de vencer el solapamiento de seguridad.
 
-Archivos de SQL listos para copiar: `docs/ABADIA_VENTAS_INCREMENTAL.sql` y `docs/ABADIA_VENTAS_COMPLETA.sql`.
+Las consultas de ventas deben configurarse para cada instalación tras verificar los alias; no se incluyen extractos particulares de farmacias en el repositorio público.
 
 ## v0.6 · Conexión PostgreSQL por SSH
 

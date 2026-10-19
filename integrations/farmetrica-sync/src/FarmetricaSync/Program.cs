@@ -13,12 +13,16 @@ builder.Host.UseWindowsService(options => options.ServiceName = "FarmetricaSync"
 // El panel contiene credenciales y consultas SQL: denegar cualquier escucha remota,
  // incluso si se sobreescribe Urls desde appsettings o variables de entorno.
 string listeningUrls = builder.Configuration["Urls"] ?? "http://127.0.0.1:5080";
+if (string.IsNullOrWhiteSpace(listeningUrls))
+    throw new InvalidOperationException("Falta una dirección de escucha local válida.");
 foreach (string endpoint in listeningUrls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
 {
     if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var parsed) ||
-        (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps) ||
-        !System.Net.IPAddress.TryParse(parsed.Host, out var ip) && !parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-        (System.Net.IPAddress.TryParse(parsed.Host, out var endpointIp) && !System.Net.IPAddress.IsLoopback(endpointIp)))
+        (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
+        throw new InvalidOperationException("URL de acceso al panel no válida.");
+    bool loopback = parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+        (System.Net.IPAddress.TryParse(parsed.Host, out var ip) && System.Net.IPAddress.IsLoopback(ip));
+    if (!loopback)
         throw new InvalidOperationException(
             "Farmétrica Sync solo permite el panel en localhost/127.0.0.1/::1. Usa acceso local o túnel SSH, nunca una interfaz pública.");
 }

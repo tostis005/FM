@@ -142,6 +142,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     if(r.supplier!=null&&r.supplier!=="")suppliers.add(r.pharmacy+"|"+r.supplier);
     const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null};
     m.compras=(m.compras??0)+amount;
+    m.recepciones=(m.recepciones||0)+Number(r.sourceRows||0);
     m.hasAmounts=(m.hasAmounts||false)||Number(r.amountRows??(r.amount==null?0:1))>0;
     months.set(r.month,m);
    }
@@ -154,6 +155,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    },hasArticleLines:lines>0,hasAmounts:amountRows>0,sourceRows,
    monthly:[...months.values()].map(m=>({
     month:m.month,ventas:m.ventas,compras:m.hasAmounts?m.compras:null,
+    recepciones:m.recepciones||0,
     unidades:m.unidades,margen:m.margen
    }))});
   }catch(e){next(e)}

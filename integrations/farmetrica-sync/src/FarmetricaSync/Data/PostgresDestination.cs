@@ -447,6 +447,47 @@ WHERE a."origen_id" IS NULL
                 await delete.ExecuteNonQueryAsync(ct);
             }
             duplicates += totalRead - staged;
+
+            // Fotografía actual del stock, con fecha de captura incluso cuando
+            // la cantidad no cambió. No se confunde con compras o ventas y no
+            // altera el histórico de operaciones de ninguno de esos módulos.
+            if (entity.Name == "articulos" && entity.Columns.Any(x => x.Name == "stock_actual"))
+            {
+                string inventory = Validation.Q(dest.Schema) + "." + Validation.Q("fm_stock_fotografia");
+                bool stockTableExists;
+                await using (var check = new NpgsqlCommand("SELECT to_regclass(@name) IS NOT NULL", conn, tx))
+                {
+                    check.Parameters.AddWithValue("name", inventory);
+                    stockTableExists = (bool)(await check.ExecuteScalarAsync(ct) ?? false);
+                }
+                if (stockTableExists)
+                {
+                    await using (var photo = new NpgsqlCommand($"""
+INSERT INTO {inventory} AS existing
+ (farmacia_codigo,sistema_origen,articulo_origen_id,unidades,capturado_en,sincronizado_en)
+ SELECT farmacia_codigo,@source,origen_id,stock_actual,now(),now()
+ FROM {stageFull} WHERE stock_actual IS NOT NULL
+ ON CONFLICT (farmacia_codigo,sistema_origen,articulo_origen_id)
+ DO UPDATE SET unidades=EXCLUDED.unidades,capturado_en=EXCLUDED.capturado_en,
+               sincronizado_en=now()
+""", conn, tx) { CommandTimeout = 180 })
+                    {
+                        photo.Parameters.AddWithValue("source", pharmacy.SystemType.ToLowerInvariant());
+                        await photo.ExecuteNonQueryAsync(ct);
+                    }
+                    await using var clear = new NpgsqlCommand($"""
+DELETE FROM {inventory} t
+WHERE t.farmacia_codigo=@pharmacy AND t.sistema_origen=@source
+  AND NOT EXISTS (SELECT 1 FROM {stageFull} s
+                  WHERE s.farmacia_codigo=t.farmacia_codigo
+                    AND s.origen_id=t.articulo_origen_id
+                    AND s.stock_actual IS NOT NULL)
+""", conn, tx) { CommandTimeout = 180 };
+                    clear.Parameters.AddWithValue("pharmacy", pharmacy.Code);
+                    clear.Parameters.AddWithValue("source", pharmacy.SystemType.ToLowerInvariant());
+                    await clear.ExecuteNonQueryAsync(ct);
+                }
+            }
         }
         onProgress?.Invoke(new SyncWriteProgress("Confirmando transacción PostgreSQL", totalRead, batchIndex, inserted, updated, deleted, duplicates));
         await tx!.CommitAsync(ct);

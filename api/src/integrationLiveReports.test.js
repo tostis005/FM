@@ -435,6 +435,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(pageOne.available,true);
   assert.equal(pageOne.rows.length,50);
   assert.equal(pageOne.total,81);
+  const smallPage=await request("/api/analytics/compras/recepciones",{
+   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"1",tamano:"10"});
+  assert.equal(smallPage.rows.length,10,"El selector de 10 por página también funciona");
   const pageTwo=await request("/api/analytics/compras/recepciones",{
    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"2",tamano:"50"});
   assert.equal(pageTwo.rows.length,31);

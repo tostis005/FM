@@ -60,6 +60,38 @@ las métricas de ventas existentes.
 base de datos privada del cliente. No incluir sus registros reales,
 credenciales ni muestras nominativas en GitHub o datos de demo pública.
 
+## Programación de trabajos y conexiones intermitentes
+
+**Una fuente fallida NO utiliza reintentos rápidos.** Si eliges «Cada hora»,
+el siguiente intento será al menos una hora **después de finalizar** el
+anterior, haya terminado bien o por caída de VPN/SQL Server/SSH/PostgreSQL.
+«Cada 6 horas» y demás intervalos respetan exactamente la misma regla.
+El campo anterior `RetryMinutes` se mantiene solo para poder leer
+configuraciones antiguas; **ya no gobierna el planificador** ni aparece
+en el formulario. El último fin se guarda en `LastCompletedUtc`, de
+modo que reiniciar Windows tampoco provoca reintentos inmediatos.
+Los puntos de control de lectura (`WatermarkUtc`) solo avanzan
+después de una publicación confirmada. Por tanto, cuando vuelve la
+conectividad el siguiente ciclo programado recupera los cambios pendientes
+dentro de las garantías de las fuentes SQL configuradas. Si el SELECT usa
+fecha comercial y no fecha técnica de modificación, siguen siendo necesarias
+reconciliaciones históricas para cambios retroactivos.
+
+En **Consultas SQL → Editar**, seleccionar **Cada día** permite indicar
+una **hora local de la farmacia** (`HH:mm`, por ejemplo `08:30`). El
+servidor utiliza su zona horaria configurada y reconoce los cambios
+de horario de verano/invierno: una hora inexistente se mueve al primer
+instante válido, y una hora repetida solo se ejecuta una vez.
+Si el servicio no estaba arrancado a la hora prevista, realiza una
+única ejecución pendiente cuando vuelve a funcionar, nunca una por
+cada día perdido. Para trabajos diarios antiguos que no tengan una
+hora indicada se mantiene la periodicidad móvil original.
+
+Los botones manuales **Ejecutar** y **Carga completa** continúan
+disponibles; una ejecución manual no activa un bucle automático.
+No se crean nuevos trabajos, no se cambian consultas SQL ni
+se modifican las farmacias al aplicar esta actualización.
+
 ## Funcionalidades incluidas
 
 - Servicio Windows que arranca con el sistema y opera sin sesión de usuario iniciada.
@@ -71,7 +103,7 @@ credenciales ni muestras nominativas en GitHub o datos de demo pública.
 - **Procesamiento de grandes volúmenes:** lector SQL Server en streaming, lotes editables de 100–20.000 filas, recuentos de tipo `long`, transacción PostgreSQL completa sin límite fijo total.
 - **Políticas por fuente:** `incremental` para solo altas inmutables (`ON CONFLICT DO NOTHING`) y `snapshot` para maestros (comparación de altas, cambios, bajas en la misma transacción).
 - **Dos consultas por farmacia y entidad:** SELECT de carga completa inicial/manual y SELECT incremental periódico (`@desde`, `@hasta`). También disponible la fotografía completa programada. La carga completa reemplaza solo los registros de esa farmacia en una transacción; tras completarla, establece el checkpoint del incremental. Si has configurado una consulta completa, el incremental automático no arranca hasta la primera carga completa satisfactoria. Frecuencia entre 5 minutos y una semana.
-- Persistencia de estado y reanudación con checkpoint al confirmar la escritura; reintentos de fallo cada 5 minutos; historial de las últimas 10.000 ejecuciones con filtros por farmacia, entidad y estado, fechas, duración, registros extraídos/insertados/actualizados/eliminados/repetidos.
+- Persistencia de estado y reanudación con checkpoint al confirmar la escritura; el siguiente intento tras fallo espera la periodicidad configurada; historial de las últimas 10.000 ejecuciones con filtros por farmacia, entidad y estado, fechas, duración, registros extraídos/insertados/actualizados/eliminados/repetidos.
 - Alertas SMTP mediante STARTTLS con correo de prueba, destinatarios globales o específicos de cada fuente, aviso de recuperación opcional y control de repetición (máximo una por consulta/hora).
 - Secrets cifrados con ASP.NET Core Data Protection, con claves protegidas por DPAPI en Windows y carpeta `ProgramData` con ACL restringidas por el instalador.
 - Escritura por COPY binario en tabla temporal y UPSERT transaccional en PostgreSQL.

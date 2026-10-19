@@ -239,7 +239,7 @@ function App(){
       const remote=server.promotions||[];
       const existing=new Set(remote.map(p=>String(p.id)));
       const deleted=new Set((server.deletedIds||[]).map(String));
-      const canEdit=["administrador","superadministrador"].includes(ctx.role);
+      const canEdit=["administrador","superadministrador"].includes(ctx.role)&&!server.catalogReset;
       setPromotionStoreStatus("connected");
       // Solo conservar importaciones locales todavía no sincronizadas, nunca
       // campañas que un administrador eliminó del servidor.

@@ -74,6 +74,7 @@ jobs:
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
           node --test src/reportFilterScopes.test.js
+          node --test src/sharedReportFilters.test.js
           node --test src/businessAnalytics.test.js
           node --test src/salesPeriods.test.js
           node --test src/localeES.test.js
@@ -217,6 +218,7 @@ jobs:
             sleep 1
           done
           node check-responsive.mjs
+          node check-dashboard-audit.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

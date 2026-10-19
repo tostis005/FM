@@ -185,7 +185,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
        (sum(c.unidades*c.coste_unitario) FILTER(WHERE c.coste_unitario>0)/
          nullif(sum(c.unidades) FILTER(WHERE c.coste_unitario>0),0))::float8 AS puc
      FROM ${schema}.fm_recepciones_analitica c
-     JOIN farmetrica.farmacias f ON f.cliente_slug=$4
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$5
        AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      ${hasProducts?`LEFT JOIN ${schema}.productos p ON p.id=c.articulo_id`:""}
      ${hasSuppliers?`LEFT JOIN ${schema}.proveedores sp ON sp.id=c.proveedor_id`:""}

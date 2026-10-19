@@ -171,5 +171,9 @@ export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun
   timer.unref?.();
   void runNightly();
  }
- return {read,schedule,refreshOne,start,runNightly};
+ return {read,schedule,refreshOne,start,runNightly,
+  isCacheRange:({from,to,months})=>{
+   const range=current(months);
+   return range.from===from&&range.to===to;
+  }};
 }

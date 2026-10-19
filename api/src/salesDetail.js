@@ -23,6 +23,14 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
    `JOIN ${t}.compras b ON upper(btrim(b.farmacia_codigo))=c.code
      AND b.articulo_id=c.articulo_id
      AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')`;
+ // Costes comparables sin proveedores marcados como traspasos internos u omisiones.
+ // Resolución del cliente por farmacia: mantiene la misma firma SQL del precálculo
+ // y evita alterar los nueve parámetros que usan los listados paginados.
+ const includedCostSupplier=`NOT EXISTS (
+   SELECT 1 FROM farmetrica.proveedores_maestro ignored
+   JOIN farmetrica.farmacias tenant_scope ON tenant_scope.cliente_slug=ignored.cliente_slug
+   WHERE tenant_scope.id::text=c."pharmacyId" AND ignored.ignorar_informes=true
+     AND upper(btrim(ignored.codigo_origen))=upper(btrim(b.proveedor_id::text)))`;
  const purchaseCosts=source=>purchases==="none"?
   `SELECT c."pharmacyId",c.cn,NULL::float8 AS cost,
     NULL::float8 AS priced_units FROM catalog c WHERE false`:
@@ -33,6 +41,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
       WHERE b.unidades>0 AND ${purchasePrice}>0)::float8 AS priced_units
    FROM ${source} JOIN catalog c ON c."pharmacyId"=${source}."pharmacyId" AND c.cn=${source}.cn
    ${purchaseJoin}
+   WHERE ${includedCostSupplier}
    GROUP BY c."pharmacyId",c.cn`;
  const articleJoin=articles==="normalized"?
    `LEFT JOIN LATERAL (

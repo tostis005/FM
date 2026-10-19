@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
-import {loadCommercialNames,nameCommercialRows} from "./commercialNames.js";
+import {loadCommercialNames,nameCommercialRows,listCommercialSuppliers} from "./commercialNames.js";
 
 test("PostgreSQL real: catálogo vendedor/proveedor local a farmacia, con tenant aislado",{
  skip:!process.env.TEST_DB_URL
@@ -43,6 +43,13 @@ test("PostgreSQL real: catálogo vendedor/proveedor local a farmacia, con tenant
   assert.equal(rows[1].sellerName,"Clara");
   assert.equal(rows[2].supplierName,"Proveedor configurado");
   assert.equal(rows[2].sellerName,"99");
+  const catalog=await listCommercialSuppliers(db,context,idA);
+  assert.equal(catalog.find(item=>item.code==="12")?.name,"Cooperativa A");
+  assert.equal(catalog.find(item=>item.code==="55")?.name,"Proveedor configurado");
+  const secondCatalog=await listCommercialSuppliers(db,context,idB);
+  assert.equal(secondCatalog.find(item=>item.code==="12")?.name,"Distribuidora B");
+  await assert.rejects(()=>listCommercialSuppliers(db,{...context,allowedPharmacyIds:[idA]},idB),
+   error=>error.status===403);
   const external=await loadCommercialNames(db,{...context,allowedPharmacyIds:[idA]},[
    {pharmacyId:idA,supplierCode:"12",sellerId:"3"},
    {pharmacyId:idB,supplierCode:"12",sellerId:"3"}

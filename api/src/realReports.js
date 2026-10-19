@@ -62,8 +62,8 @@ export function setupRealReports(app,pool,{requireTenant}){
    if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))
     return res.status(400).json({error:"Esquema de datos inválido"});
    const columns=await tableColumns(pool,schema,"compras");
-   const normalized=has(columns,"farmacia_codigo","fecha","articulo_id","unidades","importe");
-   const legacy=!normalized&&has(columns,"farmacia_id","fecha","producto_id","unidades","total");
+   const normalized=has(columns,"farmacia_codigo","fecha","articulo_id","proveedor_id","unidades","coste_unitario","importe");
+   const legacy=!normalized&&has(columns,"farmacia_id","fecha","producto_id","proveedor_id","unidades","puc","total");
    if(!normalized&&!legacy)return res.json({
     source:"missing",hasPurchases:false,pharmacies:[],message:"No existe una tabla de compras reconocible. Revisa el sincronizador y el mapeo de columnas."
    });
@@ -96,8 +96,9 @@ export function setupRealReports(app,pool,{requireTenant}){
    res.json({source:legacy?"legacy":"normalized",
     hasPurchases:pharmacies.some(p=>p.hasPeriodPurchases),pharmacies,
     period:{from:f.from,to:f.to},
-    message:pharmacies.some(p=>p.hasPeriodPurchases)?
-      "Hay compras registradas en el periodo.":"No se encontraron compras para el periodo y farmacias seleccionados."});
+    message:!pharmacies.length?"No hay farmacias autorizadas o seleccionadas.":
+      pharmacies.some(p=>p.hasPeriodPurchases)?"Hay compras registradas en el periodo.":
+      "No se encontraron compras para el periodo y farmacias seleccionados."});
   }catch(e){next(e)}
  });
 

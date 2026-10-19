@@ -106,7 +106,7 @@ export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun
   if(expected.from!==from||expected.to!==to)return null;
   try{
    const {rows:states}=await pool.query(`
-    SELECT farmacia_id,calculado_en,hasta
+    SELECT farmacia_id,calculado_en,to_char(hasta,'YYYY-MM-DD') AS hasta
     FROM farmetrica.ventas_analitica_estado
     WHERE cliente_slug=$1 AND analisis_meses=$2
       AND farmacia_id=ANY($3::int[]) AND desde=$4::date

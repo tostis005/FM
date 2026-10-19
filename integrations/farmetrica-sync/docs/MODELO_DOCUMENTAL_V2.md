@@ -69,9 +69,11 @@ usar reconciliación completa periódica y ventana de repetición acordada.
 
 - **Implementado en código:** entidades, migración aditiva, escritor JOIN,
   tratamiento de signos, transacciones, idempotencia y pruebas con PostgreSQL.
-- **Pendiente de consultas reales:** SELECT Farmatic que permita mapear
-  cabeceras/líneas de tickets y recepciones, sus claves de relación y
-  los criterios de modificación. No hay plantilla por defecto activada.
+- **Fuentes Farmatic identificadas:** `dbo.Venta` + `dbo.LineaVenta`
+  y `dbo.Recep` + `dbo.LINEARECEP`. Hay plantillas SELECT con JOIN para
+  ambos flujos, disponibles al crear un trabajo nuevo, **desactivado por defecto**.
+  Se han comprobado las columnas y muestras SSMS, no se ha ejecutado contra
+  un servidor Farmatic conectado ni conciliado un periodo de explotación real.
 - **Pendiente de reconciliación funcional:** demostrar igualdad con el ERP
   por documento, farmacia, periodo, unidades, importes, impuestos y devoluciones.
 - **Compatibilidad:** los trabajos actuales `ventas`, `compras`, `articulos`,
@@ -80,3 +82,74 @@ usar reconciliación completa periódica y ventana de repetición acordada.
 El coste neto de compras solo puede calcularse con importes y descuentos reales
 de las líneas. Los descuentos globales permanecen en cabecera hasta fijar una
 regla trazable de reparto; no se asignan automáticamente por conveniencia.
+
+## Tablas y campos Farmatic identificados el 19/10/2026
+
+**Tickets:** `Venta.IdVenta = LineaVenta.IdVenta`, línea
+`LineaVenta.IdNLinea`. `Venta.Empresa` forma parte de la clave normalizada
+de documento, aunque `LineaVenta` no contiene `Empresa`: se debe validar
+que `IdVenta` es único entre empresas en cada instalación para que el JOIN
+no duplique líneas. Se conserva `Venta.NumeroDoc` para presentación. El
+importe final del documento es `Venta.TotalVenta`, el IVA conocido en
+cabecera es `TotalCuota`, y el descuento de operación es
+`Venta.DescuentoOpera`. `LineaVenta.ImporteNeto` incluye tanto
+`LineaVenta.DescuentoLinea` como `LineaVenta.DescuentoOpera`.
+No se vuelve a descontar de `ImporteNeto`.
+
+En las **1.000 líneas de la muestra**, la relación
+`ImporteBruto - DescuentoLinea - DescuentoOpera = ImporteNeto`
+se cumple exactamente. Se conservan `Cantidad` e `ImporteNeto`
+negativos para cambios/devoluciones. `TipoVenta` se persiste como
+`tipo_venta:<valor_original>` en lugar de equiparar sin prueba
+`C`/`R` a estados contables.
+
+**Compras:** `Recep.IdRecepcion = LINEARECEP.IdRecepcion`; cada detalle
+utiliza `LINEARECEP.IdNLinea` como clave de línea. El identificador local
+de artículo se toma de `XArt_IdArticu`, el proveedor de
+`Recep.XProv_IdProveedor` (se conservan ceros a la izquierda), las
+unidades recibidas de `Recibidas`, el coste unitario observado de
+`ImportePuc`, el importe de línea observado de `Importe` y las
+bonificaciones de `UBonificar`. La muestra confirma en **1.000 líneas**
+`Importe = Recibidas * ImportePuc`, sin diferencias en los valores
+proporcionados. **Esta igualdad no demuestra si incluye IVA o descuentos**:
+el campo normalizado `precio_unitario` proviene del PUC de origen,
+y no debe describirse comercialmente como bruto verificado.
+
+`Recep` **no contiene** `NPedido`, `IdAlbaran` ni total monetario.
+El campo `LINEARECEP.XPed_IdPedido` pertenece a **cada línea**, no
+a la cabecera, y solo se vinculará a pedidos cuando se valide la fuente
+de pedidos. Los descuentos `Descuento1`, `Descuento2`,
+`Descuento3`, `Descuento4`, `DtoManual`, `DFijo`,
+`DtoBonif` y `descuentofijo` tienen significado financiero
+pendiente de verificar. **No se suman ni se convierten en porcentajes por
+suposición**: se usa `Importe` tal como viene; descuentos normalizados
+y total de recepción permanecen `NULL` hasta la reconciliación.
+
+`LINEARECEP.Baja` se conserva como indicador de baja lógica
+**de línea**; `Modificada` es un indicador, no un instante
+de cambio. La cabecera `Recep.Actualizado` tampoco se trata como
+fecha de modificación. La fecha/hora de recepción se obtiene de
+`Recep.Hora` cuando es una fecha-hora válida, con alternativa
+`Recep.Fecha`. Los ejemplos recibidos tienen ambas fechas completas.
+
+### Seguridad de las cargas y cambios pendientes
+
+1. Los SELECT de ambas plantillas se ofrecen con JOIN `LEFT` para no
+   perder cabeceras que carezcan de líneas visibles. El escritor
+   comprueba claves únicas, consistencia entre filas y no publica
+   resultados parciales ante errores.
+2. El incremental de tickets usa `Venta.FechaHora`; el de
+   recepciones filtra días completos de `Recep.Fecha`. Los
+   datos **no** proporcionan una fecha técnica fiable de modificación
+   de la cabecera y de sus líneas. Una rectificación muy tardía puede
+   no detectarse: se propone relectura de 7 días y hay que programar
+   además conciliaciones completas periódicas adecuadas al volumen real.
+3. Las nuevas plantillas **no modifican automáticamente** los
+   trabajos existentes `ventas` y `compras`. Se activan
+   solo tras aplicar migración 016, comprobar permisos SELECT,
+   comparar un periodo de prueba y revisar el plan de reconciliación.
+4. Pendiente identificar CN/EAN verdaderos de `Articu` y las
+   cabeceras/líneas de pedidos para reposición, así como semántica
+   de descuentos, `TipoVenta`, y bajas/anulaciones de cabecera.
+5. **Nunca subir registros de farmacia reales al repositorio público**.
+   Guardar muestras y credenciales solo en un entorno de pruebas protegido.

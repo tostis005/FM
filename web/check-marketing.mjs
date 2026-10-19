@@ -23,6 +23,14 @@ const leadScript=read("./public/solicitar-demo/formulario.js");
 assert.match(demo,/id="demo-request-form"/);
 assert.match(demo,/consentimiento/);
 assert.match(demo,/name="programa"/);
+const privacyForm=read("./public/privacidad/solicitud/index.html");
+for(const [name,html,minimum] of [["demo",demo,8],["privacidad",privacyForm,4]]){
+ const labels=[...html.matchAll(/<span class="field-label">[^<]+(?:<span class="required-mark" aria-hidden="true">\*<\/span>|<small>Opcional<\/small>)<\/span>/g)];
+ assert.ok(labels.length>=minimum,"Las etiquetas de "+name+" deben mantener asterisco u opcional en la misma línea");
+ assert.doesNotMatch(html,/<label for="(?:demo|privacy)-[^"]+">[^<]+<span aria-hidden="true">\*<\/span>/);
+}
+assert.match(css,/\.demo-form \.field-label\{display:inline-flex/);
+assert.match(css,/\.demo-form \.field-label \.required-mark/);
 assert.match(leadScript,/\/api\/public\/solicitudes-demo/);
 assert.match(nginx,/location \^~ \/solicitar-demo\/ /);
 assert.match(nginx,/location \^~ \/privacidad\/ /);
@@ -113,8 +121,8 @@ for(const {p,url,type} of pages){
   assert.ok(!descriptionSet.has(p.description),"Descripción duplicada: "+url);descriptionSet.add(p.description);
   if(type==="article")assert.match(html,/"@type":"BlogPosting"/);
   if(type==="integration"){
-    assert.match(html,/Origen Farmatic conectado|Conexión sujeta a validación por instalación/);
-    if(p.slug!=="farmatic")assert.match(html,/Conexión sujeta a validación por instalación/);
+    assert.match(html,/Ventas conectadas con Farmatic|Tu programa, una visión de negocio/);
+    if(p.slug!=="farmatic")assert.match(html,/Tu programa, una visión de negocio/);
   }
   for(const related of p.related||[])assert.ok(allUrls.has(related)||["/","/soluciones/","/integraciones/","/blog/"].includes(related),"Enlace contextual desconocido: "+related);
   assert.ok(nginx.includes(url),"Sitemap: falta "+url);

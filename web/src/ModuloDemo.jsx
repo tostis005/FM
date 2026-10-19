@@ -102,7 +102,7 @@ function columnsFor(module,pharmacyMap){
  const abcd={key:"abcdClass",label:"ABCD",filterMode:"multi",
   value:r=>r.abcdClass||"—",
   render:r=>r.abcdClass?<span className={"fm-abcd fm-abcd-"+r.abcdClass}
-   title="Prioridad por contribución a las ventas de esta farmacia y período">{r.abcdClass}</span>:"—"};
+   title="ABCD por contribución a la facturación: A reúne aproximadamente el 80 % del ingreso acumulado, B hasta el 95 %, C el resto y D sin ventas. Se calcula por farmacia.">{r.abcdClass}</span>:"—"};
  const common=[cn,article,pharmacy,abcd];
  switch(module){
   case "ventas":return [...common,unit("pvp","PVP catálogo"),
@@ -484,7 +484,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <label>Hasta<input aria-label="Ventas hasta" type="date" value={filters.customTo} onChange={e=>change("customTo",e.target.value)}/></label>
   </div>}
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
-  {module==="ventas"&&<p className="fm-sales-period-info">ABCD del último {effectiveAnalysisMonths===1?"mes":effectiveAnalysisMonths+" meses"}: A acumula aproximadamente el 80 % de la facturación, B hasta el 95 %, C el resto y D sin ventas. Es porcentaje de ingresos, no de artículos. El listado comienza por los más vendidos, por eso al principio suelen aparecer A.</p>}
+
   {module==="ventas"&&(searchReady||filters.families.length>0)&&<p className="fm-sales-period-info">La búsqueda y las familias filtran el detalle reciente, pero no modifican el total histórico mostrado.</p>}
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{

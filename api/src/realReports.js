@@ -259,6 +259,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[])
+       AND NULLIF(btrim(t.articulo_id),'') IS NOT NULL
      GROUP BY f.id,upper(btrim(t.farmacia_codigo)),t.articulo_id
    ) t
    JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
@@ -335,11 +336,15 @@ export function setupRealReports(app,pool,{requireTenant}){
     const supplierFilter=table==="compras"?
       " AND "+includedPurchaseSupplier({tenant:periodTenantParam,code:"t.proveedor_id",
         name:!legacy&&buyCols.has("proveedor_nombre")?"t.proveedor_nombre":null}):"";
+    // El importe sin Codigo cuenta en caja, NO como unidad de producto vendida.
+    const saleUnits=table==="ventas"
+      ? "coalesce(sum(t.unidades) FILTER (WHERE NULLIF(btrim(t.articulo_id),'') IS NOT NULL),0)"
+      : "sum(t.unidades)";
     const countedLines=table==="compras"?
       `count(*) FILTER (WHERE NULLIF(btrim(${legacy?"t.producto_id":"t.articulo_id"}::text),'') IS NOT NULL)`:
-      "count(*)";
+      "count(*) FILTER (WHERE NULLIF(btrim(t.articulo_id),'') IS NOT NULL)";
     if(!periodWithArticleFilter)return `SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
-       sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount,
+       ${saleUnits}::float8 AS units,sum(${amount})::float8 AS amount,
        ${countedLines}::float8 AS lines
        FROM ${quoted}.${table==="compras"?"fm_recepciones_analitica":"fm_ventas_analitica"} t ${fromJoin}
        WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
@@ -355,6 +360,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          FROM ${quoted}.${table==="compras"?"fm_recepciones_analitica":"fm_ventas_analitica"} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
            AND f.id=ANY($3::int[]) ${supplierFilter}
+           ${table==="ventas"?"AND NULLIF(btrim(t.articulo_id),'') IS NOT NULL":""}
          GROUP BY 1,2,3
        ) t ${article}
        WHERE ${articleFilter}

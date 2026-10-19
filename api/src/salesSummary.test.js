@@ -41,7 +41,7 @@ test("una consulta en BD agrega gráfico, KPI, artículos, recuento y ABCD",asyn
  assert.deepEqual(calls[0].params,["2026-07-18","2026-10-18",[5],"ampedia","",[]]);
  assert.match(calls[0].sql,/f.id=ANY\(\$3::int\[\]\)/);
  assert.match(calls[0].sql,/sales_scope AS MATERIALIZED/);
- assert.match(calls[0].sql,/FROM "ampedia".ventas v/);
+ assert.match(calls[0].sql,/FROM "ampedia".fm_ventas_analitica v/);
  assert.match(calls[0].sql,/sum\(importe\)::float8/);
  assert.match(calls[0].sql,/count\(DISTINCT cn\)/);
  assert.equal(body.kpis.ventas,120);

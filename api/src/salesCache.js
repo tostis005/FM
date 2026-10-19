@@ -35,7 +35,8 @@ async function sourceTypes(conn,schema){
     has("compras","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"};
 }
 export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun=true}={}){
- const running=new Set();
+ const running=new Set(),queued=new Set();
+ let pending=Promise.resolve();
  const zone=process.env.FM_ANALYTICS_TIMEZONE||"Europe/Madrid";
  const current=months=>analysisWindow(months,now(),zone);
  async function refreshOne({slug,schema,pharmacyId,code,months},force=false){
@@ -96,8 +97,14 @@ export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun
   }finally{conn?.release();running.delete(ref)}
  }
  const schedule=(args,force=false)=>{
-  // No bloquear nunca la respuesta HTTP por reconstruir 12 meses de ventas.
-  void refreshOne(args,force);
+  // Un único refresco pesado por proceso: abrir cinco farmacias no debe
+  // disparar cinco GROUP BY anuales simultáneos contra PostgreSQL.
+  const ref=args.slug+"|"+args.pharmacyId+"|"+args.months;
+  if(running.has(ref)||queued.has(ref))return;
+  queued.add(ref);
+  pending=pending.then(()=>refreshOne(args,force))
+   .catch(e=>logger.error?.("Error cola nocturna",e.code||e.name))
+   .finally(()=>queued.delete(ref));
  };
  async function read({slug,ids,months,from,to,search="",families=[],sortKey="value",sortDir="desc",page=1,pageSize=400}){
   if(!IDENT.test(slug)||!ids.length||!SALES_DETAIL_SORT_KEYS.includes(sortKey)||

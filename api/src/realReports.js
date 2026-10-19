@@ -688,7 +688,9 @@ export function setupRealReports(app,pool,{requireTenant}){
    }
    const monthly=[...new Set([...saleM.rows,...buyM.rows].map(x=>x.month))].sort().map(month=>({
     month,ventas:sum(saleM.rows.filter(r=>r.month===month),"amount"),
-    compras:sum(buyM.rows.filter(r=>r.month===month),"amount"),
+    compras:buyM.rows.some(r=>r.month===month)&&
+      buyM.rows.filter(r=>r.month===month).every(r=>r.amount==null)?
+       null:sum(buyM.rows.filter(r=>r.month===month),"amount"),
     unidades:sum(saleM.rows.filter(r=>r.month===month),"units"),
     margen:null
    }));

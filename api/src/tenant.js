@@ -174,6 +174,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       await db.query("INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos) VALUES($1,$2,$1)",
         [slug,name]);
       await db.query("INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado) SELECT $1,clave,false FROM farmetrica.modulos",[slug]);
+      // Preparar tablas nuevas sin alterar ventas/compras heredadas.
+      await db.query("SELECT farmetrica.preparar_modelo_documental($1)",[slug]);
       await db.query("COMMIT");
       res.status(201).json({slug,name,schema:slug,active:true});
     }catch(e){

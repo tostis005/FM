@@ -271,3 +271,19 @@ Se corrigen dos familias distintas de cuellos de botella:
 **Diagnóstico:** `(Invoke-RestMethod "http://127.0.0.1:5080/api/ping").version` confirma si Kestrel responde independientemente de la base de datos, mientras `/api/bootstrap-status` muestra el estado de la configuración. Ver también `docs/DIAGNOSTICO_BLOQUEOS_WEB.md` para identificar bloqueos reales en Contabo sin compartir contraseñas.
 
 **Límites:** esto elimina la espera del panel tras el candado del historial y reduce el alcance de los locks de esquema y las transacciones largas. No garantiza latencia nula si PostgreSQL está saturado de CPU, disco o red durante la publicación final. No se ha ejecutado contra las cinco farmacias ni el Contabo real; primero comprobar ventanas y tiempos reales después de actualizar.
+
+
+### Protección de acceso al panel Windows
+
+El servicio **rechaza al arrancar** direcciones de escucha que no sean
+`localhost`, `127.0.0.1` o `::1`, incluso si alguien cambia `Urls` en
+la configuración. No publiques el puerto 5080 ni abras una regla de
+entrada en el cortafuegos. Para administración remota, utiliza un túnel
+SSH con salida local. Contraseñas, claves privadas y cursores se guardan
+únicamente en `%ProgramData%\\FarmetricaSync` (permisos restringidos
+por el instalador); **nunca** los subas a GitHub.
+
+El repositorio `FM` es público: el código del sincronizador también lo
+será, pero sus secretos y conexiones reales no deben estar en el código.
+La protección de la rama principal (revisiones y pruebas obligatorias)
+requiere configurarla en los ajustes de GitHub si está disponible.

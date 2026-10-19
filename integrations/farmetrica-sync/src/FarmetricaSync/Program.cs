@@ -10,7 +10,19 @@ using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService(options => options.ServiceName = "FarmetricaSync");
-builder.WebHost.UseUrls(builder.Configuration["Urls"] ?? "http://127.0.0.1:5080");
+// El panel contiene credenciales y consultas SQL: denegar cualquier escucha remota,
+ // incluso si se sobreescribe Urls desde appsettings o variables de entorno.
+string listeningUrls = builder.Configuration["Urls"] ?? "http://127.0.0.1:5080";
+foreach (string endpoint in listeningUrls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+{
+    if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var parsed) ||
+        (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps) ||
+        !System.Net.IPAddress.TryParse(parsed.Host, out var ip) && !parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+        (System.Net.IPAddress.TryParse(parsed.Host, out var endpointIp) && !System.Net.IPAddress.IsLoopback(endpointIp)))
+        throw new InvalidOperationException(
+            "Farmétrica Sync solo permite el panel en localhost/127.0.0.1/::1. Usa acceso local o túnel SSH, nunca una interfaz pública.");
+}
+builder.WebHost.UseUrls(listeningUrls);
 
 string dataDir = Environment.GetEnvironmentVariable("FARMETRICA_SYNC_DATA") ??
     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "FarmetricaSync");

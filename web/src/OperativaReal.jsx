@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
-import OperativaPreview,{PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
+import {PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
 import "./operativaReal.css";
 
@@ -48,7 +48,7 @@ function Button({children,onClick,disabled,primary=false}){return <button type="
  className={"btn "+(primary?"btn-primary":"btn-secondary")} disabled={disabled} onClick={onClick}>{children}</button>}
 export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail=""}){
  const resource=MAP[section], [pharmacy,setPharmacy]=useState(String(pharmacies[0]?.id||""));
- const [mode,setMode]=useState("loading"),[example,setExample]=useState(false);
+ const [mode,setMode]=useState("loading");
  const [items,setItems]=useState([]),[scope,setScope]=useState({});
  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [responsibles,setResponsibles]=useState([]),[related,setRelated]=useState({oportunidades:[],pedidos:[]});
@@ -75,7 +75,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
   return api("/api/operativa?"+search);
  }
  async function refresh(){
-  if(!pharmacy)return setMode("demo");
+  if(!pharmacy){setError("No hay farmacias autorizadas para esta sección.");setMode("error");return;}
   setMode("loading");setError("");
   try{
    const result=await query();
@@ -95,11 +95,11 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
     if(policies.items?.[0])setPolicy(policies.items[0]);
    }
   }catch(e){
-   if(e.code==="migration_required"){setMode("demo");return;}
+   if(e.code==="migration_required"){setError("Esta función todavía no está habilitada para el cliente.");setMode("error");return;}
    setError(E(e));setMode("error");
   }
  }
- useEffect(()=>{setSelected("");setDraft(null);setExample(false);void refresh();},[section,clientSlug,pharmacy]);
+ useEffect(()=>{setSelected("");setDraft(null);void refresh();},[section,clientSlug,pharmacy]);
  async function save(method,recurso,body={},id){
   setBusy(true);setNotice("");setError("");
   try{
@@ -149,12 +149,9 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  const canEdit=scope.canEdit,canApprove=scope.canApprove;
  const statInput={fontSize:13};
  if(mode==="loading")return <section className="card fm-preview-panel" role="status">Cargando operativa…</section>;
- if(mode==="demo"||example)return <div>
-  {mode==="ready"&&<div className="fm-op-example-return"><Button onClick={()=>setExample(false)}>Volver a datos guardados</Button></div>}
-  <OperativaPreview section={section} pharmacies={pharmacies}/></div>;
  if(mode==="error")return <section className="card fm-preview-panel"><h2>Datos no disponibles</h2>
   <p role="alert">{error}</p><Button onClick={refresh}>Reintentar</Button>
-  <Button onClick={()=>setExample(true)}>Ver ejemplo de demo</Button></section>;
+  </section>;
  const title=TITLE(section);
  return <div className="fm-operativa-preview fm-operativa-real">
    <div className="fm-preview-heading">
@@ -162,7 +159,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
     <div className="fm-op-tools">
      <label>Farmacia<select aria-label="Farmacia" value={pharmacy} onChange={e=>setPharmacy(e.target.value)}>
       {pharmacies.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label>
-     <Button onClick={()=>setExample(true)}>Ver ejemplo de demo</Button>
+
     </div>
    </div>
    {error&&<div className="fm-op-message fm-op-error" role="alert">{error}</div>}

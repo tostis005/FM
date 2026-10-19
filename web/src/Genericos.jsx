@@ -21,8 +21,11 @@ function Metric({label,value,caption,loading}){
 function downloadRows(rows){
  const data=[["Conjunto DCPF","Nombre","Molécula","Códigos","ABCD","Ventas (€)","Unidades vendidas",
    "Compras (€)","PUC medio","Mejor PUC","Ahorro orientativo"],
-  ...rows.map(g=>[g.dcpf,g.name,g.principle,g.skuCount,g.abcdClass,g.revenue,g.salesUnits,g.spent,
-    g.averagePuc,g.bestPuc,g.indicativeSavings])];
+  ...rows.map(g=>{
+   const n=v=>v==null?"":quantity(v);
+   return [g.dcpf,g.name,g.principle,integer(g.skuCount),g.abcdClass,n(g.revenue),
+    n(g.salesUnits),n(g.spent),n(g.averagePuc),n(g.bestPuc),n(g.indicativeSavings)];
+  })];
  const csv="\ufeff"+data.map(r=>r.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
  const a=document.createElement("a");a.href=url;a.download="farmetrica-genericos-conjuntos.csv";a.click();

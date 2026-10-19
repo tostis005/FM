@@ -156,6 +156,33 @@ public static class CanonicalEntities
 {
     public static List<EntityDefinition> Create() =>
     [
+        // Dos flujos documentales futuros: una única consulta JOIN por trabajo.
+        // Las plantillas SQL concretas quedan deshabilitadas hasta validar
+        // columnas reales de cabecera y detalle en cada ERP.
+        E("ventas_completas", "Tickets y líneas normalizados desde una consulta JOIN",
+            ("documento_id", "text"), ("linea_id", "text"), ("fecha", "timestamp"),
+            ("numero_documento", "text"), ("tercero_id", "text"), ("empleado_id", "text"),
+            ("estado", "text"), ("total_documento", "numeric"),
+            ("descuento_global", "numeric"), ("descuento_global_tipo", "text"),
+            ("impuestos_documento", "numeric"), ("modificado_origen", "timestamp"),
+            ("articulo_id", "text"), ("unidades", "numeric"), ("precio_unitario", "numeric"),
+            ("descuento_linea", "numeric"), ("descuento_linea_tipo", "text"),
+            ("importe_neto", "numeric"), ("impuesto_linea", "numeric"),
+            ("coste_historico", "numeric"), ("bonificacion_unidades", "numeric"),
+            ("numero_pedido", "text"), ("eliminado_logicamente", "bool"),
+            ("linea_eliminada", "bool")),
+        E("recepciones_completas", "Recepciones y líneas normalizadas desde una consulta JOIN",
+            ("documento_id", "text"), ("linea_id", "text"), ("fecha", "timestamp"),
+            ("numero_documento", "text"), ("tercero_id", "text"), ("empleado_id", "text"),
+            ("estado", "text"), ("total_documento", "numeric"),
+            ("descuento_global", "numeric"), ("descuento_global_tipo", "text"),
+            ("impuestos_documento", "numeric"), ("modificado_origen", "timestamp"),
+            ("articulo_id", "text"), ("unidades", "numeric"), ("precio_unitario", "numeric"),
+            ("descuento_linea", "numeric"), ("descuento_linea_tipo", "text"),
+            ("importe_neto", "numeric"), ("impuesto_linea", "numeric"),
+            ("coste_historico", "numeric"), ("bonificacion_unidades", "numeric"),
+            ("numero_pedido", "text"), ("eliminado_logicamente", "bool"),
+            ("linea_eliminada", "bool")),
         E("ventas", "Líneas de venta", ("fecha", "timestamp"), ("articulo_id", "text"), ("unidades", "numeric"), ("precio_unitario", "numeric"), ("importe", "numeric"), ("numero_ticket", "text"), ("descuento_linea", "numeric"), ("descuento_operacion", "numeric")),
         // vRecep ofrece cabeceras de recepciones, NO líneas de artículos ni importes de compra.
         // Los campos de línea se conservan vacíos hasta incorporar una tabla detalle real.

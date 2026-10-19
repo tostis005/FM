@@ -39,7 +39,9 @@ await page.route("**/api/**",async route=>{
      pharmacyName:"Farmacia Centro",products:2,units:12,receipts:3,
      amount:30,lastAt:"2026-10-18T00:00:00Z"},
    "rentabilidad-segmentos":{family:"Digestivo",sales:32,units:4,coveredSales:32,
-     margin:12,costedReferences:2,references:2}
+     margin:12,costedReferences:2,references:2},
+   "stock-historico":{at:"2026-10-17",pharmacyName:"Farmacia Centro",
+     pharmacyId:"1",soldUnits:3,receivedUnits:10,documentedNetUnits:7,tickets:2,receipts:1}
   }[section];
   body={section,available:true,total:section==="ventas-tickets"?33:1,
    page:Number(q.get("pagina")),pageSize:Number(q.get("tamano")),
@@ -85,13 +87,16 @@ try{
  });
  await page.waitForTimeout(350);
  assert.equal(requests.length,after,"recuperar foco no debe recargar la tabla");
- // Solo las secciones pendientes muestran el distintivo Demo.
+ // La última sección con maqueta muestra movimientos de documentos completos.
  await page.goto(BASE+"/stock-historico",{waitUntil:"domcontentloaded"});
- await page.locator(".fm-preview-heading .fm-preview-badge",{hasText:"Demo"}).waitFor({timeout:15000});
+ await page.getByRole("heading",{name:"Histórico de stock",exact:true}).waitFor({timeout:15000});
+ await page.getByRole("columnheader",{name:/Variación documental/}).waitFor();
+ await page.getByText(/No representa el stock histórico/).waitFor();
+ assert.ok(requests.some(r=>r.section==="stock-historico"),
+  "El histórico consulta el origen documental");
+ assert.equal(await page.locator(".fm-preview-heading .fm-preview-badge").count(),0);
  assert.equal(await page.getByText("Pantalla de demostración").count(),0);
- assert.equal(await page.getByText("Módulo de demostración.").count(),0);
- assert.equal(await page.locator(".fm-preview-heading .fm-preview-badge").innerText(),"Demo");
- const messages=await page.locator(".fm-preview-heading").innerText();
+ const messages=await page.locator("main").innerText();
  assert.doesNotMatch(messages,/datos reales|datos de prueba/i);
- console.log("OK: pantallas documentales y etiqueta Demo concisa, sin textos de muestra");
+ console.log("OK: pantallas finales con consultas persistidas; histórico documental sin cifras de ejemplo");
 }finally{await browser.close();}

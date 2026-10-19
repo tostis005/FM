@@ -20,7 +20,6 @@ import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import SyncVentas from "./SyncVentas.jsx";
-import OperativaPreview,{PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
 import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
 import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -137,7 +136,7 @@ const NAV=[
  {id:"compras-pedidos",label:"Pedidos preparados",icon:Package,module:"compras",childOf:"compras"},
  {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras"},
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
- {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock",preview:true},
+ {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
@@ -941,8 +940,6 @@ function App(){
       pharmacies={tenantContext.pharmacies}/>}
     {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
-    {PREVIEW_SECTIONS[page]&&!REAL_SECTIONS.has(page)&&!DOCUMENT_SCREENS.has(page)&&<OperativaPreview key={tenantContext.client.slug+":"+page}
-      section={page} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">
       <div className="page-header"><h1>Ajustes</h1></div>

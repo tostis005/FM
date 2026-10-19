@@ -22,6 +22,13 @@ await page.route("**/api/**",async route=>{
  };
  else if(path==="/api/tenant/promociones")body={promotions:[]};
  else if(path==="/api/tenant/farmacias")body=pharmacies;
+ else if(path==="/api/analytics/pantallas/stock-historico")body={
+  section:"stock-historico",available:true,total:1,page:1,pageSize:25,
+  summary:{value:3,units:10,other:7},rows:[
+   {at:"2026-10-17",pharmacyId:"1",pharmacyName:"Farmacia de prueba",
+    soldUnits:3,receivedUnits:10,documentedNetUnits:7,tickets:2,receipts:1}
+  ]
+ };
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
@@ -65,5 +72,15 @@ try{
  await page.setViewportSize({width:390,height:780});
  await page.getByRole("button",{name:"Abrir menú"}).click();
  await page.getByRole("button",{name:"Ocultar subopciones de Promociones"}).waitFor({state:"visible"});
+ // La última pantalla que mostraba «Demo» está sustituida por una consulta
+ // documental. Su subtítulo no confunde flujos con saldos de inventario.
+ await page.goto(BASE+"/stock-historico",{waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Histórico de stock",exact:true}).waitFor({timeout:15000});
+ await page.locator(".fm-real-screen-table tbody tr").waitFor({state:"visible",timeout:15000});
+ assert.equal(await page.locator(".fm-real-screen-table tbody tr").count(),1);
+ assert.equal(await page.locator(".side-preview-badge").count(),0,
+  "No deben quedar secciones de ejemplo en la navegación principal");
+ assert.equal(await page.getByText("Pantalla de demostración").count(),0);
+ await page.getByText(/No representa el stock histórico/).waitFor({timeout:5000});
  console.log("OK: flechas de todas las secciones con hijos, apertura/cierre, navegación, recarga y móvil");
 }finally{await browser.close();}

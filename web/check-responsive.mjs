@@ -140,6 +140,23 @@ try{
          if(![count,cn,targets].every(Number.isFinite))
            throw Error("KPI de promociones no numéricos: "+count+"/"+cn+"/"+targets);
        }
+       if(path==="promociones"&&viewport.width===375){
+         const quick=page.getByRole("group",{name:"Períodos rápidos"});
+         if(await quick.getByRole("button").count()!==5)
+           throw Error("Promociones debe incluir cinco accesos rápidos");
+         await quick.getByRole("button",{name:"Este mes",exact:true}).click();
+         const dates=await page.locator(".fm-unified-filters input[type=date]").evaluateAll(
+           els=>els.map(el=>el.value));
+         if(dates.length!==2||!dates.every(date=>/^20\\d{2}-\\d{2}-\\d{2}$/.test(date)))
+           throw Error("Los accesos de promociones deben aplicar las fechas Desde/Hasta");
+         if(await quick.getByRole("button",{name:"Este mes",exact:true}).getAttribute("aria-pressed")!=="true")
+           throw Error("El acceso rápido debe mostrarse seleccionado");
+       }
+       if(["dashboard","ventas","compras","proveedores","stock","reposicion",
+         "genericos","rentabilidad","acciones","informes"].includes(path)&&viewport.width===375){
+         if(await page.getByRole("group",{name:"Períodos rápidos"}).getByRole("button").count()!==5)
+           throw Error("Faltan accesos rápidos en "+path);
+       }
        if(path==="dashboard"&&viewport.width===375){
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");
          await page.waitForFunction(()=>document.querySelector(".fm-demo-kpi strong")?.textContent!=="—");

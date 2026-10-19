@@ -6,11 +6,15 @@ on:
     paths:
       - 'integrations/farmetrica-sync/**'
       - '.github/workflows/farmetrica-sync-windows.yml'
+      - 'api/src/migrations/016_modelo_documental.sql'
+      - 'api/src/migrations/modeloDocumental.integration.test.js'
   push:
     branches: [main]
     paths:
       - 'integrations/farmetrica-sync/**'
       - '.github/workflows/farmetrica-sync-windows.yml'
+      - 'api/src/migrations/016_modelo_documental.sql'
+      - 'api/src/migrations/modeloDocumental.integration.test.js'
 permissions:
   contents: read
 jobs:
@@ -51,3 +55,31 @@ jobs:
           name: farmetrica-sync-win-x64
           path: integrations/farmetrica-sync/dist/farmetrica-sync-windows.zip
           if-no-files-found: error
+
+  validar_postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: fm_test
+          POSTGRES_PASSWORD: fm_test
+          POSTGRES_DB: fm_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fm_test -d fm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FM_TEST_DATABASE_URL: postgres://fm_test:fm_test@127.0.0.1:5432/fm_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias para PG
+        run: npm install --prefix api --no-audit --no-fund
+      - name: Probar tablas documentales con PostgreSQL 16
+        run: node --test api/src/migrations/modeloDocumental.integration.test.js

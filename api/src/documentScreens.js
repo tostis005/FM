@@ -99,7 +99,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
     AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
   WHERE h.lineas_completas AND NOT h.eliminado_logicamente
    AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
-   AND l.anulada IS TRUE
+   AND NOT l.eliminada_logicamente AND l.anulada IS TRUE
  )
  SELECT f.id::text AS "pharmacyId",f.nombre AS "pharmacyName",
   v.*,count(*) OVER()::int AS total,
@@ -108,9 +108,9 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set()){
   sum(CASE WHEN v.kind='Devolución' THEN abs(coalesce(v.units,0)) ELSE 0 END)
      OVER()::float8 AS "summaryUnits",
   count(*) FILTER(WHERE v.kind<>'Devolución') OVER()::float8 AS "summaryOther"
- FROM events v ${join} WHERE ${range}
+ FROM events v ${join} WHERE v."at" >= $1::date AND v."at" < $2::date+interval '1 day'
   AND ($5::text='' OR f.nombre ILIKE '%'||$5||'%' OR
-    v.reference ILIKE '%'||$5||'%' OR v.documentId ILIKE '%'||$5||'%' OR
+    v.reference ILIKE '%'||$5||'%' OR v."documentId" ILIKE '%'||$5||'%' OR
     coalesce(v.article,'') ILIKE '%'||$5||'%')
  ORDER BY v."at" DESC,v."documentId" DESC,v."lineId" DESC NULLS LAST ${slice}`;
  if(section==="compras-devoluciones")return `

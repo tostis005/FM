@@ -146,6 +146,9 @@ function GridTable({section,rows,sort,setSort,onOpenTicket,onOpenReceipt}){
  </HorizontalTableScroll>;
 }
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([key])=>key));
+const boundedReportSignal=controller=>typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
+ ?AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]):controller.signal;
+const detailSignal=()=>typeof AbortSignal!=="undefined"&&AbortSignal.timeout?AbortSignal.timeout(30000):undefined;
 export default function PantallasReales({section,pharmacies=[],clientSlug="ampedia"}){
  const config=META[section];
  const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug,COMMON_PERIOD_KEYS).period||"3");
@@ -180,7 +183,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
   if(ids.length)params.set("farmacias",ids.join(","));
   setLoading(true);setError("");
   fetch("/api/analytics/pantallas/"+section+"?"+params,{credentials:"same-origin",
-   cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedReportSignal(controller)})
    .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Error(body.error||"No se pueden cargar los registros");return body})
    .then(body=>{if(!controller.signal.aborted)setData(body)})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
@@ -194,7 +197,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    sistema:String(ticket.sourceSystem),documento:String(ticket.documentId)});
   try{
    const response=await fetch("/api/analytics/pantallas/ventas-tickets/lineas?"+params,{
-    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug}});
+    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:detailSignal()});
    const body=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(body.error||"No se pudo recuperar el ticket");
    setTicketDetail({ticket,loading:false,lines:body.lines||[],error:"",
@@ -208,7 +211,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    sistema:String(receipt.sourceSystem),documento:String(receipt.documentId)});
   try{
    const response=await fetch("/api/analytics/pantallas/compras-recepciones/lineas?"+params,{
-    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug}});
+    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:detailSignal()});
    const body=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(body.error||"No se pudo recuperar la recepción");
    setReceiptDetail({receipt,loading:false,lines:body.lines||[],error:"",

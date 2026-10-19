@@ -76,8 +76,8 @@
 
 
 /* Seguimiento: submenú de promociones y selector múltiple */
-.side-nav .side-sublink{margin:1px 0 8px 24px;width:calc(100% - 24px);padding:10px 12px 10px 19px;gap:10px;font-size:11.5px;position:relative}
-.side-nav .side-sublink:before{content:"";width:1px;background:#dcece5;position:absolute;left:8px;top:0;bottom:0}
+/* Submenús sin línea lateral, alineados con Configuración. */
+.side-nav .side-sublink{margin:0;width:100%;padding:10px 12px 10px 28px;gap:10px;font-size:11.5px;min-height:38px;position:relative}
 .side-nav .side-sublink.active{background:#f0faf4;color:#078e64}
 .report-selector{margin-bottom:22px;overflow:hidden;border:1px solid #e1ece7}
 .report-selector-heading{padding-bottom:15px}
@@ -753,7 +753,7 @@ html,body{overflow-x:clip}
  scrollbar-color:#a6bcb0 #edf3ef;-webkit-overflow-scrolling:touch}
 .fm-dual-scroll-top:focus-visible{outline:2px solid #0a9971;outline-offset:-2px}
 .side-settings-children{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
-.side-settings-children .side-link{padding-left:42px;min-height:38px;font-size:11.5px}
+.side-settings-children .side-link{padding-left:28px;min-height:38px;font-size:11.5px;gap:10px}
 .side-settings-chevron{margin-left:auto;transition:transform .16s ease}
 .side-settings-chevron.open{transform:rotate(180deg)}
 

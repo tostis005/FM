@@ -574,7 +574,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
-      <YAxis tickLine={false} axisLine={false} width={48} fontSize={10}/>
+      <YAxis tickLine={false} axisLine={false} width={92} fontSize={10}
+       tickFormatter={v=>chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
       <Tooltip formatter={(v,key)=>[key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
       <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
       {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}

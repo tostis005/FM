@@ -285,7 +285,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                   </button>
                 ))}
               </div>
-              <div className="fm-ai-rail-footer"><ShieldCheck size={16}/><span>Maqueta local. Sin acceso a los datos ni a servicios de IA.</span></div>
+              <div className="fm-ai-rail-footer"><ShieldCheck size={16}/><span>Versión demo: sin acceso a los datos ni motor de IA conectado.</span></div>
             </aside>
             <div className="fm-ai-workspace">
               <header className="fm-ai-topbar">

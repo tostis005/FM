@@ -18,6 +18,20 @@ test("Migración 016: esquema por cliente, aislado, idempotente y sin borrar his
     const migration = await readFile(new URL("./016_modelo_documental.sql", import.meta.url), "utf8");
     await db.query(migration);
     await db.query(migration); // Repetición sin cambios ni pérdida de datos
+    const specialMigration = await readFile(new URL("./019_lineas_sin_articulo.sql", import.meta.url), "utf8");
+    await db.query(specialMigration);
+    await db.query(specialMigration); // Idempotencia de 019 y función futura
+    const {rows:[specialSchema]}=await db.query(`
+      SELECT is_nullable FROM information_schema.columns
+      WHERE table_schema='ampedia' AND table_name='fm_ventas_lineas'
+        AND column_name='articulo_origen_id'`);
+    assert.equal(specialSchema.is_nullable, "YES");
+    const {rows:[typeColumn]}=await db.query(`
+      SELECT count(*)::int AS n FROM information_schema.columns
+      WHERE table_schema='ampedia' AND table_name='fm_ventas_lineas'
+        AND column_name='tipo_linea_origen'`);
+    assert.equal(typeColumn.n,1);
+
     const {rows:[historic]}=await db.query("SELECT count(*)::int n,max(importe)::numeric valor FROM ampedia.ventas");
     assert.equal(historic.n,1);
     assert.equal(Number(historic.valor),42.25);
@@ -49,6 +63,18 @@ test("Migración 016: esquema por cliente, aislado, idempotente y sin borrar his
     await assert.rejects(() => db.query(`INSERT INTO ampedia.fm_ventas_lineas
       (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad)
       VALUES ('ABA','farmatic','missing','1','A-8',1)`), /foreign key/i);
+    await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+      (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,
+       importe_neto,tipo_linea_origen)
+      VALUES ('EUR','farmatic','123','2',NULL,1,2.75,'C')`);
+    const {rows:[special]}=await db.query(`
+      SELECT articulo_origen_id,tipo_linea_origen,cantidad,importe_neto
+      FROM ampedia.fm_ventas_lineas
+      WHERE farmacia_codigo='EUR' AND documento_id='123' AND linea_id='2'`);
+    assert.equal(special.articulo_origen_id,null);
+    assert.equal(special.tipo_linea_origen,'C');
+    assert.equal(Number(special.importe_neto),2.75);
+
     await db.query("UPDATE ampedia.fm_ventas_cabeceras SET total_documento=12.35 WHERE farmacia_codigo='ABA'");
     const {rows:[other]}=await db.query(
       "SELECT total_documento FROM ampedia.fm_ventas_cabeceras WHERE farmacia_codigo='EUR'");

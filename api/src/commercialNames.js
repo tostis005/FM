@@ -97,3 +97,38 @@ export async function nameCommercialRows(pool,context,rows,{
   return next;
  });
 }
+
+export async function listCommercialSuppliers(pool,context,pharmacyId){
+ const {client,allowedPharmacyIds}=context||{};
+ if(!client||!SCHEMA.test(client.schema)||!SCHEMA.test(client.slug))
+  throw Error("Contexto de cliente no autorizado");
+ if(!Number.isSafeInteger(Number(pharmacyId))||
+   !(allowedPharmacyIds||[]).map(Number).includes(Number(pharmacyId)))
+  throw Object.assign(Error("Farmacia no autorizada"),{status:403});
+ const {rows:master}=await pool.query(`
+  SELECT upper(btrim(codigo_origen)) AS code,btrim(nombre) AS name
+  FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1
+   AND nullif(btrim(codigo_origen),'') IS NOT NULL
+   AND nullif(btrim(nombre),'') IS NOT NULL`,[client.slug]);
+ const map=new Map(master.map(r=>[normalize(r.code),label(r.name)]));
+ const {rows:columns}=await pool.query(
+  "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='proveedores'",[client.schema]);
+ const names=new Set(columns.map(x=>x.column_name));
+ if(["farmacia_codigo","origen_id","nombre"].every(x=>names.has(x))){
+  const schema='"'+client.schema+'"';
+  const order=names.has("sincronizado_en")?"m.sincronizado_en DESC NULLS LAST,":"";
+  const {rows}=await pool.query(`
+   SELECT DISTINCT ON (upper(btrim(m.origen_id::text)))
+    upper(btrim(m.origen_id::text)) AS code,btrim(m.nombre) AS name
+   FROM ${schema}.proveedores m
+   JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=$2
+    AND upper(btrim(m.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+   WHERE nullif(btrim(m.origen_id::text),'') IS NOT NULL
+    AND nullif(btrim(m.nombre),'') IS NOT NULL
+   ORDER BY upper(btrim(m.origen_id::text)),${order}m.nombre`,
+   [client.slug,Number(pharmacyId)]);
+  for(const row of rows)map.set(normalize(row.code),label(row.name));
+ }
+ return [...map].map(([code,name])=>({code,name}))
+  .sort((a,b)=>a.name.localeCompare(b.name,"es")||a.code.localeCompare(b.code,"es"));
+}

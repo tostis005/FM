@@ -53,7 +53,7 @@ try{
   ["stock-traspasos","Traspasos entre farmacias"],["rentabilidad-retorno","Retorno económico"]
  ]){
   await page.goto(BASE+"/"+path,{waitUntil:"domcontentloaded"});
-  await page.getByRole("heading",{name:title,exact:true}).waitFor({timeout:13000});
+  await page.getByRole("heading",{name:title,exact:true,level:1}).waitFor({timeout:13000});
   const error=await page.locator(".fm-op-error").count();
   if(error)throw Error(path+" presenta error inesperado");
  }

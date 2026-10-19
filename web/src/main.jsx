@@ -251,8 +251,13 @@ function App(){
       .then(async body=>{
         if(!body.user){window.location.replace("/login");return;}
         const ctx=await loadContext(selected).catch(()=>loadContext(""));
+        // La navegación analítica no depende de descargar todas las promociones.
+        // Mostrar la sesión y el cliente autorizado en cuanto responde /context;
+        // reconciliar las campañas en segundo plano sin bloquear Inicio.
+        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
         const loaded=await tenantState(ctx,body.user.email);
-        if(live){setSessionUser(body.user);setData(loaded);}
+        if(live)setData(current=>({...current,promos:loaded.promos,
+          objectiveSeedVersion:loaded.objectiveSeedVersion}));
       })
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};

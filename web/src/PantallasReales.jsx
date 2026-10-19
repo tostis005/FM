@@ -3,6 +3,8 @@ import {RefreshCw,Search,ChevronLeft,ChevronRight} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
+import {reconcilePharmacyIds} from "./reportFilterScopes.js";
+import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaPreview.css";
 import "./pantallasReales.css";
 
@@ -143,9 +145,15 @@ function GridTable({section,rows,sort,setSort,onOpenTicket,onOpenReceipt}){
    <tr><td colSpan={cols.length+(["ventas-tickets","compras-recepciones"].includes(section)?1:0)}>No hay registros para el periodo y los filtros seleccionados.</td></tr>}</tbody></table>
  </HorizontalTableScroll>;
 }
+const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([key])=>key));
 export default function PantallasReales({section,pharmacies=[],clientSlug="ampedia"}){
- const config=META[section], [periodKey,setPeriodKey]=useState("3");
- const [custom,setCustom]=useState({from:"",to:""}),[ids,setIds]=useState([]);
+ const config=META[section];
+ const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug,COMMON_PERIOD_KEYS).period||"3");
+ const [custom,setCustom]=useState(()=>{
+  const saved=readSharedReportFilters(clientSlug);
+  return {from:saved.customFrom||"",to:saved.customTo||""};
+ });
+ const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
  const [search,setSearch]=useState(""),[readySearch,setReadySearch]=useState("");
  const [sort,setSort]=useState(()=>({key:section==="productos"?"name":
    section==="proveedores-condiciones"?"amount":section==="rentabilidad-segmentos"?"sales":"at",
@@ -216,16 +224,21 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
   <div className="card fm-real-screen-filters">
    <label>Farmacias<MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
     options={pharmacies.map(p=>({value:String(p.id),label:p.name}))} value={ids}
-    onChange={setIds}/></label>
-   {section!=="productos"&&<label>Periodo<select value={periodKey} onChange={e=>setPeriodKey(e.target.value)}>
+    onChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}/></label>
+   {section!=="productos"&&<label>Periodo<select value={periodKey} onChange={e=>{const value=e.target.value;setPeriodKey(value);
+     if(value==="custom"){
+      const from=custom.from||resolveSalesPeriod("this_month",new Date(),{},nowZone(clientSlug)).from;
+      const to=custom.to||resolveSalesPeriod("this_month",new Date(),{},nowZone(clientSlug)).to;
+      setCustom({from,to});updateSharedReportFilters(clientSlug,{period:value,customFrom:from,customTo:to});
+     }else updateSharedReportFilters(clientSlug,{period:value});}}>
     {SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([id,label])=>
       <option value={id} key={id}>{label}</option>)}
    </select></label>}
    <label className="fm-real-search">Buscar<div><Search size={16}/><input value={search}
     onChange={e=>setSearch(e.target.value)} placeholder="Código, referencia, nombre…"/></div></label>
    {periodKey==="custom"&&section!=="productos"&&<div className="fm-real-custom">
-    <label>Desde<input type="date" value={custom.from} onChange={e=>setCustom(c=>({...c,from:e.target.value}))}/></label>
-    <label>Hasta<input type="date" value={custom.to} onChange={e=>setCustom(c=>({...c,to:e.target.value}))}/></label>
+    <label>Desde<input type="date" value={custom.from} onChange={e=>{setCustom(c=>({...c,from:e.target.value}));updateSharedReportFilters(clientSlug,{customFrom:e.target.value})}}/></label>
+    <label>Hasta<input type="date" value={custom.to} onChange={e=>{setCustom(c=>({...c,to:e.target.value}));updateSharedReportFilters(clientSlug,{customTo:e.target.value})}}/></label>
    </div>}
   </div>
   {!period.valid&&<p role="alert" className="fm-op-message">{period.reason}</p>}

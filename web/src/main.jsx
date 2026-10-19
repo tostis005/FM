@@ -547,7 +547,7 @@ function App(){
   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
   setReportStatus(status);setReportYear(year);
   setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
-  setSelectedPharmacyIds(null);setReportPage(0);setReportModal(null);
+  setSelectedPharmacyIds(sharedPharmacyIds.length?sharedPharmacyIds:null);setReportPage(0);setReportModal(null);
  }
  function toggleReportPharmacy(id){
   setSelectedPharmacyIds(prev=>{
@@ -937,34 +937,26 @@ function App(){
 
 </>}
 {page==="seguimiento-global"&&<>
- <div className="page-header report-page-header">
-  <div>
-   <h1>Seguimiento</h1></div>
-  <div className="campaign-header-actions">
-   <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/> Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
+ <ReportPageHeader title="Seguimiento" updatedAt={salesLastUpdated}
+  actions={<div className="campaign-header-actions">
+   <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/>
+    Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
    <button className="btn btn-primary" type="button" disabled={!reportSelected.length||labExportBusy}
-     onClick={()=>void exportLabCampaigns(reportSelected)}
-     title="Exportar tickets de cada promoción con el formato del laboratorio">
-    {labExportBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<ArrowDownToLine size={17}/>} {labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+    onClick={()=>void exportLabCampaigns(reportSelected)}
+    title="Exportar tickets de cada promoción con el formato del laboratorio">
+    {labExportBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<ArrowDownToLine size={17}/>}
+    {labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":
+     reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
    </button>
-  </div>
- </div>
+  </div>}/>
+ <ReportFilterBar showPeriod={false} pharmacies={pharmacies}
+   pharmacyIds={selectedPharmacyIds||[]} onPharmacyChange={selectSharedPharmacies}>
+   <label className="fm-unified-filter">Buscar campaña o CN
+    <input type="search" value={reportListSearch} onChange={e=>{setReportListSearch(e.target.value);setReportPage(0)}}
+     placeholder="Nombre, laboratorio o CN…"/></label>
+ </ReportFilterBar>
  <div className="report-active-summary">
   <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Archivadas":reportStatus==="Borrador"?"Borradores":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
-  <div className="report-quick-pharmacy" ref={pharmacySelectorRef}><Store size={15}/><span>Farmacias</span><div className="report-pharmacy-dropdown">
-   <button className="report-pharmacy-trigger" type="button" aria-haspopup="true" aria-expanded={pharmacySelectorOpen} aria-controls="report-pharmacy-options" onClick={()=>setPharmacySelectorOpen(v=>!v)}>
-    <span>{selectedPharmacyIds===null?"Todas las farmacias":effectivePharmacyIds.length===1?pharmaName(effectivePharmacyIds[0]):effectivePharmacyIds.length+" farmacias seleccionadas"}</span><ChevronDown size={15}/>
-   </button>
-   {pharmacySelectorOpen&&<div className="report-pharmacy-menu" id="report-pharmacy-options" role="group" aria-label="Seleccionar farmacias del seguimiento">
-    <div className="report-pharmacy-menu-head"><strong>Filtrar por farmacias</strong><button type="button" className="icon-btn" aria-label="Cerrar selección de farmacias" onClick={()=>setPharmacySelectorOpen(false)}><X size={15}/></button></div>
-    <label className="report-pharmacy-option"><input type="checkbox" checked={selectedPharmacyIds===null} onChange={()=>setSelectedPharmacyIds(null)}/><span>Todas las farmacias</span></label>
-    <div className="report-pharmacy-menu-divider"/>
-    {pharmacies.filter(f=>reportPharmacyIds.includes(f.id)).map(f=><label key={f.id} className="report-pharmacy-option">
-     <input type="checkbox" checked={selectedPharmacyIds!==null&&selectedPharmacyIds.includes(f.id)} onChange={()=>toggleReportPharmacy(f.id)}/><span>{f.name}</span>
-    </label>)}
-    <div className="report-pharmacy-menu-foot"><small>{selectedPharmacyIds===null?"Todas incluidas":effectivePharmacyIds.length+" de "+reportPharmacyIds.length+" seleccionadas"}</small><button type="button" className="btn btn-primary btn-sm" onClick={()=>setPharmacySelectorOpen(false)}>Listo</button></div>
-   </div>}
-  </div></div>
  </div>
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
@@ -977,8 +969,6 @@ function App(){
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
    <div className="list-options">
-     <label>Buscar campaña <input type="search" value={reportListSearch}
-        onChange={e=>{setReportListSearch(e.target.value);setReportPage(0)}} placeholder="Nombre, laboratorio o CN…"/></label>
      <label>Ordenar <select value={reportListSort} onChange={e=>{setReportListSort(e.target.value);setReportPage(0)}}>
        <option value="name">Campaña A-Z</option><option value="name-desc">Campaña Z-A</option>
        <option value="goal-desc">Objetivo mayor</option><option value="sales-desc">Ventas mayores</option>

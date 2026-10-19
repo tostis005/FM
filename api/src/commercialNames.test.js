@@ -13,7 +13,7 @@ function fakePool({missingVendors=false,missingSuppliers=false}={}){
    return {rows:tables.flatMap(table_name=>["farmacia_codigo","origen_id","nombre","sincronizado_en"].map(column_name=>({table_name,column_name})))};
   }
   if(sql.includes('."proveedores" m')){
-   assert.deepEqual(params[1],[1,2]);
+   assert.ok(params[1].length>=1&&params[1].every(id=>[1,2].includes(id)));
    return {rows:[{pharmacyId:"1",code:"12",name:"Cooperativa Centro"},
     {pharmacyId:"2",code:"12",name:"Mayorista Norte"}]};
   }

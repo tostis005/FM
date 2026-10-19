@@ -27,6 +27,39 @@ anulación y el significado financiero de los descuentos de compras.
 Consulta `docs/MODELO_DOCUMENTAL_V2.md` para el mapeo y las
 limitaciones por campo.
 
+## Nueva fuente Farmatic: vendedores
+
+Se añade la entidad `vendedores`, con cuatro columnas del
+origen confirmado `Farmatic.dbo.Vendedor`:
+
+| Origen | Destino | Observaciones |
+| --- | --- | --- |
+| `IDVENDEDOR` | `origen_id` (texto) | Clave técnica estable dentro de la farmacia |
+| `NOMBRE` | `nombre` (texto) | Se eliminan espacios de relleno; puede haber nombres repetidos |
+| `TIPO` | `tipo` (texto) | Se guarda sin interpretar códigos desconocidos |
+| `ColorVentas` | `color_ventas` (entero) | Se conserva el valor de origen; sin inferir formato RGB |
+
+**En el panel, Consultas SQL → Preparar vendedores** crea una fuente
+`snapshot` por farmacia Farmatic configurada, **desactivada**.
+Previsualizar y activar después de comprobar la consulta. Se
+reconcilia la tabla completa una vez cada 24 horas, puesto que el
+origen no facilita fecha técnica para sincronización incremental.
+La tabla PostgreSQL `<esquema>.vendedores` se crea automáticamente
+al realizar la primera sincronización y mantiene la clave compuesta
+`(farmacia_codigo, origen_id)`. No precisa migración manual para
+esta fuente. Una carga fallida no borra registros anteriores.
+
+La vinculación con ventas se puede realizar por
+`vendedores.origen_id = Venta.XVend_IdVendedor`, siempre **dentro de la
+misma farmacia**; con recepciones, por `Recep.XVend_IdVendedor`.
+`NOMBRE` jamás sirve de clave. La nueva fuente *solo incorpora el
+catálogo*: no añade automáticamente informes personales ni modifica
+las métricas de ventas existentes.
+
+**Privacidad:** los nombres de los trabajadores permanecen en la
+base de datos privada del cliente. No incluir sus registros reales,
+credenciales ni muestras nominativas en GitHub o datos de demo pública.
+
 ## Funcionalidades incluidas
 
 - Servicio Windows que arranca con el sistema y opera sin sesión de usuario iniciada.

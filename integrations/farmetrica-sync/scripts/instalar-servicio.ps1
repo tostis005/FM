@@ -6,7 +6,18 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Ejecuta PowerShell como administrador.' }
-if (-not $Source) { $Source = Join-Path $PSScriptRoot '..\dist\win-x64' }
+if (-not $Source) {
+    # El ZIP oficial contiene scripts/ y windows/; en desarrollo se utiliza dist/win-x64.
+    $packageSource = Join-Path $PSScriptRoot '..\windows'
+    $buildSource = Join-Path $PSScriptRoot '..\dist\win-x64'
+    if (Test-Path (Join-Path $packageSource 'FarmetricaSync.exe')) {
+        $Source = $packageSource
+    } elseif (Test-Path (Join-Path $buildSource 'FarmetricaSync.exe')) {
+        $Source = $buildSource
+    } else {
+        throw 'No se encuentra windows\FarmetricaSync.exe. Extrae el ZIP completo antes de instalar.'
+    }
+}
 $Source = (Resolve-Path $Source).Path
 $exe = Join-Path $Source 'FarmetricaSync.exe'
 if (-not (Test-Path $exe)) { throw "Falta $exe. Primero ejecuta publicar-win-x64.ps1 en un equipo de compilación." }

@@ -38,7 +38,7 @@ try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  const del=page.getByRole("button",{name:"Eliminar Oferta con objetivos"});
  await del.waitFor({state:"visible",timeout:14000});
- await page.getByText("Archivada",{exact:true}).first().waitFor();
+ await page.locator(".pill-finalizada").first().waitFor({state:"visible",timeout:10000});
  // Cancelar no envía una operación destructiva.
  page.once("dialog",dialog=>dialog.dismiss());
  await del.click();

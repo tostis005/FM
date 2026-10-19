@@ -765,13 +765,23 @@ export function setupRealReports(app,pool,{requireTenant}){
     value:r.value==null?null:Number(r.value),potential:null}));
    // El código ERP se conserva para enlazar, pero los listados muestran nombres.
    // Una farmacia puede utilizar el mismo código que otra para otro proveedor.
-   if(buyRows.length||supplierRows.length){
-    const names=await loadCommercialNames(pool,req.context,[
-     ...buyRows.map(r=>({pharmacyId:r.pharmacyId,supplierCode:r.providerId})),
-     ...supplierRows.map(r=>({pharmacyId:r.pharmacyId,supplierCode:r.providerId}))
-    ]);
-    for(const row of buyRows)row.supplier=names.supplier(row.pharmacyId,row.providerId);
-    for(const row of supplierRows)row.name=names.supplier(row.pharmacyId,row.providerId);
+   // Si la consulta ya dispone de nombre real, conservarlo y evitar
+   // consultas adicionales. Resolver sólo códigos que aún no tienen nombre.
+   const unresolved=[
+    ...buyRows.filter(r=>!r.supplier||String(r.supplier).trim().toUpperCase()===
+      String(r.providerId??"").trim().toUpperCase()),
+    ...supplierRows.filter(r=>!r.name||String(r.name).trim().toUpperCase()===
+      String(r.providerId??"").trim().toUpperCase())
+   ];
+   if(unresolved.length){
+    const names=await loadCommercialNames(pool,req.context,
+     unresolved.map(r=>({pharmacyId:r.pharmacyId,supplierCode:r.providerId})));
+    for(const row of buyRows){
+     if(unresolved.includes(row))row.supplier=names.supplier(row.pharmacyId,row.providerId);
+    }
+    for(const row of supplierRows){
+     if(unresolved.includes(row))row.name=names.supplier(row.pharmacyId,row.providerId);
+    }
    }
    const replenishmentRows=stockRows.filter(r=>r.need>0);
    const negativeMargins=salesRows.filter(r=>r.margin!=null&&r.margin<0).map(r=>({

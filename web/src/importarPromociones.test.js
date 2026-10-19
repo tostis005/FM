@@ -22,12 +22,12 @@ test("3x2, segunda unidad y CN con cero inicial quedan en borrador",()=>{
   assert.equal(promos[0].status,"Borrador");
 });
 test("reimportar no duplica; nuevo CN completa campaña y respeta objetivos",()=>{
-  const first=importCampaignRows([],[
+  const first=importCampaignRows([["LAB","MARCA","OFERTA","INICIO","FIN"],["TEST","GAMA","20% DTO","1 OCTUBRE","31 OCTUBRE"]],[
     ["LAB","GAMA","CN","DESCRIPCION","PROMOCION","DESDE","HASTA"],
     ["TEST","GAMA","012345","","20% DTO","1 OCTUBRE","31 OCTUBRE"]
   ]);
   const existing=[{...first[0],targets:{"1":11}}];
-  const second=importCampaignRows([],[
+  const second=importCampaignRows([["LAB","MARCA","OFERTA","INICIO","FIN"],["TEST","GAMA","20% DTO","1 OCTUBRE","31 OCTUBRE"]],[
     ["LAB","GAMA","CN","DESCRIPCION","PROMOCION","DESDE","HASTA"],
     ["TEST","GAMA","012345","","20% DTO","1 OCTUBRE","31 OCTUBRE"],
     ["TEST","GAMA","222333","","20% DTO","1 OCTUBRE","31 OCTUBRE"]
@@ -47,9 +47,10 @@ test("importar objetivos asignados activa promociones vigentes, archiva vencidas
  assert.equal(importedPromotionStatus({...promo,end:"2026-10-18"},now),"Finalizada");
  assert.equal(importedPromotionStatus({...promo,start:"2026-11-01",end:"2026-11-30"},now),"Borrador");
  assert.equal(importedPromotionStatus({...promo,targets:{}},now),"Borrador");
- assert.equal(importedPromotionStatus({...promo,targets:{"1":12,"2":""}},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,targets:{"1":12,"2":""}},now),"Activa");
  assert.equal(importedPromotionStatus({...promo,targets:{"1":0}},now),"Borrador");
- assert.equal(importedPromotionStatus({...promo,cns:[]},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,cns:[]},now),"Activa");
+ assert.equal(importedPromotionStatus({...promo,end:""},now),"Activa");
  assert.equal(importedPromotionStatus({...promo,start:"",end:""},now),"Borrador");
 });
 test("el estado de importación usa la fecha civil de la farmacia, no el UTC",()=>{
@@ -57,4 +58,62 @@ test("el estado de importación usa la fecha civil de la farmacia, no el UTC",()
  const midnight=new Date("2026-10-19T22:30:00Z");
  assert.equal(importedPromotionStatus(promo,midnight,"Europe/Madrid"),"Finalizada");
  assert.equal(importedPromotionStatus(promo,midnight,"America/Bogota"),"Activa");
+});
+
+test("primera fila vacía detiene la importación: ni texto posterior ni CN huérfanos crean promociones",()=>{
+ const a=[
+  ["LABORATORIO","MARCA","NOMBRE PROMOCIÓN","FECHA DE INICIO","FECHA DE FIN"],
+  ["BEIERSDORF","EUCERIN","20% DTO","1 OCTUBRE","31 OCTUBRE"],
+  [null,null,null,null,null],
+  ["NO HACER ESTAS PROMOCIONES",null,null,null,null],
+  ["HARTMANN","KNEIPP GUMMIES","4€ DTO","1 OCTUBRE","31 DICIEMBRE"]
+ ];
+ const b=[
+  ["LAB","GAMA","CN","DESCRIPCION","PROMOCION"],
+  ["BEIERSDORF","EUCERIN CORPORAL","001474","Eucerin","20% DTO"],
+  ["HARTMANN","KNEIPP GUMMIES","123456","No importar","4€ DTO"]
+ ];
+ const found=importCampaignRows(a,b);
+ assert.equal(found.length,1);
+ assert.equal(found[0].sourceRow,2);
+ assert.deepEqual(found[0].cns,["001474"]);
+ assert.equal(importCampaignRows([],b).length,0);
+});
+test("laboratorio/marca es el vínculo y la oferta separa gamas duplicadas",()=>{
+ const a=[
+  ["LAB","MARCA","OFERTA","INICIO","FIN"],
+  ["CANTABRIA LABS","IRALTONE","3x2","1 OCTUBRE","31 OCTUBRE"],
+  ["NATIVE","PHYTO","50% DTO 2ª UD","1 OCTUBRE","31 OCTUBRE"],
+  ["NATIVE","PHYTO","20% DTO","1 OCTUBRE","31 OCTUBRE"],
+  ["LOREAL","LA ROCHE POSAY EFFACLAR","20% DTO","1 OCTUBRE","31 OCTUBRE"]
+ ];
+ const b=[
+  ["LAB","GAMA","CN","DESC","OFERTA"],
+  ["CANTABRIA","IRALTONE","123456","Iraltone","3X2"],
+  ["NATIVE","PHYTO TTO","123457","Phyto tratamientos","50% 2ª UD"],
+  ["NATIVE","PHYTO AMPOLLAS","123458","Phyto ampollas",0.2],
+  ["LA ROCHE POSAY","EFFACLAR","123459","Effaclar",0.2],
+  ["CANTABRIA","NEORETIN","123460","No corresponde","40% 2ª UD"]
+ ];
+ const x=importCampaignRows(a,b);
+ assert.deepEqual(x.map(p=>p.cns),[["123456"],["123457"],["123458"],["123459"]]);
+});
+test("dos promociones URIAGE separadas por su descripción mantienen ambos CN y IDs únicos",()=>{
+ const a=[
+  ["LAB","MARCA","OFERTA","INICIO","FIN","DESCRIPCIÓN"],
+  ["PUIG DERMA","URIAGE","5€ DTO","1 OCTUBRE","31 OCTUBRE","Crema y Bálsamo Xemose"],
+  ["PUIG DERMA","URIAGE","5€ DTO","1 OCTUBRE","31 OCTUBRE","Los sérums de la gama"],
+ ];
+ const b=[
+  ["LAB","GAMA","CN","DESC","OFERTA"],
+  ["URIAGE","URIAGE","189666","URIAGE XEMOSE BALSAMO",5],
+  ["URIAGE","URIAGE","152281","URIAGE XEMOSE CREMA",5],
+  ["URIAGE","URIAGE","199837","URIAGE BARIEDERM CICA DAILY SERUM",5],
+  ["URIAGE","URIAGE","217776","URIAGE ROSELIANE SERUM",5]
+ ];
+ const x=importCampaignRows(a,b);
+ assert.equal(x.length,2);
+ assert.notEqual(x[0].id,x[1].id);
+ assert.deepEqual(x[0].cns,["189666","152281"]);
+ assert.deepEqual(x[1].cns,["199837","217776"]);
 });

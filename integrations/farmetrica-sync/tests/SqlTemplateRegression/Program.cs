@@ -43,7 +43,7 @@ foreach (var source in SqlTemplates.All)
         !source.Sql.Contains("{{TABLE:dbo.", StringComparison.Ordinal))
         throw new Exception($"Plantilla {source.Entity}: debe ser SELECT con macro SQL segura.");
 }
-foreach (var source in SqlTemplates.All.Where(t => t.Entity is "articulos" or "proveedores" or "familias"))
+foreach (var source in SqlTemplates.All.Where(t => t.Entity is "articulos" or "proveedores" or "familias" or "vendedores"))
 {
     if (source.PreferredMode != "snapshot")
         throw new Exception($"{source.Entity}: debe proponer snapshot/reconciliación completa.");
@@ -145,9 +145,9 @@ foreach (var (source, alias) in new[] {
 if (SqlTemplates.IsLegacyOptional("articulos", "stock_actual") ||
     SqlTemplates.IsLegacyOptional("articulos", "stock_minimo"))
     throw new Exception("Las cantidades de existencias son obligatorias en los SELECT de artículos, no se deben importar como NULL por omisión.");
-if (SqlTemplates.All.Count != 7 || entities.Count != 7 ||
+if (SqlTemplates.All.Count != 8 || entities.Count != 8 ||
     !entities.ContainsKey("ventas_completas") || !entities.ContainsKey("recepciones_completas"))
-    throw new Exception("Siete plantillas Farmatic: cinco legadas y dos JOIN documentales.");
+    throw new Exception("Ocho plantillas Farmatic: seis catálogos/movimientos y dos JOIN documentales.");
 
 var tickets = SqlTemplates.All.Single(t => t.Entity == "ventas_completas");
 var receipts = SqlTemplates.All.Single(t => t.Entity == "recepciones_completas");
@@ -227,6 +227,33 @@ if (SqlTemplates.UpgradeStandardArticleSql(previousArticleSql) != articulo ||
 
 if (SqlTemplates.UpgradeStandardArticleSql("SELECT origen_id FROM personalizado") != "SELECT origen_id FROM personalizado")
     throw new Exception("No se debe sobrescribir SQL personalizado de artículos.");
+// Catálogo Vendedor: nombres NO son clave y ColorVentas no es RGB inferido.
+var sellers = SqlTemplates.All.Single(t => t.SystemType=="farmatic" && t.Entity=="vendedores");
+if (sellers.PreferredMode!="snapshot" || sellers.SuggestedEveryMinutes!=1440 ||
+    sellers.Sql!=sellers.FullSql || sellers.Sql.Contains("@desde") || sellers.Sql.Contains("@hasta"))
+    throw new Exception("Vendedor: fotografía completa diaria sin fecha técnica.");
+foreach (var (col, type) in new[] {
+    ("origen_id","text"),("nombre","text"),("tipo","text"),("color_ventas","integer")
+})
+{
+    if (!entities["vendedores"].Columns.Any(c=>c.Name==col&&c.Type==type))
+        throw new Exception("Contrato vendedores incompleto: "+col);
+    if (!System.Text.RegularExpressions.Regex.IsMatch(sellers.Sql,
+        @"\bAS\s+"+col+@"\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        throw new Exception("SELECT Vendedor carece de alias: "+col);
+}
+if (!sellers.Sql.Contains("{{TABLE:dbo.Vendedor}} AS v") ||
+    !sellers.Sql.Contains("v.IDVENDEDOR") ||
+    !sellers.Sql.Contains("v.NOMBRE") ||
+    !sellers.Sql.Contains("v.TIPO") ||
+    !sellers.Sql.Contains("v.ColorVentas") ||
+    sellers.Sql.Contains("WHERE") ||
+    sellers.Sql.Contains("ORDER BY NOMBRE"))
+    throw new Exception("Vendedor: clave técnica y cuatro columnas de origen deben preservarse.");
+if (!SqlTemplates.All.Single(t=>t.Entity=="ventas_completas").FullSql.Contains("v.XVend_IdVendedor") ||
+    !SqlTemplates.All.Single(t=>t.Entity=="recepciones_completas").FullSql.Contains("r.XVend_IdVendedor"))
+    throw new Exception("Relación del vendedor por XVend_IdVendedor pendiente de contrato.");
+
 // Familias: coincidencia de alias, tipos y relaciones entre las tres fuentes.
 var family = SqlTemplates.All.Single(t => t.Entity == "familias");
 if (family.PreferredMode != "snapshot" || family.SuggestedEveryMinutes != 1440)
@@ -256,5 +283,5 @@ if (!family.FullSql.Contains("fa.IdFamilia = f.IdFamilia", StringComparison.Ordi
     throw new Exception("Relaciones Familia-FamiliaAux-SuperFamilia incorrectas.");
 if (!family.FullSql.Contains("f.XGrup_IdGrupoIva) AS grupo_iva_id", StringComparison.Ordinal))
     throw new Exception("Conservar el código de grupo de IVA en texto, por ejemplo 02.");
-Console.WriteLine("OK: 7 plantillas Farmatic, 2 JOIN con orígenes reales, familias y stock en artículos.");
+Console.WriteLine("OK: 8 plantillas Farmatic, vendedores por ID, JOIN documentales y catálogos.");
 

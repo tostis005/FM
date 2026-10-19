@@ -131,11 +131,15 @@ function jobs(){
  const farmaticPharmacies=cfg().pharmacies.filter(p=>p.systemType==='farmatic');
  const familiesEntity=cfg().entities.find(e=>e.name==='familias');
  const familyConfigured=familiesEntity?list.filter(j=>j.entityId===familiesEntity.id).length:0;
+ const vendorsEntity=cfg().entities.find(e=>e.name==='vendedores');
+ const vendorsConfigured=vendorsEntity?list.filter(j=>j.entityId===vendorsEntity.id && farmaticPharmacies.some(p=>p.id===j.pharmacyId)).length:0;
  let out=head('Consultas SQL','Selecciona una farmacia, entidad, consulta y política de sincronización.',`<button class="btn" onclick="F.edit('job','new')">＋ Nueva consulta</button>`);
  // Herramientas opcionales; la pantalla principal muestra primero los trabajos.
   const utilities=[];
   if(familiesEntity && farmaticPharmacies.length)
     utilities.push(`<button class="btn secondary mini" onclick="F.createFamilyJobs()">＋ Preparar familias (${familyConfigured}/${farmaticPharmacies.length})</button>`);
+  if(vendorsEntity && farmaticPharmacies.length)
+    utilities.push(`<button class="btn secondary mini" onclick="F.createVendorJobs()">＋ Preparar vendedores (${vendorsConfigured}/${farmaticPharmacies.length})</button>`);
   if(purchaseJobs.length)utilities.push(`
     <button class="btn secondary mini" onclick="F.updateAllPurchaseSchemas()">↺ Actualizar desde esquema (${purchaseJobs.length} consultas)</button>
     <button class="btn secondary mini" onclick="F.retryFailedPurchases()">Relanzar compras fallidas</button>
@@ -354,6 +358,10 @@ window.F={
  async createFamilyJobs(){
     if(!confirm('¿Crear consultas de familias en las farmacias Farmatic que todavía no las tengan? Se crean desactivadas, con carga completa diaria, sin modificar otras consultas.'))return;
     await attempt(async()=>{const r=await req('/jobs/familias/create-missing','POST');state.editing=null;await reload();toast(r.message);});
+ },
+ async createVendorJobs(){
+    if(!confirm('¿Preparar una fuente Vendedor por farmacia Farmatic? Se crean desactivadas con fotografía diaria y no se modifica ningún trabajo existente.'))return;
+    await attempt(async()=>{const r=await req('/jobs/vendedores/create-missing','POST');state.editing=null;await reload();toast(r.message);});
  },
  async updateArticleSchema(){
     const id=state.editing?.id;

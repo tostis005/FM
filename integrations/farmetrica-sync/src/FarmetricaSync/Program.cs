@@ -622,6 +622,39 @@ api.MapPost("/jobs/familias/create-missing", (ConfigStore store) =>
         message = $"Creadas {created} consultas de familias desactivadas entre {pharmacies} farmacias. Comprueba la vista previa y activa las que quieras sincronizar." });
 });
 
+// Catálogo de vendedores por farmacia. Sin fechas técnicas en Farmatic,
+// por lo que solamente se crea fotografía completa (desactivada inicialmente).
+// IDVENDEDOR se identifica dentro de farmacia, nunca por NOMBRE.
+api.MapPost("/jobs/vendedores/create-missing", (ConfigStore store) =>
+{
+    int created = 0, pharmacies = 0;
+    store.Change(c =>
+    {
+        var sellers = c.Entities.SingleOrDefault(e => e.Name == "vendedores")
+            ?? throw new InvalidOperationException("No existe la entidad vendedores.");
+        var template = SqlTemplates.All.Single(t => t.SystemType == "farmatic" && t.Entity == "vendedores");
+        foreach (var pharmacy in c.Pharmacies.Where(p =>
+                     p.SystemType.Equals("farmatic", StringComparison.OrdinalIgnoreCase)))
+        {
+            pharmacies++;
+            if (c.Jobs.Any(j => j.PharmacyId == pharmacy.Id && j.EntityId == sellers.Id))
+                continue;
+            var job = new SyncJob
+            {
+                PharmacyId = pharmacy.Id, EntityId = sellers.Id,
+                Mode = "snapshot", Sql = template.FullSql, FullSql = template.FullSql,
+                EveryMinutes = template.SuggestedEveryMinutes,
+                BatchSize = 1000, Enabled = false
+            };
+            Validation.Query(job);
+            c.Jobs.Add(job);
+            created++;
+        }
+    });
+    return Results.Ok(new { created, pharmacies,
+        message = $"Preparadas {created} fuentes de vendedores desactivadas entre {pharmacies} farmacias. Previsualiza y activa las correctas." });
+});
+
 api.MapPost("/jobs", (JobRequest r, ConfigStore store) =>
 {
     Guid createdId = Guid.Empty;

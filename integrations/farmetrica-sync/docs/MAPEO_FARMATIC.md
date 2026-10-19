@@ -18,6 +18,7 @@ Las vistas reales conocidas son `vLineaVenta`, `vRecep`, `vProveedor` y la tabla
 | `stock` | `origen_id` | `articulo_id`, `existencias`, `fecha_stock` |
 | `articulos` | `origen_id` | `nombre`, `codigo_nacional`, `ean`, `familia`, `laboratorio`, `pvp` |
 | `proveedores` | `origen_id` | `nombre`, `nif`, `telefono`, `email` |
+| `vendedores` | `origen_id` | `nombre`, `tipo`, `color_ventas` |
 
 **Todas** las columnas de una entidad deben devolverse en el SELECT, aunque puedan ser `NULL`. El motor añade `farmacia_codigo` y `sincronizado_en` automáticamente. `origen_id` debe ser estable, no nulo, único por farmacia y entidad (para líneas de ticket, identificar la línea, no solo la cabecera).
 
@@ -142,3 +143,26 @@ Al actualizar desde v0.12, los trabajos heredados de stock dejan de existir en e
 Para eliminar `farmetrica.stock` de forma segura, primero sincronizar **artículos de todas las farmacias**, y después usar la opción de retiro en Entidades de datos. La opción verifica que no falte ningún par `farmacia_codigo, origen_id` de la tabla stock original y que los cuatro valores coincidan; bloquea el `DROP TABLE ... RESTRICT` en caso contrario.
 
 *El histórico de ejecución de stock anterior se mantiene para auditoría; su tabla física solo se retira tras la comprobación y confirmación.*
+
+## Nueva fuente: Farmatic.dbo.Vendedor
+
+Identificada con las columnas técnicas `IDVENDEDOR`, `NOMBRE`, `TIPO`
+y `ColorVentas`. Se importa como catálogo completo (snapshot) diario,
+no incremental, porque no hay campo de modificación. La identidad estable
+es `(farmacia_codigo, IDVENDEDOR)`, no el nombre: nombres repetidos no
+implican vendedores duplicados. El panel permite preparar una consulta
+para cada farmacia en un clic, desactivada por seguridad.
+
+```sql
+SELECT
+    CONVERT(varchar(100), v.IDVENDEDOR) AS origen_id,
+    NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(255), v.NOMBRE))), N'') AS nombre,
+    NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(40), v.TIPO))), N'') AS tipo,
+    TRY_CONVERT(bigint, v.ColorVentas) AS color_ventas
+FROM {{TABLE:dbo.Vendedor}} AS v
+```
+
+Se relaciona en ventas con `Venta.XVend_IdVendedor` y en recepciones
+con `Recep.XVend_IdVendedor`. El color de Farmatic se conserva como
+entero original, sin presuponer conversión RGB. No se publican datos
+nominativos en el repositorio ni en la demo pública.

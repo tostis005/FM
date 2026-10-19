@@ -272,6 +272,18 @@ FROM {{TABLE:dbo.Recep}} AS r
 LEFT JOIN {{TABLE:dbo.LINEARECEP}} AS l ON l.IdRecepcion = r.IdRecepcion
 """;
 
+    // Tabla confirmada Farmatic.dbo.Vendedor.
+    // Sin marca temporal de actualización: fotografía completa diaria.
+    // El color se conserva como entero origen, SIN suponer RGB/ARGB.
+    private const string VendorsSnapshot = """
+SELECT
+    CONVERT(varchar(100), v.IDVENDEDOR) AS origen_id,
+    NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(255), v.NOMBRE))), N'') AS nombre,
+    NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(40), v.TIPO))), N'') AS tipo,
+    TRY_CONVERT(bigint, v.ColorVentas) AS color_ventas
+FROM {{TABLE:dbo.Vendedor}} AS v
+""";
+
     // Campos añadidos al contrato en esta versión. Permitir NULL solamente para
     // estos campos en SELECT anteriores, sin relajar la validación del resto.
     private static readonly IReadOnlyDictionary<string, HashSet<string>> LegacyOptional = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
@@ -309,6 +321,10 @@ LEFT JOIN {{TABLE:dbo.LINEARECEP}} AS l ON l.IdRecepcion = r.IdRecepcion
         new("farmatic", "familias", "Farmatic · familias y superfamilias (Familia/FamiliaAux/SuperFamilia)",
             FamiliesSnapshot.TrimEnd(), FamiliesSnapshot.TrimEnd(), "snapshot",
             "Una única consulta completa diaria. Relación con articulos.familia mediante IdFamilia y farmacia_codigo. Permite familias sin superfamilia. Si un IdFamilia se duplica en una farmacia, se bloquea la importación para evitar asignaciones erróneas.", 180, 1440),
+        new("farmatic", "vendedores", "Farmatic · vendedores (Vendedor)",
+            VendorsSnapshot.TrimEnd(), VendorsSnapshot.TrimEnd(), "snapshot",
+            "Catálogo completo diario por farmacia. IDVENDEDOR es la clave técnica, NOMBRE puede repetirse y ColorVentas se conserva como entero sin convertir colores. Se vincula por XVend_IdVendedor en ventas y recepciones; probar antes de activar.",
+            180, 1440),
         new("farmatic", "proveedores", "Farmatic · maestro de proveedores (vProveedor)",
             SuppliersSnapshot.TrimEnd(), SuppliersSnapshot.TrimEnd(), "snapshot",
             "Carga completa que detecta altas, cambios y bajas. No incluye datos bancarios.")

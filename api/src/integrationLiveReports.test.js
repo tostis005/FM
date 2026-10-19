@@ -421,6 +421,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(headers.kpis.recepciones,1);
   // Aunque solo existan cabeceras sin detalles, deben poderse consultar
   // individualmente, paginar en SQL y buscar fuera de las 50 primeras.
+  await pool.query(`ALTER TABLE ampedia.compras
+    ADD COLUMN IF NOT EXISTS numero_pedido text,
+    ADD COLUMN IF NOT EXISTS albaran_id text`);
   await pool.query(`INSERT INTO ampedia.compras
    (farmacia_codigo,origen_id,fecha,articulo_id,proveedor_id,unidades,importe,
     proveedor_nombre,numero_pedido,albaran_id)

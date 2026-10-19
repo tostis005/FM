@@ -76,7 +76,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
      <strong className="fm-generic-code" key={r.cn}>{r.cn}</strong>,
      r.supplier||r.supplierCode||"Sin proveedor",quantity(r.units),
      unitPrice(r.puc),unitPrice(r.referencePuc),unitPrice(r.targetPuc),
-     r.targetSupplier?(r.targetSupplier+(r.targetCn?" · CN "+r.targetCn:"")):"—",
+     r.targetSupplier?((r.targetSupplierName||r.targetSupplier)+(r.targetCn?" · CN "+r.targetCn:"")):"—",
      money(r.potential),money(r.spend)
     ])}/>}
 

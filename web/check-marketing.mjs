@@ -7,6 +7,8 @@ const home=read("./public/landing.html");
 const blog=read("./public/blog/index.html");
 const login=read("./login.html");
 const nginx=read("./nginx.conf");
+const sitemap=read("./public/sitemap.xml");
+const sitemapOrigin="__FARMETRICA_SITE_ORIGIN__";
 const css=read("./public/marketing.css");
 const emblem=read("./public/brand-symbol.svg");
 const favicon=read("./public/favicon.svg");
@@ -117,14 +119,14 @@ for(const {p,url,type} of pages){
     if(p.slug!=="farmatic")assert.match(html,/Conexión sujeta a validación por instalación/);
   }
   for(const related of p.related||[])assert.ok(allUrls.has(related)||["/","/soluciones/","/integraciones/","/blog/"].includes(related),"Enlace contextual desconocido: "+related);
-  assert.ok(nginx.includes(url),"Sitemap: falta "+url);
+  assert.ok(sitemap.includes(sitemapOrigin+url),"Sitemap: falta "+url);
 }
 for(const section of ["/soluciones/","/integraciones/"]){
   const html=read("./public"+section+"index.html");
   assert.match(html,/<h1>/);
   assert.match(html,/<meta name="description"/);
   assert.match(html,/<link rel="canonical" href="/);
-  assert.ok(nginx.includes(section),"Sitemap: falta "+section);
+  assert.ok(sitemap.includes(sitemapOrigin+section),"Sitemap: falta "+section);
 }
 for(const article of articles){
   assert.match(blog,new RegExp('href="/blog/'+article.slug+'/"'));
@@ -159,7 +161,7 @@ assert.match(css,/@media\(max-width:480px\)/);
 
 // Publicaciones SEO orientadas a intención de compra e integración técnica.
 for(const target of ["/soluciones/business-intelligence-farmacias/","/blog/integrar-farmatic-nixfarma-unycop-analitica/"]){
- assert.match(nginx,new RegExp(target.replaceAll("/","\\/")));
+ assert.ok(sitemap.includes(sitemapOrigin+target));
  const content=read("./public"+target+"index.html");
  assert.match(content,/<h1>/);
  assert.match(content,/Farmetrica/);
@@ -190,8 +192,8 @@ assert.match(seoGenerator,/Mejorar compras y márgenes/);
 // Comprobar toda la cobertura orgánica de funciones generales y preguntas de análisis.
 const intentSolutions=["software-analitica-farmacias","comparar-farmacias-red"];
 const intentArticles=["kpis-gestion-farmacia","excel-power-bi-farmacia","calcular-margen-farmacia","rotacion-cobertura-stock-farmacia","analizar-compras-proveedores-farmacia","ia-analisis-datos-farmacia"];
-for(const slug of intentSolutions){assert.ok(solutions.some(x=>x.slug===slug));assert.match(home,new RegExp('href="/soluciones/'+slug+'/"'));assert.ok(nginx.includes('/soluciones/'+slug+'/'));}
-for(const slug of intentArticles){assert.ok(articles.some(x=>x.slug===slug));assert.match(blog,new RegExp('href="/blog/'+slug+'/"'));assert.ok(nginx.includes('/blog/'+slug+'/'));}
+for(const slug of intentSolutions){assert.ok(solutions.some(x=>x.slug===slug));assert.match(home,new RegExp('href="/soluciones/'+slug+'/"'));assert.ok(sitemap.includes(sitemapOrigin+'/soluciones/'+slug+'/'));}
+for(const slug of intentArticles){assert.ok(articles.some(x=>x.slug===slug));assert.match(blog,new RegExp('href="/blog/'+slug+'/"'));assert.ok(sitemap.includes(sitemapOrigin+'/blog/'+slug+'/'));}
 assert.match(home,/Software de análisis para farmacias/);
 assert.match(home,/id="herramientas-analisis"/);
 assert.ok(home.indexOf('/soluciones/ventas-farmacia/')<home.indexOf('/soluciones/gestion-promociones-farmacia/'));

@@ -1,0 +1,42 @@
+// Se ejecuta después de generate-seo.mjs y antes de publicar en producción.
+import assert from "node:assert/strict";
+import {readFileSync,existsSync} from "node:fs";
+import {resolve,join} from "node:path";
+const root=resolve(import.meta.dirname,"public");
+const text=p=>readFileSync(join(root,p),"utf8");
+const nginx=readFileSync(new URL("./nginx.conf",import.meta.url),"utf8");
+const xml=text("sitemap.xml");
+const placeholder="__FARMETRICA_SITE_ORIGIN__";
+assert.match(xml,/^<\?xml version="1.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www.sitemaps.org\/schemas\/sitemap\/0.9">/);
+assert.ok(xml.endsWith("</urlset>\n"));
+const entries=[...xml.matchAll(/<url><loc>([^<]+)<\/loc><\/url>/g)].map(x=>x[1]);
+assert.ok(entries.length>=25,"El sitemap debe descubrir las páginas comerciales y editoriales.");
+assert.equal(new Set(entries).size,entries.length,"URLs duplicadas en el sitemap.");
+assert.ok(entries.every(x=>x.startsWith(placeholder+"/")),"URLs sin origen público o mal formadas.");
+const routes=entries.map(x=>x.slice(placeholder.length));
+assert.equal(routes[0],"/","La home debe estar en primera posición.");
+for(const route of routes){
+ assert.ok(!route.includes("?")&&!route.includes("#"),"URLs sin parámetros ni fragmentos: "+route);
+ assert.ok(/^\/(?:$|soluciones\/|integraciones\/|blog\/|solicitar-demo\/$|privacidad\/$)/.test(route),"Ruta no comercial indexada: "+route);
+ if(route==="/")continue;
+ const file=join(root,route,"index.html");
+ assert.ok(existsSync(file),"Sitemap apunta a página inexistente: "+route);
+ const html=readFileSync(file,"utf8");
+ const robots=html.match(/<meta\b[^>]*name=["']robots["'][^>]*>/i)?.[0]||"";
+ assert.doesNotMatch(robots,/\bnoindex\b/i,"La página noindex está en sitemap: "+route);
+ assert.match(html,/<link rel="canonical" href="\//,"Falta canonical en "+route);
+ assert.match(html,/<title>[^<]+<\/title>/,"Falta título en "+route);
+ assert.match(html,/<meta name="description"/,"Falta descripción en "+route);
+}
+assert.ok(routes.includes("/blog/presentamos-farmetrica/"),"Debe descubrir los artículos manuales.");
+assert.ok(routes.includes("/integraciones/farmatic/"),"Debe descubrir las integraciones.");
+assert.ok(!routes.includes("/privacidad/solicitud/"),"El formulario de derechos tiene noindex.");
+assert.ok(!routes.includes("/login"),"El login no es indexable.");
+assert.doesNotMatch(xml,/\/(?:dashboard|ventas|compras|promociones|farmacias|usuarios|clientes|api)\//);
+assert.match(nginx,/location = \/sitemap\.xml \{/);
+assert.match(nginx,/sub_filter '__FARMETRICA_SITE_ORIGIN__' '\$public_scheme:\/\/\$host'/);
+assert.match(nginx,/sub_filter '<link rel="canonical" href="\/' '<link rel="canonical" href="\$public_scheme:\/\/\$host\/'/);
+assert.match(nginx,/Sitemap: \$public_scheme:\/\/\$host\/sitemap\.xml/);
+assert.match(nginx,/X-Robots-Tag "noindex, nofollow"/);
+assert.doesNotMatch(nginx,/Disallow: \/privacidad\/solicitud\//,"No bloquear una página que debe poder leer el noindex.");
+console.log("SEO verificado: "+routes.length+" URLs públicas, canónicas y noindex correctos.");

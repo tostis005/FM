@@ -21,3 +21,34 @@
 - [ ] Añadir una entidad propia desde la interfaz y validar DDL normalizado.
 - [ ] Documentar procedimientos de backup/restore de PostgreSQL, estado, claves y credenciales.
 - [ ] Ajustar integración con la web Farmétrica para consumir las tablas reales y gestionar metadatos nuevos.
+
+## Cargas históricas masivas: millones de tickets y TimeoutException
+
+Si una reconciliación completa muestra millones de filas leídas y termina con
+`NpgsqlException: Exception while reading from stream / Timeout during reading attempt`
+durante «Staging privado preparado», **no es un resultado correcto**.
+La versión original de `JoinedDocumentWriter` tenía comandos PostgreSQL con
+`CommandTimeout = 180` y `statement_timeout = 180s`. Aunque el
+`COPY` terminase, la validación de duplicados o los UPSERT podían exceder
+3 minutos. El error ocurre antes del `Commit` final y no avanza el cursor
+de sincronización. **No repetir masivamente hasta actualizar el ejecutable.**
+
+La versión corregida construye un índice temporal por documento/línea
+para lotes de al menos 1.000 filas, ejecuta `ANALYZE`, amplía cada
+operación pesada a 30 minutos, conserva `lock_timeout = 5s` y muestra
+«Indexando staging», «Validando ...», «Insertando ...» y
+«Confirmando transacción». Los datos se siguen publicando atómicamente,
+sin recortar la validación de duplicados o cabeceras. Si una fase vuelve
+a alcanzar 30 minutos o el VPS carece de espacio para índices temporales,
+será necesario analizar recursos y dividir la carga histórica de forma
+segura; aumentar el timeout por sí solo no lo soluciona.
+
+Para reintentar: (1) conservar copia de `%ProgramData%\\FarmetricaSync`,
+(2) instalar el ZIP Windows de FM compilado *después* de la corrección,
+(3) verificar espacio y actividad de PostgreSQL y el túnel SSH si se usa,
+(4) previsualizar la consulta y probar primero un periodo acotado,
+(5) ejecutar la reconciliación completa en una ventana de mantenimiento y
+supervisar la fase de cada operación. **No cambiar el cursor manualmente**.
+Si hay errores al confirmar, revisar `pg_stat_activity`, capacidad del
+disco `pg_temp`, memoria y logs del servidor. No incluir credenciales ni
+datos reales en los tickets públicos.

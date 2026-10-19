@@ -37,7 +37,7 @@ function downloadRows(rows){
 const reportSignal=(controller)=>
  typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
   ?AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]):controller.signal;
-function GroupDetail({group,query,clientSlug,useReal=false}){
+function GroupDetail({group,query,clientSlug,pharmacies=[],useReal=false}){
  const [data,setData]=useState(null),[error,setError]=useState("");
  useEffect(()=>{
   let cancel=false;const controller=new AbortController();
@@ -50,34 +50,52 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
  },[group.dcpf,query,clientSlug,useReal]);
  if(error)return <div role="alert" className="fm-generic-detail-error">{error}</div>;
  if(!data)return <LoadingPanel kind="table" label="Consultando los CN del conjunto…" rows={4}/>;
- const saleMap=new Map(data.sales.map(r=>[r.cn,r]));
+ // Un mismo CN vendido por varias farmacias debe SUMARSE, nunca sobrescribirse.
+ const saleMap=new Map();
+ for(const r of data.sales){
+  const prev=saleMap.get(r.cn)||{units:0,revenue:0};
+  prev.units+=Number(r.units||0);prev.revenue+=Number(r.revenue||0);
+  saleMap.set(r.cn,prev);
+ }
+ const pharmacyNames=new Map(pharmacies.map(p=>[String(p.id),p.name]));
+ const activePolicy=data.policy?.global||{percentile:20,months:6};
+ const policyFor=id=>data.policy?.overrides?.find(x=>String(x.pharmacyId)===String(id))||activePolicy;
+ const policyLabels=[...new Set((data.purchases||[]).map(p=>{
+  const rule=policyFor(p.pharmacyId);return rule.percentile+" % / "+rule.months+" meses";
+ }))];
  const purchaseMap=new Map();
  for(const r of data.purchases){
   const list=purchaseMap.get(r.cn)||[];list.push(r);purchaseMap.set(r.cn,list);
  }
  return <div className="fm-generic-detail">
-  <p>Presentaciones agrupadas por <strong>DCPF {group.dcpf}</strong>. El precio de compra procede de las recepciones sincronizadas.</p>
+  <p>Presentaciones del <strong>DCPF {group.dcpf}</strong>. Los importes y unidades se suman entre las farmacias seleccionadas; el <strong>PUC observado</strong> es el coste neto de recepciones dividido entre unidades con coste válido. No es el PMC del catálogo.</p>
+  <p className="fm-generic-price-note">El <strong>PUC óptimo</strong> se calcula con las unidades más baratas del histórico de cada farmacia, CN y proveedor. Configuración activa: {policyLabels.length?policyLabels.join(" · "):activePolicy.percentile+" % / "+activePolicy.months+" meses"}. Se exige un mínimo de 3 líneas de compra por referencia. Al seleccionar varias farmacias, los valores observados se ponderan por unidades; los objetivos se calculan dentro de cada farmacia, sin trasladar precios de una farmacia a otra.</p>
   <SortableDataTable label="presentaciones de genéricos"
-   headers={["CN","Presentación","Laboratorio","Tipo","Vendidas","Ventas","Compradas","PUC observado"]}
+   headers={["CN","Presentación","Laboratorio","Tipo","Vendidas","Ventas","Compradas","PUC observado","Objetivo DCPF/ud."]}
    rows={data.products.map(product=>{
     const sales=saleMap.get(product.cn),bought=purchaseMap.get(product.cn)||[];
     const buyQty=bought.reduce((v,r)=>v+Number(r.units||0),0);
     const buyAmount=bought.reduce((v,r)=>v+Number(r.cost??r.spend??0),0);
     const pricedQty=bought.reduce((v,r)=>v+Number(r.pricedUnits??r.units??0),0);
     const avg=pricedQty>0?buyAmount/pricedQty:null;
+    const pricedWithTarget=bought.filter(x=>Number(x.pricedUnits)>0&&x.targetPuc!=null);
+    const covered=pricedWithTarget.reduce((a,x)=>a+Number(x.pricedUnits),0);
+    const target=covered>0&&Math.abs(covered-pricedQty)<0.0001?
+      pricedWithTarget.reduce((a,x)=>a+Number(x.pricedUnits)*Number(x.targetPuc),0)/covered:null;
     return [<strong className="fm-generic-code" key={product.cn}>{product.cn}</strong>,
       product.nombre,product.laboratorio||product.laboratorio_codigo||"—",
       product.generico?"Genérico":"Equivalente de referencia",
       data.salesAvailable?quantity(sales?.units||0):"—",
       data.salesAvailable?money(sales?.revenue||0):"—",
-      data.purchasesAvailable?quantity(buyQty):"—",unitPrice(avg)];
+      data.purchasesAvailable?quantity(buyQty):"—",unitPrice(avg),unitPrice(target)];
    })}/>
-  <h3>Comparativa de compras por CN y proveedor</h3>
+  <h3>Comparativa de compras por CN, proveedor y farmacia</h3>
   {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
    <SortableDataTable label="compras por genérico"
-    headers={["CN","Proveedor de compra","Unidades","PUC ponderado","Referencia histórica","Objetivo equivalente","Proveedor objetivo","Ahorro estimado","Importe"]}
+    headers={["Farmacia","CN","Proveedor de compra","Unidades","PUC observado","PUC óptimo CN/proveedor","Objetivo equivalente DCPF","Proveedor y CN objetivo","Ahorro orientativo","Compras (€)"]}
     rows={data.purchases.map(r=>[
+     pharmacyNames.get(String(r.pharmacyId))||"Farmacia "+r.pharmacyId,
      <strong className="fm-generic-code" key={r.cn}>{r.cn}</strong>,
      r.supplier||r.supplierCode||"Sin proveedor",quantity(r.units),
      unitPrice(r.puc),unitPrice(r.referencePuc),unitPrice(r.targetPuc),
@@ -107,8 +125,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   ["name","Conjunto DCPF / molécula"],["skuCount","Códigos"],
   ["abcdClass","ABCD"],["salesUnits","Venta (uds.)"],["revenue","Ventas"],
   ["averagePuc","PUC medio"],["averagePvp","PVP medio"],["unitMargin","Margen/ud."],
-  ["pvpMarginPct","Margen PVP (%)"],["bestPuc","Precio ref."],
-  ["indicativeSavings","Ahorro potencial"]
+  ["pvpMarginPct","Margen PVP (%)"],["bestPuc","Menor PUC objetivo"],
+  ["indicativeSavings","Ahorro orientativo"]
  ];
  const goToPage=next=>{
   setPage(next);setActive(null);
@@ -262,7 +280,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
       {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={12}>
-       <GroupDetail group={g} query={query} clientSlug={clientSlug} useReal={useReal}/>
+       <GroupDetail group={g} query={query} clientSlug={clientSlug} pharmacies={pharmacies} useReal={useReal}/>
       </td></tr>}
      </React.Fragment>)}</tbody>
     </table></HorizontalTableScroll>}

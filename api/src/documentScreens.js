@@ -7,6 +7,7 @@ const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
 export const DOCUMENT_SECTIONS={
  "ventas-tickets":"ventas",
+ "stock-historico":"stock",
  "ventas-devoluciones":"ventas",
  "compras-devoluciones":"compras",
  "productos":"stock",
@@ -57,6 +58,7 @@ const slice="LIMIT $6::int OFFSET $7::int";
 // Las cabeceras ordenan sobre TODO el conjunto antes de paginar.
 export const DOCUMENT_SORT={
  "ventas-tickets":{at:'"at"',ticket:'"ticket"',lines:'"lines"',units:'"units"',amount:'"amount"'},
+ "stock-historico":{at:'"at"',pharmacy:'"pharmacyName"',sales:'"soldUnits"',purchases:'"receivedUnits"',net:'"documentedNetUnits"',tickets:'"tickets"',receipts:'"receipts"'},
  "ventas-devoluciones":{at:'v."at"',reference:'v.reference',units:'v.units',amount:'v.amount',kind:'v.kind'},
  "compras-devoluciones":{at:'v.fecha',reference:'v.numero_albaran',units:'v.unidades',amount:'v.importe',supplier:'v.proveedor_id'},
  "productos":{name:'name',sourceId:'"sourceId"',cn:'cn',family:'family',pvp:'pvp',pmc:'pmc',stock:'stock'},
@@ -68,13 +70,48 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
  if(!SCHEMA.test(schema)||!Object.hasOwn(DOCUMENT_SECTIONS,section))throw Error("Pantalla o esquema inválido");
  const q='"'+schema+'"', join=pharmacyJoin("v"), range=period("v");
  const mapping=DOCUMENT_SORT[section],defaultKey={
-  "ventas-tickets":"at","ventas-devoluciones":"at","compras-devoluciones":"at",
+  "ventas-tickets":"at","ventas-devoluciones":"at","compras-devoluciones":"at","stock-historico":"at",
   productos:"name","proveedores-condiciones":"amount","rentabilidad-segmentos":"sales"
  }[section];
  const requested=order==="default"?defaultKey:order;
  if(!Object.hasOwn(mapping,requested)||!["asc","desc"].includes(direction))
   throw Error("Orden incorrecto");
  const sort=`ORDER BY ${mapping[requested]} ${direction.toUpperCase()} NULLS LAST`;
+ if(section==="stock-historico")return `
+ -- Entradas y salidas documentadas: NO son snapshots históricos de inventario.
+ -- Devueltas y anuladas conservan el signo del modelo documental.
+ WITH sales AS (
+  SELECT f.id AS fid,f.nombre AS pharmacy,v.fecha::date AS day,
+   sum(v.unidades)::float8 AS units,
+   count(DISTINCT (v.sistema_origen,v.documento_id))::int AS tickets
+  FROM ${q}.fm_ventas_analitica v ${join}
+  WHERE ${range} GROUP BY f.id,f.nombre,v.fecha::date
+ ), purchases AS (
+  SELECT f.id AS fid,f.nombre AS pharmacy,v.fecha::date AS day,
+   sum(v.unidades)::float8 AS units,
+   count(DISTINCT (v.sistema_origen,v.documento_id))::int AS receipts
+  FROM ${q}.fm_recepciones_analitica v ${join}
+  WHERE ${range}
+    AND ${includedPurchaseSupplier({tenant:"$4",code:"v.proveedor_id"})}
+  GROUP BY f.id,f.nombre,v.fecha::date
+ ), movements AS (
+  SELECT coalesce(s.fid,p.fid)::text AS "pharmacyId",
+   coalesce(s.pharmacy,p.pharmacy) AS "pharmacyName",
+   coalesce(s.day,p.day) AS "at",
+   coalesce(s.units,0)::float8 AS "soldUnits",
+   coalesce(p.units,0)::float8 AS "receivedUnits",
+   (coalesce(p.units,0)-coalesce(s.units,0))::float8 AS "documentedNetUnits",
+   coalesce(s.tickets,0)::int AS tickets,
+   coalesce(p.receipts,0)::int AS receipts
+  FROM sales s FULL OUTER JOIN purchases p ON p.fid=s.fid AND p.day=s.day
+ )
+ SELECT *,count(*) OVER()::int AS total,
+  sum("soldUnits") OVER()::float8 AS "summaryValue",
+  sum("receivedUnits") OVER()::float8 AS "summaryUnits",
+  sum("documentedNetUnits") OVER()::float8 AS "summaryOther"
+ FROM movements WHERE ($5::text='' OR "pharmacyName" ILIKE '%'||$5||'%'
+   OR to_char("at",'YYYY-MM-DD') LIKE '%'||$5||'%')
+ ${sort},"pharmacyId" ${slice}`;
  if(section==="ventas-tickets")return `
  WITH documents AS (
   SELECT f.id::text AS "pharmacyId",max(f.nombre) AS "pharmacyName",

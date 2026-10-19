@@ -22,10 +22,12 @@ La API configura tiempos máximos de conexión, consulta y espera por bloqueo. E
 
 **No se ha instalado un binario ni se ha ejecutado una migración sobre el VPS al cambiar el repositorio.** La versión instalada debe verificarse antes de afirmar que los bloqueos están corregidos en producción.
 
-## Pendiente de definición SQL
+## Orígenes SQL identificados
 
-- Tickets: SELECT de cabeceras, SELECT de líneas, claves comunes, fecha/modificación/estado y descuentos.
-- Recepciones: SELECT de cabeceras, SELECT de líneas, claves comunes, fecha/modificación/estado y descuentos/bonificaciones.
+- **Tickets completos:** `dbo.Venta` + `dbo.LineaVenta`, por `IdVenta`, con clave de línea `IdNLinea`.
+- **Recepciones completas:** `dbo.Recep` + `dbo.LINEARECEP`, por `IdRecepcion`, con clave de línea `IdNLinea`.
+- Las plantillas JOIN se encuentran en `SqlTemplates.cs`, desactivadas por defecto hasta validar cargas reales. Los flujos heredados no cambian.
+- Falta demostrar que `IdVenta` no colisiona entre `Empresa` distintas, conocer la fecha técnica de modificación y verificar anulaciones y descuentos. Un SELECT que funciona sobre la muestra no equivale a tener la explotación conciliada.
 - Maestro de artículos: completar o verificar SELECT que aporte CN y EAN/GTIN
   reales. La plantilla Farmatic actual devuelve `NULL` en ambos campos porque
   no se verificaron esos nombres en el origen; sin CN no puede clasificarse bien.
@@ -36,12 +38,12 @@ No inventar columnas del ERP. Mantener plantillas compatibles con los SELECT exi
 
 ## Estado de implementación
 
-El conector ya dispone de estructura y pruebas de publicación JOIN,
-idempotencia, detección de duplicados y cabeceras pendientes, pero no está
-listo para uso real sin validar SELECT del ERP. Quedan también la conciliación
-de cantidades/importes contra Farmatic, la comprobación de cambios históricos,
-los permisos y conexiones de todas las farmacias y el despliegue Windows + VPS.
+El conector dispone de SELECT de tickets y recepciones con las tablas
+identificadas en SQL Server, publicación JOIN, idempotencia, rechazo de claves
+duplicadas y preservación de cabeceras sin líneas. Falta aún ejecutar esos
+SELECT contra el ERP conectado y conciliar cantidades/importes reales, comprobar
+cambios históricos, confirmar permisos de cada farmacia, aplicar migración 016
+si falta en PostgreSQL e instalar el nuevo ZIP Windows.
 
-La PR permite revisar los cambios, pero no instala ni valida producción.
-No fusionar a ciegas: el código se ha trasladado desde un repositorio
-privado a otro de visibilidad pública.
+El repositorio FM es público: jamás almacenar en él contraseñas, conexiones
+reales, historiales nominativos ni extractos de ventas reales.

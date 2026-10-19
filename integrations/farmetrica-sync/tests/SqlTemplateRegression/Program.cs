@@ -145,10 +145,48 @@ foreach (var (source, alias) in new[] {
 if (SqlTemplates.IsLegacyOptional("articulos", "stock_actual") ||
     SqlTemplates.IsLegacyOptional("articulos", "stock_minimo"))
     throw new Exception("Las cantidades de existencias son obligatorias en los SELECT de artículos, no se deben importar como NULL por omisión.");
-if (SqlTemplates.All.Count != 5 || entities.Count != 7 ||
-    !entities.ContainsKey("ventas_completas") || !entities.ContainsKey("recepciones_completas") ||
-    SqlTemplates.All.Any(t => t.Entity is "ventas_completas" or "recepciones_completas"))
-    throw new Exception("Cinco plantillas Farmatic existentes y dos flujos JOIN sin SELECT inventado.");
+if (SqlTemplates.All.Count != 7 || entities.Count != 7 ||
+    !entities.ContainsKey("ventas_completas") || !entities.ContainsKey("recepciones_completas"))
+    throw new Exception("Siete plantillas Farmatic: cinco legadas y dos JOIN documentales.");
+
+var tickets = SqlTemplates.All.Single(t => t.Entity == "ventas_completas");
+var receipts = SqlTemplates.All.Single(t => t.Entity == "recepciones_completas");
+foreach (var (source, tables, requiredParts) in new[] {
+    (tickets, new[] {"dbo.Venta", "dbo.LineaVenta"}, new[] {
+        "l.IdVenta = v.IdVenta", "v.Empresa", "l.IdNLinea", "v.TotalVenta",
+        "v.DescuentoOpera", "v.TotalCuota", "l.Codigo", "l.Cantidad",
+        "l.PVP", "l.ImporteNeto", "l.DescuentoLinea"}),
+    (receipts, new[] {"dbo.Recep", "dbo.LINEARECEP"}, new[] {
+        "l.IdRecepcion = r.IdRecepcion", "l.IdNLinea", "l.XArt_IdArticu",
+        "l.Recibidas", "l.UBonificar", "l.ImportePuc", "l.Importe", "l.Baja"})
+}) {
+    foreach (var table in tables)
+        if (!source.FullSql.Contains("{{TABLE:"+table+"}}", StringComparison.Ordinal))
+            throw new Exception("Flujo JOIN sin origen confirmado: "+table);
+    foreach (var part in requiredParts)
+        if (!source.FullSql.Contains(part, StringComparison.Ordinal))
+            throw new Exception("Flujo JOIN con asignación incompleta: "+part);
+    if (source.PreferredMode != "incremental" || source.SuggestedReplayMinutes < 10080 ||
+        source.SuggestedEveryMinutes != 1440 || source.Sql == source.FullSql)
+        throw new Exception("Releer 7 días como mínimo hasta encontrar fecha técnica de modificación.");
+    if (!source.FullSql.Contains("LEFT JOIN", StringComparison.Ordinal) ||
+        source.FullSql.Contains("@desde", StringComparison.OrdinalIgnoreCase) ||
+        !source.Sql.Contains("@desde", StringComparison.Ordinal) ||
+        !source.Sql.Contains("@hasta", StringComparison.Ordinal))
+        throw new Exception("JOIN debe conservar documentos sin detalle y tener un SELECT completo aparte.");
+}
+if (!tickets.FullSql.Contains("l.ImporteNeto) AS importe_neto") ||
+    !tickets.FullSql.Contains("l.DescuentoLinea) AS descuento_linea") ||
+    !tickets.FullSql.Contains("v.DescuentoOpera) AS descuento_global"))
+    throw new Exception("El descuento de operación no puede aplicarse dos veces.");
+if (!receipts.FullSql.Contains("CAST(NULL AS decimal(20,6)) AS descuento_linea") ||
+    !receipts.FullSql.Contains("CAST(NULL AS decimal(20,6)) AS total_documento") ||
+    !receipts.FullSql.Contains("CAST(NULL AS varchar(100)) AS numero_pedido") ||
+    !receipts.FullSql.Contains("l.UBonificar) AS bonificacion_unidades"))
+    throw new Exception("No inventar descuentos y totales ausentes en Recep; preservar bonificaciones.");
+if (receipts.FullSql.Contains("r.NPedido", StringComparison.OrdinalIgnoreCase) ||
+    receipts.FullSql.Contains("r.Descuento2", StringComparison.OrdinalIgnoreCase))
+    throw new Exception("Esas columnas no existen en la cabecera Recep confirmada.");
 const string classification = """
     CAST(NULL AS varchar(50)) AS segmento_comercial,
     CAST(NULL AS varchar(100)) AS subcategoria,
@@ -199,5 +237,5 @@ if (!family.FullSql.Contains("fa.IdFamilia = f.IdFamilia", StringComparison.Ordi
     throw new Exception("Relaciones Familia-FamiliaAux-SuperFamilia incorrectas.");
 if (!family.FullSql.Contains("f.XGrup_IdGrupoIva) AS grupo_iva_id", StringComparison.Ordinal))
     throw new Exception("Conservar el código de grupo de IVA en texto, por ejemplo 02.");
-Console.WriteLine("OK: 5 entidades Farmatic, familias/superfamilias completas y stock solo en artículos.");
+Console.WriteLine("OK: 7 plantillas Farmatic, 2 JOIN con orígenes reales, familias y stock en artículos.");
 

@@ -123,5 +123,24 @@ try{
   throw Error("No se combinaron B/C en la consulta: "+columnRequest.query.columnas);
  if(columnRequest.query.desde!==t.desde||columnRequest.query.hasta!==t.hasta)
   throw Error("Cambiar la columna ABCD no debe cambiar el período de ventas");
+ // La pestaña recupera el foco sin relanzar todas las consultas ni perder
+ // los filtros/estado actuales. El refresco explícito sigue funcionando.
+ await page.waitForTimeout(500);
+ const beforeFocus=requests.length, beforeTotals=totals().length;
+ await page.evaluate(()=>{
+  document.dispatchEvent(new Event("visibilitychange"));
+  window.dispatchEvent(new Event("focus"));
+ });
+ await page.waitForTimeout(550);
+ if(requests.length!==beforeFocus)
+  throw Error("Regresión: recuperar foco vuelve a consultar ventas ("+
+   beforeFocus+" -> "+requests.length+")");
+ if(totals().length!==beforeTotals)
+  throw Error("Regresión: los totales se recalculan al volver a la pestaña");
+ const refresh=page.getByRole("button",{name:"Actualizar",exact:true});
+ await refresh.click();
+ await page.waitForTimeout(600);
+ if(totals().length<=beforeTotals)
+  throw Error("El botón Actualizar debe solicitar datos nuevos");
  console.log("OK: SUM visible antes que ABCD, doble carga independiente y períodos reales");
 }finally{await browser.close()}

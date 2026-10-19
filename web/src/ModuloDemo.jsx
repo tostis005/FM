@@ -227,15 +227,15 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [lastUpdated,setLastUpdated]=useState(null);
  const [asOf,setAsOf]=useState(()=>new Date());
  useEffect(()=>{
-  const onVisible=()=>{if(document.visibilityState==="visible"){
-    setAsOf(new Date());setReloadKey(n=>n+1);
-  }};
-  // Los informes se consultan a PostgreSQL: refresco automático sin botón de cálculo.
-  const timer=setInterval(()=>{if(document.visibilityState==="visible"){
-    setAsOf(new Date());setReloadKey(n=>n+1);
-  }},5*60*1000);
-  document.addEventListener("visibilitychange",onVisible);
-  return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",onVisible)};
+  // Recuperar el foco NO debe relanzar todas las consultas (y mostrar skeletons).
+  // El refresco periódico se limita a la pestaña que ya está visible;
+  // el botón «Actualizar» sigue permitiendo consultar nuevos datos al instante.
+  const timer=setInterval(()=>{
+    if(document.visibilityState==="visible"){
+      setAsOf(new Date());setReloadKey(n=>n+1);
+    }
+  },5*60*1000);
+  return()=>clearInterval(timer);
  },[]);
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name+":"+(p.databaseCode||p.sourceCode||"")).join(",");
  // Una sesión antigua puede haber guardado POL/VAL o códigos que ya no pertenecen

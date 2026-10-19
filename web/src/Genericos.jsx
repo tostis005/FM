@@ -141,10 +141,12 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  },[query,clientSlug,reload,useReal]);
  useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
  useEffect(()=>{
-  const refresh=()=>{if(document.visibilityState==="visible")setReload(n=>n+1)};
-  const timer=setInterval(refresh,5*60*1000);
-  document.addEventListener("visibilitychange",refresh);
-  return()=>{clearInterval(timer);document.removeEventListener("visibilitychange",refresh)};
+  // Cambiar de pestaña o recuperar foco conserva filtros, resultados y scroll.
+  // Solo actualizar cada cinco minutos mientras la pestaña está visible.
+  const timer=setInterval(()=>{
+    if(document.visibilityState==="visible")setReload(n=>n+1);
+  },5*60*1000);
+  return()=>clearInterval(timer);
  },[]);
  const groups=data?.groups||[];
  const salesEnabled=data?.sales?.available===true;

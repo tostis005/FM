@@ -168,6 +168,16 @@ jobs:
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           test "$(psql_test -At -c "SELECT cooperativa=false AND ignorar_informes=true FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND codigo_origen='COOP01'")" = t
           psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
+          # CONCURRENTLY debe ejecutarse fuera de transacción; probar dos veces
+          # para detectar índices duplicados, inválidos o migraciones no idempotentes.
+          psql_test < ops/indices-documentales-concurrentes.sql
+          psql_test < ops/indices-documentales-concurrentes.sql
+          test "$(psql_test -At -c "SELECT count(*) FROM pg_class idx
+            JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+            JOIN pg_index ix ON ix.indexrelid=idx.oid
+            WHERE ns.nspname='ampedia'
+              AND idx.relname IN ('fm_doc_ventas_codigo_fecha_idx','fm_doc_recepciones_codigo_fecha_idx')
+              AND ix.indisvalid AND ix.indisready;")" = 2
           psql_test < ops/indices-consultas-operativas.sql
           psql_test < ops/indices-consultas-operativas.sql
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace JOIN pg_index x ON x.indexrelid=i.oid WHERE n.nspname='ampedia' AND i.relname=ANY(ARRAY['fm_ventas_codigo_fecha_idx','fm_articulos_codigo_id_sync_idx','fm_compras_codigo_fecha_idx','fm_proveedores_codigo_id_sync_idx','fm_ventas_codigo_articulo_fecha_idx','fm_compras_codigo_articulo_fecha_idx']) AND x.indisvalid;")" = 6

@@ -356,6 +356,30 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
       'EXTRA-'||i,'Prueba',1,3,1 FROM generate_series(1,3005) i`);
   const completeCount=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
   assert.equal(completeCount.stockRows.length,3000);
+  // La referencia EXTRA-999 queda fuera de los primeros 3.000 al ordenar
+  // por unidades y CN. Filtrarla debe buscar en todo el inventario ERP.
+  const outside=await request("/api/analytics/reportes",{
+   modulo:"stock",farmacias:"1,2",columnas:JSON.stringify({cn:"EXTRA-999"})});
+  assert.deepEqual(outside.stockRows.map(r=>r.cn),["EXTRA-999"]);
+  assert.equal(outside.stockRows[0].units,1);
+  const byPharmacy=await request("/api/analytics/reportes",{
+   modulo:"stock",farmacias:"1,2",
+   columnas:JSON.stringify({pharmacy:["Farmacia 2"]})});
+  assert.ok(byPharmacy.stockRows.every(r=>r.pharmacyId==="2"));
+  const fullOptions=await request("/api/analytics/reportes/opciones",{
+   modulo:"stock",farmacias:"1,2"});
+  assert.ok(fullOptions.family.includes("Prueba"),
+   "Familia de un artículo fuera de la primera página disponible para filtrar");
+  const filteredPurchase=await request("/api/analytics/reportes",{
+   modulo:"compras",columnas:JSON.stringify({supplier:"Mayorista 2"})});
+  assert.ok(filteredPurchase.buyRows.length>0);
+  assert.ok(filteredPurchase.buyRows.every(r=>r.supplier.includes("Mayorista 2")));
+  const filteredProviders=await request("/api/analytics/reportes",{
+   modulo:"proveedores",farmacias:"1,2",
+   columnas:JSON.stringify({name:"Europa"})});
+  assert.ok(filteredProviders.supplierRows.length>0);
+  assert.ok(filteredProviders.supplierRows.every(r=>r.name.includes("Europa")));
+
   assert.equal(completeCount.kpis.stockArticulos,3008);
   assert.equal(completeCount.kpis.stockUnidades,3025);
   assert.equal(completeCount.kpis.stock,3053.5);

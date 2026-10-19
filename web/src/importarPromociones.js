@@ -212,6 +212,27 @@ export async function readPromotionExcel(file){
   if(!promos.length)throw Error("No se encontraron promociones importables");
   return promos;
 }
+// Las fechas del Excel son días civiles del cliente, no UTC del navegador.
+export function importedPromotionStatus(p,now=new Date(),timeZone="Europe/Madrid"){
+  const targets=Object.values(p.targets||{});
+  const completeObjectives=targets.length>0&&targets.every(value=>
+    value!==""&&value!==null&&value!==undefined&&
+    Number.isSafeInteger(Number(value))&&Number(value)>0);
+  if(!completeObjectives)return "Borrador";
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(p.start||"")||
+     !/^\d{4}-\d{2}-\d{2}$/.test(p.end||"")||p.start>p.end)return "Borrador";
+  const dayParts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{
+    timeZone,year:"numeric",month:"2-digit",day:"2-digit"
+  }).formatToParts(now).filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
+  const today=[dayParts.year,dayParts.month,dayParts.day].join("-");
+  // El nombre almacenado sigue siendo Finalizada para compatibilidad histórica.
+  // En la interfaz se presenta como Archivada.
+  if(p.end<today)return "Finalizada";
+  if(p.start>today)return "Borrador";
+  // Una campaña vigente sin productos válidos no debe activarse por accidente.
+  if(!Array.isArray(p.cns)||!p.cns.length||p.cns.some(cn=>!isValidCN(cn)))return "Borrador";
+  return "Activa";
+}
 export function mergeImportedPromos(existing,incoming){
   const normalize=p=>p.fingerprint||makeFingerprint({
     laboratory:p.laboratory||p.subtitle,range:p.range||p.name,

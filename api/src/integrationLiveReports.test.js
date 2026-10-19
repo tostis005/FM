@@ -418,6 +418,38 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(headers.hasArticleLines,false);
   assert.equal(headers.hasAmounts,false);
   assert.equal(headers.sourceRows,1);
+  assert.equal(headers.kpis.recepciones,1);
+  // Aunque solo existan cabeceras sin detalles, deben poderse consultar
+  // individualmente, paginar en SQL y buscar fuera de las 50 primeras.
+  await pool.query(`INSERT INTO ampedia.compras
+   (farmacia_codigo,origen_id,fecha,articulo_id,proveedor_id,unidades,importe,
+    proveedor_nombre,numero_pedido,albaran_id)
+   SELECT 'VAL','RECEIPT-'||i,'2026-10-17',NULL,'PV1',NULL,NULL,
+    'Proveedor de pruebas', 'PED-'||i,'ALB-'||i
+   FROM generate_series(1,80) i`);
+  const pageOne=await request("/api/analytics/compras/recepciones",{
+   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"1",tamano:"50"});
+  assert.equal(pageOne.available,true);
+  assert.equal(pageOne.rows.length,50);
+  assert.equal(pageOne.total,81);
+  const pageTwo=await request("/api/analytics/compras/recepciones",{
+   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"2",tamano:"50"});
+  assert.equal(pageTwo.rows.length,31);
+  assert.equal(pageTwo.total,81);
+  assert.equal(new Set([...pageOne.rows,...pageTwo.rows].map(r=>r.sourceId)).size,81);
+  const searchedReception=await request("/api/analytics/compras/recepciones",{
+   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",buscar:"ALB-79"});
+  assert.equal(searchedReception.total,1,"Busca en TODAS las recepciones, no solo en primera página");
+  assert.equal(searchedReception.rows[0].reference,"ALB-79");
+  const bySupplier=await request("/api/analytics/compras/recepciones",{
+   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",
+   columnas:JSON.stringify({supplier:"Proveedor de pruebas"})});
+  assert.equal(bySupplier.total,80);
+  const onlyVal=await request("/api/analytics/compras/recepciones",{
+   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",
+   columnas:JSON.stringify({pharmacy:["Valdemarías"]})});
+  assert.ok(onlyVal.rows.every(r=>r.pharmacyId==="5"));
+
   assert.equal(headers.kpis.compras,null,"Importe ausente NO debe mostrarse como 0 €");
   assert.equal(headers.kpis.unidadesCompradas,null);
   assert.equal(headers.kpis.lineasCompra,null);

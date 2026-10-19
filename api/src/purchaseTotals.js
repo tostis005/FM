@@ -103,8 +103,10 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
      orderNumber:r.orderNumber||null,receiptNumber:r.receiptNumber||null}))});
   }catch(e){next(e)}
  });
- app.get("/api/analytics/compras/resumen",...requireTenant(),async(req,res,next)=>{
-  const request={...req,query:{...req.query,modulo:"compras"}};
+ const purchaseSummaryHandler=async(req,res,next)=>{
+  // Resumen de compras reales para Inicio sin exigir acceso al listado de compras.
+  const module=req.path==="/api/analytics/dashboard/compras"?"dashboard":"compras";
+  const request={...req,query:{...req.query,modulo:module}};
   const f=getFilters(request,res);
   if(!f)return;
   if(f.search||f.families.length)
@@ -175,5 +177,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     unidades:m.unidades,margen:m.margen
    }))});
   }catch(e){next(e)}
- });
+ };
+ app.get("/api/analytics/compras/resumen",...requireTenant(),purchaseSummaryHandler);
+ app.get("/api/analytics/dashboard/compras",...requireTenant(),purchaseSummaryHandler);
 }

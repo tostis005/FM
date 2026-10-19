@@ -24,14 +24,14 @@ import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
 import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
-import { readPromotionExcel, mergeImportedPromos, importedPromotionStatus } from "./importarPromociones.js";
+import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
 import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, replaceStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -603,30 +603,32 @@ function App(){
     const file=event.target.files?.[0];if(!file)return;
     setImportBusy(true);
     try{
+      if(!["administrador","superadministrador"].includes(tenantContext?.role))
+        throw Error("Solo un administrador puede sustituir las promociones del cliente");
       const campaigns=await readPromotionExcel(file);
-      const {additions,updates,duplicates,expanded,warnings}=mergeImportedPromos(data.promos,campaigns);
       const timeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
         Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const newPromos=additions.map(p=>({...p,
-        status:importedPromotionStatus(p,new Date(),timeZone)}));
-      // Al completar objetivos pendientes se actualiza también un borrador
-      // existente; nunca sobrescribir estados editados manualmente.
-      const revised=updates.map(p=>({...p,status:p.status==="Borrador"?
-        importedPromotionStatus(p,new Date(),timeZone):p.status}));
-      if(newPromos.length||revised.length)setData(prev=>({...prev,promos:[
-        ...newPromos,...prev.promos.map(old=>revised.find(u=>u.id===old.id)||old)
-      ]}));
+      const now=new Date();
+      const newPromos=campaigns.map(p=>({...p,
+        status:importedPromotionStatus(p,now,timeZone)}));
+      const names=tenantContext?.client?.name||"este cliente";
+      if(!window.confirm("¿Sustituir TODAS las promociones existentes de "+
+        names+" por las "+newPromos.length+" promociones de la primera pestaña del Excel?\n\n"+
+        "Las promociones anteriores quedarán guardadas en el historial de auditoría. "+
+        "Esta operación reemplaza el catálogo completo, no añade filas a lo existente."))return;
+      // Atomicidad: si la importación al servidor falla, las promociones
+      // anteriores permanecen intactas tanto en BD como en la vista.
+      const result=await replaceStoredPromotions(newPromos);
+      setData(prev=>({...prev,promos:newPromos}));
       setStatusFilter("Todos");
-      const message=newPromos.length+" nuevas, "+updates.length+" actualizadas; "+duplicates+" sin cambios. ";
-      if(["administrador","superadministrador"].includes(tenantContext?.role)){
-        const changed=[...newPromos,...revised];let errors=0;
-        for(let i=0;i<changed.length;i+=5){
-          const responses=await Promise.allSettled(changed.slice(i,i+5).map(p=>saveStoredPromotion(p)));
-          errors+=responses.filter(r=>r.status==="rejected").length;
-        }
-        setToast(message+(errors?errors+" promociones solo en el navegador; revisa la conexión.":"Importación guardada en PostgreSQL.")+
-          (warnings?" "+warnings+" requieren revisión.":""));
-      }else setToast(message+"Guardado solo en este navegador.");
+      setEditingPromo(null);
+      setReportSelectedIds(newPromos.map(p=>p.id));
+      setExpandedCampaignIds(newPromos.filter(p=>p.status==="Activa").slice(0,2).map(p=>p.id));
+      const countStatus=status=>newPromos.filter(p=>p.status===status).length;
+      setToast(result.imported+" promociones importadas; "+result.removed+
+        " anteriores sustituidas. "+countStatus("Activa")+" activas, "+
+        countStatus("Finalizada")+" archivadas y "+
+        countStatus("Borrador")+" borradores.");
     }catch(error){setToast(error.message||"No se pudo importar el Excel");}
     finally{setImportBusy(false);event.target.value="";}
   }

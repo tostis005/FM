@@ -2,6 +2,7 @@
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {classifyAbcd} from "./abcd.js";
+import {parseReportColumnFilters,wrapReportTableSQL} from "./reportTableFilters.js";
 // Solo expresiones SQL conocidas; los nombres de columnas del navegador nunca se interpolan.
 const REPORT_ORDER_KEYS={
  compras:["name","cn","pharmacy","family","pvp","supplier","units","puc","value","lines"],
@@ -51,6 +52,35 @@ export function getFilters(req,res){
  return {from,to,ids:[...new Set(ids)],search,families,module,sortKey,sortDir};
 }
 export function setupRealReports(app,pool,{requireTenant}){
+ // Opciones de filtros derivadas del catálogo COMPLETO de las farmacias
+ // autorizadas, no de las primeras 3.000 referencias enviadas al navegador.
+ app.get("/api/analytics/reportes/opciones",...requireTenant(),async(req,res,next)=>{
+  const f=getFilters(req,res);if(!f)return;
+  try{
+   const schema=req.context.client.schema;
+   if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))
+    return res.status(400).json({error:"Esquema inválido"});
+   const chosen=(req.context.pharmacies||[]).filter(p=>f.ids.includes(Number(p.id)));
+   const codes=chosen.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()).filter(Boolean);
+   if(!codes.length)return res.json({family:[]});
+   const fields=await tableColumns(pool,schema,"articulos");
+   if(has(fields,"familia","farmacia_codigo")){
+    const {rows}=await pool.query(`SELECT DISTINCT btrim(familia) AS code
+       FROM "${schema}".articulos
+       WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
+         AND nullif(btrim(familia),'') IS NOT NULL ORDER BY 1`,[codes]);
+    return res.json({family:rows.map(x=>x.code)});
+   }
+   const legacy=await tableColumns(pool,schema,"productos");
+   if(legacy.has("familia")){
+    const {rows}=await pool.query(`SELECT DISTINCT btrim(familia) AS code
+       FROM "${schema}".productos
+       WHERE nullif(btrim(familia),'') IS NOT NULL ORDER BY 1`);
+    return res.json({family:rows.map(x=>x.code)});
+   }
+   return res.json({family:[]});
+  }catch(e){next(e)}
+ });
  // Diagnóstico read-only rápido, separado de los informes agregados.
  // Se consulta por farmacia y periodo con EXISTS/índice, no COUNT(*) de
  // millones de líneas. Permite diferenciar falta de datos de cálculo lento.
@@ -104,6 +134,9 @@ export function setupRealReports(app,pool,{requireTenant}){
 
  app.get("/api/analytics/reportes",...requireTenant(),async(req,res,next)=>{
   const f=getFilters(req,res);if(!f)return;
+  let columnFilters;
+  try{columnFilters=parseReportColumnFilters(req.query.columnas,f.module)}
+  catch(e){return res.status(400).json({error:e.message})}
   try{
    const schema=req.context.client.schema,quoted='"'+schema+'"',
      pharmacyIds=f.ids,
@@ -162,6 +195,14 @@ export function setupRealReports(app,pool,{requireTenant}){
    const cn="coalesce(nullif(btrim(art.codigo_nacional),''),btrim(t.articulo_id))";
    const args=[f.from,f.to,pharmacyIds,f.search,f.families];
    const pars=[...args,req.context.client.slug];
+   const hasColumnFilters=Boolean(Object.keys(columnFilters).length);
+   const queryTable=(sql,params,enabled=false,source="")=>{
+    if(!enabled||!hasColumnFilters)return pool.query(sql,params);
+    const filtered=wrapReportTableSQL(sql,columnFilters,{
+      module:f.module,source,argPosition:params.length+1,
+      sortKey:f.sortKey,sortDir:f.sortDir});
+    return pool.query(filtered,[...params,JSON.stringify(columnFilters)]);
+   };
    const columns=`${cn} AS cn,max(coalesce(art.nombre,t.articulo_id)) AS name,
      max(coalesce(art.familia,'')) AS family,max(art.pvp)::float8 AS pvp,
      max(art.pmc)::float8 AS pmc, max(art.laboratorio) AS laboratory`;
@@ -331,11 +372,14 @@ export function setupRealReports(app,pool,{requireTenant}){
    const readSupplierRows=f.module==="proveedores";
    const needFamilies=f.module==="ventas"&&articles&&articleCols.has("familia");
    const queries=[
-    sales&&pharmacyIds.length&&readSalesRows?pool.query(sqlSales,pars):{rows:[]},
-    buyers&&pharmacyIds.length&&readBuyRows?pool.query(sqlBuy,pars):{rows:[]},
+    sales&&pharmacyIds.length&&readSalesRows?
+     queryTable(sqlSales,pars,["dashboard","rentabilidad","informes","asistente"].includes(f.module)): {rows:[]},
+    buyers&&pharmacyIds.length&&readBuyRows?
+     queryTable(sqlBuy,pars,f.module==="compras"): {rows:[]},
     sales&&pharmacyIds.length&&readSalesPeriod?pool.query(sqlPeriod("ventas"),periodParams):{rows:[]},
     buyers&&pharmacyIds.length&&readBuyPeriod?pool.query(sqlPeriod("compras"),periodParams):{rows:[]},
-    buyers&&pharmacyIds.length&&readSupplierRows?pool.query(sqlProv,pars):{rows:[]},
+    buyers&&pharmacyIds.length&&readSupplierRows?
+     queryTable(sqlProv,pars,f.module==="proveedores"): {rows:[]},
     needFamilies?pool.query(`SELECT DISTINCT familia FROM ${quoted}.articulos
       WHERE familia IS NOT NULL AND familia<>'' AND
        upper(btrim(farmacia_codigo))=ANY($1::text[]) ORDER BY familia LIMIT 250`,
@@ -430,7 +474,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       });
     stockAsOf=times.every(Number.isFinite)?new Date(Math.min(...times)).toISOString():null;
     if(snapshotAvailable){
-     const {rows:current}=await pool.query(`
+     const {rows:current}=await queryTable(`
        WITH latest AS MATERIALIZED (
         SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id)
           a.farmacia_codigo,a.origen_id,a.codigo_nacional,a.nombre,a.familia,
@@ -459,7 +503,8 @@ export function setupRealReports(app,pool,{requireTenant}){
          AND (cardinality($5::text[])=0 OR coalesce(a.familia,'')=ANY($5::text[]))
        GROUP BY f.id,coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))
        ${stockOrder(stockSortExpressions,"coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))")} LIMIT ${rowLimit}`,
-       [codes,pharmacyIds,f.search,req.context.client.slug,f.families]);
+       [codes,pharmacyIds,f.search,req.context.client.slug,f.families],
+       ["stock","reposicion"].includes(f.module),"articulos");
      stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,
        need:null,needValue:null}));
@@ -538,7 +583,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          coalesce(art.nombre,'') ILIKE '%'||$2||'%')
          AND (cardinality($3::text[])=0 OR coalesce(art.familia,'')=ANY($3::text[]))`;
        const params=[pharmacyIds,f.search,f.families,req.context.client.slug];
-       const {rows:current}=await pool.query(`
+       const {rows:current}=await queryTable(`
          SELECT f.id::text AS "pharmacyId",${cn} AS cn,
            max(coalesce(art.nombre,t.articulo_id)) AS name,
            max(coalesce(art.familia,'')) AS family,
@@ -555,7 +600,8 @@ export function setupRealReports(app,pool,{requireTenant}){
            name:"max(coalesce(art.nombre,t.articulo_id))",cn,
            pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
            units:"sum(t.unidades)"
-         },cn)} LIMIT ${rowLimit}`,params);
+         },cn)} LIMIT ${rowLimit}`,params,
+         ["stock","reposicion"].includes(f.module),"stock");
        stockRows=current.map(r=>({...r,id:key(r.pharmacyId,r.cn),
          units:Number(r.units),value:null,coverage:null,excessValue:null,
          sold:0,need:null,needValue:null}));
@@ -602,7 +648,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       // nacional. Convertir mediante la ficha de artículo de la misma farmacia
       // antes de cruzar demanda, PMC y coste de compras.
       const stockCn="coalesce(nullif(btrim(art.codigo_nacional),''),btrim(s.id_articu))";
-      const {rows:sr}=await pool.query(`
+      const {rows:sr}=await queryTable(`
        SELECT s.id_farmacia::text AS "pharmacyId",${stockCn} AS cn,
         max(coalesce(art.nombre,s.descripcion)) AS name,
         max(coalesce(art.familia,'')) AS family,
@@ -632,7 +678,8 @@ export function setupRealReports(app,pool,{requireTenant}){
          pharmacy:"max(f.nombre)",family:"max(coalesce(art.familia,''))",
          units:"sum(s.stock_actual)"
        },stockCn,"units","s.id_farmacia")} LIMIT ${rowLimit}`,
-       [pharmacyIds,f.search,f.families,req.context.client.slug]);
+       [pharmacyIds,f.search,f.families,req.context.client.slug],
+       ["stock","reposicion"].includes(f.module),"instantanea");
       stockRows=sr.map(r=>({...r,id:key(r.pharmacyId,r.cn),
        units:Number(r.units),value:null,coverage:null,excessValue:null,sold:0,need:null,needValue:null}));
       stockSource="instantanea";
@@ -752,7 +799,13 @@ export function setupRealReports(app,pool,{requireTenant}){
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
     acciones:completeSales&&(!needsStock||completeStock)&&sales?actions.length:null
    };
-   res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
+   const activeTableRows=f.module==="compras"?buys.rows:
+     f.module==="proveedores"?providers.rows:
+     ["stock","reposicion"].includes(f.module)?stockRows:
+     sale.rows;
+   const tableTotalFiltered=hasColumnFilters?
+     Number(activeTableRows[0]?.__totalFiltered||0):null;
+   res.json({available:true,from:f.from,to:f.to,monthly,kpis,tableTotalFiltered,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows,
     actions,families:families.rows.map(r=>r.familia),
     availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockRowsTruncated,

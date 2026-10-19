@@ -14,6 +14,7 @@ import Genericos from "./Genericos.jsx";
 import ConfiguracionPrecios from "./ConfiguracionPrecios.jsx";
 import ConfiguracionAnalisisVentas from "./ConfiguracionAnalisisVentas.jsx";
 import {promotionMetrics} from "./promotionMetrics.js";
+import {dateES,quantity,integer,percentage} from "./localeES.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
@@ -60,10 +61,9 @@ const tenantStorageKey = (slug,email="") => {
  return STORE_KEY+":"+slug+":"+(id||"anonymous");
 };
 const ROLES = {superadmin:"Superadministrador",gestor:"Gestor de farmacias",farmacia:"Personal de farmacia"};
-const EUR = new Intl.NumberFormat("es-ES");
+const EUR = new Intl.NumberFormat("es-ES",{useGrouping:true,maximumFractionDigits:0});
 function percent(s,t) {return t ? Math.round(s/t*100):0;}
 function sum(values){return Object.values(values||{}).reduce((a,b)=>a+(Number(b)||0),0);}
-function dateES(value){if(!value)return "—";const [y,m,d]=value.split("-");return d+"/"+m+"/"+y;}
 function migratePharmacyId(value){
   const key=String(value);
   return /^F00[1-5]$/.test(key)?String(Number(key.slice(1))):key;
@@ -107,16 +107,16 @@ function Progress({value,wide=false}) {return <div className={"progress "+(wide?
 function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div></div></div>}
 function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=false}){
  const m=promotionMetrics(campaigns,salesAvailable);
- const show=value=>value==null?"—":EUR.format(value);
+ const show=value=>value==null?"—":integer(value);
  return <section className="card campaign-metrics">
   <div className="campaign-metrics-header"><h2>{heading}</h2></div>
   <div className="campaign-metrics-grid">
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
-   <div className="campaign-metric"><span>Objetivo</span><strong>{show(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Vendidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:show(m.units)}</strong></div>
+   <div className="campaign-metric"><span>Objetivo</span><strong>{quantity(m.target)}</strong></div>
+   <div className="campaign-metric"><span>Vendidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:quantity(m.units)}</strong></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
-    <strong>{salesLoading?<SkeletonLine width="64%" height="24px"/>:m.completion==null?"—":m.completion+"%"}</strong>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
+    <strong>{salesLoading?<SkeletonLine width="64%" height="24px"/>:m.completion==null?"—":percentage(m.completion)}</strong>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
   </div>
  </section>;
@@ -764,8 +764,8 @@ function App(){
   options:items=>pharmacies.filter(f=>items.some(p=>Object.hasOwn(p.targets||{},f.id)))
     .map(f=>({value:f.id,label:f.name})),
   value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
-      {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{EUR.format(sum(p.targets))}</span>},
-      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?EUR.format(sum(p.sales)):"—"}</span>},
+      {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
+      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
       {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(p)}}><Pencil size={16}/></button></div>}
     ]}/>
@@ -806,7 +806,7 @@ function App(){
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{EUR.format(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?EUR.format(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
    <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
   <section className="card report-goals-panel">
@@ -939,22 +939,22 @@ function App(){
  </div>
 }
 function GoalProgressBar({goal,sold,loading=false,available=true}){
- if(!loading&&!available)return <div className="goal-progress"><span className="fm-inline-status">Sin datos de ventas disponibles</span><small>Objetivo: {EUR.format(goal)} uds.</small></div>;
+ if(!loading&&!available)return <div className="goal-progress"><span className="fm-inline-status">Sin datos de ventas disponibles</span><small>Objetivo: {quantity(goal)} uds.</small></div>;
  if(loading)return <div className="goal-progress" role="status" aria-label="Cargando avance de ventas"><SkeletonLine width="100%" height="14px"/><SkeletonLine width="65%" height="13px"/></div>;
  const pct=goal>0?Math.round(sold/goal*100):null;
  const width=pct===null?0:Math.max(0,Math.min(100,pct));
  const remaining=goal>0?Math.max(0,goal-sold):null;
  const tone=pct===null?"empty":pct>=100?"done":pct>=80?"near":pct>=50?"mid":"low";
- const detail=pct===null?"Sin objetivo":remaining>0?"Faltan "+EUR.format(remaining)+" uds.":pct>100?"Superado en "+EUR.format(sold-goal)+" uds.":"Objetivo cumplido";
+ const detail=pct===null?"Sin objetivo":remaining>0?"Faltan "+quantity(remaining)+" uds.":pct>100?"Superado en "+quantity(sold-goal)+" uds.":"Objetivo cumplido";
  return <div className={"goal-progress goal-"+tone}>
   <div className="goal-track-wrap">
-   <div className="goal-track" role="progressbar" aria-label={pct===null?"Sin objetivo":"Cumplimiento del objetivo"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={width} aria-valuetext={pct===null?"Sin objetivo":pct+" por ciento, "+EUR.format(sold)+" de "+EUR.format(goal)+" unidades"}>
+   <div className="goal-track" role="progressbar" aria-label={pct===null?"Sin objetivo":"Cumplimiento del objetivo"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={width} aria-valuetext={pct===null?"Sin objetivo":pct+" por ciento, "+quantity(sold)+" de "+quantity(goal)+" unidades"}>
     <div className="goal-track-fill" style={{width:width+"%"}}/>
     <span className="goal-target-line"/>
    </div>
    <span className={"goal-pct "+(pct!==null&&pct>=100?"is-done":"")}>{pct===null?"—":pct+"%"}</span>
   </div>
-  <div className="goal-progress-meta"><span>{EUR.format(sold)} / {EUR.format(goal)} uds.</span><span>{detail}</span></div>
+  <div className="goal-progress-meta"><span>{quantity(sold)} / {quantity(goal)} uds.</span><span>{detail}</span></div>
  </div>;
 }
 function CampaignGoalCard({promo,pharmaName,expanded,onToggle,singlePharmacy=false,salesLoading=false,salesAvailable=true}){

@@ -289,11 +289,15 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
       v.fecha AS "at",v.unidades::float8 AS units,
       v.precio_unitario::float8 AS "unitPrice",
       v.descuento_linea::float8 AS discount,
+      l.descuento_linea_tipo AS "discountType",
       v.importe::float8 AS amount,
       v.coste_historico::float8 AS "historicalCost"
      FROM ${q}.fm_ventas_analitica v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$4
        AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     LEFT JOIN ${q}.fm_ventas_lineas l ON l.farmacia_codigo=v.farmacia_codigo
+       AND l.sistema_origen=v.sistema_origen AND l.documento_id=v.documento_id
+       AND l.linea_id=v.linea_id
      WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day'
        AND f.id=$3 AND v.sistema_origen=$5 AND v.documento_id=$6
      ORDER BY v.linea_id LIMIT 500`,

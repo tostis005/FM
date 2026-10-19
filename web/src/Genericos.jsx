@@ -51,7 +51,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
   const list=purchaseMap.get(r.cn)||[];list.push(r);purchaseMap.set(r.cn,list);
  }
  return <div className="fm-generic-detail">
-  <p>Presentaciones agrupadas por <strong>DCPF {group.dcpf}</strong>. El precio de compra procede exclusivamente de movimientos reales sincronizados.</p>
+  <p>Presentaciones agrupadas por <strong>DCPF {group.dcpf}</strong>. El precio de compra procede de las recepciones sincronizadas.</p>
   <SortableDataTable label="presentaciones de genéricos"
    headers={["CN","Presentación","Laboratorio","Tipo","Vendidas","Ventas","Compradas","PUC observado"]}
    rows={data.products.map(product=>{
@@ -71,7 +71,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
   {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
    <SortableDataTable label="compras por genérico"
-    headers={["CN","Proveedor de compra","Unidades","PUC real ponderado","Referencia histórica","Objetivo equivalente","Proveedor objetivo","Ahorro estimado","Importe"]}
+    headers={["CN","Proveedor de compra","Unidades","PUC ponderado","Referencia histórica","Objetivo equivalente","Proveedor objetivo","Ahorro estimado","Importe"]}
     rows={data.purchases.map(r=>[
      <strong className="fm-generic-code" key={r.cn}>{r.cn}</strong>,
      r.supplier||r.supplierCode||"Sin proveedor",quantity(r.units),

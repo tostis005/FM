@@ -413,7 +413,7 @@ function App(){
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]
     : storedUsers;
-  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas reales sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const filterText=search.toLocaleLowerCase("es");
@@ -610,7 +610,7 @@ function App(){
   if(labExportBusy)return;
   if(!campaigns.length){setToast("Selecciona alguna campaña para exportar");return;}
   if(salesStatus!=="real"){
-    setToast("Para exportar al laboratorio es necesaria la conexión a ventas reales de PostgreSQL.");
+    setToast("Para exportar al laboratorio es necesaria la conexión con las ventas sincronizadas.");
     return;
   }
   try{
@@ -854,7 +854,7 @@ function App(){
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/> Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
    <button className="btn btn-primary" type="button" disabled={!reportSelected.length||labExportBusy}
      onClick={()=>void exportLabCampaigns(reportSelected)}
-     title="Exportar tickets reales de cada promoción con el formato del laboratorio">
+     title="Exportar tickets de cada promoción con el formato del laboratorio">
     {labExportBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<ArrowDownToLine size={17}/>} {labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
    </button>
   </div>

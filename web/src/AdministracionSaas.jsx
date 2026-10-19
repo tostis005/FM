@@ -88,12 +88,12 @@ export function ClientesPanel({onUpdated}){
      <select value={newClient.sourceSlug} onChange={e=>setNewClient({...newClient,sourceSlug:e.target.value})}>
       <option value="">Nuevo cliente · base de datos independiente</option>
       {clients.filter(x=>!x.demoSourceSlug&&x.active).map(x=>
-        <option key={x.slug} value={x.slug}>Demo enlazada a {x.name} · datos reales</option>)}
+        <option key={x.slug} value={x.slug}>Demo enlazada a {x.name}</option>)}
      </select>
     </label>
     {newClient.sourceSlug&&<p className="fm-manage-wide" role="note">
-     Demo privada con datos operativos reales, aunque las farmacias tengan nombres ficticios.
-     No debe publicarse sin anonimizar también los datos comerciales.
+     Demo privada enlazada al cliente seleccionado.
+     Antes de compartirla, anonimiza también la información comercial.
     </p>}
     <label>Identificador / esquema<input required pattern="[a-z][a-z0-9_]{1,62}" value={newClient.slug} onChange={e=>setNewClient({...newClient,slug:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")})} placeholder="grupo_farmacias"/></label>
     <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>

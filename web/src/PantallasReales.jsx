@@ -29,7 +29,7 @@ const META={
    ["pvp","PVP",r=>EUR(r.pvp)],["pmc","PMC",r=>EUR(r.pmc)],
    ["margin","Margen teórico/ud.",r=>r.pvp!=null&&r.pmc>0?EUR(r.pvp-r.pmc):"—"],
    ["stock","Stock (uds.)",r=>UNITS(r.stock)] ]},
- "ventas-tickets":{title:"Tickets de venta",desc:"Tickets reales obtenidos de los documentos completos.",
+ "ventas-tickets":{title:"Tickets de venta",desc:"Tickets procedentes de los documentos completos.",
   note:"El importe corresponde a las líneas netas del documento, sin sumar nuevamente los importes de cabecera.",
   cols:[
    ["ticket","Ticket",r=>TXT(r.ticket)],["at","Fecha",r=>DATE(r.at)],
@@ -38,7 +38,7 @@ const META={
    ["seller","Vendedor (código ERP)",r=>TXT(r.sellerId)] ]},
  "ventas-devoluciones":{title:"Devoluciones y anulaciones de venta",
   desc:"Movimientos negativos, documentos anulados y líneas anuladas registrados por el ERP.",
-  note:"Los documentos anulados no generan un importe de devolución ficticio; solo se contabilizan importes de líneas de devolución.",
+  note:"Los documentos anulados no generan importes de devolución; solo se contabilizan las líneas de devolución.",
   cols:[
    ["reference","Documento",r=>TXT(r.reference)],["at","Fecha",r=>DATE(r.at)],
    ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["article","Artículo ERP",r=>TXT(r.article)],
@@ -61,7 +61,7 @@ const META={
    ["units","Unidades",r=>UNITS(r.units)],["receipts","Recepciones",r=>UNITS(r.receipts)],
    ["amount","Compras netas",r=>EUR(r.amount)],["lastAt","Última recepción",r=>DATE(r.lastAt)] ]},
  "rentabilidad-segmentos":{title:"Rentabilidad por familia",
-  desc:"Ventas reales agrupadas por la familia del artículo en el ERP.",
+  desc:"Ventas agrupadas por familia del artículo.",
   note:"El margen solo se estima para referencias con PMC válido. No se extrapolan los costes desconocidos ni se confunden familias con la clasificación medicamento/parafarmacia.",
   cols:[
    ["family","Familia",r=>TXT(r.family)],["sales","Ventas netas",r=>EUR(r.sales)],
@@ -185,7 +185,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
   {error&&<div className="fm-op-message fm-op-error" role="alert">{error}
    <button type="button" onClick={()=>setReload(n=>n+1)}>Reintentar</button></div>}
   {data?.available===false&&!error&&<p className="fm-op-message" role="status">{data.message||"Datos pendientes de sincronización."}</p>}
-  {loading?<section className="card fm-preview-panel" role="status">Cargando datos reales…</section>:
+  {loading?<section className="card fm-preview-panel" role="status">Cargando resultados…</section>:
    !error&&data?.available!==false&&<>
     <Metrics section={section} data={data} pharmacies={selected}/>
     <section className="card fm-preview-panel">
@@ -195,7 +195,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
       {section==="ventas-tickets"&&ticketDetail&&<section className="fm-ticket-detail" aria-label="Desglose del ticket">
        <div className="fm-preview-panel-head"><h3>Ticket {TXT(ticketDetail.ticket.ticket)} · Líneas</h3>
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
-       {ticketDetail.loading?<p role="status">Cargando líneas reales…</p>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
+       {ticketDetail.loading?<p role="status">Cargando líneas…</p>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
          {["Línea","Código de artículo","Unidades","Precio unidad","Descuento (valor ERP)","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
         </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>

@@ -85,5 +85,13 @@ try{
  });
  await page.waitForTimeout(350);
  assert.equal(requests.length,after,"recuperar foco no debe recargar la tabla");
- console.log("OK: seis pantallas reales, sin etiquetas ficticias, orden y paginación global, foco estable");
+ // Solo las secciones pendientes muestran el distintivo Demo.
+ await page.goto(BASE+"/stock-historico",{waitUntil:"domcontentloaded"});
+ await page.locator(".fm-preview-heading .fm-preview-badge",{hasText:"Demo"}).waitFor({timeout:15000});
+ assert.equal(await page.getByText("Pantalla de demostración").count(),0);
+ assert.equal(await page.getByText("Módulo de demostración.").count(),0);
+ assert.equal(await page.locator(".fm-preview-heading .fm-preview-badge").innerText(),"Demo");
+ const messages=await page.locator(".fm-preview-heading").innerText();
+ assert.doesNotMatch(messages,/datos reales|datos de prueba/i);
+ console.log("OK: pantallas documentales y etiqueta Demo concisa, sin textos de muestra");
 }finally{await browser.close();}

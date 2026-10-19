@@ -34,7 +34,7 @@ export default function SyncVentas({client,pharmacies=[]}){
  const fresh=Number(stats?.ultimos90min||0)>0;
  return <div className="fm-sync">
   <div className="page-header">
-   <div><h1>Sincronización de ventas</h1><p>Datos reales del cliente {client}. Consulta de solo lectura en PostgreSQL.</p></div>
+   <h1>Sincronización de ventas</h1>
    <button className="btn btn-secondary" type="button" onClick={()=>void refresh()} disabled={busy}>
     <RefreshCcw size={16}/>{busy?"Comprobando…":"Comprobar ahora"}</button>
   </div>
@@ -57,18 +57,17 @@ export default function SyncVentas({client,pharmacies=[]}){
     <div><span>Última recepción</span><strong>{date(stats.ultima_recepcion)}</strong></div>
     <div><span>Última fecha de venta</span><strong>{date(stats.ultima_venta)}</strong></div>
    </div>
-   <p className="fm-sync-note">{status.note}</p>
   </div>}
   {status?.tableExists&&stats&&<>
    <section className="card">
-    <div className="section-heading"><h2>Farmacias identificadas en {status.schema}.ventas</h2><Database size={19}/></div>
+    <div className="section-heading"><h2>Farmacias sincronizadas</h2><Database size={19}/></div>
     <HorizontalTableScroll className="table-scroll" label="sincronización"><table className="data-table"><thead><tr>
      <th>Farmacia</th><th>Líneas recibidas</th><th>Última recepción</th><th>Última venta</th>
     </tr></thead><tbody>{(status.pharmacies||[]).map(p=><tr key={p.codigo}>
      <td><strong>{pharmacyName(p.codigo)}</strong></td><td>{integer(p.total)}</td>
      <td>{date(p.ultima_recepcion)}</td><td>{date(p.ultima_venta)}</td>
     </tr>)}</tbody></table>
-    {!status.pharmacies?.length&&<p className="fm-sync-note">No hay ventas correspondientes a las farmacias configuradas para este cliente.</p>}
+    {!status.pharmacies?.length&&<p className="fm-sync-note">Sin movimientos de venta para estas farmacias.</p>}
     </HorizontalTableScroll>
    </section>
    <section className="card">

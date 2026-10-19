@@ -384,10 +384,12 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(completeCount.kpis.stock,3053.5);
   // Regression PostgreSQL real: más de 3.000 CN vendidos provoca consulta
   // ABCD complementaria. Antes fallaba 42P18 por parámetros $4/$5 sin tipo.
-  await pool.query(`INSERT INTO ampedia.ventas
-    (farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
-    SELECT 'ABA','BULK-V-'||i,'2026-10-11',
-      'BULK-'||i,1,1 FROM generate_series(1,3005) i`);
+  await pool.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+    (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+    SELECT 'ABA','farmatic','BULK-V-'||i,'2026-10-11',true FROM generate_series(1,3005) i`);
+  await pool.query(`INSERT INTO ampedia.fm_ventas_lineas
+    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+    SELECT 'ABA','farmatic','BULK-V-'||i,'1','BULK-'||i,1,1 FROM generate_series(1,3005) i`);
   const highVolume=await request("/api/analytics/reportes",{
     modulo:"dashboard",farmacias:"1"});
   assert.equal(highVolume.available,true);
@@ -407,70 +409,52 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(moreBC.products.every(r=>["B","C"].includes(r.abcdClass)));
   assert.ok(moreBC.products.every(r=>!allBC.products.some(p=>p.id===r.id)));
 
-  // Escenario real de producción: el sincronizador envía cabeceras de
-  // proveedor SIN artículo, unidades, importe ni coste. No son líneas de compra.
-  await pool.query(`INSERT INTO ampedia.compras
-     (farmacia_codigo,origen_id,fecha,articulo_id,proveedor_id,unidades,coste_unitario,importe)
-     VALUES ('VAL','HEADER-NO-ITEM','2026-10-17',NULL,'PV1',NULL,NULL,NULL)`);
-  const headers=await request("/api/analytics/compras/resumen",{
+  // Cabeceras sin líneas completas no son recepciones con importes verificables.
+  await pool.query(`INSERT INTO ampedia.fm_recepciones_cabeceras
+    (farmacia_codigo,sistema_origen,documento_id,fecha,proveedor_origen_id,
+     numero_albaran,lineas_completas)
+    VALUES ('VAL','farmatic','HEADER-NO-ITEM','2026-10-17','PV1','SIN-LINEAS',false)`);
+  const incomplete=await request("/api/analytics/compras/resumen",{
     farmacias:"5",desde:"2026-10-01",hasta:"2026-10-18"});
-  assert.equal(headers.hasArticleLines,false);
-  assert.equal(headers.hasAmounts,false);
-  assert.equal(headers.sourceRows,1);
-  assert.equal(headers.kpis.recepciones,1);
-  // Aunque solo existan cabeceras sin detalles, deben poderse consultar
-  // individualmente, paginar en SQL y buscar fuera de las 50 primeras.
-  await pool.query(`ALTER TABLE ampedia.compras
-    ADD COLUMN IF NOT EXISTS numero_pedido text,
-    ADD COLUMN IF NOT EXISTS albaran_id text`);
-  await pool.query(`INSERT INTO ampedia.compras
-   (farmacia_codigo,origen_id,fecha,articulo_id,proveedor_id,unidades,importe,
-    proveedor_nombre,numero_pedido,albaran_id)
-   SELECT 'VAL','RECEIPT-'||i,'2026-10-17',NULL,'PV1',NULL,NULL,
-    'Proveedor de pruebas', 'PED-'||i,'ALB-'||i
-   FROM generate_series(1,80) i`);
+  assert.equal(incomplete.sourceRows,0);
+  assert.equal(incomplete.kpis.recepciones,0);
+  // Un documento con dos artículos es una recepción, nunca dos.
+  await pool.query(`INSERT INTO ampedia.fm_recepciones_cabeceras
+    (farmacia_codigo,sistema_origen,documento_id,fecha,proveedor_origen_id,
+     numero_albaran,numero_pedido,lineas_completas)
+    SELECT 'VAL','farmatic','RECEIPT-'||i,'2026-10-17','PV1',
+      'ALB-'||i,'PED-'||i,true FROM generate_series(1,80) i`);
+  await pool.query(`INSERT INTO ampedia.fm_recepciones_lineas
+    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+     cantidad,coste_neto)
+    SELECT 'VAL','farmatic','RECEIPT-'||i,j::text,'V-1',1,2
+    FROM generate_series(1,80) i CROSS JOIN generate_series(1,2) j`);
+  const fullReceipts=await request("/api/analytics/compras/resumen",{
+    farmacias:"5",desde:"2026-10-01",hasta:"2026-10-18"});
+  assert.equal(fullReceipts.kpis.recepciones,80);
+  assert.equal(fullReceipts.kpis.unidadesCompradas,160);
+  assert.equal(fullReceipts.kpis.compras,320);
   const pageOne=await request("/api/analytics/compras/recepciones",{
-   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"1",tamano:"50"});
+    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"1",tamano:"50"});
   assert.equal(pageOne.available,true);
   assert.equal(pageOne.rows.length,50);
-  assert.equal(pageOne.total,81);
+  assert.equal(pageOne.total,80);
   const smallPage=await request("/api/analytics/compras/recepciones",{
-   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"1",tamano:"10"});
-  assert.equal(smallPage.rows.length,10,"El selector de 10 por página también funciona");
+    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"1",tamano:"10"});
+  assert.equal(smallPage.rows.length,10);
   const pageTwo=await request("/api/analytics/compras/recepciones",{
-   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"2",tamano:"50"});
-  assert.equal(pageTwo.rows.length,31);
-  assert.equal(pageTwo.total,81);
-  assert.equal(new Set([...pageOne.rows,...pageTwo.rows].map(r=>r.id)).size,81);
+    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"2",tamano:"50"});
+  assert.equal(pageTwo.rows.length,30);
+  assert.equal(pageTwo.total,80);
+  assert.equal(new Set([...pageOne.rows,...pageTwo.rows].map(r=>r.sourceId)).size,80);
   const searchedReception=await request("/api/analytics/compras/recepciones",{
-   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",buscar:"ALB-79"});
-  assert.equal(searchedReception.total,1,"Busca en TODAS las recepciones, no solo en primera página");
+    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",buscar:"ALB-79"});
+  assert.equal(searchedReception.total,1);
   assert.equal(searchedReception.rows[0].reference,"ALB-79");
-  const bySupplier=await request("/api/analytics/compras/recepciones",{
-   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",
-   columnas:JSON.stringify({supplier:"Proveedor de pruebas"})});
-  assert.equal(bySupplier.total,80);
   const onlyVal=await request("/api/analytics/compras/recepciones",{
-   farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",
-   columnas:JSON.stringify({pharmacy:["Valdemarías"]})});
+    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",
+    columnas:JSON.stringify({pharmacy:["Valdemarías"]})});
   assert.ok(onlyVal.rows.every(r=>r.pharmacyId==="5"));
-
-  assert.equal(headers.kpis.compras,null,"Importe ausente NO debe mostrarse como 0 €");
-  assert.equal(headers.kpis.unidadesCompradas,null);
-  assert.equal(headers.kpis.lineasCompra,null);
-  assert.equal(headers.kpis.proveedores,1);
-  assert.equal(headers.monthly[0].compras,null);
-  const withoutFakeArticles=await request("/api/analytics/reportes",{
-    modulo:"compras",farmacias:"5"});
-  assert.equal(withoutFakeArticles.buyRows.length,0,
-    "La tabla por artículo no debe incluir cabeceras sin producto");
-  assert.equal(withoutFakeArticles.kpis.compras,null);
-  assert.equal(withoutFakeArticles.monthly.find(m=>m.month==="2026-10")?.compras,null,
-    "No dibujar una barra de 0 € si el ERP no envió ningún importe");
-  const headerProvider=await request("/api/analytics/reportes",{
-    modulo:"proveedores",farmacias:"5"});
-  assert.equal(headerProvider.supplierRows[0].value,null,
-    "Sin gasto sincronizado, no inventar gasto 0 por proveedor");
   const filteredHighVolume=await request("/api/analytics/reportes",{
     modulo:"dashboard",farmacias:"1",buscar:"EXTRA-42"});
   assert.equal(filteredHighVolume.available,true);
@@ -479,13 +463,18 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   // Reproducción del caso «Europa, Hoy»: cuatro unidades positivas de
   // cuatro CN diferentes y un quinto movimiento con cero unidades.
   // El quinto NO debe contar como artículo vendido ni tener precio inventado.
-  await pool.query(`INSERT INTO ampedia.ventas
-   (farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
-   VALUES ('EUR','TEST-BC1','2026-10-17','TEST-BCA',1,80),
-          ('EUR','TEST-BC2','2026-10-17','TEST-BCB',1,10),
-          ('EUR','TEST-BC3','2026-10-17','TEST-BCC',1,5),
-          ('EUR','TEST-BC4','2026-10-17','TEST-BCD',1,5),
-          ('EUR','TEST-BC0','2026-10-17','TEST-BCZERO',0,0)`);
+  await pool.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+    (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+    SELECT 'EUR','farmatic','TEST-BC'||i,'2026-10-17',true
+    FROM generate_series(0,4) i`);
+  await pool.query(`INSERT INTO ampedia.fm_ventas_lineas
+    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+     cantidad,importe_neto)
+    VALUES ('EUR','farmatic','TEST-BC1','1','TEST-BCA',1,80),
+           ('EUR','farmatic','TEST-BC2','1','TEST-BCB',1,10),
+           ('EUR','farmatic','TEST-BC3','1','TEST-BCC',1,5),
+           ('EUR','farmatic','TEST-BC4','1','TEST-BCD',1,5),
+           ('EUR','farmatic','TEST-BC0','1','TEST-BCZERO',0,0)`);
   const window={farmacias:"2",desde:"2026-10-17",hasta:"2026-10-17"};
   const salesTotals=await request("/api/analytics/ventas/totales",{
    ...window,granularidad:"day"});

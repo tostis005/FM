@@ -1,6 +1,6 @@
 // Detalle de ventas paginado: ABCD de últimos 12 meses, márgenes SOLO de la página.
 // No se recalculan aquí gráficos, totales históricos ni indicadores de recuento.
-import {approvedAnalysisRange} from "./salesAnalysisPeriod.js";
+import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 const VALID=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 // Columnas permitidas para ordenar todo el universo SQL, antes del LIMIT/OFFSET.
@@ -164,7 +164,7 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
    const page=Number(req.query.pagina||1);
    const order=String(req.query.orden||"value");
    const direction=String(req.query.direccion||"desc").toLowerCase();
-   if(!approvedAnalysisRange(from,to,req.context.client.analysisMonths)||
+   if(!validSalesDateRange(from,to)||
      !Number.isSafeInteger(page)||page<1||page>1000||
      !SALES_DETAIL_SORT_KEYS.includes(order)||!["asc","desc"].includes(direction)||
      raw.length>2000||search.length>100||families.length>30||
@@ -217,9 +217,11 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
      if(cached.stale)refresh();
      return res.json({...cached,from,to});
     }
-    // Primera visita sin cache: resolver la petición viva ANTES de iniciar
-    // el cálculo completo de 12 meses, evitando competir por CPU con ella.
-    if(typeof res.once==="function")res.once("finish",refresh);
+    // Solo reconstruir el precálculo si la pantalla consulta la ventana
+    // preconfigurada. Un rango personalizado nunca debe disparar un
+    // escaneo nocturno innecesario por abrir el detalle.
+    if(cache.isCacheRange?.(args)&&typeof res.once==="function")
+     res.once("finish",refresh);
    }
    const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,

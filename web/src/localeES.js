@@ -5,7 +5,7 @@ const currencyFormatter=new Intl.NumberFormat("es-ES",{
  minimumFractionDigits:2,maximumFractionDigits:2
 });
 const quantityFormatter=new Intl.NumberFormat("es-ES",{
- useGrouping:true,minimumFractionDigits:2,maximumFractionDigits:2
+ useGrouping:true,minimumFractionDigits:0,maximumFractionDigits:0
 });
 const integerFormatter=new Intl.NumberFormat("es-ES",{
  useGrouping:true,minimumFractionDigits:0,maximumFractionDigits:0

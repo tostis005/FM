@@ -269,4 +269,39 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
    next(e);
   }
  });
+ // Desglose del ticket en líneas originales, sin aplanar cantidades ni sumar
+ // importe de cabecera. Se exige permiso del módulo, farmacia, ERP y documento.
+ app.get("/api/analytics/pantallas/ventas-tickets/lineas",...requireTenant(),async(req,res,next)=>{
+  try{
+   if(req.user?.role!=="superadministrador"&&req.context.modules?.ventas!==true)
+    return res.status(403).json({error:"Módulo no habilitado"});
+   const f=parse(req);
+   const farmacia=Number(req.query.farmacia);
+   const sistema=String(req.query.sistema||"").trim();
+   const documento=String(req.query.documento||"").trim();
+   if(!Number.isSafeInteger(farmacia)||!f.ids.includes(farmacia))
+    return res.status(403).json({error:"Farmacia no autorizada"});
+   if(!sistema||!documento||sistema.length>100||documento.length>160)
+    return res.status(400).json({error:"Documento incorrecto"});
+   const q='"'+f.schema+'"';
+   const {rows}=await pool.query({
+    text:`SELECT v.linea_id AS "lineId",v.articulo_id AS "articleId",
+      v.fecha AS "at",v.unidades::float8 AS units,
+      v.precio_unitario::float8 AS "unitPrice",
+      v.descuento_linea::float8 AS discount,
+      v.importe::float8 AS amount,
+      v.coste_historico::float8 AS "historicalCost"
+     FROM ${q}.fm_ventas_analitica v
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$4
+       AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day'
+       AND f.id=$3 AND v.sistema_origen=$5 AND v.documento_id=$6
+     ORDER BY v.linea_id LIMIT 500`,
+    values:[f.from,f.to,farmacia,f.slug,sistema,documento]
+   });
+   res.json({farmacia,sistema,documento,lines:rows,
+    truncated:rows.length===500});
+  }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
+ });
+
 }

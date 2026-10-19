@@ -52,6 +52,15 @@ export function authorizedIds(context,requested=[]){
   throw Error("Farmacias no autorizadas");
  return requested.length?[...new Set(requested)]:[...new Set(allowed)];
 }
+export function pharmacyIdsFromQuestion(question,context){
+ const normalize=value=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+ const text=normalize(question);
+ const found=(context.pharmacies||[]).filter(p=>{
+  const name=normalize(p.name).trim();
+  return name.length>=4&&text.includes(name);
+ }).map(p=>Number(p.id));
+ return [...new Set(found)];
+}
 export function normalizedPeriod(period){
  if(!period||!DATE.test(period.from)||!DATE.test(period.to)||period.from>period.to||
     !Number.isFinite(Date.parse(period.from))||!Number.isFinite(Date.parse(period.to))||

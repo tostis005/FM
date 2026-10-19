@@ -8,6 +8,7 @@ const DATE=/^\d{4}-\d{2}-\d{2}$/;
 export const DOCUMENT_SECTIONS={
  "ventas-tickets":"ventas",
  "ventas-devoluciones":"ventas",
+ "compras-recepciones":"compras",
  "compras-devoluciones":"compras",
  "productos":"stock",
  "proveedores-condiciones":"proveedores",
@@ -58,6 +59,7 @@ const slice="LIMIT $6::int OFFSET $7::int";
 export const DOCUMENT_SORT={
  "ventas-tickets":{at:'"at"',ticket:'"ticket"',lines:'"lines"',units:'"units"',amount:'"amount"'},
  "ventas-devoluciones":{at:'v."at"',reference:'v.reference',units:'v.units',amount:'v.amount',kind:'v.kind'},
+ "compras-recepciones":{at:'"at"',reference:'reference',supplier:'supplier',lines:'lines',units:'units',amount:'amount'},
  "compras-devoluciones":{at:'v.fecha',reference:'v.numero_albaran',units:'v.unidades',amount:'v.importe',supplier:'v.proveedor_id'},
  "productos":{name:'name',sourceId:'"sourceId"',cn:'cn',family:'family',pvp:'pvp',pmc:'pmc',stock:'stock'},
  "proveedores-condiciones":{amount:'amount',units:'units',products:'products',receipts:'receipts',lastAt:'"lastAt"',supplier:'"supplierCode"'},
@@ -68,7 +70,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
  if(!SCHEMA.test(schema)||!Object.hasOwn(DOCUMENT_SECTIONS,section))throw Error("Pantalla o esquema inválido");
  const q='"'+schema+'"', join=pharmacyJoin("v"), range=period("v");
  const mapping=DOCUMENT_SORT[section],defaultKey={
-  "ventas-tickets":"at","ventas-devoluciones":"at","compras-devoluciones":"at",
+  "ventas-tickets":"at","ventas-devoluciones":"at","compras-recepciones":"at","compras-devoluciones":"at",
   productos:"name","proveedores-condiciones":"amount","rentabilidad-segmentos":"sales"
  }[section];
  const requested=order==="default"?defaultKey:order;
@@ -131,6 +133,29 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
     v.reference ILIKE '%'||$5||'%' OR v."documentId" ILIKE '%'||$5||'%' OR
     coalesce(v.article,'') ILIKE '%'||$5||'%')
  ${sort},v."documentId" DESC,v."lineId" DESC NULLS LAST ${slice}`;
+ if(section==="compras-recepciones")return `
+ WITH documents AS (
+  SELECT f.id::text AS "pharmacyId",max(f.nombre) AS "pharmacyName",
+   v.sistema_origen AS "sourceSystem",v.documento_id AS "documentId",
+   coalesce(max(nullif(v.numero_albaran,'')),v.documento_id) AS reference,
+   max(v.numero_pedido) AS "orderNumber",
+   max(v.proveedor_id) AS supplier,max(v.fecha) AS "at",
+   count(*)::int AS lines,sum(v.unidades)::float8 AS units,
+   sum(v.importe)::float8 AS amount
+  FROM ${q}.fm_recepciones_analitica v ${join}
+  WHERE ${range} AND ${includedPurchaseSupplier({tenant:"$4",code:"v.proveedor_id"})}
+   AND ($5::text='' OR f.nombre ILIKE '%'||$5||'%' OR
+    v.documento_id ILIKE '%'||$5||'%' OR
+    coalesce(v.numero_albaran,'') ILIKE '%'||$5||'%' OR
+    coalesce(v.numero_pedido,'') ILIKE '%'||$5||'%' OR
+    coalesce(v.proveedor_id,'') ILIKE '%'||$5||'%')
+  GROUP BY f.id,v.sistema_origen,v.documento_id
+ )
+ SELECT *,count(*) OVER()::int AS total,
+  sum(amount) OVER()::float8 AS "summaryValue",
+  sum(units) OVER()::float8 AS "summaryUnits",
+  NULL::float8 AS "summaryOther"
+ FROM documents ${sort},"pharmacyId","documentId" DESC ${slice}`;
  if(section==="compras-devoluciones")return `
  SELECT f.id::text AS "pharmacyId",f.nombre AS "pharmacyName",
   v.fecha AS "at",v.sistema_origen AS "sourceSystem",v.documento_id AS "documentId",
@@ -305,6 +330,44 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
    });
    res.json({farmacia,sistema,documento,lines:rows,
     truncated:rows.length===500});
+  }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
+ });
+
+ // Detalle seguro de una recepción completa sin replicar el total de cabecera.
+ app.get("/api/analytics/pantallas/compras-recepciones/lineas",...requireTenant(),async(req,res,next)=>{
+  try{
+   if(req.user?.role!=="superadministrador"&&req.context.modules?.compras!==true)
+    return res.status(403).json({error:"Módulo no habilitado"});
+   const f=parse(req),farmacia=Number(req.query.farmacia);
+   const sistema=String(req.query.sistema||"").trim();
+   const documento=String(req.query.documento||"").trim();
+   if(!Number.isSafeInteger(farmacia)||!f.ids.includes(farmacia))
+    return res.status(403).json({error:"Farmacia no autorizada"});
+   if(!sistema||!documento||sistema.length>100||documento.length>160)
+    return res.status(400).json({error:"Documento incorrecto"});
+   const q='"'+f.schema+'"';
+   const {rows}=await pool.query({
+    text:`SELECT v.linea_id AS "lineId",v.articulo_id AS "articleId",
+       v.fecha AS "at",v.unidades::float8 AS units,
+       v.precio_unitario_bruto::float8 AS "unitPrice",
+       v.coste_unitario::float8 AS "unitCost",
+       l.descuento_comercial::float8 AS discount,
+       l.descuento_tipo AS "discountType",
+       l.bonificacion_unidades::float8 AS "bonusUnits",
+       v.importe::float8 AS amount
+     FROM ${q}.fm_recepciones_analitica v
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$4
+       AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     LEFT JOIN ${q}.fm_recepciones_lineas l ON l.farmacia_codigo=v.farmacia_codigo
+       AND l.sistema_origen=v.sistema_origen AND l.documento_id=v.documento_id
+       AND l.linea_id=v.linea_id
+     WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day'
+       AND f.id=$3 AND v.sistema_origen=$5 AND v.documento_id=$6
+       AND ${includedPurchaseSupplier({tenant:"$4",code:"v.proveedor_id"})}
+     ORDER BY v.linea_id LIMIT 500`,
+    values:[f.from,f.to,farmacia,f.slug,sistema,documento]
+   });
+   res.json({farmacia,sistema,documento,lines:rows,truncated:rows.length===500});
   }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
  });
 

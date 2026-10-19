@@ -265,6 +265,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      sum(t.priced_units)::float8 AS "pricedUnits",
      sum(t.lines)::int AS lines
      ${purchasesByArticle} ${provider} WHERE ${articleFilter}
+       AND NULLIF(btrim(t.articulo_id::text),'') IS NOT NULL
      GROUP BY f.id,${cn},t.proveedor_id ${reportOrder(purchaseOrders,"value")},t.proveedor_id LIMIT ${rowLimit}`;
    // Los totales mensuales sin búsqueda/familia no necesitan consultar
    // millones de fichas de artículo. Sus parámetros también deben coincidir
@@ -281,9 +282,12 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND f.cliente_slug=${periodTenantParam}`:`JOIN farmetrica.farmacias f ON f.cliente_slug=${periodTenantParam}
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
     const amount=legacy?"t.total":"t.importe";
+    const countedLines=table==="compras"?
+      `count(*) FILTER (WHERE NULLIF(btrim(${legacy?"t.producto_id":"t.articulo_id"}::text),'') IS NOT NULL)`:
+      "count(*)";
     if(!periodWithArticleFilter)return `SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
        sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount,
-       count(*)::float8 AS lines
+       ${countedLines}::float8 AS lines
        FROM ${quoted}.${table} t ${fromJoin}
        WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
          AND f.id=ANY($3::int[])
@@ -294,7 +298,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
            ${legacy?pharmacyDataCodeSQL("f"):"upper(btrim(t.farmacia_codigo))"} AS farmacia_codigo,
            ${legacy?"t.producto_id":"t.articulo_id"} AS articulo_id,
-           sum(t.unidades) AS unidades,sum(${amount}) AS importe,count(*) AS lines
+           sum(t.unidades) AS unidades,sum(${amount}) AS importe,${countedLines} AS lines
          FROM ${quoted}.${table} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
            AND f.id=ANY($3::int[])
@@ -684,13 +688,15 @@ export function setupRealReports(app,pool,{requireTenant}){
    }
    const monthly=[...new Set([...saleM.rows,...buyM.rows].map(x=>x.month))].sort().map(month=>({
     month,ventas:sum(saleM.rows.filter(r=>r.month===month),"amount"),
-    compras:sum(buyM.rows.filter(r=>r.month===month),"amount"),
+    compras:buyM.rows.some(r=>r.month===month)&&
+      buyM.rows.filter(r=>r.month===month).every(r=>r.amount==null)?
+       null:sum(buyM.rows.filter(r=>r.month===month),"amount"),
     unidades:sum(saleM.rows.filter(r=>r.month===month),"units"),
     margen:null
    }));
    const supplierRows=providers.rows.map(r=>({...r,id:key(r.pharmacyId,r.providerId),
-    family:"",products:Number(r.products),units:Number(r.units),
-    value:Number(r.value),potential:null}));
+    family:"",products:Number(r.products),units:r.units==null?null:Number(r.units),
+    value:r.value==null?null:Number(r.value),potential:null}));
    const replenishmentRows=stockRows.filter(r=>r.need>0);
    const negativeMargins=salesRows.filter(r=>r.margin!=null&&r.margin<0).map(r=>({
     ...r,action:"Revisar margen negativo",impact:Math.abs(r.margin),targetModule:"rentabilidad"
@@ -716,11 +722,16 @@ export function setupRealReports(app,pool,{requireTenant}){
     stockUnidades:snapshotAvailable?stockSummary?.units??null:null,
     ventas:sales&&readSalesPeriod?round(sum(saleM.rows,"amount")):null,
     unidades:sales&&readSalesPeriod?sum(saleM.rows,"units"):null,
-    compras:buyers&&readBuyPeriod?round(sum(buyM.rows,"amount")):null,
+    compras:buyers&&readBuyPeriod?
+      (buyM.rows.length>0&&buyM.rows.every(r=>r.amount==null)?null:round(sum(buyM.rows,"amount"))):null,
     articulosVendidos:readSalesRows&&sales&&completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
     articulosComprados:readBuyRows&&buyers&&completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
-    unidadesCompradas:buyers&&readBuyPeriod?sum(buyM.rows,"units"):null,
-    lineasCompra:buyers&&readBuyPeriod?sum(buyM.rows,"lines"):null,
+    unidadesCompradas:buyers&&readBuyPeriod?
+      (buyM.rows.length>0&&buyM.rows.every(r=>r.units==null)?null:sum(buyM.rows,"units")):null,
+    // Una cabecera de proveedor sin articulo_id no es una línea de compra
+    // de artículo. El resumen rápido comunica si ese detalle existe.
+    lineasCompra:buyers&&readBuyPeriod?
+      (buyM.rows.length>0&&sum(buyM.rows,"lines")===0?null:sum(buyM.rows,"lines")):null,
     costeMedioCompra:readBuyRows&&buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
       round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:

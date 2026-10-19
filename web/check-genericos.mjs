@@ -5,7 +5,7 @@ const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1280,height:850}});
 const user={email:"qa@example.com",role:"superadministrador",name:"QA"};
 const modules={promociones:true,ventas:true,dashboard:true,genericos:true};
-const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",active:true}];
+const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",active:true},{id:"2",name:"Farmacia Norte",sourceCode:"NOR",active:true}];
 const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
@@ -31,8 +31,12 @@ await page.route("**/api/**",async route=>{
   headerSeen=req.headers()["x-farmetrica-cliente"]==="ampedia";
   data={products:[{cn:"654321",nombre:"Omeprazol A 20 mg",laboratorio:"Lab A",generico:true},
      {cn:"654322",nombre:"Omeprazol B 20 mg",laboratorio:"Lab B",generico:true}],
-   sales:[{cn:"654321",units:22,revenue:240}],
-   purchases:[{cn:"654321",supplierCode:"P1",supplier:"Proveedor A",units:12,pricedUnits:12,cost:118,spend:118,puc:9.84,referencePuc:8.2}],
+   sales:[{cn:"654321",pharmacyId:1,units:22,revenue:240},{cn:"654321",pharmacyId:2,units:5,revenue:55}],
+   purchases:[
+    {cn:"654321",pharmacyId:1,supplierCode:"P1",supplier:"Proveedor A",units:12,pricedUnits:12,cost:118,spend:118,puc:9.84,referencePuc:8.2,targetPuc:8},
+    {cn:"654321",pharmacyId:2,supplierCode:"P2",supplier:"Proveedor B",units:2,pricedUnits:2,cost:26,spend:26,puc:13,targetPuc:10}
+   ],
+   policy:{global:{percentile:20,months:6},overrides:[{pharmacyId:2,percentile:25,months:3}]},
    salesAvailable:true,purchasesAvailable:true};
  }
  else if(p==="/api/ventas/seguimiento")data={sales:{}};
@@ -50,6 +54,12 @@ try{
  await page.getByText("Proveedor A").first().waitFor();
  assert.equal(headerSeen,true,"Detalle debe mantener tenant explícito");
  assert.equal(await page.locator(".fm-generic-detail .fm-generic-code").count()>0,true);
+ assert.equal(await page.getByText("Farmacia Centro",{exact:true}).count()>0,true);
+ assert.equal(await page.getByText("Farmacia Norte",{exact:true}).count()>0,true);
+ const firstDetailRow=page.locator('.fm-generic-detail table').first().locator('tbody tr').first();
+ assert.match(await firstDetailRow.innerText(),/27/,"Las ventas del mismo CN se suman entre farmacias");
+ assert.match(await firstDetailRow.innerText(),/PUC|9,|10,/i,"Se muestra PUC ponderado en el CN");
+ await page.getByText(/25 % \/ 3 meses/).first().waitFor();
  // Recuperar foco no debe desmontar los conjuntos ni rehacer la petición.
  const initialRequests=listRequests;
  await page.evaluate(()=>{

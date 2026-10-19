@@ -1,6 +1,7 @@
 import React,{useMemo,useState} from "react";
 import {AlertTriangle,ArrowRightLeft,CheckCircle2,ClipboardList,Package,Search,ShoppingCart,TrendingUp,Users} from "lucide-react";
 import "./operativaPreview.css";
+import SortableDataTable from "./SortableDataTable.jsx";
 
 // Pantallas de diseño final, sin datos transaccionales reales ni escrituras ERP.
 // Un borrador en esta vista vive únicamente en la memoria de la sesión React.
@@ -74,10 +75,9 @@ const analytics={
   columns:["Segmento","Ventas netas","Coste de ventas","Margen bruto","Margen %","Unidades"],
   rows:[["Medicamentos","28.750,00 €","20.800,00 €","7.950,00 €","27,7 %","2.490"],["Parafarmacia","11.500,00 €","6.810,00 €","4.690,00 €","40,8 %","810"]]}
 };
-function Table({columns,rows}){return <div className="fm-preview-scroll" role="region" aria-label="Listado con desplazamiento horizontal" tabIndex={0}>
- <table className="fm-preview-table"><thead><tr>{columns.map(h=><th key={h}>{h}</th>)}</tr></thead>
- <tbody>{rows.length?rows.map((row,i)=><tr key={i}>{row.map((v,j)=><td key={j}>{v}</td>)}</tr>):
- <tr><td colSpan={columns.length}>No hay resultados para los filtros seleccionados.</td></tr>}</tbody></table></div>}
+function Table({columns,rows}){
+ return <SortableDataTable headers={columns} rows={rows} label="registros"/>;
+}
 function KPIs({items}){return <div className="fm-preview-kpis">{items.map(([label,value])=><article className="card fm-preview-kpi" key={label}><span>{label}</span><strong>{value}</strong></article>)}</div>}
 function OrderBuilder({mode}){
  const [items,setItems]=useState(initial);

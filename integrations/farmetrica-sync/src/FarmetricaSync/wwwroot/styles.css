@@ -25,3 +25,13 @@
 .sync-pulse {display:inline-block;width:9px;height:9px;border-radius:100%;background:#13875c;box-shadow:0 0 0 3px #daf6e9;animation:syncPulse 1.7s infinite;}
 @keyframes syncPulse {50%{opacity:.45;transform:scale(.82)}}
 @media(prefers-reduced-motion:reduce){.sync-pulse{animation:none}}
+
+/* Interfaz operativa: tablas y acciones primero; documentación opcional. */
+.fm-advanced{margin:10px 0 20px;padding:11px 14px;border:1px solid #e0e8e5;border-radius:10px;background:#fff}
+.fm-advanced summary{cursor:pointer;color:#3e6157;font-weight:650;font-size:12px;list-style-position:inside}
+.fm-advanced[open] summary{margin-bottom:14px}
+.fm-advanced .row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.fm-advanced .muted{font-size:12px;margin:8px 0 12px;line-height:1.5}
+.fm-advanced .sql-tip{margin:12px 0 0}
+.fm-security-note{font-size:12px;color:#7b6329;margin:12px 0;line-height:1.5}
+.fm-advanced:focus-within{border-color:#9cc9b4}

@@ -228,7 +228,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
      <p className="fm-op-fine">Si quitas una asignación, las unidades siguen en Pendientes de asignar. El pedido no se envía automáticamente al ERP.</p>
      <div className="fm-preview-actions"><Button primary disabled={busy||!draft.lineas.length}
       onClick={async()=>{
-       const payload={nombre:draft.nombre,lineas:draft.lineas};
+       const payload={lineas:draft.lineas,...(!draft.id||draft.estado==="borrador"?{nombre:draft.nombre}:{})};
        const saved=draft.id?await save("PATCH","pedidos",{...payload,revision:draft.revision},draft.id):
         await save("POST","pedidos",payload);
        if(saved)setDraft(null);

@@ -9,13 +9,15 @@ export function buildSalesTotalsSql(schema,granularity){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!["hour","day","month"].includes(granularity))
   throw Error("Parámetro SQL no válido");
  const table='"'+schema+'"';
+ // Las líneas especiales sin artículo suman importe, pero no unidades de producto.
+ const productUnits="coalesce(sum(v.unidades) FILTER (WHERE nullif(btrim(v.articulo_id),'') IS NOT NULL),0)";
  // Para 12/6/3 meses basta un GROUP BY mensual. La ventana suma solo los
  // 12 resultados agregados y evita GROUPING SETS y una segunda lectura.
  if(granularity==="month")return `
  SELECT to_char(date_trunc('month',v.fecha),'YYYY-MM') AS month,
-   sum(v.importe)::float8 AS ventas,sum(v.unidades)::float8 AS unidades,
+   sum(v.importe)::float8 AS ventas,${productUnits}::float8 AS unidades,
    sum(sum(v.importe)) OVER()::float8 AS total_ventas,
-   sum(sum(v.unidades)) OVER()::float8 AS total_unidades
+   sum(${productUnits}) OVER()::float8 AS total_unidades
  FROM ${table}.fm_ventas_analitica v
  WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
    AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
@@ -33,7 +35,7 @@ export function buildSalesTotalsSql(schema,granularity){
  FROM (
    SELECT date_trunc('month',v.fecha) AS mes,
      date_trunc('${granularity}',v.fecha) AS periodo,
-     v.importe,v.unidades
+     v.importe,CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL THEN v.unidades ELSE 0 END AS unidades
    FROM ${table}.fm_ventas_analitica v
    WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
      AND v.fecha >= $1::date

@@ -50,7 +50,7 @@ const META={
    ["ticket","Ticket",r=>TXT(r.ticket)],["at","Fecha",r=>DATE(r.at)],
    ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["lines","Líneas",r=>UNITS(r.lines)],
    ["units","Unidades",r=>UNITS(r.units)],["amount","Venta neta",r=>EUR(r.amount)],
-   ["seller","Vendedor (código ERP)",r=>TXT(r.sellerId)] ]},
+   ["seller","Vendedor",r=>TXT(r.sellerName||r.sellerId)] ]},
  "compras-recepciones":{title:"Recepciones completas",
   desc:"Albaranes y recepciones obtenidos de sus cabeceras y líneas documentales.",
   note:"Cada documento se cuenta una sola vez. Los importes y unidades proceden de las líneas recibidas; se excluyen proveedores marcados para ignorar en informes.",
@@ -75,7 +75,7 @@ const META={
   note:"No se atribuyen estados como «solicitada» o «confirmada» si el sincronizador no transmite ese dato.",
   cols:[
    ["reference","Albarán",r=>TXT(r.reference)],["at","Fecha",r=>DATE(r.at)],
-   ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["supplier","Proveedor",r=>TXT(r.supplier)],
+   ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["supplier","Proveedor",r=>TXT(r.supplierName||r.supplier)],
    ["article","Artículo ERP",r=>TXT(r.article)],["units","Unidades",r=>UNITS(r.units)],
    ["amount","Importe neto",r=>EUR(r.amount)] ]},
  "proveedores-condiciones":{title:"Análisis de proveedores",

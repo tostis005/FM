@@ -341,12 +341,25 @@ WHERE a."origen_id" IS NULL
             }
             else
             {
-                // Datos de eventos inmutables: solo insertar. Releer solapamientos nunca altera filas existentes.
-                long newRows = await ExecuteCountAsync(conn, tx,
-                    $"INSERT INTO {target} ({cols}, \"sincronizado_en\") SELECT {cols}, NOW() FROM {stageBatch} WHERE true " +
-                    "ON CONFLICT (\"farmacia_codigo\", \"origen_id\") DO NOTHING", ct);
-                inserted += newRows;
-                duplicates += dedup.Count - newRows;
+                // Idempotencia con correcciones: un ticket o recepción ya importados
+                // pueden cambiar de importe, estado o descuento después de la primera lectura.
+                // La clave incluye farmacia; las filas idénticas NO se reescriben.
+                string differs = string.Join(" OR ", entity.Columns.Where(c => c.Name != "origen_id")
+                    .Select(c => $"current.{Validation.Q(c.Name)} IS DISTINCT FROM incoming.{Validation.Q(c.Name)}"));
+                if (string.IsNullOrEmpty(differs)) differs = "false";
+                long changedExisting = await CountAsync(conn, tx,
+                    $"SELECT COUNT(*) FROM {stageBatch} incoming JOIN {target} current " +
+                    "USING (\"farmacia_codigo\", \"origen_id\") WHERE " + differs, ct);
+                string conflictDiffers = string.Join(" OR ", entity.Columns.Where(c => c.Name != "origen_id")
+                    .Select(c => $"current.{Validation.Q(c.Name)} IS DISTINCT FROM EXCLUDED.{Validation.Q(c.Name)}"));
+                if (string.IsNullOrEmpty(conflictDiffers)) conflictDiffers = "false";
+                long applied = await ExecuteCountAsync(conn, tx,
+                    $"INSERT INTO {target} AS current ({cols}, \"sincronizado_en\") " +
+                    $"SELECT {cols}, NOW() FROM {stageBatch} WHERE true " +
+                    $"ON CONFLICT (\"farmacia_codigo\", \"origen_id\") DO UPDATE SET {updates} WHERE {conflictDiffers}", ct);
+                inserted += applied - changedExisting;
+                updated += changedExisting;
+                duplicates += dedup.Count - applied;
             }
             await ExecuteAsync(conn, tx, $"TRUNCATE TABLE {stageBatch}", ct);
             onProgress?.Invoke(new SyncWriteProgress("Leyendo y preparando lotes", totalRead, batchIndex, inserted, updated, deleted, duplicates));

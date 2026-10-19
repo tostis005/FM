@@ -5,6 +5,7 @@ import ListTable from "./ListTable.jsx";
 import {LoadingPanel,SkeletonLine} from "./LoadingState.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
+import {euro,quantity,integer,percentage,dateES} from "./localeES.js";
 import {buildAnalysis} from "./businessAnalytics.js";
 import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
@@ -59,7 +60,7 @@ function metricCards(module,k,analysisMonths=12){
   dashboard:[shared[0],shared[1],shared[2],shared[3],
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Líneas de compra","lineasCompra","n","compras")],
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Referencias por farmacia · "+analysisMonths+" meses","productosFarmacia","n"),CARD("Artículos diferentes · "+analysisMonths+" meses","articulosVendidos","n")],
+  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Referencias por farmacia","productosFarmacia","n"),CARD("Artículos diferentes","articulosVendidos","n")],
   compras:[shared[1],CARD("Unidades compradas","unidadesCompradas","n"),
    CARD("Proveedores","proveedores","n","proveedores"),
    CARD("Líneas de compra","lineasCompra","n")],
@@ -77,11 +78,12 @@ function metricCards(module,k,analysisMonths=12){
  };
  return (map[module]||shared).map(c=>({...c,value:k[c.key]}));
 }
-function format(value,unit){
+function format(value,unit,key){
  if(value==null)return "—";
- if(unit==="€")return money(value);
- if(unit==="%")return number(value)+" %";
- return number(value);
+ if(unit==="€")return euro(value);
+ if(unit==="%")return percentage(value);
+ if(["unidades","unidadesCompradas","stockUnidades"].includes(key))return quantity(value);
+ return integer(value);
 }
 function csvExport(module,columns,rows){
  const cells=[columns.map(c=>c.label),...rows.map(r=>columns.map(c=>c.value(r)??""))];
@@ -91,14 +93,15 @@ function csvExport(module,columns,rows){
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 const C=(key,label,field,fmt)=>({key,label,value:r=>r[field],render:fmt?r=>fmt(r[field]):undefined});
-const unitEuro=value=>value==null?"—":new Intl.NumberFormat("es-ES",
- {style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:4}).format(value);
+const unitEuro=euro;
 function columnsFor(module,pharmacyMap){
  const pharmacy={key:"pharmacy",label:"Farmacia",filterMode:"multi",value:r=>pharmacyMap.get(String(r.pharmacyId))||"—"};
  const article=C("name","Artículo","name"),cn=C("cn","CN","cn");
  const family={key:"family",label:"Familia",filterMode:"multi",value:r=>r.family||"—"};
  const unit=(key,label)=>C(key,label,key,unitEuro);
- const euro=(key,label)=>C(key,label,key,v=>v==null?"—":money(v)),num=(key,label)=>C(key,label,key,v=>v==null?"—":number(v));
+ const euroCol=(key,label)=>C(key,label,key,v=>euro(v));
+ const num=(key,label)=>C(key,label,key,v=>
+   ["units","need"].includes(key)?quantity(v):integer(v));
  const abcd={key:"abcdClass",label:"ABCD",filterMode:"multi",
   value:r=>r.abcdClass||"—",
   render:r=>r.abcdClass?<span className={"fm-abcd fm-abcd-"+r.abcdClass}
@@ -108,25 +111,25 @@ function columnsFor(module,pharmacyMap){
   case "ventas":return [...common,unit("pvp","PVP catálogo"),
     unit("saleUnitPrice","Precio real venta/ud."),
     unit("purchaseCost","Coste medio/ud."),unit("unitMargin","Margen/ud."),
-    num("units","Uds. vendidas"),euro("value","Ventas netas"),
-    euro("margin","Margen total")];
+    num("units","Uds. vendidas"),euroCol("value","Ventas netas"),
+    euroCol("margin","Margen total")];
   case "compras":return [cn,article,pharmacy,C("supplier","Proveedor","supplier"),num("units","Unidades"),
     unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),
-    euro("value","Compras"),num("lines","Líneas de compra")];
+    euroCol("value","Compras"),num("lines","Líneas de compra")];
   case "proveedores":return [C("name","Proveedor","name"),pharmacy,
-    num("products","Artículos"),num("units","Unidades"),euro("value","Compras")];
-  case "stock":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euro("value","Valor stock"),euro("excessValue","Sobrestock")];
-  case "reposicion":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock actual"),num("need","Reposición (uds.)"),euro("needValue","Coste estimado")];
-  case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euro("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euro("potential","Potencial de precio")];
+    num("products","Artículos"),num("units","Unidades"),euroCol("value","Compras")];
+  case "stock":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock (uds.)"),C("coverage","Cobertura (días)","coverage",number),euroCol("value","Valor stock"),euroCol("excessValue","Sobrestock")];
+  case "reposicion":return [...common,unit("unitCost","Coste/ud."),C("costSource","Origen coste","costSource"),num("units","Stock actual"),num("need","Reposición (uds.)"),euroCol("needValue","Coste estimado")];
+  case "genericos":return [...common,C("supplier","Proveedor","supplier"),C("grupoGenerico","Grupo","grupoGenerico"),euroCol("value","Compras"),C("puc","PUC","puc",money),C("target","PUC objetivo","target",v=>v==null?"—":money(v)),euroCol("potential","Potencial de precio")];
   case "rentabilidad":return [...common,unit("pvp","PVP catálogo"),
     unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),unit("saleUnitPrice","Venta/ud."),
     unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
-    euro("value","Ventas"),euro("margin","Margen total"),
+    euroCol("value","Ventas"),euroCol("margin","Margen total"),
     C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
   case "acciones":return [C("action","Acción","action"),...common,
-    euro("impact","Importe a revisar")];
+    euroCol("impact","Importe a revisar")];
   default:return [...common,unit("pvp","PVP catálogo"),unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),
-    num("units","Unidades"),euro("value","Ventas"),euro("margin","Margen")];
+    num("units","Unidades"),euroCol("value","Ventas"),euroCol("margin","Margen")];
  }
 }
 const REPORTS=[
@@ -231,14 +234,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .catch(e=>{if(!controller.signal.aborted)setFastFailure({scope:fastScope,message:e.message})});
   return ()=>controller.abort();
  },[fastEligible,fastScope]);
- const insightScope=[clientSlug,recentPeriod.from,recentPeriod.to,filters.pharmacyIds.join(","),ids,reloadKey].join("|");
+ const insightScope=[clientSlug,period.from,period.to,filters.pharmacyIds.join(","),ids,reloadKey].join("|");
  const insightData=insightResult?.scope===insightScope?insightResult.data:null;
  const insightFailureMessage=insightFailure?.scope===insightScope?insightFailure.message:null;
  const insightLoading=module==="ventas"&&period.valid&&!insightData&&!insightFailureMessage;
  useEffect(()=>{
   if(module!=="ventas"||!period.valid||(!fastSales&&!fastFailed))return;
   const controller=new AbortController();
-  const params=new URLSearchParams({desde:recentPeriod.from,hasta:recentPeriod.to});
+  const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch("/api/analytics/ventas/recuento?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
@@ -262,7 +265,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  },[singleFamilyPharmacy,familyScope]);
  useEffect(()=>{setDetailPage(1);setDetailHasMore(false)},[
    module,clientSlug,filters.pharmacyIds.join(","),filters.families.join(","),
-   searchReady,recentPeriod.from,recentPeriod.to,reloadKey,tableSort.key,tableSort.direction
+   searchReady,period.from,period.to,reloadKey,tableSort.key,tableSort.direction
  ]);
  const tables=useMemo(()=>realTables?normalizeTables(realTables):
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
@@ -277,8 +280,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    return ()=>controller.abort();
   }
   const params=new URLSearchParams();
-  params.set("desde",module==="ventas"?recentPeriod.from:period.from);
-  params.set("hasta",module==="ventas"?recentPeriod.to:period.to);
+  params.set("desde",period.from);
+  params.set("hasta",period.to);
   params.set("granularidad",module==="ventas"?"month":period.granularity);
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   if(searchReady)params.set("buscar",searchReady);
@@ -312,7 +315,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction]);
 
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
  const purchaseSummaryScope=[clientSlug,period.from,period.to,
@@ -477,7 +480,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    </div>
    <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}
      onClick={()=>{setAsOf(new Date());setReloadKey(x=>x+1)}}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
-   {period.valid&&<span className="fm-sales-period-info">{module==="ventas"&&filters.period==="all"?"Todo el histórico hasta "+period.to:period.from===period.to?period.from:period.from+" → "+period.to}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
+   {period.valid&&<span className="fm-sales-period-info">{module==="ventas"&&filters.period==="all"?"Todo el histórico hasta "+period.to:period.from===period.to?dateES(period.from):dateES(period.from)+" → "+dateES(period.to)}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
   </div>}
   {filters.period==="custom"&&<div className="fm-sales-custom-dates">
    <label>Desde<input aria-label="Ventas desde" type="date" value={filters.customFrom} onChange={e=>change("customFrom",e.target.value)}/></label>
@@ -500,7 +503,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     <span>{c.label}</span>
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
        <span className="fm-load-spinner" aria-hidden="true"/><small>Cargando…</small>
-     </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit):"—"}</strong>}
+     </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
     {!kpiLoading&&c.key==="margen"&&realKpis.margen==null&&<small>Sin coste de compra suficiente para estimar el margen</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
@@ -540,7 +543,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
         {reportError?" Los movimientos existen, pero ha fallado la consulta del informe.":""}</span>:
        <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies?.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}
    {purchaseState?.pharmacies?.length>0&&<small style={{display:"block",marginTop:6}}>
-    {purchaseState.pharmacies.map(p=>p.name+": "+(p.hasPeriodPurchases?"con compras":p.latestPurchaseDate?"sin compras en el período (última "+String(p.latestPurchaseDate).slice(0,10)+")":"sin compras sincronizadas")).join(" · ")}
+    {purchaseState.pharmacies.map(p=>p.name+": "+(p.hasPeriodPurchases?"con compras":p.latestPurchaseDate?"sin compras en el período (última "+dateES(p.latestPurchaseDate)+")":"sin compras sincronizadas")).join(" · ")}
    </small>}
    {purchaseSlow&&purchaseState?.hasPurchases&&<small style={{display:"block",marginTop:8}}>
     El informe sigue calculando el detalle; los registros existen. Puede haber una consulta lenta, no falta de datos.
@@ -573,7 +576,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
       <YAxis tickLine={false} axisLine={false} width={48} fontSize={10}/>
-      <Tooltip formatter={(v,key)=>[key==="unidades"?number(v):money(v),TITLES[key]||key]}/>
+      <Tooltip formatter={(v,key)=>[key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
       <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
       {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
      </BarChart>
@@ -590,7 +593,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id}
+   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")} rows={rows} rowKey={r=>r.id}
     sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
      module==="compras"&&fastPurchase?.sourceRows>0&&fastPurchase?.hasArticleLines===false?
        "Se han importado registros de proveedor, pero ninguna línea de compra con artículo. Comprueba la consulta del sincronizador.":

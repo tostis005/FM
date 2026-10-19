@@ -11,6 +11,30 @@ const routes=new Map();
 setupRealReports({get:(path,...handlers)=>routes.set(path,handlers.at(-1))},pool,
  {requireTenant:()=>[]});
 try{
+ // Diagnóstico específico del problema "Compras vacío": sin importes, CN ni
+ // datos de clientes en logs. Cada farmacia se comprueba con índice y LIMIT 1.
+ const today=new Date().toISOString().slice(0,10);
+ const sixMonths=new Date();sixMonths.setUTCMonth(sixMonths.getUTCMonth()-6);
+ const from=sixMonths.toISOString().slice(0,10);
+ const context={allowedPharmacyIds:[1,2,3,4,5],
+   client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
+   modules:{},pharmacies:[{id:"1",name:"Farmacia 1",sourceCode:"ABA"},
+     {id:"2",name:"Farmacia 2",sourceCode:"EUR"},
+     {id:"3",name:"Farmacia 3",sourceCode:"BUE"},
+     {id:"4",name:"Farmacia 4",sourceCode:"EST"},
+     {id:"5",name:"Farmacia 5",sourceCode:"POL",databaseCode:"VAL"}]};
+ for(const pharmacy of context.pharmacies){
+  const req={query:{desde:from,hasta:today,farmacias:pharmacy.id},
+    context};
+  let response,error;
+  const res={status(){return res},json(value){response=value;return res}};
+  const start=performance.now();
+  await routes.get("/api/analytics/compras/estado")(req,res,e=>{error=e});
+  console.log("Compras farmacia "+pharmacy.id+": "+
+   (error?"ERROR "+(error.code||error.name):response?.source||"no disponible")+
+   ", movimientos en 6 meses="+Boolean(response?.hasPurchases)+
+   ", respuesta="+Math.round(performance.now()-start)+"ms");
+ }
  const cols=await pool.query(`SELECT column_name FROM information_schema.columns
   WHERE table_schema='ampedia' AND table_name='articulos'
     AND (column_name ILIKE '%stock%' OR column_name ILIKE '%exist%'

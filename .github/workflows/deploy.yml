@@ -219,13 +219,13 @@ jobs:
                    curl -fsS http://127.0.0.1:18080/robots.txt | grep -q "Sitemap: http://127.0.0.1/sitemap.xml" && \
                    curl -fsS http://127.0.0.1:18080/ | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
-                   curl -fsS http://127.0.0.1:18080/marketing.css?v=6 | grep -q ".fm-emblem" && \
+                   curl -fsS http://127.0.0.1:18080/marketing.css?v=7 | grep -q ".fm-emblem" && \
                    curl -fsS http://127.0.0.1:18080/brand-logo.webp?v=4 | head -c 4 | grep -q "RIFF" && \
                    curl -fsS http://127.0.0.1:18080/solicitar-demo/ | grep -q "demo-request-form" && \
                    curl -fsS http://127.0.0.1:18080/metricas.js | grep -q "api/public/metricas" && \
                    [ "$(curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:18080/api/admin/metricas-web)" != 200 ]; then
                   # Comprobar absolutamente todas las páginas del sitemap y las integraciones.
-                  routes=$(curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -oE "<loc>[^<]*</loc>" | sed -E "s#<loc>https?://[^/]+([^<]*)</loc>#\1#")
+                  routes=$(curl -fsS http://127.0.0.1:18080/sitemap.xml | python3 -c "import sys, xml.etree.ElementTree as ET, urllib.parse as U; print(chr(32).join(U.urlsplit(e[0].text).path for e in ET.parse(sys.stdin).getroot()))")
                   test -n "$routes"
                   for path in $routes /integraciones/farmatic/ /integraciones/nixfarma/ /integraciones/unycop/ /integraciones/bitfarma/ /integraciones/farmanager/ /privacidad/ /privacidad/solicitud/; do
                     status=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "http://127.0.0.1:18080$path" || true)

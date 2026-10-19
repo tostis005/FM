@@ -91,7 +91,12 @@ public sealed class SyncJob
     public string FullSql { get; set; } = "";
     public string Mode { get; set; } = "incremental"; // incremental | snapshot
     public int EveryMinutes { get; set; } = 60;
-    public int RetryMinutes { get; set; } = 5; // Tiempo entre intentos después de un fallo
+    // Heredado para compatibilidad con JSON/API antiguos. El planificador ya
+    // NO reintenta con una cadencia distinta tras fallos de conexión.
+    public int RetryMinutes { get; set; } = 5;
+    // Solo se usa cuando EveryMinutes == 1440. Hora en zona de la farmacia.
+    // NULL mantiene el intervalo móvil antiguo en configuraciones existentes.
+    public string? DailyAtLocal { get; set; }
     public int BatchSize { get; set; } = 5000; // filas por lote; memoria acotada
     public DateTime InitialFromUtc { get; set; } = new(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     public bool Enabled { get; set; } = false;
@@ -108,6 +113,9 @@ public sealed class SyncState
 {
     public Guid JobId { get; set; }
     public DateTimeOffset? LastAttemptUtc { get; set; }
+    // Persistido también tras ERROR: evitar un nuevo intento inmediatamente
+    // después de una consulta muy larga o tras reiniciar el servicio.
+    public DateTimeOffset? LastCompletedUtc { get; set; }
     public DateTimeOffset? LastSuccessUtc { get; set; }
     public DateTimeOffset? WatermarkUtc { get; set; }
     public DateTimeOffset? LastFullSuccessUtc { get; set; }
@@ -221,5 +229,5 @@ public sealed record DestinationRequest(string Host, int Port, string Database, 
     string? SshKeyPassphrase = null, string SshHostKeySha256 = "");
 public sealed record MailRequest(bool Enabled, string Host, int Port, string Username, string? Password, string From, string To, bool NotifyRecovery = false);
 public sealed record PharmacyRequest(string Code, string Name, string SystemType, string ConnectionMode, string Server, string Database, string LinkedServer, string AuthMode, string Username, string? Password, string TimeZoneId, bool TrustServerCertificate, bool Enabled, string CountryCode = "ES");
-public sealed record JobRequest(Guid PharmacyId, Guid EntityId, string Sql, string FullSql, string Mode, int EveryMinutes, DateTime InitialFromUtc, bool Enabled, int BatchSize = 5000, int ReplayMinutes = 180, int SafetyDelayMinutes = 5, string AlertRecipients = "", int RetryMinutes = 5);
+public sealed record JobRequest(Guid PharmacyId, Guid EntityId, string Sql, string FullSql, string Mode, int EveryMinutes, DateTime InitialFromUtc, bool Enabled, int BatchSize = 5000, int ReplayMinutes = 180, int SafetyDelayMinutes = 5, string AlertRecipients = "", int RetryMinutes = 5, string? DailyAtLocal = null);
 public sealed record PasswordRequest(string Password);

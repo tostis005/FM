@@ -6,6 +6,7 @@ import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingSta
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
 const money=euro;
@@ -51,37 +52,34 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
  }
  return <div className="fm-generic-detail">
   <p>Presentaciones agrupadas por <strong>DCPF {group.dcpf}</strong>. El precio de compra procede exclusivamente de movimientos reales sincronizados.</p>
-  <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
-   <thead><tr><th>CN</th><th>Presentación</th><th>Laboratorio</th><th>Tipo</th>
-    <th>Vendidas</th><th>Ventas</th><th>Compradas</th><th>PUC observado</th></tr></thead>
-   <tbody>{data.products.map(product=>{
+  <SortableDataTable label="presentaciones de genéricos"
+   headers={["CN","Presentación","Laboratorio","Tipo","Vendidas","Ventas","Compradas","PUC observado"]}
+   rows={data.products.map(product=>{
     const sales=saleMap.get(product.cn),bought=purchaseMap.get(product.cn)||[];
     const buyQty=bought.reduce((v,r)=>v+Number(r.units||0),0);
     const buyAmount=bought.reduce((v,r)=>v+Number(r.cost??r.spend??0),0);
     const pricedQty=bought.reduce((v,r)=>v+Number(r.pricedUnits??r.units??0),0);
     const avg=pricedQty>0?buyAmount/pricedQty:null;
-    return <tr key={product.cn}><td className="fm-generic-code">{product.cn}</td>
-     <td>{product.nombre}</td><td>{product.laboratorio||product.laboratorio_codigo||"—"}</td>
-     <td>{product.generico?"Genérico":"Equivalente de referencia"}</td>
-     <td>{data.salesAvailable?quantity(sales?.units||0):"—"}</td>
-     <td>{data.salesAvailable?money(sales?.revenue||0):"—"}</td>
-     <td>{data.purchasesAvailable?quantity(buyQty):"—"}</td>
-     <td>{unitPrice(avg)}</td></tr>;
-   })}</tbody>
-  </table></HorizontalTableScroll>
+    return [<strong className="fm-generic-code" key={product.cn}>{product.cn}</strong>,
+      product.nombre,product.laboratorio||product.laboratorio_codigo||"—",
+      product.generico?"Genérico":"Equivalente de referencia",
+      data.salesAvailable?quantity(sales?.units||0):"—",
+      data.salesAvailable?money(sales?.revenue||0):"—",
+      data.purchasesAvailable?quantity(buyQty):"—",unitPrice(avg)];
+   })}/>
   <h3>Comparativa de compras por CN y proveedor</h3>
-  {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras y coste unitario integrados.</p>:
+  {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
-   <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
-    <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC real ponderado</th><th>Referencia histórica</th><th>Objetivo equivalente</th><th>Proveedor objetivo</th><th>Ahorro estimado</th><th>Importe</th></tr></thead>
-    <tbody>{data.purchases.map((r,i)=><tr key={r.cn+"_"+r.supplierCode+"_"+i}>
-     <td className="fm-generic-code">{r.cn}</td><td>{r.supplier||r.supplierCode||"Sin proveedor"}</td>
-     <td>{quantity(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{unitPrice(r.referencePuc)}</td>
-     <td>{unitPrice(r.targetPuc)}</td>
-     <td>{r.targetSupplier?(r.targetSupplier+(r.targetCn?" · CN "+r.targetCn:"")):"—"}</td>
-     <td>{money(r.potential)}</td><td>{money(r.spend)}</td>
-    </tr>)}</tbody>
-   </table></HorizontalTableScroll>}
+   <SortableDataTable label="compras por genérico"
+    headers={["CN","Proveedor de compra","Unidades","PUC real ponderado","Referencia histórica","Objetivo equivalente","Proveedor objetivo","Ahorro estimado","Importe"]}
+    rows={data.purchases.map(r=>[
+     <strong className="fm-generic-code" key={r.cn}>{r.cn}</strong>,
+     r.supplier||r.supplierCode||"Sin proveedor",quantity(r.units),
+     unitPrice(r.puc),unitPrice(r.referencePuc),unitPrice(r.targetPuc),
+     r.targetSupplier?(r.targetSupplier+(r.targetCn?" · CN "+r.targetCn:"")):"—",
+     money(r.potential),money(r.spend)
+    ])}/>}
+
  </div>;
 }
 export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){

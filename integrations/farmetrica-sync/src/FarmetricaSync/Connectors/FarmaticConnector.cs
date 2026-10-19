@@ -122,48 +122,6 @@ public sealed class FarmaticConnector(Secrets secrets) : ISourceConnector
         return result;
     }
 
-    // A diferencia de la vista/preview TOP 100, la carga histórica alcanza
-    // millones de líneas. Un registro sin Codigo o Cantidad hacía perder horas
-    // de extracción y terminaba sin confirmar. Solo aplicar a la plantilla
-    // oficial completa; las consultas SQL personalizadas pueden reinterpretar
-    // esos campos y NO deben verse afectadas por esta comprobación.
-    private async Task PreflightStandardSalesSnapshotAsync(
-        SqlConnection conn, Pharmacy pharmacy, SyncJob job, EntityDefinition entity,
-        CancellationToken ct)
-    {
-        if (entity.Name != "ventas_completas" || job.Mode != "snapshot") return;
-        var expected = SqlTemplates.All.FirstOrDefault(t =>
-            t.SystemType == "farmatic" && t.Entity == "ventas_completas")?.FullSql;
-        if (expected is null || !job.Sql.Trim().Equals(expected.Trim(), StringComparison.Ordinal)) return;
-
-        string diagnostic = ResolveSql(pharmacy, """
-SELECT TOP (1)
-    CONVERT(varchar(100), l.IdVenta) AS id_venta,
-    CONVERT(varchar(100), l.IdNLinea) AS id_linea,
-    CASE WHEN NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), l.Codigo))), '') IS NULL
-         THEN 'Codigo' ELSE 'Cantidad' END AS campo
-FROM {{TABLE:dbo.LineaVenta}} AS l
-WHERE l.IdNLinea IS NOT NULL
-  AND (NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), l.Codigo))), '') IS NULL
-       OR TRY_CONVERT(decimal(20,6), l.Cantidad) IS NULL)
-""");
-        await using var check = new SqlCommand(diagnostic, conn) { CommandTimeout = 1800 };
-        await using var reader = await check.ExecuteReaderAsync(CommandBehavior.SingleRow, ct);
-        if (!await reader.ReadAsync(ct)) return;
-
-        string idVenta = Convert.ToString(reader["id_venta"]) ?? "?";
-        string idLinea = Convert.ToString(reader["id_linea"]) ?? "?";
-        string campo = Convert.ToString(reader["campo"]) ?? "?";
-        // Solo claves técnicas de origen; no mostrar producto, cliente ni PII.
-        idVenta = idVenta.Length > 80 ? idVenta[..80] : idVenta;
-        idLinea = idLinea.Length > 80 ? idLinea[..80] : idLinea;
-        throw new InvalidOperationException(
-            $"Farmatic: prevalidación de ventas_completas fallida: IdVenta={idVenta}, " +
-            $"IdNLinea={idLinea}, campo {campo} vacío o inválido. " +
-            "Carga detenida antes del COPY; no se ha confirmado ningún dato. " +
-            "Revisa si la línea es un ajuste sin artículo o un registro incompleto; no se descarta automáticamente.");
-    }
-
     public async IAsyncEnumerable<IReadOnlyList<Dictionary<string, object?>>> ReadBatchesAsync(
         Pharmacy pharmacy, SyncJob job, EntityDefinition entity,
         DateTime sinceUtc, DateTime untilUtc, int batchSize,
@@ -174,7 +132,6 @@ WHERE l.IdNLinea IS NOT NULL
             throw new ArgumentOutOfRangeException(nameof(batchSize), "El lote debe tener entre 100 y 20.000 filas.");
         await using var conn = Connection(pharmacy);
         await conn.OpenAsync(ct);
-        await PreflightStandardSalesSnapshotAsync(conn, pharmacy, job, entity, ct);
         string sql = ResolveSql(pharmacy, job.Sql);
         await using var cmd = new SqlCommand(sql, conn) { CommandTimeout = 1800 };
         if (job.Mode == "incremental")

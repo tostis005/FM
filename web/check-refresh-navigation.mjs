@@ -66,33 +66,44 @@ try{
  await assertRoute("/compras","Compras");
  // Simular una pantalla muy larga para comprobar el scroll real del documento.
  // La navegación SPA debe llevar arriba aunque el usuario estuviera al final.
- const scrollDiag=await page.evaluate(()=>{
+ // Ejecutar scroll y clic dentro del mismo evento para que una actualización
+ // asíncrona del contenido no refluya la página entre la precondición y el clic.
+ const start=await page.evaluate(()=>{
   const main=document.querySelector(".main-content");
   main.style.minHeight="3200px";
   document.body.style.minHeight="3200px";
-  // Recalcular la altura y usar el scrollingElement real del documento.
   void main.getBoundingClientRect().height;
-  const root=document.scrollingElement;
-  root.scrollTop=1050;
   window.scrollTo({top:1050,left:0,behavior:"instant"});
-  return {scrollY:window.scrollY,rootTop:root.scrollTop,
-   rootHeight:root.scrollHeight,viewport:window.innerHeight,mainHeight:main.getBoundingClientRect().height};
+  const scrollY=window.scrollY;
+  const link=[...document.querySelectorAll('nav[aria-label="Módulos"] button.side-link')]
+   .find(button=>button.textContent.trim()==="Ventas");
+  if(!link)throw Error("No se encontró Ventas en el menú");
+  link.click();
+  return scrollY;
  });
- console.log("Altura de prueba de scroll:",JSON.stringify(scrollDiag));
- await page.waitForFunction(()=>window.scrollY>900,null,{timeout:4000});
- // Ir desde la navegación lateral a otro módulo, no hacer una recarga completa.
- await page.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Ventas",exact:true}).first().click();
- assert.equal(new URL(page.url()).pathname,"/ventas");
- await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
- // El historial también debe volver al inicio en vez de restaurar la posición anterior.
- await page.evaluate(()=>window.scrollTo(0,900));
- await page.goBack({waitUntil:"domcontentloaded"});
- assert.equal(new URL(page.url()).pathname,"/compras","Atrás debe volver al módulo anterior");
- await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
- await page.evaluate(()=>window.scrollTo(0,850));
- await page.goForward({waitUntil:"domcontentloaded"});
- assert.equal(new URL(page.url()).pathname,"/ventas","Adelante debe respetar la navegación");
- await page.waitForFunction(()=>window.scrollY===0,null,{timeout:3000});
+ assert.ok(start>900,"Precondición: desplazamiento real antes de pulsar Ventas");
+ await page.waitForURL("**/ventas",{timeout:8000});
+ await page.waitForFunction(()=>window.scrollY===0,null,{timeout:4000});
+ // Probar Atrás y Adelante manteniendo la posición hasta el instante
+ // de navegación; scrollRestoration='manual' evita saltos a una ruta anterior.
+ const beforeBack=await page.evaluate(()=>{
+  window.scrollTo({top:900,behavior:"instant"});
+  const before=window.scrollY;
+  window.history.back();
+  return before;
+ });
+ assert.ok(beforeBack>800,"Precondición: scroll real antes de Atrás");
+ await page.waitForURL("**/compras",{timeout:8000});
+ await page.waitForFunction(()=>window.scrollY===0,null,{timeout:4000});
+ const beforeForward=await page.evaluate(()=>{
+  window.scrollTo({top:850,behavior:"instant"});
+  const before=window.scrollY;
+  window.history.forward();
+  return before;
+ });
+ assert.ok(beforeForward>750,"Precondición: scroll real antes de Adelante");
+ await page.waitForURL("**/ventas",{timeout:8000});
+ await page.waitForFunction(()=>window.scrollY===0,null,{timeout:4000});
  // A diferencia del caso temporal, un módulo REALMENTE no autorizado sí redirige.
  role="farmacia";
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});

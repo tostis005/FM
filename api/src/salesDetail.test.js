@@ -42,7 +42,7 @@ test("familias, paginación y farmacias no autorizadas",async()=>{
  assert.equal((await request({farmacias:"9"})).status,403);
  assert.equal((await request({farmacias:"1,5",familias:"12"})).status,400);
  assert.equal((await request({pagina:"0"})).status,400);
- assert.equal((await request({desde:"2020-01-01"})).status,400);
+ assert.equal((await request({desde:"1899-01-01"})).status,400);
  assert.throws(()=>buildSalesDetailSQL("ampedia;DROP"));
 });
 
@@ -86,4 +86,17 @@ test("detalle de ventas soporta catálogo y compras antiguas y fuente ausente",(
  assert.doesNotMatch(stockOnly,/FROM "farmacia_legado"\.articulos/);
  assert.throws(()=>buildSalesDetailSQL("farmacia_legado","margin","desc",
   {articles:"otro",purchases:"legacy"}));
+});
+
+test("detalle acepta cualquier período del selector, incluidas fechas personalizadas y mes en curso",async()=>{
+ const {request,calls}=make();
+ for(const [from,to] of [["2026-10-01","2026-10-18"],["2026-10-18","2026-10-18"],
+   ["2026-09-12","2026-10-04"],["2024-11-01","2026-10-18"],["1900-01-01","2026-10-18"]]){
+  const {status,data}=await request({desde:from,hasta:to});
+  assert.equal(status,200);
+  assert.equal(data.from,from);
+  assert.equal(data.to,to);
+  const args=calls.at(-1).params;
+  assert.deepEqual(args.slice(0,2),[from,to],"SQL debe usar el filtro de cabecera y no 12 meses");
+ }
 });

@@ -69,6 +69,7 @@ jobs:
           node --test src/reportFilterScopes.test.js
           node --test src/businessAnalytics.test.js
           node --test src/salesPeriods.test.js
+          node --test src/localeES.test.js
           node --test src/promotionMetrics.test.js
           node --test src/laboratoryExport.test.js
           node check-login.mjs

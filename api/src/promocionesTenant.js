@@ -36,6 +36,34 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
       return res.json({promotions:promos});
     }catch(e){next(e);}
   });
+  // El borrado solo puede realizarlo un administrador del cliente.
+  // Guardar una última revisión de auditoría y eliminar de manera transaccional:
+  // nunca ocultar en pantalla si la eliminación del servidor falla.
+  app.delete("/api/tenant/promociones/:id",...requireTenantModule("promociones"),async(req,res,next)=>{
+    if(!ROLE_EDIT.has(req.context.role))
+      return res.status(403).json({error:"No tienes permiso para eliminar promociones"});
+    const id=String(req.params.id||"");
+    const schema=req.context.client.schema;
+    if(!SCHEMA.test(schema)||!validId(id))
+      return res.status(400).json({error:"Cliente o promoción inválidos"});
+    let db;
+    try{
+      db=await pool.connect();
+      await db.query("BEGIN");
+      const {rows}=await db.query(
+        `DELETE FROM "${schema}".fm_promociones WHERE id=$1 RETURNING documento`,[id]);
+      if(rows.length){
+        await db.query(
+          `INSERT INTO "${schema}".fm_promocion_revisiones
+           (promocion_id,documento_anterior,cambiado_por)
+           VALUES($1,$2::jsonb,$3)`,
+          [id,JSON.stringify({...rows[0].documento,deletedAt:new Date().toISOString()}),req.user.email]);
+      }
+      await db.query("COMMIT");
+      return res.json({id,deleted:rows.length>0});
+    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
+    finally{db?.release();}
+  });
   app.put("/api/tenant/promociones/:id",...requireTenantModule("promociones"),async(req,res,next)=>{
     if(!ROLE_EDIT.has(req.context.role))
       return res.status(403).json({error:"No tienes permiso para guardar promociones"});

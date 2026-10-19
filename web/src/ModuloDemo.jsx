@@ -12,7 +12,7 @@ import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import "./moduleDemo.css";
 
 const TITLES={
- dashboard:"Dashboard",ventas:"Ventas",compras:"Compras",proveedores:"Proveedores",
+ dashboard:"Inicio",ventas:"Ventas",compras:"Compras",proveedores:"Proveedores",
  stock:"Stock",reposicion:"Reposición",genericos:"Genéricos",
  rentabilidad:"Rentabilidad",acciones:"Acciones",informes:"Informes",asistente:"Asistente IA"
 };
@@ -610,59 +610,25 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
   {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
-  {module==="compras"&&receiptMode&&
-   <details className="fm-data-details">
-    <summary>Recepciones: {integer(fastPurchase.sourceRows)} · Faltan líneas e importes</summary>
-    <p>No se pueden calcular compras ni costes por artículo sin el detalle del ERP.</p>
-   </details>}
-  {module==="compras"&&receiptError&&<p role="alert" className="fm-inline-status">
-    Error al cargar recepciones: {receiptError}
-   </p>}
-  {module==="compras"&&fastPurchase?.hasArticleLines===true&&fastPurchase?.hasAmounts===false&&
-   <p role="status" className="fm-inline-status">
-    Se han importado referencias de artículos, pero faltan importes de compra.
-    Los indicadores de gasto y los precios que dependen del coste no están disponibles.
-   </p>}
-  {module==="compras"&&period.valid&&<details className="fm-data-details">
-   <summary>{purchaseStateError?"Error en estado de compras":purchaseState?.hasPurchases?"Cobertura por farmacia":"Estado de importaciones"}</summary>
-   <div className="fm-inline-status" role="status">
-   {purchaseStateError?
-    <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:
-    !purchaseState?
-     <span>Comprobando si existen compras sincronizadas en las farmacias seleccionadas…</span>:
-     purchaseState.source==="missing"?
-      <strong>No hay una tabla de compras reconocible en este cliente. Revisa las importaciones del sincronizador.</strong>:
-      purchaseState.hasPurchases?
-       <span><strong>Registros del origen de compras:</strong> {purchaseState.pharmacies.filter(p=>p.hasPeriodPurchases).length} de {purchaseState.pharmacies.length} farmacias han enviado movimientos. Esto no confirma que incluyan artículos o importes.
-        {reportLoading?" El detalle y los indicadores se están calculando.":""}
-        {reportError?" Los movimientos existen, pero ha fallado la consulta del informe.":""}</span>:
-       <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies?.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}
-   {purchaseState?.pharmacies?.length>0&&<small style={{display:"block",marginTop:6}}>
-    {purchaseState.pharmacies.map(p=>p.name+": "+(p.hasPeriodPurchases?"con compras":p.latestPurchaseDate?"sin compras en el período (última "+dateES(p.latestPurchaseDate)+")":"sin compras sincronizadas")).join(" · ")}
-   </small>}
-   {purchaseSlow&&purchaseState?.hasPurchases&&<small style={{display:"block",marginTop:8}}>
-    El informe sigue calculando el detalle; los registros existen. Puede haber una consulta lenta, no falta de datos.
-   </small>}
-  </div></details>}
-  {module==="proveedores"&&realReport?.available&&realReport.kpis?.lineasCompra==null&&
-   <p role="status" className="fm-inline-status">
-    Hay referencias de proveedor, pero no se han importado líneas de compra con
-    artículo y unidades. El gasto y los volúmenes desconocidos no son cero.
-   </p>}
-  {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
-  {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
-   <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}
-  {realReport?.available&&realReport.availability?.sales===false&&["dashboard","rentabilidad","stock","reposicion","acciones"].includes(module)&&
-   <p role="status" className="fm-inline-status">No hay una fuente de ventas compatible. Los indicadores de rotación, ABCD, reposición y márgenes que requieren ventas no se pueden calcular; no se interpretan como cero.</p>}
-  {realReport?.available&&module==="rentabilidad"&&realReport.salesRows?.length>0&&
-    realReport.availability?.marginCoverage<realReport.salesRows.length&&
-   <p role="status" className="fm-inline-status">Hay {realReport.salesRows.length-realReport.availability.marginCoverage} artículos visibles sin coste de adquisición comprobable. Se muestran sus ventas, pero no se inventa su margen. Los totales del margen permanecen sin calcular si la cobertura no es completa.</p>}
-  {realReport?.availability?.supplierRowsTruncated&&["proveedores","compras"].includes(module)&&
-   <p role="status" className="fm-inline-status">El ranking de proveedores muestra los primeros 1.000. El importe total de compras incluye todos los proveedores; no interpretes la suma de filas visibles como total de la red.</p>}
-   {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&<p role="status" className="fm-inline-status">El stock no se muestra como actual porque no hay una importación de inventario suficientemente reciente en las últimas 48 horas.</p>}
-   {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<details className="fm-data-details"><summary>Base de valoración</summary><p>{realReport.availability.stockSummaryBasis}</p></details>}
-   {realReport?.availability?.rowsTruncated&&module!=="ventas"&&<p role="status" className="fm-inline-status">El listado está limitado a las primeras 3.000 referencias. Los totales de ventas y compras proceden de todas las operaciones.</p>}
-   {realReport?.availability?.stockRowsTruncated&&["stock","reposicion","acciones"].includes(module)&&<p role="status" className="fm-inline-status">El listado de existencias está limitado a 3.000 referencias. Los recuentos y unidades del inventario se calculan sobre todas las fichas; la reposición mostrada no incluye necesariamente todas las necesidades.</p>}
+   {module==="compras"&&receiptError&&
+    <p role="alert" className="fm-inline-status">No se pudieron cargar las recepciones.</p>}
+   {module==="compras"&&(receiptMode||fastPurchase?.hasArticleLines===false)&&
+    <div className="fm-preview-data-hint" role="status">
+     <span className="fm-preview-badge">Datos parciales</span>
+     <span>Algunos importes y artículos de compras todavía no están disponibles.</span>
+    </div>}
+   {realReport?.available===false&&
+    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Demo</span>
+     <span>La información de este módulo todavía está pendiente de carga.</span></div>}
+   {realReport?.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
+    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
+     <span>Compras todavía no disponibles para esta selección.</span></div>}
+   {realReport?.availability?.sales===false&&["dashboard","rentabilidad","stock","reposicion","acciones"].includes(module)&&
+    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
+     <span>Ventas todavía no disponibles para esta selección.</span></div>}
+   {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&
+    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
+     <span>Esperando inventario actualizado.</span></div>}
 
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>

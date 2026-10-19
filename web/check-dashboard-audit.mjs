@@ -58,7 +58,9 @@ try{
  assert.equal(by("/api/analytics/ventas").length,0,"Inicio no debe repetir el detalle pesado");
  assert.ok(by("/api/analytics/ventas/totales").length>0,"Inicio usa ventas documentales reales");
  assert.ok(by("/api/analytics/dashboard/compras").length>0,"Inicio usa recepciones documentales reales");
- assert.equal(await page.locator(".fm-demo-kpi").count(),6);
+ assert.equal(await page.locator(".fm-demo-kpi").count(),8);
+ const dashboardLabels=await page.locator(".fm-demo-kpi>span").allTextContents();
+ assert.deepEqual(dashboardLabels.slice(0,4),["Ventas","Compras","Margen estimado","Margen bruto (%)"]);
  const moneyMetrics=await page.locator(".fm-demo-kpi strong").evaluateAll(els=>els.slice(0,2).map(el=>{
   const css=getComputedStyle(el);return {size:parseFloat(css.fontSize),whiteSpace:css.whiteSpace,
    width:el.clientWidth,scroll:el.scrollWidth,value:el.textContent};

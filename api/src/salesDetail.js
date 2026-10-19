@@ -209,11 +209,17 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
     const args={slug:req.context.client.slug,ids,months:Number(req.context.client.analysisMonths||12),
      from,to,search,families,sortKey:order,sortDir:direction,page,pageSize};
     const cached=await cache.read(args);
-    if(!cached||cached.stale){
+    const refresh=()=>{
      for(const id of ids)cache.schedule({
       slug:req.context.client.slug,schema,pharmacyId:id,months:args.months,code:byId.get(id)});
+    };
+    if(cached){
+     if(cached.stale)refresh();
+     return res.json({...cached,from,to});
     }
-    if(cached)return res.json({...cached,from,to});
+    // Primera visita sin cache: resolver la petición viva ANTES de iniciar
+    // el cálculo completo de 12 meses, evitando competir por CPU con ella.
+    if(typeof res.once==="function")res.once("finish",refresh);
    }
    const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,

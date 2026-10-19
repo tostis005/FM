@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
@@ -193,6 +193,16 @@ function pageFromUrl(){
 function App(){
  const [data,setData]=useState(readState);
  const [page,setPage]=useState(pageFromUrl);
+ // La SPA debe empezar arriba al navegar entre módulos, submenús o al usar
+ // Atrás/Adelante. El navegador no debe restaurar el scroll de otra ruta.
+ useEffect(()=>{
+  const previous=window.history.scrollRestoration;
+  window.history.scrollRestoration="manual";
+  return()=>{window.history.scrollRestoration=previous};
+ },[]);
+ useLayoutEffect(()=>{
+  window.scrollTo({top:0,left:0,behavior:"instant"});
+ },[page]);
  // Los submenús pueden abrirse mediante sus flechas sin navegar de pantalla.
  const [expandedNavIds,setExpandedNavIds]=useState(()=>{
   const initial=pageFromUrl();

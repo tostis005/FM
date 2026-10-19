@@ -775,6 +775,9 @@ export function setupRealReports(app,pool,{requireTenant}){
    const completeMargins=completeSales&&(!buyers||completeBuys||fullCostsCalculated);
    const stockRowsTruncated=Boolean(snapshotAvailable&&stockRows.length>=rowLimit);
    const completeStock=snapshotAvailable&&!stockRowsTruncated;
+   // Tener las tablas v2 creadas NO implica disponer de ventas para estimar
+   // rotaciones, reposición o roturas de inventario.
+   const salesEvidence=sales&&(sale.rows.length>0||saleM.rows.length>0);
    const pricedStock=stockRows.filter(r=>r.value!=null);
    const kpis={
     stockArticulos:snapshotAvailable?stockSummary?.articles??null:null,
@@ -802,12 +805,12 @@ export function setupRealReports(app,pool,{requireTenant}){
     margen:readSalesRows&&sales&&completeMargins&&coveredItems===salesRows.length?round(coveredMargin):null,
     margenPct:readSalesRows&&sales&&completeMargins&&coveredItems===salesRows.length&&coveredRevenue?round(100*coveredMargin/coveredRevenue):null,
     coberturaCostes:sales&&completeMargins&&salesRows.length?round(100*coveredItems/salesRows.length):null,
-    reposiciones:completeStock&&sales?replenishmentRows.length:null,
-    reposicionCoste:completeStock&&sales&&completeSales&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
-    sobrestock:completeStock&&sales&&completeSales&&stockRows.every(r=>r.excessUnits==null||r.excessValue!=null)?
+    reposiciones:completeStock&&salesEvidence?replenishmentRows.length:null,
+    reposicionCoste:completeStock&&salesEvidence&&completeSales&&replenishmentRows.every(r=>r.needValue!=null)?round(sum(replenishmentRows,"needValue")):null,
+    sobrestock:completeStock&&salesEvidence&&completeSales&&stockRows.every(r=>r.excessUnits==null||r.excessValue!=null)?
        round(sum(stockRows,"excessValue")):null,
-    stockSinRotacion:completeStock&&sales?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
-    roturas:completeStock&&sales?stockRows.filter(r=>r.zero).length:null,
+    stockSinRotacion:completeStock&&salesEvidence?stockRows.filter(r=>r.units>0&&r.sold<=0).length:null,
+    roturas:completeStock&&salesEvidence?stockRows.filter(r=>r.zero).length:null,
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
     acciones:completeSales&&(!needsStock||completeStock)&&sales?actions.length:null
    };

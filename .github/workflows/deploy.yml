@@ -69,6 +69,7 @@ jobs:
           node --test src/localeES.test.js
           node check-login.mjs
           node generate-seo.mjs
+          node check-seo.mjs
           node check-marketing.mjs
           node check-public-links.mjs
           npm run build
@@ -210,6 +211,9 @@ jobs:
                 if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected && \
                    curl -fsS http://127.0.0.1:18080/soluciones/gestion-promociones-farmacia/ | grep -q "Farmetrica" && \
                    curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q "<urlset" && \
+                   ! curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q '__FARMETRICA_SITE_ORIGIN__' && \
+                   curl -fsS http://127.0.0.1:18080/sitemap.xml | grep -q '<loc>http://127.0.0.1' && \
+                   curl -fsS http://127.0.0.1:18080/robots.txt | grep -q 'Sitemap: http://127.0.0.1/sitemap.xml' && \
                    curl -fsS http://127.0.0.1:18080/ | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/login | grep -q "class=\"fm-emblem\""  && \
                    curl -fsS http://127.0.0.1:18080/marketing.css?v=6 | grep -q ".fm-emblem" && \

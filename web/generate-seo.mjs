@@ -1,5 +1,5 @@
-import {mkdirSync,writeFileSync} from "node:fs";
-import {join,resolve} from "node:path";
+import {mkdirSync,writeFileSync,readFileSync,readdirSync} from "node:fs";
+import {join,resolve,relative,dirname} from "node:path";
 import {solutions,integrations,articles} from "./seo-content.mjs";
 const root=resolve(import.meta.dirname,"public");
 const esc=x=>String(x??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
@@ -76,3 +76,31 @@ for(const [p,t] of [["soluciones","solution"],["integraciones","integration"]]){
  writeFileSync(join(root,p,"index.html"),hub(t),"utf8");
 }
 console.log("Generadas "+records.length+" páginas editoriales y 2 páginas índice");
+
+// Sitemap SEO de fuente única: descubrir las páginas HTML reales que se publican.
+// Las fichas generadas y los artículos escritos manualmente se recogen sin mantener
+// un segundo listado a mano en Nginx. Las páginas noindex nunca se anuncian.
+const sitemapOrigin="__FARMETRICA_SITE_ORIGIN__";
+const sitemapPaths=new Set(["/"]); // La portada se sirve desde landing.html.
+const seoPrefixes=["/soluciones/","/integraciones/","/blog/","/solicitar-demo/","/privacidad/"];
+function scanIndexablePages(directory){
+ for(const entry of readdirSync(directory,{withFileTypes:true})){
+  const file=join(directory,entry.name);
+  if(entry.isDirectory()){scanIndexablePages(file);continue;}
+  if(!entry.isFile()||entry.name!=="index.html")continue;
+  const route="/"+relative(root,dirname(file)).replaceAll("\\\\","/")+"/";
+  if(!seoPrefixes.some(prefix=>route.startsWith(prefix)))continue;
+  const html=readFileSync(file,"utf8");
+  const robots=html.match(/<meta\\b[^>]*name=["']robots["'][^>]*>/i)?.[0]||"";
+  if(/content=["'][^"']*\\bnoindex\\b/i.test(robots))continue;
+  sitemapPaths.add(route);
+ }
+}
+scanIndexablePages(root);
+const sitemapRoutes=[...sitemapPaths].sort((a,b)=>a==="/"?-1:b==="/"?1:a.localeCompare(b,"es"));
+const sitemap='<?xml version="1.0" encoding="UTF-8"?>\\n'
+ +'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\\n'
+ +sitemapRoutes.map(route=>'  <url><loc>'+sitemapOrigin+esc(route)+'</loc></url>').join("\\n")
+ +'\\n</urlset>\\n';
+writeFileSync(join(root,"sitemap.xml"),sitemap,"utf8");
+console.log("Sitemap generado: "+sitemapRoutes.length+" rutas indexables");

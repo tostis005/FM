@@ -9,6 +9,7 @@ import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
 import { setupRealReports } from "./realReports.js";
+import {setupPurchaseTotals} from "./purchaseTotals.js";
 import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";

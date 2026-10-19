@@ -66,6 +66,13 @@ async function verifyPeriod(expected){
   throw Error("La tabla debe seguir cargando después de recibir el SUM");
  await page.locator(".fm-demo-table .fm-loading-panel").waitFor({state:"detached",timeout:11000});
  await page.getByText("Artículo",{exact:true}).first().waitFor({state:"visible",timeout:10000});
+ const selected=totals().at(-1).query;
+ for(const endpoint of ["/api/analytics/ventas/recuento","/api/analytics/ventas/detalle"]){
+  const query=requests.filter(r=>r.path===endpoint).at(-1)?.query;
+  if(!query||query.desde!==selected.desde||query.hasta!==selected.hasta)
+   throw Error("Las fechas de "+endpoint+" no coinciden con el gráfico: "+
+    JSON.stringify({summary:selected,query}));
+ }
  return totals().length;
 }
 try{
@@ -82,11 +89,18 @@ try{
  await page.locator(".fm-demo-filters select").first().selectOption("custom");
  await page.getByLabel("Ventas desde").fill("2026-10-05");
  await page.getByLabel("Ventas hasta").fill("2026-10-12");
- await page.waitForFunction(()=>document.querySelector(".fm-sales-period-info")?.textContent.includes("2026-10-12"),
-  {timeout:8000});
+ await page.waitForFunction(()=>document.querySelector(".fm-sales-period-info")?.textContent.includes("12/10/2026"),
+  null,{timeout:8000});
  await page.waitForFunction(()=>document.querySelector(".fm-demo-graph .fm-loading-panel")===null,
-  {timeout:11000});
+  null,{timeout:11000});
+ await page.locator(".fm-demo-table .fm-loading-panel").waitFor({state:"detached",timeout:11000});
  t=totals().at(-1).query;
+ for(const endpoint of ["/api/analytics/ventas/recuento","/api/analytics/ventas/detalle"]){
+  const query=requests.filter(r=>r.path===endpoint).at(-1)?.query;
+  if(!query||query.desde!==t.desde||query.hasta!==t.hasta)
+   throw Error("El período personalizado del detalle difiere del gráfico: "+
+    JSON.stringify({summary:t,query,endpoint}));
+ }
  if(t.desde!=="2026-10-05"||t.hasta!=="2026-10-12"||t.granularidad!=="day")
   throw Error("Fechas personalizadas incorrectas: "+JSON.stringify(t));
  console.log("OK: SUM visible antes que ABCD, doble carga independiente y períodos reales");

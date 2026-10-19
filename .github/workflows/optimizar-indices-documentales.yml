@@ -1,0 +1,116 @@
+name: Optimizar índices de ventas y recepciones completas
+on:
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: farmetrica-documental-indexes
+  cancel-in-progress: false
+jobs:
+  indices_documentales:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Preparar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Identificar índices documentales pendientes
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          pending=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          WITH expected AS (
+            SELECT DISTINCT c.esquema_datos AS schema_name,v.index_name,v.table_name
+            FROM farmetrica.clientes c
+            CROSS JOIN (VALUES
+              ('fm_doc_ventas_codigo_fecha_idx','fm_ventas_cabeceras'),
+              ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras')
+            ) v(index_name,table_name)
+            WHERE to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) IS NOT NULL
+          )
+          SELECT count(*) FROM expected e
+          WHERE NOT EXISTS (
+            SELECT 1 FROM pg_class idx
+            JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+            JOIN pg_index ix ON ix.indexrelid=idx.oid
+            WHERE ns.nspname=e.schema_name AND idx.relname=e.index_name
+              AND ix.indisvalid AND ix.indisready
+          );
+          SQL
+          )
+          test "$pending" -ge 0
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          echo "Índices documentales pendientes: $pending"
+      - name: Crear índices concurrentes sin detener la sincronización
+        if: steps.check.outputs.pending != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reintento tras bloqueos/deadlocks: el SQL limpia sólo sus índices inválidos.
+          for attempt in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ServerAliveInterval=20 -o ServerAliveCountMax=8 \
+                "$VPS_USER@$VPS_HOST" \
+                'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+                < ops/indices-documentales-concurrentes.sql; then
+              echo "Índices construidos en intento $attempt"
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::No se pudieron crear índices concurrentes después de cinco intentos."
+              exit 1
+            fi
+            echo "Reintentando por bloqueo transitorio ($attempt/5)."
+            sleep 20
+          done
+      - name: Verificar índices y registrar estadísticas
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          WITH expected AS (
+            SELECT DISTINCT c.esquema_datos AS schema_name,v.index_name,v.table_name
+            FROM farmetrica.clientes c
+            CROSS JOIN (VALUES
+              ('fm_doc_ventas_codigo_fecha_idx','fm_ventas_cabeceras'),
+              ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras')
+            ) v(index_name,table_name)
+            WHERE to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) IS NOT NULL
+          )
+          SELECT count(*) FROM expected e
+          WHERE NOT EXISTS (
+            SELECT 1 FROM pg_class idx
+            JOIN pg_namespace ns ON ns.oid=idx.relnamespace
+            JOIN pg_index ix ON ix.indexrelid=idx.oid
+            WHERE ns.nspname=e.schema_name AND idx.relname=e.index_name
+              AND ix.indisvalid AND ix.indisready
+          );
+          SQL
+          )
+          if [ "$missing" != 0 ]; then
+            echo "::error::Faltan $missing índices documentales válidos."
+            exit 1
+          fi
+          echo "Índices documentales listos; ninguna tabla transaccional reescrita."

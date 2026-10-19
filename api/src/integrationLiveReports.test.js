@@ -364,7 +364,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(outside.stockRows[0].units,1);
   const byPharmacy=await request("/api/analytics/reportes",{
    modulo:"stock",farmacias:"1,2",
-   columnas:JSON.stringify({pharmacy:["Farmacia 2"]})});
+   columnas:JSON.stringify({pharmacy:["Europa"]})});
   assert.ok(byPharmacy.stockRows.every(r=>r.pharmacyId==="2"));
   const fullOptions=await request("/api/analytics/reportes/opciones",{
    modulo:"stock",farmacias:"1,2"});

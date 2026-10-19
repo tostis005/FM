@@ -88,19 +88,19 @@ function scanIndexablePages(directory){
   const file=join(directory,entry.name);
   if(entry.isDirectory()){scanIndexablePages(file);continue;}
   if(!entry.isFile()||entry.name!=="index.html")continue;
-  const route="/"+relative(root,dirname(file)).replaceAll("\\\\","/")+"/";
+  const route="/"+relative(root,dirname(file)).replaceAll("\\","/")+"/";
   if(!seoPrefixes.some(prefix=>route.startsWith(prefix)))continue;
   const html=readFileSync(file,"utf8");
-  const robots=html.match(/<meta\\b[^>]*name=["']robots["'][^>]*>/i)?.[0]||"";
-  if(/content=["'][^"']*\\bnoindex\\b/i.test(robots))continue;
+  const robots=html.match(/<meta\b[^>]*name=["']robots["'][^>]*>/i)?.[0]||"";
+  if(/content=["'][^"']*\bnoindex\b/i.test(robots))continue;
   sitemapPaths.add(route);
  }
 }
 scanIndexablePages(root);
 const sitemapRoutes=[...sitemapPaths].sort((a,b)=>a==="/"?-1:b==="/"?1:a.localeCompare(b,"es"));
-const sitemap='<?xml version="1.0" encoding="UTF-8"?>\\n'
- +'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\\n'
- +sitemapRoutes.map(route=>'  <url><loc>'+sitemapOrigin+esc(route)+'</loc></url>').join("\\n")
- +'\\n</urlset>\\n';
+const sitemap='<?xml version="1.0" encoding="UTF-8"?>\n'
+ +'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+ +sitemapRoutes.map(route=>'  <url><loc>'+sitemapOrigin+esc(route)+'</loc></url>').join("\n")
+ +'\n</urlset>\n';
 writeFileSync(join(root,"sitemap.xml"),sitemap,"utf8");
 console.log("Sitemap generado: "+sitemapRoutes.length+" rutas indexables");

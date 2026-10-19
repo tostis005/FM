@@ -181,6 +181,78 @@ LEFT JOIN {{TABLE:dbo.SuperFamilia}} AS sf
     ON sf.IdSuperFamilia = fa.IdSuperFamilia
 """;
 
+
+    // Fuentes confirmadas por esquema SSMS: dbo.Venta y dbo.LineaVenta.
+    // Código interno, cantidades y descuentos firmados se conservan sin inferir CN.
+    private const string SalesDocuments = """
+SELECT
+    CONCAT(CONVERT(varchar(50), v.Empresa), '|', CONVERT(varchar(100), v.IdVenta), '|',
+           CASE WHEN l.IdNLinea IS NULL THEN 'H' ELSE 'L' END, '|',
+           COALESCE(CONVERT(varchar(100), l.IdNLinea), '0')) AS origen_id,
+    CONCAT(CONVERT(varchar(50), v.Empresa), '|', CONVERT(varchar(100), v.IdVenta)) AS documento_id,
+    CONVERT(varchar(100), l.IdNLinea) AS linea_id,
+    TRY_CONVERT(datetime2, v.FechaHora) AS fecha,
+    CONVERT(varchar(100), v.NumeroDoc) AS numero_documento,
+    CONVERT(varchar(100), v.XClie_IdCliente) AS tercero_id,
+    CONVERT(varchar(100), v.XVend_IdVendedor) AS empleado_id,
+    CONCAT('tipo_venta:', COALESCE(CONVERT(varchar(30), v.TipoVenta), 'desconocido')) AS estado,
+    TRY_CONVERT(decimal(20,6), v.TotalVenta) AS total_documento,
+    TRY_CONVERT(decimal(20,6), v.DescuentoOpera) AS descuento_global,
+    CAST('importe' AS varchar(20)) AS descuento_global_tipo,
+    TRY_CONVERT(decimal(20,6), v.TotalCuota) AS impuestos_documento,
+    CAST(NULL AS datetime2) AS modificado_origen,
+    CONVERT(varchar(100), l.Codigo) AS articulo_id,
+    TRY_CONVERT(decimal(20,6), l.Cantidad) AS unidades,
+    TRY_CONVERT(decimal(20,6), l.PVP) AS precio_unitario,
+    TRY_CONVERT(decimal(20,6), l.DescuentoLinea) AS descuento_linea,
+    CAST('importe' AS varchar(20)) AS descuento_linea_tipo,
+    TRY_CONVERT(decimal(20,6), l.ImporteNeto) AS importe_neto,
+    CAST(NULL AS decimal(20,6)) AS impuesto_linea,
+    CAST(NULL AS decimal(20,6)) AS coste_historico,
+    CAST(NULL AS decimal(20,6)) AS bonificacion_unidades,
+    CAST(NULL AS varchar(100)) AS numero_pedido,
+    CAST(NULL AS bit) AS eliminado_logicamente,
+    CAST(NULL AS bit) AS linea_eliminada
+FROM {{TABLE:dbo.Venta}} AS v
+LEFT JOIN {{TABLE:dbo.LineaVenta}} AS l ON l.IdVenta = v.IdVenta
+""";
+
+    // dbo.Recep contiene cabeceras; dbo.LINEARECEP tiene el coste de compra
+    // y bonificaciones. No atribuir semántica monetaria a Descuento1..4/DtoManual
+    // sin validarla, ni repartir importes de cabecera ausentes.
+    private const string ReceiptDocuments = """
+SELECT
+    CONCAT(CONVERT(varchar(100), r.IdRecepcion), '|',
+           CASE WHEN l.IdNLinea IS NULL THEN 'H' ELSE 'L' END, '|',
+           COALESCE(CONVERT(varchar(100), l.IdNLinea), '0')) AS origen_id,
+    CONVERT(varchar(100), r.IdRecepcion) AS documento_id,
+    CONVERT(varchar(100), l.IdNLinea) AS linea_id,
+    COALESCE(TRY_CONVERT(datetime2, r.Hora), TRY_CONVERT(datetime2, r.Fecha)) AS fecha,
+    CAST(NULL AS varchar(100)) AS numero_documento,
+    LTRIM(RTRIM(CONVERT(varchar(100), r.XProv_IdProveedor))) AS tercero_id,
+    CONVERT(varchar(100), r.XVend_IdVendedor) AS empleado_id,
+    CAST('desconocido' AS varchar(30)) AS estado,
+    CAST(NULL AS decimal(20,6)) AS total_documento,
+    CAST(NULL AS decimal(20,6)) AS descuento_global,
+    CAST(NULL AS varchar(20)) AS descuento_global_tipo,
+    CAST(NULL AS decimal(20,6)) AS impuestos_documento,
+    CAST(NULL AS datetime2) AS modificado_origen,
+    CONVERT(varchar(100), l.XArt_IdArticu) AS articulo_id,
+    TRY_CONVERT(decimal(20,6), l.Recibidas) AS unidades,
+    TRY_CONVERT(decimal(20,6), l.ImportePuc) AS precio_unitario,
+    CAST(NULL AS decimal(20,6)) AS descuento_linea,
+    CAST(NULL AS varchar(20)) AS descuento_linea_tipo,
+    TRY_CONVERT(decimal(20,6), l.Importe) AS importe_neto,
+    CAST(NULL AS decimal(20,6)) AS impuesto_linea,
+    CAST(NULL AS decimal(20,6)) AS coste_historico,
+    TRY_CONVERT(decimal(20,6), l.UBonificar) AS bonificacion_unidades,
+    CAST(NULL AS varchar(100)) AS numero_pedido,
+    CAST(NULL AS bit) AS eliminado_logicamente,
+    TRY_CONVERT(bit, l.Baja) AS linea_eliminada
+FROM {{TABLE:dbo.Recep}} AS r
+LEFT JOIN {{TABLE:dbo.LINEARECEP}} AS l ON l.IdRecepcion = r.IdRecepcion
+""";
+
     // Campos añadidos al contrato en esta versión. Permitir NULL solamente para
     // estos campos en SELECT anteriores, sin relajar la validación del resto.
     private static readonly IReadOnlyDictionary<string, HashSet<string>> LegacyOptional = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
@@ -195,6 +267,17 @@ LEFT JOIN {{TABLE:dbo.SuperFamilia}} AS sf
 
     public static IReadOnlyList<SourceQueryTemplate> All { get; } =
     [
+
+        new("farmatic", "ventas_completas", "Farmatic · tickets completos (Venta + LineaVenta)",
+            SalesDocuments.TrimEnd() + "\nWHERE v.FechaHora >= @desde AND v.FechaHora < @hasta",
+            SalesDocuments.TrimEnd(), "incremental",
+            "Una cabecera por ticket y sus líneas; se conservan descuentos, signos y TipoVenta original. No hay fecha técnica de modificación: relectura 7 días y reconciliación completa periódica. Revisar importes y anulaciones antes de producción.",
+            10080, 1440),
+        new("farmatic", "recepciones_completas", "Farmatic · compras completas (Recep + LINEARECEP)",
+            ReceiptDocuments.TrimEnd() + "\nWHERE r.Fecha >= CONVERT(date, @desde) AND r.Fecha < CONVERT(date, @hasta)",
+            ReceiptDocuments.TrimEnd(), "incremental",
+            "Compras por línea y proveedor, con importe de origen, PUC y unidades bonificadas. Descuentos 1..4 pendientes de interpretar; no confundir ImportePuc con precio bruto. No hay fecha técnica de modificación: relectura 7 días y reconciliación periódica.",
+            10080, 1440),
         new("farmatic", "ventas", "Farmatic · líneas de venta (vLineaVenta)",
             SalesSelect.TrimEnd() + "\nWHERE v.FechaHora >= @desde AND v.FechaHora < @hasta", SalesSelect.TrimEnd()),
         new("farmatic", "compras", "Farmatic · cabeceras de recepción (vRecep)",

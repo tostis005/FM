@@ -39,9 +39,12 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/analytics/ventas/detalle"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
   await delay(1450);
+  const byColumn=JSON.parse(url.searchParams.get("columnas")||"{}");
+  const letter=Array.isArray(byColumn.abcdClass)?byColumn.abcdClass[0]||"A":"A";
   body={products:[{id:"1|123456",pharmacyId:"1",cn:"123456",name:"Artículo",
     units:12,value:234.5,pvp:25,purchaseCost:8,saleUnitPrice:19.54,
-    unitMargin:11.54,margin:138.48,abcdClass:"A"}],hasMore:false,page:1};
+    unitMargin:11.54,margin:138.48,abcdClass:letter}],
+    totalFiltered:byColumn.abcdClass?31:25600,hasMore:false,page:1};
  }
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/health/database")body={status:"ok",database:"connected"};
@@ -103,5 +106,22 @@ try{
  }
  if(t.desde!=="2026-10-05"||t.hasta!=="2026-10-12"||t.granularidad!=="day")
   throw Error("Fechas personalizadas incorrectas: "+JSON.stringify(t));
+
+ // C y B deben poder elegirse aunque la primera página sólo contenga A.
+ await page.getByRole("button",{name:"Filtrar por ABCD"}).click();
+ await page.getByRole("checkbox",{name:"B",exact:true}).check();
+ await page.getByRole("checkbox",{name:"C",exact:true}).check();
+ await page.getByRole("button",{name:"Listo"}).click();
+ await page.waitForFunction(()=>{
+  const elements=[...document.querySelectorAll(".fm-demo-table .fm-abcd")];
+  return elements.some(el=>el.textContent==="B");
+ },null,{timeout:14000});
+ const columnRequest=requests.filter(r=>r.path==="/api/analytics/ventas/detalle"&&r.query.columnas).at(-1);
+ if(!columnRequest)throw Error("El filtro ABCD no ha llegado a PostgreSQL");
+ const parsed=JSON.parse(columnRequest.query.columnas);
+ if(JSON.stringify(parsed.abcdClass)!==JSON.stringify(["B","C"]))
+  throw Error("No se combinaron B/C en la consulta: "+columnRequest.query.columnas);
+ if(columnRequest.query.desde!==t.desde||columnRequest.query.hasta!==t.hasta)
+  throw Error("Cambiar la columna ABCD no debe cambiar el período de ventas");
  console.log("OK: SUM visible antes que ABCD, doble carga independiente y períodos reales");
 }finally{await browser.close()}

@@ -181,7 +181,17 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const remoteSort=remoteFields?tableSort:undefined;
  const changeTableSort=next=>{setTableSort(next);setDetailPage(1);};
  const [detailPage,setDetailPage]=useState(1);
+ const [tableFilters,setTableFilters]=useState({});
+ const [tableFiltersReady,setTableFiltersReady]=useState({});
+ useEffect(()=>{
+  const timer=setTimeout(()=>setTableFiltersReady(tableFilters),320);
+  return()=>clearTimeout(timer);
+ },[tableFilters]);
+ const activeTableFilters=JSON.stringify(tableFiltersReady);
+ const pendingTableFilters=JSON.stringify(tableFilters)!==activeTableFilters;
+ const changeTableFilters=next=>{setTableFilters(next);setDetailPage(1);setDetailHasMore(false);};
  const [detailHasMore,setDetailHasMore]=useState(false);
+ const [totalFiltered,setTotalFiltered]=useState(null);
  const [realReport,setRealReport]=useState(null);
  const [reportLoading,setReportLoading]=useState(true);
  const [reportError,setReportError]=useState("");
@@ -270,7 +280,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  },[singleFamilyPharmacy,familyScope]);
  useEffect(()=>{setDetailPage(1);setDetailHasMore(false)},[
    module,clientSlug,filters.pharmacyIds.join(","),filters.families.join(","),
-   searchReady,period.from,period.to,reloadKey,tableSort.key,tableSort.direction
+   searchReady,period.from,period.to,reloadKey,tableSort.key,tableSort.direction,activeTableFilters
  ]);
  const tables=useMemo(()=>realTables?normalizeTables(realTables):
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
@@ -291,6 +301,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   if(searchReady)params.set("buscar",searchReady);
   if(module==="ventas"&&filters.families.length)params.set("familias",filters.families.join(","));
+  if(module==="ventas"&&Object.keys(tableFiltersReady).some(key=>
+   Array.isArray(tableFiltersReady[key])?tableFiltersReady[key].length:Boolean(tableFiltersReady[key])))
+   params.set("columnas",JSON.stringify(tableFiltersReady));
   setLoading(true);setSalesError("");setRealSales(null);
   if(module==="ventas"&&detailPage===1)setRealReport(null);
   // El detalle paginado no repite la agregación histórica ni los recuentos.
@@ -306,6 +319,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .then(data=>{if(!controller.signal.aborted){
     if(module==="ventas"){
      setDetailHasMore(Boolean(data.hasMore));
+     setTotalFiltered(data.totalFiltered??null);
      setRealReport(prev=>({available:true,
       salesRows:detailPage===1?(data.products||[]):[...(prev?.salesRows||[]),...(data.products||[])],
       kpis:{margen:null},
@@ -320,7 +334,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters]);
 
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
  const purchaseSummaryScope=[clientSlug,period.from,period.to,
@@ -411,7 +425,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  });
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null||Boolean(fastSales);
- const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||filters.search!==searchReady)&&period.valid;
+ const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||filters.search!==searchReady||pendingTableFilters)&&period.valid;
  const canShowKpi=key=>realKpis[key]!=null;
  const realRevenue=hasSales?(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.ventas||0),0)??0:null;
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
@@ -599,7 +613,15 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
-   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")} rows={rows} rowKey={r=>r.id}
+   <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")}
+    serverFilters={module==="ventas"?tableFilters:null}
+    onServerFiltersChange={module==="ventas"?changeTableFilters:null}
+    filterOptions={module==="ventas"?{
+     abcdClass:["A","B","C","D"],
+     pharmacy:pharmacies.map(p=>p.name),
+     ...(singleFamilyPharmacy?{family:familyOptions}:{} )
+    }:null}
+    rows={rows} rowKey={r=>r.id}
     sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
      module==="compras"&&fastPurchase?.sourceRows>0&&fastPurchase?.hasArticleLines===false?
        "Se han importado registros de proveedor, pero ninguna línea de compra con artículo. Comprueba la consulta del sincronizador.":
@@ -612,7 +634,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       onClick={()=>setDetailPage(n=>n+1)}>
       {isFetchingSales?"Cargando artículos…":"Cargar 400 artículos más"}
     </button></div>}
-   {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {rows.length} referencias. El CSV incluye las páginas cargadas.</small>}
+   {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {integer(rows.length)} referencias cargadas{totalFiltered!=null?" de "+integer(totalFiltered)+" resultados del filtro completo":""}. El CSV incluye las páginas cargadas.</small>}
   </section>}
   {(isReports||isAssistant)&&<section className="card fm-demo-table">
    <div className="section-heading"><h2>Artículos vendidos en el período</h2>

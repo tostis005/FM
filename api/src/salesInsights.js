@@ -8,7 +8,8 @@ export function buildRecentProductCountSQL(schema){
  const t='"'+schema+'"';
  return `
  WITH sold AS MATERIALIZED (
-   SELECT upper(btrim(v.farmacia_codigo)) AS source_code,v.articulo_id
+   SELECT upper(btrim(v.farmacia_codigo)) AS source_code,v.articulo_id,
+     sum(v.unidades)::float8 AS net_units
    FROM ${t}.ventas v
    WHERE upper(btrim(v.farmacia_codigo))=ANY($1::text[])
      AND v.fecha >= $2::date AND v.fecha < $3::date+interval '1 day'
@@ -16,7 +17,7 @@ export function buildRecentProductCountSQL(schema){
    GROUP BY 1,2
  ),
  identified AS (
-   SELECT s.source_code,
+   SELECT s.source_code,s.net_units,
      coalesce(nullif(btrim(a.codigo_nacional),''),btrim(s.articulo_id)) AS cn
    FROM sold s LEFT JOIN LATERAL (
      SELECT a.codigo_nacional FROM ${t}.articulos a
@@ -26,7 +27,8 @@ export function buildRecentProductCountSQL(schema){
    ) a ON true
  )
  SELECT count(*)::int AS "totalProducts",count(DISTINCT cn)::int AS "totalArticles"
- FROM (SELECT DISTINCT source_code,cn FROM identified) x`;
+ FROM (SELECT source_code,cn FROM identified
+       GROUP BY source_code,cn HAVING sum(net_units)>0) x`;
 }
 export function buildPharmacyFamiliesSQL(schema){
  if(!SCHEMA.test(schema))throw Error("Esquema no permitido");

@@ -370,6 +370,20 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(highVolume.available,true);
   assert.equal(highVolume.salesRows.length,3000);
   assert.ok(highVolume.salesRows.some(r=>r.cn.startsWith("EXTRA-")));
+  const allBC=await request("/api/analytics/ventas/detalle",{
+   farmacias:"1",desde:"2026-10-11",hasta:"2026-10-11",
+   columnas:JSON.stringify({abcdClass:["B","C"]})});
+  assert.ok(allBC.products.length>0,"Las categorías B/C existen fuera de los 400 primeros");
+  assert.ok(allBC.products.every(r=>["B","C"].includes(r.abcdClass)));
+  assert.ok(allBC.totalFiltered>400,"El filtro se aplica sobre >3000 referencias antes de paginar");
+  assert.equal(allBC.hasMore,true);
+  const moreBC=await request("/api/analytics/ventas/detalle",{
+   farmacias:"1",desde:"2026-10-11",hasta:"2026-10-11",pagina:"2",
+   columnas:JSON.stringify({abcdClass:["B","C"]})});
+  assert.ok(moreBC.products.length>0,"Segunda página de categorías B/C globales");
+  assert.ok(moreBC.products.every(r=>["B","C"].includes(r.abcdClass)));
+  assert.ok(moreBC.products.every(r=>!allBC.products.some(p=>p.id===r.id)));
+
   // Escenario real de producción: el sincronizador envía cabeceras de
   // proveedor SIN artículo, unidades, importe ni coste. No son líneas de compra.
   await pool.query(`INSERT INTO ampedia.compras
@@ -401,6 +415,40 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(filteredHighVolume.available,true);
   assert.ok(filteredHighVolume.salesRows.some(r=>r.cn==="EXTRA-42"));
   assert.ok(filteredHighVolume.salesRows.every(r=>r.abcdClass));
+  // Reproducción del caso «Europa, Hoy»: cuatro unidades positivas de
+  // cuatro CN diferentes y un quinto movimiento con cero unidades.
+  // El quinto NO debe contar como artículo vendido ni tener precio inventado.
+  await pool.query(`INSERT INTO ampedia.ventas
+   (farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
+   VALUES ('EUR','TEST-BC1','2026-10-17','TEST-BCA',1,80),
+          ('EUR','TEST-BC2','2026-10-17','TEST-BCB',1,10),
+          ('EUR','TEST-BC3','2026-10-17','TEST-BCC',1,5),
+          ('EUR','TEST-BC4','2026-10-17','TEST-BCD',1,5),
+          ('EUR','TEST-BC0','2026-10-17','TEST-BCZERO',0,0)`);
+  const window={farmacias:"2",desde:"2026-10-17",hasta:"2026-10-17"};
+  const salesTotals=await request("/api/analytics/ventas/totales",{
+   ...window,granularidad:"day"});
+  assert.equal(salesTotals.kpis.unidades,4);
+  const salesCount=await request("/api/analytics/ventas/recuento",window);
+  assert.equal(salesCount.totalProducts,4);
+  assert.equal(salesCount.totalArticles,4);
+  const four=await request("/api/analytics/ventas/detalle",window);
+  assert.equal(four.products.length,4);
+  assert.ok(four.products.every(r=>r.units>0&&r.saleUnitPrice!=null));
+  assert.equal(four.products.some(r=>r.cn==="TEST-BCZERO"),false);
+  const bc=await request("/api/analytics/ventas/detalle",{
+   ...window,columnas:JSON.stringify({abcdClass:["B","C"]})});
+  assert.equal(bc.products.length,3);
+  assert.deepEqual(new Set(bc.products.map(r=>r.abcdClass)),new Set(["B","C"]));
+  assert.equal(bc.totalFiltered,3);
+  const onlyC=await request("/api/analytics/ventas/detalle",{
+   ...window,columnas:JSON.stringify({abcdClass:["C"]})});
+  assert.equal(onlyC.products.length,1);
+  assert.equal(onlyC.products[0].cn,"TEST-BCD");
+  const onlyB=await request("/api/analytics/ventas/detalle",{
+   ...window,columnas:JSON.stringify({abcdClass:["B"]}),pagina:"2"});
+  assert.equal(onlyB.products.length,0);
+
 
 
 

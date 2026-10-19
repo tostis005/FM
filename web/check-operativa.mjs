@@ -1,4 +1,4 @@
-// Smoke de operativa real y modo demo en el frontend FM, sin tocar PostgreSQL.
+// Smoke de operativa real sin datos ficticios en el frontend FM, sin tocar PostgreSQL.
 import {chromium} from "playwright";
 import assert from "node:assert/strict";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
@@ -43,9 +43,9 @@ try{
  await page.getByRole("button",{name:"Guardar borrador"}).click();
  await page.waitForFunction(()=>document.querySelector(".fm-op-message")?.textContent.includes("guardados"),null,{timeout:10000});
  assert.ok(posted.some(x=>x.recurso==="pedidos"&&x.lineas?.[0]?.necesidad===20));
- await page.getByRole("button",{name:"Ver ejemplo de demo"}).click();
- await page.getByText("Pantalla de demostración",{exact:true}).waitFor({timeout:7000});
- await page.getByRole("button",{name:"Volver a datos guardados"}).click();
+ assert.equal(await page.getByRole("button",{name:"Ver ejemplo de demo"}).count(),0);
+ assert.equal(await page.getByText("Pantalla de demostración").count(),0,
+  "La pantalla de pedidos no debe ofrecer cifras simuladas");
  await page.getByRole("heading",{name:"Preparador de pedidos",exact:true}).waitFor();
  for(const [path,title] of [
   ["oportunidades-seguimiento","Seguimiento de oportunidades"],
@@ -57,5 +57,5 @@ try{
   const error=await page.locator(".fm-op-error").count();
   if(error)throw Error(path+" presenta error inesperado");
  }
- console.log("OK: pantallas operativas, creación de borrador, demo aislada y navegabilidad");
+ console.log("OK: pantallas operativas, creación de borrador, sin datos de muestra y navegabilidad");
 }finally{await browser.close();}

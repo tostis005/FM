@@ -26,7 +26,16 @@ export function MultiSelectFilter({label,options=[],value=[],onChange,placeholde
       if(!trigger.current)return;
       const b=trigger.current.getBoundingClientRect();
       const width=Math.max(215,Math.min(310,window.innerWidth-16));
-      setPosition({top:Math.min(b.bottom+5,window.innerHeight-170),
+      // La altura real del selector varía con los elementos y la búsqueda.
+      // Evitar que «Listo» quede por debajo del viewport en móviles.
+      const height=menu.current?.getBoundingClientRect().height||Math.min(340,window.innerHeight-16);
+      const remainingBelow=window.innerHeight-b.bottom-8;
+      const remainingAbove=b.top-8;
+      const above=remainingBelow<height&&remainingAbove>remainingBelow;
+      const top=above
+        ?Math.max(8,b.top-height-5)
+        :Math.max(8,Math.min(b.bottom+5,window.innerHeight-height-8));
+      setPosition({top,
         left:Math.max(8,Math.min(b.left,window.innerWidth-width-8)),width});
     };
     const close=event=>{

@@ -4,6 +4,29 @@ Sincronizador configurable para el servidor Windows del cliente con Farmatic / S
 
 > **Estado de entrega:** código y compilación Windows automatizada mediante GitHub Actions. **No se ha validado con el SQL Server Farmatic ni con el PostgreSQL de Contabo reales**. Comprobar primero en preproducción; no incluye credenciales.
 
+## Orígenes Farmatic de tickets y compras completas (nuevo)
+
+Ya existen dos plantillas SQL con JOIN basadas en tablas reales
+de Farmatic verificadas en muestras SSMS:
+
+- `ventas_completas`: `dbo.Venta` + `dbo.LineaVenta`, mediante
+  `IdVenta` y `IdNLinea`. Preserva totales de ticket, impuestos,
+  cantidades firmadas, PVP, descuentos e importes netos originales.
+- `recepciones_completas`: `dbo.Recep` + `dbo.LINEARECEP`,
+  mediante `IdRecepcion` y `IdNLinea`. Preserva proveedor, unidades
+  recibidas, coste unitario de origen, importes y unidades bonificadas.
+
+Las entidades anteriores `ventas` y `compras` siguen disponibles
+para instalaciones existentes y **no se sobrescriben**. Los nuevos
+trabajos se crean desactivados; antes de habilitarlos hay que
+aplicar migración `016_modelo_documental.sql`, previsualizar y comparar
+una muestra con Farmatic. No hay fecha técnica de modificación
+confirmada: programar reconciliaciones completas además del incremental
+con 7 días de solapamiento. Pendientes de verificar estados de
+anulación y el significado financiero de los descuentos de compras.
+Consulta `docs/MODELO_DOCUMENTAL_V2.md` para el mapeo y las
+limitaciones por campo.
+
 ## Funcionalidades incluidas
 
 - Servicio Windows que arranca con el sistema y opera sin sesión de usuario iniciada.

@@ -217,6 +217,7 @@ jobs:
           node check-responsive.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
+          node check-recepciones-completas.mjs
           node check-refresh-navigation.mjs
           node check-navigation-arrows.mjs
           node check-genericos.mjs

@@ -53,7 +53,7 @@ function create({missingCost=false,truncatedBuys=false}={}){
  return {call,queries,req};
 }
 
-test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()=>{
+test("Compras devuelve PUC y KPI sin ejecutar las consultas pesadas de Ventas",async()=>{
  const {call,queries}=create();
  const {status,result}=await call();
  assert.equal(status,200);
@@ -61,20 +61,30 @@ test("reportes calculan PUC y margen bruto estimado ponderando unidades",async()
  assert.equal(result.kpis.compras,60);
  assert.equal(result.kpis.unidadesCompradas,30);
  assert.equal(result.kpis.lineasCompra,4);
- assert.equal(result.kpis.margen,90);
- assert.equal(result.salesRows[0].purchaseCost,1.5);
- assert.equal(result.salesRows[0].saleUnitPrice,6);
- assert.equal(result.salesRows[0].pvpMarginPct,75);
+ assert.equal(result.kpis.margen,null);
+ assert.equal(result.salesRows.length,0);
+ assert.equal(result.kpis.proveedores,1);
  assert.equal(result.buyRows[0].puc,1.5);
- assert.equal(result.salesRows[0].abcdClass,"A");
- assert.equal(result.buyRows[0].abcdClass,"A");
- assert.equal(result.supplierRows[0].name,"Distribuidora");
- assert.equal(result.supplierRows[0].id,"1|2");
- assert.ok(queries.some(x=>x.sql.includes("GROUP BY f.id,t.proveedor_id")));
+ assert.equal(result.buyRows[0].abcdClass,null,
+   "ABCD de ventas no debe bloquear la carga de compras");
+ assert.equal(result.supplierRows.length,0);
+ assert.ok(!queries.some(x=>x.sql.includes('FROM "ampedia".ventas')),
+   "Compras no debe escanear ventas");
+ assert.ok(!queries.some(x=>x.sql.includes('GROUP BY f.id,t.proveedor_id')),
+   "Compras no debe duplicar la agregación de proveedores");
+ assert.equal(queries.filter(x=>!x.sql.includes("information_schema")).length,2,
+   "Solo se ejecutan detalle y total mensual de compras");
+ const b=create();
+ const dashboard=await b.call({query:{...b.req.query,modulo:"dashboard"}});
+ assert.equal(dashboard.result.kpis.margen,90);
+ assert.equal(dashboard.result.salesRows[0].purchaseCost,1.5);
+ assert.equal(dashboard.result.salesRows[0].saleUnitPrice,6);
+ assert.equal(dashboard.result.salesRows[0].pvpMarginPct,75);
+ assert.equal(dashboard.result.salesRows[0].abcdClass,"A");
  assert.equal(result.availability.stock,false);
  assert.equal(result.kpis.stock,null);
  assert.ok(queries.some(x=>x.sql.includes(".articulos")));
- assert.ok(queries.some(x=>x.sql.includes(".proveedores")));
+ assert.ok(queries.every(x=>!x.sql.includes('GROUP BY f.id,t.proveedor_id')));
 });
 test("no accede a otra farmacia",async()=>{
  const {call,req}=create();
@@ -90,7 +100,7 @@ test("no accede a módulo no autorizado",async()=>{
 
 test("ABCD usa ventas completas por farmacia aunque haya filtro de búsqueda/familia",async()=>{
  const {call,queries,req}=create();
- const {status,result}=await call({query:{...req.query,buscar:"amoxicilina",familias:"Antibióticos"}});
+ const {status,result}=await call({query:{...req.query,modulo:"dashboard",buscar:"amoxicilina",familias:"Antibióticos"}});
  assert.equal(status,200);
  assert.equal(result.salesRows[0].abcdClass,"A");
  assert.ok(queries.some(({sql})=>sql.includes('GROUP BY f.id,')&&
@@ -112,7 +122,7 @@ test("consultas trimestrales preagrupan ventas por artículo antes de resolver C
 });
 test("filtro de artículos conserva la restricción por fecha y farmacia antes de agrupar",async()=>{
  const {call,queries,req}=create();
- await call({query:{...req.query,buscar:"amoxicilina",familias:"Antibióticos"}});
+ await call({query:{...req.query,modulo:"dashboard",buscar:"amoxicilina",familias:"Antibióticos"}});
  const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".ventas t'));
  assert.match(sales.sql,/f\.id=ANY\(\$3::int\[\]\)/);
  assert.match(sales.sql,/t\.fecha >= \$1::date/);

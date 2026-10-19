@@ -8,7 +8,7 @@ import "./pantallasReales.css";
 
 // Solo documentos o catálogos persistidos; esta pantalla nunca ofrece muestras.
 export const DOCUMENT_SCREENS=new Set([
- "productos","ventas-tickets","ventas-devoluciones","compras-devoluciones",
+ "productos","ventas-tickets","ventas-devoluciones","compras-devoluciones","stock-historico",
  "proveedores-condiciones","rentabilidad-segmentos"
 ]);
 const DATE=v=>v?new Date(v).toLocaleString("es-ES",{day:"2-digit",month:"2-digit",year:"numeric",
@@ -18,6 +18,11 @@ const UNITS=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigit
 const DECIMAL=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(Number(v));
 const PCT=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(v)+" %";
 const TXT=v=>v===null||v===undefined||v===""?"—":String(v);
+const DAY=v=>{
+ if(!v)return "—";
+ const iso=String(v).slice(0,10),parts=iso.split("-");
+ return parts.length===3?parts.reverse().join("/"):DATE(v);
+};
 const nowZone=slug=>slug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
 const META={
  "productos":{title:"Productos",desc:"Catálogo realmente sincronizado de las farmacias seleccionadas.",
@@ -29,6 +34,16 @@ const META={
    ["pvp","PVP",r=>EUR(r.pvp)],["pmc","PMC",r=>EUR(r.pmc)],
    ["margin","Margen teórico/ud.",r=>r.pvp!=null&&r.pmc>0?EUR(r.pvp-r.pmc):"—"],
    ["stock","Stock (uds.)",r=>UNITS(r.stock)] ]},
+ "stock-historico":{title:"Histórico de stock",desc:"Movimientos registrados por ventas y recepciones completas, agrupados por día y farmacia.",
+  note:"Variación documental = unidades recibidas − unidades vendidas. No representa el stock histórico: para reconstruir inventario faltan traspasos, ajustes, mermas y otros movimientos no incluidos en estos documentos.",
+  cols:[
+   ["at","Fecha",r=>DAY(r.at)],["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],
+   ["purchases","Entradas por recepciones",r=>UNITS(r.receivedUnits)],
+   ["sales","Salidas por ventas",r=>UNITS(r.soldUnits)],
+   ["net","Variación documental",r=>UNITS(r.documentedNetUnits)],
+   ["tickets","Tickets",r=>UNITS(r.tickets)],
+   ["receipts","Recepciones",r=>UNITS(r.receipts)]
+  ]},
  "ventas-tickets":{title:"Tickets de venta",desc:"Tickets procedentes de los documentos completos.",
   note:"El importe corresponde a las líneas netas del documento, sin sumar nuevamente los importes de cabecera.",
   cols:[
@@ -74,6 +89,7 @@ const META={
 const SORT_FIELD={
  "productos":{cn:"cn",sourceId:"sourceId",name:"name",family:"family",pvp:"pvp",pmc:"pmc",stock:"stock"},
  "ventas-tickets":{ticket:"ticket",at:"at",lines:"lines",units:"units",amount:"amount"},
+ "stock-historico":{at:"at",pharmacy:"pharmacy",purchases:"purchases",sales:"sales",net:"net",tickets:"tickets",receipts:"receipts"},
  "ventas-devoluciones":{reference:"reference",at:"at",units:"units",amount:"amount",kind:"kind"},
  "compras-devoluciones":{reference:"reference",at:"at",units:"units",amount:"amount",supplier:"supplier"},
  "proveedores-condiciones":{supplier:"supplier",units:"units",products:"products",receipts:"receipts",amount:"amount",lastAt:"lastAt"},
@@ -83,6 +99,7 @@ function Metrics({section,data,pharmacies}){
  const n=Number(data?.total||0),s=data?.summary||{};
  const cards={
   "productos":[["Referencias encontradas",UNITS(n)],["Farmacias seleccionadas",UNITS(pharmacies.length)]],
+  "stock-historico":[["Días con movimientos",UNITS(n)],["Unidades vendidas netas",UNITS(s.value)],["Unidades recibidas netas",UNITS(s.units)],["Variación documental",UNITS(s.other)]],
   "ventas-tickets":[["Tickets",UNITS(n)],["Ventas netas",EUR(s.value)],["Ticket medio",n&&s.value!=null?EUR(s.value/n):"—"],["Unidades",UNITS(s.units)]],
   "ventas-devoluciones":[["Movimientos",UNITS(n)],["Importes devueltos",EUR(s.value)],["Unidades devueltas",UNITS(s.units)],["Anulaciones",UNITS(s.other)]],
   "compras-devoluciones":[["Líneas devueltas",UNITS(n)],["Importe devuelto",EUR(s.value)],["Unidades devueltas",UNITS(s.units)]],

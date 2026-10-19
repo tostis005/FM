@@ -1,0 +1,48 @@
+import React from "react";
+import {RefreshCw} from "lucide-react";
+import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
+import {SALES_PERIODS} from "./salesPeriods.js";
+import "./reportControls.css";
+
+const formatDay=value=>value&&/^\d{4}-\d{2}-\d{2}$/.test(value)
+ ? value.slice(8,10)+"/"+value.slice(5,7)+"/"+value.slice(0,4) : "";
+
+export function ReportPageHeader({title,description,period,updatedAt,onRefresh,refreshing=false,actions}){
+ const dates=period?.valid?(period.from===period.to?formatDay(period.from):
+  formatDay(period.from)+" – "+formatDay(period.to)):"";
+ return <div className="page-header fm-unified-header">
+  <div className="fm-unified-heading"><h1>{title}</h1>{description&&<p>{description}</p>}</div>
+  <div className="fm-unified-header-right">
+   {(dates||updatedAt)&&<div className="fm-unified-header-meta" aria-live="polite">
+    {dates&&<span>Período: {dates}</span>}
+    {updatedAt&&<small>Última actualización: {updatedAt.toLocaleString("es-ES",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</small>}
+   </div>}
+   {onRefresh&&<button className="btn btn-secondary" type="button" disabled={refreshing} onClick={onRefresh}>
+    <RefreshCw size={16}/> Actualizar
+   </button>}
+   {actions}
+  </div>
+ </div>;
+}
+
+// El alcance por farmacia y el período comparten orden, etiquetas y aspecto en todos los informes.
+export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacyIds=[],onPharmacyChange,
+ showPeriod=true,showPharmacies=true,customFrom="",customTo="",onCustomFromChange,onCustomToChange,children}){
+ return <div className="card fm-unified-filters">
+  {showPeriod&&<label className="fm-unified-filter"><span>Período</span>
+   <select value={periodKey} onChange={e=>onPeriodChange?.(e.target.value)}>
+    {SALES_PERIODS.map(([id,label])=><option key={id} value={id}>{label}</option>)}
+   </select></label>}
+  {showPharmacies&&<div className="fm-unified-filter"><span>Farmacias</span>
+   <MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
+    options={pharmacies.map(f=>({value:String(f.id),label:f.name}))}
+    value={pharmacyIds} onChange={onPharmacyChange}/></div>}
+  {children}
+  {showPeriod&&periodKey==="custom"&&<>
+   <label className="fm-unified-filter"><span>Desde</span><input type="date" value={customFrom}
+    onChange={e=>onCustomFromChange?.(e.target.value)}/></label>
+   <label className="fm-unified-filter"><span>Hasta</span><input type="date" value={customTo}
+    onChange={e=>onCustomToChange?.(e.target.value)}/></label>
+  </>}
+ </div>;
+}

@@ -253,6 +253,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         SET ${flag}=EXCLUDED.${flag},actualizado_en=now()
         RETURNING ${supplierSelect}`;
       const {rows}=await pool.query(query,[req.context.client.slug,sourceCode,name,value]);
+      // Invalidar márgenes precalculados: la exclusión afecta al coste
+      // histórico que alimenta ABCD y rentabilidad. La recarga lo reconstruye.
+      await pool.query("UPDATE farmetrica.ventas_analitica_estado SET calculado_en=to_timestamp(0) WHERE cliente_slug=$1",
+        [req.context.client.slug]);
       res.json(rows[0]);
     }catch(e){next(e)}
   });

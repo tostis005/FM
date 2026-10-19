@@ -38,14 +38,56 @@
 .fm-unified-filters .fm-demo-search>div input,.fm-unified-filters .fm-real-search>div input,
 .fm-unified-filters .fm-generic-search input{width:100%;min-width:0;flex:1;border:0;background:transparent;height:36px}
 .fm-unified-filters>.fm-filter-field{flex:1 1 170px}
+
+/* Atajos temporales: segunda fila del mismo panel, sin barras duplicadas. */
+.fm-unified-filters .fm-period-shortcuts{
+ display:flex;flex:0 0 100%;width:100%;min-width:0;
+ gap:8px;align-items:center;flex-wrap:wrap;
+ border-top:1px solid #edf2ef;margin-top:2px;padding-top:12px;
+}
+.fm-period-shortcut{
+ appearance:none;display:inline-flex;align-items:center;justify-content:center;
+ padding:8px 13px;min-height:36px;border:1px solid #dfeae3;
+ border-radius:999px;background:#f8fbf9;color:#4b695b;
+ font-family:inherit;font-size:11.5px;font-weight:700;line-height:1.2;cursor:pointer;
+ transition:background-color .15s,color .15s,border-color .15s,box-shadow .15s;
+}
+.fm-period-shortcut:hover{background:#eaf8f1;border-color:#52b895;color:#087a57}
+.fm-period-shortcut.is-selected{background:#137c59;border-color:#137c59;color:#fff}
+.fm-period-shortcut.is-selected:hover{background:#0c6c4a;border-color:#0c6c4a;color:#fff}
+.fm-period-shortcut:focus-visible{outline:2px solid #128c65;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.fm-period-shortcut{transition:none}}
+
+/* Cabecera de promociones: pintar el contorno por los cuatro lados.
+   No desplazar el botón durante hover (evita recortes en el borde superior). */
+.fm-unified-header-right .campaign-header-actions .btn{
+ position:relative;transform:none;
+ border:1px solid #cadfd3;
+}
+.fm-unified-header-right .campaign-header-actions .btn-primary{
+ border-color:#08a976;
+}
+.fm-unified-header-right .campaign-header-actions .btn:hover:not(:disabled){
+ transform:none;border-color:#137f5d;
+ box-shadow:inset 0 0 0 1px #137f5d,0 2px 10px #14583b1a;
+}
+.fm-unified-header-right .campaign-header-actions .btn-primary:hover:not(:disabled){
+ border-color:#086e4d;box-shadow:inset 0 0 0 1px #086e4d,0 4px 11px #0e7d5733;
+}
+.fm-unified-header-right .campaign-header-actions .btn:focus-visible{
+ outline:2px solid #168a64;outline-offset:2px;
+}
+
 @media(max-width:790px){
  .fm-unified-filters{padding:13px;gap:12px}
  .fm-unified-header-right{justify-content:flex-start;margin-left:0}
  .fm-unified-header-meta{text-align:left}
+ .fm-unified-filters .fm-period-shortcuts{gap:7px}
 }
 @media(max-width:560px){
  .main-content .fm-unified-header{display:flex;flex-direction:column;align-items:stretch}
  .fm-unified-header-right{width:100%;justify-content:space-between}
  .fm-unified-header-right .btn{width:auto;flex:none}
  .fm-unified-filter,.fm-unified-filters>label,.fm-unified-filters>.fm-filter-field{flex-basis:100%;min-width:0}
+ .fm-period-shortcut{flex:1 1 auto;min-width:max-content;padding:9px 10px}
 }

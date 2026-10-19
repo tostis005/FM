@@ -70,8 +70,13 @@ try{
   assert.equal(m.whiteSpace,"nowrap","No partir importes");
   assert.ok(m.scroll<=m.width+3,"Importe desborda la tarjeta: "+JSON.stringify(m));
  }
- await page.locator(".fm-unified-filters select").first().selectOption("this_year");
+ const shortcuts=page.getByRole("group",{name:"Períodos rápidos"});
+ assert.deepEqual(await shortcuts.getByRole("button").allTextContents(),
+  ["Hoy","Ayer","Esta semana","Este mes","Este año"]);
+ await shortcuts.getByRole("button",{name:"Este año",exact:true}).click();
  await page.waitForFunction(()=>document.querySelector(".fm-unified-filters select")?.value==="this_year");
+ assert.equal(await shortcuts.getByRole("button",{name:"Este año",exact:true})
+  .getAttribute("aria-pressed"),"true","El atajo seleccionado debe quedar destacado");
  await page.waitForTimeout(200);
  const dashboardYear=by("/api/analytics/ventas/totales").at(-1)?.query.desde;
  assert.ok(/^\d{4}-01-01$/.test(dashboardYear||""),"Este año debe empezar en enero");
@@ -80,6 +85,9 @@ try{
  await page.waitForTimeout(200);
  assert.equal(by("/api/analytics/ventas/totales").at(-1)?.query.desde,dashboardYear,
   "Ventas debe conservar el filtro temporal de Inicio");
+ assert.equal(await page.getByRole("group",{name:"Períodos rápidos"})
+  .getByRole("button",{name:"Este año",exact:true}).getAttribute("aria-pressed"),"true",
+  "Al navegar a Ventas debe conservarse el atajo activo");
  await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
  await page.getByRole("button",{name:"Consultar artículos del período"}).click();
  await page.waitForFunction(()=>document.querySelector(".fm-dashboard-lazy-detail")===null,{timeout:12000});

@@ -265,6 +265,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      sum(t.priced_units)::float8 AS "pricedUnits",
      sum(t.lines)::int AS lines
      ${purchasesByArticle} ${provider} WHERE ${articleFilter}
+       AND NULLIF(btrim(t.articulo_id::text),'') IS NOT NULL
      GROUP BY f.id,${cn},t.proveedor_id ${reportOrder(purchaseOrders,"value")},t.proveedor_id LIMIT ${rowLimit}`;
    // Los totales mensuales sin búsqueda/familia no necesitan consultar
    // millones de fichas de artículo. Sus parámetros también deben coincidir
@@ -690,7 +691,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    }));
    const supplierRows=providers.rows.map(r=>({...r,id:key(r.pharmacyId,r.providerId),
     family:"",products:Number(r.products),units:Number(r.units),
-    value:Number(r.value),potential:null}));
+    value:r.value==null?null:Number(r.value),potential:null}));
    const replenishmentRows=stockRows.filter(r=>r.need>0);
    const negativeMargins=salesRows.filter(r=>r.margin!=null&&r.margin<0).map(r=>({
     ...r,action:"Revisar margen negativo",impact:Math.abs(r.margin),targetModule:"rentabilidad"
@@ -716,11 +717,16 @@ export function setupRealReports(app,pool,{requireTenant}){
     stockUnidades:snapshotAvailable?stockSummary?.units??null:null,
     ventas:sales&&readSalesPeriod?round(sum(saleM.rows,"amount")):null,
     unidades:sales&&readSalesPeriod?sum(saleM.rows,"units"):null,
-    compras:buyers&&readBuyPeriod?round(sum(buyM.rows,"amount")):null,
+    compras:buyers&&readBuyPeriod?
+      (buyM.rows.length>0&&buyM.rows.every(r=>r.amount==null)?null:round(sum(buyM.rows,"amount"))):null,
     articulosVendidos:readSalesRows&&sales&&completeSales?new Set(salesRows.map(r=>r.cn)).size:null,
     articulosComprados:readBuyRows&&buyers&&completeBuys?new Set(buyRows.map(r=>r.cn)).size:null,
-    unidadesCompradas:buyers&&readBuyPeriod?sum(buyM.rows,"units"):null,
-    lineasCompra:buyers&&readBuyPeriod?sum(buyM.rows,"lines"):null,
+    unidadesCompradas:buyers&&readBuyPeriod?
+      (buyM.rows.length>0&&buyM.rows.every(r=>r.units==null)?null:sum(buyM.rows,"units")):null,
+    // Una cabecera de proveedor sin articulo_id no es una línea de compra
+    // de artículo. El resumen rápido comunica si ese detalle existe.
+    lineasCompra:buyers&&readBuyPeriod&&buyRows.length?
+      sum(buyM.rows,"lines"):buyers&&readBuyPeriod&&buyM.rows.length===0?0:null,
     costeMedioCompra:readBuyRows&&buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
       round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:

@@ -65,7 +65,7 @@ export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun
    if(!source){await conn.query("ROLLBACK");return false}
    await conn.query("SET LOCAL statement_timeout='240s'");
    const {rows}=await conn.query(buildSalesDetailSQL(schema,"value","desc",source),
-    [range.from,range.to,[String(code).trim().toUpperCase()],[String(id)],"",[],MAX_ROWS+1,0]);
+    [range.from,range.to,[String(code).trim().toUpperCase()],[String(id)],"",[],MAX_ROWS+1,0,"{}"]);
    if(rows.length>MAX_ROWS)throw Error("Más referencias de las admitidas por lote nocturno");
    // Todo el reemplazo es una transacción: el navegador siempre consulta
    // o la versión antigua completa o la nueva, nunca un precálculo a medias.

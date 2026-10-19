@@ -30,7 +30,7 @@ test("detalle pagina en PostgreSQL y solo cruza compras para referencias de la p
  assert.equal(data.products[0].margin,30);
  assert.equal(data.products[0].id,"5|654321");
  assert.equal(calls.length,1);
- assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",["VAL"],["5"],"",[],401,0]);
+ assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",["VAL"],["5"],"",[],401,0,"{}"]);
  assert.match(calls[0].sql,/page AS MATERIALIZED/);
  assert.match(calls[0].sql,/FROM page p LEFT JOIN costs/);
  assert.doesNotMatch(calls[0].sql,/date_trunc\('month'|GROUPING SETS|jsonb_agg/);
@@ -38,7 +38,7 @@ test("detalle pagina en PostgreSQL y solo cruza compras para referencias de la p
 test("familias, paginación y farmacias no autorizadas",async()=>{
  const {request,calls}=make();
  await request({pagina:"2",familias:"12",buscar:"654321"});
- assert.deepEqual(calls[0].params.slice(4),["654321",["12"],401,400]);
+ assert.deepEqual(calls[0].params.slice(4),["654321",["12"],401,400,"{}"]);
  assert.equal((await request({farmacias:"9"})).status,403);
  assert.equal((await request({farmacias:"1,5",familias:"12"})).status,400);
  assert.equal((await request({pagina:"0"})).status,400);
@@ -51,7 +51,7 @@ test("ordena todo el universo ANTES de paginar y conserva ese orden en la salida
  const r=await request({orden:"units",direccion:"asc",pagina:"2"});
  assert.equal(r.status,200);
  const sql=calls[0].sql;
- assert.match(sql,/FROM visible\s+ORDER BY "__order" ASC NULLS LAST/);
+ assert.match(sql,/FROM filtered\s+ORDER BY "__order" ASC NULLS LAST/);
  assert.match(sql,/units AS "__order"/);
  assert.match(sql,/ORDER BY p\."__order" ASC NULLS LAST/);
  assert.match(sql,/LIMIT \$7::int OFFSET \$8::int/);
@@ -64,7 +64,7 @@ test("margen, PUC y coste exigen ordenar los costes ponderados de TODO el conjun
   const sql=buildSalesDetailSQL("ampedia",key,"desc");
   assert.match(sql,/global_costs AS/);
   assert.match(sql,/with_cost_sort AS/);
-  assert.match(sql,/FROM with_cost_sort\s+ORDER BY "__order" DESC NULLS LAST/);
+  assert.match(sql,/FROM filtered\s+ORDER BY "__order" DESC NULLS LAST/);
   assert.ok(sql.indexOf("global_costs AS")<sql.indexOf("LIMIT $7"));
  }
  const defaultSql=buildSalesDetailSQL("ampedia");
@@ -99,4 +99,28 @@ test("detalle acepta cualquier período del selector, incluidas fechas personali
   const args=calls.at(-1).params;
   assert.deepEqual(args.slice(0,2),[from,to],"SQL debe usar el filtro de cabecera y no 12 meses");
  }
+});
+
+test("ABCD B/C se filtra globalmente antes de ORDER BY y LIMIT 400",async()=>{
+ const {request,calls}=make();
+ const result=await request({columnas:JSON.stringify({abcdClass:["B","C"],name:"Crema",units:"2"}),pagina:"3"});
+ assert.equal(result.status,200);
+ assert.deepEqual(JSON.parse(calls.at(-1).params.at(-1)),{
+  abcdClass:["B","C"],name:"Crema",units:"2"});
+ const sql=calls.at(-1).sql;
+ assert.match(sql,/HAVING sum\(units\)>0/);
+ assert.match(sql,/filtered AS \(/);
+ assert.match(sql,/jsonb_array_elements_text\(\$9::jsonb->'abcdClass'\)/);
+ assert.ok(sql.indexOf('filtered AS (')<sql.indexOf('page AS MATERIALIZED'));
+ assert.ok(sql.indexOf('page AS MATERIALIZED')<sql.indexOf('LIMIT $7'));
+ for(const columns of [
+  '{"abcdClass":["X"]}', '{"foobar":"DROP TABLE"}','{"abcdClass":"B"}',
+  '{"cn":9}', '{"name":"'+"x".repeat(102)+'"}'
+ ])assert.equal((await request({columnas:columns})).status,400);
+});
+test("filtrar margen activa cálculo global de costes sin limitar primero",()=>{
+ const sql=buildSalesDetailSQL("ampedia","value","desc",undefined,{unitMargin:"1"});
+ assert.match(sql,/global_costs AS/);
+ assert.match(sql,/x\."globalUnitMargin"::text ILIKE/);
+ assert.ok(sql.indexOf('global_costs AS')<sql.indexOf('filtered AS ('));
 });

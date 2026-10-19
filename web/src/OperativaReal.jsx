@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
-import {PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
+
 import SortableDataTable from "./SortableDataTable.jsx";
 import "./operativaReal.css";
 
@@ -18,7 +18,16 @@ const ESTADOS={
 };
 const NUM=n=>new Intl.NumberFormat("es-ES").format(n);
 const EUR=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
-const TITLE=id=>PREVIEW_SECTIONS[id]?.title||"Operativa";
+const TITLES={
+ "compras-preparador":"Preparador de pedidos",
+ "compras-pendientes":"Pendientes de asignar",
+ "compras-pedidos":"Pedidos preparados",
+ "stock-traspasos":"Traspasos entre farmacias",
+ "rentabilidad-retorno":"Retorno económico",
+ "oportunidades-seguimiento":"Seguimiento de oportunidades",
+ "alertas":"Alertas","mi-trabajo":"Mi trabajo"
+};
+const TITLE=id=>TITLES[id]||"Operativa";
 const E=(e)=>String(e?.message||"No se pudo completar la operación.");
 const defaultNeed=()=>({id:crypto.randomUUID(),articulo:"",nombre:"",necesidad:1,asignaciones:[]});
 const pending=n=>Number(n.necesidad||0)-(n.asignaciones||[]).reduce((s,a)=>s+Number(a.unidades||0),0);

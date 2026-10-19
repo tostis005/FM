@@ -59,7 +59,7 @@ export const DOCUMENT_SORT={
  "ventas-tickets":{at:'"at"',ticket:'"ticket"',lines:'"lines"',units:'"units"',amount:'"amount"'},
  "ventas-devoluciones":{at:'v."at"',reference:'v.reference',units:'v.units',amount:'v.amount',kind:'v.kind'},
  "compras-devoluciones":{at:'v.fecha',reference:'v.numero_albaran',units:'v.unidades',amount:'v.importe',supplier:'v.proveedor_id'},
- "productos":{name:'name',cn:'cn',family:'family',pvp:'pvp',pmc:'pmc',stock:'stock'},
+ "productos":{name:'name',sourceId:'"sourceId"',cn:'cn',family:'family',pvp:'pvp',pmc:'pmc',stock:'stock'},
  "proveedores-condiciones":{amount:'amount',units:'units',products:'products',receipts:'receipts',lastAt:'"lastAt"',supplier:'"supplierCode"'},
  "rentabilidad-segmentos":{sales:'sales',margin:'margin',units:'units',family:'family'}
 };

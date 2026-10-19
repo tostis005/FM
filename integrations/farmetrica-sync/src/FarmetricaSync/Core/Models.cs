@@ -165,7 +165,7 @@ public static class CanonicalEntities
             ("estado", "text"), ("total_documento", "numeric"),
             ("descuento_global", "numeric"), ("descuento_global_tipo", "text"),
             ("impuestos_documento", "numeric"), ("modificado_origen", "timestamp"),
-            ("articulo_id", "text"), ("unidades", "numeric"), ("precio_unitario", "numeric"),
+            ("articulo_id", "text"), ("tipo_linea_origen", "text"), ("unidades", "numeric"), ("precio_unitario", "numeric"),
             ("descuento_linea", "numeric"), ("descuento_linea_tipo", "text"),
             ("importe_neto", "numeric"), ("impuesto_linea", "numeric"),
             ("coste_historico", "numeric"), ("bonificacion_unidades", "numeric"),

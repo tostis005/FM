@@ -41,6 +41,17 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(reports.available,true);
   assert.ok(reports.kpis.compras>0);
   assert.equal(reports.kpis.ventas,null,"Compras no solicita la serie mensual de ventas");
+  // Asegurar que hay información real antes de ejecutar el detalle
+  // y distinguir farmacia sin compras, filtro de fechas y origen inexistente.
+  const checkBuys=await request("/api/analytics/compras/estado",{farmacias:"1,5"});
+  assert.equal(checkBuys.source,"normalized");
+  assert.equal(checkBuys.hasPurchases,true);
+  assert.equal(checkBuys.pharmacies.find(p=>p.pharmacyId==="1").hasPeriodPurchases,true);
+  assert.equal(checkBuys.pharmacies.find(p=>p.pharmacyId==="5").hasPeriodPurchases,false);
+  const checkNoPurchases=await request("/api/analytics/compras/estado",{farmacias:"5"});
+  assert.equal(checkNoPurchases.hasPurchases,false);
+  assert.ok(checkNoPurchases.pharmacies[0].name);
+
   // Regresión: los clientes creados con la estructura antigua también
   // deben mostrar compras reales aunque carezcan de tabla articulos/ventas.
   await pool.query(`CREATE SCHEMA legacy_reports_ci`);
@@ -71,6 +82,11 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
     {modulo:"compras",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
   assert.equal(legacyReport.available,true);
   assert.equal(legacyReport.kpis.compras,15);
+  const legacyBuysStatus=await request("/api/analytics/compras/estado",
+    {farmacias:String(legacyPharmacy.id)}, {},legacyContext);
+  assert.equal(legacyBuysStatus.source,"legacy");
+  assert.equal(legacyBuysStatus.hasPurchases,true);
+
   assert.equal(legacyReport.kpis.unidadesCompradas,6);
   assert.equal(legacyReport.kpis.lineasCompra,1);
   assert.equal(legacyReport.buyRows[0].cn,"123456");
@@ -129,8 +145,11 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   const dashboard=await request("/api/analytics/reportes",{modulo:"dashboard"});
   assert.ok(dashboard.kpis.ventas>0,"Dashboard sí consulta el total de ventas");
   assert.ok(reports.buyRows.some(r=>r.cn==="654321"&&r.puc>0));
-  assert.ok(reports.salesRows.some(r=>r.cn==="654322"));
-  assert.ok(reports.supplierRows.some(r=>r.name==="Mayorista 2"));
+  assert.equal(reports.salesRows.length,0,"Compras no bloquea la carga con ventas");
+  assert.equal(reports.supplierRows.length,0,"Compras no repite proveedor agregado");
+  const suppliersForReport=await request("/api/analytics/reportes",{modulo:"proveedores"});
+  assert.ok(suppliersForReport.supplierRows.some(r=>r.name==="Mayorista 2"));
+  assert.ok(dashboard.salesRows.some(r=>r.cn==="654322"));
   // Smoke test del resto de reportes usando datos reales del fixture:
   // se comprueban módulos, esquema, importes y estructuras sin generar mocks.
   for(const module of ["dashboard","rentabilidad","reposicion","acciones","informes","asistente"]){

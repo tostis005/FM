@@ -212,6 +212,19 @@ export function setupRealReports(app,pool,{requireTenant}){
    const columns=`${cn} AS cn,max(coalesce(art.nombre,t.articulo_id)) AS name,
      max(coalesce(art.familia,'')) AS family,max(art.pvp)::float8 AS pvp,
      max(art.pmc)::float8 AS pmc, max(art.laboratorio) AS laboratory`;
+   // Con búsqueda libre, filtrar los IDs locales de artículo ANTES del GROUP BY.
+   // Sin ello, Compras/Proveedores agregaban todas las recepciones del período
+   // para descartar casi todo tras resolver cada CN en el catálogo.
+   // Conservar el filtro exterior para aplicar nombre/CN del último catálogo.
+   const exactCn=/^\d{6,7}$/.test(f.search);
+   const articleSearchPushdown=articles&&f.search?`AND (
+      t.articulo_id ILIKE '%'||$4||'%' OR EXISTS (
+       SELECT 1 FROM ${quoted}.articulos search_art
+       WHERE upper(btrim(search_art.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+         AND search_art.origen_id=t.articulo_id
+         AND (search_art.nombre ILIKE '%'||$4||'%' OR
+            ${exactCn?"btrim(search_art.codigo_nacional)=$4::text":"search_art.codigo_nacional ILIKE '%'||$4||'%'"})
+      ))`:"";
    const rowLimit=3000;
    const direction=f.sortDir.toUpperCase();
    const saleOrders={
@@ -261,6 +274,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[])
        AND NULLIF(btrim(t.articulo_id),'') IS NOT NULL
+       ${articleSearchPushdown}
      GROUP BY f.id,upper(btrim(t.farmacia_codigo)),t.articulo_id
    ) t
    JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
@@ -305,6 +319,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        AND f.id=ANY($3::int[])
        AND ${includedPurchaseSupplier({tenant:"$6",code:"t.proveedor_id",
         name:buyCols.has("proveedor_nombre")?"t.proveedor_nombre":null})}
+       ${articleSearchPushdown}
      GROUP BY f.id,upper(btrim(t.farmacia_codigo)),t.articulo_id,t.proveedor_id
    ) t JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
    ${article}`;
@@ -361,6 +376,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          FROM ${quoted}.${table==="compras"?"fm_recepciones_analitica":"fm_ventas_analitica"} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
            AND f.id=ANY($3::int[]) ${supplierFilter}
+           ${articleSearchPushdown}
            ${table==="ventas"?"AND NULLIF(btrim(t.articulo_id),'') IS NOT NULL":""}
          GROUP BY 1,2,3
        ) t ${article}

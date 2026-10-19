@@ -244,3 +244,13 @@
  font-size:clamp(16px,1.85vw,25px);letter-spacing:-.035em;
  line-height:1.2;white-space:normal;overflow-wrap:anywhere}
 .fm-demo-kpi>span{min-width:0;max-width:100%;overflow-wrap:break-word}
+
+/* Los importes grandes permanecen siempre en una sola línea: el tamaño se ajusta
+   al ancho real de la tarjeta (también con zoom y dos columnas). */
+.fm-demo-v2 .fm-demo-kpi{container-type:inline-size}
+.fm-demo-v2 .fm-demo-kpi>strong{
+ display:block;min-width:0;max-width:100%;width:100%;
+ font-size:clamp(12px,7.2cqi,26px);letter-spacing:-.045em;
+ line-height:1.25;white-space:nowrap;overflow-wrap:normal;word-break:normal;
+ font-variant-numeric:tabular-nums
+}

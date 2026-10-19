@@ -336,6 +336,23 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(completeCount.kpis.stockArticulos,3008);
   assert.equal(completeCount.kpis.stockUnidades,3025);
   assert.equal(completeCount.kpis.stock,3053.5);
+  // Regression PostgreSQL real: más de 3.000 CN vendidos provoca consulta
+  // ABCD complementaria. Antes fallaba 42P18 por parámetros $4/$5 sin tipo.
+  await pool.query(`INSERT INTO ampedia.ventas
+    (farmacia_codigo,origen_id,fecha,articulo_id,unidades,importe)
+    SELECT 'ABA','BULK-V-'||i,'2026-10-11',
+      'BULK-'||i,1,1 FROM generate_series(1,3005) i`);
+  const highVolume=await request("/api/analytics/reportes",{
+    modulo:"dashboard",farmacias:"1"});
+  assert.equal(highVolume.available,true);
+  assert.equal(highVolume.salesRows.length,3000);
+  assert.ok(highVolume.salesRows.some(r=>r.cn.startsWith("EXTRA-")));
+  const filteredHighVolume=await request("/api/analytics/reportes",{
+    modulo:"dashboard",farmacias:"1",buscar:"EXTRA-42"});
+  assert.equal(filteredHighVolume.available,true);
+  assert.ok(filteredHighVolume.salesRows.some(r=>r.cn==="EXTRA-42"));
+  assert.ok(filteredHighVolume.salesRows.every(r=>r.abcdClass));
+
 
 
  }finally{await pool.end()}

@@ -644,9 +644,11 @@ export function setupRealReports(app,pool,{requireTenant}){
       (f.search||f.families.length||sale.rows.length>=rowLimit)){
     const unfilteredSales=`SELECT f.id::text AS "pharmacyId",${cn} AS cn,
       sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
-      ${salesByArticle}
+      ${salesByArticle.replaceAll("$6","$4")}
       GROUP BY f.id,${cn}`;
-    const universe=await pool.query(unfilteredSales,[f.from,f.to,pharmacyIds,"",[],req.context.client.slug]);
+    // Esta consulta no utiliza búsqueda/familias: $4 es el tenant, NO se
+    // deben pasar $4/$5 sin referenciarlos. PostgreSQL 42P18 en producción.
+    const universe=await pool.query(unfilteredSales,[f.from,f.to,pharmacyIds,req.context.client.slug]);
     abcdUniverse=universe.rows;
    }
    const abcd=classifyAbcd(abcdUniverse,{scope:r=>r.pharmacyId});

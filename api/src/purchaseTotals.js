@@ -63,10 +63,10 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     if(Array.isArray(value)){
      if(!value.length)continue;
      values.push(value);
-     where.push(`${expressions[key]}=ANY(${values.length}::text[])`);
+     where.push(expressions[key]+"=ANY($"+values.length+"::text[])");
     }else if(value.trim()){
      values.push("%"+value.trim()+"%");
-     where.push(`${expressions[key]} ILIKE ${values.length}`);
+     where.push(expressions[key]+" ILIKE $"+values.length);
     }
    }
    // La suma de filas y el límite se calculan DESPUÉS de todos los filtros,

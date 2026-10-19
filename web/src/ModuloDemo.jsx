@@ -326,6 +326,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   }).then(async response=>{
    const result=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(result.error||"No se puede comprobar el origen de compras");
+   if(typeof result.hasPurchases!=="boolean"||!Array.isArray(result.pharmacies))
+    throw Error("La comprobación de compras devolvió una respuesta incompleta");
    return result;
   }).then(data=>{if(!controller.signal.aborted)setPurchaseState(data)})
    .catch(e=>{if(!controller.signal.aborted)setPurchaseStateError(e.message)});
@@ -485,7 +487,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
        <span><strong>Compras encontradas en el período:</strong> {purchaseState.pharmacies.filter(p=>p.hasPeriodPurchases).length} de {purchaseState.pharmacies.length} farmacias tienen movimientos.
         {reportLoading?" El detalle y los indicadores se están calculando.":""}
         {reportError?" Los movimientos existen, pero ha fallado la consulta del informe.":""}</span>:
-       <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}
+       <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies?.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}
    {purchaseState?.pharmacies?.length>0&&<small style={{display:"block",marginTop:6}}>
     {purchaseState.pharmacies.map(p=>p.name+": "+(p.hasPeriodPurchases?"con compras":p.latestPurchaseDate?"sin compras en el período (última "+String(p.latestPurchaseDate).slice(0,10)+")":"sin compras sincronizadas")).join(" · ")}
    </small>}

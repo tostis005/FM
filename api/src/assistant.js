@@ -39,12 +39,12 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   "No devuelvas datos fuera de los entregados. Siempre señala el período o que stock es una instantánea.",
   "Máximo 220 palabras."
  ].join(" ");
+ const facts="CONTEXTO: sección "+String(context.section||"General").slice(0,70)+
+  ". DATOS_VERIFICADOS="+JSON.stringify(compactFacts(results)).slice(0,14000);
  const messages=[
-  {role:"system",content:system},
+  {role:"system",content:system+" "+facts},
   ...history.map(x=>({role:x.role,content:x.content})),
-  {role:"user",content:question},
-  {role:"system",content:"CONTEXTO: sección "+String(context.section||"General").slice(0,70)+
-   ". DATOS_VERIFICADOS="+JSON.stringify(compactFacts(results)).slice(0,14000)}
+  {role:"user",content:question}
  ];
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),65000);

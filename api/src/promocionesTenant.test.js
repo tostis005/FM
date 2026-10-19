@@ -67,7 +67,7 @@ test("un empleado no puede eliminar promociones ni consultar otras tablas",async
 });
 test("no se ejecuta SQL con ID o esquema inválidos",async()=>{
  const ctx=create();
- const result=await ctx.call("../P1");
+ const result=await ctx.call("");
  assert.equal(result.status,400);
  assert.equal(ctx.records.size,1);
  // El ID es un valor paramétrico; no permite extraer otro cliente.

@@ -101,6 +101,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   ["pvpMarginPct","Margen PVP (%)"],["bestPuc","Precio ref."],
   ["indicativeSavings","Ahorro potencial"]
  ];
+ const goToPage=next=>{
+  setPage(next);setActive(null);
+  if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"instant"});
+ };
  const changeSort=key=>{
   setSort(prev=>prev.key===key?{key,direction:prev.direction==="asc"?"desc":"asc"}:
    {key,direction:"asc"});
@@ -249,8 +253,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
     </table></HorizontalTableScroll>}
    {!loading&&groups.length>20&&<div className="fm-generic-pager">
     <span>Mostrando {page*20+1}–{Math.min(groups.length,(page+1)*20)} de {groups.length}</span>
-    <button disabled={page===0} type="button" onClick={()=>{setPage(x=>x-1);setActive(null)}}>Anterior</button>
-    <button disabled={(page+1)*20>=groups.length} type="button" onClick={()=>{setPage(x=>x+1);setActive(null)}}>Siguiente</button>
+    <button disabled={page===0} type="button" onClick={()=>goToPage(page-1)}>Anterior</button>
+    <button disabled={(page+1)*20>=groups.length} type="button" onClick={()=>goToPage(page+1)}>Siguiente</button>
    </div>}
   </section>
  </div>;

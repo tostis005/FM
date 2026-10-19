@@ -28,7 +28,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null}){
   const [localFilters,setLocalFilters]=useState({});
  const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
  const filters=remotelyFiltered?serverFilters:localFilters;
@@ -37,23 +37,39 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const sort=remote?serverSort:localSort;
   const [page,setPage]=useState(0);
   const [pageSize,setPageSize]=useState(50);
+  const externalPage=Boolean(serverPagination);
+  const activeSize=externalPage?serverPagination.pageSize:pageSize;
   // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
   // Ordenar solamente la respuesta truncada produciría resultados engañosos.
   const filtered=useMemo(()=>remotelyFiltered?rows:filterSortRows(rows,columns,filters,remote?null:sort),
     [rows,columns,filters,sort,remote,remotelyFiltered]);
-  const {page:safePage,items:slice}=pageRows(filtered,page,pageSize);
+  const {page:safePage,items:slice}=externalPage?
+    {page:Math.max(0,serverPagination.page-1),items:filtered}:
+    pageRows(filtered,page,activeSize);
+  // Volver al comienzo de la página al paginar o cambiar cuántas filas se ven.
+  // Sin ello se conserva el scroll al fondo de la tabla y parece vacía.
+  const goToPage=next=>{
+   if(externalPage)serverPagination.onPageChange(next+1);
+   else setPage(next);
+   if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"instant"});
+  };
+  const changePageSize=n=>{
+   if(externalPage)serverPagination.onPageSizeChange(n);
+   else{setPageSize(n);setPage(0)}
+   if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"instant"});
+  };
   const changeFilter=(key,value)=>{
   const next={...filters,[key]:value};
   if(remotelyFiltered)onServerFiltersChange(next);
   else setLocalFilters(next);
-  setPage(0);
+  if(!externalPage)setPage(0);
  };
   const changeSort=key=>{
     const next=sort?.key!==key?{key,direction:"asc"}:
       sort.direction==="asc"?{key,direction:"desc"}:
       remote?{key,direction:"asc"}:null;
     if(remote)onSortChange(next);else setLocalSort(next);
-    setPage(0);
+    if(!externalPage)setPage(0);
   };
   return <>
     <LoadingFrame loading={loading&&rows.length>0} label={loadingLabel}>
@@ -79,7 +95,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
           </th>)}</tr>
         </thead>
-        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(pageSize,5)}/></td></tr>:slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
+        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(activeSize,5)}/></td></tr>:slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
           tabIndex={onRowClick?0:undefined} aria-label={onRowClick?"Abrir registro":undefined}
           onKeyDown={onRowClick?e=>{if(e.target===e.currentTarget&&(e.key==="Enter"||e.key===" ")){e.preventDefault();onRowClick(row);}}:undefined}
           onClick={onRowClick?()=>onRowClick(row):undefined}>
@@ -89,8 +105,8 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
       {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{!remotelyFiltered&&rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
-    <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={setPage}
-      onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label={label} loading={loading}/>
+    <ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
+      onPageSizeChange={changePageSize} label={label} loading={loading}/>
     </LoadingFrame>
   </>;
 }

@@ -9,6 +9,7 @@ import {euro,quantity,integer,percentage,dateES} from "./localeES.js";
 import {buildAnalysis} from "./businessAnalytics.js";
 import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
+import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import "./moduleDemo.css";
 
 const TITLES={
@@ -166,6 +167,7 @@ const QUESTIONS=[
  ["¿Qué acciones tienen mayor importe asociado?","acciones"]
 ];
 const STORAGE="fm_analytics_filters_";
+const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([key])=>key));
 function readFilters(key){
  try{const saved=JSON.parse(sessionStorage.getItem(key)||"null");
   if(saved&&typeof saved==="object")return {period:saved.period||"6",
@@ -177,7 +179,10 @@ function readFilters(key){
 }
 export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",analysisMonths=12,onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
  const storageKey=STORAGE+clientSlug+"_"+module;
- const [filters,setFilters]=useState(()=>readFilters(storageKey));
+ const [filters,setFilters]=useState(()=>({
+    ...readFilters(storageKey),
+    ...readSharedReportFilters(clientSlug,module==="ventas"?undefined:COMMON_PERIOD_KEYS)
+  }));
  const [searchReady,setSearchReady]=useState(()=>readFilters(storageKey).search);
  useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [detail,setDetail]=useState(null);
@@ -493,12 +498,21 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  },[optionScope,period.valid]);
  const familyOptions=singleFamilyPharmacy?(familyData?.families||[]).map(v=>({label:v.label,value:v.code})):[];
  const pharmacyOptions=pharmacies.map(p=>({label:p.name,value:String(p.id)}));
- const change=(field,value)=>setFilters(f=>({...f,[field]:value}));
- const pickPeriod=value=>setFilters(f=>{
-  if(value!=="custom")return {...f,period:value};
+ const change=(field,value)=>{
+  setFilters(f=>({...f,[field]:value}));
+  if(["customFrom","customTo"].includes(field))updateSharedReportFilters(clientSlug,{[field]:value});
+ };
+ const pickPeriod=value=>{
+  if(value!=="custom"){
+   setFilters(f=>({...f,period:value}));
+   updateSharedReportFilters(clientSlug,{period:value});
+   return;
+  }
   const initial=resolveSalesPeriod("this_month",new Date(),{},tz);
-  return {...f,period:"custom",customFrom:f.customFrom||initial.from,customTo:f.customTo||initial.to};
- });
+  const customFrom=filters.customFrom||initial.from,customTo=filters.customTo||initial.to;
+  setFilters(f=>({...f,period:"custom",customFrom,customTo}));
+  updateSharedReportFilters(clientSlug,{period:"custom",customFrom,customTo});
+ };
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null||Boolean(fastSales);
  const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||receiptLoading||filters.search!==searchReady||pendingTableFilters)&&period.valid;
@@ -564,7 +578,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {module==="proveedores"&&canNavigate("proveedores-maestro")&&
     <button className="btn btn-secondary" onClick={()=>go("proveedores-maestro")}>Maestro de proveedores <ArrowRight size={16}/></button>}</div>
   <div className="fm-demo-filters">
-   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>{setFilters(f=>({...f,pharmacyIds:reconcilePharmacyIds(v,pharmacies),families:[],search:""}));setSearchReady("");}}/></div>
+   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>{const pharmacyIds=reconcilePharmacyIds(v,pharmacies);setFilters(f=>({...f,pharmacyIds,families:[],search:""}));updateSharedReportFilters(clientSlug,{pharmacyIds});setSearchReady("");}}/></div>
    {singleFamilyPharmacy&&familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
    <label><span>Periodo</span><select value={filters.period} onChange={e=>pickPeriod(e.target.value)}>
     {SALES_PERIODS.filter(([key])=>module==="ventas"||!["24","36","60","all"].includes(key)).map(([key,label])=><option key={key} value={key}>{label}</option>)}
@@ -573,7 +587,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </div>
   {<div className="fm-sales-timebar">
    <div className="fm-sales-shortcuts" role="group" aria-label="Períodos rápidos de ventas">
-    {SALES_PERIODS.slice(0,5).map(([key,label])=><button key={key} type="button" className={"fm-sales-chip "+(filters.period===key?"is-selected":"")}
+    {SALES_PERIODS.filter(([key])=>["today","yesterday","this_week","last_week","this_month","this_year"].includes(key)).map(([key,label])=><button key={key} type="button" className={"fm-sales-chip "+(filters.period===key?"is-selected":"")}
       aria-pressed={filters.period===key} onClick={()=>pickPeriod(key)}>{label}</button>)}
    </div>
    <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}

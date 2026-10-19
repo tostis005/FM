@@ -46,6 +46,8 @@ test("compras legacy y movimientos no encontrados mantienen 0 real",async()=>{
  assert.equal(payload.kpis.compras,0);
  assert.match(calls[1].sql,/t\.total/);
  assert.match(calls[1].sql,/f\.id=t\.farmacia_id/);
+ assert.doesNotMatch(calls[1].sql,/t\.farmacia_codigo|t\.sistema_origen|t\.documento_id/);
+ assert.equal(payload.kpis.recepciones,null);
 });
 test("denegar ámbitos ajenos y rangos incorrectos",async()=>{
  const {call}=make();

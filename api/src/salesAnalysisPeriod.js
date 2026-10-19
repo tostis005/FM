@@ -1,5 +1,5 @@
-// Período ABCD autorizado por administrador del cliente.
-// No permitir que los filtros o las URLs cambien la ventana de análisis.
+// Ventana configurada de precálculo nocturno por cliente y validación independiente
+// de fechas elegidas en el informe: los filtros nunca se sustituyen por la caché.
 export const ANALYSIS_MONTHS=[3,6,12,24,36];
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 export function approvedAnalysisMonths(value){

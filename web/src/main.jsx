@@ -25,6 +25,10 @@ import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
+import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import {reconcilePharmacyIds} from "./reportFilterScopes.js";
+import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
 import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./objetivosOctubre2026.js";
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
@@ -310,6 +314,8 @@ function App(){
  const [cnPageSize,setCnPageSize]=useState(25);
  const [expandedCampaignIds,setExpandedCampaignIds]=useState(()=>data.promos.filter(p=>p.status==="Activa").slice(0,2).map(p=>p.id));
  const [selectedPharmacyIds,setSelectedPharmacyIds]=useState(()=>reportFiltersFromUrl().pharmacies);
+ const [sharedPharmacyIds,setSharedPharmacyIds]=useState([]);
+ const [salesLastUpdated,setSalesLastUpdated]=useState(null);
  const [pharmacySelectorOpen,setPharmacySelectorOpen]=useState(false);
  const pharmacySelectorRef=useRef(null);
  const reportCloseRef=useRef(null);
@@ -380,7 +386,7 @@ function App(){
          }
 
          setSalesByPromotion(byPromotion);
-         setSalesError("");
+         setSalesLastUpdated(new Date());setSalesError("");
          setSalesStatus("real");
        }catch(error){
          if(cancelled)return;
@@ -426,6 +432,22 @@ function App(){
  const {promos:rawPromos,users:storedUsers}=data;
  // Ocultar objetivos y farmacias fuera del ámbito autorizado de esta sesión.
  const pharmacies=tenantContext?.pharmacies||[];
+ // Persistir un único ámbito de farmacias por cliente al cambiar de módulo.
+ const pharmacyScopeKey=pharmacies.map(p=>String(p.id)).join(",");
+ useEffect(()=>{
+  if(!tenantContext?.client?.slug)return;
+  const saved=reconcilePharmacyIds(
+   readSharedReportFilters(tenantContext.client.slug).pharmacyIds||[],pharmacies);
+  setSharedPharmacyIds(saved);
+  if(page==="seguimiento-global"&&!new URLSearchParams(window.location.search).has("farmacias"))
+   setSelectedPharmacyIds(saved.length?saved:null);
+ },[tenantContext?.client?.slug,page,pharmacyScopeKey]);
+ function selectSharedPharmacies(value){
+  const pharmacyIds=reconcilePharmacyIds(value,pharmacies);
+  setSharedPharmacyIds(pharmacyIds);
+  updateSharedReportFilters(tenantContext?.client?.slug,{pharmacyIds});
+  if(page==="seguimiento-global")setSelectedPharmacyIds(pharmacyIds.length?pharmacyIds:null);
+ }
  const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
  const storedPromos=(rawPromos||[]).map(p=>({...p,
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
@@ -442,7 +464,12 @@ function App(){
  const filterText=search.toLocaleLowerCase("es");
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
-  &&(!from||p.end>=from)&&(!to||p.start<=to));
+  &&(!from||p.end>=from)&&(!to||p.start<=to)
+  &&(!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
+ const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
+  ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
+  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
+ }:p);
  const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
  const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
  const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
@@ -857,25 +884,35 @@ function App(){
    </header>
    <main className="main-content">
     {page==="promociones"&&<>
- <div className="page-header"><div><h1>Promociones</h1></div>
-    <div className="campaign-header-actions">
-      <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
-      <button className="btn btn-secondary" type="button" disabled={importBusy} aria-busy={importBusy} onClick={()=>importFileRef.current?.click()}>{importBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<Upload size={17}/>} {importBusy?"Importando y guardando…":"Importar Excel"}</button>
-      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={()=>void saveExistingLocalPromos()} title="Conservar en PostgreSQL las promociones importadas anteriormente en este navegador sin reemplazar las compartidas"><Database size={16}/> Guardar locales</button>}
-      {["administrador","superadministrador"].includes(tenantContext?.role)&&<button className="btn btn-secondary" type="button" onClick={exportLocalPromos} title="Exportar respaldo de las promociones anteriores a la sincronización con PostgreSQL"><ArrowDownToLine size={16}/> Copia local</button>}
-      
-      <button className="btn btn-primary main-cta" onClick={()=>startPromo()}><Plus size={18}/> Nueva promoción</button>
-    </div></div>
+ <ReportPageHeader title="Promociones" updatedAt={salesLastUpdated}
+  actions={<div className="campaign-header-actions">
+   <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
+   <button className="btn btn-secondary" type="button" disabled={importBusy}
+    aria-busy={importBusy} onClick={()=>importFileRef.current?.click()}>
+    {importBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<Upload size={17}/>}
+    {importBusy?"Importando y guardando…":"Importar Excel"}</button>
+   <button className="btn btn-primary main-cta" onClick={()=>startPromo()}>
+    <Plus size={18}/> Nueva promoción</button>
+  </div>}/>
+ <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}
+  onPharmacyChange={selectSharedPharmacies}>
+  <label className="fm-unified-filter">Buscar promoción o CN
+   <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, laboratorio o CN…"/></label>
+  <label className="fm-unified-filter">Estado
+   <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+    <option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option>
+    <option value="Finalizada">Archivada</option>
+   </select></label>
+  <label className="fm-unified-filter">Desde
+   <input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+  <label className="fm-unified-filter">Hasta
+   <input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+ </ReportFilterBar>
   {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
- <CampaignMetrics campaigns={filteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
+ <CampaignMetrics campaigns={scopedFilteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
  <section className="card list-card full-table-card">
   <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
-  <div className="toolbar">
-   <div className="search-wrap"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar promoción o CN..." aria-label="Buscar promociones"/></div>
-   <div className="select-wrap"><Filter size={16}/><select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filtrar estado"><option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></div>
-   <div className="fm-visible-date-filters"><label>Fecha de inicio<input type="date" aria-label="Fecha de inicio" value={from} onChange={e=>setFrom(e.target.value)}/></label><label>Fecha de fin<input type="date" aria-label="Fecha de fin" value={to} onChange={e=>setTo(e.target.value)}/></label></div>
-  </div>
   <ListTable rows={filteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
     tableClass="campaign-table" onRowClick={startPromo} emptyText="No hay promociones con estos filtros"
     columns={[

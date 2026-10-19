@@ -1,4 +1,4 @@
-// Recuentos recientes sin márgenes/ABCD y catálogo de familias por farmacia.
+// Recuentos exactos del período seleccionado y familias del ERP por farmacia.
 // La selección de códigos ERP se resuelve desde req.context, nunca del navegador.
 import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;

@@ -35,7 +35,7 @@ async function fields(pool,schema,table){
 function mapCatalog(catalog){
  return new Map(catalog.map(g=>[g.dcpf,{...g,salesUnits:0,revenue:0,purchaseUnits:0,
   spent:0,averagePuc:null,bestPuc:null,referenceSupplier:null,
-  referenceCn:null,averagePvp:null,pvpMarginPct:null,estimatedMargin:null,
+  referenceCn:null,referencePharmacyId:null,averagePvp:null,pvpMarginPct:null,estimatedMargin:null,
   indicativeSavings:null,paidCost:0,pricedUnits:0,pvpValue:0,pvpUnits:0,
   savings:0,referenceAvailable:false}]));
 }
@@ -228,6 +228,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
      g.savings+=potential;
      if(g.bestPuc==null||best<g.bestPuc){
       g.bestPuc=best;g.referenceSupplier=ref.supplierCode;g.referenceCn=ref.cn;
+      g.referencePharmacyId=p.pharmacyId;
      }
      g.referenceAvailable=true;
     }
@@ -308,7 +309,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     savings:groups.some(g=>g.indicativeSavings!=null)?round(count(groups,"indicativeSavings"),2):null};
    res.json({version:version.rows[0],groups:groups.slice(0,500),topGroups,totalGroups:groups.length,
     summary,policy,sales:{available:hasSales},purchases:{available:hasBuys},
-    note:"Coste real: media ponderada por unidades; ahorro orientativo: mejores precios por proveedor y CN, dentro de DCPF y período histórico configurado, con muestra mínima de 3 compras."});
+    note:"PUC observado: media ponderada por unidades con coste neto de recepciones. Objetivo: percentil bajo configurable por farmacia/CN/proveedor, con muestra mínima de 3 líneas. El menor objetivo entre farmacias se identifica con su farmacia de origen; el ahorro se calcula exclusivamente dentro de cada farmacia."});
   }catch(e){throw e}
  }
  app.get("/api/genericos/reales",...guard,async(req,res,next)=>{

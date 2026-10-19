@@ -2,7 +2,7 @@
 // Todas las consultas se limitan al esquema y farmacias del cliente autenticado.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
-import {nameCommercialRows} from "./commercialNames.js";
+import {nameCommercialRows,listCommercialSuppliers} from "./commercialNames.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -308,6 +308,20 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
  throw Error("Pantalla no soportada");
 }
 export function setupDocumentScreens(app,pool,{requireTenant}){
+ // Catálogo consultable por cualquier usuario del módulo Compras.
+ // Nunca expone proveedores ni nombres de otras farmacias o clientes.
+ app.get("/api/analytics/catalogos/proveedores",...requireTenant(),async(req,res,next)=>{
+  try{
+   if(req.user?.role!=="superadministrador"&&
+      req.context.modules?.compras!==true&&req.context.modules?.proveedores!==true)
+    return res.status(403).json({error:"Módulo no habilitado"});
+   const farmacia=String(req.query.farmacia||"");
+   if(!/^[1-9]\\d{0,8}$/.test(farmacia))
+    return res.status(400).json({error:"Farmacia inválida"});
+   const items=await listCommercialSuppliers(pool,req.context,Number(farmacia));
+   res.json({items});
+  }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
+ });
  app.get("/api/analytics/pantallas/:section",...requireTenant(),async(req,res,next)=>{
   try{
    const section=String(req.params.section||""),module=DOCUMENT_SECTIONS[section];

@@ -50,6 +50,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
   const tickerRef = useRef(null);
+  const durationRef = useRef(0);
   const discardRef = useRef(false);
   const requestRef = useRef(0);
   const createdUrlsRef = useRef(new Set());
@@ -189,12 +190,14 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
       };
       recorder.start();
       setRequesting(false);
+      durationRef.current = 0;
       setSeconds(0);
       setRecording(true);
-      tickerRef.current = window.setInterval(() => setSeconds(value => {
-        if (value >= 119) { finishRecording(false); return 120; }
-        return value + 1;
-      }), 1000);
+      tickerRef.current = window.setInterval(() => {
+        durationRef.current += 1;
+        setSeconds(durationRef.current);
+        if (durationRef.current >= 120) finishRecording(false);
+      }, 1000);
     } catch (error) {
       if (currentRequest !== requestRef.current) return;
       setRequesting(false);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {validateAssistantBody,rateCheck} from "./assistantPolicy.js";
-import {quoteSchema,authorizedIds,selectTools,periodFromQuestion,normalizedPeriod} from "./assistantAnalytics.js";
+import {quoteSchema,authorizedIds,selectTools,periodFromQuestion,normalizedPeriod,runAssistantTool,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 
 const ctx={role:"gestor",client:{schema:"ampedia"},modules:{ventas:true,compras:true,stock:false},allowedPharmacyIds:[1,2]};
 test("rechaza preguntas, farmacias e historiales inválidos",()=>{
@@ -25,4 +25,22 @@ test("limita el número de preguntas",()=>{
  const key="isolated-test:limit";
  for(let i=0;i<8;i++)assert.equal(rateCheck(key,1000+i),true);
  assert.equal(rateCheck(key,1010),false);
+});
+
+test("busca farmacias solo entre las autorizadas",()=>{
+ const local={...ctx,pharmacies:[{id:1,name:"Europa"},{id:2,name:"Abadía"}]};
+ assert.deepEqual(pharmacyIdsFromQuestion("ventas de Europa",local),[1]);
+ assert.deepEqual(pharmacyIdsFromQuestion("ventas de otra farmacia",local),[]);
+});
+test("stock usa dos parámetros, solo SELECT y cláusula por cliente",async()=>{
+ const calls=[],db={query:async(sql,params)=>{calls.push({sql,params});return {rows:[]};}};
+ const local={...ctx,client:{...ctx.client,slug:"ampedia"},modules:{...ctx.modules,stock:true}};
+ const answer=await runAssistantTool(db,local,"stock_capital",
+   {from:"2026-10-01",to:"2026-10-19"},[1]);
+ assert.equal(answer.available,true);
+ assert.deepEqual(calls[0].params,[[1],"ampedia"]);
+ assert.match(calls[0].sql,/f\.cliente_slug=\$2/);
+ assert.doesNotMatch(calls[0].sql,/\$4/);
+ assert.match(calls[0].sql,/^SELECT /);
+
 });

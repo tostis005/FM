@@ -57,7 +57,7 @@ const posts=[
 for(const [name,html] of [["landing",home],["blog",blog]]){
   assert.match(html,/<html lang="es">/);
   assert.match(html,/<meta name="description"/);
-  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=6">/);
+  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=7">/);
   assert.match(html,/href="\/login"/);
   assert.doesNotMatch(html,/<script[^>]+src="\/assets\//);
 }

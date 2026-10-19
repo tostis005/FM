@@ -176,6 +176,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [realReport,setRealReport]=useState(null);
  const [reportLoading,setReportLoading]=useState(true);
  const [reportError,setReportError]=useState("");
+ const [purchaseState,setPurchaseState]=useState(null);
+ const [purchaseStateError,setPurchaseStateError]=useState("");
+ const [purchaseSlow,setPurchaseSlow]=useState(false);
  const [salesError,setSalesError]=useState("");
  const [loading,setLoading]=useState(()=>["dashboard","ventas"].includes(module));
  const [reloadKey,setReloadKey]=useState(0);
@@ -308,6 +311,34 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
  },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction]);
+
+ // Verificación de origen/periodo rápida y separada del detalle agregado.
+ // Si el detalle tarda, el usuario ya sabe si existen compras reales.
+ useEffect(()=>{
+  if(module!=="compras"||!period.valid){setPurchaseState(null);setPurchaseStateError("");return}
+  const controller=new AbortController();
+  const params=new URLSearchParams({desde:period.from,hasta:period.to});
+  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  setPurchaseState(null);setPurchaseStateError("");
+  fetch("/api/analytics/compras/estado?"+params,{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+  }).then(async response=>{
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(result.error||"No se puede comprobar el origen de compras");
+   return result;
+  }).then(data=>{if(!controller.signal.aborted)setPurchaseState(data)})
+   .catch(e=>{if(!controller.signal.aborted)setPurchaseStateError(e.message)});
+  return()=>controller.abort();
+ },[module,clientSlug,period.from,period.to,period.valid,
+    filters.pharmacyIds.join(","),reloadKey]);
+
+ useEffect(()=>{
+  if(module!=="compras"||!reportLoading){setPurchaseSlow(false);return}
+  const timer=setTimeout(()=>setPurchaseSlow(true),12000);
+  return()=>clearTimeout(timer);
+ },[module,reportLoading,period.from,period.to,filters.pharmacyIds.join(","),
+    searchReady,tableSort.key,tableSort.direction]);
 
  useEffect(()=>{
   if(module==="ventas"){setReportLoading(false);return}
@@ -442,6 +473,25 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
+  {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
+   {purchaseStateError?
+    <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:
+    !purchaseState?
+     <span>Comprobando si existen compras sincronizadas en las farmacias seleccionadas…</span>:
+     purchaseState.source==="missing"?
+      <strong>No hay una tabla de compras reconocible en este cliente. Revisa las importaciones del sincronizador.</strong>:
+      purchaseState.hasPurchases?
+       <span><strong>Compras encontradas en el período:</strong> {purchaseState.pharmacies.filter(p=>p.hasPeriodPurchases).length} de {purchaseState.pharmacies.length} farmacias tienen movimientos.
+        {reportLoading?" El detalle y los indicadores se están calculando.":""}
+        {reportError?" Los movimientos existen, pero ha fallado la consulta del informe.":""}</span>:
+       <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}
+   {purchaseState?.pharmacies?.length>0&&<small style={{display:"block",marginTop:6}}>
+    {purchaseState.pharmacies.map(p=>p.name+": "+(p.hasPeriodPurchases?"con compras":p.latestPurchaseDate?"sin compras en el período (última "+String(p.latestPurchaseDate).slice(0,10)+")":"sin compras sincronizadas")).join(" · ")}
+   </small>}
+   {purchaseSlow&&purchaseState?.hasPurchases&&<small style={{display:"block",marginTop:8}}>
+    El informe sigue calculando el detalle; los registros existen. Puede haber una consulta lenta, no falta de datos.
+   </small>}
+  </div>}
   {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
   {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
    <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}

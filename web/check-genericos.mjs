@@ -9,6 +9,7 @@ const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",active:true}];
 const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
+let listRequests=0;
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
  let data={};
@@ -17,6 +18,7 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/promociones")data={promotions:[]};
  else if(p==="/api/tenant/farmacias")data=pharmacies;
  else if(p==="/api/genericos/reales"){
+  listRequests++;
   await new Promise(resolve=>setTimeout(resolve,650));
   data={version:{sha256:"aa",fecha_fuente:"2026-10-18",importado_en:"2026-10-18",total_genericos:6000},
     totalGroups:1,summary:{salesUnits:22,revenue:240,purchases:118,savings:19.68},policy:{global:{percentile:20,months:6},overrides:[]},
@@ -48,5 +50,17 @@ try{
  await page.getByText("Proveedor A").first().waitFor();
  assert.equal(headerSeen,true,"Detalle debe mantener tenant explícito");
  assert.equal(await page.locator(".fm-generic-detail .fm-generic-code").count()>0,true);
+ // Recuperar foco no debe desmontar los conjuntos ni rehacer la petición.
+ const initialRequests=listRequests;
+ await page.evaluate(()=>{
+  document.dispatchEvent(new Event("visibilitychange"));
+  window.dispatchEvent(new Event("focus"));
+ });
+ await page.waitForTimeout(500);
+ assert.equal(listRequests,initialRequests,"Genéricos se ha recargado por recuperar foco");
+ await page.getByRole("button",{name:"Actualizar",exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector(".fm-generic-chart")!==null);
+ await page.waitForTimeout(750);
+ assert.ok(listRequests>initialRequests,"Actualizar explícitamente debe consultar genéricos");
  console.log("OK: Genéricos carga por visual, muestra agrupación DCPF y desglose aislado por cliente");
 }finally{await browser.close();}

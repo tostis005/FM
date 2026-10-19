@@ -67,6 +67,36 @@ try {
         Batches(corrected, duplicate),null,CancellationToken.None);
     throw new Exception("JOIN multiplicado aceptado");
 } catch (InvalidOperationException e) when (e.Message.Contains("JOIN multiplicado")) { }
+// Farmatic EUR 13/03/2024: IdVenta 1327799 / IdNLinea 1 / Codigo NULL
+// / Cantidad 1 / TipoLinea C. Guardar importe en el documento, sin inventar CN.
+var special = Row(sales, "EUR|1327799|L|1", "EUR|1327799", "1",
+    8.50m, 1m, 8.50m, null);
+special["tipo_linea_origen"] = "C";
+var savedSpecial = await JoinedDocumentWriter.WriteAsync(db, "ampedia", pharmacy, sales,
+    Batches(special), null, CancellationToken.None);
+Check(savedSpecial.Inserted == 2, "Insertar línea especial y su cabecera");
+Check(await Count(db, """
+SELECT count(*) FROM ampedia.fm_ventas_lineas
+ WHERE documento_id='EUR|1327799' AND linea_id='1'
+   AND articulo_origen_id IS NULL AND tipo_linea_origen='C'
+   AND cantidad=1 AND importe_neto=8.50
+""") == 1, "La línea especial debe mantener el importe y no inventar producto");
+var repeatedSpecial = await JoinedDocumentWriter.WriteAsync(db, "ampedia", pharmacy, sales,
+    Batches(special), null, CancellationToken.None);
+Check(repeatedSpecial.Inserted == 0 && repeatedSpecial.Updated == 0,
+    "Repetir línea especial no duplica importes");
+var missingNormal = Row(sales, "BAD-LINE", "BAD-DOC", "1", 1m, 1m, 1m, null);
+missingNormal["tipo_linea_origen"] = "A";
+try
+{
+    await JoinedDocumentWriter.WriteAsync(db, "ampedia", pharmacy, sales,
+        Batches(missingNormal), null, CancellationToken.None);
+    throw new Exception("Se admitió una línea sin artículo y no especial");
+}
+catch (InvalidOperationException e) when (e.Message.Contains("articulo_id")) { }
+Check(await Count(db, "SELECT count(*) FROM ampedia.fm_ventas_lineas WHERE documento_id='BAD-DOC'")==0,
+    "Una línea inválida no puede publicarse parcialmente");
+
 var receiptHeader = Row(receipts,"RH-1","RECEIPT-JOIN",null,8m);
 var headOnly = await JoinedDocumentWriter.WriteAsync(db,"ampedia",pharmacy,receipts,
     Batches(receiptHeader),null,CancellationToken.None);

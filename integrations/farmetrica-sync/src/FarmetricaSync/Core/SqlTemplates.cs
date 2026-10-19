@@ -201,7 +201,8 @@ SELECT
     CAST('importe' AS varchar(20)) AS descuento_global_tipo,
     TRY_CONVERT(decimal(20,6), v.TotalCuota) AS impuestos_documento,
     CAST(NULL AS datetime2) AS modificado_origen,
-    CONVERT(varchar(100), l.Codigo) AS articulo_id,
+    NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), l.Codigo))), '') AS articulo_id,
+    CONVERT(varchar(100), l.TipoLinea) AS tipo_linea_origen,
     TRY_CONVERT(decimal(20,6), l.Cantidad) AS unidades,
     TRY_CONVERT(decimal(20,6), l.PVP) AS precio_unitario,
     TRY_CONVERT(decimal(20,6), l.DescuentoLinea) AS descuento_linea,
@@ -216,6 +217,24 @@ SELECT
 FROM {{TABLE:dbo.Venta}} AS v
 LEFT JOIN {{TABLE:dbo.LineaVenta}} AS l ON l.IdVenta = v.IdVenta
 """;
+
+
+    // Actualizar SOLAMENTE la plantilla anterior exacta, incluida su versión incremental.
+    // No sustituir SELECT personalizados al actualizar FarmetricaSync.
+    public static string UpgradeStandardSalesDocumentsSql(string sql)
+    {
+        var currentFull = SalesDocuments.TrimEnd();
+        var currentIncremental = currentFull +
+            "\nWHERE v.FechaHora >= @desde AND v.FechaHora < @hasta";
+        var oldFull = currentFull.Replace(
+            "NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), l.Codigo))), '') AS articulo_id,\n" +
+            "    CONVERT(varchar(100), l.TipoLinea) AS tipo_linea_origen,",
+            "CONVERT(varchar(100), l.Codigo) AS articulo_id,");
+        var oldIncremental = oldFull +
+            "\nWHERE v.FechaHora >= @desde AND v.FechaHora < @hasta";
+        return sql.Trim().Equals(oldFull, StringComparison.Ordinal) ? currentFull :
+            sql.Trim().Equals(oldIncremental, StringComparison.Ordinal) ? currentIncremental : sql;
+    }
 
     // dbo.Recep contiene cabeceras; dbo.LINEARECEP tiene el coste de compra
     // y bonificaciones. No atribuir semántica monetaria a Descuento1..4/DtoManual
@@ -258,6 +277,7 @@ LEFT JOIN {{TABLE:dbo.LINEARECEP}} AS l ON l.IdRecepcion = r.IdRecepcion
     private static readonly IReadOnlyDictionary<string, HashSet<string>> LegacyOptional = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
     {
         ["ventas"] = new(StringComparer.OrdinalIgnoreCase) { "descuento_linea", "descuento_operacion" },
+        ["ventas_completas"] = new(StringComparer.OrdinalIgnoreCase) { "tipo_linea_origen" },
         ["compras"] = new(StringComparer.OrdinalIgnoreCase) { "hora_recepcion", "fecha_hora_recepcion", "numero_pedido", "albaran_id", "condicion_id", "proveedor_nombre", "descripcion", "vendedor_id", "recepcion_actualizada", "recepcion_demorada" },
         ["articulos"] = new(StringComparer.OrdinalIgnoreCase) { "presentacion", "situacion", "puc", "pmc", "proveedor_habitual_id", "fecha_ultima_entrada", "fecha_ultima_salida", "segmento_comercial", "subcategoria", "clasificacion_origen", "clasificacion_confianza", "cn_normalizado" },
         ["proveedores"] = new(StringComparer.OrdinalIgnoreCase) { "direccion", "codigo_postal", "poblacion", "provincia", "web", "descuento" }

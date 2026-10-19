@@ -151,6 +151,25 @@ if (SqlTemplates.All.Count != 7 || entities.Count != 7 ||
 
 var tickets = SqlTemplates.All.Single(t => t.Entity == "ventas_completas");
 var receipts = SqlTemplates.All.Single(t => t.Entity == "recepciones_completas");
+
+if (!tickets.FullSql.Contains("CONVERT(varchar(100), l.TipoLinea) AS tipo_linea_origen") ||
+    !tickets.FullSql.Contains("NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), l.Codigo))), '') AS articulo_id"))
+    throw new Exception("La plantilla debe permitir Codigo vacío sin fabricar artículos y conservar TipoLinea.");
+if (!SqlTemplates.IsLegacyOptional("ventas_completas","tipo_linea_origen"))
+    throw new Exception("SQL personalizado antiguo debe conservar compatibilidad de columnas.");
+var oldStandardFull = tickets.FullSql.Replace(
+    "NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), l.Codigo))), '') AS articulo_id,\n" +
+    "    CONVERT(varchar(100), l.TipoLinea) AS tipo_linea_origen,",
+    "CONVERT(varchar(100), l.Codigo) AS articulo_id,");
+var oldStandardIncremental = oldStandardFull +
+    "\nWHERE v.FechaHora >= @desde AND v.FechaHora < @hasta";
+if (SqlTemplates.UpgradeStandardSalesDocumentsSql(oldStandardFull) != tickets.FullSql ||
+    SqlTemplates.UpgradeStandardSalesDocumentsSql(oldStandardIncremental) != tickets.Sql)
+    throw new Exception("Actualización in situ de estándar anterior sin perder trabajo ni cursor.");
+var customFull = oldStandardFull + "\nWHERE v.NumeroDoc IS NOT NULL";
+if (SqlTemplates.UpgradeStandardSalesDocumentsSql(customFull) != customFull)
+    throw new Exception("Nunca sustituir un SELECT personalizado.");
+
 foreach (var (source, tables, requiredParts) in new[] {
     (tickets, new[] {"dbo.Venta", "dbo.LineaVenta"}, new[] {
         "l.IdVenta = v.IdVenta", "v.Empresa", "l.IdNLinea", "v.TotalVenta",

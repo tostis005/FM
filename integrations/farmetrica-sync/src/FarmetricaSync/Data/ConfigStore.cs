@@ -62,6 +62,17 @@ public sealed class ConfigStore
             _config.States.RemoveAll(st => obsoleteJobIds.Contains(st.JobId));
             _config.Entities.RemoveAll(e => retiredIds.Contains(e.Id));
         }
+        // Conservar IDs, cursores y modos de trabajo. Migrar exclusivamente
+        // SELECT ventas_completas idénticos al estándar antiguo, para incluir
+        // TipoLinea y permitir líneas C sin Codigo. SQL personalizado intacto.
+        foreach (var salesJob in _config.Jobs.Where(j =>
+            _config.Entities.Any(e => e.Id == j.EntityId &&
+                e.Name.Equals("ventas_completas", StringComparison.OrdinalIgnoreCase))))
+        {
+            salesJob.Sql = SqlTemplates.UpgradeStandardSalesDocumentsSql(salesJob.Sql);
+            salesJob.FullSql = SqlTemplates.UpgradeStandardSalesDocumentsSql(salesJob.FullSql);
+        }
+
         foreach (var articleJob in _config.Jobs.Where(j =>
             _config.Entities.Any(e => e.Id == j.EntityId &&
                 e.Name.Equals("articulos", StringComparison.OrdinalIgnoreCase))))

@@ -6,6 +6,7 @@ import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
 import {setupSalesDetail} from "./salesDetail.js";
+import {setupPurchaseTotals} from "./purchaseTotals.js";
 import {createSalesCache} from "./salesCache.js";
 import {setupDemoClients} from "./demoClients.js";
 import {setupGenericosReales} from "./genericosReales.js";
@@ -21,6 +22,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
  setupSalesTotals(app,pool,{requireTenant:()=>[]});
  setupSalesInsights(app,pool,{requireTenant:()=>[]});
  setupSalesDetail(app,pool,{requireTenant:()=>[]});
+ setupPurchaseTotals(app,pool,{requireTenant:()=>[]});
  setupDemoClients(app,pool,{requireSuperadmin:()=>[]});
  setupGenericosReales(app,pool,{requireTenantModule:()=>[]});
  const ctx={client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
@@ -368,6 +370,30 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(highVolume.available,true);
   assert.equal(highVolume.salesRows.length,3000);
   assert.ok(highVolume.salesRows.some(r=>r.cn.startsWith("EXTRA-")));
+  // Escenario real de producción: el sincronizador envía cabeceras de
+  // proveedor SIN artículo, unidades, importe ni coste. No son líneas de compra.
+  await pool.query(`INSERT INTO ampedia.compras
+     (farmacia_codigo,origen_id,fecha,articulo_id,proveedor_id,unidades,coste_unitario,importe)
+     VALUES ('VAL','HEADER-NO-ITEM','2026-10-17',NULL,'PV1',NULL,NULL,NULL)`);
+  const headers=await request("/api/analytics/compras/resumen",{
+    farmacias:"5",desde:"2026-10-01",hasta:"2026-10-18"});
+  assert.equal(headers.hasArticleLines,false);
+  assert.equal(headers.hasAmounts,false);
+  assert.equal(headers.sourceRows,1);
+  assert.equal(headers.kpis.compras,null,"Importe ausente NO debe mostrarse como 0 €");
+  assert.equal(headers.kpis.unidadesCompradas,null);
+  assert.equal(headers.kpis.lineasCompra,null);
+  assert.equal(headers.kpis.proveedores,1);
+  assert.equal(headers.monthly[0].compras,null);
+  const withoutFakeArticles=await request("/api/analytics/reportes",{
+    modulo:"compras",farmacias:"5"});
+  assert.equal(withoutFakeArticles.buyRows.length,0,
+    "La tabla por artículo no debe incluir cabeceras sin producto");
+  assert.equal(withoutFakeArticles.kpis.compras,null);
+  const headerProvider=await request("/api/analytics/reportes",{
+    modulo:"proveedores",farmacias:"5"});
+  assert.equal(headerProvider.supplierRows[0].value,null,
+    "Sin gasto sincronizado, no inventar gasto 0 por proveedor");
   const filteredHighVolume=await request("/api/analytics/reportes",{
     modulo:"dashboard",farmacias:"1",buscar:"EXTRA-42"});
   assert.equal(filteredHighVolume.available,true);

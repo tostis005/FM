@@ -95,7 +95,7 @@ assert.match(configStore,/Volatile\.Read\(ref _config\)/);
 assert.match(configStore,/Volatile\.Write\(ref _config, next\)/);
 assert.doesNotMatch(configStore,/lock \(_gate\) return selector/);
 assert.match(backendCode,/api\/ping/);
-assert.match(backendCode,/IPAddress\.IsLoopback\(endpointIp\)/);
+assert.match(backendCode,/IPAddress\.IsLoopback\(ip\)/);
 assert.match(backendCode,/solo permite el panel en localhost/);
 
 assert.match(backendCode,/credentials\.AdminSalt, credentials\.AdminHash/);

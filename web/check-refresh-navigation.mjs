@@ -62,7 +62,7 @@ async function assertRoute(route,title){
 }
 try{
  await assertRoute("/ventas","Ventas");
- await assertRoute("/dashboard","Dashboard");
+ await assertRoute("/dashboard","Inicio");
  await assertRoute("/compras","Compras");
  // Las rutas internas deben seguir funcionando al usar los botones de la SPA.
  await page.getByRole("button",{name:"Ventas",exact:true}).first().click();

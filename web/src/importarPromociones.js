@@ -223,13 +223,29 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR){
     // coincide y no tienen ofertas diferentes: p.ej. dos ramas PHYTO.
     const top=candidates[0]?.score??-Infinity;
     const relevant=candidates.filter(x=>x.score>=top-8&&x.score>=50);
-    const entries=relevant.flatMap(g=>{
+    const takeAvailable=candidates=>candidates.flatMap(g=>{
       const assigned=assignedByGroup.get(g.index)||new Set();
       const available=g.entries.filter(e=>!assigned.has(e.cn));
       for(const e of available)assigned.add(e.cn);
       assignedByGroup.set(g.index,assigned);
       return available;
     });
+    let entries=takeAvailable(relevant);
+    // Segundo intento SOLO cuando la coincidencia laboratorio+marca+oferta no
+    // ha aportado ningún CN. En esta comprobación NO cuentan laboratorio
+    // ni oferta: únicamente RESUMEN.MARCA frente a LISTADO CN.GAMA.
+    let matchedByBrandOnly=false;
+    if(!entries.length){
+      const alternatives=groups.map((group,index)=>({
+        index,entries:group.entries,score:brandScore(brand,group.gama)
+      })).filter(candidate=>candidate.score>=50&&
+        candidate.entries.some(e=>!assignedByGroup.get(candidate.index)?.has(e.cn)))
+        .sort((a,b)=>b.score-a.score);
+      const bestBrand=alternatives[0]?.score??-Infinity;
+      const sameBrand=alternatives.filter(candidate=>candidate.score>=bestBrand-8);
+      entries=takeAvailable(sameBrand);
+      matchedByBrandOnly=entries.length>0;
+    }
     const cnDescriptions=Object.fromEntries(entries.filter(e=>e.description).map(e=>[e.cn,e.description]));
     const promo=createCampaign(lab,brand,offer,start,end,description,entries.map(e=>e.cn),
       "RESUMEN",cnDescriptions);
@@ -238,6 +254,8 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR){
     promo.sourceRow=rowNumber;
     promo.fingerprint=makeFingerprint(promo)+"|RESUMEN:"+rowNumber;
     promo.id=makeId(promo.fingerprint);
+    if(matchedByBrandOnly)promo.importWarnings.push(
+      "CNs asociados por coincidencia entre MARCA y GAMA; laboratorio y oferta no coincidían");
     if(!entries.length)promo.importWarnings.push("No se localizaron CNs asociados a esta fila de RESUMEN");
     campaigns.push(promo);
   }

@@ -2,7 +2,7 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import React,{useEffect,useState,useCallback,useRef} from "react";
 import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
-import {quantity,integer,dateTimeES} from "./localeES.js";
+import {quantity,dateTimeES} from "./localeES.js";
 
 const n=value=>quantity(value);
 const date=dateTimeES;

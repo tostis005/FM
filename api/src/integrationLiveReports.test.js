@@ -91,7 +91,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(legacyReport.kpis.lineasCompra,1);
   assert.equal(legacyReport.buyRows[0].cn,"123456");
   assert.equal(legacyReport.buyRows[0].puc,2.5);
-  assert.equal(legacyReport.supplierRows[0].name,"Proveedor legado");
+  const legacyProviders=await request("/api/analytics/reportes",
+    {modulo:"proveedores",farmacias:String(legacyPharmacy.id)}, {},legacyContext);
+  assert.equal(legacyProviders.supplierRows[0].name,"Proveedor legado");
   await pool.query(`CREATE TABLE legacy_reports_ci.stock (
     farmacia_id integer NOT NULL,producto_id text NOT NULL,
     unidades numeric,coste_unitario numeric,fecha_referencia timestamptz NOT NULL)`);

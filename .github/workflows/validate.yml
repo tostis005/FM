@@ -228,6 +228,7 @@ jobs:
           node check-navigation-arrows.mjs
           node check-genericos.mjs
           node check-promotions-delete.mjs
+          node check-promotions-import.mjs
           node check-operativa.mjs
           node check-pantallas-reales.mjs
           python3 -m http.server 4176 --bind 127.0.0.1 --directory public > /tmp/farmetrica-public.log 2>&1 &

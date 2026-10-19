@@ -130,6 +130,7 @@ const NAV=[
  {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas"},
  {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas"},
  {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
+ {id:"compras-recepciones",label:"Recepciones completas",icon:ClipboardList,module:"compras",childOf:"compras"},
  {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion",childOf:"compras"},
  {id:"compras-preparador",label:"Preparador de pedidos",icon:ShoppingCart,module:"compras",childOf:"compras"},
  {id:"compras-pendientes",label:"Pendientes de asignar",icon:ClipboardList,module:"compras",childOf:"compras"},

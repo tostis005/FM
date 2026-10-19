@@ -1,6 +1,7 @@
 // Servicio de IA: proveedor sustituible y herramientas de consulta cerradas.
 // No hay SQL arbitrario, escrituras, almacenamiento de audio ni exposición de DB credentials.
 import express from "express";
+import { validateAssistantBody,rateCheck } from "./assistantPolicy.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,22 +18,7 @@ const whisper=()=>process.env.AI_WHISPER_URL||"http://whisper:8080";
 const isAllowedUrl=value=>{
  try{const url=new URL(value);return ["http:","https:"].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}
 };
-export function validateAssistantBody(body) {
- if(!body||typeof body.question!=="string"||body.question.trim().length<2||
-   body.question.length>2000||!Array.isArray(body.history)||body.history.length>8||
-   body.history.some(m=>!m||!["user","assistant"].includes(m.role)||typeof m.content!=="string"||m.content.length>1600)||
-   (body.pharmacyIds!==undefined&&(!Array.isArray(body.pharmacyIds)||body.pharmacyIds.length>50||
-    body.pharmacyIds.some(x=>!Number.isInteger(x)))))return null;
- return {question:body.question.trim(),history:body.history,pharmacyIds:body.pharmacyIds||[]};
-}
-const limits=new Map();
-export function rateCheck(key,now=Date.now()){
- const previous=(limits.get(key)||[]).filter(x=>now-x<10*60*1000);
- if(previous.length>=8)return false;
- previous.push(now);limits.set(key,previous);
- if(limits.size>1000)for(const [k,values] of limits)if(now-values.at(-1)>10*60*1000)limits.delete(k);
- return true;
-}
+
 let active=0;
 function compactFacts(results) {
  return results.map(result=>({
@@ -67,7 +53,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
    method:"POST",headers:{"Content-Type":"application/json"},
    signal:controller.signal,
    body:JSON.stringify({
-    model:chosenModel,stream:false,messages,
+    model:chosenModel,stream:false,think:false,messages,
     options:{temperature:0.1,num_ctx:2048,num_predict:370},
     keep_alive:"30s"
    })

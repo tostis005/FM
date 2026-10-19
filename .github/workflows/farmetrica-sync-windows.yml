@@ -33,6 +33,8 @@ jobs:
         run: dotnet run --project tests/SqlTemplateRegression/SqlTemplateRegression.csproj --configuration Release
       - name: Probar clasificación ES sin confundir EAN ni IDs locales
         run: dotnet run --project tests/ProductClassificationRegression/ProductClassificationRegression.csproj --configuration Release
+      - name: Probar cabeceras y líneas de consultas JOIN
+        run: dotnet run --project tests/DocumentNormalizerRegression/DocumentNormalizerRegression.csproj --configuration Release
       - name: Verificar lectura no bloqueante del historial y login
         run: dotnet run --project tests/ConfigStoreRegression/ConfigStoreRegression.csproj --configuration Release
       - name: Publicar Windows autocontenido

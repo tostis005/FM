@@ -1,4 +1,5 @@
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import React,{useEffect,useState,useCallback,useRef} from "react";
 import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
@@ -61,29 +62,24 @@ export default function SyncVentas({client,pharmacies=[]}){
   {status?.tableExists&&stats&&<>
    <section className="card">
     <div className="section-heading"><h2>Farmacias sincronizadas</h2><Database size={19}/></div>
-    <HorizontalTableScroll className="table-scroll" label="sincronización"><table className="data-table"><thead><tr>
-     <th>Farmacia</th><th>Líneas recibidas</th><th>Última recepción</th><th>Última venta</th>
-    </tr></thead><tbody>{(status.pharmacies||[]).map(p=><tr key={p.codigo}>
-     <td><strong>{pharmacyName(p.codigo)}</strong></td><td>{integer(p.total)}</td>
-     <td>{date(p.ultima_recepcion)}</td><td>{date(p.ultima_venta)}</td>
-    </tr>)}</tbody></table>
-    {!status.pharmacies?.length&&<p className="fm-sync-note">Sin movimientos de venta para estas farmacias.</p>}
-    </HorizontalTableScroll>
+    <SortableDataTable label="farmacias sincronizadas"
+     headers={["Farmacia","Líneas recibidas","Última recepción","Última venta"]}
+     rows={(status.pharmacies||[]).map(p=>[
+      <strong key={p.codigo}>{pharmacyName(p.codigo)}</strong>,integer(p.total),
+      date(p.ultima_recepcion),date(p.ultima_venta)])}
+     empty="Sin movimientos de venta para estas farmacias."/>
    </section>
    <section className="card">
     <div className="section-heading"><h2>Últimas 20 líneas sincronizadas</h2></div>
-    <HorizontalTableScroll className="table-scroll" label="sincronización"><table className="data-table"><thead><tr>
-     <th>Recepción</th><th>Farmacia</th><th>ID origen</th><th>Fecha venta</th><th>Artículo</th>
-     <th>Unidades</th><th>Precio unidad</th><th>Importe</th><th>Descuento línea</th><th>Descuento operación</th>
-    </tr></thead><tbody>{(status.preview||[]).map((v,i)=><tr key={v.origen_id+"-"+i}>
-     <td>{date(v.sincronizado_en)}</td><td>{pharmacyName(v.farmacia_codigo)}</td><td>{v.origen_id}</td>
-     <td>{date(v.fecha)}</td><td>{v.articulo_id}</td><td>{n(v.unidades)}</td>
-     <td>{v.precio_unitario==null?"—":euro(v.precio_unitario)}</td><td>{euro(v.importe)}</td>
-     <td>{v.descuento_linea==null?"—":euro(v.descuento_linea)}</td>
-     <td>{v.descuento_operacion==null?"—":euro(v.descuento_operacion)}</td>
-    </tr>)}</tbody></table>
-    {!status.preview?.length&&<p className="fm-sync-note">Todavía no se han recibido líneas de venta.</p>}
-    </HorizontalTableScroll>
+    <SortableDataTable label="últimas líneas de ventas sincronizadas"
+     headers={["Recepción","Farmacia","ID origen","Fecha venta","Artículo","Unidades","Precio unidad","Importe","Descuento línea","Descuento operación"]}
+     rows={(status.preview||[]).map(v=>[
+      date(v.sincronizado_en),pharmacyName(v.farmacia_codigo),v.origen_id,
+      date(v.fecha),v.articulo_id,n(v.unidades),
+      v.precio_unitario==null?"—":euro(v.precio_unitario),euro(v.importe),
+      v.descuento_linea==null?"—":euro(v.descuento_linea),
+      v.descuento_operacion==null?"—":euro(v.descuento_operacion)])}
+     empty="Todavía no se han recibido líneas de venta."/>
    </section>
   </>}
   </LoadingFrame>

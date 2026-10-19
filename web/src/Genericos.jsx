@@ -4,6 +4,8 @@ import {ChevronDown,RefreshCw,Search,Package,Download} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingState.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
+import {reconcilePharmacyIds} from "./reportFilterScopes.js";
+import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
@@ -82,14 +84,17 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
 
  </div>;
 }
+const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id])=>id));
 export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
  // El contrato normalizado funciona en TODOS los clientes, no solo Ampedia.
  // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
  const [useReal,setUseReal]=useState(true);
  useEffect(()=>{setUseReal(true);setData(null)},[clientSlug]);
- const [periodKey,setPeriodKey]=useState("3");
- const [customFrom,setCustomFrom]=useState(""),[customTo,setCustomTo]=useState("");
- const [ids,setIds]=useState([]),[search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
+ const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug,COMMON_PERIOD_KEYS).period||"3");
+ const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
+ const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
+ const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
+ const [search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
  const [abcdFilter,setAbcdFilter]=useState("all");
  const [sort,setSort]=useState({key:"revenue",direction:"desc"});
  const sortColumns=[
@@ -167,12 +172,16 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   <div className="card fm-generics-filters">
    <label>Periodo<select value={periodKey} onChange={e=>{
     const k=e.target.value;setPeriodKey(k);
-    if(k==="custom"&&!customFrom){setCustomFrom(range.from||"");setCustomTo(range.to||"");}
+    if(k==="custom"){
+     const from=customFrom||range.from||"",to=customTo||range.to||"";
+     setCustomFrom(from);setCustomTo(to);
+     updateSharedReportFilters(clientSlug,{period:k,customFrom:from,customTo:to});
+    }else updateSharedReportFilters(clientSlug,{period:k});
    }}>{SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
-   {periodKey==="custom"&&<><label>Desde<input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label>
-    <label>Hasta<input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></>}
+   {periodKey==="custom"&&<><label>Desde<input type="date" value={customFrom} onChange={e=>{setCustomFrom(e.target.value);updateSharedReportFilters(clientSlug,{customFrom:e.target.value})}}/></label>
+    <label>Hasta<input type="date" value={customTo} onChange={e=>{setCustomTo(e.target.value);updateSharedReportFilters(clientSlug,{customTo:e.target.value})}}/></label></>}
    <label>Farmacias<MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
-    options={pharmacies.map(f=>({label:f.name,value:String(f.id)}))} value={ids} onChange={setIds}/></label>
+    options={pharmacies.map(f=>({label:f.name,value:String(f.id)}))} value={ids} onChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}/></label>
    <label>Prioridad ABCD<select value={abcdFilter} onChange={e=>setAbcdFilter(e.target.value)} aria-label="Filtrar clasificación ABCD">
     <option value="all">Todas</option><option value="A">A · Principal</option><option value="B">B · Relevante</option>
     <option value="C">C · Menor</option><option value="D">D · Sin ventas</option>

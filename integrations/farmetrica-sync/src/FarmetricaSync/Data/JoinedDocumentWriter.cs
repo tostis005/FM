@@ -109,6 +109,28 @@ public static class JoinedDocumentWriter
                     $"Falta la tabla {name}. Aplicar la migración 016 antes de activar este flujo.");
         }
 
+        // Comprobar la migración ANTES de leer millones de filas de Farmatic.
+        // En PostgreSQL articulo_origen_id debe ser nullable para líneas C sin código,
+        // sin convertirlas en productos ficticios.
+        if (sales)
+        {
+            await using var schemaCheck = new NpgsqlCommand("""
+SELECT
+    EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema=@schema AND table_name='fm_ventas_lineas'
+              AND column_name='articulo_origen_id' AND is_nullable='YES')
+    AND
+    EXISTS (SELECT 1 FROM information_schema.columns
+            WHERE table_schema=@schema AND table_name='fm_ventas_lineas'
+              AND column_name='tipo_linea_origen')
+""", conn);
+            schemaCheck.Parameters.AddWithValue("schema", schema);
+            if (!(bool)(await schemaCheck.ExecuteScalarAsync(ct) ?? false))
+                throw new InvalidOperationException(
+                    "Falta la migración 019 de líneas de venta sin artículo en PostgreSQL. " +
+                    "Aplicarla antes de lanzar una carga histórica; no se ha leído Farmatic.");
+        }
+
         string stage = Validation.Q("fs_doc_" + Guid.NewGuid().ToString("N"));
         var cols = new[] { "farmacia_codigo" }.Concat(entity.Columns.Select(c => c.Name)).ToArray();
         string fields = string.Join(", ", cols.Select(Validation.Q));
@@ -141,10 +163,25 @@ public static class JoinedDocumentWriter
                         throw new InvalidOperationException("JOIN: origen_id, documento_id y fecha son obligatorios.");
                     if (!keys.Add(key))
                         throw new InvalidOperationException($"JOIN duplicado: origen_id {key} repetido en un lote.");
-                    if (!string.IsNullOrWhiteSpace(line) &&
-                        (!row.TryGetValue("articulo_id", out var article) || string.IsNullOrWhiteSpace(Convert.ToString(article)) ||
-                         !row.TryGetValue("unidades", out var units) || units is null))
-                        throw new InvalidOperationException($"JOIN: línea {line} sin artículo o unidades.");
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        bool hasArticle = row.TryGetValue("articulo_id", out var article) &&
+                            !string.IsNullOrWhiteSpace(Convert.ToString(article));
+                        bool hasUnits = row.TryGetValue("unidades", out var units) &&
+                            units is not null && units is not DBNull;
+                        row.TryGetValue("tipo_linea_origen", out var rawLineType);
+                        bool specialSalesLine = sales &&
+                            string.Equals(Convert.ToString(rawLineType)?.Trim(),
+                                "C", StringComparison.OrdinalIgnoreCase);
+                        if (!hasUnits || (!hasArticle && !specialSalesLine))
+                        {
+                            string missing = !hasUnits ? "unidades" : "articulo_id";
+                            throw new InvalidOperationException(
+                                $"JOIN: documento {document}, línea {line}: falta {missing}. " +
+                                "Solo se admite artículo vacío para ventas TipoLinea C; " +
+                                "no se descartan líneas ni se inventan códigos.");
+                        }
+                    }
                     if (string.IsNullOrWhiteSpace(line) &&
                         (row.TryGetValue("articulo_id", out var headerArticle) && headerArticle is not null ||
                          row.TryGetValue("unidades", out var headerUnits) && headerUnits is not null))
@@ -215,7 +252,9 @@ public static class JoinedDocumentWriter
             SELECT count(*) FROM {stage}
             WHERE nullif(btrim(documento_id),'') IS NULL OR fecha IS NULL
                OR (nullif(btrim(linea_id),'') IS NOT NULL AND
-                   (nullif(btrim(articulo_id),'') IS NULL OR unidades IS NULL))", ct);
+                   (unidades IS NULL OR
+                    (nullif(btrim(articulo_id),'') IS NULL
+                     AND NOT ({(sales ? "upper(btrim(coalesce(tipo_linea_origen,'')))='C'" : "false")}))))", ct);
         if (badEmpty > 0)
             throw new InvalidOperationException($"JOIN incompleto: {badEmpty} registros sin claves o cantidad.");
 
@@ -267,7 +306,7 @@ public static class JoinedDocumentWriter
             DO UPDATE SET {headerUpdates} WHERE {headerChanges}", ct, tx, source);
 
         string lineCols = sales
-            ? "articulo_origen_id,cantidad,precio_unitario,descuento_linea,descuento_linea_tipo,importe_neto,impuestos,coste_historico,eliminada_logicamente,modificado_origen"
+            ? "articulo_origen_id,cantidad,precio_unitario,descuento_linea,descuento_linea_tipo,importe_neto,impuestos,coste_historico,eliminada_logicamente,modificado_origen,tipo_linea_origen"
             : "articulo_origen_id,cantidad,precio_unitario_bruto,descuento_comercial,descuento_tipo,bonificacion_unidades,coste_neto,impuestos,eliminada_logicamente,modificado_origen";
         string[] lineFields = lineCols.Split(',');
         string colsForLine = string.Join(",",new[] { "farmacia_codigo","sistema_origen","documento_id","linea_id" }
@@ -275,7 +314,7 @@ public static class JoinedDocumentWriter
         string lineSelect = sales
             ? @"s.articulo_id,s.unidades,s.precio_unitario,s.descuento_linea,
                 s.descuento_linea_tipo,s.importe_neto,s.impuesto_linea,s.coste_historico,
-                coalesce(s.linea_eliminada,false),s.modificado_origen"
+                coalesce(s.linea_eliminada,false),s.modificado_origen,s.tipo_linea_origen"
             : @"s.articulo_id,s.unidades,s.precio_unitario,s.descuento_linea,
                 s.descuento_linea_tipo,s.bonificacion_unidades,s.importe_neto,s.impuesto_linea,
                 coalesce(s.linea_eliminada,false),s.modificado_origen";

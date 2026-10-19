@@ -42,6 +42,16 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const filtered=useMemo(()=>remotelyFiltered?rows:filterSortRows(rows,columns,filters,remote?null:sort),
     [rows,columns,filters,sort,remote,remotelyFiltered]);
   const {page:safePage,items:slice}=pageRows(filtered,page,pageSize);
+  // Volver al comienzo de la página al paginar o cambiar cuántas filas se ven.
+  // Sin ello se conserva el scroll al fondo de la tabla y parece vacía.
+  const goToPage=next=>{
+   setPage(next);
+   if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"instant"});
+  };
+  const changePageSize=n=>{
+   setPageSize(n);setPage(0);
+   if(typeof window!=="undefined")window.scrollTo({top:0,behavior:"instant"});
+  };
   const changeFilter=(key,value)=>{
   const next={...filters,[key]:value};
   if(remotelyFiltered)onServerFiltersChange(next);
@@ -89,8 +99,8 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
       {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{!remotelyFiltered&&rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
-    <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={setPage}
-      onPageSizeChange={n=>{setPageSize(n);setPage(0)}} label={label} loading={loading}/>
+    <ListPagination total={filtered.length} page={safePage} pageSize={pageSize} onPageChange={goToPage}
+      onPageSizeChange={changePageSize} label={label} loading={loading}/>
     </LoadingFrame>
   </>;
 }

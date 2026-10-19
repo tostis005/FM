@@ -317,11 +317,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
  const purchaseSummaryScope=[clientSlug,period.from,period.to,
    filters.pharmacyIds.join(","),reloadKey].join("|");
- const fastPurchase=module==="compras"&&!searchReady&&!filters.families.length&&
+ const fastPurchase=module==="compras"&&
    purchaseSummaryResult?.scope===purchaseSummaryScope?purchaseSummaryResult.data:null;
  const purchaseSummaryError=module==="compras"&&
    purchaseSummaryFailure?.scope===purchaseSummaryScope?purchaseSummaryFailure.message:null;
- const shouldLoadPurchaseSummary=module==="compras"&&period.valid&&!searchReady&&!filters.families.length;
+ const shouldLoadPurchaseSummary=module==="compras"&&period.valid;
  useEffect(()=>{
   if(!shouldLoadPurchaseSummary)return;
   const controller=new AbortController();
@@ -510,6 +510,23 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
   {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
+  {module==="compras"&&fastPurchase?.hasArticleLines===false&&fastPurchase.sourceRows>0&&
+   <p role="alert" className="fm-inline-status">
+    El sincronizador ha enviado {number(fastPurchase.sourceRows)} registros de proveedor, pero
+    no contienen líneas de artículos. Sin código de artículo, unidades, coste e importe no es
+    posible mostrar compras por producto ni calcular precios medios fiables. Los indicadores
+    que dependen de esos campos se muestran como no disponibles, no como cero.
+    Revisa la consulta de líneas de compra configurada en el sincronizador.
+   </p>}
+  {module==="compras"&&fastPurchase?.hasArticleLines===true&&fastPurchase?.hasAmounts===false&&
+   <p role="status" className="fm-inline-status">
+    Se han importado referencias de artículos, pero faltan importes de compra.
+    Los indicadores de gasto y los precios que dependen del coste no están disponibles.
+   </p>}
+  {module==="compras"&&searchReady&&<p className="fm-sales-period-info">
+   La búsqueda filtra la tabla de artículos. Los indicadores y el gráfico resumen
+   todas las compras del período seleccionado.
+  </p>
   {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
    {purchaseStateError?
     <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:
@@ -518,7 +535,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      purchaseState.source==="missing"?
       <strong>No hay una tabla de compras reconocible en este cliente. Revisa las importaciones del sincronizador.</strong>:
       purchaseState.hasPurchases?
-       <span><strong>Compras encontradas en el período:</strong> {purchaseState.pharmacies.filter(p=>p.hasPeriodPurchases).length} de {purchaseState.pharmacies.length} farmacias tienen movimientos.
+       <span><strong>Registros del origen de compras:</strong> {purchaseState.pharmacies.filter(p=>p.hasPeriodPurchases).length} de {purchaseState.pharmacies.length} farmacias han enviado movimientos. Esto no confirma que incluyan artículos o importes.
         {reportLoading?" El detalle y los indicadores se están calculando.":""}
         {reportError?" Los movimientos existen, pero ha fallado la consulta del informe.":""}</span>:
        <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies?.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}

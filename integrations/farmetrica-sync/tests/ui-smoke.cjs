@@ -80,7 +80,8 @@ assert.match(src,/\.setInterval\?/);
 const workerCode=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Core/SyncWorker.cs'),'utf8');
 assert.match(workerCode,/GetLiveRuns/);
 assert.match(workerCode,/Provisional = p\.Phase/);
-assert.match(workerCode,/job\.RetryMinutes/);
+assert.match(workerCode,/SyncSchedule\.IsDue\(job, state, p, now\)/);
+assert.doesNotMatch(workerCode,/successful \? job\.EveryMinutes : job\.RetryMinutes/);
 assert.match(workerCode,/lastReportedBatches/);
 assert.match(workerCode,/InnerException/);
 assert.match(workerCode,/LastProgressUtc = DateTimeOffset\.UtcNow/);
@@ -118,7 +119,10 @@ assert.ok(snapshotTxAt>stageReadAt,'Snapshot transaction should open after all b
 
 assert.match(backendCode,/NormalizeForMode\(p.SystemType, entity.Name, r.Mode, r.Sql\)/);
 
-assert.match(src,/retryMinutes:\+val\('j_retry'\)/);
+assert.match(src,/dailyAtLocal:/);
+assert.match(src,/j_daily_at/);
+assert.match(src,/j_daily_time/);
+assert.doesNotMatch(src,/Reintentar después de un error \(minutos\)/);
 assert.match(postgresSource,/onProgress\?\.Invoke/);
 
 const data={

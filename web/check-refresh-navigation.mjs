@@ -67,10 +67,13 @@ try{
  // Simular una pantalla muy larga para comprobar el scroll real del documento.
  // La navegación SPA debe llevar arriba aunque el usuario estuviera al final.
  await page.evaluate(()=>{
-  document.querySelector(".main-content").style.minHeight="2600px";
-  window.scrollTo(0,1050);
+  document.querySelector(".main-content").style.minHeight="3000px";
+  const main=document.querySelector(".main-content");
+  // Obligar al navegador a recalcular la altura antes de desplazar.
+  void main.getBoundingClientRect().height;
+  window.scrollTo({top:1050,left:0,behavior:"instant"});
  });
- assert.ok(await page.evaluate(()=>window.scrollY)>900,"Precondición: estar desplazado en Compras");
+ await page.waitForFunction(()=>window.scrollY>900,null,{timeout:4000});
  // Ir desde la navegación lateral a otro módulo, no hacer una recarga completa.
  await page.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Ventas",exact:true}).first().click();
  assert.equal(new URL(page.url()).pathname,"/ventas");

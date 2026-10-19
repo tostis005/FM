@@ -187,6 +187,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationOperativa.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierReporting.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentScreens.integration.test.js
 
 
   validar_responsive:
@@ -220,6 +221,7 @@ jobs:
           node check-navigation-arrows.mjs
           node check-genericos.mjs
           node check-operativa.mjs
+          node check-pantallas-reales.mjs
           python3 -m http.server 4176 --bind 127.0.0.1 --directory public > /tmp/farmetrica-public.log 2>&1 &
           for i in $(seq 1 25); do if curl --silent --fail http://127.0.0.1:4176/landing.html >/dev/null; then break; fi; sleep 1; done
           node check-public-responsive.mjs

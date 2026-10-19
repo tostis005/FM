@@ -913,7 +913,7 @@ function App(){
  <CampaignMetrics campaigns={scopedFilteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
  <section className="card list-card full-table-card">
   <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
-  <ListTable rows={filteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
+  <ListTable rows={scopedFilteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
     tableClass="campaign-table" onRowClick={startPromo} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},

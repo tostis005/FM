@@ -41,6 +41,8 @@ const field=(name,source)=>{
   unitCost:`(CASE WHEN q."unpricedItems"=0 AND q.units<>0
     THEN q."stockValue"/q.units WHEN q.pmc>0 THEN q.pmc ELSE NULL END)`
  };
+ if(name==="value"&&["articulos","stock","instantanea"].includes(source))
+  return `(CASE WHEN q."unpricedItems"=0 THEN q."stockValue" ELSE NULL END)`;
  if(name==="pharmacy")return `(SELECT fm.nombre FROM farmetrica.farmacias fm
    WHERE fm.id::text=q."pharmacyId")`;
  if(name==="pvp"&&source==="instantanea")return "NULL::float8";

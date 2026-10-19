@@ -12,7 +12,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
   const f=getFilters(scoped,res);if(!f)return;
   const page=Number(req.query.pagina||1),size=Number(req.query.tamano||50);
   if(!Number.isSafeInteger(page)||page<1||page>10000||
-    ![25,50,100,200].includes(size)||f.families.length)
+    ![10,25,50,100,200].includes(size)||f.families.length)
    return res.status(400).json({error:"Página, tamaño o familias no válidos para recepciones"});
   let columns={};
   if(req.query.columnas!=null){

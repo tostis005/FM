@@ -56,10 +56,14 @@ public static class JoinedDocumentWriter
         };
     }
 
+    // No acortar a 180s las validaciones de cargas históricas de millones de líneas.
+    // 30 minutos por operación pesada; el lock_timeout sigue limitado a 5s.
+    private const int BulkSqlTimeoutSeconds = 1800;
+
     private static async Task<long> ScalarAsync(NpgsqlConnection conn,
         string sql, CancellationToken ct, NpgsqlTransaction? tx = null, string? source = null)
     {
-        await using var cmd = new NpgsqlCommand(sql, conn, tx) { CommandTimeout = 180 };
+        await using var cmd = new NpgsqlCommand(sql, conn, tx) { CommandTimeout = BulkSqlTimeoutSeconds };
         if (source is not null) cmd.Parameters.AddWithValue("source", source);
         var value = await cmd.ExecuteScalarAsync(ct);
         return Convert.ToInt64(value, CultureInfo.InvariantCulture);
@@ -68,7 +72,7 @@ public static class JoinedDocumentWriter
     private static async Task<long> ExecuteAsync(NpgsqlConnection conn, string sql,
         CancellationToken ct, NpgsqlTransaction? tx = null, string? source = null)
     {
-        await using var cmd = new NpgsqlCommand(sql, conn, tx) { CommandTimeout = 180 };
+        await using var cmd = new NpgsqlCommand(sql, conn, tx) { CommandTimeout = BulkSqlTimeoutSeconds };
         if (source is not null) cmd.Parameters.AddWithValue("source", source);
         return await cmd.ExecuteNonQueryAsync(ct);
     }
@@ -168,8 +172,20 @@ public static class JoinedDocumentWriter
             return new(0, 0, 0, 0, 0);
         }
 
+        // El índice TEMP es privado de esta sesión. Permite validar duplicados
+        // y agrupar documentos sin escanear N veces los 3+ millones de filas.
+        // ANALYZE aporta cardinalidades al planificador tras el COPY.
+        if (rows >= 1_000)
+        {
+            progress?.Invoke(new("Indexando staging para validación", rows, batches, 0, 0, 0, 0));
+            string stageIndex = Validation.Q("fs_doci_" + Guid.NewGuid().ToString("N"));
+            await ExecuteAsync(conn, $"CREATE INDEX {stageIndex} ON {stage} (farmacia_codigo,documento_id,linea_id)", ct);
+            await ExecuteAsync(conn, $"ANALYZE {stage}", ct);
+        }
+
         // Validar el JOIN ENTERO, no solo lotes: duplicar líneas de otros
         // lotes o cambiar totales entre filas de un ticket es un error de origen.
+        progress?.Invoke(new("Validando líneas repetidas", rows, batches, 0, 0, 0, 0));
         long duplicateLines = await ScalarAsync(conn, $@"
             SELECT count(*) FROM (
                 SELECT farmacia_codigo,documento_id,linea_id
@@ -180,6 +196,7 @@ public static class JoinedDocumentWriter
             throw new InvalidOperationException(
                 $"JOIN multiplicado: {duplicateLines} claves de línea repetidas. No se ha publicado ningún dato.");
 
+        progress?.Invoke(new("Validando consistencia de cabeceras", rows, batches, 0, 0, 0, 0));
         long badHeaders = await ScalarAsync(conn, $@"
             SELECT count(*) FROM (
                 SELECT farmacia_codigo,documento_id
@@ -193,6 +210,7 @@ public static class JoinedDocumentWriter
             throw new InvalidOperationException(
                 $"JOIN incoherente: {badHeaders} documentos con cabeceras diferentes según la línea.");
 
+        progress?.Invoke(new("Validando claves y cantidades", rows, batches, 0, 0, 0, 0));
         long badEmpty = await ScalarAsync(conn, $@"
             SELECT count(*) FROM {stage}
             WHERE nullif(btrim(documento_id),'') IS NULL OR fecha IS NULL
@@ -203,9 +221,12 @@ public static class JoinedDocumentWriter
 
         // All staging is private and complete. Only now open a transaction
         // for live tables, where regular SELECTs remain MVCC-nonblocking.
+        progress?.Invoke(new("Publicando cabeceras y líneas (transacción)", rows, batches, 0, 0, 0, 0));
         await using var tx = await conn.BeginTransactionAsync(ct);
         await ExecuteAsync(conn, "SET LOCAL lock_timeout = '5s'", ct, tx);
-        await ExecuteAsync(conn, "SET LOCAL statement_timeout = '180s'", ct, tx);
+        // Los UPSERT históricos pueden superar 3 minutos; se mantiene un
+        // límite finito de 30 minutos por sentencia y 5s de espera de locks.
+        await ExecuteAsync(conn, "SET LOCAL statement_timeout = '1800s'", ct, tx);
         string source = pharmacy.SystemType.Trim().ToLowerInvariant();
         string headersColumns = sales
             ? "fecha,numero_documento,empleado_id,cliente_origen_id,total_documento,descuento_global,descuento_global_tipo,impuestos,estado,eliminado_logicamente,modificado_origen"
@@ -230,13 +251,15 @@ public static class JoinedDocumentWriter
             s.farmacia_codigo,@source,s.documento_id,{headerSelect},
             EXISTS(SELECT 1 FROM {stage} x WHERE x.farmacia_codigo=s.farmacia_codigo
                 AND x.documento_id=s.documento_id AND nullif(btrim(x.linea_id),'') IS NOT NULL)
-            FROM {stage} s ORDER BY s.farmacia_codigo,s.documento_id,s.origen_id";
+            FROM {stage} s ORDER BY s.farmacia_codigo,s.documento_id,s.linea_id NULLS LAST";
+        progress?.Invoke(new("Comprobando cabeceras existentes", rows, batches, 0, 0, 0, 0));
         long newHeaders = await ScalarAsync(conn, $@"
             SELECT count(DISTINCT s.documento_id) FROM {stage} s
             LEFT JOIN {header} h
                 ON h.farmacia_codigo=s.farmacia_codigo AND h.sistema_origen=@source
                AND h.documento_id=s.documento_id
             WHERE h.documento_id IS NULL", ct, tx, source);
+        progress?.Invoke(new("Insertando o actualizando cabeceras", rows, batches, 0, 0, 0, 0));
         long updatedHeaders = await ExecuteAsync(conn, $@"
             INSERT INTO {header} AS current ({headerCols})
             {headerData}
@@ -256,12 +279,14 @@ public static class JoinedDocumentWriter
             : @"s.articulo_id,s.unidades,s.precio_unitario,s.descuento_linea,
                 s.descuento_linea_tipo,s.bonificacion_unidades,s.importe_neto,s.impuesto_linea,
                 coalesce(s.linea_eliminada,false),s.modificado_origen";
+        progress?.Invoke(new("Comprobando líneas existentes", rows, batches, 0, 0, 0, 0));
         long newLines = await ScalarAsync(conn, $@"
             SELECT count(*) FROM {stage} s
             LEFT JOIN {detail} t
                 ON t.farmacia_codigo=s.farmacia_codigo AND t.sistema_origen=@source
                AND t.documento_id=s.documento_id AND t.linea_id=s.linea_id
             WHERE nullif(btrim(s.linea_id),'') IS NOT NULL AND t.linea_id IS NULL", ct, tx, source);
+        progress?.Invoke(new("Insertando o actualizando líneas", rows, batches, 0, 0, 0, 0));
         long updatedLines = await ExecuteAsync(conn, $@"
             INSERT INTO {detail} AS current ({colsForLine})
             SELECT s.farmacia_codigo,@source,s.documento_id,s.linea_id,{lineSelect}
@@ -269,6 +294,7 @@ public static class JoinedDocumentWriter
             ON CONFLICT (farmacia_codigo,sistema_origen,documento_id,linea_id)
             DO UPDATE SET {SetValues(lineFields)}, recibido_en=now()
             WHERE {ChangePredicate(lineFields)}", ct, tx, source);
+        progress?.Invoke(new("Confirmando transacción documental", rows, batches, 0, 0, 0, 0));
         await tx.CommitAsync(ct);
         long added = newHeaders + newLines;
         long modified = Math.Max(0, updatedHeaders + updatedLines - added);

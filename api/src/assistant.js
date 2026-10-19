@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import {
-  periodFromQuestion, selectTools, authorizedIds, runAssistantTool
+  periodFromQuestion, selectTools, authorizedIds, pharmacyIdsFromQuestion, runAssistantTool
 } from "./assistantAnalytics.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
@@ -105,7 +105,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   const body=validateAssistantBody(req.body);
   if(!body)return res.status(400).json({error:"Pregunta o historial inválidos"});
   let ids;
-  try{ids=authorizedIds(req.context,body.pharmacyIds);}
+  try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:pharmacyIdsFromQuestion(body.question,req.context));}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
   const key=req.context.client.slug+":"+req.user.email;
   if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});

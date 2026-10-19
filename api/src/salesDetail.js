@@ -1,4 +1,4 @@
-// Detalle de ventas paginado: ABCD de últimos 12 meses, márgenes SOLO de la página.
+// Detalle paginado del período solicitado: ABCD de ese rango, márgenes de la página.
 // No se recalculan aquí gráficos, totales históricos ni indicadores de recuento.
 import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 const VALID=/^[a-z][a-z0-9_]{1,62}$/;

@@ -546,6 +546,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     El informe sigue calculando el detalle; los registros existen. Puede haber una consulta lenta, no falta de datos.
    </small>}
   </div>}
+  {module==="proveedores"&&realReport?.available&&realReport.kpis?.lineasCompra==null&&
+   <p role="status" className="fm-inline-status">
+    Hay referencias de proveedor, pero no se han importado líneas de compra con
+    artículo y unidades. El gasto y los volúmenes desconocidos no son cero.
+   </p>}
   {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
   {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
    <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}
@@ -587,6 +592,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id}
     sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
+     module==="compras"&&fastPurchase?.sourceRows>0&&fastPurchase?.hasArticleLines===false?
+       "Se han importado registros de proveedor, pero ninguna línea de compra con artículo. Comprueba la consulta del sincronizador.":
      module==="compras"&&purchaseState?.hasPurchases?
        "Hay compras sincronizadas. Si el listado está vacío, revisa los filtros o el estado de la consulta.":
        available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}

@@ -2,7 +2,7 @@ name: Auditoria fuentes de recepciones
 on:
   push:
     branches: [main]
-    paths: [".github/workflows/audit-recepciones.yml"]
+    paths: [".github/workflows/audit-recepciones.yml", "api/src/diagnoseRecepciones.js"]
   workflow_dispatch:
 permissions:
   contents: read

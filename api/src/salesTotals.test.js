@@ -89,3 +89,12 @@ test("sin caché: cada total de ventas se obtiene de PostgreSQL",async()=>{
  assert.equal((await call({...filters,farmacias:"99"})).status,403);
  assert.equal(calls.length,5);
 });
+
+test("importe de líneas sin CN/ID se incluye en caja pero nunca infla unidades",()=>{
+ for(const granularity of ["hour","day","month"]){
+  const sql=buildSalesTotalsSql("ampedia",granularity);
+  assert.match(sql,/v\.importe/);
+  assert.match(sql,/nullif\(btrim\(v\.articulo_id\),''\) IS NOT NULL/);
+  assert.match(sql,/unidades/);
+ }
+});

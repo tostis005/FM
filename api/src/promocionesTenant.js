@@ -46,7 +46,11 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
            LIMIT 2000`);
         deletedIds=deleted.rows.map(r=>r.promocion_id);
       }
-      return res.json({promotions:promos,deletedIds});
+      const {rows:markers}=await pool.query(
+        `SELECT count(*)::int AS total FROM "${schema}".fm_promocion_revisiones
+         WHERE promocion_id='__CATALOG_RESET_20261019__'`);
+      return res.json({promotions:promos,deletedIds,
+        catalogReset:Number(markers[0]?.total||0)>0});
     }catch(e){next(e);}
   });
   // El borrado solo puede realizarlo un administrador del cliente.

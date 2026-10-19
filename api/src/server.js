@@ -23,6 +23,7 @@ import { setupTenantPromotions } from "./promocionesTenant.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 import {setupOperativa} from "./operativa.js";
+import {setupDocumentScreens} from "./documentScreens.js";
 
 const { Pool } = pg;
 const {
@@ -117,6 +118,7 @@ setupTenantPromotions(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
 setupRealReports(app,pool,{requireTenant});
 setupPurchaseTotals(app,pool,{requireTenant});
+setupDocumentScreens(app,pool,{requireTenant});
 setupSalesSummary(app,pool,{requireTenant});
 setupSalesTotals(app,pool,{requireTenant});
 setupSalesInsights(app,pool,{requireTenant});

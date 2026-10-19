@@ -390,6 +390,8 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(withoutFakeArticles.buyRows.length,0,
     "La tabla por artículo no debe incluir cabeceras sin producto");
   assert.equal(withoutFakeArticles.kpis.compras,null);
+  assert.equal(withoutFakeArticles.monthly.find(m=>m.month==="2026-10")?.compras,null,
+    "No dibujar una barra de 0 € si el ERP no envió ningún importe");
   const headerProvider=await request("/api/analytics/reportes",{
     modulo:"proveedores",farmacias:"5"});
   assert.equal(headerProvider.supplierRows[0].value,null,

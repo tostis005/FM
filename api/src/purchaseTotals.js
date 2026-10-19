@@ -130,6 +130,8 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
    const amount=legacy?"t.total":"t.importe";
    const productId=legacy?"t.producto_id":"t.articulo_id";
+   // El esquema anterior no incluye claves documentales verificables; no inventar recepciones.
+   const documentCount=legacy?"NULL::int":"count(DISTINCT (t.farmacia_codigo,t.sistema_origen,t.documento_id))::int";
    // Inicio necesita agregación mensual, no un cubo por farmacia+proveedor:
    // menos grupos que ordenar y menos memoria para un período corto.
    const dashboard=f.module==="dashboard";
@@ -142,7 +144,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
      count(${amount})::int AS "amountRows",
      sum(t.unidades)::float8 AS units,count(t.unidades)::int AS "unitRows",
      count(*)::int AS "sourceRows",
-     count(DISTINCT (t.farmacia_codigo,t.sistema_origen,t.documento_id))::int AS "receipts",
+     ${documentCount} AS "receipts",
      count(*) FILTER(WHERE nullif(btrim(${productId}::text),'') IS NOT NULL)::int AS lines
     FROM "${schema}".fm_recepciones_analitica t ${join}
     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
@@ -174,11 +176,11 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     proveedores:suppliers.size,
     // Contar cabeceras como recepciones solo cuando NO hay líneas de producto:
     // en otros clientes sourceRows podría ser el número de líneas, no de albaranes.
-    recepciones:receipts
+    recepciones:legacy?null:receipts
    },hasArticleLines:lines>0,hasAmounts:amountRows>0,sourceRows,
    monthly:[...months.values()].map(m=>({
     month:m.month,ventas:m.ventas,compras:m.hasAmounts?m.compras:null,
-    recepciones:m.recepciones||0,
+    recepciones:legacy?null:m.recepciones||0,
     unidades:m.unidades,margen:m.margen
    }))});
   }catch(e){next(e)}

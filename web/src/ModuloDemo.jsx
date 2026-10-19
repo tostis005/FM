@@ -86,7 +86,13 @@ function format(value,unit,key){
  return integer(value);
 }
 function csvExport(module,columns,rows){
- const cells=[columns.map(c=>c.label),...rows.map(r=>columns.map(c=>c.value(r)??""))];
+ const csvValue=(column,row)=>{
+  const v=column.value(row);
+  if(v==null)return "";
+  if(typeof v!=="number")return v;
+  return ["lines","products"].includes(column.key)?integer(v):quantity(v);
+ };
+ const cells=[columns.map(c=>c.label),...rows.map(r=>columns.map(c=>csvValue(c,r)))];
  const csv="\ufeff"+cells.map(record=>record.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(";")).join("\r\n");
  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
  const link=document.createElement("a");link.href=url;link.download="farmetrica-"+module+".csv";link.click();

@@ -189,7 +189,9 @@ function cnListGroups(rows){
 function matchingCNs(row,group){
   const [lab,brand,offer,, ,description]=row;
   if(normalizedLab(lab,brand)!==normalizedLab(group.lab,group.gama))return null;
-  const score=brandScore(brand,group.gama);
+  let score=brandScore(brand,group.gama);
+  if(key(brand)==="VARIOS"&&key(lab)==="DRASANVI"&&
+     /HYDROPS/i.test(description||"")&&/HYDROPS/i.test(group.gama))score=90;
   if(score<40)return null;
   const offerWeight=offerScore(offer,group.offer);
   if(offerWeight<0 && score<90)return null;

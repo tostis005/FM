@@ -370,6 +370,20 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(highVolume.available,true);
   assert.equal(highVolume.salesRows.length,3000);
   assert.ok(highVolume.salesRows.some(r=>r.cn.startsWith("EXTRA-")));
+  const allBC=await request("/api/analytics/ventas/detalle",{
+   farmacias:"1",desde:"2026-10-11",hasta:"2026-10-11",
+   columnas:JSON.stringify({abcdClass:["B","C"]})});
+  assert.ok(allBC.products.length>0,"Las categorías B/C existen fuera de los 400 primeros");
+  assert.ok(allBC.products.every(r=>["B","C"].includes(r.abcdClass)));
+  assert.ok(allBC.totalFiltered>400,"El filtro se aplica sobre >3000 referencias antes de paginar");
+  assert.equal(allBC.hasMore,true);
+  const moreBC=await request("/api/analytics/ventas/detalle",{
+   farmacias:"1",desde:"2026-10-11",hasta:"2026-10-11",pagina:"2",
+   columnas:JSON.stringify({abcdClass:["B","C"]})});
+  assert.ok(moreBC.products.length>0,"Segunda página de categorías B/C globales");
+  assert.ok(moreBC.products.every(r=>["B","C"].includes(r.abcdClass)));
+  assert.ok(moreBC.products.every(r=>!allBC.products.some(p=>p.id===r.id)));
+
   // Escenario real de producción: el sincronizador envía cabeceras de
   // proveedor SIN artículo, unidades, importe ni coste. No son líneas de compra.
   await pool.query(`INSERT INTO ampedia.compras

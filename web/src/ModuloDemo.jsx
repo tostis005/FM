@@ -10,6 +10,7 @@ import {buildAnalysis} from "./businessAnalytics.js";
 import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
 
 // Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
@@ -190,7 +191,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const storageKey=STORAGE+clientSlug+"_"+module;
  const [filters,setFilters]=useState(()=>({
     ...readFilters(storageKey),
-    ...readSharedReportFilters(clientSlug,module==="ventas"?undefined:COMMON_PERIOD_KEYS)
+    ...readSharedReportFilters(clientSlug)
   }));
  useEffect(()=>initializeSharedReportFilters(clientSlug,{
     period:filters.period,customFrom:filters.customFrom,customTo:filters.customTo,
@@ -605,30 +606,25 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const chartSeries=isDashboard?["ventas","compras","Ventas y compras"]:chartConfig;
 
  return <div className="fm-demo fm-demo-v2">
-  <div className="page-header"><h1>{TITLES[module]||"Dashboard"}</h1>
-   {module==="proveedores"&&canNavigate("proveedores-maestro")&&
-    <button className="btn btn-secondary" onClick={()=>go("proveedores-maestro")}>Maestro de proveedores <ArrowRight size={16}/></button>}</div>
-  <div className="fm-demo-filters">
-   <div className="fm-filter-field"><span>Farmacias</span><MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias" options={pharmacyOptions} value={filters.pharmacyIds} onChange={v=>{const pharmacyIds=reconcilePharmacyIds(v,pharmacies);setFilters(f=>({...f,pharmacyIds,families:[],search:""}));updateSharedReportFilters(clientSlug,{pharmacyIds});setSearchReady("");}}/></div>
-   {singleFamilyPharmacy&&familyOptions.length>0&&<div className="fm-filter-field"><span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias" options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
-   <label><span>Periodo</span><select value={filters.period} onChange={e=>pickPeriod(e.target.value)}>
-    {SALES_PERIODS.filter(([key])=>module==="ventas"||!["24","36","60","all"].includes(key)).map(([key,label])=><option key={key} value={key}>{label}</option>)}
-   </select></label>
-   <label className="fm-demo-search"><span>{receiptMode?"Recepción, proveedor o documento":"Artículo o CN"}</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
-  </div>
-  {<div className="fm-sales-timebar">
-   <div className="fm-sales-shortcuts" role="group" aria-label="Períodos rápidos de ventas">
-    {SALES_PERIODS.filter(([key])=>["today","yesterday","this_week","last_week","this_month","this_year"].includes(key)).map(([key,label])=><button key={key} type="button" className={"fm-sales-chip "+(filters.period===key?"is-selected":"")}
-      aria-pressed={filters.period===key} onClick={()=>pickPeriod(key)}>{label}</button>)}
-   </div>
-   <button type="button" className="btn btn-secondary fm-sales-refresh" disabled={isFetchingSales||!period.valid}
-     onClick={()=>{setAsOf(new Date());setReloadKey(x=>x+1)}}><RefreshCw size={15} className={isFetchingSales?"fm-refresh-rotate":""}/> Actualizar</button>
-   {period.valid&&<span className="fm-sales-period-info">{module==="ventas"&&filters.period==="all"?"Todo el histórico hasta "+dateES(period.to):period.from===period.to?dateES(period.from):dateES(period.from)+" → "+dateES(period.to)}{lastUpdated&&<small>Actualizado: {lastUpdated.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}</small>}</span>}
-  </div>}
-  {filters.period==="custom"&&<div className="fm-sales-custom-dates">
-   <label>Desde<input aria-label="Ventas desde" type="date" value={filters.customFrom} onChange={e=>change("customFrom",e.target.value)}/></label>
-   <label>Hasta<input aria-label="Ventas hasta" type="date" value={filters.customTo} onChange={e=>change("customTo",e.target.value)}/></label>
-  </div>}
+  <ReportPageHeader title={TITLES[module]||"Dashboard"} period={period} updatedAt={lastUpdated}
+   onRefresh={()=>{setAsOf(new Date());setReloadKey(x=>x+1)}}
+   refreshing={isFetchingSales||!period.valid}
+   actions={module==="proveedores"&&canNavigate("proveedores-maestro")&&
+    <button className="btn btn-secondary" onClick={()=>go("proveedores-maestro")}>Maestro de proveedores <ArrowRight size={16}/></button>}/>
+  <ReportFilterBar periodKey={filters.period} onPeriodChange={pickPeriod}
+   pharmacies={pharmacies} pharmacyIds={filters.pharmacyIds}
+   onPharmacyChange={v=>{const pharmacyIds=reconcilePharmacyIds(v,pharmacies);
+    setFilters(f=>({...f,pharmacyIds,families:[],search:""}));
+    updateSharedReportFilters(clientSlug,{pharmacyIds});setSearchReady("");}}
+   customFrom={filters.customFrom} customTo={filters.customTo}
+   onCustomFromChange={value=>change("customFrom",value)}
+   onCustomToChange={value=>change("customTo",value)}>
+   {singleFamilyPharmacy&&familyOptions.length>0&&<div className="fm-unified-filter">
+    <span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias"
+     options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
+   <label className="fm-demo-search fm-unified-filter"><span>{receiptMode?"Recepción, proveedor o documento":"Artículo o CN"}</span>
+    <div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
+  </ReportFilterBar>
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
 
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}

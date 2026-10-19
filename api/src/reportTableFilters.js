@@ -68,7 +68,8 @@ export function wrapReportTableSQL(sql,filters,{module,source="",argPosition,sor
  const tie=module==="proveedores"?'q."providerId"':"q.cn";
  // El orden global debe aplicarse a las filas YA filtradas, no a las 3.000
  // primeras de la consulta original.
- const orderExpression=field(sortKey,source)||field("value",source)||"q.units";
+ const orderExpression=field(sortKey,source)||
+   (["articulos","stock","instantanea"].includes(source)?"q.units":"q.value");
  const sort=orderExpression==="NULL::float8"?"q.units":orderExpression;
  return `SELECT q.*,count(*) OVER()::int AS "__totalFiltered"
   FROM (${base}) AS q

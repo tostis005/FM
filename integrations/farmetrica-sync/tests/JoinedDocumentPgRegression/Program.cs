@@ -84,4 +84,23 @@ try
     throw new Exception("Se permitió confirmar una carga completa vacía");
 }
 catch (InvalidOperationException e) when (e.Message.Contains("completa de documentos vacía")) { }
+// Regression de cargas masivas: >1000 filas activa el índice temporal y
+// mantiene atomicidad e idempotencia después del análisis de staging.
+var sourceRows = Enumerable.Range(1, 1100)
+    .Select(i => Row(sales, $"STRESS-L-{i}", $"STRESS-D-{i}", "1",
+        12.25m, 1m, 12.25m, "ART-1")).ToArray();
+var phases = new List<string>();
+var historical = await JoinedDocumentWriter.WriteAsync(db, "ampedia", pharmacy, sales,
+    Batches(sourceRows), p => phases.Add(p.Phase), CancellationToken.None, true);
+Check(historical.Rows == 1100 && historical.Inserted == 2200,
+    "La carga histórica con índice staging debe insertar 1100 cabeceras y líneas");
+Check(phases.Contains("Indexando staging para validación") &&
+      phases.Contains("Validando consistencia de cabeceras") &&
+      phases.Contains("Insertando o actualizando líneas"),
+    "Debe informar de indexación, validación y publicación en PostgreSQL");
+var retry = await JoinedDocumentWriter.WriteAsync(db, "ampedia", pharmacy, sales,
+    Batches(sourceRows), null, CancellationToken.None, true);
+Check(retry.Inserted == 0 && retry.Updated == 0,
+    "Una reconciliación masiva repetida debe ser idempotente");
+
 Console.WriteLine("PostgreSQL JOIN writer: atomicidad, idempotencia, cambios y recuperación OK");

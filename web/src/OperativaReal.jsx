@@ -61,6 +61,9 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  const [items,setItems]=useState([]),[scope,setScope]=useState({});
  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [responsibles,setResponsibles]=useState([]),[related,setRelated]=useState({oportunidades:[],pedidos:[]});
+ const [supplierChoices,setSupplierChoices]=useState([]);
+ const supplierNames=useMemo(()=>new Map(supplierChoices.map(s=>[String(s.code).trim().toUpperCase(),s.name])),[supplierChoices]);
+ const supplierLabel=code=>supplierNames.get(String(code||"").trim().toUpperCase())||code;
  const [selected,setSelected]=useState(""),[events,setEvents]=useState([]),[comment,setComment]=useState("");
  const [name,setName]=useState(""),[detail,setDetail]=useState(""),[amount,setAmount]=useState("0"),[owner,setOwner]=useState("");
  const [priority,setPriority]=useState("media"),[impact,setImpact]=useState("ahorro_potencial");
@@ -100,6 +103,8 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
       pedidos:(orders.items||[]).filter(x=>x.estado==="pendiente_aprobacion")});
    }
    if(resource==="pedidos"){
+    const suppliers=await api("/api/analytics/catalogos/proveedores?farmacia="+encodeURIComponent(pharmacy)).catch(()=>({items:[]}));
+    setSupplierChoices(suppliers.items||[]);
     const policies=await query("politicas").catch(()=>({items:[]}));
     if(policies.items?.[0])setPolicy(policies.items[0]);
    }
@@ -205,7 +210,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
        <input type="number" aria-label={"Necesidad "+n.nombre} min="0" key={n.id+"q"}
         value={n.necesidad} onChange={e=>editNeed(n.id,"necesidad",e.target.value)} style={{width:70}}/>,
        n.necesidad-pending(n),<strong key={n.id+"p"}>{pending(n)}</strong>,
-       n.asignaciones.map(a=>a.proveedor+": "+a.unidades).join(" · ")||"—",
+       n.asignaciones.map(a=>supplierLabel(a.proveedor)+": "+a.unidades).join(" · ")||"—",
        <Button key={n.id+"d"} onClick={()=>setDraft(d=>({...d,lineas:d.lineas.filter(x=>x.id!==n.id)}))}>Quitar</Button>
       ])}/>
      <div className="fm-op-fields">
@@ -222,7 +227,11 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
       <FormField label="Artículo"><select value={allocArticle} onChange={e=>setAllocArticle(e.target.value)}>
        <option value="">Seleccionar</option>{draft.lineas.map(n=><option value={n.id} key={n.id}>{n.nombre}</option>)}
       </select></FormField>
-      <FormField label="Proveedor"><input value={allocProvider} onChange={e=>setAllocProvider(e.target.value)}/></FormField>
+      <FormField label="Proveedor"><input list="fm-op-supplier-options" aria-label="Proveedor" value={allocProvider}
+       onChange={e=>setAllocProvider(e.target.value)} placeholder="Seleccionar proveedor por nombre"/>
+       <datalist id="fm-op-supplier-options">{supplierChoices.map(s=>
+        <option value={s.code} label={s.name} key={s.code}>{s.name}</option>)}</datalist>
+      </FormField>
       <FormField label="Unidades (0 para quitar)"><input type="number" min="0" value={allocUnits}
        onChange={e=>setAllocUnits(e.target.value)}/></FormField>
       <FormField label="Coste unitario, opcional"><input type="number" min="0" step="0.01" value={allocCost}

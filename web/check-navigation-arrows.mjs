@@ -32,6 +32,17 @@ try{
   assert.equal(await caret.count(),1,group+" necesita flecha desplegable");
   assert.equal(await caret.getAttribute("aria-expanded"),"false");
  }
+ // El chevrón debe ser reconocible incluso sin hover ni selección.
+ const visual=await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).evaluate(button=>{
+  const buttonStyle=getComputedStyle(button),icon=button.querySelector("svg");
+  const svgStyle=getComputedStyle(icon);
+  return {background:buttonStyle.backgroundColor,color:buttonStyle.color,border:buttonStyle.borderTopWidth,
+   width:icon.getBoundingClientRect().width,stroke:svgStyle.strokeWidth};
+ });
+ assert.notEqual(visual.background,"rgba(0, 0, 0, 0)","La flecha necesita un fondo visible");
+ assert.equal(visual.border,"1px","El contorno debe distinguirse del menú");
+ assert.ok(visual.width>=20,"El icono no debe ser demasiado pequeño");
+ assert.equal(Number.parseFloat(visual.stroke),3,"Trazo grueso y legible");
  const before=new URL(page.url()).pathname;
  await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).click();
  assert.equal(new URL(page.url()).pathname,before,"desplegar no cambia de pantalla");

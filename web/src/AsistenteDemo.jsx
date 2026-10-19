@@ -4,6 +4,7 @@ import {
   Plus, RotateCcw, ShieldCheck, Sparkles, Square, Trash2, X
 } from "lucide-react";
 import "./AsistenteDemo.css";
+import { collectSpeechResults, mergeDictationDraft } from "./dictadoVoz.js";
 
 const SUGGESTIONS = [
   { icon: Database, text: "¿Qué productos tienen más stock inmovilizado?" },
@@ -87,12 +88,13 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     if (token !== dictationTokenRef.current) return;
     clearTicker();
     recognitionRef.current = null;
+    dictationTokenRef.current += 1;
     setDictationStatus("idle");
     setDictationPreview("");
     const spoken = [recognizedRef.current.final, recognizedRef.current.interim].filter(Boolean).join(" ").trim();
     if (spoken) {
       // El dictado añade texto al borrador existente sin enviarlo automáticamente.
-      setDraft([baseDraftRef.current.trim(), spoken].filter(Boolean).join(" ").slice(0, 2000));
+      setDraft(mergeDictationDraft(baseDraftRef.current, spoken));
       setTranscriptionReady(true);
       setAudioError("");
       inputRef.current?.focus();
@@ -154,13 +156,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     };
     recognition.onresult = event => {
       if (token !== dictationTokenRef.current) return;
-      const finalParts = [], interimParts = [];
-      for (let i = 0; i < event.results.length; i += 1) {
-        const phrase = event.results[i][0]?.transcript?.trim();
-        if (!phrase) continue;
-        (event.results[i].isFinal ? finalParts : interimParts).push(phrase);
-      }
-      recognizedRef.current = { final: finalParts.join(" "), interim: interimParts.join(" ") };
+      recognizedRef.current = collectSpeechResults(event.results);
       setDictationPreview([recognizedRef.current.final, recognizedRef.current.interim].filter(Boolean).join(" "));
     };
     recognition.onerror = event => {
@@ -342,7 +338,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                     <div className="fm-ai-dictation-icon"><Mic size={25}/></div>
                     <div className="fm-ai-dictation-copy">
                       <strong>{dictationStatus === "starting" ? "Preparando micrófono…" : dictationStatus === "finishing" ? "Terminando el dictado…" : "Te escucho"}</strong>
-                      <span>{dictationPreview || (dictationStatus === "finishing" ? "Pasando el dictado a texto" : "Habla de forma natural. Tu pregunta aparecerá aquí mientras la dictas.")}</span>
+                      <span aria-live="polite">{dictationPreview || (dictationStatus === "finishing" ? "Pasando el dictado a texto" : "Habla de forma natural. Tu pregunta aparecerá aquí mientras la dictas.")}</span>
                     </div>
                     <div className="fm-ai-dictation-timer">{timerLabel(seconds)}</div>
                   </div>

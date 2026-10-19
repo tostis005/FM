@@ -12,6 +12,12 @@ import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import "./moduleDemo.css";
 
+// Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
+// Al agotarse el plazo se muestra un error recuperable y se puede cambiar de filtro.
+const boundedSignal=(controller,ms=30000)=>
+ typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
+  ?AbortSignal.any([controller.signal,AbortSignal.timeout(ms)]):controller.signal;
+
 const TITLES={
  dashboard:"Inicio",ventas:"Ventas",compras:"Compras",proveedores:"Proveedores",
  stock:"Stock",reposicion:"Reposición",genericos:"Genéricos",
@@ -275,7 +281,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   const params=new URLSearchParams({desde:period.from,hasta:period.to,granularidad:period.granularity});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch("/api/analytics/ventas/totales?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar los totales");if(!Array.isArray(b.monthly)||!b.kpis)throw Error("Respuesta de totales incompleta");return b})
    .then(data=>{if(!controller.signal.aborted){setFastResult({scope:fastScope,data});setLastUpdated(new Date())}})
    .catch(e=>{if(!controller.signal.aborted)setFastFailure({scope:fastScope,message:e.message})});
@@ -291,7 +297,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch("/api/analytics/ventas/recuento?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
    .then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||"Error al contar artículos");return data})
    .then(data=>{if(!controller.signal.aborted)setInsightResult({scope:insightScope,data})})
    .catch(e=>{if(!controller.signal.aborted)setInsightFailure({scope:insightScope,message:e.message})});
@@ -304,7 +310,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(!singleFamilyPharmacy)return;
   const controller=new AbortController();
   fetch("/api/analytics/ventas/familias?farmacias="+encodeURIComponent(filters.pharmacyIds[0]),{
-   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
    .then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||"Error al consultar familias");return data})
    .then(data=>{if(!controller.signal.aborted)setFamilyResult({scope:familyScope,data})})
    .catch(()=>{if(!controller.signal.aborted)setFamilyResult({scope:familyScope,data:{families:[]}})});
@@ -346,7 +352,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   }
   const endpoint=module==="ventas"?"/api/analytics/ventas/detalle":"/api/analytics/ventas";
   fetch(endpoint+"?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar las ventas");return b})
    .then(data=>{if(!controller.signal.aborted){
     if(module==="ventas"){
@@ -401,7 +407,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   setReceiptLoading(true);setReceiptError("");
   fetch("/api/analytics/compras/recepciones?"+p,{
    credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
   }).then(async r=>{
    const data=await r.json().catch(()=>({}));
    if(!r.ok)throw Error(data.error||"No se pueden consultar las recepciones");
@@ -420,7 +426,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch((module==="dashboard"?"/api/analytics/dashboard/compras?":"/api/analytics/compras/resumen?")+params,{
    credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
   }).then(async response=>{
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(data.error||"No se pueden cargar los totales de compras");
@@ -442,7 +448,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   setPurchaseState(null);setPurchaseStateError("");
   fetch("/api/analytics/compras/estado?"+params,{
    credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
   }).then(async response=>{
    const result=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(result.error||"No se puede comprobar el origen de compras");
@@ -480,7 +486,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   setReportLoading(true);setReportError("");
   if(module==="compras")setRealReport(null);
   fetch("/api/analytics/reportes?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden cargar los informes");return b})
    .then(b=>{if(!controller.signal.aborted){setRealReport(b);setLastUpdated(new Date())}})
    .catch(e=>{if(!controller.signal.aborted){setRealReport(null);setReportError(e.message)}})
@@ -499,7 +505,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch("/api/analytics/reportes/opciones?"+params,{
    credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
   }).then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.error);return data})
    .then(data=>{if(!controller.signal.aborted)setGlobalFamilyResult({
     scope:optionScope,data:Array.isArray(data.family)?data.family:[]})})

@@ -199,6 +199,10 @@ public static class CanonicalEntities
             ("grupo_iva_id", "text"), ("deducible_hacienda", "bool"),
             ("grupo_formulacion", "text"), ("empresa", "text"),
             ("informacion_especial", "text")),
+        // IDVENDEDOR es local a cada Farmatic; nombres repetidos son válidos.
+        // El enlace se realiza por farmacia_codigo + origen_id, nunca por NOMBRE.
+        E("vendedores", "Catálogo de vendedores Farmatic",
+            ("nombre", "text"), ("tipo", "text"), ("color_ventas", "integer")),
         E("proveedores", "Maestro de proveedores", ("nombre", "text"), ("nif", "text"), ("telefono", "text"), ("email", "text"),
             ("direccion", "text"), ("codigo_postal", "text"), ("poblacion", "text"), ("provincia", "text"), ("web", "text"), ("descuento", "numeric"))
     ];

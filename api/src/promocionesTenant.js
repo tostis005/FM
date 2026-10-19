@@ -77,6 +77,49 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
     finally{db?.release();}
   });
+  // Reimportar un Excel sustituye el catálogo COMPLETO del cliente
+  // atómicamente. Se conserva cada versión anterior para auditoría.
+  app.post("/api/tenant/promociones/reemplazar",...requireTenantModule("promociones"),async(req,res,next)=>{
+    if(!ROLE_EDIT.has(req.context.role))
+      return res.status(403).json({error:"No tienes permiso para sustituir promociones"});
+    const schema=req.context.client.schema;
+    const input=req.body?.promotions;
+    if(!SCHEMA.test(schema)||!Array.isArray(input)||!input.length||input.length>150)
+      return res.status(400).json({error:"Importación de promociones inválida"});
+    const pharmacyIds=new Set(req.context.pharmacies.map(p=>String(p.id)));
+    const campaigns=input.map(p=>cleanDocument(p,p?.id,pharmacyIds));
+    const ids=campaigns.map(p=>p?.id);
+    if(campaigns.some(p=>!p)||new Set(ids).size!==ids.length)
+      return res.status(400).json({error:"Hay promociones inválidas, duplicadas o con farmacias no autorizadas"});
+    let db;
+    try{
+      db=await pool.connect();
+      await db.query("BEGIN");
+      const {rows:previous}=await db.query(
+        `SELECT id,documento FROM "${schema}".fm_promociones FOR UPDATE`);
+      const archivedAt=new Date().toISOString();
+      for(const old of previous){
+        await db.query(
+          `INSERT INTO "${schema}".fm_promocion_revisiones
+            (promocion_id,documento_anterior,cambiado_por)
+            VALUES($1,$2::jsonb,$3)`,
+          [old.id,JSON.stringify({...old.documento,deletedAt:archivedAt,
+            deletedReason:"Reimportación completa de promociones"}),req.user.email]);
+      }
+      await db.query(`DELETE FROM "${schema}".fm_promociones`);
+      for(const promotion of campaigns){
+        await db.query(
+          `INSERT INTO "${schema}".fm_promociones
+            (id,documento,fuente,creado_por,actualizado_por)
+            VALUES($1,$2::jsonb,$3,$4,$4)`,
+          [promotion.id,JSON.stringify(promotion),
+           String(promotion.source||"").slice(0,200),req.user.email]);
+      }
+      await db.query("COMMIT");
+      return res.json({removed:previous.length,imported:campaigns.length});
+    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
+    finally{db?.release();}
+  });
   app.put("/api/tenant/promociones/:id",...requireTenantModule("promociones"),async(req,res,next)=>{
     if(!ROLE_EDIT.has(req.context.role))
       return res.status(403).json({error:"No tienes permiso para guardar promociones"});

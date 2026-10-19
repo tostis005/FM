@@ -54,7 +54,7 @@ const pool = new Pool({
 const app = express();
 app.disable("x-powered-by");
 app.use(helmet());
-app.use(express.json({ limit: "128kb" }));
+app.use(express.json({ limit: "1mb" }));
 app.use((req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));

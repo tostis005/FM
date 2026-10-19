@@ -92,7 +92,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const schema=req.context.client.schema;
    if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))
     return res.status(400).json({error:"Esquema de datos inválido"});
-   const columns=await tableColumns(pool,schema,"compras");
+   const columns=await tableColumns(pool,schema,"fm_recepciones_analitica");
    const normalized=has(columns,"farmacia_codigo","fecha","articulo_id","proveedor_id","unidades","coste_unitario","importe");
    const legacy=!normalized&&has(columns,"farmacia_id","fecha","producto_id","proveedor_id","unidades","puc","total");
    if(!normalized&&!legacy)return res.json({
@@ -110,14 +110,14 @@ export function setupRealReports(app,pool,{requireTenant}){
     // Un registro basta. ORDER BY fecha DESC puede aprovechar el índice
     // (farmacia,fecha) y nunca devuelve detalles comerciales.
     const inPeriod=await pool.query({text:`
-      SELECT t.fecha FROM ${quoted}.compras t
+      SELECT t.fecha FROM ${quoted}.fm_recepciones_analitica t
       WHERE ${dateWindow} AND ${identifier} AND ${ignore}
       ORDER BY t.fecha DESC LIMIT 1`,
       values:[f.from,f.to,value,req.context.client.slug],query_timeout:12000});
     let lastOutside=null;
     if(!inPeriod.rows.length){
      const last=await pool.query({text:`
-       SELECT t.fecha FROM ${quoted}.compras t
+       SELECT t.fecha FROM ${quoted}.fm_recepciones_analitica t
        WHERE ${legacy?"t.farmacia_id=$1::int":"upper(btrim(t.farmacia_codigo))=$1::text"}
          AND ${includedPurchaseSupplier({tenant:"$2",code:"t.proveedor_id",
            name:columns.has("proveedor_nombre")?"t.proveedor_nombre":null})}
@@ -146,8 +146,8 @@ export function setupRealReports(app,pool,{requireTenant}){
    const schema=req.context.client.schema,quoted='"'+schema+'"',
      pharmacyIds=f.ids,
      [articleCols,saleCols,buyCols,providerCols,legacyProductCols,legacyStockCols]=await Promise.all([
-      tableColumns(pool,schema,"articulos"),tableColumns(pool,schema,"ventas"),
-      tableColumns(pool,schema,"compras"),tableColumns(pool,schema,"proveedores"),
+      tableColumns(pool,schema,"articulos"),tableColumns(pool,schema,"fm_ventas_analitica"),
+      tableColumns(pool,schema,"fm_recepciones_analitica"),tableColumns(pool,schema,"proveedores"),
       tableColumns(pool,schema,"productos"),tableColumns(pool,schema,"stock")
      ]);
    const articles=has(articleCols,"farmacia_codigo","origen_id","nombre","codigo_nacional");
@@ -254,7 +254,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const salesByArticle=`FROM (
      SELECT f.id AS pharmacy_id,upper(btrim(t.farmacia_codigo)) AS farmacia_codigo,
        t.articulo_id,sum(t.unidades) AS unidades,sum(t.importe) AS importe
-     FROM ${quoted}.ventas t
+     FROM ${quoted}.fm_ventas_analitica t
      JOIN farmetrica.farmacias f ON f.cliente_slug=$6
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
@@ -279,7 +279,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        sum(t.unidades*t.puc) FILTER(WHERE t.unidades>0 AND t.puc>0) AS cost,
        sum(t.unidades) FILTER(WHERE t.unidades>0 AND t.puc>0) AS priced_units,
        count(*)::int AS lines
-     FROM ${quoted}.compras t
+     FROM ${quoted}.fm_recepciones_analitica t
      JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$6
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
        AND f.id=ANY($3::int[])
@@ -296,7 +296,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        sum(t.unidades) FILTER(
          WHERE t.unidades>0 AND t.coste_unitario>0) AS priced_units,
        count(*)::int AS lines
-     FROM ${quoted}.compras t
+     FROM ${quoted}.fm_recepciones_analitica t
      JOIN farmetrica.farmacias f ON f.cliente_slug=$6
        AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
@@ -341,7 +341,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     if(!periodWithArticleFilter)return `SELECT to_char(date_trunc('month',t.fecha),'YYYY-MM') AS month,
        sum(t.unidades)::float8 AS units,sum(${amount})::float8 AS amount,
        ${countedLines}::float8 AS lines
-       FROM ${quoted}.${table} t ${fromJoin}
+       FROM ${quoted}.${table==="compras"?"fm_recepciones_analitica":"fm_ventas_analitica"} t ${fromJoin}
        WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
          AND f.id=ANY($3::int[]) ${supplierFilter}
        GROUP BY 1 ORDER BY 1`;
@@ -352,7 +352,7 @@ export function setupRealReports(app,pool,{requireTenant}){
            ${legacy?pharmacyDataCodeSQL("f"):"upper(btrim(t.farmacia_codigo))"} AS farmacia_codigo,
            ${legacy?"t.producto_id":"t.articulo_id"} AS articulo_id,
            sum(t.unidades) AS unidades,sum(${amount}) AS importe,${countedLines} AS lines
-         FROM ${quoted}.${table} t ${fromJoin}
+         FROM ${quoted}.${table==="compras"?"fm_recepciones_analitica":"fm_ventas_analitica"} t ${fromJoin}
          WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
            AND f.id=ANY($3::int[]) ${supplierFilter}
          GROUP BY 1,2,3

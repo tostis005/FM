@@ -161,6 +161,9 @@ jobs:
           test "$result" = t
           psql_test -At -c "INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo) VALUES ('ampedia','COOP01','Cooperativa de prueba CI','cooperativa');" >/dev/null
           psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND tipo='cooperativa';" | grep -qx 1
+          psql_test -At -c "UPDATE farmetrica.proveedores_maestro SET cooperativa=false,ignorar_informes=true WHERE cliente_slug='ampedia' AND codigo_origen='COOP01';" >/dev/null
+          psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
+          test "$(psql_test -At -c "SELECT cooperativa=false AND ignorar_informes=true FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND codigo_origen='COOP01'")" = t
           psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
           psql_test < ops/indices-consultas-operativas.sql
           psql_test < ops/indices-consultas-operativas.sql
@@ -169,6 +172,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationOperativa.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierReporting.integration.test.js
 
 
   validar_responsive:

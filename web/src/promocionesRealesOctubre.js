@@ -17,7 +17,8 @@ const groups=[
 ["BEBE INNOVA","DR BROWNS","50% 2ª UD","1 OCTUBRE","15 DICIEMBRE","198766,198764,198765,152760,154240,206749,204899,213211,204898,204900,154804,003794,204897,152758,167129,167128,154370,154803,157077,219454,196540,208585,196539,217830,177969"]
 ];
 export const REAL_OCTOBER_EXAMPLES=importCampaignRows(
-  [["LABORATORIO","MARCA","NOMBRE PROMOCIÓN","FECHA DE INICIO","FECHA DE FIN","DESCRIPCIÓN"]],
+  [["LABORATORIO","MARCA","NOMBRE PROMOCIÓN","FECHA DE INICIO","FECHA DE FIN","DESCRIPCIÓN"],
+   ...groups.map(([lab,range,offer,start,end])=>[lab,range,offer,start,end,""])],
   [["LABORATORIO","GAMA","CN","DESCRIPCIÓN","PROMOCION","FECHA DESDE","FECHA HASTA"],
     ...groups.flatMap(([lab,range,offer,start,end,codes])=>codes.split(",").map(cn=>[lab,range,cn,"",offer,start,end]))
   ]

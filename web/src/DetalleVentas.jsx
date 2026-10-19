@@ -14,7 +14,7 @@ const validDate=s=>/^20\d\d-\d\d-\d\d$/.test(s||"");
 const INITIAL={start:"",end:""};
 const TICKET_COLUMNS=[
   ["pharmacy","Farmacia",v=>v.pharmacyName||v.pharmacyCode],
-  ["seller","Vendedor ID",v=>v.sellerId||"—"],
+  ["seller","Vendedor",v=>v.sellerName||v.sellerId||"—"],
   ["saleId","ID origen",v=>v.saleId],
   ["ticket","Ticket",v=>v.ticket||"—"],
   ["at","Fecha y hora",v=>date(v.at)],

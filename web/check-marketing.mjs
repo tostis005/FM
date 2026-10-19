@@ -25,6 +25,14 @@ const leadScript=read("./public/solicitar-demo/formulario.js");
 assert.match(demo,/id="demo-request-form"/);
 assert.match(demo,/consentimiento/);
 assert.match(demo,/name="programa"/);
+const privacyForm=read("./public/privacidad/solicitud/index.html");
+for(const [name,html,minimum] of [["demo",demo,8],["privacidad",privacyForm,4]]){
+ const labels=[...html.matchAll(/<span class="field-label">[^<]+(?:<span class="required-mark" aria-hidden="true">\*<\/span>|<small>Opcional<\/small>)<\/span>/g)];
+ assert.ok(labels.length>=minimum,"Las etiquetas de "+name+" deben mantener asterisco u opcional en la misma línea");
+ assert.doesNotMatch(html,/<label for="(?:demo|privacy)-[^"]+">[^<]+<span aria-hidden="true">\*<\/span>/);
+}
+assert.match(css,/\.demo-form \.field-label\{display:inline-flex/);
+assert.match(css,/\.demo-form \.field-label \.required-mark/);
 assert.match(leadScript,/\/api\/public\/solicitudes-demo/);
 assert.match(nginx,/location \^~ \/solicitar-demo\/ /);
 assert.match(nginx,/location \^~ \/privacidad\/ /);
@@ -51,7 +59,7 @@ const posts=[
 for(const [name,html] of [["landing",home],["blog",blog]]){
   assert.match(html,/<html lang="es">/);
   assert.match(html,/<meta name="description"/);
-  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=6">/);
+  assert.match(html,/<link rel="stylesheet" href="\/marketing.css\?v=7">/);
   assert.match(html,/href="\/login"/);
   assert.doesNotMatch(html,/<script[^>]+src="\/assets\//);
 }
@@ -59,7 +67,7 @@ assert.match(home,/<h1 id="hero-title">/);
 assert.match(home,/Farmatic/);
 assert.match(home,/Nixfarma/);
 assert.match(home,/Unycop/);
-assert.match(home,/Toda tu farmacia, <em>en una sola visión/);
+assert.match(home,/Conoce tu farmacia\. <em>Descubre dónde mejorar/);
 assert.match(home,/Mejores decisiones/);
 assert.match(home,/Stock e inventario/);
 assert.match(home,/Proveedores/);
@@ -68,7 +76,7 @@ assert.match(home,/Rentabilidad/);
 assert.match(home,/Una farmacia/);
 assert.match(home,new RegExp('href="/integraciones/bitfarma/"'));
 assert.match(home,new RegExp('href="/integraciones/farmanager/"'));
-assert.match(home,/la conexión depende de la versión, permisos y validación técnica/);
+assert.match(home,/la disponibilidad se determina según versión, permisos y configuración/);
 assert.match(css,/@media\(max-width:700px\)/);
 assert.match(login,/query\.get\("next"\) \|\| "\/dashboard"/);
 assert.match(login,/next === "\/" \? "\/dashboard"/);
@@ -115,8 +123,8 @@ for(const {p,url,type} of pages){
   assert.ok(!descriptionSet.has(p.description),"Descripción duplicada: "+url);descriptionSet.add(p.description);
   if(type==="article")assert.match(html,/"@type":"BlogPosting"/);
   if(type==="integration"){
-    assert.match(html,/Origen Farmatic conectado|Conexión sujeta a validación por instalación/);
-    if(p.slug!=="farmatic")assert.match(html,/Conexión sujeta a validación por instalación/);
+    assert.match(html,/Ventas conectadas con Farmatic|Tu programa, una visión de negocio/);
+    if(p.slug!=="farmatic")assert.match(html,/Tu programa, una visión de negocio/);
   }
   for(const related of p.related||[])assert.ok(allUrls.has(related)||["/","/soluciones/","/integraciones/","/blog/"].includes(related),"Enlace contextual desconocido: "+related);
   assert.ok(sitemap.includes(sitemapOrigin+url),"Sitemap: falta "+url);
@@ -173,7 +181,7 @@ assert.match(home,/href="\/blog\/integrar-farmatic-nixfarma-unycop-analitica\/"/
 assert.match(blog,/href="\/blog\/integrar-farmatic-nixfarma-unycop-analitica\/"/);
 
 // La narrativa principal es inteligencia de negocio, no únicamente campañas.
-assert.match(home,/Toda tu farmacia, <em>en una sola visión/);
+assert.match(home,/Conoce tu farmacia\. <em>Descubre dónde mejorar/);
 assert.match(login,/espacio de inteligencia de negocio/);
 assert.doesNotMatch(login,/panel de promociones y seguimiento/);
 assert.match(blog,/Presentamos Farmetrica: una visión integral de tu farmacia/);

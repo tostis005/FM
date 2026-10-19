@@ -126,11 +126,11 @@ related:["/soluciones/grupos-de-farmacias/","/soluciones/cuadro-mando-farmacias/
 export const integrations=[
 {
 slug:"farmatic",category:"Origen conectado",title:"Farmatic y Farmetrica: análisis de datos de farmacia",
-description:"Cómo se aprovechan las ventas de Farmatic en Farmetrica y qué requiere ampliar el análisis a compras, stock, proveedores y rentabilidad.",
+description:"Analiza ventas de Farmatic en Farmetrica, consulta referencias y rendimiento comercial y descubre oportunidades para tu negocio.",
 hero:"Tus datos de Farmatic, con otra perspectiva de negocio.",
-lead:"Farmetrica cuenta con una conexión operativa a datos de ventas procedentes de Farmatic, consultados desde PostgreSQL en una instalación. El análisis integral requiere incorporar otras fuentes de compras, costes e inventario después de validarlas.",
-value:"Ventas conectadas en un entorno; ampliación condicionada a nuevas fuentes.",
-sections:[{"heading":"Ventas con el detalle necesario","paragraphs":["Los movimientos de ventas se consultan por producto, fecha y farmacia, respetando las referencias y permisos de origen.","Las devoluciones y los importes dependen del contrato de datos disponible y de las reglas validadas para la instalación."]},{"heading":"Hacia el análisis completo de la farmacia","paragraphs":["Un modelo común puede relacionar ventas con compras, proveedores, existencias y márgenes cuando todas esas fuentes se han conectado y validado.","La conexión operativa de ventas no implica que compras o inventario estén integrados de manera automática."]},{"heading":"Complementar, no sustituir","paragraphs":["Farmetrica no reemplaza a Farmatic: ofrece una capa adicional de análisis comercial sobre los datos autorizados.","El seguimiento de campañas y la exportación para laboratorios constituyen casos específicos de uso de las ventas conectadas."]}],
+lead:"Farmetrica ya analiza ventas procedentes de Farmatic en un entorno conectado. Consulta la evolución del negocio por producto, periodo y farmacia, y aprovecha una visión comercial preparada para incorporar compras, stock y rentabilidad.",
+value:"Analiza los resultados comerciales de Farmatic con una perspectiva más amplia.",
+sections:[{"heading":"Ventas con el detalle necesario","paragraphs":["Los movimientos de ventas se consultan por producto, fecha y farmacia, respetando las referencias y permisos de origen.","Las devoluciones y los importes dependen del contrato de datos disponible y de las reglas validadas para la instalación."]},{"heading":"Más contexto para cada decisión","paragraphs":["Un modelo común puede relacionar ventas con compras, proveedores, existencias y márgenes cuando todas esas fuentes se han conectado y validado.","La conexión operativa de ventas no implica que compras o inventario estén integrados de manera automática."]},{"heading":"Complementar, no sustituir","paragraphs":["Farmetrica no reemplaza a Farmatic: ofrece una capa adicional de análisis comercial sobre los datos autorizados.","El seguimiento de campañas y la exportación para laboratorios constituyen casos específicos de uso de las ventas conectadas."]}],
 faq:[["¿Farmetrica sustituye a Farmatic?","No. Complementa la información del software de gestión con una capa de análisis."],["¿Ya se analizan compras y stock de Farmatic?","La fuente validada actualmente es de ventas. El resto requiere integración y verificación."],["¿Funciona con cualquier instalación?","Cada versión y sistema debe comprobarse técnicamente antes de ofrecer la conexión."]],
 related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/business-intelligence-farmacias/"]
 },
@@ -139,27 +139,27 @@ slug:"nixfarma",category:"Ecosistema ERP",title:"Nixfarma y Farmetrica: analíti
 description:"Descubre cómo analizar ventas, compras, stock, proveedores y promociones con un modelo de datos independiente para farmacias que trabajan con Nixfarma.",
 hero:"Tus datos de Nixfarma pueden contar una historia comercial más completa.",
 lead:"Nixfarma resuelve el día a día operativo de muchas oficinas de farmacia. Farmetrica está diseñada para complementar al programa de gestión con análisis de ventas, compras, stock y rentabilidad, utilizando un modelo independiente del origen.",
-value:"Un criterio de análisis común, con conexión validada para cada instalación.",
+value:"Una visión de compras, ventas y existencias con criterios comerciales comunes.",
 sections:[
 {heading:"Más preguntas, una sola visión de negocio",paragraphs:["Ventas, compras, existencias y artículos ganan valor cuando se pueden analizar conjuntamente. El objetivo es entender qué referencias funcionan, qué costes se pueden revisar y dónde se concentra el stock.","Farmetrica ofrece módulos comerciales para estas preguntas, con disponibilidad de datos según la integración que se configure para cada cliente."],points:["Ventas y rendimiento de productos.","Compras y proveedores.","Stock y cobertura.","Rentabilidad y promociones."]},
-{heading:"Tus datos conservan su contexto",paragraphs:["Para construir indicadores comparables hay que revisar códigos de producto, fechas, devoluciones, costes y pertenencia a cada farmacia.","Una conexión con Nixfarma exige comprobar la versión y la vía de acceso autorizada. No debe confundirse la existencia del programa con una integración ya desplegada de Farmetrica."]},
+{heading:"Tus datos conservan su contexto",paragraphs:["Para construir indicadores comparables hay que revisar códigos de producto, fechas, devoluciones, costes y pertenencia a cada farmacia.","La incorporación de datos de Nixfarma se configura mediante las vías autorizadas que ofrezca cada instalación."]},
 {heading:"Pensado para una farmacia y redes",paragraphs:["Una vez disponible un origen validado, los mismos indicadores permiten analizar un punto de venta o consolidar varias farmacias, con filtros y ámbitos por usuario.","La implantación concreta debe definir qué información se proporciona, con qué frecuencia y con qué permisos."]}
 ],
-faq:[["¿Nixfarma es un programa de gestión real?","Sí, Nixfarma es un programa comercial de gestión de farmacias."],["¿Existe ya un conector de Farmetrica validado con Nixfarma?","No consta una integración operativa validada; hay que revisar la instalación y los accesos disponibles."],["¿Farmetrica sustituye a Nixfarma?","No. El enfoque de Farmetrica es añadir análisis comercial a los datos del programa de farmacia."]],
+faq:[["¿Tengo que sustituir Nixfarma?","No. Farmetrica complementa tu programa de gestión con análisis de negocio."],["¿Existe ya un conector de Farmetrica validado con Nixfarma?","Todavía no existe una conexión operativa de Nixfarma verificada en Farmetrica. Para habilitarla es necesario acordar el acceso autorizado y verificar los datos."],["¿Farmetrica sustituye a Nixfarma?","No. El enfoque de Farmetrica es añadir análisis comercial a los datos del programa de farmacia."]],
 related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/control-stock-farmacia/"]
 },
 {
 slug:"unycop",category:"Ecosistema ERP",title:"Unycop y Farmetrica: análisis comercial de farmacia",
-description:"Conoce las posibilidades de analítica de ventas, compras, stock y objetivos comerciales para una farmacia que utiliza el programa Unycop.",
+description:"Descubre cómo analizar ventas, compras, márgenes y existencias de una farmacia que trabaja con Unycop.",
 hero:"Tu sistema Unycop gestiona operaciones. Tus decisiones necesitan perspectiva.",
-lead:"Farmetrica organiza la inteligencia comercial del negocio en torno a ventas, compras, artículos, existencias y promociones. Esta lógica permite trabajar con distintos sistemas de origen, previa adaptación y validación de la conexión.",
-value:"Analítica independiente del ERP, con conectividad sujeta a la instalación.",
+lead:"Farmetrica aporta una visión de negocio que combina ventas, compras, artículos y existencias con indicadores accionables. Su modelo independiente permite preparar el análisis de farmacias que utilizan Unycop.",
+value:"Controla indicadores de negocio sin renunciar a tu software de gestión.",
 sections:[
 {heading:"Unificar información comercial",paragraphs:["El responsable necesita relacionar qué vende, qué compra, qué margen estimado obtiene y qué stock mantiene. Estas preguntas no dependen de la marca del ERP, sino de disponer de datos coherentes.","El modelo de Farmetrica permite relacionar estas dimensiones por referencia, proveedor, farmacia y periodo, siempre que estén disponibles las fuentes necesarias."],points:["Visión comercial de ventas y compras.","Rendimiento de artículos y familias.","Cobertura y existencias.","Objetivos y campañas por farmacia."]},
 {heading:"Una conexión que respete tu sistema",paragraphs:["Unycop cuenta con distintas soluciones y versiones. La disponibilidad de los datos y sus mecanismos de acceso puede cambiar según el producto y la instalación.","Antes de dar por activa la integración hay que validar extracción, permisos, identificadores y reglas de negocio con el propietario autorizado de los datos."]},
 {heading:"De un punto de venta a la red",paragraphs:["La comparación entre farmacias cobra valor si los movimientos se interpretan de la misma forma, incluso cuando los orígenes son diferentes.","Farmetrica incorpora una estructura de clientes, farmacias, módulos y roles para organizar el análisis comercial de la red."]}
 ],
-faq:[["¿Unycop es un ERP de farmacia?","Sí, Unycop es una familia comercial de software de gestión para farmacias."],["¿Farmetrica está conectada hoy a Unycop?","No consta una implantación con Unycop verificada. La conexión debe evaluarse y configurarse por instalación."],["¿El programa funciona igual con todas las versiones?","No se puede garantizar; la versión concreta y sus opciones técnicas condicionan la integración."]],
+faq:[["¿Farmetrica sustituye a Unycop?","No. Farmetrica complementa el sistema de gestión con información para analizar el negocio y priorizar mejoras."],["¿Farmetrica está conectada hoy a Unycop?","Farmetrica no dispone todavía de un conector de Unycop verificado. Su implantación requiere configurar y comprobar el acceso a los datos del sistema."],["¿El programa funciona igual con todas las versiones?","No se puede garantizar; la versión concreta y sus opciones técnicas condicionan la integración."]],
 related:["/integraciones/","/soluciones/grupos-de-farmacias/","/soluciones/analisis-compras-farmacia/"]
 }
 ];
@@ -340,28 +340,28 @@ related:["/soluciones/ventas-farmacia/","/soluciones/rentabilidad-farmacia/","/s
 integrations.push(
 {
 slug:"bitfarma",category:"Programas de gestión",title:"Bitfarma y el análisis comercial de Farmetrica",
-description:"Cómo se relaciona el software Bitfarma con un modelo independiente de analítica comercial y qué datos hacen falta para conectar ventas, compras y stock.",
+description:"Analítica comercial para farmacias con Bitfarma: ventas, compras, stock y oportunidades para mejorar márgenes.",
 hero:"Trabajas con Bitfarma. Tu información comercial puede dar mucho más.",
 lead:"Bitfarma es un programa de gestión para oficinas de farmacia. Farmetrica utiliza un modelo de datos independiente del ERP para que las preguntas comerciales sigan siendo las mismas, cualquiera que sea el sistema de origen.",
-value:"Conexión a Bitfarma sujeta a comprobación de acceso, esquema y permisos.",
+value:"Una misma perspectiva para comprender tus compras, ventas y existencias.",
 sections:[
-{heading:"Una fuente de datos, muchas decisiones",paragraphs:["Para construir paneles de ventas, artículos, compras, stock y rentabilidad hacen falta movimientos e identificadores consistentes.","La viabilidad de la conexión depende de la instalación y de las vías autorizadas para disponer de los datos." ]},
-{heading:"Analiza con el mismo criterio",paragraphs:["El objetivo es mantener la misma lectura de ventas, costes y existencias, adaptando los identificadores y formatos de origen.","Farmetrica no se anuncia como conector oficial ni como integración automática con cualquier versión de Bitfarma."]},
-{heading:"Qué validar en la implantación",paragraphs:["El sistema de origen, permisos, frecuencia de actualización, anulaciones y correspondencias de referencias se revisan antes de habilitar un informe operativo.","Sin esa validación, una integración no puede considerarse implantada."]}
-],faq:[["¿Está conectado Bitfarma actualmente?","No consta una conexión operativa verificada de Farmetrica con Bitfarma. Cada instalación requiere validación técnica."],["¿Bitfarma es un software real?","Sí, Bitfarma es un software comercial de gestión de farmacias; se menciona con fines descriptivos."]],
+{heading:"Una fuente de datos, muchas decisiones",paragraphs:["Para construir paneles de ventas, artículos, compras, stock y rentabilidad hacen falta movimientos e identificadores consistentes.","La incorporación de Bitfarma se configura en función del acceso autorizado y la estructura de datos de cada instalación." ]},
+{heading:"Analiza con el mismo criterio",paragraphs:["El objetivo es mantener la misma lectura de ventas, costes y existencias, adaptando los identificadores y formatos de origen.","Farmetrica no sustituye al programa de gestión: incorpora una capa adicional de análisis comercial."]},
+{heading:"Datos consistentes para tomar decisiones",paragraphs:["El sistema de origen, permisos, frecuencia de actualización, anulaciones y correspondencias de referencias se revisan antes de habilitar un informe operativo.","Esa revisión permite mostrar indicadores coherentes y comparables entre farmacias."]}
+],faq:[["¿Está conectado Bitfarma actualmente?","Todavía no hay una conexión de Bitfarma verificada en producción. Se debe configurar y validar el acceso a sus datos antes de habilitarla."],["¿Tengo que dejar de utilizar Bitfarma?","No. Farmetrica es una capa analítica que complementa las tareas cotidianas del software de farmacia."]],
 related:["/integraciones/","/soluciones/ventas-farmacia/","/soluciones/control-stock-farmacia/"]
 },
 {
 slug:"farmanager",category:"Programas de gestión",title:"Farmanager de Cofares y analítica comercial para farmacias",
-description:"Farmanager, el software de farmacia desarrollado por Cofares, y los requisitos para relacionar su información comercial con Farmetrica.",
+description:"Analiza el negocio de una farmacia con Farmanager: compras, proveedores, ventas y stock en una misma visión.",
 hero:"Farmanager y una visión comercial de toda la farmacia.",
-lead:"Farmanager es un programa de farmacia desarrollado por Cofares. Farmetrica plantea un modelo de análisis común para relacionar ventas, compras, proveedores y stock, con independencia del ERP de origen.",
-value:"Una conexión con Farmanager exige evaluación técnica y autorización de cada instalación.",
+lead:"Farmetrica ofrece una visión comercial común para analizar ventas, compras, proveedores, márgenes e inventario y tomar decisiones con más contexto, también en redes que utilizan Farmanager.",
+value:"Indicadores de negocio para gestionar mejor tus farmacias.",
 sections:[
 {heading:"El valor no está en duplicar tu ERP",paragraphs:["Un buen sistema de gestión resuelve operaciones diarias; una herramienta analítica ayuda a revisar decisiones comerciales con una visión transversal.","Analizar compras, márgenes o inventario requiere disponer de datos correctos, homologados y actualizados." ]},
-{heading:"Qué información es imprescindible",paragraphs:["Se necesitan referencias identificables, ventas y compras con fechas, costes coherentes y existencias por farmacia.","La disponibilidad de estos datos y sus métodos de acceso deben verificarse con las partes autorizadas."]},
+{heading:"Qué información se reúne",paragraphs:["Se necesitan referencias identificables, ventas y compras con fechas, costes coherentes y existencias por farmacia.","La disponibilidad de estos datos y sus métodos de acceso deben verificarse con las partes autorizadas."]},
 {heading:"Unificar preguntas entre farmacias",paragraphs:["Una red puede utilizar distintos sistemas, pero necesitar los mismos indicadores para cada establecimiento.","La correspondencia entre códigos, reglas y movimientos es parte esencial de una conexión fiable."]}
-],faq:[["¿Existe una conexión activa con Farmanager?","No consta una integración activa y validada de Farmetrica con Farmanager."],["¿Farmanager pertenece a Cofares?","Sí, Cofares identifica Farmanager como su solución tecnológica de gestión de farmacia."]],
+],faq:[["¿Existe una conexión activa con Farmanager?","Todavía no hay una integración de Farmanager verificada en producción. Debe configurarse y comprobarse la conexión autorizada antes de considerarla activa."],["¿Tengo que cambiar de software para utilizar Farmetrica?","No. Farmetrica está planteada como una solución complementaria a los programas de gestión."]],
 related:["/integraciones/","/soluciones/analisis-compras-farmacia/","/soluciones/grupos-de-farmacias/"]
 }
 );

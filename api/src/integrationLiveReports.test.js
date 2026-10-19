@@ -439,7 +439,7 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",pagina:"2",tamano:"50"});
   assert.equal(pageTwo.rows.length,31);
   assert.equal(pageTwo.total,81);
-  assert.equal(new Set([...pageOne.rows,...pageTwo.rows].map(r=>r.sourceId)).size,81);
+  assert.equal(new Set([...pageOne.rows,...pageTwo.rows].map(r=>r.id)).size,81);
   const searchedReception=await request("/api/analytics/compras/recepciones",{
    farmacias:"5",desde:"2026-10-17",hasta:"2026-10-17",buscar:"ALB-79"});
   assert.equal(searchedReception.total,1,"Busca en TODAS las recepciones, no solo en primera página");

@@ -29,6 +29,22 @@ export async function loadCommercialNames(pool,context,entries=[]){
   [client.schema]);
  const available=(table,...names)=>names.every(name=>columns.some(r=>r.table_name===table&&r.column_name===name));
  const schema='"'+client.schema+'"';
+ // Los primeros clientes FM utilizaban un catálogo proveedores(id,nombre)
+ // sin farmacia_codigo. Sólo es seguro resolverlo si el tenant tiene UNA farmacia.
+ // De otro modo el mismo ID puede identificar empresas diferentes.
+ if(supplierCodes.length&&!available("proveedores","farmacia_codigo","origen_id","nombre")&&
+     available("proveedores","id","nombre")){
+  const {rows:pharmacyCount}=await pool.query(
+   "SELECT count(*)::int AS total FROM farmetrica.farmacias WHERE cliente_slug=$1",[client.slug]);
+  if(Number(pharmacyCount[0]?.total)===1){
+   const {rows:legacy}=await pool.query(`
+    SELECT upper(btrim(id::text)) AS code,btrim(nombre::text) AS name
+    FROM ${schema}.proveedores
+    WHERE upper(btrim(id::text))=ANY($1::text[])
+      AND nullif(btrim(nombre::text),'') IS NOT NULL`,[supplierCodes]);
+   for(const row of legacy)master.set(normalize(row.code),label(row.name));
+  }
+ }
  async function fill(table,codes,destination){
   if(!codes.length||!available(table,"farmacia_codigo","origen_id","nombre"))return;
   const order=available(table,"sincronizado_en")?"m.sincronizado_en DESC NULLS LAST,":"";

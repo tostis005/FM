@@ -235,3 +235,12 @@
 .fm-data-details[open] summary{margin-bottom:10px}
 .fm-data-details p{margin:6px 0;font-size:12px;line-height:1.5;color:var(--text-muted,#547064)}
 .fm-data-details .fm-inline-status{margin:0}
+
+
+/* Cada cifra conserva legibilidad sin salir de su tarjeta. */
+.fm-demo-kpi,.fm-demo-v2 .fm-demo-kpi{min-width:0!important;max-width:100%;overflow:hidden}
+.fm-demo-kpi>strong,.fm-demo-v2 .fm-demo-kpi strong{
+ max-width:100%;min-width:0;font-variant-numeric:tabular-nums;
+ font-size:clamp(16px,1.85vw,25px);letter-spacing:-.035em;
+ line-height:1.2;white-space:normal;overflow-wrap:anywhere}
+.fm-demo-kpi>span{min-width:0;max-width:100%;overflow-wrap:break-word}

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity, ArrowDownToLine, ArrowRight, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
+  Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
-  MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target,
+  MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail
 } from "lucide-react";
 import "./styles.css";
@@ -20,7 +20,7 @@ import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import SyncVentas from "./SyncVentas.jsx";
-import AsistenteDemo from "./AsistenteDemo.jsx";
+import OperativaPreview,{PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
@@ -124,29 +124,44 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
 function Field({label,children,hint}) {return <label className="field"><span className="field-label">{label}</span>{children}{hint&&<small>{hint}</small>}</label>}
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
 const NAV=[
- {id:"dashboard",label:"Dashboard",icon:LayoutDashboard,module:"dashboard"},
+ {id:"dashboard",label:"Inicio",icon:LayoutDashboard,module:"dashboard"},
  {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
+ {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas",preview:true},
+ {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas",preview:true},
  {id:"compras",label:"Compras",icon:BarChart3,module:"compras"},
- {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
+ {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion",childOf:"compras"},
+ {id:"compras-preparador",label:"Preparador de pedidos",icon:ShoppingCart,module:"compras",childOf:"compras",preview:true},
+ {id:"compras-pendientes",label:"Pendientes de asignar",icon:ClipboardList,module:"compras",childOf:"compras",preview:true},
+ {id:"compras-pedidos",label:"Pedidos preparados",icon:Package,module:"compras",childOf:"compras",preview:true},
+ {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras",preview:true},
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
- {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion"},
+ {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock",preview:true},
+ {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock",preview:true},
+ {id:"productos",label:"Productos",icon:Package,module:"stock",preview:true},
+ {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
+ {id:"proveedores-condiciones",label:"Condiciones comerciales",icon:ClipboardList,module:"proveedores",childOf:"proveedores",preview:true},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
- {id:"acciones",label:"Acciones",icon:ClipboardList,module:"acciones"},
- {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes"},
+ {id:"rentabilidad-segmentos",label:"Por segmento",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad",preview:true},
+ {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad",preview:true},
+ {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
- {id:"asistente",label:"Asistente IA",icon:Sparkles,module:"asistente"},
+ {id:"acciones",label:"Oportunidades",icon:ClipboardList,module:"acciones"},
+ {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones",preview:true},
+ {id:"alertas",label:"Alertas",icon:Bell,module:"acciones",preview:true},
+ {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas",preview:true},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
+ {id:"sincronizacion",label:"Sincronización",icon:RefreshCcw,admin:true},
+ {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
-  {id:"sincronizacion",label:"Sincronización",icon:RefreshCcw,admin:true},
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
- {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true},
- {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true}
+ {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
 ];
-const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","clientes","sincronizacion","solicitudes","accesos","ajustes"]);
-const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes","asistente"]);
+const ADMIN_IDS=new Set(["clientes","solicitudes","accesos"]);
+const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","sincronizacion","ajustes"]);
+const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -282,6 +297,7 @@ function App(){
   const [toast,setToast]=useState("");
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
+ const [adminOpen,setAdminOpen]=useState(()=>ADMIN_IDS.has(pageFromUrl()));
  // Un menú móvil largo debe desplazarse sin mover la página de fondo.
  useEffect(()=>{
    if(!mobileMenu)return;
@@ -676,7 +692,7 @@ function App(){
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
  },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
- useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true)},[page]);
+ useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true);if(ADMIN_IDS.has(page))setAdminOpen(true)},[page]);
  const role=tenantContext?.role;
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
@@ -698,10 +714,15 @@ function App(){
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
    <nav className="side-nav" aria-label="Módulos">
-    {visibleNav.filter(item=>!CONFIG_IDS.has(item.id)).map(item=><React.Fragment key={item.id}>
+    {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)).map(item=><React.Fragment key={item.id}>
      <button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}>
-      <item.icon size={19}/><span>{item.label}</span>{page===item.id&&<span className="active-dot"/>}
+      <item.icon size={19}/><span>{item.label}</span>{item.preview&&<small className="side-preview-badge">Demo</small>}{page===item.id&&<span className="active-dot"/>}
      </button>
+     {(page===item.id||NAV.some(n=>n.id===page&&n.childOf===item.id))&&
+      visibleNav.filter(child=>child.childOf===item.id).map(child=>
+       <button key={child.id} className={"side-link side-sublink "+(page===child.id?"active":"")} onClick={()=>nav(child.id)}>
+        <child.icon size={16}/><span>{child.label}</span>{child.preview&&<small className="side-preview-badge">Demo</small>}
+        {page===child.id&&<span className="active-dot"/>}</button>)}
      {item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}
     </React.Fragment>)}
     {visibleNav.some(item=>CONFIG_IDS.has(item.id))&&<>
@@ -712,6 +733,19 @@ function App(){
      </button>
      {settingsOpen&&<div id="fm-settings-nav" className="side-settings-children">
       {visibleNav.filter(item=>CONFIG_IDS.has(item.id)).map(item=>
+       <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
+        onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
+        {page===item.id&&<span className="active-dot"/>}</button>)}
+     </div>}
+    </>}
+    {visibleNav.some(item=>ADMIN_IDS.has(item.id))&&<>
+     <button className={"side-link "+(ADMIN_IDS.has(page)?"active":"")} type="button"
+      aria-expanded={adminOpen} aria-controls="fm-admin-nav" onClick={()=>setAdminOpen(v=>!v)}>
+      <ShieldCheck size={19}/><span>Administración</span>
+      <ChevronDown size={15} className={"side-settings-chevron"+(adminOpen?" open":"")}/>
+     </button>
+     {adminOpen&&<div id="fm-admin-nav" className="side-settings-children">
+      {visibleNav.filter(item=>ADMIN_IDS.has(item.id)).map(item=>
        <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
         onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
         {page===item.id&&<span className="active-dot"/>}</button>)}
@@ -862,6 +896,8 @@ function App(){
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
+    {PREVIEW_SECTIONS[page]&&<OperativaPreview key={tenantContext.client.slug+":"+page}
+      section={page} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">
       <div className="page-header"><h1>Ajustes</h1></div>
@@ -936,7 +972,7 @@ function App(){
   {editingUser&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingUser(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingUser==="nuevo"?"Nuevo usuario":"Editar usuario"}</h2><p>Asigna un rol y define las farmacias disponibles.</p></div><button className="icon-btn" onClick={()=>setEditingUser(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={saveUser} className="drawer-content"><Field label="Nombre completo"><input required value={userForm.name} onChange={e=>setUserForm({...userForm,name:e.target.value})}/></Field><Field label="Correo electrónico"><input type="email" required value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/></Field><Field label="Rol"><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="farmacia">Personal de farmacia</option><option value="gestor">Gestor de farmacias</option><option value="superadmin">Superadministrador</option></select></Field><Field label="Estado"><select value={String(userForm.active)} onChange={e=>setUserForm({...userForm,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></Field><div className="form-divider"/><div className="field-heading"><div><strong>Farmacias asignadas</strong><small>{userForm.role==="superadmin"?"Este rol tiene acceso a toda la red.":"Marca las farmacias a las que podrá acceder."}</small></div></div>{userForm.role!=="superadmin"&&<div className="pharmacy-picker">{pharmacies.map(f=><label key={f.id} className={"pharmacy-choice "+(userForm.pharmacies.includes(f.id)?"chosen":"")}><input type="checkbox" checked={userForm.pharmacies.includes(f.id)} onChange={()=>setUserForm({...userForm,pharmacies:userForm.pharmacies.includes(f.id)?userForm.pharmacies.filter(x=>x!==f.id):[...userForm.pharmacies,f.id]})}/><span className="choice-check">{userForm.pharmacies.includes(f.id)&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>}<div className="note small-note"><ShieldCheck size={16}/> Estas asignaciones son solo visuales hasta habilitar autenticación y autorización en el servidor.</div><FormActions onCancel={()=>setEditingUser(null)}/></form></div></div>}
   {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El identificador se asigna automáticamente a las farmacias nuevas.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content">{editingPharmacy!=="nuevo"&&<Field label="ID de farmacia"><input disabled value={pharmacyForm.id}/></Field>}<Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad (opcional)"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA" maxLength="16" value={pharmacyForm.sourceCode||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field><Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local" value={pharmacyForm.sourceHost||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field><Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field><div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)} label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/></form></div></div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
-  <AsistenteDemo key={tenantContext.client.slug} section={title} />
+
  </div>
 }
 function GoalProgressBar({goal,sold,loading=false,available=true}){

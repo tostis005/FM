@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {validateAssistantBody,rateCheck} from "./assistant.js";
+import {validateAssistantBody,rateCheck} from "./assistantPolicy.js";
 import {quoteSchema,authorizedIds,selectTools,periodFromQuestion,normalizedPeriod} from "./assistantAnalytics.js";
 
 const ctx={role:"gestor",client:{schema:"ampedia"},modules:{ventas:true,compras:true,stock:false},allowedPharmacyIds:[1,2]};

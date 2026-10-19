@@ -25,15 +25,15 @@ export function analysisWindow(months,now=new Date(),zone="Europe/Madrid"){
 async function sourceTypes(conn,schema){
  const {rows}=await conn.query(
   "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[])",
-  [schema,["ventas","compras","articulos","productos"]]);
+  [schema,["fm_ventas_analitica","fm_recepciones_analitica","articulos","productos"]]);
  const cols=new Map();
  for(const row of rows){if(!cols.has(row.table_name))cols.set(row.table_name,new Set());cols.get(row.table_name).add(row.column_name)}
  const has=(tbl,...names)=>names.every(name=>cols.get(tbl)?.has(name));
- if(!has("ventas","farmacia_codigo","articulo_id","fecha","unidades","importe"))return null;
+ if(!has("fm_ventas_analitica","farmacia_codigo","articulo_id","fecha","unidades","importe"))return null;
  return {articles:has("articulos","farmacia_codigo","origen_id","nombre","familia","codigo_nacional","pvp","pmc","sincronizado_en")?"normalized":
     has("productos","id","descripcion","cn","familia")?"legacy":"none",
-   purchases:has("compras","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario")?"normalized":
-    has("compras","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"};
+   purchases:has("fm_recepciones_analitica","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario")?"normalized":
+    has("fm_recepciones_analitica","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"};
 }
 export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun=true}={}){
  const running=new Set(),queued=new Set();

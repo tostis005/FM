@@ -756,3 +756,19 @@ html,body{overflow-x:clip}
 .side-settings-children .side-link{padding-left:42px;min-height:38px;font-size:11.5px}
 .side-settings-chevron{margin-left:auto;transition:transform .16s ease}
 .side-settings-chevron.open{transform:rotate(180deg)}
+
+
+/* Contrato único de cabeceras: texto con flecha, no botones resaltados. */
+.fm-unified-table{border-collapse:collapse;width:100%;min-width:max(740px,100%);text-align:left}
+.fm-unified-table th{padding:12px 14px;color:#728881;background:#f6f9f8;text-align:left;font-size:12px;font-weight:800;white-space:nowrap}
+.fm-unified-table td{padding:12px 14px;border-bottom:1px solid #eef2ef;color:#334d46;font-size:13px;vertical-align:middle;white-space:nowrap}
+.fm-unified-table .smart-sort,.smart-table .smart-sort,.fm-generics .smart-sort{
+ display:inline-flex;align-items:center;gap:7px;justify-content:flex-start;
+ border:0;background:none;box-shadow:none;color:inherit;cursor:pointer;
+ font:inherit;text-align:left;padding:0;text-transform:none;white-space:nowrap}
+.fm-unified-table .smart-sort:focus-visible,.smart-table .smart-sort:focus-visible{
+ outline:2px solid #0aa674;outline-offset:3px}
+.fm-supplier-check-field{display:flex!important;align-items:center;flex-direction:row!important;gap:10px}
+.fm-supplier-check-field input,.fm-management .smart-table input[type="checkbox"]{
+ inline-size:18px;block-size:18px;accent-color:#099d70;cursor:pointer}
+.fm-unified-table input[type="number"],.fm-unified-table select{max-width:190px}

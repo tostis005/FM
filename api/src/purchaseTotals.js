@@ -76,17 +76,23 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    values.push(size,(page-1)*size);
    const limit="$"+(values.length-1),offset="$"+values.length;
    const {rows}=await pool.query(`
-    SELECT f.id::text AS "pharmacyId",
-      ${id} AS "sourceId",${reference} AS reference,
-      ${supplier} AS supplier,${col("proveedor_id")} AS "supplierId",
-      ${orderNumber} AS "orderNumber",
-      to_char(t.fecha,'YYYY-MM-DD') AS date,
-      ${col("albaran_id")} AS "receiptNumber",
-      count(*) OVER()::int AS total
-    FROM "${schema}".fm_recepciones_analitica t ${join}
-    WHERE ${where.join(" AND ")}
-    ORDER BY t.fecha DESC,${id} DESC NULLS LAST
-    LIMIT ${limit}::int OFFSET ${offset}::int`,values);
+    WITH documents AS (
+     SELECT DISTINCT ON (f.id,t.sistema_origen,t.documento_id)
+       f.id::text AS "pharmacyId",
+       t.documento_id AS "sourceId",
+       ${reference} AS reference,
+       ${supplier} AS supplier,${col("proveedor_id")} AS "supplierId",
+       ${orderNumber} AS "orderNumber",
+       to_char(t.fecha,'YYYY-MM-DD') AS date,
+       ${col("albaran_id")} AS "receiptNumber",
+       t.fecha AS "documentDate"
+     FROM "${schema}".fm_recepciones_analitica t ${join}
+     WHERE ${where.join(" AND ")}
+     ORDER BY f.id,t.sistema_origen,t.documento_id,t.fecha DESC
+    )
+    SELECT documents.*,count(*) OVER()::int AS total FROM documents
+    ORDER BY "documentDate" DESC,"sourceId" DESC
+    LIMIT ${limit}::int OFFSET ${offset}::int`,values);;
    res.json({available:true,from:f.from,to:f.to,page,pageSize:size,
     total:Number(rows[0]?.total||0),
     rows:rows.map((r,i)=>({id:String(r.pharmacyId)+"|"+String(r.sourceId||r.reference||"recepcion")+"|"+((page-1)*size+i),
@@ -127,6 +133,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
      count(${amount})::int AS "amountRows",
      sum(t.unidades)::float8 AS units,count(t.unidades)::int AS "unitRows",
      count(*)::int AS "sourceRows",
+     count(DISTINCT (t.farmacia_codigo,t.sistema_origen,t.documento_id))::int AS "receipts",
      count(*) FILTER(WHERE nullif(btrim(${productId}::text),'') IS NOT NULL)::int AS lines
     FROM "${schema}".fm_recepciones_analitica t ${join}
     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
@@ -136,17 +143,18 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     GROUP BY 1,f.id,t.proveedor_id ORDER BY 1`,
     [f.from,f.to,f.ids,req.context.client.slug]);
    const months=new Map(),suppliers=new Set();
-   let purchases=0,units=0,lines=0,sourceRows=0,amountRows=0,unitRows=0;
+   let purchases=0,units=0,lines=0,receipts=0,sourceRows=0,amountRows=0,unitRows=0;
    for(const r of rows){
     const amount=Number(r.amount||0),qty=Number(r.units||0),count=Number(r.lines||0);
     purchases+=amount;units+=qty;lines+=count;
     sourceRows+=Number(r.sourceRows||0);
+    receipts+=Number(r.receipts||0);
     amountRows+=Number(r.amountRows??(r.amount==null?0:1));
     unitRows+=Number(r.unitRows??(r.units==null?0:1));
     if(r.supplier!=null&&r.supplier!=="")suppliers.add(r.pharmacy+"|"+r.supplier);
     const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null};
     m.compras=(m.compras??0)+amount;
-    m.recepciones=(m.recepciones||0)+Number(r.sourceRows||0);
+    m.recepciones=(m.recepciones||0)+Number(r.receipts||0);
     m.hasAmounts=(m.hasAmounts||false)||Number(r.amountRows??(r.amount==null?0:1))>0;
     months.set(r.month,m);
    }
@@ -157,7 +165,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     proveedores:suppliers.size,
     // Contar cabeceras como recepciones solo cuando NO hay líneas de producto:
     // en otros clientes sourceRows podría ser el número de líneas, no de albaranes.
-    recepciones:lines>0?null:sourceRows
+    recepciones:receipts
    },hasArticleLines:lines>0,hasAmounts:amountRows>0,sourceRows,
    monthly:[...months.values()].map(m=>({
     month:m.month,ventas:m.ventas,compras:m.hasAmounts?m.compras:null,

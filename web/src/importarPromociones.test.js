@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {excelDate,importCampaignRows,mergeImportedPromos} from "./importarPromociones.js";
+import {excelDate,importCampaignRows,mergeImportedPromos,importedPromotionStatus} from "./importarPromociones.js";
 
 test("fechas españolas y serial Excel",()=>{
   assert.equal(excelDate("1 OCTUBRE"),"2026-10-01");
@@ -38,4 +38,23 @@ test("reimportar no duplica; nuevo CN completa campaña y respeta objetivos",()=
   assert.deepEqual(merged.updates[0].cns,["012345","222333"]);
   assert.equal(merged.updates[0].targets["1"],11);
   assert.equal(mergeImportedPromos(merged.updates,second).duplicates,1);
+});
+
+test("importar objetivos asignados activa promociones vigentes, archiva vencidas",()=>{
+ const now=new Date("2026-10-19T22:30:00Z");
+ const promo={cns:["001474"],targets:{"1":12,"2":5},start:"2026-10-01",end:"2026-10-31"};
+ assert.equal(importedPromotionStatus(promo,now),"Activa");
+ assert.equal(importedPromotionStatus({...promo,end:"2026-10-18"},now),"Finalizada");
+ assert.equal(importedPromotionStatus({...promo,start:"2026-11-01",end:"2026-11-30"},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,targets:{}},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,targets:{"1":12,"2":""}},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,targets:{"1":0}},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,cns:[]},now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,start:"",end:""},now),"Borrador");
+});
+test("el estado de importación usa la fecha civil de la farmacia, no el UTC",()=>{
+ const promo={cns:["123456"],targets:{"1":25},start:"2026-10-19",end:"2026-10-19"};
+ const midnight=new Date("2026-10-19T22:30:00Z");
+ assert.equal(importedPromotionStatus(promo,midnight,"Europe/Madrid"),"Finalizada");
+ assert.equal(importedPromotionStatus(promo,midnight,"America/Bogota"),"Activa");
 });

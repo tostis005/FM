@@ -21,6 +21,7 @@ import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import SyncVentas from "./SyncVentas.jsx";
 import OperativaPreview,{PREVIEW_SECTIONS} from "./OperativaPreview.jsx";
+import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
 import { readPromotionExcel, mergeImportedPromos } from "./importarPromociones.js";
@@ -896,7 +897,10 @@ function App(){
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
-    {PREVIEW_SECTIONS[page]&&<OperativaPreview key={tenantContext.client.slug+":"+page}
+    {REAL_SECTIONS.has(page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
+      section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
+      pharmacies={tenantContext.pharmacies}/>}
+    {PREVIEW_SECTIONS[page]&&!REAL_SECTIONS.has(page)&&<OperativaPreview key={tenantContext.client.slug+":"+page}
       section={page} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">

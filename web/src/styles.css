@@ -779,13 +779,34 @@ html,body{overflow-x:clip}
 .side-nav-parent.has-submenu>.side-link{padding-right:45px}
 .side-nav-parent>.side-link>span:not(.active-dot){min-width:0}
 .side-nav-caret{position:absolute;right:5px;top:50%;transform:translateY(-50%);
- display:grid;place-items:center;width:34px;height:36px;border:0;border-radius:8px;
- background:transparent;color:#6a8075;cursor:pointer;z-index:1}
-.side-nav-caret:hover{color:#07976b;background:#dff5e9}
-.side-nav-caret:focus-visible{outline:2px solid #07976b;outline-offset:1px}
-.side-nav-parent:has(.side-link.active) .side-nav-caret{color:#07976b}
+ display:grid;place-items:center;width:36px;height:36px;border:1px solid #b8d6c9;border-radius:9px;
+ background:#e7f5ee;color:#255f4b;cursor:pointer;z-index:1;
+ transition:background .15s ease,border-color .15s ease,color .15s ease}
+.side-nav-caret:hover{color:#076442;background:#ccebdd;border-color:#76bda0}
+.side-nav-caret:focus-visible{outline:3px solid #07976b;outline-offset:2px}
+.side-nav-parent:has(.side-link.active) .side-nav-caret{color:#075e46;background:#ccefe0;border-color:#80c9ac}
 .side-nav-caret .side-settings-chevron{margin-left:0;display:block;transition:transform .18s ease}
 .side-nav-caret .side-settings-chevron.open{transform:rotate(180deg)}
 .side-nav-submenu{display:flex;flex-direction:column;gap:2px;min-width:0}
 .side-nav-submenu[hidden]{display:none}
 .side-nav-submenu .side-sublink{flex:0 0 auto}
+
+/* Chevron de alto contraste consistente en Configuración y Administración. */
+.side-nav>.side-link[aria-controls="fm-settings-nav"] .side-settings-chevron,
+.side-nav>.side-link[aria-controls="fm-admin-nav"] .side-settings-chevron{
+ width:32px;height:32px;min-width:32px;padding:5px;box-sizing:border-box;
+ border:1px solid #b8d6c9;border-radius:9px;background:#e7f5ee;
+ color:#255f4b;stroke-width:3;
+}
+.side-nav>.side-link[aria-controls="fm-settings-nav"]:hover .side-settings-chevron,
+.side-nav>.side-link[aria-controls="fm-admin-nav"]:hover .side-settings-chevron{
+ background:#ccebdd;border-color:#76bda0;color:#076442;
+}
+.side-nav>.side-link[aria-expanded="true"] .side-settings-chevron{
+ border-color:#80c9ac;background:#ccefe0;color:#075e46;
+}
+.side-nav-caret svg{stroke-width:3}
+@media (prefers-contrast:more){
+ .side-nav-caret,.side-nav>.side-link[aria-controls] .side-settings-chevron{
+  color:#124b36;background:#c5e9d8;border-color:#377b5e}
+}

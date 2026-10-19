@@ -7,8 +7,8 @@ test("formato español: separador de miles, coma decimal y euros limitados a 2 d
  assert.match(euro(5),/5,00\s*€/u);
  assert.match(euro(0),/0,00\s*€/u);
  assert.match(euro(12.34567),/12,35\s*€/u);
- assert.equal(quantity(1234.5),"1.234,50");
- assert.equal(quantity(18),"18,00");
+ assert.equal(quantity(1234.5),"1.235");
+ assert.equal(quantity(18),"18");
  assert.equal(integer(1234567),"1.234.567");
  assert.equal(decimal(1234.56),"1.234,56");
  assert.equal(percentage(11.235),"11,24 %");

@@ -108,8 +108,8 @@ function OrderBuilder({mode}){
    {tab==="orders"&&<Table columns={["Pedido","Proveedor","Referencias","Importe previsto","Estado"]}
     rows={[["PED-0401","Proveedor A","4","1.284,30 €","Borrador"],["PED-0402","Proveedor B","7","862,15 €","Pendiente de aprobación"]]}/>}
    <div className="fm-preview-actions"><button className="btn btn-primary" type="button"
-      onClick={()=>setNotice("No disponible en la demo: estos cambios no se guardan ni envían pedidos.")}>Guardar borrador</button>
-    <button className="btn btn-secondary" type="button" onClick={()=>setNotice("No disponible en la demo: la exportación real se activará con los datos de compras.")}>Exportar pedido</button>
+      onClick={()=>setNotice("Acción no disponible.")}>Guardar borrador</button>
+    <button className="btn btn-secondary" type="button" onClick={()=>setNotice("Exportación no disponible.")}>Exportar pedido</button>
     {notice&&<span role="status" className="fm-preview-notice">{notice}</span>}
    </div>
   </section>
@@ -192,7 +192,7 @@ export default function OperativaPreview({section,pharmacies=[]}){
  const name=PREVIEW_SECTIONS[section]?.title||"Módulo";
  return <div className="fm-operativa-preview">
   <div className="fm-preview-heading"><div className="page-header"><div><h1>{name}</h1></div></div>
-    <span className="fm-preview-badge">Pantalla de demostración</span></div>
+    <span className="fm-preview-badge">Demo</span></div>
   {analytics[section]?<AnalyticSection section={section}/>:
    section.startsWith("compras-")?<OrderBuilder key={section} mode={section}/>:
    section==="stock-traspasos"?<Transfers pharmacies={pharmacies}/>:
@@ -200,6 +200,6 @@ export default function OperativaPreview({section,pharmacies=[]}){
    section==="alertas"?<WorkQueue onlyAlerts/>:
    section==="mi-trabajo"?<WorkQueue/>:
    section==="rentabilidad-retorno"?<ReturnScreen/>:
-   <section className="card fm-preview-panel">Módulo de demostración.</section>}
+   <section className="card fm-preview-panel">Sin contenido disponible.</section>}
  </div>;
 }

@@ -274,7 +274,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
        <td>{unitPrice(g.averagePuc)}</td><td>{unitPrice(g.averagePvp)}</td>
        <td>{g.averagePvp!=null&&g.averagePuc!=null?unitPrice(g.averagePvp-g.averagePuc):"—"}</td>
        <td>{g.pvpMarginPct==null?"—":percentage(g.pvpMarginPct)}</td>
-       <td>{unitPrice(g.bestPuc)}</td><td>{money(g.indicativeSavings)}</td>
+       <td>{unitPrice(g.bestPuc)}{g.referencePharmacyId!=null&&ids.length!==1&&
+        <small>Origen: {pharmacies.find(p=>String(p.id)===String(g.referencePharmacyId))?.name||"Farmacia "+g.referencePharmacyId}</small>}</td>
+       <td>{money(g.indicativeSavings)}</td>
        <td><button type="button" className="fm-generic-expand" aria-label={"Desplegar conjunto "+g.dcpf}
         aria-expanded={active===g.dcpf} onClick={e=>{e.stopPropagation();setActive(active===g.dcpf?null:g.dcpf)}}>
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>

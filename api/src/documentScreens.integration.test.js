@@ -11,6 +11,10 @@ test("consulta documental sólo acepta esquemas y apartados permitidos",()=>{
  assert.ok(buildDocumentScreenSQL("compras-devoluciones","ampedia").includes("fm_recepciones_analitica"));
  assert.ok(!buildDocumentScreenSQL("productos","ampedia",new Set(["farmacia_codigo","origen_id","nombre"])).includes(".ventas "));
  assert.ok(Object.hasOwn(DOCUMENT_SORT["productos"],"sourceId"));
+ assert.ok(buildDocumentScreenSQL("stock-historico","ampedia").includes("fm_ventas_analitica"));
+ assert.ok(buildDocumentScreenSQL("stock-historico","ampedia").includes("fm_recepciones_analitica"));
+ assert.match(buildDocumentScreenSQL("stock-historico","ampedia"),/ignorar_informes=true/);
+ assert.throws(()=>buildDocumentScreenSQL("stock-historico","ampedia",new Set(),"unknown"),/Orden incorrecto/);
 });
 
 test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, catálogo y aislamiento",{
@@ -118,5 +122,85 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   assert.equal(invalid.status,400,"orden no admitido");
   const other=await call("ventas-tickets",{farmacias:"2",buscar:"SCREEN-CI-V1"});
   assert.equal(other.body.total,0,"no mezclar IDs documentales entre farmacias");
+ }finally{await db.query("ROLLBACK").catch(()=>{});await db.end();}
+});
+
+test("PostgreSQL: evolución de movimientos documentados sin inventar saldos históricos",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const db=new pg.Client({connectionString:process.env.TEST_DB_URL});
+ await db.connect();
+ const name="ci_stock_mov",routes={};
+ const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
+ setupDocumentScreens(app,db,{requireTenant:()=>[]});
+ try{
+  await db.query("BEGIN");
+  await db.query("CREATE SCHEMA ci_stock_mov");
+  await db.query("INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos) VALUES($1,'Movimientos CI',$1)",[name]);
+  const {rows:[farm]}=await db.query(
+   "INSERT INTO farmetrica.farmacias(cliente_slug,nombre,codigo_origen) VALUES($1,'Farmacia Historia','HIS') RETURNING id",[name]);
+  const {rows:[other]}=await db.query(
+   "INSERT INTO farmetrica.farmacias(cliente_slug,nombre,codigo_origen) VALUES($1,'Otra farmacia','OTR') RETURNING id",[name]);
+  await db.query("SELECT farmetrica.preparar_modelo_documental($1)",[name]);
+  await db.query("SELECT farmetrica.preparar_vistas_documentales($1)",[name]);
+  await db.query(`INSERT INTO ci_stock_mov.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas) VALUES
+   ('HIS','farmatic','SV1','2026-10-17',true),
+   ('HIS','farmatic','SV2','2026-10-17',true),
+   ('HIS','farmatic','SV3','2026-10-18',true),
+   ('OTR','farmatic','OUT','2026-10-17',true)`);
+  await db.query(`INSERT INTO ci_stock_mov.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto,devuelta)
+   VALUES ('HIS','farmatic','SV1','1','A1',4,40,false),
+          ('HIS','farmatic','SV2','1','A1',1,10,true),
+          ('HIS','farmatic','SV3','1','A2',2,20,false),
+          ('OTR','farmatic','OUT','1','A1',999,9999,false)`);
+  await db.query(`INSERT INTO ci_stock_mov.fm_recepciones_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,proveedor_origen_id,lineas_completas)
+   VALUES ('HIS','farmatic','RC1','2026-10-17','PR1',true),
+          ('HIS','farmatic','RC2','2026-10-17','IGN',true)`);
+  await db.query(`INSERT INTO ci_stock_mov.fm_recepciones_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto)
+   VALUES ('HIS','farmatic','RC1','1','A1',10,20),
+          ('HIS','farmatic','RC2','1','A2',50,100)`);
+  await db.query(`INSERT INTO farmetrica.proveedores_maestro
+   (cliente_slug,codigo_origen,nombre,ignorar_informes)
+   VALUES ($1,'IGN','Traslado interno',true)`,[name]);
+  async function fetchScreen(params={},access=[farm.id]){
+   const req={params:{section:"stock-historico"},
+    query:{desde:"2026-10-01",hasta:"2026-10-19",pagina:"1",tamano:"25",
+     farmacias:String(farm.id),...params},
+    context:{client:{slug:name,schema:name},role:"gestor",
+     modules:{stock:true},allowedPharmacyIds:access,pharmacies:[]},
+    user:{role:"gestor",email:"gestor@example.invalid"}};
+   let body,status=200,error;
+   const res={status(n){status=n;return res},json(x){body=x;return res}};
+   await routes["/api/analytics/pantallas/:section"](req,res,e=>{error=e});
+   if(error)throw error;
+   return {body,status};
+  }
+  const res=await fetchScreen();
+  assert.equal(res.status,200);
+  assert.equal(res.body.total,2,"Sólo dos fechas con documentos para la farmacia autorizada");
+  assert.equal(res.body.rows.length,2);
+  const byDay=new Map(res.body.rows.map(x=>[String(x.at).slice(0,10),x]));
+  const first=byDay.get("2026-10-17"),second=byDay.get("2026-10-18");
+  assert.equal(Number(first.soldUnits),3,"La devolución de venta reduce las unidades vendidas");
+  assert.equal(Number(first.receivedUnits),10,"Ignorar proveedores excluye traspasos internos");
+  assert.equal(Number(first.documentedNetUnits),7);
+  assert.equal(first.tickets,2);
+  assert.equal(first.receipts,1);
+  assert.equal(Number(second.soldUnits),2);
+  assert.equal(Number(second.receivedUnits),0);
+  assert.equal(Number(second.documentedNetUnits),-2);
+  assert.equal(Number(res.body.summary.value),5);
+  assert.equal(Number(res.body.summary.units),10);
+  assert.equal(Number(res.body.summary.other),5);
+  const search=await fetchScreen({buscar:"2026-10-17"});
+  assert.equal(search.body.total,1,"El texto filtra sobre todos los días antes de paginar");
+  const sorted=await fetchScreen({orden:"net",direccion:"asc"});
+  assert.equal(sorted.body.rows[0].documentedNetUnits,-2);
+  const denied=await fetchScreen({farmacias:String(other.id)});
+  assert.equal(denied.status,403,"No mostrar datos de otra farmacia");
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end();}
 });

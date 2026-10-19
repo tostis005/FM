@@ -66,13 +66,19 @@ try{
  await assertRoute("/compras","Compras");
  // Simular una pantalla muy larga para comprobar el scroll real del documento.
  // La navegación SPA debe llevar arriba aunque el usuario estuviera al final.
- await page.evaluate(()=>{
-  document.querySelector(".main-content").style.minHeight="3000px";
+ const scrollDiag=await page.evaluate(()=>{
   const main=document.querySelector(".main-content");
-  // Obligar al navegador a recalcular la altura antes de desplazar.
+  main.style.minHeight="3200px";
+  document.body.style.minHeight="3200px";
+  // Recalcular la altura y usar el scrollingElement real del documento.
   void main.getBoundingClientRect().height;
+  const root=document.scrollingElement;
+  root.scrollTop=1050;
   window.scrollTo({top:1050,left:0,behavior:"instant"});
+  return {scrollY:window.scrollY,rootTop:root.scrollTop,
+   rootHeight:root.scrollHeight,viewport:window.innerHeight,mainHeight:main.getBoundingClientRect().height};
  });
+ console.log("Altura de prueba de scroll:",JSON.stringify(scrollDiag));
  await page.waitForFunction(()=>window.scrollY>900,null,{timeout:4000});
  // Ir desde la navegación lateral a otro módulo, no hacer una recarga completa.
  await page.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Ventas",exact:true}).first().click();

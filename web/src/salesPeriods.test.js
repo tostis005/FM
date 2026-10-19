@@ -27,7 +27,7 @@ test("personalizado valida el rango y escoge puntos horarios, diarios o mensuale
  assert.equal(v("2023-01-01","2026-01-01").valid,true);
  assert.equal(v("1900-01-01","2026-10-18").valid,false);
  assert.equal(v("","2026-10-18").valid,false);
- assert.equal(SALES_PERIODS.length,16);
+ assert.equal(SALES_PERIODS.length,17);
  assert.equal(formatSalesBucket("2026-10-18T09:00","hour"),"09:00");
  assert.equal(formatSalesBucket("2026-10-18","day"),"18/10");
 });
@@ -38,4 +38,13 @@ test("períodos históricos de dos, tres, cinco años y todo el registro",()=>{
  assert.equal(resolve("60").from,"2021-11-01");
  assert.equal(resolve("all").from,"1900-01-01");
  assert.equal(resolve("all").granularity,"month");
+});
+
+test("Este año empieza en enero, termina hoy y mantiene zona horaria local",()=>{
+ const current=resolve("this_year");
+ assert.deepEqual([current.from,current.to,current.granularity],["2026-01-01","2026-10-18","month"]);
+ const newYear=new Date("2027-01-01T00:30:00Z");
+ assert.equal(resolveSalesPeriod("this_year",newYear,{},"America/El_Salvador").from,"2026-01-01");
+ assert.equal(resolveSalesPeriod("this_year",newYear,{},"Europe/Madrid").from,"2027-01-01");
+ assert.ok(SALES_PERIODS.some(([key,label])=>key==="this_year"&&label==="Este año"));
 });

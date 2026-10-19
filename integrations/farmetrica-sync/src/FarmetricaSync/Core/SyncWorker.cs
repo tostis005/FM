@@ -100,11 +100,9 @@ public sealed class SyncWorker(
             // del primer ciclo incremental. Se evita así importar parcialmente el histórico.
             if (job.Mode == "incremental" && !string.IsNullOrWhiteSpace(job.FullSql)
                 && state?.LastFullSuccessUtc is null) continue;
-            // Éxito: periodicidad normal. Error: reintento configurable (sin alterar cursor).
-            var successful = state?.LastStatus == "ok";
-            var baseTime = successful ? state!.LastSuccessUtc : state?.LastAttemptUtc;
-            int every = successful ? job.EveryMinutes : job.RetryMinutes;
-            if (baseTime is null || now - baseTime >= TimeSpan.FromMinutes(every)) Enqueue(job.Id);
+            // Éxito y error comparten el MISMO calendario programado.
+            // Una VPN caída no genera nuevos intentos cada cinco minutos.
+            if (SyncSchedule.IsDue(job, state, p, now)) Enqueue(job.Id);
         }
     }
 
@@ -131,7 +129,7 @@ public sealed class SyncWorker(
         {
             PharmacyId = job.PharmacyId, EntityId = job.EntityId, Mode = "snapshot",
             Sql = job.Mode == "snapshot" ? job.Sql : job.FullSql,
-            EveryMinutes = job.EveryMinutes, RetryMinutes = job.RetryMinutes, BatchSize = job.BatchSize, InitialFromUtc = job.InitialFromUtc, Enabled = job.Enabled, ReplayMinutes = job.ReplayMinutes, SafetyDelayMinutes = job.SafetyDelayMinutes
+            EveryMinutes = job.EveryMinutes, RetryMinutes = job.RetryMinutes, DailyAtLocal = job.DailyAtLocal, BatchSize = job.BatchSize, InitialFromUtc = job.InitialFromUtc, Enabled = job.Enabled, ReplayMinutes = job.ReplayMinutes, SafetyDelayMinutes = job.SafetyDelayMinutes
         } : job;
         // Las lecturas incrementales terminan en el límite seguro, no en la hora actual.
         // El cursor confirmado representa ese límite; relectura inclusiva e idempotente.
@@ -210,6 +208,7 @@ public sealed class SyncWorker(
         {
             var state = GetState(c, jobId);
             state.LastStatus = status;
+            state.LastCompletedUtc = completed;
             state.LastError = error;
             state.LastRows = count;
             state.LastInserted = changes.Inserted;

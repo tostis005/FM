@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS farmetrica.op_oportunidades (
  resuelto_en timestamptz,
  revision integer NOT NULL DEFAULT 1,
  FOREIGN KEY (cliente_slug,farmacia_id) REFERENCES farmetrica.farmacias(cliente_slug,id),
- UNIQUE (cliente_slug,farmacia_id,regla,episodio)
+ UNIQUE (cliente_slug,farmacia_id,regla,episodio),
+ UNIQUE (id,cliente_slug,farmacia_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS op_oportunidades_un_episodio_abierto
  ON farmetrica.op_oportunidades(cliente_slug,farmacia_id,regla)
@@ -137,7 +138,7 @@ CREATE TABLE IF NOT EXISTS farmetrica.op_resultados_verificados (
  clave_deduplicacion text NOT NULL,
  creado_en timestamptz NOT NULL DEFAULT now(),
  FOREIGN KEY (cliente_slug,farmacia_id) REFERENCES farmetrica.farmacias(cliente_slug,id),
- FOREIGN KEY (oportunidad_id) REFERENCES farmetrica.op_oportunidades(id),
+ FOREIGN KEY (oportunidad_id,cliente_slug,farmacia_id) REFERENCES farmetrica.op_oportunidades(id,cliente_slug,farmacia_id),
  UNIQUE(cliente_slug,farmacia_id,clave_deduplicacion)
 );
 CREATE INDEX IF NOT EXISTS op_resultados_ambito ON farmetrica.op_resultados_verificados(cliente_slug,farmacia_id,creado_en DESC);

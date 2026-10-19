@@ -124,79 +124,122 @@ function createCampaign(laboratory,range,offer,start,end,description,cns,source,
   if(promo.type==="sin_clasificar")promo.importWarnings.push("Tipo de promoción pendiente de clasificación");
   return promo;
 }
-function groupCnRows(rows,year=PROMOTION_YEAR){
+// RESUMEN es la única fuente de campañas. LISTADO CN PROMOCIONES es un
+// catálogo auxiliar que NUNCA puede crear una campaña nueva.
+function summaryRowsUntilBlank(rows){
+  const result=[];
+  for(let i=1;i<(rows||[]).length;i++){
+    const r=rows[i]||[];
+    // La primera fila con las columnas principales vacías termina la tabla:
+    // todo lo posterior, incluido "NO HACER ESTAS PROMOCIONES", es ajeno.
+    if(!clean(r[0])&&!clean(r[1])&&!clean(r[2]))break;
+    if(typeof r[0]!=="string"||!clean(r[0])||!clean(r[1])||!clean(r[2]))continue;
+    result.push({row:r,rowNumber:i+1});
+  }
+  return result;
+}
+function normalizedLab(lab,brand=""){
+  const l=key(lab),b=key(brand);
+  if(l==="CANTABRIALABS")return "CANTABRIA";
+  if(l==="LOREAL")return b.startsWith("CERAVE")?"CERAVE":"LAROCHEPOSAY";
+  if(l==="NAOS")return "BIODERMA";
+  if(l==="PUIGDERMA")return b.includes("APIVITA")?"APIVITA":"URIAGE";
+  return l;
+}
+function brandTokens(raw){
+  const canonical=fold(raw).replace(/FOTOPROTECTORES?/g,"FOTOPROT")
+    .replace(/CAPILAR/g,"HAIR").replace(/COSMETICA PEDIATRICA/g,"COSMETICA")
+    .replace(/[^A-Z0-9]+/g," ");
+  return canonical.split(" ").filter(t=>t.length>=3&&
+    !["GAMA","LABS","LABORATORIOS","CORPORAL","LIQUIDACION"].includes(t));
+}
+function brandScore(brand,gama){
+  const a=key(brand),b=key(gama);
+  if(a===b)return 100;
+  if(a&&b&&(a.includes(b)||b.includes(a)))return 90;
+  const first=brandTokens(brand),second=brandTokens(gama);
+  const overlap=first.filter(t=>second.some(x=>x===t||t.length>=5&&x.startsWith(t.slice(0,5))||
+    x.length>=5&&t.startsWith(x.slice(0,5)))).length;
+  return overlap?Math.round(35+45*overlap/Math.max(first.length,second.length)):0;
+}
+function offerScore(a,b){
+  const x=typeInfo(a),y=typeInfo(b);
+  if(x.type===y.type){
+    if(x.discountPercent&&y.discountPercent&&x.discountPercent!==y.discountPercent)return -200;
+    if(x.discountAmount&&y.discountAmount&&x.discountAmount!==y.discountAmount)return -200;
+    return 30;
+  }
+  // Descripciones especiales ("20% del champú") pueden representar la misma
+  // campaña pero no deben ganar frente a una equivalencia de oferta exacta.
+  if(key(a)===key(b))return 25;
+  return -25;
+}
+function cnListGroups(rows){
   const groups=new Map();
-  for(const row of rows.slice(1)){
-    const [lab,range,code,description,offer,from,to]=row;
+  for(const r of (rows||[]).slice(1)){
+    const [lab,gama,code,description,offer]=r||[];
     const cn=cnOf(code);
-    if(!isValidCN(cn)||!clean(lab)||!clean(range)||!clean(offer))continue;
-    const start=excelDate(from,year),end=excelDate(to,year);
-    const groupKey=[key(lab),key(range),key(offer),start,end].join("|");
-    if(!groups.has(groupKey))groups.set(groupKey,{lab,range,offer,start,end,cns:[],description,cnDescriptions:{}});
-    const group=groups.get(groupKey);
-    group.cns.push(cn);
-    if(clean(description))group.cnDescriptions[cn]=clean(description);
+    if(!isValidCN(cn)||!clean(lab)||!clean(gama))continue;
+    const id=[key(lab),key(gama),key(offer)].join("|");
+    if(!groups.has(id))groups.set(id,{lab,gama,offer,entries:[]});
+    groups.get(id).entries.push({cn,description:clean(description)});
   }
   return [...groups.values()];
 }
-const stopwords=new Set(["LA","EL","LOS","LAS","DE","DEL","GAMA","PRODUCTOS","DTO","2A","2","EN","Y","POR","CORPORAL","PROMOCION","ANTIEDAD"]);
-function tokens(s){return new Set(fold(s).split(/[^A-Z0-9]+/).filter(t=>t.length>2&&!stopwords.has(t)));}
-function similarity(a,b){
-  const x=tokens(a),y=tokens(b);
-  if(!x.size||!y.size)return 0;
-  const common=[...x].filter(t=>y.has(t)).length;
-  return common/Math.min(x.size,y.size);
-}
-function comparableOffers(a,b){
-  const x=typeInfo(a),y=typeInfo(b);
-  return x.type===y.type&&(x.discountPercent===y.discountPercent||!x.discountPercent||!y.discountPercent);
+function matchingCNs(row,group){
+  const [lab,brand,offer,, ,description]=row;
+  if(normalizedLab(lab,brand)!==normalizedLab(group.lab,group.gama))return null;
+  const score=brandScore(brand,group.gama);
+  if(score<40)return null;
+  const offerWeight=offerScore(offer,group.offer);
+  if(offerWeight<0 && score<90)return null;
+  let entries=group.entries;
+  // Dos filas URIAGE en RESUMEN tienen el mismo laboratorio, marca, fechas y
+  // descuento: se distinguen por Xemose frente a los sérums de la descripción.
+  if(normalizedLab(lab,brand)==="URIAGE"&&key(brand)==="URIAGE"){
+    const xemose=/XEMOSE/i.test(description||"");
+    const serum=/S[ÉE]RUM|SERUM/i.test(description||"");
+    if(xemose)entries=entries.filter(e=>/XEMOSE/i.test(e.description));
+    else if(serum)entries=entries.filter(e=>!/XEMOSE/i.test(e.description));
+  }
+  if(!entries.length)return null;
+  // Premiar coincidencias explícitas y no mezclar gamas parcialmente relacionadas.
+  return {score:score+offerWeight,entries};
 }
 export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR){
-  const summary=(summaryRows||[]).slice(1).filter(r=>clean(r[0])&&clean(r[1])&&r[2]!==null&&r[2]!==undefined&&r[2]!=="");
-  const cnGroups=groupCnRows(cnRows||[],year);
-  const assigned=new Set();
+  const groups=cnListGroups(cnRows);
   const campaigns=[];
-  for(const row of summary){
-    const [lab,range,offer,from,to,description]=row;
-    // Filas de material auxiliar, códigos sueltos o sin oferta no son promociones.
-    if(typeof lab==="number" || !clean(offer))continue;
+  const assignedByGroup=new Map();
+  for(const {row,rowNumber} of summaryRowsUntilBlank(summaryRows)){
+    const [lab,brand,offer,from,to,description]=row;
     const start=excelDate(from,year),end=excelDate(to,year);
-    const matches=cnGroups.map((g,index)=>{
-      if(assigned.has(index)||!comparableOffers(offer,g.offer))return {index,score:0};
-      const sameStart=!start||!g.start||start===g.start;
-      const sameEnd=!end||!g.end||end===g.end;
-      if(!sameStart||!sameEnd)return {index,score:0};
-      const rangeScore=similarity(range,g.range);
-      const labScore=similarity(lab,g.lab);
-      return {index,score:rangeScore*0.85+labScore*0.15};
-    }).sort((a,b)=>b.score-a.score);
-    // Unir solo coincidencias suficientemente claras y únicas.
-    const best=matches[0],second=matches[1];
-    const confident=best&&best.score>=0.72&&(!second||best.score-second.score>=0.12);
-    const g=confident?cnGroups[best.index]:null;
-    if(g)assigned.add(best.index);
-    const promo=createCampaign(lab,range,offer,start,end,description,g?.cns||[],"RESUMEN",g?.cnDescriptions||{});
-    if(!g && cnGroups.length)promo.importWarnings.push("No se ha podido asociar con seguridad el listado de CNs");
+    const candidates=groups.map((group,index)=>{
+      const result=matchingCNs(row,group);
+      return result?{index,group,...result}:null;
+    }).filter(Boolean).sort((a,b)=>b.score-a.score);
+    // Agrupar subgamas de una misma marca únicamente cuando su puntuación
+    // coincide y no tienen ofertas diferentes: p.ej. dos ramas PHYTO.
+    const top=candidates[0]?.score??-Infinity;
+    const relevant=candidates.filter(x=>x.score>=top-8&&x.score>=50);
+    const entries=relevant.flatMap(g=>{
+      const assigned=assignedByGroup.get(g.index)||new Set();
+      const available=g.entries.filter(e=>!assigned.has(e.cn));
+      for(const e of available)assigned.add(e.cn);
+      assignedByGroup.set(g.index,assigned);
+      return available;
+    });
+    const cnDescriptions=Object.fromEntries(entries.filter(e=>e.description).map(e=>[e.cn,e.description]));
+    const promo=createCampaign(lab,brand,offer,start,end,description,entries.map(e=>e.cn),
+      "RESUMEN",cnDescriptions);
+    // Una fila del RESUMEN siempre es una promoción, aunque otra comparta
+    // laboratorio/marca/oferta: el número de fila estabiliza su identidad.
+    promo.sourceRow=rowNumber;
+    promo.fingerprint=makeFingerprint(promo)+"|RESUMEN:"+rowNumber;
+    promo.id=makeId(promo.fingerprint);
+    if(!entries.length)promo.importWarnings.push("No se localizaron CNs asociados a esta fila de RESUMEN");
     campaigns.push(promo);
   }
-  for(let i=0;i<cnGroups.length;i++){
-    if(assigned.has(i))continue;
-    const g=cnGroups[i];
-    const promo=createCampaign(g.lab,g.range,g.offer,g.start,g.end,g.description,g.cns,"LISTADO CN PROMOCIONES",g.cnDescriptions||{});
-    promo.importWarnings.push("Grupo de CN sin conciliación exacta con RESUMEN: revisar posible duplicado");
-    campaigns.push(promo);
-  }
-  // Duplicados internos: mismos criterios comerciales -> mantener unión de CNs.
-  const result=new Map();
-  for(const p of campaigns){
-    if(result.has(p.fingerprint)){
-      const old=result.get(p.fingerprint);
-      old.cns=[...new Set([...old.cns,...p.cns])];
-      old.cnDescriptions={...old.cnDescriptions,...p.cnDescriptions};
-      old.importWarnings=[...new Set([...old.importWarnings,...p.importWarnings])];
-    }else result.set(p.fingerprint,p);
-  }
-  return [...result.values()];
+  return campaigns;
 }
 export async function readPromotionExcel(file){
   if(!file||file.size>15*1024*1024)throw Error("El fichero es demasiado grande (máximo 15 MB)");
@@ -215,22 +258,20 @@ export async function readPromotionExcel(file){
 // Las fechas del Excel son días civiles del cliente, no UTC del navegador.
 export function importedPromotionStatus(p,now=new Date(),timeZone="Europe/Madrid"){
   const targets=Object.values(p.targets||{});
-  const completeObjectives=targets.length>0&&targets.every(value=>
+  const completeObjectives=targets.some(value=>
     value!==""&&value!==null&&value!==undefined&&
     Number.isSafeInteger(Number(value))&&Number(value)>0);
   if(!completeObjectives)return "Borrador";
   if(!/^\d{4}-\d{2}-\d{2}$/.test(p.start||"")||
-     !/^\d{4}-\d{2}-\d{2}$/.test(p.end||"")||p.start>p.end)return "Borrador";
+     p.end&&(!/^\d{4}-\d{2}-\d{2}$/.test(p.end)||p.start>p.end))return "Borrador";
   const dayParts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{
     timeZone,year:"numeric",month:"2-digit",day:"2-digit"
   }).formatToParts(now).filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
   const today=[dayParts.year,dayParts.month,dayParts.day].join("-");
   // El nombre almacenado sigue siendo Finalizada para compatibilidad histórica.
   // En la interfaz se presenta como Archivada.
-  if(p.end<today)return "Finalizada";
+  if(p.end&&p.end<today)return "Finalizada";
   if(p.start>today)return "Borrador";
-  // Una campaña vigente sin productos válidos no debe activarse por accidente.
-  if(!Array.isArray(p.cns)||!p.cns.length||p.cns.some(cn=>!isValidCN(cn)))return "Borrador";
   return "Activa";
 }
 export function mergeImportedPromos(existing,incoming){

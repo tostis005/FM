@@ -21,9 +21,9 @@ function make({legacy=false,empty=false,headerOnly=false}={}){
  setupPurchaseTotals(app,pool,{requireTenant:()=>[]});
  const context={allowedPharmacyIds:[1],client:{schema:"ampedia",slug:"ampedia"},
   pharmacies:[{id:1,databaseCode:"ABA",name:"Farmacia"}],role:"superadministrador",modules:{}};
- async function call(query={}){const req={query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...query},context};
+ async function call(query={},path="/api/analytics/compras/resumen"){const req={path,query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...query},context};
   let payload,code=200,err;const res={status(n){code=n;return this},json(d){payload=d;return this}};
-  await endpoints.get("/api/analytics/compras/resumen")(req,res,e=>{err=e});if(err)throw err;
+  await endpoints.get(path)(req,res,e=>{err=e});if(err)throw err;
   return {code,payload};
  }
  return {call,calls};
@@ -68,4 +68,15 @@ test("cabeceras de proveedores sin líneas ni importes no se presentan como comp
  assert.equal(payload.kpis.proveedores,1);
  assert.equal(payload.monthly[0].compras,null);
  assert.match(calls[1].sql,/FILTER\(WHERE nullif\(btrim\(t\.articulo_id::text\),''\) IS NOT NULL\)/);
+});
+
+test("Inicio reutiliza recepciones documentales en resumen mensual sin agrupación por proveedor",async()=>{
+ const {call,calls}=make();
+ const {code,payload}=await call({},"/api/analytics/dashboard/compras");
+ assert.equal(code,200);
+ assert.equal(payload.kpis.compras,120);
+ assert.match(calls[1].sql,/NULL::text AS pharmacy/);
+ assert.match(calls[1].sql,/GROUP BY 1 ORDER BY 1/);
+ assert.doesNotMatch(calls[1].sql,/GROUP BY 1,f.id,t.proveedor_id/);
+ assert.ok(calls.every(({sql})=>!sql.includes(".articulos")&&!sql.includes(".fm_ventas_analitica")));
 });

@@ -690,7 +690,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     margen:null
    }));
    const supplierRows=providers.rows.map(r=>({...r,id:key(r.pharmacyId,r.providerId),
-    family:"",products:Number(r.products),units:Number(r.units),
+    family:"",products:Number(r.products),units:r.units==null?null:Number(r.units),
     value:r.value==null?null:Number(r.value),potential:null}));
    const replenishmentRows=stockRows.filter(r=>r.need>0);
    const negativeMargins=salesRows.filter(r=>r.margin!=null&&r.margin<0).map(r=>({

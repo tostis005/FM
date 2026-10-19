@@ -45,10 +45,10 @@ test("familias se limitan a una sola farmacia y sus identificadores ERP",async()
  assert.equal(shared.data.families.length,0);
  assert.equal(calls.length,1);
 });
-test("no permite farmacias ajenas ni recuentos del histórico completo",async()=>{
+test("no permite farmacias ajenas ni fechas fuera del intervalo permitido",async()=>{
  const {call,calls,ctx}=make();
  assert.equal((await call("recuento",{farmacias:"9",desde:"2025-11-01",hasta:"2026-10-18"})).status,403);
- assert.equal((await call("recuento",{farmacias:"5",desde:"2020-01-01",hasta:"2026-10-18"})).status,400);
+ assert.equal((await call("recuento",{farmacias:"5",desde:"1899-01-01",hasta:"2026-10-18"})).status,400);
  assert.equal((await call("familias",{farmacias:"9"})).status,403);
  assert.equal(calls.length,0);
  assert.throws(()=>buildRecentProductCountSQL('ampedia";DROP TABLE t;--'));
@@ -68,10 +68,13 @@ test("sin caché: cada recuento va a PostgreSQL",async()=>{
  await call("recuento",{...filters,farmacias:"1"});
  assert.equal(calls.length,4,"farmacia diferente sigue autorizada");
 });
-test("un usuario no puede ampliar desde la URL la ventana ABCD del administrador",async()=>{
- const {call,calls,ctx}=make();
- assert.equal((await call("recuento",{farmacias:"5",desde:"2026-08-01",hasta:"2026-10-18"})).status,400);
- const c24={...ctx,client:{...ctx.client,analysisMonths:24}};
- assert.equal((await call("recuento",{farmacias:"5",desde:"2024-11-01",hasta:"2026-10-18"},c24)).status,200);
- assert.equal(calls.length,1);
+test("el recuento de artículos usa exactamente el período elegido y no 12 meses",async()=>{
+ const {call,calls}=make();
+ for(const [from,to] of [["2026-08-01","2026-10-18"],["2026-10-18","2026-10-18"],
+  ["1900-01-01","2026-10-18"]]){
+  const result=await call("recuento",{farmacias:"5",desde:from,hasta:to});
+  assert.equal(result.status,200);
+  assert.deepEqual(calls.at(-1).params,[["VAL"],from,to]);
+  assert.equal(result.data.from,from);
+ }
 });

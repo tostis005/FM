@@ -3,6 +3,7 @@ import {filterSortRows,pageRows} from "./listLogic.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingFrame} from "./LoadingState.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import {integer} from "./localeES.js";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -12,7 +13,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
   const pages=Math.max(1,Math.ceil(total/pageSize));
   const current=Math.max(0,Math.min(page,pages-1));
   return <div className="list-pagination" aria-label={"Paginación de "+label}>
-    <span className="list-page-count">{total?current*pageSize+1:0}–{Math.min((current+1)*pageSize,total)} de {total} {label}</span>
+    <span className="list-page-count">{integer(total?current*pageSize+1:0)}–{integer(Math.min((current+1)*pageSize,total))} de {integer(total)} {label}</span>
     <label className="list-page-size">Por página
       <select value={pageSize} onChange={e=>onPageSizeChange(Number(e.target.value))} aria-label={"Registros por página de "+label}>
         {PAGE_SIZES.map(n=><option value={n} key={n}>{n}</option>)}
@@ -21,7 +22,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     <div className="list-page-buttons">
       <button type="button" disabled={current===0||loading} onClick={()=>onPageChange(0)} aria-label="Primera página">«</button>
       <button type="button" disabled={current===0||loading} onClick={()=>onPageChange(current-1)}>Anterior</button>
-      <span>Página {current+1} de {pages}</span>
+      <span>Página {integer(current+1)} de {integer(pages)}</span>
       <button type="button" disabled={current>=pages-1||loading} onClick={()=>onPageChange(current+1)}>Siguiente</button>
       <button type="button" disabled={current>=pages-1||loading} onClick={()=>onPageChange(pages-1)} aria-label="Última página">»</button>
     </div>

@@ -6,14 +6,12 @@ import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingSta
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
-const money=value=>value==null?"—":new Intl.NumberFormat("es-ES",
- {style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(value));
-const number=value=>value==null?"—":new Intl.NumberFormat("es-ES",
- {maximumFractionDigits:0}).format(Number(value));
-const unitPrice=value=>value==null?"—":new Intl.NumberFormat("es-ES",
- {style:"currency",currency:"EUR",maximumFractionDigits:4}).format(Number(value));
-const labelDate=d=>d?new Date(d).toLocaleDateString("es-ES"):"—";
+const money=euro;
+const number=integer;
+const unitPrice=euro;
+const labelDate=dateES;
 function Metric({label,value,caption,loading}){
  return <div className="card fm-generic-metric" aria-busy={loading}>
    <span>{label}</span>{loading?<div role="status" aria-label={"Cargando "+label} className="fm-kpi-spinner"><span className="fm-load-spinner"/><small>Cargando…</small></div>:
@@ -23,8 +21,11 @@ function Metric({label,value,caption,loading}){
 function downloadRows(rows){
  const data=[["Conjunto DCPF","Nombre","Molécula","Códigos","ABCD","Ventas (€)","Unidades vendidas",
    "Compras (€)","PUC medio","Mejor PUC","Ahorro orientativo"],
-  ...rows.map(g=>[g.dcpf,g.name,g.principle,g.skuCount,g.abcdClass,g.revenue,g.salesUnits,g.spent,
-    g.averagePuc,g.bestPuc,g.indicativeSavings])];
+  ...rows.map(g=>{
+   const n=v=>v==null?"":quantity(v);
+   return [g.dcpf,g.name,g.principle,integer(g.skuCount),g.abcdClass,n(g.revenue),
+    n(g.salesUnits),n(g.spent),n(g.averagePuc),n(g.bestPuc),n(g.indicativeSavings)];
+  })];
  const csv="\ufeff"+data.map(r=>r.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
  const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
  const a=document.createElement("a");a.href=url;a.download="farmetrica-genericos-conjuntos.csv";a.click();
@@ -62,9 +63,9 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
     return <tr key={product.cn}><td className="fm-generic-code">{product.cn}</td>
      <td>{product.nombre}</td><td>{product.laboratorio||product.laboratorio_codigo||"—"}</td>
      <td>{product.generico?"Genérico":"Equivalente de referencia"}</td>
-     <td>{data.salesAvailable?number(sales?.units||0):"—"}</td>
+     <td>{data.salesAvailable?quantity(sales?.units||0):"—"}</td>
      <td>{data.salesAvailable?money(sales?.revenue||0):"—"}</td>
-     <td>{data.purchasesAvailable?number(buyQty):"—"}</td>
+     <td>{data.purchasesAvailable?quantity(buyQty):"—"}</td>
      <td>{unitPrice(avg)}</td></tr>;
    })}</tbody>
   </table></HorizontalTableScroll>
@@ -75,7 +76,7 @@ function GroupDetail({group,query,clientSlug,useReal=false}){
     <thead><tr><th>CN</th><th>Proveedor de compra</th><th>Unidades</th><th>PUC real ponderado</th><th>Referencia histórica</th><th>Objetivo equivalente</th><th>Proveedor objetivo</th><th>Ahorro estimado</th><th>Importe</th></tr></thead>
     <tbody>{data.purchases.map((r,i)=><tr key={r.cn+"_"+r.supplierCode+"_"+i}>
      <td className="fm-generic-code">{r.cn}</td><td>{r.supplier||r.supplierCode||"Sin proveedor"}</td>
-     <td>{number(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{unitPrice(r.referencePuc)}</td>
+     <td>{quantity(r.units)}</td><td>{unitPrice(r.puc)}</td><td>{unitPrice(r.referencePuc)}</td>
      <td>{unitPrice(r.targetPuc)}</td>
      <td>{r.targetSupplier?(r.targetSupplier+(r.targetCn?" · CN "+r.targetCn:"")):"—"}</td>
      <td>{money(r.potential)}</td><td>{money(r.spend)}</td>
@@ -187,7 +188,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   </p>}
   <div className="fm-generic-metrics">
    <Metric label="Conjuntos genéricos" loading={loading} value={number(totals.count)} caption=""/>
-   <Metric label="Unidades vendidas" loading={loading} value={number(totals.units)} caption=""/>
+   <Metric label="Unidades vendidas" loading={loading} value={quantity(totals.units)} caption=""/>
    <Metric label="Ventas netas" loading={loading} value={money(totals.revenue)} caption=""/>
    <Metric label="Compras registradas" loading={loading} value={money(totals.spend)} caption=""/>
    <Metric label="Ahorro potencial" loading={loading} value={data?.summary?.savings==null?"—":money(data.summary.savings)} caption=""/>
@@ -232,10 +233,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
        <td>{number(g.skuCount)} <small>({g.genericCount} EFG)</small></td>
        <td>{g.abcdClass?<span className={"fm-abcd fm-abcd-"+g.abcdClass} title="Clasificación por peso de ventas del conjunto en el período">{g.abcdClass}</span>:"—"}</td>
-       <td>{number(g.salesUnits)}</td><td>{money(g.revenue)}</td>
+       <td>{quantity(g.salesUnits)}</td><td>{money(g.revenue)}</td>
        <td>{unitPrice(g.averagePuc)}</td><td>{unitPrice(g.averagePvp)}</td>
        <td>{g.averagePvp!=null&&g.averagePuc!=null?unitPrice(g.averagePvp-g.averagePuc):"—"}</td>
-       <td>{g.pvpMarginPct==null?"—":number(g.pvpMarginPct)+" %"}</td>
+       <td>{g.pvpMarginPct==null?"—":percentage(g.pvpMarginPct)}</td>
        <td>{unitPrice(g.bestPuc)}</td><td>{money(g.indicativeSavings)}</td>
        <td><button type="button" className="fm-generic-expand" aria-label={"Desplegar conjunto "+g.dcpf}
         aria-expanded={active===g.dcpf} onClick={e=>{e.stopPropagation();setActive(active===g.dcpf?null:g.dcpf)}}>

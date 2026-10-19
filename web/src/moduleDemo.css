@@ -254,3 +254,13 @@
  line-height:1.25;white-space:nowrap;overflow-wrap:normal;word-break:normal;
  font-variant-numeric:tabular-nums
 }
+
+/* KPI legibles: tarjetas más anchas antes de reducir el tamaño de las cifras. */
+.fm-demo-v2 .fm-demo-kpis{grid-template-columns:repeat(auto-fit,minmax(min(245px,100%),1fr))}
+.fm-demo-v2 .fm-demo-kpi>strong{
+ font-size:clamp(18px,8.4cqi,27px);letter-spacing:-.04em;
+ white-space:nowrap;overflow-wrap:normal;word-break:normal
+}
+.fm-dashboard-lazy-detail{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between;padding:15px 4px;color:#577365;font-size:13px}
+.fm-dashboard-lazy-detail p{margin:0;flex:1 1 230px;line-height:1.5}
+@media(max-width:720px){.fm-demo-v2 .fm-demo-kpis{grid-template-columns:minmax(0,1fr)}}

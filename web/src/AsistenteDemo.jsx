@@ -16,9 +16,9 @@ const SUGGESTIONS = [
 function demoReply(question) {
   const q = question.toLocaleLowerCase("es-ES");
   if (/stock|inmoviliz|sobrestock|existencias/.test(q))
-    return "Cuando conectemos los datos, analizaré las existencias, la rotación y las ventas por farmacia para identificar el stock inmovilizado. Esta versión es una maqueta: todavía no tiene cifras reales.";
+    return "Cuando conectemos los datos, analizaré las existencias, la rotación y las ventas por farmacia para identificar el stock inmovilizado. Esta función todavía no está disponible.";
   if (/margen|rentab|beneficio|pvp|precio/.test(q))
-    return "Podré comparar precios de venta, costes de compra, unidades y evolución del margen para explicarte las diferencias. Por ahora no hay consultas ni resultados reales conectados.";
+    return "Podré comparar precios de venta, costes de compra, unidades y evolución del margen para explicarte las diferencias. Esta función todavía no puede consultar resultados.";
   if (/venta|rotaci|artículo|producto|genéric/.test(q))
     return "El asistente podrá cruzar ventas, productos, periodos y farmacias, con las mismas definiciones que los informes. Esta conversación solo demuestra cómo funcionará la interfaz.";
   if (/compra|proveedor|ahorro|descuento/.test(q))
@@ -457,7 +457,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                             <p>{message.text}</p>
                             
                           </div>
-                          <time className="fm-ai-msg-time">{message.time}{message.role === "assistant" ? " · Respuesta de demostración" : ""}</time>
+                          <time className="fm-ai-msg-time">{message.time}{message.role === "assistant" ? "" : ""}</time>
                         </div>
                       </div>
                     ))}

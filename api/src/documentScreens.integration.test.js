@@ -75,6 +75,7 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   const lines=await ticketLines();
   assert.equal(lines.status,200);
   assert.equal(lines.body.lines.length,2,"El ticket real debe mostrar todas sus líneas");
+  assert.ok(Object.hasOwn(lines.body.lines[0],"discountType"),"El tipo de descuento debe venir de la línea ERP");
   assert.equal(Number(lines.body.lines.reduce((v,x)=>v+Number(x.amount),0)),15);
   const noAccess=await ticketLines({farmacia:"99",farmacias:"99"});
   assert.equal(noAccess.status,403,"No se pueden abrir tickets de farmacias ajenas");

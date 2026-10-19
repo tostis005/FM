@@ -15,6 +15,7 @@ const DATE=v=>v?new Date(v).toLocaleString("es-ES",{day:"2-digit",month:"2-digit
  hour:"2-digit",minute:"2-digit"}):"—";
 const EUR=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(v));
 const UNITS=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(v));
+const DECIMAL=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(Number(v));
 const PCT=v=>v==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(v)+" %";
 const TXT=v=>v===null||v===undefined||v===""?"—":String(v);
 const nowZone=slug=>slug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -196,12 +197,12 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
        {ticketDetail.loading?<p role="status">Cargando líneas reales…</p>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
-         {["Línea","Código de artículo","Unidades","Precio unidad","Descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
+         {["Línea","Código de artículo","Unidades","Precio unidad","Descuento (valor ERP)","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
         </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>
          <td>{TXT(line.lineId)}</td><td>{TXT(line.articleId)}</td><td>{UNITS(line.units)}</td>
-         <td>{EUR(line.unitPrice)}</td><td>{EUR(line.discount)}</td><td>{EUR(line.amount)}</td>
+         <td>{EUR(line.unitPrice)}</td><td>{DECIMAL(line.discount)}</td><td>{TXT(line.discountType)}</td><td>{EUR(line.amount)}</td>
          <td>{EUR(line.historicalCost)}</td></tr>)}
-         {!ticketDetail.lines.length&&<tr><td colSpan="7">El documento no tiene líneas visibles.</td></tr>}
+         {!ticketDetail.lines.length&&<tr><td colSpan="8">El documento no tiene líneas visibles.</td></tr>}
         </tbody></table></HorizontalTableScroll>}
        {ticketDetail.truncated&&<p role="status">El ticket tiene más de 500 líneas; se muestran las primeras 500.</p>}
       </section>}

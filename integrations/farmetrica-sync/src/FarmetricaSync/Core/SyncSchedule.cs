@@ -25,7 +25,10 @@ public static class SyncSchedule
             // Un intento confirmado para ese horario evita ejecutarlo otra vez,
             // aunque haya dado error o el servicio Windows se haya reiniciado.
             // Las ejecuciones manuales posteriores al horario también lo consumen.
-            if (state?.LastAttemptUtc is { } attempted && attempted >= slotToday)
+            // También cubrir cargas iniciadas ANTES de la hora fija que acaban
+            // DESPUÉS de ella: no reintentar inmediatamente tras una carga larga.
+            if ((state?.LastAttemptUtc is { } attempted && attempted >= slotToday) ||
+                (state?.LastCompletedUtc is { } finished && finished >= slotToday))
                 return ToUtcSlot(localToday.AddDays(1), hour, zone);
             return slotToday;
         }

@@ -256,8 +256,9 @@ function App(){
         // reconciliar las campañas en segundo plano sin bloquear Inicio.
         if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
         const loaded=await tenantState(ctx,body.user.email);
-        if(live)setData(current=>({...current,promos:loaded.promos,
-          objectiveSeedVersion:loaded.objectiveSeedVersion}));
+        if(live&&localStorage.getItem("fm_active_tenant")===ctx.client.slug)
+          setData(current=>({...current,promos:loaded.promos,
+           objectiveSeedVersion:loaded.objectiveSeedVersion}));
       })
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};

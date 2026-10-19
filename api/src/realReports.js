@@ -89,7 +89,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        ORDER BY t.fecha DESC LIMIT 1`,values:[value],query_timeout:12000});
      lastOutside=last.rows[0]?.fecha||null;
     }
-    return {pharmacyId:String(pharmacy.id),name:pharmacy.name,
+    return {pharmacyId:String(pharmacy.id),name:pharmacy.name||"Farmacia "+pharmacy.id,
       hasPeriodPurchases:inPeriod.rows.length>0,
       latestPurchaseDate:(inPeriod.rows[0]?.fecha||lastOutside||null)};
    }));
@@ -651,7 +651,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const abcd=classifyAbcd(abcdUniverse,{scope:r=>r.pharmacyId});
    for(const collection of [salesRows,buyRows,stockRows]){
     for(const row of collection){
-     row.abcdClass=sales?(abcd.get(key(row.pharmacyId,row.cn))||"D"):null;
+     row.abcdClass=sales&&readSalesRows?(abcd.get(key(row.pharmacyId,row.cn))||"D"):null;
     }
    }
    // ABCD utiliza el universo completo aunque el listado esté truncado.

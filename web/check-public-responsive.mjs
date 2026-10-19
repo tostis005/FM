@@ -44,6 +44,21 @@ try{
        details.logo.right<=0||details.logo.left>viewport.width||!details.logoVisible||!details.logoLoaded)
       throw Error("El nuevo logotipo no se muestra: "+JSON.stringify(details));
     if(!details.links)throw Error("Página pública sin navegación");
+    if(path==="/solicitar-demo/"){
+      const labels=await page.locator(".demo-form .field-label .required-mark").count();
+      if(labels<6)throw Error("Campos obligatorios sin marcador visible");
+      const alignment=await page.locator(".demo-form .field-label").evaluateAll(nodes=>nodes.map(el=>{
+        const marker=el.querySelector(".required-mark");
+        if(!marker)return true;
+        const textNode=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim());
+        if(!textNode)return false;
+        const range=document.createRange();range.selectNodeContents(textNode);
+        const labelRects=[...range.getClientRects()];
+        const markerBox=marker.getBoundingClientRect();
+        return labelRects.some(rect=>Math.abs(rect.top-markerBox.top)<10);
+      }));
+      if(alignment.some(x=>!x))throw Error("Asterisco obligatorio en otra línea");
+    }
     if(path==="/landing.html"){
       if(!await page.getByRole("heading",{level:1}).count())throw Error("Falta H1");
       if(viewport.width<=414){

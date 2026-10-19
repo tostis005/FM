@@ -96,7 +96,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    res.json({available:true,from:f.from,to:f.to,page,pageSize:size,
     total:Number(rows[0]?.total||0),
     rows:rows.map((r,i)=>({id:String(r.pharmacyId)+"|"+String(r.sourceId||r.reference||"recepcion")+"|"+((page-1)*size+i),
-     pharmacyId:String(r.pharmacyId),reference:r.reference,date:r.date,
+     pharmacyId:String(r.pharmacyId),sourceId:r.sourceId,reference:r.reference,date:r.date,
      supplier:r.supplier||null,supplierId:r.supplierId||null,
      orderNumber:r.orderNumber||null,receiptNumber:r.receiptNumber||null}))});
   }catch(e){next(e)}

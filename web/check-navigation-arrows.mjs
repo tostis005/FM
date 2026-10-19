@@ -46,7 +46,7 @@ try{
  await page.getByRole("button",{name:"Preparador de pedidos"}).waitFor({state:"visible"});
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  await page.getByRole("button",{name:"Ocultar subopciones de Promociones"}).waitFor();
- await page.getByRole("button",{name:"Seguimiento",exact:true}).waitFor({state:"visible"});
+ await page.getByRole("navigation",{name:"Módulos"}).getByRole("button",{name:"Seguimiento",exact:true}).waitFor({state:"visible"});
  await page.setViewportSize({width:390,height:780});
  await page.getByRole("button",{name:"Abrir menú"}).click();
  await page.getByRole("button",{name:"Ocultar subopciones de Promociones"}).waitFor({state:"visible"});

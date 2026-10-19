@@ -55,7 +55,8 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       count(*) FILTER(WHERE generico)::int AS "genericCount",
       count(DISTINCT nullif(laboratorio_codigo,''))::int AS "labCount"
       FROM farmetrica.nomenclator_presentaciones
-      GROUP BY dcpf HAVING bool_or(generico)`),
+      ${detail?"WHERE dcpf=$1":""}
+      GROUP BY dcpf HAVING bool_or(generico)`,detail?[selectedDcpf]:[]),
     readPricePolicy(pool,req.context.client.slug)
    ]);
    if(!version.rows.length)return res.json({version:null,groups:[],totalGroups:0,summary:{},
@@ -74,6 +75,23 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     return res.status(422).json({error:"Este cliente todavía no dispone del contrato normalizado para genéricos"});
    }
    const args=[f.from,f.to,f.ids,req.context.client.slug];
+   // No reagrupar todo el histórico para abrir un único DCPF.
+   let detailArticles=[];
+   if(detail&&f.ids.length){
+    const codes=(req.context.pharmacies||[]).filter(p=>f.ids.includes(Number(p.id)))
+      .map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase());
+    const [local,official]=await Promise.all([
+     pool.query(`SELECT DISTINCT a.origen_id AS id
+      FROM ${schema}.articulos a JOIN farmetrica.nomenclator_presentaciones n
+        ON n.cn=nullif(btrim(a.codigo_nacional),'')
+      WHERE n.dcpf=$1 AND upper(btrim(a.farmacia_codigo))=ANY($2::text[])`,
+      [selectedDcpf,codes]),
+     pool.query("SELECT cn FROM farmetrica.nomenclator_presentaciones WHERE dcpf=$1",[selectedDcpf])
+    ]);
+    detailArticles=[...new Set([...local.rows.map(x=>x.id),...official.rows.map(x=>x.cn)].filter(Boolean))];
+   }
+   const scopedArticles=detail?"AND v.articulo_id=ANY($5::text[])":"";
+   const scopedArgs=detail?[...args,detailArticles,selectedDcpf]:args;
    const art=`LEFT JOIN LATERAL(
       SELECT codigo_nacional,pvp,pmc,nombre FROM ${schema}.articulos a
       WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(c.farmacia_codigo))
@@ -94,12 +112,13 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
           AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("scope")}
         WHERE scope.id=ANY($3::int[])
           AND v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day'
+          ${scopedArticles}
         GROUP BY v.farmacia_codigo,v.articulo_id
       )
       SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
         sum(c.unidades)::float8 AS units,sum(c.importe)::float8 AS revenue
       FROM c ${ph} ${art} ${nJoin}
-      WHERE f.id=ANY($3::int[]) GROUP BY n.dcpf,n.cn,f.id`,args):{rows:[]},
+      WHERE f.id=ANY($3::int[]) ${detail?"AND n.dcpf=$6":""} GROUP BY n.dcpf,n.cn,f.id`,scopedArgs):{rows:[]},
     hasBuys&&f.ids.length?pool.query(`
       WITH c AS MATERIALIZED (
         SELECT v.farmacia_codigo,v.articulo_id,v.proveedor_id,
@@ -116,6 +135,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
         WHERE scope.id=ANY($3::int[]) AND v.fecha>=$1::date
           AND v.fecha<$2::date+interval '1 day'
           AND ${includedPurchaseSupplier({tenant:"$4",code:"v.proveedor_id",name:"v.proveedor_nombre"})}
+          ${scopedArticles}
         GROUP BY v.farmacia_codigo,v.articulo_id,v.proveedor_id
       )
       SELECT n.dcpf,n.cn,f.id::int AS "pharmacyId",
@@ -130,8 +150,8 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       sum(c.unidades) FILTER(WHERE c.unidades>0 AND a.pvp>0)::float8 AS "pvpUnits",
       sum(c.lines)::int AS "purchaseLines"
       FROM c ${ph} ${art} ${nJoin}
-      WHERE f.id=ANY($3::int[])
-      GROUP BY n.dcpf,n.cn,f.id,c.proveedor_id`,args):{rows:[]}
+      WHERE f.id=ANY($3::int[]) ${detail?"AND n.dcpf=$6":""}
+      GROUP BY n.dcpf,n.cn,f.id,c.proveedor_id`,scopedArgs):{rows:[]}
    ]);
    // No confundir período de visualización y ventana de referencia:
    // esta última termina el mismo día del informe y utiliza meses/pct por farmacia.
@@ -155,6 +175,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       WHERE f.id=ANY($2::int[]) AND c.fecha <= $1::date+interval '1 day'
         AND c.fecha >= ($1::date-make_interval(months=>coalesce(pl.meses,pg.meses,6)))
         AND c.unidades>0 AND c.coste_unitario>0
+        ${detail?"AND c.articulo_id=ANY($4::text[])":""}
         AND ${includedPurchaseSupplier({tenant:"$3",code:"c.proveedor_id",name:"c.proveedor_nombre"})}
       GROUP BY f.id,c.farmacia_codigo,c.articulo_id,c.proveedor_id,
         c.coste_unitario,coalesce(pl.percentil,pg.percentil,20)
@@ -164,6 +185,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       FROM c
       ${art}
       ${nJoin}
+      ${detail?"WHERE n.dcpf=$5":""}
     ), ranked AS (
       SELECT raw.*,
         sum(qty) OVER (PARTITION BY pharmacy,dcpf,cn,supplier) AS total_qty,
@@ -181,7 +203,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     FROM eligible
     GROUP BY pharmacy,dcpf,cn,supplier
     HAVING sum(lines)>=3 AND sum(selected_qty)>0
-   `,[f.to,f.ids,req.context.client.slug]):{rows:[]};
+   `,detail?[f.to,f.ids,req.context.client.slug,detailArticles,selectedDcpf]:[f.to,f.ids,req.context.client.slug]):{rows:[]};
    const refByGroup=new Map();
    for(const r of refs.rows){
     const k=String(r.pharmacyId)+"|"+r.dcpf;

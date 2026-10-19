@@ -2,6 +2,7 @@
 // clasificación ABCD ni coste de cada artículo. Solo datos reales del período.
 import {getFilters} from "./realReports.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {includedPurchaseSupplier} from "./supplierReporting.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function setupPurchaseTotals(app,pool,{requireTenant}){
  // Registros de recepción importados desde el ERP, paginados de verdad.
@@ -50,7 +51,8 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    const orderNumber=col("numero_pedido");
    const date=`to_char(t.fecha,'DD/MM/YYYY')`;
    const where=[`t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'`,
-    "f.id=ANY($3::int[])"];
+    "f.id=ANY($3::int[])",includedPurchaseSupplier({tenant:"$4",code:"t.proveedor_id",
+      name:names.has("proveedor_nombre")?"t.proveedor_nombre":null})];
    const expressions={reference,supplier,pharmacy:"f.nombre",date,orderNumber};
    const values=[f.from,f.to,f.ids,req.context.client.slug];
    if(f.search){
@@ -129,6 +131,8 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     FROM "${schema}".compras t ${join}
     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
      AND f.id=ANY($3::int[])
+     AND ${includedPurchaseSupplier({tenant:"$4",code:"t.proveedor_id",
+       name:names.has("proveedor_nombre")?"t.proveedor_nombre":null})}
     GROUP BY 1,f.id,t.proveedor_id ORDER BY 1`,
     [f.from,f.to,f.ids,req.context.client.slug]);
    const months=new Map(),suppliers=new Set();

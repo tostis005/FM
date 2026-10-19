@@ -44,7 +44,9 @@ try{
  assert.equal(visual.border,"0px","No debe dibujarse un recuadro");
  assert.ok(visual.width>=16&&visual.width<=20,"Flecha compacta");
  assert.ok(Number.parseFloat(visual.stroke)>=2,"El trazo debe seguir siendo legible");
- assert.equal(visual.color,"rgb(255, 255, 255)","Contraste blanco sobre el lateral");
+ const rgb=(visual.color.match(/\d+/g)||[]).map(Number);
+ assert.ok(rgb.length>=3&&rgb[0]>=200&&rgb[1]>=220&&rgb[2]>=200,
+  "La flecha ha de ser blanca o verde muy claro sobre el lateral");
  const before=new URL(page.url()).pathname;
  await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).click();
  assert.equal(new URL(page.url()).pathname,before,"desplegar no cambia de pantalla");

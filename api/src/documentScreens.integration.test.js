@@ -8,6 +8,9 @@ test("consulta documental sólo acepta esquemas y apartados permitidos",()=>{
  assert.throws(()=>buildDocumentScreenSQL("otra","ampedia"),/inválido/);
  assert.throws(()=>buildDocumentScreenSQL("ventas-tickets","ampedia",new Set(),"injection"),/Orden incorrecto/);
  assert.ok(buildDocumentScreenSQL("ventas-tickets","ampedia").includes("fm_ventas_analitica"));
+ assert.ok(buildDocumentScreenSQL("compras-recepciones","ampedia").includes("fm_recepciones_analitica"));
+ assert.match(buildDocumentScreenSQL("compras-recepciones","ampedia"),/ignorar_informes=true/);
+ assert.throws(()=>buildDocumentScreenSQL("compras-recepciones","ampedia",new Set(),"DROP"),/Orden incorrecto/);
  assert.ok(buildDocumentScreenSQL("compras-devoluciones","ampedia").includes("fm_recepciones_analitica"));
  assert.ok(!buildDocumentScreenSQL("productos","ampedia",new Set(["farmacia_codigo","origen_id","nombre"])).includes(".ventas "));
  assert.ok(Object.hasOwn(DOCUMENT_SORT["productos"],"sourceId"));
@@ -46,6 +49,16 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   if(exception)throw exception;
   return {body,status};
  }
+ async function receiptLines(params={},ctx=context){
+  const req={query:{desde:"2026-10-01",hasta:"2026-10-19",farmacias:"1",
+    farmacia:"1",sistema:"farmatic",documento:"SCREEN-CI-R1",...params},
+   params:{},context:ctx,user:{role:ctx.role,email:"test@example.invalid"}};
+  let body,status=200;const res={status(x){status=x;return res},json(x){body=x;return res}};
+  let exception;await routes["/api/analytics/pantallas/compras-recepciones/lineas"](
+   req,res,e=>{exception=e});
+  if(exception)throw exception;
+  return {body,status};
+ }
  try{
   await db.query("BEGIN");
   await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
@@ -70,6 +83,17 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   await db.query(`INSERT INTO ampedia.fm_recepciones_lineas
    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,coste_neto,devuelta)
    VALUES ('ABA','farmatic','SCREEN-CI-RDEV','1','ART-01',3,6,true)
+   ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO ampedia.fm_recepciones_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,numero_albaran,
+    proveedor_origen_id,lineas_completas)
+   VALUES ('ABA','farmatic','SCREEN-CI-R1','2026-10-18','ALB-CI-R1','PR1',true)
+   ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO ampedia.fm_recepciones_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+    cantidad,coste_neto,precio_unitario_bruto)
+   VALUES ('ABA','farmatic','SCREEN-CI-R1','1','ART-01',2,6,4),
+          ('ABA','farmatic','SCREEN-CI-R1','2','ART-02',3,15,6)
    ON CONFLICT DO NOTHING`);
   const ticket=await call("ventas-tickets",{buscar:"SCREEN-CI-V1"});
   assert.equal(ticket.status,200);assert.equal(ticket.body.total,1);
@@ -101,6 +125,28 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
   assert.equal(purchase.body.total,1);
   assert.equal(purchase.body.rows[0].supplier,"PR1");
   assert.equal(Number(purchase.body.rows[0].amount),-6);
+  const receipt=await call("compras-recepciones",{buscar:"ALB-CI-R1"});
+  assert.equal(receipt.status,200);
+  assert.equal(receipt.body.total,1,"Dos líneas no deben producir dos recepciones");
+  assert.equal(Number(receipt.body.rows[0].lines),2);
+  assert.equal(Number(receipt.body.rows[0].units),5);
+  assert.equal(Number(receipt.body.rows[0].amount),21);
+  assert.equal(Number(receipt.body.summary.value),21);
+  assert.equal(Number(receipt.body.summary.units),5);
+  const receiptDetails=await receiptLines();
+  assert.equal(receiptDetails.status,200);
+  assert.equal(receiptDetails.body.lines.length,2);
+  assert.equal(Number(receiptDetails.body.lines[0].netUnitCost),3);
+  assert.equal(Number(receiptDetails.body.lines[1].netUnitCost),5);
+  assert.equal(Number(receiptDetails.body.lines.reduce((s,l)=>s+Number(l.amount),0)),21);
+  const noReceiptAccess=await receiptLines({farmacia:"99",farmacias:"99"});
+  assert.equal(noReceiptAccess.status,403);
+  const invalidReceipt=await receiptLines({documento:""});
+  assert.equal(invalidReceipt.status,400);
+  const anotherPharmacy=await call("compras-recepciones",{farmacias:"2",buscar:"ALB-CI-R1"});
+  assert.equal(anotherPharmacy.body.total,0,"El documento debe aislarse por farmacia");
+  const badOrder=await call("compras-recepciones",{orden:"SQL Injection"});
+  assert.equal(badOrder.status,400);
   const catalog=await call("productos",{buscar:"ART-01"});
   assert.equal(catalog.status,200);assert.ok(catalog.body.total>=1);
   assert.equal(catalog.body.rows[0].sourceId,"ART-01");

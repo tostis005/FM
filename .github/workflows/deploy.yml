@@ -129,9 +129,19 @@ jobs:
         run: |
           set -euo pipefail
           for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 014_clientes_demo.sql 015_cache_analitica_ventas.sql 016_modelo_documental.sql 018_lectura_documental.sql 016_operativa_manual.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
-            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-              'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
-              < "api/src/migrations/$migration"
+            for attempt in 1 2 3 4 5; do
+              if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+                  'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
+                  < "api/src/migrations/$migration"; then
+                break
+              fi
+              if [ "$attempt" = 5 ]; then
+                echo "::error::No se pudo aplicar $migration tras 5 intentos."
+                exit 1
+              fi
+              echo "::warning::Reintento de $migration por bloqueo concurrente."
+              sleep "$((attempt*5))"
+            done
           done
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao

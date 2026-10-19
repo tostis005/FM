@@ -452,7 +452,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     searchReady,tableSort.key,tableSort.direction]);
 
  useEffect(()=>{
-  if(module==="ventas"){setReportLoading(false);return}
+  if(module==="ventas"||receiptMode){setReportLoading(false);if(receiptMode){setRealReport(null);setReportError("")}return}
   if(!period.valid){setReportLoading(false);setRealReport(null);return}
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,modulo:module});
@@ -471,7 +471,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .catch(e=>{if(!controller.signal.aborted){setRealReport(null);setReportError(e.message)}})
    .finally(()=>{if(!controller.signal.aborted)setReportLoading(false)});
   return()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,tableSort.key,tableSort.direction,activeTableFilters]);
+ },[module,clientSlug,ids,period.from,period.to,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,tableSort.key,tableSort.direction,activeTableFilters,receiptMode]);
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
  useEffect(()=>{sessionStorage.setItem(storageKey,JSON.stringify(filters))},[filters,storageKey]);
@@ -501,7 +501,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  });
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null||Boolean(fastSales);
- const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||filters.search!==searchReady||pendingTableFilters)&&period.valid;
+ const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||receiptLoading||filters.search!==searchReady||pendingTableFilters)&&period.valid;
  const canShowKpi=key=>realKpis[key]!=null;
  const realRevenue=hasSales?(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.ventas||0),0)??0:null;
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
@@ -536,7 +536,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
        Boolean(REPORT_GLOBAL_FILTER_FIELDS[module]?.includes(col.key)),
      sortable:receiptMode?false:remoteFields?remoteFields.includes(col.key):
        limited?false:col.sortable}));
- const chartConfig=SERIES[module]||SERIES.dashboard;
+ const chartConfig=receiptMode?["recepciones",null,"Recepciones registradas"]:SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;
  const chartLoading=module==="compras"&&shouldLoadPurchaseSummary?
    (!fastPurchase&&!purchaseSummaryError):
@@ -676,8 +676,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
       <YAxis tickLine={false} axisLine={false} width={92} fontSize={10}
-       tickFormatter={v=>chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
-      <Tooltip formatter={(v,key)=>[key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
+       tickFormatter={v=>chartSeries[0]==="recepciones"?integer(v):chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
+      <Tooltip formatter={(v,key)=>[key==="recepciones"?integer(v):key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
       <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
       {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
      </BarChart>
@@ -708,13 +708,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      onPageChange:setReceiptPage,onPageSizeChange:n=>{setReceiptSize(n);setReceiptPage(1)}
     }:null}
     rows={rows} rowKey={r=>r.id}
-    sort={receiptMode?undefined:remoteSort} onSortChange={!receiptMode&&remoteSort?changeTableSort:undefined} defaultSort={receiptMode?null:tableSort} label={receiptMode?"recepciones":"registros"} loading={receiptMode?receiptLoading:isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
-     module==="compras"&&fastPurchase?.sourceRows>0&&fastPurchase?.hasArticleLines===false?
-       "Se han importado registros de proveedor, pero ninguna línea de compra con artículo. Comprueba la consulta del sincronizador.":
-     module==="compras"&&purchaseState?.hasPurchases?
-       "Hay compras sincronizadas. Si el listado está vacío, revisa los filtros o el estado de la consulta.":
-       available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
-    onRowClick={receiptMode?undefined:row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
+    sort={receiptMode?undefined:remoteSort} onSortChange={!receiptMode&&remoteSort?changeTableSort:undefined} defaultSort={receiptMode?null:tableSort} label={receiptMode?"recepciones":"registros"} loading={receiptMode?receiptLoading:isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"}
+    onRowClick={receiptMode?undefined:row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)}
+    emptyText={receiptMode?"No se encontraron recepciones para esta búsqueda, período o farmacia.":reportError?"No se pudo consultar el informe":available?"No hay resultados":"Sin datos disponibles"} columns={columns}/>
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}
       onClick={()=>setDetailPage(n=>n+1)}>

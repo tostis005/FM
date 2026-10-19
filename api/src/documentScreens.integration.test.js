@@ -183,7 +183,7 @@ test("PostgreSQL: evolución de movimientos documentados sin inventar saldos his
   assert.equal(res.status,200);
   assert.equal(res.body.total,2,"Sólo dos fechas con documentos para la farmacia autorizada");
   assert.equal(res.body.rows.length,2);
-  const byDay=new Map(res.body.rows.map(x=>[String(x.at).slice(0,10),x]));
+  const byDay=new Map(res.body.rows.map(x=>[new Date(x.at).toISOString().slice(0,10),x]));
   const first=byDay.get("2026-10-17"),second=byDay.get("2026-10-18");
   assert.equal(Number(first.soldUnits),3,"La devolución de venta reduce las unidades vendidas");
   assert.equal(Number(first.receivedUnits),10,"Ignorar proveedores excluye traspasos internos");

@@ -34,7 +34,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    const schema=req.context.client.schema;
    if(!SCHEMA.test(schema))return res.status(400).json({error:"Esquema no válido"});
    const {rows:fields}=await pool.query(
-    "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='compras'",[schema]);
+    "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='fm_recepciones_analitica'",[schema]);
    const names=new Set(fields.map(r=>r.column_name));
    const present=(...keys)=>keys.every(k=>names.has(k));
    const legacy=!present("farmacia_codigo","fecha","origen_id")&&present("farmacia_id","fecha");
@@ -83,7 +83,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
       to_char(t.fecha,'YYYY-MM-DD') AS date,
       ${col("albaran_id")} AS "receiptNumber",
       count(*) OVER()::int AS total
-    FROM "${schema}".compras t ${join}
+    FROM "${schema}".fm_recepciones_analitica t ${join}
     WHERE ${where.join(" AND ")}
     ORDER BY t.fecha DESC,${id} DESC NULLS LAST
     LIMIT ${limit}::int OFFSET ${offset}::int`,values);
@@ -105,7 +105,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    const schema=req.context.client.schema;
    if(!SCHEMA.test(schema))return res.status(400).json({error:"Esquema no válido"});
    const {rows:columns}=await pool.query(
-    "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='compras'",[schema]);
+    "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='fm_recepciones_analitica'",[schema]);
    const names=new Set(columns.map(r=>r.column_name));
    const supports=(...fields)=>fields.every(field=>names.has(field));
    const normalized=supports("farmacia_codigo","fecha","articulo_id","proveedor_id","unidades","importe","coste_unitario");
@@ -128,7 +128,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
      sum(t.unidades)::float8 AS units,count(t.unidades)::int AS "unitRows",
      count(*)::int AS "sourceRows",
      count(*) FILTER(WHERE nullif(btrim(${productId}::text),'') IS NOT NULL)::int AS lines
-    FROM "${schema}".compras t ${join}
+    FROM "${schema}".fm_recepciones_analitica t ${join}
     WHERE t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'
      AND f.id=ANY($3::int[])
      AND ${includedPurchaseSupplier({tenant:"$4",code:"t.proveedor_id",

@@ -526,7 +526,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="compras"&&searchReady&&<p className="fm-sales-period-info">
    La búsqueda filtra la tabla de artículos. Los indicadores y el gráfico resumen
    todas las compras del período seleccionado.
-  </p>
+  </p>}
   {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
    {purchaseStateError?
     <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:

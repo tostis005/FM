@@ -51,6 +51,57 @@ function getFilters(req,res){
  return {from,to,ids:[...new Set(ids)],search,families,module,sortKey,sortDir};
 }
 export function setupRealReports(app,pool,{requireTenant}){
+ // Diagnóstico read-only rápido, separado de los informes agregados.
+ // Se consulta por farmacia y periodo con EXISTS/índice, no COUNT(*) de
+ // millones de líneas. Permite diferenciar falta de datos de cálculo lento.
+ app.get("/api/analytics/compras/estado",...requireTenant(),async(req,res,next)=>{
+  const scoped={...req,query:{...req.query,modulo:"compras"}};
+  const f=getFilters(scoped,res);if(!f)return;
+  try{
+   const schema=req.context.client.schema;
+   if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))
+    return res.status(400).json({error:"Esquema de datos inválido"});
+   const columns=await tableColumns(pool,schema,"compras");
+   const normalized=has(columns,"farmacia_codigo","fecha","articulo_id","proveedor_id","unidades","coste_unitario","importe");
+   const legacy=!normalized&&has(columns,"farmacia_id","fecha","producto_id","proveedor_id","unidades","puc","total");
+   if(!normalized&&!legacy)return res.json({
+    source:"missing",hasPurchases:false,pharmacies:[],message:"No existe una tabla de compras reconocible. Revisa el sincronizador y el mapeo de columnas."
+   });
+   const quoted='"'+schema+'"';
+   const chosen=(req.context.pharmacies||[]).filter(p=>f.ids.includes(Number(p.id)));
+   const pharmacies=await Promise.all(chosen.map(async pharmacy=>{
+    const code=String(pharmacy.databaseCode||pharmacy.sourceCode||"").trim().toUpperCase();
+    const identifier=legacy?"t.farmacia_id=$3::int":"upper(btrim(t.farmacia_codigo))=$3::text";
+    const value=legacy?Number(pharmacy.id):code;
+    const dateWindow=`t.fecha >= $1::date AND t.fecha < $2::date+interval '1 day'`;
+    // Un registro basta. ORDER BY fecha DESC puede aprovechar el índice
+    // (farmacia,fecha) y nunca devuelve detalles comerciales.
+    const inPeriod=await pool.query({text:`
+      SELECT t.fecha FROM ${quoted}.compras t
+      WHERE ${dateWindow} AND ${identifier}
+      ORDER BY t.fecha DESC LIMIT 1`,
+      values:[f.from,f.to,value],query_timeout:12000});
+    let lastOutside=null;
+    if(!inPeriod.rows.length){
+     const last=await pool.query({text:`
+       SELECT t.fecha FROM ${quoted}.compras t
+       WHERE ${legacy?"t.farmacia_id=$1::int":"upper(btrim(t.farmacia_codigo))=$1::text"}
+       ORDER BY t.fecha DESC LIMIT 1`,values:[value],query_timeout:12000});
+     lastOutside=last.rows[0]?.fecha||null;
+    }
+    return {pharmacyId:String(pharmacy.id),name:pharmacy.name||"Farmacia "+pharmacy.id,
+      hasPeriodPurchases:inPeriod.rows.length>0,
+      latestPurchaseDate:(inPeriod.rows[0]?.fecha||lastOutside||null)};
+   }));
+   res.json({source:legacy?"legacy":"normalized",
+    hasPurchases:pharmacies.some(p=>p.hasPeriodPurchases),pharmacies,
+    period:{from:f.from,to:f.to},
+    message:!pharmacies.length?"No hay farmacias autorizadas o seleccionadas.":
+      pharmacies.some(p=>p.hasPeriodPurchases)?"Hay compras registradas en el periodo.":
+      "No se encontraron compras para el periodo y farmacias seleccionados."});
+  }catch(e){next(e)}
+ });
+
  app.get("/api/analytics/reportes",...requireTenant(),async(req,res,next)=>{
   const f=getFilters(req,res);if(!f)return;
   try{
@@ -263,11 +314,17 @@ export function setupRealReports(app,pool,{requireTenant}){
    // evita recorrer compras, catálogo y proveedores innecesariamente en Stock,
    // y evita las ventas completas al consultar solamente proveedores.
    // No guardar ni precalcular resultados: todas las lecturas son SQL reales.
-   const readSalesRows=f.module!=="proveedores";
+   // Compras nunca debe esperar a la clasificación ABCD/ventas del período.
+   // Consultar millones de ventas aquí bloqueaba los cuatro KPI y el listado
+   // aunque sí existieran compras sincronizadas. ABCD requiere su propia
+   // consulta independiente, no debe bloquear este informe.
+   const readSalesRows=!["compras","proveedores"].includes(f.module);
    const readBuyRows=f.module!=="proveedores";
    const readSalesPeriod=!["compras","proveedores","acciones"].includes(f.module);
    const readBuyPeriod=!["stock","reposicion"].includes(f.module);
-   const readSupplierRows=["compras","proveedores"].includes(f.module);
+   // El informe Compras ya trae proveedor por línea; repetir toda la agregación
+   // para un ranking independiente duplica la consulta pesada.
+   const readSupplierRows=f.module==="proveedores";
    const needFamilies=f.module==="ventas"&&articles&&articleCols.has("familia");
    const queries=[
     sales&&pharmacyIds.length&&readSalesRows?pool.query(sqlSales,pars):{rows:[]},
@@ -301,7 +358,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     const k=key(r.pharmacyId,r.cn),old=costs.get(k)||{units:0,total:0};
     old.units+=Number(r.pricedUnits);old.total+=Number(r.cost);costs.set(k,old);
    }
-   if(buyers&&!buyDetailComplete&&pharmacyIds.length){
+   if(buyers&&!buyDetailComplete&&pharmacyIds.length&&readSalesRows){
     // Segunda agregación compacta por farmacia+CN, independiente de la
     // paginación, proveedor o columna de orden del informe.
     const {rows:allCosts}=await pool.query(`SELECT f.id::text AS "pharmacyId",
@@ -595,7 +652,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    const abcd=classifyAbcd(abcdUniverse,{scope:r=>r.pharmacyId});
    for(const collection of [salesRows,buyRows,stockRows]){
     for(const row of collection){
-     row.abcdClass=sales?(abcd.get(key(row.pharmacyId,row.cn))||"D"):null;
+     row.abcdClass=sales&&readSalesRows?(abcd.get(key(row.pharmacyId,row.cn))||"D"):null;
     }
    }
    // ABCD utiliza el universo completo aunque el listado esté truncado.
@@ -664,7 +721,9 @@ export function setupRealReports(app,pool,{requireTenant}){
     lineasCompra:buyers&&readBuyPeriod?sum(buyM.rows,"lines"):null,
     costeMedioCompra:readBuyRows&&buyers&&completeBuys&&sum(buyRows,r=>r.pricedUnits)>0?
       round(sum(buyRows,r=>r.cost)/sum(buyRows,r=>r.pricedUnits),4):null,
-    proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:null,
+    proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:
+      f.module==="compras"&&buyers&&completeBuys?
+        new Set(buyRows.map(r=>key(r.pharmacyId,r.providerId))).size:null,
     stock:stockSummary
       ?(stockSummary.unpriced===0?round(stockSummary.value):null)
       :completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,

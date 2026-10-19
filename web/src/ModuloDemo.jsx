@@ -176,6 +176,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [realReport,setRealReport]=useState(null);
  const [reportLoading,setReportLoading]=useState(true);
  const [reportError,setReportError]=useState("");
+ const [purchaseState,setPurchaseState]=useState(null);
+ const [purchaseStateError,setPurchaseStateError]=useState("");
+ const [purchaseSlow,setPurchaseSlow]=useState(false);
  const [salesError,setSalesError]=useState("");
  const [loading,setLoading]=useState(()=>["dashboard","ventas"].includes(module));
  const [reloadKey,setReloadKey]=useState(0);
@@ -309,6 +312,36 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   return ()=>controller.abort();
  },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction]);
 
+ // Verificación de origen/periodo rápida y separada del detalle agregado.
+ // Si el detalle tarda, el usuario ya sabe si existen compras reales.
+ useEffect(()=>{
+  if(module!=="compras"||!period.valid){setPurchaseState(null);setPurchaseStateError("");return}
+  const controller=new AbortController();
+  const params=new URLSearchParams({desde:period.from,hasta:period.to});
+  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  setPurchaseState(null);setPurchaseStateError("");
+  fetch("/api/analytics/compras/estado?"+params,{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+  }).then(async response=>{
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(result.error||"No se puede comprobar el origen de compras");
+   if(typeof result.hasPurchases!=="boolean"||!Array.isArray(result.pharmacies))
+    throw Error("La comprobación de compras devolvió una respuesta incompleta");
+   return result;
+  }).then(data=>{if(!controller.signal.aborted)setPurchaseState(data)})
+   .catch(e=>{if(!controller.signal.aborted)setPurchaseStateError(e.message)});
+  return()=>controller.abort();
+ },[module,clientSlug,period.from,period.to,period.valid,
+    filters.pharmacyIds.join(","),reloadKey]);
+
+ useEffect(()=>{
+  if(module!=="compras"||!reportLoading){setPurchaseSlow(false);return}
+  const timer=setTimeout(()=>setPurchaseSlow(true),12000);
+  return()=>clearTimeout(timer);
+ },[module,reportLoading,period.from,period.to,filters.pharmacyIds.join(","),
+    searchReady,tableSort.key,tableSort.direction]);
+
  useEffect(()=>{
   if(module==="ventas"){setReportLoading(false);return}
   if(!period.valid){setReportLoading(false);setRealReport(null);return}
@@ -319,6 +352,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(searchReady)params.set("buscar",searchReady);
   if(remoteSort){params.set("orden",remoteSort.key);params.set("direccion",remoteSort.direction);}
   setReportLoading(true);setReportError("");
+  if(module==="compras")setRealReport(null);
   fetch("/api/analytics/reportes?"+params,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
    .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden cargar los informes");return b})
@@ -442,6 +476,25 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
+  {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
+   {purchaseStateError?
+    <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:
+    !purchaseState?
+     <span>Comprobando si existen compras sincronizadas en las farmacias seleccionadas…</span>:
+     purchaseState.source==="missing"?
+      <strong>No hay una tabla de compras reconocible en este cliente. Revisa las importaciones del sincronizador.</strong>:
+      purchaseState.hasPurchases?
+       <span><strong>Compras encontradas en el período:</strong> {purchaseState.pharmacies.filter(p=>p.hasPeriodPurchases).length} de {purchaseState.pharmacies.length} farmacias tienen movimientos.
+        {reportLoading?" El detalle y los indicadores se están calculando.":""}
+        {reportError?" Los movimientos existen, pero ha fallado la consulta del informe.":""}</span>:
+       <span><strong>No se han encontrado compras para este período.</strong> {purchaseState.pharmacies?.some(p=>p.latestPurchaseDate)?"Existen movimientos fuera del rango seleccionado; amplía las fechas.":"No hay movimientos sincronizados en las farmacias consultadas."}</span>}
+   {purchaseState?.pharmacies?.length>0&&<small style={{display:"block",marginTop:6}}>
+    {purchaseState.pharmacies.map(p=>p.name+": "+(p.hasPeriodPurchases?"con compras":p.latestPurchaseDate?"sin compras en el período (última "+String(p.latestPurchaseDate).slice(0,10)+")":"sin compras sincronizadas")).join(" · ")}
+   </small>}
+   {purchaseSlow&&purchaseState?.hasPurchases&&<small style={{display:"block",marginTop:8}}>
+    El informe sigue calculando el detalle; los registros existen. Puede haber una consulta lenta, no falta de datos.
+   </small>}
+  </div>}
   {realReport?.available===false&&realReport.reason&&<p role="status" className="fm-inline-status">{realReport.reason}</p>}
   {realReport?.available&&realReport.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
    <p role="status" className="fm-inline-status">No se ha encontrado una tabla de compras compatible para este cliente. Comprueba la sincronización y el mapeo de columnas del origen de datos.</p>}
@@ -482,7 +535,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id}
-    sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
+    sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
+     module==="compras"&&purchaseState?.hasPurchases?
+       "Hay compras sincronizadas. Si el listado está vacío, revisa los filtros o el estado de la consulta.":
+       available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
     onRowClick={row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}

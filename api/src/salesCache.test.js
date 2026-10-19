@@ -52,9 +52,9 @@ test("refresco de ventas inserta instantánea y fecha de forma transaccional",as
   if(sql.includes("pg_try_advisory_xact_lock"))return {rows:[{acquired:true}]};
   if(sql.includes("SELECT desde::text"))return {rows:[]};
   if(sql.includes("information_schema.columns"))return {rows:[
-   ...["farmacia_codigo","articulo_id","fecha","unidades","importe"].map(column_name=>({table_name:"ventas",column_name})),
+   ...["farmacia_codigo","articulo_id","fecha","unidades","importe"].map(column_name=>({table_name:"fm_ventas_analitica",column_name})),
    ...["farmacia_codigo","origen_id","nombre","familia","codigo_nacional","pvp","pmc","sincronizado_en"].map(column_name=>({table_name:"articulos",column_name})),
-   ...["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario"].map(column_name=>({table_name:"compras",column_name}))
+   ...["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario"].map(column_name=>({table_name:"fm_recepciones_analitica",column_name}))
   ]};
   if(sql.includes("WITH pharmacy_map AS"))return {rows:[{pharmacyId:"1",cn:"123456",name:"Artículo",family:"",
    units:3,value:18,abcdClass:"A",pvp:7,purchaseCost:2,margin:12}]};

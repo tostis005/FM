@@ -52,3 +52,30 @@ INSERT INTO ampedia.ventas(farmacia_codigo,origen_id,fecha,articulo_id,unidades,
 VALUES ('VAL','V-01','2026-10-11','V-1',4,28);
 INSERT INTO ampedia.proveedores(farmacia_codigo,origen_id,nombre)
 VALUES ('VAL','PV1','Mayorista Valdemarías');
+
+-- Las consultas nuevas usan únicamente documentos completos. Los antiguos
+-- registros del fixture se conservan deliberadamente como prueba de NO lectura.
+INSERT INTO ampedia.fm_ventas_cabeceras
+ (farmacia_codigo,sistema_origen,documento_id,fecha,numero_documento,
+  total_documento,lineas_completas)
+ SELECT farmacia_codigo,'farmatic',origen_id,fecha,origen_id,importe,true
+ FROM ampedia.ventas
+ ON CONFLICT DO NOTHING;
+INSERT INTO ampedia.fm_ventas_lineas
+ (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+  cantidad,importe_neto)
+ SELECT farmacia_codigo,'farmatic',origen_id,'1',articulo_id,unidades,importe
+ FROM ampedia.ventas WHERE articulo_id IS NOT NULL
+ ON CONFLICT DO NOTHING;
+
+INSERT INTO ampedia.fm_recepciones_cabeceras
+ (farmacia_codigo,sistema_origen,documento_id,fecha,numero_albaran,
+  proveedor_origen_id,total_documento,lineas_completas)
+ SELECT farmacia_codigo,'farmatic',origen_id,fecha,origen_id,proveedor_id,importe,true
+ FROM ampedia.compras ON CONFLICT DO NOTHING;
+INSERT INTO ampedia.fm_recepciones_lineas
+ (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,
+  cantidad,coste_neto)
+ SELECT farmacia_codigo,'farmatic',origen_id,'1',articulo_id,unidades,importe
+ FROM ampedia.compras WHERE articulo_id IS NOT NULL
+ ON CONFLICT DO NOTHING;

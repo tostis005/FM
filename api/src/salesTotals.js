@@ -16,7 +16,7 @@ export function buildSalesTotalsSql(schema,granularity){
    sum(v.importe)::float8 AS ventas,sum(v.unidades)::float8 AS unidades,
    sum(sum(v.importe)) OVER()::float8 AS total_ventas,
    sum(sum(v.unidades)) OVER()::float8 AS total_unidades
- FROM ${table}.ventas v
+ FROM ${table}.fm_ventas_analitica v
  WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
    AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
  GROUP BY date_trunc('month',v.fecha)
@@ -34,7 +34,7 @@ export function buildSalesTotalsSql(schema,granularity){
    SELECT date_trunc('month',v.fecha) AS mes,
      date_trunc('${granularity}',v.fecha) AS periodo,
      v.importe,v.unidades
-   FROM ${table}.ventas v
+   FROM ${table}.fm_ventas_analitica v
    WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
      AND v.fecha >= $1::date
      AND v.fecha < ($2::date + interval '1 day')

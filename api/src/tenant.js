@@ -177,6 +177,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       await db.query("INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado) SELECT $1,clave,false FROM farmetrica.modulos",[slug]);
       // Preparar tablas nuevas sin alterar ventas/compras heredadas.
       await db.query("SELECT farmetrica.preparar_modelo_documental($1)",[slug]);
+       await db.query("SELECT farmetrica.preparar_vistas_documentales($1)",[slug]);
       await db.query("COMMIT");
       res.status(201).json({slug,name,schema:slug,active:true});
     }catch(e){
@@ -207,7 +208,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       let external=[];
       if(codes.length){
         const {rows:fields}=await pool.query(
-          "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name IN ('proveedores','compras')",
+          "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name IN ('proveedores','fm_recepciones_analitica')",
           [schema]);
         const has=(table,...cols)=>cols.every(col=>fields.some(f=>f.table_name===table&&f.column_name===col));
         if(has("proveedores","farmacia_codigo","origen_id","nombre")){
@@ -227,18 +228,18 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         }
         // Si el origen todavía no envía el maestro, identificar proveedores
         // de sus recepciones, sin fabricar registros ni alterar las compras.
-        if(!external.length&&has("compras","proveedor_id")&&
-           (has("compras","farmacia_codigo")||has("compras","farmacia_id"))){
-          const supplierName=has("compras","proveedor_nombre")?
+        if(!external.length&&has("fm_recepciones_analitica","proveedor_id")&&
+           (has("fm_recepciones_analitica","farmacia_codigo")||has("fm_recepciones_analitica","farmacia_id"))){
+          const supplierName=has("fm_recepciones_analitica","proveedor_nombre")?
             "min(nullif(btrim(proveedor_nombre::text),''))":"NULL::text";
           const localIds=req.context.pharmacies.map(p=>Number(p.id)).filter(Number.isInteger);
-          const legacySource=has("compras","farmacia_codigo")? "upper(btrim(farmacia_codigo))=ANY($1::text[])":
+          const legacySource=has("fm_recepciones_analitica","farmacia_codigo")? "upper(btrim(farmacia_codigo))=ANY($1::text[])":
             "farmacia_id=ANY($1::int[])";
           const result=await pool.query(`SELECT upper(btrim(proveedor_id::text)) AS "sourceCode",
             ${supplierName} AS name
-            FROM "${schema}".compras WHERE ${legacySource}
+            FROM "${schema}".fm_recepciones_analitica WHERE ${legacySource}
              AND nullif(btrim(proveedor_id::text),'') IS NOT NULL
-            GROUP BY 1`,[has("compras","farmacia_codigo")?codes:localIds]);
+            GROUP BY 1`,[has("fm_recepciones_analitica","farmacia_codigo")?codes:localIds]);
           external=result.rows;
         }
       }

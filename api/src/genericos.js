@@ -42,8 +42,8 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
   try{
    const [v,sales,purchases]=await Promise.all([
     catalogData(pool),
-    tableColumns(pool,req.context.client.schema,"ventas",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
-    tableColumns(pool,req.context.client.schema,"compras",["farmacia_id","producto_id","fecha","unidades","puc"]),
+    tableColumns(pool,req.context.client.schema,"fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
+    tableColumns(pool,req.context.client.schema,"fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario"]),
    ]);
    res.json({version:v.rows[0]||null,sales:sales?{available:true}:noData("Ventas no sincronizadas"),
       purchases:purchases?{available:true}:noData("Compras no sincronizadas")});
@@ -58,8 +58,8 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
     sales:noData("Pendiente de importar Nomenclátor AEMPS"),
     purchases:noData("Pendiente de importar Nomenclátor AEMPS")});
    const [hasSales,hasPurchases,hasProducts,hasSuppliers]=await Promise.all([
-    tableColumns(pool,req.context.client.schema,"ventas",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
-    tableColumns(pool,req.context.client.schema,"compras",["farmacia_id","producto_id","fecha","unidades","puc"]),
+    tableColumns(pool,req.context.client.schema,"fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
+    tableColumns(pool,req.context.client.schema,"fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario"]),
     tableColumns(pool,req.context.client.schema,"productos",["id","cn"]),
     tableColumns(pool,req.context.client.schema,"proveedores",["id","nombre"]),
    ]);
@@ -72,7 +72,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    const conditions="";
    let salesSql=`SELECT n.dcpf,
         sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue
-     FROM ${schema}.ventas v
+     FROM ${schema}.fm_ventas_analitica v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND
        upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
      ${hasProducts?`LEFT JOIN ${schema}.productos pv ON pv.id=btrim(v.articulo_id::text)`:""}
@@ -83,17 +83,19 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      GROUP BY n.dcpf`;
    let purchasesSql=`SELECT n.dcpf,
      sum(c.unidades)::float8 AS units,
-     sum(c.unidades*c.puc)::float8 AS spend,
-     CASE WHEN sum(c.unidades) FILTER(WHERE c.puc>0)>0 THEN
-       (sum(c.unidades*c.puc) FILTER(WHERE c.puc>0)/
-        sum(c.unidades) FILTER(WHERE c.puc>0))::float8 ELSE NULL END AS avg_puc,
-     min(c.puc) FILTER(WHERE c.puc>0)::float8 AS best_puc
-     FROM ${schema}.compras c
-     ${hasProducts?`LEFT JOIN ${schema}.productos p ON p.id=c.producto_id`:""}
+     sum(c.unidades*c.coste_unitario)::float8 AS spend,
+     CASE WHEN sum(c.unidades) FILTER(WHERE c.coste_unitario>0)>0 THEN
+       (sum(c.unidades*c.coste_unitario) FILTER(WHERE c.coste_unitario>0)/
+        sum(c.unidades) FILTER(WHERE c.coste_unitario>0))::float8 ELSE NULL END AS avg_puc,
+     min(c.coste_unitario) FILTER(WHERE c.coste_unitario>0)::float8 AS best_puc
+     FROM ${schema}.fm_recepciones_analitica c
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$4
+       AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     ${hasProducts?`LEFT JOIN ${schema}.productos p ON p.id=c.articulo_id`:""}
      JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
-       ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.producto_id::text))":"btrim(c.producto_id::text)"}
+       ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.articulo_id::text))":"btrim(c.articulo_id::text)"}
      WHERE c.fecha >= $1::date AND c.fecha < $2::date+interval '1 day'
-       AND c.farmacia_id=ANY($3::int[]) ${conditions}
+       AND f.id=ANY($3::int[]) ${conditions}
        AND ${includedPurchaseSupplier({tenant:"$4",code:"c.proveedor_id"})}
      GROUP BY n.dcpf`;
    const [catalog,sales,purchases]=await Promise.all([
@@ -154,8 +156,8 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    const schema=tenantSchema(req),tenant=req.context.client.slug;
    const [v,hasSales,hasPurchases,hasProducts,hasSuppliers]=await Promise.all([
     pool.query("SELECT 1 FROM farmetrica.nomenclator_presentaciones WHERE dcpf=$1 AND generico LIMIT 1",[dcpf]),
-    tableColumns(pool,req.context.client.schema,"ventas",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
-    tableColumns(pool,req.context.client.schema,"compras",["farmacia_id","producto_id","fecha","unidades","puc"]),
+    tableColumns(pool,req.context.client.schema,"fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]),
+    tableColumns(pool,req.context.client.schema,"fm_recepciones_analitica",["farmacia_codigo","articulo_id","fecha","unidades","coste_unitario"]),
     tableColumns(pool,req.context.client.schema,"productos",["id","cn"]),
     tableColumns(pool,req.context.client.schema,"proveedores",["id","nombre"]),
    ]);
@@ -166,7 +168,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
    const params=[q.from,q.to,q.ids,dcpf,tenant];
    const sales=hasSales&&q.ids.length?await pool.query(`
      SELECT n.cn,sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue
-     FROM ${schema}.ventas v
+     FROM ${schema}.fm_ventas_analitica v
      JOIN farmetrica.farmacias f ON f.cliente_slug=$5
        AND upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
      ${hasProducts?`LEFT JOIN ${schema}.productos pv ON pv.id=btrim(v.articulo_id::text)`:""}
@@ -179,15 +181,17 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      SELECT n.cn,c.proveedor_id::text AS "supplierCode",
        ${hasSuppliers?"max(sp.nombre)":"null::text"} AS supplier,
        sum(c.unidades)::float8 AS units,
-       sum(c.unidades*c.puc)::float8 AS spend,
-       (sum(c.unidades*c.puc) FILTER(WHERE c.puc>0)/
-         nullif(sum(c.unidades) FILTER(WHERE c.puc>0),0))::float8 AS puc
-     FROM ${schema}.compras c
-     ${hasProducts?`LEFT JOIN ${schema}.productos p ON p.id=c.producto_id`:""}
+       sum(c.unidades*c.coste_unitario)::float8 AS spend,
+       (sum(c.unidades*c.coste_unitario) FILTER(WHERE c.coste_unitario>0)/
+         nullif(sum(c.unidades) FILTER(WHERE c.coste_unitario>0),0))::float8 AS puc
+     FROM ${schema}.fm_recepciones_analitica c
+     JOIN farmetrica.farmacias f ON f.cliente_slug=$5
+       AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     ${hasProducts?`LEFT JOIN ${schema}.productos p ON p.id=c.articulo_id`:""}
      ${hasSuppliers?`LEFT JOIN ${schema}.proveedores sp ON sp.id=c.proveedor_id`:""}
      JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
-       ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.producto_id::text))":"btrim(c.producto_id::text)"}
-     WHERE n.dcpf=$4 AND c.farmacia_id=ANY($3::int[])
+       ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.articulo_id::text))":"btrim(c.articulo_id::text)"}
+     WHERE n.dcpf=$4 AND f.id=ANY($3::int[])
        AND c.fecha >= $1::date AND c.fecha < $2::date+interval '1 day'
        AND ${includedPurchaseSupplier({tenant:"$5",code:"c.proveedor_id",name:hasSuppliers?"sp.nombre":null})}
      GROUP BY n.cn,c.proveedor_id::text

@@ -37,7 +37,7 @@ export function buildSalesSummarySql(schema,granularity,hasProductFilters=false)
  WITH sales_scope AS MATERIALIZED (
   SELECT f.id::text AS pharmacy_id,upper(btrim(v.farmacia_codigo)) AS source_code,
     v.articulo_id,v.fecha,v.unidades,v.importe
-  FROM ${tbl}.ventas v JOIN farmetrica.farmacias f
+  FROM ${tbl}.fm_ventas_analitica v JOIN farmetrica.farmacias f
     ON f.cliente_slug=$4 AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
   WHERE f.id=ANY($3::int[]) AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'
     AND nullif(btrim(v.articulo_id),'') IS NOT NULL
@@ -113,7 +113,7 @@ export function buildSalesSummarySql(schema,granularity,hasProductFilters=false)
   SELECT f.id::text AS pharmacy_id,b.articulo_id,
     sum(b.unidades*b.coste_unitario) FILTER(WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS cost,
     sum(b.unidades) FILTER(WHERE b.unidades>0 AND b.coste_unitario>0)::float8 AS priced_units
-  FROM ${tbl}.compras b JOIN farmetrica.farmacias f
+  FROM ${tbl}.fm_recepciones_analitica b JOIN farmetrica.farmacias f
     ON f.cliente_slug=$4 AND upper(btrim(b.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
   WHERE f.id=ANY($3::int[]) AND b.fecha >= $1::date AND b.fecha < $2::date+interval '1 day'
     AND ${includedPurchaseSupplier({tenant:"$4",code:"b.proveedor_id"})}

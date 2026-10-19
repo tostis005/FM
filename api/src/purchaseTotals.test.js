@@ -13,10 +13,10 @@ function make({legacy=false,empty=false,headerOnly=false}={}){
   assert.deepEqual(params,["2026-10-01","2026-10-18",[1],"ampedia"]);
   if(empty)return {rows:[]};
   if(headerOnly)return {rows:[{month:"2026-10",pharmacy:"1",supplier:"PR1",
-    amount:null,amountRows:0,units:null,unitRows:0,sourceRows:30,lines:0}]};
-  return {rows:[{month:"2026-10",pharmacy:"1",supplier:"2",amount:60,units:15,lines:3},
-   {month:"2026-10",pharmacy:"1",supplier:"3",amount:40,units:10,lines:2},
-   {month:"2026-10",pharmacy:"1",supplier:"2",amount:20,units:5,lines:1}]};
+    amount:null,amountRows:0,units:null,unitRows:0,sourceRows:30,receipts:30,lines:0}]};
+  return {rows:[{month:"2026-10",pharmacy:"1",supplier:"2",amount:60,units:15,receipts:2,lines:3},
+   {month:"2026-10",pharmacy:"1",supplier:"3",amount:40,units:10,receipts:1,lines:2},
+   {month:"2026-10",pharmacy:"1",supplier:"2",amount:20,units:5,receipts:1,lines:1}]};
  }};
  setupPurchaseTotals(app,pool,{requireTenant:()=>[]});
  const context={allowedPharmacyIds:[1],client:{schema:"ampedia",slug:"ampedia"},
@@ -32,10 +32,10 @@ test("totales de Compras de todos los proveedores y series, sin leer ventas ni c
  const {call,calls}=make();
  const {code,payload}=await call();
  assert.equal(code,200);
- assert.deepEqual(payload.kpis,{compras:120,unidadesCompradas:30,lineasCompra:6,proveedores:2,recepciones:null});
+ assert.deepEqual(payload.kpis,{compras:120,unidadesCompradas:30,lineasCompra:6,proveedores:2,recepciones:4});
  assert.equal(payload.monthly.length,1);
  assert.equal(payload.monthly[0].compras,120);
- assert.ok(calls.every(({sql})=>!sql.includes(".ventas")&&!sql.includes(".articulos")));
+ assert.ok(calls.every(({sql})=>!sql.includes(".fm_ventas_analitica")&&!sql.includes(".articulos")));
  assert.match(calls[1].sql,/GROUP BY 1,f.id,t.proveedor_id/);
  assert.match(calls[1].sql,/cliente_slug=\$4/);
 });

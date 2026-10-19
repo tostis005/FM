@@ -202,7 +202,7 @@ function salesJoin(req) {
   if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!/^[a-z][a-z0-9_]{1,62}$/.test(tenant))
     throw Error("Cliente inválido");
   const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
-  return ` FROM "${schema}".ventas v JOIN farmetrica.farmacias f
+  return ` FROM "${schema}".fm_ventas_analitica v JOIN farmetrica.farmacias f
     ON upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
     AND f.cliente_slug='${tenant}' AND f.id IN (${ids.length?ids.join(","):"NULL"}) `;
 }
@@ -217,7 +217,7 @@ app.get("/api/ventas/cobertura", ...requireTenantModule("promociones"), async (r
         count(v.origen_id)::bigint::text AS lineas,
         min(v.fecha) AS primera,max(v.fecha) AS ultima
         FROM farmetrica.farmacias f
-        LEFT JOIN "${schema}".ventas v
+        LEFT JOIN "${schema}".fm_ventas_analitica v
           ON upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
         WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
         GROUP BY f.id,f.codigo_origen ORDER BY f.id`,
@@ -263,7 +263,7 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
       );
       summary[p.id] = Object.fromEntries(rows.map(row => [row.farmacia_id, Number(row.unidades)]));
     }
-    res.json({ sales: summary, origin: req.context.client.schema+".ventas", updatedAt: new Date().toISOString() });
+    res.json({ sales: summary, origin: req.context.client.schema+".fm_ventas_analitica", updatedAt: new Date().toISOString() });
   } catch (err) { next(err); }
 });
 
@@ -406,7 +406,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
       [...params,limit,offset]);
     res.json({
       rows, total:countRows[0]?.total||0, offset, limit,
-      origin:req.context.client.schema+".ventas", sellerNamesAvailable:false,
+      origin:req.context.client.schema+".fm_ventas_analitica", sellerNamesAvailable:false,
     });
   } catch(err){ next(err); }
 });

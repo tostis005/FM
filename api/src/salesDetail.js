@@ -17,10 +17,10 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
   throw Error("Ordenación o formato de detalle de ventas inválido");
  const t='"'+schema+'"';
  const purchasePrice=purchases==="legacy"?"b.puc":"b.coste_unitario";
- const purchaseJoin=purchases==="legacy"?`JOIN ${t}.compras b
+ const purchaseJoin=purchases==="legacy"?`JOIN ${t}.fm_recepciones_analitica b
      ON b.farmacia_id::text=c."pharmacyId" AND b.producto_id=c.articulo_id
        AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')`:
-   `JOIN ${t}.compras b ON upper(btrim(b.farmacia_codigo))=c.code
+   `JOIN ${t}.fm_recepciones_analitica b ON upper(btrim(b.farmacia_codigo))=c.code
      AND b.articulo_id=c.articulo_id
      AND b.fecha >= $1::date AND b.fecha < ($2::date+interval '1 day')`;
  // Costes comparables sin proveedores marcados como traspasos internos u omisiones.
@@ -100,7 +100,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
  raw AS MATERIALIZED (
   SELECT upper(btrim(v.farmacia_codigo)) AS code,v.articulo_id,
     sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS value
-  FROM ${t}.ventas v
+  FROM ${t}.fm_ventas_analitica v
   WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
     AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
     AND nullif(btrim(v.articulo_id),'') IS NOT NULL
@@ -205,22 +205,22 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
    if(req.context.client.slug!=="ampedia"){
     const {rows:fields}=await pool.query(
       "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[])",
-      [schema,["ventas","articulos","productos","compras"]]);
+      [schema,["fm_ventas_analitica","articulos","productos","fm_recepciones_analitica"]]);
     const byTable=new Map();
     for(const field of fields){
      if(!byTable.has(field.table_name))byTable.set(field.table_name,new Set());
      byTable.get(field.table_name).add(field.column_name);
     }
     const has=(table,...cols)=>cols.every(c=>byTable.get(table)?.has(c));
-    if(!has("ventas","farmacia_codigo","articulo_id","fecha","unidades","importe"))
+    if(!has("fm_ventas_analitica","farmacia_codigo","articulo_id","fecha","unidades","importe"))
      return res.status(422).json({error:"No hay ventas normalizadas sincronizadas para este cliente"});
     source={
      articles:has("articulos","farmacia_codigo","origen_id","codigo_nacional",
        "nombre","familia","pmc","pvp","sincronizado_en")?"normalized":
        has("productos","id","descripcion","cn","familia")?"legacy":"none",
-     purchases:has("compras","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario")?
+     purchases:has("fm_recepciones_analitica","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario")?
        "normalized":
-       has("compras","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"
+       has("fm_recepciones_analitica","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"
     };
    }
    const pageSize=400;

@@ -6,8 +6,8 @@ function create({missingCost=false,truncatedBuys=false}={}){
  const routes={};const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  const tableFields={
   articulos:["farmacia_codigo","origen_id","nombre","codigo_nacional","familia","pvp","pmc"],
-  ventas:["farmacia_codigo","articulo_id","fecha","unidades","importe"],
-  compras:["farmacia_codigo","articulo_id","proveedor_id","proveedor_nombre","unidades","coste_unitario","importe","fecha"],
+  fm_ventas_analitica:["farmacia_codigo","articulo_id","fecha","unidades","importe"],
+  fm_recepciones_analitica:["farmacia_codigo","articulo_id","proveedor_id","proveedor_nombre","unidades","coste_unitario","importe","fecha"],
   proveedores:["farmacia_codigo","origen_id","nombre"]
  };
  const queries=[];
@@ -19,12 +19,12 @@ function create({missingCost=false,truncatedBuys=false}={}){
    return {rows:(tableFields[params[1]]||[]).map(column_name=>({column_name}))};
   if(sql.includes("to_regclass"))return {rows:[{tbl:null}]};
   if(sql.includes("SELECT DISTINCT familia"))return {rows:[{familia:"Antibióticos"}]};
-  if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".ventas"))
+  if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".fm_ventas_analitica"))
    return {rows:[{pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
     pvp:6,pmc:missingCost?0:1,laboratory:"Lab A",units:20,value:120}]};
   if(sql.includes('SELECT f.id::text AS "pharmacyId",t.proveedor_id AS "providerId"'))
    return {rows:[{pharmacyId:"1",providerId:"2",name:"Distribuidora",value:60,units:30,products:1}]};
-  if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".compras")){
+  if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".fm_recepciones_analitica")){
    if(missingCost)return {rows:[]};
    if(sql.includes('sum(t.cost)::float8 AS cost')&&!sql.includes(' AS "providerId"'))
     return {rows:[{pharmacyId:"1",cn:"654321",cost:300,pricedUnits:100}]};
@@ -33,9 +33,9 @@ function create({missingCost=false,truncatedBuys=false}={}){
     units:30,value:60,cost:45,pricedUnits:30,lines:4};
    return {rows:truncatedBuys?Array.from({length:3000},(_,i)=>({...sample,providerId:String(i)})):[sample]};
   }
-  if(sql.includes("date_trunc('month'")&&sql.includes(".ventas"))
+  if(sql.includes("date_trunc('month'")&&sql.includes(".fm_ventas_analitica"))
    return {rows:[{month:"2026-10",units:20,amount:120}]};
-  if(sql.includes("date_trunc('month'")&&sql.includes(".compras"))
+  if(sql.includes("date_trunc('month'")&&sql.includes(".fm_recepciones_analitica"))
    return {rows:[{month:"2026-10",units:30,amount:60,lines:4}]};
 
   throw Error("SQL inesperado: "+sql.slice(0,180));
@@ -104,26 +104,26 @@ test("ABCD usa ventas completas por farmacia aunque haya filtro de búsqueda/fam
  assert.equal(status,200);
  assert.equal(result.salesRows[0].abcdClass,"A");
  assert.ok(queries.some(({sql})=>sql.includes('GROUP BY f.id,')&&
-  sql.includes('AS "pharmacyId"')&&sql.includes(".ventas")&&!sql.includes("ILIKE")),
+  sql.includes('AS "pharmacyId"')&&sql.includes(".fm_ventas_analitica")&&!sql.includes("ILIKE")),
   "el ranking no debe recortarse a los artículos visibles");
 });
 
 test("consultas trimestrales preagrupan ventas por artículo antes de resolver CN",async()=>{
  const {call,queries,req}=create();
  await call({query:{...req.query,modulo:"dashboard"}});
- const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".ventas t'));
+ const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".fm_ventas_analitica t'));
  assert.ok(sales,"se ejecuta la consulta de ventas por artículo");
  assert.match(sales.sql,/GROUP BY f\.id,upper\(btrim\(t\.farmacia_codigo\)\),t\.articulo_id/);
  assert.match(sales.sql,/\) t\s+JOIN farmetrica\.farmacias f/);
  assert.match(sales.sql,/LEFT JOIN LATERAL/);
- const monthly=queries.find(x=>x.sql.includes("date_trunc('month'")&&x.sql.includes('"ampedia".ventas t'));
+ const monthly=queries.find(x=>x.sql.includes("date_trunc('month'")&&x.sql.includes('"ampedia".fm_ventas_analitica t'));
  assert.ok(monthly);
  assert.doesNotMatch(monthly.sql,/LEFT JOIN LATERAL/,"los totales mensuales no necesitan fichas de artículos");
 });
 test("filtro de artículos conserva la restricción por fecha y farmacia antes de agrupar",async()=>{
  const {call,queries,req}=create();
  await call({query:{...req.query,modulo:"dashboard",buscar:"amoxicilina",familias:"Antibióticos"}});
- const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".ventas t'));
+ const sales=queries.find(x=>x.sql.includes('AS "pharmacyId"')&&x.sql.includes('FROM "ampedia".fm_ventas_analitica t'));
  assert.match(sales.sql,/f\.id=ANY\(\$3::int\[\]\)/);
  assert.match(sales.sql,/t\.fecha >= \$1::date/);
  assert.match(sales.sql,/coalesce\(art\.familia,''\)=ANY\(\$5::text\[\]\)/);
@@ -140,7 +140,7 @@ test("los módulos ahorran consultas ajenas a sus indicadores y conservan los da
  assert.equal(provider.result.kpis.lineasCompra,4);
  assert.equal(provider.result.availability.rowsTruncated,false,
    "No marcar proveedores como truncado cuando se omitieron ventas deliberadamente");
- assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".ventas t')),
+ assert.ok(!a.queries.some(q=>q.sql.includes('FROM "ampedia".fm_ventas_analitica t')),
    "Proveedores no debe escanear todas las ventas");
  assert.ok(!a.queries.some(q=>q.sql.includes(' AS supplier,')&&q.sql.includes('.compras')),
    "Proveedores no debe ejecutar de nuevo el detalle de compras");

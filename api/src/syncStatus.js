@@ -20,21 +20,21 @@ export function setupSyncStatus(app,pool,{requireTenant}) {
       db=await pool.connect();
       await db.query("BEGIN READ ONLY");
       await db.query("SET LOCAL statement_timeout = '20000'");
-      const {rows:exists}=await db.query("SELECT to_regclass($1)::text AS name",[schema+".ventas"]);
+      const {rows:exists}=await db.query("SELECT to_regclass($1)::text AS name",[schema+".fm_ventas_analitica"]);
       if(!exists[0]?.name){
         await db.query("COMMIT");
         return res.json({schema,connection:true,tableExists:false,
-          message:"No existe la tabla ventas en el esquema del cliente. Comprueba el destino del sincronizador."});
+          message:"Todavía no está disponible la lectura de ventas completas."});
       }
       const {rows:columns}=await db.query(
-        "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='ventas'",
+        "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='fm_ventas_analitica'",
         [schema]);
       const found=new Set(columns.map(r=>r.column_name));
       const missing=REQUIRED.filter(name=>!found.has(name));
       if(missing.length){
         await db.query("COMMIT");
         return res.json({schema,connection:true,tableExists:true,missingColumns:missing,
-          message:"La tabla ventas no coincide con el contrato del sincronizador."});
+          message:"Las ventas completas todavía no cumplen el contrato de lectura."});
       }
       if(!permitted.length){
         await db.query("COMMIT");
@@ -48,7 +48,7 @@ export function setupSyncStatus(app,pool,{requireTenant}) {
           count(*) FILTER (WHERE v.sincronizado_en >= now()-interval '24 hours')::text AS ultimas24h,
           max(v.sincronizado_en) AS ultima_recepcion,
           max(v.fecha) AS ultima_venta
-        FROM "${schema}".ventas v ${scope}`,[permitted]);
+        FROM "${schema}".fm_ventas_analitica v ${scope}`,[permitted]);
       const {rows:pharmacies}=await db.query(`
         SELECT v.farmacia_codigo AS codigo, count(*)::text AS total,
           max(v.sincronizado_en) AS ultima_recepcion,max(v.fecha) AS ultima_venta

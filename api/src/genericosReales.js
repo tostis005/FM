@@ -62,8 +62,8 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    // Los orígenes pueden sincronizarse por separado.
    const [artCols,saleCols,buyCols]=await Promise.all([
     fields(pool,req.context.client.schema,"articulos"),
-    fields(pool,req.context.client.schema,"ventas"),
-    fields(pool,req.context.client.schema,"compras")
+    fields(pool,req.context.client.schema,"fm_ventas_analitica"),
+    fields(pool,req.context.client.schema,"fm_recepciones_analitica")
    ]);
    const hasCols=(cols,...needed)=>needed.every(c=>cols.has(c));
    const hasArt=hasCols(artCols,"farmacia_codigo","origen_id","codigo_nacional","sincronizado_en","pvp","pmc","nombre");
@@ -88,7 +88,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       WITH c AS MATERIALIZED (
         SELECT v.farmacia_codigo,v.articulo_id,
           sum(v.unidades) AS unidades,sum(v.importe) AS importe
-        FROM ${schema}.ventas v
+        FROM ${schema}.fm_ventas_analitica v
         JOIN farmetrica.farmacias scope ON scope.cliente_slug=$4
           AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("scope")}
         WHERE scope.id=ANY($3::int[])
@@ -109,7 +109,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
           sum(v.unidades) FILTER(
             WHERE v.unidades>0 AND v.coste_unitario>0) AS paid_units,
           count(*)::int AS lines
-        FROM ${schema}.compras v
+        FROM ${schema}.fm_recepciones_analitica v
         JOIN farmetrica.farmacias scope ON scope.cliente_slug=$4
           AND upper(btrim(v.farmacia_codigo))=${pharmacyDataCodeSQL("scope")}
         WHERE scope.id=ANY($3::int[]) AND v.fecha>=$1::date
@@ -144,7 +144,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
         c.proveedor_id,c.coste_unitario::float8 AS price,
         coalesce(pl.percentil,pg.percentil,20)::float8 AS pct,
         sum(c.unidades)::float8 AS qty,count(*)::int AS lines
-      FROM ${schema}.compras c
+      FROM ${schema}.fm_recepciones_analitica c
       JOIN farmetrica.farmacias f ON f.cliente_slug=$3
         AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
       LEFT JOIN farmetrica.politica_precios pg

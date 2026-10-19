@@ -83,3 +83,8 @@ jobs:
         run: npm install --prefix api --no-audit --no-fund
       - name: Probar tablas documentales con PostgreSQL 16
         run: node --test api/src/migrations/modeloDocumental.integration.test.js
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Probar importación JOIN de extremo a extremo
+        run: dotnet run --project integrations/farmetrica-sync/tests/JoinedDocumentPgRegression/JoinedDocumentPgRegression.csproj --configuration Release

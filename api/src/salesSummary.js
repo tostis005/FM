@@ -1,6 +1,7 @@
 // Un solo viaje a PostgreSQL para la pantalla de Ventas.
 // Ningún movimiento/ticket bruto sale del servidor.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {includedPurchaseSupplier} from "./supplierReporting.js";
 
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 function validDate(s){if(!ISO.test(s))return false;const d=new Date(s+"T00:00:00Z");return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===s}
@@ -115,6 +116,7 @@ export function buildSalesSummarySql(schema,granularity,hasProductFilters=false)
   FROM ${tbl}.compras b JOIN farmetrica.farmacias f
     ON f.cliente_slug=$4 AND upper(btrim(b.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
   WHERE f.id=ANY($3::int[]) AND b.fecha >= $1::date AND b.fecha < $2::date+interval '1 day'
+    AND ${includedPurchaseSupplier({tenant:"$4",code:"b.proveedor_id"})}
   GROUP BY f.id,b.articulo_id
  ),
  purchase_cns AS (

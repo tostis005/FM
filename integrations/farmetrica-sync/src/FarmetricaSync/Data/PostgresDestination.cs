@@ -259,6 +259,14 @@ WHERE a."origen_id" IS NULL
         Validation.Id(dest.Schema, "Esquema");
         Validation.Entity(entity);
         if (mode is not ("snapshot" or "incremental")) throw new ArgumentException("Modo de carga desconocido.");
+        if (JoinedDocumentWriter.Supports(entity.Name))
+        {
+            // La base solo publica después de leer y validar el JOIN entero.
+            // No se crea la tabla heredada de filas de venta para este flujo.
+            await using var docSession = await OpenAsync(dest, ct);
+            return await JoinedDocumentWriter.WriteAsync(docSession.Connection, dest.Schema,
+                pharmacy, entity, rawBatches, onProgress, ct);
+        }
 
         string target = Validation.Q(dest.Schema) + "." + Validation.Q(entity.Name);
         string[] names = ["farmacia_codigo", .. entity.Columns.Select(c => c.Name)];

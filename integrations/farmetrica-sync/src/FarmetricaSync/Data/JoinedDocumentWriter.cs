@@ -142,8 +142,8 @@ public static class JoinedDocumentWriter
                          !row.TryGetValue("unidades", out var units) || units is null))
                         throw new InvalidOperationException($"JOIN: línea {line} sin artículo o unidades.");
                     if (string.IsNullOrWhiteSpace(line) &&
-                        (row.TryGetValue("articulo_id", out var article) && article is not null ||
-                         row.TryGetValue("unidades", out var units) && units is not null))
+                        (row.TryGetValue("articulo_id", out var headerArticle) && headerArticle is not null ||
+                         row.TryGetValue("unidades", out var headerUnits) && headerUnits is not null))
                         throw new InvalidOperationException("JOIN: datos de línea sin linea_id.");
                     await writer.StartRowAsync(ct);
                     await writer.WriteAsync(pharmacy.Code, NpgsqlDbType.Text, ct);

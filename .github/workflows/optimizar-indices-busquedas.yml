@@ -1,0 +1,114 @@
+name: Optimizar búsquedas de CN y Genéricos
+on:
+  push:
+    branches: [main]
+    paths: ["ops/indices-busquedas-cn-genericos.sql", ".github/workflows/optimizar-indices-busquedas.yml"]
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: farmetrica-cns-documental-indexes
+  cancel-in-progress: false
+jobs:
+  indices_busqueda:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Preparar acceso seguro
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Detectar índices pendientes
+        id: pending
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+           'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          WITH expected AS (
+           SELECT 'farmetrica'::text AS schema_name,name FROM
+            (VALUES ('fm_find_dcpf_cn_idx'),('fm_find_nom_nombre_trgm_idx'),('fm_find_nom_cn_trgm_idx')) x(name)
+           UNION ALL
+           SELECT c.esquema_datos,v.name FROM
+            (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
+            CROSS JOIN (VALUES
+             ('fm_find_articulos_cn_farmacia_idx','articulos'),
+             ('fm_find_articulos_nombre_trgm_idx','articulos'),
+             ('fm_find_recepciones_linea_articulo_idx','fm_recepciones_lineas'),
+             ('fm_find_ventas_linea_articulo_idx','fm_ventas_lineas')
+            )v(name,tbl)
+            WHERE to_regclass(format('%I.%I',c.esquema_datos,v.tbl)) IS NOT NULL
+          )
+          SELECT count(*) FROM expected e WHERE NOT EXISTS(
+           SELECT 1 FROM pg_class i JOIN pg_namespace ns ON ns.oid=i.relnamespace
+           JOIN pg_index ix ON ix.indexrelid=i.oid
+           WHERE ns.nspname=e.schema_name AND i.relname=e.name
+            AND ix.indisvalid AND ix.indisready);
+          SQL
+          )
+          test "$count" -ge 0
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Índices pendientes: $count"
+      - name: Construcción concurrente sin detener el ERP
+        if: steps.pending.outputs.count != '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+             -o ServerAliveInterval=20 -o ServerAliveCountMax=8 "$VPS_USER@$VPS_HOST" \
+             'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+             < ops/indices-busquedas-cn-genericos.sql; then
+              echo "Índices instalados y validados"
+              break
+            fi
+            if [ "$i" = 5 ]; then exit 1; fi
+            sleep 20
+          done
+      - name: Comprobar índices de búsqueda válidos en PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+           'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          WITH expected AS (
+           SELECT 'farmetrica'::text AS schema_name,name FROM
+            (VALUES ('fm_find_dcpf_cn_idx'),('fm_find_nom_nombre_trgm_idx'),('fm_find_nom_cn_trgm_idx')) x(name)
+           UNION ALL
+           SELECT c.esquema_datos,v.name FROM
+            (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
+            CROSS JOIN (VALUES
+             ('fm_find_articulos_cn_farmacia_idx','articulos'),
+             ('fm_find_articulos_nombre_trgm_idx','articulos'),
+             ('fm_find_recepciones_linea_articulo_idx','fm_recepciones_lineas'),
+             ('fm_find_ventas_linea_articulo_idx','fm_ventas_lineas')
+            )v(name,tbl)
+            WHERE to_regclass(format('%I.%I',c.esquema_datos,v.tbl)) IS NOT NULL
+          )
+          SELECT count(*) FROM expected e WHERE NOT EXISTS(
+           SELECT 1 FROM pg_class i JOIN pg_namespace ns ON ns.oid=i.relnamespace
+           JOIN pg_index ix ON ix.indexrelid=i.oid
+           WHERE ns.nspname=e.schema_name AND i.relname=e.name
+            AND ix.indisvalid AND ix.indisready);
+          SQL
+          )
+          test "$count" = 0
+          echo "Índices de búsqueda completos, no se ha cambiado ningún movimiento"

@@ -30,7 +30,7 @@ test("detalle pagina en PostgreSQL y solo cruza compras para referencias de la p
  assert.equal(data.products[0].margin,30);
  assert.equal(data.products[0].id,"5|654321");
  assert.equal(calls.length,1);
- assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",["VAL"],["5"],"",[],201,0]);
+ assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",["VAL"],["5"],"",[],401,0]);
  assert.match(calls[0].sql,/page AS MATERIALIZED/);
  assert.match(calls[0].sql,/FROM page p LEFT JOIN costs/);
  assert.doesNotMatch(calls[0].sql,/date_trunc\('month'|GROUPING SETS|jsonb_agg/);
@@ -38,7 +38,7 @@ test("detalle pagina en PostgreSQL y solo cruza compras para referencias de la p
 test("familias, paginación y farmacias no autorizadas",async()=>{
  const {request,calls}=make();
  await request({pagina:"2",familias:"12",buscar:"654321"});
- assert.deepEqual(calls[0].params.slice(4),["654321",["12"],201,200]);
+ assert.deepEqual(calls[0].params.slice(4),["654321",["12"],401,400]);
  assert.equal((await request({farmacias:"9"})).status,403);
  assert.equal((await request({farmacias:"1,5",familias:"12"})).status,400);
  assert.equal((await request({pagina:"0"})).status,400);

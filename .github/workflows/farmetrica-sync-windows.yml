@@ -74,6 +74,7 @@ jobs:
           --health-retries 12
     env:
       FM_TEST_DATABASE_URL: postgres://fm_test:fm_test@127.0.0.1:5432/fm_test
+      FM_TEST_NPGSQL: Host=127.0.0.1;Port=5432;Database=fm_test;Username=fm_test;Password=fm_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

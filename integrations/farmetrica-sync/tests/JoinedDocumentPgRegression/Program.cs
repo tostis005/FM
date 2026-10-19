@@ -2,8 +2,8 @@ using FarmetricaSync.Core;
 using FarmetricaSync.Data;
 using Npgsql;
 
-var url = Environment.GetEnvironmentVariable("FM_TEST_DATABASE_URL")
-    ?? throw new Exception("FM_TEST_DATABASE_URL es obligatorio");
+var url = Environment.GetEnvironmentVariable("FM_TEST_NPGSQL")
+    ?? throw new Exception("FM_TEST_NPGSQL es obligatorio");
 await using var db = new NpgsqlConnection(url);
 await db.OpenAsync();
 var pharmacy = new Pharmacy { Code = "ABA", SystemType = "farmatic" };

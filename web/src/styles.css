@@ -772,3 +772,20 @@ html,body{overflow-x:clip}
 .fm-supplier-check-field input,.fm-management .smart-table input[type="checkbox"]{
  inline-size:18px;block-size:18px;accent-color:#099d70;cursor:pointer}
 .fm-unified-table input[type="number"],.fm-unified-table select{max-width:190px}
+
+/* Grupos de navegación: flecha visible cuando tienen subopciones.
+   El indicador es un botón independiente: desplegar no cambia de informe. */
+.side-nav-parent{position:relative;min-width:0;flex:0 0 auto}
+.side-nav-parent.has-submenu>.side-link{padding-right:45px}
+.side-nav-parent>.side-link>span:not(.active-dot){min-width:0}
+.side-nav-caret{position:absolute;right:5px;top:50%;transform:translateY(-50%);
+ display:grid;place-items:center;width:34px;height:36px;border:0;border-radius:8px;
+ background:transparent;color:#6a8075;cursor:pointer;z-index:1}
+.side-nav-caret:hover{color:#07976b;background:#dff5e9}
+.side-nav-caret:focus-visible{outline:2px solid #07976b;outline-offset:1px}
+.side-nav-parent:has(.side-link.active) .side-nav-caret{color:#07976b}
+.side-nav-caret .side-settings-chevron{margin-left:0;display:block;transition:transform .18s ease}
+.side-nav-caret .side-settings-chevron.open{transform:rotate(180deg)}
+.side-nav-submenu{display:flex;flex-direction:column;gap:2px;min-width:0}
+.side-nav-submenu[hidden]{display:none}
+.side-nav-submenu .side-sublink{flex:0 0 auto}

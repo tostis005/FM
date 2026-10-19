@@ -92,7 +92,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     )
     SELECT documents.*,count(*) OVER()::int AS total FROM documents
     ORDER BY "documentDate" DESC,"sourceId" DESC
-    LIMIT ${limit}::int OFFSET ${offset}::int`,values);;
+    LIMIT ${limit}::int OFFSET ${offset}::int`,values);
    res.json({available:true,from:f.from,to:f.to,page,pageSize:size,
     total:Number(rows[0]?.total||0),
     rows:rows.map((r,i)=>({id:String(r.pharmacyId)+"|"+String(r.sourceId||r.reference||"recepcion")+"|"+((page-1)*size+i),

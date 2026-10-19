@@ -204,7 +204,7 @@ export function setupSalesDetail(app,pool,{requireTenant}){
        has("compras","farmacia_id","producto_id","fecha","unidades","puc")?"legacy":"none"
     };
    }
-   const pageSize=200;
+   const pageSize=400;
    const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
      pageSize+1,(page-1)*pageSize]);

@@ -2,6 +2,7 @@
 // jamás códigos nacionales, nombres, precios ni importes.
 import pg from "pg";
 import {setupRealReports} from "./realReports.js";
+import {setupPurchaseTotals} from "./purchaseTotals.js";
 if(process.env.FM_BENCHMARK_READONLY!=="1")throw Error("Se requiere modo read-only explícito");
 const pool=new pg.Pool({
  connectionString:process.env.DATABASE_URL,max:6,connectionTimeoutMillis:5000,
@@ -10,6 +11,7 @@ const pool=new pg.Pool({
 const routes=new Map();
 setupRealReports({get:(path,...handlers)=>routes.set(path,handlers.at(-1))},pool,
  {requireTenant:()=>[]});
+setupPurchaseTotals({get:(path,...handlers)=>routes.set(path,handlers.at(-1))},pool,{requireTenant:()=>[]});
 try{
  // Diagnóstico específico del problema "Compras vacío": sin importes, CN ni
  // datos de clientes en logs. Cada farmacia se comprueba con índice y LIMIT 1.
@@ -82,6 +84,29 @@ try{
   await routes.get("/api/analytics/reportes")(req,res,e=>{error=e});
   if(error)throw error;
   if(status!==200)throw Error("HTTP "+status);
+  if(modulo==="compras"){
+   const isPresent=key=>response.kpis?.[key]!=null;
+   const rows=response.buyRows||[];
+   const missing=field=>rows.filter(r=>r[field]==null||r[field]==="").length;
+   console.log("CONTROL_COMPRAS "+name+
+    ": indicadores_compras="+isPresent("compras")+
+    ", unidades="+isPresent("unidadesCompradas")+
+    ", proveedores="+isPresent("proveedores")+
+    ", lineas="+isPresent("lineasCompra")+
+    ", filas="+rows.length+", sin_pvp="+missing("pvp")+
+    ", sin_nombre="+missing("name")+", sin_puc="+missing("puc"));
+   const start=performance.now();
+   const reqTotals={...req,query:{desde:req.query.desde,hasta:req.query.hasta,farmacias:req.query.farmacias}};
+   let totals,problem;
+   const rr={status(){return rr},json(v){totals=v;return rr}};
+   await routes.get("/api/analytics/compras/resumen")(reqTotals,rr,e=>{problem=e});
+   if(problem)throw problem;
+   console.log("CONTROL_COMPRAS_RESUMEN "+name+": "+
+    Math.round(performance.now()-start)+"ms, total="+(totals?.kpis?.compras!=null)+
+    ", unidades="+(totals?.kpis?.unidadesCompradas!=null)+
+    ", proveedores="+(totals?.kpis?.proveedores!=null)+
+    ", lineas="+(totals?.kpis?.lineasCompra!=null));
+  }
   console.log("Informe "+name+" / "+modulo+": "+(Number(process.hrtime.bigint()-now)/1e6).toFixed(0)+
     " ms. Ventas productos="+response.salesRows?.length+
     ", Compras productos="+response.buyRows?.length+

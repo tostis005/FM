@@ -33,7 +33,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const remote=serverSort!==undefined&&typeof onSortChange==="function";
   const sort=remote?serverSort:localSort;
   const [page,setPage]=useState(0);
-  const [pageSize,setPageSize]=useState(10);
+  const [pageSize,setPageSize]=useState(50);
   // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
   // Ordenar solamente la respuesta truncada produciría resultados engañosos.
   const filtered=useMemo(()=>filterSortRows(rows,columns,filters,remote?null:sort),

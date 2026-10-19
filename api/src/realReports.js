@@ -24,7 +24,7 @@ async function tableColumns(pool,schema,table){
  return new Set(rows.map(r=>r.column_name));
 }
 const has=(columns,...required)=>required.every(column=>columns.has(column));
-function getFilters(req,res){
+export function getFilters(req,res){
  const from=String(req.query.desde||""),to=String(req.query.hasta||""),
    raw=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim(),
    module=String(req.query.modulo||"dashboard"),

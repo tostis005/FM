@@ -6,6 +6,7 @@ import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingSta
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
@@ -111,7 +112,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
  const [useReal,setUseReal]=useState(true);
  useEffect(()=>{setUseReal(true);setData(null)},[clientSlug]);
- const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug,COMMON_PERIOD_KEYS).period||"3");
+ const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug).period||"3");
  const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
  const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
@@ -138,6 +139,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   setPage(0);setActive(null);
  };
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
+ const [updatedAt,setUpdatedAt]=useState(null);
  const [active,setActive]=useState(null),[page,setPage]=useState(0),[reload,setReload]=useState(0);
  const asOf=useMemo(()=>new Date(),[reload]);
  const range=resolveSalesPeriod(periodKey,asOf,{from:customFrom,to:customTo},
@@ -164,7 +166,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
     if(!r.ok)throw Error(j.error||"No se pudieron consultar los conjuntos");
     return j;
    })
-   .then(j=>{if(mounted&&j)setData(j)}).catch(e=>{if(mounted)setError(e.message)})
+   .then(j=>{if(mounted&&j){setData(j);setUpdatedAt(new Date());}}).catch(e=>{if(mounted)setError(e.message)})
    .finally(()=>{if(mounted)setLoading(false)});
   return()=>{mounted=false;controller.abort()};
  },[query,clientSlug,reload,useReal]);
@@ -190,29 +192,33 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   name:(g.principle||g.name||g.dcpf).slice(0,28),revenue:Number(g.revenue),dcpf:g.dcpf}));
  const chunk=groups.slice(page*20,(page+1)*20);
  return <div className="fm-generics">
-  <div className="page-header"><h1>Genéricos</h1>
-   <button className="btn btn-secondary" type="button" disabled={loading}
-    onClick={()=>setReload(x=>x+1)}><RefreshCw size={16}/> Actualizar</button></div>
-  <div className="card fm-generics-filters">
-   <label>Periodo<select value={periodKey} onChange={e=>{
-    const k=e.target.value;setPeriodKey(k);
+  <ReportPageHeader title="Genéricos" period={range} updatedAt={updatedAt}
+   refreshing={loading} onRefresh={()=>setReload(x=>x+1)}/>
+  <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{
+    setPeriodKey(k);
     if(k==="custom"){
-     const from=customFrom||range.from||"",to=customTo||range.to||"";
+     const defaultRange=resolveSalesPeriod("this_month",new Date(),{},
+      clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
+     const from=customFrom||defaultRange.from,to=customTo||defaultRange.to;
      setCustomFrom(from);setCustomTo(to);
      updateSharedReportFilters(clientSlug,{period:k,customFrom:from,customTo:to});
     }else updateSharedReportFilters(clientSlug,{period:k});
-   }}>{SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
-   {periodKey==="custom"&&<><label>Desde<input type="date" value={customFrom} onChange={e=>{setCustomFrom(e.target.value);updateSharedReportFilters(clientSlug,{customFrom:e.target.value})}}/></label>
-    <label>Hasta<input type="date" value={customTo} onChange={e=>{setCustomTo(e.target.value);updateSharedReportFilters(clientSlug,{customTo:e.target.value})}}/></label></>}
-   <label>Farmacias<MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
-    options={pharmacies.map(f=>({label:f.name,value:String(f.id)}))} value={ids} onChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}/></label>
-   <label>Prioridad ABCD<select value={abcdFilter} onChange={e=>setAbcdFilter(e.target.value)} aria-label="Filtrar clasificación ABCD">
-    <option value="all">Todas</option><option value="A">A · Principal</option><option value="B">B · Relevante</option>
-    <option value="C">C · Menor</option><option value="D">D · Sin ventas</option>
-   </select></label>
-   <label>Molécula, presentación o CN<div className="fm-generic-search"><Search size={16}/>
-    <input placeholder="Buscar conjunto…" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
-  </div>
+   }}
+   pharmacies={pharmacies} pharmacyIds={ids}
+   onPharmacyChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);
+    setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}
+   customFrom={customFrom} customTo={customTo}
+   onCustomFromChange={value=>{setCustomFrom(value);updateSharedReportFilters(clientSlug,{customFrom:value})}}
+   onCustomToChange={value=>{setCustomTo(value);updateSharedReportFilters(clientSlug,{customTo:value})}}>
+   <label className="fm-unified-filter">Prioridad ABCD
+    <select value={abcdFilter} onChange={e=>setAbcdFilter(e.target.value)} aria-label="Filtrar clasificación ABCD">
+     <option value="all">Todas</option><option value="A">A · Principal</option><option value="B">B · Relevante</option>
+     <option value="C">C · Menor</option><option value="D">D · Sin ventas</option>
+    </select></label>
+   <label className="fm-unified-filter">Molécula, presentación o CN
+    <div className="fm-generic-search"><Search size={16}/>
+     <input placeholder="Buscar conjunto…" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
+  </ReportFilterBar>
   {!range.valid&&<p role="alert" className="fm-generic-detail-error">{range.reason}</p>}
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
   {data?.version&&!loading&&!salesEnabled&&<p role="status" className="fm-inline-status">

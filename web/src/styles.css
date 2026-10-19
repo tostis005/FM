@@ -427,7 +427,7 @@
 .multi-filter-active{background:#e7f8ef;border-color:#71cba8;color:#0a825c}
 .multi-filter-popover{position:fixed;z-index:100;border:1px solid #dbeae2;border-radius:12px;
   background:#fff;box-shadow:0 15px 40px #103f2b35;font-size:12px;
-  overflow:hidden;max-width:calc(100vw - 16px);color:#263e33}
+  overflow-x:hidden;overflow-y:auto;max-height:calc(100dvh - 16px);max-width:calc(100vw - 16px);color:#263e33}
 .multi-filter-top{display:flex;justify-content:space-between;align-items:center;
   gap:10px;padding:11px 13px;border-bottom:1px solid #edf3ef}
 .multi-filter-top strong{font-size:12px}

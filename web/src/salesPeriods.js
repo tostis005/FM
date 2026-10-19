@@ -1,11 +1,14 @@
 // Rangos calendario en zona horaria del cliente: no dependen del huso del navegador.
 // El filtro de ventas se aplica en PostgreSQL con fechas inclusivas.
 export const SALES_PERIODS=[
- ["today","Hoy"],["yesterday","Ayer"],["this_week","Esta semana"],
- ["last_week","Semana pasada"],["this_month","Este mes"],["this_year","Este año"],
- ["last_month","Mes pasado"],["last_7","Últimos 7 días"],
- ["last_30","Últimos 30 días"],["3","3 meses"],["6","6 meses"],
- ["12","12 meses"],["24","2 años"],["36","3 años"],["60","5 años"],
+ // Secuencia compartida en todas las pantallas, de fechas recientes a históricas.
+ ["today","Hoy"],["yesterday","Ayer"],
+ ["this_week","Esta semana"],["last_week","Semana pasada"],
+ ["this_month","Este mes"],["last_month","Mes pasado"],
+ ["this_year","Este año"],["last_year","Año pasado"],
+ ["last_7","Últimos 7 días"],["last_30","Últimos 30 días"],
+ ["3","Últimos 3 meses"],["6","Últimos 6 meses"],["12","Últimos 12 meses"],
+ ["24","Últimos 2 años"],["36","Últimos 3 años"],["60","Últimos 5 años"],
  ["all","Todo el histórico"],["custom","Personalizado"]
 ];
 const iso=d=>d.toISOString().slice(0,10);
@@ -34,6 +37,10 @@ export function resolveSalesPeriod(period,now=new Date(),custom={},timeZone="Eur
   case "last_week":from=add(firstWeek,{days:-7});to=add(firstWeek,{days:-1});granularity="day";break;
   case "this_month":from=firstMonth;granularity="day";break;
    case "this_year":from=new Date(Date.UTC(today.getUTCFullYear(),0,1));granularity="month";break;
+  case "last_year":
+   from=new Date(Date.UTC(today.getUTCFullYear()-1,0,1));
+   to=new Date(Date.UTC(today.getUTCFullYear()-1,11,31));
+   granularity="month";break;
   case "last_month":from=add(firstMonth,{months:-1});to=add(firstMonth,{days:-1});granularity="day";break;
   case "last_7":from=add(today,{days:-6});granularity="day";break;
   case "last_30":from=add(today,{days:-29});granularity="day";break;

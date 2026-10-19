@@ -1,0 +1,51 @@
+/* Cabeceras y filtros compartidos entre los módulos de Farmétrica. */
+.main-content .fm-unified-header{
+ display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+ margin-bottom:16px;flex-wrap:wrap;
+}
+.fm-unified-heading{min-width:0;flex:1 1 260px}
+.fm-unified-heading h1{margin:0}
+.fm-unified-heading p{margin:6px 0 0;color:#748b82;font-size:12px;line-height:1.5}
+.fm-unified-header-right{
+ margin-left:auto;display:flex;align-items:center;justify-content:flex-end;
+ gap:12px;flex-wrap:wrap;min-width:0;
+}
+.fm-unified-header-meta{text-align:right;display:flex;flex-direction:column;gap:4px;
+ color:#526b61;font-size:11px;line-height:1.4}
+.fm-unified-header-meta small{color:#8ba098;font-size:10px}
+.fm-unified-header-right .btn{white-space:nowrap}
+.fm-unified-filters{
+ display:flex;align-items:flex-end;gap:13px;flex-wrap:wrap;
+ padding:15px 18px;margin-bottom:19px;min-width:0;
+}
+.fm-unified-filter,.fm-unified-filters>label,.fm-unified-filters>.fm-filter-field{
+ display:flex;flex-direction:column;justify-content:flex-end;gap:7px;
+ min-width:165px;flex:1 1 170px;margin:0;color:#53685e;
+ font-size:11px;font-weight:700;
+}
+.fm-unified-filter>span,.fm-unified-filters>label>span,
+.fm-unified-filters>.fm-filter-field>span{font-size:11px;font-weight:700;color:#53685e}
+.fm-unified-filter select,.fm-unified-filter input,
+.fm-unified-filters select,.fm-unified-filters input[type="date"],
+.fm-unified-filters input[type="search"],.fm-unified-filters input:not([type]){
+ border:1px solid #dfe9e3;border-radius:8px;background:#fff;color:#334e41;
+ height:40px;min-height:40px;max-width:100%;width:100%;padding:8px 11px;
+ box-sizing:border-box;font-size:12px;outline-offset:2px;
+}
+.fm-unified-filters .multi-filter-trigger{height:40px;min-height:40px;width:100%}
+.fm-unified-filters .fm-demo-search>div,.fm-unified-filters .fm-real-search>div,
+.fm-unified-filters .fm-generic-search{min-height:40px;display:flex;align-items:center}
+.fm-unified-filters .fm-demo-search>div input,.fm-unified-filters .fm-real-search>div input,
+.fm-unified-filters .fm-generic-search input{width:100%;min-width:0;flex:1;border:0;background:transparent;height:36px}
+.fm-unified-filters>.fm-filter-field{flex:1 1 170px}
+@media(max-width:790px){
+ .fm-unified-filters{padding:13px;gap:12px}
+ .fm-unified-header-right{justify-content:flex-start;margin-left:0}
+ .fm-unified-header-meta{text-align:left}
+}
+@media(max-width:560px){
+ .main-content .fm-unified-header{display:flex;flex-direction:column;align-items:stretch}
+ .fm-unified-header-right{width:100%;justify-content:space-between}
+ .fm-unified-header-right .btn{width:auto;flex:none}
+ .fm-unified-filter,.fm-unified-filters>label,.fm-unified-filters>.fm-filter-field{flex-basis:100%;min-width:0}
+}

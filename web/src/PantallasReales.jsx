@@ -5,6 +5,7 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./operativaPreview.css";
 import "./pantallasReales.css";
 
@@ -151,7 +152,7 @@ const boundedReportSignal=controller=>typeof AbortSignal!=="undefined"&&AbortSig
 const detailSignal=()=>typeof AbortSignal!=="undefined"&&AbortSignal.timeout?AbortSignal.timeout(30000):undefined;
 export default function PantallasReales({section,pharmacies=[],clientSlug="ampedia"}){
  const config=META[section];
- const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug,COMMON_PERIOD_KEYS).period||"3");
+ const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug).period||"3");
  const [custom,setCustom]=useState(()=>{
   const saved=readSharedReportFilters(clientSlug);
   return {from:saved.customFrom||"",to:saved.customTo||""};
@@ -166,6 +167,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    direction:section==="productos"?"asc":"desc"}));
  const [page,setPage]=useState(1),[size,setSize]=useState(25),[reload,setReload]=useState(0);
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
+ const [updatedAt,setUpdatedAt]=useState(null);
  const [ticketDetail,setTicketDetail]=useState(null);
  const [receiptDetail,setReceiptDetail]=useState(null);
  const period=useMemo(()=>resolveSalesPeriod(periodKey,new Date(),custom,nowZone(clientSlug)),
@@ -185,7 +187,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
   fetch("/api/analytics/pantallas/"+section+"?"+params,{credentials:"same-origin",
    cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedReportSignal(controller)})
    .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Error(body.error||"No se pueden cargar los registros");return body})
-   .then(body=>{if(!controller.signal.aborted)setData(body)})
+   .then(body=>{if(!controller.signal.aborted){setData(body);setUpdatedAt(new Date());}})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return()=>controller.abort();
@@ -222,31 +224,29 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
  const selected=ids.length?pharmacies.filter(p=>ids.includes(String(p.id))):pharmacies;
  const count=Number(data?.total||0),pages=Math.max(1,Math.ceil(count/size));
  return <div className="fm-operativa-preview fm-operativa-real fm-real-screen">
-  <div className="fm-preview-heading">
-   <div className="page-header"><div><h1>{config.title}</h1><p>{config.desc}</p></div></div>
-   <button className="btn btn-secondary" type="button" onClick={()=>setReload(n=>n+1)}
-    disabled={loading}><RefreshCw size={16}/> Actualizar</button>
-  </div>
-  <div className="card fm-real-screen-filters">
-   <label>Farmacias<MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
-    options={pharmacies.map(p=>({value:String(p.id),label:p.name}))} value={ids}
-    onChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}/></label>
-   {section!=="productos"&&<label>Periodo<select value={periodKey} onChange={e=>{const value=e.target.value;setPeriodKey(value);
-     if(value==="custom"){
-      const from=custom.from||resolveSalesPeriod("this_month",new Date(),{},nowZone(clientSlug)).from;
-      const to=custom.to||resolveSalesPeriod("this_month",new Date(),{},nowZone(clientSlug)).to;
-      setCustom({from,to});updateSharedReportFilters(clientSlug,{period:value,customFrom:from,customTo:to});
-     }else updateSharedReportFilters(clientSlug,{period:value});}}>
-    {SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([id,label])=>
-      <option value={id} key={id}>{label}</option>)}
-   </select></label>}
-   <label className="fm-real-search">Buscar<div><Search size={16}/><input value={search}
-    onChange={e=>setSearch(e.target.value)} placeholder="Código, referencia, nombre…"/></div></label>
-   {periodKey==="custom"&&section!=="productos"&&<div className="fm-real-custom">
-    <label>Desde<input type="date" value={custom.from} onChange={e=>{setCustom(c=>({...c,from:e.target.value}));updateSharedReportFilters(clientSlug,{customFrom:e.target.value})}}/></label>
-    <label>Hasta<input type="date" value={custom.to} onChange={e=>{setCustom(c=>({...c,to:e.target.value}));updateSharedReportFilters(clientSlug,{customTo:e.target.value})}}/></label>
-   </div>}
-  </div>
+  <ReportPageHeader title={config.title} description={config.desc} period={section==="productos"?null:period}
+   updatedAt={updatedAt} refreshing={loading} onRefresh={()=>setReload(n=>n+1)}/>
+  <ReportFilterBar showPeriod={section!=="productos"} periodKey={periodKey}
+   pharmacies={pharmacies} pharmacyIds={ids}
+   onPharmacyChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);
+    setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}
+   onPeriodChange={value=>{
+    setPeriodKey(value);
+    if(value==="custom"){
+     const defaultRange=resolveSalesPeriod("this_month",new Date(),{},nowZone(clientSlug));
+     const from=custom.from||defaultRange.from,to=custom.to||defaultRange.to;
+     setCustom({from,to});updateSharedReportFilters(clientSlug,{period:value,customFrom:from,customTo:to});
+    }else updateSharedReportFilters(clientSlug,{period:value});
+   }}
+   customFrom={custom.from} customTo={custom.to}
+   onCustomFromChange={value=>{setCustom(c=>({...c,from:value}));
+    updateSharedReportFilters(clientSlug,{customFrom:value})}}
+   onCustomToChange={value=>{setCustom(c=>({...c,to:value}));
+    updateSharedReportFilters(clientSlug,{customTo:value})}}>
+   <label className="fm-real-search fm-unified-filter"><span>Buscar</span><div><Search size={16}/><input
+    value={search} onChange={e=>setSearch(e.target.value)}
+    placeholder="Código, referencia, nombre…"/></div></label>
+  </ReportFilterBar>
   {!period.valid&&<p role="alert" className="fm-op-message">{period.reason}</p>}
   {error&&<div className="fm-op-message fm-op-error" role="alert">{error}
    <button type="button" onClick={()=>setReload(n=>n+1)}>Reintentar</button></div>}

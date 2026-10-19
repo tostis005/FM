@@ -27,7 +27,7 @@ test("personalizado valida el rango y escoge puntos horarios, diarios o mensuale
  assert.equal(v("2023-01-01","2026-01-01").valid,true);
  assert.equal(v("1900-01-01","2026-10-18").valid,false);
  assert.equal(v("","2026-10-18").valid,false);
- assert.equal(SALES_PERIODS.length,17);
+ assert.equal(SALES_PERIODS.length,18);
  assert.equal(formatSalesBucket("2026-10-18T09:00","hour"),"09:00");
  assert.equal(formatSalesBucket("2026-10-18","day"),"18/10");
 });
@@ -47,4 +47,15 @@ test("Este año empieza en enero, termina hoy y mantiene zona horaria local",()=
  assert.equal(resolveSalesPeriod("this_year",newYear,{},"America/El_Salvador").from,"2026-01-01");
  assert.equal(resolveSalesPeriod("this_year",newYear,{},"Europe/Madrid").from,"2027-01-01");
  assert.ok(SALES_PERIODS.some(([key,label])=>key==="this_year"&&label==="Este año"));
+});
+
+test("períodos ordenados y año pasado para todas las pantallas",()=>{
+ const keys=SALES_PERIODS.map(([key])=>key);
+ assert.deepEqual(keys.slice(0,8),["today","yesterday","this_week","last_week",
+  "this_month","last_month","this_year","last_year"]);
+ assert.deepEqual([resolve("last_year").from,resolve("last_year").to,resolve("last_year").granularity],
+  ["2025-01-01","2025-12-31","month"]);
+ const turn=new Date("2027-01-01T00:30:00Z");
+ assert.equal(resolveSalesPeriod("last_year",turn,{},"Europe/Madrid").from,"2026-01-01");
+ assert.equal(resolveSalesPeriod("last_year",turn,{},"America/El_Salvador").from,"2025-01-01");
 });

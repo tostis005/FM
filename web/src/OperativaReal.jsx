@@ -2,6 +2,8 @@ import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
 
 import SortableDataTable from "./SortableDataTable.jsx";
+import {ReportPageHeader} from "./ReportControls.jsx";
+import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaReal.css";
 
 const MAP={"compras-preparador":"pedidos","compras-pendientes":"pedidos","compras-pedidos":"pedidos",
@@ -56,10 +58,15 @@ function SelectStatus({value,onChange,values,disabled}){return <select aria-labe
 function Button({children,onClick,disabled,primary=false}){return <button type="button"
  className={"btn "+(primary?"btn-primary":"btn-secondary")} disabled={disabled} onClick={onClick}>{children}</button>}
 export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail=""}){
- const resource=MAP[section], [pharmacy,setPharmacy]=useState(String(pharmacies[0]?.id||""));
+ const resource=MAP[section], [pharmacy,setPharmacy]=useState(()=>{
+  const saved=readSharedReportFilters(clientSlug).pharmacyIds||[];
+  const first=saved.find(id=>pharmacies.some(p=>String(p.id)===id));
+  return first||String(pharmacies[0]?.id||"");
+ });
  const [mode,setMode]=useState("loading");
  const [items,setItems]=useState([]),[scope,setScope]=useState({});
  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
+ const [lastUpdated,setLastUpdated]=useState(null);
  const [responsibles,setResponsibles]=useState([]),[related,setRelated]=useState({oportunidades:[],pedidos:[]});
  const [supplierChoices,setSupplierChoices]=useState([]);
  const supplierNames=useMemo(()=>new Map(supplierChoices.map(s=>[String(s.code).trim().toUpperCase(),s.name])),[supplierChoices]);
@@ -73,7 +80,13 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  const [allocArticle,setAllocArticle]=useState(""),[allocProvider,setAllocProvider]=useState(""),
   [allocUnits,setAllocUnits]=useState("1"),[allocCost,setAllocCost]=useState("");
  const [policy,setPolicy]=useState({cobertura_saludable:90,intervalo_pedidos:7,plazo_entrega:2,stock_seguridad:0});
- useEffect(()=>{setPharmacy(String(pharmacies[0]?.id||""));},[clientSlug,pharmacies.map(p=>p.id).join(",")]);
+ useEffect(()=>{
+   setPharmacy(current=>{
+    if(pharmacies.some(p=>String(p.id)===current))return current;
+    const saved=readSharedReportFilters(clientSlug).pharmacyIds||[];
+    return saved.find(id=>pharmacies.some(p=>String(p.id)===id))||String(pharmacies[0]?.id||"");
+   });
+ },[clientSlug,pharmacies.map(p=>p.id).join(",")]);
  const headers={"x-farmetrica-cliente":clientSlug,"content-type":"application/json"};
  async function api(path,method="GET",body){
   const result=await fetch(path,{method,credentials:"same-origin",cache:"no-store",headers,
@@ -91,7 +104,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
   setMode("loading");setError("");
   try{
    const result=await query();
-   setScope(result.scope||{});setItems(result.items||[]);setMode("ready");
+   setScope(result.scope||{});setItems(result.items||[]);setLastUpdated(new Date());setMode("ready");
    if(["oportunidades","trabajo"].includes(resource)){
     const resp=await api("/api/operativa/responsables?farmacia="+encodeURIComponent(pharmacy)).catch(()=>({items:[]}));
     setResponsibles(resp.items||[]);
@@ -162,20 +175,26 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    p.lineas.some(n=>pending(n)>0):true),[items,section]);
  const canEdit=scope.canEdit,canApprove=scope.canApprove;
  const statInput={fontSize:13};
- if(mode==="loading")return <section className="card fm-preview-panel" role="status">Cargando operativa…</section>;
- if(mode==="error")return <section className="card fm-preview-panel"><h2>Datos no disponibles</h2>
-  <p role="alert">{error}</p><Button onClick={refresh}>Reintentar</Button>
-  </section>;
  const title=TITLE(section);
+ const header=<>
+  <ReportPageHeader title={title} updatedAt={lastUpdated}
+   refreshing={mode==="loading"||busy} onRefresh={()=>void refresh()}/>
+  <div className="card fm-unified-filters">
+   <label className="fm-unified-filter">Farmacias
+    <select aria-label="Farmacia" value={pharmacy}
+     onChange={e=>{const id=e.target.value;setPharmacy(id);
+      updateSharedReportFilters(clientSlug,{pharmacyIds:[id]});}}>
+     {pharmacies.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}
+    </select></label>
+  </div>
+ </>;
+ if(mode==="loading")return <div className="fm-operativa-preview fm-operativa-real">{header}
+  <section className="card fm-preview-panel" role="status">Cargando operativa…</section></div>;
+ if(mode==="error")return <div className="fm-operativa-preview fm-operativa-real">{header}
+  <section className="card fm-preview-panel"><h2>Datos no disponibles</h2>
+   <p role="alert">{error}</p><Button onClick={refresh}>Reintentar</Button></section></div>;
  return <div className="fm-operativa-preview fm-operativa-real">
-   <div className="fm-preview-heading">
-    <div className="page-header"><div><h1>{title}</h1></div></div>
-    <div className="fm-op-tools">
-     <label>Farmacia<select aria-label="Farmacia" value={pharmacy} onChange={e=>setPharmacy(e.target.value)}>
-      {pharmacies.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label>
-
-    </div>
-   </div>
+   {header}
    {error&&<div className="fm-op-message fm-op-error" role="alert">{error}</div>}
    {notice&&<div className="fm-op-message" role="status">{notice}</div>}
    {resource==="pedidos"&&<>

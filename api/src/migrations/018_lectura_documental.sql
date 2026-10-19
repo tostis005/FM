@@ -75,6 +75,17 @@ BEGIN
  END LOOP;
 END $apply$;
 
--- El precálculo heredado no se debe servir después del cambio de fuentes.
--- Solo se invalidan metadatos de la caché; el recálculo usa las vistas nuevas.
-UPDATE farmetrica.ventas_analitica_estado SET calculado_en=to_timestamp(0);
+-- Invalidar la caché una única vez por cliente en el cambio de fuente:
+-- ejecutar esta migración en despliegues sucesivos NO vuelve a vaciarla.
+CREATE TABLE IF NOT EXISTS farmetrica.fuentes_documentales_activas (
+ cliente_slug text PRIMARY KEY REFERENCES farmetrica.clientes(slug),
+ activada_en timestamptz NOT NULL DEFAULT now()
+);
+WITH nuevos AS (
+ INSERT INTO farmetrica.fuentes_documentales_activas(cliente_slug)
+ SELECT c.slug FROM farmetrica.clientes c
+ WHERE to_regclass(format('%I.fm_ventas_analitica',c.esquema_datos)) IS NOT NULL
+ ON CONFLICT (cliente_slug) DO NOTHING RETURNING cliente_slug
+)
+UPDATE farmetrica.ventas_analitica_estado state SET calculado_en=to_timestamp(0)
+WHERE state.cliente_slug IN (SELECT cliente_slug FROM nuevos);

@@ -730,7 +730,7 @@ export function setupRealReports(app,pool,{requireTenant}){
       (f.search||f.families.length||sale.rows.length>=rowLimit)){
     const unfilteredSales=`SELECT f.id::text AS "pharmacyId",${cn} AS cn,
       sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
-      ${salesByArticle.replaceAll("$6","$4")}
+      ${salesByArticle.replace(articleSearchPushdown,"").replaceAll("$6","$4")}
       GROUP BY f.id,${cn}`;
     // Esta consulta no utiliza búsqueda/familias: $4 es el tenant, NO se
     // deben pasar $4/$5 sin referenciarlos. PostgreSQL 42P18 en producción.

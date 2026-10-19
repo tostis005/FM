@@ -96,9 +96,17 @@ function ffmpegConvert(buffer,directory){
  });
 }
 export function setupAssistant(app,pool,{requireTenant}) {
- app.get("/api/asistente/estado",...requireTenant(),(_req,res)=>{
-  res.json({enabled:enabled(),voiceEnabled:voiceEnabled(),model:enabled()?model():null,
-    mode:enabled()?"local":"not_configured"});
+ app.get("/api/asistente/estado",...requireTenant(),async(_req,res)=>{
+  let available=false;
+  if(enabled())try{
+    const response=await fetch(ollama().replace(/\/+$/,"")+"/api/tags",{signal:AbortSignal.timeout(2200)});
+    if(response.ok){
+      const result=await response.json();
+      available=(result.models||[]).some(entry=>entry.name===model()||entry.model===model());
+    }
+  }catch{}
+  res.json({enabled:available,configured:enabled(),voiceEnabled:voiceEnabled(),
+    model:enabled()?model():null,mode:available?"local":enabled()?"model_unavailable":"not_configured"});
  });
  app.post("/api/asistente/chat",...requireTenant(),async(req,res)=>{
   if(!enabled())return res.status(503).json({error:"El asistente está pendiente de activación en el servidor"});

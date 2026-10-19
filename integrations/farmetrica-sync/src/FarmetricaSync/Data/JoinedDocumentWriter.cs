@@ -175,7 +175,7 @@ public static class JoinedDocumentWriter
         // El índice TEMP es privado de esta sesión. Permite validar duplicados
         // y agrupar documentos sin escanear N veces los 3+ millones de filas.
         // ANALYZE aporta cardinalidades al planificador tras el COPY.
-        if (rows >= 20_000)
+        if (rows >= 1_000)
         {
             progress?.Invoke(new("Indexando staging para validación", rows, batches, 0, 0, 0, 0));
             string stageIndex = Validation.Q("fs_doci_" + Guid.NewGuid().ToString("N"));

@@ -28,6 +28,7 @@ jobs:
           node --test api/src/assistant.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --test api/src/supplierReporting.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
           node --check api/src/genericos.js
@@ -119,6 +120,8 @@ jobs:
             psql_test --single-transaction < "$sql"
           done
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql
+          psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
+          psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           psql_test < api/src/migrations/004_ampedia_cutover_MANUAL.sql
           psql_test --single-transaction < api/src/migrations/003_multitenant.sql
           psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql

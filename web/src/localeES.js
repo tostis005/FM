@@ -32,7 +32,7 @@ export function dateES(input){
  const d=new Date(input);
  return Number.isNaN(d.getTime())?"—":new Intl.DateTimeFormat("es-ES").format(d);
 }
-export function dateTimeES(input,timeZone="Europe/Madrid"){
+export function dateTimeES(input,timeZone){
  if(input==null||input==="")return "—";
  const d=new Date(input);
  return Number.isNaN(d.getTime())?"—":new Intl.DateTimeFormat("es-ES",{

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  AudioLines, ArrowUp, Check, CircleHelp, Clock3, Database, Mic, MessageCircle,
+  AudioLines, ArrowUp, CircleHelp, Clock3, Database, Mic, MessageCircle,
   Plus, RotateCcw, ShieldCheck, Sparkles, Square, Trash2, X
 } from "lucide-react";
 import "./AsistenteDemo.css";
+import { collectSpeechResults, mergeDictationDraft } from "./dictadoVoz.js";
 
 const SUGGESTIONS = [
   { icon: Database, text: "¿Qué productos tienen más stock inmovilizado?" },
@@ -37,35 +38,29 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState([]);
-  const [recording, setRecording] = useState(false);
-  const [requesting, setRequesting] = useState(false);
-  const [recorded, setRecorded] = useState(null);
+  const [dictationStatus, setDictationStatus] = useState("idle");
+  const [dictationPreview, setDictationPreview] = useState("");
   const [seconds, setSeconds] = useState(0);
   const [audioError, setAudioError] = useState("");
+  const [transcriptionReady, setTranscriptionReady] = useState(false);
   const [sessionNumber, setSessionNumber] = useState(1);
   const inputRef = useRef(null);
   const conversationRef = useRef(null);
   const dialogRef = useRef(null);
   const launcherRef = useRef(null);
-  const recorderRef = useRef(null);
-  const streamRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const dictationTokenRef = useRef(0);
+  const recognizedRef = useRef({ final: "", interim: "" });
+  const baseDraftRef = useRef("");
+  const speechErroredRef = useRef(false);
   const tickerRef = useRef(null);
   const durationRef = useRef(0);
-  const discardRef = useRef(false);
-  const requestRef = useRef(0);
-  const createdUrlsRef = useRef(new Set());
   const counterRef = useRef(0);
+  const isDictating = dictationStatus !== "idle";
 
-  function createMessage(role, text, audioUrl) {
+  function createMessage(role, text) {
     counterRef.current += 1;
-    return { id: counterRef.current, role, text, audioUrl: audioUrl || null, time: stamp() };
-  }
-
-  function revokeUrl(url) {
-    if (url && createdUrlsRef.current.has(url)) {
-      URL.revokeObjectURL(url);
-      createdUrlsRef.current.delete(url);
-    }
+    return { id: counterRef.current, role, text, time: stamp() };
   }
 
   function clearTicker() {
@@ -73,22 +68,118 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     tickerRef.current = null;
   }
 
-  function stopTracks() {
-    if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
-    streamRef.current = null;
+  function cancelDictation() {
+    dictationTokenRef.current += 1; // Ignorar resultados tardíos al descartar, cerrar o cambiar de conversación.
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    clearTicker();
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      try { recognition.abort(); } catch {}
+    }
+    setDictationStatus("idle");
+    setDictationPreview("");
+    setSeconds(0);
   }
 
-  function finishRecording(discard = false) {
-    requestRef.current += 1;
-    discardRef.current = discard;
+  function completeDictation(token) {
+    if (token !== dictationTokenRef.current) return;
     clearTicker();
-    const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      try { recorder.stop(); } catch { stopTracks(); }
-    } else {
-      stopTracks();
+    recognitionRef.current = null;
+    dictationTokenRef.current += 1;
+    setDictationStatus("idle");
+    setDictationPreview("");
+    const spoken = [recognizedRef.current.final, recognizedRef.current.interim].filter(Boolean).join(" ").trim();
+    if (spoken) {
+      // El dictado añade texto al borrador existente sin enviarlo automáticamente.
+      setDraft(mergeDictationDraft(baseDraftRef.current, spoken));
+      setTranscriptionReady(true);
+      setAudioError("");
+      inputRef.current?.focus();
+    } else if (!speechErroredRef.current) {
+      setAudioError("No se ha detectado una frase. Vuelve a intentarlo o escribe tu pregunta.");
     }
-    setRecording(false);
+  }
+
+  function stopDictation() {
+    const recognition = recognitionRef.current;
+    if (!recognition || dictationStatus === "finishing") return;
+    setDictationStatus("finishing");
+    clearTicker();
+    try { recognition.stop(); }
+    catch { completeDictation(dictationTokenRef.current); }
+  }
+
+  function startDictation() {
+    if (isDictating) return;
+    setAudioError("");
+    setTranscriptionReady(false);
+    const BrowserRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!BrowserRecognition) {
+      setAudioError("Este navegador no permite transcribir voz directamente. Puedes escribir tu pregunta; el dictado local se incorporará al conectar el servicio de transcripción.");
+      return;
+    }
+    let recognition;
+    try {
+      recognition = new BrowserRecognition();
+      recognition.lang = "es-ES";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+    } catch {
+      setAudioError("No se ha podido iniciar el reconocimiento de voz en este navegador.");
+      return;
+    }
+    const token = ++dictationTokenRef.current;
+    recognitionRef.current = recognition;
+    recognizedRef.current = { final: "", interim: "" };
+    baseDraftRef.current = draft;
+    speechErroredRef.current = false;
+    durationRef.current = 0;
+    setSeconds(0);
+    setDictationPreview("");
+    setDictationStatus("starting");
+    recognition.onstart = () => {
+      if (token !== dictationTokenRef.current) return;
+      setDictationStatus("listening");
+      tickerRef.current = window.setInterval(() => {
+        durationRef.current += 1;
+        setSeconds(durationRef.current);
+        if (durationRef.current >= 120) {
+          clearTicker();
+          try { recognition.stop(); } catch { completeDictation(token); }
+          setDictationStatus("finishing");
+        }
+      }, 1000);
+    };
+    recognition.onresult = event => {
+      if (token !== dictationTokenRef.current) return;
+      recognizedRef.current = collectSpeechResults(event.results);
+      setDictationPreview([recognizedRef.current.final, recognizedRef.current.interim].filter(Boolean).join(" "));
+    };
+    recognition.onerror = event => {
+      if (token !== dictationTokenRef.current) return;
+      speechErroredRef.current = true;
+      const messages = {
+        "not-allowed": "Debes permitir el acceso al micrófono para dictar.",
+        "service-not-allowed": "El navegador ha bloqueado el reconocimiento de voz.",
+        "audio-capture": "No se ha encontrado un micrófono disponible.",
+        "no-speech": "No se ha detectado voz. Vuelve a intentarlo.",
+        network: "El servicio de reconocimiento de voz del navegador no está disponible.",
+        "language-not-supported": "El navegador no admite reconocimiento de voz en español."
+      };
+      setAudioError(messages[event.error] || "No ha sido posible transcribir el audio. Inténtalo de nuevo.");
+    };
+    recognition.onend = () => completeDictation(token);
+    try { recognition.start(); }
+    catch {
+      recognitionRef.current = null;
+      dictationTokenRef.current += 1;
+      setDictationStatus("idle");
+      setAudioError("No se ha podido activar el micrófono. Comprueba sus permisos.");
+    }
   }
 
   useEffect(() => {
@@ -99,13 +190,12 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     function handleKeyDown(event) {
       if (event.key === "Escape") {
         event.preventDefault();
-        finishRecording(true);
-        setRequesting(false);
+        cancelDictation();
         setOpen(false);
         launcherRef.current?.focus();
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
-      const items = [...dialogRef.current.querySelectorAll("button:not(:disabled),textarea:not(:disabled),audio[controls]")];
+      const items = [...dialogRef.current.querySelectorAll("button:not(:disabled),textarea:not(:disabled)")];
       if (!items.length) return;
       const first = items[0], last = items[items.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -123,27 +213,27 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   }, [messages, open]);
 
   useEffect(() => () => {
-    requestRef.current += 1;
+    dictationTokenRef.current += 1;
     clearTicker();
-    if (recorderRef.current?.state === "recording") {
-      recorderRef.current.onstop = null;
-      try { recorderRef.current.stop(); } catch {}
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      try { recognition.abort(); } catch {}
     }
-    stopTracks();
-    createdUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
-    createdUrlsRef.current.clear();
   }, []);
 
   function closeAssistant() {
-    finishRecording(true);
-    setRequesting(false);
+    cancelDictation();
     setOpen(false);
     launcherRef.current?.focus();
   }
 
   function sendText(text = draft) {
     const question = text.trim();
-    if (!question || recording || requesting) return;
+    if (!question || isDictating) return;
     setMessages(previous => [
       ...previous,
       createMessage("user", question),
@@ -151,93 +241,16 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     ]);
     setDraft("");
     setAudioError("");
+    setTranscriptionReady(false);
     inputRef.current?.focus();
   }
 
-  async function startRecording() {
-    if (recording || requesting) return;
-    setAudioError("");
-    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setAudioError("Este navegador no permite grabar audio aquí. Comprueba que utilizas HTTPS y que el micrófono está disponible.");
-      return;
-    }
-    if (recorded) { revokeUrl(recorded.url); setRecorded(null); }
-    const currentRequest = ++requestRef.current;
-    setRequesting(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (currentRequest !== requestRef.current) {
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-      const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find(value => MediaRecorder.isTypeSupported(value));
-      const recorder = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
-      const chunks = [];
-      streamRef.current = stream;
-      recorderRef.current = recorder;
-      discardRef.current = false;
-      recorder.ondataavailable = event => { if (event.data.size > 0) chunks.push(event.data); };
-      recorder.onerror = () => setAudioError("Se ha interrumpido la grabación. Inténtalo de nuevo.");
-      recorder.onstop = () => {
-        stopTracks();
-        recorderRef.current = null;
-        if (discardRef.current) return;
-        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        if (!blob.size) { setAudioError("No se ha registrado audio. Vuelve a intentarlo."); return; }
-        const url = URL.createObjectURL(blob);
-        createdUrlsRef.current.add(url);
-        setRecorded({ url, size: blob.size });
-      };
-      recorder.start();
-      setRequesting(false);
-      durationRef.current = 0;
-      setSeconds(0);
-      setRecording(true);
-      tickerRef.current = window.setInterval(() => {
-        durationRef.current += 1;
-        setSeconds(durationRef.current);
-        if (durationRef.current >= 120) finishRecording(false);
-      }, 1000);
-    } catch (error) {
-      if (currentRequest !== requestRef.current) return;
-      setRequesting(false);
-      stopTracks();
-      setRecording(false);
-      setAudioError(error?.name === "NotAllowedError"
-        ? "Permite el acceso al micrófono en tu navegador para grabar una pregunta."
-        : "No se ha podido abrir el micrófono. Comprueba el dispositivo y vuelve a intentarlo.");
-    }
-  }
-
-  function removeAudio() {
-    if (recorded) revokeUrl(recorded.url);
-    setRecorded(null);
-    setSeconds(0);
-  }
-
-  function sendAudio() {
-    if (!recorded || recording) return;
-    setMessages(previous => [
-      ...previous,
-      createMessage("user", "Mensaje de voz · " + timerLabel(seconds), recorded.url),
-      createMessage("assistant", "Audio recibido en la maqueta. Puedes reproducirlo en esta conversación. No se ha enviado a ningún servidor: la transcripción y la respuesta por IA se conectarán en una fase posterior.")
-    ]);
-    setRecorded(null);
-    setSeconds(0);
-    setAudioError("");
-  }
-
   function newConversation() {
-    finishRecording(true);
-    setRequesting(false);
-    if (recorded) revokeUrl(recorded.url);
-    createdUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
-    createdUrlsRef.current.clear();
-    setRecorded(null);
+    cancelDictation();
     setMessages([]);
     setDraft("");
     setAudioError("");
-    setSeconds(0);
+    setTranscriptionReady(false);
     setSessionNumber(value => value + 1);
     inputRef.current?.focus();
   }
@@ -267,12 +280,12 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
               <div className="fm-ai-rail-label">PRUEBA ESTAS PREGUNTAS</div>
               <div className="fm-ai-rail-prompts">
                 {SUGGESTIONS.map(item => (
-                  <button key={item.text} type="button" onClick={() => sendText(item.text)}>
+                  <button key={item.text} type="button" onClick={() => sendText(item.text)} disabled={isDictating}>
                     <item.icon size={16} aria-hidden="true"/><span>{item.text}</span>
                   </button>
                 ))}
               </div>
-              <div className="fm-ai-rail-footer"><ShieldCheck size={16}/><span>Maqueta local. Sin acceso a los datos ni a servicios de IA.</span></div>
+              <div className="fm-ai-rail-footer"><ShieldCheck size={16}/><span>Versión demo: sin acceso a los datos ni motor de IA conectado.</span></div>
             </aside>
             <div className="fm-ai-workspace">
               <header className="fm-ai-topbar">
@@ -309,7 +322,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                         <div className="fm-ai-msg-content">
                           <div className="fm-ai-msg-bubble">
                             <p>{message.text}</p>
-                            {message.audioUrl && <audio controls preload="none" src={message.audioUrl} aria-label="Reproducir mensaje de voz"/>}
+                            
                           </div>
                           <time className="fm-ai-msg-time">{message.time}{message.role === "assistant" ? " · Respuesta de demostración" : ""}</time>
                         </div>
@@ -320,39 +333,46 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
               </div>
               <div className="fm-ai-bottom">
                 {audioError && <div className="fm-ai-error" role="alert">{audioError}</div>}
-                {requesting && <div className="fm-ai-recording" role="status"><span className="fm-ai-rec-dot"/> Solicitando permiso del micrófono… <button type="button" onClick={() => { finishRecording(true); setRequesting(false); }}>Cancelar</button></div>}
-                {recording && <div className="fm-ai-recording" role="status">
-                  <span className="fm-ai-rec-dot"/><span>Grabando audio</span><strong>{timerLabel(seconds)}</strong>
-                  <button type="button" onClick={() => finishRecording(true)} title="Descartar grabación"><Trash2 size={16}/> Descartar</button>
-                  <button type="button" onClick={() => finishRecording(false)} className="fm-ai-stop"><Square size={14} fill="currentColor"/> Detener</button>
-                </div>}
-                {recorded && <div className="fm-ai-audio-preview">
-                  <AudioLines size={19}/><span>Audio listo · {timerLabel(seconds)}</span>
-                  <audio controls preload="none" src={recorded.url} aria-label="Escuchar grabación antes de enviar"/>
-                  <button type="button" className="fm-ai-icon-btn" onClick={removeAudio} aria-label="Eliminar audio"><X size={18}/></button>
-                  <button type="button" className="fm-ai-send-audio" onClick={sendAudio}><Check size={16}/> Enviar audio</button>
-                </div>}
+                {isDictating && <section className="fm-ai-dictation" aria-label="Dictado de voz">
+                  <div className="fm-ai-dictation-content">
+                    <div className="fm-ai-dictation-icon"><Mic size={25}/></div>
+                    <div className="fm-ai-dictation-copy">
+                      <strong>{dictationStatus === "starting" ? "Preparando micrófono…" : dictationStatus === "finishing" ? "Terminando el dictado…" : "Te escucho"}</strong>
+                      <span aria-live="polite">{dictationPreview || (dictationStatus === "finishing" ? "Pasando el dictado a texto" : "Habla de forma natural. Tu pregunta aparecerá aquí mientras la dictas.")}</span>
+                    </div>
+                    <div className="fm-ai-dictation-timer">{timerLabel(seconds)}</div>
+                  </div>
+                  <div className="fm-ai-dictation-actions">
+                    <button type="button" className="fm-ai-dictation-discard" onClick={cancelDictation}>
+                      <Trash2 size={21}/> <span>Descartar</span>
+                    </button>
+                    <button type="button" className="fm-ai-dictation-stop" onClick={stopDictation} disabled={dictationStatus === "finishing"}>
+                      <Square size={19} fill="currentColor"/> <span>{dictationStatus === "finishing" ? "Transcribiendo…" : "Detener y transcribir"}</span>
+                    </button>
+                  </div>
+                </section>}
+                {transcriptionReady && !isDictating && <p className="fm-ai-transcription-ready" role="status">Transcripción lista: revísala o edítala antes de enviarla.</p>}
                 <div className="fm-ai-composer">
                   <textarea
                     ref={inputRef}
                     aria-label="Escribe tu pregunta"
-                    placeholder={recording || requesting ? "Termina la grabación para escribir..." : "Escribe una pregunta sobre tus farmacias..."}
+                    placeholder={isDictating ? "Termina el dictado para continuar..." : "Escribe una pregunta sobre tus farmacias..."}
                     rows={2}
                     maxLength={2000}
-                    disabled={recording || requesting}
+                    disabled={isDictating}
                     value={draft}
-                    onChange={event => setDraft(event.target.value)}
+                    onChange={event => { setDraft(event.target.value); setTranscriptionReady(false); }}
                     onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); sendText(); } }}
                   />
                   <div className="fm-ai-composer-actions">
                     <span>Intro para enviar · Mayús + Intro para nueva línea</span>
                     <div>
-                      <button type="button" className="fm-ai-icon-btn" title="Grabar mensaje de voz" aria-label="Grabar mensaje de voz" disabled={recording || requesting || Boolean(recorded)} onClick={startRecording}><Mic size={19}/></button>
-                      <button type="button" className="fm-ai-send" disabled={!draft.trim() || recording || requesting} aria-label="Enviar mensaje" title="Enviar mensaje" onClick={() => sendText()}><ArrowUp size={19}/></button>
+                      <button type="button" className="fm-ai-icon-btn" title="Dictar una pregunta" aria-label="Dictar una pregunta" disabled={isDictating} onClick={startDictation}><Mic size={19}/></button>
+                      <button type="button" className="fm-ai-send" disabled={!draft.trim() || isDictating} aria-label="Enviar mensaje" title="Enviar mensaje" onClick={() => sendText()}><ArrowUp size={19}/></button>
                     </div>
                   </div>
                 </div>
-                <p className="fm-ai-disclaimer"><MessageCircle size={13}/> Vista previa: los mensajes y audios permanecen en esta pestaña y no se envían a Farmétrica ni a servicios externos.</p>
+                <p className="fm-ai-disclaimer"><MessageCircle size={13}/> Modo demo: el chat no consulta datos. El dictado utiliza el reconocimiento del navegador, que puede procesar la voz en un servicio externo según el dispositivo.</p>
               </div>
             </div>
           </section>

@@ -1,40 +1,37 @@
-# Asistente de Farmétrica · maqueta de interfaz
+# Asistente de Farmétrica · maqueta de interfaz y dictado
 
-Esta primera iteración contiene **solo frontend**. No ejecuta modelos, no consulta PostgreSQL, no llama a Ollama y no transmite mensajes ni grabaciones a servidores. Los ejemplos de respuesta son textos explicativos predefinidos; nunca se presentan como cifras reales.
+Esta iteración continúa siendo una **maqueta de frontend**. No consulta PostgreSQL, no ejecuta Ollama ni llama a ningún modelo de Farmétrica. Las respuestas del chat son mensajes de demostración, nunca cifras reales.
 
-## Dónde aparece
+## Experiencia del chat
 
-La burbuja «Asistente IA» está anclada abajo a la derecha en **todas las páginas autenticadas** de la aplicación. Al pulsarla, abre una vista de pantalla completa con:
-- Cabecera y botón de cierre (o tecla Escape).
-- Contexto de la sección activa (ventas, compras, dashboard, etc.).
-- Sugerencias para iniciar consultas y botón de nueva conversación.
-- Campo de texto: Intro envía, Mayús+Intro inserta nueva línea.
-- Historial visible de la conversación actual, exclusivamente en memoria de la pestaña.
-- Grabación local con MediaRecorder, contador y límite de dos minutos.
-- Controles para detener, descartar, escuchar y enviar el audio dentro de la maqueta.
-- Mensajes de estado y errores cuando no hay permiso de micrófono.
+La burbuja «Asistente IA» aparece en las páginas autenticadas. Al pulsarla se abre una pantalla completa con chat, sugerencias y contexto de la sección activa. El historial de la conversación actual permanece en memoria, sin guardarse en localStorage. Al cambiar de cliente se reinicia el asistente.
 
-Al cambiar de cliente se reinicia el asistente para que no se reutilice una conversación en otro contexto. Tampoco se guarda texto ni audio en localStorage.
+- Escribir una pregunta y enviarla con Intro (Mayús + Intro añade una línea).
+- Dictar una pregunta desde el botón de micrófono del compositor.
+- Durante el dictado aparece un panel destacado con **dos botones grandes**, «Descartar» y «Detener y transcribir», contador y vista previa del reconocimiento.
+- Al pulsar **Detener y transcribir**, el texto reconocido se inserta en la misma caja del compositor, junto al borrador que ya existiera. **No se envía automáticamente**.
+- Al pulsar **Descartar**, no se añade ningún texto al borrador.
+- Si el navegador no soporta dictado, se muestra un mensaje claro y se mantiene disponible la escritura.
 
-## Probar manualmente
+### Transcripción temporal desde navegador
 
-1. Iniciar sesión y recorrer varias secciones: la burbuja debe mantenerse visible.
-2. Abrir, cerrar, usar Escape y volver a abrir. Comprobar foco y desplazamiento.
-3. Escribir y enviar una pregunta; probar Intro, Mayús+Intro, sugerencias y nueva conversación.
-4. Permitir micrófono en un origen HTTPS (o localhost), grabar, detener y reproducir.
-5. Enviar audio y verificar que se puede reproducir el mensaje en la conversación.
-6. Cancelar grabación y revocar permisos: comprobar mensajes de error.
-7. Comprobar móvil y escritorio, incluidos botones con teclado.
-8. Cambiar de cliente y verificar que no reaparecen mensajes ni audios del cliente anterior.
+Mientras no esté instalado Whisper u otro motor local, esta demo utiliza `SpeechRecognition` / `webkitSpeechRecognition` del navegador, en idioma español, cuando está disponible. **La compatibilidad depende del navegador** y algunos proveedores pueden enviar el audio a sus propios servicios externos para reconocimiento. La web de Farmétrica no recibe ni almacena una grabación, pero **no se puede prometer procesamiento local ni privacidad del audio por parte del proveedor del navegador**. Esta advertencia está también visible en la interfaz del chat. Si el proveedor del navegador no funciona o deniega permiso, el asistente invita a escribir.
 
-**Importante:** enviar un audio en esta versión significa añadirlo al chat como reproducción local. Todavía **no** hay transcripción ni respuesta al contenido de la voz; tampoco persistencia del historial.
+En una futura integración, sustituiremos esta dependencia por transcripción controlada (p. ej., Whisper local en el servidor) y adaptaremos la política de privacidad y consentimiento.
 
-## Integración futura (fuera de esta iteración)
+## Pruebas
 
-- Endpoint autenticado para conversaciones, rate limiting, límites de tamaño de los archivos y política de retención.
-- Servicio de transcripción de audio con consentimiento y controles de privacidad.
-- Orquestador de consultas autorizado por cliente/farmacia (nunca acceso a SQL arbitrario desde el navegador).
-- Motor LLM intercambiable (Ollama o proveedor externo) y respuestas con fuentes de datos verificables.
-- Pruebas de carga, permisos de usuario y aislamiento multi-tenant antes de habilitarlo para clientes.
+1. Iniciar sesión; comprobar botón flotante, pantalla completa y versión móvil.
+2. Abrir micrófono en HTTPS en un navegador compatible, permitir acceso y dictar una pregunta.
+3. Revisar que se muestre texto mientras se dicta; detener y comprobar que aparece en el textarea (no aparece ningún reproductor de audio).
+4. Editar la transcripción y enviarla; verificar que la respuesta se identifica como demo.
+5. Comprobar que al descartar no se pierde el texto que ya estaba escrito.
+6. Repetir con una pregunta ya escrita para comprobar que el dictado se añade sin sustituir el borrador.
+7. Comprobar micrófono denegado, navegador incompatible, dictado sin voz, Escape y cambio de cliente.
+8. Verificar que al cerrar o cambiar de conversación no se aplican resultados de una sesión de dictado antigua.
 
-La interfaz está encapsulada en `web/src/AsistenteDemo.jsx` y `web/src/AsistenteDemo.css`, lo que permite sustituir la respuesta simulada por peticiones autenticadas sin rehacer la navegación de Farmétrica.
+Las reglas para unir transcripciones y texto se encuentran en `web/src/dictadoVoz.js` y tienen pruebas unitarias en `web/src/dictadoVoz.test.js`.
+
+## Integración futura
+
+Backend autenticado para conversaciones, transcripción controlada y autorización por cliente/farmacia; herramientas analíticas auditables, modelo LLM intercambiable, límites de consultas y pruebas de carga. Hasta entonces, el envío del chat **solo produce respuestas explicativas prefijadas**.

@@ -3,6 +3,7 @@
 // No se modifican artículos/ventas/compras de ningún ERP.
 import {buildSalesDetailSQL,SALES_DETAIL_SORT_KEYS} from "./salesDetail.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {salesCacheColumnWhereSQL} from "./salesColumnFilters.js";
 
 const IDENT=/^[a-z][a-z0-9_]{1,62}$/;
 const MAX_ROWS=75000;
@@ -106,7 +107,7 @@ export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun
    .catch(e=>logger.error?.("Error cola nocturna",e.code||e.name))
    .finally(()=>queued.delete(ref));
  };
- async function read({slug,ids,months,from,to,search="",families=[],sortKey="value",sortDir="desc",page=1,pageSize=400}){
+ async function read({slug,ids,months,from,to,search="",families=[],sortKey="value",sortDir="desc",page=1,pageSize=400,columnFilters={}}){
   if(!IDENT.test(slug)||!ids.length||!SALES_DETAIL_SORT_KEYS.includes(sortKey)||
     !["asc","desc"].includes(sortDir))return null;
   const expected=current(months);
@@ -126,18 +127,21 @@ export function createSalesCache(pool,{now=()=>new Date(),logger=console,autoRun
      numeric.has(sortKey)?`(i.detalle->>'${sortKey}')::double precision`:
       `i.detalle->>'${sortKey}'`;
    const {rows}=await pool.query(`
-     SELECT i.detalle
+     SELECT i.detalle,count(*) OVER()::int AS "__totalFiltered"
      FROM farmetrica.ventas_analitica_cache i
      JOIN farmetrica.farmacias f ON f.id=i.farmacia_id AND f.cliente_slug=i.cliente_slug
      WHERE i.cliente_slug=$1 AND i.analisis_meses=$2 AND i.farmacia_id=ANY($3::int[])
       AND ($4::text='' OR i.cn ILIKE '%'||$4||'%' OR i.detalle->>'name' ILIKE '%'||$4||'%')
       AND (cardinality($5::text[])=0 OR i.detalle->>'family'=ANY($5::text[]))
+      AND (i.detalle->>'units')::float8>0
+      AND ${salesCacheColumnWhereSQL("i","$8")}
      ORDER BY ${sort} ${direction} NULLS LAST,i.farmacia_id,i.cn
      LIMIT $6 OFFSET $7`,
-    [slug,months,ids,search,families,pageSize+1,(page-1)*pageSize]);
+    [slug,months,ids,search,families,pageSize+1,(page-1)*pageSize,JSON.stringify(columnFilters)]);
    const stale=states.some(s=>now().getTime()-new Date(s.calculado_en).getTime()>24*60*60*1000||
      String(s.hasta).slice(0,10)!==to);
    return {products:rows.slice(0,pageSize).map(r=>r.detalle),hasMore:rows.length>pageSize,
+    totalFiltered:Number(rows[0]?.__totalFiltered||0),
     page,cache:true,stale,cacheAsOf:states.reduce((date,r)=>{
      const t=new Date(r.calculado_en).getTime();return Math.min(date,t)
     },Infinity)};

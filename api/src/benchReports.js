@@ -73,20 +73,30 @@ try{
  console.log("VINCULACION_COMPRAS_VAL: referencias="+match.referencias+
    ", encontradas_en_catalogo="+match.vinculadas);
  // Descubrir posibles tablas de detalle del ERP sin leer datos sensibles.
- const {rows:tableColumns}=await pool.query(`SELECT table_name,
-   string_agg(column_name,',' ORDER BY ordinal_position) AS columns
-   FROM information_schema.columns
-   WHERE table_schema='ampedia' AND
-     (table_name ILIKE '%compra%' OR table_name ILIKE '%recep%'
-      OR table_name ILIKE '%pedido%' OR table_name ILIKE '%entrada%')
-   GROUP BY table_name ORDER BY table_name`);
+ // pg_catalog evita bloqueos de metadata de information_schema sobre tablas
+ // que el sincronizador pueda estar migrando/importando temporalmente.
+ const {rows:tableColumns}=await pool.query(`
+   SELECT c.relname AS table_name,
+     string_agg(a.attname,',' ORDER BY a.attnum) AS columns
+   FROM pg_catalog.pg_class c
+   JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+   JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid
+    AND a.attnum>0 AND NOT a.attisdropped
+   WHERE n.nspname='ampedia' AND c.relkind IN ('r','p','v','m')
+    AND (c.relname ILIKE '%compra%' OR c.relname ILIKE '%recep%'
+       OR c.relname ILIKE '%pedido%' OR c.relname ILIKE '%entrada%')
+   GROUP BY c.relname ORDER BY c.relname`);
  for(const row of tableColumns)console.log("TABLA_ORIGEN_COMPRAS "+row.table_name+
    ": columnas="+row.columns);
- const cols=await pool.query(`SELECT column_name FROM information_schema.columns
-  WHERE table_schema='ampedia' AND table_name='articulos'
-    AND (column_name ILIKE '%stock%' OR column_name ILIKE '%exist%'
-      OR column_name ILIKE '%pvp%' OR column_name ILIKE '%cost%')
-  ORDER BY column_name`);
+ const cols=await pool.query(`
+   SELECT a.attname AS column_name FROM pg_catalog.pg_attribute a
+   JOIN pg_catalog.pg_class c ON c.oid=a.attrelid
+   JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+   WHERE n.nspname='ampedia' AND c.relname='articulos'
+    AND a.attnum>0 AND NOT a.attisdropped
+    AND (a.attname ILIKE '%stock%' OR a.attname ILIKE '%exist%'
+      OR a.attname ILIKE '%pvp%' OR a.attname ILIKE '%cost%')
+   ORDER BY a.attname`);
  console.log("Artículos: columnas de inventario y precios = "+
   cols.rows.map(x=>x.column_name).join(", "));
  const snapshots=await pool.query(`

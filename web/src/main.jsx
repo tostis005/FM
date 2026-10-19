@@ -95,8 +95,9 @@ function readState(slug=localStorage.getItem("fm_active_tenant")||"ampedia",emai
     }
   }catch {}
   if(slug!=="ampedia")return {promos:[],pharmacies:[],users:[],objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
-  const seeded=applyObjectiveRows(REAL_OCTOBER_EXAMPLES,OCTOBER_2026_OBJECTIVE_ROWS).promotions;
-  return {promos:seeded,pharmacies:DEFAULT_PHARMACIES,users:[],
+  // En una sesión nueva, PostgreSQL es la fuente de promociones: no crear
+  // campañas de ejemplo que pudieran haberse eliminado en otro navegador.
+  return {promos:[],pharmacies:DEFAULT_PHARMACIES,users:[],
     objectiveSeedVersion:OCTOBER_2026_OBJECTIVES_VERSION};
 }
 function downloadCSV(name, rows) {
@@ -237,8 +238,13 @@ function App(){
       const server=await loadStoredPromotions();
       const remote=server.promotions||[];
       const existing=new Set(remote.map(p=>String(p.id)));
+      const deleted=new Set((server.deletedIds||[]).map(String));
+      const canEdit=["administrador","superadministrador"].includes(ctx.role);
       setPromotionStoreStatus("connected");
-      return {...local,promos:[...remote,...local.promos.filter(p=>!existing.has(String(p.id)))]};
+      // Solo conservar importaciones locales todavía no sincronizadas, nunca
+      // campañas que un administrador eliminó del servidor.
+      return {...local,promos:[...remote,...(canEdit?local.promos:[]).filter(
+        p=>!existing.has(String(p.id))&&!deleted.has(String(p.id)))]};
     }catch{
       setPromotionStoreStatus("error");
       return local; // Nunca descartar importaciones ya guardadas en el navegador.

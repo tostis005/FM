@@ -80,7 +80,8 @@ assert.match(src,/\.setInterval\?/);
 const workerCode=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Core/SyncWorker.cs'),'utf8');
 assert.match(workerCode,/GetLiveRuns/);
 assert.match(workerCode,/Provisional = p\.Phase/);
-assert.match(workerCode,/job\.RetryMinutes/);
+assert.match(workerCode,/SyncSchedule\.IsDue\(job, state, p, now\)/);
+assert.doesNotMatch(workerCode,/successful \? job\.EveryMinutes : job\.RetryMinutes/);
 assert.match(workerCode,/lastReportedBatches/);
 assert.match(workerCode,/InnerException/);
 assert.match(workerCode,/LastProgressUtc = DateTimeOffset\.UtcNow/);
@@ -118,7 +119,10 @@ assert.ok(snapshotTxAt>stageReadAt,'Snapshot transaction should open after all b
 
 assert.match(backendCode,/NormalizeForMode\(p.SystemType, entity.Name, r.Mode, r.Sql\)/);
 
-assert.match(src,/retryMinutes:\+val\('j_retry'\)/);
+assert.match(src,/dailyAtLocal:/);
+assert.match(src,/j_daily_at/);
+assert.match(src,/j_daily_time/);
+assert.doesNotMatch(src,/Reintentar después de un error \(minutos\)/);
 assert.match(postgresSource,/onProgress\?\.Invoke/);
 
 const data={
@@ -149,7 +153,7 @@ for(const [id,label] of [
 ]){context.window.F.go(id);contains(label);}
 context.window.F.go('pharmacies');context.window.F.edit('pharmacy','new');contains('p_code');contains('p_trust');
 context.window.F.go('entities');context.window.F.edit('entity','new');contains('e_columns');
-context.window.F.go('jobs');context.window.F.edit('job','new');contains('j_sql');contains('j_fullSql');contains('j_batch');contains('Carga completa');contains('j_period');contains('j_retry');
+context.window.F.go('jobs');context.window.F.edit('job','new');contains('j_sql');contains('j_fullSql');contains('j_batch');contains('Carga completa');contains('j_period');contains('j_daily_at');
 context.window.F.go('history');contains('Historial de ejecuciones');
 assert.equal(fakeLocation.pathname,'/historial');
 const exampleLive={jobId:'test-job',pharmacyCode:'ABC',entityName:'ventas',startedUtc:new Date().toISOString(),status:'running',mode:'incremental',rows:12500,batches:3,phase:'Leyendo y preparando lotes',provisional:true};

@@ -46,6 +46,59 @@ try
 
     if (reloaded.Read(c => c.Jobs.Count) != 1)
         throw new Exception("Configuration was not durably persisted.");
+    // Las VPN caídas NO generan reintentos especiales cada 5 minutos.
+    var start = new DateTimeOffset(2026,10,19,10,0,0,TimeSpan.Zero);
+    var interval = new SyncJob { EveryMinutes=60, RetryMinutes=5 };
+    var failed = new SyncState {
+        LastAttemptUtc=start, LastCompletedUtc=start.AddMinutes(10), LastStatus="error"
+    };
+    var local = new Pharmacy { TimeZoneId="UTC" };
+    if (SyncSchedule.IsDue(interval,failed,local,start.AddMinutes(12)) ||
+        SyncSchedule.IsDue(interval,failed,local,start.AddMinutes(69)) ||
+        !SyncSchedule.IsDue(interval,failed,local,start.AddMinutes(70)))
+        throw new Exception("Error VPN: respetar exactamente la hora desde el fin del último intento.");
+    failed.LastStatus="ok";failed.LastSuccessUtc=start.AddMinutes(10);
+    if (SyncSchedule.IsDue(interval,failed,local,start.AddMinutes(11)))
+        throw new Exception("La periodicidad correcta no debe depender del estado.");
+    // Las configuraciones antiguas sin LastCompletedUtc usan LastAttemptUtc,
+    // nunca RetryMinutes. Esto evita reintentos rápidos tras actualizar.
+    failed.LastCompletedUtc=null;failed.LastStatus="error";
+    if (SyncSchedule.IsDue(interval,failed,local,start.AddMinutes(6)) ||
+        !SyncSchedule.IsDue(interval,failed,local,start.AddMinutes(60)))
+        throw new Exception("Retrocompatibilidad de errores sin LastCompletedUtc.");
+    var daily=new SyncJob {EveryMinutes=1440,DailyAtLocal="08:30",RetryMinutes=5};
+    var before=new DateTimeOffset(2026,10,19,8,29,0,TimeSpan.Zero);
+    var slot=before.AddMinutes(1);
+    if (SyncSchedule.IsDue(daily,null,local,before) ||
+        !SyncSchedule.IsDue(daily,null,local,slot))
+        throw new Exception("La hora diaria debe cumplirse en la zona de la farmacia.");
+    var todayFailed=new SyncState{LastAttemptUtc=slot,LastCompletedUtc=slot.AddMinutes(2),LastStatus="error"};
+    if (SyncSchedule.IsDue(daily,todayFailed,local,slot.AddHours(1)) ||
+        SyncSchedule.IsDue(daily,todayFailed,local,slot.AddDays(1).AddMinutes(-1)) ||
+        !SyncSchedule.IsDue(daily,todayFailed,local,slot.AddDays(1)))
+        throw new Exception("Un fallo a las 08:30 no permite un segundo intento hasta el día siguiente.");
+    var crossing = new SyncState {
+        LastAttemptUtc=slot.AddMinutes(-5),LastCompletedUtc=slot.AddHours(1),LastStatus="error"
+    };
+    if (SyncSchedule.IsDue(daily,crossing,local,slot.AddHours(1).AddMinutes(1)))
+        throw new Exception("Una carga larga que atraviesa la hora fija no debe reintentarse inmediatamente.");
+    // Hora de Madrid, incluso si el sincronizador Windows está en otra zona.
+    var madrid=new Pharmacy{TimeZoneId="Europe/Madrid"};
+    var spring=new SyncJob{EveryMinutes=1440,DailyAtLocal="02:30"};
+    var dstStart = new DateTimeOffset(2026,3,29,1,0,0,TimeSpan.Zero);
+    if (SyncSchedule.NextDueUtc(spring,null,madrid,dstStart)!=dstStart)
+        throw new Exception("Hora inexistente de primavera: primer instante local válido.");
+    var dstEnd = new DateTimeOffset(2026,10,25,0,30,0,TimeSpan.Zero);
+    if (SyncSchedule.NextDueUtc(spring,null,madrid,dstEnd)!=dstEnd)
+        throw new Exception("Hora ambigua de otoño: usar la primera ocurrencia UTC.");
+    store.Change(c => c.States.Add(new SyncState {
+        JobId=Guid.NewGuid(),LastAttemptUtc=start,LastCompletedUtc=start.AddMinutes(10),
+        LastStatus="error"
+    }));
+    var saved=new ConfigStore(path);
+    if (!saved.Read(c=>c.States.Any(x=>x.LastCompletedUtc==start.AddMinutes(10))))
+        throw new Exception("La finalización del intento debe sobrevivir al reinicio del servicio.");
+    Console.WriteLine("OK: caída VPN sin reintentos, horario diario, zona farmacia, DST y estado persistido.");
     Console.WriteLine("OK: /login and /config reads do not wait behind history writes; snapshot is atomic.");
 }
 finally { Directory.Delete(path, recursive:true); }

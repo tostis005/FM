@@ -1,0 +1,26 @@
+
+/* Páginas productivas de documentos, catálogo y proveedores. */
+.fm-real-screen .page-header p{margin:6px 0 0;color:#627a73;font-size:13px;max-width:780px}
+.fm-real-screen-filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px;padding:16px;min-width:0}
+.fm-real-screen-filters>label{display:flex;flex-direction:column;gap:7px;font-size:12px;font-weight:700;color:#627a73;min-width:min(100%,190px)}
+.fm-real-screen-filters select,.fm-real-screen-filters input{height:40px;border:1px solid #cdded7;border-radius:8px;background:#fff;color:#25443b;padding:8px 10px;min-width:0;width:100%}
+.fm-real-screen-filters .fm-real-search{flex:1;min-width:min(100%,200px)}
+.fm-real-search>div{display:flex;align-items:center;gap:7px;border:1px solid #cdded7;border-radius:8px;background:white;padding-left:10px}
+.fm-real-search>div input{border:0;outline:none;min-width:0;width:100%}
+.fm-real-custom{display:flex;gap:10px;flex-wrap:wrap}
+.fm-real-custom label{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.fm-real-screen .fm-preview-kpis{grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr))}
+.fm-real-screen .fm-preview-kpi{min-width:0;overflow:hidden}
+.fm-real-screen .fm-preview-kpi strong{font-size:clamp(16px,1.8vw,25px);overflow-wrap:anywhere}
+.fm-real-screen-table{min-width:max(760px,100%);white-space:nowrap}
+.fm-real-screen-table th,.fm-real-screen-table td{white-space:nowrap}
+.fm-real-count{font-size:12px;color:#607b6b;font-weight:700}
+.fm-real-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:16px;flex-wrap:wrap;color:#627a73;font-size:13px}
+.fm-real-pagination>div{display:flex;align-items:center;gap:8px}
+.fm-real-pagination label{display:flex;align-items:center;gap:8px;font-weight:600}
+.fm-real-pagination select{border:1px solid #cdded7;border-radius:7px;padding:6px;color:#36594d;background:#fff}
+.fm-real-pagination button{display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;min-width:38px}
+.fm-real-source-note{color:#667f75;font-size:12px;line-height:1.6;max-width:950px;margin:0}
+@media(max-width:560px){.fm-real-screen-filters{flex-direction:column;align-items:stretch}
+.fm-real-screen-filters>label{min-width:0;width:100%}.fm-real-pagination{align-items:flex-start}
+.fm-real-custom label{flex:1;min-width:140px}}

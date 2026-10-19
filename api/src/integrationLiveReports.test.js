@@ -6,6 +6,7 @@ import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
 import {setupSalesDetail} from "./salesDetail.js";
+import {createSalesCache} from "./salesCache.js";
 import {setupDemoClients} from "./demoClients.js";
 import {setupGenericosReales} from "./genericosReales.js";
 const enabled=Boolean(process.env.TEST_DB_URL);
@@ -253,6 +254,26 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(Math.abs(priced.unitMargin-(priced.saleUnitPrice-priced.purchaseCost))<.0002);
   assert.ok(Math.abs(priced.margin-(priced.value-priced.units*priced.purchaseCost))<.02);
   assert.equal(detailVal.hasMore,false);
+  // Precálculo nocturno contra PostgreSQL real: misma clasificación, unidades,
+  // PVP, coste y márgenes que la ruta sin cache y aislamiento por farmacia.
+  const calc=createSalesCache(pool,{now:()=>new Date("2026-10-18T09:00:00Z"),
+    autoRun:false,logger:{info(){},error(){}}});
+  const refreshed=await calc.refreshOne({
+    slug:"ampedia",schema:"ampedia",pharmacyId:5,code:"VAL",months:12});
+  assert.equal(refreshed,true);
+  const cached=await calc.read({slug:"ampedia",ids:[5],months:12,
+    from:"2025-11-01",to:"2026-10-18",search:"",families:[],
+    sortKey:"margin",sortDir:"desc",page:1,pageSize:400});
+  assert.ok(cached?.cache);
+  assert.equal(cached.products.length,1);
+  assert.equal(cached.products[0].abcdClass,priced.abcdClass);
+  assert.equal(cached.products[0].purchaseCost,priced.purchaseCost);
+  assert.equal(cached.products[0].margin,priced.margin);
+  assert.equal(cached.products[0].saleUnitPrice,priced.saleUnitPrice);
+  assert.equal(await calc.read({slug:"ampedia",ids:[2,5],months:12,
+    from:"2025-11-01",to:"2026-10-18",sortKey:"value",sortDir:"desc"}),null,
+    "No reutilizar una cache incompleta al consultar otra farmacia");
+
   // Probar en PostgreSQL real que ORDER BY se ejecuta ANTES de limitar
   // y que los campos derivados se pueden ordenar sin depender de la página.
   for(const order of ["purchaseCost","unitMargin","margin","marginPct",

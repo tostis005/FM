@@ -4,6 +4,9 @@ on:
   push:
     branches: [main, preview/farmetrica-v1]
     paths: ["web/**", "api/**", "deploy/**", ".github/workflows/deploy.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["web/**", "api/**", "deploy/**", ".github/workflows/deploy.yml"]
   workflow_dispatch:
 
 permissions:

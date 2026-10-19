@@ -192,6 +192,12 @@ function pageFromUrl(){
 function App(){
  const [data,setData]=useState(readState);
  const [page,setPage]=useState(pageFromUrl);
+ // Los submenús pueden abrirse mediante sus flechas sin navegar de pantalla.
+ const [expandedNavIds,setExpandedNavIds]=useState(()=>{
+  const initial=pageFromUrl();
+  const parent=initial==="seguimiento-global"?"promociones":NAV.find(item=>item.id===initial)?.childOf||initial;
+  return [parent];
+ });
  const [search,setSearch]=useState("");
  const [statusFilter,setStatusFilter]=useState("Todos");
  const [from,setFrom]=useState("");
@@ -694,6 +700,11 @@ function App(){
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
  },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
  useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true);if(ADMIN_IDS.has(page))setAdminOpen(true)},[page]);
+ useEffect(()=>{
+  // Si se navega directamente a una subpágina, mostrar sus opciones.
+  const parent=page==="seguimiento-global"?"promociones":NAV.find(item=>item.id===page)?.childOf||page;
+  setExpandedNavIds(previous=>previous.includes(parent)?previous:[...previous,parent]);
+ },[page]);
  const role=tenantContext?.role;
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
@@ -715,17 +726,44 @@ function App(){
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
    <nav className="side-nav" aria-label="Módulos">
-    {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)).map(item=><React.Fragment key={item.id}>
-     <button className={"side-link "+(page===item.id?"active":"")} onClick={()=>nav(item.id)}>
-      <item.icon size={19}/><span>{item.label}</span>{item.preview&&<small className="side-preview-badge">Demo</small>}{page===item.id&&<span className="active-dot"/>}
-     </button>
-     {(page===item.id||NAV.some(n=>n.id===page&&n.childOf===item.id))&&
-      visibleNav.filter(child=>child.childOf===item.id).map(child=>
-       <button key={child.id} className={"side-link side-sublink "+(page===child.id?"active":"")} onClick={()=>nav(child.id)}>
-        <child.icon size={16}/><span>{child.label}</span>{child.preview&&<small className="side-preview-badge">Demo</small>}
+    {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)).map(item=>{
+     const children=visibleNav.filter(child=>child.childOf===item.id);
+     const hasChildren=children.length>0||item.id==="promociones";
+     const expanded=hasChildren&&expandedNavIds.includes(item.id);
+     const submenuId="fm-submenu-"+item.id;
+     return <React.Fragment key={item.id}>
+      <div className={hasChildren?"side-nav-parent has-submenu":"side-nav-parent"}>
+       <button className={"side-link "+(page===item.id?"active":"")} type="button"
+        onClick={()=>nav(item.id)} aria-current={page===item.id?"page":undefined}>
+        <item.icon size={19}/><span>{item.label}</span>
+        {item.preview&&<small className="side-preview-badge">Demo</small>}
+        {page===item.id&&<span className="active-dot"/>}
+       </button>
+       {hasChildren&&<button className="side-nav-caret" type="button"
+        aria-label={(expanded?"Ocultar":"Mostrar")+" subopciones de "+item.label}
+        aria-expanded={expanded} aria-controls={submenuId}
+        onClick={()=>setExpandedNavIds(previous=>expanded?
+         previous.filter(id=>id!==item.id):[...previous,item.id])}>
+         <ChevronDown size={16} className={"side-settings-chevron"+(expanded?" open":"")}/>
+        </button>}
+      </div>
+      {hasChildren&&<div id={submenuId} className="side-nav-submenu" hidden={!expanded}>
+       {children.map(child=><button key={child.id}
+        className={"side-link side-sublink "+(page===child.id?"active":"")}
+        type="button" onClick={()=>nav(child.id)} aria-current={page===child.id?"page":undefined}>
+        <child.icon size={16}/><span>{child.label}</span>
+        {child.preview&&<small className="side-preview-badge">Demo</small>}
         {page===child.id&&<span className="active-dot"/>}</button>)}
-     {item.id==="promociones"&&<button className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")} onClick={()=>nav("seguimiento-global")}><BarChart3 size={16}/><span>Seguimiento</span>{page==="seguimiento-global"&&<span className="active-dot"/>}</button>}
-    </React.Fragment>)}
+       {item.id==="promociones"&&<button
+        className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")}
+        type="button" onClick={()=>nav("seguimiento-global")}
+        aria-current={page==="seguimiento-global"?"page":undefined}>
+         <BarChart3 size={16}/><span>Seguimiento</span>
+         {page==="seguimiento-global"&&<span className="active-dot"/>}
+        </button>}
+      </div>}
+     </React.Fragment>;
+    })}
     {visibleNav.some(item=>CONFIG_IDS.has(item.id))&&<>
      <button className={"side-link "+(CONFIG_IDS.has(page)?"active":"")} type="button"
       aria-expanded={settingsOpen} aria-controls="fm-settings-nav" onClick={()=>setSettingsOpen(v=>!v)}>

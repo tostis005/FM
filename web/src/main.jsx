@@ -911,7 +911,7 @@ function App(){
   </div>
  </div>
  <div className="report-active-summary">
-  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Finalizadas":reportStatus==="Borrador"?"Borradores":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
+  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Archivadas":reportStatus==="Borrador"?"Borradores":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
   <div className="report-quick-pharmacy" ref={pharmacySelectorRef}><Store size={15}/><span>Farmacias</span><div className="report-pharmacy-dropdown">
    <button className="report-pharmacy-trigger" type="button" aria-haspopup="true" aria-expanded={pharmacySelectorOpen} aria-controls="report-pharmacy-options" onClick={()=>setPharmacySelectorOpen(v=>!v)}>
     <span>{selectedPharmacyIds===null?"Todas las farmacias":effectivePharmacyIds.length===1?pharmaName(effectivePharmacyIds[0]):effectivePharmacyIds.length+" farmacias seleccionadas"}</span><ChevronDown size={15}/>

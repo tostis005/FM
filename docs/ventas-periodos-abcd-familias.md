@@ -10,6 +10,30 @@
 - **Carga web**: se muestra primero el total; la tabla y los recuentos tienen sus propios indicadores de carga. Cambiar fechas, farmacias, búsqueda o clasificación reinicia la paginación y descarta el detalle anterior.
 - **Presentación**: fechas `dd/mm/aaaa`, miles con punto y decimales con coma; importes en euros siempre con dos decimales (también por unidad). Las cantidades vendidas se presentan con dos decimales sin modificar la precisión contable del origen.
 
+## Filtros de columna y referencias con saldo cero
+
+En la tabla **Ventas → Artículos** los filtros de columna (CN, nombre, farmacia,
+ABCD, PVP, precio real, coste, unidades, ventas y margen) se ejecutan **en
+PostgreSQL sobre todo el conjunto autorizado antes de ordenar y paginar**.
+La lista de opciones ABCD ofrece siempre A, B, C y D, sin depender de las
+referencias de las 50 o 400 primeras filas. Se pueden combinar B y C.
+La caché nocturna aplica las mismas condiciones al conjunto precalculado.
+La API devuelve `totalFiltered` como número de resultados que coinciden.
+No alterar los indicadores ni la gráfica general al filtrar una columna de la
+tabla: representan el período y farmacias seleccionados arriba.
+
+«Referencias vendidas» significa productos con saldo **neto positivo de
+unidades** en las fechas filtradas. Un registro de venta con 0 unidades, una
+compensación de unidades o una devolución sin saldo positivo no crea una
+referencia vendida adicional en la tabla o su recuento. Los movimientos
+negativos y ajustes permanecen intactos en PostgreSQL y continúan formando
+parte de las cifras económicas y unidades netas del período. Que las
+referencias y unidades netas difieran no implica por sí solo un error cuando
+existen devoluciones o cantidades fraccionarias.
+
+El informe de otros módulos puede emplear otros universos (stock, compras,
+proveedores) y no debe reutilizar la primera página de Ventas para filtrarlos.
+
 ## Familia no es una dimensión común de la red
 
 Los campos `ampedia.articulos.familia` son códigos emitidos por cada ERP de farmacia. Una `familia='12'` en farmacia A no tiene por qué significar la misma agrupación que `familia='12'` en farmacia B.

@@ -1,7 +1,8 @@
 // Contrato único de análisis: articulos, proveedores, ventas, compras y stock.
 // Los registros de ejemplo son deterministas y comparten CN, farmaciaId y proveedorId.
-export const money=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(n||0);
-export const number=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(n||0);
+import {euro,decimal} from "./localeES.js";
+export const money=n=>euro(n);
+export const number=n=>decimal(n);
 export const round=(n,d=2)=>Number((Number(n)||0).toFixed(d));
 export const sum=(items,key)=>items.reduce((t,x)=>t+(Number(typeof key==="function"?key(x):x[key])||0),0);
 export const monthAt=(date,shift=0)=>new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+shift,1)).toISOString().slice(0,7);

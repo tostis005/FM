@@ -73,7 +73,8 @@ function metricCards(module,k,analysisMonths=12){
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Líneas de compra","lineasCompra","n","compras")],
   ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Referencias por farmacia","productosFarmacia","n"),CARD("Artículos diferentes","articulosVendidos","n")],
-  compras:[shared[1],CARD("Unidades compradas","unidadesCompradas","n"),
+  compras:[shared[1],CARD("Recepciones registradas","recepciones","n"),
+   CARD("Unidades compradas","unidadesCompradas","n"),
    CARD("Proveedores","proveedores","n","proveedores"),
    CARD("Líneas de compra","lineasCompra","n")],
   proveedores:[CARD("Proveedores","proveedores","n"),shared[1],
@@ -204,7 +205,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const globalColumnFiltering=module==="ventas"||Boolean(REPORT_GLOBAL_FILTER_FIELDS[module]?.length);
  const activeTableFilters=JSON.stringify(tableFiltersReady);
  const pendingTableFilters=JSON.stringify(tableFilters)!==activeTableFilters;
- const changeTableFilters=next=>{setTableFilters(next);setDetailPage(1);setDetailHasMore(false);};
+ const changeTableFilters=next=>{setTableFilters(next);setDetailPage(1);setReceiptPage(1);setDetailHasMore(false);};
  const [detailHasMore,setDetailHasMore]=useState(false);
  const [totalFiltered,setTotalFiltered]=useState(null);
  const [realReport,setRealReport]=useState(null);
@@ -212,6 +213,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [reportError,setReportError]=useState("");
  const [purchaseState,setPurchaseState]=useState(null);
  const [purchaseSummaryResult,setPurchaseSummaryResult]=useState(null);
+ const [receiptPage,setReceiptPage]=useState(1);
+ const [receiptSize,setReceiptSize]=useState(50);
+ const [receiptResult,setReceiptResult]=useState(null);
+ const [receiptError,setReceiptError]=useState("");
+ const [receiptLoading,setReceiptLoading]=useState(false);
  const [purchaseSummaryFailure,setPurchaseSummaryFailure]=useState(null);
  const [purchaseStateError,setPurchaseStateError]=useState("");
  const [purchaseSlow,setPurchaseSlow]=useState(false);
@@ -359,6 +365,43 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const purchaseSummaryError=module==="compras"&&
    purchaseSummaryFailure?.scope===purchaseSummaryScope?purchaseSummaryFailure.message:null;
  const shouldLoadPurchaseSummary=module==="compras"&&period.valid;
+ const receiptMode=module==="compras"&&fastPurchase?.hasArticleLines===false&&
+  Number(fastPurchase.sourceRows)>0;
+ const receiptColumns=receiptMode?[
+  {key:"reference",label:"Recepción / albarán",value:r=>r.reference||"—",sortable:false},
+  {key:"date",label:"Fecha recepción",value:r=>dateES(r.date),sortable:false},
+  {key:"pharmacy",label:"Farmacia",filterMode:"multi",value:r=>pharmacies.find(p=>String(p.id)===String(r.pharmacyId))?.name||"—",sortable:false},
+  {key:"supplier",label:"Proveedor",value:r=>r.supplier||"—",sortable:false},
+  {key:"orderNumber",label:"N.º pedido",value:r=>r.orderNumber||"—",sortable:false}
+ ]:null;
+ const receiptScope=[clientSlug,period.from,period.to,filters.pharmacyIds.join(","),
+  searchReady,activeTableFilters,receiptPage,receiptSize,reloadKey].join("|");
+ const receiptData=receiptResult?.scope===receiptScope?receiptResult.data:null;
+ useEffect(()=>{setReceiptPage(1)},[clientSlug,period.from,period.to,
+  filters.pharmacyIds.join(","),searchReady,activeTableFilters,module]);
+ useEffect(()=>{
+  if(!receiptMode||!period.valid){setReceiptLoading(false);return}
+  const controller=new AbortController();
+  const p=new URLSearchParams({
+   desde:period.from,hasta:period.to,pagina:String(receiptPage),tamano:String(receiptSize)});
+  if(filters.pharmacyIds.length)p.set("farmacias",filters.pharmacyIds.join(","));
+  if(searchReady)p.set("buscar",searchReady);
+  if(Object.keys(tableFiltersReady).length)p.set("columnas",JSON.stringify(tableFiltersReady));
+  setReceiptLoading(true);setReceiptError("");
+  fetch("/api/analytics/compras/recepciones?"+p,{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+  }).then(async r=>{
+   const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(data.error||"No se pueden consultar las recepciones");
+   if(!Array.isArray(data.rows)||!Number.isFinite(data.total))throw Error("Respuesta de recepciones incompleta");
+   return data;
+  }).then(data=>{if(!controller.signal.aborted)setReceiptResult({scope:receiptScope,data})})
+   .catch(e=>{if(!controller.signal.aborted)setReceiptError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setReceiptLoading(false)});
+  return()=>controller.abort();
+ },[receiptMode,receiptScope,period.valid]);
+
  useEffect(()=>{
   if(!shouldLoadPurchaseSummary)return;
   const controller=new AbortController();
@@ -409,7 +452,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     searchReady,tableSort.key,tableSort.direction]);
 
  useEffect(()=>{
-  if(module==="ventas"){setReportLoading(false);return}
+  if(module==="ventas"||receiptMode){setReportLoading(false);if(receiptMode){setRealReport(null);setReportError("")}return}
   if(!period.valid){setReportLoading(false);setRealReport(null);return}
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,modulo:module});
@@ -428,7 +471,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .catch(e=>{if(!controller.signal.aborted){setRealReport(null);setReportError(e.message)}})
    .finally(()=>{if(!controller.signal.aborted)setReportLoading(false)});
   return()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,tableSort.key,tableSort.direction,activeTableFilters]);
+ },[module,clientSlug,ids,period.from,period.to,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,tableSort.key,tableSort.direction,activeTableFilters,receiptMode]);
  const pharmacyMap=useMemo(()=>new Map(pharmacies.map(p=>[String(p.id),p.name])),[ids]);
  const analysis=useMemo(()=>buildAnalysis(tables,{...filters,allowedPharmacyIds:pharmacies.map(p=>p.id)},asOf),[tables,filters,ids,asOf]);
  useEffect(()=>{sessionStorage.setItem(storageKey,JSON.stringify(filters))},[filters,storageKey]);
@@ -458,7 +501,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  });
  const go=route=>{if(route&&canNavigate(route))onNavigate(route)};
  const hasSales=realSales!==null||Boolean(fastSales);
- const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||filters.search!==searchReady||pendingTableFilters)&&period.valid;
+ const isFetchingSales=(Boolean(reportLoading)||(salesModule&&loading)||receiptLoading||filters.search!==searchReady||pendingTableFilters)&&period.valid;
  const canShowKpi=key=>realKpis[key]!=null;
  const realRevenue=hasSales?(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.ventas||0),0)??0:null;
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
@@ -482,18 +525,18 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    pvp:r.pvp??null,purchaseCost:r.purchaseCost??null,unitMargin:r.unitMargin??null,
    saleUnitPrice:r.saleUnitPrice??null
  }));
- const rows=module==="ventas"?(realReport?.salesRows||liveSalesRows):(datasets[module]||[]);
+ const rows=receiptMode?(receiptData?.rows||[]):module==="ventas"?(realReport?.salesRows||liveSalesRows):(datasets[module]||[]);
  // Los códigos de familia no son comparables entre farmacias distintas.
  const limited=!remoteFields&&Boolean(realReport?.availability?.rowsTruncated||
    realReport?.availability?.stockRowsTruncated);
- const columns=columnsFor(module==="dashboard"?"informes":module,pharmacyMap)
+ const columns=(receiptMode?receiptColumns:columnsFor(module==="dashboard"?"informes":module,pharmacyMap))
    .filter(col=>!(module==="ventas"&&!singleFamilyPharmacy&&col.key==="family"))
    .map(col=>({...col,
-     searchable:module==="ventas"?col.searchable:
+     searchable:receiptMode?true:module==="ventas"?col.searchable:
        Boolean(REPORT_GLOBAL_FILTER_FIELDS[module]?.includes(col.key)),
-     sortable:remoteFields?remoteFields.includes(col.key):
+     sortable:receiptMode?false:remoteFields?remoteFields.includes(col.key):
        limited?false:col.sortable}));
- const chartConfig=SERIES[module]||SERIES.dashboard;
+ const chartConfig=receiptMode?["recepciones",null,"Recepciones registradas"]:SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;
  const chartLoading=module==="compras"&&shouldLoadPurchaseSummary?
    (!fastPurchase&&!purchaseSummaryError):
@@ -526,7 +569,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <label><span>Periodo</span><select value={filters.period} onChange={e=>pickPeriod(e.target.value)}>
     {SALES_PERIODS.filter(([key])=>module==="ventas"||!["24","36","60","all"].includes(key)).map(([key,label])=><option key={key} value={key}>{label}</option>)}
    </select></label>
-   <label className="fm-demo-search"><span>Artículo o CN</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
+   <label className="fm-demo-search"><span>{receiptMode?"Recepción, proveedor o documento":"Artículo o CN"}</span><div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </div>
   {<div className="fm-sales-timebar">
    <div className="fm-sales-shortcuts" role="group" aria-label="Períodos rápidos de ventas">
@@ -568,13 +611,15 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
   {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
-  {module==="compras"&&fastPurchase?.hasArticleLines===false&&fastPurchase.sourceRows>0&&
-   <p role="alert" className="fm-inline-status">
-    El sincronizador ha enviado {number(fastPurchase.sourceRows)} registros de proveedor, pero
-    no contienen líneas de artículos. Sin código de artículo, unidades, coste e importe no es
-    posible mostrar compras por producto ni calcular precios medios fiables. Los indicadores
-    que dependen de esos campos se muestran como no disponibles, no como cero.
-    Revisa la consulta de líneas de compra configurada en el sincronizador.
+  {module==="compras"&&receiptMode&&
+   <p role="status" className="fm-inline-status">
+    Se han sincronizado {integer(fastPurchase.sourceRows)} registros de recepción.
+    Puedes consultar sus fechas, farmacias, proveedores y documentos y buscar en
+    todos ellos. Aún faltan las líneas de artículo, unidades e importes del ERP:
+    las compras en euros y los costes unitarios no se pueden calcular hasta importar ese detalle.
+   </p>}
+  {module==="compras"&&receiptError&&<p role="alert" className="fm-inline-status">
+    Error al cargar recepciones: {receiptError}
    </p>}
   {module==="compras"&&fastPurchase?.hasArticleLines===true&&fastPurchase?.hasAmounts===false&&
    <p role="status" className="fm-inline-status">
@@ -582,7 +627,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     Los indicadores de gasto y los precios que dependen del coste no están disponibles.
    </p>}
   {module==="compras"&&searchReady&&<p className="fm-sales-period-info">
-   La búsqueda filtra la tabla de artículos. Los indicadores y el gráfico resumen
+   La búsqueda filtra todas las referencias disponibles de la tabla. Los indicadores y el gráfico resumen
    todas las compras del período seleccionado.
   </p>}
   {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
@@ -631,8 +676,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
       <YAxis tickLine={false} axisLine={false} width={92} fontSize={10}
-       tickFormatter={v=>chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
-      <Tooltip formatter={(v,key)=>[key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
+       tickFormatter={v=>chartSeries[0]==="recepciones"?integer(v):chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
+      <Tooltip formatter={(v,key)=>[key==="recepciones"?integer(v):key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
       <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
       {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
      </BarChart>
@@ -647,7 +692,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
   </section>:<section className="card fm-demo-table">
-   <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
+   <div className="section-heading"><h2>{receiptMode?"Recepciones":isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")}
     serverFilters={globalColumnFiltering?tableFilters:null}
@@ -658,14 +703,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      ...(module==="ventas"&&singleFamilyPharmacy?{family:familyOptions}:{}),
      ...(REPORT_GLOBAL_FILTER_FIELDS[module]?.includes("family")?{family:fullFamilyOptions}: {})
     }:null}
+    serverPagination={receiptMode?{
+     total:receiptData?.total||0,page:receiptPage,pageSize:receiptSize,
+     onPageChange:setReceiptPage,onPageSizeChange:n=>{setReceiptSize(n);setReceiptPage(1)}
+    }:null}
     rows={rows} rowKey={r=>r.id}
-    sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
-     module==="compras"&&fastPurchase?.sourceRows>0&&fastPurchase?.hasArticleLines===false?
-       "Se han importado registros de proveedor, pero ninguna línea de compra con artículo. Comprueba la consulta del sincronizador.":
-     module==="compras"&&purchaseState?.hasPurchases?
-       "Hay compras sincronizadas. Si el listado está vacío, revisa los filtros o el estado de la consulta.":
-       available?"No hay resultados para los filtros seleccionados":"Sin datos disponibles"}
-    onRowClick={row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)} columns={columns}/>
+    sort={receiptMode?undefined:remoteSort} onSortChange={!receiptMode&&remoteSort?changeTableSort:undefined} defaultSort={receiptMode?null:tableSort} label={receiptMode?"recepciones":"registros"} loading={receiptMode?receiptLoading:isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"}
+    onRowClick={receiptMode?undefined:row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)}
+    emptyText={receiptMode?"No se encontraron recepciones para esta búsqueda, período o farmacia.":reportError?"No se pudo consultar el informe":available?"No hay resultados":"Sin datos disponibles"} columns={columns}/>
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}
       onClick={()=>setDetailPage(n=>n+1)}>

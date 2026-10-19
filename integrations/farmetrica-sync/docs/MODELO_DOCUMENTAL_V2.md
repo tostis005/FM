@@ -33,6 +33,7 @@ admitiendo valores `CAST(NULL AS ...)` cuando el origen no suministre el campo.
 | `impuestos_documento` | Importe fiscal total cuando existe |
 | `modificado_origen` | Momento de última modificación relevante del documento |
 | `articulo_id` | ID de artículo local a farmacia, nunca se supone que es CN |
+| `tipo_linea_origen` | TipoLinea original de Farmatic (por ejemplo C); permite preservar líneas sin artículo sin suponer su significado comercial |
 | `unidades` | Cantidad firmada; negativa para devoluciones si el ERP la almacena así |
 | `precio_unitario` | PVP o precio bruto de compra según tipo documental |
 | `descuento_linea` | Descuento aplicado a la línea, sin sumar porcentajes e importes |
@@ -153,3 +154,35 @@ fecha de modificación. La fecha/hora de recepción se obtiene de
    de descuentos, `TipoVenta`, y bajas/anulaciones de cabecera.
 5. **Nunca subir registros de farmacia reales al repositorio público**.
    Guardar muestras y credenciales solo en un entorno de pruebas protegido.
+
+## Línea especial de venta sin artículo: EUR, ejemplo 13/03/2024
+
+Caso real observado en la vista `vLineaVenta`: `IdVenta = 1327799`,
+`IdNLinea = 1`, `Codigo` vacío, `Cantidad = 1` y `TipoLinea = C`.
+No se ha probado aún su `ImporteNeto` ni el significado de la letra `C`.
+
+En la plantilla `Venta + LineaVenta`, conservar la clave `linea_id`,
+cantidad, precios/descuentos/importes originales y `tipo_linea_origen=C`;
+guardar `articulo_origen_id=NULL`. **No se atribuye una referencia CN,
+no se convierte la línea en artículo, no se descarta el importe**.
+Para evitar introducir falsos productos, el escritor solo admite
+`Codigo` vacío cuando `TipoLinea` es exactamente `C`; los demás
+casos sin artículo o cantidad siguen bloqueando la carga, con la
+clave de documento y línea en el error. El carácter `C` NO
+se reinterpreta automáticamente como devolución, pago ni anulación.
+
+El cambio requiere aplicar **`api/src/migrations/019_lineas_sin_articulo.sql`**
+en PostgreSQL ANTES de instalar/ejecutar la nueva carga. Es un cambio
+aditivo: permite nulos en `fm_ventas_lineas.articulo_origen_id`
+y añade `tipo_linea_origen` a las líneas; no recalcula el histórico.
+La misma migración actualiza `farmetrica.preparar_modelo_documental`
+para futuros tenants y se puede repetir. El importador verifica la
+estructura al abrir la conexión, antes de leer millones de filas
+desde Farmatic, para no perder tiempo por una migración pendiente.
+
+Los informes de artículo no deben sumar las unidades de estas líneas
+ni mostrar una referencia ficticia. Las sumas **financieras** del movimiento
+sí deben conservar los importes y las cabeceras sin duplicarlos.
+Esta normalización no garantiza que todos los tipos de línea estén
+interpretados; es necesario conciliar un ticket real antes de considerarla
+validada en las cinco farmacias.

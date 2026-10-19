@@ -39,10 +39,12 @@ try{
   return {background:buttonStyle.backgroundColor,color:buttonStyle.color,border:buttonStyle.borderTopWidth,
    width:icon.getBoundingClientRect().width,stroke:svgStyle.strokeWidth};
  });
- assert.notEqual(visual.background,"rgba(0, 0, 0, 0)","La flecha necesita un fondo visible");
- assert.equal(visual.border,"1px","El contorno debe distinguirse del menú");
- assert.ok(visual.width>=20,"El icono no debe ser demasiado pequeño");
- assert.equal(Number.parseFloat(visual.stroke),3,"Trazo grueso y legible");
+ // El menú definitivo usa un chevrón blanco discreto SIN botón grande.
+ assert.equal(visual.background,"rgba(0, 0, 0, 0)","La flecha debe ser discreta, sin fondo");
+ assert.equal(visual.border,"0px","No debe dibujarse un recuadro");
+ assert.ok(visual.width>=16&&visual.width<=20,"Flecha compacta");
+ assert.ok(Number.parseFloat(visual.stroke)>=2,"El trazo debe seguir siendo legible");
+ assert.equal(visual.color,"rgb(255, 255, 255)","Contraste blanco sobre el lateral");
  const before=new URL(page.url()).pathname;
  await page.getByRole("button",{name:"Mostrar subopciones de Compras"}).click();
  assert.equal(new URL(page.url()).pathname,before,"desplegar no cambia de pantalla");

@@ -4,6 +4,12 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {SALES_PERIODS} from "./salesPeriods.js";
 import "./reportControls.css";
 
+// El mismo conjunto de atajos se utiliza en cada pantalla con intervalo de fechas.
+export const QUICK_PERIODS=[
+ ["today","Hoy"],["yesterday","Ayer"],["this_week","Esta semana"],
+ ["this_month","Este mes"],["this_year","Este año"]
+];
+
 const formatDay=value=>value&&/^\d{4}-\d{2}-\d{2}$/.test(value)
  ? value.slice(8,10)+"/"+value.slice(5,7)+"/"+value.slice(0,4) : "";
 
@@ -27,7 +33,8 @@ export function ReportPageHeader({title,description,period,updatedAt,onRefresh,r
 
 // El alcance por farmacia y el período comparten orden, etiquetas y aspecto en todos los informes.
 export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacyIds=[],onPharmacyChange,
- showPeriod=true,showPharmacies=true,customFrom="",customTo="",onCustomFromChange,onCustomToChange,children}){
+ showPeriod=true,showPharmacies=true,customFrom="",customTo="",onCustomFromChange,onCustomToChange,
+ quickPeriodKey, onQuickPeriodChange,children}){
  return <div className="card fm-unified-filters">
   {showPeriod&&<label className="fm-unified-filter"><span>Período</span>
    <select value={periodKey} onChange={e=>onPeriodChange?.(e.target.value)}>
@@ -44,5 +51,13 @@ export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacy
    <label className="fm-unified-filter"><span>Hasta</span><input type="date" value={customTo}
     onChange={e=>onCustomToChange?.(e.target.value)}/></label>
   </>}
+  {(showPeriod||onQuickPeriodChange)&&<div className="fm-period-shortcuts"
+   role="group" aria-label="Períodos rápidos">
+   {QUICK_PERIODS.map(([key,label])=><button key={key} type="button"
+    className={"fm-period-shortcut "+((quickPeriodKey===undefined?periodKey:quickPeriodKey)===key?"is-selected":"")}
+    aria-pressed={(quickPeriodKey===undefined?periodKey:quickPeriodKey)===key}
+    onClick={()=>{(onQuickPeriodChange||onPeriodChange)?.(key)}}>
+    {label}</button>)}
+  </div>}
  </div>;
 }

@@ -9,7 +9,7 @@ import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
 
 const num=quantity;
 const money=euro;
-const date=dateTimeES;
+const date=input=>dateTimeES(input,"Europe/Madrid");
 const validDate=s=>/^20\d\d-\d\d-\d\d$/.test(s||"");
 const INITIAL={start:"",end:""};
 const TICKET_COLUMNS=[

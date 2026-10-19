@@ -83,16 +83,16 @@ try{
  await page.locator(".fm-demo-kpi").first().waitFor({state:"visible",timeout:15000});
  await verifyPeriod("month");
  if(totals().length!==1)throw Error("Se esperaba una consulta SQL mensual");
- await page.getByRole("button",{name:"Hoy",exact:true}).click();
+ await page.locator(".fm-unified-filters select").first().selectOption("today");
  await verifyPeriod("hour");
  let t=totals().at(-1).query;
  if(t.desde!==t.hasta)throw Error("Hoy debe solicitar un solo día");
- await page.getByRole("button",{name:"Esta semana",exact:true}).click();
+ await page.locator(".fm-unified-filters select").first().selectOption("this_week");
  await verifyPeriod("day");
- await page.locator(".fm-demo-filters select").first().selectOption("custom");
- await page.getByLabel("Ventas desde").fill("2026-10-05");
- await page.getByLabel("Ventas hasta").fill("2026-10-12");
- await page.waitForFunction(()=>document.querySelector(".fm-sales-period-info")?.textContent.includes("12/10/2026"),
+ await page.locator(".fm-unified-filters select").first().selectOption("custom");
+ await page.locator(".fm-unified-filters input[type=date]").first().fill("2026-10-05");
+ await page.locator(".fm-unified-filters input[type=date]").last().fill("2026-10-12");
+ await page.waitForFunction(()=>document.querySelector(".fm-unified-header-meta")?.textContent.includes("12/10/2026"),
   null,{timeout:8000});
  await page.waitForFunction(()=>document.querySelector(".fm-demo-graph .fm-loading-panel")===null,
   null,{timeout:11000});

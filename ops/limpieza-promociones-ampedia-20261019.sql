@@ -1,4 +1,5 @@
 -- Mantenimiento ÚNICO autorizado de Ampedia, 19/10/2026.
+-- Primera ejecución protegida contra repetición por marca de catálogo.
 -- Respalda TODOS los documentos en una tabla propia y en el historial antes
 -- de vaciar el catálogo actual. Otras farmacias/clientes NO se modifican.
 -- Protegido con marca de ejecución para evitar borrados al reintentar.

@@ -406,7 +406,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
         <div className="fm-ai-root">
           <section className="fm-ai-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="fm-ai-title">
             <aside className="fm-ai-rail" aria-label="Opciones del asistente">
-              <div className="fm-ai-rail-brand"><span className="fm-ai-logo"><Sparkles size={23}/></span><span>Farmétrica <strong>Asistente</strong></span></div>
+              <div className="fm-ai-rail-brand"><span className="fm-ai-logo"><Sparkles size={23}/></span><span>Farmétrica</span></div>
               <button type="button" className="fm-ai-new" onClick={newConversation}><Plus size={17}/> Nueva conversación</button>
               <div className="fm-ai-rail-label">ESTÁS CONSULTANDO</div>
               <div className="fm-ai-rail-context"><Database size={17}/><span>{section}</span></div>
@@ -424,7 +424,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
               <header className="fm-ai-topbar">
                 <div className="fm-ai-heading">
                   <div className="fm-ai-heading-icon"><Sparkles size={19}/></div>
-                  <div><h1 id="fm-ai-title">Asistente Farmétrica</h1><p>Tu espacio de análisis en lenguaje natural</p></div>
+                  <div><h1 id="fm-ai-title">Asistente</h1><p>Tu espacio de análisis en lenguaje natural</p></div>
                 </div>
                 <div className="fm-ai-top-actions">
                   <span className="fm-ai-demo-status"><span/> {assistantStatus?.enabled?"Conectado":"Por activar"}</span>

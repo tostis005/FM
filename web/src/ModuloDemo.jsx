@@ -2,7 +2,7 @@ import React,{useMemo,useState,useEffect} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
 import {ArrowDownToLine,ArrowRight,Search,X,RefreshCw} from "lucide-react";
 import ListTable from "./ListTable.jsx";
-import {LoadingPanel,LoadingStatus,SkeletonLine} from "./LoadingState.jsx";
+import {LoadingPanel,SkeletonLine} from "./LoadingState.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
 import {buildAnalysis} from "./businessAnalytics.js";
@@ -27,7 +27,7 @@ const TABLE_DEFAULTS={
 // Solo estas columnas cuentan con ORDER BY de todo el conjunto en el servidor.
 // No habilitar una ordenación local engañosa sobre las primeras 3.000 filas.
 const REMOTE_FIELDS={
- ventas:["name","cn","pharmacy","family","abcdClass","pvp","purchaseCost","costSource",
+ ventas:["name","cn","pharmacy","family","abcdClass","pvp","purchaseCost",
    "saleUnitPrice","unitMargin","units","value","margin","marginPct"],
  compras:["name","cn","pharmacy","family","pvp","supplier","units","puc","value","lines"],
  proveedores:["name","pharmacy","products","units","value"],
@@ -59,7 +59,7 @@ function metricCards(module,k,analysisMonths=12){
   dashboard:[shared[0],shared[1],shared[2],shared[3],
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Líneas de compra","lineasCompra","n","compras")],
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Productos por farmacia ("+analysisMonths+" m)","productosFarmacia","n"),CARD("Artículos únicos ("+analysisMonths+" m)","articulosVendidos","n")],
+  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Referencias por farmacia · "+analysisMonths+" meses","productosFarmacia","n"),CARD("Artículos diferentes · "+analysisMonths+" meses","articulosVendidos","n")],
   compras:[shared[1],CARD("Unidades compradas","unidadesCompradas","n"),
    CARD("Proveedores","proveedores","n","proveedores"),
    CARD("Líneas de compra","lineasCompra","n")],
@@ -103,14 +103,14 @@ function columnsFor(module,pharmacyMap){
   value:r=>r.abcdClass||"—",
   render:r=>r.abcdClass?<span className={"fm-abcd fm-abcd-"+r.abcdClass}
    title="Prioridad por contribución a las ventas de esta farmacia y período">{r.abcdClass}</span>:"—"};
- const common=[article,cn,pharmacy,abcd];
+ const common=[cn,article,pharmacy,abcd];
  switch(module){
-  case "ventas":return [...common,family,unit("pvp","PVP catálogo"),
-    unit("purchaseCost","Coste/ud."),C("costSource","Origen coste","costSource"),unit("saleUnitPrice","Venta/ud."),
-    unit("unitMargin","Margen/ud."),num("units","Uds. vendidas"),
-    euro("value","Ventas"),euro("margin","Margen total"),
-    C("marginPct","Margen (%)","marginPct",v=>v==null?"—":number(v)+" %")];
-  case "compras":return [...common,C("supplier","Proveedor","supplier"),num("units","Unidades"),
+  case "ventas":return [...common,unit("pvp","PVP catálogo"),
+    unit("saleUnitPrice","Precio real venta/ud."),
+    unit("purchaseCost","Coste medio/ud."),unit("unitMargin","Margen/ud."),
+    num("units","Uds. vendidas"),euro("value","Ventas netas"),
+    euro("margin","Margen total")];
+  case "compras":return [cn,article,pharmacy,C("supplier","Proveedor","supplier"),num("units","Unidades"),
     unit("pvp","PVP catálogo"),C("puc","PUC compra","puc",unitEuro),
     euro("value","Compras"),num("lines","Líneas de compra")];
   case "proveedores":return [C("name","Proveedor","name"),pharmacy,
@@ -453,7 +453,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <label>Hasta<input aria-label="Ventas hasta" type="date" value={filters.customTo} onChange={e=>change("customTo",e.target.value)}/></label>
   </div>}
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
-  {module==="ventas"&&<p className="fm-sales-period-info">Los totales y el gráfico corresponden al período seleccionado. Productos, artículos, ABCD y margen se calculan sobre los últimos {effectiveAnalysisMonths} meses, según la configuración del administrador. Las familias son específicas de cada farmacia.</p>}
+  {module==="ventas"&&<p className="fm-sales-period-info">ABCD del último {effectiveAnalysisMonths===1?"mes":effectiveAnalysisMonths+" meses"}: A acumula aproximadamente el 80 % de la facturación, B hasta el 95 %, C el resto y D sin ventas. Es porcentaje de ingresos, no de artículos. El listado comienza por los más vendidos, por eso al principio suelen aparecer A.</p>}
   {module==="ventas"&&(searchReady||filters.families.length>0)&&<p className="fm-sales-period-info">La búsqueda y las familias filtran el detalle reciente, pero no modifican el total histórico mostrado.</p>}
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
@@ -509,7 +509,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {realReport?.availability?.stockSummaryBasis&&["stock","reposicion"].includes(module)&&<p className="fm-sales-period-info">Base de valoración: {realReport.availability.stockSummaryBasis}. Si faltan costes, el importe permanece sin calcular. El listado puede mostrar menos referencias sin afectar a los recuentos.</p>}
    {realReport?.availability?.rowsTruncated&&module!=="ventas"&&<p role="status" className="fm-inline-status">El listado está limitado a las primeras 3.000 referencias. Los totales de ventas y compras proceden de todas las operaciones.</p>}
    {realReport?.availability?.stockRowsTruncated&&["stock","reposicion","acciones"].includes(module)&&<p role="status" className="fm-inline-status">El listado de existencias está limitado a 3.000 referencias. Los recuentos y unidades del inventario se calculan sobre todas las fichas; la reposición mostrada no incluye necesariamente todas las necesidades.</p>}
-  {isFetchingSales&&<div className="fm-loading-message"><LoadingStatus label={"Consultando "+(module==="compras"||module==="proveedores"?"compras":module==="stock"||module==="reposicion"?"inventario":"informes")+" y actualizando indicadores…"}/></div>}
+
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
     {chartLoading?<LoadingPanel kind="chart" label={"Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas")+"…"}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
@@ -532,7 +532,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
   </section>:<section className="card fm-demo-table">
-   <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos y ABCD — últimos "+effectiveAnalysisMonths+" meses":TITLES[module]+" por artículo"}</h2>
+   <div className="section-heading"><h2>{isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    <ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,module==="ventas"?recentPeriod.from:period.from,module==="ventas"?recentPeriod.to:period.to].join("|")} rows={rows} rowKey={r=>r.id}
     sort={remoteSort} onSortChange={remoteSort?changeTableSort:undefined} defaultSort={tableSort} label="registros" loading={isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"} emptyText={reportError?"No se pudo cargar el informe; revisa el mensaje de error":
@@ -543,9 +543,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}
       onClick={()=>setDetailPage(n=>n+1)}>
-      {isFetchingSales?"Cargando artículos…":"Cargar 200 artículos más"}
+      {isFetchingSales?"Cargando artículos…":"Cargar 400 artículos más"}
     </button></div>}
-   {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {rows.length} referencias. El CSV exporta únicamente las páginas cargadas. ABCD y costes: últimos {effectiveAnalysisMonths} meses.</small>}
+   {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {rows.length} referencias. El CSV incluye las páginas cargadas.</small>}
   </section>}
   {(isReports||isAssistant)&&<section className="card fm-demo-table">
    <div className="section-heading"><h2>Artículos vendidos en el período</h2>

@@ -26,7 +26,7 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
  async function call(section,params={},ctx=context){
   const req={query:{desde:"2026-10-01",hasta:"2026-10-19",
     farmacias:"1",pagina:"1",tamano:"25",...params},
-    params:{section},context:ctx,user:{role:"superadministrador",email:"test@example.invalid"}};
+    params:{section},context:ctx,user:{role:ctx.role,email:"test@example.invalid"}};
   let body,status=200;const res={status(x){status=x;return res},json(x){body=x;return res}};
   let exception;await routes["/api/analytics/pantallas/:section"](req,res,e=>{exception=e});
   if(exception)throw exception;

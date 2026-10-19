@@ -11,13 +11,23 @@ export function buildSalesTotalsSql(schema,granularity){
  const table='"'+schema+'"';
  // Las líneas especiales sin artículo suman importe, pero no unidades de producto.
  const productUnits="coalesce(sum(v.unidades) FILTER (WHERE nullif(btrim(v.articulo_id),'') IS NOT NULL),0)";
+ const product="nullif(btrim(v.articulo_id),'') IS NOT NULL";
+ const costed=`${product} AND v.coste_historico IS NOT NULL AND v.coste_historico>=0`;
+ const marginExpr=`coalesce(sum(v.importe-v.unidades*v.coste_historico) FILTER (WHERE ${costed}),0)`;
+ const salesCostedExpr=`coalesce(sum(v.importe) FILTER (WHERE ${costed}),0)`;
+ const pricedExpr=`count(*) FILTER (WHERE ${costed})`;
+ const productCountExpr=`count(*) FILTER (WHERE ${product})`;
  // Para 12/6/3 meses basta un GROUP BY mensual. La ventana suma solo los
  // 12 resultados agregados y evita GROUPING SETS y una segunda lectura.
  if(granularity==="month")return `
  SELECT to_char(date_trunc('month',v.fecha),'YYYY-MM') AS month,
    sum(v.importe)::float8 AS ventas,${productUnits}::float8 AS unidades,
    sum(sum(v.importe)) OVER()::float8 AS total_ventas,
-   sum(${productUnits}) OVER()::float8 AS total_unidades
+   sum(${productUnits}) OVER()::float8 AS total_unidades,
+   sum(${marginExpr}) OVER()::float8 AS total_margen,
+   sum(${salesCostedExpr}) OVER()::float8 AS total_ventas_con_coste,
+   sum(${pricedExpr}) OVER()::bigint AS total_lineas_con_coste,
+   sum(${productCountExpr}) OVER()::bigint AS total_lineas_producto
  FROM ${table}.fm_ventas_analitica v
  WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
    AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
@@ -31,11 +41,19 @@ export function buildSalesTotalsSql(schema,granularity){
    to_char(mes,'YYYY-MM') AS month,
    ${granularity==="month"?"NULL::text":"to_char(periodo,'"+fmt+"')"} AS bucket,
    coalesce(sum(importe),0)::float8 AS ventas,
-   coalesce(sum(unidades),0)::float8 AS unidades
+   coalesce(sum(unidades),0)::float8 AS unidades,
+   coalesce(sum(margin),0)::float8 AS margen,
+   coalesce(sum(sales_with_cost),0)::float8 AS ventas_con_coste,
+   coalesce(sum(costed_count),0)::bigint AS lineas_con_coste,
+   coalesce(sum(product_count),0)::bigint AS lineas_producto
  FROM (
    SELECT date_trunc('month',v.fecha) AS mes,
      date_trunc('${granularity}',v.fecha) AS periodo,
-     v.importe,CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL THEN v.unidades ELSE 0 END AS unidades
+     v.importe,CASE WHEN ${product} THEN v.unidades ELSE 0 END AS unidades,
+     CASE WHEN ${costed} THEN v.importe-v.unidades*v.coste_historico ELSE 0 END AS margin,
+     CASE WHEN ${costed} THEN v.importe ELSE 0 END AS sales_with_cost,
+     CASE WHEN ${costed} THEN 1 ELSE 0 END AS costed_count,
+     CASE WHEN ${product} THEN 1 ELSE 0 END AS product_count
    FROM ${table}.fm_ventas_analitica v
    WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
      AND v.fecha >= $1::date
@@ -87,8 +105,16 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    const total=granularity==="month"?
     {ventas:rows[0]?.total_ventas,unidades:rows[0]?.total_unidades}:
     rows.find(x=>x.tipo==="total");
+   const priced=Number(granularity==="month"?total?.total_lineas_con_coste:total?.lineas_con_coste)||0;
+   const products=Number(granularity==="month"?total?.total_lineas_producto:total?.lineas_producto)||0;
+   const gross=Number(granularity==="month"?total?.total_margen:total?.margen)||0;
+   const coveredSales=Number(granularity==="month"?total?.total_ventas_con_coste:total?.ventas_con_coste)||0;
+   const marginComplete=products>0&&priced===products;
    res.json({from,to,granularity,monthly:months,series,
-     kpis:{ventas:Number(total?.ventas||0),unidades:Number(total?.unidades||0)}});
+     kpis:{ventas:Number(total?.ventas||0),unidades:Number(total?.unidades||0),
+       margen:marginComplete?Math.round(gross*100)/100:null,
+       margenPct:marginComplete&&coveredSales!==0?Math.round(gross/coveredSales*10000)/100:null,
+       coberturaCostes:products?Math.round(priced/products*10000)/100:null}});
   }catch(e){next(e)}
  });
 }

@@ -28,7 +28,15 @@ public static class Validation
     public static void Query(SyncJob job)
     {
         if (job.EveryMinutes is < 5 or > 10080) throw new ArgumentException("Frecuencia: de 5 a 10080 minutos.");
-        if (job.RetryMinutes is < 5 or > 1440) throw new ArgumentException("Reintento tras error: de 5 a 1440 minutos.");
+        // RetryMinutes sigue en JSON antiguo pero nunca gobierna el horario.
+        if (!string.IsNullOrWhiteSpace(job.DailyAtLocal))
+        {
+            if (job.EveryMinutes != 1440 ||
+                !TimeOnly.TryParseExact(job.DailyAtLocal, "HH:mm",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out _))
+                throw new ArgumentException("La hora fija HH:mm solo está disponible para frecuencia diaria (1440 minutos).");
+        }
         if (job.BatchSize is < 100 or > 20_000) throw new ArgumentException("Tamaño de lote: de 100 a 20.000 filas.");
         if (job.ReplayMinutes is < 0 or > 43200) throw new ArgumentException("Solapamiento: de 0 a 43200 minutos.");
         if (job.SafetyDelayMinutes is < 0 or > 1440) throw new ArgumentException("Demora de seguridad: de 0 a 1440 minutos.");

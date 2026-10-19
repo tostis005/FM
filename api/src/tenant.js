@@ -218,16 +218,27 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
             GROUP BY 1`,[codes]);
           external=result.rows;
         }
+        if(!external.length&&has("proveedores","id","nombre")){
+          const result=await pool.query(`SELECT upper(btrim(id::text)) AS "sourceCode",
+            min(nullif(btrim(nombre::text),'')) AS name
+            FROM "${schema}".proveedores WHERE nullif(btrim(id::text),'') IS NOT NULL
+            GROUP BY 1`);
+          external=result.rows;
+        }
         // Si el origen todavía no envía el maestro, identificar proveedores
         // de sus recepciones, sin fabricar registros ni alterar las compras.
-        if(!external.length&&has("compras","farmacia_codigo","proveedor_id")){
+        if(!external.length&&has("compras","proveedor_id")&&
+           (has("compras","farmacia_codigo")||has("compras","farmacia_id"))){
           const supplierName=has("compras","proveedor_nombre")?
             "min(nullif(btrim(proveedor_nombre::text),''))":"NULL::text";
+          const localIds=req.context.pharmacies.map(p=>Number(p.id)).filter(Number.isInteger);
+          const legacySource=has("compras","farmacia_codigo")? "upper(btrim(farmacia_codigo))=ANY($1::text[])":
+            "farmacia_id=ANY($1::int[])";
           const result=await pool.query(`SELECT upper(btrim(proveedor_id::text)) AS "sourceCode",
             ${supplierName} AS name
-            FROM "${schema}".compras WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
+            FROM "${schema}".compras WHERE ${legacySource}
              AND nullif(btrim(proveedor_id::text),'') IS NOT NULL
-            GROUP BY 1`,[codes]);
+            GROUP BY 1`,[has("compras","farmacia_codigo")?codes:localIds]);
           external=result.rows;
         }
       }

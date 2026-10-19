@@ -34,13 +34,16 @@ function downloadRows(rows){
  const a=document.createElement("a");a.href=url;a.download="farmetrica-genericos-conjuntos.csv";a.click();
  setTimeout(()=>URL.revokeObjectURL(url),500);
 }
+const reportSignal=(controller)=>
+ typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
+  ?AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]):controller.signal;
 function GroupDetail({group,query,clientSlug,useReal=false}){
  const [data,setData]=useState(null),[error,setError]=useState("");
  useEffect(()=>{
   let cancel=false;const controller=new AbortController();
   setData(null);setError("");
   fetch("/api/genericos/"+(useReal?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query,{
-   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
    .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudo cargar el conjunto");return j})
    .then(d=>{if(!cancel)setData(d)}).catch(e=>{if(!cancel)setError(e.message)});
   return()=>{cancel=true;controller.abort()};
@@ -136,7 +139,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   let mounted=true;const controller=new AbortController();
   setLoading(true);setError("");
   fetch("/api/genericos/"+(useReal?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal})
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
    .then(async r=>{
     const j=await r.json().catch(()=>({}));
     if(r.status===422&&useReal){setUseReal(false);return null;}

@@ -52,6 +52,35 @@ export function getFilters(req,res){
  return {from,to,ids:[...new Set(ids)],search,families,module,sortKey,sortDir};
 }
 export function setupRealReports(app,pool,{requireTenant}){
+ // Opciones de filtros derivadas del catálogo COMPLETO de las farmacias
+ // autorizadas, no de las primeras 3.000 referencias enviadas al navegador.
+ app.get("/api/analytics/reportes/opciones",...requireTenant(),async(req,res,next)=>{
+  const f=getFilters(req,res);if(!f)return;
+  try{
+   const schema=req.context.client.schema;
+   if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))
+    return res.status(400).json({error:"Esquema inválido"});
+   const chosen=(req.context.pharmacies||[]).filter(p=>f.ids.includes(Number(p.id)));
+   const codes=chosen.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()).filter(Boolean);
+   if(!codes.length)return res.json({family:[]});
+   const fields=await tableColumns(pool,schema,"articulos");
+   if(has(fields,"familia","farmacia_codigo")){
+    const {rows}=await pool.query(`SELECT DISTINCT btrim(familia) AS code
+       FROM "${schema}".articulos
+       WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
+         AND nullif(btrim(familia),'') IS NOT NULL ORDER BY 1`,[codes]);
+    return res.json({family:rows.map(x=>x.code)});
+   }
+   const legacy=await tableColumns(pool,schema,"productos");
+   if(legacy.has("familia")){
+    const {rows}=await pool.query(`SELECT DISTINCT btrim(familia) AS code
+       FROM "${schema}".productos
+       WHERE nullif(btrim(familia),'') IS NOT NULL ORDER BY 1`);
+    return res.json({family:rows.map(x=>x.code)});
+   }
+   return res.json({family:[]});
+  }catch(e){next(e)}
+ });
  // Diagnóstico read-only rápido, separado de los informes agregados.
  // Se consulta por farmacia y periodo con EXISTS/índice, no COUNT(*) de
  // millones de líneas. Permite diferenciar falta de datos de cálculo lento.

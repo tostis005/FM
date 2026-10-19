@@ -26,7 +26,7 @@ function make({legacy=false,empty=false,headerOnly=false}={}){
   await endpoints.get(path)(req,res,e=>{err=e});if(err)throw err;
   return {code,payload};
  }
- return {call,calls};
+ return {call,calls,context};
 }
 test("totales de Compras de todos los proveedores y series, sin leer ventas ni catÃ¡logo",async()=>{
  const {call,calls}=make();
@@ -79,4 +79,11 @@ test("Inicio reutiliza recepciones documentales en resumen mensual sin agrupaciÃ
  assert.match(calls[1].sql,/GROUP BY 1 ORDER BY 1/);
  assert.doesNotMatch(calls[1].sql,/GROUP BY 1,f.id,t.proveedor_id/);
  assert.ok(calls.every(({sql})=>!sql.includes(".articulos")&&!sql.includes(".fm_ventas_analitica")));
+});
+
+test("un usuario con acceso a Inicio no necesita habilitar Compras para consultar su KPI",async()=>{
+ const {call,context}=make();
+ context.role="administrador";context.modules={dashboard:true,compras:false};
+ assert.equal((await call({},"/api/analytics/dashboard/compras")).code,200);
+ assert.equal((await call({},"/api/analytics/compras/resumen")).code,403);
 });

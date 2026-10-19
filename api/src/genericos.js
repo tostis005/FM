@@ -34,6 +34,7 @@ function catalogData(pool){
 }
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {nameCommercialRows} from "./commercialNames.js";
 import {classifyAbcd} from "./abcd.js";
 import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
 export function setupGenericAnalytics(app,pool,{requireTenantModule}){
@@ -178,8 +179,8 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
        AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'
      GROUP BY n.cn`,params):{rows:[]};
    const purchases=hasPurchases&&q.ids.length?await pool.query(`
-     SELECT n.cn,c.proveedor_id::text AS "supplierCode",
-       ${hasSuppliers?"max(sp.nombre)":"null::text"} AS supplier,
+     SELECT n.cn,f.id::text AS "pharmacyId",
+       c.proveedor_id::text AS "supplierCode",
        sum(c.unidades)::float8 AS units,
        sum(c.unidades*c.coste_unitario)::float8 AS spend,
        (sum(c.unidades*c.coste_unitario) FILTER(WHERE c.coste_unitario>0)/
@@ -188,16 +189,17 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      JOIN farmetrica.farmacias f ON f.cliente_slug=$5
        AND upper(btrim(c.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
      ${hasProducts?`LEFT JOIN ${schema}.productos p ON p.id=c.articulo_id`:""}
-     ${hasSuppliers?`LEFT JOIN ${schema}.proveedores sp ON sp.id=c.proveedor_id`:""}
      JOIN farmetrica.nomenclator_presentaciones n ON n.cn=
        ${hasProducts?"coalesce(nullif(btrim(p.cn),''),btrim(c.articulo_id::text))":"btrim(c.articulo_id::text)"}
      WHERE n.dcpf=$4 AND f.id=ANY($3::int[])
        AND c.fecha >= $1::date AND c.fecha < $2::date+interval '1 day'
-       AND ${includedPurchaseSupplier({tenant:"$5",code:"c.proveedor_id",name:hasSuppliers?"sp.nombre":null})}
-     GROUP BY n.cn,c.proveedor_id::text
+       AND ${includedPurchaseSupplier({tenant:"$5",code:"c.proveedor_id"})}
+     GROUP BY n.cn,c.proveedor_id::text,f.id
      ORDER BY puc NULLS LAST,n.cn`,[...params.slice(0,4),req.context.client.slug]):{rows:[]};
-   res.json({products:products.rows,sales:sales.rows,purchases:purchases.rows,
-      salesAvailable:hasSales,purchasesAvailable:hasPurchases});
+   const named=await nameCommercialRows(pool,req.context,purchases.rows);
+   res.json({products:products.rows,sales:sales.rows,
+    purchases:named.map(p=>({...p,supplier:p.supplierName||p.supplierCode})),
+    salesAvailable:hasSales,purchasesAvailable:hasPurchases});
   }catch(e){next(e);}
  });
 }

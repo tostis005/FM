@@ -19,6 +19,11 @@ assert.match(backendCode,/\/destination\/test-draft/);
 assert.match(src,/Probar conexión \(sin guardar\)/);
 assert.match(src,/Ver primeros 100/);
 assert.match(src,/Usar plantilla estándar/);
+assert.match(src,/<details class="fm-advanced">/);
+assert.match(src,/Herramientas de mantenimiento/);
+assert.doesNotMatch(src,/panel\('Cómo empezar'/);
+assert.doesNotMatch(src,/panel\('Formato mínimo del SELECT'/);
+
 
 
 const connectorSource=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Connectors/FarmaticConnector.cs'),'utf8');
@@ -53,7 +58,7 @@ assert.match(templateCode,/\{\{TABLE:dbo\.FamiliaAux\}\}/);
 assert.match(templateCode,/\{\{TABLE:dbo\.SuperFamilia\}\}/);
 assert.match(templateCode,/fa\.IdFamilia = f\.IdFamilia/);
 assert.match(templateCode,/sf\.IdSuperFamilia = fa\.IdSuperFamilia/);
-assert.match(src,/Preparar familias para todas las farmacias/);
+assert.match(src,/Preparar familias/);
 assert.match(src,/createFamilyJobs/);
 assert.match(backendCode,/\/jobs\/familias\/create-missing/);
 assert.match(tunnelSource,/FingerPrintSHA256/);

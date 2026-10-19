@@ -802,3 +802,7 @@ html,body{overflow-x:clip}
 @media (prefers-contrast:more){
  .side-nav-caret,.side-nav>.side-link[aria-controls] .side-settings-chevron{color:#fff}
 }
+
+/* Borrado explícito de promociones (solo administración). */
+.campaign-row-actions .fm-delete-promo{color:#b05b59;flex:0 0 30px;min-height:30px}
+.campaign-row-actions .fm-delete-promo:hover:not(:disabled){color:#a52d33;background:#fff0f0}

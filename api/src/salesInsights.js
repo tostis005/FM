@@ -14,7 +14,7 @@ export function buildRecentProductCountSQL(schema){
    WHERE upper(btrim(v.farmacia_codigo))=ANY($1::text[])
      AND v.fecha >= $2::date AND v.fecha < $3::date+interval '1 day'
      AND nullif(btrim(v.articulo_id),'') IS NOT NULL
-   GROUP BY 1,2 HAVING sum(v.unidades)>0
+   GROUP BY 1,2
  ),
  identified AS (
    SELECT s.source_code,s.net_units,

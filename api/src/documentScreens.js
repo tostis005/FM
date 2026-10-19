@@ -168,6 +168,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
    AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
    AND f.id=ANY($3::int[])
   WHERE nullif(btrim(a.origen_id),'') IS NOT NULL
+    AND $1::date <= $2::date
   ORDER BY f.id,a.origen_id,${stamp}
  )
  SELECT *,count(*) OVER()::int AS total,

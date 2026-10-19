@@ -67,7 +67,7 @@ test("consulta de conjuntos agrupa los CN y recupera compras y ventas con parám
  const sale=calls.find(c=>c.sql.includes("SELECT n.dcpf")&&c.sql.includes(".ventas"));
  const buy=calls.find(c=>c.sql.includes("SELECT n.dcpf")&&c.sql.includes(".compras"));
  assert.deepEqual(sale.params,["2026-10-01","2026-10-18",[1],"ampedia"]);
- assert.deepEqual(buy.params,["2026-10-01","2026-10-18",[1]]);
+ assert.deepEqual(buy.params,["2026-10-01","2026-10-18",[1],"ampedia"]);
  assert.match(sale.sql,/farmetrica\.farmacias f ON f\.cliente_slug=\$4/);
  assert.match(buy.sql,/farmacia_id=ANY\(\$3::int\[\]\)/);
 });
@@ -85,7 +85,7 @@ test("detalle DCPF muestra proveedores sin mezclar clientes",async()=>{
  assert.equal(body.purchases[0].puc,1.5);
  const purchase=calls.find(c=>c.sql.includes("SELECT n.cn")&&c.sql.includes(".compras"));
  const sale=calls.find(c=>c.sql.includes("SELECT n.cn")&&c.sql.includes(".ventas"));
- assert.deepEqual(purchase.params,["2026-10-01","2026-10-18",[1],"10531000140107"]);
+ assert.deepEqual(purchase.params,["2026-10-01","2026-10-18",[1],"10531000140107","ampedia"]);
  assert.deepEqual(sale.params,["2026-10-01","2026-10-18",[1],"10531000140107","ampedia"]);
 });
 test("rechaza acceso a farmacias que el usuario no tiene asignadas",async()=>{

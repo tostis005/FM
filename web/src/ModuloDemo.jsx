@@ -672,6 +672,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       {isFetchingSales?"Cargando artículos…":"Cargar 400 artículos más"}
     </button></div>}
    {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {integer(rows.length)} referencias cargadas{totalFiltered!=null?" de "+integer(totalFiltered)+" resultados del filtro completo":""}. El CSV incluye las páginas cargadas.</small>}
+   {["compras","proveedores","stock"].includes(module)&&
+    Object.values(tableFiltersReady).some(v=>Array.isArray(v)?v.length:Boolean(v))&&
+    !reportLoading&&<small className="fm-sales-period-info">
+     Filtro aplicado a todos los datos del período: {integer(realReport?.tableTotalFiltered??0)}
+     {" "}referencias coincidentes{realReport?.tableTotalFiltered>3000?" (se muestran las primeras 3.000)":""}.
+    </small>}
   </section>}
   {(isReports||isAssistant)&&<section className="card fm-demo-table">
    <div className="section-heading"><h2>Artículos vendidos en el período</h2>

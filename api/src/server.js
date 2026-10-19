@@ -14,6 +14,7 @@ import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
 import {setupSalesDetail} from "./salesDetail.js";
+import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
@@ -111,7 +112,8 @@ setupPurchaseTotals(app,pool,{requireTenant});
 setupSalesSummary(app,pool,{requireTenant});
 setupSalesTotals(app,pool,{requireTenant});
 setupSalesInsights(app,pool,{requireTenant});
-setupSalesDetail(app,pool,{requireTenant});
+const salesCache=createSalesCache(pool);
+setupSalesDetail(app,pool,{requireTenant,cache:salesCache});
 setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
 setupGenericosReales(app,pool,{requireTenantModule});
 
@@ -428,6 +430,8 @@ try {
   await pool.query(privacyMigration);
   const promosMigration=await readFile(new URL("./migrations/009_promociones_cliente.sql",import.meta.url),"utf8");
   await pool.query(promosMigration);
+  const cacheMigration=await readFile(new URL("./migrations/015_cache_analitica_ventas.sql",import.meta.url),"utf8");
+  await pool.query(cacheMigration);
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{
@@ -440,6 +444,7 @@ try {
   await purgeExpiredPublicRequests();
   setInterval(purgeExpiredPublicRequests,24*60*60*1000).unref();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
+  salesCache.start();
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);
   await pool.end();

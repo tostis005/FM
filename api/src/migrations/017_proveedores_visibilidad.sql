@@ -1,13 +1,20 @@
 -- Indicadores de proveedor gestionados por cliente. No modifica movimientos del ERP.
-ALTER TABLE farmetrica.proveedores_maestro
- ADD COLUMN IF NOT EXISTS cooperativa boolean NOT NULL DEFAULT false;
+-- La conversión histórica debe suceder SOLO una vez.
+-- En despliegues posteriores respetar si el usuario ha desmarcado el check.
+DO $
+BEGIN
+ IF NOT EXISTS (
+   SELECT 1 FROM information_schema.columns
+   WHERE table_schema='farmetrica' AND table_name='proveedores_maestro'
+     AND column_name='cooperativa'
+ ) THEN
+   ALTER TABLE farmetrica.proveedores_maestro
+     ADD COLUMN cooperativa boolean NOT NULL DEFAULT false;
+   UPDATE farmetrica.proveedores_maestro SET cooperativa=true WHERE tipo='cooperativa';
+ END IF;
+END $;
 ALTER TABLE farmetrica.proveedores_maestro
  ADD COLUMN IF NOT EXISTS ignorar_informes boolean NOT NULL DEFAULT false;
-
--- Respetar la clasificación histórica antes de separar atributo y tipo.
-UPDATE farmetrica.proveedores_maestro
- SET cooperativa=true
- WHERE tipo='cooperativa' AND cooperativa=false;
 
 CREATE INDEX IF NOT EXISTS proveedores_maestro_exclusiones
  ON farmetrica.proveedores_maestro (cliente_slug,upper(btrim(codigo_origen)))

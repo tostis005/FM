@@ -152,7 +152,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
    ON co."pharmacyId"=p."pharmacyId" AND co.cn=p.cn
  ORDER BY p."__order" ${directions} NULLS LAST,p."pharmacyId",p.cn`;
 }
-export function setupSalesDetail(app,pool,{requireTenant}){
+export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
  app.get("/api/analytics/ventas/detalle",...requireTenant(),async(req,res,next)=>{
   try{
    if(req.context.role!=="superadministrador"&&
@@ -205,6 +205,16 @@ export function setupSalesDetail(app,pool,{requireTenant}){
     };
    }
    const pageSize=400;
+   if(cache){
+    const args={slug:req.context.client.slug,ids,months:Number(req.context.client.analysisMonths||12),
+     from,to,search,families,sortKey:order,sortDir:direction,page,pageSize};
+    const cached=await cache.read(args);
+    if(!cached||cached.stale){
+     for(const id of ids)cache.schedule({
+      slug:req.context.client.slug,schema,pharmacyId:id,months:args.months,code:byId.get(id)});
+    }
+    if(cached)return res.json({...cached,from,to});
+   }
    const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source),
     [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
      pageSize+1,(page-1)*pageSize]);

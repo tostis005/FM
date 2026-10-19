@@ -5,10 +5,11 @@ import {loadTicketLines} from "./farmaciasApi.js";
 import {ListPagination} from "./ListTable.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
+import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
 
-const num=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:3}).format(Number(n)||0);
-const money=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(n)||0);
-const date=n=>new Intl.DateTimeFormat("es-ES",{dateStyle:"short",timeStyle:"medium",timeZone:"Europe/Madrid"}).format(new Date(n));
+const num=quantity;
+const money=euro;
+const date=dateTimeES;
 const validDate=s=>/^20\d\d-\d\d-\d\d$/.test(s||"");
 const INITIAL={start:"",end:""};
 const TICKET_COLUMNS=[
@@ -24,7 +25,7 @@ const TICKET_COLUMNS=[
   ["gross","Bruto",v=>v.gross==null?"—":money(v.gross)],
   ["lineDiscount","Descuento",v=>v.lineDiscount==null?"—":money(v.lineDiscount)],
   ["net","Neto",v=>money(v.net)],
-  ["discountPercent","% Dto.",v=>v.gross==null||v.lineDiscount==null?"—":(Number(v.gross)?Math.round(Math.abs(Number(v.lineDiscount)/Number(v.gross))*1000)/10:0)+"%"],
+  ["discountPercent","% Dto.",v=>v.gross==null||v.lineDiscount==null?"—":percentage(Number(v.gross)?Math.abs(Number(v.lineDiscount)/Number(v.gross))*100:0)],
 ];
 
 export default function DetalleVentas({promotions,pharmacies,connected,loading=false}){

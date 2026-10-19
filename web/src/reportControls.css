@@ -49,7 +49,7 @@
  appearance:none;display:inline-flex;align-items:center;justify-content:center;
  padding:8px 13px;min-height:36px;border:1px solid #dfeae3;
  border-radius:999px;background:#f8fbf9;color:#4b695b;
- font:700 11.5px/1.2 inherit;cursor:pointer;
+ font-family:inherit;font-size:11.5px;font-weight:700;line-height:1.2;cursor:pointer;
  transition:background-color .15s,color .15s,border-color .15s,box-shadow .15s;
 }
 .fm-period-shortcut:hover{background:#eaf8f1;border-color:#52b895;color:#087a57}

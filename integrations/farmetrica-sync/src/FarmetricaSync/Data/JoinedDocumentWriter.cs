@@ -141,10 +141,22 @@ public static class JoinedDocumentWriter
                         throw new InvalidOperationException("JOIN: origen_id, documento_id y fecha son obligatorios.");
                     if (!keys.Add(key))
                         throw new InvalidOperationException($"JOIN duplicado: origen_id {key} repetido en un lote.");
-                    if (!string.IsNullOrWhiteSpace(line) &&
-                        (!row.TryGetValue("articulo_id", out var article) || string.IsNullOrWhiteSpace(Convert.ToString(article)) ||
-                         !row.TryGetValue("unidades", out var units) || units is null))
-                        throw new InvalidOperationException($"JOIN: línea {line} sin artículo o unidades.");
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        bool articuloPresente = row.TryGetValue("articulo_id", out var article) &&
+                            !string.IsNullOrWhiteSpace(Convert.ToString(article));
+                        bool unidadesPresentes = row.TryGetValue("unidades", out var units) &&
+                            units is not null && units is not DBNull;
+                        if (!articuloPresente || !unidadesPresentes)
+                        {
+                            string missing = !articuloPresente && !unidadesPresentes
+                                ? "articulo_id y unidades"
+                                : !articuloPresente ? "articulo_id" : "unidades";
+                            throw new InvalidOperationException(
+                                $"JOIN: documento {document}, línea {line}: {missing} ausente. " +
+                                "No se ha confirmado ningún dato. Revisar el origen y no sustituir valores por ceros ni descartar líneas.");
+                        }
+                    }
                     if (string.IsNullOrWhiteSpace(line) &&
                         (row.TryGetValue("articulo_id", out var headerArticle) && headerArticle is not null ||
                          row.TryGetValue("unidades", out var headerUnits) && headerUnits is not null))

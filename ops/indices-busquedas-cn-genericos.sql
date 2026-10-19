@@ -75,8 +75,10 @@ WITH expected AS (
  ('fm_find_ventas_linea_articulo_idx','fm_ventas_lineas')) v(name,tab)
  WHERE to_regclass(format('%I.%I',c.esquema_datos,v.tab)) IS NOT NULL
 )
-SELECT format('SELECT 1 / CASE WHEN count(*) FILTER(WHERE ix.indisvalid AND ix.indisready)=count(*) THEN 1 ELSE 0 END AS indices_verificados;',
- count(*)) FROM expected e
+SELECT CASE WHEN count(*) FILTER(WHERE ix.indisvalid AND ix.indisready)=count(*)
+  THEN 'SELECT 1 AS indices_verificados;'
+  ELSE 'SELECT 1/0 AS indices_invalidos;' END
+FROM expected e
  LEFT JOIN pg_namespace ns ON ns.nspname=e.schema_name
  LEFT JOIN pg_class i ON i.relnamespace=ns.oid AND i.relname=e.name
  LEFT JOIN pg_index ix ON ix.indexrelid=i.oid

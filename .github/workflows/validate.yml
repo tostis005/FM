@@ -48,6 +48,7 @@ jobs:
           node --test api/src/pricePolicy.test.js
           node --test api/src/abcd.test.js
           node --test api/src/realReports.test.js
+          node --test api/src/reportTableFilters.test.js
           node --test api/src/salesSummary.test.js
           node --test api/src/salesTotals.test.js
           node --test api/src/salesInsights.test.js

@@ -1,7 +1,7 @@
 -- Indicadores de proveedor gestionados por cliente. No modifica movimientos del ERP.
 -- La conversión histórica debe suceder SOLO una vez.
 -- En despliegues posteriores respetar si el usuario ha desmarcado el check.
-DO $
+DO $fm_supplier_flags$
 BEGIN
  IF NOT EXISTS (
    SELECT 1 FROM information_schema.columns
@@ -12,7 +12,7 @@ BEGIN
      ADD COLUMN cooperativa boolean NOT NULL DEFAULT false;
    UPDATE farmetrica.proveedores_maestro SET cooperativa=true WHERE tipo='cooperativa';
  END IF;
-END $;
+END $fm_supplier_flags$;
 ALTER TABLE farmetrica.proveedores_maestro
  ADD COLUMN IF NOT EXISTS ignorar_informes boolean NOT NULL DEFAULT false;
 

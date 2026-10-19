@@ -2,11 +2,10 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import React,{useEffect,useState,useCallback,useRef} from "react";
 import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
+import {quantity,integer,dateTimeES} from "./localeES.js";
 
-const n=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(Number(value||0));
-const date=value=>value?new Intl.DateTimeFormat("es-ES",{
-  dateStyle:"short",timeStyle:"medium",
-}).format(new Date(value)):"—";
+const n=value=>quantity(value);
+const date=dateTimeES;
 
 export default function SyncVentas({client,pharmacies=[]}){
  const [status,setStatus]=useState(null),[busy,setBusy]=useState(true),[error,setError]=useState("");

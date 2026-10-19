@@ -35,11 +35,11 @@ export function salesColumnWhereSQL(alias="x",arg="$9",filters={}){
 
   `(NOT (${arg}::jsonb ? 'pharmacy') OR
     (SELECT f.nombre FROM farmetrica.farmacias f WHERE f.id::text=${alias}."pharmacyId") IN
-    (SELECT jsonb_array_elements_text(${arg}::jsonb->'pharmacy'))`,
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'pharmacy')))`,
   `(NOT (${arg}::jsonb ? 'abcdClass') OR ${alias}."abcdClass" IN
-    (SELECT jsonb_array_elements_text(${arg}::jsonb->'abcdClass'))`,
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'abcdClass')))`,
   `(NOT (${arg}::jsonb ? 'family') OR ${alias}.family IN
-    (SELECT jsonb_array_elements_text(${arg}::jsonb->'family'))`
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'family')))`
  ];
  for(const [field,expression] of Object.entries({
   purchaseCost:alias+'."globalPurchaseCost"',unitMargin:alias+'."globalUnitMargin"',
@@ -53,9 +53,9 @@ export function salesCacheColumnWhereSQL(alias="i",arg="$8"){
  const text=key=>`(NOT (${arg}::jsonb ? '${key}') OR ${j(key)} ILIKE '%'||(${arg}::jsonb->>'${key}')||'%')`;
  return [...TEXT_SALES_COLUMNS.map(text),
   `(NOT (${arg}::jsonb ? 'pharmacy') OR f.nombre IN
-    (SELECT jsonb_array_elements_text(${arg}::jsonb->'pharmacy'))`,
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'pharmacy')))`,
   `(NOT (${arg}::jsonb ? 'abcdClass') OR ${j("abcdClass")} IN
-    (SELECT jsonb_array_elements_text(${arg}::jsonb->'abcdClass'))`,
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'abcdClass')))`,
   `(NOT (${arg}::jsonb ? 'family') OR ${j("family")} IN
-    (SELECT jsonb_array_elements_text(${arg}::jsonb->'family'))`].join(" AND ");
+    (SELECT jsonb_array_elements_text(${arg}::jsonb->'family')))`].join(" AND ");
 }

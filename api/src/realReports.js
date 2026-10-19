@@ -2,6 +2,7 @@
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {loadCommercialNames} from "./commercialNames.js";
 import {classifyAbcd} from "./abcd.js";
 import {parseReportColumnFilters,wrapReportTableSQL} from "./reportTableFilters.js";
 // Solo expresiones SQL conocidas; los nombres de columnas del navegador nunca se interpolan.
@@ -762,6 +763,26 @@ export function setupRealReports(app,pool,{requireTenant}){
    const supplierRows=providers.rows.map(r=>({...r,id:key(r.pharmacyId,r.providerId),
     family:"",products:Number(r.products),units:r.units==null?null:Number(r.units),
     value:r.value==null?null:Number(r.value),potential:null}));
+   // El código ERP se conserva para enlazar, pero los listados muestran nombres.
+   // Una farmacia puede utilizar el mismo código que otra para otro proveedor.
+   // Si la consulta ya dispone de nombre real, conservarlo y evitar
+   // consultas adicionales. Resolver sólo códigos que aún no tienen nombre.
+   const unresolved=[
+    ...buyRows.filter(r=>!r.supplier||String(r.supplier).trim().toUpperCase()===
+      String(r.providerId??"").trim().toUpperCase()),
+    ...supplierRows.filter(r=>!r.name||String(r.name).trim().toUpperCase()===
+      String(r.providerId??"").trim().toUpperCase())
+   ];
+   if(unresolved.length){
+    const names=await loadCommercialNames(pool,req.context,
+     unresolved.map(r=>({pharmacyId:r.pharmacyId,supplierCode:r.providerId})));
+    for(const row of buyRows){
+     if(unresolved.includes(row))row.supplier=names.supplier(row.pharmacyId,row.providerId);
+    }
+    for(const row of supplierRows){
+     if(unresolved.includes(row))row.name=names.supplier(row.pharmacyId,row.providerId);
+    }
+   }
    const replenishmentRows=stockRows.filter(r=>r.need>0);
    const negativeMargins=salesRows.filter(r=>r.margin!=null&&r.margin<0).map(r=>({
     ...r,action:"Revisar margen negativo",impact:Math.abs(r.margin),targetModule:"rentabilidad"

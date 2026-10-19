@@ -24,6 +24,7 @@ import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 import {setupOperativa} from "./operativa.js";
 import {setupDocumentScreens} from "./documentScreens.js";
+import {nameCommercialRows} from "./commercialNames.js";
 
 const { Pool } = pg;
 const {
@@ -333,7 +334,7 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
 // Detalle de líneas sincronizadas. No inventar vendedor ni bruto si no vienen del origen.
 // Cada importe y descuento se presenta con el contrato canónico que recibió PostgreSQL.
 const ticketColumns = Object.freeze({
-  pharmacy:"f.nombre",seller:"NULL::text",saleId:"v.origen_id",
+  pharmacy:"f.nombre",seller:"v.vendedor_id",saleId:"v.origen_id",
   ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",description:"NULL::text",
   pvp:"v.precio_unitario",quantity:"v.unidades",gross:"NULL::numeric",
   lineDiscount:"v.descuento_linea",net:"v.importe",
@@ -398,7 +399,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
               v.numero_ticket::text AS "ticket",
               v.fecha AS "at",
               btrim(v.articulo_id::text) AS "cn", NULL::text AS "description",
-              NULL::text AS "sellerId",
+              v.vendedor_id AS "sellerId",
               v.precio_unitario::float8 AS "pvp", v.unidades::float8 AS "quantity",
               NULL::float8 AS "gross",
               v.descuento_linea::float8 AS "lineDiscount",
@@ -406,9 +407,11 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
        ` + where + orderSql +
       " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
       [...params,limit,offset]);
+    const named=await nameCommercialRows(pool,req.context,rows);
     res.json({
-      rows, total:countRows[0]?.total||0, offset, limit,
-      origin:req.context.client.schema+".fm_ventas_analitica", sellerNamesAvailable:false,
+      rows:named,total:countRows[0]?.total||0,offset,limit,
+      origin:req.context.client.schema+".fm_ventas_analitica",
+      sellerNamesAvailable:named.some(row=>row.sellerName&&row.sellerName!==row.sellerId),
     });
   } catch(err){ next(err); }
 });

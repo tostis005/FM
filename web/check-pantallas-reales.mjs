@@ -27,11 +27,11 @@ await page.route("**/api/**",async route=>{
   requests.push({section,query:Object.fromEntries(q.entries())});
   const sample={
    "ventas-tickets":{ticket:"T-REAL",at:"2026-10-18T12:00:00Z",pharmacyName:"Farmacia Centro",
-     lines:2,units:3,amount:15,sellerId:"E1"},
+     lines:2,units:3,amount:15,sellerId:"E1",sellerName:"Marga Abadía"},
    "ventas-devoluciones":{reference:"DEV-REAL",at:"2026-10-18T12:00:00Z",
      pharmacyName:"Farmacia Centro",article:"ART-01",units:-1,amount:-4,kind:"Devolución"},
    "compras-devoluciones":{reference:"ALB-REAL",at:"2026-10-18T12:00:00Z",
-     pharmacyName:"Farmacia Centro",article:"ART-01",supplier:"PR1",units:-3,amount:-6},
+     pharmacyName:"Farmacia Centro",article:"ART-01",supplier:"PR1",supplierName:"Cooperativa Centro",units:-3,amount:-6},
    "productos":{cn:"654321",sourceId:"ART-01",name:"Omeprazol real",
      family:"Digestivo",laboratory:"Lab A",pharmacyName:"Farmacia Centro",
      pvp:8,pmc:2.5,stock:4},
@@ -64,8 +64,11 @@ try{
   assert.equal(await page.getByText("Ver ejemplo de demo").count(),0,path);
   assert.ok(requests.some(r=>r.section===path),path+" debe consultar la API real");
  }
+ await page.goto(BASE+"/compras-devoluciones",{waitUntil:"domcontentloaded"});
+ await page.getByText("Cooperativa Centro",{exact:true}).waitFor();
  await page.goto(BASE+"/ventas-tickets",{waitUntil:"domcontentloaded"});
  await page.getByText("T-REAL",{exact:true}).waitFor();
+ await page.getByText("Marga Abadía",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ver líneas"}).first().click();
  await page.getByRole("region",{name:"Desglose del ticket"}).getByText("ART-01").waitFor();
  assert.equal(await page.getByRole("region",{name:"Desglose del ticket"}).locator("tbody tr").count(),2);

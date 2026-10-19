@@ -3,6 +3,7 @@
 import {readPricePolicy} from "./pricePolicy.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {loadCommercialNames} from "./commercialNames.js";
 import {classifyAbcd} from "./abcd.js";
 import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
@@ -246,13 +247,23 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
       principio_activo,generico,comercializado FROM farmetrica.nomenclator_presentaciones
       WHERE dcpf=$1 ORDER BY generico DESC,nombre,cn`,[selectedDcpf]);
     const relevant=refs.rows.filter(r=>r.dcpf===selectedDcpf);
+    const scopedPurchases=purchases.rows.filter(r=>r.dcpf===selectedDcpf);
+    const commercial=await loadCommercialNames(pool,req.context,scopedPurchases.map(p=>({
+     pharmacyId:p.pharmacyId,supplierCode:p.supplierCode
+    })).concat(scopedPurchases.map(p=>({
+     pharmacyId:p.pharmacyId,supplierCode:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.supplierCode
+    }))));
     return res.json({products:products.rows,
      sales:sales.rows.filter(r=>r.dcpf===selectedDcpf),
-     purchases:purchases.rows.filter(r=>r.dcpf===selectedDcpf).map(p=>({
-      ...p,puc:Number(p.pricedUnits)>0?round(Number(p.cost)/Number(p.pricedUnits)):null,
+     purchases:scopedPurchases.map(p=>({
+      ...p,
+      supplier:commercial.supplier(p.pharmacyId,p.supplierCode),
+      puc:Number(p.pricedUnits)>0?round(Number(p.cost)/Number(p.pricedUnits)):null,
       referencePuc:relevant.find(r=>String(r.pharmacyId)===String(p.pharmacyId)&&r.cn===p.cn&&r.supplierCode===p.supplierCode)?.referencePuc??null,
       targetPuc:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.referencePuc??null,
       targetSupplier:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.supplierCode??null,
+      targetSupplierName:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.supplierCode?
+       commercial.supplier(p.pharmacyId,refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf).supplierCode):null,
       targetCn:refByGroup.get(String(p.pharmacyId)+"|"+p.dcpf)?.cn??null,
       potential:Number(p.pricedUnits)>0&&refByGroup.has(String(p.pharmacyId)+"|"+p.dcpf)?
        round(Math.max(0,Number(p.cost)/Number(p.pricedUnits)-

@@ -2,6 +2,7 @@
 // Todas las consultas se limitan al esquema y farmacias del cliente autenticado.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {nameCommercialRows} from "./commercialNames.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -202,7 +203,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
  SELECT f.id::text AS "pharmacyId",f.nombre AS "pharmacyName",
   v.fecha AS "at",v.sistema_origen AS "sourceSystem",v.documento_id AS "documentId",
   coalesce(v.numero_albaran,v.documento_id) AS reference,v.linea_id AS "lineId",
-  v.articulo_id AS article,v.proveedor_id AS supplier,
+  v.articulo_id AS article,v.proveedor_id AS supplier,v.proveedor_id AS "supplierCode",
   v.unidades::float8 AS units,v.importe::float8 AS amount,
   count(*) OVER()::int AS total,
   sum(abs(coalesce(v.importe,0))) OVER()::float8 AS "summaryValue",
@@ -328,7 +329,10 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
    const sql=buildDocumentScreenSQL(section,f.schema,columns,
     String(req.query.orden||"default"),String(req.query.direccion||"desc"));
    const {rows}=await pool.query({text:sql,values:[f.from,f.to,f.ids,f.slug,f.search,f.size,(f.page-1)*f.size]});
-   res.json(result(rows,f,section,
+   const named=["ventas-tickets","compras-recepciones","compras-devoluciones",
+    "proveedores-condiciones"].includes(section)?
+    await nameCommercialRows(pool,req.context,rows):rows;
+   res.json(result(named,f,section,
     section==="rentabilidad-segmentos"?"El margen es estimado y solo utiliza referencias con PMC del catálogo.":""));
   }catch(e){
    if(e.status)return res.status(e.status).json({error:e.message});
@@ -367,8 +371,9 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
      ORDER BY v.linea_id LIMIT 501`,
     values:[f.from,f.to,farmacia,f.slug,sistema,documento]
    });
-   res.json({farmacia,sistema,documento,lines:rows.slice(0,500),
-    truncated:rows.length>500});
+   const lines=await nameCommercialRows(pool,req.context,
+    rows.slice(0,500).map(line=>({...line,pharmacyId:String(farmacia)})));
+   res.json({farmacia,sistema,documento,lines,truncated:rows.length>500});
   }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
  });
  // Desglose del ticket en líneas originales, sin aplanar cantidades ni sumar

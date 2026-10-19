@@ -177,6 +177,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [reportLoading,setReportLoading]=useState(true);
  const [reportError,setReportError]=useState("");
  const [purchaseState,setPurchaseState]=useState(null);
+ const [purchaseSummaryResult,setPurchaseSummaryResult]=useState(null);
+ const [purchaseSummaryFailure,setPurchaseSummaryFailure]=useState(null);
  const [purchaseStateError,setPurchaseStateError]=useState("");
  const [purchaseSlow,setPurchaseSlow]=useState(false);
  const [salesError,setSalesError]=useState("");
@@ -312,6 +314,33 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   return ()=>controller.abort();
  },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,recentPeriod.from,recentPeriod.to,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction]);
 
+ // Totales y gráfica de compras independientes de los cálculos del catálogo.
+ const purchaseSummaryScope=[clientSlug,period.from,period.to,
+   filters.pharmacyIds.join(","),reloadKey].join("|");
+ const fastPurchase=module==="compras"&&!searchReady&&!filters.families.length&&
+   purchaseSummaryResult?.scope===purchaseSummaryScope?purchaseSummaryResult.data:null;
+ const purchaseSummaryError=module==="compras"&&
+   purchaseSummaryFailure?.scope===purchaseSummaryScope?purchaseSummaryFailure.message:null;
+ const shouldLoadPurchaseSummary=module==="compras"&&period.valid&&!searchReady&&!filters.families.length;
+ useEffect(()=>{
+  if(!shouldLoadPurchaseSummary)return;
+  const controller=new AbortController();
+  const params=new URLSearchParams({desde:period.from,hasta:period.to});
+  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  fetch("/api/analytics/compras/resumen?"+params,{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+  }).then(async response=>{
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(data.error||"No se pueden cargar los totales de compras");
+   if(!Array.isArray(data.monthly)||!data.kpis)
+    throw Error("Respuesta de totales de compras incompleta");
+   return data;
+  }).then(data=>{if(!controller.signal.aborted)setPurchaseSummaryResult({scope:purchaseSummaryScope,data})})
+   .catch(e=>{if(!controller.signal.aborted)setPurchaseSummaryFailure({scope:purchaseSummaryScope,message:e.message})});
+  return()=>controller.abort();
+ },[shouldLoadPurchaseSummary,purchaseSummaryScope]);
+
  // Verificación de origen/periodo rápida y separada del detalle agregado.
  // Si el detalle tarda, el usuario ya sabe si existen compras reales.
  useEffect(()=>{
@@ -380,7 +409,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...realReport?.kpis,...(insightData?{
    productosFarmacia:insightData.totalProducts,articulosVendidos:insightData.totalArticles
-  }:{}),...(fastSales?.kpis||{})};
+  }:{}),...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
  if(!realReport?.kpis&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;}
  const cards=metricCards(module,realKpis,effectiveAnalysisMonths);
  const isDashboard=module==="dashboard",isReports=module==="informes",isAssistant=module==="asistente";
@@ -408,8 +437,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      limited?false:col.sortable}));
  const chartConfig=SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;
- const chartLoading=module==="ventas"&&fastEligible?
-   (fastLoading||(!fastSales&&isFetchingSales)):isFetchingSales;
+ const chartLoading=module==="compras"&&shouldLoadPurchaseSummary?
+   (!fastPurchase&&!purchaseSummaryError):
+   module==="ventas"&&fastEligible?
+    (fastLoading||(!fastSales&&isFetchingSales)):isFetchingSales;
  const chart=salesModule&&chartData&&(module==="ventas"||(!filters.families.length&&!searchReady))?
    (module==="ventas"&&filters.period==="all"?
     [...(chartData.series||[])].reduce((acc,r)=>{
@@ -423,7 +454,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      month:formatSalesBucket(r.bucket,chartData.granularity||"month"),
      ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0
     }))):
-   (realReport?.monthly||[]).map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
+   (module==="compras"&&fastPurchase?.monthly||realReport?.monthly||[]).map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
  const available=Boolean(realReport?.available||(["dashboard","ventas"].includes(module)&&hasSales));
  const chartSeries=module==="dashboard"&&!realReport?["ventas",null,"Evolución de ventas"]:chartConfig;
 
@@ -458,7 +489,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
-   const kpiLoading=module==="ventas"&&fastEligible&&["ventas","unidades"].includes(c.key)?
+   const kpiLoading=module==="compras"&&shouldLoadPurchaseSummary?
+     (!fastPurchase&&!purchaseSummaryError):
+    module==="ventas"&&fastEligible&&["ventas","unidades"].includes(c.key)?
      (fastLoading||(!fastSales&&isFetchingSales)):
      (module==="ventas"&&["productosFarmacia","articulosVendidos"].includes(c.key)?
         insightLoading:isFetchingSales);
@@ -476,6 +509,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {(salesError||reportError)&&<p role="alert" className="fm-inline-status">{reportError||salesError}</p>}
+  {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
   {module==="compras"&&period.valid&&<div className="fm-inline-status" role="status">
    {purchaseStateError?
     <span>No se ha podido comprobar si hay movimientos de compra: {purchaseStateError}. Los resultados del informe se comprueban por separado.</span>:

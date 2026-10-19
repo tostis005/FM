@@ -92,7 +92,7 @@ function Metrics({section,data,pharmacies}){
   <span>{label}</span><strong>{value}</strong>
  </article>)}</div>;
 }
-function GridTable({section,rows,sort,setSort}){
+function GridTable({section,rows,sort,setSort,onOpenTicket}){
  const cols=META[section].cols;
  return <HorizontalTableScroll className="fm-preview-scroll" label="registros">
   <table className="fm-unified-table fm-real-screen-table"><thead><tr>{cols.map(([id,label])=>{
@@ -102,10 +102,12 @@ function GridTable({section,rows,sort,setSort}){
       setSort(old=>({key,direction:old.key===key&&old.direction==="asc"?"desc":"asc"}))}>
        {label}<span className="smart-sort-arrow" aria-hidden="true">{active?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
       </button>:label}</th>;
-  })}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr
+  })}{section==="ventas-tickets"&&<th scope="col">Detalle</th>}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr
    key={[r.pharmacyId,r.sourceSystem,r.documentId,r.lineId,r.sourceId,r.supplierCode,r.family,i].join("|")}>
-    {cols.map(([id,,format])=><td key={id}>{format(r)}</td>)}</tr>):
-   <tr><td colSpan={cols.length}>No hay registros para el periodo y los filtros seleccionados.</td></tr>}</tbody></table>
+    {cols.map(([id,,format])=><td key={id}>{format(r)}</td>)}
+    {section==="ventas-tickets"&&<td><button type="button" className="btn btn-secondary btn-sm"
+     onClick={()=>onOpenTicket(r)}>Ver líneas</button></td>}</tr>):
+   <tr><td colSpan={cols.length+(section==="ventas-tickets"?1:0)}>No hay registros para el periodo y los filtros seleccionados.</td></tr>}</tbody></table>
  </HorizontalTableScroll>;
 }
 export default function PantallasReales({section,pharmacies=[],clientSlug="ampedia"}){
@@ -117,11 +119,13 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    direction:section==="productos"?"asc":"desc"}));
  const [page,setPage]=useState(1),[size,setSize]=useState(25),[reload,setReload]=useState(0);
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
+ const [ticketDetail,setTicketDetail]=useState(null);
  const period=useMemo(()=>resolveSalesPeriod(periodKey,new Date(),custom,nowZone(clientSlug)),
   [periodKey,custom.from,custom.to,clientSlug,reload]);
  const pharmacyKey=ids.join(",");
  useEffect(()=>{const timer=setTimeout(()=>setReadySearch(search),320);return()=>clearTimeout(timer)},[search]);
  useEffect(()=>setPage(1),[pharmacyKey,readySearch,period.from,period.to,sort.key,sort.direction,section,size]);
+ useEffect(()=>setTicketDetail(null),[page,pharmacyKey,readySearch,period.from,period.to,section]);
  useEffect(()=>{
   if(!period.valid){setLoading(false);return;}
   const controller=new AbortController();
@@ -138,6 +142,20 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return()=>controller.abort();
  },[clientSlug,section,period.from,period.to,period.valid,pharmacyKey,readySearch,page,size,sort.key,sort.direction,reload]);
+ async function openTicket(ticket){
+  setTicketDetail({ticket,loading:true,lines:[],error:""});
+  const params=new URLSearchParams({desde:period.from,hasta:period.to,
+   farmacia:String(ticket.pharmacyId),farmacias:String(ticket.pharmacyId),
+   sistema:String(ticket.sourceSystem),documento:String(ticket.documentId)});
+  try{
+   const response=await fetch("/api/analytics/pantallas/ventas-tickets/lineas?"+params,{
+    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug}});
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(body.error||"No se pudo recuperar el ticket");
+   setTicketDetail({ticket,loading:false,lines:body.lines||[],error:"",
+    truncated:Boolean(body.truncated)});
+  }catch(e){setTicketDetail({ticket,loading:false,lines:[],error:e.message});}
+ }
  if(!config)return null;
  const selected=ids.length?pharmacies.filter(p=>ids.includes(String(p.id))):pharmacies;
  const count=Number(data?.total||0),pages=Math.max(1,Math.ceil(count/size));
@@ -172,7 +190,21 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
     <section className="card fm-preview-panel">
      <div className="fm-preview-panel-head"><h2>Resultados</h2>
       <span className="fm-real-count">{UNITS(count)} registros encontrados</span></div>
-     <GridTable section={section} rows={data?.rows||[]} sort={sort} setSort={setSort}/>
+     <GridTable section={section} rows={data?.rows||[]} sort={sort} setSort={setSort} onOpenTicket={openTicket}/>
+      {section==="ventas-tickets"&&ticketDetail&&<section className="fm-ticket-detail" aria-label="Desglose del ticket">
+       <div className="fm-preview-panel-head"><h3>Ticket {TXT(ticketDetail.ticket.ticket)} · Líneas</h3>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
+       {ticketDetail.loading?<p role="status">Cargando líneas reales…</p>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
+        <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
+         {["Línea","Código de artículo","Unidades","Precio unidad","Descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
+        </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>
+         <td>{TXT(line.lineId)}</td><td>{TXT(line.articleId)}</td><td>{UNITS(line.units)}</td>
+         <td>{EUR(line.unitPrice)}</td><td>{EUR(line.discount)}</td><td>{EUR(line.amount)}</td>
+         <td>{EUR(line.historicalCost)}</td></tr>)}
+         {!ticketDetail.lines.length&&<tr><td colSpan="7">El documento no tiene líneas visibles.</td></tr>}
+        </tbody></table></HorizontalTableScroll>}
+       {ticketDetail.truncated&&<p role="status">El ticket tiene más de 500 líneas; se muestran las primeras 500.</p>}
+      </section>}
      <div className="fm-real-pagination">
       <span>Página {page} de {pages}</span>
       <div><label>Por página <select value={size} onChange={e=>setSize(Number(e.target.value))}>

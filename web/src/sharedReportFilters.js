@@ -33,3 +33,12 @@ export function updateSharedReportFilters(clientSlug,patch){
   if(own(patch,"pharmacyIds"))updated.pharmacyIds=cleanIds(patch.pharmacyIds);
   try{sessionStorage.setItem(PREFIX+encodeURIComponent(clientSlug),JSON.stringify(updated))}catch{}
 }
+
+export function initializeSharedReportFilters(clientSlug,defaults){
+  if(!clientSlug||!defaults)return;
+  // Sólo rellenar filtros todavía no elegidos; nunca pisar una selección anterior.
+  const saved=readSharedReportFilters(clientSlug);
+  const missing=Object.fromEntries(["period","customFrom","customTo","pharmacyIds"]
+    .filter(key=>!own(saved,key)&&own(defaults,key)).map(key=>[key,defaults[key]]));
+  if(Object.keys(missing).length)updateSharedReportFilters(clientSlug,missing);
+}

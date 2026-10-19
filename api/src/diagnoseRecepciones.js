@@ -40,6 +40,19 @@ try{
  max(fecha)::date AS latest_date
  FROM ampedia.compras WHERE fecha >= current_date-interval '6 months'`);
  console.log("RECEPCIONES_AMPEDIA_CALIDAD "+JSON.stringify(source));
+ // Salud del stock importado por farmacia. No mostrar existencias concretas,
+ // valoración comercial, nombres ni códigos nacionales.
+ const {rows:stock}=await db.query(`
+  SELECT upper(btrim(farmacia_codigo)) AS farmacia,
+   count(*)::int AS fichas,
+   count(stock_actual)::int AS stock_informado,
+   count(*) FILTER (WHERE stock_actual IS NULL)::int AS sin_stock,
+   count(*) FILTER (WHERE stock_actual<0)::int AS stock_negativo,
+   count(*) FILTER (WHERE stock_actual<>0 AND (pmc IS NULL OR pmc<=0))::int AS sin_coste_stock,
+   max(sincronizado_en)::text AS ultima_sincronizacion
+  FROM ampedia.articulos
+  GROUP BY 1 ORDER BY 1`);
+ for(const row of stock)console.log("STOCK_AMPEDIA_COBERTURA "+JSON.stringify(row));
  await db.query("ROLLBACK");
 }catch(e){console.log("RECEPCIONES_AUDITORIA_ERROR "+(e.code||e.name));process.exitCode=1;try{await db.query("ROLLBACK")}catch{}}
 finally{await db.end()}

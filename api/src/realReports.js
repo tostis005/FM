@@ -799,7 +799,13 @@ export function setupRealReports(app,pool,{requireTenant}){
     potencialCompra:null,compraGenericos:null,potencialGenericos:null,
     acciones:completeSales&&(!needsStock||completeStock)&&sales?actions.length:null
    };
-   res.json({available:true,from:f.from,to:f.to,monthly,kpis,salesRows,buyRows,
+   const activeTableRows=f.module==="compras"?buys.rows:
+     f.module==="proveedores"?providers.rows:
+     ["stock","reposicion"].includes(f.module)?stockRows:
+     sale.rows;
+   const tableTotalFiltered=hasColumnFilters?
+     Number(activeTableRows[0]?.__totalFiltered||0):null;
+   res.json({available:true,from:f.from,to:f.to,monthly,kpis,tableTotalFiltered,salesRows,buyRows,
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows,
     actions,families:families.rows.map(r=>r.familia),
     availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockRowsTruncated,

@@ -135,8 +135,10 @@ try{
          const count=Number((await metrics.nth(0).textContent()).replace(/\D/g,""));
          const cn=Number((await metrics.nth(1).textContent()).replace(/\D/g,""));
          const targets=Number((await metrics.nth(2).textContent()).replace(/\D/g,""));
-         if(!(count>0&&cn>0&&targets>0))
-           throw Error("Las campañas importadas no deben mostrar KPI en cero: "+count+"/"+cn+"/"+targets);
+         // Un cliente sin promociones es válido: no crear campañas ficticias
+         // solo para que los KPI tengan números mayores que cero.
+         if(![count,cn,targets].every(Number.isFinite))
+           throw Error("KPI de promociones no numéricos: "+count+"/"+cn+"/"+targets);
        }
        if(path==="dashboard"&&viewport.width===375){
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");

@@ -2,7 +2,7 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import React,{useEffect,useState,useCallback,useRef} from "react";
 import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
-import {quantity,dateTimeES} from "./localeES.js";
+import {euro,quantity,integer,dateTimeES} from "./localeES.js";
 
 const n=value=>quantity(value);
 const date=dateTimeES;
@@ -51,9 +51,9 @@ export default function SyncVentas({client,pharmacies=[]}){
     <strong>{fresh?"Hay filas recibidas en los últimos 90 minutos":"No constan filas nuevas en los últimos 90 minutos"}</strong>
     <span>Última comprobación: {date(status.checkedAt)}</span></div>
    <div className="fm-sync-metrics">
-    <div><span>Total líneas</span><strong>{n(stats.total)}</strong></div>
-    <div><span>Últimos 90 minutos</span><strong>{n(stats.ultimos90min)}</strong></div>
-    <div><span>Últimas 24 horas</span><strong>{n(stats.ultimas24h)}</strong></div>
+    <div><span>Total líneas</span><strong>{integer(stats.total)}</strong></div>
+    <div><span>Últimos 90 minutos</span><strong>{integer(stats.ultimos90min)}</strong></div>
+    <div><span>Últimas 24 horas</span><strong>{integer(stats.ultimas24h)}</strong></div>
     <div><span>Última recepción</span><strong>{date(stats.ultima_recepcion)}</strong></div>
     <div><span>Última fecha de venta</span><strong>{date(stats.ultima_venta)}</strong></div>
    </div>
@@ -65,7 +65,7 @@ export default function SyncVentas({client,pharmacies=[]}){
     <HorizontalTableScroll className="table-scroll" label="sincronización"><table className="data-table"><thead><tr>
      <th>Farmacia</th><th>Líneas recibidas</th><th>Última recepción</th><th>Última venta</th>
     </tr></thead><tbody>{(status.pharmacies||[]).map(p=><tr key={p.codigo}>
-     <td><strong>{pharmacyName(p.codigo)}</strong></td><td>{n(p.total)}</td>
+     <td><strong>{pharmacyName(p.codigo)}</strong></td><td>{integer(p.total)}</td>
      <td>{date(p.ultima_recepcion)}</td><td>{date(p.ultima_venta)}</td>
     </tr>)}</tbody></table>
     {!status.pharmacies?.length&&<p className="fm-sync-note">No hay ventas correspondientes a las farmacias configuradas para este cliente.</p>}
@@ -79,9 +79,9 @@ export default function SyncVentas({client,pharmacies=[]}){
     </tr></thead><tbody>{(status.preview||[]).map((v,i)=><tr key={v.origen_id+"-"+i}>
      <td>{date(v.sincronizado_en)}</td><td>{pharmacyName(v.farmacia_codigo)}</td><td>{v.origen_id}</td>
      <td>{date(v.fecha)}</td><td>{v.articulo_id}</td><td>{n(v.unidades)}</td>
-     <td>{v.precio_unitario==null?"—":n(v.precio_unitario)}</td><td>{n(v.importe)}</td>
-     <td>{v.descuento_linea==null?"—":n(v.descuento_linea)}</td>
-     <td>{v.descuento_operacion==null?"—":n(v.descuento_operacion)}</td>
+     <td>{v.precio_unitario==null?"—":euro(v.precio_unitario)}</td><td>{euro(v.importe)}</td>
+     <td>{v.descuento_linea==null?"—":euro(v.descuento_linea)}</td>
+     <td>{v.descuento_operacion==null?"—":euro(v.descuento_operacion)}</td>
     </tr>)}</tbody></table>
     {!status.preview?.length&&<p className="fm-sync-note">Todavía no se han recibido líneas de venta.</p>}
     </HorizontalTableScroll>

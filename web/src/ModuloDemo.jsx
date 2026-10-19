@@ -76,7 +76,9 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
  const map={
-  dashboard:[shared[0],shared[1],CARD("Unidades vendidas","unidades","n","ventas"),
+  dashboard:[shared[0],shared[1],shared[3],
+   CARD("Margen bruto (%)","margenPct","%","rentabilidad"),
+   CARD("Unidades vendidas","unidades","n","ventas"),
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Recepciones registradas","recepciones","n","compras"),
    CARD("Líneas de compra","lineasCompra","n","compras")],
@@ -632,7 +634,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
-   const kpiLoading=isDashboard?(["ventas","unidades"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
+   const kpiLoading=isDashboard?(["ventas","unidades","margen","margenPct"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
     module==="compras"&&shouldLoadPurchaseSummary?
      (!fastPurchase&&!purchaseSummaryError):
     module==="ventas"&&fastEligible&&["ventas","unidades"].includes(c.key)?
@@ -645,7 +647,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
        <span className="fm-load-spinner" aria-hidden="true"/><small>Cargando…</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
-    {!kpiLoading&&c.key==="margen"&&realKpis.margen==null&&<small>Sin coste de compra suficiente para estimar el margen</small>}
+    {!kpiLoading&&c.key==="margen"&&realKpis.margen==null&&<small>Sin cobertura completa del coste histórico</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>

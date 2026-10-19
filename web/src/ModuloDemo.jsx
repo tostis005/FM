@@ -618,8 +618,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      <span>Algunos importes y artículos de compras todavía no están disponibles.</span>
     </div>}
    {realReport?.available===false&&
-    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Demo</span>
-     <span>La información de este módulo todavía está pendiente de carga.</span></div>}
+    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
+     <span>La información de este módulo todavía está pendiente de sincronización.</span></div>}
    {realReport?.availability?.purchases===false&&["compras","proveedores"].includes(module)&&
     <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
      <span>Compras todavía no disponibles para esta selección.</span></div>}

@@ -151,7 +151,9 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     unidadesCompradas:sourceRows>0&&unitRows===0?null:units,
     lineasCompra:sourceRows>0&&lines===0?null:lines,
     proveedores:suppliers.size,
-    recepciones:sourceRows
+    // Contar cabeceras como recepciones solo cuando NO hay líneas de producto:
+    // en otros clientes sourceRows podría ser el número de líneas, no de albaranes.
+    recepciones:lines>0?null:sourceRows
    },hasArticleLines:lines>0,hasAmounts:amountRows>0,sourceRows,
    monthly:[...months.values()].map(m=>({
     month:m.month,ventas:m.ventas,compras:m.hasAmounts?m.compras:null,

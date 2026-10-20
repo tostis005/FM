@@ -1,11 +1,12 @@
 // Identidad semántica del RESUMEN: no depende del número de fila ni del
-// nombre del archivo. Fechas COMPLETAS: la misma oferta en otro año es distinta.
+// nombre del archivo. Las campañas "hasta fin de existencias" pueden no
+// tener fecha de fin; en ese caso se conserva el fin vacío en la identidad.
 const normalize=value=>String(value??"").trim().normalize("NFD")
  .replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").toUpperCase();
 export function promotionImportIdentity(p){
- if(!p||!p.start||!p.end||!(p.laboratory||p.subtitle)||
+ if(!p||!p.start||!(p.laboratory||p.subtitle)||
    !p.range||p.originalOffer==null)return null;
- return [p.start,p.end,p.laboratory||p.subtitle,p.range,
+ return [p.start,p.end||"",p.laboratory||p.subtitle,p.range,
   p.originalOffer,p.description||""].map(normalize).join("\u001F");
 }
 export function planPromotionImport(existing,incoming){

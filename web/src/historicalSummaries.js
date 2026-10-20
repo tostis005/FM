@@ -83,9 +83,18 @@ export function mergeHistoricalSummaries(parts,kind,{from,to}){
  });
  if(kind==="purchases"){
   const complete=parts.every(p=>p.available!==false);
-  return {from,to,available:complete,monthly:months,sourceRows:sum(parts,"sourceRows"),
+  const amountsComplete=parts.every(p=>p.available!==false&&p.kpis.compras!=null&&
+   p.hasAmounts!==false&&(p.amountRows==null||p.sourceRows==null||
+    Number(p.amountRows)===Number(p.sourceRows)));
+  const covered=parts.every(p=>Number.isFinite(Number(p.sourceRows))&&
+   p.sourceRows!=null&&Number.isFinite(Number(p.amountRows))&&p.amountRows!=null);
+  const sourceRows=sum(parts,"sourceRows");
+  const amountRows=covered?sum(parts,"amountRows"):null;
+  return {from,to,available:complete,monthly:months,sourceRows,
+   amountRows,amountCoveragePct:covered?
+    (sourceRows?round(amountRows/sourceRows*100):100):null,
    hasArticleLines:parts.some(p=>p.hasArticleLines||p.kpis?.lineasCompra!=null),
-   hasAmounts:parts.some(p=>p.hasAmounts||p.kpis?.compras!=null),
+   hasAmounts:amountsComplete,
    kpis:{
     compras:sumNullable(parts,"compras"),
     unidadesCompradas:sumNullable(parts,"unidadesCompradas"),

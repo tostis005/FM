@@ -14,7 +14,7 @@ import ModuloDemo from "./ModuloDemo.jsx";
 import Genericos from "./Genericos.jsx";
 import ConfiguracionPrecios from "./ConfiguracionPrecios.jsx";
 import ConfiguracionAnalisisVentas from "./ConfiguracionAnalisisVentas.jsx";
-import {promotionMetrics} from "./promotionMetrics.js";
+import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
@@ -29,6 +29,7 @@ import { readPromotionExcel, importedPromotionStatus } from "./importarPromocion
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
+import {mapLimited} from "./asyncBatches.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
@@ -122,7 +123,7 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{quantity(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Vendidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:quantity(m.units)}</strong></div>
+   <div className="campaign-metric"><span>Uds. atribuidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:quantity(m.units)}</strong></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
     <strong>{salesLoading?<SkeletonLine width="64%" height="24px"/>:m.completion==null?"—":percentage(m.completion)}</strong>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
@@ -221,6 +222,8 @@ function App(){
  const [from,setFrom]=useState("");
  const [to,setTo]=useState("");
  const [editingPromo,setEditingPromo]=useState(null);
+ const [savingPromo,setSavingPromo]=useState(false);
+ const [promoSaveError,setPromoSaveError]=useState("");
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
  const [cnText,setCnText]=useState("");
  const [editingUser,setEditingUser]=useState(null);
@@ -234,6 +237,7 @@ function App(){
   const [authError,setAuthError]=useState("");
   const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
   async function tenantState(ctx,email){
+    setPromotionStoreStatus("checking");
     const local=readState(ctx.client.slug,email);
     // Copia recuperable antes de reconciliar con las promociones compartidas.
     try{
@@ -244,17 +248,14 @@ function App(){
     try{
       const server=await loadStoredPromotions();
       const remote=server.promotions||[];
-      const existing=new Set(remote.map(p=>String(p.id)));
-      const deleted=new Set((server.deletedIds||[]).map(String));
-      const canEdit=["administrador","superadministrador"].includes(ctx.role)&&!server.catalogReset;
+      // El catálogo activo procede exclusivamente de PostgreSQL. Conservar
+      // copias anteriores sólo como respaldo, sin mostrarlas como vigentes.
+      if(!Array.isArray(remote))throw Error("Catálogo de promociones incompleto");
       setPromotionStoreStatus("connected");
-      // Solo conservar importaciones locales todavía no sincronizadas, nunca
-      // campañas que un administrador eliminó del servidor.
-      return {...local,promos:[...remote,...(canEdit?local.promos:[]).filter(
-        p=>!existing.has(String(p.id))&&!deleted.has(String(p.id)))]};
+      return {...local,promos:remote};
     }catch{
       setPromotionStoreStatus("error");
-      return local; // Nunca descartar importaciones ya guardadas en el navegador.
+      return {...local,promos:[]}; // No mostrar campañas almacenadas sólo localmente.
     }
   }
   async function loadContext(slug){
@@ -277,7 +278,8 @@ function App(){
         // La navegación analítica no depende de descargar todas las promociones.
         // Mostrar la sesión y el cliente autorizado en cuanto responde /context;
         // reconciliar las campañas en segundo plano sin bloquear Inicio.
-        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
+        if(live){setSessionUser(body.user);
+          setData({...readState(ctx.client.slug,body.user.email),promos:[]});}
         const loaded=await tenantState(ctx,body.user.email);
         if(live&&localStorage.getItem("fm_active_tenant")===ctx.client.slug)
           setData(current=>({...current,promos:loaded.promos,
@@ -286,9 +288,24 @@ function App(){
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};
   },[]);
+  async function retryPromotions(){
+   if(!tenantContext)return;
+   setPromotionStoreStatus("checking");
+   try{
+    const server=await loadStoredPromotions();
+    if(!Array.isArray(server.promotions))throw Error("El servidor no devolvió un catálogo válido");
+    setData(prev=>({...prev,promos:server.promotions}));
+    setPromotionStoreStatus("connected");
+   }catch(err){
+    setPromotionStoreStatus("error");
+    setToast("No se pudieron cargar las promociones: "+err.message);
+   }
+  }
   async function activateClient(slug){
     if(slug===tenantContext?.client.slug)return;
     try{
+      setPromotionStoreStatus("checking");
+      setData(prev=>({...prev,promos:[]}));
       const ctx=await loadContext(slug);
       setData(await tenantState(ctx,sessionUser?.email));
       setSalesStatus("sin_conexion");setSalesByPromotion({});
@@ -364,7 +381,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!tenantContext||!sessionUser||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -379,7 +396,8 @@ function App(){
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
-         const results=await Promise.all(chunks.map(chunk=>loadPromotionSales(chunk)));
+         const results=await mapLimited(chunks,3,
+           chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
          const byPromotion={};
          for(let i=0;i<segments.length;i++){
@@ -398,7 +416,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[data.promos,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email]);
+   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -520,7 +538,7 @@ function App(){
  const reportTargets=Object.entries(combinedReport.targets);
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
- const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
+ const reportCNs=[...new Set(reportFilteredCampaigns.flatMap(p=>p.cns||[]))];
  const searchedCNs=reportCNs.filter(cn=>(cn+" "+(reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"")).toLowerCase().includes(cnSearch.toLowerCase()));
  const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
@@ -574,9 +592,15 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  async function savePromo(e){
-  e.preventDefault();const codes=parseCNs(cnText);
+  e.preventDefault();
+  setPromoSaveError("");
+  if(savingPromo)return;
+  if(!canManagePromotions)return setToast("No tienes permiso para modificar promociones.");
+  if(promotionStoreStatus!=="connected")
+   return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
+  const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
   if(!codes.length&&promoForm.status!=="Borrador")return setToast("Añade al menos un CN antes de activar");
    const invalid=codes.filter(cn=>!isValidCN(cn));
@@ -598,12 +622,18 @@ function App(){
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
   const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
-  setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
-  setEditingPromo(null);
-   if(["administrador","superadministrador"].includes(tenantContext?.role)) {
-     try{await saveStoredPromotion(result);setToast("Promoción guardada en PostgreSQL");}
-     catch(err){setToast("Guardada en este navegador; pendiente de servidor: "+err.message);}
-   } else setToast("Promoción guardada únicamente en este navegador");
+  setSavingPromo(true);
+  try{
+   await saveStoredPromotion(result);
+   setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?
+    prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
+   setEditingPromo(null);
+   setToast("Promoción guardada correctamente");
+  }catch(err){
+   const message="No se ha guardado la promoción: "+err.message+". Reintenta.";
+   setPromoSaveError(message);setToast(message);
+  }finally{setSavingPromo(false)}
+
  }
  async function removePromotion(p){
   if(!["administrador","superadministrador"].includes(tenantContext?.role))return;
@@ -802,6 +832,7 @@ function App(){
   setExpandedNavIds(previous=>previous.includes(parent)?previous:[...previous,parent]);
  },[page]);
  const role=tenantContext?.role;
+ const canManagePromotions=["administrador","superadministrador"].includes(role);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(item.id==="usuarios"&&role==="gestor");
@@ -901,17 +932,26 @@ function App(){
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
-    {page==="promociones"&&<>
+    {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
+     <section className="card fm-preview-panel" role={promotionStoreStatus==="error"?"alert":"status"}>
+      <h2>{promotionStoreStatus==="error"?"No se pudieron consultar las promociones":"Consultando promociones…"}</h2>
+      <p>{promotionStoreStatus==="error"?
+       "El catálogo compartido no está disponible. No se muestran copias antiguas del navegador para evitar confusiones.":
+       "Cargando las campañas compartidas del cliente."}</p>
+      {promotionStoreStatus==="error"&&<button className="btn btn-secondary" type="button"
+       onClick={()=>void retryPromotions()}>Reintentar</button>}
+     </section>}
+    {page==="promociones"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Promociones" updatedAt={salesLastUpdated}
   period={from&&to&&from<=to?{valid:true,from,to}:null}
   actions={<div className="campaign-header-actions">
    <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
-   <button className="btn btn-secondary" type="button" disabled={importBusy}
+   {canManagePromotions&&<button className="btn btn-secondary" type="button" disabled={importBusy||promotionStoreStatus!=="connected"}
     aria-busy={importBusy} onClick={()=>importFileRef.current?.click()}>
     {importBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<Upload size={17}/>}
-    {importBusy?"Importando y guardando…":"Importar Excel"}</button>
-   <button className="btn btn-primary main-cta" onClick={()=>startPromo()}>
-    <Plus size={18}/> Nueva promoción</button>
+    {importBusy?"Importando y guardando…":"Importar Excel"}</button>}
+   {canManagePromotions&&<button className="btn btn-primary main-cta" disabled={savingPromo||promotionStoreStatus!=="connected"} onClick={()=>startPromo()}>
+    <Plus size={18}/> Nueva promoción</button>}
   </div>}/>
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}
   onPharmacyChange={selectSharedPharmacies}
@@ -932,9 +972,9 @@ function App(){
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
  <CampaignMetrics campaigns={scopedFilteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
  <section className="card list-card full-table-card">
-  <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{filteredPromos.length} promociones</span></div>
+  <div className="section-heading"><div><h2>Listado de promociones</h2></div><span className="count-label">{scopedFilteredPromos.length} promociones</span></div>
   <ListTable rows={scopedFilteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
-    tableClass="campaign-table" onRowClick={p=>startPromo(promos.find(original=>original.id===p.id)||p)} emptyText="No hay promociones con estos filtros"
+    tableClass="campaign-table" onRowClick={canManagePromotions?p=>startPromo(promos.find(original=>original.id===p.id)||p):undefined} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
       {key:"type",label:"Tipo",filterMode:"multi",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
@@ -951,12 +991,12 @@ function App(){
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
       {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
-      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button><button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>{["administrador","superadministrador"].includes(tenantContext?.role)&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
     ]}/>
  </section>
 
 </>}
-{page==="seguimiento-global"&&<>
+{page==="seguimiento-global"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Seguimiento" updatedAt={salesLastUpdated}
   actions={<div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/>
@@ -982,8 +1022,13 @@ function App(){
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Unidades vendidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
-   <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. atribuidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
+   {hasOverlappingPromotions(reportFilteredCampaigns)&&
+     <p role="note" className="fm-sales-period-info">
+      Hay promociones con el mismo CN, farmacia y fechas solapadas. Una misma
+      venta puede atribuirse a varias promociones; este total no representa unidades únicas.
+     </p>}
+    <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
@@ -1001,7 +1046,7 @@ function App(){
       label="campañas" onPageChange={setReportPage}
       onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
-  <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
+  <DetalleVentas promotions={reportFilteredCampaigns} pharmacies={pharmacies} pharmacyScopeIds={effectivePharmacyIds} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>
@@ -1110,7 +1155,8 @@ function App(){
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
    {Object.keys(promoForm.targets).length>0&&<div className="target-list"><div className="target-head"><strong>Objetivos por farmacia</strong><div className="increase-controls"><label>Incremento <input type="number" step="0.5" min="-100" max="500" value={targetIncrease} onChange={e=>setTargetIncrease(e.target.value)} aria-label="Incremento porcentual"/> %</label><button type="button" onClick={applyIncrease}>Aplicar</button></div></div>{Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}><div><strong>{pharmaName(id)}</strong><small>{id}</small></div><div className="numeric-input"><input type="number" min="0" value={value} onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})} aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div></div>)}<div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(promoForm.targets))} uds.</strong></div><small className="hint">Deja el objetivo vacío mientras sea borrador. Introduce valores base y pulsa Aplicar para incrementar el porcentaje; cambiar el campo no altera los objetivos hasta pulsar el botón. El cálculo desde histórico se añadirá más adelante.</small></div>}
-   <FormActions onCancel={()=>setEditingPromo(null)} label={editingPromo==="nuevo"?"Crear promoción":"Guardar cambios"}/>
+   {promoSaveError&&<p role="alert" className="fm-manage-feedback">{promoSaveError}</p>}
+   <FormActions onCancel={()=>{if(!savingPromo)setEditingPromo(null)}} disabled={savingPromo} label={savingPromo?"Guardando…":editingPromo==="nuevo"?"Crear promoción":"Guardar cambios"}/>
    {editingPromo!=="nuevo"&&<div className="drawer-extra"><button type="button" className="btn btn-secondary" onClick={()=>{const p={...promoForm};setEditingPromo(null);copyPromo(p)}}><Copy size={16}/> Duplicar promoción</button><button type="button" className="btn btn-secondary" onClick={()=>exportPromo(promoForm)}><ArrowDownToLine size={16}/> Descargar ficha de promoción</button></div>}
   </form></div></div>}
   {editingUser&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingUser(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingUser==="nuevo"?"Nuevo usuario":"Editar usuario"}</h2><p>Asigna un rol y define las farmacias disponibles.</p></div><button className="icon-btn" onClick={()=>setEditingUser(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={saveUser} className="drawer-content"><Field label="Nombre completo"><input required value={userForm.name} onChange={e=>setUserForm({...userForm,name:e.target.value})}/></Field><Field label="Correo electrónico"><input type="email" required value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/></Field><Field label="Rol"><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="farmacia">Personal de farmacia</option><option value="gestor">Gestor de farmacias</option><option value="superadmin">Superadministrador</option></select></Field><Field label="Estado"><select value={String(userForm.active)} onChange={e=>setUserForm({...userForm,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></Field><div className="form-divider"/><div className="field-heading"><div><strong>Farmacias asignadas</strong><small>{userForm.role==="superadmin"?"Este rol tiene acceso a toda la red.":"Marca las farmacias a las que podrá acceder."}</small></div></div>{userForm.role!=="superadmin"&&<div className="pharmacy-picker">{pharmacies.map(f=><label key={f.id} className={"pharmacy-choice "+(userForm.pharmacies.includes(f.id)?"chosen":"")}><input type="checkbox" checked={userForm.pharmacies.includes(f.id)} onChange={()=>setUserForm({...userForm,pharmacies:userForm.pharmacies.includes(f.id)?userForm.pharmacies.filter(x=>x!==f.id):[...userForm.pharmacies,f.id]})}/><span className="choice-check">{userForm.pharmacies.includes(f.id)&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>}<div className="note small-note"><ShieldCheck size={16}/> Estas asignaciones son solo visuales hasta habilitar autenticación y autorización en el servidor.</div><FormActions onCancel={()=>setEditingUser(null)}/></form></div></div>}

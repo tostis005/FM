@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {promotionMetrics} from "./promotionMetrics.js";
+import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 test("cuenta promociones importadas en borrador, CN y objetivos",()=>{
  const data=[{id:"X1",status:"Borrador",cns:["001474","164432"],targets:{"1":20,"2":15},sales:{"1":5,"2":3}},
   {id:"X2",status:"Finalizada",cns:["001474","195598"],targets:{"1":10},sales:{"1":4}}];
@@ -34,4 +34,13 @@ test("Excel de octubre: las promociones con objetivos cuentan aunque estén en b
  assert.ok(metrics.cnCount>30);
  assert.ok(metrics.target>0,"Los objetivos del Excel deben reflejarse en el resumen");
  assert.equal(metrics.units,null);
+});
+
+test("avisa de duplicidad posible solo si coinciden CN, farmacia y fechas",()=>{
+ const base={cns:["123456"],targets:{"1":10},start:"2026-10-01",end:"2026-10-31"};
+ assert.equal(hasOverlappingPromotions([base,{...base,id:"otra",start:"2026-10-20"}]),true);
+ assert.equal(hasOverlappingPromotions([base,{...base,id:"otra",cns:["234567"]}]),false);
+ assert.equal(hasOverlappingPromotions([base,{...base,id:"otra",targets:{"2":10}}]),false);
+ assert.equal(hasOverlappingPromotions([base,{...base,id:"otra",start:"2026-11-01",end:"2026-11-30"}]),false);
+ assert.equal(hasOverlappingPromotions([base]),false);
 });

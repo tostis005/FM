@@ -126,7 +126,11 @@ const C=(key,label,field,fmt)=>({key,label,value:r=>r[field],render:fmt?r=>fmt(r
 const unitEuro=euro;
 function columnsFor(module,pharmacyMap){
  const pharmacy={key:"pharmacy",label:"Farmacia",filterMode:"multi",value:r=>pharmacyMap.get(String(r.pharmacyId))||"—"};
- const article=C("name","Artículo","name"),cn=C("cn","CN","cn");
+ const article=C("name","Artículo","name"),cn={
+   key:"cn",label:"CN",value:r=>r.nationalCode||"CN no disponible",
+   render:r=>r.nationalCode?<strong className="fm-verified-cn">{r.nationalCode}</strong>:
+    <span className="fm-missing-cn" title="El catálogo no proporciona un código nacional verificado. El identificador interno del ERP no es un CN.">CN no disponible</span>
+  };
  const family={key:"family",label:"Familia",filterMode:"multi",value:r=>r.family||"—"};
  const unit=(key,label)=>C(key,label,key,unitEuro);
  const euroCol=(key,label)=>C(key,label,key,v=>euro(v));
@@ -557,7 +561,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  };
  const liveSalesRows=(realSales?.products||[]).map((r,i)=>({
    id:String(r.pharmacyId)+"|"+r.cn,pharmacyId:String(r.pharmacyId),
-   cn:r.cn,name:r.name||r.cn,family:"",units:Number(r.units)||0,
+   cn:r.cn,nationalCode:r.nationalCode||null,sourceId:r.sourceId||null,
+    name:r.name||"Nombre no disponible",family:"",units:Number(r.units)||0,
    value:r.value==null?null:Number(r.value),margin:null,marginPct:null,
    pvp:r.pvp??null,purchaseCost:r.purchaseCost??null,unitMargin:r.unitMargin??null,
    saleUnitPrice:r.saleUnitPrice??null

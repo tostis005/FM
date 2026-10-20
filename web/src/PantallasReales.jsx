@@ -187,13 +187,13 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
  useEffect(()=>setPage(1),[pharmacyKey,readySearch,period.from,period.to,sort.key,sort.direction,section,size]);
  useEffect(()=>{setTicketDetail(null);setReceiptDetail(null)},[page,pharmacyKey,readySearch,period.from,period.to,section]);
  useEffect(()=>{
-  if(!period.valid){setLoading(false);return;}
+  if(!period.valid){setData(null);setLoading(false);return;}
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,
    buscar:readySearch,pagina:String(page),tamano:String(size),orden:sort.key,
    direccion:sort.direction});
   if(ids.length)params.set("farmacias",ids.join(","));
-  setLoading(true);setError("");
+  setLoading(true);setError("");setData(null);
   fetch("/api/analytics/pantallas/"+section+"?"+params,{credentials:"same-origin",
    cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedReportSignal(controller)})
    .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Error(body.error||"No se pueden cargar los registros");return body})
@@ -262,7 +262,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
    <button type="button" onClick={()=>setReload(n=>n+1)}>Reintentar</button></div>}
   {data?.available===false&&!error&&<p className="fm-op-message" role="status">{data.message||"Datos pendientes de sincronización."}</p>}
   {loading?<section className="card fm-preview-panel" role="status">Cargando resultados…</section>:
-   !error&&data?.available!==false&&<>
+   period.valid&&!error&&data&&data.available!==false&&<>
     <Metrics section={section} data={data} pharmacies={selected}/>
     <section className="card fm-preview-panel">
      <div className="fm-preview-panel-head"><h2>Resultados</h2>

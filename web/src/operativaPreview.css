@@ -45,3 +45,14 @@
  display:block;max-width:100%;font-size:clamp(16px,1.8vw,25px);
  font-variant-numeric:tabular-nums;white-space:normal;overflow-wrap:anywhere;line-height:1.25}
 .fm-preview-scroll{min-width:0;max-width:100%;width:100%}
+
+
+/* Las tarjetas de documentos y operativa mantienen el valor en la misma
+   altura, dejando una tercera fila libre para una descripción futura. */
+.fm-preview-kpi{
+ display:grid;grid-template-columns:minmax(0,1fr);
+ grid-template-rows:minmax(32px,auto) minmax(38px,auto) minmax(20px,auto);
+ align-content:start;align-items:start;gap:6px;min-height:142px;
+}
+.fm-preview-kpi>span:first-child{grid-row:1}
+.fm-preview-kpi>strong{grid-row:2;align-self:start}

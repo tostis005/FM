@@ -95,6 +95,36 @@ try{
    const page=await ctx.newPage();
    page.on("pageerror",err=>console.error("Error React en pruebas responsive:",err.message));
    await page.route("**/api/**",mockApi);
+   // Comprobar que durante la autenticación no se dibuja la antigua maqueta de tarjetas.
+   if(viewport.width===375){
+     let releaseAuth;
+     const authGate=new Promise(resolve=>{releaseAuth=resolve});
+     await page.route("**/api/auth/me",async route=>{await authGate;await mockApi(route)});
+     try{
+       const authRequested=page.waitForRequest("**/api/auth/me",{timeout:12000});
+       await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded",timeout:20000});
+       await authRequested;
+       await page.locator(".fm-startup-screen").waitFor({state:"visible",timeout:10000});
+       const splash=await page.evaluate(()=>{
+         const rect=document.querySelector(".fm-startup-screen").getBoundingClientRect();
+         return {top:rect.top,left:rect.left,width:rect.width,height:rect.height,
+           viewportWidth:innerWidth,viewportHeight:innerHeight,
+           oldCards:document.querySelectorAll(".fm-skeleton-kpis,.fm-loading-panel").length,
+           shell:document.querySelectorAll(".workspace").length};
+       });
+       if(Math.abs(splash.top)>1||Math.abs(splash.left)>1||
+          splash.width<splash.viewportWidth-1||splash.height<splash.viewportHeight-1||
+          splash.oldCards||splash.shell)
+         throw Error("Arranque sin pantalla completa: "+JSON.stringify(splash));
+       console.log("OK 375 arranque");
+     }catch(error){
+       failures.push("375-arranque: "+error.message);
+       console.error("FAIL 375 arranque",error.message);
+     }finally{
+       releaseAuth();
+       await page.unroute("**/api/auth/me");
+     }
+   }
    for(const path of routes){
      try{
        await page.goto(BASE+"/"+path,{waitUntil:"domcontentloaded",timeout:20000});
@@ -107,6 +137,12 @@ try{
          contentWidth:document.querySelector(".main-content")?.getBoundingClientRect().width,
          topbarRight:document.querySelector(".topbar-right")?.getBoundingClientRect().right,
          topbarLeft:document.querySelector(".topbar")?.getBoundingClientRect().left,
+         mobileTopGap:(()=>{
+           const bar=document.querySelector(".workspace>.topbar");
+           const first=document.querySelector(".workspace>.main-content")?.firstElementChild;
+           return bar&&first?Math.round(first.getBoundingClientRect().top-
+             bar.getBoundingClientRect().bottom):null;
+         })(),
          table:([...document.querySelectorAll(".table-scroll")].map(e=>({
            viewport:e.clientWidth,content:e.scrollWidth}))),
        }));
@@ -114,6 +150,10 @@ try{
        if(excess>2||result.topbarRight>result.viewport+2){
          throw Error("Desbordamiento de "+excess+"px; "+JSON.stringify(result));
        }
+       if(viewport.width<=560&&["promociones","dashboard","ventas"].includes(path)&&
+          (result.mobileTopGap===null||result.mobileTopGap>55||result.mobileTopGap<0))
+         throw Error("Hueco superior móvil: "+result.mobileTopGap+"px");
+
        if(path==="promociones"&&viewport.width<=560&&
           !result.table.some(t=>t.content>t.viewport)){
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");

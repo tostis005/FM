@@ -1,2 +1,67 @@
 <!doctype html>
-<html lang="es-ES"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="theme-color" content="#102f28"/><meta name="description" content="Farmetrica · Inteligencia de negocio y análisis para farmacias"/><link rel="icon" type="image/webp" href="/brand-logo.webp?v=4"><title>Farmetrica · Plataforma de análisis</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>
+<html lang="es-ES">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="theme-color" content="#102f28"/>
+  <meta name="description" content="Farmetrica · Inteligencia de negocio y análisis para farmacias"/>
+  <link rel="icon" type="image/webp" href="/brand-logo.webp?v=4">
+  <title>Farmetrica · Plataforma de análisis</title>
+  <!-- La pantalla inicial se pinta incluso antes de descargar React, sin destellos blancos. -->
+  <style>
+    html,body,#root{margin:0;min-height:100%;width:100%}
+    .fm-startup-screen{
+      position:fixed;inset:0;z-index:2000;overflow:hidden;
+      min-height:100vh;min-height:100dvh;display:flex;align-items:center;
+      justify-content:center;padding:32px max(24px,env(safe-area-inset-right,0px))
+      max(44px,env(safe-area-inset-bottom,0px)) max(24px,env(safe-area-inset-left,0px));
+      box-sizing:border-box;background:
+       radial-gradient(ellipse 88% 65% at 85% 12%,#23745477 0%,transparent 72%),
+       linear-gradient(152deg,#102f28 0%,#124332 53%,#186447 100%);
+      color:#f7fff9;text-align:center;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    }
+    .fm-startup-body{position:relative;z-index:1;width:min(100%,390px);display:flex;
+      flex-direction:column;align-items:center;gap:0}
+    .fm-startup-mark{width:76px;height:76px;display:grid;place-items:center;
+      border-radius:22px;background:#f3fcf5;box-shadow:0 18px 45px #061a142d}
+    .fm-startup-mark img{display:block;width:53px;height:53px;object-fit:contain}
+    .fm-startup-name{font-size:12px;letter-spacing:.24em;font-weight:800;
+      margin:22px 0 0;color:#c2edce}
+    .fm-startup-title{font-size:clamp(23px,5vw,30px);font-weight:750;
+      line-height:1.22;letter-spacing:-.04em;margin:16px 0 0;color:#fff}
+    .fm-startup-description{color:#d0e8d9;font-size:13px;line-height:1.7;
+      max-width:325px;margin:13px 0 0}
+    .fm-startup-spinner{display:block;width:32px;height:32px;margin:32px auto 0;
+      border-radius:50%;border:3px solid #c1efce52;border-top-color:#caf8d8;
+      animation:fm-startup-spin .9s linear infinite}
+    .fm-startup-footnote{position:absolute;bottom:max(27px,env(safe-area-inset-bottom,0px));
+      left:16px;right:16px;font-size:11px;color:#a4d0b9;letter-spacing:.03em}
+    .fm-startup-retry{margin-top:26px;border:1px solid #d6f5de;border-radius:10px;
+      padding:12px 22px;background:#e2f6e8;color:#124732;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+    .fm-startup-retry:focus-visible{outline:3px solid #fff;outline-offset:3px}
+    @keyframes fm-startup-spin{to{transform:rotate(360deg)}}
+    @media(max-width:560px){
+      .fm-startup-screen{padding-top:max(24px,env(safe-area-inset-top,0px))}
+      .fm-startup-mark{width:66px;height:66px;border-radius:19px}
+      .fm-startup-mark img{width:48px;height:48px}
+      .fm-startup-name{margin-top:19px}
+    }
+    @media(prefers-reduced-motion:reduce){.fm-startup-spinner{animation:none}}
+  </style>
+</head>
+<body>
+  <div id="root">
+    <main class="fm-startup-screen" aria-label="Iniciando Farmetrica">
+      <div class="fm-startup-body" role="status" aria-live="polite">
+        <span class="fm-startup-mark"><img src="/brand-logo.webp?v=4" alt=""/></span>
+        <span class="fm-startup-name">FARMETRICA</span>
+        <h1 class="fm-startup-title">Preparando tu espacio</h1>
+        <p class="fm-startup-description">Estamos verificando tu sesión y preparando tu información.</p>
+        <span class="fm-startup-spinner" aria-hidden="true"></span>
+      </div>
+      <span class="fm-startup-footnote">Inteligencia para tu farmacia</span>
+    </main>
+  </div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

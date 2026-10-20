@@ -3,6 +3,7 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {nameCommercialRows,listCommercialSuppliers} from "./commercialNames.js";
+import {nameArticleRows} from "./articleNames.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -346,7 +347,9 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
    const named=["ventas-tickets","compras-recepciones","compras-devoluciones",
     "proveedores-condiciones"].includes(section)?
     await nameCommercialRows(pool,req.context,rows):rows;
-   res.json(result(named,f,section,
+   const withArticles=["ventas-devoluciones","compras-devoluciones"].includes(section)?
+    await nameArticleRows(pool,req.context,named,{code:"article"}):named;
+   res.json(result(withArticles,f,section,
     section==="rentabilidad-segmentos"?"El margen es estimado y solo utiliza referencias con PMC del catálogo.":""));
   }catch(e){
    if(e.status)return res.status(e.status).json({error:e.message});
@@ -387,7 +390,8 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
    });
    const lines=await nameCommercialRows(pool,req.context,
     rows.slice(0,500).map(line=>({...line,pharmacyId:String(farmacia)})));
-   res.json({farmacia,sistema,documento,lines,truncated:rows.length>500});
+   const withArticles=await nameArticleRows(pool,req.context,lines);
+   res.json({farmacia,sistema,documento,lines:withArticles,truncated:rows.length>500});
   }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
  });
  // Desglose del ticket en líneas originales, sin aplanar cantidades ni sumar
@@ -424,8 +428,9 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
      ORDER BY v.linea_id LIMIT 500`,
     values:[f.from,f.to,farmacia,f.slug,sistema,documento]
    });
-   res.json({farmacia,sistema,documento,lines:rows,
-    truncated:rows.length===500});
+   const lines=await nameArticleRows(pool,req.context,
+    rows.map(row=>({...row,pharmacyId:String(farmacia)})));
+   res.json({farmacia,sistema,documento,lines,truncated:rows.length===500});
   }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e);}
  });
 

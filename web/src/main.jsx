@@ -1001,7 +1001,7 @@ function App(){
    <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>
      <label>Ordenar <select value={cnSort} onChange={e=>{setCnSort(e.target.value);setCnPage(0)}}><option value="asc">CN ascendente</option><option value="desc">CN descendente</option></select></label></div>
-   <div className="cn-chips">{orderedCNs.slice(safeCNPage*cnPageSize,(safeCNPage+1)*cnPageSize).map(cn=><span key={cn} className="cn-chip" title={reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||""}>{cn}</span>)}
+   <div className="cn-chips">{orderedCNs.slice(safeCNPage*cnPageSize,(safeCNPage+1)*cnPageSize).map(cn=><span key={cn} className="cn-chip" title={reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"Nombre no disponible"}><strong>{cn}</strong><span>{reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"Nombre no disponible"}</span></span>)}
      {!orderedCNs.length&&<span className="empty-inline">No hay CNs para la búsqueda.</span>}</div>
    <ListPagination total={orderedCNs.length} page={safeCNPage} pageSize={cnPageSize} label="CNs"
      onPageChange={setCnPage} onPageSizeChange={n=>{setCnPageSize(n);setCnPage(0)}}/>

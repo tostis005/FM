@@ -109,13 +109,15 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
  catalog AS MATERIALIZED (
   SELECT pm.pharmacy_id AS "pharmacyId",r.code,r.articulo_id,r.units,r.value,
     coalesce(nullif(btrim(a.codigo_nacional),''),btrim(r.articulo_id)) AS cn,
-    coalesce(nullif(a.nombre,''),r.articulo_id) AS name,
+    nullif(btrim(a.codigo_nacional),'') AS "nationalCode",
+    r.articulo_id AS "sourceId",coalesce(nullif(a.nombre,''),r.articulo_id) AS name,
     coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc,a.pvp::float8 AS pvp
   FROM raw r JOIN pharmacy_map pm ON pm.code=r.code
   ${articleJoin}
  ),
  grouped AS MATERIALIZED (
-  SELECT "pharmacyId",cn,max(name) AS name,max(family) AS family,
+  SELECT "pharmacyId",cn,max("nationalCode") AS "nationalCode",
+    max("sourceId") AS "sourceId",max(name) AS name,max(family) AS family,
     max(pmc) AS pmc,max(pvp) AS pvp,sum(units)::float8 AS units,sum(value)::float8 AS value
   FROM catalog GROUP BY "pharmacyId",cn HAVING sum(units)>0
  ),

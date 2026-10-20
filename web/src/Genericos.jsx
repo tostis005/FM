@@ -59,6 +59,7 @@ function GroupDetail({group,query,clientSlug,pharmacies=[],useReal=false}){
   saleMap.set(r.cn,prev);
  }
  const pharmacyNames=new Map(pharmacies.map(p=>[String(p.id),p.name]));
+ const articleNames=new Map((data.products||[]).map(p=>[String(p.cn),p.nombre||p.descripcion||""]));
  const activePolicy=data.policy?.global||{percentile:20,months:6};
  const policyFor=id=>data.policy?.overrides?.find(x=>String(x.pharmacyId)===String(id))||activePolicy;
  const policyLabels=[...new Set((data.purchases||[]).map(p=>{
@@ -94,13 +95,13 @@ function GroupDetail({group,query,clientSlug,pharmacies=[],useReal=false}){
   {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras integrados.</p>:
    !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
    <SortableDataTable label="compras por genérico"
-    headers={["Farmacia","CN","Proveedor de compra","Unidades","PUC observado","PUC óptimo CN/proveedor","Objetivo equivalente DCPF","Proveedor y CN objetivo","Ahorro orientativo","Compras (€)"]}
+    headers={["Farmacia","CN · Artículo","Proveedor de compra","Unidades","PUC observado","PUC óptimo CN/proveedor","Objetivo equivalente DCPF","Proveedor y CN objetivo","Ahorro orientativo","Compras (€)"]}
     rows={data.purchases.map(r=>[
      pharmacyNames.get(String(r.pharmacyId))||"Farmacia "+r.pharmacyId,
-     <strong className="fm-generic-code" key={r.cn}>{r.cn}</strong>,
+     <span className="fm-generic-cn-name" key={r.cn}><strong className="fm-generic-code">{r.cn}</strong><span>{articleNames.get(String(r.cn))||"Nombre no disponible"}</span></span>,
      r.supplier||r.supplierCode||"Sin proveedor",quantity(r.units),
      unitPrice(r.puc),unitPrice(r.referencePuc),unitPrice(r.targetPuc),
-     r.targetSupplier?((r.targetSupplierName||r.targetSupplier)+(r.targetCn?" · CN "+r.targetCn:"")):"—",
+     r.targetSupplier?((r.targetSupplierName||r.targetSupplier)+(r.targetCn?" · CN "+r.targetCn+" · "+(articleNames.get(String(r.targetCn))||"Nombre no disponible"):"")):"—",
      money(r.potential),money(r.spend)
     ])}/>}
 

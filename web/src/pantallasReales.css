@@ -30,3 +30,10 @@
 .fm-ticket-detail .fm-preview-panel-head h3{margin:0;font-size:15px}
 .fm-ticket-detail .fm-real-screen-table{background:white}
 .fm-ticket-detail p[role="alert"]{color:#a32828}
+
+/* Referencia comercial identificable: CN auténtico junto a su descripción. */
+.fm-article-identity{display:inline-flex;align-items:baseline;gap:9px;flex-wrap:wrap;max-width:460px;white-space:normal}
+.fm-article-cn{display:inline-block;flex:none;color:#126e50;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fm-article-cn-unknown{color:#8a9990;font-weight:650}
+.fm-article-name{font-size:12px;font-weight:650;color:#254536;overflow-wrap:anywhere}
+.fm-article-source{font-size:10px;color:#879c91;white-space:nowrap}

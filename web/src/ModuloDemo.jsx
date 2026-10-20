@@ -709,7 +709,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     disabled={!active||kpiLoading} aria-busy={kpiLoading} onClick={()=>go(c.link)} aria-label={c.label+(kpiLoading?", cargando":active?": abrir "+TITLES[c.link]:"")}>
     <span>{c.label}</span>
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
-       <span className="fm-load-spinner" aria-hidden="true"/><small>{isDashboard?userLoadingText(dashboardProgress(c.key)):"Cargando datos…"}</small>
+       <span className="fm-load-spinner" aria-hidden="true"/><small>{userLoadingText(isDashboard?dashboardProgress(c.key):
+       module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):
+       module==="ventas"&&["ventas","unidades"].includes(c.key)?
+       taskPercent(fastProgress,fastScope,Boolean(fastSales)):null)}</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
     {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&
       <small>Sin cobertura completa del coste histórico de los artículos vendidos</small>}
@@ -755,8 +758,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
 
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    {chartLoading?<LoadingPanel kind="chart" label={isDashboard?userLoadingText(combinedPercent([saleProgress,buyProgress]),"Cargando evolución"):
-        "Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas")+"…"}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {chartLoading?<LoadingPanel kind="chart" label={userLoadingText(isDashboard?combinedPercent([saleProgress,buyProgress]):
+      module==="ventas"?taskPercent(fastProgress,fastScope,Boolean(fastSales)):
+      module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):null,
+      isDashboard?"Cargando evolución":
+       "Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas"))}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>

@@ -306,7 +306,7 @@
 .fm-demo-v2 .fm-demo-kpi{
  display:grid;
  grid-template-columns:minmax(0,1fr);
- grid-template-rows:minmax(30px,auto) minmax(36px,auto) minmax(34px,auto);
+ grid-template-rows:38px minmax(36px,auto) minmax(34px,auto);
  align-content:start;justify-content:stretch;align-items:start;
  justify-items:stretch;gap:8px;min-height:154px;
 }

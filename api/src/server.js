@@ -451,7 +451,7 @@ try {
   await pool.query(tenantMigration);
   const analysisMigration=await readFile(new URL("./migrations/012_analisis_ventas_cliente.sql",import.meta.url),"utf8");
   await pool.query(analysisMigration);
-  for(const filename of ["013_accesos_locales.sql","014_clientes_demo.sql","018_metodos_acceso_usuarios.sql"]){
+  for(const filename of ["013_accesos_locales.sql","014_clientes_demo.sql","018_metodos_acceso_usuarios.sql","019_activacion_usuarios.sql"]){
     const sql=await readFile(new URL("./migrations/"+filename,import.meta.url),"utf8");
     await pool.query(sql);
   }

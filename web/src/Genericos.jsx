@@ -156,9 +156,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   return p.toString();
  },[range.from,range.to,range.valid,ids.join(","),queryText,abcdFilter,sort.key,sort.direction]);
  useEffect(()=>{
-  if(!query){setLoading(false);return;}
+  if(!query){setData(null);setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
-  setLoading(true);setError("");
+  setLoading(true);setError("");setData(null);
   fetch("/api/genericos/"+(useReal?"reales":"conjuntos")+"?"+query,{credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
    .then(async r=>{

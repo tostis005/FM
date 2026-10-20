@@ -209,7 +209,8 @@ export function setupRealReports(app,pool,{requireTenant}){
       sortKey:f.sortKey,sortDir:f.sortDir});
     return pool.query(filtered,[...params,JSON.stringify(columnFilters)]);
    };
-   const columns=`${cn} AS cn,max(coalesce(art.nombre,t.articulo_id)) AS name,
+   const columns=`${cn} AS cn,max(nullif(btrim(art.codigo_nacional),'')) AS "nationalCode",
+     max(t.articulo_id::text) AS "sourceId",max(coalesce(art.nombre,t.articulo_id)) AS name,
      max(coalesce(art.familia,'')) AS family,max(art.pvp)::float8 AS pvp,
      max(art.pmc)::float8 AS pmc, max(art.laboratorio) AS laboratory`;
    // Con búsqueda libre, filtrar los IDs locales de artículo ANTES del GROUP BY.
@@ -521,7 +522,8 @@ export function setupRealReports(app,pool,{requireTenant}){
        )
        SELECT f.id::text AS "pharmacyId",
          coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id)) AS cn,
-         max(a.nombre) AS name,max(coalesce(a.familia,'')) AS family,
+         max(nullif(btrim(a.codigo_nacional),'')) AS "nationalCode",
+         max(a.origen_id) AS "sourceId",max(a.nombre) AS name,max(coalesce(a.familia,'')) AS family,
          max(a.pmc)::float8 AS pmc,max(a.pvp)::float8 AS pvp,
          sum(a.stock_actual)::float8 AS units,
          sum(a.stock_actual*a.pmc) FILTER (
@@ -620,6 +622,8 @@ export function setupRealReports(app,pool,{requireTenant}){
        const params=[pharmacyIds,f.search,f.families,req.context.client.slug];
        const {rows:current}=await queryTable(`
          SELECT f.id::text AS "pharmacyId",${cn} AS cn,
+           max(nullif(btrim(art.codigo_nacional),'')) AS "nationalCode",
+           max(t.articulo_id::text) AS "sourceId",
            max(coalesce(art.nombre,t.articulo_id)) AS name,
            max(coalesce(art.familia,'')) AS family,
            max(coalesce(t.coste_unitario,art.pmc))::float8 AS pmc,
@@ -685,6 +689,8 @@ export function setupRealReports(app,pool,{requireTenant}){
       const stockCn="coalesce(nullif(btrim(art.codigo_nacional),''),btrim(s.id_articu))";
       const {rows:sr}=await queryTable(`
        SELECT s.id_farmacia::text AS "pharmacyId",${stockCn} AS cn,
+        max(nullif(btrim(art.codigo_nacional),'')) AS "nationalCode",
+        max(s.id_articu::text) AS "sourceId",
         max(coalesce(art.nombre,s.descripcion)) AS name,
         max(coalesce(art.familia,'')) AS family,
         max(art.pmc)::float8 AS pmc,

@@ -70,10 +70,10 @@ END $func$;
 REVOKE ALL ON FUNCTION farmetrica.aplicar_exclusiones_ventas(text) FROM PUBLIC;
 
 DO $apply$
-DECLARE current_schema record;
+DECLARE schema_row record;
 BEGIN
- FOR current_schema IN SELECT DISTINCT esquema_datos FROM farmetrica.clientes
+ FOR schema_row IN SELECT DISTINCT esquema_datos FROM farmetrica.clientes
   WHERE to_regnamespace(esquema_datos) IS NOT NULL LOOP
-  PERFORM farmetrica.aplicar_exclusiones_ventas(current_schema.esquema_datos);
+  PERFORM farmetrica.aplicar_exclusiones_ventas(schema_row.esquema_datos);
  END LOOP;
 END $apply$;

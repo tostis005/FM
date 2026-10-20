@@ -1,0 +1,96 @@
+name: Auditoría lectura unidades y traspasos
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/auditar-brecha-traspasos.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  auditar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar acceso seguro al VPS
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Comparar ventas, recepciones ignoradas y cobertura documental sin modificar ERP
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST"             'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='45000ms';
+          SET LOCAL lock_timeout='2000ms';
+          SELECT 'AUDITORIA_PERIODO' AS tipo, '2025-10-20' AS desde, '2026-10-20' AS hasta;
+          SELECT 'PROVEEDORES_IGNORADOS' AS tipo,count(*) AS cantidad
+            FROM farmetrica.proveedores_maestro
+            WHERE cliente_slug='ampedia' AND ignorar_informes=true;
+          WITH sold AS (
+            SELECT f.id AS id,coalesce(sum(v.unidades)
+              FILTER(WHERE nullif(btrim(v.articulo_id),'') IS NOT NULL),0) AS sold
+            FROM ampedia.fm_ventas_analitica v
+            JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+             AND upper(btrim(v.farmacia_codigo))=
+              CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+               THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+            WHERE v.fecha >= date '2025-10-20'
+              AND v.fecha < date '2026-10-21'
+            GROUP BY f.id
+          ), purchases AS (
+            SELECT f.id AS id,
+              coalesce(sum(v.unidades),0) AS received_all,
+              coalesce(sum(v.unidades) FILTER(WHERE NOT EXISTS(
+                SELECT 1 FROM farmetrica.proveedores_maestro p
+                WHERE p.cliente_slug='ampedia' AND p.ignorar_informes
+                 AND upper(btrim(p.codigo_origen))=upper(btrim(v.proveedor_id)))),0) AS received_reported
+            FROM ampedia.fm_recepciones_analitica v
+            JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+             AND upper(btrim(v.farmacia_codigo))=
+              CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+               THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+            WHERE v.fecha >= date '2025-10-20'
+              AND v.fecha < date '2026-10-21'
+            GROUP BY f.id
+          )
+          SELECT 'BRECHA_UNIDADES_FARMACIA' AS tipo,f.id AS farmacia_id,
+            coalesce(s.sold,0)::float8 AS vendidas,
+            coalesce(p.received_reported,0)::float8 AS compradas_informes,
+            (coalesce(p.received_all,0)-coalesce(p.received_reported,0))::float8 AS recepciones_excluidas,
+            (coalesce(s.sold,0)-coalesce(p.received_reported,0))::float8 AS diferencia_actual,
+            (coalesce(s.sold,0)-coalesce(p.received_all,0))::float8 AS diferencia_si_se_incluyeran_todas
+          FROM farmetrica.farmacias f LEFT JOIN sold s ON s.id=f.id
+          LEFT JOIN purchases p ON p.id=f.id
+          WHERE f.cliente_slug='ampedia' ORDER BY f.id;
+          SELECT 'COBERTURA_CN_ARTICULOS' AS tipo,
+            count(*)::int AS fichas,
+            count(*) FILTER(WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL)::int AS cn_verificados
+          FROM ampedia.articulos;
+          SELECT 'COBERTURA_CN_CORRESPONDENCIAS' AS tipo,
+            count(*)::int AS referencias,
+            count(*) FILTER(WHERE nullif(btrim(codigo_nacional_normalizado),'') IS NOT NULL)::int AS cn_verificados
+          FROM ampedia.fm_producto_correspondencias;
+          SELECT 'RECEPCIONES_CABECERAS' AS tipo,
+            count(*) AS cabeceras,
+            count(*) FILTER(WHERE lineas_completas IS NOT TRUE) AS incompletas,
+            count(*) FILTER(WHERE eliminada_logicamente IS TRUE) AS eliminadas
+          FROM ampedia.fm_recepciones_cabeceras
+          WHERE fecha>=date '2025-10-20' AND fecha<date '2026-10-21';
+          SELECT 'VENTAS_CLIENTE_ORIGEN_90D' AS tipo,
+            coalesce(estado,'sin_tipo') AS tipo_venta,
+            count(*)::int AS documentos,
+            count(*) FILTER(WHERE nullif(btrim(cliente_origen_id),'') IS NOT NULL)::int AS con_cliente_erp
+          FROM ampedia.fm_ventas_cabeceras
+          WHERE fecha>=date '2026-07-20' AND fecha<date '2026-10-21'
+             AND lineas_completas AND NOT eliminada_logicamente
+          GROUP BY 2 ORDER BY documentos DESC LIMIT 15;
+          ROLLBACK;
+          SQL

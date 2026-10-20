@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Plus,Search} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import TraspasosSalientes from "./TraspasosSalientes.jsx";
 import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
 import "./moduleDemo.css";
 const TYPES=[["sin_clasificar","Sin clasificar"],["cooperativa","Cooperativa"],["laboratorio","Laboratorio"],["mayorista","Mayorista"],["otros","Otros"]];
@@ -61,9 +62,9 @@ export default function ProveedoresMaestro({clientSlug}){
         onClick={e=>e.stopPropagation()}
         onKeyDown={e=>e.stopPropagation()}
         onChange={e=>{e.stopPropagation();void changeFlag(r,"cooperative",e.target.checked)}}/>},
-      {key:"ignoreReports",label:"Ignorar en informes",sortable:true,searchable:false,
+      {key:"ignoreReports",label:"Ignorar proveedor en informes",sortable:true,searchable:false,
        value:r=>r.ignoreReports?"Sí":"No",
-       render:r=><input type="checkbox" aria-label={"Ignorar en informes: "+r.name}
+       render:r=><input type="checkbox" aria-label={"Ignorar proveedor en informes: "+r.name}
         checked={Boolean(r.ignoreReports)} disabled={Boolean(savingFlags[r.sourceCode+":ignoreReports"])}
         onClick={e=>e.stopPropagation()}
         onKeyDown={e=>e.stopPropagation()}
@@ -71,6 +72,7 @@ export default function ProveedoresMaestro({clientSlug}){
       {key:"active",label:"Estado",filterMode:"multi",value:r=>r.active?"Activo":"Inactivo"},
      ]}/>
    </section>
+   <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
    {form&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setForm(null)}}>
     <div className="fm-demo-detail" role="dialog" aria-modal="true" aria-label="Proveedor">
      <button className="btn btn-secondary" type="button" onClick={()=>setForm(null)}>Cerrar</button>
@@ -80,7 +82,7 @@ export default function ProveedoresMaestro({clientSlug}){
       <label>Nombre<input required maxLength="200" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nombre del proveedor"/></label>
       <label>Clasificación<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{TYPES.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label>
       <label className="fm-supplier-check-field"><input type="checkbox" checked={Boolean(form.cooperative)} onChange={e=>setForm({...form,cooperative:e.target.checked})}/> Cooperativa</label>
-      <label className="fm-supplier-check-field"><input type="checkbox" checked={Boolean(form.ignoreReports)} onChange={e=>setForm({...form,ignoreReports:e.target.checked})}/> Ignorar en informes</label>
+      <label className="fm-supplier-check-field"><input type="checkbox" checked={Boolean(form.ignoreReports)} onChange={e=>setForm({...form,ignoreReports:e.target.checked})}/> Ignorar proveedor en informes</label>
       <label>Estado<select value={String(form.active)} onChange={e=>setForm({...form,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></label>
       <button className="btn btn-primary" type="submit" disabled={busy}>{busy?"Guardando…":"Guardar proveedor"}</button>
      </form>

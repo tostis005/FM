@@ -393,7 +393,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
        [slug,domain]);res.json({deleted:rowCount>0});
     }catch(e){next(e)}
   });
-  app.get("/api/tenant/dominios",...requireTenantAdmin(),async(req,res,next)=>{
+  app.get("/api/tenant/dominios",...requireTenantManager(),async(req,res,next)=>{
     try{
       const {rows}=await pool.query(
        "SELECT dominio AS domain FROM farmetrica.cliente_dominios WHERE cliente_slug=$1 AND activo=true ORDER BY dominio",

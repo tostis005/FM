@@ -76,7 +76,7 @@
       <form id="form">
         <div class="field">
           <label for="email">Correo electrónico</label>
-          <input id="email" name="email" type="email" placeholder="tu-correo@empresa.es" autocomplete="username" spellcheck="false" required maxlength="254"/>
+          <input id="email" name="email" type="email" placeholder="usuario@gmail.com o usuario@empresa.es" autocomplete="username" spellcheck="false" required maxlength="254"/>
         </div>
         <div class="field">
           <label for="password">Contraseña</label>
@@ -87,8 +87,8 @@
       <button type="button" class="auth-link" id="forgot-trigger">¿Has olvidado tu contraseña?</button>
       <section id="forgot-flow" class="auth-flow" aria-label="Recuperar contraseña">
        <h3>Recuperar contraseña</h3>
-       <p>Solo para colaboradores externos. Te enviaremos un enlace válido durante 30 minutos.</p>
-       <form id="forgot-form"><div class="field"><label for="forgot-email">Correo externo</label>
+       <p>Para usuarios con acceso mediante correo y contraseña. Te enviaremos un enlace válido durante 30 minutos.</p>
+       <form id="forgot-form"><div class="field"><label for="forgot-email">Correo electrónico</label>
         <input type="email" required id="forgot-email" autocomplete="email" maxlength="254"
          placeholder="colaborador@ejemplo.com"/></div>
         <button type="submit" class="primary" id="forgot-send">Enviar enlace de recuperación</button>
@@ -108,7 +108,7 @@
        </form>
        <div class="auth-notice" id="reset-notice" role="status"></div>
       </section>
-      <div id="separator" class="separator">o entra con tu cuenta</div>
+      <div id="separator" class="separator">o accede con Google</div>
       <div id="google" aria-label="Acceso con Google"></div>
       <p class="subtext">El acceso y la información disponible dependen de los permisos de tu cuenta y de las fuentes de datos conectadas. Si necesitas acceso, contacta con el administrador.</p>
     </section>
@@ -147,7 +147,7 @@
          body:JSON.stringify({email:document.getElementById("forgot-email").value.trim()})});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw Error(data.error||"No se pudo enviar el correo");
-        flowNotice("forgot-notice",data.message||"Si existe una cuenta externa, recibirás instrucciones.");
+        flowNotice("forgot-notice",data.message||"Si existe una cuenta con contraseña, recibirás instrucciones.");
        }catch(e){showError(e.message)}
        finally{button.disabled=false}
       });

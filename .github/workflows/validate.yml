@@ -50,6 +50,7 @@ jobs:
           node --test api/src/salesAnalysisPeriod.test.js
           node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/internalPassword.test.js
+          node --test api/src/accessPolicy.test.js
           node --test api/src/operativaRules.test.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js

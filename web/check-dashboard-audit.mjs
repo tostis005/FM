@@ -37,7 +37,7 @@ await page.route("**/api/**",async route=>{
   available:true,kpis:{compras:2696250.36,unidadesCompradas:9823*count,
    recepciones:120,lineasCompra:1304,proveedores:12},
   monthly:[{month:"2026-10",compras:2696250.36,recepciones:120}],
-  sourceRows:1304,hasArticleLines:true
+  sourceRows:1304,amountRows:1304,hasAmounts:true,amountCoveragePct:100,hasArticleLines:true
  };
  else if(p==="/api/analytics/reportes")body={
   available:true,monthly:[],kpis:{},salesRows:[],buyRows:[],supplierRows:[],
@@ -47,6 +47,9 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/analytics/ventas/detalle")body={products:[],hasMore:false,totalFiltered:0};
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/analytics/compras/estado")body={hasPurchases:true,pharmacies:[]};
+ if(["/api/analytics/ventas/totales","/api/analytics/dashboard/compras"].includes(p)&&
+  (url.searchParams.get("desde")||"")<"2026-01-01")
+  await new Promise(resolve=>setTimeout(resolve,100));
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 const by=p=>requests.filter(x=>x.path===p);
@@ -61,7 +64,7 @@ try{
  assert.ok(by("/api/analytics/dashboard/compras").length>0,"Inicio usa recepciones documentales reales");
  assert.equal(await page.locator(".fm-demo-kpi").count(),10);
  const dashboardLabels=await page.locator(".fm-demo-kpi>span").allTextContents();
- assert.deepEqual(dashboardLabels.slice(0,6),["Ventas","Compras","Resultado comercial estimado","Resultado comercial (%)","Margen estimado","Margen bruto (%)"]);
+ assert.deepEqual(dashboardLabels.slice(0,6),["Ventas","Compras","Resultado comercial estimado","Resultado comercial (%)","Margen bruto estimado","Margen bruto (%)"]);
  const moneyMetrics=await page.locator(".fm-demo-kpi strong").evaluateAll(els=>els.slice(0,2).map(el=>{
   const css=getComputedStyle(el);return {size:parseFloat(css.fontSize),whiteSpace:css.whiteSpace,
    width:el.clientWidth,scroll:el.scrollWidth,value:el.textContent};
@@ -106,6 +109,12 @@ try{
  const beforeSales=by("/api/analytics/ventas/totales").length;
  const beforePurchases=by("/api/analytics/dashboard/compras").length;
  await page.locator(".fm-unified-filters select").first().selectOption("60");
+ await page.getByText(/Cargando datos · \\d+ %/).first().waitFor({timeout:9000});
+ const loadingTexts=await page.locator(".fm-demo-kpi").allTextContents();
+ assert.ok(loadingTexts.some(t=>/Cargando datos · \\d+ %/.test(t)),
+  "En históricos debe aparecer un porcentaje legible");
+ assert.ok(!loadingTexts.some(t=>/Cargando \\d+\\/\\d+ (bloques|períodos)/.test(t)),
+  "No enseñar términos ni cantidades internas de procesamiento");
  await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===10&&
   [...document.querySelectorAll(".fm-demo-kpi")].every(card=>card.getAttribute("aria-busy")==="false"),
   {timeout:18000});

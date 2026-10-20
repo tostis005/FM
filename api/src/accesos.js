@@ -247,7 +247,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
         url.searchParams.set("token",token);
         try{await mailer.sendMail({from:process.env.SMTP_FROM,to:email,
          subject:"Recuperación de contraseña de Farmetrica",
-         text:"Has solicitado restablecer tu contraseña. Este enlace caduca en 30 minutos y solo se puede utilizar una vez. Si no lo has solicitado, ignora este mensaje.\\n\\n"+url.toString()
+         text:"Has solicitado restablecer tu contraseña. Este enlace caduca en 30 minutos y solo se puede utilizar una vez. Si no lo has solicitado, ignora este mensaje.\n\n"+url.toString()
         })}catch(error){
          await pool.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1 AND token_hash=$2",
           [email,digest]);throw error;

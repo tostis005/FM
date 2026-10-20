@@ -8,11 +8,13 @@ const isSuper = user => user?.role === "superadministrador";
 const asEmail = value => String(value || "").trim().toLowerCase();
 
 import {decoratePharmacy} from "./pharmacyCodes.js";
-import {hashInternalPassword,validInternalPassword} from "./internalPassword.js";
-import {normalizeDomain,emailDomain,validClientDomain,validInternalEmail} from "./accessPolicy.js";
+import {hashInternalPassword} from "./internalPassword.js";
+import {randomBytes} from "node:crypto";
+import {normalizeDomain,emailDomain,validClientDomain} from "./accessPolicy.js";
 import {sourceSupplierRows} from "./supplierReporting.js";
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
-export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
+export function setupTenant(app,pool,{requireUser,requireSuperadmin,
+  sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
   async function resolve(req) {
     const slug = String(req.get("x-farmetrica-cliente") || req.query.cliente ||
       req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
@@ -406,12 +408,14 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.get("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
     try{
       const scoped=req.context.role==="gestor";
-       const {rows}=await pool.query(
+      const {rows}=await pool.query(
         `SELECT uc.email,coalesce(a.nombre,'') AS name,uc.rol AS role,
           uc.farmacias::text[] AS pharmacies,uc.activo AS active,
-          uc.metodo_acceso AS "authType"
+          uc.metodo_acceso AS "authType",
+          (cr.email IS NOT NULL) AS "hasPassword"
          FROM farmetrica.usuario_clientes uc
          LEFT JOIN public.acceso_cuentas a ON a.email=uc.email
+         LEFT JOIN farmetrica.credenciales_locales cr ON cr.email=uc.email AND cr.activo=true
          WHERE uc.cliente_slug=$1
           AND (NOT $3::boolean OR (uc.rol IN ('farmacia','colaborador')
             AND uc.farmacias && $2::int[]))
@@ -423,58 +427,56 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   app.put("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
     const email=asEmail(req.body?.email),name=String(req.body?.name||"").trim(),role=req.body?.role;
     const pharmacies=req.body?.pharmacies,active=req.body?.active;
-    const authType=req.body?.authType||"google",password=req.body?.password;
+    const authType=req.body?.authType||"google";
     if(!EMAIL.test(email)||email.length>254||name.length>150||!ROLES.has(role)||
-      !["google","interno"].includes(authType)||
-      (password!==undefined&&password!==""&&!validInternalPassword(password))||
+      !["google","local"].includes(authType)||
+      (req.body?.password!==undefined&&req.body.password!=="")||
       typeof active!=="boolean"||!Array.isArray(pharmacies)||pharmacies.length>100||
       pharmacies.some(id=>!/^[1-9]\d{0,8}$/.test(String(id))))
-      return res.status(400).json({error:"Datos de usuario inválidos"});
+      return res.status(400).json({error:"Datos de usuario inválidos. Las contraseñas las establece cada usuario."});
     const ids=[...new Set(pharmacies.map(Number))];
     if(role!=="administrador"&&active&&!ids.length)
       return res.status(400).json({error:"Selecciona al menos una farmacia"});
     if(ids.some(id=>!req.context.pharmacies.some(p=>Number(p.id)===id)))
       return res.status(403).json({error:"No puedes asignar farmacias ajenas al cliente"});
-    const external=authType==="interno";
-    const {rows:domains}=await pool.query(
-     "SELECT dominio FROM farmetrica.cliente_dominios WHERE cliente_slug=$1 AND activo=true",
-     [req.context.client.slug]);
-    const allowedDomains=domains.map(d=>d.dominio);
-    if(!external&&!validInternalEmail(email,allowedDomains))
-     return res.status(400).json({error:"El correo interno debe pertenecer a un dominio habilitado para este cliente"});
-    if(external&&allowedDomains.includes(emailDomain(email)))
-     return res.status(400).json({error:"Utiliza acceso Google para los dominios internos"});
-    // La contraseña pertenece a un email global; un gestor de un cliente
-    // no puede cambiarla si esa identidad accede externamente a otro cliente.
-    if(external){
-     const {rows:otherClients}=await pool.query(
-      "SELECT 1 FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug<>$2 AND metodo_acceso='interno' LIMIT 1",
-      [email,req.context.client.slug]);
-     if(otherClients.length)return res.status(409).json({
-      error:"Este correo externo ya tiene credenciales en otro cliente. Usa otra dirección."
-     });
-    }
     if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
-     return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
+      return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
     if(req.context.role==="gestor"){
-     const {rows:existing}=await pool.query(
-      "SELECT rol,farmacias FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
-      [req.context.client.slug,email]);
-     if(existing.length&&(!["farmacia","colaborador"].includes(existing[0].rol)||
-      existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
-      return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
+      const {rows:existing}=await pool.query(
+        "SELECT rol,farmacias FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
+        [req.context.client.slug,email]);
+      if(existing.length&&(!["farmacia","colaborador"].includes(existing[0].rol)||
+        existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
+        return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
     }
-    const hashed=external&&password?await hashInternalPassword(password):null;
+    // Las contraseñas están vinculadas al correo global: no permitir que
+    // dos clientes independientes roten las credenciales de la misma cuenta.
+    if(authType==="local"){
+      const {rows:others}=await pool.query(
+        "SELECT 1 FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug<>$2 AND metodo_acceso='local' LIMIT 1",
+        [email,req.context.client.slug]);
+      if(others.length)return res.status(409).json({
+        error:"Esta dirección ya utiliza contraseña en otro cliente. Pide acceso mediante Google o utiliza otra dirección."
+      });
+    }
     const db=await pool.connect();
+    let invite=false,committed=false;
     try{
       await db.query("BEGIN");
-      if(authType==="interno"&&!hashed){
-        const {rows:existing}=await db.query(
-          "SELECT 1 FROM farmetrica.credenciales_locales WHERE email=$1 AND activo=true",
+      const {rows:previous}=await db.query(
+        "SELECT metodo_acceso,activo FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2 FOR UPDATE",
+        [email,req.context.client.slug]);
+      if(authType==="local"){
+        const {rows:credential}=await db.query(
+          "SELECT activo FROM farmetrica.credenciales_locales WHERE email=$1 FOR UPDATE",
           [email]);
-        if(!existing.length){
+        invite=!previous.length||previous[0].metodo_acceso!=="local"||
+          !previous[0].activo||!credential.length||!credential[0].activo;
+        if(invite&&!localInvitationsReady()){
           await db.query("ROLLBACK");
-          return res.status(400).json({error:"Los colaboradores externos necesitan una contraseña de al menos 12 caracteres"});
+          return res.status(503).json({
+            error:"Para dar de alta usuarios con contraseña, primero configura SMTP y PUBLIC_APP_ORIGIN en el servidor."
+          });
         }
       }
       await db.query(
@@ -483,13 +485,52 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       await db.query(
         "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso",
         [email,req.context.client.slug,role,ids,active,authType]);
-      if(hashed)await db.query(
-        "INSERT INTO farmetrica.credenciales_locales(email,password_hash,activo) VALUES($1,$2,true) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,activo=true,actualizado_en=now()",
-        [email,hashed]);
-      await db.query("COMMIT");
-      res.json({email,name,role,pharmacies:ids.map(String),active,authType});
-    }catch(e){await db.query("ROLLBACK");next(e);}
-    finally{db.release();}
+      if(authType==="local"&&invite){
+        // Contraseña aleatoria desconocida incluso para el administrador.
+        // Sólo el enlace de activación permite establecer la definitiva.
+        const unknownPassword=randomBytes(32).toString("hex");
+        const hash=await hashInternalPassword(unknownPassword);
+        await db.query(
+          "INSERT INTO farmetrica.credenciales_locales(email,password_hash,activo) VALUES($1,$2,true) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,activo=true,actualizado_en=now()",
+          [email,hash]);
+      }
+      await db.query("COMMIT");committed=true;
+    }catch(e){
+      if(!committed)await db.query("ROLLBACK");
+      return next(e);
+    }finally{db.release();}
+    const response={email,name,role,pharmacies:ids.map(String),active,authType,
+      invitationRequired:invite&&active,invitationSent:false};
+    if(invite&&active){
+      try{
+        const sent=await sendLocalInvitation(email);
+        response.invitationSent=Boolean(sent.sent);
+        if(sent.recent)response.invitationMessage="Ya se envió una invitación recientemente. Comprueba el correo.";
+      }catch(e){
+        response.invitationMessage="Usuario guardado, pero no se ha podido enviar la invitación. Reinténtalo desde el listado.";
+      }
+    }
+    res.json(response);
+  });
+  app.post("/api/tenant/usuarios/:email/invitar",...requireTenantManager(),async(req,res,next)=>{
+    const email=asEmail(req.params.email);
+    if(!EMAIL.test(email)||email.length>254)return res.status(400).json({error:"Correo no válido"});
+    if(!localInvitationsReady())
+      return res.status(503).json({error:"Configura SMTP y PUBLIC_APP_ORIGIN para enviar invitaciones"});
+    try{
+      const scopeManager=req.context.role==="gestor";
+      const {rows}=await pool.query(
+        `SELECT uc.email FROM farmetrica.usuario_clientes uc
+        WHERE uc.cliente_slug=$1 AND uc.email=$2 AND uc.activo=true AND uc.metodo_acceso='local'
+         AND (NOT $4::boolean OR (uc.rol IN ('farmacia','colaborador')
+            AND uc.farmacias && $3::int[]))`,
+        [req.context.client.slug,email,req.context.allowedPharmacyIds,scopeManager]);
+      if(!rows.length)return res.status(404).json({error:"Usuario sin acceso con contraseña o fuera de tu ámbito"});
+      const result=await sendLocalInvitation(email);
+      res.json({sent:result.sent,message:result.sent?
+        "Invitación enviada. El enlace caduca en 30 minutos.":
+        "Ya se ha enviado un enlace recientemente. Comprueba el correo."});
+    }catch(e){next(e)}
   });
   return {requireTenant,requireTenantAdmin,requireTenantModule};
 }

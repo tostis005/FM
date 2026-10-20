@@ -19,7 +19,7 @@ const labelDate=dateES;
 function Metric({label,value,caption,loading}){
  return <div className="card fm-generic-metric" aria-busy={loading}>
    <span>{label}</span>{loading?<div role="status" aria-label={"Cargando "+label} className="fm-kpi-spinner"><span className="fm-load-spinner"/><small>Cargando…</small></div>:
-    <strong>{value}</strong>}{caption&&<small>{caption}</small>}
+    <strong>{value}</strong>}<small className="fm-generic-caption">{caption||"\u00a0"}</small>
  </div>;
 }
 function downloadRows(rows){

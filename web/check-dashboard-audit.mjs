@@ -59,9 +59,9 @@ try{
  assert.equal(by("/api/analytics/ventas").length,0,"Inicio no debe repetir el detalle pesado");
  assert.ok(by("/api/analytics/ventas/totales").length>0,"Inicio usa ventas documentales reales");
  assert.ok(by("/api/analytics/dashboard/compras").length>0,"Inicio usa recepciones documentales reales");
- assert.equal(await page.locator(".fm-demo-kpi").count(),8);
+ assert.equal(await page.locator(".fm-demo-kpi").count(),10);
  const dashboardLabels=await page.locator(".fm-demo-kpi>span").allTextContents();
- assert.deepEqual(dashboardLabels.slice(0,4),["Ventas","Compras","Margen estimado","Margen bruto (%)"]);
+ assert.deepEqual(dashboardLabels.slice(0,6),["Ventas","Compras","Resultado comercial estimado","Resultado comercial (%)","Margen estimado","Margen bruto (%)"]);
  const moneyMetrics=await page.locator(".fm-demo-kpi strong").evaluateAll(els=>els.slice(0,2).map(el=>{
   const css=getComputedStyle(el);return {size:parseFloat(css.fontSize),whiteSpace:css.whiteSpace,
    width:el.clientWidth,scroll:el.scrollWidth,value:el.textContent};
@@ -71,6 +71,13 @@ try{
   assert.equal(m.whiteSpace,"nowrap","No partir importes");
   assert.ok(m.scroll<=m.width+3,"Importe desborda la tarjeta: "+JSON.stringify(m));
  }
+ const resultCard=page.locator(".fm-demo-kpi").filter({hasText:"Resultado comercial estimado"});
+ await resultCard.locator("strong").waitFor({state:"visible",timeout:12000});
+ const resultText=await resultCard.locator("strong").textContent();
+ assert.ok(resultText.includes("1.350.161,90"),"Resultado comercial incorrecto: "+resultText);
+ const pctCard=page.locator(".fm-demo-kpi").filter({hasText:"Resultado comercial (%)"});
+ const pctText=await pctCard.locator("strong").textContent();
+ assert.ok(pctText.includes("33,37"),"Porcentaje comercial incorrecto: "+pctText);
  const shortcuts=page.getByRole("group",{name:"Períodos rápidos"});
  assert.deepEqual(await shortcuts.getByRole("button").allTextContents(),
   ["Hoy","Ayer","Esta semana","Este mes","Este año"]);
@@ -99,7 +106,7 @@ try{
  const beforeSales=by("/api/analytics/ventas/totales").length;
  const beforePurchases=by("/api/analytics/dashboard/compras").length;
  await page.locator(".fm-unified-filters select").first().selectOption("60");
- await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===8&&
+ await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===10&&
   [...document.querySelectorAll(".fm-demo-kpi")].every(card=>card.getAttribute("aria-busy")==="false"),
   {timeout:18000});
  const salesWindows=by("/api/analytics/ventas/totales").slice(beforeSales);
@@ -110,10 +117,17 @@ try{
   const days=(Date.parse(req.query.hasta)-Date.parse(req.query.desde))/86400000;
   assert.ok(days<=366,"El cliente no debe lanzar agregaciones completas de cinco años");
  }
+ await page.waitForFunction(()=>{
+  const cards=[...document.querySelectorAll(".fm-demo-kpi")];
+  return cards.length===10&&cards.slice(0,6).every(card=>
+   card.getAttribute("aria-busy")==="false"&&
+   card.querySelector("strong")?.textContent&&
+   card.querySelector("strong").textContent!=="—");
+ },null,{timeout:15000});
  const values=await page.locator(".fm-demo-kpi").evaluateAll(
-  cards=>cards.slice(0,4).map(card=>card.querySelector("strong")?.textContent));
+  cards=>cards.slice(0,6).map(card=>card.querySelector("strong")?.textContent));
  assert.ok(values.every(v=>v&&v!=="—"),
-  "Con coste histórico completo deben mostrarse ventas, compras y margen");
+  "Con coste histórico completo deben mostrarse ventas, compras y margen: "+JSON.stringify(values));
  assert.deepEqual(pageErrors,[],"No debe haber excepciones de React");
  console.log("OK: Inicio sin bloqueo, KPI legibles, fuentes documentales y filtros compartidos");
 }finally{await browser.close();}

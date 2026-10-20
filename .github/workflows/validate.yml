@@ -50,6 +50,7 @@ jobs:
           node --test api/src/salesAnalysisPeriod.test.js
           node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/internalPassword.test.js
+          node --test api/src/accessPolicy.test.js
           node --test api/src/operativaRules.test.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
@@ -133,6 +134,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
           psql_test --single-transaction < api/src/migrations/012_analisis_ventas_cliente.sql
           psql_test --single-transaction < api/src/migrations/013_accesos_locales.sql
+          psql_test --single-transaction < api/src/migrations/020_dominios_cliente_reset.sql
+          psql_test --single-transaction < api/src/migrations/020_dominios_cliente_reset.sql
           psql_test --single-transaction < api/src/migrations/014_clientes_demo.sql
           psql_test --single-transaction < api/src/migrations/015_cache_analitica_ventas.sql
           psql_test --single-transaction < api/src/migrations/016_modelo_documental.sql
@@ -189,6 +192,8 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationPasswordReset.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationTenantDomains.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationOperativa.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierReporting.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/commercialNames.integration.test.js

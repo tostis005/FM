@@ -78,8 +78,10 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
  const map={
-  dashboard:[shared[0],shared[1],shared[3],
-   CARD("Margen bruto (%)","margenPct","%","rentabilidad"),
+  dashboard:[shared[0],shared[1],
+   CARD("Resultado comercial estimado","resultadoComercial","€"),
+   CARD("Resultado comercial (%)","resultadoComercialPct","%"),
+   shared[3],CARD("Margen bruto (%)","margenPct","%","rentabilidad"),
    CARD("Unidades vendidas","unidades","n","ventas"),
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Recepciones registradas","recepciones","n","compras"),
@@ -590,6 +592,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    productosFarmacia:insightData.totalProducts,articulosVendidos:insightData.totalArticles
   }:{}),...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
  if(!realReport?.kpis&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;}
+ // Resultado comercial aproximado: no equivale a margen bruto ni beneficio neto.
+ const commercialReady=module==="dashboard"&&fastSales?.kpis?.ventas!=null&&
+  fastPurchase?.kpis?.compras!=null&&fastPurchase?.available!==false&&
+  fastPurchase?.hasAmounts!==false;
+ realKpis.resultadoComercial=commercialReady?
+  Number(fastSales.kpis.ventas)-Number(fastPurchase.kpis.compras):null;
+ realKpis.resultadoComercialPct=commercialReady&&Number(fastSales.kpis.ventas)!==0?
+  100*realKpis.resultadoComercial/Number(fastSales.kpis.ventas):null;
  const cards=metricCards(module,realKpis,effectiveAnalysisMonths);
  const isReports=module==="informes",isAssistant=module==="asistente";
  const datasets={
@@ -675,7 +685,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
-   const kpiLoading=isDashboard?(["ventas","unidades","margen","margenPct"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
+   const kpiLoading=isDashboard?(["resultadoComercial","resultadoComercialPct"].includes(c.key)?
+     dashboardSalesLoading||dashboardPurchaseLoading:
+     ["ventas","unidades","margen","margenPct"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
     module==="compras"&&shouldLoadPurchaseSummary?
      (!fastPurchase&&!purchaseSummaryError):
     module==="ventas"&&fastEligible&&["ventas","unidades"].includes(c.key)?
@@ -694,6 +706,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       })():"Cargando…"}</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
     {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&<small>Sin cobertura completa del coste de las ventas</small>}
+     {!kpiLoading&&["resultadoComercial","resultadoComercialPct"].includes(c.key)&&
+      <small>{commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
+       "No disponible hasta disponer de importes completos de ventas y compras"}</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>

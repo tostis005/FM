@@ -1,8 +1,9 @@
-import { createHmac, randomInt, scrypt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomInt, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import nodemailer from "nodemailer";
-import {verifyInternalPassword} from "./internalPassword.js";
+import {verifyInternalPassword,hashInternalPassword,validInternalPassword} from "./internalPassword.js";
+import {emailDomain,googleDomainAuthorized} from "./accessPolicy.js";
 
 const EMAIL = /^[a-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
@@ -14,7 +15,7 @@ const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth
 const emailOf = x => typeof x === "string" ? x.trim().toLowerCase() : "";
 const domainOf = x => typeof x === "string" ? x.trim().toLowerCase().replace(/^@/, "") : "";
 
-export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
+export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{mailerOverride=null}={}) {
   const googleId = process.env.GOOGLE_CLIENT_ID || "";
   const secret = process.env.SESSION_SECRET || "";
   const temporaryAdminEmail = emailOf(process.env.TEMP_ADMIN_EMAIL);
@@ -23,11 +24,11 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     EMAIL.test(temporaryAdminEmail) && HASH_PATTERN.test(temporaryPasswordHash);
   const attemptsByIp = new Map();
   const smtpReady = Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && (process.env.SMTP_USER ? process.env.SMTP_PASSWORD : true));
-  const mailer = smtpReady ? nodemailer.createTransport({
+  const mailer = mailerOverride || (smtpReady ? nodemailer.createTransport({
     host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE === "true",
     ...(process.env.SMTP_USER ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } } : {}),
-  }) : null;
+  }) : null);
   const key = new TextEncoder().encode(secret);
   const cookieSecure = process.env.COOKIE_SECURE !== "false";
   const rateByIp = new Map();
@@ -55,15 +56,23 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       "SELECT email,nombre,rol,farmacias,activo FROM public.acceso_cuentas WHERE email=$1",[email]);
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
-      "SELECT cliente_slug AS slug,rol AS role,farmacias::text[] AS pharmacies,activo AS active,metodo_acceso AS login_method FROM farmetrica.usuario_clientes WHERE email=$1",[email]);
+      `SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
+         uc.activo AS active,uc.metodo_acceso AS login_method,
+         EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
+           d.cliente_slug=uc.cliente_slug AND d.activo=true
+           AND d.dominio=split_part(uc.email,'@',2)) AS domain_allowed
+         FROM farmetrica.usuario_clientes uc WHERE uc.email=$1`,[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
-    const active=memberships.filter(m=>m.active&&(loginMethod!=="interno"||m.login_method==="interno")&&(loginMethod!=="google"||m.login_method==="google"));
+    const active=memberships.filter(m=>m.active&&m.login_method===loginMethod&&
+      (loginMethod!=="google"||m.domain_allowed));
+    const superAdmin=loginMethod!=="interno"&&superRows.length>0;
     if(loginMethod==="interno"&&!active.length)return null;
-    if(!superRows.length && !active.length)return null;
+    if(!superAdmin && !active.length)return null;
     return {email,name:explicit[0].nombre||email.split("@")[0],
-      role:loginMethod!=="interno"&&superRows.length?"superadministrador":active[0]?.role,
-      tenants:memberships.filter(m=>m.login_method===loginMethod||loginMethod==="correo"),source:loginMethod};
+      role:superAdmin?"superadministrador":active[0]?.role,
+      tenants:memberships.filter(m=>m.active&&m.login_method===loginMethod&&
+       (loginMethod!=="google"||m.domain_allowed)),source:loginMethod};
   }
   function cookie(req) {
     const entries = (req.get("cookie") || "").split(";");
@@ -200,6 +209,104 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       return issueSession(res,user);
     }catch(e){next(e)}
   });
+  // Recuperación de contraseñas externas: token opaco, 30 min, un solo uso.
+  // No revela si existe una dirección de correo registrada.
+  const genericResetMessage="Si existe una cuenta externa activa, recibirás un enlace de recuperación.";
+  const resetRate=new Map();
+  app.post("/api/auth/forgot-password",async(req,res,next)=>{
+    const email=emailOf(req.body?.email);
+    if(!EMAIL.test(email)||email.length>254)
+     return res.status(400).json({error:"Correo no válido"});
+    if(!mailer||secret.length<32||!process.env.PUBLIC_APP_ORIGIN)
+     return res.status(503).json({error:"Recuperación no disponible hasta configurar el correo SMTP"});
+    const now=Date.now(),ip=String(req.get("x-real-ip")||req.ip||"unknown").slice(0,80);
+    for(const [k,until] of resetRate)if(until<now)resetRate.delete(k);
+    const keys=["ip:"+ip,"email:"+email];
+    if(keys.some(k=>resetRate.get(k)>now))return res.json({message:genericResetMessage});
+    for(const k of keys)resetRate.set(k,now+60_000);
+    try{
+      const {rows}=await pool.query(`
+       SELECT 1 FROM public.acceso_cuentas a
+       JOIN farmetrica.usuario_clientes uc ON uc.email=a.email
+       JOIN farmetrica.credenciales_locales cr ON cr.email=a.email AND cr.activo=true
+       WHERE a.email=$1 AND a.activo=true AND uc.activo=true AND uc.metodo_acceso='interno'
+       LIMIT 1`,[email]);
+      if(rows.length){
+       const token=randomBytes(32).toString("hex");
+       const digest=createHmac("sha256",secret).update("reset:"+email+":"+token).digest("hex");
+       const saved=await pool.query(`
+        INSERT INTO farmetrica.restablecimientos_contrasena(email,token_hash,caduca_en)
+        VALUES($1,$2,now()+interval '30 minutes')
+        ON CONFLICT(email) DO UPDATE
+        SET token_hash=EXCLUDED.token_hash,caduca_en=EXCLUDED.caduca_en,solicitado_en=now()
+        WHERE farmetrica.restablecimientos_contrasena.solicitado_en<now()-interval '60 seconds'
+        RETURNING email`,[email,digest]);
+       if(saved.rows.length){
+        const url=new URL("/login",process.env.PUBLIC_APP_ORIGIN);
+        url.searchParams.set("reset","1");url.searchParams.set("email",email);
+        url.searchParams.set("token",token);
+        try{await mailer.sendMail({from:process.env.SMTP_FROM,to:email,
+         subject:"Recuperación de contraseña de Farmetrica",
+         text:"Has solicitado restablecer tu contraseña. Este enlace caduca en 30 minutos y solo se puede utilizar una vez. Si no lo has solicitado, ignora este mensaje.\n\n"+url.toString()
+        })}catch(error){
+         await pool.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1 AND token_hash=$2",
+          [email,digest]);throw error;
+        }
+       }
+      }
+      return res.json({message:genericResetMessage});
+    }catch(e){next(e)}
+  });
+  app.post("/api/auth/reset-password",async(req,res,next)=>{
+    const email=emailOf(req.body?.email),token=req.body?.token,password=req.body?.password;
+    if(!EMAIL.test(email)||typeof token!=="string"||!/^[a-f0-9]{64}$/.test(token)||
+       !validInternalPassword(password))
+     return res.status(400).json({error:"Enlace o contraseña incorrectos. Utiliza al menos 12 caracteres."});
+    const digest=createHmac("sha256",secret).update("reset:"+email+":"+token).digest("hex");
+    const db=await pool.connect();
+    try{
+     await db.query("BEGIN");
+     const {rows}=await db.query(`
+      SELECT token_hash FROM farmetrica.restablecimientos_contrasena
+      WHERE email=$1 AND caduca_en>now() FOR UPDATE`,[email]);
+     if(!rows.length||rows[0].token_hash.length!==digest.length||
+       !timingSafeEqual(Buffer.from(rows[0].token_hash),Buffer.from(digest))){
+      await db.query("ROLLBACK");
+      return res.status(400).json({error:"El enlace ya no es válido o ha caducado"});
+     }
+     const hash=await hashInternalPassword(password);
+     const updated=await db.query(`
+      UPDATE farmetrica.credenciales_locales cr
+      SET password_hash=$2,actualizado_en=now(),activo=true
+      WHERE cr.email=$1 AND EXISTS(SELECT 1 FROM farmetrica.usuario_clientes uc
+       WHERE uc.email=cr.email AND uc.activo=true AND uc.metodo_acceso='interno')
+      AND EXISTS(SELECT 1 FROM public.acceso_cuentas a
+       WHERE a.email=cr.email AND a.activo=true)`,[email,hash]);
+     if(!updated.rowCount){await db.query("ROLLBACK");
+      return res.status(400).json({error:"Cuenta externa no disponible"});}
+     await db.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1",[email]);
+     await db.query("COMMIT");
+     return res.json({ok:true,message:"Contraseña actualizada. Ya puedes entrar."});
+    }catch(e){await db.query("ROLLBACK");next(e)}
+    finally{db.release()}
+  });
+  app.post("/api/auth/change-password",requireUser,async(req,res,next)=>{
+    if(req.user.source!=="interno")return res.status(403).json({error:"Las cuentas Google gestionan su contraseña en Google"});
+    const current=req.body?.currentPassword,newPassword=req.body?.newPassword;
+    if(typeof current!=="string"||!validInternalPassword(newPassword))
+     return res.status(400).json({error:"La nueva contraseña debe tener entre 12 y 128 caracteres"});
+    try{
+     const {rows}=await pool.query(
+      "SELECT password_hash FROM farmetrica.credenciales_locales WHERE email=$1 AND activo=true",
+      [req.user.email]);
+     if(!rows.length||!await verifyInternalPassword(current,rows[0].password_hash))
+      return res.status(403).json({error:"La contraseña actual es incorrecta"});
+     const hash=await hashInternalPassword(newPassword);
+     await pool.query("UPDATE farmetrica.credenciales_locales SET password_hash=$2,actualizado_en=now() WHERE email=$1",
+      [req.user.email,hash]);
+     res.json({ok:true});
+    }catch(e){next(e)}
+  });
   app.get("/api/auth/me", async (req, res, next) => {
     try { res.json({ user: await sessionUser(req) }); } catch (e) { next(e); }
   });
@@ -217,8 +324,31 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       });
       if (payload.email_verified !== true || !EMAIL.test(emailOf(payload.email)))
         return res.status(401).json({ error: "Google no ha verificado este correo" });
-      const user = await resolveAccess(emailOf(payload.email));
-      if (!user) return res.status(403).json({ error: "Tu correo o dominio no está autorizado por el administrador" });
+      const email=emailOf(payload.email),hosted=String(payload.hd||"").toLowerCase();
+      const {rows:superRow}=await pool.query(
+       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
+      if(!superRow.length){
+       const {rows:approved}=await pool.query(`
+        SELECT d.cliente_slug,d.dominio,d.farmacia_id FROM farmetrica.cliente_dominios d
+        JOIN farmetrica.clientes c ON c.slug=d.cliente_slug AND c.activo=true
+        WHERE d.dominio=$1 AND d.activo=true LIMIT 1`,[emailDomain(email)]);
+       const domain=approved[0];
+       if(!domain||!googleDomainAuthorized(email,hosted,domain.dominio))
+        return res.status(403).json({error:"El dominio de Google no está autorizado para ningún cliente"});
+       // Incorporación con alcance mínimo. El gestor asigna roles y farmacias después.
+       await pool.query(`
+        INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
+        VALUES($1,$2,'colaborador','{}',true) ON CONFLICT(email) DO NOTHING`,
+        [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
+       await pool.query(`
+        INSERT INTO farmetrica.usuario_clientes
+        (email,cliente_slug,rol,farmacias,activo,metodo_acceso)
+        VALUES($1,$2,'colaborador',$3,true,'google')
+        ON CONFLICT(email,cliente_slug) DO NOTHING`,
+        [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
+      }
+      const user=await resolveAccess(email,"google");
+      if(!user)return res.status(403).json({error:"Esta cuenta está desactivada o no tiene acceso autorizado"});
       return issueSession(res, user);
     } catch (e) {
       if (e.code?.startsWith("ERR_JWT") || e.code?.startsWith("ERR_JWS")) return res.status(401).json({ error: "Inicio de sesión Google inválido" });
@@ -241,7 +371,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     state.count += 1; rateByIp.set(ip, state);
     try {
       const { rows } = await pool.query(
-        "SELECT email FROM public.acceso_cuentas WHERE email=$1 AND activo=TRUE", [email]);
+        "SELECT a.email FROM public.acceso_cuentas a JOIN farmetrica.superadministradores sa ON sa.email=a.email WHERE a.email=$1 AND a.activo=TRUE", [email]);
       if (!rows.length) return res.json(genericResponse);
       const { rows: recent } = await pool.query(
         "SELECT enviado_en FROM public.acceso_codigos WHERE email=$1", [email]);
@@ -279,6 +409,11 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       const { rowCount } = await pool.query(
         "DELETE FROM public.acceso_codigos WHERE email=$1 AND codigo_hash=$2", [email, rows[0].codigo_hash]);
       if (!rowCount) return res.status(401).json({ error: "Código ya utilizado" });
+      // El código email heredado no puede sustituir el SSO corporativo ni
+      // el password+reset de usuarios externos: solo superadministración.
+      const {rows:superRows}=await pool.query(
+       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
+      if(!superRows.length)return res.status(403).json({error:"Este acceso requiere Google o contraseña"});
       const user = await resolveAccess(email);
       if (!user) return res.status(403).json({ error: "La cuenta ya no está autorizada" });
       return issueSession(res, user);

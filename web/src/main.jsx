@@ -9,6 +9,7 @@ import {
 import "./styles.css";
 import "./loginTheme.css";
 import AccessAdmin from "./Accesos.jsx";
+import CambiarContrasena from "./CambiarContrasena.jsx";
 import ModuloDemo from "./ModuloDemo.jsx";
 import Genericos from "./Genericos.jsx";
 import ConfiguracionPrecios from "./ConfiguracionPrecios.jsx";
@@ -228,6 +229,7 @@ function App(){
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState("cargando");
   const [sessionUser,setSessionUser]=useState(null);
+  const [passwordModal,setPasswordModal]=useState(false);
   const [tenantContext,setTenantContext]=useState(null);
   const [authError,setAuthError]=useState("");
   const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
@@ -802,7 +804,7 @@ function App(){
  const role=tenantContext?.role;
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(item.admin)return ["administrador","superadministrador"].includes(role);
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(item.id==="usuarios"&&role==="gestor");
    if(item.module)return sessionUser?.role==="superadministrador"||tenantContext?.modules?.[item.module]===true;
    return true;
  });
@@ -892,6 +894,9 @@ function App(){
     <button className="mobile-toggle icon-btn" type="button" aria-controls="farmetrica-sidebar" aria-expanded={mobileMenu} onClick={()=>setMobileMenu(v=>!v)} aria-label={mobileMenu?"Cerrar menú":"Abrir menú"}><LayoutDashboard size={20}/></button>
     <div className="topbar-title"><strong className="topbar-wordmark">Farmetrica</strong></div>
     <div className="topbar-right">{tenantContext.clients.length>1&&<select className="fm-client-selector" aria-label="Cambiar de cliente" value={tenantContext.client.slug} onChange={e=>activateClient(e.target.value)}>{tenantContext.clients.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select>}<button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
+       {sessionUser?.source==="interno"&&<button type="button" className="btn btn-secondary btn-sm"
+        onClick={()=>setPasswordModal(true)} aria-label="Cambiar contraseña">
+        <ShieldCheck size={14}/> Cambiar contraseña</button>}
        <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="superadministrador"?"Superadministrador":tenantContext.role==="administrador"?"Administrador de cliente":"Usuario autorizado"}</small></span>
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
@@ -1021,7 +1026,7 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>} 
@@ -1052,6 +1057,7 @@ function App(){
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>
   </div>
+  {passwordModal&&<CambiarContrasena onClose={()=>setPasswordModal(false)}/>}
   {reportModal&&<div className="report-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setReportModal(null)}}>
    <section className="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
     <div className="report-modal-top">

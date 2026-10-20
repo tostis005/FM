@@ -1,267 +1,42 @@
-import React, { useEffect, useRef, useState } from "react";
-import { CheckCircle2, KeyRound, LockKeyhole, Mail, Plus, ShieldCheck, Trash2 } from "lucide-react";
-import ListTable from "./ListTable.jsx";
-import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
-
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    credentials: "same-origin", cache: "no-store",
-    ...options, headers: { "Content-Type": "application/json", ...options.headers },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw Error(data.error || "Error HTTP " + response.status);
-  return data;
-}
-const EMPTY_DOMAIN = { domain: "", pharmacyId: "", active: true };
-const EMPTY_ACCOUNT = { email: "", name: "", role: "farmacia", pharmacies: [], active: true };
-const ROLES = [
-  ["farmacia", "Personal de farmacia"], ["gestor", "Gestor de farmacias"],
-  ["colaborador", "Colaborador externo"], ["administrador", "Administrador"],
-];
-function GoogleSignIn({ clientId, onCredential, onError }) {
-  const buttonRef = useRef(null);
-  useEffect(() => {
-    let cancelled = false;
-    if (!clientId) return;
-    const render = () => {
-      if (cancelled || !buttonRef.current || !window.google?.accounts?.id) return;
-      buttonRef.current.replaceChildren();
-      window.google.accounts.id.initialize({
-        client_id: clientId, callback: response => onCredential(response.credential),
-      });
-      window.google.accounts.id.renderButton(buttonRef.current, {
-        type: "standard", theme: "outline", size: "large",
-        text: "signin_with", shape: "rectangular", width: 285,
-      });
-    };
-    if (window.google?.accounts?.id) render();
-    else {
-      let script = document.getElementById("google-identity-services");
-      if (!script) {
-        script = document.createElement("script");
-        script.id = "google-identity-services";
-        script.src = "https://accounts.google.com/gsi/client";
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-      }
-      script.addEventListener("load", render);
-      script.addEventListener("error", onError);
-      return () => { cancelled = true; script.removeEventListener("load", render); script.removeEventListener("error", onError); };
-    }
-    return () => { cancelled = true; };
-  }, [clientId, onCredential, onError]);
-  return <div ref={buttonRef} className="access-google-button" aria-label="Iniciar sesión con Google"/>;
-}
-
-export default function AccessAdmin({ onAuthenticated }) {
-  const [config, setConfig] = useState(null);
-  const [user, setUser] = useState(null);
-  const [domains, setDomains] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [pharmacies, setPharmacies] = useState([]);
-  const [domainForm, setDomainForm] = useState(EMPTY_DOMAIN);
-  const [accountForm, setAccountForm] = useState(EMPTY_ACCOUNT);
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [internalPassword,setInternalPassword]=useState("");
-  const [codeRequested, setCodeRequested] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  async function refresh() {
-    const data = await api("/api/auth/me");
-    setUser(data.user || null);
-    if (data.user?.role === "superadministrador") {
-      const [ds, us, fs] = await Promise.all([
-        api("/api/admin/domains"), api("/api/admin/accounts"), api("/api/farmacias"),
-      ]);
-      setDomains(ds); setAccounts(us); setPharmacies(fs);
-    } else { setDomains([]); setAccounts([]); }
-    onAuthenticated?.();
+import React,{useEffect,useState} from "react";
+import {ShieldCheck,Building2,Users,ArrowRight} from "lucide-react";
+import {LoadingStatus} from "./LoadingState.jsx";
+export default function AccessAdmin({onAuthenticated}){
+ const [user,setUser]=useState(null),[clients,setClients]=useState([]),
+  [error,setError]=useState(""),[loading,setLoading]=useState(true);
+ useEffect(()=>{
+  let active=true;
+  async function load(){
+   try{
+    const [me,all]=await Promise.all([
+     fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"}).then(r=>r.json()),
+     fetch("/api/admin/clientes",{credentials:"same-origin",cache:"no-store"})
+      .then(async r=>r.ok?r.json():[])]);
+    if(active){setUser(me.user);setClients(all);onAuthenticated?.()}
+   }catch(e){if(active)setError(e.message)}finally{if(active)setLoading(false)}
   }
-  useEffect(() => {
-    let running = true;
-    Promise.all([api("/api/auth/config"), api("/api/auth/me")])
-      .then(async ([settings]) => { if (running) setConfig(settings); if (running) await refresh(); })
-      .catch(() => { if (running) { setConfig({ googleClientId: "", emailCodesAvailable: false, configured: false }); setError("La API de acceso todavía no está disponible en el servidor. La lista solo podrá gestionarse cuando configuremos Google y despleguemos el backend."); } });
-    return () => { running = false; };
-  }, []);
-  async function action(work, success) {
-    setError(""); setMessage(""); setBusy(true);
-    try { await work(); setMessage(success); await refresh(); }
-    catch (e) { setError(e.message); }
-    finally { setBusy(false); }
-  }
-  const googleCallback = async credential => action(
-    () => api("/api/auth/google", { method: "POST", body: JSON.stringify({ credential }) }),
-    "Sesión iniciada correctamente",
-  );
-  const googleError = () => setError("No se ha podido cargar el inicio de sesión Google.");
-  async function loginInternal(event){
-    event.preventDefault();
-    await action(()=>api("/api/auth/password",{
-      method:"POST",body:JSON.stringify({email,password:internalPassword})
-    }),"Sesión iniciada");
-    setInternalPassword("");
-  }
-  async function requestCode(event) {
-    event.preventDefault();
-    await action(async () => {
-      await api("/api/auth/request-code", { method: "POST", body: JSON.stringify({ email }) });
-      setCodeRequested(true);
-    }, "Si el correo está autorizado, recibirás un código válido durante 10 minutos.");
-  }
-  async function verifyCode(event) {
-    event.preventDefault();
-    await action(() => api("/api/auth/verify-code", {
-      method: "POST", body: JSON.stringify({ email, code }),
-    }), "Sesión iniciada con código");
-  }
-  async function saveDomain(event) {
-    event.preventDefault();
-    await action(() => api("/api/admin/domains", {
-      method: "PUT", body: JSON.stringify(domainForm),
-    }), "Dominio guardado");
-    setDomainForm(EMPTY_DOMAIN);
-  }
-  async function saveAccount(event) {
-    event.preventDefault();
-    await action(() => api("/api/admin/accounts", {
-      method: "PUT", body: JSON.stringify(accountForm),
-    }), "Cuenta guardada");
-    setAccountForm(EMPTY_ACCOUNT);
-  }
-  const administrator = user?.role === "superadministrador";
-  return <div className="access-management">
-    <div className="page-header">
-      <div><h1>Accesos y dominios</h1><p>Controla qué correos pueden entrar y a qué farmacias pertenecen.</p></div>
-      {user && <button className="btn btn-secondary" onClick={() => action(
-        () => api("/api/auth/logout", { method: "POST" }), "Sesión cerrada",
-      )}>Cerrar sesión</button>}
-    </div>
-    <div className="access-explainer">
-      <ShieldCheck size={19}/>
-      <span>Un dominio permitido autoriza el inicio de sesión. Los permisos se asignan en el servidor: el correo verificado por sí solo no concede acceso a todas las farmacias. Una cuenta desactivada no podrá entrar, aunque su dominio esté permitido.</span>
-    </div>
-    {error && <div className="access-alert access-alert-error" role="alert">{error}</div>}
-    {message && <div className="access-alert" role="status"><CheckCircle2 size={16}/>{message}</div>}
-    {busy&&<div className="fm-loading-message"><LoadingStatus label="Guardando y actualizando permisos…"/></div>}
-    {!config && <section className="card access-section"><LoadingPanel kind="table" label="Comprobando permisos y conexión al servidor…"/></section>}
-    {config && !user && <section className="card access-section">
-      <h2>Iniciar sesión</h2>
-      <p>Utiliza tu cuenta Google autorizada, incluso si no termina en gmail.com. Los colaboradores con una cuenta individual también podrán solicitar un código por correo electrónico.</p>
-      {config.googleClientId ? <GoogleSignIn clientId={config.googleClientId} onCredential={googleCallback} onError={googleError}/> :
-        <p className="access-hint">Google pendiente de configurar en el servidor.</p>}
-      {config.internalPasswordEnabled&&<form className="access-code-login" onSubmit={loginInternal}>
-        <label>Cuenta interna
-          <input type="email" required autoComplete="username" placeholder="correo@ejemplo.com"
-            value={email} onChange={e=>setEmail(e.target.value)}/>
-        </label>
-        <label>Contraseña
-          <input type="password" required autoComplete="current-password"
-            value={internalPassword} onChange={e=>setInternalPassword(e.target.value)}/>
-        </label>
-        <button className="btn btn-primary" type="submit" disabled={busy}>
-          <KeyRound size={16}/> Entrar con contraseña
-        </button>
-      </form>}
-      {config.emailCodesAvailable && <form onSubmit={codeRequested ? verifyCode : requestCode} className="access-code-login">
-        <label>Correo autorizado
-          <input type="email" required placeholder="persona@ejemplo.com" value={email} onChange={e=>{setEmail(e.target.value);setCodeRequested(false);setCode("");}}/>
-        </label>
-        {codeRequested && <label>Código de 6 dígitos
-          <input type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength="6" required placeholder="000000" value={code} onChange={e=>setCode(e.target.value)}/>
-        </label>}
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          <KeyRound size={16}/>{codeRequested?"Verificar código":"Enviar código"}
-        </button>
-        {codeRequested && <button type="button" className="btn btn-secondary" disabled={busy} onClick={requestCode}>Reenviar código</button>}
-      </form>}
-      {!config.emailCodesAvailable && <p className="access-hint">El acceso mediante códigos estará disponible cuando se configure el servicio de correo saliente (SMTP).</p>}
-    </section>}
-    {user && !administrator && <section className="card access-section">
-      <h2>Cuenta autorizada</h2>
-      <p><strong>{user.email}</strong> · {user.role}</p>
-      <p>Tu cuenta puede iniciar sesión, pero solo un administrador puede gestionar dominios y correos. Las farmacias y los permisos efectivos dependen de las asignaciones autorizadas.</p>
-    </section>}
-    {administrator && <>
-      <section className="card access-section">
-        <div className="section-heading"><div><h2>Dominios permitidos</h2></div><span className="count-label">{domains.length} dominios</span></div>
-        <form className="access-form-grid" onSubmit={saveDomain}>
-          <label>Dominio
-            <input required placeholder="farmaciaejemplo.es" value={domainForm.domain} onChange={e=>setDomainForm({...domainForm,domain:e.target.value})}/>
-          </label>
-          <label>Farmacia vinculada
-            <select value={domainForm.pharmacyId ?? ""} onChange={e=>setDomainForm({...domainForm,pharmacyId:e.target.value})}>
-              <option value="">Sin asignar</option>{pharmacies.map(p=><option key={p.id} value={p.id}>{p.name} ({p.sourceCode})</option>)}
-            </select>
-          </label>
-          <label className="access-checkbox"><input type="checkbox" checked={domainForm.active} onChange={e=>setDomainForm({...domainForm,active:e.target.checked})}/> Habilitado</label>
-          <button type="submit" className="btn btn-primary" disabled={busy}><Plus size={16}/> Guardar dominio</button>
-        </form>
-        <ListTable rows={domains} rowKey={d=>d.domain} label="dominios" emptyText="No hay dominios permitidos"
- columns={[
-  {key:"domain",label:"Dominio",value:d=>d.domain,render:d=><strong>@{d.domain}</strong>},
-  {key:"pharmacy",label:"Farmacia",filterMode:"multi",
-   filterValues:d=>[String(d.pharmacyId||"none")],
-   options:()=>[{value:"none",label:"Sin asignar"},...pharmacies.map(p=>({value:String(p.id),label:p.name}))],
-   value:d=>pharmacies.find(p=>String(p.id)===String(d.pharmacyId))?.name||"Sin asignar"},
-  {key:"active",label:"Estado",filterMode:"multi",value:d=>d.active?"Habilitado":"Bloqueado"},
-  {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
-   render:d=><div className="list-cell-actions">
-      <button className="btn btn-secondary btn-sm" onClick={()=>setDomainForm(d)}>Editar</button>
-      <button className="btn btn-secondary btn-sm" disabled={busy} onClick={()=>action(
-        ()=>api("/api/admin/domains/"+encodeURIComponent(d.domain),{method:"DELETE"}),"Dominio eliminado"
-      )}><Trash2 size={14}/> Eliminar</button>
-   </div>}
- ]}/>
-      </section>
-      <section className="card access-section">
-        <div className="section-heading"><div><h2>Correos autorizados</h2></div><span className="count-label">{accounts.length} cuentas</span></div>
-        <form className="access-form-grid" onSubmit={saveAccount}>
-          <label>Correo electrónico
-            <input type="email" required placeholder="colaborador@gmail.com" value={accountForm.email} onChange={e=>setAccountForm({...accountForm,email:e.target.value})}/>
-          </label>
-          <label>Nombre (opcional)
-            <input placeholder="Nombre y apellidos" value={accountForm.name} onChange={e=>setAccountForm({...accountForm,name:e.target.value})}/>
-          </label>
-          <label>Rol
-            <select value={accountForm.role} onChange={e=>setAccountForm({...accountForm,role:e.target.value})}>
-              {ROLES.map(([id,label])=><option key={id} value={id}>{label}</option>)}
-            </select>
-          </label>
-          <label className="access-checkbox"><input type="checkbox" checked={accountForm.active} onChange={e=>setAccountForm({...accountForm,active:e.target.checked})}/> Cuenta activa</label>
-          <div className="access-full">
-            <strong>Farmacias autorizadas</strong>
-            <div className="access-pharmacy-checks">{pharmacies.map(f=><label key={f.id}>
-              <input type="checkbox" checked={accountForm.pharmacies.includes(String(f.id))} onChange={e=>
-                setAccountForm(prev=>({...prev,pharmacies:e.target.checked?[...prev.pharmacies,String(f.id)]:prev.pharmacies.filter(p=>p!==String(f.id))}))}/>
-              {f.name}
-            </label>)}</div>
-            <small>Se requiere al menos una farmacia para las cuentas activas que no sean administradoras.</small>
-          </div>
-          <button className="btn btn-primary" type="submit" disabled={busy}><Mail size={16}/> Guardar correo autorizado</button>
-          <button className="btn btn-secondary" type="button" onClick={()=>setAccountForm(EMPTY_ACCOUNT)}>Limpiar formulario</button>
-        </form>
-        <ListTable rows={accounts} rowKey={u=>u.email} label="cuentas" emptyText="No hay correos autorizados"
- columns={[
-  {key:"email",label:"Correo",value:u=>u.email+" "+(u.name||""),render:u=><><strong>{u.email}</strong><small>{u.name}</small></>},
-  {key:"role",label:"Rol",filterMode:"multi",value:u=>ROLES.find(([id])=>id===u.role)?.[1]||u.role},
-  {key:"pharmacies",label:"Farmacias",filterMode:"multi",
-   filterValues:u=>u.role==="administrador"?pharmacies.map(f=>String(f.id)):u.pharmacies.map(String),
-   options:()=>pharmacies.map(f=>({value:String(f.id),label:f.name})),
-   value:u=>u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(f=>String(f.id)===String(id))?.name||id).join(", ")||"—"},
-  {key:"active",label:"Estado",filterMode:"multi",value:u=>u.active?"Activa":"Bloqueada"},
-  {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
-   render:u=><div className="list-cell-actions">
-     <button className="btn btn-secondary btn-sm" onClick={()=>setAccountForm(u)}>Editar</button>
-     <button className="btn btn-secondary btn-sm" disabled={busy||u.email===user.email} onClick={()=>action(
-       ()=>api("/api/admin/accounts/"+encodeURIComponent(u.email),{method:"DELETE"}),"Cuenta desactivada"
-     )}><LockKeyhole size={14}/> Bloquear</button>
-   </div>}
- ]}/>
-      </section>
-    </>}
-  </div>;
+  load();return()=>{active=false}
+ },[]);
+ return <div className="fm-management">
+  <div className="page-header"><h1>Seguridad y accesos</h1></div>
+  {loading&&<LoadingStatus label="Consultando permisos…"/>}
+  {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
+  <section className="card fm-manage-client">
+   <div className="section-heading"><h2><ShieldCheck size={19}/> Acceso por cliente</h2></div>
+   <p>Los dominios corporativos se autorizan desde Administración → Clientes.
+    La configuración de usuarios internos, externos, roles y farmacias se realiza
+    desde Configuración → Usuarios dentro de cada cliente.</p>
+   <p>Google verifica la identidad y el dominio de Workspace; cada permiso
+    efectivo se valida en el servidor. Las cuentas externas utilizan contraseñas
+    seguras y pueden recuperarlas desde la pantalla de acceso.</p>
+   <div className="fm-manage-domain-list">{clients.map(client=><div
+    className="fm-manage-domain-item" key={client.slug}>
+    <Building2 size={18}/><strong>{client.name}</strong>
+    <span>Dominios y módulos administrados por cliente</span>
+   </div>)}</div>
+   {user?.role==="superadministrador"&&<button className="btn btn-primary"
+    onClick={()=>window.location.assign("/clientes")}>
+    <Users size={16}/> Gestionar clientes y dominios <ArrowRight size={16}/></button>}
+  </section>
+ </div>;
 }

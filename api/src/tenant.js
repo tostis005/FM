@@ -9,6 +9,7 @@ const asEmail = value => String(value || "").trim().toLowerCase();
 
 import {decoratePharmacy} from "./pharmacyCodes.js";
 import {hashInternalPassword,validInternalPassword} from "./internalPassword.js";
+import {normalizeDomain,emailDomain,validClientDomain,validInternalEmail} from "./accessPolicy.js";
 import {sourceSupplierRows} from "./supplierReporting.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   async function resolve(req) {
@@ -49,6 +50,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   }
   const requireTenant=()=>middleware();
   const requireTenantAdmin=()=>middleware(ctx=>["administrador","superadministrador"].includes(ctx.role));
+   const requireTenantManager=()=>middleware(ctx=>["gestor","administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
@@ -343,15 +345,79 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       res.json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}
   });
-  app.get("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{
+  // Los dominios autorizados pertenecen al cliente, nunca a una lista global.
+  app.get("/api/admin/clientes/:slug/dominios",requireSuperadmin,async(req,res,next)=>{
+    const slug=String(req.params.slug||"").toLowerCase();
+    if(!SLUG.test(slug))return res.status(400).json({error:"Cliente no válido"});
     try{
       const {rows}=await pool.query(
-        'SELECT uc.email,coalesce(a.nombre,\'\') AS name,uc.rol AS role,uc.farmacias::text[] AS pharmacies,uc.activo AS active,uc.metodo_acceso AS "authType" FROM farmetrica.usuario_clientes uc LEFT JOIN public.acceso_cuentas a ON a.email=uc.email WHERE uc.cliente_slug=$1 ORDER BY uc.email',
-        [req.context.client.slug]);
+       'SELECT dominio AS domain,activo AS active,farmacia_id::text AS "pharmacyId" FROM farmetrica.cliente_dominios WHERE cliente_slug=$1 ORDER BY dominio',
+       [slug]);res.json(rows);
+    }catch(e){next(e)}
+  });
+  app.put("/api/admin/clientes/:slug/dominios",requireSuperadmin,async(req,res,next)=>{
+    const slug=String(req.params.slug||"").toLowerCase();
+    const domain=normalizeDomain(req.body?.domain),active=req.body?.active;
+    const pharmacyId=req.body?.pharmacyId?Number(req.body.pharmacyId):null;
+    if(!SLUG.test(slug)||!validClientDomain(domain)||typeof active!=="boolean"||
+      (pharmacyId!==null&&(!Number.isSafeInteger(pharmacyId)||pharmacyId<1)))
+      return res.status(400).json({error:"Dominio corporativo o farmacia no válidos"});
+    try{
+      const {rows:[client]}=await pool.query(
+       "SELECT slug FROM farmetrica.clientes WHERE slug=$1",[slug]);
+      if(!client)return res.status(404).json({error:"Cliente no encontrado"});
+      if(pharmacyId!==null){
+       const {rows}=await pool.query(
+        "SELECT id FROM farmetrica.farmacias WHERE cliente_slug=$1 AND id=$2",[slug,pharmacyId]);
+       if(!rows.length)return res.status(400).json({error:"La farmacia no pertenece al cliente"});
+      }
+      const {rows}=await pool.query(`INSERT INTO farmetrica.cliente_dominios
+       (cliente_slug,dominio,activo,farmacia_id) VALUES($1,$2,$3,$4)
+       ON CONFLICT(cliente_slug,dominio) DO UPDATE
+       SET activo=EXCLUDED.activo,farmacia_id=EXCLUDED.farmacia_id,actualizado_en=now()
+       RETURNING dominio AS domain,activo AS active,farmacia_id::text AS "pharmacyId"`,
+       [slug,domain,active,pharmacyId]);
+      res.json(rows[0]);
+    }catch(e){
+      if(e.code==="23505")return res.status(409).json({error:"Este dominio ya pertenece a otro cliente"});
+      next(e)
+    }
+  });
+  app.delete("/api/admin/clientes/:slug/dominios/:domain",requireSuperadmin,async(req,res,next)=>{
+    const slug=String(req.params.slug||"").toLowerCase(),domain=normalizeDomain(req.params.domain);
+    if(!SLUG.test(slug)||!validClientDomain(domain))
+     return res.status(400).json({error:"Dominio no válido"});
+    try{
+      const {rowCount}=await pool.query(
+       "DELETE FROM farmetrica.cliente_dominios WHERE cliente_slug=$1 AND dominio=$2",
+       [slug,domain]);res.json({deleted:rowCount>0});
+    }catch(e){next(e)}
+  });
+  app.get("/api/tenant/dominios",...requireTenantManager(),async(req,res,next)=>{
+    try{
+      const {rows}=await pool.query(
+       "SELECT dominio AS domain FROM farmetrica.cliente_dominios WHERE cliente_slug=$1 AND activo=true ORDER BY dominio",
+       [req.context.client.slug]);res.json(rows);
+    }catch(e){next(e)}
+  });
+  app.get("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
+    try{
+      const scoped=req.context.role==="gestor";
+       const {rows}=await pool.query(
+        `SELECT uc.email,coalesce(a.nombre,'') AS name,uc.rol AS role,
+          uc.farmacias::text[] AS pharmacies,uc.activo AS active,
+          uc.metodo_acceso AS "authType"
+         FROM farmetrica.usuario_clientes uc
+         LEFT JOIN public.acceso_cuentas a ON a.email=uc.email
+         WHERE uc.cliente_slug=$1
+          AND (NOT $3::boolean OR (uc.rol IN ('farmacia','colaborador')
+            AND uc.farmacias && $2::int[]))
+         ORDER BY uc.email`,
+        [req.context.client.slug,req.context.allowedPharmacyIds,scoped]);
       res.json(rows);
     }catch(e){next(e);}
   });
-  app.put("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{
+  app.put("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
     const email=asEmail(req.body?.email),name=String(req.body?.name||"").trim(),role=req.body?.role;
     const pharmacies=req.body?.pharmacies,active=req.body?.active;
     const authType=req.body?.authType||"google",password=req.body?.password;
@@ -366,7 +432,36 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
       return res.status(400).json({error:"Selecciona al menos una farmacia"});
     if(ids.some(id=>!req.context.pharmacies.some(p=>Number(p.id)===id)))
       return res.status(403).json({error:"No puedes asignar farmacias ajenas al cliente"});
-    const hashed=authType==="interno"&&password?await hashInternalPassword(password):null;
+    const external=authType==="interno";
+    const {rows:domains}=await pool.query(
+     "SELECT dominio FROM farmetrica.cliente_dominios WHERE cliente_slug=$1 AND activo=true",
+     [req.context.client.slug]);
+    const allowedDomains=domains.map(d=>d.dominio);
+    if(!external&&!validInternalEmail(email,allowedDomains))
+     return res.status(400).json({error:"El correo interno debe pertenecer a un dominio habilitado para este cliente"});
+    if(external&&allowedDomains.includes(emailDomain(email)))
+     return res.status(400).json({error:"Utiliza acceso Google para los dominios internos"});
+    // La contraseña pertenece a un email global; un gestor de un cliente
+    // no puede cambiarla si esa identidad accede externamente a otro cliente.
+    if(external){
+     const {rows:otherClients}=await pool.query(
+      "SELECT 1 FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug<>$2 AND metodo_acceso='interno' LIMIT 1",
+      [email,req.context.client.slug]);
+     if(otherClients.length)return res.status(409).json({
+      error:"Este correo externo ya tiene credenciales en otro cliente. Usa otra dirección."
+     });
+    }
+    if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
+     return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
+    if(req.context.role==="gestor"){
+     const {rows:existing}=await pool.query(
+      "SELECT rol,farmacias FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
+      [req.context.client.slug,email]);
+     if(existing.length&&(!["farmacia","colaborador"].includes(existing[0].rol)||
+      existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
+      return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
+    }
+    const hashed=external&&password?await hashInternalPassword(password):null;
     const db=await pool.connect();
     try{
       await db.query("BEGIN");
@@ -376,7 +471,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
           [email]);
         if(!existing.length){
           await db.query("ROLLBACK");
-          return res.status(400).json({error:"Establece una contraseña de al menos 12 caracteres"});
+          return res.status(400).json({error:"Los colaboradores externos necesitan una contraseña de al menos 12 caracteres"});
         }
       }
       await db.query(

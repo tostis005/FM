@@ -3,7 +3,7 @@ import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,
 
 import SortableDataTable from "./SortableDataTable.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
-import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
+import {readSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaReal.css";
 
 const MAP={"compras-preparador":"pedidos","compras-pendientes":"pedidos","compras-pedidos":"pedidos",
@@ -58,7 +58,10 @@ function SelectStatus({value,onChange,values,disabled}){return <select aria-labe
 function Button({children,onClick,disabled,primary=false}){return <button type="button"
  className={"btn "+(primary?"btn-primary":"btn-secondary")} disabled={disabled} onClick={onClick}>{children}</button>}
 export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail=""}){
+ const operationalPharmacyKey="fm_operativa_farmacia:"+clientSlug;
  const resource=MAP[section], [pharmacy,setPharmacy]=useState(()=>{
+  const operational=sessionStorage.getItem(operationalPharmacyKey);
+  if(pharmacies.some(p=>String(p.id)===operational))return operational;
   const saved=readSharedReportFilters(clientSlug).pharmacyIds||[];
   const first=saved.find(id=>pharmacies.some(p=>String(p.id)===id));
   return first||String(pharmacies[0]?.id||"");
@@ -83,6 +86,8 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  useEffect(()=>{
    setPharmacy(current=>{
     if(pharmacies.some(p=>String(p.id)===current))return current;
+    const operational=sessionStorage.getItem(operationalPharmacyKey);
+    if(pharmacies.some(p=>String(p.id)===operational))return operational;
     const saved=readSharedReportFilters(clientSlug).pharmacyIds||[];
     return saved.find(id=>pharmacies.some(p=>String(p.id)===id))||String(pharmacies[0]?.id||"");
    });
@@ -183,7 +188,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    <label className="fm-unified-filter">Farmacias
     <select aria-label="Farmacia" value={pharmacy}
      onChange={e=>{const id=e.target.value;setPharmacy(id);
-      updateSharedReportFilters(clientSlug,{pharmacyIds:[id]});}}>
+      sessionStorage.setItem(operationalPharmacyKey,id);}}>
      {pharmacies.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}
     </select></label>
   </div>

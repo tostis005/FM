@@ -123,7 +123,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    if(!normalized&&!legacy)return res.json({available:false,kpis:{},monthly:[]});
    if(!f.ids.length)return res.json({available:true,
     kpis:{compras:0,unidadesCompradas:0,lineasCompra:0,proveedores:0,recepciones:0},
-    hasArticleLines:false,hasAmounts:false,sourceRows:0,monthly:[]});
+    hasArticleLines:false,hasAmounts:true,amountRows:0,amountCoveragePct:100,sourceRows:0,monthly:[]});
    const join=legacy?
     "JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$4":
     `JOIN farmetrica.farmacias f ON f.cliente_slug=$4
@@ -163,25 +163,28 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     amountRows+=Number(r.amountRows??(r.amount==null?0:1));
     unitRows+=Number(r.unitRows??(r.units==null?0:1));
     if(r.supplier!=null&&r.supplier!=="")suppliers.add(r.pharmacy+"|"+r.supplier);
-    const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null};
+    const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null,sourceRows:0,amountRows:0,unitRows:0};
     m.compras=(m.compras??0)+amount;
     m.recepciones=(m.recepciones||0)+Number(r.receipts||0);
-    m.hasAmounts=(m.hasAmounts||false)||Number(r.amountRows??(r.amount==null?0:1))>0;
+    m.sourceRows+=Number(r.sourceRows??1);
+     m.amountRows+=Number(r.amountRows??(r.amount==null?0:1));
+    m.unitRows+=Number(r.unitRows??(r.units==null?0:1));
     months.set(r.month,m);
    }
    res.json({available:true,kpis:{
-    compras:sourceRows>0&&amountRows===0?null:Math.round(purchases*100)/100,
-    unidadesCompradas:sourceRows>0&&unitRows===0?null:units,
+    compras:sourceRows>0&&amountRows!==sourceRows?null:Math.round(purchases*100)/100,
+    unidadesCompradas:sourceRows>0&&unitRows!==sourceRows?null:units,
     lineasCompra:sourceRows>0&&lines===0?null:lines,
     proveedores:suppliers.size,
     // Contar cabeceras como recepciones solo cuando NO hay líneas de producto:
     // en otros clientes sourceRows podría ser el número de líneas, no de albaranes.
     recepciones:legacy?null:receipts
-   },hasArticleLines:lines>0,hasAmounts:amountRows>0,sourceRows,
+   },hasArticleLines:lines>0,hasAmounts:amountRows===sourceRows,
+    amountRows,amountCoveragePct:sourceRows?Math.round(amountRows/sourceRows*10000)/100:100,sourceRows,
    monthly:[...months.values()].map(m=>({
-    month:m.month,ventas:m.ventas,compras:m.hasAmounts?m.compras:null,
+    month:m.month,ventas:m.ventas,compras:m.sourceRows===m.amountRows?m.compras:null,
     recepciones:legacy?null:m.recepciones||0,
-    unidades:m.unidades,margen:m.margen
+    unidades:m.sourceRows===m.unitRows?m.unidades:null,margen:m.margen
    }))});
   }catch(e){next(e)}
  };

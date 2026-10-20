@@ -12,6 +12,7 @@ import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {loadHistoricalSummary} from "./historicalSummaries.js";
+import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import "./moduleDemo.css";
 
 // Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
@@ -73,7 +74,7 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Ventas", "ventas","€","ventas"),
   CARD("Compras","compras","€","compras"),
   CARD("Stock valorado","stock","€","stock"),
-  CARD("Margen estimado","margen","€","rentabilidad"),
+  CARD("Margen bruto estimado","margen","€","rentabilidad"),
   CARD("Potencial de precio","potencialCompra","€","compras"),
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
@@ -97,7 +98,7 @@ function metricCards(module,k,analysisMonths=12){
   stock:[CARD("Artículos con stock informado","stockArticulos","n"),CARD("Unidades en inventario","stockUnidades","n"),shared[2],CARD("Sin ventas en periodo","stockSinRotacion","n")],
   reposicion:[shared[5],CARD("Unidades en inventario","stockUnidades","n"),CARD("Coste de reposición","reposicionCoste","€"),CARD("Roturas","roturas","n")],
   genericos:[CARD("Compra de genéricos","compraGenericos","€"),CARD("Potencial de precio","potencialGenericos","€","compras"),shared[1],CARD("Proveedores","proveedores","n","proveedores")],
-  rentabilidad:[shared[3],CARD("Margen estimado","margenPct","%"),CARD("Cobertura de costes","coberturaCostes","%"),shared[0]],
+  rentabilidad:[shared[3],CARD("Margen bruto estimado (%)","margenPct","%"),CARD("Cobertura de costes","coberturaCostes","%"),shared[0]],
   acciones:[CARD("Acciones identificadas","acciones","n"),
    CARD("Roturas","roturas","n","reposicion"),
    CARD("Sobrestock","sobrestock","€","stock"),shared[5]],
@@ -594,12 +595,22 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  if(!realReport?.kpis&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;}
  // Resultado comercial aproximado: no equivale a margen bruto ni beneficio neto.
  const commercialReady=module==="dashboard"&&fastSales?.kpis?.ventas!=null&&
-  fastPurchase?.kpis?.compras!=null&&fastPurchase?.available!==false&&
-  fastPurchase?.hasAmounts!==false;
+  Number.isFinite(Number(fastSales.kpis.ventas))&&fastPurchase?.kpis?.compras!=null&&
+  Number.isFinite(Number(fastPurchase.kpis.compras))&&fastPurchase?.available===true&&
+  fastPurchase?.hasAmounts===true;
  realKpis.resultadoComercial=commercialReady?
   Number(fastSales.kpis.ventas)-Number(fastPurchase.kpis.compras):null;
  realKpis.resultadoComercialPct=commercialReady&&Number(fastSales.kpis.ventas)!==0?
   100*realKpis.resultadoComercial/Number(fastSales.kpis.ventas):null;
+ const saleProgress={progress:fastProgress,scope:fastScope,completed:Boolean(fastSales)};
+ const buyProgress={progress:purchaseProgress,scope:purchaseSummaryScope,completed:Boolean(fastPurchase)};
+ const dashboardProgress=key=>{
+  if(["resultadoComercial","resultadoComercialPct"].includes(key))
+   return combinedPercent([saleProgress,buyProgress]);
+  if(["ventas","unidades","margen","margenPct"].includes(key))
+   return taskPercent(fastProgress,fastScope,Boolean(fastSales));
+  return taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase));
+ };
  const cards=metricCards(module,realKpis,effectiveAnalysisMonths);
  const isReports=module==="informes",isAssistant=module==="asistente";
  const datasets={
@@ -698,17 +709,18 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     disabled={!active||kpiLoading} aria-busy={kpiLoading} onClick={()=>go(c.link)} aria-label={c.label+(kpiLoading?", cargando":active?": abrir "+TITLES[c.link]:"")}>
     <span>{c.label}</span>
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
-       <span className="fm-load-spinner" aria-hidden="true"/><small>{isDashboard?(()=>{
-       const isSales=["ventas","unidades","margen","margenPct"].includes(c.key);
-       const progress=isSales?fastProgress:purchaseProgress,scope=isSales?fastScope:purchaseSummaryScope;
-       return progress?.scope===scope&&progress.total>1?
-        "Cargando "+progress.done+"/"+progress.total+" períodos…":"Cargando…";
-      })():"Cargando…"}</small>
+       <span className="fm-load-spinner" aria-hidden="true"/><small>{userLoadingText(isDashboard?dashboardProgress(c.key):
+       module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):
+       module==="ventas"&&["ventas","unidades"].includes(c.key)?
+       taskPercent(fastProgress,fastScope,Boolean(fastSales)):null)}</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
-    {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&<small>Sin cobertura completa del coste de las ventas</small>}
+    {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&
+      <small>Sin cobertura completa del coste histórico de los artículos vendidos</small>}
      {!kpiLoading&&["resultadoComercial","resultadoComercialPct"].includes(c.key)&&
       <small>{commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
-       "No disponible hasta disponer de importes completos de ventas y compras"}</small>}
+       fastPurchase?.amountCoveragePct!=null&&fastPurchase.amountCoveragePct<100?
+        "Cobertura de importes de compra: "+percentage(fastPurchase.amountCoveragePct)+". Faltan costes.":
+        "No disponible hasta disponer de importes completos de ventas y compras"}</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>
@@ -720,6 +732,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
    {module==="compras"&&receiptError&&
     <p role="alert" className="fm-inline-status">No se pudieron cargar las recepciones.</p>}
+   {module==="compras"&&fastPurchase?.hasAmounts===false&&Number(fastPurchase.sourceRows)>0&&
+     <div className="fm-preview-data-hint" role="status">
+       <span className="fm-preview-badge">Importes incompletos</span>
+       <span>Hay recepciones sin importe registrado. No mostramos sumas parciales como compras totales.
+        {fastPurchase.amountCoveragePct!=null&&" Cobertura: "+percentage(fastPurchase.amountCoveragePct)+"."}</span>
+     </div>}
    {module==="compras"&&(receiptMode||fastPurchase?.hasArticleLines===false)&&
     <div className="fm-preview-data-hint" role="status">
      <span className="fm-preview-badge">Datos parciales</span>
@@ -740,7 +758,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
 
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
-    {chartLoading?<LoadingPanel kind="chart" label={"Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas")+"…"}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
+    {chartLoading?<LoadingPanel kind="chart" label={userLoadingText(isDashboard?combinedPercent([saleProgress,buyProgress]):
+      module==="ventas"?taskPercent(fastProgress,fastScope,Boolean(fastSales)):
+      module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):null,
+      isDashboard?"Cargando evolución":
+       "Cargando evolución de "+(module==="compras"||module==="proveedores"?"compras":"ventas"))}/>:!chart.length?<div className="fm-sales-no-chart">No hay movimientos registrados para este período y estos filtros.</div>:<div className="fm-demo-chart"><ResponsiveContainer width="100%" height="100%">
      <BarChart data={chart} margin={{top:12,right:10,left:0,bottom:0}}>
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>

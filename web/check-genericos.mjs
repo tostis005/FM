@@ -17,6 +17,10 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/context")data=context;
  else if(p==="/api/tenant/promociones")data={promotions:[]};
  else if(p==="/api/tenant/farmacias")data=pharmacies;
+ else if(p==="/api/genericos/reales"&&u.searchParams.get("buscar")==="error-api"){
+  await route.fulfill({status:503,contentType:"application/json",
+   body:JSON.stringify({error:"Error de consulta simulado"})});return;
+ }
  else if(p==="/api/genericos/reales"){
   listRequests++;
   await new Promise(resolve=>setTimeout(resolve,650));
@@ -72,5 +76,10 @@ try{
  await page.waitForFunction(()=>document.querySelector(".fm-generic-chart")!==null);
  await page.waitForTimeout(750);
  assert.ok(listRequests>initialRequests,"Actualizar explícitamente debe consultar genéricos");
+ await page.getByPlaceholder("Buscar conjunto…").fill("error-api");
+ await page.locator(".fm-generic-list .fm-generic-empty-text").waitFor({timeout:8000});
+ await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).first().waitFor({timeout:7000});
+ assert.equal(await page.locator(".fm-generic-list").getByText("Omeprazol",{exact:true}).count(),0,
+  "Tras un fallo de consulta no se deben mostrar los resultados del filtro anterior");
  console.log("OK: Genéricos carga por visual, muestra agrupación DCPF y desglose aislado por cliente");
 }finally{await browser.close();}

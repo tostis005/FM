@@ -47,6 +47,14 @@ try{
  assert.equal(await page.getByText("Pantalla de demostración").count(),0,
   "La pantalla de pedidos no debe ofrecer cifras simuladas");
  await page.getByRole("heading",{name:"Preparador de pedidos",exact:true}).waitFor();
+ // Una pantalla operativa individual no debe pisar el filtro general de varias farmacias.
+ await page.evaluate(()=>sessionStorage.setItem("fm_shared_report_filters_v1:ampedia",
+  JSON.stringify({period:"this_month",pharmacyIds:["1","2"]})));
+ await page.getByRole("combobox",{name:"Farmacia"}).selectOption("2");
+ const shared=await page.evaluate(()=>JSON.parse(
+  sessionStorage.getItem("fm_shared_report_filters_v1:ampedia")));
+ assert.deepEqual(shared.pharmacyIds,["1","2"],
+  "Operativa no puede convertir una selección de varias farmacias en una sola");
  for(const [path,title] of [
   ["oportunidades-seguimiento","Seguimiento de oportunidades"],
   ["alertas","Alertas"],["mi-trabajo","Mi trabajo"],
@@ -54,6 +62,8 @@ try{
  ]){
   await page.goto(BASE+"/"+path,{waitUntil:"domcontentloaded"});
   await page.getByRole("heading",{name:title,exact:true,level:1}).waitFor({timeout:13000});
+  assert.equal(await page.getByRole("combobox",{name:"Farmacia"}).inputValue(),"2",
+   "La última farmacia operativa debe mantenerse entre pantallas");
   const error=await page.locator(".fm-op-error").count();
   if(error)throw Error(path+" presenta error inesperado");
  }

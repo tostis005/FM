@@ -31,6 +31,29 @@ test("totales de compra numéricos confirman disponibilidad aunque falte el flag
  assert.equal(data.hasAmounts,true);
  assert.equal(data.kpis.compras,250);
 });
+test("el importe de 1 año incompleto invalida el resultado de 5 años",()=>{
+ const complete={available:true,sourceRows:3,amountRows:3,hasAmounts:true,monthly:[],
+  kpis:{compras:300,unidadesCompradas:40}};
+ const partial={available:true,sourceRows:2,amountRows:1,hasAmounts:false,
+  monthly:[{month:"2026-02",compras:null,unidades:7}],
+  kpis:{compras:null,unidadesCompradas:7}};
+ const merged=mergeHistoricalSummaries([complete,partial],"purchases",
+  {from:"2025-01-01",to:"2026-12-31"});
+ assert.equal(merged.hasAmounts,false);
+ assert.equal(merged.kpis.compras,null);
+ assert.equal(merged.amountCoveragePct,80);
+});
+test("dos mitades del mismo mes: un coste desconocido no se convierte en cero",()=>{
+ const priced={available:true,sourceRows:1,amountRows:1,hasAmounts:true,
+  monthly:[{month:"2026-07",compras:60,recepciones:1}],kpis:{compras:60,recepciones:1}};
+ const unpriced={available:true,sourceRows:1,amountRows:0,hasAmounts:false,
+  monthly:[{month:"2026-07",compras:null,recepciones:1}],kpis:{compras:null,recepciones:1}};
+ const result=mergeHistoricalSummaries([priced,unpriced],"purchases",
+  {from:"2026-07-01",to:"2026-07-31"});
+ assert.equal(result.monthly.length,1);
+ assert.equal(result.monthly[0].compras,null);
+ assert.equal(result.monthly[0].recepciones,2);
+});
 test("compras reales se suman por tramo, nunca se suman proveedores repetidos",()=>{
  const period=(month,compras,units)=>({available:true,sourceRows:2,
   hasArticleLines:true,hasAmounts:true,

@@ -101,5 +101,15 @@ try{
  assert.equal(await page.getByText("Pantalla de demostración").count(),0);
  const messages=await page.locator("main").innerText();
  assert.doesNotMatch(messages,/datos reales|datos de prueba/i);
+ // Un intervalo personalizado incorrecto debe invalidar la tabla antigua.
+ await page.goto(BASE+"/ventas-tickets",{waitUntil:"domcontentloaded"});
+ await page.getByText("T-REAL",{exact:true}).waitFor();
+ await page.locator(".fm-unified-filters select").first().selectOption("custom");
+ const inputs=page.locator(".fm-unified-filters input[type=date]");
+ await inputs.nth(0).fill("2026-10-21");
+ await inputs.nth(1).fill("2026-10-01");
+ await page.getByRole("alert").first().waitFor({timeout:6000});
+ assert.equal(await page.getByText("T-REAL",{exact:true}).count(),0,
+  "Un rango incorrecto no puede seguir mostrando tickets antiguos");
  console.log("OK: pantallas finales con consultas persistidas; histórico documental sin cifras de ejemplo");
 }finally{await browser.close();}

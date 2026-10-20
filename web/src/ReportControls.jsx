@@ -21,7 +21,7 @@ export function ReportPageHeader({title,description,period,updatedAt,onRefresh,r
   <div className="fm-unified-header-right">
    {(dates||updatedAt)&&<div className="fm-unified-header-meta" aria-live="polite">
     {dates&&<span>Período: {dates}</span>}
-    {updatedAt&&<small>Última actualización: {updatedAt.toLocaleString("es-ES",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</small>}
+    {updatedAt&&<small>Última consulta: {updatedAt.toLocaleString("es-ES",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</small>}
    </div>}
    {onRefresh&&<button className="btn btn-secondary" type="button" disabled={refreshing} onClick={onRefresh}>
     <RefreshCw size={16}/> Actualizar

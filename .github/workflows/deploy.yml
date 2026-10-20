@@ -75,6 +75,7 @@ jobs:
           node --test src/businessAnalytics.test.js
           node --test src/promotionMetrics.test.js
           node --test src/salesPeriods.test.js
+          node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/localeES.test.js
           node check-login.mjs
           node generate-seo.mjs

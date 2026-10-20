@@ -41,7 +41,7 @@ try{
  for(const request of ticketRequests)
   assert.deepEqual(request.columnFilters.pharmacy,["1"],
    "El filtro de farmacia del consolidado debe aplicarse a los tickets");
- const promoOptions=await page.getByLabel("Promoción",{exact:true}).locator("option").allTextContents();
+ const promoOptions=await page.locator(".lab-detail-filters select").first().locator("option").allTextContents();
  assert.deepEqual(promoOptions,["Campaña Centro y Norte","Campaña coincidente Centro"],
   "No incluir campañas que pertenecen solo a otras farmacias");
  await page.getByText(/Una misma venta puede atribuirse a varias promociones/).waitFor();

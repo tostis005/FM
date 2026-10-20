@@ -103,8 +103,11 @@ try{
  assert.equal(await page.getByText("Promoción antigua").first().count(),1);
  // La misma importación NO actualiza objetivos ni CNs de campañas existentes.
  stored[1].targets={"1":77};
+ const secondImport=page.waitForResponse(response=>
+  new URL(response.url()).pathname==="/api/tenant/promociones/importar"&&
+  response.request().method()==="POST",{timeout:12000});
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
- await page.waitForFunction(()=>document.querySelector('button[aria-busy="true"]')===null,null,{timeout:12000});
+ await secondImport;
  assert.equal(postCount,2);
  assert.equal(stored.length,3);
  assert.equal(stored[1].targets["1"],77,"La reimportación no sobreescribe cambios existentes");

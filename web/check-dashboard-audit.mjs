@@ -109,11 +109,11 @@ try{
  const beforeSales=by("/api/analytics/ventas/totales").length;
  const beforePurchases=by("/api/analytics/dashboard/compras").length;
  await page.locator(".fm-unified-filters select").first().selectOption("60");
- await page.getByText(/Cargando datos · \\d+ %/).first().waitFor({timeout:9000});
+ await page.getByText(/Cargando datos · \d+ %/).first().waitFor({timeout:9000});
  const loadingTexts=await page.locator(".fm-demo-kpi").allTextContents();
- assert.ok(loadingTexts.some(t=>/Cargando datos · \\d+ %/.test(t)),
+ assert.ok(loadingTexts.some(t=>/Cargando datos · \d+ %/.test(t)),
   "En históricos debe aparecer un porcentaje legible");
- assert.ok(!loadingTexts.some(t=>/Cargando \\d+\\/\\d+ (bloques|períodos)/.test(t)),
+ assert.ok(!loadingTexts.some(t=>/Cargando \d+\/\d+ (bloques|períodos)/.test(t)),
   "No enseñar términos ni cantidades internas de procesamiento");
  await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===10&&
   [...document.querySelectorAll(".fm-demo-kpi")].every(card=>card.getAttribute("aria-busy")==="false"),

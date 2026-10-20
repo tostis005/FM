@@ -107,9 +107,9 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
        (id,documento,fuente,creado_por,actualizado_por)
        VALUES($1,$2::jsonb,$3,$4,$4)`,[promo.id,JSON.stringify(promo),
       String(promo.source||"").slice(0,200),req.user.email]);
-    await db.query("COMMIT");
-    const {rows:all}=await pool.query(`SELECT documento FROM "${schema}".fm_promociones
+    const {rows:all}=await db.query(`SELECT documento FROM "${schema}".fm_promociones
       ORDER BY actualizado_en DESC LIMIT 2000`);
+    await db.query("COMMIT");
     return res.json({imported:additions.length,skipped,promotions:all.map(r=>r.documento)});
    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e)}
    finally{db?.release()}

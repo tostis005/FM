@@ -38,7 +38,7 @@ import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, replaceStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -352,6 +352,8 @@ function App(){
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [toast,setToast]=useState("");
  const [deletingPromoId,setDeletingPromoId]=useState(null);
+ const [selectedPromotionIds,setSelectedPromotionIds]=useState([]);
+ const [deletingSelected,setDeletingSelected]=useState(false);
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
  const [adminOpen,setAdminOpen]=useState(()=>ADMIN_IDS.has(pageFromUrl()));
@@ -637,7 +639,7 @@ function App(){
  }
  async function removePromotion(p){
   if(!["administrador","superadministrador"].includes(tenantContext?.role))return;
-  if(deletingPromoId)return;
+  if(deletingPromoId||deletingSelected)return;
   const confirmed=window.confirm(
    '¿Eliminar definitivamente la promoción "'+p.name+'"?\n\n'+
    'Se borrará de Farmetrica para todas las personas de este cliente. No se puede deshacer.'
@@ -649,12 +651,32 @@ function App(){
    await deleteStoredPromotion(p.id);
    setData(prev=>({...prev,promos:prev.promos.filter(x=>String(x.id)!==String(p.id))}));
    setReportSelectedIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
+   setSelectedPromotionIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
    setExpandedCampaignIds(prev=>prev.filter(id=>String(id)!==String(p.id)));
    if(String(promoForm.id)===String(p.id))setEditingPromo(null);
    setToast("Promoción eliminada de Farmetrica");
   }catch(err){
    setToast("No se pudo eliminar la promoción: "+err.message);
   }finally{setDeletingPromoId(null);}
+ }
+ async function removeSelectedPromotions(){
+  if(!canManagePromotions||deletingSelected||deletingPromoId)return;
+  const ids=[...new Set(selectedPromotionIds)].filter(id=>data.promos.some(p=>String(p.id)===String(id)));
+  if(!ids.length)return;
+  if(ids.length>500)return setToast("Selecciona un máximo de 500 promociones por eliminación.");
+  if(!window.confirm("¿Eliminar definitivamente "+ids.length+" promociones seleccionadas?\n\nNo se puede deshacer."))return;
+  setDeletingSelected(true);
+  try{
+   const result=await deleteStoredPromotions(ids);
+   const removed=new Set((result.deletedIds||[]).map(String));
+   setData(prev=>({...prev,promos:prev.promos.filter(p=>!removed.has(String(p.id)))}));
+   setReportSelectedIds(prev=>prev.filter(id=>!removed.has(String(id))));
+   setExpandedCampaignIds(prev=>prev.filter(id=>!removed.has(String(id))));
+   setSelectedPromotionIds(prev=>prev.filter(id=>!removed.has(String(id))));
+   if(removed.has(String(promoForm.id)))setEditingPromo(null);
+   setToast(removed.size+" promociones eliminadas");
+  }catch(err){setToast("No se pudieron eliminar las promociones: "+err.message)}
+  finally{setDeletingSelected(false)}
  }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
@@ -672,37 +694,23 @@ function App(){
     setToast("Incremento aplicado. Puedes retocar cada objetivo antes de guardar");
   }
   async function importPromotionFile(event){
-    const file=event.target.files?.[0];if(!file)return;
-    setImportBusy(true);
-    try{
-      if(!["administrador","superadministrador"].includes(tenantContext?.role))
-        throw Error("Solo un administrador puede sustituir las promociones del cliente");
-      const campaigns=await readPromotionExcel(file);
-      const timeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
-        Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const now=new Date();
-      const newPromos=campaigns.map(p=>({...p,
-        status:importedPromotionStatus(p,now,timeZone)}));
-      const names=tenantContext?.client?.name||"este cliente";
-      if(!window.confirm("¿Sustituir TODAS las promociones existentes de "+
-        names+" por las "+newPromos.length+" promociones de la primera pestaña del Excel?\n\n"+
-        "Las promociones anteriores quedarán guardadas en el historial de auditoría. "+
-        "Esta operación reemplaza el catálogo completo, no añade filas a lo existente."))return;
-      // Atomicidad: si la importación al servidor falla, las promociones
-      // anteriores permanecen intactas tanto en BD como en la vista.
-      const result=await replaceStoredPromotions(newPromos);
-      setData(prev=>({...prev,promos:newPromos}));
-      setStatusFilter("Todos");
-      setEditingPromo(null);
-      setReportSelectedIds(newPromos.map(p=>p.id));
-      setExpandedCampaignIds(newPromos.filter(p=>p.status==="Activa").slice(0,2).map(p=>p.id));
-      const countStatus=status=>newPromos.filter(p=>p.status===status).length;
-      setToast(result.imported+" promociones importadas; "+result.removed+
-        " anteriores sustituidas. "+countStatus("Activa")+" activas, "+
-        countStatus("Finalizada")+" archivadas y "+
-        countStatus("Borrador")+" borradores.");
-    }catch(error){setToast(error.message||"No se pudo importar el Excel");}
-    finally{setImportBusy(false);event.target.value="";}
+   const file=event.target.files?.[0];if(!file)return;
+   setImportBusy(true);
+   try{
+    if(!canManagePromotions)throw Error("No tienes permiso para importar promociones");
+    const campaigns=await readPromotionExcel(file);
+    const timeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
+      Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now=new Date();
+    const newPromos=campaigns.map(p=>({...p,
+      status:importedPromotionStatus(p,now,timeZone)}));
+    const result=await importStoredPromotions(newPromos);
+    if(!Array.isArray(result.promotions))throw Error("El servidor no devolvió el catálogo actualizado");
+    setData(prev=>({...prev,promos:result.promotions}));
+    setReportSelectedIds(prev=>[...new Set([...prev,...result.promotions.map(p=>p.id)])]);
+    // Sin avisos previos, sin borrar ni sobrescribir campañas existentes.
+   }catch(error){setToast(error.message||"No se pudo importar el Excel")}
+   finally{setImportBusy(false);event.target.value="";}
   }
   function exportLocalPromos(){
     const key="fm_promos_respaldo_v1:"+tenantContext?.client?.slug+":"+String(sessionUser?.email||"").toLowerCase();

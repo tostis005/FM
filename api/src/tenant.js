@@ -11,6 +11,7 @@ import {decoratePharmacy} from "./pharmacyCodes.js";
 import {hashInternalPassword,validInternalPassword} from "./internalPassword.js";
 import {normalizeDomain,emailDomain,validClientDomain,validInternalEmail} from "./accessPolicy.js";
 import {sourceSupplierRows} from "./supplierReporting.js";
+import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   async function resolve(req) {
     const slug = String(req.get("x-farmetrica-cliente") || req.query.cliente ||
@@ -52,6 +53,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   const requireTenantAdmin=()=>middleware(ctx=>["administrador","superadministrador"].includes(ctx.role));
    const requireTenantManager=()=>middleware(ctx=>["gestor","administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
+  setupOutgoingTransfers(app,pool,{requireTenantAdmin});
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
   app.put("/api/tenant/configuracion-ventas",...requireTenantAdmin(),async(req,res,next)=>{
@@ -309,6 +311,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
         'UPDATE farmetrica.proveedores_maestro SET codigo_origen=$3,nombre=$4,tipo=$5,activo=$6,cooperativa=$7,ignorar_informes=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 RETURNING '+supplierSelect,
         [req.params.id,req.context.client.slug,code,name,type,active,coop,ignored]);
       if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
+      await pool.query("UPDATE farmetrica.ventas_analitica_estado SET calculado_en=to_timestamp(0) WHERE cliente_slug=$1",[req.context.client.slug]);
       res.json(rows[0]);
     }catch(e){next(e)}
   });

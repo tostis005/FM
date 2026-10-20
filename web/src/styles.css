@@ -812,3 +812,23 @@ html,body{overflow-x:clip}
 /* Borrado explícito de promociones (solo administración). */
 .campaign-row-actions .fm-delete-promo{color:#b05b59;flex:0 0 30px;min-height:30px}
 .campaign-row-actions .fm-delete-promo:hover:not(:disabled){color:#a52d33;background:#fff0f0}
+
+
+/* Altura y posición coherente de indicadores en las pantallas generales.
+   El subtítulo siempre tiene su propia fila, incluso cuando está vacío. */
+.kpi:has(.kpi-content){align-items:flex-start}
+.kpi .kpi-content{
+ flex:1;min-width:0;display:grid;
+ grid-template-rows:minmax(18px,auto) minmax(34px,auto) minmax(19px,auto);
+ align-content:start;align-items:start;gap:5px;
+}
+.kpi .kpi-content .kpi-value{margin-top:0;min-height:34px}
+.kpi .kpi-content .kpi-caption{
+ min-height:19px;margin:0;font-size:11px;line-height:1.45;
+}
+.fm-traffic-kpis>div,.fm-sync-metrics>div{
+ display:grid;grid-template-rows:minmax(30px,auto) minmax(34px,auto) minmax(18px,auto);
+ align-content:start;align-items:start;gap:5px;
+}
+.fm-traffic-kpis>div>span,.fm-sync-metrics>div>span{margin:0}
+.fm-traffic-kpis>div>strong,.fm-sync-metrics>div>strong{align-self:start;min-height:30px}

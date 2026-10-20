@@ -209,6 +209,104 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       return issueSession(res,user);
     }catch(e){next(e)}
   });
+  // Recuperación de contraseñas externas: token opaco, 30 min, un solo uso.
+  // No revela si existe una dirección de correo registrada.
+  const genericResetMessage="Si existe una cuenta externa activa, recibirás un enlace de recuperación.";
+  const resetRate=new Map();
+  app.post("/api/auth/forgot-password",async(req,res,next)=>{
+    const email=emailOf(req.body?.email);
+    if(!EMAIL.test(email)||email.length>254)
+     return res.status(400).json({error:"Correo no válido"});
+    if(!mailer||secret.length<32||!process.env.PUBLIC_APP_ORIGIN)
+     return res.status(503).json({error:"Recuperación no disponible hasta configurar el correo SMTP"});
+    const now=Date.now(),ip=String(req.get("x-real-ip")||req.ip||"unknown").slice(0,80);
+    for(const [k,until] of resetRate)if(until<now)resetRate.delete(k);
+    const keys=["ip:"+ip,"email:"+email];
+    if(keys.some(k=>resetRate.get(k)>now))return res.json({message:genericResetMessage});
+    for(const k of keys)resetRate.set(k,now+60_000);
+    try{
+      const {rows}=await pool.query(`
+       SELECT 1 FROM public.acceso_cuentas a
+       JOIN farmetrica.usuario_clientes uc ON uc.email=a.email
+       JOIN farmetrica.credenciales_locales cr ON cr.email=a.email AND cr.activo=true
+       WHERE a.email=$1 AND a.activo=true AND uc.activo=true AND uc.metodo_acceso='interno'
+       LIMIT 1`,[email]);
+      if(rows.length){
+       const token=randomBytes(32).toString("hex");
+       const digest=createHmac("sha256",secret).update("reset:"+email+":"+token).digest("hex");
+       const saved=await pool.query(`
+        INSERT INTO farmetrica.restablecimientos_contrasena(email,token_hash,caduca_en)
+        VALUES($1,$2,now()+interval '30 minutes')
+        ON CONFLICT(email) DO UPDATE
+        SET token_hash=EXCLUDED.token_hash,caduca_en=EXCLUDED.caduca_en,solicitado_en=now()
+        WHERE farmetrica.restablecimientos_contrasena.solicitado_en<now()-interval '60 seconds'
+        RETURNING email`,[email,digest]);
+       if(saved.rows.length){
+        const url=new URL("/login",process.env.PUBLIC_APP_ORIGIN);
+        url.searchParams.set("reset","1");url.searchParams.set("email",email);
+        url.searchParams.set("token",token);
+        try{await mailer.sendMail({from:process.env.SMTP_FROM,to:email,
+         subject:"Recuperación de contraseña de Farmetrica",
+         text:"Has solicitado restablecer tu contraseña. Este enlace caduca en 30 minutos y solo se puede utilizar una vez. Si no lo has solicitado, ignora este mensaje.\\n\\n"+url.toString()
+        })}catch(error){
+         await pool.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1 AND token_hash=$2",
+          [email,digest]);throw error;
+        }
+       }
+      }
+      return res.json({message:genericResetMessage});
+    }catch(e){next(e)}
+  });
+  app.post("/api/auth/reset-password",async(req,res,next)=>{
+    const email=emailOf(req.body?.email),token=req.body?.token,password=req.body?.password;
+    if(!EMAIL.test(email)||typeof token!=="string"||!/^[a-f0-9]{64}$/.test(token)||
+       !validInternalPassword(password))
+     return res.status(400).json({error:"Enlace o contraseña incorrectos. Utiliza al menos 12 caracteres."});
+    const digest=createHmac("sha256",secret).update("reset:"+email+":"+token).digest("hex");
+    const db=await pool.connect();
+    try{
+     await db.query("BEGIN");
+     const {rows}=await db.query(`
+      SELECT token_hash FROM farmetrica.restablecimientos_contrasena
+      WHERE email=$1 AND caduca_en>now() FOR UPDATE`,[email]);
+     if(!rows.length||rows[0].token_hash.length!==digest.length||
+       !timingSafeEqual(Buffer.from(rows[0].token_hash),Buffer.from(digest))){
+      await db.query("ROLLBACK");
+      return res.status(400).json({error:"El enlace ya no es válido o ha caducado"});
+     }
+     const hash=await hashInternalPassword(password);
+     const updated=await db.query(`
+      UPDATE farmetrica.credenciales_locales cr
+      SET password_hash=$2,actualizado_en=now(),activo=true
+      WHERE cr.email=$1 AND EXISTS(SELECT 1 FROM farmetrica.usuario_clientes uc
+       WHERE uc.email=cr.email AND uc.activo=true AND uc.metodo_acceso='interno')
+      AND EXISTS(SELECT 1 FROM public.acceso_cuentas a
+       WHERE a.email=cr.email AND a.activo=true)`,[email,hash]);
+     if(!updated.rowCount){await db.query("ROLLBACK");
+      return res.status(400).json({error:"Cuenta externa no disponible"});}
+     await db.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1",[email]);
+     await db.query("COMMIT");
+     return res.json({ok:true,message:"Contraseña actualizada. Ya puedes entrar."});
+    }catch(e){await db.query("ROLLBACK");next(e)}
+    finally{db.release()}
+  });
+  app.post("/api/auth/change-password",requireUser,async(req,res,next)=>{
+    if(req.user.source!=="interno")return res.status(403).json({error:"Las cuentas Google gestionan su contraseña en Google"});
+    const current=req.body?.currentPassword,newPassword=req.body?.newPassword;
+    if(typeof current!=="string"||!validInternalPassword(newPassword))
+     return res.status(400).json({error:"La nueva contraseña debe tener entre 12 y 128 caracteres"});
+    try{
+     const {rows}=await pool.query(
+      "SELECT password_hash FROM farmetrica.credenciales_locales WHERE email=$1 AND activo=true",
+      [req.user.email]);
+     if(!rows.length||!await verifyInternalPassword(current,rows[0].password_hash))
+      return res.status(403).json({error:"La contraseña actual es incorrecta"});
+     const hash=await hashInternalPassword(newPassword);
+     await pool.query("UPDATE farmetrica.credenciales_locales SET password_hash=$2,actualizado_en=now() WHERE email=$1",
+      [req.user.email,hash]);
+     res.json({ok:true});
+    }catch(e){next(e)}
+  });
   app.get("/api/auth/me", async (req, res, next) => {
     try { res.json({ user: await sessionUser(req) }); } catch (e) { next(e); }
   });

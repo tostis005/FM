@@ -64,7 +64,23 @@ export function mergeHistoricalSummaries(parts,kind,{from,to}){
  if(!parts.length||!["sales","purchases"].includes(kind))throw Error("Origen incorrecto");
  if(parts.some(p=>!p||!Array.isArray(p.monthly)||!p.kpis))
   throw Error("No se pudieron consultar todos los tramos históricos");
- const months=[...parts.flatMap(part=>part.monthly)].sort((a,b)=>a.month.localeCompare(b.month));
+ // Al reintentar un año por semestres, el corte puede caer a mitad de mes.
+ // Unir la misma mensualidad antes de dibujar la evolución o calcular el total.
+ const grouped=new Map();
+ for(const row of parts.flatMap(part=>part.monthly)){
+  if(!row?.month)continue;
+  const rows=grouped.get(row.month)||[];
+  rows.push(row);grouped.set(row.month,rows);
+ }
+ const months=[...grouped].sort(([a],[b])=>a.localeCompare(b)).map(([month,rows])=>{
+  const out={...rows[0],month};
+  for(const key of ["ventas","compras","unidades","recepciones"]){
+   if(rows.some(r=>r[key]!=null))
+    out[key]=rows.reduce((n,r)=>n+Number(r[key]||0),0);
+   else if(rows.some(r=>Object.hasOwn(r,key)))out[key]=null;
+  }
+  return out;
+ });
  if(kind==="purchases"){
   const complete=parts.every(p=>p.available!==false);
   return {from,to,available:complete,monthly:months,sourceRows:sum(parts,"sourceRows"),

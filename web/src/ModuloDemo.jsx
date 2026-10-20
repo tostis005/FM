@@ -729,6 +729,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="compras"&&purchaseSummaryError&&<p role="alert" className="fm-inline-status">Los indicadores rápidos no se pudieron cargar: {purchaseSummaryError}</p>}
    {module==="compras"&&receiptError&&
     <p role="alert" className="fm-inline-status">No se pudieron cargar las recepciones.</p>}
+   {module==="compras"&&fastPurchase?.hasAmounts===false&&Number(fastPurchase.sourceRows)>0&&
+     <div className="fm-preview-data-hint" role="status">
+       <span className="fm-preview-badge">Importes incompletos</span>
+       <span>Hay recepciones sin importe registrado. No mostramos sumas parciales como compras totales.
+        {fastPurchase.amountCoveragePct!=null&&" Cobertura: "+percentage(fastPurchase.amountCoveragePct)+"."}</span>
+     </div>}
    {module==="compras"&&(receiptMode||fastPurchase?.hasArticleLines===false)&&
     <div className="fm-preview-data-hint" role="status">
      <span className="fm-preview-badge">Datos parciales</span>

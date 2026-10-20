@@ -538,7 +538,7 @@ function App(){
  const reportTargets=Object.entries(combinedReport.targets);
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
- const reportCNs=[...new Set(reportSelected.flatMap(p=>p.cns||[]))];
+ const reportCNs=[...new Set(reportFilteredCampaigns.flatMap(p=>p.cns||[]))];
  const searchedCNs=reportCNs.filter(cn=>(cn+" "+(reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"")).toLowerCase().includes(cnSearch.toLowerCase()));
  const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
@@ -1041,7 +1041,7 @@ function App(){
       label="campañas" onPageChange={setReportPage}
       onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
-  <DetalleVentas promotions={reportSelected} pharmacies={pharmacies} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
+  <DetalleVentas promotions={reportFilteredCampaigns} pharmacies={pharmacies} pharmacyScopeIds={effectivePharmacyIds} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>

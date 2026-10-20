@@ -56,12 +56,12 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       "SELECT email,nombre,rol,farmacias,activo FROM public.acceso_cuentas WHERE email=$1",[email]);
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
-      "SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
+      `SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
          uc.activo AS active,uc.metodo_acceso AS login_method,
          EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
            d.cliente_slug=uc.cliente_slug AND d.activo=true
            AND d.dominio=split_part(uc.email,'@',2)) AS domain_allowed
-         FROM farmetrica.usuario_clientes uc WHERE uc.email=$1",[email]);
+         FROM farmetrica.usuario_clientes uc WHERE uc.email=$1`,[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
     const active=memberships.filter(m=>m.active&&m.login_method===loginMethod&&

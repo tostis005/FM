@@ -24,11 +24,11 @@ export default function AccessAdmin({onAuthenticated}){
   <section className="card fm-manage-client">
    <div className="section-heading"><h2><ShieldCheck size={19}/> Acceso por cliente</h2></div>
    <p>Los dominios corporativos se autorizan desde Administración → Clientes.
-    La configuración de usuarios internos, externos, roles y farmacias se realiza
-    desde Configuración → Usuarios dentro de cada cliente.</p>
-   <p>Google verifica la identidad y el dominio de Workspace; cada permiso
-    efectivo se valida en el servidor. Las cuentas externas utilizan contraseñas
-    seguras y pueden recuperarlas desde la pantalla de acceso.</p>
+    La configuración de métodos de acceso (Google o correo y contraseña),
+    roles y farmacias se realiza desde Configuración → Usuarios de cada cliente.</p>
+   <p>Las cuentas Gmail personales pueden acceder con Google cuando están autorizadas
+    individualmente. Los dominios Workspace autorizados conservan su acceso corporativo.
+    Las cuentas con contraseña reciben una invitación segura para activarse.</p>
    <div className="fm-manage-domain-list">{clients.map(client=><div
     className="fm-manage-domain-item" key={client.slug}>
     <Building2 size={18}/><strong>{client.name}</strong>

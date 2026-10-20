@@ -738,7 +738,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     fastFailed&&isDashboard&&isSaleMetric?"Error al consultar ventas":
     purchaseSummaryError&&isDashboard&&!isSaleMetric?"Error al consultar compras":
     isMargin&&realKpis[c.key]==null?
-     "Sin cobertura completa del coste histórico de los artículos vendidos":
+     fastSales?.kpis?.coberturaCostes!=null?
+      "Cobertura del coste histórico: "+percentage(fastSales.kpis.coberturaCostes)+
+      ". No se muestra un margen parcial como si fuese total.":
+      "No hay costes históricos suficientes para calcular un margen fiable":
     "";
    const progress=isDashboard?dashboardProgress(c.key):
     module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):

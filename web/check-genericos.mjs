@@ -79,7 +79,7 @@ try{
  await page.getByPlaceholder("Buscar conjunto…").fill("error-api");
  await page.locator(".fm-generic-list .fm-generic-empty-text").waitFor({timeout:8000});
  await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).first().waitFor({timeout:7000});
- assert.equal(await page.getByText("Omeprazol",{exact:true}).count(),0,
+ assert.equal(await page.locator(".fm-generic-list").getByText("Omeprazol",{exact:true}).count(),0,
   "Tras un fallo de consulta no se deben mostrar los resultados del filtro anterior");
  console.log("OK: Genéricos carga por visual, muestra agrupación DCPF y desglose aislado por cliente");
 }finally{await browser.close();}

@@ -59,7 +59,7 @@ try{
  await page.getByRole("button",{name:"Nueva promoción"}).click();
  const modal=page.locator(".drawer").filter({hasText:"Nueva promoción"});
  await modal.getByLabel("Nombre de promoción").fill("Campaña de verificación");
- await modal.locator(".pharmacy-picker input[type=checkbox]").first().check();
+ await modal.locator(".pharmacy-picker .pharmacy-choice").first().click();
  await modal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).fill("10");
  await modal.getByRole("button",{name:"Crear promoción"}).click();
  await modal.getByRole("alert").waitFor();

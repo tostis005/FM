@@ -92,7 +92,7 @@
 /* Indicadores de genéricos: etiqueta, cifra y explicación con filas estables. */
 .fm-generics .fm-generic-metric,.fm-generic-metric{
  display:grid;grid-template-columns:minmax(0,1fr);
- grid-template-rows:minmax(32px,auto) minmax(35px,auto) minmax(20px,auto);
+ grid-template-rows:36px minmax(35px,auto) minmax(20px,auto);
  justify-content:stretch;align-content:start;align-items:start;gap:6px;
  min-height:145px;
 }

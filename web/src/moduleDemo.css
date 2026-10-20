@@ -280,3 +280,11 @@
 .fm-internal-email>span{font-size:19px;font-weight:800;padding:0 0 13px;color:#1d704f}
 @media(max-width:560px){.fm-internal-email{gap:7px}.fm-internal-email>label{flex-basis:100%}
 .fm-internal-email>span{padding:0}}
+
+.fm-manage-transfers{margin-top:20px;display:grid;gap:11px}
+.fm-manage-transfers h2{font-size:17px;margin:0}
+.fm-manage-transfers h3{font-size:14px;margin:12px 0 0}
+.fm-manage-transfers p{line-height:1.65;font-size:13px}
+.fm-manage-transfer-preview{border-top:1px solid #d9e9dc;padding-top:14px;display:grid;gap:12px}
+.fm-manage-transfer-preview .fm-supplier-check-field{display:flex;gap:10px;align-items:flex-start;line-height:1.5}
+.fm-manage-transfer-preview .fm-supplier-check-field input{flex:none;margin-top:4px}

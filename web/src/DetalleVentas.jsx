@@ -28,7 +28,7 @@ const TICKET_COLUMNS=[
   ["discountPercent","% Dto.",v=>v.gross==null||v.lineDiscount==null?"—":percentage(Number(v.gross)?Math.abs(Number(v.lineDiscount)/Number(v.gross))*100:0)],
 ];
 
-export default function DetalleVentas({promotions,pharmacies,connected,loading=false}){
+export default function DetalleVentas({promotions,pharmacies,connected,loading=false,pharmacyScopeIds=null}){
   const [promoId,setPromoId]=useState("");
   const [draft,setDraft]=useState(INITIAL);
   const [applied,setApplied]=useState(INITIAL);
@@ -45,6 +45,12 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     },350);
     return()=>clearTimeout(timeout);
   },[JSON.stringify(columnDraft)]);
+  const scopeIds=(pharmacyScopeIds??pharmacies.map(p=>p.id)).map(String);
+  const scopeKey=scopeIds.join(",");
+  const columnPharmacies=Array.isArray(columnFilters.pharmacy)?columnFilters.pharmacy:[];
+  const selectedPharmacies=columnPharmacies.length?
+   scopeIds.filter(id=>columnPharmacies.includes(id)):scopeIds;
+  const effectiveColumnFilters={...columnFilters,pharmacy:selectedPharmacies};
   const filterSignature=JSON.stringify(columnFilters);
   const toggleSort=key=>{
     setSort(prev=>prev.key!==key?{key,direction:"asc"}:
@@ -62,16 +68,18 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     cns:promo.cns||[],start:applied.start||promo.start,end:applied.end||promo.end,
 
   }:null;
-  const eligible=Boolean(connected&&filters?.cns.length&&validDate(filters.start)&&validDate(filters.end)&&filters.start<=filters.end);
+  const eligible=Boolean(connected&&filters?.cns.length&&scopeIds.length&&
+    selectedPharmacies.length&&validDate(filters.start)&&validDate(filters.end)&&filters.start<=filters.end);
+  useEffect(()=>{setPage(0)},[scopeKey]);
   useEffect(()=>{
     if(!eligible){setResult({rows:[],total:0,status:"idle",error:""});return;}
     let cancelled=false;
     setResult(prev=>({...prev,status:"loading"}));
-    loadTicketLines({...filters,columnFilters,orderBy:sort.key,orderDir:sort.direction,offset:page*pageSize,limit:pageSize})
+    loadTicketLines({...filters,columnFilters:effectiveColumnFilters,orderBy:sort.key,orderDir:sort.direction,offset:page*pageSize,limit:pageSize})
       .then(x=>{if(!cancelled)setResult({rows:x.rows||[],total:x.total||0,status:"ready",error:""});})
       .catch(err=>{if(!cancelled)setResult({rows:[],total:0,status:"error",error:err.message});});
     return()=>{cancelled=true;};
-  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,applied.start,applied.end,(promo?.cns||[]).join(",")]);
+  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,scopeKey,applied.start,applied.end,(promo?.cns||[]).join(",")]);
   function applyFilters(e){
     e.preventDefault();setApplied({...draft});setPage(0);
   }
@@ -79,7 +87,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
   if(loading)return <section className="card lab-detail-panel"><div className="section-heading"><h2>Consulta de tickets</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
   return <section className="card lab-detail-panel">
     <div className="section-heading"><div><h2>Consulta de tickets</h2></div></div>
-    {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas una sesión de administrador y la conexión a PostgreSQL.</div>}
+    {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas conexión con PostgreSQL y permiso de acceso a promociones.</div>}
     <form className="lab-detail-filters" onSubmit={applyFilters}>
       <label>Promoción
         <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({})}}>
@@ -108,7 +116,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
         <tr className="smart-filter-row">{TICKET_COLUMNS.map(([key,label])=><th key={key}>
           {key==="pharmacy"||key==="cn"?
             <MultiSelectFilter label={label}
-              options={key==="pharmacy"?pharmacies.map(f=>({value:String(f.id),label:f.name})):
+              options={key==="pharmacy"?pharmacies.filter(f=>scopeIds.includes(String(f.id))).map(f=>({value:String(f.id),label:f.name})):
                 (promo?.cns||[]).map(cn=>({value:cn,label:cn}))}
               value={Array.isArray(columnFilters[key])?columnFilters[key]:[]}
               onChange={values=>{setColumnFilters(prev=>({...prev,[key]:values}));setPage(0)}}/>:

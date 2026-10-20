@@ -65,7 +65,7 @@ function ClientDomains({client}){
  async function refresh(){
   const [ds,ps]=await Promise.all([api(endpoint),
    api("/api/tenant/farmacias",{headers:{"X-Farmetrica-Cliente":client}})]);
-  setDomains(ds);setPharmacies(ps);
+  setDomains(Array.isArray(ds)?ds:[]);setPharmacies(Array.isArray(ps)?ps:[]);
  }
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[client]);
  async function save(e){
@@ -182,7 +182,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
  async function refresh(){setLoading(true);
   try{const [people,allowed]=await Promise.all([
     api("/api/tenant/usuarios",{headers}),api("/api/tenant/dominios",{headers})]);
-   setUsers(people);setDomains(allowed.map(x=>x.domain));}
+   setUsers(Array.isArray(people)?people:[]);setDomains(Array.isArray(allowed)?allowed.map(x=>x.domain):[]);}
   finally{setLoading(false)}
  }
  useEffect(()=>{refresh().catch(e=>setFeedback(e.message))},[client]);

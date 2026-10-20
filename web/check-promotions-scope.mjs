@@ -41,7 +41,13 @@ try{
  for(const request of ticketRequests)
   assert.deepEqual(request.columnFilters.pharmacy,["1"],
    "El filtro de farmacia del consolidado debe aplicarse a los tickets");
- const promoOptions=await page.locator(".lab-detail-filters select").first().locator("option").allTextContents();
+ const selector=page.locator(".lab-detail-filters select").first();
+ await selector.waitFor({state:"visible",timeout:18000});
+ const promoOptions=await selector.locator("option").allTextContents();
+ if(!promoOptions.length)console.log("Auditoría seguimiento:",JSON.stringify({
+  url:page.url(),text:(await page.locator(".main-content").innerText()).slice(0,2000),
+  ticketRequests:ticketRequests.length
+ }));
  assert.deepEqual(promoOptions,["Campaña Centro y Norte","Campaña coincidente Centro"],
   "No incluir campañas que pertenecen solo a otras farmacias");
  await page.getByText(/Una misma venta puede atribuirse a varias promociones/).waitFor();

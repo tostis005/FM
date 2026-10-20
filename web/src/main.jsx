@@ -354,6 +354,7 @@ function App(){
  const [deletingPromoId,setDeletingPromoId]=useState(null);
  const [selectedPromotionIds,setSelectedPromotionIds]=useState([]);
  const [deletingSelected,setDeletingSelected]=useState(false);
+ useEffect(()=>setSelectedPromotionIds([]),[tenantContext?.client?.slug]);
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
  const [adminOpen,setAdminOpen]=useState(()=>ADMIN_IDS.has(pageFromUrl()));

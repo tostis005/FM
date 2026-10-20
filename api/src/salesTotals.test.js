@@ -1,18 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {setupSalesTotals,buildSalesTotalsSql} from "./salesTotals.js";
-function make(){
+function make({hasHistoricalCost=true}={}){
  const routes={};
  const app={get(path,...h){routes[path]=h.at(-1)}};
  const calls=[];
  const pool={async query(sql,params){
+  if(sql.includes("information_schema.columns"))
+   return {rows:hasHistoricalCost?[{column_name:"coste_historico"}]:[]};
   calls.push({sql,params});
   const max=Math.max(0,...[...sql.matchAll(/\$(\d+)/g)].map(x=>+x[1]));
   assert.equal(max,params.length);
   if(sql.includes("sum(sum(v.importe)) OVER()"))
    return {rows:[{month:"2026-10",ventas:220,unidades:9,
-     total_ventas:220,total_unidades:9,total_margen:30,
-     total_ventas_con_coste:200,total_lineas_con_coste:9,total_lineas_producto:9}]};
+     total_ventas:220,total_unidades:9,total_margen:hasHistoricalCost?30:0,
+     total_ventas_con_coste:hasHistoricalCost?200:0,
+     total_lineas_con_coste:hasHistoricalCost?9:0,total_lineas_producto:9}]};
   return {rows:[{tipo:"month",month:"2026-10",bucket:null,ventas:220,unidades:9},
    {tipo:"total",month:null,bucket:null,ventas:220,unidades:9}]};
  }};
@@ -101,5 +104,22 @@ test("importe de líneas sin CN/ID se incluye en caja pero nunca infla unidades"
   assert.match(sql,/v\.importe/);
   assert.match(sql,/nullif\(btrim\(v\.articulo_id\),''\) IS NOT NULL/);
   assert.match(sql,/unidades/);
+ }
+});
+
+test("sin columna coste_historico se siguen mostrando ventas y unidades sin inventar margen",async()=>{
+ const {call,calls}=make({hasHistoricalCost:false});
+ const {status,data}=await call();
+ assert.equal(status,200);
+ assert.equal(data.kpis.ventas,220);
+ assert.equal(data.kpis.unidades,9);
+ assert.equal(data.kpis.margen,null);
+ assert.equal(data.kpis.margenPct,null);
+ assert.equal(data.kpis.coberturaCostes,0);
+ assert.equal(calls.length,1);
+ assert.doesNotMatch(calls[0].sql,/v\.coste_historico/);
+ assert.match(calls[0].sql,/NULL::numeric/);
+ for(const granularity of ["hour","day","month"]){
+  assert.doesNotMatch(buildSalesTotalsSql("ampedia",granularity,false),/v\.coste_historico/);
  }
 });

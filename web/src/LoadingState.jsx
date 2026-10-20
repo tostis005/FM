@@ -6,10 +6,10 @@ import "./loadingState.css";
 export function StartupScreen({error=""}){
  const failed=Boolean(error);
  return <main className="fm-startup-screen"
-  aria-label={failed?"Error al iniciar Farmétrica":"Iniciando Farmétrica"}>
+  aria-label={failed?"Error al iniciar Farmetrica":"Iniciando Farmetrica"}>
   <div className="fm-startup-body" role={failed?"alert":"status"} aria-live={failed?"assertive":"polite"}>
    <span className="fm-startup-mark"><img src="/brand-logo.webp?v=4" alt=""/></span>
-   <span className="fm-startup-name">FARMÉTRICA</span>
+   <span className="fm-startup-name">FARMETRICA</span>
    <h1 className="fm-startup-title">{failed?"No hemos podido iniciar tu sesión":"Preparando tu espacio"}</h1>
    <p className="fm-startup-description">
     {failed?"Comprueba la conexión y vuelve a intentarlo. "+error:

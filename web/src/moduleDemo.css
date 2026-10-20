@@ -298,3 +298,26 @@
  .fm-promotions-bulk-actions{justify-content:flex-start;width:100%}
  .fm-promotions-bulk-actions .btn{font-size:12px}
 }
+
+
+/* KPI homogéneos para Inicio y los módulos analíticos.
+   El valor ocupa siempre la segunda fila, y el espacio de explicación se
+   reserva aunque no exista texto. No repartir el espacio con justify-between. */
+.fm-demo-v2 .fm-demo-kpi{
+ display:grid;
+ grid-template-columns:minmax(0,1fr);
+ grid-template-rows:minmax(30px,auto) minmax(36px,auto) minmax(34px,auto);
+ align-content:start;justify-content:stretch;align-items:start;
+ justify-items:stretch;gap:8px;min-height:154px;
+}
+.fm-demo-v2 .fm-demo-kpi>span:first-child{grid-row:1;align-self:start}
+.fm-demo-v2 .fm-demo-kpi>strong,
+.fm-demo-v2 .fm-demo-kpi>.fm-kpi-spinner{
+ grid-row:2;align-self:start;margin:0;min-height:34px;
+}
+.fm-demo-v2 .fm-demo-kpi>.fm-kpi-caption{
+ grid-row:3;display:block;align-self:start;
+ min-height:34px;margin:0;color:#789488;font-size:11px;
+ line-height:1.45;font-weight:500;
+}
+.fm-demo-v2 .fm-demo-kpi>.fm-kpi-arrow{position:absolute;top:17px;right:14px}

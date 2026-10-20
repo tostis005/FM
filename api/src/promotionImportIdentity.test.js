@@ -34,3 +34,15 @@ test("diferentes descripciones distinguen campañas que comparten laboratorio, m
  assert.notEqual(promotionImportIdentity(promo),promotionImportIdentity(x));
  assert.equal(planPromotionImport([promo],[x]).additions.length,1);
 });
+test("liquidación FIN EXISTENCIAS se importa sin fecha final y un duplicado se omite",()=>{
+ const liquidation={...promo,id:"LIQ",end:"",range:"CAUDALIE RESVERATROL",originalOffer:"0.2"};
+ assert.ok(promotionImportIdentity(liquidation));
+ const first=planPromotionImport([], [liquidation]);
+ assert.equal(first.additions.length,1);
+ const second=planPromotionImport(first.additions,[{...liquidation,id:"LIQ-OTHER"}]);
+ assert.deepEqual(second,{additions:[],skipped:1});
+});
+test("fecha final distinta distingue una campaña abierta de una cerrada",()=>{
+ const opened={...promo,end:""};
+ assert.notEqual(promotionImportIdentity(opened),promotionImportIdentity(promo));
+});

@@ -62,6 +62,7 @@ jobs:
           node --test api/src/salesTotals.test.js
           node --test api/src/salesInsights.test.js
           node --test api/src/salesDetail.test.js
+          node --test api/src/articleNames.test.js
           node --test api/src/genericos.test.js
           python3 -m unittest discover -s deploy/nomenclator -p 'test_*.py'
           python3 -m py_compile deploy/bootstrap-temp-admin-vps.py

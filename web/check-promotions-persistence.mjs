@@ -60,7 +60,9 @@ try{
  const modal=page.locator(".drawer").filter({hasText:"Nueva promoción"});
  await modal.getByLabel("Nombre de promoción").fill("Campaña de verificación");
  await modal.getByRole("button",{name:"Crear promoción"}).click();
- await modal.getByRole("alert").getByText(/No se ha guardado la promoción: PostgreSQL temporalmente no disponible/).waitFor();
+ await modal.getByRole("alert").waitFor();
+ assert.match(await modal.getByRole("alert").textContent(),
+  /No se ha guardado la promoción: PostgreSQL temporalmente no disponible/);
  assert.equal(await modal.count(),1,"La promoción no confirmada permanece editable");
  assert.equal(await page.locator(".campaign-table").getByText("Campaña de verificación").count(),0,
   "No añadir una campaña sin confirmación del servidor");

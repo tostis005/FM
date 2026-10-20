@@ -332,15 +332,26 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
  }catch(err){next(err)}
 });
 
-// Detalle de líneas sincronizadas. No inventar bruto ni porcentajes de
-// descuento: el ERP sólo garantiza precio, unidades, descuento y total de línea.
-// Los IDs técnicos siguen disponibles para identificar filas, pero no como
-// columnas ordenables o filtrables del listado comercial.
+// El detalle usa importes del ERP sin alterar los originales. Para
+// devoluciones, la presentación, ordenación y búsqueda numérica son absolutas.
+// El importe bruto se reconstruye a partir de neto + descuento de línea;
+// en ausencia de ambos importes, PVP x unidades es solo una alternativa.
+const ticketGrossSQL = `(CASE
+  WHEN v.importe IS NOT NULL AND v.descuento_linea IS NOT NULL
+   THEN abs(v.importe)+abs(v.descuento_linea)
+  WHEN v.precio_unitario IS NOT NULL AND v.unidades IS NOT NULL
+   THEN abs(v.precio_unitario*v.unidades)
+  ELSE NULL END)`;
+const ticketDiscountPercentSQL = `(CASE WHEN v.descuento_linea IS NOT NULL
+  AND ${ticketGrossSQL}>0
+  THEN 100*abs(v.descuento_linea)/NULLIF(${ticketGrossSQL},0)
+  ELSE NULL END)`;
 const ticketColumns = Object.freeze({
   pharmacy:"f.nombre",seller:"v.vendedor_id",
   ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",
-  pvp:"v.precio_unitario",quantity:"v.unidades",
-  lineDiscount:"v.descuento_linea",net:"v.importe",
+  pvp:"abs(v.precio_unitario)",quantity:"abs(v.unidades)",
+  gross:ticketGrossSQL,lineDiscount:"abs(v.descuento_linea)",
+  net:"abs(v.importe)",discountPercent:ticketDiscountPercentSQL,
 });
 app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
@@ -403,8 +414,10 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
               btrim(v.articulo_id::text) AS "cn", NULL::text AS "description",
               v.vendedor_id AS "sellerId",
               v.precio_unitario::float8 AS "pvp", v.unidades::float8 AS "quantity",
+              ${ticketGrossSQL}::float8 AS "gross",
               v.descuento_linea::float8 AS "lineDiscount",
-              v.importe::float8 AS "net"
+              v.importe::float8 AS "net",
+              ${ticketDiscountPercentSQL}::float8 AS "discountPercent"
        ` + where + orderSql +
       " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
       [...params,limit,offset]);

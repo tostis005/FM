@@ -11,7 +11,8 @@ function make(){
   assert.equal(max,params.length);
   if(sql.includes("sum(sum(v.importe)) OVER()"))
    return {rows:[{month:"2026-10",ventas:220,unidades:9,
-     total_ventas:220,total_unidades:9}]};
+     total_ventas:220,total_unidades:9,total_margen:30,
+     total_ventas_con_coste:200,total_lineas_con_coste:9,total_lineas_producto:9}]};
   return {rows:[{tipo:"month",month:"2026-10",bucket:null,ventas:220,unidades:9},
    {tipo:"total",month:null,bucket:null,ventas:220,unidades:9}]};
  }};
@@ -46,6 +47,10 @@ test("12 meses: un SUM mensual y total SQL sin consulta de artículos ni compras
  assert.doesNotMatch(calls[0].sql,/\.compras|\.articulos|LATERAL|count\(DISTINCT|ROW_NUMBER/i);
  assert.equal(data.kpis.ventas,220);
  assert.equal(data.kpis.unidades,9);
+ assert.equal(data.kpis.margen,30,"El margen mensual no debe perder las columnas total_*");
+ assert.equal(data.kpis.margenPct,15);
+ assert.equal(data.kpis.coberturaCostes,100);
+ assert.deepEqual(data.costBasis,{products:9,priced:9,coveredSales:200,margin:30});
  assert.deepEqual(data.series,[{bucket:"2026-10",ventas:220,unidades:9}]);
 });
 test("el mes con granularidad distinta admite dos niveles de agrupación",()=>{

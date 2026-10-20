@@ -265,3 +265,17 @@ button,input,select,textarea{font-family:inherit}
 /* Mostrar el isotipo oficial completo sin recorte ni fondo artificial. */
 .sidebar .brand-mark{background:transparent;transform:none}
 .sidebar .brand-mark .fm-emblem{width:100%;height:100%;object-fit:contain}
+
+/* La primera sección móvil empieza justo después de la barra superior:
+   sin huecos verticales heredados del layout de escritorio. */
+@media(max-width:790px){
+ html,body,#root{margin:0;padding:0}
+ .app-shell,.app-shell>.workspace{margin-top:0;padding-top:0}
+ .workspace>.topbar{height:60px;min-height:60px;flex:0 0 60px;margin:0}
+ .workspace>.main-content{margin-top:0;padding-top:12px}
+ .workspace>.main-content>:first-child{margin-top:0}
+}
+@media(max-width:560px){
+ .workspace>.topbar{height:56px;min-height:56px;flex-basis:56px}
+ .workspace>.main-content{padding-top:10px}
+}

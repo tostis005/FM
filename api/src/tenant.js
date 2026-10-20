@@ -50,6 +50,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
   }
   const requireTenant=()=>middleware();
   const requireTenantAdmin=()=>middleware(ctx=>["administrador","superadministrador"].includes(ctx.role));
+   const requireTenantManager=()=>middleware(ctx=>["gestor","administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
@@ -399,15 +400,24 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
        [req.context.client.slug]);res.json(rows);
     }catch(e){next(e)}
   });
-  app.get("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{
+  app.get("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
     try{
-      const {rows}=await pool.query(
-        'SELECT uc.email,coalesce(a.nombre,\'\') AS name,uc.rol AS role,uc.farmacias::text[] AS pharmacies,uc.activo AS active,uc.metodo_acceso AS "authType" FROM farmetrica.usuario_clientes uc LEFT JOIN public.acceso_cuentas a ON a.email=uc.email WHERE uc.cliente_slug=$1 ORDER BY uc.email',
-        [req.context.client.slug]);
+      const scoped=req.context.role==="gestor";
+       const {rows}=await pool.query(
+        `SELECT uc.email,coalesce(a.nombre,'') AS name,uc.rol AS role,
+          uc.farmacias::text[] AS pharmacies,uc.activo AS active,
+          uc.metodo_acceso AS "authType"
+         FROM farmetrica.usuario_clientes uc
+         LEFT JOIN public.acceso_cuentas a ON a.email=uc.email
+         WHERE uc.cliente_slug=$1
+          AND (NOT $3::boolean OR (uc.rol IN ('farmacia','colaborador')
+            AND uc.farmacias && $2::int[]))
+         ORDER BY uc.email`,
+        [req.context.client.slug,req.context.allowedPharmacyIds,scoped]);
       res.json(rows);
     }catch(e){next(e);}
   });
-  app.put("/api/tenant/usuarios",...requireTenantAdmin(),async(req,res,next)=>{
+  app.put("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
     const email=asEmail(req.body?.email),name=String(req.body?.name||"").trim(),role=req.body?.role;
     const pharmacies=req.body?.pharmacies,active=req.body?.active;
     const authType=req.body?.authType||"google",password=req.body?.password;
@@ -431,6 +441,16 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
      return res.status(400).json({error:"El correo interno debe pertenecer a un dominio habilitado para este cliente"});
     if(external&&allowedDomains.includes(emailDomain(email)))
      return res.status(400).json({error:"Utiliza acceso Google para los dominios internos"});
+    if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
+     return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
+    if(req.context.role==="gestor"){
+     const {rows:existing}=await pool.query(
+      "SELECT rol,farmacias FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
+      [req.context.client.slug,email]);
+     if(existing.length&&(!["farmacia","colaborador"].includes(existing[0].rol)||
+      existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
+      return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
+    }
     const hashed=external&&password?await hashInternalPassword(password):null;
     const db=await pool.connect();
     try{

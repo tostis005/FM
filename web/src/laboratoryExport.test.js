@@ -94,3 +94,14 @@ test("una cantidad o descuento ausente no se convierte artificialmente en cero",
  assert.doesNotMatch(sheet,/<c r="K3"/);
  assert.match(sheet,/<c r="J3"><v>8<\/v><\/c>/);
 });
+
+test("el Excel utiliza el CN real y el artículo, no el identificador interno del ERP",async()=>{
+ const line={...ticket(31),cn:"ERP-9999",nationalCode:"001474",
+   articleName:"Crema facial de catálogo",description:null};
+ const {blob}=await buildLabSalesExcel(promotion("CN","GUM"),[line]);
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
+ assert.match(sheet,/<c r="D3" t="inlineStr">.*?001474/);
+ assert.match(sheet,/<c r="E3" t="inlineStr">.*?Crema facial de catálogo/);
+ assert.doesNotMatch(sheet,/ERP-9999/);
+});

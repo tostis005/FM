@@ -242,6 +242,7 @@ jobs:
           node check-promotions-delete.mjs
           node check-promotions-persistence.mjs
           node check-promotions-scope.mjs
+          node check-traspasos-salientes.mjs
           node check-promotions-import.mjs
           node check-operativa.mjs
           node check-pantallas-reales.mjs

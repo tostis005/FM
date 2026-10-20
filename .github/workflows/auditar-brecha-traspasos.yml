@@ -70,6 +70,14 @@ jobs:
           FROM farmetrica.farmacias f LEFT JOIN sold s ON s.id=f.id
           LEFT JOIN purchases p ON p.id=f.id
           WHERE f.cliente_slug='ampedia' ORDER BY f.id;
+          SELECT 'COBERTURA_CN_ARTICULOS' AS tipo,
+            count(*)::int AS fichas,
+            count(*) FILTER(WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL)::int AS cn_verificados
+          FROM ampedia.articulos;
+          SELECT 'COBERTURA_CN_CORRESPONDENCIAS' AS tipo,
+            count(*)::int AS referencias,
+            count(*) FILTER(WHERE nullif(btrim(codigo_nacional_normalizado),'') IS NOT NULL)::int AS cn_verificados
+          FROM ampedia.fm_producto_correspondencias;
           SELECT 'RECEPCIONES_CABECERAS' AS tipo,
             count(*) AS cabeceras,
             count(*) FILTER(WHERE lineas_completas IS NOT TRUE) AS incompletas,

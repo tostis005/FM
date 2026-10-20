@@ -30,7 +30,8 @@ await page.route("**/api/**",async route=>{
   granularity:url.searchParams.get("granularidad")||"month",
   monthly:[{month:"2026-10",ventas:4046412.26/count*count,unidades:1543*count}],
   series:[{bucket:"2026-10",ventas:4046412.26,unidades:1543*count}],
-  kpis:{ventas:4046412.26,unidades:1543*count}
+  kpis:{ventas:4046412.26,unidades:1543*count},
+  costBasis:{products:100,priced:100,coveredSales:4046412.26,margin:825000}
  };
  else if(p==="/api/analytics/dashboard/compras"||p==="/api/analytics/compras/resumen")body={
   available:true,kpis:{compras:2696250.36,unidadesCompradas:9823*count,
@@ -94,6 +95,25 @@ try{
  await page.waitForTimeout(200);
  assert.equal(by("/api/analytics/reportes").length,1,
   "El detalle completo solo debe consultarse tras la petición del usuario");
+ // Histórico de cinco años: cero llamadas monolíticas y todos los KPI terminan.
+ const beforeSales=by("/api/analytics/ventas/totales").length;
+ const beforePurchases=by("/api/analytics/dashboard/compras").length;
+ await page.locator(".fm-unified-filters select").first().selectOption("60");
+ await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===8&&
+  [...document.querySelectorAll(".fm-demo-kpi")].every(card=>card.getAttribute("aria-busy")==="false"),
+  {timeout:18000});
+ const salesWindows=by("/api/analytics/ventas/totales").slice(beforeSales);
+ const purchaseWindows=by("/api/analytics/dashboard/compras").slice(beforePurchases);
+ assert.ok(salesWindows.length>=5&&purchaseWindows.length>=5,
+  "El histórico debe dividirse por años para ventas y compras");
+ for(const req of [...salesWindows,...purchaseWindows]){
+  const days=(Date.parse(req.query.hasta)-Date.parse(req.query.desde))/86400000;
+  assert.ok(days<=366,"El cliente no debe lanzar agregaciones completas de cinco años");
+ }
+ const values=await page.locator(".fm-demo-kpi").evaluateAll(
+  cards=>cards.slice(0,4).map(card=>card.querySelector("strong")?.textContent));
+ assert.ok(values.every(v=>v&&v!=="—"),
+  "Con coste histórico completo deben mostrarse ventas, compras y margen");
  assert.deepEqual(pageErrors,[],"No debe haber excepciones de React");
  console.log("OK: Inicio sin bloqueo, KPI legibles, fuentes documentales y filtros compartidos");
 }finally{await browser.close();}

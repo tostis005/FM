@@ -137,6 +137,14 @@ try{
          contentWidth:document.querySelector(".main-content")?.getBoundingClientRect().width,
          topbarRight:document.querySelector(".topbar-right")?.getBoundingClientRect().right,
          topbarLeft:document.querySelector(".topbar")?.getBoundingClientRect().left,
+         reportHeader:(()=>{const node=document.querySelector(".fm-unified-header");
+          if(!node)return null;
+          const rect=node.getBoundingClientRect();
+          const heading=node.querySelector(".fm-unified-heading")?.getBoundingClientRect();
+          const meta=node.querySelector(".fm-unified-header-right")?.getBoundingClientRect();
+          return {height:Math.round(rect.height),internalGap:heading&&meta?
+           Math.round(meta.top-heading.bottom):null};
+         })(),
          mobileTopGap:(()=>{
            const bar=document.querySelector(".workspace>.topbar");
            const first=document.querySelector(".workspace>.main-content")?.firstElementChild;
@@ -153,6 +161,10 @@ try{
        if(viewport.width<=560&&["promociones","dashboard","ventas"].includes(path)&&
           (result.mobileTopGap===null||result.mobileTopGap>55||result.mobileTopGap<0))
          throw Error("Hueco superior móvil: "+result.mobileTopGap+"px");
+
+       if(path==="dashboard"&&viewport.width<=560&&result.reportHeader&&
+          (result.reportHeader.height>205||result.reportHeader.internalGap>40))
+         throw Error("Cabecera de Inicio anormalmente alta: "+JSON.stringify(result.reportHeader));
 
        if(path==="promociones"&&viewport.width<=560&&
           !result.table.some(t=>t.content>t.viewport)){

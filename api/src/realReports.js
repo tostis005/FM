@@ -1,6 +1,7 @@
 // Informes agregados sobre las tablas reales normalizadas del cliente.
 // No mezcla cifras de demostración ni traslada compras/ventas brutas al navegador.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {loadCommercialNames} from "./commercialNames.js";
 import {classifyAbcd} from "./abcd.js";
@@ -33,8 +34,7 @@ export function getFilters(req,res){
    module=String(req.query.modulo||"dashboard"),
    sortKey=String(req.query.orden||"value"),sortDir=String(req.query.direccion||"desc").toLowerCase();
  const families=String(req.query.familias||"").split(",").filter(Boolean);
- if(!validDate(from)||!validDate(to)||Date.parse(to)<Date.parse(from)||
-    Date.parse(to)-Date.parse(from)>366*DAY||raw.length>2000||search.length>100||
+ if(!validSalesDateRange(from,to)||raw.length>2000||search.length>100||
     families.length>30||families.some(f=>f.length>80)||
     !["asc","desc"].includes(sortDir)||
     (req.query.orden!=null&&!(REPORT_ORDER_KEYS[module]||[]).includes(sortKey))||![

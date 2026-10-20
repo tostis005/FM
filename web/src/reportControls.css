@@ -91,3 +91,20 @@
  .fm-unified-filter,.fm-unified-filters>label,.fm-unified-filters>.fm-filter-field{flex-basis:100%;min-width:0}
  .fm-period-shortcut{flex:1 1 auto;min-width:max-content;padding:9px 10px}
 }
+
+/* En columna, el flex-basis:260px del título pasaba a ser ALTURA:
+   dejaba cientos de píxeles vacíos entre Inicio y el período. */
+@media(max-width:560px){
+ .main-content .page-header.fm-unified-header{
+  display:flex;flex-direction:column;align-items:stretch;
+  justify-content:flex-start;gap:10px;height:auto;min-height:0;
+ }
+ .main-content .fm-unified-header>.fm-unified-heading{
+  flex:0 0 auto;width:100%;min-height:0;
+ }
+ .main-content .fm-unified-header>.fm-unified-header-right{
+  flex:0 0 auto;width:100%;margin:0;
+  justify-content:space-between;align-items:center;gap:8px;
+ }
+ .main-content .fm-unified-header-meta{text-align:left;min-width:0}
+}

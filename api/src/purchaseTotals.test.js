@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupPurchaseTotals} from "./purchaseTotals.js";
 
-function make({legacy=false,empty=false,headerOnly=false}={}){
+function make({legacy=false,empty=false,headerOnly=false,
+ from="2026-10-01",to="2026-10-18"}={}){
  const endpoints=new Map(),calls=[];
  const app={get:(path,...handlers)=>endpoints.set(path,handlers.at(-1))};
  const fields=legacy?["farmacia_id","fecha","producto_id","proveedor_id","unidades","total","puc"]:
@@ -10,7 +11,7 @@ function make({legacy=false,empty=false,headerOnly=false}={}){
  const pool={async query(sql,params){
   calls.push({sql,params});
   if(sql.includes("information_schema.columns"))return {rows:fields.map(column_name=>({column_name}))};
-  assert.deepEqual(params,["2026-10-01","2026-10-18",[1],"ampedia"]);
+  assert.deepEqual(params,[from,to,[1],"ampedia"]);
   if(empty)return {rows:[]};
   if(headerOnly)return {rows:[{month:"2026-10",pharmacy:"1",supplier:"PR1",
     amount:null,amountRows:0,units:null,unitRows:0,sourceRows:30,receipts:30,lines:0}]};
@@ -21,7 +22,7 @@ function make({legacy=false,empty=false,headerOnly=false}={}){
  setupPurchaseTotals(app,pool,{requireTenant:()=>[]});
  const context={allowedPharmacyIds:[1],client:{schema:"ampedia",slug:"ampedia"},
   pharmacies:[{id:1,databaseCode:"ABA",name:"Farmacia"}],role:"superadministrador",modules:{}};
- async function call(query={},path="/api/analytics/compras/resumen"){const req={path,query:{desde:"2026-10-01",hasta:"2026-10-18",farmacias:"1",...query},context};
+ async function call(query={},path="/api/analytics/compras/resumen"){const req={path,query:{desde:from,hasta:to,farmacias:"1",...query},context};
   let payload,code=200,err;const res={status(n){code=n;return this},json(d){payload=d;return this}};
   await endpoints.get(path)(req,res,e=>{err=e});if(err)throw err;
   return {code,payload};
@@ -52,7 +53,7 @@ test("compras legacy y movimientos no encontrados mantienen 0 real",async()=>{
 test("denegar ámbitos ajenos y rangos incorrectos",async()=>{
  const {call}=make();
  assert.equal((await call({farmacias:"2"})).code,403);
- assert.equal((await call({desde:"2024-01-01"})).code,400);
+ assert.equal((await call({desde:"2027-01-01"})).code,400);
  assert.equal((await call({buscar:"test"})).code,400);
 });
 
@@ -88,4 +89,12 @@ test("un usuario con acceso a Inicio no necesita habilitar Compras para consulta
  context.role="administrador";context.modules={dashboard:true,compras:false};
  assert.equal((await call({},"/api/analytics/dashboard/compras")).code,200);
  assert.equal((await call({},"/api/analytics/compras/resumen")).code,403);
+});
+
+test("Inicio admite cinco años completos y la consulta permanece aislada por farmacia",async()=>{
+ const {call,calls}=make({from:"2021-11-01",to:"2026-10-20"});
+ const {code,payload}=await call({},"/api/analytics/dashboard/compras");
+ assert.equal(code,200);
+ assert.equal(payload.kpis.unidadesCompradas,30);
+ assert.deepEqual(calls.at(-1).params,["2021-11-01","2026-10-20",[1],"ampedia"]);
 });

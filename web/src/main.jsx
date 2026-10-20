@@ -23,7 +23,7 @@ import SyncVentas from "./SyncVentas.jsx";
 import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
 import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
-import {LoadingPanel,LoadingStatus,LoadingFrame,SkeletonLine,SkeletonKpis} from "./LoadingState.jsx";
+import {LoadingStatus,SkeletonLine,StartupScreen} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
@@ -815,7 +815,7 @@ function App(){
    if(tenantContext && sessionUser && !allowed)
      nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard");
  },[tenantContext,sessionUser,page,allowed]);
- if(!tenantContext||!sessionUser||!allowed)return <div className="app-shell"><main className="main-content">{authError?<p role="alert">{authError}</p>:<><SkeletonKpis count={4}/><LoadingPanel kind="table" label="Preparando tu espacio de trabajo y sus permisos…"/></>}</main></div>;
+ if(!tenantContext||!sessionUser||!allowed)return <StartupScreen error={authError}/>;
  return <div className="app-shell">
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>

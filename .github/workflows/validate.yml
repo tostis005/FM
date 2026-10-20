@@ -29,7 +29,7 @@ jobs:
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --test api/src/supplierReporting.test.js
-          node --test api/src/outgoingTransfers.test.js
+          node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -145,8 +145,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/016_modelo_documental.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
-          psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
+          psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
           psql_test --single-transaction < api/src/migrations/016_operativa_manual.sql
           psql_test --single-transaction < api/src/migrations/016_operativa_manual.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql

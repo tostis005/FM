@@ -103,8 +103,15 @@ export function setupSalesTotals(app,pool,{requireTenant}){
     months.map(x=>({bucket:x.month,ventas:x.ventas,unidades:x.unidades})):
     rows.filter(x=>x.tipo==="series").map(x=>({
      bucket:x.bucket,ventas:Number(x.ventas),unidades:Number(x.unidades)}));
+   // En el agregado mensual los costes/márgenes llegan en columnas WINDOW
+   // total_*; no están en las columnas del mes individual. Si no se copian,
+   // los KPI de margen se convierten erróneamente en «sin datos».
    const total=granularity==="month"?
-    {ventas:rows[0]?.total_ventas,unidades:rows[0]?.total_unidades}:
+    {ventas:rows[0]?.total_ventas,unidades:rows[0]?.total_unidades,
+     total_margen:rows[0]?.total_margen,
+     total_ventas_con_coste:rows[0]?.total_ventas_con_coste,
+     total_lineas_con_coste:rows[0]?.total_lineas_con_coste,
+     total_lineas_producto:rows[0]?.total_lineas_producto}:
     rows.find(x=>x.tipo==="total");
    const priced=Number(granularity==="month"?total?.total_lineas_con_coste:total?.lineas_con_coste)||0;
    const products=Number(granularity==="month"?total?.total_lineas_producto:total?.lineas_producto)||0;

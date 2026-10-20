@@ -74,7 +74,17 @@ try{
  assert.equal(saved.length,1);
  assert.equal(saveCalls,2);
  await page.reload({waitUntil:"domcontentloaded"});
- await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:15000});
+ try{
+  await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:12000});
+ }catch(err){
+  console.log("Auditoría tras recarga:",JSON.stringify({
+   serverPromotions:saved.map(p=>({id:p.id,name:p.name,status:p.status,start:p.start,end:p.end})),
+   visibleText:(await page.locator(".main-content").innerText()).slice(0,3000),
+   url:page.url(),
+   currentTenant:await page.evaluate(()=>localStorage.getItem("fm_active_tenant"))
+  }));
+  throw err;
+ }
  assert.equal(await page.getByText(cached.name,{exact:true}).count(),0,
   "La lista tras recargar viene exclusivamente de la base de datos");
 

@@ -52,6 +52,16 @@ test("histórico consulta dos tramos como máximo a la vez y termina completo",a
  assert.equal(result.kpis.ventas,60);
  assert.deepEqual(progress.at(-1),[6,6]);
 });
+test("si se divide una consulta a mitad de mes la serie mensual se consolida",()=>{
+ const rows=(ventas)=>({monthly:[{month:"2026-07",ventas,unidades:2}],
+  costBasis:{products:2,priced:2,coveredSales:ventas,margin:1},
+  kpis:{ventas,unidades:2}});
+ const data=mergeHistoricalSummaries([rows(10),rows(20)],"sales",
+  {from:"2026-07-01",to:"2026-07-31"});
+ assert.deepEqual(data.monthly,[{month:"2026-07",ventas:30,unidades:4}]);
+ assert.equal(data.kpis.ventas,30);
+});
+
 test("errores temporales de un año se reintentan por mitades sin inventar totales",async()=>{
  const requests=[];
  const result=await loadHistoricalSummary({from:"2025-01-01",to:"2025-12-31",kind:"purchases",

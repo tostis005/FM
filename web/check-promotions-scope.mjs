@@ -28,7 +28,17 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/ventas/seguimiento")payload={sales:{}};
  else if(path==="/api/ventas/detalle"){
   ticketRequests.push(request.postDataJSON());
-  payload={rows:[],total:0};
+  payload={rows:[{
+   pharmacyId:"1",pharmacyName:"Farmacia Centro",saleId:"7891",lineId:"1",ticket:"T-101",
+   at:"2026-10-15T10:00:00Z",cn:"789",sourceArticleId:"789",nationalCode:"123456",
+   articleName:"Crema de manos",description:"Crema de manos",
+   sellerId:"3",sellerName:"Marta",pvp:10,quantity:2,net:20,lineDiscount:0
+  },{
+   pharmacyId:"1",pharmacyName:"Farmacia Centro",saleId:"7892",lineId:"2",ticket:"T-102",
+   at:"2026-10-15T10:01:00Z",cn:"991",sourceArticleId:"991",nationalCode:null,
+   articleName:"Artículo sin CN",description:"Artículo sin CN",
+   sellerId:"3",sellerName:"Marta",pvp:6,quantity:1,net:6,lineDiscount:0
+  }],total:2};
  }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(payload)});
 });
@@ -50,6 +60,10 @@ try{
  }));
  assert.deepEqual(promoOptions,["Campaña Centro y Norte","Campaña coincidente Centro"],
   "No incluir campañas que pertenecen solo a otras farmacias");
+ await page.getByText("CN 123456 · Crema de manos").waitFor();
+ await page.getByText("CN sin identificar · Artículo sin CN").waitFor();
+ assert.ok(await page.locator(".lab-detail-table").getByText("789",{exact:true}).count()>0,
+  "La referencia ERP se conserva separada del CN verificado");
  await page.getByText(/Una misma venta puede atribuirse a varias promociones/).waitFor();
  assert.deepEqual(errors,[],"No hay excepciones de navegador");
  console.log("OK: el filtro de farmacias se propaga al detalle de tickets y se advierten solapes de CN");

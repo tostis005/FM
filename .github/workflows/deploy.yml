@@ -63,6 +63,7 @@ jobs:
           node --test api/src/internalPassword.test.js
           node --test api/src/accessPolicy.test.js
           node --test api/src/salesDetail.test.js
+          node --test api/src/articleNames.test.js
           node --test api/src/genericos.test.js
           node --check api/src/publicLeads.js
           node --check api/src/privacyRequests.js

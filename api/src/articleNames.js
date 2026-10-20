@@ -44,3 +44,16 @@ export async function nameArticleRows(pool,context,rows,{code="articleId"}={}){
   key(article.pharmacyId,article.id),{cn:article.cn,name:article.name}]));
  return enrich(catalog);
 }
+
+// Mantener el identificador ERP para compatibilidad con las búsquedas
+// documentales, pero publicar el código nacional SOLO si consta en catálogo.
+export async function nameTicketArticleRows(pool,context,rows){
+ const named=await nameArticleRows(pool,context,rows,{code:"cn"});
+ return named.map(row=>({
+  ...row,
+  sourceArticleId:row.articleId,
+  nationalCode:row.cn,
+  cn:row.articleId,
+  description:row.articleName
+ }));
+}

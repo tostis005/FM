@@ -113,7 +113,7 @@ function downloadCSV(name, rows) {
 }
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status==="Finalizada"?"Archivada":status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
-function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div></div></div>}
+function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div className="kpi-content"><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div><div className="kpi-caption">{caption||"\u00a0"}</div></div></div>}
 function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=false}){
  const m=promotionMetrics(campaigns,salesAvailable);
  const show=value=>value==null?"—":integer(value);

@@ -264,3 +264,6 @@
 .fm-dashboard-lazy-detail{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:space-between;padding:15px 4px;color:#577365;font-size:13px}
 .fm-dashboard-lazy-detail p{margin:0;flex:1 1 230px;line-height:1.5}
 @media(max-width:720px){.fm-demo-v2 .fm-demo-kpis{grid-template-columns:minmax(0,1fr)}}
+
+.fm-verified-cn{font-weight:800;color:#137b57;font-variant-numeric:tabular-nums}
+.fm-missing-cn{font-size:11px;color:#8b9c92;font-weight:650;white-space:nowrap}

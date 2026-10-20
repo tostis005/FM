@@ -184,7 +184,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const salesEnabled=data?.sales?.available===true;
  const buysEnabled=data?.purchases?.available===true;
  const totals=useMemo(()=>({
-  count:data?.totalGroups||0,
+  count:data?Number(data.totalGroups||0):null,
   units:salesEnabled?data?.summary?.salesUnits??0:null,
   revenue:salesEnabled?data?.summary?.revenue??0:null,
   spend:buysEnabled?data?.summary?.purchases??0:null,

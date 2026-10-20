@@ -23,6 +23,14 @@ test("sumatorios de ventas y margen ponderado conservan cobertura de costes",()=
  assert.equal(incomplete.kpis.margenPct,null);
  assert.equal(incomplete.kpis.coberturaCostes,85);
 });
+test("totales de compra numéricos confirman disponibilidad aunque falte el flag opcional",()=>{
+ const data=mergeHistoricalSummaries([
+  {available:true,monthly:[],kpis:{compras:100,unidadesCompradas:5}},
+  {available:true,monthly:[],kpis:{compras:150,unidadesCompradas:7}}
+ ],"purchases",{from:"2024-01-01",to:"2025-12-31"});
+ assert.equal(data.hasAmounts,true);
+ assert.equal(data.kpis.compras,250);
+});
 test("compras reales se suman por tramo, nunca se suman proveedores repetidos",()=>{
  const period=(month,compras,units)=>({available:true,sourceRows:2,
   hasArticleLines:true,hasAmounts:true,

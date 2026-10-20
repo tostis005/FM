@@ -351,10 +351,12 @@
 .lab-detail-filters label{display:grid;gap:6px;font-size:12px;font-weight:650;color:#4b5d57;min-width:0}
 .lab-detail-filters input,.lab-detail-filters select{min-height:41px;border:1px solid #d5e2dc;border-radius:9px;padding:9px 10px;background:#fff;color:#1c382c;width:100%;font:inherit}
 .lab-detail-count{font-weight:650;color:#304e44;font-size:13px}
-.lab-detail-table{min-width:1400px}
+.lab-detail-table{min-width:1180px}
 .lab-detail-table th{white-space:nowrap}
 .lab-detail-table td{white-space:nowrap;font-variant-numeric:tabular-nums}
-.lab-detail-table td:nth-child(7){max-width:280px;white-space:normal;min-width:160px}
+.lab-detail-table td:nth-child(6){max-width:350px;white-space:normal;min-width:220px}
+.lab-detail-table td:nth-child(5){font-weight:650}
+.lab-detail-money-help{margin:-6px 0 0;color:#627a6d;font-size:12px;line-height:1.55}
 .lab-detail-pagination{display:flex;align-items:center;justify-content:flex-end;gap:12px}
 .lab-detail-pagination span{font-size:13px;font-weight:600;color:#4a5b55}
 .lab-detail-empty{padding:20px;font-size:13px;color:#718078;text-align:center}
@@ -531,7 +533,7 @@ html,body{overflow-x:clip}
   .table-scroll-hint{display:block}
   .table-scroll .data-table{min-width:max-content}
   .table-scroll .campaign-table{min-width:840px}
-  .table-scroll .lab-detail-table{min-width:1180px}
+  .table-scroll .lab-detail-table{min-width:1080px}
   .report-scope-info{display:flex;flex-wrap:wrap;gap:6px}
   .report-active-summary{flex-wrap:wrap;gap:12px}
   .report-quick-pharmacy{flex:1 1 200px;max-width:100%}

@@ -332,14 +332,15 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
  }catch(err){next(err)}
 });
 
-// Detalle de líneas sincronizadas. No inventar vendedor ni bruto si no vienen del origen.
-// Cada importe y descuento se presenta con el contrato canónico que recibió PostgreSQL.
+// Detalle de líneas sincronizadas. No inventar bruto ni porcentajes de
+// descuento: el ERP sólo garantiza precio, unidades, descuento y total de línea.
+// Los IDs técnicos siguen disponibles para identificar filas, pero no como
+// columnas ordenables o filtrables del listado comercial.
 const ticketColumns = Object.freeze({
-  pharmacy:"f.nombre",seller:"v.vendedor_id",saleId:"v.origen_id",
-  ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",sourceArticleId:"v.articulo_id",
-  pvp:"v.precio_unitario",quantity:"v.unidades",gross:"NULL::numeric",
+  pharmacy:"f.nombre",seller:"v.vendedor_id",
+  ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",
+  pvp:"v.precio_unitario",quantity:"v.unidades",
   lineDiscount:"v.descuento_linea",net:"v.importe",
-  discountPercent:"NULL::numeric",
 });
 app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
@@ -351,7 +352,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
       (ticket != null && (typeof ticket !== "string" || ticket.length > 60)) ||
       (cn != null && cn !== "" && (!/^\\d{6}$/.test(cn) || !cns.includes(cn))) ||
       !columnFilters || typeof columnFilters !== "object" || Array.isArray(columnFilters) ||
-      Object.keys(columnFilters).length > 13 ||
+      Object.keys(columnFilters).length > Object.keys(ticketColumns).length ||
       Object.entries(columnFilters).some(([name,value]) => {
         if(!Object.hasOwn(ticketColumns,name))return true;
         if(Array.isArray(value)){
@@ -402,7 +403,6 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
               btrim(v.articulo_id::text) AS "cn", NULL::text AS "description",
               v.vendedor_id AS "sellerId",
               v.precio_unitario::float8 AS "pvp", v.unidades::float8 AS "quantity",
-              NULL::float8 AS "gross",
               v.descuento_linea::float8 AS "lineDiscount",
               v.importe::float8 AS "net"
        ` + where + orderSql +

@@ -5,7 +5,8 @@ import {loadTicketLines} from "./farmaciasApi.js";
 import {ListPagination} from "./ListTable.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
-import {euro,quantity,dateTimeES} from "./localeES.js";
+import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
+import {ticketLineAmounts} from "./ticketLineAmounts.js";
 
 const num=quantity;
 const money=euro;
@@ -21,10 +22,13 @@ const TICKET_COLUMNS=[
   ["at","Fecha y hora",v=>date(v.at)],
   ["cn","CN",v=>v.displayCN||"—"],
   ["article","Artículo",v=>v.articleName||v.description||"Nombre no disponible",false],
-  ["pvp","Precio unitario",v=>money(v.pvp)],
-  ["quantity","Unidades",v=>num(v.quantity)],
-  ["lineDiscount","Descuento (€)",v=>money(v.lineDiscount)],
-  ["net","Importe vendido",v=>money(v.net)],
+  ["pvp","PVP unitario",v=>money(v.pvp)],
+  ["quantity","Cantidad",v=>num(v.quantity)],
+  ["gross","Importe bruto",v=>money(v.gross)],
+  ["lineDiscount","Descuento en línea",v=>money(v.lineDiscount)],
+  ["net","Importe neto",v=>money(v.net)],
+  ["discountPercent","% descuento en línea",v=>
+    percentage(v.discountRate===null?null:v.discountRate*100)],
 ];
 
 export default function DetalleVentas({promotions,pharmacies,connected,loading=false,pharmacyScopeIds=null}){
@@ -82,7 +86,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
           const code=String(row.nationalCode||"").trim();
           const origin=String(row.sourceArticleId||row.cn||"").trim();
           // El ID ERP solo se muestra como CN si consta expresamente en la promoción.
-          return {...row,displayCN:code||(promotionCNs.has(origin)?origin:"")};
+          return {...row,...ticketLineAmounts(row),displayCN:code||(promotionCNs.has(origin)?origin:"")};
         });
         setResult({rows,total:x.total||0,status:"ready",error:""});
       })
@@ -115,7 +119,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
     <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
-    <p className="lab-detail-money-help">Importe vendido: total registrado por el ERP para la línea. Descuento: importe informado por el ERP cuando existe; «—» significa dato no disponible, no descuento cero. No se calculan bruto ni porcentajes sin una base fiable.</p>
+    <p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se presentan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>
     <HorizontalTableScroll className="table-scroll" label="líneas de venta" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>
         <tr>{TICKET_COLUMNS.map(([key,label,,sortable=true])=><th key={key}

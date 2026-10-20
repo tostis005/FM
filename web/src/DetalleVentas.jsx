@@ -5,29 +5,26 @@ import {loadTicketLines} from "./farmaciasApi.js";
 import {ListPagination} from "./ListTable.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
-import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
+import {euro,quantity,dateTimeES} from "./localeES.js";
 
 const num=quantity;
 const money=euro;
 const date=input=>dateTimeES(input,"Europe/Madrid");
 const validDate=s=>/^20\d\d-\d\d-\d\d$/.test(s||"");
 const INITIAL={start:"",end:""};
+// Sólo columnas sustentadas por el ERP; "Artículo" se enriquece después
+// de la consulta SQL y por eso no ofrece una ordenación/filtrado incompletos.
 const TICKET_COLUMNS=[
   ["pharmacy","Farmacia",v=>v.pharmacyName||v.pharmacyCode],
   ["seller","Vendedor",v=>v.sellerName||v.sellerId||"—"],
-  ["saleId","ID origen",v=>v.saleId],
   ["ticket","Ticket",v=>v.ticket||"—"],
   ["at","Fecha y hora",v=>date(v.at)],
-  ["cn","CN y nombre del artículo",v=>v.nationalCode?
-   "CN "+v.nationalCode+" · "+(v.articleName||v.description||"Nombre no disponible"):
-   "CN sin identificar · "+(v.articleName||v.description||"Nombre no disponible")],
-  ["sourceArticleId","Referencia ERP",v=>v.sourceArticleId||v.cn||"—"],
-  ["pvp","Precio unidad",v=>v.pvp==null?"—":money(v.pvp)],
+  ["cn","CN",v=>v.displayCN||"—"],
+  ["article","Artículo",v=>v.articleName||v.description||"Nombre no disponible",false],
+  ["pvp","Precio unitario",v=>money(v.pvp)],
   ["quantity","Unidades",v=>num(v.quantity)],
-  ["gross","Bruto",v=>v.gross==null?"—":money(v.gross)],
-  ["lineDiscount","Descuento",v=>v.lineDiscount==null?"—":money(v.lineDiscount)],
-  ["net","Neto",v=>money(v.net)],
-  ["discountPercent","% Dto.",v=>v.gross==null||v.lineDiscount==null?"—":percentage(Number(v.gross)?Math.abs(Number(v.lineDiscount)/Number(v.gross))*100:0)],
+  ["lineDiscount","Descuento (€)",v=>money(v.lineDiscount)],
+  ["net","Importe vendido",v=>money(v.net)],
 ];
 
 export default function DetalleVentas({promotions,pharmacies,connected,loading=false,pharmacyScopeIds=null}){
@@ -78,7 +75,17 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     let cancelled=false;
     setResult(prev=>({...prev,status:"loading"}));
     loadTicketLines({...filters,columnFilters:effectiveColumnFilters,orderBy:sort.key,orderDir:sort.direction,offset:page*pageSize,limit:pageSize})
-      .then(x=>{if(!cancelled)setResult({rows:x.rows||[],total:x.total||0,status:"ready",error:""});})
+      .then(x=>{
+        if(cancelled)return;
+        const promotionCNs=new Set(filters.cns);
+        const rows=(x.rows||[]).map(row=>{
+          const code=String(row.nationalCode||"").trim();
+          const origin=String(row.sourceArticleId||row.cn||"").trim();
+          // El ID ERP solo se muestra como CN si consta expresamente en la promoción.
+          return {...row,displayCN:code||(promotionCNs.has(origin)?origin:"")};
+        });
+        setResult({rows,total:x.total||0,status:"ready",error:""});
+      })
       .catch(err=>{if(!cancelled)setResult({rows:[],total:0,status:"error",error:err.message});});
     return()=>{cancelled=true;};
   },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,scopeKey,applied.start,applied.end,(promo?.cns||[]).join(",")]);
@@ -108,12 +115,14 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
     <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
+    <p className="lab-detail-money-help">Importe vendido: total registrado por el ERP para la línea. Descuento: importe informado por el ERP cuando existe; «—» significa dato no disponible, no descuento cero. No se calculan bruto ni porcentajes sin una base fiable.</p>
     <HorizontalTableScroll className="table-scroll" label="líneas de venta" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>
-        <tr>{TICKET_COLUMNS.map(([key,label])=><th key={key} aria-sort={sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
-          <button className="smart-sort" type="button" onClick={()=>toggleSort(key)} aria-label={"Ordenar "+label}>
+        <tr>{TICKET_COLUMNS.map(([key,label,,sortable=true])=><th key={key}
+          aria-sort={sortable?(sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"):undefined}>
+          {sortable?<button className="smart-sort" type="button" onClick={()=>toggleSort(key)} aria-label={"Ordenar "+label}>
             {label} <span aria-hidden="true" className="smart-sort-arrow">{sort.key===key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
-          </button>
+          </button>:<span>{label}</span>}
         </th>)}</tr>
         <tr className="smart-filter-row">{TICKET_COLUMNS.map(([key,label])=><th key={key}>
           {key==="pharmacy"||key==="cn"?
@@ -122,7 +131,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
                 (promo?.cns||[]).map(cn=>({value:cn,label:cn}))}
               value={Array.isArray(columnFilters[key])?columnFilters[key]:[]}
               onChange={values=>{setColumnFilters(prev=>({...prev,[key]:values}));setPage(0)}}/>:
-          key==="ticket"?<span className="smart-filter-blank"/>:
+          key==="ticket"||key==="article"?<span className="smart-filter-blank"/>:
           <input type="search" className="smart-column-filter" aria-label={"Buscar en "+label}
             placeholder="Buscar…" value={columnDraft[key]||""}
             onChange={e=>setColumnDraft(prev=>({...prev,[key]:e.target.value}))}/>}

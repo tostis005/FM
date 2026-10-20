@@ -8,7 +8,8 @@ export function validTransferCustomerId(value){
  return typeof value==="string"&&CLIENT_ID.test(value.trim());
 }
 export function transferPreviewDates(from,to){
- const realDate=s=>DATE.test(s||"")&&new Date(s+"T00:00:00Z").toISOString().slice(0,10)===s;
+ const realDate=s=>DATE.test(s||"")&&!Number.isNaN(Date.parse(s+"T00:00:00Z"))&&
+  new Date(s+"T00:00:00Z").toISOString().slice(0,10)===s;
  return realDate(from)&&realDate(to)&&to>=from&&
   Date.parse(to)-Date.parse(from)<=92*86400000;
 }

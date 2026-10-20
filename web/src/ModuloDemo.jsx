@@ -74,7 +74,7 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Ventas", "ventas","€","ventas"),
   CARD("Compras","compras","€","compras"),
   CARD("Stock valorado","stock","€","stock"),
-  CARD("Margen estimado","margen","€","rentabilidad"),
+  CARD("Margen bruto estimado","margen","€","rentabilidad"),
   CARD("Potencial de precio","potencialCompra","€","compras"),
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
@@ -98,7 +98,7 @@ function metricCards(module,k,analysisMonths=12){
   stock:[CARD("Artículos con stock informado","stockArticulos","n"),CARD("Unidades en inventario","stockUnidades","n"),shared[2],CARD("Sin ventas en periodo","stockSinRotacion","n")],
   reposicion:[shared[5],CARD("Unidades en inventario","stockUnidades","n"),CARD("Coste de reposición","reposicionCoste","€"),CARD("Roturas","roturas","n")],
   genericos:[CARD("Compra de genéricos","compraGenericos","€"),CARD("Potencial de precio","potencialGenericos","€","compras"),shared[1],CARD("Proveedores","proveedores","n","proveedores")],
-  rentabilidad:[shared[3],CARD("Margen estimado","margenPct","%"),CARD("Cobertura de costes","coberturaCostes","%"),shared[0]],
+  rentabilidad:[shared[3],CARD("Margen bruto estimado (%)","margenPct","%"),CARD("Cobertura de costes","coberturaCostes","%"),shared[0]],
   acciones:[CARD("Acciones identificadas","acciones","n"),
    CARD("Roturas","roturas","n","reposicion"),
    CARD("Sobrestock","sobrestock","€","stock"),shared[5]],
@@ -711,10 +711,13 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
        <span className="fm-load-spinner" aria-hidden="true"/><small>{isDashboard?userLoadingText(dashboardProgress(c.key)):"Cargando datos…"}</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
-    {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&<small>Sin cobertura completa del coste de las ventas</small>}
+    {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&
+      <small>Sin cobertura completa del coste histórico de los artículos vendidos</small>}
      {!kpiLoading&&["resultadoComercial","resultadoComercialPct"].includes(c.key)&&
       <small>{commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
-       "No disponible hasta disponer de importes completos de ventas y compras"}</small>}
+       fastPurchase?.amountCoveragePct!=null&&fastPurchase.amountCoveragePct<100?
+        "Cobertura de importes de compra: "+percentage(fastPurchase.amountCoveragePct)+". Faltan costes.":
+        "No disponible hasta disponer de importes completos de ventas y compras"}</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>

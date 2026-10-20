@@ -4,7 +4,7 @@
 // por separado; si falla la comprobación nunca se omiten datos del período.
 const ISO=/^\d{4}-\d{2}-\d{2}$/;
 export async function historyStartDate({from,to,source,pharmacyIds=[],clientSlug,
- signal,request=fetch}){
+ signal,cancelledSignal,request=fetch}){
  if(!ISO.test(from)||!ISO.test(to)||from>to||!["ventas","compras"].includes(source))
   return from;
  const params=new URLSearchParams({fuente:source});
@@ -21,7 +21,9 @@ export async function historyStartDate({from,to,source,pharmacyIds=[],clientSlug
   return payload.earliest>to?to:
    payload.earliest>from?payload.earliest:from;
  }catch(error){
-  if(signal?.aborted)throw error;
-  return from; // Seguridad: sin confirmación, no recortamos el histórico.
+  // Agotar el plazo de la comprobación de cobertura no debe impedir que el
+  // histórico siga cargando. Solo un cambio de pantalla/filtro cancela todo.
+  if((cancelledSignal||signal)?.aborted)throw error;
+  return from; // Sin confirmación no se omiten tramos de datos.
  }
 }

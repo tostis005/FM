@@ -57,15 +57,20 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
       `SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
-         uc.activo AS active,uc.metodo_acceso AS login_method
+         uc.activo AS active,uc.metodo_acceso AS login_method,
+         uc.google_invitado AS individually_invited,
+         EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
+           d.cliente_slug=uc.cliente_slug AND d.activo=true
+           AND d.dominio=split_part(uc.email,'@',2)) AS domain_allowed
          FROM farmetrica.usuario_clientes uc WHERE uc.email=$1`,[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
-    // El dominio de Workspace solo permite el alta automática corporativa.
-    // Una cuenta Google individual ya autorizada puede ser @gmail.com.
-    // Los JWT antiguos que contienen "interno" conservan su sesión.
+    // Una invitación Google explícita admite Gmail y no exige Workspace.
+    // Las altas automáticas corporativas se revocan al retirar el dominio;
+    // los JWT antiguos con "interno" siguen reconociéndose como "local".
     const method=loginMethod==="interno"?"local":loginMethod;
-    const active=memberships.filter(m=>m.active&&m.login_method===method);
+    const active=memberships.filter(m=>m.active&&m.login_method===method&&
+      (method!=="google"||m.individually_invited||m.domain_allowed));
     const superAdmin=method!=="local"&&superRows.length>0;
     if(method==="local"&&!active.length)return null;
     if(!superAdmin && !active.length)return null;
@@ -333,6 +338,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
         SELECT 1 FROM farmetrica.usuario_clientes uc
         JOIN farmetrica.clientes c ON c.slug=uc.cliente_slug AND c.activo=true
         WHERE uc.email=$1 AND uc.metodo_acceso='google' AND uc.activo=true
+          AND uc.google_invitado=true
         LIMIT 1`,[email]);
        if(!invited.length){
         // Compatibilidad: incorporación corporativa por Workspace verificado

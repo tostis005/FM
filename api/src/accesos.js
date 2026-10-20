@@ -1,8 +1,9 @@
-import { createHmac, randomInt, scrypt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomInt, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import nodemailer from "nodemailer";
-import {verifyInternalPassword} from "./internalPassword.js";
+import {verifyInternalPassword,hashInternalPassword,validInternalPassword} from "./internalPassword.js";
+import {emailDomain,googleDomainAuthorized} from "./accessPolicy.js";
 
 const EMAIL = /^[a-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
@@ -55,15 +56,23 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       "SELECT email,nombre,rol,farmacias,activo FROM public.acceso_cuentas WHERE email=$1",[email]);
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
-      "SELECT cliente_slug AS slug,rol AS role,farmacias::text[] AS pharmacies,activo AS active,metodo_acceso AS login_method FROM farmetrica.usuario_clientes WHERE email=$1",[email]);
+      "SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
+         uc.activo AS active,uc.metodo_acceso AS login_method,
+         EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
+           d.cliente_slug=uc.cliente_slug AND d.activo=true
+           AND d.dominio=split_part(uc.email,'@',2)) AS domain_allowed
+         FROM farmetrica.usuario_clientes uc WHERE uc.email=$1",[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
-    const active=memberships.filter(m=>m.active&&(loginMethod!=="interno"||m.login_method==="interno")&&(loginMethod!=="google"||m.login_method==="google"));
+    const active=memberships.filter(m=>m.active&&m.login_method===loginMethod&&
+      (loginMethod!=="google"||m.domain_allowed));
+    const superAdmin=loginMethod!=="interno"&&superRows.length>0;
     if(loginMethod==="interno"&&!active.length)return null;
-    if(!superRows.length && !active.length)return null;
+    if(!superAdmin && !active.length)return null;
     return {email,name:explicit[0].nombre||email.split("@")[0],
-      role:loginMethod!=="interno"&&superRows.length?"superadministrador":active[0]?.role,
-      tenants:memberships.filter(m=>m.login_method===loginMethod||loginMethod==="correo"),source:loginMethod};
+      role:superAdmin?"superadministrador":active[0]?.role,
+      tenants:memberships.filter(m=>m.active&&m.login_method===loginMethod&&
+       (loginMethod!=="google"||m.domain_allowed)),source:loginMethod};
   }
   function cookie(req) {
     const entries = (req.get("cookie") || "").split(";");
@@ -217,8 +226,31 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       });
       if (payload.email_verified !== true || !EMAIL.test(emailOf(payload.email)))
         return res.status(401).json({ error: "Google no ha verificado este correo" });
-      const user = await resolveAccess(emailOf(payload.email));
-      if (!user) return res.status(403).json({ error: "Tu correo o dominio no está autorizado por el administrador" });
+      const email=emailOf(payload.email),hosted=String(payload.hd||"").toLowerCase();
+      const {rows:superRow}=await pool.query(
+       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
+      if(!superRow.length){
+       const {rows:approved}=await pool.query(`
+        SELECT d.cliente_slug,d.dominio,d.farmacia_id FROM farmetrica.cliente_dominios d
+        JOIN farmetrica.clientes c ON c.slug=d.cliente_slug AND c.activo=true
+        WHERE d.dominio=$1 AND d.activo=true LIMIT 1`,[emailDomain(email)]);
+       const domain=approved[0];
+       if(!domain||!googleDomainAuthorized(email,hosted,domain.dominio))
+        return res.status(403).json({error:"El dominio de Google no está autorizado para ningún cliente"});
+       // Incorporación con alcance mínimo. El gestor asigna roles y farmacias después.
+       await pool.query(`
+        INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
+        VALUES($1,$2,'colaborador','{}',true) ON CONFLICT(email) DO NOTHING`,
+        [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
+       await pool.query(`
+        INSERT INTO farmetrica.usuario_clientes
+        (email,cliente_slug,rol,farmacias,activo,metodo_acceso)
+        VALUES($1,$2,'colaborador',$3,true,'google')
+        ON CONFLICT(email,cliente_slug) DO NOTHING`,
+        [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
+      }
+      const user=await resolveAccess(email,"google");
+      if(!user)return res.status(403).json({error:"Esta cuenta está desactivada o no tiene acceso autorizado"});
       return issueSession(res, user);
     } catch (e) {
       if (e.code?.startsWith("ERR_JWT") || e.code?.startsWith("ERR_JWS")) return res.status(401).json({ error: "Inicio de sesión Google inválido" });

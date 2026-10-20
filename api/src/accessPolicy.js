@@ -18,3 +18,10 @@ export function googleDomainAuthorized(email,hostedDomain,domain){
  return emailDomain(email)===normalizeDomain(domain)&&
   normalizeDomain(hostedDomain)===normalizeDomain(domain)&&validClientDomain(domain);
 }
+
+export function googleMembershipAuthorized(membership){
+ // No basta con que Google haya verificado la identidad: además debe existir
+ // una invitación individual o seguir activo el dominio Workspace del cliente.
+ return Boolean(membership?.active&&membership.login_method==="google"&&
+  (membership.individually_invited===true||membership.domain_allowed===true));
+}

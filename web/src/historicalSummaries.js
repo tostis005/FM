@@ -84,7 +84,8 @@ export function mergeHistoricalSummaries(parts,kind,{from,to}){
  if(kind==="purchases"){
   const complete=parts.every(p=>p.available!==false);
   return {from,to,available:complete,monthly:months,sourceRows:sum(parts,"sourceRows"),
-   hasArticleLines:parts.some(p=>p.hasArticleLines),hasAmounts:parts.some(p=>p.hasAmounts),
+   hasArticleLines:parts.some(p=>p.hasArticleLines||p.kpis?.lineasCompra!=null),
+   hasAmounts:parts.some(p=>p.hasAmounts||p.kpis?.compras!=null),
    kpis:{
     compras:sumNullable(parts,"compras"),
     unidadesCompradas:sumNullable(parts,"unidadesCompradas"),

@@ -106,7 +106,12 @@ export const saveStoredPromotion = (promotion) => request(
 export const deleteStoredPromotion = (id) => request(
   "/api/tenant/promociones/"+encodeURIComponent(id),{method:"DELETE"});
 
-export const replaceStoredPromotions = (promotions) => request(
-  "/api/tenant/promociones/reemplazar",{
+export const importStoredPromotions = (promotions) => request(
+  "/api/tenant/promociones/importar",{
     method:"POST",body:JSON.stringify({promotions}),
+  });
+
+export const deleteStoredPromotions = (ids) => request(
+  "/api/tenant/promociones/eliminar-lote",{
+    method:"POST",body:JSON.stringify({ids}),
   });

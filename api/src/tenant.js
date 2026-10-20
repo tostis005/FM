@@ -483,8 +483,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES ($1,$2,$3,'{}',TRUE) ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre",
         [email,name,role]);
       await db.query(
-        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso",
-        [email,req.context.client.slug,role,ids,active,authType]);
+        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso,google_invitado) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso,google_invitado=EXCLUDED.google_invitado",
+        [email,req.context.client.slug,role,ids,active,authType,authType==="google"]);
       if(authType==="local"&&invite){
         // Contraseña aleatoria desconocida incluso para el administrador.
         // Sólo el enlace de activación permite establecer la definitiva.

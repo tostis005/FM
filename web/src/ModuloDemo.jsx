@@ -12,6 +12,7 @@ import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {loadHistoricalSummary} from "./historicalSummaries.js";
+import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import "./moduleDemo.css";
 
@@ -308,10 +309,19 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    if(!Array.isArray(data.monthly)||!data.kpis)throw Error("Respuesta de totales incompleta");
    return data;
   };
-  const job=historic?loadHistoricalSummary({from:period.from,to:period.to,load,
-   kind:"sales",signal:controller.signal,onProgress:(done,total)=>
-    setFastProgress({scope:fastScope,done,total})}):
-   load({from:period.from,to:period.to});
+  const job=(async()=>{
+   // Todo el histórico nunca debe consultar años anteriores al primer dato
+   // del ERP. Esta verificación es independiente de la de compras.
+   const from=historic&&filters.period==="all"?
+    await historyStartDate({from:period.from,to:period.to,source:"ventas",
+     pharmacyIds:filters.pharmacyIds,clientSlug,signal:boundedSignal(controller)}):
+    period.from;
+   if(controller.signal.aborted)return null;
+   return historic?loadHistoricalSummary({from,to:period.to,load,
+    kind:"sales",signal:controller.signal,onProgress:(done,total)=>
+     setFastProgress({scope:fastScope,done,total})}):
+    load({from:period.from,to:period.to});
+  })();
   job.then(data=>{if(!controller.signal.aborted){
    setFastResult({scope:fastScope,data});setLastUpdated(new Date());
   }}).catch(e=>{if(!controller.signal.aborted)setFastFailure({
@@ -475,10 +485,17 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     throw Error("Respuesta de totales de compras incompleta");
    return data;
   };
-  const job=historic?loadHistoricalSummary({from:period.from,to:period.to,load,
-   kind:"purchases",signal:controller.signal,onProgress:(done,total)=>
-    setPurchaseProgress({scope:purchaseSummaryScope,done,total})}):
-   load({from:period.from,to:period.to});
+  const job=(async()=>{
+   const from=historic&&filters.period==="all"?
+    await historyStartDate({from:period.from,to:period.to,source:"compras",
+     pharmacyIds:filters.pharmacyIds,clientSlug,signal:boundedSignal(controller)}):
+    period.from;
+   if(controller.signal.aborted)return null;
+   return historic?loadHistoricalSummary({from,to:period.to,load,
+    kind:"purchases",signal:controller.signal,onProgress:(done,total)=>
+     setPurchaseProgress({scope:purchaseSummaryScope,done,total})}):
+    load({from:period.from,to:period.to});
+  })();
   job.then(data=>{if(!controller.signal.aborted){
    setPurchaseSummaryResult({scope:purchaseSummaryScope,data});setLastUpdated(new Date());
   }}).catch(e=>{if(!controller.signal.aborted)setPurchaseSummaryFailure({
@@ -641,7 +658,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
        limited?false:col.sortable}));
  const chartConfig=receiptMode?["recepciones",null,"Recepciones registradas"]:SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;
- const chartLoading=isDashboard?(dashboardSalesLoading||dashboardPurchaseLoading):
+ // En Inicio mostrar la gráfica en cuanto haya llegado cualquiera de las
+ // fuentes; la segunda serie se completa después sin bloquear las ventas.
+ const chartLoading=isDashboard?(!fastSales&&!fastPurchase&&
+   (dashboardSalesLoading||dashboardPurchaseLoading)):
   module==="compras"&&shouldLoadPurchaseSummary?
    (!fastPurchase&&!purchaseSummaryError):
    module==="ventas"&&fastEligible?

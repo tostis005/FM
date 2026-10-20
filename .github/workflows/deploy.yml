@@ -34,7 +34,7 @@ jobs:
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --test api/src/supplierReporting.test.js
-          node --test api/src/outgoingTransfers.test.js
+          node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
           node --test api/src/promocionesTenant.test.js

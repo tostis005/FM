@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupPurchaseTotals} from "./purchaseTotals.js";
 
-function make({legacy=false,empty=false,headerOnly=false,
+function make({legacy=false,empty=false,headerOnly=false,partiallyPriced=false,
  from="2026-10-01",to="2026-10-18"}={}){
  const endpoints=new Map(),calls=[];
  const app={get:(path,...handlers)=>endpoints.set(path,handlers.at(-1))};
@@ -13,11 +13,13 @@ function make({legacy=false,empty=false,headerOnly=false,
   if(sql.includes("information_schema.columns"))return {rows:fields.map(column_name=>({column_name}))};
   assert.deepEqual(params,[from,to,[1],"ampedia"]);
   if(empty)return {rows:[]};
+  if(partiallyPriced)return {rows:[{month:"2026-10",pharmacy:"1",supplier:"PR1",
+    amount:60,amountRows:2,units:12,unitRows:3,sourceRows:3,receipts:1,lines:3}]};
   if(headerOnly)return {rows:[{month:"2026-10",pharmacy:"1",supplier:"PR1",
     amount:null,amountRows:0,units:null,unitRows:0,sourceRows:30,receipts:30,lines:0}]};
-  return {rows:[{month:"2026-10",pharmacy:"1",supplier:"2",amount:60,units:15,receipts:2,lines:3},
-   {month:"2026-10",pharmacy:"1",supplier:"3",amount:40,units:10,receipts:1,lines:2},
-   {month:"2026-10",pharmacy:"1",supplier:"2",amount:20,units:5,receipts:1,lines:1}]};
+  return {rows:[{month:"2026-10",pharmacy:"1",supplier:"2",amount:60,amountRows:1,sourceRows:1,unitRows:1,units:15,receipts:2,lines:3},
+   {month:"2026-10",pharmacy:"1",supplier:"3",amount:40,amountRows:1,sourceRows:1,unitRows:1,units:10,receipts:1,lines:2},
+   {month:"2026-10",pharmacy:"1",supplier:"2",amount:20,amountRows:1,sourceRows:1,unitRows:1,units:5,receipts:1,lines:1}]};
  }};
  setupPurchaseTotals(app,pool,{requireTenant:()=>[]});
  const context={allowedPharmacyIds:[1],client:{schema:"ampedia",slug:"ampedia"},
@@ -97,4 +99,17 @@ test("Inicio admite cinco años completos y la consulta permanece aislada por fa
  assert.equal(code,200);
  assert.equal(payload.kpis.unidadesCompradas,30);
  assert.deepEqual(calls.at(-1).params,["2021-11-01","2026-10-20",[1],"ampedia"]);
+});
+
+test("las recepciones sin importe no inflan artificialmente el resultado comercial",async()=>{
+ const {call}=make({partiallyPriced:true});
+ const {code,payload}=await call({},"/api/analytics/dashboard/compras");
+ assert.equal(code,200);
+ assert.equal(payload.sourceRows,3);
+ assert.equal(payload.amountRows,2);
+ assert.equal(payload.hasAmounts,false);
+ assert.equal(payload.amountCoveragePct,66.67);
+ assert.equal(payload.kpis.compras,null,"No sumar solo los costes conocidos");
+ assert.equal(payload.monthly[0].compras,null,"No dibujar una cifra parcial");
+ assert.equal(payload.kpis.unidadesCompradas,12);
 });

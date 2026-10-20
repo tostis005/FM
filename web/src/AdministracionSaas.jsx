@@ -57,6 +57,65 @@ function DemoFarmacias({clientSlug}){
   </div>}
  </div>;
 }
+function ClientDomains({client}){
+ const [domains,setDomains]=useState([]),[pharmacies,setPharmacies]=useState([]),
+  [form,setForm]=useState({domain:"",pharmacyId:"",active:true}),
+  [busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
+ const endpoint="/api/admin/clientes/"+encodeURIComponent(client)+"/dominios";
+ async function refresh(){
+  const [ds,ps]=await Promise.all([api(endpoint),
+   api("/api/tenant/farmacias",{headers:{"X-Farmetrica-Cliente":client}})]);
+  setDomains(ds);setPharmacies(ps);
+ }
+ useEffect(()=>{refresh().catch(e=>setError(e.message))},[client]);
+ async function save(e){
+  e.preventDefault();setError("");setMessage("");setBusy(true);
+  try{await api(endpoint,{method:"PUT",body:JSON.stringify(form)});
+   setForm({domain:"",pharmacyId:"",active:true});await refresh();
+   setMessage("Dominio corporativo actualizado para este cliente.");
+  }catch(e){setError(e.message)}finally{setBusy(false)}
+ }
+ async function remove(domain){
+  if(!window.confirm("¿Eliminar el dominio @"+domain+"? Sus cuentas perderán el acceso Google."))
+   return;
+  setBusy(true);setError("");
+  try{await api(endpoint+"/"+encodeURIComponent(domain),{method:"DELETE"});
+   await refresh();setMessage("Dominio eliminado");}
+  catch(e){setError(e.message)}finally{setBusy(false)}
+ }
+ return <div className="fm-manage-domains">
+  <h3>Dominios corporativos autorizados para Google</h3>
+  <p>Los usuarios de Google Workspace verificados en estos dominios podrán iniciar sesión.
+   Los nuevos accesos reciben permisos mínimos hasta que se les asigne un rol y farmacias.</p>
+  {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
+  {message&&<p role="status" className="fm-manage-feedback">{message}</p>}
+  <form onSubmit={save} className="fm-manage-form">
+   <label>Dominio corporativo
+    <input required placeholder="farmacia.es" value={form.domain}
+     onChange={e=>setForm({...form,domain:e.target.value.toLowerCase().replace(/^@/,"")})}/></label>
+   <label>Farmacia inicial (opcional)
+    <select value={form.pharmacyId||""}
+     onChange={e=>setForm({...form,pharmacyId:e.target.value})}>
+     <option value="">Sin acceso a farmacias hasta asignar permisos</option>
+     {pharmacies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+    </select></label>
+   <label>Estado<select value={String(form.active)}
+    onChange={e=>setForm({...form,active:e.target.value==="true"})}>
+    <option value="true">Autorizado</option><option value="false">Deshabilitado</option>
+   </select></label>
+   <button className="btn btn-primary" disabled={busy} type="submit">
+    {busy?"Guardando…":"Guardar dominio"}</button>
+  </form>
+  <div className="fm-manage-domain-list">{domains.map(d=><div key={d.domain}
+   className="fm-manage-domain-item"><strong>@{d.domain}</strong>
+   <span>{d.active?"Autorizado":"Bloqueado"} · {pharmacies.find(p=>String(p.id)===String(d.pharmacyId))?.name||"Sin farmacia inicial"}</span>
+   <button className="btn btn-secondary btn-sm" type="button" onClick={()=>setForm(d)}>Editar</button>
+   <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
+    onClick={()=>remove(d.domain)}>Eliminar</button>
+  </div>)}</div>
+  {!domains.length&&<p>Todavía no hay dominios corporativos autorizados.</p>}
+ </div>;
+}
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:""});
@@ -103,6 +162,7 @@ export function ClientesPanel({onUpdated}){
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
+   <ClientDomains key={c.slug} client={c.slug}/>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
     <input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.[id])}
       onChange={e=>toggle(c.slug,id,e.target.checked)} aria-label={"Habilitar "+label+" para "+c.name}/>

@@ -27,12 +27,22 @@ const DAY=v=>{
  return parts.length===3?parts.reverse().join("/"):DATE(v);
 };
 const nowZone=slug=>slug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
+// Un código interno de Farmatic jamás se etiqueta como código nacional.
+function ArticleIdentification({cn,name,sourceId}){
+ const realCn=String(cn||"").trim(),realName=String(name||"").trim();
+ return <span className="fm-article-identity">
+  <span className={realCn?"fm-article-cn":"fm-article-cn fm-article-cn-unknown"}>
+   {realCn||"CN no disponible"}</span>
+  <span className="fm-article-name">{realName||"Nombre no disponible"}</span>
+  {!realName&&sourceId&&<small className="fm-article-source">Ref. interna: {sourceId}</small>}
+ </span>;
+}
 const META={
  "productos":{title:"Productos",desc:"Catálogo realmente sincronizado de las farmacias seleccionadas.",
   note:"PVP, PMC y existencias proceden del catálogo del ERP. El margen unitario es una estimación PVP − PMC, no un beneficio realizado.",
   cols:[
-   ["cn","CN",r=>TXT(r.cn)],["sourceId","Código ERP",r=>TXT(r.sourceId)],
-   ["name","Artículo",r=>TXT(r.name)],["family","Familia",r=>TXT(r.family)],
+   ["cn","CN · Artículo",r=><ArticleIdentification cn={r.cn} name={r.name} sourceId={r.sourceId}/>],
+   ["sourceId","Código interno",r=>TXT(r.sourceId)],["family","Familia",r=>TXT(r.family)],
    ["laboratory","Laboratorio",r=>TXT(r.laboratory)],["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],
    ["pvp","PVP",r=>EUR(r.pvp)],["pmc","PMC",r=>EUR(r.pmc)],
    ["margin","Margen teórico/ud.",r=>r.pvp!=null&&r.pmc>0?EUR(r.pvp-r.pmc):"—"],
@@ -70,7 +80,7 @@ const META={
   note:"Los documentos anulados no generan importes de devolución; solo se contabilizan las líneas de devolución.",
   cols:[
    ["reference","Documento",r=>TXT(r.reference)],["at","Fecha",r=>DATE(r.at)],
-   ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["article","Artículo ERP",r=>TXT(r.article)],
+   ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["article","CN · Artículo",r=><ArticleIdentification cn={r.cn} name={r.articleName} sourceId={r.articleId||r.article}/>],
    ["units","Unidades",r=>UNITS(r.units)],["amount","Importe neto",r=>EUR(r.amount)],
    ["kind","Tipo",r=>TXT(r.kind)] ]},
  "compras-devoluciones":{title:"Devoluciones a proveedores",
@@ -263,9 +273,10 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
        {ticketDetail.loading?<p role="status">Cargando líneas…</p>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
-         {["Línea","Código de artículo","Unidades","Precio unidad","Descuento (valor ERP)","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
+         {["Línea","CN · Artículo","Unidades","Precio unidad","Descuento (valor ERP)","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
         </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>
-         <td>{TXT(line.lineId)}</td><td>{TXT(line.articleId)}</td><td>{UNITS(line.units)}</td>
+         <td>{TXT(line.lineId)}</td><td><ArticleIdentification cn={line.cn}
+          name={line.articleName} sourceId={line.articleId}/></td><td>{UNITS(line.units)}</td>
          <td>{EUR(line.unitPrice)}</td><td>{DECIMAL(line.discount)}</td><td>{TXT(line.discountType)}</td><td>{EUR(line.amount)}</td>
          <td>{EUR(line.historicalCost)}</td></tr>)}
          {!ticketDetail.lines.length&&<tr><td colSpan="8">El documento no tiene líneas visibles.</td></tr>}
@@ -279,9 +290,10 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
        {receiptDetail.loading?<p role="status">Cargando líneas…</p>:receiptDetail.error?<p role="alert">{receiptDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas de la recepción">
          <table className="fm-unified-table fm-real-screen-table"><thead><tr>
-          {["Línea","Código de artículo","Unidades netas","Precio bruto/ud.","Coste neto/ud.","Importe neto"].map(v=><th key={v}>{v}</th>)}
+          {["Línea","CN · Artículo","Unidades netas","Precio bruto/ud.","Coste neto/ud.","Importe neto"].map(v=><th key={v}>{v}</th>)}
          </tr></thead><tbody>{receiptDetail.lines.map(line=><tr key={line.lineId}>
-          <td>{TXT(line.lineId)}</td><td>{TXT(line.articleId)}</td>
+          <td>{TXT(line.lineId)}</td><td><ArticleIdentification cn={line.cn}
+           name={line.articleName} sourceId={line.articleId}/></td>
           <td>{UNITS(line.units)}</td><td>{EUR(line.unitPrice)}</td>
           <td>{EUR(line.netUnitCost)}</td><td>{EUR(line.amount)}</td></tr>)}
           {!receiptDetail.lines.length&&<tr><td colSpan="6">El documento no tiene líneas visibles.</td></tr>}

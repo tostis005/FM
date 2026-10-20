@@ -314,7 +314,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    // del ERP. Esta verificación es independiente de la de compras.
    const from=historic&&filters.period==="all"?
     await historyStartDate({from:period.from,to:period.to,source:"ventas",
-     pharmacyIds:filters.pharmacyIds,clientSlug,signal:boundedSignal(controller)}):
+     pharmacyIds:filters.pharmacyIds,clientSlug,signal:boundedSignal(controller),
+     cancelledSignal:controller.signal}):
     period.from;
    if(controller.signal.aborted)return null;
    return historic?loadHistoricalSummary({from,to:period.to,load,
@@ -488,7 +489,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   const job=(async()=>{
    const from=historic&&filters.period==="all"?
     await historyStartDate({from:period.from,to:period.to,source:"compras",
-     pharmacyIds:filters.pharmacyIds,clientSlug,signal:boundedSignal(controller)}):
+     pharmacyIds:filters.pharmacyIds,clientSlug,signal:boundedSignal(controller),
+     cancelledSignal:controller.signal}):
     period.from;
    if(controller.signal.aborted)return null;
    return historic?loadHistoricalSummary({from,to:period.to,load,

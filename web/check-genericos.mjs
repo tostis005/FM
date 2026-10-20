@@ -77,7 +77,8 @@ try{
  await page.waitForTimeout(750);
  assert.ok(listRequests>initialRequests,"Actualizar explícitamente debe consultar genéricos");
  await page.getByPlaceholder("Buscar conjunto…").fill("error-api");
- await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).waitFor({timeout:7000});
+ await page.locator(".fm-generic-list .fm-generic-empty-text").waitFor({timeout:8000});
+ await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).first().waitFor({timeout:7000});
  assert.equal(await page.getByText("Omeprazol",{exact:true}).count(),0,
   "Tras un fallo de consulta no se deben mostrar los resultados del filtro anterior");
  console.log("OK: Genéricos carga por visual, muestra agrupación DCPF y desglose aislado por cliente");

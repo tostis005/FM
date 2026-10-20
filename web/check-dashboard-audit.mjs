@@ -117,10 +117,17 @@ try{
   const days=(Date.parse(req.query.hasta)-Date.parse(req.query.desde))/86400000;
   assert.ok(days<=366,"El cliente no debe lanzar agregaciones completas de cinco años");
  }
+ await page.waitForFunction(()=>{
+  const cards=[...document.querySelectorAll(".fm-demo-kpi")];
+  return cards.length===10&&cards.slice(0,6).every(card=>
+   card.getAttribute("aria-busy")==="false"&&
+   card.querySelector("strong")?.textContent&&
+   card.querySelector("strong").textContent!=="—");
+ },null,{timeout:15000});
  const values=await page.locator(".fm-demo-kpi").evaluateAll(
   cards=>cards.slice(0,6).map(card=>card.querySelector("strong")?.textContent));
  assert.ok(values.every(v=>v&&v!=="—"),
-  "Con coste histórico completo deben mostrarse ventas, compras y margen");
+  "Con coste histórico completo deben mostrarse ventas, compras y margen: "+JSON.stringify(values));
  assert.deepEqual(pageErrors,[],"No debe haber excepciones de React");
  console.log("OK: Inicio sin bloqueo, KPI legibles, fuentes documentales y filtros compartidos");
 }finally{await browser.close();}

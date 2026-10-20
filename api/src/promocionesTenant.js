@@ -1,3 +1,4 @@
+import {planPromotionImport} from "./promotionImportIdentity.js";
 // Persistencia de promociones por esquema cliente. Las promociones anteriores del
 // navegador se importan explícitamente y nunca se borran en una migración.
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -81,48 +82,61 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
     finally{db?.release();}
   });
-  // Reimportar un Excel sustituye el catálogo COMPLETO del cliente
-  // atómicamente. Se conserva cada versión anterior para auditoría.
-  app.post("/api/tenant/promociones/reemplazar",...requireTenantModule("promociones"),async(req,res,next)=>{
-    if(!ROLE_EDIT.has(req.context.role))
-      return res.status(403).json({error:"No tienes permiso para sustituir promociones"});
-    const schema=req.context.client.schema;
-    const input=req.body?.promotions;
-    if(!SCHEMA.test(schema)||!Array.isArray(input)||!input.length||input.length>150)
-      return res.status(400).json({error:"Importación de promociones inválida"});
-    const pharmacyIds=new Set(req.context.pharmacies.map(p=>String(p.id)));
-    const campaigns=input.map(p=>cleanDocument(p,p?.id,pharmacyIds));
-    const ids=campaigns.map(p=>p?.id);
-    if(campaigns.some(p=>!p)||new Set(ids).size!==ids.length)
-      return res.status(400).json({error:"Hay promociones inválidas, duplicadas o con farmacias no autorizadas"});
-    let db;
-    try{
-      db=await pool.connect();
-      await db.query("BEGIN");
-      const {rows:previous}=await db.query(
-        `SELECT id,documento FROM "${schema}".fm_promociones FOR UPDATE`);
-      const archivedAt=new Date().toISOString();
-      for(const old of previous){
-        await db.query(
-          `INSERT INTO "${schema}".fm_promocion_revisiones
-            (promocion_id,documento_anterior,cambiado_por)
-            VALUES($1,$2::jsonb,$3)`,
-          [old.id,JSON.stringify({...old.documento,deletedAt:archivedAt,
-            deletedReason:"Reimportación completa de promociones"}),req.user.email]);
-      }
-      await db.query(`DELETE FROM "${schema}".fm_promociones`);
-      for(const promotion of campaigns){
-        await db.query(
-          `INSERT INTO "${schema}".fm_promociones
-            (id,documento,fuente,creado_por,actualizado_por)
-            VALUES($1,$2::jsonb,$3,$4,$4)`,
-          [promotion.id,JSON.stringify(promotion),
-           String(promotion.source||"").slice(0,200),req.user.email]);
-      }
-      await db.query("COMMIT");
-      return res.json({removed:previous.length,imported:campaigns.length});
-    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
-    finally{db?.release();}
+
+  // Los navegadores antiguos no deben poder seguir reemplazando el catálogo.
+  app.post("/api/tenant/promociones/reemplazar",...requireTenantModule("promociones"),
+   (_req,res)=>res.status(410).json({error:"La sustitución completa está desactivada"}));
+  app.post("/api/tenant/promociones/importar",...requireTenantModule("promociones"),async(req,res,next)=>{
+   if(!ROLE_EDIT.has(req.context.role))
+    return res.status(403).json({error:"No tienes permiso para importar promociones"});
+   const schema=req.context.client.schema,input=req.body?.promotions;
+   if(!SCHEMA.test(schema)||!Array.isArray(input)||!input.length||input.length>150)
+    return res.status(400).json({error:"Importación de promociones inválida"});
+   const pharmacyIds=new Set(req.context.pharmacies.map(p=>String(p.id)));
+   const campaigns=input.map(p=>cleanDocument(p,p?.id,pharmacyIds));
+   if(campaigns.some(p=>!p))return res.status(400).json({error:"Datos de promociones o farmacias inválidos"});
+   let db;
+   try{
+    db=await pool.connect();await db.query("BEGIN");
+    await db.query("SELECT pg_advisory_xact_lock(hashtext($1))",["fm-promotion-import-"+schema]);
+    const {rows:current}=await db.query(
+     `SELECT id,documento FROM "${schema}".fm_promociones FOR UPDATE`);
+    const {additions,skipped}=planPromotionImport(current.map(r=>r.documento),campaigns);
+    for(const promo of additions)
+     await db.query(`INSERT INTO "${schema}".fm_promociones
+       (id,documento,fuente,creado_por,actualizado_por)
+       VALUES($1,$2::jsonb,$3,$4,$4)`,[promo.id,JSON.stringify(promo),
+      String(promo.source||"").slice(0,200),req.user.email]);
+    const {rows:all}=await db.query(`SELECT documento FROM "${schema}".fm_promociones
+      ORDER BY actualizado_en DESC LIMIT 2000`);
+    await db.query("COMMIT");
+    return res.json({imported:additions.length,skipped,promotions:all.map(r=>r.documento)});
+   }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e)}
+   finally{db?.release()}
+  });
+  app.post("/api/tenant/promociones/eliminar-lote",...requireTenantModule("promociones"),async(req,res,next)=>{
+   if(!ROLE_EDIT.has(req.context.role))
+    return res.status(403).json({error:"No tienes permiso para eliminar promociones"});
+   const schema=req.context.client.schema,ids=req.body?.ids;
+   if(!SCHEMA.test(schema)||!Array.isArray(ids)||!ids.length||ids.length>500||
+    ids.some(id=>!validId(id))||new Set(ids).size!==ids.length)
+    return res.status(400).json({error:"Selección de promociones inválida"});
+   let db;
+   try{
+    db=await pool.connect();await db.query("BEGIN");
+    const {rows:deleted}=await db.query(`DELETE FROM "${schema}".fm_promociones
+      WHERE id=ANY($1::text[]) RETURNING id,documento`,[ids]);
+    const deletedAt=new Date().toISOString();
+    for(const row of deleted)
+     await db.query(`INSERT INTO "${schema}".fm_promocion_revisiones
+       (promocion_id,documento_anterior,cambiado_por)
+       VALUES($1,$2::jsonb,$3)`,
+      [row.id,JSON.stringify({...row.documento,deletedAt,
+       deletedReason:"Eliminación múltiple de promociones"}),req.user.email]);
+    await db.query("COMMIT");
+    return res.json({deletedIds:deleted.map(r=>r.id),removed:deleted.length});
+   }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e)}
+   finally{db?.release()}
   });
   app.put("/api/tenant/promociones/:id",...requireTenantModule("promociones"),async(req,res,next)=>{
     if(!ROLE_EDIT.has(req.context.role))

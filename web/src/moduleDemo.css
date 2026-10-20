@@ -288,3 +288,13 @@
 .fm-manage-transfer-preview{border-top:1px solid #d9e9dc;padding-top:14px;display:grid;gap:12px}
 .fm-manage-transfer-preview .fm-supplier-check-field{display:flex;gap:10px;align-items:flex-start;line-height:1.5}
 .fm-manage-transfer-preview .fm-supplier-check-field input{flex:none;margin-top:4px}
+
+/* Selección múltiple: cabecera y casillas claras en escritorio y móvil. */
+.fm-selection-column{width:42px!important;min-width:42px;text-align:center!important}
+.fm-selection-column input[type="checkbox"]{width:18px;height:18px;cursor:pointer;accent-color:#1c7b58;vertical-align:middle}
+.fm-promotions-bulk-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.fm-promotions-bulk-actions .btn{display:inline-flex;align-items:center;gap:6px}
+@media(max-width:680px){
+ .fm-promotions-bulk-actions{justify-content:flex-start;width:100%}
+ .fm-promotions-bulk-actions .btn{font-size:12px}
+}

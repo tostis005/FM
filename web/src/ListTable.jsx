@@ -28,7 +28,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null}){
   const [localFilters,setLocalFilters]=useState({});
  const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
  const filters=remotelyFiltered?serverFilters:localFilters;
@@ -43,6 +43,16 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   // Ordenar solamente la respuesta truncada produciría resultados engañosos.
   const filtered=useMemo(()=>remotelyFiltered?rows:filterSortRows(rows,columns,filters,remote?null:sort),
     [rows,columns,filters,sort,remote,remotelyFiltered]);
+  const selected=new Set(selection?.selectedKeys||[]);
+  const allFilteredKeys=filtered.map(row=>String(rowKey(row)));
+  const allSelected=allFilteredKeys.length>0&&allFilteredKeys.every(key=>selected.has(key));
+  const toggleSelection=key=>selection?.onChange?.(selected.has(key)?
+   [...selected].filter(id=>id!==key):[...selected,key]);
+  const selectFiltered=checked=>{
+   const ids=new Set(selected);
+   for(const key of allFilteredKeys){if(checked)ids.add(key);else ids.delete(key);}
+   selection?.onChange?.([...ids]);
+  };
   const {page:safePage,items:slice}=externalPage?
     {page:Math.max(0,serverPagination.page-1),items:filtered}:
     pageRows(filtered,page,activeSize);
@@ -76,13 +86,17 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     <HorizontalTableScroll className="table-scroll" label={label}>
       <table className={"data-table smart-table "+tableClass}>
         <thead>
-          <tr>{columns.map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+          <tr>{selection&&<th scope="col" className="fm-selection-column">
+            <input type="checkbox" aria-label={"Seleccionar todas las "+label+" filtradas"}
+             checked={allSelected} disabled={Boolean(selection.disabled)||!allFilteredKeys.length}
+             onChange={e=>selectFiltered(e.target.checked)}/></th>}{columns.map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
             {col.sortable===false?<span className="smart-th-label">{col.label}</span>:
               <button className="smart-sort" type="button" onClick={()=>changeSort(col.key)} aria-label={"Ordenar "+col.label}>
                 <span>{col.label}</span><span aria-hidden="true" className="smart-sort-arrow">{sort?.key===col.key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
               </button>}
           </th>)}</tr>
-          <tr className="smart-filter-row">{columns.map(col=><th key={col.key}>
+          <tr className="smart-filter-row">{selection&&<th className="fm-selection-column">
+            <span className="smart-filter-blank"/></th>}{columns.map(col=><th key={col.key}>
             {col.searchable===false?<span className="smart-filter-blank"/>:
               col.filterMode==="multi"?<MultiSelectFilter label={col.label}
                 options={filterOptions?.[col.key]||
@@ -95,10 +109,16 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
           </th>)}</tr>
         </thead>
-        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(activeSize,5)}/></td></tr>:slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
+        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length+(selection?1:0)}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(activeSize,5)}/></td></tr>:slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
           tabIndex={onRowClick?0:undefined} aria-label={onRowClick?"Abrir registro":undefined}
           onKeyDown={onRowClick?e=>{if(e.target===e.currentTarget&&(e.key==="Enter"||e.key===" ")){e.preventDefault();onRowClick(row);}}:undefined}
           onClick={onRowClick?()=>onRowClick(row):undefined}>
+          {selection&&<td className="fm-selection-column">
+            <input type="checkbox" aria-label={"Seleccionar "+(row.name||String(rowKey(row)))}
+             checked={selected.has(String(rowKey(row)))} disabled={Boolean(selection.disabled)}
+             onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}
+             onChange={e=>{e.stopPropagation();toggleSelection(String(rowKey(row)))}}/>
+           </td>}
           {columns.map(col=><td key={col.key}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
         </tr>)}</tbody>
       </table>

@@ -267,7 +267,7 @@ export async function readPromotionExcel(file){
   const sheets=await sheetsFromExcel(await file.arrayBuffer());
   if(!sheets["RESUMEN"] || !sheets["LISTADO CN PROMOCIONES"])
     throw Error("Excel no compatible: se necesitan las hojas RESUMEN y LISTADO CN PROMOCIONES");
-  const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):PROMOTION_YEAR;
+  const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):new Date().getFullYear();
   let promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year).map(p=>({...p,source:"Excel: "+file.name}));
   if(sheets["OBJETIVOS OCTUBRE 2026"]) {
     promos=applyObjectiveRows(promos,sheets["OBJETIVOS OCTUBRE 2026"],year).promotions;

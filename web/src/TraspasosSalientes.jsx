@@ -21,7 +21,7 @@ export default function TraspasosSalientes({clientSlug,suppliers=[]}){
  }
  useEffect(()=>{let live=true;
   Promise.all([api(root),api("/api/tenant/farmacias")]).then(([m,p])=>{
-   if(live){setMappings(m);setPharmacies(p);}
+   if(live){setMappings(Array.isArray(m)?m:[]);setPharmacies(Array.isArray(p)?p:[]);}
   }).catch(e=>{if(live)setError(e.message)});
   return()=>{live=false}
  },[clientSlug]);

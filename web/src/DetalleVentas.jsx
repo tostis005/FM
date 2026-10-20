@@ -18,8 +18,10 @@ const TICKET_COLUMNS=[
   ["saleId","ID origen",v=>v.saleId],
   ["ticket","Ticket",v=>v.ticket||"—"],
   ["at","Fecha y hora",v=>date(v.at)],
-  ["cn","Artículo",v=>v.cn],
-  ["description","Descripción",v=>v.description],
+  ["cn","CN y nombre del artículo",v=>v.nationalCode?
+   "CN "+v.nationalCode+" · "+(v.articleName||v.description||"Nombre no disponible"):
+   "CN sin identificar · "+(v.articleName||v.description||"Nombre no disponible")],
+  ["sourceArticleId","Referencia ERP",v=>v.sourceArticleId||v.cn||"—"],
   ["pvp","Precio unidad",v=>v.pvp==null?"—":money(v.pvp)],
   ["quantity","Unidades",v=>num(v.quantity)],
   ["gross","Bruto",v=>v.gross==null?"—":money(v.gross)],

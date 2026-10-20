@@ -11,6 +11,7 @@ import {SALES_PERIODS,resolveSalesPeriod,formatSalesBucket} from "./salesPeriods
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import {loadHistoricalSummary} from "./historicalSummaries.js";
 import "./moduleDemo.css";
 
 // Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
@@ -243,6 +244,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [receiptError,setReceiptError]=useState("");
  const [receiptLoading,setReceiptLoading]=useState(false);
  const [purchaseSummaryFailure,setPurchaseSummaryFailure]=useState(null);
+ const [fastProgress,setFastProgress]=useState(null);
+ const [purchaseProgress,setPurchaseProgress]=useState(null);
  const [purchaseStateError,setPurchaseStateError]=useState("");
  const [purchaseSlow,setPurchaseSlow]=useState(false);
  const [salesError,setSalesError]=useState("");
@@ -287,11 +290,31 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,granularidad:period.granularity});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
-  fetch("/api/analytics/ventas/totales?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
-   .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar los totales");if(!Array.isArray(b.monthly)||!b.kpis)throw Error("Respuesta de totales incompleta");return b})
-   .then(data=>{if(!controller.signal.aborted){setFastResult({scope:fastScope,data});setLastUpdated(new Date())}})
-   .catch(e=>{if(!controller.signal.aborted)setFastFailure({scope:fastScope,message:e.message})});
+  setFastProgress({scope:fastScope,done:0,total:0});
+  const historic=period.granularity==="month"&&
+   Date.parse(period.to)-Date.parse(period.from)>366*86400000;
+  const load=async window=>{
+   const query=new URLSearchParams({desde:window.from,hasta:window.to,granularidad:period.granularity});
+   if(filters.pharmacyIds.length)query.set("farmacias",filters.pharmacyIds.join(","));
+   const response=await fetch("/api/analytics/ventas/totales?"+query,{
+    credentials:"same-origin",cache:"no-store",
+    headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)});
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok){const error=new Error(data.error||"No se pueden consultar los totales de ventas");
+    error.status=response.status;throw error;}
+   if(!Array.isArray(data.monthly)||!data.kpis)throw Error("Respuesta de totales incompleta");
+   return data;
+  };
+  const job=historic?loadHistoricalSummary({from:period.from,to:period.to,load,
+   kind:"sales",signal:controller.signal,onProgress:(done,total)=>
+    setFastProgress({scope:fastScope,done,total})}):
+   load({from:period.from,to:period.to});
+  job.then(data=>{if(!controller.signal.aborted){
+   setFastResult({scope:fastScope,data});setLastUpdated(new Date());
+  }}).catch(e=>{if(!controller.signal.aborted)setFastFailure({
+   scope:fastScope,message:e.name==="TimeoutError"?
+    "La consulta tarda demasiado. Prueba un período más corto.":e.message
+  })});
   return ()=>controller.abort();
  },[fastEligible,fastScope]);
  const insightScope=[clientSlug,period.from,period.to,filters.pharmacyIds.join(","),ids,reloadKey].join("|");
@@ -386,8 +409,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    filters.pharmacyIds.join(","),reloadKey].join("|");
  const fastPurchase=["compras","dashboard"].includes(module)&&
    purchaseSummaryResult?.scope===purchaseSummaryScope?purchaseSummaryResult.data:null;
- const purchaseSummaryError=module==="compras"&&
-   purchaseSummaryFailure?.scope===purchaseSummaryScope?purchaseSummaryFailure.message:null;
+ const purchaseSummaryError=purchaseSummaryFailure?.scope===purchaseSummaryScope?
+   purchaseSummaryFailure.message:null;
  const shouldLoadPurchaseSummary=["compras","dashboard"].includes(module)&&period.valid;
  const receiptMode=module==="compras"&&fastPurchase?.hasArticleLines===false&&
   Number(fastPurchase.sourceRows)>0;
@@ -431,17 +454,34 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
-  fetch((module==="dashboard"?"/api/analytics/dashboard/compras?":"/api/analytics/compras/resumen?")+params,{
-   credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
-  }).then(async response=>{
+  setPurchaseProgress({scope:purchaseSummaryScope,done:0,total:0});
+  const historic=period.granularity==="month"&&
+   Date.parse(period.to)-Date.parse(period.from)>366*86400000;
+  const load=async window=>{
+   const query=new URLSearchParams({desde:window.from,hasta:window.to});
+   if(filters.pharmacyIds.length)query.set("farmacias",filters.pharmacyIds.join(","));
+   const response=await fetch((module==="dashboard"?
+    "/api/analytics/dashboard/compras?":"/api/analytics/compras/resumen?")+query,{
+    credentials:"same-origin",cache:"no-store",
+    headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
+   });
    const data=await response.json().catch(()=>({}));
-   if(!response.ok)throw Error(data.error||"No se pueden cargar los totales de compras");
+   if(!response.ok){const error=new Error(data.error||"No se pueden cargar los totales de compras");
+    error.status=response.status;throw error;}
    if(!Array.isArray(data.monthly)||!data.kpis)
     throw Error("Respuesta de totales de compras incompleta");
    return data;
-  }).then(data=>{if(!controller.signal.aborted)setPurchaseSummaryResult({scope:purchaseSummaryScope,data})})
-   .catch(e=>{if(!controller.signal.aborted)setPurchaseSummaryFailure({scope:purchaseSummaryScope,message:e.message})});
+  };
+  const job=historic?loadHistoricalSummary({from:period.from,to:period.to,load,
+   kind:"purchases",signal:controller.signal,onProgress:(done,total)=>
+    setPurchaseProgress({scope:purchaseSummaryScope,done,total})}):
+   load({from:period.from,to:period.to});
+  job.then(data=>{if(!controller.signal.aborted){
+   setPurchaseSummaryResult({scope:purchaseSummaryScope,data});setLastUpdated(new Date());
+  }}).catch(e=>{if(!controller.signal.aborted)setPurchaseSummaryFailure({
+   scope:purchaseSummaryScope,message:e.name==="TimeoutError"?
+    "La consulta tarda demasiado. Prueba un período más corto.":e.message
+  })});
   return()=>controller.abort();
  },[shouldLoadPurchaseSummary,purchaseSummaryScope]);
 
@@ -646,9 +686,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     disabled={!active||kpiLoading} aria-busy={kpiLoading} onClick={()=>go(c.link)} aria-label={c.label+(kpiLoading?", cargando":active?": abrir "+TITLES[c.link]:"")}>
     <span>{c.label}</span>
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
-       <span className="fm-load-spinner" aria-hidden="true"/><small>Cargando…</small>
+       <span className="fm-load-spinner" aria-hidden="true"/><small>{isDashboard?(()=>{
+       const isSales=["ventas","unidades","margen","margenPct"].includes(c.key);
+       const progress=isSales?fastProgress:purchaseProgress,scope=isSales?fastScope:purchaseSummaryScope;
+       return progress?.scope===scope&&progress.total>1?
+        "Cargando "+progress.done+"/"+progress.total+" períodos…":"Cargando…";
+      })():"Cargando…"}</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
-    {!kpiLoading&&c.key==="margen"&&realKpis.margen==null&&<small>Sin cobertura completa del coste histórico</small>}
+    {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&<small>Sin cobertura completa del coste de las ventas</small>}
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>

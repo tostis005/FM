@@ -397,7 +397,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     try{
       await mailer.sendMail({from:process.env.SMTP_FROM,to:normalized,
        subject:"Activa tu acceso a Farmetrica",
-       text:"Te han invitado a Farmetrica. Abre este enlace para establecer tu contraseña. Caduca en 30 minutos y solo puede utilizarse una vez. Si no esperabas esta invitación, ignora el mensaje.\\n\\n"+url.toString()
+       text:"Te han invitado a Farmetrica. Abre este enlace para establecer tu contraseña. Caduca en 30 minutos y solo puede utilizarse una vez. Si no esperabas esta invitación, ignora el mensaje.\n\n"+url.toString()
       });
     }catch(error){
       await pool.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1 AND token_hash=$2",

@@ -57,22 +57,21 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
       `SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
-         uc.activo AS active,uc.metodo_acceso AS login_method,
-         EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
-           d.cliente_slug=uc.cliente_slug AND d.activo=true
-           AND d.dominio=split_part(uc.email,'@',2)) AS domain_allowed
+         uc.activo AS active,uc.metodo_acceso AS login_method
          FROM farmetrica.usuario_clientes uc WHERE uc.email=$1`,[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
-    const active=memberships.filter(m=>m.active&&m.login_method===loginMethod&&
-      (loginMethod!=="google"||m.domain_allowed));
-    const superAdmin=loginMethod!=="interno"&&superRows.length>0;
-    if(loginMethod==="interno"&&!active.length)return null;
+    // El dominio de Workspace solo permite el alta automática corporativa.
+    // Una cuenta Google individual ya autorizada puede ser @gmail.com.
+    // Los JWT antiguos que contienen "interno" conservan su sesión.
+    const method=loginMethod==="interno"?"local":loginMethod;
+    const active=memberships.filter(m=>m.active&&m.login_method===method);
+    const superAdmin=method!=="local"&&superRows.length>0;
+    if(method==="local"&&!active.length)return null;
     if(!superAdmin && !active.length)return null;
     return {email,name:explicit[0].nombre||email.split("@")[0],
       role:superAdmin?"superadministrador":active[0]?.role,
-      tenants:memberships.filter(m=>m.active&&m.login_method===loginMethod&&
-       (loginMethod!=="google"||m.domain_allowed)),source:loginMethod};
+      tenants:active,source:method};
   }
   function cookie(req) {
     const entries = (req.get("cookie") || "").split(";");
@@ -178,16 +177,16 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     } catch (error) { next(error); }
   });
 
-  // Usuario interno creado por un administrador de cliente. No altera
-  // Google, códigos de correo, ni el acceso provisional del superadministrador.
+  // Correo y contraseña local para usuarios explícitamente autorizados.
+  // Compatible con las sesiones que previamente se denominaban "interno".
   app.post("/api/auth/password",async(req,res,next)=>{
-    if(secret.length<32)return res.status(503).json({error:"Acceso interno no configurado"});
+    if(secret.length<32)return res.status(503).json({error:"Acceso con contraseña no configurado"});
     const email=emailOf(req.body?.email),password=req.body?.password;
     if(!EMAIL.test(email)||typeof password!=="string"||password.length>256)
       return res.status(400).json({error:"Correo o contraseña incorrectos"});
     const now=Date.now();
-    const keys=["internal-ip:"+String(req.get("x-real-ip")||req.ip||"unknown").slice(0,80),
-      "internal-email:"+email];
+    const keys=["password-ip:"+String(req.get("x-real-ip")||req.ip||"unknown").slice(0,80),
+      "password-email:"+email];
     for(const [id,state] of attemptsByIp)if(state.until<now)attemptsByIp.delete(id);
     if(keys.some(id=>(attemptsByIp.get(id)?.count||0)>=5))
       return res.status(429).json({error:"Demasiados intentos; inténtalo en 15 minutos"});
@@ -196,7 +195,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
         "SELECT password_hash FROM farmetrica.credenciales_locales WHERE email=$1 AND activo=true",
         [email]);
       const match=rows.length>0&&await verifyInternalPassword(password,rows[0].password_hash);
-      const user=match?await resolveAccess(email,"interno"):null;
+      const user=match?await resolveAccess(email,"local"):null;
       if(!user){
         for(const id of keys){
           const previous=attemptsByIp.get(id);
@@ -209,9 +208,9 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       return issueSession(res,user);
     }catch(e){next(e)}
   });
-  // Recuperación de contraseñas externas: token opaco, 30 min, un solo uso.
+  // Activación y recuperación de contraseñas locales: token opaco, 30 min, un solo uso.
   // No revela si existe una dirección de correo registrada.
-  const genericResetMessage="Si existe una cuenta externa activa, recibirás un enlace de recuperación.";
+  const genericResetMessage="Si existe una cuenta con contraseña activa, recibirás un enlace de recuperación.";
   const resetRate=new Map();
   app.post("/api/auth/forgot-password",async(req,res,next)=>{
     const email=emailOf(req.body?.email);
@@ -229,7 +228,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
        SELECT 1 FROM public.acceso_cuentas a
        JOIN farmetrica.usuario_clientes uc ON uc.email=a.email
        JOIN farmetrica.credenciales_locales cr ON cr.email=a.email AND cr.activo=true
-       WHERE a.email=$1 AND a.activo=true AND uc.activo=true AND uc.metodo_acceso='interno'
+       WHERE a.email=$1 AND a.activo=true AND uc.activo=true AND uc.metodo_acceso='local'
        LIMIT 1`,[email]);
       if(rows.length){
        const token=randomBytes(32).toString("hex");
@@ -279,11 +278,11 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       UPDATE farmetrica.credenciales_locales cr
       SET password_hash=$2,actualizado_en=now(),activo=true
       WHERE cr.email=$1 AND EXISTS(SELECT 1 FROM farmetrica.usuario_clientes uc
-       WHERE uc.email=cr.email AND uc.activo=true AND uc.metodo_acceso='interno')
+       WHERE uc.email=cr.email AND uc.activo=true AND uc.metodo_acceso='local')
       AND EXISTS(SELECT 1 FROM public.acceso_cuentas a
        WHERE a.email=cr.email AND a.activo=true)`,[email,hash]);
      if(!updated.rowCount){await db.query("ROLLBACK");
-      return res.status(400).json({error:"Cuenta externa no disponible"});}
+      return res.status(400).json({error:"Cuenta con contraseña no disponible"});}
      await db.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1",[email]);
      await db.query("COMMIT");
      return res.json({ok:true,message:"Contraseña actualizada. Ya puedes entrar."});
@@ -291,7 +290,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     finally{db.release()}
   });
   app.post("/api/auth/change-password",requireUser,async(req,res,next)=>{
-    if(req.user.source!=="interno")return res.status(403).json({error:"Las cuentas Google gestionan su contraseña en Google"});
+    if(req.user.source!=="local")return res.status(403).json({error:"Las cuentas Google gestionan su contraseña en Google"});
     const current=req.body?.currentPassword,newPassword=req.body?.newPassword;
     if(typeof current!=="string"||!validInternalPassword(newPassword))
      return res.status(400).json({error:"La nueva contraseña debe tener entre 12 y 128 caracteres"});
@@ -328,24 +327,35 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       const {rows:superRow}=await pool.query(
        "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
       if(!superRow.length){
-       const {rows:approved}=await pool.query(`
-        SELECT d.cliente_slug,d.dominio,d.farmacia_id FROM farmetrica.cliente_dominios d
-        JOIN farmetrica.clientes c ON c.slug=d.cliente_slug AND c.activo=true
-        WHERE d.dominio=$1 AND d.activo=true LIMIT 1`,[emailDomain(email)]);
-       const domain=approved[0];
-       if(!domain||!googleDomainAuthorized(email,hosted,domain.dominio))
-        return res.status(403).json({error:"El dominio de Google no está autorizado para ningún cliente"});
-       // Incorporación con alcance mínimo. El gestor asigna roles y farmacias después.
-       await pool.query(`
-        INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
-        VALUES($1,$2,'colaborador','{}',true) ON CONFLICT(email) DO NOTHING`,
-        [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
-       await pool.query(`
-        INSERT INTO farmetrica.usuario_clientes
-        (email,cliente_slug,rol,farmacias,activo,metodo_acceso)
-        VALUES($1,$2,'colaborador',$3,true,'google')
-        ON CONFLICT(email,cliente_slug) DO NOTHING`,
-        [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
+       // Las cuentas personales Google sólo entran si un administrador
+       // les concedió expresamente acceso a un cliente activo.
+       const {rows:invited}=await pool.query(`
+        SELECT 1 FROM farmetrica.usuario_clientes uc
+        JOIN farmetrica.clientes c ON c.slug=uc.cliente_slug AND c.activo=true
+        WHERE uc.email=$1 AND uc.metodo_acceso='google' AND uc.activo=true
+        LIMIT 1`,[email]);
+       if(!invited.length){
+        // Compatibilidad: incorporación corporativa por Workspace verificado
+        // y dominio exacto autorizado; no se aplica a Gmail personales.
+        const {rows:approved}=await pool.query(`
+         SELECT d.cliente_slug,d.dominio,d.farmacia_id FROM farmetrica.cliente_dominios d
+         JOIN farmetrica.clientes c ON c.slug=d.cliente_slug AND c.activo=true
+         WHERE d.dominio=$1 AND d.activo=true LIMIT 1`,[emailDomain(email)]);
+        const domain=approved[0];
+        if(!domain||!googleDomainAuthorized(email,hosted,domain.dominio))
+         return res.status(403).json({error:"Esta cuenta Google no está autorizada. Solicita acceso al administrador."});
+        // Permisos mínimos hasta que un administrador asigne el perfil.
+        await pool.query(`
+         INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo)
+         VALUES($1,$2,'colaborador','{}',true) ON CONFLICT(email) DO NOTHING`,
+         [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
+        await pool.query(`
+         INSERT INTO farmetrica.usuario_clientes
+         (email,cliente_slug,rol,farmacias,activo,metodo_acceso)
+         VALUES($1,$2,'colaborador',$3,true,'google')
+         ON CONFLICT(email,cliente_slug) DO NOTHING`,
+         [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
+       }
       }
       const user=await resolveAccess(email,"google");
       if(!user)return res.status(403).json({error:"Esta cuenta está desactivada o no tiene acceso autorizado"});
@@ -355,6 +365,47 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       next(e);
     }
   });
+
+  // Enlaces de primera activación para usuarios con correo y contraseña.
+  // Se comparte el almacenamiento de tokens de restablecimiento: 30 min,
+  // hash HMAC y consumo en un solo uso. Nunca enviamos contraseñas por correo.
+  const localInvitationsReady=()=>Boolean(mailer&&secret.length>=32&&process.env.PUBLIC_APP_ORIGIN);
+  async function sendLocalInvitation(email){
+    if(!localInvitationsReady())throw Error("Configura SMTP y PUBLIC_APP_ORIGIN antes de invitar usuarios con contraseña");
+    const normalized=emailOf(email);
+    if(!EMAIL.test(normalized))throw Error("Correo de invitación inválido");
+    const {rows:allowed}=await pool.query(`
+      SELECT 1 FROM farmetrica.usuario_clientes uc
+      JOIN public.acceso_cuentas a ON a.email=uc.email AND a.activo=true
+      JOIN farmetrica.clientes c ON c.slug=uc.cliente_slug AND c.activo=true
+      WHERE uc.email=$1 AND uc.activo=true AND uc.metodo_acceso='local' LIMIT 1`,[normalized]);
+    if(!allowed.length)throw Error("La cuenta no está activa para el acceso con contraseña");
+    const token=randomBytes(32).toString("hex");
+    const digest=createHmac("sha256",secret).update("reset:"+normalized+":"+token).digest("hex");
+    const {rows:saved}=await pool.query(`
+      INSERT INTO farmetrica.restablecimientos_contrasena(email,token_hash,caduca_en)
+      VALUES($1,$2,now()+interval '30 minutes')
+      ON CONFLICT(email) DO UPDATE
+      SET token_hash=EXCLUDED.token_hash,caduca_en=EXCLUDED.caduca_en,solicitado_en=now()
+      WHERE farmetrica.restablecimientos_contrasena.solicitado_en<now()-interval '60 seconds'
+      RETURNING email`,[normalized,digest]);
+    if(!saved.length)return {sent:false,recent:true};
+    const url=new URL("/login",process.env.PUBLIC_APP_ORIGIN);
+    url.searchParams.set("reset","1");
+    url.searchParams.set("email",normalized);
+    url.searchParams.set("token",token);
+    try{
+      await mailer.sendMail({from:process.env.SMTP_FROM,to:normalized,
+       subject:"Activa tu acceso a Farmetrica",
+       text:"Te han invitado a Farmetrica. Abre este enlace para establecer tu contraseña. Caduca en 30 minutos y solo puede utilizarse una vez. Si no esperabas esta invitación, ignora el mensaje.\\n\\n"+url.toString()
+      });
+    }catch(error){
+      await pool.query("DELETE FROM farmetrica.restablecimientos_contrasena WHERE email=$1 AND token_hash=$2",
+        [normalized,digest]);
+      throw error;
+    }
+    return {sent:true};
+  }
 
   // Los códigos de correo se envían solamente a cuentas individuales ya autorizadas.
   // No se devuelven ni registran en logs y tienen expiración y límite de intentos.
@@ -514,5 +565,6 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
        ON CONFLICT(email) DO NOTHING`);
   }
 
-  return { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins };
+  return { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins,
+    localInvitationsReady,sendLocalInvitation };
 }

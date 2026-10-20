@@ -93,7 +93,8 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    const schema=req.context.client.schema;
    if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema))throw Error("Esquema no válido");
    if(!ids.length)return res.json({from,to,granularity,monthly:[],series:[],
-     kpis:{ventas:0,unidades:0}});
+     costBasis:{products:0,priced:0,coveredSales:0,margin:0},
+     kpis:{ventas:0,unidades:0,margen:null,margenPct:null,coberturaCostes:null}});
    // Siempre leer PostgreSQL: sin cachés de importes ni series.
    const {rows}=await pool.query(buildSalesTotalsSql(schema,granularity),[from,to,codes]);
    const months=(granularity==="month"?rows:rows.filter(x=>x.tipo==="month")).map(x=>({
@@ -111,6 +112,7 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    const coveredSales=Number(granularity==="month"?total?.total_ventas_con_coste:total?.ventas_con_coste)||0;
    const marginComplete=products>0&&priced===products;
    res.json({from,to,granularity,monthly:months,series,
+     costBasis:{products,priced,coveredSales,margin:gross},
      kpis:{ventas:Number(total?.ventas||0),unidades:Number(total?.unidades||0),
        margen:marginComplete?Math.round(gross*100)/100:null,
        margenPct:marginComplete&&coveredSales!==0?Math.round(gross/coveredSales*10000)/100:null,

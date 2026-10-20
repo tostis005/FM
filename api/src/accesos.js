@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
 import nodemailer from "nodemailer";
 import {verifyInternalPassword,hashInternalPassword,validInternalPassword} from "./internalPassword.js";
-import {emailDomain,googleDomainAuthorized} from "./accessPolicy.js";
+import {emailDomain,googleDomainAuthorized,googleMembershipAuthorized} from "./accessPolicy.js";
 
 const EMAIL = /^[a-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
@@ -70,7 +70,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     // los JWT antiguos con "interno" siguen reconociéndose como "local".
     const method=loginMethod==="interno"?"local":loginMethod;
     const active=memberships.filter(m=>m.active&&m.login_method===method&&
-      (method!=="google"||m.individually_invited||m.domain_allowed));
+      (method!=="google"||googleMembershipAuthorized(m)));
     const superAdmin=method!=="local"&&superRows.length>0;
     if(method==="local"&&!active.length)return null;
     if(!superAdmin && !active.length)return null;

@@ -441,6 +441,16 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin}) {
      return res.status(400).json({error:"El correo interno debe pertenecer a un dominio habilitado para este cliente"});
     if(external&&allowedDomains.includes(emailDomain(email)))
      return res.status(400).json({error:"Utiliza acceso Google para los dominios internos"});
+    // La contraseña pertenece a un email global; un gestor de un cliente
+    // no puede cambiarla si esa identidad accede externamente a otro cliente.
+    if(external){
+     const {rows:otherClients}=await pool.query(
+      "SELECT 1 FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug<>$2 AND metodo_acceso='interno' LIMIT 1",
+      [email,req.context.client.slug]);
+     if(otherClients.length)return res.status(409).json({
+      error:"Este correo externo ya tiene credenciales en otro cliente. Usa otra dirección."
+     });
+    }
     if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
      return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
     if(req.context.role==="gestor"){

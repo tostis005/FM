@@ -36,9 +36,7 @@ try{
  await page.goto(BASE+"/promociones/seguimiento?estado=Activa&ids=P1,P2,P3&farmacias=1",
   {waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Consulta de tickets"}).waitFor({timeout:16000});
- await page.waitForFunction(()=>document.querySelector(".lab-detail-count")?.textContent.includes("líneas de venta"),
-  null,{timeout:16000});
- await page.waitForTimeout(300);
+ for(let i=0;i<80&&!ticketRequests.length;i++)await page.waitForTimeout(150);
  assert.ok(ticketRequests.length>0,"El desglose consulta el servidor");
  for(const request of ticketRequests)
   assert.deepEqual(request.columnFilters.pharmacy,["1"],

@@ -15,7 +15,7 @@ const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth
 const emailOf = x => typeof x === "string" ? x.trim().toLowerCase() : "";
 const domainOf = x => typeof x === "string" ? x.trim().toLowerCase().replace(/^@/, "") : "";
 
-export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
+export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{mailerOverride=null}={}) {
   const googleId = process.env.GOOGLE_CLIENT_ID || "";
   const secret = process.env.SESSION_SECRET || "";
   const temporaryAdminEmail = emailOf(process.env.TEMP_ADMIN_EMAIL);
@@ -24,11 +24,11 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     EMAIL.test(temporaryAdminEmail) && HASH_PATTERN.test(temporaryPasswordHash);
   const attemptsByIp = new Map();
   const smtpReady = Boolean(process.env.SMTP_HOST && process.env.SMTP_FROM && (process.env.SMTP_USER ? process.env.SMTP_PASSWORD : true));
-  const mailer = smtpReady ? nodemailer.createTransport({
+  const mailer = mailerOverride || (smtpReady ? nodemailer.createTransport({
     host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE === "true",
     ...(process.env.SMTP_USER ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD } } : {}),
-  }) : null;
+  }) : null);
   const key = new TextEncoder().encode(secret);
   const cookieSecure = process.env.COOKIE_SECURE !== "false";
   const rateByIp = new Map();

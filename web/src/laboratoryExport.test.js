@@ -43,10 +43,16 @@ test("el Excel de laboratorio conserva pestañas Export y Hoja1",async()=>{
   const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
   assert.match(workbook,/name="Export"/);
   assert.match(workbook,/name="Hoja1"/);
-  assert.match(sheet,/NOMBRE FARMACIA/);
+  assert.match(sheet,/<c r="A2" t="inlineStr" s="1">.*?NumeroDoc/);
   assert.match(sheet,/DescuentoLinea/);
   assert.match(sheet,/T12/);
-  assert.match(sheet,/Abadía/);
+  assert.doesNotMatch(sheet,/NOMBRE FARMACIA|VENDEDOR|IdVenta/);
+  assert.doesNotMatch(sheet,/Abadía/);
+  // 10 - 2 = 8 y el porcentaje se guarda como 0,2 con formato Excel 20 %.
+  assert.match(sheet,/<c r="H3"><v>10<\/v><\/c>/);
+  assert.match(sheet,/<c r="I3"><v>2<\/v><\/c>/);
+  assert.match(sheet,/<c r="J3"><v>8<\/v><\/c>/);
+  assert.match(sheet,/<c r="K3" s="4"><v>0\.2<\/v><\/c>/);
 });
 test("selección múltiple: ZIP solo un Excel por promoción, sin resumen general",async()=>{
   const promos=[promotion("X1","GUM"),promotion("X2","GUM")];
@@ -59,4 +65,32 @@ test("selección múltiple: ZIP solo un Excel por promoción, sin resumen genera
     const nested=await JSZip.loadAsync(await zip.file(fn).async("uint8array"));
     assert.ok(nested.file("xl/workbook.xml"));
   }
+});
+
+test("las devoluciones se exportan con cantidades e importes positivos",async()=>{
+ const refund={...ticket(20),at:"2026-10-16T10:30:00Z",
+   quantity:-2,lineDiscount:-4,net:-16,gross:null,pvp:10};
+ const {blob}=await buildLabSalesExcel(promotion("RET","GUM"),[refund]);
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
+ const styles=await zip.file("xl/styles.xml").async("string");
+ assert.match(sheet,/<c r="G3"><v>2<\/v><\/c>/);
+ assert.match(sheet,/<c r="H3"><v>20<\/v><\/c>/);
+ assert.match(sheet,/<c r="I3"><v>4<\/v><\/c>/);
+ assert.match(sheet,/<c r="J3"><v>16<\/v><\/c>/);
+ assert.match(sheet,/<c r="K3" s="4"><v>0\.2<\/v><\/c>/);
+ assert.match(styles,/numFmtId="166" formatCode="0\.00%"/);
+ assert.doesNotMatch(sheet,/NOMBRE FARMACIA|VENDEDOR|IdVenta/);
+});
+
+test("una cantidad o descuento ausente no se convierte artificialmente en cero",async()=>{
+ const incomplete={...ticket(21),quantity:null,lineDiscount:null,net:8,gross:null};
+ const {blob}=await buildLabSalesExcel(promotion("SIN","GUM"),[incomplete]);
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
+ assert.doesNotMatch(sheet,/<c r="G3"/);
+ assert.doesNotMatch(sheet,/<c r="H3"/);
+ assert.doesNotMatch(sheet,/<c r="I3"/);
+ assert.doesNotMatch(sheet,/<c r="K3"/);
+ assert.match(sheet,/<c r="J3"><v>8<\/v><\/c>/);
 });

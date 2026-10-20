@@ -5,15 +5,16 @@ function validDate(s){
  const d=new Date(s+"T00:00:00Z");
  return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s;
 }
-export function buildSalesTotalsSql(schema,granularity){
+export function buildSalesTotalsSql(schema,granularity,hasHistoricalCost=true){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!["hour","day","month"].includes(granularity))
   throw Error("Parámetro SQL no válido");
  const table='"'+schema+'"';
  // Las líneas especiales sin artículo suman importe, pero no unidades de producto.
  const productUnits="coalesce(sum(v.unidades) FILTER (WHERE nullif(btrim(v.articulo_id),'') IS NOT NULL),0)";
  const product="nullif(btrim(v.articulo_id),'') IS NOT NULL";
- const costed=`${product} AND v.coste_historico IS NOT NULL AND v.coste_historico>=0`;
- const marginExpr=`coalesce(sum(v.importe-v.unidades*v.coste_historico) FILTER (WHERE ${costed}),0)`;
+ const costValue=hasHistoricalCost?"v.coste_historico":"NULL::numeric";
+ const costed=`${product} AND ${costValue} IS NOT NULL AND ${costValue}>=0`;
+ const marginExpr=`coalesce(sum(v.importe-v.unidades*${costValue}) FILTER (WHERE ${costed}),0)`;
  const salesCostedExpr=`coalesce(sum(v.importe) FILTER (WHERE ${costed}),0)`;
  const pricedExpr=`count(*) FILTER (WHERE ${costed})`;
  const productCountExpr=`count(*) FILTER (WHERE ${product})`;
@@ -50,7 +51,7 @@ export function buildSalesTotalsSql(schema,granularity){
    SELECT date_trunc('month',v.fecha) AS mes,
      date_trunc('${granularity}',v.fecha) AS periodo,
      v.importe,CASE WHEN ${product} THEN v.unidades ELSE 0 END AS unidades,
-     CASE WHEN ${costed} THEN v.importe-v.unidades*v.coste_historico ELSE 0 END AS margin,
+     CASE WHEN ${costed} THEN v.importe-v.unidades*${costValue} ELSE 0 END AS margin,
      CASE WHEN ${costed} THEN v.importe ELSE 0 END AS sales_with_cost,
      CASE WHEN ${costed} THEN 1 ELSE 0 END AS costed_count,
      CASE WHEN ${product} THEN 1 ELSE 0 END AS product_count
@@ -95,8 +96,14 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    if(!ids.length)return res.json({from,to,granularity,monthly:[],series:[],
      costBasis:{products:0,priced:0,coveredSales:0,margin:0},
      kpis:{ventas:0,unidades:0,margen:null,margenPct:null,coberturaCostes:null}});
-   // Siempre leer PostgreSQL: sin cachés de importes ni series.
-   const {rows}=await pool.query(buildSalesTotalsSql(schema,granularity),[from,to,codes]);
+   // En algunos ERP no existe coste_historico: nunca permitir que una
+   // columna opcional haga fallar también ventas y unidades. El margen se
+   // publica sólo cuando el origen tiene costes históricos suficientes.
+   const {rows:costFields}=await pool.query(
+    "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='fm_ventas_analitica' AND column_name='coste_historico'",
+    [schema]);
+   const hasHistoricalCost=costFields.length>0;
+   const {rows}=await pool.query(buildSalesTotalsSql(schema,granularity,hasHistoricalCost),[from,to,codes]);
    const months=(granularity==="month"?rows:rows.filter(x=>x.tipo==="month")).map(x=>({
     month:x.month,ventas:Number(x.ventas),unidades:Number(x.unidades)}));
    const series=granularity==="month"?

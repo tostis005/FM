@@ -321,3 +321,12 @@
  line-height:1.45;font-weight:500;
 }
 .fm-demo-v2 .fm-demo-kpi>.fm-kpi-arrow{position:absolute;top:17px;right:14px}
+
+
+/* Fichas de proveedores: mismo orden vertical que Inicio y resto de módulos. */
+.fm-supplier-summary-item{
+ grid-template-rows:minmax(30px,auto) minmax(36px,auto) minmax(18px,auto);
+ align-content:start;align-items:start;gap:7px;
+}
+.fm-supplier-summary-item>span:first-child{grid-row:1}
+.fm-supplier-summary-item>strong{grid-row:2;align-self:start}

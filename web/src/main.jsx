@@ -29,6 +29,7 @@ import { readPromotionExcel, importedPromotionStatus } from "./importarPromocion
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
+import {mapLimited} from "./asyncBatches.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
@@ -221,6 +222,7 @@ function App(){
  const [from,setFrom]=useState("");
  const [to,setTo]=useState("");
  const [editingPromo,setEditingPromo]=useState(null);
+ const [savingPromo,setSavingPromo]=useState(false);
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
  const [cnText,setCnText]=useState("");
  const [editingUser,setEditingUser]=useState(null);
@@ -234,6 +236,7 @@ function App(){
   const [authError,setAuthError]=useState("");
   const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
   async function tenantState(ctx,email){
+    setPromotionStoreStatus("checking");
     const local=readState(ctx.client.slug,email);
     // Copia recuperable antes de reconciliar con las promociones compartidas.
     try{
@@ -244,17 +247,14 @@ function App(){
     try{
       const server=await loadStoredPromotions();
       const remote=server.promotions||[];
-      const existing=new Set(remote.map(p=>String(p.id)));
-      const deleted=new Set((server.deletedIds||[]).map(String));
-      const canEdit=["administrador","superadministrador"].includes(ctx.role)&&!server.catalogReset;
+      // El catálogo activo procede exclusivamente de PostgreSQL. Conservar
+      // copias anteriores sólo como respaldo, sin mostrarlas como vigentes.
+      if(!Array.isArray(remote))throw Error("Catálogo de promociones incompleto");
       setPromotionStoreStatus("connected");
-      // Solo conservar importaciones locales todavía no sincronizadas, nunca
-      // campañas que un administrador eliminó del servidor.
-      return {...local,promos:[...remote,...(canEdit?local.promos:[]).filter(
-        p=>!existing.has(String(p.id))&&!deleted.has(String(p.id)))]};
+      return {...local,promos:remote};
     }catch{
       setPromotionStoreStatus("error");
-      return local; // Nunca descartar importaciones ya guardadas en el navegador.
+      return {...local,promos:[]}; // No mostrar campañas almacenadas sólo localmente.
     }
   }
   async function loadContext(slug){
@@ -277,7 +277,8 @@ function App(){
         // La navegación analítica no depende de descargar todas las promociones.
         // Mostrar la sesión y el cliente autorizado en cuanto responde /context;
         // reconciliar las campañas en segundo plano sin bloquear Inicio.
-        if(live){setSessionUser(body.user);setData(readState(ctx.client.slug,body.user.email));}
+        if(live){setSessionUser(body.user);
+          setData({...readState(ctx.client.slug,body.user.email),promos:[]});}
         const loaded=await tenantState(ctx,body.user.email);
         if(live&&localStorage.getItem("fm_active_tenant")===ctx.client.slug)
           setData(current=>({...current,promos:loaded.promos,
@@ -289,6 +290,8 @@ function App(){
   async function activateClient(slug){
     if(slug===tenantContext?.client.slug)return;
     try{
+      setPromotionStoreStatus("checking");
+      setData(prev=>({...prev,promos:[]}));
       const ctx=await loadContext(slug);
       setData(await tenantState(ctx,sessionUser?.email));
       setSalesStatus("sin_conexion");setSalesByPromotion({});
@@ -364,7 +367,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!tenantContext||!sessionUser||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -379,7 +382,8 @@ function App(){
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
-         const results=await Promise.all(chunks.map(chunk=>loadPromotionSales(chunk)));
+         const results=await mapLimited(chunks,3,
+           chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
          const byPromotion={};
          for(let i=0;i<segments.length;i++){
@@ -398,7 +402,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[data.promos,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email]);
+   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -802,6 +806,7 @@ function App(){
   setExpandedNavIds(previous=>previous.includes(parent)?previous:[...previous,parent]);
  },[page]);
  const role=tenantContext?.role;
+ const canManagePromotions=["administrador","superadministrador"].includes(role);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(item.id==="usuarios"&&role==="gestor");

@@ -1,0 +1,43 @@
+name: Read-only Farmetrica capacity audit 20261020
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/read-only-fm-capacity-audit-20261020.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Read Docker host capacity without modifications
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 15 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          chmod 600 ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" 'bash -s' <<'REMOTE'
+          set -u
+          export LC_ALL=C
+          echo '=== UTC ==='; date -u +'%Y-%m-%dT%H:%M:%SZ'
+          echo '=== UPTIME AND CPU ==='; uptime; nproc; grep -m1 'model name' /proc/cpuinfo | cut -c1-125
+          echo '=== MEMORY MB ==='; free -m
+          echo '=== STORAGE ==='; df -h / /var 2>/dev/null || true; df -i / 2>/dev/null || true
+          echo '=== DISK PRESSURE ==='; cat /proc/pressure/cpu /proc/pressure/io /proc/pressure/memory 2>/dev/null || true
+          echo '=== CPU TOP PROCESS TYPES ==='; ps -eo comm:28,%cpu,%mem,rss --sort=-%cpu | head -n 17 || true
+          echo '=== DOCKER STATUS ==='; systemctl is-active docker || true
+          echo '=== DOCKER CONTAINERS ==='; timeout 15 docker ps --format '{{.Names}} | {{.Image}} | {{.Status}}' 2>&1 | head -n 30 || true
+          echo '=== DOCKER STATS ==='; timeout 20 docker stats --no-stream --format '{{.Name}} | {{.CPUPerc}} | {{.MemUsage}}' 2>&1 | head -n 30 || true
+          echo '=== DOCKER DISK ==='; timeout 20 docker system df 2>&1 | head -n 18 || true
+          echo '=== LOG SIZE MB ==='; du -sm /var/log 2>/dev/null || true
+          REMOTE

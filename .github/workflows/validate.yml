@@ -81,6 +81,7 @@ jobs:
           node --test src/businessAnalytics.test.js
           node --test src/salesPeriods.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
+          node --test src/asyncBatches.test.js
           node --test src/localeES.test.js
           node --test src/promotionMetrics.test.js
           node --test src/laboratoryExport.test.js
@@ -234,6 +235,7 @@ jobs:
           node check-navigation-arrows.mjs
           node check-genericos.mjs
           node check-promotions-delete.mjs
+          node check-promotions-persistence.mjs
           node check-promotions-import.mjs
           node check-operativa.mjs
           node check-pantallas-reales.mjs

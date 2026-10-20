@@ -725,22 +725,33 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      (fastLoading||(!fastSales&&isFetchingSales)):
      (module==="ventas"&&["productosFarmacia","articulosVendidos"].includes(c.key)?
         insightLoading:isFetchingSales);
+   const isMargin=["margen","margenPct"].includes(c.key);
+   const isCommercial=["resultadoComercial","resultadoComercialPct"].includes(c.key);
+   const reason=!kpiLoading&&isMargin&&realKpis[c.key]==null?
+    (fastFailed?"No se pudo consultar ventas: "+fastFailed:
+     "Sin cobertura completa del coste histórico de los artículos vendidos"):
+    !kpiLoading&&isCommercial?
+     commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
+      fastFailed||purchaseSummaryError?
+       "No disponible: una de las fuentes no se ha podido cargar":
+       fastPurchase?.amountCoveragePct!=null&&fastPurchase.amountCoveragePct<100?
+        "Cobertura de compras: "+percentage(fastPurchase.amountCoveragePct)+". Faltan importes.":
+        "No disponible hasta disponer de importes completos de ventas y compras":
+    !kpiLoading&&fastFailed&&["ventas","unidades"].includes(c.key)?"Error al consultar ventas": "";
+   const progress=isDashboard?dashboardProgress(c.key):
+    module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):
+    module==="ventas"&&["ventas","unidades"].includes(c.key)?
+    taskPercent(fastProgress,fastScope,Boolean(fastSales)):null;
+   const sourceLabel=isDashboard?(isCommercial?"ventas y compras":
+    ["ventas","unidades","margen","margenPct"].includes(c.key)?"ventas":"compras"):"datos";
    return <button key={c.label+c.key} type="button" className={"card fm-demo-kpi fm-kpi-link "+(active?"fm-kpi-active":"")}
     disabled={!active||kpiLoading} aria-busy={kpiLoading} onClick={()=>go(c.link)} aria-label={c.label+(kpiLoading?", cargando":active?": abrir "+TITLES[c.link]:"")}>
     <span>{c.label}</span>
     {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
-       <span className="fm-load-spinner" aria-hidden="true"/><small>{userLoadingText(isDashboard?dashboardProgress(c.key):
-       module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):
-       module==="ventas"&&["ventas","unidades"].includes(c.key)?
-       taskPercent(fastProgress,fastScope,Boolean(fastSales)):null)}</small>
+       <span className="fm-load-spinner" aria-hidden="true"/>
+       <small>{userLoadingText(progress,"Calculando "+sourceLabel)}</small>
      </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
-    {!kpiLoading&&["margen","margenPct"].includes(c.key)&&realKpis[c.key]==null&&
-      <small>Sin cobertura completa del coste histórico de los artículos vendidos</small>}
-     {!kpiLoading&&["resultadoComercial","resultadoComercialPct"].includes(c.key)&&
-      <small>{commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
-       fastPurchase?.amountCoveragePct!=null&&fastPurchase.amountCoveragePct<100?
-        "Cobertura de importes de compra: "+percentage(fastPurchase.amountCoveragePct)+". Faltan costes.":
-        "No disponible hasta disponer de importes completos de ventas y compras"}</small>}
+    <small className="fm-kpi-caption">{reason||"\u00a0"}</small>
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;
   })}</div>

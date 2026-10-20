@@ -174,7 +174,7 @@ export function ClientesPanel({onUpdated}){
 }
 const initial={email:"",name:"",role:"farmacia",pharmacies:[],active:true,authType:"google",password:""};
 const ROLES=[["administrador","Administrador del cliente"],["gestor","Gestor"],["farmacia","Personal de farmacia"],["colaborador","Colaborador externo"]];
-export function EquipoCliente({client,pharmacies=[]}){
+export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}){
  const [users,setUsers]=useState([]),[domains,setDomains]=useState([]),
   [form,setForm]=useState(initial),[busy,setBusy]=useState(false),
   [feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
@@ -235,7 +235,7 @@ export function EquipoCliente({client,pharmacies=[]}){
        placeholder="Mínimo 12 caracteres; dejar vacío para conservar al editar" value={form.password||""}
        onChange={e=>setForm({...form,password:e.target.value})}/>
      </label>}
-    <label>Rol<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{ROLES.map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></label>
+    <label>Rol<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{ROLES.filter(([id])=>managerRole!=="gestor"||["farmacia","colaborador"].includes(id)).map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></label>
     <label>Estado<select value={String(form.active)} onChange={e=>setForm({...form,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Bloqueado en este cliente</option></select></label>
     <div className="fm-manage-wide"><strong>Farmacias autorizadas</strong><div className="fm-manage-checkboxes">{pharmacies.map(p=><label key={p.id}><input type="checkbox" checked={form.pharmacies.includes(String(p.id))} onChange={e=>setForm(v=>({...v,pharmacies:e.target.checked?[...v.pharmacies,String(p.id)]:v.pharmacies.filter(id=>id!==String(p.id))}))}/>{p.name}</label>)}</div></div>
     {form.authType==="interno"&&<p className="fm-manage-wide">

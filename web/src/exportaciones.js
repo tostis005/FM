@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { isValidCN } from "./cns.js";
+import { ticketLineAmounts } from "./ticketLineAmounts.js";
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
@@ -19,7 +20,7 @@ function columnName(index) {
   return result;
 }
 
-function worksheetXml(rows, widths = [], dateCols = [], timeCols = []) {
+function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCols = []) {
   const columnWidths = widths.length
     ? "<cols>" + widths.map((width, index) => '<col min="' + (index + 1) +
       '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>').join("") + "</cols>"
@@ -28,7 +29,7 @@ function worksheetXml(rows, widths = [], dateCols = [], timeCols = []) {
     const cells = row.map((value, colIndex) => {
       if (value === null || value === undefined) return "";
       const ref = columnName(colIndex + 1) + (rowIndex + 1);
-      const style = rowIndex === 0 || (dateCols.length && rowIndex === 1) ? ' s="1"' : (typeof value === "number" && dateCols.includes(colIndex) ? ' s="2"' : typeof value === "number" && timeCols.includes(colIndex) ? ' s="3"' : "");
+      const style = rowIndex === 0 || (dateCols.length && rowIndex === 1) ? ' s="1"' : (typeof value === "number" && dateCols.includes(colIndex) ? ' s="2"' : typeof value === "number" && timeCols.includes(colIndex) ? ' s="3"' : typeof value === "number" && percentCols.includes(colIndex) ? ' s="4"' : "");
       if (typeof value === "number" && Number.isFinite(value)) {
         return '<c r="' + ref + '"' + style + '><v>' + value + '</v></c>';
       }
@@ -75,15 +76,15 @@ async function workbook(sheets) {
     "</Relationships>");
   zip.file("xl/styles.xml", XML_HEADER +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm:ss"/></numFmts>' +
+    '<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm:ss"/><numFmt numFmtId="166" formatCode="0.00%"/></numFmts>' +
     '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="4"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+    '<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
     "</styleSheet>");
   sheets.forEach((sheet, index) => zip.file("xl/worksheets/sheet" + (index + 1) + ".xml",
-    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [])));
+    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [], sheet.percentCols || [])));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
@@ -180,9 +181,8 @@ export async function exportAllPromotionsZip(promotions, pharmacyName) {
 
 
 const LAB_HEADERS = [
-  "NOMBRE FARMACIA","VENDEDOR","IdVenta","NumeroDoc","FECHA","HORA",
-  "Codigo","Descripcion","Pvp","Cantidad","ImporteBruto","DescuentoLinea",
-  "ImporteNeto","%DTO LINEA"
+  "NumeroDoc","FECHA","HORA","Codigo","Descripcion","Pvp",
+  "Cantidad","ImporteBruto","DescuentoLinea","ImporteNeto","%DTO LINEA"
 ];
 function madridParts(isoDate){
   const formatter=new Intl.DateTimeFormat("en-GB",{
@@ -197,29 +197,38 @@ function madridParts(isoDate){
 export async function buildLabSalesExcel(promo,lines){
   ensureValidCNs(promo);
   const ordered=[...lines].sort((a,b)=>new Date(a.at)-new Date(b.at));
+  const sourceCN=line=>{
+    const national=String(line.nationalCode||"").trim();
+    const origin=String(line.cn||"").trim();
+    // No exportar un identificador ERP como CN si no consta en el catálogo
+    // nacional o en el listado de CN de esta promoción.
+    return national||(promo.cns.includes(origin)?origin:"");
+  };
   const rows=[
-    ["","",promo.name],
+    [promo.name],
     LAB_HEADERS,
     ...ordered.map(line=>{
       const {serial,time}=madridParts(line.at);
-      const gross=Number(line.gross)||0,discount=Number(line.lineDiscount)||0;
+      const amounts=ticketLineAmounts(line);
       return [
-        line.pharmacyName || line.pharmacyCode || "",
-        line.sellerId ? "ID "+line.sellerId : "Sin vendedor asignado",
-        line.saleId || "",line.ticket||"",serial,time,
-        line.cn||"",line.description||"",
-        Number(line.pvp)||0,Number(line.quantity)||0,
-        gross,discount,Number(line.net)||0,
-        gross!==0?Math.abs(discount/gross):0
+        line.ticket||"",serial,time,
+        sourceCN(line),line.articleName||line.description||"",
+        amounts.pvp,amounts.quantity,amounts.gross,
+        amounts.lineDiscount,amounts.net,amounts.discountRate,
       ];
     }),
   ];
   const products=[["Código","Descripción","P.v.p."],...Object.values(Object.fromEntries(
-    ordered.filter(l=>l.cn).map(l=>[l.cn,[l.cn,l.description||"",Number(l.pvp)||0]])
+    ordered.filter(line=>sourceCN(line)).map(line=>[
+      sourceCN(line),[sourceCN(line),line.articleName||line.description||"",
+        ticketLineAmounts(line).pvp]
+    ])
   ))];
-  // Plantilla utilizada para exportación a laboratorio, con importes originales.
+  // Exportar importes numéricos: el porcentaje utiliza el formato Excel 0,00 %.
+  // Las devoluciones muestran cantidades e importes absolutos sin tocar el origen.
   const blob=await workbook([
-    {name:"Export",rows,widths:[22,28,18,24,17,15,14,65,14,13,19,20,19,18],dateCols:[4],timeCols:[5]},
+    {name:"Export",rows,widths:[23,17,15,14,65,14,13,19,20,19,20],
+      dateCols:[1],timeCols:[2],percentCols:[10]},
     {name:"Hoja1",rows:products,widths:[17,72,16]},
   ]);
   const safe=String(promo.name||"promocion").normalize("NFD")

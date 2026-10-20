@@ -51,3 +51,10 @@ test("la cancelación explícita no se interpreta como cobertura vacía",async()
  await assert.rejects(historyStartDate({...input,signal:controller.signal,
   request:async()=>{throw Error("Aborted");}}));
 });
+
+test("timeout de cobertura no detiene el dashboard si el usuario no canceló",async()=>{
+ const first=await historyStartDate({...input,signal:{aborted:true},
+  cancelledSignal:{aborted:false},
+  request:async()=>{throw Error("TimeoutError");}});
+ assert.equal(first,input.from);
+});

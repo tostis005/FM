@@ -27,8 +27,8 @@ await page.route("**/api/**",async route=>{
  }
  else if(path==="/api/analytics/pantallas/compras-recepciones/lineas")
   body={farmacia:1,sistema:"farmatic",documento:"REC-CI-1",truncated:false,lines:[
-   {lineId:"1",articleId:"CN01",units:2,unitPrice:4,netUnitCost:3,amount:6},
-   {lineId:"2",articleId:"CN02",units:3,unitPrice:6,netUnitCost:5,amount:15}
+   {lineId:"1",articleId:"ART-01",cn:"654321",articleName:"Paracetamol 500 mg",units:2,unitPrice:4,netUnitCost:3,amount:6},
+   {lineId:"2",articleId:"ART-02",cn:null,articleName:"Ibuprofeno 400 mg",units:3,unitPrice:6,netUnitCost:5,amount:15}
   ]};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -40,8 +40,11 @@ try{
  assert.ok(await page.getByText("21,00 €").count()>=1 || await page.getByText(/21,00\s*€/).count()>=1);
  await page.getByRole("button",{name:"Ver líneas"}).click();
  await page.getByRole("heading",{name:/Recepción ALB-CI-1/}).waitFor();
- await page.getByText("CN01",{exact:true}).waitFor();
- await page.getByText("CN02",{exact:true}).waitFor();
+ await page.getByText("654321",{exact:true}).waitFor();
+  await page.getByText("Paracetamol 500 mg",{exact:true}).waitFor();
+ await page.getByText("Ibuprofeno 400 mg",{exact:true}).waitFor();
+  await page.getByText("CN no disponible",{exact:true}).waitFor();
+  assert.equal(await page.getByText("ART-01",{exact:true}).count(),0,"Un ID ERP no es un CN");
  await page.getByRole("button",{name:"Cerrar detalle"}).click();
  await page.getByRole("button",{name:/Importe neto/}).first().click();
  await page.waitForTimeout(500);

@@ -70,6 +70,15 @@ jobs:
           FROM farmetrica.farmacias f LEFT JOIN sold s ON s.id=f.id
           LEFT JOIN purchases p ON p.id=f.id
           WHERE f.cliente_slug='ampedia' ORDER BY f.id;
+          SELECT 'IGNORADOS_POR_TIPO_90D' AS tipo,p.tipo AS clasificacion,
+            count(DISTINCT p.codigo_origen)::int AS proveedores,
+            coalesce(sum(v.unidades),0)::float8 AS unidades_recibidas
+          FROM farmetrica.proveedores_maestro p
+          JOIN ampedia.fm_recepciones_analitica v
+            ON upper(btrim(p.codigo_origen))=upper(btrim(v.proveedor_id))
+          WHERE p.cliente_slug='ampedia' AND p.ignorar_informes=true
+            AND v.fecha>=date '2026-07-20' AND v.fecha<date '2026-10-21'
+          GROUP BY p.tipo ORDER BY unidades_recibidas DESC;
           SELECT 'COBERTURA_CN_ARTICULOS' AS tipo,
             count(*)::int AS fichas,
             count(*) FILTER(WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL)::int AS cn_verificados
@@ -90,7 +99,7 @@ jobs:
             count(*) FILTER(WHERE nullif(btrim(cliente_origen_id),'') IS NOT NULL)::int AS con_cliente_erp
           FROM ampedia.fm_ventas_cabeceras
           WHERE fecha>=date '2026-07-20' AND fecha<date '2026-10-21'
-             AND lineas_completas AND NOT eliminada_logicamente
+             AND lineas_completas AND NOT eliminado_logicamente
           GROUP BY 2 ORDER BY documentos DESC LIMIT 15;
           ROLLBACK;
           SQL

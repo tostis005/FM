@@ -163,11 +163,12 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
     amountRows+=Number(r.amountRows??(r.amount==null?0:1));
     unitRows+=Number(r.unitRows??(r.units==null?0:1));
     if(r.supplier!=null&&r.supplier!=="")suppliers.add(r.pharmacy+"|"+r.supplier);
-    const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null,sourceRows:0,amountRows:0};
+    const m=months.get(r.month)||{month:r.month,ventas:0,compras:0,unidades:0,margen:null,sourceRows:0,amountRows:0,unitRows:0};
     m.compras=(m.compras??0)+amount;
     m.recepciones=(m.recepciones||0)+Number(r.receipts||0);
     m.sourceRows+=Number(r.sourceRows??1);
      m.amountRows+=Number(r.amountRows??(r.amount==null?0:1));
+    m.unitRows+=Number(r.unitRows??(r.units==null?0:1));
     months.set(r.month,m);
    }
    res.json({available:true,kpis:{
@@ -183,7 +184,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    monthly:[...months.values()].map(m=>({
     month:m.month,ventas:m.ventas,compras:m.sourceRows===m.amountRows?m.compras:null,
     recepciones:legacy?null:m.recepciones||0,
-    unidades:m.unidades,margen:m.margen
+    unidades:m.sourceRows===m.unitRows?m.unidades:null,margen:m.margen
    }))});
   }catch(e){next(e)}
  };

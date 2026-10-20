@@ -804,7 +804,7 @@ function App(){
  const role=tenantContext?.role;
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(item.admin)return ["administrador","superadministrador"].includes(role);
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(item.id==="usuarios"&&role==="gestor");
    if(item.module)return sessionUser?.role==="superadministrador"||tenantContext?.modules?.[item.module]===true;
    return true;
  });
@@ -1026,7 +1026,7 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>} 

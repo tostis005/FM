@@ -371,7 +371,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
     state.count += 1; rateByIp.set(ip, state);
     try {
       const { rows } = await pool.query(
-        "SELECT email FROM public.acceso_cuentas WHERE email=$1 AND activo=TRUE", [email]);
+        "SELECT a.email FROM public.acceso_cuentas a JOIN farmetrica.superadministradores sa ON sa.email=a.email WHERE a.email=$1 AND a.activo=TRUE", [email]);
       if (!rows.length) return res.json(genericResponse);
       const { rows: recent } = await pool.query(
         "SELECT enviado_en FROM public.acceso_codigos WHERE email=$1", [email]);
@@ -409,6 +409,11 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false) {
       const { rowCount } = await pool.query(
         "DELETE FROM public.acceso_codigos WHERE email=$1 AND codigo_hash=$2", [email, rows[0].codigo_hash]);
       if (!rowCount) return res.status(401).json({ error: "Código ya utilizado" });
+      // El código email heredado no puede sustituir el SSO corporativo ni
+      // el password+reset de usuarios externos: solo superadministración.
+      const {rows:superRows}=await pool.query(
+       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
+      if(!superRows.length)return res.status(403).json({error:"Este acceso requiere Google o contraseña"});
       const user = await resolveAccess(email);
       if (!user) return res.status(403).json({ error: "La cuenta ya no está autorizada" });
       return issueSession(res, user);

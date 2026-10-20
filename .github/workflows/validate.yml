@@ -29,6 +29,7 @@ jobs:
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --test api/src/supplierReporting.test.js
+          node --test api/src/outgoingTransfers.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -201,6 +202,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationTenantDomains.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationOperativa.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierReporting.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/outgoingTransfers.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/commercialNames.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentScreens.integration.test.js
 

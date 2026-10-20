@@ -25,6 +25,7 @@ import { setupPrivacyRequests } from "./privacyRequests.js";
 import {setupOperativa} from "./operativa.js";
 import {setupDocumentScreens} from "./documentScreens.js";
 import {nameCommercialRows} from "./commercialNames.js";
+import {nameTicketArticleRows} from "./articleNames.js";
 
 const { Pool } = pg;
 const {
@@ -335,7 +336,7 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
 // Cada importe y descuento se presenta con el contrato canónico que recibió PostgreSQL.
 const ticketColumns = Object.freeze({
   pharmacy:"f.nombre",seller:"v.vendedor_id",saleId:"v.origen_id",
-  ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",description:"NULL::text",
+  ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",sourceArticleId:"v.articulo_id",
   pvp:"v.precio_unitario",quantity:"v.unidades",gross:"NULL::numeric",
   lineDiscount:"v.descuento_linea",net:"v.importe",
   discountPercent:"NULL::numeric",
@@ -407,7 +408,8 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
        ` + where + orderSql +
       " LIMIT $"+(params.length+1)+" OFFSET $"+(params.length+2),
       [...params,limit,offset]);
-    const named=await nameCommercialRows(pool,req.context,rows);
+    const withSeller=await nameCommercialRows(pool,req.context,rows);
+    const named=await nameTicketArticleRows(pool,req.context,withSeller);
     res.json({
       rows:named,total:countRows[0]?.total||0,offset,limit,
       origin:req.context.client.schema+".fm_ventas_analitica",

@@ -40,4 +40,7 @@ jobs:
           echo '=== DOCKER STATS ==='; timeout 20 docker stats --no-stream --format '{{.Name}} | {{.CPUPerc}} | {{.MemUsage}}' 2>&1 | head -n 30 || true
           echo '=== DOCKER DISK ==='; timeout 20 docker system df 2>&1 | head -n 18 || true
           echo '=== LOG SIZE MB ==='; du -sm /var/log 2>/dev/null || true
+          echo '=== INSTALLED OLLAMA MODELS ==='; timeout 12 docker exec farmawao-ollama-1 ollama list 2>&1 | head -n 12 || true
+          echo '=== LOADED OLLAMA MODELS ==='; timeout 12 docker exec farmawao-ollama-1 ollama ps 2>&1 | head -n 12 || true
+          echo '=== TOP LOG SUBDIRECTORIES MB ==='; du -sm /var/log/* 2>/dev/null | sort -nr | head -n 12 || true
           REMOTE

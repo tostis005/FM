@@ -287,6 +287,19 @@ function App(){
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};
   },[]);
+  async function retryPromotions(){
+   if(!tenantContext)return;
+   setPromotionStoreStatus("checking");
+   try{
+    const server=await loadStoredPromotions();
+    if(!Array.isArray(server.promotions))throw Error("El servidor no devolvió un catálogo válido");
+    setData(prev=>({...prev,promos:server.promotions}));
+    setPromotionStoreStatus("connected");
+   }catch(err){
+    setPromotionStoreStatus("error");
+    setToast("No se pudieron cargar las promociones: "+err.message);
+   }
+  }
   async function activateClient(slug){
     if(slug===tenantContext?.client.slug)return;
     try{
@@ -916,7 +929,16 @@ function App(){
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
-    {page==="promociones"&&<>
+    {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
+     <section className="card fm-preview-panel" role={promotionStoreStatus==="error"?"alert":"status"}>
+      <h2>{promotionStoreStatus==="error"?"No se pudieron consultar las promociones":"Consultando promociones…"}</h2>
+      <p>{promotionStoreStatus==="error"?
+       "El catálogo compartido no está disponible. No se muestran copias antiguas del navegador para evitar confusiones.":
+       "Cargando las campañas compartidas del cliente."}</p>
+      {promotionStoreStatus==="error"&&<button className="btn btn-secondary" type="button"
+       onClick={()=>void retryPromotions()}>Reintentar</button>}
+     </section>}
+    {page==="promociones"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Promociones" updatedAt={salesLastUpdated}
   period={from&&to&&from<=to?{valid:true,from,to}:null}
   actions={<div className="campaign-header-actions">
@@ -971,7 +993,7 @@ function App(){
  </section>
 
 </>}
-{page==="seguimiento-global"&&<>
+{page==="seguimiento-global"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Seguimiento" updatedAt={salesLastUpdated}
   actions={<div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/>

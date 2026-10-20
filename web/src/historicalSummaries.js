@@ -75,9 +75,10 @@ export function mergeHistoricalSummaries(parts,kind,{from,to}){
  const months=[...grouped].sort(([a],[b])=>a.localeCompare(b)).map(([month,rows])=>{
   const out={...rows[0],month};
   for(const key of ["ventas","compras","unidades","recepciones"]){
-   if(rows.some(r=>r[key]!=null))
-    out[key]=rows.reduce((n,r)=>n+Number(r[key]||0),0);
-   else if(rows.some(r=>Object.hasOwn(r,key)))out[key]=null;
+   if(!rows.some(r=>Object.hasOwn(r,key)))continue;
+   // Si una mitad de mes carece de importe, no sumar únicamente la mitad válida.
+   out[key]=rows.some(r=>r[key]==null)?null:
+    rows.reduce((n,r)=>n+Number(r[key]),0);
   }
   return out;
  });

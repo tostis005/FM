@@ -727,17 +727,19 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
         insightLoading:isFetchingSales);
    const isMargin=["margen","margenPct"].includes(c.key);
    const isCommercial=["resultadoComercial","resultadoComercialPct"].includes(c.key);
-   const reason=!kpiLoading&&isMargin&&realKpis[c.key]==null?
-    (fastFailed?"No se pudo consultar ventas: "+fastFailed:
-     "Sin cobertura completa del coste histórico de los artículos vendidos"):
-    !kpiLoading&&isCommercial?
-     commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
-      fastFailed||purchaseSummaryError?
-       "No disponible: una de las fuentes no se ha podido cargar":
-       fastPurchase?.amountCoveragePct!=null&&fastPurchase.amountCoveragePct<100?
-        "Cobertura de compras: "+percentage(fastPurchase.amountCoveragePct)+". Faltan importes.":
-        "No disponible hasta disponer de importes completos de ventas y compras":
-    !kpiLoading&&fastFailed&&["ventas","unidades"].includes(c.key)?"Error al consultar ventas": "";
+   const isSaleMetric=["ventas","unidades","margen","margenPct"].includes(c.key);
+   const reason=kpiLoading?"":isCommercial?
+    commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
+     fastFailed||purchaseSummaryError?
+      "No disponible: una de las fuentes no se ha podido cargar":
+      fastPurchase?.amountCoveragePct!=null&&fastPurchase.amountCoveragePct<100?
+       "Cobertura de compras: "+percentage(fastPurchase.amountCoveragePct)+". Faltan importes.":
+       "No disponible hasta disponer de importes completos de ventas y compras":
+    fastFailed&&isDashboard&&isSaleMetric?"Error al consultar ventas":
+    purchaseSummaryError&&isDashboard&&!isSaleMetric?"Error al consultar compras":
+    isMargin&&realKpis[c.key]==null?
+     "Sin cobertura completa del coste histórico de los artículos vendidos":
+    "";
    const progress=isDashboard?dashboardProgress(c.key):
     module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):
     module==="ventas"&&["ventas","unidades"].includes(c.key)?

@@ -175,9 +175,16 @@ export function ClientesPanel({onUpdated}){
 const initial={email:"",name:"",role:"farmacia",pharmacies:[],active:true,authType:"google",password:""};
 const ROLES=[["administrador","Administrador del cliente"],["gestor","Gestor"],["farmacia","Personal de farmacia"],["colaborador","Colaborador externo"]];
 export function EquipoCliente({client,pharmacies=[]}){
- const [users,setUsers]=useState([]),[form,setForm]=useState(initial),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
+ const [users,setUsers]=useState([]),[domains,setDomains]=useState([]),
+  [form,setForm]=useState(initial),[busy,setBusy]=useState(false),
+  [feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
  const headers={"X-Farmetrica-Cliente":client};
- async function refresh(){setLoading(true);try{setUsers(await api("/api/tenant/usuarios",{headers}))}finally{setLoading(false)}}
+ async function refresh(){setLoading(true);
+  try{const [people,allowed]=await Promise.all([
+    api("/api/tenant/usuarios",{headers}),api("/api/tenant/dominios",{headers})]);
+   setUsers(people);setDomains(allowed.map(x=>x.domain));}
+  finally{setLoading(false)}
+ }
  useEffect(()=>{refresh().catch(e=>setFeedback(e.message))},[client]);
  async function save(e){
   e.preventDefault();setBusy(true);setFeedback("");
@@ -185,33 +192,64 @@ export function EquipoCliente({client,pharmacies=[]}){
    setForm(initial);await refresh();setFeedback("Usuario y permisos guardados en PostgreSQL");
   }catch(error){setFeedback(error.message)}finally{setBusy(false)}
  }
+ const corporate=form.authType!=="interno";
+ const currentDomain=String(form.email||"").split("@")[1]||domains[0]||"";
+ const userPart=String(form.email||"").split("@")[0]||"";
+ const setUserPart=value=>setForm({...form,email:value+"@"+currentDomain});
+ const setDomain=value=>setForm({...form,email:userPart+"@"+value});
  return <div className="fm-management">
-  <div className="page-header"><h1>Equipo y permisos</h1></div>
+  <div className="page-header"><h1>Usuarios y permisos del cliente</h1></div>
   {feedback&&<div className="fm-manage-feedback" role="status">{feedback}</div>}
   <section className="card fm-manage-client"><div className="section-heading"><h2>Alta o modificación de usuarios</h2><Users size={20}/></div>
    <form className="fm-manage-form" onSubmit={save}>
-    <label>Correo<input type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="nombre@empresa.com"/></label>
+    {corporate?<div className="fm-manage-wide">
+      <strong>Correo corporativo para acceso con Google</strong>
+      <div className="fm-internal-email">
+       <label>Usuario
+        <input required value={userPart}
+         onChange={e=>setUserPart(e.target.value.toLowerCase().replace(/[@\s]/g,""))}
+         placeholder="nombre.apellido"/></label>
+       <span aria-hidden="true">@</span>
+       <label>Dominio autorizado
+        <select required value={domains.includes(currentDomain)?currentDomain:""}
+         onChange={e=>setDomain(e.target.value)}>
+         <option value="">Elige un dominio</option>
+         {domains.map(domain=><option key={domain} value={domain}>{domain}</option>)}
+        </select></label>
+      </div>
+      {!domains.length&&<p role="alert">El superadministrador debe autorizar un dominio de este cliente en Administración → Clientes antes de dar de alta usuarios internos.</p>}
+     </div>:
+     <label>Correo del colaborador externo
+      <input type="email" required value={form.email}
+       onChange={e=>setForm({...form,email:e.target.value})}
+       placeholder="colaborador@correoexterno.com"/></label>}
     <label>Nombre<input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nombre y apellidos"/></label>
-    <label>Acceso<select value={form.authType||"google"} onChange={e=>setForm({...form,authType:e.target.value,password:""})}>
-      <option value="google">Google autorizado</option>
-      <option value="interno">Usuario interno (contraseña)</option>
+    <label>Tipo de usuario<select value={form.authType||"google"}
+      onChange={e=>setForm({...form,authType:e.target.value,password:"",
+       email:e.target.value==="google"?"@"+(domains[0]||""):form.email})}>
+      <option value="google">Interno · Google Workspace (SSO)</option>
+      <option value="interno">Externo · Correo y contraseña</option>
      </select></label>
-     {form.authType==="interno"&&<label>Contraseña
+     {form.authType==="interno"&&<label>Contraseña inicial del usuario externo
       <input type="password" autoComplete="new-password" minLength={12} maxLength={128}
-       placeholder="Mínimo 12 caracteres; vacío al editar" value={form.password||""}
+       placeholder="Mínimo 12 caracteres; dejar vacío para conservar al editar" value={form.password||""}
        onChange={e=>setForm({...form,password:e.target.value})}/>
      </label>}
     <label>Rol<select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}>{ROLES.map(([id,label])=><option value={id} key={id}>{label}</option>)}</select></label>
     <label>Estado<select value={String(form.active)} onChange={e=>setForm({...form,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Bloqueado en este cliente</option></select></label>
     <div className="fm-manage-wide"><strong>Farmacias autorizadas</strong><div className="fm-manage-checkboxes">{pharmacies.map(p=><label key={p.id}><input type="checkbox" checked={form.pharmacies.includes(String(p.id))} onChange={e=>setForm(v=>({...v,pharmacies:e.target.checked?[...v.pharmacies,String(p.id)]:v.pharmacies.filter(id=>id!==String(p.id))}))}/>{p.name}</label>)}</div></div>
-    <div className="fm-manage-wide"><button className="btn btn-primary" disabled={busy} type="submit"><CheckCircle2 size={16}/>{busy?"Guardando…":"Guardar usuario"}</button></div>
+    {form.authType==="interno"&&<p className="fm-manage-wide">
+    Entrega la contraseña inicial por un canal seguro. Después podrá cambiarla
+    o utilizar «He olvidado mi contraseña» en el acceso.</p>}
+  <div className="fm-manage-wide"><button className="btn btn-primary"
+    disabled={busy||(corporate&&!domains.includes(currentDomain))} type="submit"><CheckCircle2 size={16}/>{busy?"Guardando…":"Guardar usuario"}</button></div>
    </form>
   </section>
   <section className="card fm-manage-client"><div className="section-heading"><div><h2>Usuarios asignados</h2></div><span>{loading?<LoadingStatus compact label="Cargando equipo…"/>:users.length+" personas"}</span></div>
    {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:<SortableDataTable label="usuarios" headers={["Correo","Acceso","Rol","Farmacias","Estado","Acciones"]}
     rows={users.map(u=>[
      <div key={u.email}><strong>{u.name||u.email}</strong><div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></div>,
-     u.authType==="interno"?"Interno":"Google",
+     u.authType==="interno"?"Externo · contraseña":"Interno · Google",
      ROLES.find(x=>x[0]===u.role)?.[1]||u.role,
      u.role==="administrador"?"Todas":u.pharmacies.map(id=>pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")||"—",
      u.active?"Activo":"Bloqueado",

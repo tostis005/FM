@@ -33,8 +33,7 @@ export function setupHistoryCoverage(app,pool,{requireTenant}){
    Number(p.id),String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()]));
   if(source==="ventas"||fields.has("farmacia_codigo")){
    const codes=[...new Set(requested.map(id=>codesById.get(id)).filter(Boolean))];
-   if(codes.length!==new Set(requested).size&&
-      requested.some(id=>!codesById.has(id)||!codesById.get(id)))
+   if(requested.some(id=>!codesById.get(id)))
     return res.status(503).json({error:"Falta correspondencia ERP de una farmacia"});
    try{
     const {rows}=await pool.query({

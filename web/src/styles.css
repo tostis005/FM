@@ -819,7 +819,7 @@ html,body{overflow-x:clip}
 .kpi:has(.kpi-content){align-items:flex-start}
 .kpi .kpi-content{
  flex:1;min-width:0;display:grid;
- grid-template-rows:minmax(18px,auto) minmax(34px,auto) minmax(19px,auto);
+ grid-template-rows:24px minmax(34px,auto) minmax(19px,auto);
  align-content:start;align-items:start;gap:5px;
 }
 .kpi .kpi-content .kpi-value{margin-top:0;min-height:34px}

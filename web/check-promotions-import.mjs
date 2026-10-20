@@ -3,6 +3,7 @@
 import {chromium} from "playwright";
 import JSZip from "jszip";
 import assert from "node:assert/strict";
+import {planPromotionImport} from "../api/src/promotionImportIdentity.js";
 
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const escapeXml=v=>String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -52,10 +53,13 @@ const user={email:"admin@example.org",name:"Administrador",role:"superadministra
 const farmacia={id:"1",name:"Abadía",sourceCode:"ABA",active:true};
 const old={id:"POLD",name:"Promoción antigua",status:"Activa",cns:["121212"],
  targets:{"1":3},start:"2026-10-01",end:"2026-10-31",type:"tres_por_dos"};
-let imported=null,postCount=0;
-page.on("pageerror",e=>{throw e;});
+let stored=[old],postCount=0,removedCount=0,lastImport=[];
+const errors=[];
+page.on("pageerror",e=>errors.push(e.message));
+page.on("dialog",dialog=>{if(dialog.type()==="confirm"&&/Eliminar definitivamente/.test(dialog.message()))
+ return dialog.accept();throw Error("Aviso inesperado durante importación: "+dialog.message());});
 await page.route("**/api/**",async route=>{
- const url=new URL(route.request().url()),p=url.pathname;
+ const url=new URL(route.request().url()),p=url.pathname,method=route.request().method();
  let body={};
  if(p==="/api/auth/me")body={user};
  else if(p==="/api/tenant/context")body={
@@ -63,38 +67,58 @@ await page.route("**/api/**",async route=>{
   clients:[{slug:"ampedia",name:"Ampedia"}],role:"superadministrador",
   modules:{promociones:true,dashboard:true},pharmacies:[farmacia],allowedPharmacyIds:[1]};
  else if(p==="/api/tenant/farmacias")body=[farmacia];
- else if(p==="/api/tenant/promociones")body={promotions:imported||[old],deletedIds:[]};
- else if(p==="/api/tenant/promociones/reemplazar"){
+ else if(p==="/api/tenant/promociones"&&method==="GET")body={promotions:stored,deletedIds:[]};
+ else if(p==="/api/tenant/promociones/importar"&&method==="POST"){
   postCount++;
-  imported=route.request().postDataJSON().promotions;
-  body={removed:1,imported:imported.length};
+  lastImport=route.request().postDataJSON().promotions;
+  const {additions,skipped}=planPromotionImport(stored,lastImport);
+  stored=[...stored,...additions];
+  body={imported:additions.length,skipped,promotions:stored};
+ }else if(p==="/api/tenant/promociones/eliminar-lote"&&method==="POST"){
+  const ids=route.request().postDataJSON().ids;
+  removedCount+=ids.length;
+  stored=stored.filter(x=>!ids.includes(x.id));
+  body={deletedIds:ids,removed:ids.length};
  }else if(p==="/api/ventas/seguimiento")body={sales:{}};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  await page.getByText("Promoción antigua").first().waitFor({state:"visible",timeout:12000});
- page.once("dialog",dialog=>{
-  assert.match(dialog.message(),/Sustituir TODAS/i);
-  return dialog.accept();
- });
- await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles({
-  name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
-  mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  buffer:await excel()
- });
- await page.waitForFunction(()=>document.body.textContent.includes("2 promociones importadas"),null,{timeout:12000});
+ const file={name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
+  mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await excel()};
+ await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
+ await page.waitForFunction(()=>document.querySelectorAll(".campaign-table tbody tr").length>=3,null,{timeout:12000});
  assert.equal(postCount,1);
- assert.equal(imported?.length,2,"RESUMEN debe cortar en la primera fila en blanco");
- const gum=imported.find(p=>p.range==="GUM"),eucerin=imported.find(p=>p.range==="EUCERIN");
- assert.ok(gum);
- assert.ok(eucerin);
+ assert.equal(stored.length,3,"El Excel añade dos promociones sin eliminar la anterior");
+ assert.equal(lastImport.length,2,"RESUMEN debe cortar al llegar a la primera fila en blanco");
+ const gum=lastImport.find(p=>p.range==="GUM"),eucerin=lastImport.find(p=>p.range==="EUCERIN");
+ assert.ok(gum);assert.ok(eucerin);
  assert.deepEqual(gum.cns,["123456"]);
  assert.deepEqual(eucerin.cns,["654321"]);
  assert.deepEqual(gum.targets,{"1":12});
  assert.equal(gum.status,"Activa");
  assert.equal(eucerin.status,"Finalizada");
- assert.ok(!imported.some(p=>p.name.includes("KNEIPP")));
- await page.getByText("Promoción antigua").first().waitFor({state:"detached",timeout:9000});
- console.log("OK: reimportación reemplaza catálogo; solo RESUMEN, vínculo laboratorio/gama y objetivos");
+ assert.ok(!lastImport.some(p=>p.name.includes("KNEIPP")));
+ assert.equal(await page.getByText("Promoción antigua").first().count(),1);
+ // La misma importación NO actualiza objetivos ni CNs de campañas existentes.
+ stored[1].targets={"1":77};
+ await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
+ await page.waitForFunction(()=>document.querySelector('button[aria-busy="true"]')===null,null,{timeout:12000});
+ assert.equal(postCount,2);
+ assert.equal(stored.length,3);
+ assert.equal(stored[1].targets["1"],77,"La reimportación no sobreescribe cambios existentes");
+ // Selección de varias filas, no hay que eliminar una por una.
+ await page.getByRole("checkbox",{name:"Seleccionar Promoción antigua"}).check();
+ await page.getByRole("checkbox",{name:"Seleccionar "+gum.name}).check();
+ await page.getByRole("button",{name:"Eliminar seleccionadas"}).click();
+ await page.waitForFunction(()=>document.body.textContent.includes("2 promociones eliminadas"),null,{timeout:9000});
+ assert.equal(removedCount,2);
+ assert.equal(stored.length,1);
+ assert.equal(stored[0].id,eucerin.id);
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByText(eucerin.name).first().waitFor({timeout:10000});
+ assert.equal(await page.getByText("Promoción antigua").count(),0);
+ assert.deepEqual(errors,[]);
+ console.log("OK: importación acumulativa sin confirmaciones, deduplicación, selección y borrado múltiple");
 }finally{await browser.close();}

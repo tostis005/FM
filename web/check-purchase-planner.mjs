@@ -40,16 +40,18 @@ await page.route("**/api/**",async route=>{
  }
  else if(path==="/api/analytics/pedidos/propuesta"){
   const id=url.searchParams.get("buscar")||"";
-  const g={key:"CN:123456",cn:"123456",articleName:"Crema de manos",
+  const g={key:"CN:123456",kind:"articulo",cn:"123456",articleName:"Crema de manos",
    stock:10,unitsPeriod:24,units3:90,units12:300,suggested:8,
    patron:"recurrente",firstSale:"2026-03-05",lastSale:"2026-10-18",saleSpanDays:228,
    pharmacies:[
-    {pharmacyId:"1",articleId:"771",articleName:"Crema de manos",cn:"123456",
+    {pharmacyId:"1",groupKey:"CN:123456",articleId:"771",articleName:"Crema de manos",cn:"123456",
+     options:[{articleId:"771",articleName:"Crema de manos",cn:"123456"}],
      unitsPeriod:12,units3:45,units12:150,stock:6,suggested:3,ordered:0,
      daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,
      firstSale:"2026-03-05",lastSale:"2026-10-18",saleSpanDays:228,
      demandPattern:"recurrente",confidence:"calculable"},
-    {pharmacyId:"2",articleId:"999",articleName:"Crema de manos",cn:"123456",
+    {pharmacyId:"2",groupKey:"CN:123456",articleId:"999",articleName:"Crema de manos",cn:"123456",
+     options:[{articleId:"999",articleName:"Crema de manos",cn:"123456"}],
      unitsPeriod:12,units3:45,units12:150,stock:4,suggested:5,ordered:0,
      daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,
      firstSale:"2026-03-05",lastSale:"2026-10-18",saleSpanDays:228,

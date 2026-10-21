@@ -36,8 +36,11 @@ test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados
    ...["farmacia_codigo","articulo_id","fecha","unidades"]
     .map(column_name=>({table_name:"fm_ventas_analitica",column_name}))
   ]};
-  if(text.includes("WITH sold AS MATERIALIZED"))return {rows:[{pharmacyId:"1",articleId:"77",
-   articleName:"Crema",cn:"123456",stock:4,stockAt:null,unitsPeriod:18,units3:90,units12:250}]};
+  if(text.includes("WITH sold AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"1",articleId:"77",articleName:"Crema",cn:"123456",
+    stock:4,stockAt:null,unitsPeriod:18,units3:90,units12:250},
+   {pharmacyId:"1",articleId:"88",articleName:"Gel",cn:"888888",
+    stock:3,stockAt:null,unitsPeriod:7,units3:35,units12:145}]};
   if(text.includes("SELECT DISTINCT ON (f.id,a.origen_id)"))return {rows:[]};
   if(text.includes("op_politicas_reposicion"))return {rows:[{farmacia_id:1,intervalo_pedidos:7,plazo_entrega:2,stock_seguridad:1}]};
   if(text.includes("FROM farmetrica.nomenclator_presentaciones"))return {rows:[]};
@@ -62,6 +65,16 @@ test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados
  assert.equal(result.body.groups.length,1);
  assert.equal(result.body.groups[0].pharmacies[0].suggested,4);
  assert.equal(result.body.groups[0].pharmacies[0].ordered,2);
+ const secondPage=await call({buscar:"",pagina:"2",tamano:"1",orden:"unitsPeriod",direccion:"desc"});
+ assert.equal(secondPage.code,200);
+ assert.equal(secondPage.body.groups.length,1);
+ assert.equal(secondPage.body.totalGroups,2);
+ assert.equal(secondPage.body.groups[0].articleName,"Gel");
+ assert.equal(secondPage.body.summary.unitsPeriod,25);
+ assert.equal(secondPage.body.summary.products,2);
+ assert.equal(secondPage.body.truncated,false);
+ assert.equal((await call({pagina:"0"})).code,400);
+ assert.equal((await call({filtros:'{"stock":"x"}',buscar:""})).body.totalGroups,0);
  assert.match(seen.find(x=>x.text.includes("WITH sold AS MATERIALIZED")).text,/ranked AS/);
  assert.match(seen.find(x=>x.text.includes("WITH sold AS MATERIALIZED")).text,/a2.nombre ILIKE/);
  assert.equal((await call({farmacias:"3"})).code,400);

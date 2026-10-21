@@ -75,7 +75,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
        const newAssignments={};
        for(const g of data.groups||[])for(const p of g.pharmacies)
         if(String(p.pharmacyId)===String(pendingLink.pharmacyId)&&
-         (String(g.cn)===String(pendingLink.cn)||String(p.articleId)===String(pendingLink.articleId)))
+         (String(g.cn)===String(pendingLink.cn)||String(p.articleId)===String(pendingLink.articleId)||
+          p.options?.some(o=>String(o.articleId)===String(pendingLink.articleId)||String(o.cn)===String(pendingLink.cn))))
          newAssignments[key(p)]={supplier:String(pendingLink.supplier),units:Math.max(0,p.suggested||0),articleId:String(pendingLink.articleId||p.options?.[0]?.articleId||"")};
        setOverrides(newAssignments);
       }
@@ -105,7 +106,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  const allLines=useMemo(()=>{
   const lines=[];
   for(const g of groups)for(const p of g.pharmacies){
-   const edit=overrides[key(p)]||{},units=Number(edit.units??p.suggested??0);
+   const edit=overrides[key(p)]||{},units=Number(edit.units??0);
    const supplier=String(edit.supplier||"").trim();
    const articleId=chosenArticle(p,edit),article=p.options?.find(x=>String(x.articleId)===articleId)||(!p.options?p:null);
    if(units>0&&Number.isSafeInteger(units)&&supplier&&article){
@@ -120,13 +121,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   return lines;
  },[groups,overrides,pharmacies,suppliers]);
  const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>
-  Number(overrides[key(p)]?.units??p.suggested??0)>0&&
+  Number(overrides[key(p)]?.units??0)>0&&
   !String(overrides[key(p)]?.supplier||"").trim()).length,0);
  const missingArticle=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>
-  Number(overrides[key(p)]?.units??p.suggested??0)>0&&
+  Number(overrides[key(p)]?.units??0)>0&&
   !chosenArticle(p,overrides[key(p)]||{})).length,0);
  const invalidQuantities=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>{
-  const qty=Number(overrides[key(p)]?.units??p.suggested??0);
+  const qty=Number(overrides[key(p)]?.units??0);
   return !Number.isSafeInteger(qty)||qty<0||qty>999999;
  }).length,0);
  const total=field=>groups.reduce((n,g)=>n+Number(g[field]||0),0);
@@ -141,7 +142,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  },{}));
  const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
  const setValue=(p,field,value)=>setOverrides(previous=>({...previous,
-  [key(p)]:{units:p.suggested??0,supplier:"",...previous[key(p)],[field]:value}}));
+  [key(p)]:{units:0,supplier:"",...previous[key(p)],[field]:value}}));
  function exportGrouped(){
   if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de exportar.");
   if(invalidQuantities)return setError("Revisa las cantidades: solo se admiten unidades enteras no negativas.");
@@ -224,7 +225,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalos y plazos por farmacia.</small>}
       <div className="fm-planner-edit">
        <label>Pedir <input type="number" min="0" max="999999" step="1" disabled={!canEdit||p.suggested===null}
-        value={edit.units??p.suggested??0} onChange={e=>setValue(p,"units",e.target.value)}/></label>
+        value={edit.units??0} onChange={e=>setValue(p,"units",e.target.value)}/></label>
+       <button className="fm-planner-use-suggestion" type="button" disabled={!canEdit||p.suggested===null}
+        onClick={()=>setValue(p,"units",p.suggested)}>Usar recomendado ({whole(p.suggested)})</button>
        {g.kind==="generico"&&<label>Presentación a comprar
         <select aria-label={"Presentación a comprar en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
          disabled={!canEdit||p.suggested===null}
@@ -248,8 +251,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {key:"stock",label:"Stock disponible",value:g=>g.stock??-1,render:g=>g.stock===null?"—":whole(g.stock)},
   {key:"suggested",label:"Pedido recomendado",value:g=>g.suggested??-1,
    render:g=>g.suggested===null?"Ver desglose":<strong>{whole(g.suggested)}</strong>},
-  {key:"selected",label:"Pedir",value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??p.suggested??0),0),
-   render:g=><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??p.suggested??0),0))}</strong>}
+  {key:"selected",label:"Pedir",value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0),
+   render:g=><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0))}</strong>}
  ];
  return <section className="card fm-planner">
   <div className="fm-planner-head"><div><h2><ShoppingCart size={19}/> Propuesta inteligente de compra</h2>

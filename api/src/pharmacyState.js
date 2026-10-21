@@ -6,7 +6,7 @@ const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const STALE_MS=48*60*60*1000;
 const normalized=v=>String(v??"").trim().toUpperCase();
 const iso=value=>value?new Date(value).toISOString():null;
-const isFailed=(state,error)=>Boolean(String(error||"").trim())||
+const isFailed=(state,error,rejected=0)=>Number(rejected)>0||Boolean(String(error||"").trim())||
  /^(error|failed|fallido|fallida|fallo|rechazado|rechazada)$/i.test(String(state||"").trim());
 const success=state=>/^(ok|success|completed|complete|completado|completada|finalizada|finalizado|exito|éxito)$/i.test(String(state||"").trim());
 
@@ -15,7 +15,7 @@ export function pharmacySyncSummary(pharmacy,runs,received,now=new Date()){
  const lastPurchases=received.compras?.lastReceivedAt||null;
  const receivedAt=[lastSales,lastPurchases].filter(Boolean).sort().at(-1)||null;
  const lastRun=[...runs].sort((a,b)=>new Date(b.startedAt)-new Date(a.startedAt))[0]||null;
- const problems=runs.filter(r=>isFailed(r.state,r.error));
+ const problems=runs.filter(r=>isFailed(r.state,r.error,r.rejected));
  const recent=receivedAt&&now.getTime()-new Date(receivedAt).getTime()<STALE_MS;
  let state=!pharmacy.active?"Inactiva":problems.length?"Revisar":
   lastRun&&!lastRun.finishedAt&&now.getTime()-new Date(lastRun.startedAt).getTime()<4*3600000?"Sincronizando":
@@ -28,7 +28,7 @@ export function pharmacySyncSummary(pharmacy,runs,received,now=new Date()){
   flows:runs.map(r=>({flow:r.flow,state:r.state,startedAt:r.startedAt,
    finishedAt:r.finishedAt,read:r.read,inserted:r.inserted,rejected:r.rejected,
    error:r.error})),incidents:problems.map(r=>({flow:r.flow,
-   state:r.state,error:r.error||"La última ejecución del flujo no finalizó correctamente"}))};
+   state:r.state,error:r.error||(Number(r.rejected)>0?String(r.rejected)+" registros rechazados en esta ejecución":"La última ejecución del flujo no finalizó correctamente")}))};
 }
 export function setupPharmacyState(app,pool,{requireTenant}){
  app.get("/api/tenant/estado",...requireTenant(),async(req,res,next)=>{
@@ -67,10 +67,10 @@ export function setupPharmacyState(app,pool,{requireTenant}){
     sources.push(kind);
     const timestamp=table===header?"recibido_en":"sincronizado_en";
     const date="fecha";
-    tasks.push([kind,runQuery("SELECT farmacia_codigo AS code,"+
+    tasks.push([kind,runQuery("SELECT upper(btrim(farmacia_codigo)) AS code,"+
      " max("+timestamp+") AS \"lastReceivedAt\",max("+date+") AS \"lastDocumentAt\""+
      " FROM "+q+".\""+table+"\" WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])"+
-     " GROUP BY farmacia_codigo",[codes])]);
+     " GROUP BY upper(btrim(farmacia_codigo))",[codes])]);
    }
    const results=await Promise.allSettled(tasks.map(t=>t[1]));
    const maps={runs:new Map(),ventas:new Map(),compras:new Map()},warnings=[];

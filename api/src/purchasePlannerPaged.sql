@@ -153,15 +153,19 @@ grupos AS MATERIALIZED (
   CASE WHEN count(n.stock)=count(*) THEN sum(n.stock)::float8 ELSE NULL END AS stock,
   CASE WHEN count(n.sugeridas)=count(*) THEN sum(n.sugeridas)::float8 ELSE NULL END AS suggested,
   CASE
-   WHEN bool_or(n.patron='pico_reciente') AND NOT bool_or(n.patron='recurrente')
+   WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6
+    AND max(n.ultima_venta)>=current_date-interval '14 days'
     THEN 'pico_reciente'
-   WHEN bool_and(n.patron='concentrada') THEN 'concentrada'
+   WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6
+    AND max(n.ultima_venta)<current_date-interval '14 days'
+    THEN 'concentrada'
    WHEN bool_or(n.patron='recurrente') THEN 'recurrente'
    WHEN sum(n.v30)=0 AND bool_or(n.patron='posible_estacional') THEN 'posible_estacional'
    WHEN sum(n.v30)=0 THEN 'sin_actividad'
    ELSE 'intermitente'
   END AS patron,
   CASE
+   WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6 THEN 1
    WHEN bool_or(n.patron='recurrente') THEN 4
    WHEN sum(n.v30)>0 AND bool_or(n.patron='intermitente') THEN 3
    WHEN bool_or(n.patron='pico_reciente') THEN 2

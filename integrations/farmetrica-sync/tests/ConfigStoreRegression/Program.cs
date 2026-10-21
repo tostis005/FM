@@ -98,6 +98,11 @@ try
     var saved=new ConfigStore(path);
     if (!saved.Read(c=>c.States.Any(x=>x.LastCompletedUtc==start.AddMinutes(10))))
         throw new Exception("La finalización del intento debe sobrevivir al reinicio del servicio.");
+    if (saved.Read(c=>c.MonitorInstanceId) != Guid.Empty)
+        throw new Exception("Una configuración antigua debe poder adquirir un identificador de monitor al arrancar.");
+    saved.Change(c => c.MonitorInstanceId = Guid.NewGuid());
+    if (new ConfigStore(path).Read(c=>c.MonitorInstanceId) == Guid.Empty)
+        throw new Exception("El identificador de monitor debe persistir tras reinicio.");
     Console.WriteLine("OK: caída VPN sin reintentos, horario diario, zona farmacia, DST y estado persistido.");
     Console.WriteLine("OK: /login and /config reads do not wait behind history writes; snapshot is atomic.");
 }

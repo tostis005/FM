@@ -79,7 +79,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " WHERE upper(btrim(a2.farmacia_codigo))="+pharmacyDataCodeSQL("f2"),
     " AND upper(btrim(a2.origen_id::text))=upper(btrim(sold.article))",
     " AND (a2.nombre ILIKE '%'||$6||'%'"+(has("articulos","codigo_nacional")?" OR a2.codigo_nacional ILIKE '%'||$6||'%'":"")+")",
-    " )))",
+    " ))",
     " ORDER BY greatest(coalesce(u3,0),0) DESC,greatest(coalesce(u12,0),0) DESC,fid,article LIMIT $5::int)",
     " SELECT s.fid::text AS \"pharmacyId\",s.article AS \"articleId\",",
     " coalesce(nullif(btrim(a.name),''),s.article) AS \"articleName\",a.cn,",

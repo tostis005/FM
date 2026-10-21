@@ -359,8 +359,13 @@ jobs:
             AND fecha < '2026-10-22'::date AND farmacia_codigo=ANY($1::text[])
             AND nullif(btrim(articulo_id),'') IS NOT NULL`,
             [ids==="1"?["ABA"]:["ABA","EUR","BUE","EST","VAL"]]);
+           const returnedUnits=response?.summary?.unitsPeriod??full.reduce((n,g)=>n+g.unitsPeriod,0);
            console.log("VALIDACION_PRODUCCION",ids,"sourceUnits",actual.units,
-            "shownUnits",full.reduce((n,g)=>n+g.unitsPeriod,0),"coverage",JSON.stringify(coverage));
+            "groupUnits",returnedUnits,"totalGroups",response?.totalGroups,
+            "coverageOfPage",JSON.stringify(coverage));
+           if(response?.available!==true||response?.truncated||
+              Math.abs(Number(actual.units||0)-Number(returnedUnits||0))>0.00001)
+             throw Error("El total del grupo no coincide con la fuente del período");
            console.log("ENDPOINT_NUEVO",ids,"status",status,"ms",Date.now()-start,
             "groups",response?.groups?.length??null,"available",response?.available??null,
             "truncated",response?.truncated??null,

@@ -101,7 +101,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
    const join=pharmacyDataCodeSQL("f");
    const sql=[
     "WITH sold AS MATERIALIZED (",
-    " SELECT f.id AS fid,v.articulo_id::text AS article,",
+    " SELECT f.id AS fid,upper(btrim(v.farmacia_codigo)) AS source_code,v.articulo_id::text AS article,",
     " sum(v.unidades) FILTER(WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day') AS period,",
     " sum(v.unidades) FILTER(WHERE v.fecha >= current_date-interval '90 days' AND v.fecha < current_date+interval '1 day') AS u3,",
     " sum(v.unidades) FILTER(WHERE v.fecha >= current_date-interval '365 days' AND v.fecha < current_date+interval '1 day') AS u12",
@@ -109,7 +109,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " AND upper(btrim(v.farmacia_codigo))="+join+" AND f.id=ANY($3::int[])",
     " WHERE v.fecha >= least($1::date,current_date-interval '365 days')",
     " AND v.fecha < greatest($2::date,current_date)+interval '1 day'",
-    " AND nullif(btrim(v.articulo_id::text),'') IS NOT NULL GROUP BY f.id,v.articulo_id",
+    " AND nullif(btrim(v.articulo_id::text),'') IS NOT NULL GROUP BY f.id,upper(btrim(v.farmacia_codigo)),v.articulo_id",
     "), ranked AS (SELECT * FROM sold WHERE ($6::text='' OR article ILIKE '%'||$6||'%' OR EXISTS (",
     " SELECT 1 FROM "+q+".articulos a2 JOIN farmetrica.farmacias f2",
     " ON f2.id=sold.fid AND f2.cliente_slug=$4",
@@ -126,8 +126,8 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " JOIN farmetrica.farmacias f ON f.id=s.fid AND f.cliente_slug=$4",
     " LEFT JOIN LATERAL (SELECT a.nombre AS name,"+code+" AS cn,",
     " a.stock_actual AS stock,"+stamp+" AS stamp FROM "+q+".articulos a",
-    " WHERE upper(btrim(a.farmacia_codigo))="+join,
-    " AND upper(btrim(a.origen_id::text))=upper(btrim(s.article))",
+    " WHERE a.farmacia_codigo=s.source_code,
+    " AND a.origen_id=s.article",
     " "+latest+" LIMIT 1) a ON true ORDER BY s.fid,s.article"
    ].join(" ");
    const [sales,policies,orders,catalogSearch]=await Promise.all([

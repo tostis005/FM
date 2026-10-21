@@ -72,14 +72,15 @@ export default function PharmacyState({clientSlug}){
   return()=>{controller.abort();clearInterval(timer)};
  },[refresh]);
  const pharmacies=data?.pharmacies||[];
- const healthy=pharmacies.filter(p=>p.state==="Correcto").length;
- const errors=pharmacies.filter(p=>p.state==="Error").length;
- const warning=pharmacies.filter(p=>p.state==="Revisar"||p.state==="Sincronizando").length;
- const pending=pharmacies.filter(p=>!p.monitored&&p.active).length;
- const filtered=pharmacies.filter(p=>(!pharmacyIds.length||pharmacyIds.includes(p.id))&&(scope==="all"||
+ const scoped=pharmacies.filter(p=>!pharmacyIds.length||pharmacyIds.includes(p.id));
+ const healthy=scoped.filter(p=>p.state==="Correcto").length;
+ const errors=scoped.filter(p=>p.state==="Error").length;
+ const warning=scoped.filter(p=>p.state==="Revisar"||p.state==="Sincronizando").length;
+ const pending=scoped.filter(p=>!p.monitored&&p.active).length;
+ const filtered=scoped.filter(p=>scope==="all"||
   scope==="issues"&&(p.state==="Error"||p.state==="Revisar")||
   scope==="healthy"&&p.state==="Correcto"||
-  scope==="unknown"&&!p.monitored));
+  scope==="unknown"&&!p.monitored);
  const toggle=id=>setExpanded(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
  const priority={Error:0,Revisar:1,Sincronizando:2,Correcto:3,Inactiva:4};
  const columns=[
@@ -127,7 +128,7 @@ export default function PharmacyState({clientSlug}){
   </ReportFilterBar>
   {error&&<div className="access-alert access-alert-error" role="alert"><AlertTriangle size={17}/>{error}</div>}
   <div className="fm-pharmacy-status-kpis">
-   <div className="card"><Store size={19}/><span>Farmacias</span><strong>{integer(pharmacies.length)}</strong></div>
+   <div className="card"><Store size={19}/><span>Farmacias</span><strong>{integer(scoped.length)}</strong></div>
    <div className="card fm-kpi-ok"><CheckCircle2 size={19}/><span>Correctas</span><strong>{integer(healthy)}</strong></div>
    <div className="card fm-kpi-error"><AlertTriangle size={19}/><span>Con error</span><strong>{integer(errors)}</strong></div>
    <div className="card fm-kpi-warning"><Clock3 size={19}/><span>En revisión</span><strong>{integer(warning)}</strong></div>

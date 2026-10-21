@@ -46,7 +46,7 @@ export default function SortableDataTable({
  const filterMode=index=>{
   if(isAction(index))return "none";
   if(filterModes[index])return filterModes[index];
-  return /farmacia|estado|\\babcd\\b|clasificaci[oó]n|prioridad|\\btipo\\b|categor[ií]a|responsable/iu.test(String(headers[index]))?"multi":"text";
+  return /farmacia|estado|\babcd\b|clasificaci[oó]n|prioridad|\btipo\b|categor[ií]a|responsable/iu.test(String(headers[index]))?"multi":"text";
  };
  const filtered=useMemo(()=>(rows||[]).filter(row=>headers.every((_,i)=>{
   const condition=filters[i],text=readableCell(row[i]);

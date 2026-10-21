@@ -5,6 +5,7 @@ import {ReportFilterBar,ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
+import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import "./purchasePlanner.css";
 
 const today=()=>resolveSalesPeriod("today").from;
@@ -35,7 +36,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   [period,customFrom,customTo]);
  const from=resolved.valid?resolved.from:"",to=resolved.valid?resolved.to:"";
  const [search,setSearch]=useState("");
- const [pharmacyIds,setPharmacyIds]=useState(()=>readSharedReportFilters(clientSlug).pharmacyIds||[]);
+ const [pharmacyIds,setPharmacyIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
  const [updatedAt,setUpdatedAt]=useState(null);
  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(50);
  const [sort,setSort]=useState({key:"suggested",direction:"desc"});
@@ -304,7 +305,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    refreshing={busy} onRefresh={()=>setReload(n=>n+1)}/>
   <ReportFilterBar periodKey={period} onPeriodChange={setSharedPeriod}
    pharmacies={pharmacies} pharmacyIds={pharmacyIds}
-   onPharmacyChange={next=>{setPharmacyIds(next);updateSharedReportFilters(clientSlug,{pharmacyIds:next});setPage(1);clearSelection()}}
+   onPharmacyChange={next=>{const ids=reconcilePharmacyIds(next,pharmacies);setPharmacyIds(ids);updateSharedReportFilters(clientSlug,{pharmacyIds:ids});setPage(1);clearSelection()}}
    customFrom={customFrom} customTo={customTo}
    onCustomFromChange={value=>setSharedDate("from",value)}
    onCustomToChange={value=>setSharedDate("to",value)}>

@@ -1,13 +1,11 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Plus,Search} from "lucide-react";
+import {Plus,X} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
 import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
-const TYPES=[["sin_clasificar","Sin clasificar"],["cooperativa","Cooperativa"],["laboratorio","Laboratorio"],["mayorista","Mayorista"],["otros","Otros"]];
 const EMPTY={sourceCode:"",name:"",type:"sin_clasificar",active:true,cooperative:false,ignoreReports:false};
-const label=key=>TYPES.find(([id])=>id===key)?.[1]||"Sin clasificar";
 export default function ProveedoresMaestro({clientSlug}){
  const [rows,setRows]=useState([]),[search,setSearch]=useState(""),[form,setForm]=useState(null),
   [error,setError]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[savingFlags,setSavingFlags]=useState({});
@@ -45,7 +43,7 @@ export default function ProveedoresMaestro({clientSlug}){
    setError(e.message);
   }finally{setSavingFlags(state=>{const next={...state};delete next[key];return next})}
  }
- const visible=useMemo(()=>rows.filter(r=>(r.name+" "+r.sourceCode+" "+label(r.type)).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
+ const visible=useMemo(()=>rows.filter(r=>(r.name+" "+r.sourceCode).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
  return <div className="fm-management fm-production-panel">
    <ReportPageHeader title="Maestro de proveedores" updatedAt={updatedAt}
     refreshing={loading} onRefresh={()=>void refresh().catch(e=>setError(e.message))}
@@ -53,17 +51,16 @@ export default function ProveedoresMaestro({clientSlug}){
    <ReportFilterBar showPeriod={false} showPharmacies={false}>
     <label className="fm-unified-filter"><span>Buscar proveedor o código</span>
      <input type="search" aria-label="Buscar proveedor" value={search}
-      placeholder="Nombre, código o tipo…" onChange={e=>setSearch(e.target.value)}/></label>
+      placeholder="Nombre o código…" onChange={e=>setSearch(e.target.value)}/></label>
    </ReportFilterBar>
    {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
-   <div className="fm-supplier-summary">{[["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"],["laboratorio","Laboratorios"],["sin_clasificar","Sin clasificar"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:rows.filter(r=>id==="cooperative"||id==="ignoreReports"?r[id]===true:r.type===id).length}</strong></div>)}</div>   <section className="card fm-demo-table">
+   <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:id==="total"?rows.length:rows.filter(r=>r[id]===true).length}</strong></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     
     <ListTable rows={visible} rowKey={r=>r.id||r.sourceCode} label="proveedores" defaultSort={{key:"name",direction:"asc"}} loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
      onRowClick={row=>setForm({...row})} columns={[
       {key:"sourceCode",label:"Código",value:r=>r.sourceCode},
       {key:"name",label:"Proveedor",value:r=>r.name,render:r=><strong>{r.name}</strong>},
-      {key:"type",label:"Tipo",filterMode:"multi",value:r=>label(r.type)},
       {key:"cooperative",label:"Cooperativa",sortable:true,searchable:false,
        value:r=>r.cooperative?"Sí":"No",
        render:r=><input type="checkbox" aria-label={"Cooperativa: "+r.name}
@@ -78,22 +75,26 @@ export default function ProveedoresMaestro({clientSlug}){
         onClick={e=>e.stopPropagation()}
         onKeyDown={e=>e.stopPropagation()}
         onChange={e=>{e.stopPropagation();void changeFlag(r,"ignoreReports",e.target.checked)}}/>},
-      {key:"active",label:"Estado",filterMode:"multi",value:r=>r.active?"Activo":"Inactivo"},
      ]}/>
    </section>
    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
    {form&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setForm(null)}}>
-    <div className="fm-demo-detail" role="dialog" aria-modal="true" aria-label="Proveedor">
-     <button className="btn btn-secondary" type="button" onClick={()=>setForm(null)}>Cerrar</button>
-     <h2>{form.id?"Editar proveedor":"Nuevo proveedor"}</h2>
+    <div className="fm-demo-detail fm-provider-dialog" role="dialog" aria-modal="true" aria-label={form.id?"Editar proveedor":"Nuevo proveedor"}>
+     <div className="fm-provider-dialog-heading">
+      <h2>{form.id?"Editar proveedor":"Nuevo proveedor"}</h2>
+      <button className="icon-btn fm-provider-dialog-close" type="button" aria-label="Cerrar" onClick={()=>setForm(null)}><X size={19}/></button>
+     </div>
      <form className="fm-provider-form" onSubmit={save}>
       <label>Código de origen<input required maxLength="60" value={form.sourceCode} onChange={e=>setForm({...form,sourceCode:e.target.value})} placeholder="Código del ERP"/></label>
       <label>Nombre<input required maxLength="200" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nombre del proveedor"/></label>
-      <label>Clasificación<select value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{TYPES.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label>
-      <label className="fm-supplier-check-field"><input type="checkbox" checked={Boolean(form.cooperative)} onChange={e=>setForm({...form,cooperative:e.target.checked})}/> Cooperativa</label>
-      <label className="fm-supplier-check-field"><input type="checkbox" checked={Boolean(form.ignoreReports)} onChange={e=>setForm({...form,ignoreReports:e.target.checked})}/> Ignorar proveedor en informes</label>
-      <label>Estado<select value={String(form.active)} onChange={e=>setForm({...form,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></label>
-      <button className="btn btn-primary" type="submit" disabled={busy}>{busy?"Guardando…":"Guardar proveedor"}</button>
+      <div className="fm-provider-options">
+       <label className="fm-provider-option"><input type="checkbox" checked={Boolean(form.cooperative)} onChange={e=>setForm({...form,cooperative:e.target.checked})}/><span>Cooperativa</span></label>
+       <label className="fm-provider-option"><input type="checkbox" checked={Boolean(form.ignoreReports)} onChange={e=>setForm({...form,ignoreReports:e.target.checked})}/><span>Ignorar en informes</span></label>
+      </div>
+      <div className="fm-provider-actions">
+       <button className="btn btn-secondary" type="button" disabled={busy} onClick={()=>setForm(null)}>Cancelar</button>
+       <button className="btn btn-primary" type="submit" disabled={busy}>{busy?"Guardando…":"Guardar proveedor"}</button>
+      </div>
      </form>
     </div>
    </div>}

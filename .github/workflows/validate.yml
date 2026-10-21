@@ -237,9 +237,9 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
-          node check-purchase-planner.mjs
           node check-responsive.mjs
           node check-dashboard-audit.mjs
+          node check-purchase-planner.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs
@@ -263,65 +263,3 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
-
-
-  diagnostico_puc_genericos:
-    runs-on: ubuntu-latest
-    timeout-minutes: 4
-    env:
-      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
-      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
-      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
-    steps:
-      - name: Verificar nombres y precios del conjunto genérico en producción, solo lectura
-        run: |
-          set -euo pipefail
-          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
-          chmod 600 ~/.ssh/id_fm
-          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
-          BEGIN READ ONLY;
-          SET LOCAL statement_timeout='35000ms';
-          SELECT 'COLUMNAS_NOMENCLATOR' AS tipo,string_agg(column_name||':'||data_type,', ' ORDER BY ordinal_position) AS columnas
-          FROM information_schema.columns WHERE table_schema='farmetrica' AND table_name='nomenclator_presentaciones';
-          WITH scope AS (
-           SELECT n.dcpf,count(DISTINCT n.cn) AS cn,
-            min(n.nombre) AS muestra,min(n.principio_activo) AS principio,
-            count(*) FILTER (WHERE nullif(n.principio_activo,'') IS NOT NULL) AS activos
-           FROM farmetrica.nomenclator_presentaciones n
-           WHERE n.generico=true AND n.dcpf IN ('17531000140106','19241000140107')
-           GROUP BY n.dcpf
-          )
-          SELECT 'NOMBRES_GRUPO' AS tipo,* FROM scope ORDER BY dcpf;
-          WITH c AS (
-           SELECT n.dcpf,r.articulo_id,r.proveedor_id,
-            coalesce(pm.cooperativa,false) AS coop,pm.ignorar_informes AS ignorado,
-            max(coalesce(pm.nombre,r.proveedor_nombre)) AS proveedor,
-            count(*) AS lineas,sum(r.unidades) AS uds,
-            min(r.coste_unitario) AS min_puc
-           FROM ampedia.fm_recepciones_analitica r
-           JOIN farmetrica.nomenclator_presentaciones n
-            ON n.cn=r.articulo_id AND n.generico=true
-           LEFT JOIN farmetrica.proveedores_maestro pm ON pm.cliente_slug='ampedia'
-            AND upper(btrim(pm.codigo_origen))=upper(btrim(r.proveedor_id))
-           WHERE r.fecha>=date '2026-04-21' AND r.fecha<date '2026-10-22'
-            AND n.dcpf IN ('17531000140106','19241000140107')
-            AND r.unidades>0 AND r.coste_unitario>0
-           GROUP BY n.dcpf,r.articulo_id,r.proveedor_id,pm.cooperativa,pm.ignorar_informes
-          )
-          SELECT 'PUC_GRUPO' AS tipo,dcpf,articulo_id,proveedor_id,coop,ignorado,
-           left(proveedor,50) AS proveedor,lineas,uds,min_puc
-          FROM c ORDER BY dcpf,coop,lineas DESC LIMIT 28;
-          SELECT 'NOMBRES_PROVEEDORES' AS tipo,p.farmacia_codigo,p.origen_id,left(p.nombre,65) AS nombre
-          FROM ampedia.proveedores p WHERE p.origen_id IN ('0005','0125','0087','0144')
-          ORDER BY p.origen_id,p.farmacia_codigo LIMIT 30;
-          SELECT 'FUENTE_DE_CODIGOS' AS tipo,f.id,f.codigo_origen,
-            a.origen_id,a.codigo_nacional,left(a.nombre,35) AS producto
-          FROM ampedia.articulos a JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
-            AND upper(btrim(f.codigo_origen))=upper(btrim(a.farmacia_codigo))
-          WHERE a.codigo_nacional IN ('726005','662026') LIMIT 10;
-          ROLLBACK;
-          SQL

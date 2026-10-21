@@ -8,6 +8,8 @@ on:
       - '.github/workflows/farmetrica-sync-windows.yml'
       - 'api/src/migrations/016_modelo_documental.sql'
       - 'api/src/migrations/modeloDocumental.integration.test.js'
+      - 'api/src/pharmacyState.js'
+      - 'api/src/pharmacyState.test.js'
   push:
     branches: [main]
     paths:

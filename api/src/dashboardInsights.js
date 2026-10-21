@@ -56,13 +56,17 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
     salesFrom(req)+" GROUP BY f.id,v.vendedor_id ORDER BY sales DESC",
     params(req,f));
    const named=await nameCommercialRows(pool,req.context,rows);
+   const pharmacyNames=new Map((req.context.pharmacies||[]).map(p=>[String(p.id),p.name]));
    const result=new Map();
    for(const row of named){
-    // El mismo ID de vendedor puede pertenecer a personas distintas en cada farmacia.
+    // Los IDs y también los nombres pueden repetirse entre farmacias distintas.
     const label=row.sellerId==null||!String(row.sellerId).trim()?
      "Sin vendedor":row.sellerName||String(row.sellerId);
-    const key=label.trim().toLocaleUpperCase("es");
-    const v=result.get(key)||{name:label,sales:0,units:0};
+    const pharmacy=pharmacyNames.get(String(row.pharmacyId))||"Farmacia "+row.pharmacyId;
+    const key=String(row.pharmacyId)+"|"+String(row.sellerId||"");
+    const name=f.ids.length>1?label+" · "+pharmacy:label;
+    const v=result.get(key)||{name,pharmacyId:String(row.pharmacyId),
+     sellerId:row.sellerId,sales:0,units:0};
     v.sales+=Number(row.sales||0);v.units+=Number(row.units||0);
     result.set(key,v);
    }

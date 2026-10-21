@@ -308,6 +308,12 @@ jobs:
             if(!groups?.length||!(summary?.unitsPeriod>10000))
              throw Error("El preparador no devuelve ventas reales completas");
            }
+           const values=["2026-10-01","2026-10-21",[1,2,3,4,5],"ampedia","ECLIPSE",20,0,"","","","","",""];
+           const eclipse=await pool.query({text:query,values,query_timeout:30000});
+           console.log("ECLIPSE_DEMANDA",JSON.stringify((eclipse.rows[0]?.groups||[]).map(g=>({
+             code:g.cn,period:g.unitsPeriod,past3:g.units3,past12:g.units12,
+             suggested:g.suggested,pattern:g.patron,pharmacies:g.pharmacies?.length
+           })).slice(0,8)));
           }finally{await pool.end()}
           JS
           } | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \

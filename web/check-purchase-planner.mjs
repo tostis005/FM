@@ -71,7 +71,7 @@ try{
  await page.getByRole("heading",{name:"Preparador de pedidos"}).waitFor({timeout:15000});
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
  await page.getByRole("button",{name:"Este mes"}).waitFor();
- await page.getByText(/Propuesta inteligente de compra/).waitFor();
+ await page.getByText(/Nueva propuesta por laboratorio/).waitFor();
  assert.equal(await page.locator(".fm-unified-header select[aria-label=\"Farmacia\"]").count(),0,"La cabecera no debe imponer una farmacia");
  assert.ok(await page.getByText("Farmacias",{exact:true}).first().isVisible(),"Las farmacias se filtran en la caja común");
  const periodResponse=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta");

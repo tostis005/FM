@@ -1,11 +1,16 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {RefreshCw,Search,ChevronLeft,ChevronRight} from "lucide-react";
+import {RefreshCw,Search,ChevronLeft,ChevronRight,Download} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import {ListPagination} from "./ListTable.jsx";
+import {LoadingPanel} from "./LoadingState.jsx";
+import {downloadTableCSV} from "./tableExport.js";
+import {readableCell} from "./SortableDataTable.jsx";
+import {searchText} from "./listLogic.js";
 import "./operativaPreview.css";
 import "./pantallasReales.css";
 
@@ -140,23 +145,53 @@ function Metrics({section,data,pharmacies}){
 }
 function GridTable({section,rows,sort,setSort,onOpenTicket,onOpenReceipt}){
  const cols=META[section].cols;
- return <HorizontalTableScroll className="fm-preview-scroll" label="registros">
-  <table className="fm-unified-table fm-real-screen-table"><thead><tr>{cols.map(([id,label])=>{
-   const key=SORT_FIELD[section][id],active=sort.key===key&&Boolean(key);
-   return <th key={id} scope="col" aria-sort={!key?"none":active?(sort.direction==="asc"?"ascending":"descending"):"none"}>
-     {key?<button className="smart-sort" type="button" onClick={()=>
-      setSort(old=>({key,direction:old.key===key&&old.direction==="asc"?"desc":"asc"}))}>
-       {label}<span className="smart-sort-arrow" aria-hidden="true">{active?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
-      </button>:label}</th>;
-  })}{["ventas-tickets","compras-recepciones"].includes(section)&&<th scope="col">Detalle</th>}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr
-   key={[r.pharmacyId,r.sourceSystem,r.documentId,r.lineId,r.sourceId,r.supplierCode,r.family,i].join("|")}>
-    {cols.map(([id,,format])=><td key={id}>{format(r)}</td>)}
-    {section==="ventas-tickets"&&<td><button type="button" className="btn btn-secondary btn-sm"
-     onClick={()=>onOpenTicket(r)}>Ver líneas</button></td>}
-    {section==="compras-recepciones"&&<td><button type="button" className="btn btn-secondary btn-sm"
-     onClick={()=>onOpenReceipt(r)}>Ver líneas</button></td>}</tr>):
-   <tr><td colSpan={cols.length+(["ventas-tickets","compras-recepciones"].includes(section)?1:0)}>No hay registros para el periodo y los filtros seleccionados.</td></tr>}</tbody></table>
- </HorizontalTableScroll>;
+ const [filters,setFilters]=useState({});
+ const cellText=(col,r)=>readableCell(col[2](r));
+ const filtered=rows.filter(r=>cols.every(col=>{
+  const v=filters[col[0]];
+  if(!v||(Array.isArray(v)&&!v.length))return true;
+  const value=cellText(col,r);
+  return Array.isArray(v)?v.includes(value):searchText(value).includes(searchText(v).trim());
+ }));
+ const multi=id=>["pharmacy","family","kind","supplier","laboratory","seller"].includes(id);
+ const detail=["ventas-tickets","compras-recepciones"].includes(section);
+ return <>
+  <div className="fm-table-toolbar">
+   <span className="fm-table-export-scope">Filtros y exportación de la página actual</span>
+   <button className="btn btn-secondary btn-sm" type="button" disabled={!filtered.length}
+    onClick={()=>downloadTableCSV("farmetrica-"+section+"-pagina",cols.map(c=>c[1]),
+     filtered.map(r=>cols.map(c=>cellText(c,r))))}><Download size={15}/> Exportar CSV (página actual)</button>
+  </div>
+  <HorizontalTableScroll className="fm-preview-scroll" label="registros">
+   <table className="fm-unified-table fm-real-screen-table smart-table">
+    <thead><tr>{cols.map(([id,label])=>{
+     const key=SORT_FIELD[section][id],active=sort.key===key&&Boolean(key);
+     return <th key={id} scope="col" aria-sort={!key?"none":active?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+      {key?<button className="smart-sort" type="button" onClick={()=>
+       setSort(old=>({key,direction:old.key===key&&old.direction==="asc"?"desc":"asc"}))}>
+        {label}<span className="smart-sort-arrow" aria-hidden="true">{active?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
+       </button>:label}</th>;
+    })}{detail&&<th>Detalle</th>}</tr>
+    <tr className="smart-filter-row">{cols.map(col=><th key={col[0]}>
+     {multi(col[0])?<MultiSelectFilter label={col[1]}
+      options={[...new Set(rows.map(r=>cellText(col,r)).filter(Boolean))]}
+      value={Array.isArray(filters[col[0]])?filters[col[0]]:[]}
+      onChange={v=>setFilters(old=>({...old,[col[0]]:v}))}/>:
+      <input className="smart-column-filter" type="search" aria-label={"Buscar en "+col[1]}
+       value={filters[col[0]]||""} placeholder="Filtrar…"
+       onChange={e=>setFilters(old=>({...old,[col[0]]:e.target.value}))}/>}
+    </th>)}{detail&&<th><span className="smart-filter-blank"/></th>}</tr></thead>
+    <tbody>{filtered.length?filtered.map((r,i)=><tr
+     key={[r.pharmacyId,r.sourceSystem,r.documentId,r.lineId,r.sourceId,r.supplierCode,r.family,i].join("|")}>
+     {cols.map(([id,,format])=><td key={id}>{format(r)}</td>)}
+     {section==="ventas-tickets"&&<td><button className="btn btn-secondary btn-sm"
+      type="button" onClick={()=>onOpenTicket(r)}>Ver líneas</button></td>}
+     {section==="compras-recepciones"&&<td><button className="btn btn-secondary btn-sm"
+      type="button" onClick={()=>onOpenReceipt(r)}>Ver líneas</button></td>}</tr>):
+     <tr><td colSpan={cols.length+(detail?1:0)}>No hay registros que coincidan en esta página.</td></tr>}</tbody>
+   </table>
+  </HorizontalTableScroll>
+ </>;
 }
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([key])=>key));
 const boundedReportSignal=controller=>typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
@@ -263,7 +298,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
   {error&&<div className="fm-op-message fm-op-error" role="alert">{error}
    <button type="button" onClick={()=>setReload(n=>n+1)}>Reintentar</button></div>}
   {data?.available===false&&!error&&<p className="fm-op-message" role="status">{data.message||"Datos pendientes de sincronización."}</p>}
-  {loading?<section className="card fm-preview-panel" role="status">Cargando resultados…</section>:
+  {loading?<section className="card fm-preview-panel"><LoadingPanel kind="table" label="Cargando detalle de resultados…" rows={5}/></section>:
    period.valid&&!error&&data&&data.available!==false&&<>
     <Metrics section={section} data={data} pharmacies={selected}/>
     <section className="card fm-preview-panel">
@@ -273,7 +308,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
       {section==="ventas-tickets"&&ticketDetail&&<section className="fm-ticket-detail" aria-label="Desglose del ticket">
        <div className="fm-preview-panel-head"><h3>Ticket {TXT(ticketDetail.ticket.ticket)} · Líneas</h3>
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
-       {ticketDetail.loading?<p role="status">Cargando líneas…</p>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
+       {ticketDetail.loading?<LoadingPanel kind="table" label="Cargando detalle de líneas…" rows={5}/>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
          {["Línea","CN · Artículo","Unidades","Precio unidad","Descuento (valor ERP)","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
         </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>
@@ -289,7 +324,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
        aria-label="Desglose de la recepción">
        <div className="fm-preview-panel-head"><h3>Recepción {TXT(receiptDetail.receipt.reference)} · Líneas</h3>
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setReceiptDetail(null)}>Cerrar detalle</button></div>
-       {receiptDetail.loading?<p role="status">Cargando líneas…</p>:receiptDetail.error?<p role="alert">{receiptDetail.error}</p>:
+       {receiptDetail.loading?<LoadingPanel kind="table" label="Cargando detalle de líneas…" rows={5}/>:receiptDetail.error?<p role="alert">{receiptDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas de la recepción">
          <table className="fm-unified-table fm-real-screen-table"><thead><tr>
           {["Línea","CN · Artículo","Unidades netas","Precio bruto/ud.","Coste neto/ud.","Importe neto"].map(v=><th key={v}>{v}</th>)}

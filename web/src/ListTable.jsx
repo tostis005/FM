@@ -1,4 +1,6 @@
 import React,{useMemo,useState} from "react";
+import {Download} from "lucide-react";
+import {downloadTableCSV} from "./tableExport.js";
 import {filterSortRows,pageRows} from "./listLogic.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingFrame} from "./LoadingState.jsx";
@@ -28,7 +30,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName=""}){
   const [localFilters,setLocalFilters]=useState({});
  const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
  const filters=remotelyFiltered?serverFilters:localFilters;
@@ -81,7 +83,24 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     if(remote)onSortChange(next);else setLocalSort(next);
     if(!externalPage)setPage(0);
   };
+  const csvColumns=columns.filter(col=>col.exportable!==false&&
+   col.label&&col.key!=="actions"&&col.key!=="action");
+  const exportCurrent=()=>{
+    if(onExport)return onExport();
+    downloadTableCSV(exportFileName||"farmetrica-"+label.trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-"),
+      csvColumns.map(c=>c.label),filtered.map(row=>csvColumns.map(c=>
+       c.exportValue?c.exportValue(row):c.value(row))));
+  };
   return <>
+    {showExport&&<div className="fm-table-toolbar">
+      <span className="fm-table-export-scope">{externalPage?
+       "Exportación de las filas de esta página":filtered.length+" resultados disponibles"}</span>
+      <button type="button" className="btn btn-secondary btn-sm"
+       onClick={exportCurrent} disabled={loading||(!onExport&&!filtered.length)}>
+       <Download size={15}/> Exportar CSV{externalPage&&!onExport?" (página actual)":""}
+      </button>
+    </div>}
     <LoadingFrame loading={loading&&rows.length>0} label={loadingLabel}>
     <HorizontalTableScroll className="table-scroll" label={label}>
       <table className={"data-table smart-table "+tableClass}>
@@ -98,7 +117,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           <tr className="smart-filter-row">{selection&&<th className="fm-selection-column">
             <span className="smart-filter-blank"/></th>}{columns.map(col=><th key={col.key}>
             {col.searchable===false?<span className="smart-filter-blank"/>:
-              col.filterMode==="multi"?<MultiSelectFilter label={col.label}
+              (col.filterMode==="multi"||(!externalPage&&col.filterMode!=="text"&&/farmacia|\babcd\b|clasificaci[oó]n|estado|\btipo\b|prioridad|categor[ií]a/i.test(col.label)))?<MultiSelectFilter label={col.label}
                 options={filterOptions?.[col.key]||
                   (typeof col.options==="function"?col.options(rows):col.options||
                   [...new Set(rows.flatMap(r=>col.filterValues?.(r)||[col.value(r)]))])}

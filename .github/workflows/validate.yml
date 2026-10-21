@@ -311,6 +311,10 @@ jobs:
             to_regclass('farmetrica.op_pedidos') IS NOT NULL AS pedidos,
             to_regclass('farmetrica.op_politicas_reposicion') IS NOT NULL AS politicas,
             to_regclass('farmetrica.nomenclator_presentaciones') IS NOT NULL AS nomenclator;
+          SELECT 'CACHE' AS control,farmacia_id,analisis_meses,desde,hasta,
+           calculado_en,referencias FROM farmetrica.ventas_analitica_estado
+          WHERE cliente_slug='ampedia' AND analisis_meses IN (3,12)
+          ORDER BY farmacia_id,analisis_meses LIMIT 20;
           ROLLBACK;
           SQL
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \

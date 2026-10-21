@@ -81,7 +81,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
   const dcpfs=req.body?.dcpfs;
   const to=String(req.body?.to||"");
   if(!SCHEMA.test(ctx.client.schema)||!validDate(to)||
-   !Array.isArray(items)||items.length>1200||
+   !Array.isArray(items)||items.length>4000||
    !Array.isArray(ids)||ids.length>100||ids.some(n=>!allowed.includes(Number(n)))||
    !Array.isArray(dcpfs)||dcpfs.length>100||dcpfs.some(d=>!/^[0-9]{1,30}$/.test(String(d)))||
    items.some(x=>!x||typeof x.groupKey!=="string"||x.groupKey.length>95||

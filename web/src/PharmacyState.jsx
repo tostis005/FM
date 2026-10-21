@@ -95,7 +95,7 @@ export default function PharmacyState({clientSlug}){
    render:p=><div className="fm-pharmacy-receptions">
     <span>Ventas: {displayDate(p.sales?.lastReceivedAt)}</span>
     <span>Compras: {displayDate(p.purchases?.lastReceivedAt)}</span></div>},
-  {key:"detail",label:"Incidencia / detalle",sortable:false,searchable:false,value:():"",
+  {key:"detail",label:"Incidencia / detalle",sortable:false,searchable:false,value:()=>"",
    render:p=><div className="fm-pharmacy-row-detail">
     {p.incidents?.length>0?<span className="fm-pharmacy-incident-preview">
      {p.incidents[0].flow}: {p.incidents[0].error}</span>:

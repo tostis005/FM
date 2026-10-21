@@ -21,3 +21,11 @@ export function reconcilePharmacyIds(selected,pharmacies){
  }
  return result;
 }
+
+// En los filtros compartidos, [] significa «todas las farmacias».
+// El preparador debe aplicar ese mismo alcance al consultar tanto ventas
+// como precios PUC: de lo contrario envía [] y no encuentra laboratorios.
+export function effectivePharmacyIds(selected,pharmacies){
+ const ids=reconcilePharmacyIds(selected,pharmacies);
+ return ids.length?ids:[...new Set((pharmacies||[]).map(p=>String(p.id??"").trim()).filter(Boolean))];
+}

@@ -31,6 +31,7 @@ jobs:
           node --test api/src/supplierReporting.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
+          node --test api/src/stockTargetDays.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js

@@ -70,6 +70,46 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       return res.json({analysisMonths:Number(rows[0].analisis_abcd_meses)});
     }catch(e){next(e)}
   });
+  // Días de stock objetivo para el preparador. Reutiliza la política de
+  // reposición por farmacia existente; no altera intervalos, plazos ni seguridad.
+  // «Todas» aplica el valor únicamente a las farmacias autorizadas del tenant.
+  app.get("/api/tenant/stock-objetivo",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      const ids=req.context.pharmacies.map(p=>Number(p.id));
+      if(!ids.length)return res.json({defaultDays:90,items:[]});
+      const {rows}=await pool.query(
+        'SELECT farmacia_id AS "pharmacyId",cobertura_saludable AS days FROM farmetrica.op_politicas_reposicion WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])',
+        [req.context.client.slug,ids]);
+      const map=new Map(rows.map(r=>[Number(r.pharmacyId),Number(r.days)]));
+      res.json({defaultDays:90,items:ids.map(id=>({
+        pharmacyId:id,days:map.get(id)??90,configured:map.has(id)
+      }))});
+    }catch(e){next(e)}
+  });
+  app.put("/api/tenant/stock-objetivo",...requireTenantAdmin(),async(req,res,next)=>{
+    try{
+      const days=req.body?.days,requested=req.body?.pharmacyId;
+      const allowed=req.context.pharmacies.map(p=>Number(p.id));
+      if(!Number.isSafeInteger(days)||days<1||days>3650||
+       !Number.isSafeInteger(requested)||requested<0||
+       (requested!==0&&!allowed.includes(requested)))
+        return res.status(400).json({error:"Selecciona una farmacia autorizada y entre 1 y 3.650 días"});
+      if(!allowed.length)return res.status(403).json({error:"No hay farmacias autorizadas"});
+      const ids=requested===0?allowed:[requested];
+      const {rows}=await pool.query(
+        `INSERT INTO farmetrica.op_politicas_reposicion
+          (cliente_slug,farmacia_id,cobertura_saludable,actualizado_por)
+         SELECT $1,f.id,$3,$4 FROM farmetrica.farmacias f
+         WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
+         ON CONFLICT(cliente_slug,farmacia_id) DO UPDATE
+          SET cobertura_saludable=EXCLUDED.cobertura_saludable,
+           actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now()
+         RETURNING farmacia_id AS "pharmacyId",cobertura_saludable AS days`,
+        [req.context.client.slug,ids,days,req.user.email]);
+      if(rows.length!==ids.length)throw Error("No se pudieron actualizar todas las farmacias");
+      res.json({days,updatedPharmacies:rows.map(r=>Number(r.pharmacyId))});
+    }catch(e){next(e)}
+  });
   app.get("/api/tenant/context",...requireTenant(),async(req,res,next)=>{
     try{
     const {rows}=await pool.query(

@@ -91,7 +91,10 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     (x.cn!=null&&(typeof x.cn!=="string"||x.cn.length>40))))
    return res.status(400).json({error:"Referencias para recomendar laboratorios inválidas"});
   try{
-   res.json(await readPlannerLaboratories(pool,ctx,ids.map(Number),items,dcpfs.map(String),to));
+   // La tabla de propuesta ya interpreta [] como todas las farmacias autorizadas.
+   // Hacer lo mismo en la ruta PUC para clientes antiguos/móviles en caché.
+   const chosen=ids.length?ids.map(Number):allowed;
+   res.json(await readPlannerLaboratories(pool,ctx,chosen,items,dcpfs.map(String),to));
   }catch(e){
    if(["57014","53300"].includes(e.code))return res.status(504)
     .json({error:"La consulta de PUC ha superado el tiempo; los pedidos siguen disponibles sin recomendación de precio."});

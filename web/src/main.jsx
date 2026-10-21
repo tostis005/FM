@@ -13,6 +13,7 @@ const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
 const Genericos=React.lazy(()=>import("./Genericos.jsx"));
 const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
+const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
 import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
@@ -1139,6 +1140,7 @@ function App(){
        initialMonths={tenantContext.client.analysisMonths}
        onSaved={()=>loadContext(tenantContext.client.slug)}/>
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
+      <ConfiguracionDiasStock clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
      </div>}
    </React.Suspense>
    </main>

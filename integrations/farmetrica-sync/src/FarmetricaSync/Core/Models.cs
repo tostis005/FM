@@ -169,7 +169,7 @@ public static class CanonicalEntities
         // Dos flujos documentales futuros: una única consulta JOIN por trabajo.
         // Las plantillas SQL concretas quedan deshabilitadas hasta validar
         // columnas reales de cabecera y detalle en cada ERP.
-        E("ventas_completas", "Tickets y líneas normalizados desde una consulta JOIN",
+        E("ventas_completas", "Ventas: tickets y líneas normalizados desde una consulta JOIN",
             ("documento_id", "text"), ("linea_id", "text"), ("fecha", "timestamp"),
             ("numero_documento", "text"), ("tercero_id", "text"), ("empleado_id", "text"),
             ("estado", "text"), ("total_documento", "numeric"),
@@ -181,7 +181,7 @@ public static class CanonicalEntities
             ("coste_historico", "numeric"), ("bonificacion_unidades", "numeric"),
             ("numero_pedido", "text"), ("eliminado_logicamente", "bool"),
             ("linea_eliminada", "bool")),
-        E("recepciones_completas", "Recepciones y líneas normalizadas desde una consulta JOIN",
+        E("recepciones_completas", "Compras: recepciones y líneas normalizadas desde una consulta JOIN",
             ("documento_id", "text"), ("linea_id", "text"), ("fecha", "timestamp"),
             ("numero_documento", "text"), ("tercero_id", "text"), ("empleado_id", "text"),
             ("estado", "text"), ("total_documento", "numeric"),

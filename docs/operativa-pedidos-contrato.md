@@ -27,7 +27,7 @@ Cada movimiento importado debe tener `cliente_slug`, un código de farmacia ineq
 No usar números de CN ni umbrales fijos sin fuente fiable para afirmar si un artículo es medicamento. Mantener los artículos «sin clasificar» hasta que el maestro oficial o una clasificación autorizada los determine.
 
 ## Preparador de compras
-Separa la **necesidad** (artículo y unidades requeridas) de sus **asignaciones a proveedores**. Reducir la asignación de un proveedor a cero no borra la necesidad. El total asignado nunca puede superar lo necesario. Un pedido pasa por borrador, pendiente de aprobación, aprobado y exportado. Aprobar o marcar exportado **no lo envía al ERP**.
+Separa la **necesidad** (artículo y unidades requeridas) de sus **asignaciones a proveedores**. Reducir la asignación de un proveedor a cero no borra la necesidad. El total asignado nunca puede superar lo necesario. Un pedido pasa por borrador, pendiente de aprobación, aprobado, exportado y recibido. Aprobar o marcar exportado **no lo envía al ERP**.
 
 Cuando lleguen los datos se usará, entre otras comprobaciones, la demanda durante el intervalo de pedido más el plazo de entrega, más stock de seguridad, descontando stock disponible, reservas y recepciones previstas. Las fechas desconocidas o los precios históricos reducen la confianza. La cobertura saludable de sobrestock no es lo mismo que la cobertura de reposición.
 
@@ -70,3 +70,5 @@ En producción se debe revisar: acceso cliente cruzado, roles lector/gestor/admi
 
 **SQL nuevo:** sí, migración 016.  
 **Actualizar análisis existente:** no. No se reprocesan datos de Farmatic ni se modifican los snapshots.
+
+**Pedido recibido:** marcado manualmente, previa confirmación; deja de considerarse pendiente al proponer compras. La acción NO actualiza existencias del ERP ni sustituye la conciliación documental.

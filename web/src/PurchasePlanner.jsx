@@ -251,63 +251,100 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   finally{setBusy(false)}
  }
  const columns=[
-  {key:"articleName",label:"Artículo / conjunto genérico",value:g=>g.articleName,
-   render:g=><div className="fm-planner-article"><button type="button" className="fm-planner-toggle"
-    onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))} aria-expanded={Boolean(open[g.key])}>
-    <ChevronDown size={15}/><span><strong>{g.articleName}</strong><small>{g.kind==="generico"?"Genérico · DCPF "+g.dcpf+" · "+g.productCount+" referencias":g.cn?"CN "+g.cn:"Código local sin CN verificado"}</small></span></button>
-    {open[g.key]&&<div className="fm-planner-details">{g.pharmacies.map(p=>{
-     const edit=overrides[key(p)]||{},options=suppliers[String(p.pharmacyId)]||[];
-     const confidence=p.confidence;
-     return <div className="fm-planner-pharmacy" key={key(p)}>
-      <strong>{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</strong>
-      {g.kind!=="generico"&&<small>{p.cn?"Código nacional "+p.cn:"Código de artículo local "+p.articleId}</small>}
-      <div className="fm-planner-detail-metrics">
-       <span>Vendidas período <b>{whole(p.unitsPeriod)}</b></span>
-       <span>Ventas 3 meses <b>{whole(p.units3)}</b></span>
-       <span>Ventas 12 meses <b>{whole(p.units12)}</b></span>
-       <span>Stock disponible <b>{p.stock===null?"Sin dato":whole(p.stock)}</b></span>
-       <span>Pedido recomendado <b>{p.suggested===null?"Sin cálculo":whole(p.suggested)}</b></span>
+  {key:"articleName",label:"Producto / genérico",value:g=>g.articleName,
+   render:g=><div className="fm-planner-article">
+    <button type="button" className="fm-planner-toggle"
+     onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))}
+     aria-expanded={Boolean(open[g.key])}>
+     <ChevronDown size={15}/>
+     <span><strong>{g.articleName}</strong><small>
+      {g.kind==="generico"?"Conjunto genérico · "+g.productCount+" CN / referencias":"CN "+(g.cn||"sin identificar")}
+     </small></span>
+    </button>
+    {open[g.key]&&<div className="fm-planner-details" aria-label={"Desglose de "+g.articleName}>
+      <div className="fm-planner-detail-head">
+       <strong>Reparto de necesidad entre farmacias</strong>
+       <span>Propuesta del grupo: <b>{g.suggested==null?"Sin cálculo":whole(g.suggested)+" uds."}</b></span>
       </div>
-      {g.kind==="generico"&&<div className="fm-planner-variants">
-       <small>Referencias equivalentes en esta farmacia:</small>
-       {p.options.map(o=><small key={o.articleId}>{o.cn||"Sin CN"} · {o.articleName} · Código {o.articleId} · Stock {o.stock??"?"}</small>)}
-      </div>}
-      <small>Fechas de venta en los últimos 12 meses:
-       {p.firstSale?<> desde <b>{String(p.firstSale).slice(0,10)}</b> hasta <b>{String(p.lastSale).slice(0,10)}</b>,
-        intervalo de {p.saleSpanDays} días</>:" sin ventas verificadas"}.</small>
-      <small>Demanda {p.demandPattern==="concentrada"?"concentrada en pocas fechas":
-       p.demandPattern==="pico_reciente"?"pico reciente, revisar":
-       p.demandPattern==="recurrente"?"recurrente":
-       p.demandPattern==="posible_estacional"?"posible temporada":
-       p.demandPattern==="sin_actividad"?"sin actividad reciente":"intermitente"} ·
-       Media estimada {whole(p.daily)} uds./día · Cobertura {p.coverageDays??p.interval} días ·
-       Stock {p.stock??"?"} · Pedidos pendientes {p.ordered??0} ·
-       <b> Recomendado {p.suggested??"sin cálculo"} uds.</b></small>
-      <small>Última actualización conocida del inventario: {p.stockAt?new Date(p.stockAt).toLocaleString("es-ES"):"Sin fecha disponible"}</small>
-      {confidence!=="calculable"&&<small className="fm-planner-caution">{confidence==="stock_antiguo"?"Stock posiblemente desactualizado":confidence==="sin_stock"?"Sin stock: no se propone compra":"Sin fecha verificable de stock"}</small>}
-      {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalo y días de cobertura desde Farmacias.</small>}
-      <div className="fm-planner-edit">
-       <label>Pedir <input type="number" min="0" max="999999" step="1" disabled={!canEdit||p.suggested===null}
-        value={edit.units??0} onChange={e=>setValue(p,"units",e.target.value)}/></label>
-       <button className="fm-planner-use-suggestion" type="button" disabled={!canEdit||p.suggested===null}
-        onClick={()=>setValue(p,"units",p.suggested)}>Usar recomendado ({whole(p.suggested)})</button>
-       {g.kind==="generico"&&<label>Presentación a comprar
-        <select aria-label={"Presentación a comprar en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
-         disabled={!canEdit||p.suggested===null}
-         value={chosenArticle(p,edit)} onChange={e=>setValue(p,"articleId",e.target.value)}>
-         <option value="">Selecciona CN / artículo</option>
-         {p.options.map(o=><option key={o.articleId} value={o.articleId}>{o.cn||"Sin CN"} · {o.articleName}</option>)}
-        </select></label>}
-       <label>Proveedor <input list={"fm-pl-sup-"+p.pharmacyId} disabled={!canEdit||p.suggested===null}
-        placeholder="Código proveedor" value={edit.supplier||""}
-        onChange={e=>setValue(p,"supplier",e.target.value)}/>
-        <datalist id={"fm-pl-sup-"+p.pharmacyId}>{options.map(s=>
-         <option key={s.code} value={s.code} label={s.name}>{s.name}</option>)}</datalist>
-       </label>
+      <div className="fm-planner-table-scroll">
+       <table className="fm-planner-breakdown">
+        <thead><tr><th>Farmacia</th><th>Ventas período</th><th>3 meses</th>
+         <th>12 meses</th><th>Stock</th><th>Recomendado</th>
+         <th>Unidades a pedir</th><th>Laboratorio / PUC</th><th>CN a comprar</th></tr></thead>
+        <tbody>{g.pharmacies.map(p=>{
+         const edit=overrides[key(p)]||{},offers=labOptionsFor(p),recommendation=recommendedFor(p);
+         const selectedArticle=chosenArticle(p,edit);
+         const chosenOffer=offers.find(o=>String(o.supplierCode)===String(edit.supplier)&&String(o.articleId)===String(selectedArticle));
+         return <tr key={key(p)}>
+          <th scope="row">{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</th>
+          <td>{whole(p.unitsPeriod)}</td><td>{whole(p.units3)}</td><td>{whole(p.units12)}</td>
+          <td>{p.stock==null?"—":whole(p.stock)}</td>
+          <td><strong>{p.suggested==null?"—":whole(p.suggested)}</strong></td>
+          <td><div className="fm-planner-qty">
+           <input aria-label={"Unidades a pedir en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
+            type="number" min="0" max="999999" step="1" disabled={!canEdit||p.suggested===null}
+            value={edit.units??0} onChange={e=>setValue(p,"units",e.target.value)}/>
+           <button type="button" disabled={!canEdit||p.suggested===null} onClick={()=>applyRecommendation(p)}>
+            Usar recomendado</button>
+          </div></td>
+          <td><select aria-label={"Laboratorio en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
+             disabled={!canEdit||p.suggested===null||!offers.length}
+             value={chosenOffer?chosenOffer.supplierCode+"|"+chosenOffer.articleId:""}
+             onChange={e=>{
+              const chosen=offers.find(o=>o.supplierCode+"|"+o.articleId===e.target.value);
+              setValues(p,{supplier:chosen?.supplierCode||"",articleId:chosen?.articleId||""});
+             }}>
+             <option value="">{labLoading?"Consultando PUC…":"Elegir laboratorio"}</option>
+             {offers.map(o=><option key={o.supplierCode+"|"+o.articleId} value={o.supplierCode+"|"+o.articleId}>
+              {o.supplierName} · {euro(o.puc)} · CN {o.cn}
+             </option>)}
+            </select>
+            {recommendation&&<small className="fm-planner-supplier-hint">
+             Mejor PUC observado: {recommendation.supplierName} · {euro(recommendation.puc)}
+            </small>}
+            {!offers.length&&!labLoading&&<small>Sin PUC de laboratorio verificable</small>}
+          </td>
+          <td>{g.kind==="generico"?<select aria-label={"Presentación a comprar en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
+           disabled={!canEdit||p.suggested===null}
+           value={selectedArticle} onChange={e=>setValues(p,{articleId:e.target.value,supplier:""})}>
+           <option value="">Selecciona CN</option>
+           {p.options.map(o=><option value={o.articleId} key={o.articleId}>{o.cn||o.articleId} · {o.articleName}</option>)}
+          </select>:<span>{p.cn||p.articleId}</span>}</td>
+         </tr>;
+        })}</tbody>
+        <tfoot><tr><th scope="row">Total del grupo</th>
+         <td>{whole(g.unitsPeriod)}</td><td>{whole(g.units3)}</td><td>{whole(g.units12)}</td>
+         <td>{g.stock==null?"—":whole(g.stock)}</td>
+         <td><strong>{g.suggested==null?"—":whole(g.suggested)}</strong></td>
+         <td><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units||0),0))} uds.</strong></td>
+         <td colSpan="2">{laboratoryByGroup.get(g.key)?
+          "Laboratorio sugerido: "+laboratoryByGroup.get(g.key).supplierName:
+          "Sin precio PUC válido para recomendar proveedor"}</td>
+        </tr></tfoot>
+       </table>
       </div>
-     </div>;
-    })}</div>}</div>},
-  
+      {g.kind==="generico"&&<details className="fm-planner-presentations">
+       <summary>CN y laboratorios del conjunto genérico ({(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).length} presentaciones oficiales)</summary>
+       <div className="fm-planner-table-scroll">
+        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación del nomenclátor</th><th>Laboratorio fabricante</th></tr></thead>
+         <tbody>{(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).map(v=><tr key={v.cn}>
+          <td>{v.cn}</td><td>{v.name}</td><td>{v.laboratory||"Sin información de laboratorio"}</td>
+         </tr>)}</tbody>
+        </table>
+       </div>
+       <small>El laboratorio del nomenclátor es el fabricante; el proveedor recomendado se determina con compras y PUC reales, excluyendo cooperativas.</small>
+      </details>}
+     </div>}
+   </div>},
+  {key:"laboratorio",label:"Laboratorio recomendado",sortable:false,searchable:false,
+   value:g=>laboratoryByGroup.get(g.key)?.supplierName||"",
+   render:g=>{const choice=laboratoryByGroup.get(g.key);
+    return choice?<div className="fm-planner-lab-choice">
+     <strong>{choice.supplierName}</strong>
+     <small>PUC observado {euro(choice.puc)} · CN {choice.cn}</small>
+     </div>:<small className="fm-planner-no-puc">{labLoading?"Consultando precios…":
+      "Sin laboratorio con PUC contrastado"}</small>;
+   }},
   {key:"patron",label:"Demanda",sortable:false,searchable:false,value:g=>g.patron||"",
    render:g=><span className={"fm-planner-pattern fm-planner-pattern-"+(g.patron||"desconocida")}>
     {({recurrente:"Recurrente",intermitente:"Intermitente",
@@ -343,8 +380,10 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      placeholder="Nombre o código nacional…"/></label>
   </ReportFilterBar>
   <section className="card fm-planner">
-  <p className="fm-planner-scope">Propuesta inteligente de compra · {pharmacyIds.length||pharmacies.length} farmacias seleccionadas. Prioridad calculada a partir de ventas, recurrencia y actividad reciente. Despliega cada artículo para el desglose por farmacia.</p>
+  <p className="fm-planner-scope">Nueva propuesta por laboratorio (sin cooperativas) · {pharmacyIds.length||pharmacies.length} farmacias seleccionadas. Prioridad calculada a partir de ventas, recurrencia y actividad reciente. Despliega cada artículo para el desglose por farmacia.</p>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
+  {labError&&<p role="status" className="fm-op-message fm-op-warning">
+   No se pudo verificar el PUC: {labError}. No se recomiendan proveedores sin un precio fiable.</p>}
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
   {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}
   {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se puede guardar ni exportar una consulta incompleta.</p>}

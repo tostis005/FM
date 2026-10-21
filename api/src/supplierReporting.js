@@ -13,6 +13,12 @@ export function includedPurchaseSupplier({tenant,code,name=null}){
    ` OR (nullif(${normalized(name)},'') IS NOT NULL
         AND upper(btrim(pm.nombre))=${normalized(name)})`:""}))`;
 }
+// La clasificación de compras depende exclusivamente del check cooperativa.
+ // Los proveedores no marcados, incluidos los sin ficha, son laboratorios.
+export function purchaseSupplierChannelSQL(alias="pm"){
+ if(!/^[a-z][a-z0-9_]*$/.test(alias))throw Error("Alias SQL de proveedor inválido");
+ return `CASE WHEN ${alias}.cooperativa IS TRUE THEN 'cooperativa' ELSE 'laboratorio' END`;
+}
 export function sourceSupplierRows(master,external){
  const map=new Map();
  for(const row of external||[]){

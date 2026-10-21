@@ -267,6 +267,7 @@ jobs:
 
 
   smoke_proveedor_nombre_produccion:
+    needs: deploy_main_proveedores
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -307,3 +308,37 @@ jobs:
            console.log("PROVEEDOR_NOMBRE_REAL_OK");
           }finally{await pool.end()}
           JS
+
+  deploy_main_proveedores:
+    concurrency:
+      group: farmawao-api-production
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Publicar código validado de main y reiniciar exclusivamente web y API
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          echo "Versión principal seleccionada: $(git rev-parse HEAD)"
+          node --check api/src/purchasePlanner.js
+          node --check api/src/purchasePlannerPaged.js
+          test -s api/src/purchasePlannerPaged.sql
+          tar -czf - -C api . | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. api/'
+          tar -czf - -C web --exclude=node_modules --exclude=dist . | \
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. web/'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'set -eu; cd /opt/farmawao; docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api web; for i in $(seq 1 25); do if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected; then exit 0; fi; sleep 3; done; echo "ERROR: API no responde después del despliegue" >&2; exit 1'

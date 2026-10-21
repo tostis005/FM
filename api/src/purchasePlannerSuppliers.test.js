@@ -20,6 +20,9 @@ test("PUC recomienda laboratorio más barato y conserva CN/farmacia concretos",(
  assert.equal(result.recommendations[0].recommended.supplierName,"Laboratorio B");
  assert.equal(pickBestLaboratory([{puc:null},{supplierCode:"B",puc:5}]).supplierCode,"B");
  assert.equal(pickBestLaboratory([]),null);
+ assert.equal(mapLaboratoryOffers([{pharmacyId:"1",articleId:"111111",
+  supplierCode:"0042",supplierName:"0042",puc:1.2}],articles).recommendations.length,0,
+  "Un código numérico sin denominación de laboratorio no se recomienda");
 });
 
 test("SQL del PUC impide cooperativas, respeta los precios positivos y las farmacias autorizadas",async()=>{

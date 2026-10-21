@@ -62,6 +62,9 @@ public sealed class SyncWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // El pulso es independiente de la cola: sigue vivo aunque SQL Server o la VPN
+        // bloqueen durante una extracción de larga duración.
+        _ = Task.Run(() => MonitoringLoopAsync(stoppingToken), stoppingToken);
         // Una cola de ejecución evita que dos ciclos del mismo proceso se solapen.
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -85,6 +88,40 @@ public sealed class SyncWorker(
                 await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
         }
+    }
+
+
+    private async Task MonitoringLoopAsync(CancellationToken token)
+    {
+        try
+        {
+            if (config.Read(c => c.MonitorInstanceId == Guid.Empty))
+                config.Change(c => c.MonitorInstanceId = Guid.NewGuid());
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    var snapshot = config.Read(c => c);
+                    if (!string.IsNullOrWhiteSpace(snapshot.Destination.Host) &&
+                        !string.IsNullOrWhiteSpace(snapshot.Destination.Database))
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        timeout.CancelAfter(TimeSpan.FromSeconds(40));
+                        await destination.PublishMonitoringAsync(snapshot.Destination, snapshot,
+                            GetLiveRuns(), timeout.Token);
+                    }
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+                catch (Exception ex)
+                {
+                    // Fallos de PostgreSQL no deben frenar el planificador; en el próximo
+                    // pulso se reenvían las últimas ejecuciones guardadas localmente.
+                    logger.LogWarning("No se pudo publicar supervisión: {Detail}", ex.Message);
+                }
+                await Task.Delay(TimeSpan.FromMinutes(1), token);
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
     }
 
     private void EnqueueScheduled()

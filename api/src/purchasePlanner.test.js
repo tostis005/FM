@@ -28,6 +28,7 @@ test("API valida permisos y pagina consultas CN SQL con totales del grupo",async
  const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  const pool={async query(q){
   calls.push(q);
+  if(q.text.includes('SELECT f.id::text AS "pharmacyId",a.origen_id'))return {rows:[]};
   assert.match(q.text,/WITH\s+ventas AS MATERIALIZED/);
   assert.match(q.text,/farmetrica.nomenclator_presentaciones/);
   assert.match(q.text,/coalesce|nullif/i);

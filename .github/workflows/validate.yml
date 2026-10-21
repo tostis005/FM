@@ -260,3 +260,69 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+
+  smoke_preparador_produccion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Verificar versión desplegada y consultar datos reales sin modificarlos
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --input-type=module -' <<'JS'
+          import pg from "pg";
+          import {setupPurchasePlanner} from "./src/purchasePlanner.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,
+           connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          const pharmacies=[{id:1},{id:2},{id:3},{id:4},{id:5}];
+          const context={role:"superadministrador",modules:{compras:true},
+           client:{slug:"ampedia",schema:"ampedia"},pharmacies};
+          const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
+          setupPurchasePlanner(app,pool,{requireTenant:()=>[]});
+          const run=async query=>{
+           let data=null,code=200,err=null;
+           const res={status(v){code=v;return this},json(v){data=v;return this}};
+           const started=Date.now();
+           await routes["/api/analytics/pedidos/propuesta"]({query,context},
+             res,e=>{err=e});
+           if(code!==200||err||data?.available!==true)
+             throw Error("API error: "+code+" "+(err?.code||err?.message||data?.error||data?.reason||"unavailable"));
+           console.log("PREPARADOR_REAL",query.pagina||"1","ms",Date.now()-started,
+            "rows",data.groups?.length,"totalGroups",data.totalGroups,
+            "totalUnits",data.summary?.unitsPeriod,"stockKnown",data.summary?.stockKnown,
+            "recommended",data.summary?.suggestedKnown,"truncated",data.truncated);
+           if(data.truncated||!data.groups?.length||!(data.totalGroups>data.groups.length)||
+             !(data.summary?.unitsPeriod>10000)||data.groups.length>50)
+             throw Error("No se ha recuperado una primera página real válida");
+           return data;
+          };
+          try{
+           const q={desde:"2026-10-01",hasta:"2026-10-21",farmacias:"1,2,3,4,5",
+             pagina:"1",tamano:"50",orden:"unitsPeriod",direccion:"desc"};
+           const first=await run(q);
+           const {rows:[source]}=await pool.query("SELECT COALESCE(sum(unidades),0)::float8 AS unidades "+
+            "FROM ampedia.fm_ventas_analitica WHERE fecha>=$1::date AND fecha<$2::date+interval '1 day' "+
+            "AND farmacia_codigo=ANY($3::text[]) AND nullif(btrim(articulo_id),'') IS NOT NULL",
+            [q.desde,q.hasta,["ABA","EUR","BUE","EST","VAL"]]);
+           console.log("VENTAS_ORIGEN",source.unidades,"PREPARADOR",first.summary.unitsPeriod);
+           if(Math.abs(source.unidades-first.summary.unitsPeriod)>0.000001)
+             throw Error("El total de ventas del grupo difiere de la fuente de ventas");
+           if(!first.groups.every(g=>g.pharmacies.every(p=>p.options?.length)))
+             throw Error("Hay líneas de compra sin referencia ERP rastreable");
+           const second=await run({...q,pagina:"2"});
+           if(first.groups.at(-1).unitsPeriod<second.groups[0].unitsPeriod||
+              first.totalGroups!==second.totalGroups)
+             throw Error("Paginación u ordenación inconsistente");
+           console.log("SMOKE_PREPARADOR_PRODUCCION_OK",first.totalGroups,"referencias");
+          }finally{await pool.end()}
+          JS

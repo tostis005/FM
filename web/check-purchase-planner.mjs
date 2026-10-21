@@ -37,6 +37,16 @@ await page.route("**/api/**",async route=>{
     recommended:{supplierCode:"P44",supplierName:"Laboratorio Alfa",articleId:"999",cn:"123456",puc:3.52},
     options:[{supplierCode:"P44",supplierName:"Laboratorio Alfa",articleId:"999",cn:"123456",puc:3.52}]}],
    presentations:[{cn:"123456",dcpf:"10001",name:"Crema",laboratory:"Laboratorio Alfa"}]};
+  if((request.postDataJSON()?.dcpfs||[]).includes("17531000140106")){
+   body={recommendations:[{groupKey:"DCPF:17531000140106",
+    recommended:{supplierName:"Proveedor 0005 (nombre pendiente)",supplierIdentified:false,
+     cn:"662026",puc:1.201,sampleLines:5},
+    options:[{supplierName:"Proveedor 0005 (nombre pendiente)",supplierIdentified:false,
+     cn:"662026",puc:1.201,sampleLines:5}]}],
+    byPharmacy:[],
+    presentations:[{cn:"726064",dcpf:"17531000140106",name:"PARACETAMOL TEVAGEN 1000 MG COMPRIMIDOS EFG"},
+     {cn:"662026",dcpf:"17531000140106",name:"PARACETAMOL 1000 MG COMPRIMIDOS EFG"}]};
+  }
  }
  else if(path==="/api/analytics/pedidos/propuesta"){
   const id=url.searchParams.get("buscar")||"";
@@ -60,7 +70,12 @@ await page.route("**/api/**",async route=>{
   const other={...g,key:"CN:654321",cn:"654321",articleName:"Gel de prueba",
    patron:"concentrada",firstSale:"2026-08-11",lastSale:"2026-08-13",saleSpanDays:3,suggested:0,
    pharmacies:g.pharmacies.map(p=>({...p,articleName:"Gel de prueba",cn:"654321"}))};
-  body={available:true,groups:id&&id!=="123456"?[]:pageNumber===2?[other]:[g],
+  const generic={...g,key:"DCPF:17531000140106",kind:"generico",dcpf:"17531000140106",
+   cn:null,articleName:"Genérico · Paracetamol 1000 mg comprimidos",
+   pharmacies:g.pharmacies.map(p=>({...p,groupKey:"DCPF:17531000140106",
+    cn:"726064",options:[{articleId:p.articleId,articleName:"Paracetamol EFG",cn:"726064"}]}))};
+  body={available:true,groups:id==="paracetamol"?[generic]:
+   id&&id!=="123456"?[]:pageNumber===2?[other]:[g],
    totalGroups:100,page:pageNumber,pageSize:50,
    summary:{unitsPeriod:240,units3:900,units12:3000,stockKnown:100,
     stockMissing:0,suggestedKnown:80,suggestedMissing:0,products:100,referenceCount:150},
@@ -113,6 +128,15 @@ try{
  assert.deepEqual(posts.map(p=>p.farmacia).sort(),["1","2"]);
  assert.deepEqual(posts.map(p=>p.lineas[0].articulo).sort(),["771","999"]);
  assert.ok(posts.every(p=>p.lineas[0].asignaciones[0].proveedor==="P44"));
+ const search=page.locator(".fm-unified-filter input[type=search]").first();
+ await search.fill("paracetamol");
+ await page.getByText("Genérico · Paracetamol 1000 mg comprimidos").first().waitFor();
+ await page.getByText(/Proveedor 0005.*nombre pendiente/).first().waitFor();
+ await page.getByRole("button",{name:/Genérico.*Paracetamol 1000 mg/}).first().click();
+ await page.locator(".fm-planner-presentations summary").click();
+ await page.getByText(/1,201.*€/).first().waitFor();
+ assert.equal(await page.getByText("Genérico DCPF 17531000140106").count(),0,
+  "No se debe mostrar el identificador numérico en lugar del genérico");
  assert.deepEqual(errors,[]);
  console.log("OK: Preparador consolidado, desglose por farmacia, proveedor y borradores guardados");
 }finally{await browser.close()}

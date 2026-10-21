@@ -8,28 +8,42 @@ export function pickBestLaboratory(rows){
    Number(b.sampleLines||0)-Number(a.sampleLines||0)||
    String(a.supplierName||"").localeCompare(String(b.supplierName||""),"es"))[0]||null;
 }
-export function mapLaboratoryOffers(rows,items){
+export function mapLaboratoryOffers(rows,items,groupLinks=new Map()){
  const byRef=new Map(),byPh=new Map(),byGroup=new Map();
  for(const it of items){
   const key=String(it.pharmacyId)+"|"+String(it.articleId);
   if(!byRef.has(key))byRef.set(key,[]);
-  byRef.get(key).push(it.groupKey);
+  byRef.get(key).push(it);
  }
  for(const r of rows){
-  // Sin denominación verificada no mostrar un identificador numérico como nombre
-  // de laboratorio: un código de proveedor no es una recomendación comercial.
-  if(!String(r.supplierName||"").trim()||
-   String(r.supplierName).trim()===String(r.supplierCode).trim())continue;
-  for(const groupKey of byRef.get(String(r.pharmacyId)+"|"+String(r.articleId))||[]){
+  const ref=String(r.pharmacyId)+"|"+String(r.articleId);
+  const local=byRef.get(ref)||[];
+  const allKeys=[...new Set([...local.map(v=>v.groupKey),
+   ...(groupLinks.get(String(r.cn||r.articleId))||[])])];
+  const name=String(r.supplierName||"").trim();
+  for(const groupKey of allKeys){
    const item={groupKey,pharmacyId:String(r.pharmacyId),articleId:String(r.articleId),
     cn:String(r.cn||r.articleId),supplierCode:String(r.supplierCode),
-    supplierName:String(r.supplierName||r.supplierCode),
-    puc:Number(r.puc),sampleLines:Number(r.sampleLines||0)};
-   const pk=groupKey+"|"+item.pharmacyId;
-   if(!byPh.has(pk))byPh.set(pk,[]);
-   byPh.get(pk).push(item);
+    supplierName:name&&name!==String(r.supplierCode)?name:"Proveedor "+r.supplierCode+" (nombre pendiente)",
+    supplierIdentified:Boolean(name)&&name!==String(r.supplierCode),
+    puc:Number(r.puc),sampleLines:Number(r.sampleLines||0),
+    sourcePharmacyId:String(r.pharmacyId)};
    if(!byGroup.has(groupKey))byGroup.set(groupKey,[]);
    byGroup.get(groupKey).push(item);
+   // El mismo CN puede tener un ID de artículo diferente en otra farmacia.
+   // La compra automática solo se puede ofrecer cuando el CN y el
+   // código de proveedor coinciden con registros de ESTA farmacia.
+   const targets=items.filter(it=>it.groupKey===groupKey&&
+    String(it.pharmacyId)===String(r.pharmacyId)&&
+    String(it.cn||it.articleId)===item.cn);
+   for(const target of targets){
+    const option={...item,articleId:String(target.articleId)};
+    const pk=groupKey+"|"+item.pharmacyId;
+    if(!byPh.has(pk))byPh.set(pk,[]);
+    if(!byPh.get(pk).some(v=>v.articleId===option.articleId&&
+      v.supplierCode===option.supplierCode))
+     byPh.get(pk).push(option);
+   }
   }
  }
  return {byPharmacy:[...byPh.values()].map(options=>({
@@ -37,15 +51,58 @@ export function mapLaboratoryOffers(rows,items){
    recommended:pickBestLaboratory(options),
    options:options.sort((a,b)=>a.puc-b.puc)
   })),recommendations:[...byGroup].map(([groupKey,offers])=>({
-   groupKey,recommended:pickBestLaboratory(offers)
+   groupKey,recommended:pickBestLaboratory(offers),
+   options:offers.sort((a,b)=>a.puc-b.puc)
   }))};
 }
 export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,reportTo){
  const ids=new Set(chosen.map(String));
  const selected=items.filter(r=>ids.has(String(r.pharmacyId)));
- const codes=[...new Set(selected.map(r=>String(r.articleId)))];
- let offers=[];
+ // Todos los CN del DCPF se buscan en el nomenclátor, aunque no estén
+ // en el stock del establecimiento que se está consultando.
+ const lookups=[...new Set(selected.map(r=>String(r.cn||r.articleId)))];
+ let presentations=[];
+ if(lookups.length||dcpfs.length){
+  const {rows}=await pool.query(`SELECT DISTINCT ON (cn) cn,dcpf,nombre,
+   laboratorio,laboratorio_codigo,principio_activo,generico,comercializado
+   FROM farmetrica.nomenclator_presentaciones
+   WHERE dcpf=ANY($1::text[]) OR cn=ANY($2::text[])
+   ORDER BY cn,dcpf LIMIT 10000`,[dcpfs,lookups]);
+  presentations=rows.map(r=>({cn:String(r.cn),dcpf:r.dcpf,
+   name:r.nombre,laboratory:r.laboratorio,laboratoryCode:r.laboratorio_codigo,
+   principle:r.principio_activo,generic:r.generico,marketed:r.comercializado}));
+ }
+ const groupLinks=new Map();
+ for(const n of presentations){
+  if(!dcpfs.includes(String(n.dcpf)))continue;
+  const cn=String(n.cn),key="DCPF:"+n.dcpf;
+  if(!groupLinks.has(cn))groupLinks.set(cn,[]);
+  if(!groupLinks.get(cn).includes(key))groupLinks.get(cn).push(key);
+ }
  const q='"'+ctx.client.schema+'"';
+ const cnCodes=presentations.filter(n=>dcpfs.includes(String(n.dcpf))).map(n=>n.cn);
+ // El código ERP de un artículo puede ser distinto del CN en ciertas cargas.
+ // Resolver los alias del catálogo de TODAS las farmacias para cada CN del DCPF.
+ let aliases=[];
+ if(cnCodes.length){
+  const {rows}=await pool.query({
+   text:`SELECT f.id::text AS "pharmacyId",a.origen_id AS "articleId",
+     btrim(a.codigo_nacional) AS cn
+    FROM ${q}.articulos a JOIN farmetrica.farmacias f
+     ON f.cliente_slug=$2 AND f.id=ANY($3::int[])
+     AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    WHERE btrim(coalesce(a.codigo_nacional,''))=ANY($1::text[])`,
+   values:[cnCodes,ctx.client.slug,chosen],query_timeout:12000
+  });
+  aliases=rows;
+ }
+ const sourceCn=new Map();
+ for(const entry of [...aliases,...selected])
+  sourceCn.set(String(entry.pharmacyId)+"|"+String(entry.articleId),
+   String(entry.cn||entry.articleId));
+ const codes=[...new Set([...selected.map(r=>String(r.articleId)),
+  ...cnCodes,...aliases.map(r=>String(r.articleId))])];
+ let offers=[];
  if(codes.length){
   const sql=`
   WITH base AS MATERIALIZED (
@@ -64,7 +121,7 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
    LEFT JOIN farmetrica.politica_precios pl
     ON pl.cliente_slug=$4 AND pl.farmacia_id=f.id
    WHERE c.articulo_id=ANY($1::text[])
-    AND c.fecha>=($3::date-make_interval(months=>coalesce(pl.meses,pg.meses,6)))
+    AND c.fecha>=($3::date-interval '12 months')
     AND c.fecha<$3::date+interval '1 day'
     AND c.unidades>0 AND c.coste_unitario>0
     AND nullif(btrim(c.proveedor_id),'') IS NOT NULL
@@ -85,7 +142,7 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
    (sum(price*taken)/nullif(sum(taken),0))::float8 AS puc,
    sum(lines)::int AS "sampleLines"
   FROM low GROUP BY pharmacy_id,article_id,supplier_code
-  HAVING sum(lines)>=3 AND sum(taken)>0`;
+  HAVING sum(taken)>0`;
   const {rows}=await pool.query({text:sql,values:[codes,chosen,reportTo,ctx.client.slug],
    query_timeout:18000});
   offers=rows;
@@ -110,17 +167,15 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
    }));
   }
  }
- const result=mapLaboratoryOffers(offers,selected);
- const lookups=[...new Set(selected.map(r=>String(r.cn||r.articleId)))];
- let presentations=[];
- if(lookups.length||dcpfs.length){
-  const {rows}=await pool.query(`SELECT DISTINCT ON (cn) cn,dcpf,nombre,
-   laboratorio,laboratorio_codigo
-   FROM farmetrica.nomenclator_presentaciones
-   WHERE (generico=true AND dcpf=ANY($1::text[])) OR cn=ANY($2::text[])
-   ORDER BY cn,dcpf LIMIT 6000`,[dcpfs,lookups]);
-  presentations=rows.map(r=>({cn:String(r.cn),dcpf:r.dcpf,
-   name:r.nombre,laboratory:r.laboratorio,laboratoryCode:r.laboratorio_codigo}));
- }
- return {...result,presentations,observedPrices:offers.length,policy:"percentil_puc"};
+ // Un registro documental comprado en cualquiera de las farmacias puede
+ // informar el PUC de un genérico DCPF, aunque su CN no esté en la primera
+ // presentación del grupo ni en la farmacia actual.
+ const result=mapLaboratoryOffers(offers.map(r=>{
+  const direct=selected.find(it=>String(it.articleId)===String(r.articleId)&&
+   String(it.pharmacyId)===String(r.pharmacyId));
+  return {...r,cn:sourceCn.get(String(r.pharmacyId)+"|"+String(r.articleId))||
+   direct?.cn||String(r.articleId)};
+ }),selected,groupLinks);
+ return {...result,presentations,observedPrices:offers.length,
+  policy:"percentil_puc_12m",priceWindowMonths:12};
 }

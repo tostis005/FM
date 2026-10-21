@@ -21,5 +21,15 @@ test("PostgreSQL: recomienda proveedor no cooperativo con PUC real y devuelve la
   assert.equal(suggestion.supplierName,"Mayorista 2");
   assert.ok(data.presentations.some(r=>r.cn==="654322"));
   assert.equal(data.byPharmacy[0].options.length,2);
+  // La lista visible solo contiene ART-01 (CN 654321), pero el mejor
+  // PUC pertenece a ART-02 (CN 654322), otro CN del mismo DCPF.
+  const narrow=await readPlannerLaboratories(pool,
+   {client:{slug:"ampedia",schema:"ampedia"}},[1],
+   [{groupKey:"DCPF:123456789",pharmacyId:"1",articleId:"ART-01",cn:"654321"}],
+   ["123456789"],"2026-10-21");
+  const cross=narrow.recommendations.find(r=>r.groupKey==="DCPF:123456789")?.recommended;
+  assert.ok(cross,"El PUC de otro CN del DCPF debe estar disponible sin depender de la página");
+  assert.equal(cross.cn,"654322");
+  assert.equal(cross.supplierName,"Mayorista 2");
  }finally{await pool.end()}
 });

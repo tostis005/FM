@@ -291,7 +291,10 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
             {recommendation&&<small className="fm-planner-supplier-hint">
              Mejor PUC observado: {recommendation.supplierName} · {euro(recommendation.puc)}
             </small>}
-            {!offers.length&&!labLoading&&<small>Sin PUC de laboratorio verificable</small>}
+            {!offers.length&&!labLoading&&<small>{laboratoryByGroup.get(g.key)?
+              "Precio del conjunto: "+euro(laboratoryByGroup.get(g.key).puc)+
+              " (comprado en otra farmacia o presentación; verificar proveedor local)":
+              "Sin PUC de laboratorio en los últimos 12 meses"}</small>}
           </td>
           <td>{g.kind==="generico"?<select aria-label={"Presentación a comprar en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
            disabled={!canEdit||p.suggested===null}
@@ -315,12 +318,14 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       {g.kind==="generico"&&<details className="fm-planner-presentations">
        <summary>CN y laboratorios del conjunto genérico ({(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).length} presentaciones oficiales)</summary>
        <div className="fm-planner-table-scroll">
-        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación del nomenclátor</th><th>Fabricante oficial</th><th>Laboratorio con PUC observado</th></tr></thead>
+        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación del nomenclátor</th><th>Fabricante oficial</th><th>Proveedor / PUC observado</th></tr></thead>
          <tbody>{(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).map(v=><tr key={v.cn}>
           <td>{v.cn}</td><td>{v.name}</td><td>{v.laboratory||"No informado en el nomenclátor"}</td>
-          <td>{[...new Set((labData?.byPharmacy||[]).filter(r=>r.groupKey===g.key)
-           .flatMap(r=>r.options||[]).filter(o=>String(o.cn)===String(v.cn))
-           .map(o=>o.supplierName))].join(", ")||"Sin precio verificado"}</td>
+          <td>{(labData?.recommendations||[]).find(r=>r.groupKey===g.key)?.options
+           ?.filter(o=>String(o.cn)===String(v.cn)).slice(0,3)
+           .map(o=>o.supplierName+" · "+euro(o.puc)+
+             " ("+o.sampleLines+" compra"+(o.sampleLines===1?"":"s")+")")
+           .join("; ")||"Sin compras con precio en los últimos 12 meses"}</td>
          </tr>)}</tbody>
         </table>
        </div>
@@ -335,7 +340,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      aria-expanded={Boolean(open[g.key])}>
      <ChevronDown size={15}/>
      <span><strong>{g.articleName}</strong><small>
-      {g.kind==="generico"?"Genérico DCPF "+g.dcpf+" · "+g.productCount+" referencias entre farmacias":"CN "+(g.cn||"sin identificar")}
+      {g.kind==="generico"?g.productCount+" referencias del conjunto · Ver CN y PUC en el detalle":"CN "+(g.cn||"sin identificar")}
      </small></span>
     </button>
 
@@ -345,7 +350,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    render:g=>{const choice=laboratoryByGroup.get(g.key);
     return choice?<div className="fm-planner-lab-choice">
      <strong>{choice.supplierName}</strong>
-     <small>PUC observado {euro(choice.puc)} · CN {choice.cn}</small>
+     <small>PUC {euro(choice.puc)} · CN {choice.cn} · {choice.sampleLines} compra(s) en 12 meses
+      {!choice.supplierIdentified?" · Nombre del proveedor pendiente":""}</small>
      </div>:<small className="fm-planner-no-puc">{labLoading?"Consultando precios…":
       "Sin laboratorio con PUC contrastado"}</small>;
    }},

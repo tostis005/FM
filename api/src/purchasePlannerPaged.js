@@ -6,24 +6,56 @@ const FIELD={
  units3:'g."units3"',units12:'g."units12"',
  stock:'g.stock',suggested:'g.suggested'
 };
-export function inferGenericGroupName(names,fallback=""){
+export function inferGenericGroupName(names,fallback="",principles=[]){
  const labels=[...new Set((names||[]).map(v=>String(v||"").trim()).filter(Boolean))];
- if(labels.length<2)return "Genérico · "+(fallback||labels[0]||"sin DCPF");
- const normalize=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+ if(!labels.length)return "Genérico · Denominación pendiente";
+ const norm=v=>String(v).normalize("NFD").replace(/[\u0300-\u036f]/g,"")
   .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().split(/\s+/).filter(Boolean);
- const counts=new Map();
- for(const name of labels)for(const token of new Set(normalize(name)))
-  counts.set(token,(counts.get(token)||0)+1);
- const threshold=Math.max(2,Math.ceil(labels.length*.65));
- const excluded=new Set(["EFG","GENERICA","GENERICO","GENERICOS","DE","DEL","POR","X",
-  "ENVASE","BLISTER","BLISTERS","COMPRIMIDOS","CAPSULAS","SOBRES","UNIDADES"]);
- // Conservar forma/dosis, pero no cantidades variables de envase ni marca.
- const representative=labels.slice().sort((a,b)=>a.length-b.length)[0];
- const sample=normalize(representative),cut=sample.indexOf("EFG");
- const core=cut>=0?sample.slice(0,cut):sample;
- const tokens=core.filter(t=>(counts.get(t)||0)>=threshold&&!excluded.has(t));
- const output=tokens.slice(0,7).join(" ").trim();
- return output.length>=5?output:"Genérico · "+(fallback||representative);
+ const normalizeDose=label=>{
+  const hit=label.match(/\b(\d+(?:[,.]\d+)?)\s*(MG|G|MCG|MICROGRAMOS|UI)\b/i);
+  if(!hit)return "";
+  const amount=Number(hit[1].replace(",","."));
+  if(!Number.isFinite(amount)||amount<=0)return "";
+  return hit[2].toUpperCase()==="G"?String(amount*1000)+" mg":
+   String(amount)+" "+hit[2].toLowerCase();
+ };
+ const mostCommon=list=>{
+  const counter=new Map();
+  for(const value of list.filter(Boolean))counter.set(value,(counter.get(value)||0)+1);
+  return [...counter].sort((a,b)=>b[1]-a[1]||
+   String(a[0]).localeCompare(String(b[0]),"es"))[0]||null;
+ };
+ const normalized=labels.map(norm);
+ // El DCPF agrupa presentaciones de distintas marcas. Inferir el principio
+ // activo por su prefijo compartido, no por la primera marca alfabética.
+ const first=mostCommon(normalized.map(words=>words[0]));
+ let generic="";
+ if(first&&first[1]>=Math.max(2,Math.ceil(labels.length*.30))){
+  generic=first[0];
+  for(let i=1;i<3;i++){
+   const term=mostCommon(normalized.filter(w=>w[0]===first[0]).map(w=>w[i]));
+   if(!term||term[1]<Math.ceil(first[1]*.72)||
+    /^(\d+|MG|G|MCG|EFG|FORTE)$/.test(term[0]))break;
+   generic+=" "+term[0];
+  }
+ }
+ const principle=(principles||[]).map(x=>String(x||"").trim()).find(Boolean);
+ if(principle)generic=principle;
+ const dose=mostCommon(labels.map(normalizeDose))?.[0]||"";
+ const forms=["COMPRIMIDOS","CAPSULAS","SOBRES","SOLUCION","SUSPENSION",
+  "CREMA","GEL","POMADA","COLIRIO","SUPOSITORIOS","PARCHES","INYECTABLE"];
+ const form=mostCommon(normalized.map(words=>forms.find(t=>words.includes(t))||""))?.[0]||"";
+ const suffix=form==="CAPSULAS"&&normalized.filter(w=>w.includes("GASTRORRESISTENTES")).length>=labels.length*.45?
+  "Cápsulas gastrorresistentes":form.toLocaleLowerCase("es-ES");
+ if(!generic){
+  // Ante nomenclátor parcial, mostrar la presentación oficial sin fingir
+  // un principio activo que no se ha podido determinar.
+  const fallbackName=labels.find(n=>/\bEFG\b/i.test(n))||labels[0];
+  return "Genérico · "+fallbackName.replace(/,\s*\d+\s*(?:comprimidos|capsulas|sobres|unidades).*$/i,"").trim();
+ }
+ const name=generic.toLocaleLowerCase("es-ES").replace(/(^|\s)(\S)/g,
+  (_m,space,ch)=>space+ch.toLocaleUpperCase("es-ES"));
+ return "Genérico · "+[name,dose,suffix].filter(Boolean).join(" ");
 }
 // El detalle incluye también farmacias con existencias pero ninguna venta.
 // Consultar únicamente CNs de la página evita recorrer todo el catálogo en Node.
@@ -32,16 +64,22 @@ export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
  const dcpfs=[...new Set(groups.filter(g=>g.kind==="generico").map(g=>String(g.dcpf)).filter(Boolean))];
  let official=[];
  if(dcpfs.length){
-  const r=await pool.query("SELECT cn,dcpf,nombre FROM farmetrica.nomenclator_presentaciones"+
+  const r=await pool.query("SELECT cn,dcpf,nombre,principio_activo FROM farmetrica.nomenclator_presentaciones"+
    " WHERE generico=true AND dcpf=ANY($1::text[]) LIMIT 8000",[dcpfs]);
   official=r.rows;
  }
  const keyByCn=new Map();
  for(const g of groups)if(g.cn&&g.kind!=="generico")keyByCn.set(g.cn,g.key);
  for(const o of official)keyByCn.set(String(o.cn),"DCPF:"+o.dcpf);
+ const officialByDcpf=new Map();
+ for(const o of official){
+  const id=String(o.dcpf);
+  if(!officialByDcpf.has(id))officialByDcpf.set(id,[]);
+  officialByDcpf.get(id).push(o);
+ }
  for(const g of groups)if(g.kind==="generico"){
-  const labels=official.filter(o=>String(o.dcpf)===String(g.dcpf)).map(o=>o.nombre);
-  g.articleName=inferGenericGroupName(labels,g.dcpf);
+  const rows=officialByDcpf.get(String(g.dcpf))||[];
+  g.articleName=inferGenericGroupName(rows.map(o=>o.nombre),g.dcpf,rows.map(o=>o.principio_activo));
  }
  const codes=[...keyByCn.keys()];
  if(!codes.length)return groups;

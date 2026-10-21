@@ -145,5 +145,81 @@ jobs:
             count(*)::int AS articulos,
             count(*) FILTER(WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL)::int AS cn_disponibles
           FROM ampedia.articulos GROUP BY 2 ORDER BY 2;
+
+          -- Contraste de unidades en la misma ventana y mismas farmacias.
+          WITH entradas AS MATERIALIZED (
+           SELECT upper(btrim(h.farmacia_codigo)) AS code,
+             sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)::float8 AS todas,
+             sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+              FILTER(WHERE pm.codigo_origen IS NOT NULL)::float8 AS ignoradas
+           FROM ampedia.fm_recepciones_cabeceras h
+           JOIN ampedia.fm_recepciones_lineas l ON l.farmacia_codigo=h.farmacia_codigo
+             AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+           LEFT JOIN farmetrica.proveedores_maestro pm ON pm.cliente_slug='ampedia'
+             AND pm.ignorar_informes=true
+             AND upper(btrim(pm.codigo_origen))=upper(btrim(h.proveedor_origen_id))
+           WHERE h.fecha>=current_date-interval '30 days'
+             AND h.lineas_completas AND NOT h.eliminada_logicamente
+             AND NOT l.eliminada_logicamente
+             AND lower(btrim(coalesce(h.estado,''))) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+             AND nullif(btrim(l.articulo_origen_id),'') IS NOT NULL
+           GROUP BY 1
+          ), salidas AS MATERIALIZED (
+           SELECT upper(btrim(h.farmacia_codigo)) AS code,
+             sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)::float8 AS vendidas
+           FROM ampedia.fm_ventas_cabeceras h
+           JOIN ampedia.fm_ventas_lineas l ON l.farmacia_codigo=h.farmacia_codigo
+             AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+           WHERE h.fecha>=current_date-interval '30 days'
+             AND h.lineas_completas AND NOT h.eliminado_logicamente
+             AND NOT l.eliminada_logicamente AND NOT coalesce(l.anulada,false)
+             AND lower(btrim(coalesce(h.estado,''))) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+             AND nullif(btrim(l.articulo_origen_id),'') IS NOT NULL
+           GROUP BY 1
+          )
+          SELECT 'UNIDADES_30D' AS tipo,f.nombre AS farmacia,
+            coalesce(s.vendidas,0) AS vendidas,
+            coalesce(e.todas,0) AS recepciones_totales,
+            coalesce(e.ignoradas,0) AS recepciones_ignoradas,
+            (coalesce(e.todas,0)-coalesce(e.ignoradas,0))::float8 AS compradas_reportes,
+            (coalesce(s.vendidas,0)-coalesce(e.todas,0)+coalesce(e.ignoradas,0))::float8 AS brecha_reportes
+          FROM farmetrica.farmacias f
+          LEFT JOIN entradas e ON e.code=CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL') THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+          LEFT JOIN salidas s ON s.code=CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL') THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+          WHERE f.cliente_slug='ampedia' ORDER BY f.id;
+          -- Evaluar si los códigos internos ERP de las cinco farmacias
+          -- representan el mismo producto. Esto NO garantiza identidad.
+          WITH catalog AS MATERIALIZED (
+            SELECT DISTINCT ON (upper(btrim(farmacia_codigo)),upper(btrim(origen_id)))
+              upper(btrim(farmacia_codigo)) AS code,upper(btrim(origen_id)) AS article,
+              lower(regexp_replace(btrim(coalesce(nombre,'')),'\s+',' ','g')) AS name
+            FROM ampedia.articulos
+            WHERE nullif(btrim(origen_id),'') IS NOT NULL
+            ORDER BY upper(btrim(farmacia_codigo)),upper(btrim(origen_id)),
+              sincronizado_en DESC NULLS LAST
+          )
+          SELECT 'COLISIONES_CODIGO_ERP' AS tipo,
+            a.code AS farmacia_a,b.code AS farmacia_b,
+            count(*)::int AS codigos_compartidos,
+            count(*) FILTER(WHERE a.name=b.name AND a.name<>'')::int AS nombre_coincide,
+            count(*) FILTER(WHERE a.name<>b.name OR a.name='')::int AS nombre_difiere
+          FROM catalog a JOIN catalog b ON a.article=b.article AND a.code<b.code
+          GROUP BY a.code,b.code ORDER BY a.code,b.code;
+          SELECT 'COBERTURA_IDENTIFICADORES_GLOBAL' AS tipo,
+            count(*)::int AS referencias,
+            count(*) FILTER(WHERE nullif(btrim(codigo_nacional_normalizado),'') IS NOT NULL)::int AS cn,
+            count(*) FILTER(WHERE nullif(btrim(ean_gtin),'') IS NOT NULL)::int AS ean
+          FROM ampedia.fm_producto_correspondencias;
+          SELECT 'TIPOS_SALIDA_30D' AS tipo,h.estado,
+            count(DISTINCT (h.farmacia_codigo,h.sistema_origen,h.documento_id))::int AS documentos,
+            sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)::float8 AS unidades
+          FROM ampedia.fm_ventas_cabeceras h
+          JOIN ampedia.fm_ventas_lineas l ON l.farmacia_codigo=h.farmacia_codigo
+            AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+          WHERE h.fecha>=current_date-interval '30 days'
+            AND h.lineas_completas AND NOT h.eliminado_logicamente
+            AND NOT l.eliminada_logicamente AND NOT coalesce(l.anulada,false)
+            AND nullif(btrim(l.articulo_origen_id),'') IS NOT NULL
+          GROUP BY h.estado ORDER BY documentos DESC;
           ROLLBACK;
           SQL

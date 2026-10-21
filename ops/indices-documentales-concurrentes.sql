@@ -44,14 +44,14 @@ SELECT format(
  'fm_state_ventas_recibido_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
 WHERE to_regclass(format('%I.fm_ventas_cabeceras',c.esquema_datos)) IS NOT NULL
-\\gexec
+\gexec
 
 SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_recepciones_cabeceras ((upper(btrim(farmacia_codigo))), recibido_en DESC) INCLUDE (fecha);',
  'fm_state_recepciones_recibido_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
 WHERE to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) IS NOT NULL
-\\gexec
+\gexec
 
 -- Verificar que el índice sea válido, visible para el planificador y usable.
 WITH expected AS (

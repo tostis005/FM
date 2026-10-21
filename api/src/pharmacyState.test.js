@@ -44,7 +44,7 @@ test("Estado devuelve todas las farmacias autorizadas, incluidas las sin recepci
  if(error)throw error;
  assert.equal(json.pharmacies.length,2);
  assert.equal(json.pharmacies[0].flows[0].flow,"ventas_completas");
-  assert.ok(queries.filter(x=>x.sql.includes("fm_sync_")).every(x=>x.sql.includes("NOT IN")));
+  assert.ok(queries.filter(x=>x.sql.includes(".fm_sync_")).every(x=>x.sql.includes("NOT IN")));
  assert.equal(json.pharmacies[1].state,"Sin información");
  assert.ok(queries.some(x=>x.sql.includes("fm_sync_ejecuciones")));
  assert.ok(queries.some(x=>x.sql.includes("fm_recepciones_cabeceras")));

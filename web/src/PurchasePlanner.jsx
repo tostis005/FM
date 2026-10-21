@@ -326,13 +326,16 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       {g.kind==="generico"&&<details className="fm-planner-presentations">
        <summary>CN y laboratorios del conjunto genérico ({(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).length} presentaciones oficiales)</summary>
        <div className="fm-planner-table-scroll">
-        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación del nomenclátor</th><th>Laboratorio fabricante</th></tr></thead>
+        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación del nomenclátor</th><th>Fabricante oficial</th><th>Laboratorio con PUC observado</th></tr></thead>
          <tbody>{(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).map(v=><tr key={v.cn}>
-          <td>{v.cn}</td><td>{v.name}</td><td>{v.laboratory||"Sin información de laboratorio"}</td>
+          <td>{v.cn}</td><td>{v.name}</td><td>{v.laboratory||"No informado en el nomenclátor"}</td>
+          <td>{[...new Set((labData?.byPharmacy||[]).filter(r=>r.groupKey===g.key)
+           .flatMap(r=>r.options||[]).filter(o=>String(o.cn)===String(v.cn))
+           .map(o=>o.supplierName))].join(", ")||"Sin precio verificado"}</td>
          </tr>)}</tbody>
         </table>
        </div>
-       <small>El laboratorio del nomenclátor es el fabricante; el proveedor recomendado se determina con compras y PUC reales, excluyendo cooperativas.</small>
+       <small>El fabricante oficial y el laboratorio proveedor no son necesariamente el mismo. Solo se recomiendan proveedores no cooperativos con PUC suficiente y verificado.</small>
       </details>}
      </div>}
    </div>},

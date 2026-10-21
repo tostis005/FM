@@ -42,7 +42,7 @@ test("PostgreSQL: preparador consulta ventas documentales y stock real, filtrand
   if(error)throw error;
   const unSold=body.groups.find(g=>g.pharmacies.some(p=>p.options.some(o=>
    o.cn==="654321"&&o.articleId==="ART-01")));
-  assert.ok(unSold,"la búsqueda incluye artículos del catálogo sin ventas");
+  assert.ok(unSold,"la búsqueda incluye artículos del catálogo sin ventas: "+JSON.stringify(body).slice(0,1100));
   assert.ok(unSold.pharmacies[0].options.some(o=>o.articleId==="ART-01"));
  }finally{await pool.end()}
 });

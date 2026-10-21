@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {reconcilePharmacyIds} from "./reportFilterScopes.js";
+import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
 
 const pharmacies=[
  {id:"1",name:"Abadía",sourceCode:"ABA",databaseCode:"ABA"},
@@ -21,4 +21,12 @@ test("no resuelve códigos ERP ambiguos entre farmacias distintas",()=>{
  const list=[{id:"10",sourceCode:"SAME"},{id:"11",sourceCode:"SAME"}];
  assert.deepEqual(reconcilePharmacyIds(["SAME"],list),[]);
  assert.deepEqual(reconcilePharmacyIds(["10","11"],list),["10","11"]);
+});
+
+test("móvil: ningún filtro seleccionado significa todas las farmacias en ventas Y PUC",()=>{
+ assert.deepEqual(effectivePharmacyIds([],pharmacies),["1","5"]);
+ assert.deepEqual(effectivePharmacyIds(["POL"],pharmacies),["5"]);
+ assert.deepEqual(effectivePharmacyIds(["ABA","POL"],pharmacies),["1","5"]);
+ assert.deepEqual(effectivePharmacyIds(["fuera"],pharmacies),["1","5"]);
+ assert.deepEqual(effectivePharmacyIds([] ,[]),[]);
 });

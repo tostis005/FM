@@ -73,7 +73,7 @@ assert.match(tunnelSource,/client\.ConnectAsync\(ct\)/);
 assert.match(postgresSource,/Pooling = !localPort\.HasValue/);
 assert.match(backendCode,/\/destination\/test-ssh-draft/);
 assert.match(backendCode,/MapFallbackToFile\("index\.html"\)/);
-assert.match(backendCode,/worker\.GetLiveRuns\(\)\.Concat\(c\.Runs\)/);
+assert.match(backendCode,/worker\.GetLiveRuns\(\)\.Concat\(c\.Runs\.Where\(/);
 assert.match(src,/popstate/);
 assert.match(src,/\/historial/);
 assert.match(src,/\.setInterval\?/);

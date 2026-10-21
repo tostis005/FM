@@ -119,7 +119,7 @@ export function setupPharmacyState(app,pool,{requireTenant}){
      " servicio_visto_en AS \"heartbeatAt\",registrado_en AS \"registeredAt\","+
      " filas_leidas AS \"read\",filas_insertadas AS \"inserted\""+
      " FROM "+q+".fm_sync_monitor WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])"+
-     " ORDER BY flujo",[codes])]);
+     " AND lower(btrim(flujo)) NOT IN ('ventas','compras') ORDER BY flujo",[codes])]);
    }
    if(available.has("fm_sync_ejecuciones")){
     sources.push("ejecuciones");
@@ -129,7 +129,8 @@ export function setupPharmacyState(app,pool,{requireTenant}){
      " rechazadas AS rejected,error_resumen AS error"+
      " FROM "+q+".fm_sync_ejecuciones"+
      " WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])"+
-     " ORDER BY upper(btrim(farmacia_codigo)),flujo,iniciada_en DESC",[codes])]);
+     " AND lower(btrim(flujo)) NOT IN ('ventas','compras')"+
+      " ORDER BY upper(btrim(farmacia_codigo)),flujo,iniciada_en DESC",[codes])]);
    }
    for(const [kind,header,view] of [
     ["ventas","fm_ventas_cabeceras","fm_ventas_analitica"],

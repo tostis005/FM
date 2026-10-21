@@ -162,6 +162,12 @@ Check(await Count(db,
     $"SELECT count(*) FROM ampedia.fm_sync_ejecuciones WHERE ejecucion_id='{monitorRun.Id}' " +
     "AND sistema_origen='farmatic' AND modificadas=2") == 1,
     "El historial debe escribir usando la clave y columnas del modelo documental");
+Check(await Count(db, """
+    SELECT count(*) FROM information_schema.columns
+     WHERE table_schema='ampedia' AND table_name='fm_sync_ejecuciones'
+       AND column_name='trabajo_id'
+    """) == 0,
+    "La supervisión no debe alterar el historial canónico de la API");
 Check(await Count(db,
     $"SELECT count(*) FROM ampedia.fm_sync_monitor WHERE instancia_id='{monitorConfig.MonitorInstanceId}' " +
     $"AND trabajo_id='{monitorJob.Id}'") == 1, "Debe guardar también el pulso del trabajo");

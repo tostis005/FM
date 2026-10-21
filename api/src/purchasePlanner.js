@@ -49,7 +49,7 @@ export function groupPurchaseRows(rows){
     {suggested:first.suggested,daily:first.daily,demand:first.demand}:
     proposePurchase({stock,units3,units12,ordered,interval:first.interval,
      lead:first.lead,safety:first.safety});
-   return {...first,pharmacyId,options:options.map(p=>({
+   return {...first,pharmacyId,groupKey:group.key,options:options.map(p=>({
     articleId:p.articleId,articleName:p.articleName,cn:p.cn,stock:p.stock,
     unitsPeriod:p.unitsPeriod,units3:p.units3,units12:p.units12
    })),stock,ordered,unitsPeriod,units3,units12,...calculated,

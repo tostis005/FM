@@ -1,6 +1,7 @@
 import React,{useCallback,useEffect,useState} from "react";
 import {RefreshCcw,Activity,Clock3,AlertTriangle,CheckCircle2,Store,ChevronDown,ChevronUp} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import {syncFlowLabel} from "./syncFlowLabel.js";
 import {dateTimeES,integer} from "./localeES.js";
 import "./PharmacyState.css";
 
@@ -35,7 +36,7 @@ function Detail({pharmacy}){
  return <div className="fm-pharmacy-detail-list">
   {pharmacy.monitors.map(m=><div className="fm-pharmacy-detail-job" key={m.jobId}>
    <div className="fm-pharmacy-detail-head">
-    <strong>{m.flow.replaceAll("_"," ")}</strong><Status status={m.health} detail/>
+    <strong>{syncFlowLabel(m.flow)}</strong><Status status={m.health} detail/>
    </div>
    <div className="fm-pharmacy-detail-meta"><span><Interval monitor={m}/></span>
     <span>Último intento: {displayDate(m.lastAttemptAt)}</span>
@@ -98,7 +99,7 @@ export default function PharmacyState({clientSlug}){
   {key:"detail",label:"Incidencia / detalle",sortable:false,searchable:false,value:()=>"",
    render:p=><div className="fm-pharmacy-row-detail">
     {p.incidents?.length>0?<span className="fm-pharmacy-incident-preview">
-     {p.incidents[0].flow}: {p.incidents[0].error}</span>:
+     {syncFlowLabel(p.incidents[0].flow)}: {p.incidents[0].error}</span>:
      p.monitored?<span className="fm-pharmacy-muted">Sin incidencias conocidas</span>:
      <span className="fm-pharmacy-muted">Instala Sync 0.17 para supervisar</span>}
     <button type="button" className="fm-pharmacy-expand" onClick={()=>toggle(p.id)}

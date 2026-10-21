@@ -13,7 +13,12 @@ export function readableCell(value){
  if(Array.isArray(value))return value.map(readableCell).join(" ");
  if(React.isValidElement(value)){
   if(value.props?.value!==undefined)return readableCell(value.props.value);
-  return readableCell(value.props?.children);
+  const children=readableCell(value.props?.children);
+  if(children)return children;
+  // Identificadores de artículo renderizados mediante un componente React
+  // personalizado: exportar y filtrar CN/nombre en lugar de una celda vacía.
+  return [value.props?.cn,value.props?.name,value.props?.sourceId,value.props?.label]
+   .filter(v=>v!==undefined&&v!==null&&v!=="").map(readableCell).join(" ");
  }
  return "";
 }

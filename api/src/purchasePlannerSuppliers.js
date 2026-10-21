@@ -85,6 +85,26 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
   const {rows}=await pool.query({text:sql,values:[codes,chosen,reportTo,ctx.client.slug],
    query_timeout:18000});
   offers=rows;
+  // En muchos sincronizadores el nombre no viene en la recepción.
+  // Recuperarlo del maestro local de proveedores de cada farmacia.
+  const providerCodes=[...new Set(offers.map(x=>String(x.supplierCode)))];
+  if(providerCodes.length){
+   const {rows:names}=await pool.query({
+    text:`SELECT f.id::text AS "pharmacyId",p.origen_id AS "supplierCode",
+      max(nullif(btrim(p.nombre),'')) AS name
+     FROM ${q}.proveedores p JOIN farmetrica.farmacias f
+      ON f.cliente_slug=$2 AND f.id=ANY($3::int[])
+      AND upper(btrim(p.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     WHERE p.origen_id=ANY($1::text[]) GROUP BY f.id,p.origen_id`,
+    values:[providerCodes,ctx.client.slug,chosen],query_timeout:8000
+   });
+   const nameMap=new Map(names.filter(n=>n.name).map(n=>[
+    String(n.pharmacyId)+"|"+String(n.supplierCode),String(n.name)]));
+   offers=offers.map(r=>({
+    ...r,supplierName:r.supplierName&&String(r.supplierName)!==String(r.supplierCode)?
+     r.supplierName:nameMap.get(String(r.pharmacyId)+"|"+String(r.supplierCode))||r.supplierName
+   }));
+  }
  }
  const result=mapLaboratoryOffers(offers,selected);
  const lookups=[...new Set(selected.map(r=>String(r.cn||r.articleId)))];

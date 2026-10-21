@@ -91,7 +91,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
    return res.status(400).json({error:"Filtros inválidos"});
   }
   if(!SCHEMA.test(schema)||!validDate(from)||!validDate(to)||from>to||
-   Date.parse(to)-Date.parse(from)>3650*DAY||search.length>100||
+   Date.parse(to)-Date.parse(from)>150*365.25*DAY||search.length>100||
    raw.length>1600||ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id))||
    !allowedSort.has(sort)||!["asc","desc"].includes(direction)||
    !Number.isSafeInteger(page)||page<1||page>100000||

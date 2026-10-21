@@ -40,7 +40,7 @@ export default function ConfiguracionDiasStock({clientSlug,pharmacies=[]}){
  async function save(e){
   e.preventDefault();setError("");setNotice("");
   const value=Number(days);
-  if(!/^\\d+$/.test(String(days))||!Number.isSafeInteger(value)||value<1||value>3650)
+  if(!/^\d+$/.test(String(days))||!Number.isSafeInteger(value)||value<1||value>3650)
    return setError("Indica un número entero entre 1 y 3.650 días.");
   setSaving(true);
   try{

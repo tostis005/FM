@@ -144,7 +144,7 @@ export default function PharmacyState({clientSlug}){
    </div>
    <ListTable rows={[...filtered].sort((a,b)=>(priority[a.state]??5)-(priority[b.state]??5)||a.name.localeCompare(b.name))}
     columns={columns} rowKey={p=>p.id} label="farmacias"
-    defaultSort={{key:"health",direction:"asc"}} loading={loading&&!data}
+    loading={loading&&!data}
     loadingLabel="Comprobando trabajos y recepciones…"
     emptyText="No hay farmacias con este estado"/>
   </section>

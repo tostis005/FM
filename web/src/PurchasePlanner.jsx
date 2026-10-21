@@ -13,8 +13,8 @@ export function putPurchaseLink(slug,link){
  sessionStorage.setItem(STAGING_PREFIX+slug,JSON.stringify(link));
 }
 function makeCSV(lines){
- return "\ufeff"+[["Proveedor","Farmacia","CN","Código ERP","Artículo","Unidades"],
-  ...lines.map(x=>[x.supplier,x.pharmacyName,x.cn||"",x.articleId,x.articleName,x.units])]
+ return "\ufeff"+[["Proveedor","Código proveedor","Farmacia","CN","Código ERP","Artículo","Unidades"],
+  ...lines.map(x=>[x.supplierName||"Nombre no disponible",x.supplier,x.pharmacyName,x.cn||"",x.articleId,x.articleName,x.units])]
   .map(line=>line.map(exportSafe).join(";")).join("\r\n");
 }
 function downloadCSV(filename,lines){
@@ -93,12 +93,17 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   for(const g of groups)for(const p of g.pharmacies){
    const edit=overrides[key(p)]||{},units=Number(edit.units??p.suggested??0);
    const supplier=String(edit.supplier||"").trim();
-   if(units>0&&Number.isSafeInteger(units)&&supplier)lines.push({...p,cn:g.cn,
-    articleName:g.articleName,pharmacyName:pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId,
-    units,supplier});
+   if(units>0&&Number.isSafeInteger(units)&&supplier){
+    const provider=(suppliers[String(p.pharmacyId)]||[]).find(s=>String(s.code).trim().toUpperCase()===supplier.toUpperCase());
+    const supplierName=String(provider?.name||"").trim();
+    lines.push({...p,cn:g.cn,articleName:g.articleName,
+     pharmacyName:pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId,
+     units,supplier,supplierName,
+     supplierKey:supplierName?"NAME:"+supplierName.toUpperCase():"LOCAL:"+p.pharmacyId+":"+supplier.toUpperCase()});
+   }
   }
   return lines;
- },[groups,overrides,pharmacies]);
+ },[groups,overrides,pharmacies,suppliers]);
  const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>Number(overrides[key(p)]?.units??p.suggested??0)>0&&!String(overrides[key(p)]?.supplier||"").trim()).length,0);
  const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
  const setValue=(p,field,value)=>setOverrides(previous=>({...previous,
@@ -109,11 +114,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   // el formato propio de cada laboratorio sin perder trazabilidad.
   const bySupplier=new Map();
   for(const line of allLines){
-   if(!bySupplier.has(line.supplier))bySupplier.set(line.supplier,[]);
-   bySupplier.get(line.supplier).push(line);
+   if(!bySupplier.has(line.supplierKey))bySupplier.set(line.supplierKey,[]);
+   bySupplier.get(line.supplierKey).push(line);
   }
-  for(const [supplier,lines] of bySupplier)
-   downloadCSV("farmetrica-pedido-"+supplier.replace(/[^a-z0-9_-]/gi,"_").slice(0,60),lines);
+  for(const [,lines] of bySupplier){
+   const name=lines[0].supplierName||lines[0].supplier+"-"+lines[0].pharmacyId;
+   downloadCSV("farmetrica-pedido-"+name.replace(/[^a-z0-9_-]/gi,"_").slice(0,60),lines);
+  }
   setNotice("CSV preparado por proveedor. La descarga no envía ni aprueba pedidos.");
  }
  async function saveDrafts(){
@@ -161,6 +168,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       <strong>{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</strong>
       <small>ERP {p.articleId} · Stock {p.stock===null?"No disponible":whole(p.stock)} · Período {whole(p.unitsPeriod)} · 3m {whole(p.units3)} · 12m {whole(p.units12)}</small>
       <small>Media {whole(p.daily)} uds./día × ({p.interval}+{p.lead} días) + seguridad {p.safety} − stock {whole(p.stock)} − preparados {p.ordered??0} = <b>{p.suggested??"Sin cálculo"} uds.</b></small>
+      <small>Última actualización conocida del inventario: {p.stockAt?new Date(p.stockAt).toLocaleString("es-ES"):"Sin fecha disponible"}</small>
       {confidence!=="calculable"&&<small className="fm-planner-caution">{confidence==="stock_antiguo"?"Stock posiblemente desactualizado":confidence==="sin_stock"?"Sin stock: no se propone compra":"Sin fecha verificable de stock"}</small>}
       {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalos y plazos por farmacia.</small>}
       <div className="fm-planner-edit">

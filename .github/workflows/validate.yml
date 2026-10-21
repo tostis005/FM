@@ -30,6 +30,7 @@ jobs:
           node --check api/src/tenant.js
           node --test api/src/supplierReporting.test.js
           node --test api/src/purchasePlanner.test.js
+          node --test api/src/purchasePlannerSuppliers.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
@@ -263,38 +264,3 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
-
-
-  verificar_maestro_proveedores:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
-      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
-      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
-    steps:
-      - name: Nombres del maestro de proveedores (solo lectura)
-        run: |
-          set -euo pipefail
-          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
-          chmod 600 ~/.ssh/id_fm
-          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
-          BEGIN READ ONLY;
-          SET LOCAL statement_timeout='15000ms';
-          SELECT 'MAESTRO_TOTAL' AS origen,count(*) AS total,count(*) FILTER(WHERE nullif(btrim(nombre),'') IS NOT NULL) AS con_nombre FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia';
-          SELECT 'MAESTRO_ID' AS origen,codigo_origen,left(nombre,68) AS nombre,cooperativa,ignorar_informes
-          FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia'
-           AND ltrim(btrim(codigo_origen),'0')=ANY(ARRAY['256','5','125','87','144'])
-          ORDER BY codigo_origen LIMIT 30;
-          SELECT 'EXTERNO_ID' AS origen,farmacia_codigo,origen_id,left(nombre,68) AS nombre
-          FROM ampedia.proveedores WHERE ltrim(btrim(origen_id),'0')=ANY(ARRAY['256','5','125','87','144'])
-          ORDER BY origen_id LIMIT 30;
-          SELECT 'PROVEEDORES_CAMPOS' AS origen,table_name,string_agg(column_name,', ' ORDER BY ordinal_position)
-          FROM information_schema.columns WHERE table_schema='ampedia' AND table_name IN ('proveedores','fm_recepciones_analitica')
-          GROUP BY table_name;
-          ROLLBACK;
-          SQL

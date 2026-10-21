@@ -45,7 +45,9 @@ jobs:
             FROM farmetrica.clientes c
             CROSS JOIN (VALUES
               ('fm_doc_ventas_codigo_fecha_idx','fm_ventas_cabeceras'),
-              ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras')
+              ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras'),
+              ('fm_state_ventas_recibido_idx','fm_ventas_cabeceras'),
+              ('fm_state_recepciones_recibido_idx','fm_recepciones_cabeceras')
             ) v(index_name,table_name)
             WHERE to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) IS NOT NULL
           )
@@ -95,7 +97,9 @@ jobs:
             FROM farmetrica.clientes c
             CROSS JOIN (VALUES
               ('fm_doc_ventas_codigo_fecha_idx','fm_ventas_cabeceras'),
-              ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras')
+              ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras'),
+              ('fm_state_ventas_recibido_idx','fm_ventas_cabeceras'),
+              ('fm_state_recepciones_recibido_idx','fm_recepciones_cabeceras')
             ) v(index_name,table_name)
             WHERE to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) IS NOT NULL
           )

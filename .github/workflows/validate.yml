@@ -351,7 +351,7 @@ jobs:
              concentrated:summary?.concentratedCount,recentPeaks:summary?.recentPeakCount,
              seasonal:summary?.seasonalCount,
              sample:groups?.slice(0,3).map(g=>({
-              cn:g.cn,days:g.saleDays,weeks:g.saleWeeks,last:g.lastSale,
+              cn:g.cn,first:g.firstSale,last:g.lastSale,span:g.saleSpanDays,lines:g.saleLines,
               pattern:g.patron,suggested:g.suggested,pharmacies:g.pharmacies?.length
              }))}));
             if(!groups?.length)throw Error("La consulta no devolvió artículos");
@@ -360,7 +360,7 @@ jobs:
             if(scope==="eclipse"){
              const g=groups.find(g=>g.cn==="000294");
              if(!g||g.patron!=="concentrada"||g.suggested!==0||
-              !(g.saleDays>0 && g.saleDays<=7))
+              !(g.saleSpanDays>0 && g.saleSpanDays<=7))
               throw Error("Patrón de ventas concentradas no respaldado por días de venta");
             }
            }

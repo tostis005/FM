@@ -11,13 +11,11 @@ ALTER TABLE farmetrica.usuario_clientes
 -- Gmail personal requiere invitación explícita por cliente.
 ALTER TABLE farmetrica.usuario_clientes
  ADD COLUMN IF NOT EXISTS google_invitado boolean NOT NULL DEFAULT false;
-DO $$
-BEGIN
- IF NOT EXISTS (SELECT 1 FROM pg_constraint
-   WHERE conrelid='farmetrica.usuario_clientes'::regclass
-    AND conname='usuario_clientes_metodo_acceso_check') THEN
-  ALTER TABLE farmetrica.usuario_clientes
-   ADD CONSTRAINT usuario_clientes_metodo_acceso_check
-   CHECK (metodo_acceso IN ('google','interno'));
- END IF;
-END $$;
+-- Compatibilidad con cuentas históricas llamadas "interno".
+-- El login y la API usan ahora "local". Ejecutable repetidamente.
+ALTER TABLE farmetrica.usuario_clientes
+ DROP CONSTRAINT IF EXISTS usuario_clientes_metodo_acceso_check;
+UPDATE farmetrica.usuario_clientes SET metodo_acceso='local' WHERE metodo_acceso='interno';
+ALTER TABLE farmetrica.usuario_clientes
+ ADD CONSTRAINT usuario_clientes_metodo_acceso_check
+ CHECK (metodo_acceso IN ('google','local'));

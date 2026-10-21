@@ -82,7 +82,7 @@ export default function PharmacyState({clientSlug}){
  const columns=[
   {key:"name",label:"Farmacia",filterMode:"multi",value:p=>p.name,
    render:p=><div className="fm-pharmacy-name"><strong>{p.name}</strong><small>{p.code}</small></div>},
-  {key:"health",label:"Estado",filterMode:"multi",value:p=>p.state,
+  {key:"health",label:"Situación",filterMode:"multi",value:p=>p.state,
    render:p=><Status status={p.state}/>},
   {key:"jobs",label:"Sincronizaciones",value:p=>String(p.monitors?.length||0),
    render:p=>p.monitored?<div className="fm-pharmacy-flow-summary">

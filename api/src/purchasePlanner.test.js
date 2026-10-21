@@ -95,7 +95,8 @@ test("genéricos EFG agrupan CN diferentes por DCPF sin sumar dobles previsiones
 
 test("PUC interpreta filtro de farmacias [] como todas las autorizadas igual que ventas",async()=>{
  const routes={},sqlCalls=[];
- const app={post(path,...middleware){routes[path]=middleware.at(-1)}};
+ const app={post(path,...middleware){routes[path]=middleware.at(-1)},
+  get(path,...middleware){routes[path]=middleware.at(-1)}};
  const pool={async query(query,values){
   const text=typeof query==="string"?query:query.text;
   const params=values||query.values;

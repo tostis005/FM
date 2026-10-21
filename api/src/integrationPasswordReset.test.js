@@ -26,7 +26,7 @@ test("PostgreSQL: restablecer contraseña externa usa enlace de un solo uso sin 
   await pool.query(
    "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES($1,'CI','colaborador','{}',true)",[email]);
   await pool.query(
-   "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso) VALUES($1,'ampedia','colaborador','{}',true,'interno')",[email]);
+   "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso) VALUES($1,'ampedia','colaborador','{}',true,'local')",[email]);
   await pool.query(
    "INSERT INTO farmetrica.credenciales_locales(email,password_hash,activo) VALUES($1,$2,true)",
    [email,await hashInternalPassword(original)]);

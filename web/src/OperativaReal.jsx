@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
 
 import SortableDataTable from "./SortableDataTable.jsx";
+import PurchasePlanner from "./PurchasePlanner.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {readSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaReal.css";
@@ -14,7 +15,7 @@ const ESTADOS={
  nueva:"Nueva",en_estudio:"En estudio",en_curso:"En curso",aplicada_parcialmente:"Aplicada parcialmente",
  aplicada:"Aplicada",descartada:"Descartada",pospuesta:"Pospuesta",
  borrador:"Borrador",pendiente_aprobacion:"Pendiente de aprobación",
- aprobado:"Aprobado",exportado:"Exportado",cancelado:"Cancelado",
+ aprobado:"Aprobado",exportado:"Exportado",recibido:"Recibido",cancelado:"Cancelado",
  pendiente:"Pendiente",resuelta:"Resuelta",
  propuesta:"Propuesta",en_revision:"En revisión",aprobada:"Aprobada",realizada:"Realizada"
 };
@@ -57,7 +58,7 @@ function SelectStatus({value,onChange,values,disabled}){return <select aria-labe
  onChange={e=>onChange(e.target.value)}>{values.map(s=><option key={s} value={s}>{ESTADOS[s]||s}</option>)}</select>}
 function Button({children,onClick,disabled,primary=false}){return <button type="button"
  className={"btn "+(primary?"btn-primary":"btn-secondary")} disabled={disabled} onClick={onClick}>{children}</button>}
-export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail=""}){
+export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail="",tenantRole=""}){
  const operationalPharmacyKey="fm_operativa_farmacia:"+clientSlug;
  const resource=MAP[section], [pharmacy,setPharmacy]=useState(()=>{
   const operational=sessionStorage.getItem(operationalPharmacyKey);
@@ -104,9 +105,9 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
   const search=new URLSearchParams({recurso,farmacia:pharmacy,...params});
   return api("/api/operativa?"+search);
  }
- async function refresh(){
+ async function refresh({silent=false}={}){
   if(!pharmacy){setError("No hay farmacias autorizadas para esta sección.");setMode("error");return;}
-  setMode("loading");setError("");
+  if(!silent)setMode("loading");setError("");
   try{
    const result=await query();
    setScope(result.scope||{});setItems(result.items||[]);setLastUpdated(new Date());setMode("ready");
@@ -131,6 +132,18 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    setError(E(e));setMode("error");
   }
  }
+ useEffect(()=>{
+  if(section!=="stock-traspasos")return;
+  try{
+   const link=JSON.parse(sessionStorage.getItem("fm_stock_transfer:"+clientSlug)||"null");
+   if(!link)return;
+   sessionStorage.removeItem("fm_stock_transfer:"+clientSlug);
+   if(!pharmacies.some(p=>String(p.id)===String(link.pharmacyId)))return;
+   setPharmacy(String(link.pharmacyId));
+   setArticle(String(link.article||""));setName(String(link.name||""));
+   setUnits(String(link.units||1));
+  }catch{}
+ },[section,clientSlug]);
  useEffect(()=>{setSelected("");setDraft(null);void refresh();},[section,clientSlug,pharmacy]);
  async function save(method,recurso,body={},id){
   setBusy(true);setNotice("");setError("");
@@ -202,7 +215,9 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    {header}
    {error&&<div className="fm-op-message fm-op-error" role="alert">{error}</div>}
    {notice&&<div className="fm-op-message" role="status">{notice}</div>}
-   {resource==="pedidos"&&<>
+   {section==="compras-preparador"&&<PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
+    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)} onCreated={()=>void refresh({silent:true})}/>}
+  {resource==="pedidos"&&<>
     <Cards entries={[["Planes",NUM(items.length)],["Pendientes de aprobación",NUM(items.filter(n=>n.estado==="pendiente_aprobacion").length)],
      ["Necesidades sin asignar",NUM(items.reduce((s,p)=>s+p.lineas.reduce((v,n)=>v+pending(n),0),0))+" uds."],
      ["Pedidos aprobados",NUM(items.filter(x=>x.estado==="aprobado").length)]]}/>
@@ -219,6 +234,8 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
          {canEdit&&p.estado==="borrador"&&<Button disabled={busy} onClick={()=>update(p,"pendiente_aprobacion")}>Solicitar aprobación</Button>}
          {canApprove&&p.estado==="pendiente_aprobacion"&&<Button disabled={busy} onClick={()=>update(p,"aprobado")}>Aprobar</Button>}
          {canEdit&&p.estado==="aprobado"&&<Button disabled={busy} onClick={()=>update(p,"exportado")}>Marcar exportado</Button>}
+          {canEdit&&p.estado==="exportado"&&<Button disabled={busy}
+           onClick={()=>{if(window.confirm("¿Confirmas que el pedido ya se ha recibido? Esta marca no modifica las existencias del ERP."))void update(p,"recibido")}}>Marcar recibido</Button>}
          {canEdit&&["borrador","pendiente_aprobacion","aprobado"].includes(p.estado)&&
           <Button disabled={busy} onClick={()=>update(p,"cancelado")}>Cancelar</Button>}
          <Button onClick={()=>history(p)}>Historial</Button>

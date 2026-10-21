@@ -33,14 +33,16 @@ SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.articulos ((btrim(codigo_nacional)),(upper(btrim(farmacia_codigo))),origen_id);',
  'fm_find_articulos_cn_farmacia_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.articulos',c.esquema_datos)) IS NOT NULL
+JOIN pg_class art_relation ON art_relation.oid=to_regclass(format('%I.articulos',c.esquema_datos))
+WHERE art_relation.relkind IN ('r','m')
 \gexec
 
 SELECT format(
  'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.articulos USING gin (nombre gin_trgm_ops);',
  'fm_find_articulos_nombre_trgm_idx',c.esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.articulos',c.esquema_datos)) IS NOT NULL
+JOIN pg_class art_relation ON art_relation.oid=to_regclass(format('%I.articulos',c.esquema_datos))
+WHERE art_relation.relkind IN ('r','m')
 \gexec
 
 -- PK documental optimiza documento->líneas; estos índices inversos optimizan
@@ -73,7 +75,8 @@ WITH expected AS (
  ('fm_find_articulos_nombre_trgm_idx','articulos'),
  ('fm_find_recepciones_linea_articulo_idx','fm_recepciones_lineas'),
  ('fm_find_ventas_linea_articulo_idx','fm_ventas_lineas')) v(name,tab)
- WHERE to_regclass(format('%I.%I',c.esquema_datos,v.tab)) IS NOT NULL
+ JOIN pg_class indexed_relation ON indexed_relation.oid=to_regclass(format('%I.%I',c.esquema_datos,v.tab))
+ WHERE indexed_relation.relkind IN ('r','m')
 )
 SELECT CASE WHEN count(*) FILTER(WHERE ix.indisvalid AND ix.indisready)=count(*)
   THEN 'SELECT 1 AS indices_verificados;'
@@ -87,5 +90,6 @@ FROM expected e
 ANALYZE farmetrica.nomenclator_presentaciones;
 SELECT format('ANALYZE %I.articulos;',esquema_datos)
 FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
-WHERE to_regclass(format('%I.articulos',esquema_datos)) IS NOT NULL
+JOIN pg_class article_to_analyze ON article_to_analyze.oid=to_regclass(format('%I.articulos',esquema_datos))
+WHERE article_to_analyze.relkind IN ('r','m')
 \gexec

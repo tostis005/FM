@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS farmetrica.op_pedidos (
  farmacia_id integer NOT NULL,
  nombre text NOT NULL CHECK(length(nombre) BETWEEN 1 AND 180),
  estado text NOT NULL DEFAULT 'borrador'
-  CHECK(estado IN ('borrador','pendiente_aprobacion','aprobado','exportado','cancelado')),
+  CHECK(estado IN ('borrador','pendiente_aprobacion','aprobado','exportado','recibido','cancelado')),
  lineas jsonb NOT NULL DEFAULT '[]'::jsonb CHECK(jsonb_typeof(lineas)='array'),
  creado_por text NOT NULL,
  aprobado_por text,
@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS farmetrica.op_pedidos (
  FOREIGN KEY (cliente_slug,farmacia_id) REFERENCES farmetrica.farmacias(cliente_slug,id)
 );
 CREATE INDEX IF NOT EXISTS op_pedidos_ambito ON farmetrica.op_pedidos(cliente_slug,farmacia_id,estado,actualizado_en DESC);
+-- Extensión idempotente del check para instalaciones existentes.
+ALTER TABLE farmetrica.op_pedidos DROP CONSTRAINT IF EXISTS op_pedidos_estado_check;
+ALTER TABLE farmetrica.op_pedidos ADD CONSTRAINT op_pedidos_estado_check
+ CHECK (estado IN ('borrador','pendiente_aprobacion','aprobado','exportado','recibido','cancelado'));
 
 CREATE TABLE IF NOT EXISTS farmetrica.op_trabajo (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

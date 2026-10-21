@@ -2,7 +2,7 @@ import {randomUUID} from "node:crypto";
 
 export const STATES={
  oportunidades:["nueva","en_estudio","en_curso","aplicada_parcialmente","aplicada","descartada","pospuesta"],
- pedidos:["borrador","pendiente_aprobacion","aprobado","exportado","cancelado"],
+ pedidos:["borrador","pendiente_aprobacion","aprobado","exportado","recibido","cancelado"],
  trabajo:["pendiente","en_curso","resuelta","descartada","pospuesta"],
  traspasos:["propuesta","en_revision","aprobada","realizada","descartada"]
 };
@@ -57,7 +57,7 @@ export function canTransition(kind,from,to){
  if(from===to)return kind==="pedidos"&&["borrador","pendiente_aprobacion"].includes(from);
  const transitions={
   pedidos:{borrador:["pendiente_aprobacion","cancelado"],pendiente_aprobacion:["borrador","aprobado","cancelado"],
-   aprobado:["exportado","cancelado"],exportado:[],cancelado:[]},
+   aprobado:["exportado","cancelado"],exportado:["recibido"],recibido:[],cancelado:[]},
   traspasos:{propuesta:["en_revision","descartada"],en_revision:["aprobada","descartada"],
    aprobada:["realizada","descartada"],realizada:[],descartada:[]}
  };

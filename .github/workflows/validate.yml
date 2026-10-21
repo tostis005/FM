@@ -29,6 +29,7 @@ jobs:
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --test api/src/supplierReporting.test.js
+          node --test api/src/purchasePlanner.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
@@ -206,6 +207,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/outgoingTransfers.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/commercialNames.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentScreens.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlanner.integration.test.js
 
 
   validar_responsive:
@@ -234,6 +236,7 @@ jobs:
           done
           node check-responsive.mjs
           node check-dashboard-audit.mjs
+          node check-purchase-planner.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

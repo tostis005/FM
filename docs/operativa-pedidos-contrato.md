@@ -27,9 +27,32 @@ Cada movimiento importado debe tener `cliente_slug`, un código de farmacia ineq
 No usar números de CN ni umbrales fijos sin fuente fiable para afirmar si un artículo es medicamento. Mantener los artículos «sin clasificar» hasta que el maestro oficial o una clasificación autorizada los determine.
 
 ## Preparador de compras
-Separa la **necesidad** (artículo y unidades requeridas) de sus **asignaciones a proveedores**. Reducir la asignación de un proveedor a cero no borra la necesidad. El total asignado nunca puede superar lo necesario. Un pedido pasa por borrador, pendiente de aprobación, aprobado y exportado. Aprobar o marcar exportado **no lo envía al ERP**.
+Separa la **necesidad** (artículo y unidades requeridas) de sus **asignaciones a proveedores**. Reducir la asignación de un proveedor a cero no borra la necesidad. El total asignado nunca puede superar lo necesario. Un pedido pasa por borrador, pendiente de aprobación, aprobado, exportado y recibido. Aprobar o marcar exportado **no lo envía al ERP**.
 
 Cuando lleguen los datos se usará, entre otras comprobaciones, la demanda durante el intervalo de pedido más el plazo de entrega, más stock de seguridad, descontando stock disponible, reservas y recepciones previstas. Las fechas desconocidas o los precios históricos reducen la confianza. La cobertura saludable de sobrestock no es lo mismo que la cobertura de reposición.
+
+## Preparador inteligente (octubre de 2026)
+- Vista consolidada con artículos agrupados por CN verificado; sin CN, cada farmacia
+  conserva su referencia interna independiente para evitar equivalencias falsas.
+- Por farmacia: stock actual del catálogo, ventas del período elegido, últimas 90 y 365
+  jornadas, pedidos internos preparados y unidades sugeridas.
+- Fórmula: techo de [máximo(ventas 90d/90, ventas 365d/365) ×
+  (intervalo entre pedidos + plazo de entrega) + seguridad − stock disponible −
+  unidades en planes internos no cancelados]. El usuario puede modificar las
+  cantidades y elegir proveedor; la fórmula y los parámetros se muestran por farmacia.
+- Si falta stock no se sugiere una cantidad ficticia. Se distingue entre stock
+  con fecha desconocida y desactualizado. Si faltan políticas se indican los
+  supuestos (7 días entre pedidos, 2 de entrega, 0 seguridad).
+- Se respetan los permisos del cliente y las farmacias seleccionadas.
+  Los borradores se guardan en `op_pedidos` por farmacia/proveedor, con aprobación
+  posterior; la exportación CSV crea archivos por proveedor y conserva el detalle
+  por farmacia, CN y código ERP. No envía pedidos al proveedor.
+- Los planes internos **no se concilian aún con las recepciones del ERP**:
+  antes de realizar una compra se debe comprobar que un plan exportado no haya
+  llegado ya. El límite de 3500 referencias por consulta bloquea exportar o guardar
+  resultados truncados hasta que se aplique una búsqueda más concreta.
+- Inicio ofrece un acceso desde el comparador PUC; Reposición otro acceso directo.
+  Stock permite iniciar una propuesta de traspaso con artículo y farmacia de origen.
 
 ## Oportunidades y resultado económico
 - Cada regla tiene una clave estable y episodios separados.
@@ -47,3 +70,5 @@ En producción se debe revisar: acceso cliente cruzado, roles lector/gestor/admi
 
 **SQL nuevo:** sí, migración 016.  
 **Actualizar análisis existente:** no. No se reprocesan datos de Farmatic ni se modifican los snapshots.
+
+**Pedido recibido:** marcado manualmente, previa confirmación; deja de considerarse pendiente al proponer compras. La acción NO actualiza existencias del ERP ni sustituye la conciliación documental.

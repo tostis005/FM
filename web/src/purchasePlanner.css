@@ -1,0 +1,32 @@
+.fm-planner{min-width:0;padding:18px;margin:16px 0;display:grid;gap:14px}
+.fm-planner-head,.fm-planner-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fm-planner-head h2{display:flex;align-items:center;gap:8px;font-size:17px;color:#214b38;margin:0}
+.fm-planner-head p{font-size:12px;color:#6b8074;line-height:1.6;margin:5px 0 0}
+.fm-planner-filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
+.fm-planner-filters label{display:grid;gap:5px;font-size:12px;font-weight:600;color:#516c60}
+.fm-planner-filters input,.fm-planner-edit input{padding:8px 9px;border:1px solid #cadcd0;border-radius:8px;max-width:210px;width:100%;font-size:12px;background:#fff}
+.fm-planner-pharmacies{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#486859}
+.fm-planner-pharmacies label{display:flex;gap:5px;align-items:center}
+.fm-planner-summary{display:flex;gap:17px;align-items:center;flex-wrap:wrap;background:#f5f9f7;padding:10px 12px;border-radius:9px;color:#4e6b5a;font-size:12px}
+.fm-planner-summary strong{color:#1a7a56}
+.fm-planner .smart-table{min-width:950px}
+.fm-planner-article{min-width:210px}
+.fm-planner-toggle{display:flex;align-items:center;gap:5px;background:transparent;border:0;text-align:left;color:#24513a;padding:4px;cursor:pointer}
+.fm-planner-toggle small{display:block;font-size:10px;color:#668577;margin-top:3px}
+.fm-planner-toggle[aria-expanded=true] svg{transform:rotate(180deg)}
+.fm-planner-details{margin-top:10px;display:grid;gap:10px;width:min(450px,75vw)}
+.fm-planner-pharmacy{display:grid;gap:4px;border-left:3px solid #b6ddcb;background:#f9fcfa;padding:9px;color:#375b45;border-radius:3px}
+.fm-planner-pharmacy small{font-size:11px;color:#5c7e68;line-height:1.5}
+.fm-planner-pharmacy .fm-planner-caution{color:#9a672c}
+.fm-planner-edit{display:flex;gap:9px;flex-wrap:wrap;margin-top:4px}
+.fm-planner-edit label{display:grid;gap:4px;font-size:11px}
+.fm-planner-edit input{max-width:150px}
+.fm-planner-actions{justify-content:flex-end}
+.fm-planner .fm-op-message{display:flex;align-items:center;gap:8px}
+@media(max-width:650px){.fm-planner{padding:12px}.fm-planner-filters label{flex:1 1 130px}.fm-planner-actions .btn{flex:1;justify-content:center}}
+
+.fm-planner-supplier-overview{border:1px solid #dce9e0;border-radius:10px;background:#fafdfb;padding:12px;display:grid;gap:8px}
+.fm-planner-supplier-overview>strong{font-size:12px;color:#315642}
+.fm-planner-supplier-overview>div{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:6px 0;border-top:1px solid #edf4ee;font-size:12px;color:#3e624b}
+.fm-planner-supplier-overview small{color:#71877a}
+.fm-planner-supplier-overview b{margin-left:auto;color:#148258}

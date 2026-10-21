@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import ListTable from "./ListTable.jsx";
+import {putPurchaseLink} from "./PurchasePlanner.jsx";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
 import {euro,integer,percentage} from "./localeES.js";
 import "./dashboardInsights.css";
@@ -134,7 +135,7 @@ function useComparator(scope,{page,pageSize,sort,filters}){
  },[key,scope.valid]);
  return !scope.valid?{status:"empty"}:result?.key===key?result:{status:"loading"};
 }
-function Purchases({scope,pharmacies}){
+function Purchases({scope,pharmacies,onNavigate,canNavigate}){
  const insight=useInsight("canales-compra",scope);
  const [filters,setFilters]=useState({});
  const [readyFilters,setReadyFilters]=useState({});
@@ -167,7 +168,11 @@ function Purchases({scope,pharmacies}){
   {key:"cheaper",label:"Más económico",filterMode:"multi",value:r=>r.cheaper,
    render:r=>r.cheaper},
   {key:"potentialSaving",label:"Ahorro potencial",value:r=>r.potentialSaving,
-   render:r=><strong>{euro(r.potentialSaving)}</strong>}
+   render:r=><strong>{euro(r.potentialSaving)}</strong>},
+  {key:"action",label:"Pedido",sortable:false,searchable:false,value:()=>"",
+   render:r=><button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
+    onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
+     supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>}
  ];
  const changeFilters=next=>{setFilters(next);setPage(1)};
  return <Panel title="¿Dónde estamos comprando mejor?" subtitle="Cooperativa frente a laboratorio · coste ponderado de las compras, según PUC registrado" insight={insight}>
@@ -224,14 +229,14 @@ function Purchases({scope,pharmacies}){
    </>}
  </Panel>;
 }
-export default function DashboardInsights({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0}){
+export default function DashboardInsights({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false}){
  const scope={clientSlug,from:period.from,to:period.to,valid:period.valid,
   pharmacyIds,reloadKey};
  return <div className="fm-dashboard-insights">
   <Heatmap scope={scope}/>
   <div className="fm-dashboard-insights-bottom">
    <Sellers scope={scope}/>
-   <Purchases scope={scope} pharmacies={pharmacies}/>
+   <Purchases scope={scope} pharmacies={pharmacies} onNavigate={onNavigate} canNavigate={canNavigate}/>
   </div>
  </div>;
 }

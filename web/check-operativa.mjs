@@ -40,7 +40,7 @@ try{
  await page.getByLabel("Descripción",{exact:true}).last().fill("Producto de prueba");
  await page.getByLabel("Necesidad (uds.)").fill("20");
  await page.getByRole("button",{name:"Añadir artículo"}).click();
- await page.getByRole("button",{name:"Guardar borrador"}).click();
+ await page.getByRole("button",{name:"Guardar borrador",exact:true}).click();
  await page.waitForFunction(()=>document.querySelector(".fm-op-message")?.textContent.includes("guardados"),null,{timeout:10000});
  assert.ok(posted.some(x=>x.recurso==="pedidos"&&x.lineas?.[0]?.necesidad===20));
  assert.equal(await page.getByRole("button",{name:"Ver ejemplo de demo"}).count(),0);

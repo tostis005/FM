@@ -60,10 +60,14 @@ try{
  }));
  assert.deepEqual(promoOptions,["Campaña Centro y Norte","Campaña coincidente Centro"],
   "No incluir campañas que pertenecen solo a otras farmacias");
- await page.getByText("CN 123456 · Crema de manos").waitFor();
- await page.getByText("CN sin identificar · Artículo sin CN").waitFor();
- assert.ok(await page.locator(".lab-detail-table").getByText("789",{exact:true}).count()>0,
-  "La referencia ERP se conserva separada del CN verificado");
+ const withCn=page.locator(".lab-detail-table tbody tr").filter({hasText:"Crema de manos"});
+ await withCn.waitFor();
+ assert.equal((await withCn.locator("td").nth(4).innerText()).trim(),"123456",
+  "El CN verificado se muestra en su columna específica");
+ const withoutCn=page.locator(".lab-detail-table tbody tr").filter({hasText:"Artículo sin CN"});
+ await withoutCn.waitFor();
+ assert.equal((await withoutCn.locator("td").nth(4).innerText()).trim(),"—",
+  "El identificador ERP no se presenta como CN");
  await page.getByText(/Una misma venta puede atribuirse a varias promociones/).waitFor();
  assert.deepEqual(errors,[],"No hay excepciones de navegador");
  console.log("OK: el filtro de farmacias se propaga al detalle de tickets y se advierten solapes de CN");

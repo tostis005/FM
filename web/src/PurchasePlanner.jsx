@@ -272,7 +272,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   <div className="fm-planner-filters">
    <label>Desde <input type="date" value={from} onChange={e=>{setFrom(e.target.value);setPeriod("custom")}}/></label>
    <label>Hasta <input type="date" value={to} onChange={e=>{setTo(e.target.value);setPeriod("custom")}}/></label>
-   <label>Buscar CN, DCPF o artículo <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, CN o DCPF…"/></label>
+   <label>Buscar CN o artículo <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="CN o nombre…"/></label>
   </div>
   <p className="fm-planner-scope">Grupo completo · {pharmacies.length} farmacias autorizadas. Los totales se calculan sobre el grupo; despliega cada fila para consultar el detalle de sus farmacias.</p>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}

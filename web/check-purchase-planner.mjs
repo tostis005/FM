@@ -110,7 +110,7 @@ try{
  assert.ok(width<=210,"La columna Producto / genérico debe ser compacta: "+width+"px");
 
  await page.getByRole("button",{name:"Este mes"}).waitFor();
- await page.getByText(/Nueva propuesta por laboratorio/).waitFor();
+ assert.equal(await page.getByText(/Nueva propuesta por laboratorio/).count(),0);
  assert.equal(await page.locator(".fm-unified-header select[aria-label=\"Farmacia\"]").count(),0,"La cabecera no debe imponer una farmacia");
  assert.ok(await page.getByText("Farmacias",{exact:true}).first().isVisible(),"Las farmacias se filtran en la caja común");
  const periodResponse=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta");

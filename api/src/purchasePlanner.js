@@ -1,4 +1,5 @@
 import {readPurchasePlannerPaged} from "./purchasePlannerPaged.js";
+import {readPlannerLaboratories} from "./purchasePlannerSuppliers.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const VALID_DATE=/^\d{4}-\d{2}-\d{2}$/;
 const DAY=86400000;
@@ -71,6 +72,33 @@ export function groupPurchaseRows(rows){
    String(a.articleName).localeCompare(b.articleName,"es"));
 }
 export function setupPurchasePlanner(app,pool,{requireTenant}){
+ if(typeof app.post==="function")app.post("/api/analytics/pedidos/laboratorios",...requireTenant(),async(req,res,next)=>{
+  const ctx=req.context;
+  if(ctx.role!=="superadministrador"&&ctx.modules?.compras!==true)
+   return res.status(403).json({error:"Compras no habilitado"});
+  const allowed=(ctx.pharmacies||[]).map(p=>Number(p.id));
+  const items=req.body?.items,ids=req.body?.pharmacies;
+  const dcpfs=req.body?.dcpfs;
+  const to=String(req.body?.to||"");
+  if(!SCHEMA.test(ctx.client.schema)||!validDate(to)||
+   !Array.isArray(items)||items.length>1200||
+   !Array.isArray(ids)||ids.length>100||ids.some(n=>!allowed.includes(Number(n)))||
+   !Array.isArray(dcpfs)||dcpfs.length>100||dcpfs.some(d=>!/^[0-9]{1,30}$/.test(String(d)))||
+   items.some(x=>!x||typeof x.groupKey!=="string"||x.groupKey.length>95||
+    !/^(CN:|DCPF:|ERP:)/.test(x.groupKey)||
+    !Number.isSafeInteger(Number(x.pharmacyId))||!allowed.includes(Number(x.pharmacyId))||
+    typeof x.articleId!=="string"||x.articleId.length>90||
+    (x.cn!=null&&(typeof x.cn!=="string"||x.cn.length>40))))
+   return res.status(400).json({error:"Referencias para recomendar laboratorios inválidas"});
+  try{
+   res.json(await readPlannerLaboratories(pool,ctx,ids.map(Number),items,dcpfs.map(String),to));
+  }catch(e){
+   if(["57014","53300"].includes(e.code))return res.status(504)
+    .json({error:"La consulta de PUC ha superado el tiempo; los pedidos siguen disponibles sin recomendación de precio."});
+   next(e);
+  }
+ });
+
  app.get("/api/analytics/pedidos/propuesta",...requireTenant(),async(req,res,next)=>{
   const ctx=req.context;
   if(ctx.role!=="superadministrador"&&ctx.modules?.compras!==true)

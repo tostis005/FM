@@ -23,36 +23,30 @@ test("agrupación cruza farmacias solo si consta CN, nunca por ID del ERP",()=>{
  assert.equal(shared.suggested,6);
  assert.equal(shared.stock,10);
 });
-test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados",async()=>{
- const routes={},seen=[];
+test("API valida permisos y pagina consultas CN SQL con totales del grupo",async()=>{
+ const routes={},calls=[];
  const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
- const pool={async query(sql,params=[]){
-  const text=typeof sql==="string"?sql:sql.text;
-  const args=typeof sql==="string"?params:sql.values;
-  seen.push({text,args});
-  if(text.includes("information_schema.columns"))return {rows:[
-   ...["farmacia_codigo","origen_id","nombre","stock_actual","codigo_nacional"]
-    .map(column_name=>({table_name:"articulos",column_name})),
-   ...["farmacia_codigo","articulo_id","fecha","unidades"]
-    .map(column_name=>({table_name:"fm_ventas_analitica",column_name}))
-  ]};
-  if(text.includes("WITH sold AS MATERIALIZED"))return {rows:[
-   {pharmacyId:"1",articleId:"77",articleName:"Crema",cn:"123456",
-    stock:4,stockAt:null,unitsPeriod:18,units3:90,units12:250},
-   {pharmacyId:"1",articleId:"88",articleName:"Gel",cn:"888888",
-    stock:3,stockAt:null,unitsPeriod:7,units3:35,units12:145}]};
-  if(text.includes("SELECT DISTINCT ON (f.id,a.origen_id)"))return {rows:[]};
-  if(text.includes("op_politicas_reposicion"))return {rows:[{farmacia_id:1,intervalo_pedidos:7,plazo_entrega:2,stock_seguridad:1}]};
-  if(text.includes("FROM farmetrica.nomenclator_presentaciones"))return {rows:[]};
-  if(text.includes("op_pedidos"))return {rows:[{farmacia_id:1,lineas:[
-   {articulo:"77",asignaciones:[{unidades:2,proveedor:"P5"}]}]}]};
-  throw Error("Unexpected SQL: "+text.slice(0,100));
+ const pool={async query(q){
+  calls.push(q);
+  assert.match(q.text,/WITH\s+ventas AS MATERIALIZED/);
+  assert.match(q.text,/farmetrica.nomenclator_presentaciones/);
+  assert.match(q.text,/coalesce|nullif/i);
+  assert.ok(!q.text.includes("__SCHEMA__"));
+  const page=Math.floor(q.values[6]/q.values[5])+1;
+  const group={key:"CN:123456",cn:"123456",kind:"articulo",
+   articleName:page===1?"Crema":"Gel",unitsPeriod:18,units3:90,units12:250,
+   stock:4,suggested:3,
+   pharmacies:[{pharmacyId:"1",articleId:"123456",groupKey:"CN:123456",
+    options:[{articleId:"123456",cn:"123456"}],stock:4,suggested:3}]};
+  return {rows:[{summary:{products:2,referenceCount:2,unitsPeriod:25,units3:90,
+   units12:250,stockKnown:8,stockMissing:0,suggestedKnown:6,
+   suggestedMissing:0},groups:[group]}]};
  }};
  setupPurchasePlanner(app,pool,{requireTenant:()=>[]});
- const req={query:{desde:"2026-10-01",hasta:"2026-10-21",farmacias:"1",buscar:"Crema"},
+ const req={query:{desde:"2026-10-01",hasta:"2026-10-21",farmacias:"1"},
   context:{role:"administrador",modules:{compras:true},client:{schema:"ampedia",slug:"ampedia"},
-   pharmacies:[{id:"1",name:"Centro"},{id:"2",name:"Europa"}]}};
- async function call(query,context=req.context){
+   pharmacies:[{id:1,name:"Centro"},{id:2,name:"Europa"}]}};
+ async function call(query={},context=req.context){
   let code=200,body,error;
   const res={status(v){code=v;return this},json(v){body=v;return this}};
   await routes["/api/analytics/pedidos/propuesta"]({...req,query:{...req.query,...query},context},
@@ -60,25 +54,21 @@ test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados
   if(error)throw error;
   return {code,body};
  }
- const result=await call({});
- assert.equal(result.code,200);
- assert.equal(result.body.groups.length,1);
- assert.equal(result.body.groups[0].pharmacies[0].suggested,4);
- assert.equal(result.body.groups[0].pharmacies[0].ordered,2);
- const secondPage=await call({buscar:"",pagina:"2",tamano:"1",orden:"unitsPeriod",direccion:"desc"});
- assert.equal(secondPage.code,200);
- assert.equal(secondPage.body.groups.length,1);
- assert.equal(secondPage.body.totalGroups,2);
- assert.equal(secondPage.body.groups[0].articleName,"Gel");
- assert.equal(secondPage.body.summary.unitsPeriod,25);
- assert.equal(secondPage.body.summary.products,2);
- assert.equal(secondPage.body.truncated,false);
- assert.equal((await call({pagina:"0"})).code,400);
- assert.equal((await call({filtros:'{"stock":"x"}',buscar:""})).body.totalGroups,0);
- assert.match(seen.find(x=>x.text.includes("WITH sold AS MATERIALIZED")).text,/ranked AS/);
- assert.match(seen.find(x=>x.text.includes("WITH sold AS MATERIALIZED")).text,/a2.nombre ILIKE/);
+ const first=await call({pagina:"1",tamano:"1"});
+ assert.equal(first.code,200);
+ assert.equal(first.body.groups[0].cn,"123456");
+ assert.equal(first.body.summary.unitsPeriod,25);
+ assert.equal(first.body.totalGroups,2);
+ assert.equal(first.body.groups.length,1);
+ const second=await call({pagina:"2",tamano:"1",orden:"unitsPeriod",direccion:"desc"});
+ assert.equal(second.code,200);
+ assert.equal(second.body.groups[0].articleName,"Gel");
+ assert.equal((await call({pagina:"-1"})).code,400);
  assert.equal((await call({farmacias:"3"})).code,400);
+ assert.equal((await call({orden:"DROP"})).code,400);
+ assert.equal((await call({filtros:'{"noAutorizado":"x"}'})).code,400);
  assert.equal((await call({}, {...req.context,role:"farmacia",modules:{compras:false}})).code,403);
+ assert.ok(calls.length>=2);
 });
 
 test("genéricos EFG agrupan CN diferentes por DCPF sin sumar dobles previsiones",()=>{

@@ -658,6 +658,16 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
        Boolean(REPORT_GLOBAL_FILTER_FIELDS[module]?.includes(col.key)),
      sortable:receiptMode?false:remoteFields?remoteFields.includes(col.key):
        limited?false:col.sortable}));
+ if(module==="stock"&&canNavigate("stock-traspasos"))columns.push({
+  key:"proponerTraspaso",label:"Redistribuir",sortable:false,searchable:false,value:()=>"",
+  render:row=><button className="btn btn-secondary" type="button"
+   disabled={Number(row.units||0)<=0} onClick={e=>{e.stopPropagation();
+    sessionStorage.setItem("fm_stock_transfer:"+clientSlug,JSON.stringify({
+     pharmacyId:row.pharmacyId,article:row.sourceId||row.cn,
+     name:row.name,units:1}));
+    onNavigate("stock-traspasos");
+   }}>Proponer traspaso</button>
+ });
  const chartConfig=receiptMode?["recepciones",null,"Recepciones registradas"]:SERIES[module]||SERIES.dashboard;
  const chartData=module==="ventas"&&fastEligible&&fastSales?fastSales:realSales;
  // En Inicio mostrar la gráfica en cuanto haya llegado cualquiera de las

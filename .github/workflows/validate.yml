@@ -235,6 +235,7 @@ jobs:
           done
           node check-responsive.mjs
           node check-dashboard-audit.mjs
+          node check-purchase-planner.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

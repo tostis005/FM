@@ -258,7 +258,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      aria-expanded={Boolean(open[g.key])}>
      <ChevronDown size={15}/>
      <span><strong>{g.articleName}</strong><small>
-      {g.kind==="generico"?"Conjunto genérico · "+g.productCount+" CN / referencias":"CN "+(g.cn||"sin identificar")}
+      {g.kind==="generico"?"Genérico DCPF "+g.dcpf+" · "+g.productCount+" referencias entre farmacias":"CN "+(g.cn||"sin identificar")}
      </small></span>
     </button>
     {open[g.key]&&<div className="fm-planner-details" aria-label={"Desglose de "+g.articleName}>

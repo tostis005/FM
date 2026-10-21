@@ -30,15 +30,21 @@ await page.route("**/api/**",async route=>{
   const id=url.searchParams.get("buscar")||"";
   const g={key:"CN:123456",cn:"123456",articleName:"Crema de manos",
    stock:10,unitsPeriod:24,units3:90,units12:300,suggested:8,
+   patron:"recurrente",firstSale:"2026-03-05",lastSale:"2026-10-18",saleSpanDays:228,
    pharmacies:[
     {pharmacyId:"1",articleId:"771",articleName:"Crema de manos",cn:"123456",
      unitsPeriod:12,units3:45,units12:150,stock:6,suggested:3,ordered:0,
-     daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,confidence:"calculable"},
+     daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,
+     firstSale:"2026-03-05",lastSale:"2026-10-18",saleSpanDays:228,
+     demandPattern:"recurrente",confidence:"calculable"},
     {pharmacyId:"2",articleId:"999",articleName:"Crema de manos",cn:"123456",
      unitsPeriod:12,units3:45,units12:150,stock:4,suggested:5,ordered:0,
-     daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,confidence:"calculable"}]};
+     daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,
+     firstSale:"2026-03-05",lastSale:"2026-10-18",saleSpanDays:228,
+     demandPattern:"recurrente",confidence:"calculable"}]};
   const pageNumber=Number(url.searchParams.get("pagina")||1);
   const other={...g,key:"CN:654321",cn:"654321",articleName:"Gel de prueba",
+   patron:"concentrada",firstSale:"2026-08-11",lastSale:"2026-08-13",saleSpanDays:3,suggested:0,
    pharmacies:g.pharmacies.map(p=>({...p,articleName:"Gel de prueba",cn:"654321"}))};
   body={available:true,groups:id&&id!=="123456"?[]:pageNumber===2?[other]:[g],
    totalGroups:100,page:pageNumber,pageSize:50,
@@ -68,11 +74,14 @@ try{
  await page.getByRole("button",{name:"Siguiente"}).click();
  await pageTwo;
  await page.getByText("Gel de prueba").first().waitFor();
+ await page.getByText("Ventas concentradas").first().waitFor();
+ await page.getByText(/intervalo de 3 días/).first().waitFor();
  const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="1");
  await page.getByRole("button",{name:"Anterior"}).click();
  await pageOne;
  await page.getByText("Crema de manos").first().waitFor();
+ await page.getByText("Recurrente").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.getByText("Código nacional 123456").first().waitFor();
  assert.equal(await page.locator(".fm-planner-pharmacy").count(),2);

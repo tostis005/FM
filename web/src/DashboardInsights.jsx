@@ -7,8 +7,8 @@ const DAYS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"
 const HOURS=[{from:0,to:9,label:"00–09"},
  ...Array.from({length:12},(_,i)=>({from:9+i,to:10+i,label:String(9+i).padStart(2,"0")+"–"+String(10+i).padStart(2,"0")})),
  {from:21,to:24,label:"21–24"}];
-const CHANNELS={cooperativa:"Cooperativa",laboratorio:"Laboratorio",sin_clasificar:"Sin clasificar"};
-const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca",sin_clasificar:"#d4dcda"};
+const CHANNELS={cooperativa:"Cooperativa",laboratorio:"Laboratorio"};
+const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca"};
 const EMPTY=[];
 const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v));
@@ -110,9 +110,9 @@ function Purchases({scope,pharmacies}){
  const [choice,setChoice]=useState("all");
  const channels=Array.isArray(insight.data?.channels)?insight.data.channels:EMPTY;
  const comparisons=Array.isArray(insight.data?.comparisons)?insight.data.comparisons:EMPTY;
- const classified=channels.filter(c=>c.channel!=="sin_clasificar"&&c.value>0);
+ const classified=channels.filter(c=>["cooperativa","laboratorio"].includes(c.channel)&&c.value>0);
  const known=classified.reduce((n,c)=>n+c.value,0);
- const unknown=channels.find(c=>c.channel==="sin_clasificar")?.value||0;
+
  const names=new Map(pharmacies.map(p=>[String(p.id),p.name]));
  const filtered=comparisons.filter(row=>{
   const search=(row.articleName||"")+" "+(row.cn||"")+" "+(row.articleId||"");
@@ -140,8 +140,7 @@ function Purchases({scope,pharmacies}){
         <small>{known>0?pct(value/known*100):"—"}</small>
        </div>;
       })}
-      <p className="fm-insight-foot">Se representan importes de compra calculados con el PUC de las líneas válidas, no ventas al público.
-       {unknown>0?" Sin clasificar: "+euro(unknown)+". Revisa el tipo del proveedor en su maestro.":""}</p>
+      <p className="fm-insight-foot">Se representan importes de compra calculados con el PUC de las líneas válidas, no ventas al público. Solo son cooperativas las marcadas con ese indicador; el resto se considera laboratorio.</p>
      </div>
     </div>
     <div className="fm-insight-divider"/>
@@ -169,7 +168,7 @@ function Purchases({scope,pharmacies}){
       <td>{row.difference>0?"Laboratorio":row.difference<0?"Cooperativa":"Igual"}</td>
       <td><strong>{euro(row.potentialSaving)}</strong></td>
      </tr>)}</tbody></table></div>:
-     <p className="fm-insight-status">No hay artículos comparables con los filtros seleccionados.</p>}
+     <p className="fm-insight-status">{query||choice!=="all"?"No hay artículos comparables con estos filtros.":!channels.some(c=>c.channel==="cooperativa"&&c.lines>0)||!channels.some(c=>c.channel==="laboratorio"&&c.lines>0)?"No hay compras con PUC válido de ambos canales en las farmacias y fechas seleccionadas.":"No se han comprado los mismos artículos a ambos canales dentro de la misma farmacia y período."}</p>}
     <p className="fm-insight-foot">PUC medio ponderado por unidades compradas (sin devoluciones). El ahorro es orientativo: diferencia de PUC por las unidades compradas al canal más caro, sin considerar rappels, portes ni condiciones comerciales. Se muestran hasta {integer(insight.data?.comparisonLimit||80)} oportunidades ordenadas por impacto.</p>
    </>}
  </Panel>;

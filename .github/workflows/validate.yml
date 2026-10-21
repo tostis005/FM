@@ -313,3 +313,27 @@ jobs:
             to_regclass('farmetrica.nomenclator_presentaciones') IS NOT NULL AS nomenclator;
           ROLLBACK;
           SQL
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --input-type=module -' <<'JS'
+          import pg from "pg";
+          import {setupPurchasePlanner} from "./src/purchasePlanner.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,
+           connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
+          setupPurchasePlanner(app,pool,{requireTenant:()=>[]});
+          const pharmacies=[
+           {id:1,name:"Abadía"},{id:2,name:"Europa"},
+           {id:3,name:"Buenavista"},{id:4,name:"Estación"},{id:5,name:"Valdemarías"}];
+          const context={role:"superadministrador",modules:{compras:true},
+           client:{slug:"ampedia",schema:"ampedia"},pharmacies};
+          for(const ids of ["1","1,2,3,4,5"]){
+           const start=Date.now();let response=null,failure=null,status=200;
+           const res={status(s){status=s;return this},json(data){response=data;return this}};
+           const req={query:{desde:"2026-10-01",hasta:"2026-10-21",farmacias:ids,buscar:""},context};
+           await routes["/api/analytics/pedidos/propuesta"](req,res,e=>{failure=e});
+           console.log("ENDPOINT_PLAN",ids,"status",status,"ms",Date.now()-start,
+            "groups",response?.groups?.length??null,"available",response?.available??null,
+            "error",failure?.code||failure?.message||response?.error||response?.reason||"none");
+          }
+          await pool.end();
+          JS

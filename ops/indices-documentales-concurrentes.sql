@@ -13,7 +13,8 @@ FROM pg_class idx
 JOIN pg_namespace ns ON ns.oid=idx.relnamespace
 JOIN pg_index ix ON ix.indexrelid=idx.oid
 WHERE ns.nspname IN (SELECT DISTINCT esquema_datos FROM farmetrica.clientes)
-  AND idx.relname IN ('fm_doc_ventas_codigo_fecha_idx','fm_doc_recepciones_codigo_fecha_idx')
+  AND idx.relname IN ('fm_doc_ventas_codigo_fecha_idx','fm_doc_recepciones_codigo_fecha_idx',
+                     'fm_state_ventas_recibido_idx','fm_state_recepciones_recibido_idx')
   AND (NOT ix.indisvalid OR NOT ix.indisready)
 \gexec
 
@@ -35,13 +36,32 @@ FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
 WHERE to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) IS NOT NULL
 \gexec
 
+-- Estado de farmacias: búsqueda O(log n) de la última recepción de cada
+-- farmacia, incluso cuando se importan documentos históricos fuera de orden.
+-- Índices independientes de lineas_completas: el estado muestra toda llegada.
+SELECT format(
+ 'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_ventas_cabeceras ((upper(btrim(farmacia_codigo))), recibido_en DESC) INCLUDE (fecha);',
+ 'fm_state_ventas_recibido_idx',c.esquema_datos)
+FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
+WHERE to_regclass(format('%I.fm_ventas_cabeceras',c.esquema_datos)) IS NOT NULL
+\\gexec
+
+SELECT format(
+ 'CREATE INDEX CONCURRENTLY IF NOT EXISTS %I ON %I.fm_recepciones_cabeceras ((upper(btrim(farmacia_codigo))), recibido_en DESC) INCLUDE (fecha);',
+ 'fm_state_recepciones_recibido_idx',c.esquema_datos)
+FROM (SELECT DISTINCT esquema_datos FROM farmetrica.clientes) c
+WHERE to_regclass(format('%I.fm_recepciones_cabeceras',c.esquema_datos)) IS NOT NULL
+\\gexec
+
 -- Verificar que el índice sea válido, visible para el planificador y usable.
 WITH expected AS (
  SELECT DISTINCT c.esquema_datos AS schema_name,v.index_name,v.table_name
  FROM farmetrica.clientes c
  CROSS JOIN (VALUES
   ('fm_doc_ventas_codigo_fecha_idx','fm_ventas_cabeceras'),
-  ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras')
+  ('fm_doc_recepciones_codigo_fecha_idx','fm_recepciones_cabeceras'),
+  ('fm_state_ventas_recibido_idx','fm_ventas_cabeceras'),
+  ('fm_state_recepciones_recibido_idx','fm_recepciones_cabeceras')
  ) v(index_name,table_name)
  WHERE to_regclass(format('%I.%I',c.esquema_datos,v.table_name)) IS NOT NULL
 ), checked AS (

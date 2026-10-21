@@ -10,7 +10,7 @@ const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",databaseCode:"
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",schema:"ampedia",name:"Ampedia"},role:"superadministrador",
  pharmacies,modules:{compras:true,dashboard:true}};
-const posts=[],errors=[],laboratoryRequests=[];
+const posts=[],errors=[],laboratoryRequests=[],stockWrites=[];
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname;
@@ -23,6 +23,12 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/operativa"&&request.method()==="POST"){
   posts.push(request.postDataJSON());
   body={item:{id:"1b3e8f19-5949-4834-9561-5de41248c72e"}};
+ }
+ else if(path==="/api/tenant/stock-objetivo"&&request.method()==="GET")
+  body={defaultDays:90,items:[{pharmacyId:1,days:90,configured:false},
+   {pharmacyId:2,days:90,configured:false}]};
+ else if(path==="/api/tenant/stock-objetivo"&&request.method()==="PUT"){
+  stockWrites.push(request.postDataJSON());body={days:stockWrites.at(-1).days,updatedPharmacies:[1,2]};
  }
  else if(path==="/api/analytics/catalogos/proveedores")body={items:[
   {code:"P44",name:"Laboratorio Alfa"},{code:"P55",name:"Cooperativa Beta"}]};
@@ -96,6 +102,7 @@ try{
  await page.goto(BASE+"/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Preparador de pedidos"}).waitFor({timeout:15000});
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
+ assert.equal(await page.getByText(/Nueva propuesta por laboratorio/).count(),0);
  assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0,
   "La columna Demanda ya no debe mostrarse");
  const width=await page.locator(".fm-planner .smart-table thead th").first()
@@ -167,6 +174,14 @@ try{
  await page.locator(".fm-planner-details").first().waitFor();
  assert.equal(await page.getByText("Sin PUC de laboratorio en los últimos 12 meses").count(),0,
   "No presentar ausencia falsa de PUC en móvil cuando el proveedor tiene compras");
+ // La nueva preferencia de stock debe guardarse desde Ajustes.
+ await page.goto(BASE+"/ajustes",{waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Días de stock objetivo"}).waitFor({timeout:15000});
+ const daysInput=page.getByRole("spinbutton",{name:"Días de stock objetivo"});
+ await daysInput.fill("28");
+ await page.getByRole("button",{name:"Guardar días de stock"}).click();
+ await page.getByText("Objetivo aplicado a todas las farmacias.").waitFor({timeout:15000});
+ assert.deepEqual(stockWrites,[{pharmacyId:0,days:28}]);
  assert.deepEqual(errors,[]);
- console.log("OK: Preparador, PUC en móvil con todas las farmacias, detalle y borradores");
+ console.log("OK: PUC móvil, preparado de pedidos y Ajustes de días de stock");
 }finally{await browser.close()}

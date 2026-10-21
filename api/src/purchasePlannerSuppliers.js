@@ -1,5 +1,45 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 
+// Los ID de proveedor vienen del ERP: pueden llevar ceros iniciales y
+// NO son globalmente únicos entre farmacias. El catálogo de la misma farmacia
+// prevalece sobre nombres inferidos o de otro establecimiento.
+export const canonicalSupplierCode=value=>{
+ const s=String(value??"").trim().toUpperCase();
+ return /^\d+$/.test(s)?s.replace(/^0+(?=\d)/,""):s;
+};
+const usableSupplierName=(name,code)=>{
+ const text=String(name??"").trim();
+ return Boolean(text)&&canonicalSupplierCode(text)!==canonicalSupplierCode(code)&&
+  !/^Proveedor\s+.+\(nombre pendiente\)$/i.test(text);
+};
+export function resolveSupplierNames(offers,pharmacySuppliers=[],masterSuppliers=[]){
+ const byPharmacy=new Map(),shared=new Map(),master=new Map();
+ for(const row of pharmacySuppliers){
+  const code=canonicalSupplierCode(row.supplierCode);
+  const name=String(row.name??"").trim();
+  if(!code||!usableSupplierName(name,code))continue;
+  byPharmacy.set(String(row.pharmacyId)+"|"+code,name);
+  if(!shared.has(code))shared.set(code,new Map());
+  shared.get(code).set(name.toLocaleUpperCase("es-ES"),name);
+ }
+ for(const row of masterSuppliers){
+  const code=canonicalSupplierCode(row.supplierCode);
+  if(code&&usableSupplierName(row.name,code)&&!master.has(code))
+   master.set(code,String(row.name).trim());
+ }
+ return (offers||[]).map(row=>{
+  const code=canonicalSupplierCode(row.supplierCode);
+  const local=byPharmacy.get(String(row.pharmacyId)+"|"+code);
+  const sameNameAcrossPharmacies=shared.get(code);
+  const unambiguous=sameNameAcrossPharmacies?.size===1?
+   [...sameNameAcrossPharmacies.values()][0]:null;
+  const existing=usableSupplierName(row.supplierName,row.supplierCode)?
+   String(row.supplierName).trim():null;
+  return {...row,supplierName:local||existing||master.get(code)||unambiguous||
+   row.supplierName||row.supplierCode};
+ });
+}
+
 // Solo comparar PUC basados en recepciones de proveedores no cooperativos,
 // respetando el percentil y período definidos para cada farmacia.
 export function pickBestLaboratory(rows){
@@ -146,25 +186,45 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
   const {rows}=await pool.query({text:sql,values:[codes,chosen,reportTo,ctx.client.slug],
    query_timeout:18000});
   offers=rows;
-  // En muchos sincronizadores el nombre no viene en la recepción.
-  // Recuperarlo del maestro local de proveedores de cada farmacia.
-  const providerCodes=[...new Set(offers.map(x=>String(x.supplierCode)))];
+  // Fuente real que alimenta Configuración > Proveedores: maestro del
+  // tenant más catálogo sincronizado por farmacia. La farmacia del PUC
+  // manda; solo reutilizamos un nombre ajeno si es inequívoco en todas.
+  const providerCodes=[...new Set(offers.map(x=>canonicalSupplierCode(x.supplierCode)))];
   if(providerCodes.length){
-   const {rows:names}=await pool.query({
-    text:`SELECT f.id::text AS "pharmacyId",p.origen_id AS "supplierCode",
-      max(nullif(btrim(p.nombre),'')) AS name
-     FROM ${q}.proveedores p JOIN farmetrica.farmacias f
-      ON f.cliente_slug=$2 AND f.id=ANY($3::int[])
-      AND upper(btrim(p.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-     WHERE p.origen_id=ANY($1::text[]) GROUP BY f.id,p.origen_id`,
-    values:[providerCodes,ctx.client.slug,chosen],query_timeout:8000
-   });
-   const nameMap=new Map(names.filter(n=>n.name).map(n=>[
-    String(n.pharmacyId)+"|"+String(n.supplierCode),String(n.name)]));
-   offers=offers.map(r=>({
-    ...r,supplierName:r.supplierName&&String(r.supplierName)!==String(r.supplierCode)?
-     r.supplierName:nameMap.get(String(r.pharmacyId)+"|"+String(r.supplierCode))||r.supplierName
-   }));
+   const [localNames,masterNames]=await Promise.all([
+    pool.query({
+     text:`SELECT f.id::text AS "pharmacyId",p.origen_id::text AS "supplierCode",
+        max(nullif(btrim(p.nombre::text),'')) AS name
+       FROM ${q}.proveedores p
+       JOIN farmetrica.farmacias f ON f.cliente_slug=$2
+        AND upper(btrim(p.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+       WHERE (CASE WHEN btrim(p.origen_id) ~ '^[0-9]+
+ }
+ // Un registro documental comprado en cualquiera de las farmacias puede
+ // informar el PUC de un genérico DCPF, aunque su CN no esté en la primera
+ // presentación del grupo ni en la farmacia actual.
+ const result=mapLaboratoryOffers(offers.map(r=>{
+  const direct=selected.find(it=>String(it.articleId)===String(r.articleId)&&
+   String(it.pharmacyId)===String(r.pharmacyId));
+  return {...r,cn:sourceCn.get(String(r.pharmacyId)+"|"+String(r.articleId))||
+   direct?.cn||String(r.articleId)};
+ }),selected,groupLinks);
+ return {...result,presentations,observedPrices:offers.length,
+  policy:"percentil_puc_12m",priceWindowMonths:12};
+}
+
+          THEN coalesce(nullif(ltrim(btrim(p.origen_id),'0'),''),'0')
+          ELSE upper(btrim(p.origen_id)) END)=ANY($1::text[])
+       GROUP BY f.id,p.origen_id`,
+     values:[providerCodes,ctx.client.slug],query_timeout:8000
+    }),
+    pool.query({
+     text:`SELECT codigo_origen::text AS "supplierCode",nombre AS name
+      FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1`,
+     values:[ctx.client.slug],query_timeout:8000
+    })
+   ]);
+   offers=resolveSupplierNames(offers,localNames.rows,masterNames.rows);
   }
  }
  // Un registro documental comprado en cualquiera de las farmacias puede

@@ -1,7 +1,8 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ShoppingCart,Download,Save,ChevronDown,AlertTriangle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
-import {ReportFilterBar} from "./ReportControls.jsx";
+import {ReportFilterBar,ReportPageHeader} from "./ReportControls.jsx";
+import {LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import "./purchasePlanner.css";
@@ -34,6 +35,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   [period,customFrom,customTo]);
  const from=resolved.valid?resolved.from:"",to=resolved.valid?resolved.to:"";
  const [search,setSearch]=useState("");
+ const [pharmacyIds,setPharmacyIds]=useState([]);
+ const [updatedAt,setUpdatedAt]=useState(null);
  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(50);
  const [sort,setSort]=useState({key:"suggested",direction:"desc"});
  const [columnFilters,setColumnFilters]=useState({});
@@ -61,7 +64,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    }
   }catch{}
  },[clientSlug]);
- const codes=pharmacies.map(p=>String(p.id)).join(",");
+ const codes=pharmacies.filter(p=>!pharmacyIds.length||pharmacyIds.includes(String(p.id))).map(p=>String(p.id)).join(",");
  const clearSelection=()=>{setOverrides({});setEditedRows({});setOpen({})};
  const setSharedPeriod=value=>{setPeriod(value);setPage(1);clearSelection();
   updateSharedReportFilters(clientSlug,{period:value})};
@@ -83,7 +86,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:ac.signal
    }).then(async r=>{const data=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(data.error||"No se puede preparar el pedido");return data})
-    .then(data=>{if(!ac.signal.aborted){setResult(data);
+    .then(data=>{if(!ac.signal.aborted){setResult(data);setUpdatedAt(new Date());
       if(pendingLink?.supplier){
        const newAssignments={};
        for(const g of data.groups||[])for(const p of g.pharmacies)
@@ -296,19 +299,22 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {key:"selected",label:"Pedir",sortable:false,searchable:false,value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0),
    render:g=><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0))}</strong>}
  ];
- return <section className="card fm-planner">
-  <div className="fm-planner-head"><div><h2><ShoppingCart size={19}/> Propuesta inteligente de compra</h2>
-   <p>Necesidades del grupo por código nacional y DCPF. La prioridad se calcula exclusivamente con las fechas y unidades vendidas: recurrencia, concentración de ventas y actividad reciente. Las posibles temporadas se identifican como indicios, no como certeza.</p></div>
-   <button className="btn btn-secondary" onClick={()=>setReload(n=>n+1)} type="button" disabled={busy}>Actualizar</button></div>
+ return <>
+  <ReportPageHeader title="Preparador de pedidos" period={resolved} updatedAt={updatedAt}
+   refreshing={busy} onRefresh={()=>setReload(n=>n+1)}/>
   <ReportFilterBar periodKey={period} onPeriodChange={setSharedPeriod}
-   showPharmacies={false} customFrom={customFrom} customTo={customTo}
+   pharmacies={pharmacies} pharmacyIds={pharmacyIds}
+   onPharmacyChange={next=>{setPharmacyIds(next);setPage(1);clearSelection()}}
+   customFrom={customFrom} customTo={customTo}
    onCustomFromChange={value=>setSharedDate("from",value)}
-   onCustomToChange={value=>setSharedDate("to",value)}/>
-  <p className="fm-planner-scope">Grupo completo · {pharmacies.length} farmacias autorizadas. Despliega los artículos para consultar su detalle por farmacia.</p>
-  <div className="fm-planner-filters">
-   <label>Buscar artículo o CN <input type="search" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);clearSelection()}}
-    placeholder="Nombre o código nacional…"/></label>
-  </div>
+   onCustomToChange={value=>setSharedDate("to",value)}>
+   <label className="fm-unified-filter"><span>Buscar artículo o CN</span>
+    <input type="search" value={search}
+     onChange={e=>{setSearch(e.target.value);setPage(1);clearSelection()}}
+     placeholder="Nombre o código nacional…"/></label>
+  </ReportFilterBar>
+  <section className="card fm-planner">
+  <p className="fm-planner-scope">Propuesta inteligente de compra · {pharmacyIds.length||pharmacies.length} farmacias seleccionadas. Prioridad calculada a partir de ventas, recurrencia y actividad reciente. Despliega cada artículo para el desglose por farmacia.</p>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
   {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}
@@ -353,7 +359,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   </div>
   <p className="fm-op-fine">{result?.note||"La propuesta necesita ventas y stock sincronizados."} No se envía automáticamente ningún pedido. Los borradores se revisan y aprueban en la sección inferior.</p>
   </>}
-  {!result&&busy&&<p role="status" className="fm-op-message">Cargando ventas, stock y recomendaciones del grupo…</p>}
+  {!result&&busy&&<LoadingPanel kind="table" label="Calculando ventas, stock y recomendaciones…" rows={5}/>}
   {!result&&!busy&&!error&&<p role="status" className="fm-op-message">No hay resultados disponibles todavía.</p>}
- </section>;
+ </section></>;
 }

@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from "react";
-import {Filter} from "lucide-react";
+import {Filter,Download} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {loadTicketLines} from "./farmaciasApi.js";
 import {ListPagination} from "./ListTable.jsx";
@@ -7,6 +7,7 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
 import {ticketLineAmounts} from "./ticketLineAmounts.js";
+import {downloadTableCSV} from "./tableExport.js";
 
 const num=quantity;
 const money=euro;
@@ -101,7 +102,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
   return <section className="card lab-detail-panel">
     <div className="section-heading"><div><h2>Consulta de tickets</h2></div></div>
     {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas conexión con PostgreSQL y permiso de acceso a promociones.</div>}
-    <form className="lab-detail-filters" onSubmit={applyFilters}>
+    <form className="card fm-unified-filters lab-detail-filters" onSubmit={applyFilters}>
       <label>Promoción
         <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({})}}>
           {!promotions.length&&<option value="">Selecciona una promoción</option>}
@@ -118,7 +119,14 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     </form>
     {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
-    <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
+    <div className="fm-table-toolbar">
+     <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
+     <button type="button" className="btn btn-secondary btn-sm"
+      disabled={result.status==="loading"||!result.rows.length}
+      onClick={()=>downloadTableCSV("farmetrica-tickets-"+(promo?.id||"ventas")+"-pagina",
+       TICKET_COLUMNS.map(c=>c[1]),result.rows.map(row=>TICKET_COLUMNS.map(c=>c[2](row))))}>
+      <Download size={15}/> Exportar CSV (página actual)</button>
+    </div>
     <p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se muestran en negativo; en el Excel de laboratorio se exportan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>
     <HorizontalTableScroll className="table-scroll" label="líneas de venta" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>

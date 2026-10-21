@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useState} from "react";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {RefreshCcw,Activity,Clock3,AlertTriangle,CheckCircle2,Store,ChevronDown,ChevronUp} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {syncFlowLabel} from "./syncFlowLabel.js";
@@ -52,6 +53,7 @@ function Detail({pharmacy}){
 export default function PharmacyState({clientSlug}){
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
  const [scope,setScope]=useState("all"),[expanded,setExpanded]=useState([]);
+ const [pharmacyIds,setPharmacyIds]=useState([]);
  const refresh=useCallback(async signal=>{
   setLoading(true);
   try{
@@ -74,10 +76,10 @@ export default function PharmacyState({clientSlug}){
  const errors=pharmacies.filter(p=>p.state==="Error").length;
  const warning=pharmacies.filter(p=>p.state==="Revisar"||p.state==="Sincronizando").length;
  const pending=pharmacies.filter(p=>!p.monitored&&p.active).length;
- const filtered=pharmacies.filter(p=>scope==="all"||
+ const filtered=pharmacies.filter(p=>(!pharmacyIds.length||pharmacyIds.includes(p.id))&&(scope==="all"||
   scope==="issues"&&(p.state==="Error"||p.state==="Revisar")||
   scope==="healthy"&&p.state==="Correcto"||
-  scope==="unknown"&&!p.monitored);
+  scope==="unknown"&&!p.monitored));
  const toggle=id=>setExpanded(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
  const priority={Error:0,Revisar:1,Sincronizando:2,Correcto:3,Inactiva:4};
  const columns=[
@@ -110,12 +112,19 @@ export default function PharmacyState({clientSlug}){
    </div>}
  ];
  return <div className="fm-pharmacy-status-page">
-  <div className="page-header">
-   <div><h1>Estado de las farmacias</h1>
-    <p>Supervisión de los trabajos y de la recepción de datos, actualizada cada minuto.</p></div>
-   <button type="button" className="btn btn-secondary" disabled={loading} onClick={()=>void refresh()}>
-    <RefreshCcw size={16}/>{loading?"Comprobando…":"Actualizar estado"}</button>
-  </div>
+  <ReportPageHeader title="Estado de las farmacias"
+   description="Supervisión de los trabajos y de la recepción de datos, actualizada cada minuto."
+   updatedAt={data?.checkedAt?new Date(data.checkedAt):null}
+   onRefresh={()=>void refresh()} refreshing={loading}/>
+  <ReportFilterBar showPeriod={false} pharmacies={pharmacies}
+   pharmacyIds={pharmacyIds} onPharmacyChange={setPharmacyIds}>
+   <label className="fm-unified-filter"><span>Situación</span>
+    <select aria-label="Filtrar por estado" value={scope} onChange={e=>setScope(e.target.value)}>
+     <option value="all">Todas</option><option value="issues">Incidencias</option>
+     <option value="healthy">Correctas</option>
+     <option value="unknown">Sin supervisión</option>
+    </select></label>
+  </ReportFilterBar>
   {error&&<div className="access-alert access-alert-error" role="alert"><AlertTriangle size={17}/>{error}</div>}
   <div className="fm-pharmacy-status-kpis">
    <div className="card"><Store size={19}/><span>Farmacias</span><strong>{integer(pharmacies.length)}</strong></div>
@@ -135,13 +144,6 @@ export default function PharmacyState({clientSlug}){
   <section className="card fm-pharmacy-status-table">
    <div className="fm-pharmacy-table-heading">
     <div><h2>Seguimiento por farmacia</h2><p>Las incidencias tienen prioridad. Abre los detalles para ver cada trabajo y su horario.</p></div>
-    <div className="fm-pharmacy-status-filters" role="group" aria-label="Filtrar por estado">
-     {[
-      ["all","Todas"],["issues","Incidencias"],["healthy","Correctas"],["unknown","Sin supervisión"]
-     ].map(([key,label])=><button type="button" key={key}
-      className={scope===key?"active":""} aria-pressed={scope===key}
-      onClick={()=>setScope(key)}>{label}</button>)}
-    </div>
    </div>
    <ListTable rows={[...filtered].sort((a,b)=>(priority[a.state]??5)-(priority[b.state]??5)||a.name.localeCompare(b.name))}
     columns={columns} rowKey={p=>p.id} label="farmacias"

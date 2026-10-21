@@ -63,3 +63,29 @@
 .fm-planner-pattern-recurrente{background:#e7f3ec;color:#235943}
 .fm-planner-pattern-posible_estacional{background:#edf3fa;color:#405f83}
 .fm-planner-pattern-sin_actividad{background:#f1f2f3;color:#59616b}
+
+
+/* Preparador 2: resumen compacto por farmacia y propuesta de laboratorio. */
+.fm-planner-article{min-width:235px;position:relative}
+.fm-planner .smart-table{min-width:1170px}
+.fm-planner-details{width:min(1000px,82vw);max-width:calc(100vw - 75px);margin-top:12px;padding:12px;border:1px solid #d9e8dc;background:#fff;border-radius:10px;box-shadow:0 8px 20px rgba(22,63,39,.065)}
+.fm-planner-detail-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;color:#315440;font-size:12px;margin-bottom:8px}
+.fm-planner-table-scroll{overflow-x:auto;max-width:100%}
+.fm-planner-breakdown{border-collapse:collapse;width:100%;font-size:11px;min-width:800px;font-variant-numeric:tabular-nums}
+.fm-planner-breakdown th,.fm-planner-breakdown td{padding:8px 7px;text-align:left;border-bottom:1px solid #e6ede8;vertical-align:middle}
+.fm-planner-breakdown thead th{background:#eef6f0;color:#496a54;font-weight:700;white-space:nowrap}
+.fm-planner-breakdown tbody th{font-weight:700;color:#294b36;white-space:nowrap}
+.fm-planner-breakdown tfoot th,.fm-planner-breakdown tfoot td{background:#e8f3eb;font-weight:650;color:#27583e}
+.fm-planner-breakdown select{width:100%;max-width:210px;min-width:140px;padding:7px;border:1px solid #cfdfd2;border-radius:7px;background:#fff;color:#344e3d;font-size:11px}
+.fm-planner-qty{display:flex;gap:6px;align-items:center}
+.fm-planner-qty input{width:68px;padding:7px 4px;border:1px solid #cfdfd2;border-radius:7px;font-size:12px}
+.fm-planner-qty button{padding:6px 7px;border:1px solid #bad8c4;border-radius:6px;color:#206c48;background:#eff9f2;font-size:10px;cursor:pointer;white-space:nowrap}
+.fm-planner-qty button:disabled{opacity:.45;cursor:not-allowed}
+.fm-planner-supplier-hint,.fm-planner-breakdown td>small{display:block;font-size:10px;line-height:1.35;color:#69806f;margin-top:5px}
+.fm-planner-presentations{margin-top:11px;border-top:1px solid #e6ede8;padding-top:9px}
+.fm-planner-presentations summary{cursor:pointer;font-size:11px;font-weight:700;color:#236646;padding:5px 0}
+.fm-planner-presentations>small{display:block;font-size:10px;color:#687b6a;line-height:1.5;margin-top:5px}
+.fm-planner-lab-choice{display:grid;gap:3px;max-width:175px}
+.fm-planner-lab-choice strong{font-size:11px;color:#245d40}
+.fm-planner-lab-choice small,.fm-planner-no-puc{font-size:10px;color:#687d6f;line-height:1.4}
+@media(max-width:700px){.fm-planner-details{width:calc(100vw - 35px);max-width:calc(100vw - 35px);padding:8px}.fm-planner-breakdown{font-size:10px}.fm-planner-qty{flex-direction:column;align-items:stretch}}

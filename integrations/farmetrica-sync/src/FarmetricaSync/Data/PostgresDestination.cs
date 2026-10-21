@@ -65,6 +65,152 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
         }
     }
 
+
+    // Telemetría independiente de la VPN/SQL Server: no altera tablas comerciales,
+    // transacciones de importación ni cursores. Se publica cada minuto, incluso en errores.
+    public async Task PublishMonitoringAsync(Destination dest, AppConfig config,
+        IReadOnlyList<SyncRun> liveRuns, CancellationToken ct)
+    {
+        Validation.Id(dest.Schema, "Esquema PostgreSQL");
+        if (config.MonitorInstanceId == Guid.Empty) return;
+        await using var session = await OpenAsync(dest, ct);
+        var db = session.Connection;
+        var schema = Validation.Q(dest.Schema);
+        var monitor = schema + "." + Validation.Q("fm_sync_monitor");
+        var history = schema + "." + Validation.Q("fm_sync_ejecuciones");
+        var ddl = $"""
+            CREATE TABLE IF NOT EXISTS {monitor} (
+              instancia_id uuid NOT NULL, trabajo_id uuid NOT NULL,
+              farmacia_codigo text NOT NULL, flujo text NOT NULL,
+              habilitado boolean NOT NULL, frecuencia_minutos integer NOT NULL,
+              hora_diaria_local text, zona_horaria text,
+              proxima_ejecucion timestamptz, ultimo_intento timestamptz,
+              ultimo_fin timestamptz, ultimo_exito timestamptz,
+              ultimo_estado text, ultimo_error text, estado_actual text,
+              filas_leidas bigint NOT NULL DEFAULT 0,
+              filas_insertadas bigint NOT NULL DEFAULT 0,
+              servicio_visto_en timestamptz NOT NULL DEFAULT now(),
+              registrado_en timestamptz NOT NULL DEFAULT now(),
+              PRIMARY KEY (instancia_id,trabajo_id)
+            );
+            CREATE INDEX IF NOT EXISTS fm_sync_monitor_codigo_idx
+              ON {monitor}(farmacia_codigo);
+            CREATE TABLE IF NOT EXISTS {history} (
+              id uuid PRIMARY KEY, trabajo_id uuid NOT NULL,
+              farmacia_codigo text NOT NULL, flujo text NOT NULL,
+              estado text NOT NULL, iniciada_en timestamptz NOT NULL,
+              finalizada_en timestamptz, leidas bigint NOT NULL DEFAULT 0,
+              insertadas bigint NOT NULL DEFAULT 0,
+              rechazadas bigint NOT NULL DEFAULT 0,
+              error_resumen text
+            );
+            CREATE INDEX IF NOT EXISTS fm_sync_ejecuciones_codigo_fecha_idx
+              ON {history}(farmacia_codigo,flujo,iniciada_en DESC);
+            """;
+        await using (var command = new NpgsqlCommand(ddl, db) { CommandTimeout = 20 })
+            await command.ExecuteNonQueryAsync(ct);
+
+        var now = DateTimeOffset.UtcNow;
+        var active = liveRuns.GroupBy(x => x.JobId).ToDictionary(g => g.Key,
+            g => g.OrderByDescending(x => x.StartedUtc).First());
+        var rows = config.Jobs.Select(job =>
+        {
+            var pharmacy = config.Pharmacies.FirstOrDefault(p => p.Id == job.PharmacyId);
+            var entity = config.Entities.FirstOrDefault(e => e.Id == job.EntityId);
+            if (pharmacy is null || entity is null) return null;
+            var state = config.States.FirstOrDefault(x => x.JobId == job.Id);
+            DateTimeOffset? due = null;
+            try { if (job.Enabled && pharmacy.Enabled)
+                due = SyncSchedule.NextDueUtc(job, state, pharmacy, now); }
+            catch { /* La programación incorrecta no debe detener otras farmacias. */ }
+            var running = active.GetValueOrDefault(job.Id);
+            return (object)new {
+                instancia_id = config.MonitorInstanceId,
+                trabajo_id = job.Id, farmacia_codigo = pharmacy.Code.Trim().ToUpperInvariant(),
+                flujo = entity.Name, habilitado = job.Enabled && pharmacy.Enabled,
+                frecuencia_minutos = Math.Max(1, job.EveryMinutes),
+                hora_diaria_local = job.DailyAtLocal, zona_horaria = pharmacy.TimeZoneId,
+                proxima_ejecucion = due,
+                ultimo_intento = state?.LastAttemptUtc,
+                ultimo_fin = state?.LastCompletedUtc,
+                ultimo_exito = state?.LastSuccessUtc,
+                ultimo_estado = state?.LastStatus ?? "pending",
+                ultimo_error = (state?.LastError ?? "").Length > 950
+                    ? state!.LastError[..950] : state?.LastError ?? "",
+                estado_actual = running?.Status ?? "idle",
+                filas_leidas = state?.LastRows ?? 0L,
+                filas_insertadas = state?.LastInserted ?? 0L
+            };
+        }).Where(x => x is not null).ToArray();
+        var json = System.Text.Json.JsonSerializer.Serialize(rows);
+
+        var updateSql = $"""
+            UPDATE {monitor} SET habilitado=false
+            WHERE instancia_id=@instance AND NOT (trabajo_id=ANY(@jobs));
+            INSERT INTO {monitor} AS m
+            (instancia_id,trabajo_id,farmacia_codigo,flujo,habilitado,frecuencia_minutos,
+             hora_diaria_local,zona_horaria,proxima_ejecucion,ultimo_intento,ultimo_fin,
+             ultimo_exito,ultimo_estado,ultimo_error,estado_actual,filas_leidas,filas_insertadas,
+             servicio_visto_en)
+            SELECT instancia_id,trabajo_id,farmacia_codigo,flujo,habilitado,frecuencia_minutos,
+                   hora_diaria_local,zona_horaria,proxima_ejecucion,ultimo_intento,ultimo_fin,
+                   ultimo_exito,ultimo_estado,ultimo_error,estado_actual,filas_leidas,filas_insertadas,
+                   now()
+            FROM jsonb_to_recordset(@rows::jsonb) AS r (
+              instancia_id uuid,trabajo_id uuid,farmacia_codigo text,flujo text,
+              habilitado boolean,frecuencia_minutos integer,hora_diaria_local text,
+              zona_horaria text,proxima_ejecucion timestamptz,ultimo_intento timestamptz,
+              ultimo_fin timestamptz,ultimo_exito timestamptz,ultimo_estado text,
+              ultimo_error text,estado_actual text,filas_leidas bigint,filas_insertadas bigint)
+            ON CONFLICT (instancia_id,trabajo_id) DO UPDATE SET
+              farmacia_codigo=EXCLUDED.farmacia_codigo,flujo=EXCLUDED.flujo,
+              habilitado=EXCLUDED.habilitado,frecuencia_minutos=EXCLUDED.frecuencia_minutos,
+              hora_diaria_local=EXCLUDED.hora_diaria_local,zona_horaria=EXCLUDED.zona_horaria,
+              proxima_ejecucion=EXCLUDED.proxima_ejecucion,
+              ultimo_intento=EXCLUDED.ultimo_intento,ultimo_fin=EXCLUDED.ultimo_fin,
+              ultimo_exito=EXCLUDED.ultimo_exito,ultimo_estado=EXCLUDED.ultimo_estado,
+              ultimo_error=EXCLUDED.ultimo_error,estado_actual=EXCLUDED.estado_actual,
+              filas_leidas=EXCLUDED.filas_leidas,filas_insertadas=EXCLUDED.filas_insertadas,
+              servicio_visto_en=now();
+            """;
+        await using (var command = new NpgsqlCommand(updateSql, db) { CommandTimeout = 20 })
+        {
+            command.Parameters.AddWithValue("instance", config.MonitorInstanceId);
+            command.Parameters.AddWithValue("jobs", NpgsqlDbType.Array | NpgsqlDbType.Uuid,
+                config.Jobs.Select(j => j.Id).ToArray());
+            command.Parameters.AddWithValue("rows", NpgsqlDbType.Jsonb, json);
+            await command.ExecuteNonQueryAsync(ct);
+        }
+        // Historial local ya confirmado: retransmitir una ventana acotada permite
+        // recuperar incidencias aunque PostgreSQL no estuviera disponible unos minutos.
+        var recent = config.Runs.Where(r => r.FinishedUtc.HasValue)
+            .Take(250).Select(r => new {
+                id = r.Id, trabajo_id = r.JobId,
+                farmacia_codigo = r.PharmacyCode.Trim().ToUpperInvariant(),
+                flujo = r.EntityName, estado = r.Status,
+                iniciada_en = r.StartedUtc, finalizada_en = r.FinishedUtc,
+                leidas = r.Rows, insertadas = r.Inserted, rechazadas = 0,
+                error_resumen = r.Error.Length > 950 ? r.Error[..950] : r.Error
+            }).ToArray();
+        if (recent.Length == 0) return;
+        var insertSql = $"""
+            INSERT INTO {history}
+            (id,trabajo_id,farmacia_codigo,flujo,estado,iniciada_en,finalizada_en,
+             leidas,insertadas,rechazadas,error_resumen)
+            SELECT id,trabajo_id,farmacia_codigo,flujo,estado,iniciada_en,
+                   finalizada_en,leidas,insertadas,rechazadas,error_resumen
+            FROM jsonb_to_recordset(@history::jsonb) AS r (
+              id uuid,trabajo_id uuid,farmacia_codigo text,flujo text,estado text,
+              iniciada_en timestamptz,finalizada_en timestamptz,
+              leidas bigint,insertadas bigint,rechazadas bigint,error_resumen text)
+            ON CONFLICT (id) DO NOTHING;
+            """;
+        await using var historyCommand = new NpgsqlCommand(insertSql, db) { CommandTimeout = 20 };
+        historyCommand.Parameters.AddWithValue("history", NpgsqlDbType.Jsonb,
+            System.Text.Json.JsonSerializer.Serialize(recent));
+        await historyCommand.ExecuteNonQueryAsync(ct);
+    }
+
     public Task TestSshAsync(Destination dest, CancellationToken ct) => tunnels.TestSshAsync(dest, ct);
 
     public async Task TestAsync(Destination dest, CancellationToken ct)

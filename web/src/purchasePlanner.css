@@ -56,3 +56,10 @@
 .fm-planner-pattern-puntual{background:#f4f3ef;color:#776b4f}
 .fm-planner-pattern-estacional{background:#edf3f8;color:#465f78}
 .fm-planner-pattern-intermitente{background:#f5f1e9;color:#7a6237}
+
+.fm-planner-pattern-evidence{display:block;font-size:10px;font-weight:400;line-height:1.4;max-width:220px;white-space:normal;color:inherit;opacity:.8;margin-top:4px}
+.fm-planner-pattern-concentrada{background:#f5f0e8;color:#715737}
+.fm-planner-pattern-pico_reciente{background:#fff1e9;color:#885130}
+.fm-planner-pattern-recurrente{background:#e7f3ec;color:#235943}
+.fm-planner-pattern-posible_estacional{background:#edf3fa;color:#405f83}
+.fm-planner-pattern-sin_actividad{background:#f1f2f3;color:#59616b}

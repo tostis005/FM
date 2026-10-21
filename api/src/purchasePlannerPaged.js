@@ -54,7 +54,8 @@ export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
   if(p.stockAt&&a.stockAt&&new Date(a.stockAt)<new Date(p.stockAt))p.stockAt=a.stockAt;
   if(!p.stockAt)p.stockAt=a.stockAt;
   if(p.stock===null){p.suggested=null;p.confidence="sin_stock"}
-  else if(p.demandPattern==="puntual"||p.demandPattern==="sin_ventas")p.suggested=0;
+  else if(["concentrada","pico_reciente","sin_actividad","posible_estacional","sin_ventas"]
+   .includes(p.demandPattern))p.suggested=0;
   else{
    const daily=p.demandPattern==="estacional"?
     Number(p.units3||0)/90:Number(p.daily||0);
@@ -102,6 +103,6 @@ export async function readPurchasePlannerPaged(pool,ctx,{
   policiesDefaulted:false,
   pharmacies:ctx.pharmacies.filter(f=>chosen.includes(Number(f.id)))
    .map(f=>({id:f.id,name:f.name})),
-  note:"El grupo usa el CN común, con genéricos equivalentes agrupados por DCPF verificado. La propuesta prioriza demanda repetida y no repone automáticamente ventas puntuales sin actividad reciente. El objetivo de stock se expresa en días de cobertura por farmacia."
+  note:"El grupo usa el CN común y, cuando corresponde, el DCPF verificado. La prioridad se calcula a partir de días, semanas y meses con ventas reales: los picos concentrados y los períodos sin actividad reciente no generan compras automáticas. Los indicios de estacionalidad no se consideran certeza sin comparación interanual."
  };
 }

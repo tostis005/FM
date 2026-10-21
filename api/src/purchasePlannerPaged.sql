@@ -11,7 +11,17 @@ ventas AS MATERIALIZED (
    WHERE v.fecha >= current_date-interval '90 days' AND v.fecha < current_date+interval '1 day'),0)::float8 AS v90,
   COALESCE(sum(v.unidades) FILTER (
    WHERE v.fecha >= current_date-interval '365 days' AND v.fecha < current_date+interval '1 day'),0)::float8 AS v365,
-  count(*)::int AS numero_lineas
+  -- Agregaciones lineales: min/max y count, sin count(distinct) sobre
+  -- millones de líneas (evita timeout de la página completa).
+  min(v.fecha::date) FILTER (
+   WHERE v.unidades>0 AND v.fecha >= current_date-interval '365 days'
+     AND v.fecha < current_date+interval '1 day') AS primera_venta,
+  max(v.fecha::date) FILTER (
+   WHERE v.unidades>0 AND v.fecha >= current_date-interval '365 days'
+     AND v.fecha < current_date+interval '1 day') AS ultima_venta,
+  count(*) FILTER (
+   WHERE v.unidades>0 AND v.fecha >= current_date-interval '365 days'
+     AND v.fecha < current_date+interval '1 day')::int AS lineas_venta
  FROM __SCHEMA__.fm_ventas_analitica v
  JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
   AND upper(btrim(v.farmacia_codigo))=__FARMACIA_CODE__
@@ -27,9 +37,7 @@ catalogo AS MATERIALIZED (
    CASE WHEN v.articulo ~ '^[0-9]{6,7}$' THEN v.articulo END) AS cn,
   a.stock_actual::float8 AS stock,a.sincronizado_en AS fecha_stock,
   v.periodo,v.v30,v.v90,v.v365,
-  (CASE WHEN v.v30>0 THEN 1 ELSE 0 END+
-   CASE WHEN v.v90>v.v30 THEN 1 ELSE 0 END+
-   CASE WHEN v.v365>v.v90 THEN 1 ELSE 0 END)::int AS meses_venta
+  v.primera_venta,v.ultima_venta,v.lineas_venta
  FROM ventas v LEFT JOIN LATERAL (
   SELECT nombre,codigo_nacional,stock_actual,sincronizado_en
   FROM __SCHEMA__.articulos a
@@ -43,7 +51,8 @@ catalogo_sin_ventas AS MATERIALIZED (
    CASE WHEN a.origen_id ~ '^[0-9]{6,7}$' THEN a.origen_id END) AS cn,
   a.stock_actual::float8 AS stock,a.sincronizado_en AS fecha_stock,
   0::float8 AS periodo,0::float8 AS v30,0::float8 AS v90,0::float8 AS v365,
-  0::int AS meses_venta
+  NULL::date AS primera_venta,NULL::date AS ultima_venta,
+  0::int AS lineas_venta
  FROM __SCHEMA__.articulos a JOIN farmetrica.farmacias f
   ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
   AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
@@ -86,7 +95,9 @@ por_farmacia AS MATERIALIZED (
   count(*)::int AS referencias,
   sum(c.periodo)::float8 AS periodo,sum(c.v30)::float8 AS v30,
   sum(c.v90)::float8 AS v90,sum(c.v365)::float8 AS v365,
-  max(c.meses_venta)::int AS meses_venta,
+  min(c.primera_venta) AS primera_venta,
+  max(c.ultima_venta) AS ultima_venta,
+  sum(c.lineas_venta)::int AS lineas_venta,
   CASE WHEN count(c.stock)=count(*) THEN sum(c.stock)::float8 ELSE NULL END AS stock,
   min(c.fecha_stock) AS fecha_stock,
   sum(coalesce(p.unidades,0))::float8 AS encargadas,
@@ -98,22 +109,34 @@ por_farmacia AS MATERIALIZED (
   ON pol.cliente_slug=$4 AND pol.farmacia_id=c.fid
  GROUP BY c.grupo,c.fid
 ),
+-- Observación real: intervalo entre la primera y la última venta
+-- positiva de 12 meses, más número de transacciones y actividad en 30/90d.
+-- No hay ninguna excepción por producto, nombre, familia ni CN.
 necesidades AS MATERIALIZED (
  SELECT pf.*,
-  CASE WHEN pf.v30=0 AND pf.v90>0 AND pf.v365<=pf.v90 THEN 'puntual'
-   WHEN pf.v30=0 THEN 'estacional'
-   WHEN pf.meses_venta>=3 THEN 'estable'
-   ELSE 'intermitente' END AS patron,
+  CASE
+   WHEN pf.v365>=20 AND pf.ultima_venta-pf.primera_venta<=6
+    AND pf.ultima_venta>=current_date-interval '14 days' THEN 'pico_reciente'
+   WHEN pf.v365>=20 AND pf.ultima_venta-pf.primera_venta<=6
+    AND pf.ultima_venta<current_date-interval '14 days' THEN 'concentrada'
+   WHEN pf.v30>0 AND pf.ultima_venta-pf.primera_venta>=120
+    AND pf.lineas_venta>=12 THEN 'recurrente'
+   WHEN pf.v30=0 AND pf.v90>0
+    AND pf.ultima_venta-pf.primera_venta>=21
+    AND pf.lineas_venta>=10 THEN 'posible_estacional'
+   WHEN pf.v30=0 THEN 'sin_actividad'
+   ELSE 'intermitente'
+  END AS patron,
   greatest(pf.v30/30.0,pf.v90/90.0,pf.v365/365.0) AS media_dia,
-  CASE WHEN pf.stock IS NULL OR pf.stock<0 THEN NULL
-   WHEN pf.v30=0 AND pf.v90>0 AND pf.v365<=pf.v90 THEN 0::float8
-   WHEN pf.v30=0 THEN greatest(0,ceil(
-     (pf.v90/90.0)*greatest(pf.cobertura_dias,pf.intervalo_dias)
-     -pf.stock-pf.encargadas))::float8
+  CASE
+   WHEN pf.stock IS NULL OR pf.stock<0 THEN NULL
+   WHEN pf.v365>=20 AND pf.ultima_venta-pf.primera_venta<=6 THEN 0::float8
+   WHEN pf.v30=0 THEN 0::float8
    ELSE greatest(0,least(999999,ceil(
-     greatest(pf.v30/30.0,pf.v90/90.0,pf.v365/365.0)*
-      greatest(pf.cobertura_dias,pf.intervalo_dias)
-     -pf.stock-pf.encargadas-1e-9)))::float8 END AS sugeridas
+    greatest(pf.v30/30.0,pf.v90/90.0,pf.v365/365.0)*
+     greatest(pf.cobertura_dias,pf.intervalo_dias)
+     -pf.stock-pf.encargadas-1e-9)))::float8
+  END AS sugeridas
  FROM por_farmacia pf
 ),
 grupos AS MATERIALIZED (
@@ -122,18 +145,33 @@ grupos AS MATERIALIZED (
   sum(n.referencias)::int AS "productCount",
   sum(n.periodo)::float8 AS "unitsPeriod",
   sum(n.v90)::float8 AS "units3",sum(n.v365)::float8 AS "units12",
+  sum(n.v30)::float8 AS "units30",
+  min(n.primera_venta) AS "firstSale",
+  max(n.ultima_venta) AS "lastSale",
+  (max(n.ultima_venta)-min(n.primera_venta)+1)::int AS "saleSpanDays",
+  sum(n.lineas_venta)::int AS "saleLines",
   CASE WHEN count(n.stock)=count(*) THEN sum(n.stock)::float8 ELSE NULL END AS stock,
   CASE WHEN count(n.sugeridas)=count(*) THEN sum(n.sugeridas)::float8 ELSE NULL END AS suggested,
-  CASE WHEN sum(n.v30)=0 AND sum(n.v90)>0 AND sum(n.v365)<=sum(n.v90)
-   THEN 'puntual'
-   WHEN sum(n.v30)=0 THEN 'estacional'
-   WHEN bool_or(n.patron='estable') THEN 'estable'
-   ELSE 'intermitente' END AS patron,
-  CASE WHEN sum(n.v30)=0 AND sum(n.v90)>0 AND sum(n.v365)<=sum(n.v90)
-   THEN 0
-   WHEN sum(n.v30)=0 THEN 1
-   WHEN bool_or(n.patron='estable') THEN 3
-   ELSE 2 END AS prioridad
+  CASE
+   WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6
+    AND max(n.ultima_venta)>=current_date-interval '14 days'
+    THEN 'pico_reciente'
+   WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6
+    AND max(n.ultima_venta)<current_date-interval '14 days'
+    THEN 'concentrada'
+   WHEN bool_or(n.patron='recurrente') THEN 'recurrente'
+   WHEN sum(n.v30)=0 AND bool_or(n.patron='posible_estacional') THEN 'posible_estacional'
+   WHEN sum(n.v30)=0 THEN 'sin_actividad'
+   ELSE 'intermitente'
+  END AS patron,
+  CASE
+   WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6 THEN 1
+   WHEN bool_or(n.patron='recurrente') THEN 4
+   WHEN sum(n.v30)>0 AND bool_or(n.patron='intermitente') THEN 3
+   WHEN bool_or(n.patron='pico_reciente') THEN 2
+   WHEN bool_or(n.patron='posible_estacional') THEN 1
+   ELSE 0
+  END AS prioridad
  FROM necesidades n GROUP BY n.grupo
 ),
 filtrados AS MATERIALIZED (
@@ -162,8 +200,9 @@ totales AS MATERIALIZED (
   count(*) FILTER(WHERE stock IS NULL)::int AS "stockMissing",
   coalesce(sum(suggested),0)::float8 AS "suggestedKnown",
   count(*) FILTER(WHERE suggested IS NULL)::int AS "suggestedMissing",
-  count(*) FILTER(WHERE patron='puntual')::int AS "oneOffCount",
-  count(*) FILTER(WHERE patron='estacional')::int AS "seasonalCount",
+  count(*) FILTER(WHERE patron='concentrada')::int AS "concentratedCount",
+  count(*) FILTER(WHERE patron='pico_reciente')::int AS "recentPeakCount",
+  count(*) FILTER(WHERE patron='posible_estacional')::int AS "seasonalCount",
   false AS partial FROM filtrados
 ),
 pagina AS MATERIALIZED (
@@ -185,6 +224,9 @@ SELECT (SELECT to_jsonb(t) FROM totales t) AS summary,
     'daily',n.media_dia,'interval',n.intervalo_dias,
     'lead',0,'safety',0,'coverageDays',n.cobertura_dias,
     'demandPattern',n.patron,
+    'firstSale',n.primera_venta,'lastSale',n.ultima_venta,
+    'saleSpanDays',(n.ultima_venta-n.primera_venta+1),
+    'saleLines',n.lineas_venta,
     'policyDefault',n.politica_default,
     'confidence',CASE WHEN n.stock IS NULL THEN 'sin_stock'
       WHEN n.fecha_stock IS NULL THEN 'fecha_desconocida'

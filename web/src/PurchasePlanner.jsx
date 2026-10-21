@@ -240,7 +240,17 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
        <small>Referencias equivalentes en esta farmacia:</small>
        {p.options.map(o=><small key={o.articleId}>{o.cn||"Sin CN"} · {o.articleName} · Código {o.articleId} · Stock {o.stock??"?"}</small>)}
       </div>}
-      <small>Demanda {p.demandPattern||"pendiente de clasificar"} · Media {whole(p.daily)} uds./día × {p.coverageDays??p.interval} días de cobertura − stock {p.stock??"?"} − pedidos preparados {p.ordered??0} = <b>{p.suggested??"Sin cálculo"} uds.</b></small>
+      <small>Fechas de venta en los últimos 12 meses:
+       {p.firstSale?<> desde <b>{String(p.firstSale).slice(0,10)}</b> hasta <b>{String(p.lastSale).slice(0,10)}</b>,
+        intervalo de {p.saleSpanDays} días</>:" sin ventas verificadas"}.</small>
+      <small>Demanda {p.demandPattern==="concentrada"?"concentrada en pocas fechas":
+       p.demandPattern==="pico_reciente"?"pico reciente, revisar":
+       p.demandPattern==="recurrente"?"recurrente":
+       p.demandPattern==="posible_estacional"?"posible temporada":
+       p.demandPattern==="sin_actividad"?"sin actividad reciente":"intermitente"} ·
+       Media estimada {whole(p.daily)} uds./día · Cobertura {p.coverageDays??p.interval} días ·
+       Stock {p.stock??"?"} · Pedidos pendientes {p.ordered??0} ·
+       <b> Recomendado {p.suggested??"sin cálculo"} uds.</b></small>
       <small>Última actualización conocida del inventario: {p.stockAt?new Date(p.stockAt).toLocaleString("es-ES"):"Sin fecha disponible"}</small>
       {confidence!=="calculable"&&<small className="fm-planner-caution">{confidence==="stock_antiguo"?"Stock posiblemente desactualizado":confidence==="sin_stock"?"Sin stock: no se propone compra":"Sin fecha verificable de stock"}</small>}
       {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalo y días de cobertura desde Farmacias.</small>}
@@ -268,7 +278,15 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   
   {key:"patron",label:"Demanda",sortable:false,searchable:false,value:g=>g.patron||"",
    render:g=><span className={"fm-planner-pattern fm-planner-pattern-"+(g.patron||"desconocida")}>
-    {({estable:"Estable",intermitente:"Intermitente",estacional:"Estacional",puntual:"Puntual"})[g.patron]||"Sin clasificar"}</span>},
+    {({recurrente:"Recurrente",intermitente:"Intermitente",
+      posible_estacional:"Posible temporada",concentrada:"Ventas concentradas",
+      pico_reciente:"Pico reciente",sin_actividad:"Sin actividad reciente"})[g.patron]||"Sin clasificar"}
+    <small className="fm-planner-pattern-evidence">
+      {g.firstSale?"Ventas entre "+String(g.firstSale).slice(0,10)+
+       " y "+String(g.lastSale).slice(0,10)+
+       " ("+g.saleSpanDays+" días de intervalo)":"Sin ventas en 12 meses"}
+    </small>
+   </span>},
   {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
   {key:"units3",label:"Ventas 3m",value:g=>g.units3,render:g=>whole(g.units3)},
   {key:"units12",label:"Ventas 12m",value:g=>g.units12,render:g=>whole(g.units12)},
@@ -280,7 +298,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  ];
  return <section className="card fm-planner">
   <div className="fm-planner-head"><div><h2><ShoppingCart size={19}/> Propuesta inteligente de compra</h2>
-   <p>Necesidades del grupo consolidadas por código nacional y DCPF de genéricos. Se prioriza la demanda sostenida frente a ventas puntuales; las estacionales siguen disponibles para revisión.</p></div>
+   <p>Necesidades del grupo por código nacional y DCPF. La prioridad se calcula exclusivamente con las fechas y unidades vendidas: recurrencia, concentración de ventas y actividad reciente. Las posibles temporadas se identifican como indicios, no como certeza.</p></div>
    <button className="btn btn-secondary" onClick={()=>setReload(n=>n+1)} type="button" disabled={busy}>Actualizar</button></div>
   <ReportFilterBar periodKey={period} onPeriodChange={setSharedPeriod}
    showPharmacies={false} customFrom={customFrom} customTo={customTo}
@@ -306,8 +324,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     {missingSuggested>0&&<small>{missingSuggested} referencias sin propuesta calculable</small>}</div>
   </div>
   <div className="fm-planner-summary-note">
-   {result?.summary?.oneOffCount>0&&<span>{whole(result.summary.oneOffCount)} artículos con demanda puntual, sin propuesta automática si ya no tienen actividad · </span>}
-   {result?.summary?.seasonalCount>0&&<span>{whole(result.summary.seasonalCount)} posibles estacionales · </span>}
+   {result?.summary?.concentratedCount>0&&<span>{whole(result.summary.concentratedCount)} artículos con ventas concentradas en pocos días · </span>}
+   {result?.summary?.recentPeakCount>0&&<span>{whole(result.summary.recentPeakCount)} picos recientes para revisión · </span>}
+   {result?.summary?.seasonalCount>0&&<span>{whole(result.summary.seasonalCount)} posibles patrones de temporada · </span>}
    {whole(result?.summary?.products??result?.totalGroups??groups.length)} conjuntos o artículos del grupo · {whole(result?.summary?.referenceCount??groups.length)} referencias · {whole(allLines.length)} líneas con proveedor · {whole(selectedTotal)} unidades asignadas
    {missingSupplier>0&&<span> · {missingSupplier} necesidades sin proveedor</span>}
    {missingArticle>0&&<span> · {missingArticle} necesidades genéricas sin presentación elegida</span>}

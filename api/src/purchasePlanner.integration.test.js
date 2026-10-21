@@ -46,3 +46,63 @@ test("PostgreSQL: preparador consulta ventas documentales y stock real, filtrand
   assert.ok(unSold.pharmacies[0].options.some(o=>o.articleId==="ART-01"));
  }finally{await pool.end()}
 });
+
+
+test("PostgreSQL: concentración y recurrencia se distinguen por fechas de venta, no por CN",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const pool=new pg.Pool({connectionString:process.env.TEST_DB_URL});
+ const db=await pool.connect();
+ try{
+  await db.query("BEGIN");
+  await db.query(`INSERT INTO ampedia.articulos
+   (farmacia_codigo,origen_id,nombre,codigo_nacional,stock_actual,sincronizado_en)
+   VALUES ('ABA','990001','Artículo de prueba A',NULL,0,now()),
+    ('ABA','990002','Artículo de prueba B',NULL,0,now())
+   ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+   SELECT 'ABA','farmatic','PATRON-A-'||i,current_date-interval '70 days'
+     +(i-1)*interval '1 day',true FROM generate_series(1,4) i
+   UNION ALL
+   SELECT 'ABA','farmatic','PATRON-B-'||i,current_date-interval '132 days'
+     +(i-1)*interval '11 days',true FROM generate_series(1,12) i`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+   SELECT 'ABA','farmatic','PATRON-A-'||i,'1','990001',40,40 FROM generate_series(1,4) i
+   UNION ALL
+   SELECT 'ABA','farmatic','PATRON-B-'||i,'1','990002',2,2 FROM generate_series(1,12) i`);
+  const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
+  setupPurchasePlanner(app,db,{requireTenant:()=>[]});
+  const stamp=d=>d.toISOString().slice(0,10);
+  const from=stamp(new Date(Date.now()-28*86400000)),to=stamp(new Date());
+  const ctx={role:"superadministrador",client:{slug:"ampedia",schema:"ampedia"},
+   modules:{compras:true},pharmacies:[{id:"1",name:"Abadía"}]};
+  async function getArticle(cn){
+   let data=null,error=null,status=200;
+   const res={status(n){status=n;return this},json(d){data=d;return this}};
+   await routes["/api/analytics/pedidos/propuesta"]({
+    query:{desde:from,hasta:to,farmacias:"1",buscar:cn,pagina:"1",tamano:"50"},context:ctx
+   },res,e=>{error=e});
+   if(error)throw error;
+   assert.equal(status,200);
+   const group=data.groups.find(g=>g.cn===cn);
+   assert.ok(group,"Debe encontrarse el código nacional "+cn);
+   return group;
+  }
+  const concentrated=await getArticle("990001");
+  assert.equal(concentrated.patron,"concentrada");
+  assert.equal(concentrated.suggested,0);
+  assert.equal(concentrated.saleSpanDays,4);
+  assert.equal(concentrated.units12,160);
+  const recurring=await getArticle("990002");
+  assert.equal(recurring.patron,"recurrente");
+  assert.ok(recurring.saleSpanDays>=120);
+  assert.ok(recurring.suggested>0);
+  assert.equal(recurring.units12,24);
+ }finally{
+  await db.query("ROLLBACK").catch(()=>{});
+  db.release();
+  await pool.end();
+ }
+});

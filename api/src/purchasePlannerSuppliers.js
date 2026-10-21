@@ -186,36 +186,22 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
   const {rows}=await pool.query({text:sql,values:[codes,chosen,reportTo,ctx.client.slug],
    query_timeout:18000});
   offers=rows;
-  // Fuente real que alimenta Configuración > Proveedores: maestro del
-  // tenant más catálogo sincronizado por farmacia. La farmacia del PUC
-  // manda; solo reutilizamos un nombre ajeno si es inequívoco en todas.
+  // Resolver nombres desde la misma lista usada por Configuración > Proveedores:
+  // el maestro del cliente y el catálogo Farmatic sincronizado. El código
+  // ERP puede variar por farmacia: no utilizar un ID global sin comprobar.
   const providerCodes=[...new Set(offers.map(x=>canonicalSupplierCode(x.supplierCode)))];
   if(providerCodes.length){
    const [localNames,masterNames]=await Promise.all([
     pool.query({
      text:`SELECT f.id::text AS "pharmacyId",p.origen_id::text AS "supplierCode",
-        max(nullif(btrim(p.nombre::text),'')) AS name
-       FROM ${q}.proveedores p
-       JOIN farmetrica.farmacias f ON f.cliente_slug=$2
-        AND upper(btrim(p.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-       WHERE (CASE WHEN btrim(p.origen_id) ~ '^[0-9]+
- }
- // Un registro documental comprado en cualquiera de las farmacias puede
- // informar el PUC de un genérico DCPF, aunque su CN no esté en la primera
- // presentación del grupo ni en la farmacia actual.
- const result=mapLaboratoryOffers(offers.map(r=>{
-  const direct=selected.find(it=>String(it.articleId)===String(r.articleId)&&
-   String(it.pharmacyId)===String(r.pharmacyId));
-  return {...r,cn:sourceCn.get(String(r.pharmacyId)+"|"+String(r.articleId))||
-   direct?.cn||String(r.articleId)};
- }),selected,groupLinks);
- return {...result,presentations,observedPrices:offers.length,
-  policy:"percentil_puc_12m",priceWindowMonths:12};
-}
-
-          THEN coalesce(nullif(ltrim(btrim(p.origen_id),'0'),''),'0')
-          ELSE upper(btrim(p.origen_id)) END)=ANY($1::text[])
-       GROUP BY f.id,p.origen_id`,
+       max(nullif(btrim(p.nombre::text),'')) AS name
+      FROM ${q}.proveedores p
+      JOIN farmetrica.farmacias f ON f.cliente_slug=$2
+       AND upper(btrim(p.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+      WHERE (CASE WHEN btrim(p.origen_id) ~ '^[0-9]+$'
+        THEN coalesce(nullif(ltrim(btrim(p.origen_id),'0'),''),'0')
+        ELSE upper(btrim(p.origen_id)) END)=ANY($1::text[])
+      GROUP BY f.id,p.origen_id`,
      values:[providerCodes,ctx.client.slug],query_timeout:8000
     }),
     pool.query({
@@ -226,7 +212,6 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
    ]);
    offers=resolveSupplierNames(offers,localNames.rows,masterNames.rows);
   }
- }
  // Un registro documental comprado en cualquiera de las farmacias puede
  // informar el PUC de un genérico DCPF, aunque su CN no esté en la primera
  // presentación del grupo ni en la farmacia actual.

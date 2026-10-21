@@ -11,14 +11,14 @@ import {integer} from "./localeES.js";
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
 // registros de la tabla, no sobre la página visible.
 export const PAGE_SIZES=[10,25,50,100];
-export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChange,label="registros",loading=false}){
+export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChange,label="registros",loading=false,pageSizes=PAGE_SIZES}){
   const pages=Math.max(1,Math.ceil(total/pageSize));
   const current=Math.max(0,Math.min(page,pages-1));
   return <div className="list-pagination" aria-label={"Paginación de "+label}>
     <span className="list-page-count">{integer(total?current*pageSize+1:0)}–{integer(Math.min((current+1)*pageSize,total))} de {integer(total)} {label}</span>
     <label className="list-page-size">Por página
       <select value={pageSize} onChange={e=>onPageSizeChange(Number(e.target.value))} aria-label={"Registros por página de "+label}>
-        {PAGE_SIZES.map(n=><option value={n} key={n}>{n}</option>)}
+        {pageSizes.map(n=><option value={n} key={n}>{n}</option>)}
       </select>
     </label>
     <div className="list-page-buttons">

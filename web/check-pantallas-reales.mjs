@@ -77,7 +77,7 @@ try{
 
  const before=requests.length;
  await page.getByRole("button",{name:"Siguiente",exact:true}).click();
- await page.waitForFunction(()=>document.querySelector(".fm-real-pagination")?.textContent.includes("Página 2"));
+ await page.waitForFunction(()=>document.querySelector(".list-pagination")?.textContent.includes("Página 2"));
  assert.ok(requests.length>before);
  assert.equal(requests.at(-1).query.pagina,"2","paginación en servidor");
  await page.getByRole("button",{name:/Venta neta/}).click();

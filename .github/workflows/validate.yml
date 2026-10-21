@@ -81,6 +81,7 @@ jobs:
           node --test src/importarPromociones.test.js
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
+          node --test src/tableExport.test.js
           node --test src/reportFilterScopes.test.js
           node --test src/sharedReportFilters.test.js
           node --test src/businessAnalytics.test.js

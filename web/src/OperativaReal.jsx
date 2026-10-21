@@ -15,7 +15,7 @@ const ESTADOS={
  nueva:"Nueva",en_estudio:"En estudio",en_curso:"En curso",aplicada_parcialmente:"Aplicada parcialmente",
  aplicada:"Aplicada",descartada:"Descartada",pospuesta:"Pospuesta",
  borrador:"Borrador",pendiente_aprobacion:"Pendiente de aprobación",
- aprobado:"Aprobado",exportado:"Exportado",cancelado:"Cancelado",
+ aprobado:"Aprobado",exportado:"Exportado",recibido:"Recibido",cancelado:"Cancelado",
  pendiente:"Pendiente",resuelta:"Resuelta",
  propuesta:"Propuesta",en_revision:"En revisión",aprobada:"Aprobada",realizada:"Realizada"
 };
@@ -234,6 +234,8 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
          {canEdit&&p.estado==="borrador"&&<Button disabled={busy} onClick={()=>update(p,"pendiente_aprobacion")}>Solicitar aprobación</Button>}
          {canApprove&&p.estado==="pendiente_aprobacion"&&<Button disabled={busy} onClick={()=>update(p,"aprobado")}>Aprobar</Button>}
          {canEdit&&p.estado==="aprobado"&&<Button disabled={busy} onClick={()=>update(p,"exportado")}>Marcar exportado</Button>}
+          {canEdit&&p.estado==="exportado"&&<Button disabled={busy}
+           onClick={()=>{if(window.confirm("¿Confirmas que el pedido ya se ha recibido? Esta marca no modifica las existencias del ERP."))void update(p,"recibido")}}>Marcar recibido</Button>}
          {canEdit&&["borrador","pendiente_aprobacion","aprobado"].includes(p.estado)&&
           <Button disabled={busy} onClick={()=>update(p,"cancelado")}>Cancelar</Button>}
          <Button onClick={()=>history(p)}>Historial</Button>

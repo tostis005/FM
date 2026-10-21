@@ -73,7 +73,13 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " WHERE v.fecha >= least($1::date,current_date-interval '365 days')",
     " AND v.fecha < greatest($2::date,current_date)+interval '1 day'",
     " AND nullif(btrim(v.articulo_id::text),'') IS NOT NULL GROUP BY f.id,v.articulo_id",
-    "), ranked AS (SELECT * FROM sold",
+    "), ranked AS (SELECT * FROM sold WHERE ($6::text='' OR article ILIKE '%'||$6||'%' OR EXISTS (",
+    " SELECT 1 FROM "+q+".articulos a2 JOIN farmetrica.farmacias f2",
+    " ON f2.id=sold.fid AND f2.cliente_slug=$4",
+    " WHERE upper(btrim(a2.farmacia_codigo))="+pharmacyDataCodeSQL("f2"),
+    " AND upper(btrim(a2.origen_id::text))=upper(btrim(sold.article))",
+    " AND (a2.nombre ILIKE '%'||$6||'%'"+(has("articulos","codigo_nacional")?" OR a2.codigo_nacional ILIKE '%'||$6||'%'":"")+")",
+    " )))",
     " ORDER BY greatest(coalesce(u3,0),0) DESC,greatest(coalesce(u12,0),0) DESC,fid,article LIMIT $5::int)",
     " SELECT s.fid::text AS \"pharmacyId\",s.article AS \"articleId\",",
     " coalesce(nullif(btrim(a.name),''),s.article) AS \"articleName\",a.cn,",
@@ -88,7 +94,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " "+latest+" LIMIT 1) a ON true ORDER BY s.fid,s.article"
    ].join(" ");
    const [sales,policies,orders]=await Promise.all([
-    pool.query({text:sql,values:[from,to,chosen,ctx.client.slug,MAX+1],query_timeout:30000}),
+    pool.query({text:sql,values:[from,to,chosen,ctx.client.slug,MAX+1,search],query_timeout:30000}),
     pool.query("SELECT farmacia_id,intervalo_pedidos,plazo_entrega,stock_seguridad"+
      " FROM farmetrica.op_politicas_reposicion WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])",
      [ctx.client.slug,chosen]),

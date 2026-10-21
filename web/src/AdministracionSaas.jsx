@@ -241,36 +241,22 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
       onChange={e=>setForm(v=>({...v,name:e.target.value}))}
       placeholder="Nombre y apellidos"/>
     </label>
-    <div className="fm-manage-wide" style={{display:"grid",gap:10}}>
-     <strong>Método de inicio de sesión</strong>
-     <label style={{display:"flex",alignItems:"start",gap:10}}>
-      <input type="radio" name="authType" value="google"
-       checked={form.authType==="google"}
-       onChange={()=>setForm(v=>({...v,authType:"google"}))}/>
-      <span><strong>Acceso con Google</strong>
-       <span style={{display:"block",fontWeight:400,color:"#637e70"}}>
-        Para cuentas Gmail personales y cuentas Google Workspace. No necesitan contraseña de Farmétrica.
-       </span>
-      </span>
-     </label>
-     <label style={{display:"flex",alignItems:"start",gap:10}}>
-      <input type="radio" name="authType" value="local"
-       checked={form.authType==="local"}
-       onChange={()=>setForm(v=>({...v,authType:"local"}))}/>
-      <span><strong>Correo y contraseña</strong>
-       <span style={{display:"block",fontWeight:400,color:"#637e70"}}>
-        El usuario recibirá una invitación para crear su propia contraseña. No tienes que conocerla.
-       </span>
-      </span>
-     </label>
-     {form.authType==="google"?
-      <p style={{margin:"0",fontSize:12,color:"#637e70"}}>
-       El correo debe estar autorizado en este cliente. Tener una cuenta Google no concede acceso por sí solo.
-      </p>:
-      <p style={{margin:"0",fontSize:12,color:"#637e70"}}>
-       El enlace de activación caduca en 30 minutos y se puede volver a enviar.
-       Este método necesita el servicio de correo SMTP configurado en el servidor.
-      </p>}
+    <div className="fm-manage-wide fm-auth-method-field">
+     <strong>Método de acceso</strong>
+     <div className="fm-auth-methods" role="radiogroup" aria-label="Método de acceso">
+      <label className={"fm-auth-method"+(form.authType==="google"?" selected":"")}>
+       <input type="radio" name="authType" value="google"
+        checked={form.authType==="google"}
+        onChange={()=>setForm(v=>({...v,authType:"google"}))}/>
+       <span>Google</span>
+      </label>
+      <label className={"fm-auth-method"+(form.authType==="local"?" selected":"")}>
+       <input type="radio" name="authType" value="local"
+        checked={form.authType==="local"}
+        onChange={()=>setForm(v=>({...v,authType:"local"}))}/>
+       <span>Correo y contraseña</span>
+      </label>
+     </div>
     </div>
     <label>Rol
      <select value={form.role} onChange={e=>setForm(v=>({...v,role:e.target.value}))}>

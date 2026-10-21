@@ -132,6 +132,18 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    setError(E(e));setMode("error");
   }
  }
+ useEffect(()=>{
+  if(section!=="stock-traspasos")return;
+  try{
+   const link=JSON.parse(sessionStorage.getItem("fm_stock_transfer:"+clientSlug)||"null");
+   if(!link)return;
+   sessionStorage.removeItem("fm_stock_transfer:"+clientSlug);
+   if(!pharmacies.some(p=>String(p.id)===String(link.pharmacyId)))return;
+   setPharmacy(String(link.pharmacyId));
+   setArticle(String(link.article||""));setName(String(link.name||""));
+   setUnits(String(link.units||1));
+  }catch{}
+ },[section,clientSlug]);
  useEffect(()=>{setSelected("");setDraft(null);void refresh();},[section,clientSlug,pharmacy]);
  async function save(method,recurso,body={},id){
   setBusy(true);setNotice("");setError("");

@@ -8,37 +8,54 @@ const FIELD={
 };
 export function inferGenericGroupName(names,fallback="",principles=[]){
  const labels=[...new Set((names||[]).map(v=>String(v||"").trim()).filter(Boolean))];
- const normalized=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-  .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().split(/\s+/).filter(Boolean);
  if(!labels.length)return "Genérico · Denominación pendiente";
- const principle=(principles||[]).map(x=>String(x||"").trim()).find(Boolean);
- const main=labels.slice().sort((a,b)=>a.length-b.length)[0];
- const excluded=new Set(["EFG","DE","DEL","LA","LOS","LAS","POR","X","ENVASE","UNIDADES",
-  "CONTENIDO","GENERICA","GENERICO"]);
- let common=[];
- if(labels.length>=2){
-  const frequency=new Map();
-  for(const label of labels){
-   const split=normalized(label),end=split.indexOf("EFG");
-   const words=end>=0?split.slice(0,end):split.slice(0,16);
-   for(const token of new Set(words))frequency.set(token,(frequency.get(token)||0)+1);
+ const norm=v=>String(v).normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().split(/\s+/).filter(Boolean);
+ const normalizeDose=label=>{
+  const hit=label.match(/\b(\d+(?:[,.]\d+)?)\s*(MG|G|MCG|MICROGRAMOS|UI)\b/i);
+  if(!hit)return "";
+  const amount=Number(hit[1].replace(",","."));
+  if(!Number.isFinite(amount)||amount<=0)return "";
+  return hit[2].toUpperCase()==="G"?String(amount*1000)+" mg":
+   String(amount)+" "+hit[2].toLowerCase();
+ };
+ const mostCommon=list=>{
+  const counter=new Map();
+  for(const value of list.filter(Boolean))counter.set(value,(counter.get(value)||0)+1);
+  return [...counter].sort((a,b)=>b[1]-a[1]||
+   String(a[0]).localeCompare(String(b[0]),"es"))[0]||null;
+ };
+ const normalized=labels.map(norm);
+ // El DCPF agrupa presentaciones de distintas marcas. Inferir el principio
+ // activo por su prefijo compartido, no por la primera marca alfabética.
+ const first=mostCommon(normalized.map(words=>words[0]));
+ let generic="";
+ if(first&&first[1]>=Math.max(2,Math.ceil(labels.length*.30))){
+  generic=first[0];
+  for(let i=1;i<3;i++){
+   const term=mostCommon(normalized.filter(w=>w[0]===first[0]).map(w=>w[i]));
+   if(!term||term[1]<Math.ceil(first[1]*.72)||
+    /^(\d+|MG|G|MCG|EFG|FORTE)$/.test(term[0]))break;
+   generic+=" "+term[0];
   }
-  const required=Math.max(2,Math.ceil(labels.length*.55));
-  const words=normalized(main),end=words.indexOf("EFG");
-  common=(end>=0?words.slice(0,end):words.slice(0,14))
-   .filter(token=>frequency.get(token)>=required&&!excluded.has(token));
  }
- // Puede haber una sola presentación registrada; su denominación sigue siendo
- // más útil que el DCPF numérico. En ese caso no inventamos el principio activo.
- let result=common.join(" ");
- if(principle){
-  const dose=(main.match(/\b\d+(?:[,.]\d+)?\s*(?:MG|G|MCG|MICROGRAMOS|UI|ML|%)\b/i)||[])[0]||"";
-  const form=(main.match(/\b(?:COMPRIMIDOS?|CAPSULAS?|SOBRES?|SOLUCION|SUSPENSION|CREMA|GEL|POMADA|COLIRIO|SUPOSITORIOS?|PARCHES?|INYECTABLE)\b/i)||[])[0]||"";
-  result=[principle,dose,form].filter(Boolean).join(" ");
+ const principle=(principles||[]).map(x=>String(x||"").trim()).find(Boolean);
+ if(principle)generic=principle;
+ const dose=mostCommon(labels.map(normalizeDose))?.[0]||"";
+ const forms=["COMPRIMIDOS","CAPSULAS","SOBRES","SOLUCION","SUSPENSION",
+  "CREMA","GEL","POMADA","COLIRIO","SUPOSITORIOS","PARCHES","INYECTABLE"];
+ const form=mostCommon(normalized.map(words=>forms.find(t=>words.includes(t))||""))?.[0]||"";
+ const suffix=form==="CAPSULAS"&&normalized.filter(w=>w.includes("GASTRORRESISTENTES")).length>=labels.length*.45?
+  "Cápsulas gastrorresistentes":form.toLocaleLowerCase("es-ES");
+ if(!generic){
+  // Ante nomenclátor parcial, mostrar la presentación oficial sin fingir
+  // un principio activo que no se ha podido determinar.
+  const fallbackName=labels.find(n=>/\bEFG\b/i.test(n))||labels[0];
+  return "Genérico · "+fallbackName.replace(/,\s*\d+\s*(?:comprimidos|capsulas|sobres|unidades).*$/i,"").trim();
  }
- if(!result||result.length<5)result=main.replace(/,\s*\d+\s*(?:comprimidos|capsulas|sobres|unidades).*$/i,"").trim();
- return "Genérico · "+result.toLocaleLowerCase("es-ES")
-  .replace(/(^|\s)(\S)/g,(_m,space,ch)=>space+ch.toLocaleUpperCase("es-ES"));
+ const name=generic.toLocaleLowerCase("es-ES").replace(/(^|\s)(\S)/g,
+  (_m,space,ch)=>space+ch.toLocaleUpperCase("es-ES"));
+ return "Genérico · "+[name,dose,suffix].filter(Boolean).join(" ");
 }
 // El detalle incluye también farmacias con existencias pero ninguna venta.
 // Consultar únicamente CNs de la página evita recorrer todo el catálogo en Node.

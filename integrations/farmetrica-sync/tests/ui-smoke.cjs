@@ -106,7 +106,7 @@ assert.match(backendCode,/IPAddress\.IsLoopback\(ip\)/);
 assert.match(backendCode,/solo permite el panel en localhost/);
 
 assert.match(backendCode,/credentials\.AdminSalt, credentials\.AdminHash/);
-assert.match(backendCode,/c\.Runs\.Take\(100\)/);
+assert.match(backendCode,/c\.Runs\.Where\(/);
 assert.match(src,/reloadPending/);
 assert.match(src,/AbortSignal\.timeout/);
 assert.match(src,/state\.loginPending/);

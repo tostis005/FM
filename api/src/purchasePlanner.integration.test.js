@@ -65,8 +65,8 @@ test("PostgreSQL: concentración y recurrencia se distinguen por fechas de venta
    SELECT 'ABA','farmatic','PATRON-A-'||i,current_date-interval '70 days'
      +(i-1)*interval '1 day',true FROM generate_series(1,4) i
    UNION ALL
-   SELECT 'ABA','farmatic','PATRON-B-'||i,current_date-interval '132 days'
-     +(i-1)*interval '11 days',true FROM generate_series(1,12) i`);
+   SELECT 'ABA','farmatic','PATRON-B-'||i,current_date-interval '330 days'
+     +(i-1)*interval '29 days',true FROM generate_series(1,12) i`);
   await db.query(`INSERT INTO ampedia.fm_ventas_lineas
    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
    SELECT 'ABA','farmatic','PATRON-A-'||i,'1','990001',40,40 FROM generate_series(1,4) i
@@ -97,7 +97,8 @@ test("PostgreSQL: concentración y recurrencia se distinguen por fechas de venta
   assert.equal(concentrated.units12,160);
   const recurring=await getArticle("990002");
   assert.equal(recurring.patron,"recurrente");
-  assert.ok(recurring.saleSpanDays>=120);
+  assert.ok(recurring.saleSpanDays>=300);
+  assert.ok(recurring.activeQuarters>=3);
   assert.ok(recurring.suggested>0);
   assert.equal(recurring.units12,24);
  }finally{

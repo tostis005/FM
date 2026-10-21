@@ -33,6 +33,7 @@ jobs:
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
+          node --test api/src/pharmacyState.test.js
           node --check api/src/promocionesTenant.js
           node --test api/src/promocionesTenant.test.js
           node --test api/src/promocionesReplace.test.js

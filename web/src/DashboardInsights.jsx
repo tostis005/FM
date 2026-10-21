@@ -9,6 +9,7 @@ const HOURS=[{from:0,to:9,label:"00–09"},
  {from:21,to:24,label:"21–24"}];
 const CHANNELS={cooperativa:"Cooperativa",laboratorio:"Laboratorio",sin_clasificar:"Sin clasificar"};
 const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca",sin_clasificar:"#d4dcda"};
+const EMPTY=[];
 const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v));
 const pct=v=>v==null?"—":percentage(v);
@@ -46,7 +47,8 @@ function Panel({title,subtitle,insight,children,empty="Sin movimientos en este p
 }
 function Heatmap({scope}){
  const insight=useInsight("horarios",scope);
- const {cells,total}=insight.data||{cells:[],total:0};
+ const cells=Array.isArray(insight.data?.cells)?insight.data.cells:EMPTY;
+ const total=Number(insight.data?.total)||0;
  const grid=useMemo(()=>{
   const map=new Map();
   for(const cell of cells){
@@ -83,7 +85,7 @@ function Heatmap({scope}){
 function Sellers({scope}){
  const insight=useInsight("vendedores",scope);
  const [showAll,setShowAll]=useState(false);
- const sellers=insight.data?.sellers||[];
+ const sellers=Array.isArray(insight.data?.sellers)?insight.data.sellers:EMPTY;
  const maximum=Math.max(1,...sellers.map(x=>Math.max(0,x.sales)));
  return <Panel title="Ventas por vendedor" subtitle="Comparación de ventas netas · vendedores de las farmacias seleccionadas" insight={insight}>
   {!sellers.length?<p className="fm-insight-status">No hay vendedores con ventas para la selección.</p>:
@@ -101,8 +103,8 @@ function Purchases({scope,pharmacies}){
  const insight=useInsight("canales-compra",scope);
  const [query,setQuery]=useState("");
  const [choice,setChoice]=useState("all");
- const channels=insight.data?.channels||[];
- const comparisons=insight.data?.comparisons||[];
+ const channels=Array.isArray(insight.data?.channels)?insight.data.channels:EMPTY;
+ const comparisons=Array.isArray(insight.data?.comparisons)?insight.data.comparisons:EMPTY;
  const classified=channels.filter(c=>c.channel!=="sin_clasificar"&&c.value>0);
  const known=classified.reduce((n,c)=>n+c.value,0);
  const unknown=channels.find(c=>c.channel==="sin_clasificar")?.value||0;

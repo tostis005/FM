@@ -108,10 +108,12 @@ try{
  const pageTwo=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="2");
  await page.getByRole("button",{name:"Siguiente"}).click();
- await pageTwo;
+ const pageTwoRes=await pageTwo;
+ const pageTwoData=await pageTwoRes.json();
  await page.getByText("Gel de prueba").first().waitFor();
- await page.getByText("Ventas concentradas").first().waitFor();
- await page.getByText(/3 días de intervalo/).first().waitFor();
+ assert.equal(pageTwoData.groups[0].patron,"concentrada",
+  "La detección de demanda se conserva en API aunque no se muestre la columna");
+ assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0);
  const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="1");
  await page.getByRole("button",{name:"Anterior"}).click();

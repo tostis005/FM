@@ -55,7 +55,8 @@ jobs:
              ('fm_find_recepciones_linea_articulo_idx','fm_recepciones_lineas'),
              ('fm_find_ventas_linea_articulo_idx','fm_ventas_lineas')
             )v(name,tbl)
-            WHERE to_regclass(format('%I.%I',c.esquema_datos,v.tbl)) IS NOT NULL
+            JOIN pg_class base_relation ON base_relation.oid=to_regclass(format('%I.%I',c.esquema_datos,v.tbl))
+            WHERE base_relation.relkind IN ('r','m')
           )
           SELECT count(*) FROM expected e WHERE NOT EXISTS(
            SELECT 1 FROM pg_class i JOIN pg_namespace ns ON ns.oid=i.relnamespace
@@ -101,7 +102,8 @@ jobs:
              ('fm_find_recepciones_linea_articulo_idx','fm_recepciones_lineas'),
              ('fm_find_ventas_linea_articulo_idx','fm_ventas_lineas')
             )v(name,tbl)
-            WHERE to_regclass(format('%I.%I',c.esquema_datos,v.tbl)) IS NOT NULL
+            JOIN pg_class base_relation ON base_relation.oid=to_regclass(format('%I.%I',c.esquema_datos,v.tbl))
+            WHERE base_relation.relkind IN ('r','m')
           )
           SELECT count(*) FROM expected e WHERE NOT EXISTS(
            SELECT 1 FROM pg_class i JOIN pg_namespace ns ON ns.oid=i.relnamespace

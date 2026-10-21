@@ -14,6 +14,7 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {loadHistoricalSummary} from "./historicalSummaries.js";
 import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
+import DashboardInsights from "./DashboardInsights.jsx";
 import "./moduleDemo.css";
 
 // Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
@@ -83,7 +84,6 @@ function metricCards(module,k,analysisMonths=12){
   dashboard:[shared[0],shared[1],
    CARD("Resultado comercial estimado","resultadoComercial","€"),
    CARD("Resultado comercial (%)","resultadoComercialPct","%"),
-   shared[3],CARD("Margen bruto (%)","margenPct","%","rentabilidad"),
    CARD("Unidades vendidas","unidades","n","ventas"),
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Recepciones registradas","recepciones","n","compras"),
@@ -812,6 +812,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      </BarChart>
     </ResponsiveContainer></div>}
    </section>}
+  {isDashboard&&<DashboardInsights clientSlug={clientSlug} period={period}
+   pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}/>}
   {isReports?<section className="card fm-demo-table">
    <div className="section-heading"><h2>Informes por área</h2></div>
    <div className="fm-link-list">{REPORTS.filter(([id])=>canNavigate(id)).map(([id,title,scope])=>
@@ -820,7 +822,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="section-heading"><h2>Consultas de análisis</h2></div>
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
-  </section>:<section className="card fm-demo-table">
+  </section>:isDashboard?null:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{receiptMode?"Recepciones":isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    {isDashboard&&!showDashboardDetail?<div className="fm-dashboard-lazy-detail"><p>El detalle completo de artículos se consulta cuando lo necesitas para que Inicio abra sin esperar el análisis pesado.</p><button type="button" className="btn btn-secondary" onClick={()=>setShowDashboardDetail(true)}>Consultar artículos del período</button></div>:<ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")}

@@ -1,0 +1,46 @@
+.fm-dashboard-insights{display:grid;gap:18px;min-width:0}
+.fm-dashboard-insights-bottom{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.5fr);gap:18px;align-items:start}
+.fm-insight-panel{padding:20px;min-width:0;overflow:hidden}
+.fm-insight-head{margin-bottom:15px}.fm-insight-head h2{margin:0;font:800 16px Manrope,system-ui,sans-serif;color:#203e34}
+.fm-insight-head p,.fm-purchase-heading p{margin:6px 0 0;color:#698379;font-size:12px;line-height:1.5}
+.fm-insight-status{color:#799187;font-size:13px;padding:24px 8px;min-height:95px}
+.fm-insight-foot{color:#698379;font-size:11px;line-height:1.5;margin:13px 0 0}
+.fm-heat-scroll,.fm-purchase-scroll{width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.fm-heat-grid{display:grid;gap:5px;min-width:1140px;align-items:stretch}
+.fm-heat-axis,.fm-heat-day{font-size:11px;font-weight:750;color:#587568;min-width:0;display:flex;align-items:center;justify-content:center;padding:8px 2px}
+.fm-heat-day{justify-content:flex-start}
+.fm-heat-cell{min-height:37px;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:6px 2px;font-size:10px;font-variant-numeric:tabular-nums;font-weight:700;color:#28634e;white-space:nowrap}
+.fm-heat-cell-strong{color:#fff}
+.fm-seller-list{display:grid;gap:13px}.fm-seller-row{display:grid;gap:6px}
+.fm-seller-label{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#49695b}
+.fm-seller-label span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-seller-label strong{color:#173f30;font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.fm-seller-track{height:10px;border-radius:15px;overflow:hidden;background:#eef5f1}
+.fm-seller-track>div{height:100%;background:linear-gradient(90deg,#b5e8d2,#14966b);border-radius:15px}
+.fm-seller-more{margin-top:15px}
+.fm-purchase-overview{display:grid;grid-template-columns:185px minmax(0,1fr);gap:20px;align-items:center}
+.fm-purchase-pie{min-width:0}.fm-purchase-legend{display:grid;gap:10px}
+.fm-purchase-legend-row{display:grid;grid-template-columns:10px minmax(80px,1fr) auto auto;gap:9px;align-items:center;font-size:12px;color:#45685a}
+.fm-channel-dot{display:block;width:10px;height:10px;border-radius:50%}
+.fm-purchase-legend-row strong{font-size:12px;color:#204d38;font-variant-numeric:tabular-nums}
+.fm-purchase-legend-row small{font-size:11px;color:#668878;min-width:44px;text-align:right}
+.fm-insight-divider{border-top:1px solid #e5eee9;margin:18px 0}
+.fm-purchase-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.fm-purchase-heading h3{font-size:13px;margin:0;color:#204435}
+.fm-insight-count{white-space:nowrap;color:#18865f;background:#edf9f2;padding:7px 10px;border-radius:20px;font-size:10px;font-weight:800}
+.fm-purchase-controls{display:flex;gap:9px;margin:15px 0 12px}
+.fm-purchase-controls input,.fm-purchase-controls select{min-width:0;border:1px solid #dceae3;border-radius:9px;padding:9px;background:#fff;color:#38594a;font-size:12px}
+.fm-purchase-controls input{flex:1}.fm-purchase-controls select{max-width:200px}
+.fm-purchase-table{border-collapse:collapse;width:100%;min-width:745px;font-size:11px;text-align:right}
+.fm-purchase-table th{padding:11px 7px;background:#f5faf7;color:#668176;font-size:10px;white-space:nowrap}
+.fm-purchase-table th:first-child,.fm-purchase-table td:first-child{text-align:left}
+.fm-purchase-table td{padding:11px 7px;border-bottom:1px solid #edf3f0;color:#4a675b;font-variant-numeric:tabular-nums}
+.fm-purchase-table td:first-child{min-width:145px;max-width:235px;overflow-wrap:anywhere}
+.fm-purchase-table td strong{color:#234d37}
+.fm-purchase-table td small{display:block;color:#789185;margin-top:4px;font-size:10px}
+.fm-purchase-table .fm-cost-higher{color:#c16d23}.fm-purchase-table .fm-cost-lower{color:#08764f}
+@media(max-width:1150px){.fm-dashboard-insights-bottom{grid-template-columns:1fr}}
+@media(max-width:650px){.fm-insight-panel{padding:14px}.fm-purchase-overview{grid-template-columns:1fr;gap:4px}
+.fm-purchase-pie{width:190px;max-width:100%;justify-self:center}
+.fm-purchase-controls{flex-direction:column}.fm-purchase-controls select{max-width:none}
+.fm-insight-count{display:none}}

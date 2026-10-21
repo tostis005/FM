@@ -312,6 +312,77 @@ jobs:
             to_regclass('farmetrica.op_pedidos') IS NOT NULL AS pedidos,
             to_regclass('farmetrica.op_politicas_reposicion') IS NOT NULL AS politicas,
             to_regclass('farmetrica.nomenclator_presentaciones') IS NOT NULL AS nomenclator;
+          SELECT 'CN_CATALOGO' AS control,farmacia_codigo,
+           count(*) AS referencias,
+           count(*) FILTER(WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL) AS cn_informados,
+           count(*) FILTER(WHERE origen_id ~ '^[0-9]{6}
+          WHERE cliente_slug='ampedia' AND analisis_meses IN (3,12)
+          ORDER BY farmacia_id,analisis_meses LIMIT 20;
+          ROLLBACK;
+          SQL
+      - name: Ejecutar nuevo planificador sobre producción sin desplegarlo
+        run: |
+          set -euo pipefail
+          {
+            printf 'const plannerSource = Buffer.from("'
+            base64 -w0 api/src/purchasePlanner.js
+            printf '","base64").toString("utf8");\n'
+            cat <<'JS'
+          import pg from "pg";
+          const inline='const pharmacyDataCodeSQL=(alias="f")=>\x60(CASE WHEN \x24{alias}.cliente_slug=\x27ampedia\x27 AND \x24{alias}.id=5 AND upper(btrim(\x24{alias}.codigo_origen)) IN (\x27POL\x27,\x27VAL\x27) THEN \x27VAL\x27 ELSE upper(btrim(\x24{alias}.codigo_origen)) END)\x60;';
+          const modified=plannerSource.replace(/^import \{pharmacyDataCodeSQL\} from .*?;\s*/m,inline);
+          const module=await import("data:text/javascript;base64,"+Buffer.from(modified).toString("base64"));
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,
+           connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          const routes={},app={get(path,...handlers){routes[path]=handlers.at(-1)}};
+          module.setupPurchasePlanner(app,pool,{requireTenant:()=>[]});
+          const pharmacies=[{id:1,name:"Abadía"},{id:2,name:"Europa"},
+            {id:3,name:"Buenavista"},{id:4,name:"Estación"},{id:5,name:"Valdemarías"}];
+          const context={role:"superadministrador",modules:{compras:true},
+           client:{slug:"ampedia",schema:"ampedia"},pharmacies};
+          for(const ids of ["1","1,2,3,4,5"]){
+           const start=Date.now();let response=null,failure=null,status=200;
+           const res={status(s){status=s;return this},json(data){response=data;return this}};
+           await routes["/api/analytics/pedidos/propuesta"]({
+             query:{desde:"2026-10-01",hasta:"2026-10-21",farmacias:ids,buscar:""},context
+            },res,e=>{failure=e});
+           const full=(response?.groups||[]);
+           const coverage={
+             cn:full.filter(g=>g.cn).length,
+             generic:full.filter(g=>g.kind==="generico").length,
+             pharmacyPairs:full.filter(g=>g.pharmacies.length>1).length,
+             unstocked:full.filter(g=>g.stock===null).length,
+             manual:full.filter(g=>g.key?.startsWith("ERP:")).length
+           };
+           const {rows:[actual]}=await pool.query(`SELECT sum(unidades)::float8 AS units
+            FROM ampedia.fm_ventas_analitica WHERE fecha >= '2026-10-01'::date
+            AND fecha < '2026-10-22'::date AND farmacia_codigo=ANY($1::text[])
+            AND nullif(btrim(articulo_id),'') IS NOT NULL`,
+            [ids==="1"?["ABA"]:["ABA","EUR","BUE","EST","VAL"]]);
+           console.log("VALIDACION_PRODUCCION",ids,"sourceUnits",actual.units,
+            "shownUnits",full.reduce((n,g)=>n+g.unitsPeriod,0),"coverage",JSON.stringify(coverage));
+           console.log("ENDPOINT_NUEVO",ids,"status",status,"ms",Date.now()-start,
+            "groups",response?.groups?.length??null,"available",response?.available??null,
+            "truncated",response?.truncated??null,
+            "periodUnits",response?.groups?.reduce((n,g)=>n+g.unitsPeriod,0)??null,
+            "stock",response?.groups?.reduce((n,g)=>n+Number(g.stock||0),0)??null,
+            "recommended",response?.groups?.reduce((n,g)=>n+Number(g.suggested||0),0)??null,
+            "first",response?.groups?.[0]?.articleName?.slice(0,45)||"none",
+            "sales",response?.groups?.slice(0,10).reduce((n,g)=>n+g.unitsPeriod,0)??null,
+            "error",failure?.code||failure?.message||response?.error||response?.reason||"none");
+          }
+          await pool.end();
+          JS
+          } | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+) AS origen_parece_cn
+          FROM ampedia.articulos
+          GROUP BY farmacia_codigo ORDER BY farmacia_codigo;
+          SELECT 'CORRESPONDENCIAS' AS control,farmacia_codigo,
+           count(*) AS referencias,
+           count(*) FILTER(WHERE nullif(btrim(codigo_nacional_normalizado),'') IS NOT NULL) AS cn
+          FROM ampedia.fm_producto_correspondencias
+          GROUP BY farmacia_codigo ORDER BY farmacia_codigo;
           SELECT 'CACHE' AS control,farmacia_id,analisis_meses,desde,hasta,
            calculado_en,referencias FROM farmetrica.ventas_analitica_estado
           WHERE cliente_slug='ampedia' AND analisis_meses IN (3,12)

@@ -28,6 +28,7 @@ test("SQL del PUC impide cooperativas, respeta los precios positivos y las farma
   calls.push({text:typeof q==="string"?q:q.text,values:values||q.values});
   if(calls.length===1)return {rows:[{pharmacyId:"1",articleId:"111111",
     supplierCode:"LAB-A",supplierName:"Laboratorio A",puc:2.8,sampleLines:4}]};
+  if(calls.length===2)return {rows:[{pharmacyId:"1",supplierCode:"LAB-A",name:"Laboratorio A"}]};
   return {rows:[{cn:"111111",dcpf:"100",nombre:"EFG",
    laboratorio:"Laboratorio A",laboratorio_codigo:"AAA"}]};
  }};

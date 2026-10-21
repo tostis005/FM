@@ -26,6 +26,18 @@ await page.route("**/api/**",async route=>{
  }
  else if(path==="/api/analytics/catalogos/proveedores")body={items:[
   {code:"P44",name:"Laboratorio Alfa"},{code:"P55",name:"Cooperativa Beta"}]};
+ else if(path==="/api/analytics/pedidos/laboratorios"){
+  body={recommendations:[{groupKey:"CN:123456",recommended:{
+   groupKey:"CN:123456",pharmacyId:"1",articleId:"771",cn:"123456",
+   supplierCode:"P44",supplierName:"Laboratorio Alfa",puc:3.24,sampleLines:4}}],
+   byPharmacy:[{groupKey:"CN:123456",pharmacyId:"1",
+    recommended:{supplierCode:"P44",supplierName:"Laboratorio Alfa",articleId:"771",cn:"123456",puc:3.24},
+    options:[{supplierCode:"P44",supplierName:"Laboratorio Alfa",articleId:"771",cn:"123456",puc:3.24}]},
+    {groupKey:"CN:123456",pharmacyId:"2",
+    recommended:{supplierCode:"P44",supplierName:"Laboratorio Alfa",articleId:"999",cn:"123456",puc:3.52},
+    options:[{supplierCode:"P44",supplierName:"Laboratorio Alfa",articleId:"999",cn:"123456",puc:3.52}]}],
+   presentations:[{cn:"123456",dcpf:"10001",name:"Crema",laboratory:"Laboratorio Alfa"}]};
+ }
  else if(path==="/api/analytics/pedidos/propuesta"){
   const id=url.searchParams.get("buscar")||"";
   const g={key:"CN:123456",cn:"123456",articleName:"Crema de manos",
@@ -84,14 +96,15 @@ try{
  await page.getByText("Crema de manos").first().waitFor();
  await page.getByText("Recurrente").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
- await page.getByText("Código nacional 123456").first().waitFor();
- assert.equal(await page.locator(".fm-planner-pharmacy").count(),2);
- const controls=page.locator(".fm-planner-pharmacy");
- await controls.nth(0).getByRole("button",{name:/Usar recomendado/}).click();
- await controls.nth(1).getByRole("button",{name:/Usar recomendado/}).click();
-
- await controls.nth(0).locator('input[list]').fill("P44");
- await controls.nth(1).locator('input[list]').fill("P44");
+ await page.getByRole("columnheader",{name:"Farmacia"}).first().waitFor();
+ await page.getByText("Laboratorio Alfa").first().waitFor();
+ const detail=page.locator(".fm-planner-details");
+ const rows=detail.locator("tbody tr");
+ assert.equal(await rows.count(),2,"Una fila de detalle por farmacia");
+ await rows.nth(0).getByRole("button",{name:"Usar recomendado"}).click();
+ await rows.nth(1).getByRole("button",{name:"Usar recomendado"}).click();
+ assert.equal(await rows.nth(0).getByRole("combobox",{name:/Laboratorio en/}).inputValue(),"P44|771");
+ assert.equal(await rows.nth(1).getByRole("combobox",{name:/Laboratorio en/}).inputValue(),"P44|999");
  await page.getByRole("button",{name:"Guardar borradores por proveedor"}).click();
  await page.waitForFunction(()=>document.body.textContent.includes("borradores guardados"),null,{timeout:15000});
  assert.equal(posts.length,2,"Una farmacia genera su borrador separado del resto");

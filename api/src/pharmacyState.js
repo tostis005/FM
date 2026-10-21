@@ -140,10 +140,24 @@ export function setupPharmacyState(app,pool,{requireTenant}){
     if(!table)continue;
     sources.push(kind);
     const timestamp=table===header?"recibido_en":"sincronizado_en";
-    tasks.push([kind,runQuery("SELECT upper(btrim(farmacia_codigo)) AS code,"+
+    // La cabecera puede contener millones de tickets. MAX(recibido_en)
+    // por farmacia obliga a recorrerlos; buscar el último registro por código
+    // con un índice (farmacia normalizada, recibido_en DESC) cuesta 1 fila.
+    const sql=table===header?
+     "SELECT c.code, last.recibido_en AS \"lastReceivedAt\","+
+     " last.fecha AS \"lastDocumentAt\""+
+     " FROM unnest($1::text[]) AS c(code)"+
+     " LEFT JOIN LATERAL ("+
+     " SELECT d.recibido_en,d.fecha FROM "+q+".\""+table+"\" d"+
+     " WHERE upper(btrim(d.farmacia_codigo))=c.code"+
+     " ORDER BY d.recibido_en DESC LIMIT 1"+
+     " ) last ON true":
+     // Compatibilidad con sincronizadores antiguos sin cabeceras documentales.
+     "SELECT upper(btrim(farmacia_codigo)) AS code,"+
      " max("+timestamp+") AS \"lastReceivedAt\",max(fecha) AS \"lastDocumentAt\""+
      " FROM "+q+".\""+table+"\" WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])"+
-     " GROUP BY upper(btrim(farmacia_codigo))",[codes])]);
+     " GROUP BY upper(btrim(farmacia_codigo))";
+    tasks.push([kind,runQuery(sql,[codes])]);
    }
    const results=await Promise.allSettled(tasks.map(t=>t[1]));
    const maps={runs:new Map(),monitors:new Map(),ventas:new Map(),compras:new Map()},warnings=[];

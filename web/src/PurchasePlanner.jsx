@@ -101,13 +101,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  // Una necesidad DCPF no es una referencia facturable: antes de guardar
  // o exportar se debe escoger el CN real que suministrará el proveedor.
  const chosenArticle=(p,edit)=>String(edit.articleId||
-  (p.options?.length===1?p.options[0].articleId:""));
+  (Array.isArray(p.options)?(p.options.length===1?p.options[0].articleId:""):p.articleId||""));
  const allLines=useMemo(()=>{
   const lines=[];
   for(const g of groups)for(const p of g.pharmacies){
    const edit=overrides[key(p)]||{},units=Number(edit.units??p.suggested??0);
    const supplier=String(edit.supplier||"").trim();
-   const articleId=chosenArticle(p,edit),article=p.options?.find(x=>String(x.articleId)===articleId);
+   const articleId=chosenArticle(p,edit),article=p.options?.find(x=>String(x.articleId)===articleId)||(!p.options?p:null);
    if(units>0&&Number.isSafeInteger(units)&&supplier&&article){
     const provider=(suppliers[String(p.pharmacyId)]||[]).find(s=>String(s.code).trim().toUpperCase()===supplier.toUpperCase());
     const supplierName=String(provider?.name||"").trim();

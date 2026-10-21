@@ -4,6 +4,8 @@ namespace FarmetricaSync.Core;
 
 public sealed class AppConfig
 {
+    // Identificador persistente de esta instalación; no se comparte entre equipos.
+    public Guid MonitorInstanceId { get; set; } = Guid.Empty;
     public string? AdminSalt { get; set; }
     public string? AdminHash { get; set; }
     public Destination Destination { get; set; } = new();

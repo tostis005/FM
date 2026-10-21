@@ -1,8 +1,57 @@
-# Farmétrica Sync · versión técnica 0.15
+# Farmétrica Sync · versión técnica 0.17
 
 Sincronizador configurable para el servidor Windows del cliente con Farmatic / SQL Server y conexiones a otras farmacias mediante Linked Servers. Procesa los cambios de ventas, compras, artículos (con existencias integradas), proveedores y entidades adicionales hacia **PostgreSQL**. Panel web local y servicio en segundo plano.
 
 > **Estado de entrega:** código y compilación Windows automatizada mediante GitHub Actions. **No se ha validado con el SQL Server Farmatic ni con el PostgreSQL de Contabo reales**. Comprobar primero en preproducción; no incluye credenciales.
+
+
+## Supervisión central desde Farmétrica (nuevo en 0.17)
+
+El servicio Windows emite un **pulso cada 60 segundos** directamente a PostgreSQL, aunque
+no haya ventas, aunque Farmatic esté sin actividad o aunque una VPN remota esté caída.
+Publica por cada trabajo su farmacia, entidad, activación, intervalo en minutos,
+hora diaria (si procede), zona horaria, siguiente ejecución prevista,
+último intento, último fin, último éxito, estado/error y los últimos contadores.
+También transmite un historial idempotente de las últimas 250 ejecuciones confirmadas.
+
+En el esquema de destino PostgreSQL se crean automáticamente dos tablas:
+
+- fm_sync_monitor: estado actual, frecuencia, planificación y latido independiente del ERP.
+- fm_sync_ejecuciones: historial de ejecuciones y errores.
+
+No se copian contraseñas, cadenas de conexión ni SQL de los trabajos.
+El usuario PostgreSQL debe disponer de permiso para crear tablas/índices en
+el esquema de destino la primera vez. Los fallos de publicación del estado no
+interrumpen las importaciones; se vuelven a enviar los últimos resultados en
+el próximo pulso. La aplicación web requiere desplegar la API de la misma
+funcionalidad para leerlos.
+
+**Semáforos:** rojo al detectar un error del último intento, un retraso superior
+a un intervalo respecto del siguiente horario, o un latido ausente durante más
+de dos intervalos. Ámbar si vence el horario o falta confirmación. Verde con
+último éxito y servicio comunicando. Gris para trabajos desactivados o sin
+supervisión. La falta de nuevas ventas/recepciones no provoca un error.
+
+**Reintentos tras VPN caída:** un trabajo de 60 minutos vuelve a ser elegible 60
+minutos después de la **finalización** del intento fallido, no cada cinco minutos.
+Si es diario a una hora concreta, espera la misma hora del día siguiente.
+RetryMinutes permanece únicamente por compatibilidad de configuración antigua;
+ya no gobierna la planificación.
+
+### Actualizar un Windows que ya tiene Farmétrica Sync
+
+1. Haz una copia segura de la carpeta ProgramData/FarmetricaSync y del ZIP anterior;
+   este directorio contiene secretos cifrados y debe permanecer privado.
+2. Extrae **todo** el ZIP en una carpeta temporal (incluye windows y scripts).
+3. Ejecuta PowerShell como administrador y, dentro de la carpeta extraída,
+   lanza el instalador scripts/instalar-servicio.ps1. El instalador detiene el servicio,
+   sustituye los binarios **sin borrar su configuración** y lo vuelve a iniciar.
+4. Comprueba que Windows muestra el servicio FarmetricaSync como **En ejecución**.
+   Abre http://127.0.0.1:5080 desde el propio servidor.
+5. Con acceso al panel SaaS ya actualizado, comprueba que aparecen los
+   trabajos por farmacia en Estado. Si no se publican, revisa los logs del
+   servicio y los permisos PostgreSQL. CI no valida la
+   conectividad con VPN ni bases de datos de producción.
 
 ## Orígenes Farmatic de tickets y compras completas (nuevo)
 

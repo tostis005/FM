@@ -51,3 +51,8 @@
 
 .fm-planner-use-suggestion{align-self:end;border:1px solid #a6d8b9;background:#edf8f0;color:#176944;border-radius:7px;cursor:pointer;padding:8px;font-size:11px;font-weight:600}
 .fm-planner-use-suggestion:disabled{opacity:.55;cursor:not-allowed}
+
+.fm-planner-pattern{display:inline-block;padding:4px 8px;border-radius:6px;background:#edf3f0;color:#325647;font-size:11px;font-weight:650;white-space:nowrap}
+.fm-planner-pattern-puntual{background:#f4f3ef;color:#776b4f}
+.fm-planner-pattern-estacional{background:#edf3f8;color:#465f78}
+.fm-planner-pattern-intermitente{background:#f5f1e9;color:#7a6237}

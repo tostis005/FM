@@ -119,7 +119,7 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
     {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
     <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
-    <p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se presentan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>
+    <p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se muestran en negativo; en el Excel de laboratorio se exportan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>
     <HorizontalTableScroll className="table-scroll" label="líneas de venta" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>
         <tr>{TICKET_COLUMNS.map(([key,label,,sortable=true])=><th key={key}

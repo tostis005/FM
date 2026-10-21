@@ -21,15 +21,7 @@ ventas AS MATERIALIZED (
      AND v.fecha < current_date+interval '1 day') AS ultima_venta,
   count(*) FILTER (
    WHERE v.unidades>0 AND v.fecha >= current_date-interval '365 days'
-     AND v.fecha < current_date+interval '1 day')::int AS lineas_venta,
-  -- Más robusto que primera/última fecha: registra en qué tramos de ~90 días
-  -- hubo actividad. Evita tomar dos campañas aisladas como venta sostenida.
-  coalesce(bit_or(
-   1::int << least(3,greatest(0,
-    ((current_date-v.fecha::date)/91)::int))
-  ) FILTER (WHERE v.unidades>0
-   AND v.fecha >= current_date-interval '365 days'
-   AND v.fecha < current_date+interval '1 day'),0)::int AS tramos_actividad
+     AND v.fecha < current_date+interval '1 day')::int AS lineas_venta
  FROM __SCHEMA__.fm_ventas_analitica v
  JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
   AND upper(btrim(v.farmacia_codigo))=__FARMACIA_CODE__
@@ -45,7 +37,7 @@ catalogo AS MATERIALIZED (
    CASE WHEN v.articulo ~ '^[0-9]{6,7}$' THEN v.articulo END) AS cn,
   a.stock_actual::float8 AS stock,a.sincronizado_en AS fecha_stock,
   v.periodo,v.v30,v.v90,v.v365,
-  v.primera_venta,v.ultima_venta,v.lineas_venta,v.tramos_actividad
+  v.primera_venta,v.ultima_venta,v.lineas_venta
  FROM ventas v LEFT JOIN LATERAL (
   SELECT nombre,codigo_nacional,stock_actual,sincronizado_en
   FROM __SCHEMA__.articulos a
@@ -60,7 +52,7 @@ catalogo_sin_ventas AS MATERIALIZED (
   a.stock_actual::float8 AS stock,a.sincronizado_en AS fecha_stock,
   0::float8 AS periodo,0::float8 AS v30,0::float8 AS v90,0::float8 AS v365,
   NULL::date AS primera_venta,NULL::date AS ultima_venta,
-  0::int AS lineas_venta,0::int AS tramos_actividad
+  0::int AS lineas_venta
  FROM __SCHEMA__.articulos a JOIN farmetrica.farmacias f
   ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
   AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
@@ -106,7 +98,6 @@ por_farmacia AS MATERIALIZED (
   min(c.primera_venta) AS primera_venta,
   max(c.ultima_venta) AS ultima_venta,
   sum(c.lineas_venta)::int AS lineas_venta,
-  bit_or(c.tramos_actividad)::int AS tramos_actividad,
   CASE WHEN count(c.stock)=count(*) THEN sum(c.stock)::float8 ELSE NULL END AS stock,
   min(c.fecha_stock) AS fecha_stock,
   sum(coalesce(p.unidades,0))::float8 AS encargadas,
@@ -129,8 +120,7 @@ necesidades AS MATERIALIZED (
    WHEN pf.v365>=20 AND pf.ultima_venta-pf.primera_venta<=6
     AND pf.ultima_venta<current_date-interval '14 days' THEN 'concentrada'
    WHEN pf.v30>0 AND pf.ultima_venta-pf.primera_venta>=120
-    AND pf.lineas_venta>=12 AND
-    bit_count(pf.tramos_actividad::bit(4))>=3 THEN 'recurrente'
+    AND pf.lineas_venta>=12 THEN 'recurrente'
    WHEN pf.v30=0 AND pf.v90>0
     AND pf.ultima_venta-pf.primera_venta>=21
     AND pf.lineas_venta>=10 THEN 'posible_estacional'
@@ -160,7 +150,6 @@ grupos AS MATERIALIZED (
   max(n.ultima_venta) AS "lastSale",
   (max(n.ultima_venta)-min(n.primera_venta)+1)::int AS "saleSpanDays",
   sum(n.lineas_venta)::int AS "saleLines",
-  bit_count(bit_or(n.tramos_actividad)::bit(4))::int AS "activeQuarters",
   CASE WHEN count(n.stock)=count(*) THEN sum(n.stock)::float8 ELSE NULL END AS stock,
   CASE WHEN count(n.sugeridas)=count(*) THEN sum(n.sugeridas)::float8 ELSE NULL END AS suggested,
   CASE
@@ -170,18 +159,14 @@ grupos AS MATERIALIZED (
    WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6
     AND max(n.ultima_venta)<current_date-interval '14 days'
     THEN 'concentrada'
-   WHEN sum(n.v30)>0 AND max(n.ultima_venta)-min(n.primera_venta)>=120
-    AND sum(n.lineas_venta)>=12
-    AND bit_count(bit_or(n.tramos_actividad)::bit(4))>=3 THEN 'recurrente'
+   WHEN bool_or(n.patron='recurrente') THEN 'recurrente'
    WHEN sum(n.v30)=0 AND bool_or(n.patron='posible_estacional') THEN 'posible_estacional'
    WHEN sum(n.v30)=0 THEN 'sin_actividad'
    ELSE 'intermitente'
   END AS patron,
   CASE
    WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6 THEN 1
-   WHEN sum(n.v30)>0 AND max(n.ultima_venta)-min(n.primera_venta)>=120
-    AND sum(n.lineas_venta)>=12
-    AND bit_count(bit_or(n.tramos_actividad)::bit(4))>=3 THEN 4
+   WHEN bool_or(n.patron='recurrente') THEN 4
    WHEN sum(n.v30)>0 AND bool_or(n.patron='intermitente') THEN 3
    WHEN bool_or(n.patron='pico_reciente') THEN 2
    WHEN bool_or(n.patron='posible_estacional') THEN 1
@@ -242,7 +227,6 @@ SELECT (SELECT to_jsonb(t) FROM totales t) AS summary,
     'firstSale',n.primera_venta,'lastSale',n.ultima_venta,
     'saleSpanDays',(n.ultima_venta-n.primera_venta+1),
     'saleLines',n.lineas_venta,
-    'activeQuarters',bit_count(n.tramos_actividad::bit(4)),
     'policyDefault',n.politica_default,
     'confidence',CASE WHEN n.stock IS NULL THEN 'sin_stock'
       WHEN n.fecha_stock IS NULL THEN 'fecha_desconocida'

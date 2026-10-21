@@ -85,7 +85,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
        setOverrides(newAssignments);
       }
     }})
-    .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
+    .catch(e=>{if(!ac.signal.aborted){setResult(null);setError(e.name==="TimeoutError"?"La consulta ha superado el tiempo permitido.":"Error al cargar el preparador: "+e.message)}})
     .finally(()=>{if(!ac.signal.aborted)setBusy(false)});
   },300);
   return()=>{clearTimeout(delay);ac.abort()};
@@ -279,6 +279,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
   {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}
   {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se puede guardar ni exportar una consulta incompleta.</p>}
+  {result?.available===true&&<>
   <div className="fm-planner-summary" aria-label="Resumen del grupo">
    <div><span>Vendidas período</span><strong>{whole(total("unitsPeriod"))}</strong></div>
    <div><span>Ventas 3 meses</span><strong>{whole(total("units3"))}</strong></div>
@@ -307,5 +308,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     onClick={saveDrafts}><Save size={16}/>{busy?"Guardando…":"Guardar borradores por proveedor"}</button>
   </div>
   <p className="fm-op-fine">{result?.note||"La propuesta necesita ventas y stock sincronizados."} No se envía automáticamente ningún pedido. Los borradores se revisan y aprueban en la sección inferior.</p>
+  </>}
+  {!result&&busy&&<p role="status" className="fm-op-message">Cargando ventas, stock y recomendaciones del grupo…</p>}
+  {!result&&!busy&&!error&&<p role="status" className="fm-op-message">No hay resultados disponibles todavía.</p>}
  </section>;
 }

@@ -234,6 +234,7 @@ function App(){
  const [editingPharmacy,setEditingPharmacy]=useState(null);
  const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState("cargando");
+ const [pharmacyLastUpdated,setPharmacyLastUpdated]=useState(null);
   const [sessionUser,setSessionUser]=useState(null);
   const [passwordModal,setPasswordModal]=useState(false);
   const [tenantContext,setTenantContext]=useState(null);
@@ -792,7 +793,7 @@ function App(){
       if (!(await hasPharmacySession())) {setPharmacyApiStatus("sin_sesion");return;}
       const records=await loadPharmacies();
       setData(prev=>({...prev,pharmacies:records}));
-      setPharmacyApiStatus("connected");setPharmacyApiError("");
+      setPharmacyApiStatus("connected");setPharmacyApiError("");setPharmacyLastUpdated(new Date());
     } catch(err) {setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
   }
   async function connectPharmacies(){
@@ -1027,6 +1028,7 @@ function App(){
 </>}
 {page==="seguimiento-global"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Seguimiento" updatedAt={salesLastUpdated}
+  period={from&&to&&from<=to?{valid:true,from,to}:null}
   onRefresh={()=>void retryPromotions()} refreshing={promotionStoreStatus==="checking"||salesStatus==="cargando"}
   actions={<div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/>
@@ -1091,7 +1093,7 @@ function App(){
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
 </>}
 {page==="farmacias"&&<>
- <ReportPageHeader title="Maestro de farmacias"
+ <ReportPageHeader title="Maestro de farmacias" updatedAt={pharmacyLastUpdated}
    onRefresh={()=>void refreshPharmacies()} refreshing={pharmacyApiStatus==="cargando"}
    actions={<div className="pharmacy-header-actions">
      {pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&

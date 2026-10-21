@@ -84,13 +84,13 @@ por_farmacia AS MATERIALIZED (
 ),
 necesidades AS MATERIALIZED (
  SELECT pf.*,
-  CASE WHEN pf.v30=0 AND pf.meses_venta<=2 THEN 'puntual'
+  CASE WHEN pf.v30=0 AND pf.v90>0 AND pf.v365<=pf.v90 THEN 'puntual'
    WHEN pf.v30=0 THEN 'estacional'
    WHEN pf.meses_venta>=3 THEN 'estable'
    ELSE 'intermitente' END AS patron,
   greatest(pf.v30/30.0,pf.v90/90.0,pf.v365/365.0) AS media_dia,
   CASE WHEN pf.stock IS NULL OR pf.stock<0 THEN NULL
-   WHEN pf.v30=0 AND pf.meses_venta<=2 THEN 0::float8
+   WHEN pf.v30=0 AND pf.v90>0 AND pf.v365<=pf.v90 THEN 0::float8
    WHEN pf.v30=0 THEN greatest(0,ceil(
      (pf.v90/90.0)*greatest(pf.cobertura_dias,pf.intervalo_dias)
      -pf.stock-pf.encargadas))::float8

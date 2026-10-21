@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS farmetrica.credenciales_locales (
 );
 ALTER TABLE farmetrica.usuario_clientes
  ADD COLUMN IF NOT EXISTS metodo_acceso text NOT NULL DEFAULT 'google';
+-- Gmail personal requiere invitación explícita por cliente.
+ALTER TABLE farmetrica.usuario_clientes
+ ADD COLUMN IF NOT EXISTS google_invitado boolean NOT NULL DEFAULT false;
 DO $$
 BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_constraint

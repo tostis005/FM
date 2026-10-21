@@ -10,6 +10,7 @@ import "./purchasePlanner.css";
 
 const today=()=>resolveSalesPeriod("today").from;
 const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
+const euro=n=>n==null?"Sin PUC":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:3}).format(Number(n));
 const exportSafe=x=>{const str=String(x??"");return '"'+(/^[\s]*[=+@-]/.test(str)?"'"+str:str).replaceAll('"','""')+'"'};
 const key=p=>String(p.pharmacyId)+"|"+String(p.groupKey||p.articleId);
 export const STAGING_PREFIX="fm_preparador_enlace:";
@@ -47,7 +48,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  const [notice,setNotice]=useState("");
  const [overrides,setOverrides]=useState({});
  const [editedRows,setEditedRows]=useState({});
- const [suppliers,setSuppliers]=useState({});
+ const [labData,setLabData]=useState(null);
+ const [labLoading,setLabLoading]=useState(false),[labError,setLabError]=useState("");
  const [open,setOpen]=useState({});
  const [reload,setReload]=useState(0);
  const [pendingLink,setPendingLink]=useState(null);
@@ -104,18 +106,37 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   return()=>{clearTimeout(delay);ac.abort()};
  },[clientSlug,codes,from,to,search,page,pageSize,sort.key,sort.direction,JSON.stringify(columnFilters),reload,pendingLink]);
  useEffect(()=>{
+  const groups=result?.available===true?result.groups||[]:[];
+  if(!groups.length){setLabData(null);setLabError("");setLabLoading(false);return}
   const ac=new AbortController();
-  Promise.allSettled(pharmacies.map(async p=>{
-   const id=String(p.id);
-   const params=new URLSearchParams({farmacia:id});
-   const res=await fetch("/api/analytics/catalogos/proveedores?"+params,{
-    credentials:"same-origin",headers:{"X-Farmetrica-Cliente":clientSlug},signal:ac.signal});
-   if(!res.ok)return {id,items:[]};
-   const json=await res.json();return {id,items:json.items||[]};
-  })).then(data=>{if(!ac.signal.aborted)setSuppliers(Object.fromEntries(data.filter(x=>x.status==="fulfilled").map(x=>[x.value.id,x.value.items])))});
+  setLabData(null);setLabError("");setLabLoading(true);
+  const items=groups.flatMap(g=>g.pharmacies.flatMap(p=>
+   (p.options||[]).map(o=>({groupKey:g.key,pharmacyId:p.pharmacyId,
+    articleId:String(o.articleId),cn:String(o.cn||o.articleId)}))));
+  const dcpfs=[...new Set(groups.filter(g=>g.kind==="generico").map(g=>String(g.dcpf)))];
+  fetch("/api/analytics/pedidos/laboratorios",{
+   method:"POST",credentials:"same-origin",signal:ac.signal,
+   headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug},
+   body:JSON.stringify({items,dcpfs,pharmacies:pharmacyIds.map(Number),to})
+  }).then(async r=>{const data=await r.json().catch(()=>({}));
+   if(!r.ok)throw Error(data.error||"No se pudieron consultar los PUC");return data
+  }).then(data=>{if(!ac.signal.aborted)setLabData(data)})
+   .catch(e=>{if(!ac.signal.aborted)setLabError(e.message)})
+   .finally(()=>{if(!ac.signal.aborted)setLabLoading(false)});
   return()=>ac.abort();
- },[clientSlug,codes]);
+ },[result,clientSlug,to,pharmacyIds.join(",")]);
  const groups=result?.groups||[];
+ const laboratoryByGroup=new Map((labData?.recommendations||[])
+  .map(r=>[String(r.groupKey),r.recommended]));
+ const laboratoryByPharmacy=new Map((labData?.byPharmacy||[])
+  .map(r=>[String(r.groupKey)+"|"+String(r.pharmacyId),r]));
+ const labOptionsFor=p=>laboratoryByPharmacy.get(String(p.groupKey)+"|"+String(p.pharmacyId))
+  ?.options||[];
+ const recommendedFor=p=>laboratoryByPharmacy.get(String(p.groupKey)+"|"+String(p.pharmacyId))
+  ?.recommended||null;
+ const offerFor=(p,edit)=>labOptionsFor(p).find(o=>
+  String(o.supplierCode)===String(edit.supplier)&&
+  String(o.articleId)===String(chosenArticle(p,edit)))||null;
  // Una necesidad DCPF no es una referencia facturable: antes de guardar
  // o exportar se debe escoger el CN real que suministrará el proveedor.
  const chosenArticle=(p,edit)=>String(edit.articleId||
@@ -127,8 +148,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    const supplier=String(edit.supplier||"").trim();
    const articleId=chosenArticle(p,edit),article=p.options?.find(x=>String(x.articleId)===articleId)||(!p.options?p:null);
    if(units>0&&Number.isSafeInteger(units)&&supplier&&article){
-    const provider=(suppliers[String(p.pharmacyId)]||[]).find(s=>String(s.code).trim().toUpperCase()===supplier.toUpperCase());
-    const supplierName=String(provider?.name||"").trim();
+    const provider=offerFor(p,edit);
+    if(!provider)continue;
+    const supplierName=String(provider.supplierName||"").trim();
     lines.push({...p,articleId,cn:article.cn||p.cn,articleName:article.articleName||p.articleName,
      pharmacyName:pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId,
      units,supplier,supplierName,
@@ -136,10 +158,10 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    }
   }
   return lines;
- },[editedRows,overrides,pharmacies,suppliers]);
+ },[editedRows,overrides,pharmacies,labData]);
  const edited=Object.values(editedRows);
  const missingSupplier=edited.filter(p=>Number(overrides[key(p)]?.units??0)>0&&
-  !String(overrides[key(p)]?.supplier||"").trim()).length;
+  !offerFor(p,overrides[key(p)]||{})).length;
  const missingArticle=edited.filter(p=>Number(overrides[key(p)]?.units??0)>0&&
   !chosenArticle(p,overrides[key(p)]||{})).length;
  const invalidQuantities=edited.filter(p=>{
@@ -159,10 +181,16 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   return acc;
  },{}));
  const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
- const setValue=(p,field,value)=>{
+ const setValues=(p,patch)=>{
   setEditedRows(previous=>({...previous,[key(p)]:p}));
   setOverrides(previous=>({...previous,
-   [key(p)]:{units:0,supplier:"",...previous[key(p)],[field]:value}}));
+   [key(p)]:{units:0,supplier:"",...previous[key(p)],...patch}}));
+ };
+ const setValue=(p,field,value)=>setValues(p,{[field]:value});
+ const applyRecommendation=p=>{
+  const selected=recommendedFor(p);
+  setValues(p,{units:p.suggested??0,
+   ...(selected?{supplier:selected.supplierCode,articleId:selected.articleId}:{})});
  };
  function exportGrouped(){
   if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de exportar.");

@@ -44,3 +44,14 @@
 .fm-purchase-pie{width:190px;max-width:100%;justify-self:center}
 .fm-purchase-controls{flex-direction:column}.fm-purchase-controls select{max-width:none}
 .fm-insight-count{display:none}}
+
+/* Comparador completo: cabeceras ordenables, filtros y paginación compartida. */
+.fm-puc-comparator-table{min-width:0;margin-top:12px}
+.fm-puc-comparator-table .table-scroll{width:100%;max-width:100%}
+.fm-puc-comparator-table .fm-puc-smart-table{min-width:980px;font-size:11px}
+.fm-puc-comparator-table .fm-puc-smart-table th{white-space:nowrap}
+.fm-puc-comparator-table .fm-puc-smart-table td{font-variant-numeric:tabular-nums}
+.fm-puc-comparator-table .fm-puc-smart-table td small{display:block;font-size:10px;color:#789185;margin-top:4px}
+.fm-puc-comparator-table .fm-cost-higher{color:#c16d23}
+.fm-puc-comparator-table .fm-cost-lower{color:#08764f}
+.fm-puc-comparator-table .list-pagination{margin-top:8px}

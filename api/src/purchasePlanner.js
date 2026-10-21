@@ -126,7 +126,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " JOIN farmetrica.farmacias f ON f.id=s.fid AND f.cliente_slug=$4",
     " LEFT JOIN LATERAL (SELECT a.nombre AS name,"+code+" AS cn,",
     " a.stock_actual AS stock,"+stamp+" AS stamp FROM "+q+".articulos a",
-    " WHERE a.farmacia_codigo=s.source_code,
+    " WHERE a.farmacia_codigo=s.source_code",
     " AND a.origen_id=s.article",
     " "+latest+" LIMIT 1) a ON true ORDER BY s.fid,s.article"
    ].join(" ");

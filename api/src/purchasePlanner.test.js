@@ -40,6 +40,7 @@ test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados
    articleName:"Crema",cn:"123456",stock:4,stockAt:null,unitsPeriod:18,units3:90,units12:250}]};
   if(text.includes("SELECT DISTINCT ON (f.id,a.origen_id)"))return {rows:[]};
   if(text.includes("op_politicas_reposicion"))return {rows:[{farmacia_id:1,intervalo_pedidos:7,plazo_entrega:2,stock_seguridad:1}]};
+  if(text.includes("FROM farmetrica.nomenclator_presentaciones"))return {rows:[]};
   if(text.includes("op_pedidos"))return {rows:[{farmacia_id:1,lineas:[
    {articulo:"77",asignaciones:[{unidades:2,proveedor:"P5"}]}]}]};
   throw Error("Unexpected SQL: "+text.slice(0,100));
@@ -65,4 +66,25 @@ test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados
  assert.match(seen.find(x=>x.text.includes("WITH sold AS MATERIALIZED")).text,/a2.nombre ILIKE/);
  assert.equal((await call({farmacias:"3"})).code,400);
  assert.equal((await call({}, {...req.context,role:"farmacia",modules:{compras:false}})).code,403);
+});
+
+test("genéricos EFG agrupan CN diferentes por DCPF sin sumar dobles previsiones",()=>{
+ const base={pharmacyId:"1",unitsPeriod:9,units3:90,units12:365,
+  interval:7,lead:2,safety:0,ordered:0,policyDefault:false,confidence:"calculable",stockAt:null};
+ const groups=groupPurchaseRows([
+  {...base,articleId:"A1",cn:"111111",articleName:"Genérico A",genericDcpf:"7788",genericName:"Principio 20 mg",stock:4,suggested:5},
+  {...base,articleId:"B2",cn:"222222",articleName:"Genérico B",genericDcpf:"7788",genericName:"Principio 20 mg",stock:6,suggested:3},
+  {...base,articleId:"C3",cn:"333333",articleName:"Marca",stock:2,suggested:7}
+ ]);
+ assert.equal(groups.length,2);
+ const generic=groups.find(g=>g.dcpf==="7788");
+ assert.equal(generic.kind,"generico");
+ assert.equal(generic.cn,null);
+ assert.equal(generic.pharmacies.length,1);
+ assert.equal(generic.pharmacies[0].options.length,2);
+ assert.equal(generic.pharmacies[0].stock,10);
+ assert.equal(generic.pharmacies[0].units3,180);
+ assert.equal(generic.pharmacies[0].suggested,8);
+ assert.notEqual(generic.pharmacies[0].suggested,5+3+5);
+ assert.equal(groups.find(g=>g.cn==="333333").kind,"articulo");
 });

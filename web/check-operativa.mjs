@@ -35,6 +35,11 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Preparador de pedidos",exact:true}).waitFor({timeout:15000});
+ assert.equal(await page.getByRole("combobox",{name:"Farmacia",exact:true}).count(),0,
+  "El preparador global no ofrece selector de una única farmacia");
+ // La creación manual de planes se mantiene en la sección de pedidos preparados.
+ await page.goto(BASE+"/compras-pedidos",{waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Pedidos preparados",exact:true}).waitFor({timeout:15000});
  await page.getByRole("button",{name:/Nuevo borrador/}).click();
  await page.getByLabel("Código de artículo").fill("CN0001");
  await page.getByLabel("Descripción",{exact:true}).last().fill("Producto de prueba");
@@ -46,7 +51,7 @@ try{
  assert.equal(await page.getByRole("button",{name:"Ver ejemplo de demo"}).count(),0);
  assert.equal(await page.getByText("Pantalla de demostración").count(),0,
   "La pantalla de pedidos no debe ofrecer cifras simuladas");
- await page.getByRole("heading",{name:"Preparador de pedidos",exact:true}).waitFor();
+ await page.getByRole("heading",{name:"Pedidos preparados",exact:true}).waitFor();
  // Una pantalla operativa individual no debe pisar el filtro general de varias farmacias.
  await page.evaluate(()=>sessionStorage.setItem("fm_shared_report_filters_v1:ampedia",
   JSON.stringify({period:"this_month",pharmacyIds:["1","2"]})));

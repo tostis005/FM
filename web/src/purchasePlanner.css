@@ -30,3 +30,24 @@
 .fm-planner-supplier-overview>div{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:6px 0;border-top:1px solid #edf4ee;font-size:12px;color:#3e624b}
 .fm-planner-supplier-overview small{color:#71877a}
 .fm-planner-supplier-overview b{margin-left:auto;color:#148258}
+
+/* Resumen consolidado: el foco es el grupo, no un selector de farmacia. */
+.fm-planner-scope{font-size:12px;color:#587766;margin:0;line-height:1.5}
+.fm-planner-period{display:flex;flex-wrap:wrap;gap:7px}
+.fm-planner-period-option{padding:8px 13px;border:1px solid #cbded2;border-radius:8px;background:#fff;color:#315d45;font-size:12px;font-weight:600;cursor:pointer}
+.fm-planner-period-option.active{background:#e2f2e8;border-color:#2b9972;color:#176944}
+.fm-planner-summary{display:grid;grid-template-columns:repeat(5,minmax(135px,1fr));gap:10px;background:transparent;padding:0}
+.fm-planner-summary>div{display:flex;flex-direction:column;gap:6px;background:#f5f9f7;border:1px solid #e5f0e9;border-radius:10px;padding:12px}
+.fm-planner-summary>div>strong{font-size:22px;font-variant-numeric:tabular-nums}
+.fm-planner-summary-note{font-size:12px;color:#587766}
+.fm-planner-details{width:min(680px,80vw)}
+.fm-planner-detail-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:7px 0}
+.fm-planner-detail-metrics span{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px}
+.fm-planner-variants{display:grid;gap:4px;margin:6px 0;padding:7px 9px;background:#eff7f2;border-radius:7px}
+.fm-planner-edit select{max-width:220px;width:100%;font-size:12px;padding:8px 9px;background:#fff;border:1px solid #cadcd0;border-radius:8px}
+.fm-planner-article{min-width:240px}
+@media(max-width:850px){.fm-planner-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:420px){.fm-planner-summary{grid-template-columns:1fr}.fm-planner-detail-metrics{grid-template-columns:1fr}}
+
+.fm-planner-use-suggestion{align-self:end;border:1px solid #a6d8b9;background:#edf8f0;color:#176944;border-radius:7px;cursor:pointer;padding:8px;font-size:11px;font-weight:600}
+.fm-planner-use-suggestion:disabled{opacity:.55;cursor:not-allowed}

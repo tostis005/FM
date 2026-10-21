@@ -23,21 +23,26 @@ test("PostgreSQL: preparador consulta ventas documentales y stock real, filtrand
   assert.equal(code,200);
   assert.equal(body.available,true);
   assert.ok(body.groups.length>0,"debe poder buscar un CN real, aunque el ERP tenga otro ID");
-  const line=body.groups.find(g=>g.cn==="654322");
-  assert.ok(line,"se agrupa por código nacional comprobado");
+  // Si el CN corresponde a un EFG, su fila es el conjunto DCPF;
+  // si no, sigue agrupado como CN. Siempre conserva ERP y stock exactos.
+  const line=body.groups.find(g=>g.pharmacies.some(p=>
+   p.options.some(o=>o.cn==="654322"&&o.articleId==="ART-02")));
+  assert.ok(line,"el CN buscado debe aparecer en el grupo real");
   assert.equal(line.pharmacies.length,1);
-  assert.equal(line.pharmacies[0].stock,0);
+  const reference=line.pharmacies[0].options.find(o=>o.cn==="654322");
+  assert.equal(reference.stock,0);
   assert.ok(line.pharmacies[0].units3>0);
-  assert.ok(line.pharmacies[0].suggested>0);
-  assert.equal(line.pharmacies[0].articleId,"ART-02");
+  assert.ok(line.pharmacies[0].suggested===null||line.pharmacies[0].suggested>=0);
+  assert.equal(reference.articleId,"ART-02");
   // El preparador también puede recibir un artículo del comparador PUC
   // sin ventas en el período: se permite añadirlo manualmente, sin inventar demanda.
   req.query.buscar="654321";
   body=null;error=null;
   await routes["/api/analytics/pedidos/propuesta"](req,res,e=>{error=e});
   if(error)throw error;
-  const unSold=body.groups.find(g=>g.cn==="654321");
+  const unSold=body.groups.find(g=>g.pharmacies.some(p=>p.options.some(o=>
+   o.cn==="654321"&&o.articleId==="ART-01")));
   assert.ok(unSold,"la búsqueda incluye artículos del catálogo sin ventas");
-  assert.equal(unSold.pharmacies[0].articleId,"ART-01");
+  assert.ok(unSold.pharmacies[0].options.some(o=>o.articleId==="ART-01"));
  }finally{await pool.end()}
 });

@@ -1,5 +1,6 @@
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
+import {ReportPageHeader} from "./ReportControls.jsx";
 import React,{useEffect,useState,useCallback,useRef} from "react";
 import {LoadingFrame,LoadingPanel,SkeletonKpis,LoadingStatus} from "./LoadingState.jsx";
 import {Database,RefreshCcw,Clock3,CheckCircle2,AlertTriangle} from "lucide-react";
@@ -34,11 +35,9 @@ export default function SyncVentas({client,pharmacies=[]}){
  const stats=status?.metrics;
  const fresh=Number(stats?.ultimos90min||0)>0;
  return <div className="fm-sync">
-  <div className="page-header">
-   <h1>Sincronización de ventas</h1>
-   <button className="btn btn-secondary" type="button" onClick={()=>void refresh()} disabled={busy}>
-    <RefreshCcw size={16}/>{busy?"Comprobando…":"Comprobar ahora"}</button>
-  </div>
+  <ReportPageHeader title="Sincronización de ventas"
+   updatedAt={status?.checkedAt?new Date(status.checkedAt):null}
+   onRefresh={()=>void refresh()} refreshing={busy}/>
   {error&&<div className="access-alert access-alert-error" role="alert">
    <AlertTriangle size={17}/> {error}</div>}
   {busy&&status&&<div className="fm-loading-message"><LoadingStatus label="Actualizando datos de sincronización…"/></div>}

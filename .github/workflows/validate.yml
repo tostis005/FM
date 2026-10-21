@@ -315,5 +315,13 @@ jobs:
           SELECT 'PUC_GRUPO' AS tipo,dcpf,articulo_id,proveedor_id,coop,ignorado,
            left(proveedor,50) AS proveedor,lineas,uds,min_puc
           FROM c ORDER BY dcpf,coop,lineas DESC LIMIT 28;
+          SELECT 'NOMBRES_PROVEEDORES' AS tipo,p.farmacia_codigo,p.origen_id,left(p.nombre,65) AS nombre
+          FROM ampedia.proveedores p WHERE p.origen_id IN ('0005','0125','0087','0144')
+          ORDER BY p.origen_id,p.farmacia_codigo LIMIT 30;
+          SELECT 'FUENTE_DE_CODIGOS' AS tipo,f.id,f.codigo_origen,
+            a.origen_id,a.codigo_nacional,left(a.nombre,35) AS producto
+          FROM ampedia.articulos a JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+            AND upper(btrim(f.codigo_origen))=upper(btrim(a.farmacia_codigo))
+          WHERE a.codigo_nacional IN ('726005','662026') LIMIT 10;
           ROLLBACK;
           SQL

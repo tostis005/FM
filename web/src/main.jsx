@@ -1111,6 +1111,7 @@ function App(){
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {REAL_SECTIONS.has(page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
+      tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}/>}
     {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}

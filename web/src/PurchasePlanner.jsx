@@ -222,13 +222,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {key:"articleName",label:"Artículo / conjunto genérico",value:g=>g.articleName,
    render:g=><div className="fm-planner-article"><button type="button" className="fm-planner-toggle"
     onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))} aria-expanded={Boolean(open[g.key])}>
-    <ChevronDown size={15}/><span><strong>{g.articleName}</strong><small>{g.kind==="generico"?"Genérico · DCPF "+g.dcpf+" · "+g.productCount+" referencias":g.cn||"ERP (sin CN común)"}</small></span></button>
+    <ChevronDown size={15}/><span><strong>{g.articleName}</strong><small>{g.kind==="generico"?"Genérico · DCPF "+g.dcpf+" · "+g.productCount+" referencias":g.cn?"CN "+g.cn:"Código local sin CN verificado"}</small></span></button>
     {open[g.key]&&<div className="fm-planner-details">{g.pharmacies.map(p=>{
      const edit=overrides[key(p)]||{},options=suppliers[String(p.pharmacyId)]||[];
      const confidence=p.confidence;
      return <div className="fm-planner-pharmacy" key={key(p)}>
       <strong>{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</strong>
-      {g.kind!=="generico"&&<small>Referencia ERP {p.articleId} · CN {g.cn||p.cn||"No disponible"}</small>}
+      {g.kind!=="generico"&&<small>{p.cn?"Código nacional "+p.cn:"Código de artículo local "+p.articleId}</small>}
       <div className="fm-planner-detail-metrics">
        <span>Vendidas período <b>{whole(p.unitsPeriod)}</b></span>
        <span>Ventas 3 meses <b>{whole(p.units3)}</b></span>
@@ -238,12 +238,12 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       </div>
       {g.kind==="generico"&&<div className="fm-planner-variants">
        <small>Referencias equivalentes en esta farmacia:</small>
-       {p.options.map(o=><small key={o.articleId}>{o.cn||"Sin CN"} · {o.articleName} · ERP {o.articleId} · Stock {o.stock??"?"}</small>)}
+       {p.options.map(o=><small key={o.articleId}>{o.cn||"Sin CN"} · {o.articleName} · Código {o.articleId} · Stock {o.stock??"?"}</small>)}
       </div>}
-      <small>Media {whole(p.daily)} uds./día × ({p.interval}+{p.lead} días) + seguridad {p.safety} − stock {whole(p.stock)} − preparados {p.ordered??0} = <b>{p.suggested??"Sin cálculo"} uds.</b></small>
+      <small>Demanda {p.demandPattern||"pendiente de clasificar"} · Media {whole(p.daily)} uds./día × {p.coverageDays??p.interval} días de cobertura − stock {p.stock??"?"} − pedidos preparados {p.ordered??0} = <b>{p.suggested??"Sin cálculo"} uds.</b></small>
       <small>Última actualización conocida del inventario: {p.stockAt?new Date(p.stockAt).toLocaleString("es-ES"):"Sin fecha disponible"}</small>
       {confidence!=="calculable"&&<small className="fm-planner-caution">{confidence==="stock_antiguo"?"Stock posiblemente desactualizado":confidence==="sin_stock"?"Sin stock: no se propone compra":"Sin fecha verificable de stock"}</small>}
-      {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalos y plazos por farmacia.</small>}
+      {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalo y días de cobertura desde Farmacias.</small>}
       <div className="fm-planner-edit">
        <label>Pedir <input type="number" min="0" max="999999" step="1" disabled={!canEdit||p.suggested===null}
         value={edit.units??0} onChange={e=>setValue(p,"units",e.target.value)}/></label>
@@ -266,6 +266,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      </div>;
     })}</div>}</div>},
   
+  {key:"patron",label:"Demanda",sortable:false,searchable:false,value:g=>g.patron||"",
+   render:g=><span className={"fm-planner-pattern fm-planner-pattern-"+(g.patron||"desconocida")}>
+    {({estable:"Estable",intermitente:"Intermitente",estacional:"Estacional",puntual:"Puntual"})[g.patron]||"Sin clasificar"}</span>},
   {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
   {key:"units3",label:"Ventas 3m",value:g=>g.units3,render:g=>whole(g.units3)},
   {key:"units12",label:"Ventas 12m",value:g=>g.units12,render:g=>whole(g.units12)},
@@ -277,7 +280,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  ];
  return <section className="card fm-planner">
   <div className="fm-planner-head"><div><h2><ShoppingCart size={19}/> Propuesta inteligente de compra</h2>
-   <p>Visión global de la necesidad de compra. Los genéricos se agrupan por conjunto DCPF oficial y se preparan por farmacia.</p></div>
+   <p>Necesidades del grupo consolidadas por código nacional y DCPF de genéricos. Se prioriza la demanda sostenida frente a ventas puntuales; las estacionales siguen disponibles para revisión.</p></div>
    <button className="btn btn-secondary" onClick={()=>setReload(n=>n+1)} type="button" disabled={busy}>Actualizar</button></div>
   <ReportFilterBar periodKey={period} onPeriodChange={setSharedPeriod}
    showPharmacies={false} customFrom={customFrom} customTo={customTo}
@@ -302,7 +305,10 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    <div><span>Pedido recomendado</span><strong>{result?.truncated?"Parcial":whole(knownSuggestion)}</strong>
     {missingSuggested>0&&<small>{missingSuggested} referencias sin propuesta calculable</small>}</div>
   </div>
-  <div className="fm-planner-summary-note">{whole(result?.summary?.products??result?.totalGroups??groups.length)} conjuntos o artículos del grupo · {whole(result?.summary?.referenceCount??groups.length)} referencias · {whole(allLines.length)} líneas con proveedor · {whole(selectedTotal)} unidades asignadas
+  <div className="fm-planner-summary-note">
+   {result?.summary?.oneOffCount>0&&<span>{whole(result.summary.oneOffCount)} artículos con demanda puntual, sin propuesta automática si ya no tienen actividad · </span>}
+   {result?.summary?.seasonalCount>0&&<span>{whole(result.summary.seasonalCount)} posibles estacionales · </span>}
+   {whole(result?.summary?.products??result?.totalGroups??groups.length)} conjuntos o artículos del grupo · {whole(result?.summary?.referenceCount??groups.length)} referencias · {whole(allLines.length)} líneas con proveedor · {whole(selectedTotal)} unidades asignadas
    {missingSupplier>0&&<span> · {missingSupplier} necesidades sin proveedor</span>}
    {missingArticle>0&&<span> · {missingArticle} necesidades genéricas sin presentación elegida</span>}
    {invalidQuantities>0&&<span role="alert"> · {invalidQuantities} cantidades inválidas</span>}

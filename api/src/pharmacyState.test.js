@@ -13,6 +13,11 @@ test("sin filas recientes no se afirma avería de VPN, pero se conservan inciden
   finishedAt:"2026-10-21T07:01:00.000Z",error:"Fallo al leer el origen"}],old,now);
  assert.equal(failed.state,"Revisar");
  assert.equal(failed.incidents[0].error,"Fallo al leer el origen");
+ const rejected=pharmacySyncSummary(p,[{flow:"compras",state:"completado",
+  startedAt:"2026-10-21T07:00:00Z",finishedAt:"2026-10-21T07:01:00Z",
+  rejected:3,error:null}],old,now);
+ assert.equal(rejected.state,"Revisar");
+ assert.match(rejected.incidents[0].error,/3 registros rechazados/);
  assert.equal(pharmacySyncSummary(p,[],{ventas:{lastReceivedAt:"2026-10-21T07:40:00.000Z"}},now).state,"Actividad reciente");
 });
 

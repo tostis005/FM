@@ -344,6 +344,21 @@ jobs:
            await routes["/api/analytics/pedidos/propuesta"]({
              query:{desde:"2026-10-01",hasta:"2026-10-21",farmacias:ids,buscar:""},context
             },res,e=>{failure=e});
+           const full=(response?.groups||[]);
+           const coverage={
+             cn:full.filter(g=>g.cn).length,
+             generic:full.filter(g=>g.kind==="generico").length,
+             pharmacyPairs:full.filter(g=>g.pharmacies.length>1).length,
+             unstocked:full.filter(g=>g.stock===null).length,
+             manual:full.filter(g=>g.key?.startsWith("ERP:")).length
+           };
+           const {rows:[actual]}=await pool.query(`SELECT sum(unidades)::float8 AS units
+            FROM ampedia.fm_ventas_analitica WHERE fecha >= '2026-10-01'::date
+            AND fecha < '2026-10-22'::date AND farmacia_codigo=ANY($1::text[])
+            AND nullif(btrim(articulo_id),'') IS NOT NULL`,
+            [ids==="1"?["ABA"]:["ABA","EUR","BUE","EST","VAL"]]);
+           console.log("VALIDACION_PRODUCCION",ids,"sourceUnits",actual.units,
+            "shownUnits",full.reduce((n,g)=>n+g.unitsPeriod,0),"coverage",JSON.stringify(coverage));
            console.log("ENDPOINT_NUEVO",ids,"status",status,"ms",Date.now()-start,
             "groups",response?.groups?.length??null,"available",response?.available??null,
             "truncated",response?.truncated??null,

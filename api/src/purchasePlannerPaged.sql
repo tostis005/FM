@@ -37,8 +37,25 @@ catalogo AS MATERIALIZED (
   ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
  ) a ON true
 ),
+catalogo_sin_ventas AS MATERIALIZED (
+ SELECT f.id AS fid,a.origen_id AS articulo,upper(btrim(a.farmacia_codigo)) AS farmacia_codigo,
+  a.nombre AS nombre,COALESCE(nullif(btrim(a.codigo_nacional),''),
+   CASE WHEN a.origen_id ~ '^[0-9]{6,7}$' THEN a.origen_id END) AS cn,
+  a.stock_actual::float8 AS stock,a.sincronizado_en AS fecha_stock,
+  0::float8 AS periodo,0::float8 AS v30,0::float8 AS v90,0::float8 AS v365,
+  0::int AS meses_venta
+ FROM __SCHEMA__.articulos a JOIN farmetrica.farmacias f
+  ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
+  AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
+ WHERE $5::text<>'' AND
+  (upper(a.origen_id) LIKE '%'||$5||'%' OR upper(a.nombre) LIKE '%'||$5||'%'
+   OR upper(coalesce(a.codigo_nacional,'')) LIKE '%'||$5||'%')
+  AND NOT EXISTS(SELECT 1 FROM catalogo c WHERE c.fid=f.id AND c.articulo=a.origen_id)
+ LIMIT 3500
+),
 articulos AS MATERIALIZED (
  SELECT * FROM catalogo
+ UNION ALL SELECT * FROM catalogo_sin_ventas
 ),
 clasificados AS MATERIALIZED (
  SELECT a.*, n.dcpf,n.nombre AS nombre_generico,

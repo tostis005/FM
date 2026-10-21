@@ -134,3 +134,76 @@ Check(retry.Inserted == 0 && retry.Updated == 0,
     "Una reconciliación masiva repetida debe ser idempotente");
 
 Console.WriteLine("PostgreSQL JOIN writer: atomicidad, idempotencia, cambios y recuperación OK");
+
+
+// Regresión de supervisión: la API ya crea ejecucion_id, sistema_origen y
+// modificadas. Nunca volver a intentar INSERT (id) contra ese contrato.
+var monitorPharmacy = new Pharmacy { Code = "TEST-MONITOR", SystemType = "farmatic" };
+var monitorEntity = sales;
+var monitorJob = new SyncJob {
+    PharmacyId = monitorPharmacy.Id, EntityId = monitorEntity.Id, Enabled = true,
+    EveryMinutes = 60
+};
+var monitorRun = new SyncRun {
+    JobId = monitorJob.Id, PharmacyId = monitorPharmacy.Id, EntityId = monitorEntity.Id,
+    PharmacyCode = monitorPharmacy.Code, EntityName = monitorEntity.Name,
+    Status = "completado", StartedUtc = DateTimeOffset.UtcNow.AddMinutes(-2),
+    FinishedUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+    Rows = 8, Inserted = 6, Updated = 2
+};
+var monitorConfig = new AppConfig {
+    MonitorInstanceId = Guid.NewGuid(),
+    Pharmacies = [monitorPharmacy], Entities = [monitorEntity],
+    Jobs = [monitorJob], Runs = [monitorRun]
+};
+await PostgresDestination.PublishMonitoringToConnectionAsync(db,
+    new Destination { Schema = "ampedia" }, monitorConfig, [], CancellationToken.None);
+Check(await Count(db,
+    $"SELECT count(*) FROM ampedia.fm_sync_ejecuciones WHERE ejecucion_id='{monitorRun.Id}' " +
+    "AND sistema_origen='farmatic' AND modificadas=2") == 1,
+    "El historial debe escribir usando la clave y columnas del modelo documental");
+Check(await Count(db,
+    $"SELECT count(*) FROM ampedia.fm_sync_monitor WHERE instancia_id='{monitorConfig.MonitorInstanceId}' " +
+    $"AND trabajo_id='{monitorJob.Id}'") == 1, "Debe guardar también el pulso del trabajo");
+await PostgresDestination.PublishMonitoringToConnectionAsync(db,
+    new Destination { Schema = "ampedia" }, monitorConfig, [], CancellationToken.None);
+Check(await Count(db,
+    $"SELECT count(*) FROM ampedia.fm_sync_ejecuciones WHERE ejecucion_id='{monitorRun.Id}'") == 1,
+    "La retransmisión del historial no debe duplicar ejecuciones");
+// Un cliente antiguo puede tener aún el historial con PK (id). Su migración
+// debe conservar las filas y adaptar la misma tabla sin renombrarla ni borrarla.
+var legacySchema = "fm_mon_" + Guid.NewGuid().ToString("N")[..12];
+await using (var cmd = new NpgsqlCommand($"""
+    CREATE SCHEMA {legacySchema};
+    CREATE TABLE {legacySchema}.fm_sync_ejecuciones (
+      id uuid PRIMARY KEY, trabajo_id uuid NOT NULL,
+      farmacia_codigo text NOT NULL, flujo text NOT NULL,
+      estado text NOT NULL, iniciada_en timestamptz NOT NULL,
+      finalizada_en timestamptz, leidas bigint NOT NULL DEFAULT 0,
+      insertadas bigint NOT NULL DEFAULT 0, rechazadas bigint NOT NULL DEFAULT 0,
+      error_resumen text
+    );
+    INSERT INTO {legacySchema}.fm_sync_ejecuciones
+      (id,trabajo_id,farmacia_codigo,flujo,estado,iniciada_en)
+    VALUES ('{Guid.NewGuid()}','{monitorJob.Id}','TEST-MONITOR',
+      'ventas_completas','completado',now() - interval '1 day');
+    """, db))
+    await cmd.ExecuteNonQueryAsync();
+try
+{
+    await PostgresDestination.PublishMonitoringToConnectionAsync(db,
+        new Destination { Schema = legacySchema }, monitorConfig, [], CancellationToken.None);
+    Check(await Count(db, $"SELECT count(*) FROM {legacySchema}.fm_sync_ejecuciones") == 2,
+        "La migración del historial anterior debe preservar filas y añadir la nueva");
+    Check(await Count(db, $"""
+        SELECT count(*) FROM {legacySchema}.fm_sync_ejecuciones
+         WHERE ejecucion_id='{monitorRun.Id}' AND sistema_origen='farmatic'
+           AND modificadas=2
+        """) == 1, "Historial heredado migrado y enriquecido correctamente");
+}
+finally
+{
+    await using var drop = new NpgsqlCommand($"DROP SCHEMA {legacySchema} CASCADE", db);
+    await drop.ExecuteNonQueryAsync();
+}
+Console.WriteLine("PostgreSQL supervisión: esquema canónico, idempotencia y migración legacy OK");

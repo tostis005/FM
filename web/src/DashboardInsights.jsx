@@ -22,7 +22,12 @@ function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid}){
   const params=new URLSearchParams({desde:from,hasta:to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
   setResult({scope,status:"loading"});
-  const timeout=setTimeout(()=>controller.abort(),30000);
+  const timeout=setTimeout(()=>{
+   if(controller.signal.aborted)return;
+   setResult({scope,status:"error",
+    error:"La consulta tarda demasiado. Prueba un período más corto."});
+   controller.abort();
+  },30000);
   fetch("/api/analytics/dashboard/"+endpoint+"?"+params,{
    credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal

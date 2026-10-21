@@ -6,24 +6,39 @@ const FIELD={
  units3:'g."units3"',units12:'g."units12"',
  stock:'g.stock',suggested:'g.suggested'
 };
-export function inferGenericGroupName(names,fallback=""){
+export function inferGenericGroupName(names,fallback="",principles=[]){
  const labels=[...new Set((names||[]).map(v=>String(v||"").trim()).filter(Boolean))];
- if(labels.length<2)return "Genérico · "+(fallback||labels[0]||"sin DCPF");
- const normalize=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+ const normalized=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
   .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().split(/\s+/).filter(Boolean);
- const counts=new Map();
- for(const name of labels)for(const token of new Set(normalize(name)))
-  counts.set(token,(counts.get(token)||0)+1);
- const threshold=Math.max(2,Math.ceil(labels.length*.65));
- const excluded=new Set(["EFG","GENERICA","GENERICO","GENERICOS","DE","DEL","POR","X",
-  "ENVASE","BLISTER","BLISTERS","COMPRIMIDOS","CAPSULAS","SOBRES","UNIDADES"]);
- // Conservar forma/dosis, pero no cantidades variables de envase ni marca.
- const representative=labels.slice().sort((a,b)=>a.length-b.length)[0];
- const sample=normalize(representative),cut=sample.indexOf("EFG");
- const core=cut>=0?sample.slice(0,cut):sample;
- const tokens=core.filter(t=>(counts.get(t)||0)>=threshold&&!excluded.has(t));
- const output=tokens.slice(0,7).join(" ").trim();
- return output.length>=5?output:"Genérico · "+(fallback||representative);
+ if(!labels.length)return "Genérico · Denominación pendiente";
+ const principle=(principles||[]).map(x=>String(x||"").trim()).find(Boolean);
+ const main=labels.slice().sort((a,b)=>a.length-b.length)[0];
+ const excluded=new Set(["EFG","DE","DEL","LA","LOS","LAS","POR","X","ENVASE","UNIDADES",
+  "CONTENIDO","GENERICA","GENERICO"]);
+ let common=[];
+ if(labels.length>=2){
+  const frequency=new Map();
+  for(const label of labels){
+   const split=normalized(label),end=split.indexOf("EFG");
+   const words=end>=0?split.slice(0,end):split.slice(0,16);
+   for(const token of new Set(words))frequency.set(token,(frequency.get(token)||0)+1);
+  }
+  const required=Math.max(2,Math.ceil(labels.length*.55));
+  const words=normalized(main),end=words.indexOf("EFG");
+  common=(end>=0?words.slice(0,end):words.slice(0,14))
+   .filter(token=>frequency.get(token)>=required&&!excluded.has(token));
+ }
+ // Puede haber una sola presentación registrada; su denominación sigue siendo
+ // más útil que el DCPF numérico. En ese caso no inventamos el principio activo.
+ let result=common.join(" ");
+ if(principle){
+  const dose=(main.match(/\b\d+(?:[,.]\d+)?\s*(?:MG|G|MCG|MICROGRAMOS|UI|ML|%)\b/i)||[])[0]||"";
+  const form=(main.match(/\b(?:COMPRIMIDOS?|CAPSULAS?|SOBRES?|SOLUCION|SUSPENSION|CREMA|GEL|POMADA|COLIRIO|SUPOSITORIOS?|PARCHES?|INYECTABLE)\b/i)||[])[0]||"";
+  result=[principle,dose,form].filter(Boolean).join(" ");
+ }
+ if(!result||result.length<5)result=main.replace(/,\s*\d+\s*(?:comprimidos|capsulas|sobres|unidades).*$/i,"").trim();
+ return "Genérico · "+result.toLocaleLowerCase("es-ES")
+  .replace(/(^|\s)(\S)/g,(_m,space,ch)=>space+ch.toLocaleUpperCase("es-ES"));
 }
 // El detalle incluye también farmacias con existencias pero ninguna venta.
 // Consultar únicamente CNs de la página evita recorrer todo el catálogo en Node.
@@ -32,16 +47,22 @@ export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
  const dcpfs=[...new Set(groups.filter(g=>g.kind==="generico").map(g=>String(g.dcpf)).filter(Boolean))];
  let official=[];
  if(dcpfs.length){
-  const r=await pool.query("SELECT cn,dcpf,nombre FROM farmetrica.nomenclator_presentaciones"+
+  const r=await pool.query("SELECT cn,dcpf,nombre,principio_activo FROM farmetrica.nomenclator_presentaciones"+
    " WHERE generico=true AND dcpf=ANY($1::text[]) LIMIT 8000",[dcpfs]);
   official=r.rows;
  }
  const keyByCn=new Map();
  for(const g of groups)if(g.cn&&g.kind!=="generico")keyByCn.set(g.cn,g.key);
  for(const o of official)keyByCn.set(String(o.cn),"DCPF:"+o.dcpf);
+ const officialByDcpf=new Map();
+ for(const o of official){
+  const id=String(o.dcpf);
+  if(!officialByDcpf.has(id))officialByDcpf.set(id,[]);
+  officialByDcpf.get(id).push(o);
+ }
  for(const g of groups)if(g.kind==="generico"){
-  const labels=official.filter(o=>String(o.dcpf)===String(g.dcpf)).map(o=>o.nombre);
-  g.articleName=inferGenericGroupName(labels,g.dcpf);
+  const rows=officialByDcpf.get(String(g.dcpf))||[];
+  g.articleName=inferGenericGroupName(rows.map(o=>o.nombre),g.dcpf,rows.map(o=>o.principio_activo));
  }
  const codes=[...keyByCn.keys()];
  if(!codes.length)return groups;

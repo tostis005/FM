@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import { isValidCN } from "./cns.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
 
@@ -58,6 +57,7 @@ function parseXml(text){
 }
 const local=(el,tag)=>[...el.getElementsByTagName("*")].filter(n=>n.localName===tag);
 async function sheetsFromExcel(buffer){
+  const {default: JSZip}=await import("jszip");
   const zip=await JSZip.loadAsync(buffer);
   const workbook=parseXml(await zip.file("xl/workbook.xml")?.async("text"));
   const rels=parseXml(await zip.file("xl/_rels/workbook.xml.rels")?.async("text"));

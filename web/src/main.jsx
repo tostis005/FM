@@ -8,25 +8,27 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
-import AccessAdmin from "./Accesos.jsx";
-import CambiarContrasena from "./CambiarContrasena.jsx";
-import ModuloDemo from "./ModuloDemo.jsx";
-import Genericos from "./Genericos.jsx";
-import ConfiguracionPrecios from "./ConfiguracionPrecios.jsx";
-import ConfiguracionAnalisisVentas from "./ConfiguracionAnalisisVentas.jsx";
+const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
+const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
+const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
+const Genericos=React.lazy(()=>import("./Genericos.jsx"));
+const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
+const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
 import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
-import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
-import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
-import DetalleVentas from "./DetalleVentas.jsx";
-import SolicitudesDemo from "./SolicitudesDemo.jsx";
-import PharmacyState from "./PharmacyState.jsx";
-import PoliticaReposicionFarmacia from "./PoliticaReposicionFarmacia.jsx";
-import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
-import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
+const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresMaestro.jsx"));
+const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
+const EquipoCliente=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.EquipoCliente})));
+const DetalleVentas=React.lazy(()=>import("./DetalleVentas.jsx"));
+const SolicitudesDemo=React.lazy(()=>import("./SolicitudesDemo.jsx"));
+const PharmacyState=React.lazy(()=>import("./PharmacyState.jsx"));
+const PoliticaReposicionFarmacia=React.lazy(()=>import("./PoliticaReposicionFarmacia.jsx"));
+const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
+const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
+import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
@@ -943,6 +945,7 @@ function App(){
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
+   <React.Suspense fallback={<LoadingStatus label="Cargando sección…"/>}>
     {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
      <section className="card fm-preview-panel" role={promotionStoreStatus==="error"?"alert":"status"}>
       <h2>{promotionStoreStatus==="error"?"No se pudieron consultar las promociones":"Consultando promociones…"}</h2>
@@ -1137,10 +1140,11 @@ function App(){
        onSaved={()=>loadContext(tenantContext.client.slug)}/>
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
      </div>}
+   </React.Suspense>
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>
   </div>
-  {passwordModal&&<CambiarContrasena onClose={()=>setPasswordModal(false)}/>}
+  {passwordModal&&<React.Suspense fallback={null}><CambiarContrasena onClose={()=>setPasswordModal(false)}/></React.Suspense>}
   {reportModal&&<div className="report-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setReportModal(null)}}>
    <section className="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
     <div className="report-modal-top">
@@ -1199,9 +1203,9 @@ function App(){
   </form></div></div>}
   {editingUser&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingUser(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingUser==="nuevo"?"Nuevo usuario":"Editar usuario"}</h2><p>Asigna un rol y define las farmacias disponibles.</p></div><button className="icon-btn" onClick={()=>setEditingUser(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={saveUser} className="drawer-content"><Field label="Nombre completo"><input required value={userForm.name} onChange={e=>setUserForm({...userForm,name:e.target.value})}/></Field><Field label="Correo electrónico"><input type="email" required value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/></Field><Field label="Rol"><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="farmacia">Personal de farmacia</option><option value="gestor">Gestor de farmacias</option><option value="superadmin">Superadministrador</option></select></Field><Field label="Estado"><select value={String(userForm.active)} onChange={e=>setUserForm({...userForm,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></Field><div className="form-divider"/><div className="field-heading"><div><strong>Farmacias asignadas</strong><small>{userForm.role==="superadmin"?"Este rol tiene acceso a toda la red.":"Marca las farmacias a las que podrá acceder."}</small></div></div>{userForm.role!=="superadmin"&&<div className="pharmacy-picker">{pharmacies.map(f=><label key={f.id} className={"pharmacy-choice "+(userForm.pharmacies.includes(f.id)?"chosen":"")}><input type="checkbox" checked={userForm.pharmacies.includes(f.id)} onChange={()=>setUserForm({...userForm,pharmacies:userForm.pharmacies.includes(f.id)?userForm.pharmacies.filter(x=>x!==f.id):[...userForm.pharmacies,f.id]})}/><span className="choice-check">{userForm.pharmacies.includes(f.id)&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>}<div className="note small-note"><ShieldCheck size={16}/> Estas asignaciones son solo visuales hasta habilitar autenticación y autorización en el servidor.</div><FormActions onCancel={()=>setEditingUser(null)}/></form></div></div>}
   {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El identificador se asigna automáticamente a las farmacias nuevas.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content">{editingPharmacy!=="nuevo"&&<Field label="ID de farmacia"><input disabled value={pharmacyForm.id}/></Field>}<Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad (opcional)"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA" maxLength="16" value={pharmacyForm.sourceCode||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field><Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local" value={pharmacyForm.sourceHost||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field><Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field><div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)} label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/></form>
-  {editingPharmacy!=="nuevo"&&<PoliticaReposicionFarmacia
+  {editingPharmacy!=="nuevo"&&<React.Suspense fallback={null}><PoliticaReposicionFarmacia
    clientSlug={tenantContext?.client?.slug||"ampedia"} pharmacyId={pharmacyForm.id}
-   canEdit={pharmacyApiStatus==="connected"}/>}
+   canEdit={pharmacyApiStatus==="connected"}/></React.Suspense>}
  </div></div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
 

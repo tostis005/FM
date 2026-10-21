@@ -1,4 +1,3 @@
-import JSZip from "jszip";
 import { isValidCN } from "./cns.js";
 import { ticketLineAmounts } from "./ticketLineAmounts.js";
 
@@ -44,6 +43,7 @@ function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCo
 }
 
 async function workbook(sheets) {
+  const {default: JSZip}=await import("jszip");
   const zip = new JSZip();
   const types = [
     XML_HEADER,
@@ -158,6 +158,7 @@ export async function exportPromotionExcel(promo, pharmacyName) {
 }
 
 export async function exportAllPromotionsZip(promotions, pharmacyName) {
+  const {default: JSZip}=await import("jszip");
   promotions.forEach(ensureValidCNs);
   const archive = new JSZip();
   const summary = [
@@ -242,6 +243,7 @@ export async function exportLabSalesExcel(promo,lines) {
   downloadBlob(blob,name);
 }
 export async function buildLabSalesZip(items) {
+  const {default: JSZip}=await import("jszip");
   if(!items.length)throw new Error("Selecciona al menos una promoción");
   const archive=new JSZip();
   const seen=new Set();

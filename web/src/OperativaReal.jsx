@@ -8,10 +8,8 @@ import {LoadingPanel} from "./LoadingState.jsx";
 import {readSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaReal.css";
 
-const MAP={"compras-preparador":"pedidos","compras-pendientes":"pedidos","compras-pedidos":"pedidos",
- "oportunidades-seguimiento":"oportunidades","alertas":"trabajo","mi-trabajo":"trabajo",
- "stock-traspasos":"traspasos","rentabilidad-retorno":"resultados"};
-export const REAL_SECTIONS=new Set(Object.keys(MAP));
+import {REAL_SECTION_MAP as MAP} from "./moduleRoutes.js";
+export {REAL_SECTIONS} from "./moduleRoutes.js";
 const ESTADOS={
  nueva:"Nueva",en_estudio:"En estudio",en_curso:"En curso",aplicada_parcialmente:"Aplicada parcialmente",
  aplicada:"Aplicada",descartada:"Descartada",pospuesta:"Pospuesta",

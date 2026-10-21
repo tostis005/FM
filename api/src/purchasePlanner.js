@@ -196,10 +196,47 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     const official=genericByCn.get(normalize(p.cn));
     return {...p,genericDcpf:official?.dcpf||null,genericName:official?.name||null};
    });
+   // Incluir también los EFG con stock y cero ventas. Si solo se agrupan los
+   // artículos vendidos se infraestima el inventario y se piden unidades de más.
+   const dcpfs=[...new Set([...genericByCn.values()].map(n=>String(n.dcpf)))];
+   let siblingsTruncated=false;
+   if(dcpfs.length&&has("articulos","codigo_nacional")){
+    const catalog=await pool.query({text:[
+     "SELECT DISTINCT ON (f.id,a.origen_id) f.id::text AS \"pharmacyId\",",
+     "a.origen_id::text AS \"articleId\",a.nombre AS \"articleName\",",
+     "nullif(btrim(a.codigo_nacional),'') AS cn,a.stock_actual::float8 AS stock,",
+     stamp+" AS \"stockAt\",n.dcpf AS \"genericDcpf\",",
+     "coalesce(nullif(btrim(n.principio_activo),''),n.nombre) AS \"genericName\",",
+     "0::float8 AS \"unitsPeriod\",0::float8 AS \"units3\",0::float8 AS \"units12\"",
+     "FROM "+q+".articulos a JOIN farmetrica.farmacias f ON f.cliente_slug=$2",
+     "AND f.id=ANY($1::int[]) AND upper(btrim(a.farmacia_codigo))="+join,
+     "JOIN farmetrica.nomenclator_presentaciones n ON n.cn=nullif(btrim(a.codigo_nacional),'')",
+     "AND n.generico=true WHERE n.dcpf=ANY($3::text[])",
+     "ORDER BY f.id,a.origen_id,"+
+      (has("articulos","sincronizado_en")?"a.sincronizado_en DESC NULLS LAST":"a.nombre"),
+     "LIMIT $4::int"
+    ].join(" "),values:[chosen,ctx.client.slug,dcpfs,MAX*4+1],query_timeout:30000});
+    siblingsTruncated=catalog.rows.length>MAX*4;
+    const seen=new Set(enriched.map(p=>String(p.pharmacyId)+"|"+normalize(p.articleId)));
+    for(const row of catalog.rows.slice(0,MAX*4)){
+     const composite=String(row.pharmacyId)+"|"+normalize(row.articleId);
+     if(seen.has(composite))continue;
+     seen.add(composite);
+     const policy=policyMap.get(Number(row.pharmacyId));
+     const stock=row.stock==null?null:Number(row.stock);
+     const interval=policy?.intervalo_pedidos??7,lead=policy?.plazo_entrega??2,
+      safety=policy?.stock_seguridad??0;
+     const prepared=ordered.get(composite)||0;
+     enriched.push({...row,stock,ordered:prepared,interval,lead,safety,
+      policyDefault:!policy,...proposePurchase({stock,ordered:prepared,interval,lead,safety}),
+      confidence:stock===null?"sin_stock":row.stockAt==null?"fecha_desconocida":
+       Date.now()-new Date(row.stockAt).getTime()>48*3600000?"stock_antiguo":"calculable"});
+    }
+   }
    const groups=groupPurchaseRows(enriched).filter(g=>!search||
     normalize([g.cn,g.dcpf,g.articleName,...g.pharmacies.flatMap(p=>
      p.options.flatMap(o=>[o.articleId,o.articleName,o.cn]))].join(" ")).includes(search));
-   res.json({available:true,from,to,groups,limit:MAX,truncated:combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX,
+   res.json({available:true,from,to,groups,limit:MAX,truncated:combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX||siblingsTruncated,
     pharmacies:ctx.pharmacies.filter(p=>chosen.includes(Number(p.id))).map(p=>({id:p.id,name:p.name})),
     note:"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y unidades ya preparadas en borradores o pedidos pendientes/aprobados/exportados para evitar duplicar compras. Las recepciones del ERP no están conciliadas con estos planes: revisa los pedidos antiguos. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
   }catch(e){next(e)}

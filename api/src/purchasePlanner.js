@@ -93,14 +93,27 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     " AND upper(btrim(a.origen_id::text))=upper(btrim(s.article))",
     " "+latest+" LIMIT 1) a ON true ORDER BY s.fid,s.article"
    ].join(" ");
-   const [sales,policies,orders]=await Promise.all([
+   const [sales,policies,orders,catalogSearch]=await Promise.all([
     pool.query({text:sql,values:[from,to,chosen,ctx.client.slug,MAX+1,search],query_timeout:30000}),
     pool.query("SELECT farmacia_id,intervalo_pedidos,plazo_entrega,stock_seguridad"+
      " FROM farmetrica.op_politicas_reposicion WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])",
      [ctx.client.slug,chosen]),
     pool.query("SELECT farmacia_id,lineas FROM farmetrica.op_pedidos"+
      " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')"+
-     " ORDER BY actualizado_en DESC LIMIT 1000",[ctx.client.slug,chosen])
+     " ORDER BY actualizado_en DESC LIMIT 1000",[ctx.client.slug,chosen]),
+    search?pool.query({text:[
+     "SELECT DISTINCT ON (f.id,a.origen_id)",
+     " f.id::text AS \"pharmacyId\",a.origen_id::text AS \"articleId\",",
+     " a.nombre AS \"articleName\","+code+" AS cn,",
+     " a.stock_actual::float8 AS stock,"+stamp+" AS \"stockAt\",",
+     " 0::float8 AS \"unitsPeriod\",0::float8 AS \"units3\",0::float8 AS \"units12\"",
+     " FROM "+q+".articulos a JOIN farmetrica.farmacias f ON f.cliente_slug=$2",
+     " AND upper(btrim(a.farmacia_codigo))="+join+" AND f.id=ANY($1::int[])",
+     " WHERE (a.origen_id ILIKE '%'||$3||'%' OR a.nombre ILIKE '%'||$3||'%'"+
+       (has("articulos","codigo_nacional")?" OR a.codigo_nacional ILIKE '%'||$3||'%'":"")+")",
+     " ORDER BY f.id,a.origen_id,"+(has("articulos","sincronizado_en")?"a.sincronizado_en DESC NULLS LAST":"a.nombre"),
+     " LIMIT $4::int"
+    ].join(" "),values:[chosen,ctx.client.slug,search,MAX+1],query_timeout:30000}):Promise.resolve({rows:[]})
    ]);
    const policyMap=new Map(policies.rows.map(p=>[Number(p.farmacia_id),p]));
    const ordered=new Map();
@@ -108,7 +121,13 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     const key=o.farmacia_id+"|"+normalize(line.articulo);
     ordered.set(key,(ordered.get(key)||0)+(line.asignaciones||[]).reduce((n,a)=>n+Number(a.unidades||0),0));
    }
-   const rows=sales.rows.slice(0,MAX).map(s=>{
+   const combined=[...sales.rows];
+   const seen=new Set(combined.map(row=>row.pharmacyId+"|"+normalize(row.articleId)));
+   for(const item of catalogSearch.rows){
+    const id=item.pharmacyId+"|"+normalize(item.articleId);
+    if(!seen.has(id)){combined.push(item);seen.add(id)}
+   }
+   const rows=combined.slice(0,MAX).map(s=>{
     const policy=policyMap.get(Number(s.pharmacyId));
     const stock=s.stock==null?null:Number(s.stock);
     const calculated=proposePurchase({stock,units3:Math.max(0,Number(s.units3||0)),
@@ -124,7 +143,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
    });
    const groups=groupPurchaseRows(rows).filter(g=>!search||
     normalize([g.cn,g.articleName,...g.pharmacies.map(p=>p.articleId)].join(" ")).includes(search));
-   res.json({available:true,from,to,groups,limit:MAX,truncated:sales.rows.length>MAX,
+   res.json({available:true,from,to,groups,limit:MAX,truncated:combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX,
     pharmacies:ctx.pharmacies.filter(p=>chosen.includes(Number(p.id))).map(p=>({id:p.id,name:p.name})),
     note:"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y unidades ya preparadas en borradores o pedidos pendientes/aprobados/exportados para evitar duplicar compras. Las recepciones del ERP no están conciliadas con estos planes: revisa los pedidos antiguos. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
   }catch(e){next(e)}

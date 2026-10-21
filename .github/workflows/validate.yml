@@ -264,3 +264,46 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+
+  smoke_proveedor_nombre_produccion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Verificar código y nombre de proveedor en la API activa, solo lectura
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --input-type=module -' <<'JS'
+          import pg from "pg";
+          import {canonicalSupplierCode,readPlannerLaboratories} from "./src/purchasePlannerSuppliers.js";
+          if(canonicalSupplierCode("0256")!=="256")throw Error("Código API sin función de normalización");
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,
+           max:2,connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          try{
+           const t=Date.now();
+           const data=await readPlannerLaboratories(pool,
+            {client:{schema:"ampedia",slug:"ampedia"}},[1,2,3,4,5],
+            [{groupKey:"DCPF:17531000140106",pharmacyId:"1",articleId:"726064",cn:"726064"}],
+            ["17531000140106"],"2026-10-21");
+           const group=data.recommendations.find(x=>x.groupKey==="DCPF:17531000140106");
+           const offers=(group?.options||[]).filter(x=>x.supplierCode==="0256");
+           const matches=offers.filter(x=>/TEVA PHARMA/i.test(x.supplierName));
+           console.log("VERIFICACION_PROVEEDOR",JSON.stringify({ms:Date.now()-t,
+            cnCount:data.presentations.length,priceRows:data.observedPrices,
+            offers0256:offers.length,tevas:matches.length,
+            details:offers.slice(0,4).map(x=>({pharmacy:x.pharmacyId,cn:x.cn,
+             name:x.supplierName,price:x.puc}))}));
+           if(!offers.length||matches.length!==offers.length)throw Error("El 0256 no se ha vinculado a TEVA");
+           console.log("PROVEEDOR_NOMBRE_REAL_OK");
+          }finally{await pool.end()}
+          JS

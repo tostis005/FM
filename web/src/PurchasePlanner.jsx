@@ -194,6 +194,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     }
    }
    setNotice(saved+" borradores guardados. Revísalos y apruébalos en «Planes de compra» antes de marcar su exportación.");
+   // Borrar confirmaciones inmediatamente y recalcular pendientes para no permitir
+   // guardar una segunda vez las mismas unidades si se pulsa de nuevo.
+   setOverrides({});setReload(n=>n+1);
    onCreated();
   }catch(e){setError(e.message+(saved?" ("+saved+" borradores ya guardados; revisa antes de repetir).":""))}
   finally{setBusy(false)}

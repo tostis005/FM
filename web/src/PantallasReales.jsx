@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {RefreshCw,Search,ChevronLeft,ChevronRight,Download} from "lucide-react";
+import {RefreshCw,Search,Download} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
@@ -337,16 +337,9 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
          </tbody></table></HorizontalTableScroll>}
        {receiptDetail.truncated&&<p role="status">Se muestran las primeras 500 líneas de la recepción.</p>}
       </section>}
-     <div className="fm-real-pagination">
-      <span>Página {page} de {pages}</span>
-      <div><label>Por página <select value={size} onChange={e=>setSize(Number(e.target.value))}>
-       {[25,50,100].map(n=><option key={n}>{n}</option>)}</select></label>
-       <button type="button" className="btn btn-secondary" disabled={page<=1}
-        onClick={()=>setPage(p=>Math.max(1,p-1))} aria-label="Página anterior"><ChevronLeft size={16}/></button>
-       <button type="button" className="btn btn-secondary" disabled={page>=pages}
-        onClick={()=>setPage(p=>Math.min(pages,p+1))} aria-label="Página siguiente"><ChevronRight size={16}/></button>
-      </div>
-     </div>
+     <ListPagination total={count} page={page-1} pageSize={size} loading={loading}
+      label="registros" onPageChange={n=>setPage(n+1)}
+      onPageSizeChange={n=>{setSize(n);setPage(1)}}/>
     </section>
     <p className="fm-real-source-note">{config.note}</p>
    </>}

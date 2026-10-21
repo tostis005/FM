@@ -31,8 +31,8 @@ test("Estado devuelve todas las farmacias autorizadas, incluidas las sin recepci
    {table_name:"fm_sync_ejecuciones"},{table_name:"fm_ventas_cabeceras"},{table_name:"fm_recepciones_cabeceras"}]};
   if(sql.includes(".fm_sync_ejecuciones"))return {rows:[{code:"ABA",flow:"ventas_completas",state:"completado",
    startedAt:"2026-10-21T07:00:00Z",finishedAt:"2026-10-21T07:01:00Z",read:10,inserted:4,rejected:0,error:null}]};
-  if(sql.includes(".fm_ventas_cabeceras"))return {rows:[{code:"ABA",lastReceivedAt:"2026-10-21T07:00:00Z",lastDocumentAt:"2026-10-21T06:59:00Z"}]};
-  if(sql.includes(".fm_recepciones_cabeceras"))return {rows:[]};
+  if(sql.includes("fm_ventas_cabeceras"))return {rows:[{code:"ABA",lastReceivedAt:"2026-10-21T07:00:00Z",lastDocumentAt:"2026-10-21T06:59:00Z"}]};
+  if(sql.includes("fm_recepciones_cabeceras"))return {rows:[]};
   throw Error("SQL inesperado: "+sql);
  }};
  setupPharmacyState(app,pool,{requireTenant:()=>[]});
@@ -48,7 +48,7 @@ test("Estado devuelve todas las farmacias autorizadas, incluidas las sin recepci
  assert.equal(json.pharmacies[1].state,"Sin información");
  assert.ok(queries.some(x=>x.sql.includes("fm_sync_ejecuciones")));
  assert.ok(queries.some(x=>x.sql.includes("fm_recepciones_cabeceras")));
- const receipts=queries.filter(x=>/FROM "ampedia"\\.fm_(ventas|recepciones)_cabeceras/.test(x.sql));
+ const receipts=queries.filter(x=>x.sql.includes('FROM "ampedia"."fm_ventas_cabeceras"')||x.sql.includes('FROM "ampedia"."fm_recepciones_cabeceras"'));
  assert.equal(receipts.length,2);
  assert.ok(receipts.every(x=>x.sql.includes("LEFT JOIN LATERAL")&&
   x.sql.includes("ORDER BY d.recibido_en DESC LIMIT 1")&&

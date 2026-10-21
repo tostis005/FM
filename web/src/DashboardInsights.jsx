@@ -172,7 +172,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
   {key:"action",label:"Pedido",sortable:false,searchable:false,value:()=>"",
    render:r=><button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
     onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
-     supplier:""});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>}
+     supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>}
  ];
  const changeFilters=next=>{setFilters(next);setPage(1)};
  return <Panel title="¿Dónde estamos comprando mejor?" subtitle="Cooperativa frente a laboratorio · coste ponderado de las compras, según PUC registrado" insight={insight}>

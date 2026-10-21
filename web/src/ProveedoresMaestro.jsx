@@ -3,6 +3,7 @@ import {Plus,Search} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
 import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
 const TYPES=[["sin_clasificar","Sin clasificar"],["cooperativa","Cooperativa"],["laboratorio","Laboratorio"],["mayorista","Mayorista"],["otros","Otros"]];
 const EMPTY={sourceCode:"",name:"",type:"sin_clasificar",active:true,cooperative:false,ignoreReports:false};
@@ -10,6 +11,7 @@ const label=key=>TYPES.find(([id])=>id===key)?.[1]||"Sin clasificar";
 export default function ProveedoresMaestro({clientSlug}){
  const [rows,setRows]=useState([]),[search,setSearch]=useState(""),[form,setForm]=useState(null),
   [error,setError]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[savingFlags,setSavingFlags]=useState({});
+ const [updatedAt,setUpdatedAt]=useState(null);
  async function api(path,options={}){
   const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
    headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug,...options.headers}});
@@ -17,7 +19,7 @@ export default function ProveedoresMaestro({clientSlug}){
   if(!r.ok)throw Error(data.error||"No se pudo completar la operación");
   return data;
  }
- async function refresh(){setLoading(true);try{setRows(await api("/api/tenant/proveedores"))}finally{setLoading(false)}}
+ async function refresh(){setLoading(true);try{setRows(await api("/api/tenant/proveedores"));setUpdatedAt(new Date())}finally{setLoading(false)}}
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[clientSlug]);
  async function save(e){
   e.preventDefault();setBusy(true);setError("");
@@ -45,11 +47,18 @@ export default function ProveedoresMaestro({clientSlug}){
  }
  const visible=useMemo(()=>rows.filter(r=>(r.name+" "+r.sourceCode+" "+label(r.type)).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
  return <div className="fm-management fm-production-panel">
-   <header className="page-header"><h1>Maestro de proveedores</h1><button className="btn btn-primary" disabled={loading} onClick={()=>setForm({...EMPTY})}><Plus size={16}/> Añadir proveedor</button></header>
+   <ReportPageHeader title="Maestro de proveedores" updatedAt={updatedAt}
+    refreshing={loading} onRefresh={()=>void refresh().catch(e=>setError(e.message))}
+    actions={<button className="btn btn-primary" disabled={loading} onClick={()=>setForm({...EMPTY})}><Plus size={16}/> Añadir proveedor</button>}/>
+   <ReportFilterBar showPeriod={false} showPharmacies={false}>
+    <label className="fm-unified-filter"><span>Buscar proveedor o código</span>
+     <input type="search" aria-label="Buscar proveedor" value={search}
+      placeholder="Nombre, código o tipo…" onChange={e=>setSearch(e.target.value)}/></label>
+   </ReportFilterBar>
    {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
    <div className="fm-supplier-summary">{[["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"],["laboratorio","Laboratorios"],["sin_clasificar","Sin clasificar"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:rows.filter(r=>id==="cooperative"||id==="ignoreReports"?r[id]===true:r.type===id).length}</strong></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
-    <div className="toolbar"><div className="search-wrap"><Search size={16}/><input placeholder="Buscar proveedor o código" aria-label="Buscar proveedor" value={search} onChange={e=>setSearch(e.target.value)}/></div></div>
+    
     <ListTable rows={visible} rowKey={r=>r.id||r.sourceCode} label="proveedores" defaultSort={{key:"name",direction:"asc"}} loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
      onRowClick={row=>setForm({...row})} columns={[
       {key:"sourceCode",label:"Código",value:r=>r.sourceCode},

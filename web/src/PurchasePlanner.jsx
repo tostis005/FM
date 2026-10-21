@@ -70,7 +70,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:ac.signal
    }).then(async r=>{const data=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(data.error||"No se puede preparar el pedido");return data})
-    .then(data=>{if(!ac.signal.aborted){setResult(data);setOverrides({});setOpen({});
+    .then(data=>{if(!ac.signal.aborted){setResult(data);setOverrides({});
       if(pendingLink?.supplier){
        const newAssignments={};
        for(const g of data.groups||[])for(const p of g.pharmacies)

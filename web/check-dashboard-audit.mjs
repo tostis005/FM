@@ -61,6 +61,13 @@ await page.route("**/api/**",async route=>{
    articleName:"Artículo prueba",cn:"123456",coopPuc:18,labPuc:12,
    difference:6,differencePct:33.333,potentialSaving:60}],comparisonLimit:80
  };
+ else if(p==="/api/analytics/dashboard/comparador-puc")body={
+  available:true,total:1,page:Number(url.searchParams.get("pagina")||1),
+  pageSize:Number(url.searchParams.get("tamano")||25),
+  rows:[{pharmacyId:"1",articleId:"ART-01",articleName:"Artículo prueba",cn:"123456",
+   coopPuc:18,labPuc:12,difference:6,differencePct:33.333,
+   cheaper:"Laboratorio",potentialSaving:60}]
+ };
  if(["/api/analytics/ventas/totales","/api/analytics/dashboard/compras"].includes(p)&&
   (url.searchParams.get("desde")||"")<"2026-01-01")
   await new Promise(resolve=>setTimeout(resolve,100));
@@ -118,11 +125,13 @@ try{
  await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor({timeout:12000});
  await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).waitFor({timeout:12000});
  await page.waitForFunction(()=>document.body.textContent.includes("Artículo prueba"),null,{timeout:12000});
+ assert.ok(await page.getByLabel("Paginación de artículos comparables").count()>0,"Comparador PUC con paginador");
+ assert.ok(await page.getByRole("button",{name:"Ordenar PUC coop."}).count()>0,"Comparador ordenable");
  assert.equal(await page.locator(".fm-dashboard-lazy-detail").count(),0,
   "Inicio no debe renderizar un detalle de artículos sin solicitar");
  assert.equal(by("/api/analytics/reportes").length,0,
   "Inicio no debe solicitar el informe pesado de artículos");
- for(const endpoint of ["horarios","vendedores","canales-compra"]){
+ for(const endpoint of ["horarios","vendedores","canales-compra","comparador-puc"]){
   assert.ok(by("/api/analytics/dashboard/"+endpoint).length>0,
    "No se lanzó la consulta independiente de "+endpoint);
  }

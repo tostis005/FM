@@ -132,9 +132,12 @@ const unitEuro=euro;
 function columnsFor(module,pharmacyMap){
  const pharmacy={key:"pharmacy",label:"Farmacia",filterMode:"multi",value:r=>pharmacyMap.get(String(r.pharmacyId))||"—"};
  const article=C("name","Artículo","name"),cn={
-   key:"cn",label:"CN",value:r=>r.nationalCode||"CN no disponible",
-   render:r=>r.nationalCode?<strong className="fm-verified-cn">{r.nationalCode}</strong>:
-    <span className="fm-missing-cn" title="El catálogo no proporciona un código nacional verificado. El identificador interno del ERP no es un CN.">CN no disponible</span>
+   key:"cn",label:"CN",value:r=>r.nationalCode||(/^[0-9]{6,7}$/.test(String(r.cn||""))?String(r.cn):"CN no disponible"),
+   render:r=>{
+    const cn=String(r.nationalCode||(/^[0-9]{6,7}$/.test(String(r.cn||""))?r.cn:""));
+    return cn?<strong className="fm-verified-cn">{cn}</strong>:
+     <span className="fm-missing-cn" title="No se dispone de un código nacional o identificador común válido.">CN no disponible</span>;
+   }
   };
  const family={key:"family",label:"Familia",filterMode:"multi",value:r=>r.family||"—"};
  const unit=(key,label)=>C(key,label,key,unitEuro);

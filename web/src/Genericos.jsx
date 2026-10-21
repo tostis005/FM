@@ -10,6 +10,8 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
+import {ListPagination} from "./ListTable.jsx";
+import {searchText} from "./listLogic.js";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
 const money=euro;
@@ -123,6 +125,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const [search,setSearch]=useState(""),[queryText,setQueryText]=useState("");
  const [abcdFilter,setAbcdFilter]=useState("all");
  const [sort,setSort]=useState({key:"revenue",direction:"desc"});
+ const [tableFilters,setTableFilters]=useState({});
+ const [pageSize,setPageSize]=useState(25);
  const sortColumns=[
   ["name","Conjunto DCPF / molécula"],["skuCount","Códigos"],
   ["abcdClass","ABCD"],["salesUnits","Venta (uds.)"],["revenue","Ventas"],
@@ -191,7 +195,17 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  }),[data,salesEnabled,buysEnabled]);
  const top=(data?.topGroups||groups).filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
   name:(g.principle||g.name||g.dcpf).slice(0,28),revenue:Number(g.revenue),dcpf:g.dcpf}));
- const chunk=groups.slice(page*20,(page+1)*20);
+ const visibleGroups=groups.filter(g=>sortColumns.every(([key])=>{
+  const selected=tableFilters[key];
+  if(!selected||(Array.isArray(selected)&&!selected.length))return true;
+  const value=key==="name"?[g.name,g.principle,g.dcpf].join(" "):
+   key==="unitMargin"?(g.averagePvp!=null&&g.averagePuc!=null?g.averagePvp-g.averagePuc:""):
+   g[key];
+  return Array.isArray(selected)?selected.includes(String(value??"")):
+   searchText(value).includes(searchText(selected).trim());
+ }));
+ const safePage=Math.max(0,Math.min(page,Math.ceil(visibleGroups.length/pageSize)-1));
+ const chunk=visibleGroups.slice(safePage*pageSize,(safePage+1)*pageSize);
  return <div className="fm-generics">
   <ReportPageHeader title="Genéricos" period={range} updatedAt={updatedAt}
    refreshing={loading} onRefresh={()=>setReload(x=>x+1)}/>
@@ -259,10 +273,10 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   <section className="card fm-generic-list">
    <div className="section-heading"><div><h2>Conjuntos genéricos</h2>
     <p>{loading?"Consultando catálogo…":number(data?.totalGroups||0)+" conjuntos · "+number(groups.length)+" visibles en la consulta"}</p></div>
-    <button type="button" className="btn btn-secondary" disabled={loading||!groups.length}
-     onClick={()=>downloadRows(groups)}><Download size={16}/> CSV</button></div>
+    <button type="button" className="btn btn-secondary" disabled={loading||!visibleGroups.length}
+     onClick={()=>downloadRows(visibleGroups)}><Download size={16}/> CSV</button></div>
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
-    !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
+    !visibleGroups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
      <thead><tr>{sortColumns.map(([key,label])=><th key={key} scope="col"
        aria-sort={sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
@@ -271,7 +285,15 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
         <span>{label}</span><span aria-hidden="true" className="smart-sort-arrow">
          {sort.key===key?(sort.direction==="asc"?"▲":"▼"):"↕"}
         </span>
-       </button></th>)}<th/></tr></thead>
+       </button></th>)}<th/></tr>
+     <tr className="smart-filter-row">{sortColumns.map(([key,label])=><th key={key}>
+      {key==="abcdClass"?<MultiSelectFilter label="ABCD" options={["A","B","C","D"]}
+       value={Array.isArray(tableFilters[key])?tableFilters[key]:[]}
+       onChange={values=>{setTableFilters(prev=>({...prev,[key]:values}));setPage(0)}}/>:
+       <input className="smart-column-filter" type="search" aria-label={"Buscar en "+label}
+        placeholder="Filtrar…" value={tableFilters[key]||""}
+        onChange={e=>{setTableFilters(prev=>({...prev,[key]:e.target.value}));setPage(0)}}/>}
+     </th>)}<th><span className="smart-filter-blank"/></th></tr></thead>
      <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
@@ -293,11 +315,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
       </td></tr>}
      </React.Fragment>)}</tbody>
     </table></HorizontalTableScroll>}
-   {!loading&&groups.length>20&&<div className="fm-generic-pager">
-    <span>Mostrando {page*20+1}–{Math.min(groups.length,(page+1)*20)} de {groups.length}</span>
-    <button disabled={page===0} type="button" onClick={()=>goToPage(page-1)}>Anterior</button>
-    <button disabled={(page+1)*20>=groups.length} type="button" onClick={()=>goToPage(page+1)}>Siguiente</button>
-   </div>}
+   {!loading&&<ListPagination total={visibleGroups.length} page={safePage} pageSize={pageSize}
+     onPageChange={goToPage} onPageSizeChange={n=>{setPageSize(n);setPage(0);setActive(null)}} label="conjuntos"/>}
   </section>
  </div>;
 }

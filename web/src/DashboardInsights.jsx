@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
+import ListTable from "./ListTable.jsx";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
 import {euro,integer,percentage} from "./localeES.js";
 import "./dashboardInsights.css";
@@ -21,6 +22,7 @@ function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid}){
   const controller=new AbortController();
   const params=new URLSearchParams({desde:from,hasta:to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
+  if(endpoint==="canales-compra")params.set("resumen","1");
   setResult({scope,status:"loading"});
   const timeout=setTimeout(()=>{
    if(controller.signal.aborted)return;
@@ -104,21 +106,70 @@ function Sellers({scope}){
    <p className="fm-insight-foot">El ranking se calcula con el importe neto, incluyendo devoluciones. Se resuelve el nombre del vendedor por farmacia.</p></>}
  </Panel>;
 }
+function useComparator(scope,{page,pageSize,sort,filters}){
+ const key=JSON.stringify([scope.clientSlug,scope.from,scope.to,scope.pharmacyIds,scope.reloadKey,
+  page,pageSize,sort,filters]);
+ const [result,setResult]=useState(null);
+ useEffect(()=>{
+  if(!scope.valid)return;
+  const controller=new AbortController();
+  const params=new URLSearchParams({desde:scope.from,hasta:scope.to,
+   pagina:String(page),tamano:String(pageSize),orden:sort.key,direccion:sort.direction});
+  if(scope.pharmacyIds.length)params.set("farmacias",scope.pharmacyIds.join(","));
+  if(Object.entries(filters).some(([,v])=>Array.isArray(v)?v.length:Boolean(v)))
+   params.set("columnas",JSON.stringify(filters));
+  setResult({key,status:"loading"});
+  const timeout=setTimeout(()=>controller.abort(),32000);
+  fetch("/api/analytics/dashboard/comparador-puc?"+params,{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":scope.clientSlug},signal:controller.signal
+  }).then(async response=>{
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(body.error||"No se puede consultar el comparador");
+   return body;
+  }).then(data=>{if(!controller.signal.aborted)setResult({key,status:"ready",data})})
+   .catch(e=>{if(!controller.signal.aborted)setResult({key,status:"error",error:e.message})})
+   .finally(()=>clearTimeout(timeout));
+  return()=>{clearTimeout(timeout);controller.abort()};
+ },[key,scope.valid]);
+ return !scope.valid?{status:"empty"}:result?.key===key?result:{status:"loading"};
+}
 function Purchases({scope,pharmacies}){
  const insight=useInsight("canales-compra",scope);
- const [query,setQuery]=useState("");
- const [choice,setChoice]=useState("all");
+ const [filters,setFilters]=useState({});
+ const [readyFilters,setReadyFilters]=useState({});
+ const [sort,setSort]=useState({key:"potentialSaving",direction:"desc"});
+ const [page,setPage]=useState(1);
+ const [pageSize,setPageSize]=useState(25);
+ useEffect(()=>{
+  const timer=setTimeout(()=>setReadyFilters(filters),300);
+  return()=>clearTimeout(timer);
+ },[filters]);
+ const comparator=useComparator(scope,{page,pageSize,sort,filters:readyFilters});
  const channels=Array.isArray(insight.data?.channels)?insight.data.channels:EMPTY;
- const comparisons=Array.isArray(insight.data?.comparisons)?insight.data.comparisons:EMPTY;
+ const comparisons=Array.isArray(comparator.data?.rows)?comparator.data.rows:EMPTY;
+ const total=Number(comparator.data?.total||0);
  const classified=channels.filter(c=>["cooperativa","laboratorio"].includes(c.channel)&&c.value>0);
  const known=classified.reduce((n,c)=>n+c.value,0);
-
  const names=new Map(pharmacies.map(p=>[String(p.id),p.name]));
- const filtered=comparisons.filter(row=>{
-  const search=(row.articleName||"")+" "+(row.cn||"")+" "+(row.articleId||"");
-  return search.toLocaleLowerCase("es").includes(query.toLocaleLowerCase("es"))&&
-   (choice==="all"||choice==="lab"&&row.difference>0||choice==="coop"&&row.difference<0);
- });
+ const columns=[
+  {key:"article",label:"Artículo / CN",value:r=>r.articleName||r.cn||r.articleId,
+   render:r=><div><strong>{r.articleName||r.cn||r.articleId}</strong>
+    <small>{r.cn||"ID ERP "+r.articleId}</small></div>},
+  {key:"pharmacy",label:"Farmacia",filterMode:"multi",
+   value:r=>names.get(String(r.pharmacyId))||"Farmacia "+r.pharmacyId},
+  {key:"coopPuc",label:"PUC coop.",value:r=>r.coopPuc,render:r=>price(r.coopPuc)},
+  {key:"labPuc",label:"PUC lab.",value:r=>r.labPuc,render:r=>price(r.labPuc)},
+  {key:"difference",label:"Diferencia",value:r=>r.difference,
+   render:r=><span className={r.difference>0?"fm-cost-higher":"fm-cost-lower"}>{price(r.difference)}</span>},
+  {key:"differencePct",label:"Ahorro %",value:r=>r.differencePct,
+   render:r=>pct(r.differencePct)},
+  {key:"cheaper",label:"Más económico",filterMode:"multi",value:r=>r.cheaper,
+   render:r=>r.cheaper},
+  {key:"potentialSaving",label:"Ahorro potencial",value:r=>r.potentialSaving,
+   render:r=><strong>{euro(r.potentialSaving)}</strong>}
+ ];
+ const changeFilters=next=>{setFilters(next);setPage(1)};
  return <Panel title="¿Dónde estamos comprando mejor?" subtitle="Cooperativa frente a laboratorio · coste ponderado de las compras, según PUC registrado" insight={insight}>
   {insight.data?.available===false?<p className="fm-insight-status">{insight.data.reason||"No hay datos de compras por artículo."}</p>:
    <>
@@ -126,8 +177,8 @@ function Purchases({scope,pharmacies}){
      <div className="fm-purchase-pie">
       {classified.length>0?<ResponsiveContainer width="100%" height={190}>
        <PieChart><Pie data={classified} dataKey="value" nameKey="channel" innerRadius={51}
-         outerRadius={79} paddingAngle={2} stroke="none">{classified.map(c=>
-          <Cell key={c.channel} fill={COLORS[c.channel]}/>)}</Pie>
+        outerRadius={79} paddingAngle={2} stroke="none">{classified.map(c=>
+         <Cell key={c.channel} fill={COLORS[c.channel]}/>)}</Pie>
         <Tooltip formatter={(value,name)=>[euro(value),CHANNELS[name]||name]}/></PieChart>
       </ResponsiveContainer>:<p className="fm-insight-status">Sin compras clasificadas con PUC válido.</p>}
      </div>
@@ -140,36 +191,36 @@ function Purchases({scope,pharmacies}){
         <small>{known>0?pct(value/known*100):"—"}</small>
        </div>;
       })}
-      <p className="fm-insight-foot">Se representan importes de compra calculados con el PUC de las líneas válidas, no ventas al público. Solo son cooperativas las marcadas con ese indicador; el resto se considera laboratorio.</p>
+      <p className="fm-insight-foot">Importes de compras según su PUC. Solo se consideran cooperativas los proveedores con el indicador activado; el resto son laboratorios.</p>
      </div>
     </div>
     <div className="fm-insight-divider"/>
     <div className="fm-purchase-heading"><div><h3>Comparador de PUC por artículo</h3>
-     <p>Solo artículos comprados a ambos canales en la misma farmacia. La diferencia es PUC cooperativa − PUC laboratorio.</p></div>
-     <span className="fm-insight-count">{integer(comparisons.length)} referencias</span>
+     <p>Exclusivamente artículos comprados en ambos canales en la misma farmacia y período. Orden y filtros aplicados sobre todos los resultados, no solo la página.</p></div>
+     <span className="fm-insight-count">{integer(total)} referencias</span>
     </div>
-    <div className="fm-purchase-controls">
-     <input type="search" value={query} onChange={e=>setQuery(e.target.value)}
-      aria-label="Buscar artículo o código" placeholder="Buscar artículo o CN…"/>
-     <select aria-label="Comparar canal más barato" value={choice} onChange={e=>setChoice(e.target.value)}>
-      <option value="all">Todos</option><option value="lab">Laboratorio más barato</option>
-      <option value="coop">Cooperativa más barata</option>
-     </select>
-    </div>
-    {filtered.length?<div className="fm-purchase-scroll"><table className="fm-purchase-table"><thead>
-     <tr><th>Artículo / farmacia</th><th>PUC coop.</th><th>PUC lab.</th>
-      <th>Diferencia</th><th>Ahorro %</th><th>Más económico</th><th>Ahorro potencial</th></tr></thead>
-     <tbody>{filtered.map(row=><tr key={row.pharmacyId+"|"+row.articleId}>
-      <td><strong>{row.articleName||row.cn||row.articleId}</strong>
-       <small>{row.articleName?row.cn||row.articleId:"Artículo ERP "+row.articleId} · {names.get(String(row.pharmacyId))||"Farmacia "+row.pharmacyId}</small></td>
-      <td>{price(row.coopPuc)}</td><td>{price(row.labPuc)}</td>
-      <td className={row.difference>0?"fm-cost-higher":"fm-cost-lower"}>{price(row.difference)}</td>
-      <td>{pct(row.differencePct)}</td>
-      <td>{row.difference>0?"Laboratorio":row.difference<0?"Cooperativa":"Igual"}</td>
-      <td><strong>{euro(row.potentialSaving)}</strong></td>
-     </tr>)}</tbody></table></div>:
-     <p className="fm-insight-status">{query||choice!=="all"?"No hay artículos comparables con estos filtros.":!channels.some(c=>c.channel==="cooperativa"&&c.lines>0)||!channels.some(c=>c.channel==="laboratorio"&&c.lines>0)?"No hay compras con PUC válido de ambos canales en las farmacias y fechas seleccionadas.":"No se han comprado los mismos artículos a ambos canales dentro de la misma farmacia y período."}</p>}
-    <p className="fm-insight-foot">PUC medio ponderado por unidades compradas (sin devoluciones). El ahorro es orientativo: diferencia de PUC por las unidades compradas al canal más caro, sin considerar rappels, portes ni condiciones comerciales. Se muestran hasta {integer(insight.data?.comparisonLimit||80)} oportunidades ordenadas por impacto.</p>
+    {comparator.status==="error"?<p role="alert" className="fm-insight-status">{comparator.error}</p>:
+     comparator.data?.available===false?<p className="fm-insight-status">{comparator.data.reason}</p>:
+     <div className="fm-puc-comparator-table">
+      <ListTable
+       rows={comparisons}
+       columns={columns}
+       rowKey={r=>r.pharmacyId+"|"+r.articleId}
+       label="artículos comparables"
+       tableClass="fm-puc-smart-table"
+       emptyText={known===0?"No hay compras con PUC de ambos canales para comparar.":"No hay artículos que coincidan en ambos canales con estos filtros."}
+       loading={comparator.status==="loading"}
+       loadingLabel="Comparando PUC de laboratorio y cooperativa…"
+       serverFilters={filters}
+       onServerFiltersChange={changeFilters}
+       filterOptions={{pharmacy:pharmacies.map(p=>p.name),cheaper:["Laboratorio","Cooperativa","Igual"]}}
+       sort={sort}
+       onSortChange={next=>{setSort(next);setPage(1)}}
+       serverPagination={{total,page,pageSize,onPageChange:setPage,
+        onPageSizeChange:n=>{setPageSize(n);setPage(1)}}}
+      />
+     </div>}
+    <p className="fm-insight-foot">PUC medio ponderado por unidades compradas (sin devoluciones y con PUC positivo). El ahorro estimado compara las unidades compradas al canal más caro, sin considerar rappels, portes ni otras condiciones comerciales.</p>
    </>}
  </Panel>;
 }

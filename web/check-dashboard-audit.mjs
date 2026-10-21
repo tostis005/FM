@@ -61,6 +61,26 @@ await page.route("**/api/**",async route=>{
    articleName:"Artículo prueba",cn:"123456",coopPuc:18,labPuc:12,
    difference:6,differencePct:33.333,potentialSaving:60}],comparisonLimit:80
  };
+ else if(p==="/api/tenant/estado")body={
+  checkedAt:"2026-10-21T08:00:00Z",sources:["ejecuciones","ventas","compras"],warnings:[],
+  pharmacies:[
+   {id:"1",name:"Farmacia Centro",code:"ABA",active:true,state:"Actividad reciente",
+    lastReceivedAt:"2026-10-21T07:00:00Z",
+    sales:{lastReceivedAt:"2026-10-21T07:00:00Z",lastDocumentAt:"2026-10-21T06:59:00Z"},
+    purchases:{lastReceivedAt:"2026-10-21T06:55:00Z",lastDocumentAt:"2026-10-21T06:50:00Z"},
+    lastRunAt:"2026-10-21T07:00:00Z",flows:[{flow:"ventas",state:"completado",startedAt:"2026-10-21T07:00:00Z"}],incidents:[]},
+   {id:"2",name:"Farmacia Europa",code:"EUR",active:true,state:"Sin actividad reciente",
+    sales:null,purchases:null,lastRunAt:null,flows:[],incidents:[]}
+  ],
+  note:"Los movimientos no demuestran conectividad VPN."
+ };
+ else if(p==="/api/analytics/dashboard/comparador-puc")body={
+  available:true,total:1,page:Number(url.searchParams.get("pagina")||1),
+  pageSize:Number(url.searchParams.get("tamano")||25),
+  rows:[{pharmacyId:"1",articleId:"ART-01",articleName:"Artículo prueba",cn:"123456",
+   coopPuc:18,labPuc:12,difference:6,differencePct:33.333,
+   cheaper:"Laboratorio",potentialSaving:60}]
+ };
  if(["/api/analytics/ventas/totales","/api/analytics/dashboard/compras"].includes(p)&&
   (url.searchParams.get("desde")||"")<"2026-01-01")
   await new Promise(resolve=>setTimeout(resolve,100));
@@ -118,11 +138,13 @@ try{
  await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor({timeout:12000});
  await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).waitFor({timeout:12000});
  await page.waitForFunction(()=>document.body.textContent.includes("Artículo prueba"),null,{timeout:12000});
+ assert.ok(await page.getByLabel("Paginación de artículos comparables").count()>0,"Comparador PUC con paginador");
+ assert.ok(await page.getByRole("button",{name:"Ordenar PUC coop."}).count()>0,"Comparador ordenable");
  assert.equal(await page.locator(".fm-dashboard-lazy-detail").count(),0,
   "Inicio no debe renderizar un detalle de artículos sin solicitar");
  assert.equal(by("/api/analytics/reportes").length,0,
   "Inicio no debe solicitar el informe pesado de artículos");
- for(const endpoint of ["horarios","vendedores","canales-compra"]){
+ for(const endpoint of ["horarios","vendedores","canales-compra","comparador-puc"]){
   assert.ok(by("/api/analytics/dashboard/"+endpoint).length>0,
    "No se lanzó la consulta independiente de "+endpoint);
  }
@@ -157,6 +179,13 @@ try{
   cards=>cards.slice(0,6).map(card=>card.querySelector("strong")?.textContent));
  assert.ok(values.every(v=>v&&v!=="—"),
   "Los importes y unidades principales deben estar disponibles: "+JSON.stringify(values));
- assert.deepEqual(pageErrors,[],"No debe haber excepciones de React");
+ await page.goto(BASE+"/estado",{waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Estado de las farmacias"}).waitFor({timeout:12000});
+ await page.getByRole("heading",{name:"Seguimiento por farmacia"}).waitFor({timeout:12000});
+ await page.waitForFunction(()=>document.body.textContent.includes("Farmacia Europa"),null,{timeout:12000});
+ assert.ok(by("/api/tenant/estado").length>0,"Estado consulta las importaciones por farmacia");
+ assert.equal(await page.getByRole("button",{name:"Ordenar Situación"}).count(),1,
+  "La tabla Estado dispone de ordenación como las demás tablas");
+  assert.deepEqual(pageErrors,[],"No debe haber excepciones de React");
  console.log("OK: Inicio sin bloqueo, KPI legibles, fuentes documentales y filtros compartidos");
 }finally{await browser.close();}

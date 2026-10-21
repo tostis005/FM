@@ -21,6 +21,7 @@ import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
 import SyncVentas from "./SyncVentas.jsx";
+import PharmacyState from "./PharmacyState.jsx";
 import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
 import PantallasReales,{DOCUMENT_SCREENS} from "./PantallasReales.jsx";
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -164,13 +165,14 @@ const NAV=[
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
  {id:"sincronizacion",label:"Sincronización",icon:RefreshCcw,admin:true},
+ {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
 ];
 const ADMIN_IDS=new Set(["clientes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","sincronizacion","ajustes"]);
+const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","sincronizacion","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
@@ -844,7 +846,7 @@ function App(){
  const canManagePromotions=["administrador","superadministrador"].includes(role);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(item.admin)return ["administrador","superadministrador"].includes(role)||(item.id==="usuarios"&&role==="gestor");
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
    if(item.module)return sessionUser?.role==="superadministrador"||tenantContext?.modules?.[item.module]===true;
    return true;
  });
@@ -1100,6 +1102,7 @@ function App(){
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>} 
+    {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}/>}
     {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
@@ -1115,7 +1118,7 @@ function App(){
      {page==="ajustes"&&<div className="fm-production-settings">
       <div className="page-header"><h1>Ajustes</h1></div>
       <div className="fm-module-links">
-       {[["usuarios","Usuarios"],["farmacias","Farmacias"],["proveedores-maestro","Proveedores"],["clientes","Clientes"],["solicitudes","Solicitudes"],["accesos","Accesos"]]
+       {[["estado","Estado"],["usuarios","Usuarios"],["farmacias","Farmacias"],["proveedores-maestro","Proveedores"],["clientes","Clientes"],["solicitudes","Solicitudes"],["accesos","Accesos"]]
         .filter(([id])=>visibleNav.some(item=>item.id===id))
         .map(([id,label])=><button className="card fm-module-link" key={id} onClick={()=>nav(id)}><strong>{label}</strong><ArrowRight size={17}/></button>)}
       </div>

@@ -109,6 +109,14 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
     " AND nullif(btrim("+article+"::text),'') IS NOT NULL"+
     " AND "+included+" ), priced AS (SELECT * FROM classified WHERE puc IS NOT NULL AND puc>=0)";
    const values=params(req,f);
+   if(req.query.resumen==="1"){
+    const {rows:channelRows}=await pool.query(base+" SELECT channel,sum(units*puc)::float8 AS value,"+
+      " sum(units)::float8 AS units,count(*)::int AS lines"+
+      " FROM priced GROUP BY channel",values);
+    return res.json({...empty,channels:channelRows.map(row=>({...row,
+     value:Number(row.value),units:Number(row.units)})),
+     pricedLines:channelRows.reduce((n,r)=>n+Number(r.lines||0),0)});
+   }
    const [channelsResult,detailResult]=await Promise.all([
     pool.query(base+" SELECT channel,sum(units*puc)::float8 AS value,"+
       " sum(units)::float8 AS units,count(*)::int AS lines"+

@@ -1,3 +1,5 @@
+import "./pucComparator.test.js";
+import "./pharmacyState.test.js";
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {includedPurchaseSupplier,sourceSupplierRows,purchaseSupplierChannelSQL} from "./supplierReporting.js";

@@ -10,7 +10,7 @@ const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",databaseCode:"
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",schema:"ampedia",name:"Ampedia"},role:"superadministrador",
  pharmacies,modules:{compras:true,dashboard:true}};
-const posts=[],errors=[];
+const posts=[],errors=[],laboratoryRequests=[];
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname;
@@ -27,6 +27,15 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/analytics/catalogos/proveedores")body={items:[
   {code:"P44",name:"Laboratorio Alfa"},{code:"P55",name:"Cooperativa Beta"}]};
  else if(path==="/api/analytics/pedidos/laboratorios"){
+  const payload=request.postDataJSON();
+  laboratoryRequests.push(payload);
+  // Reproducir el servidor: sin farmacias el PUC nunca se encuentra.
+  // El móvil sin filtro previo debe enviar las dos farmacias autorizadas.
+  if(!payload?.pharmacies?.length){
+   await route.fulfill({status:200,contentType:"application/json",
+    body:JSON.stringify({recommendations:[],byPharmacy:[],presentations:[],observedPrices:0})});
+   return;
+  }
   body={recommendations:[{groupKey:"CN:123456",recommended:{
    groupKey:"CN:123456",pharmacyId:"1",articleId:"771",cn:"123456",
    supplierCode:"P44",supplierName:"Laboratorio Alfa",puc:3.24,sampleLines:4}}],
@@ -123,6 +132,8 @@ try{
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.locator(".fm-planner-details").first().waitFor();
  await page.locator(".fm-planner-lab-choice strong").first().waitFor();
+ assert.deepEqual(laboratoryRequests.at(-1).pharmacies,[1,2],
+  "Sin filtro, la consulta PUC debe incluir ambas farmacias como la de ventas");
  const detail=page.locator(".fm-planner-details");
  const rows=detail.locator("tbody tr");
  assert.equal(await rows.count(),2,"Una fila de detalle por farmacia");
@@ -145,6 +156,17 @@ try{
  await page.getByText(/1,201.*€/).first().waitFor();
  assert.equal(await page.getByText("Genérico DCPF 17531000140106").count(),0,
   "No se debe mostrar el identificador numérico en lugar del genérico");
+ // Simular navegador móvil nuevo: sin filtros previos compartidos.
+ await page.setViewportSize({width:375,height:812});
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByText("Crema de manos").first().waitFor({timeout:15000});
+ await page.getByText("Laboratorio Alfa").first().waitFor({timeout:15000});
+ assert.deepEqual(laboratoryRequests.at(-1).pharmacies,[1,2],
+  "En móvil, Todas las farmacias debe consultar PUC para ambas");
+ await page.getByRole("button",{name:/Crema de manos/}).first().click();
+ await page.locator(".fm-planner-details").first().waitFor();
+ assert.equal(await page.getByText("Sin PUC de laboratorio en los últimos 12 meses").count(),0,
+  "No presentar ausencia falsa de PUC en móvil cuando el proveedor tiene compras");
  assert.deepEqual(errors,[]);
- console.log("OK: Preparador consolidado, desglose por farmacia, proveedor y borradores guardados");
+ console.log("OK: Preparador, PUC en móvil con todas las farmacias, detalle y borradores");
 }finally{await browser.close()}

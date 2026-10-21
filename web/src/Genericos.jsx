@@ -276,7 +276,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
     <button type="button" className="btn btn-secondary" disabled={loading||!visibleGroups.length}
      onClick={()=>downloadRows(visibleGroups)}><Download size={16}/> CSV</button></div>
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
-    !visibleGroups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
+    !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>
      <thead><tr>{sortColumns.map(([key,label])=><th key={key} scope="col"
        aria-sort={sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
@@ -294,7 +294,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
         placeholder="Filtrar…" value={tableFilters[key]||""}
         onChange={e=>{setTableFilters(prev=>({...prev,[key]:e.target.value}));setPage(0)}}/>}
      </th>)}<th><span className="smart-filter-blank"/></th></tr></thead>
-     <tbody>{chunk.map(g=><React.Fragment key={g.dcpf}>
+     <tbody>{!chunk.length&&<tr><td colSpan={12}>Ningún conjunto coincide con los filtros de columna. Puedes modificarlos arriba.</td></tr>}{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
        <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
        <td>{number(g.skuCount)} <small>({g.genericCount} EFG)</small></td>

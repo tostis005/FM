@@ -51,7 +51,6 @@ catalogo_sin_ventas AS MATERIALIZED (
   (upper(a.origen_id) LIKE '%'||$5||'%' OR upper(a.nombre) LIKE '%'||$5||'%'
    OR upper(coalesce(a.codigo_nacional,'')) LIKE '%'||$5||'%')
   AND NOT EXISTS(SELECT 1 FROM catalogo c WHERE c.fid=f.id AND c.articulo=a.origen_id)
- LIMIT 3500
 ),
 articulos AS MATERIALIZED (
  SELECT * FROM catalogo

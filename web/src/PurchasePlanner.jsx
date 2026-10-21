@@ -198,16 +198,26 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   finally{setBusy(false)}
  }
  const columns=[
-  {key:"articleName",label:"Artículo / CN",value:g=>g.articleName,
+  {key:"articleName",label:"Artículo / conjunto genérico",value:g=>g.articleName,
    render:g=><div className="fm-planner-article"><button type="button" className="fm-planner-toggle"
     onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))} aria-expanded={Boolean(open[g.key])}>
-    <ChevronDown size={15}/><span><strong>{g.articleName}</strong><small>{g.cn||"ERP (sin CN común)"}</small></span></button>
+    <ChevronDown size={15}/><span><strong>{g.articleName}</strong><small>{g.kind==="generico"?"Genérico · DCPF "+g.dcpf+" · "+g.productCount+" referencias":g.cn||"ERP (sin CN común)"}</small></span></button>
     {open[g.key]&&<div className="fm-planner-details">{g.pharmacies.map(p=>{
      const edit=overrides[key(p)]||{},options=suppliers[String(p.pharmacyId)]||[];
      const confidence=p.confidence;
      return <div className="fm-planner-pharmacy" key={key(p)}>
       <strong>{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</strong>
-      <small>ERP {p.articleId} · Stock {p.stock===null?"No disponible":whole(p.stock)} · Período {whole(p.unitsPeriod)} · 3m {whole(p.units3)} · 12m {whole(p.units12)}</small>
+      <div className="fm-planner-detail-metrics">
+       <span>Vendidas período <b>{whole(p.unitsPeriod)}</b></span>
+       <span>Ventas 3 meses <b>{whole(p.units3)}</b></span>
+       <span>Ventas 12 meses <b>{whole(p.units12)}</b></span>
+       <span>Stock disponible <b>{p.stock===null?"Sin dato":whole(p.stock)}</b></span>
+       <span>Pedido recomendado <b>{p.suggested===null?"Sin cálculo":whole(p.suggested)}</b></span>
+      </div>
+      {g.kind==="generico"&&<div className="fm-planner-variants">
+       <small>Referencias equivalentes en esta farmacia:</small>
+       {p.options.map(o=><small key={o.articleId}>{o.cn||"Sin CN"} · {o.articleName} · ERP {o.articleId} · Stock {o.stock??"?"}</small>)}
+      </div>}
       <small>Media {whole(p.daily)} uds./día × ({p.interval}+{p.lead} días) + seguridad {p.safety} − stock {whole(p.stock)} − preparados {p.ordered??0} = <b>{p.suggested??"Sin cálculo"} uds.</b></small>
       <small>Última actualización conocida del inventario: {p.stockAt?new Date(p.stockAt).toLocaleString("es-ES"):"Sin fecha disponible"}</small>
       {confidence!=="calculable"&&<small className="fm-planner-caution">{confidence==="stock_antiguo"?"Stock posiblemente desactualizado":confidence==="sin_stock"?"Sin stock: no se propone compra":"Sin fecha verificable de stock"}</small>}
@@ -215,6 +225,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       <div className="fm-planner-edit">
        <label>Pedir <input type="number" min="0" max="999999" step="1" disabled={!canEdit||p.suggested===null}
         value={edit.units??p.suggested??0} onChange={e=>setValue(p,"units",e.target.value)}/></label>
+       {g.kind==="generico"&&<label>Presentación a comprar
+        <select aria-label={"Presentación a comprar en "+(pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId)}
+         disabled={!canEdit||p.suggested===null}
+         value={chosenArticle(p,edit)} onChange={e=>setValue(p,"articleId",e.target.value)}>
+         <option value="">Selecciona CN / artículo</option>
+         {p.options.map(o=><option key={o.articleId} value={o.articleId}>{o.cn||"Sin CN"} · {o.articleName}</option>)}
+        </select></label>}
        <label>Proveedor <input list={"fm-pl-sup-"+p.pharmacyId} disabled={!canEdit||p.suggested===null}
         placeholder="Código proveedor" value={edit.supplier||""}
         onChange={e=>setValue(p,"supplier",e.target.value)}/>
@@ -224,11 +241,12 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       </div>
      </div>;
     })}</div>}</div>},
-  {key:"stock",label:"Stock",value:g=>g.stock??-1,render:g=>g.stock===null?"—":whole(g.stock)},
-  {key:"unitsPeriod",label:"Ventas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
+  
+  {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
   {key:"units3",label:"Ventas 3m",value:g=>g.units3,render:g=>whole(g.units3)},
   {key:"units12",label:"Ventas 12m",value:g=>g.units12,render:g=>whole(g.units12)},
-  {key:"suggested",label:"Propuesta",value:g=>g.suggested??-1,
+  {key:"stock",label:"Stock disponible",value:g=>g.stock??-1,render:g=>g.stock===null?"—":whole(g.stock)},
+  {key:"suggested",label:"Pedido recomendado",value:g=>g.suggested??-1,
    render:g=>g.suggested===null?"Ver desglose":<strong>{whole(g.suggested)}</strong>},
   {key:"selected",label:"Pedir",value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??p.suggested??0),0),
    render:g=><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??p.suggested??0),0))}</strong>}

@@ -300,12 +300,12 @@ FROM {{TABLE:dbo.Vendedor}} AS v
     public static IReadOnlyList<SourceQueryTemplate> All { get; } =
     [
 
-        new("farmatic", "ventas_completas", "Farmatic · tickets completos (Venta + LineaVenta)",
+        new("farmatic", "ventas_completas", "Farmatic · ventas (Venta + LineaVenta)",
             SalesDocuments.TrimEnd() + "\nWHERE v.FechaHora >= @desde AND v.FechaHora < @hasta",
             SalesDocuments.TrimEnd(), "incremental",
             "Una cabecera por ticket y sus líneas; se conservan descuentos, signos y TipoVenta original. No hay fecha técnica de modificación: relectura 7 días y reconciliación completa periódica. Revisar importes y anulaciones antes de producción.",
             10080, 1440),
-        new("farmatic", "recepciones_completas", "Farmatic · compras completas (Recep + LINEARECEP)",
+        new("farmatic", "recepciones_completas", "Farmatic · compras (Recep + LINEARECEP)",
             ReceiptDocuments.TrimEnd() + "\nWHERE r.Fecha >= CONVERT(date, @desde) AND r.Fecha < CONVERT(date, @hasta)",
             ReceiptDocuments.TrimEnd(), "incremental",
             "Compras por línea y proveedor, con importe de origen, PUC y unidades bonificadas. Descuentos 1..4 pendientes de interpretar; no confundir ImportePuc con precio bruto. No hay fecha técnica de modificación: relectura 7 días y reconciliación periódica.",

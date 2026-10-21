@@ -74,8 +74,7 @@ try{
  await pageOne;
  await page.getByText("Crema de manos").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
- await page.getByText("ERP 771").waitFor();
- await page.getByText("ERP 999").waitFor();
+ await page.getByText("Código nacional 123456").first().waitFor();
  assert.equal(await page.locator(".fm-planner-pharmacy").count(),2);
  const controls=page.locator(".fm-planner-pharmacy");
  await controls.nth(0).getByRole("button",{name:/Usar recomendado/}).click();

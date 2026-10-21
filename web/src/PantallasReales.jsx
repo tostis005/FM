@@ -27,9 +27,11 @@ const DAY=v=>{
  return parts.length===3?parts.reverse().join("/"):DATE(v);
 };
 const nowZone=slug=>slug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
-// Un código interno de Farmatic jamás se etiqueta como código nacional.
+// El catálogo actual usa el identificador de origen de seis cifras para el CN.
 function ArticleIdentification({cn,name,sourceId}){
- const realCn=String(cn||"").trim(),realName=String(name||"").trim();
+ const code=String(cn||"").trim(),origin=String(sourceId||"").trim();
+ const realCn=code||(/^[0-9]{6,7}$/.test(origin)?origin:"");
+ const realName=String(name||"").trim();
  return <span className="fm-article-identity">
   <span className={realCn?"fm-article-cn":"fm-article-cn fm-article-cn-unknown"}>
    {realCn||"CN no disponible"}</span>
@@ -42,7 +44,7 @@ const META={
   note:"PVP, PMC y existencias proceden del catálogo del ERP. El margen unitario es una estimación PVP − PMC, no un beneficio realizado.",
   cols:[
    ["cn","CN · Artículo",r=><ArticleIdentification cn={r.cn} name={r.name} sourceId={r.sourceId}/>],
-   ["sourceId","Código interno",r=>TXT(r.sourceId)],["family","Familia",r=>TXT(r.family)],
+   ["sourceId","Código origen / CN",r=>TXT(r.sourceId)],["family","Familia",r=>TXT(r.family)],
    ["laboratory","Laboratorio",r=>TXT(r.laboratory)],["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],
    ["pvp","PVP",r=>EUR(r.pvp)],["pmc","PMC",r=>EUR(r.pmc)],
    ["margin","Margen teórico/ud.",r=>r.pvp!=null&&r.pmc>0?EUR(r.pvp-r.pmc):"—"],

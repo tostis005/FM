@@ -83,7 +83,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
     const [local,official]=await Promise.all([
      pool.query(`SELECT DISTINCT a.origen_id AS id
       FROM ${schema}.articulos a JOIN farmetrica.nomenclator_presentaciones n
-        ON n.cn=nullif(btrim(a.codigo_nacional),'')
+        ON n.cn=coalesce(nullif(btrim(a.codigo_nacional),''), CASE WHEN a.origen_id ~ '^[0-9]{6,7}$' THEN a.origen_id END)
       WHERE n.dcpf=$1 AND upper(btrim(a.farmacia_codigo))=ANY($2::text[])`,
       [selectedDcpf,codes]),
      pool.query("SELECT cn FROM farmetrica.nomenclator_presentaciones WHERE dcpf=$1",[selectedDcpf])

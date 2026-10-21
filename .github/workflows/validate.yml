@@ -263,3 +263,54 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+
+  smoke_puc_genericos_en_produccion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Verificar en la API real el PUC de CN equivalentes (solo lectura)
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --max-old-space-size=512 --input-type=module -' <<'JS'
+          import pg from "pg";
+          import {readPlannerLaboratories} from "./src/purchasePlannerSuppliers.js";
+          import {inferGenericGroupName} from "./src/purchasePlannerPaged.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,
+           max:2,connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          try{
+           const {rows:official}=await pool.query(
+            "SELECT nombre,principio_activo FROM farmetrica.nomenclator_presentaciones WHERE generico=true AND dcpf=$1",
+            ["17531000140106"]);
+           const display=inferGenericGroupName(official.map(v=>v.nombre),"17531000140106",
+            official.map(v=>v.principio_activo));
+           const started=Date.now();
+           const data=await readPlannerLaboratories(pool,{
+            client:{schema:"ampedia",slug:"ampedia"}},[1,2,3,4,5],[
+             {groupKey:"DCPF:17531000140106",pharmacyId:"1",
+              articleId:"726064",cn:"726064"}
+            ],["17531000140106"],"2026-10-21");
+           const group=data.recommendations.find(r=>r.groupKey==="DCPF:17531000140106");
+           const summary={ms:Date.now()-started,groupName:display,
+            presentationCount:data.presentations.length,observedPrices:data.observedPrices,
+            groupOffers:group?.options.length||0,bestPrice:group?.recommended?.puc,
+            bestCn:group?.recommended?.cn,bestProvider:group?.recommended?.supplierName,
+            otherCnOffers:group?.options.filter(x=>x.cn!=="726064").length||0};
+           console.log("VERIFICACION_PUC_GENERICO",JSON.stringify(summary));
+           if(!/paracetamol/i.test(display)||/17531000140106/.test(display)||
+            !(data.observedPrices>0)||!(group?.recommended?.puc>0)||
+            !group.options.some(x=>x.cn!=="726064"))
+            throw Error("No se recuperan el nombre farmacológico y PUC de otros CN del DCPF");
+           console.log("PUC_GENERICO_REAL_OK");
+          }finally{await pool.end()}
+          JS

@@ -92,3 +92,43 @@ test("genéricos EFG agrupan CN diferentes por DCPF sin sumar dobles previsiones
  assert.notEqual(generic.pharmacies[0].suggested,5+3+5);
  assert.equal(groups.find(g=>g.cn==="333333").kind,"articulo");
 });
+
+test("PUC interpreta filtro de farmacias [] como todas las autorizadas igual que ventas",async()=>{
+ const routes={},sqlCalls=[];
+ const app={post(path,...middleware){routes[path]=middleware.at(-1)}};
+ const pool={async query(query,values){
+  const text=typeof query==="string"?query:query.text;
+  const params=values||query.values;
+  sqlCalls.push({text,values:params});
+  if(text.includes("WITH base AS MATERIALIZED")){
+   return {rows:[{pharmacyId:"1",articleId:"771",supplierCode:"P44",
+    supplierName:"Laboratorio Alfa",puc:2.35,sampleLines:2}]};
+  }
+  return {rows:[]};
+ }};
+ setupPurchasePlanner(app,pool,{requireTenant:()=>[]});
+ const route=routes["/api/analytics/pedidos/laboratorios"];
+ assert.equal(typeof route,"function");
+ const context={role:"administrador",modules:{compras:true},
+  client:{schema:"ampedia",slug:"ampedia"},
+  pharmacies:[{id:1,name:"Centro"},{id:2,name:"Norte"}]};
+ const body={to:"2026-10-21",pharmacies:[],dcpfs:[],
+  items:[{groupKey:"CN:123456",pharmacyId:"1",articleId:"771",cn:"123456"}]};
+ async function call(patch={}){
+  let code=200,payload,error;
+  const res={status(status){code=status;return this},json(data){payload=data;return this}};
+  await route({body:{...body,...patch},context},res,err=>{error=err});
+  if(error)throw error;
+  return {code,payload};
+ }
+ const all=await call();
+ assert.equal(all.code,200);
+ assert.equal(all.payload.recommendations[0].recommended.supplierName,"Laboratorio Alfa");
+ assert.deepEqual(sqlCalls.find(x=>x.text.includes("WITH base AS MATERIALIZED")).values[1],[1,2]);
+ sqlCalls.length=0;
+ const one=await call({pharmacies:[1]});
+ assert.equal(one.code,200);
+ assert.deepEqual(sqlCalls.find(x=>x.text.includes("WITH base AS MATERIALIZED")).values[1],[1]);
+ assert.equal((await call({pharmacies:[999]})).code,400,
+  "La lista vacía no debe permitir escapar de los permisos del usuario");
+});

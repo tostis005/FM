@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
 
 import SortableDataTable from "./SortableDataTable.jsx";
+import PurchasePlanner from "./PurchasePlanner.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {readSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaReal.css";
@@ -57,7 +58,7 @@ function SelectStatus({value,onChange,values,disabled}){return <select aria-labe
  onChange={e=>onChange(e.target.value)}>{values.map(s=><option key={s} value={s}>{ESTADOS[s]||s}</option>)}</select>}
 function Button({children,onClick,disabled,primary=false}){return <button type="button"
  className={"btn "+(primary?"btn-primary":"btn-secondary")} disabled={disabled} onClick={onClick}>{children}</button>}
-export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail=""}){
+export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail="",tenantRole=""}){
  const operationalPharmacyKey="fm_operativa_farmacia:"+clientSlug;
  const resource=MAP[section], [pharmacy,setPharmacy]=useState(()=>{
   const operational=sessionStorage.getItem(operationalPharmacyKey);
@@ -202,7 +203,9 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    {header}
    {error&&<div className="fm-op-message fm-op-error" role="alert">{error}</div>}
    {notice&&<div className="fm-op-message" role="status">{notice}</div>}
-   {resource==="pedidos"&&<>
+   {section==="compras-preparador"&&<PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
+    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)} onCreated={refresh}/>}
+  {resource==="pedidos"&&<>
     <Cards entries={[["Planes",NUM(items.length)],["Pendientes de aprobación",NUM(items.filter(n=>n.estado==="pendiente_aprobacion").length)],
      ["Necesidades sin asignar",NUM(items.reduce((s,p)=>s+p.lineas.reduce((v,n)=>v+pending(n),0),0))+" uds."],
      ["Pedidos aprobados",NUM(items.filter(x=>x.estado==="aprobado").length)]]}/>

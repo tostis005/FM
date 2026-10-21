@@ -74,7 +74,17 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
         Validation.Id(dest.Schema, "Esquema PostgreSQL");
         if (config.MonitorInstanceId == Guid.Empty) return;
         await using var session = await OpenAsync(dest, ct);
-        var db = session.Connection;
+        await PublishMonitoringToConnectionAsync(session.Connection, dest, config, liveRuns, ct);
+    }
+
+    // Misma ruta que producción, accesible desde el test PostgreSQL en CI.
+    // La tabla fm_sync_ejecuciones la comparte la API: ejecucion_id es la clave
+    // canónica, NO "id" como en la primera versión del sincronizador.
+    public static async Task PublishMonitoringToConnectionAsync(NpgsqlConnection db,
+        Destination dest, AppConfig config, IReadOnlyList<SyncRun> liveRuns, CancellationToken ct)
+    {
+        Validation.Id(dest.Schema, "Esquema PostgreSQL");
+        if (config.MonitorInstanceId == Guid.Empty) return;
         var schema = Validation.Q(dest.Schema);
         var monitor = schema + "." + Validation.Q("fm_sync_monitor");
         var history = schema + "." + Validation.Q("fm_sync_ejecuciones");
@@ -96,14 +106,34 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
             CREATE INDEX IF NOT EXISTS fm_sync_monitor_codigo_idx
               ON {monitor}(farmacia_codigo);
             CREATE TABLE IF NOT EXISTS {history} (
-              id uuid PRIMARY KEY, trabajo_id uuid NOT NULL,
-              farmacia_codigo text NOT NULL, flujo text NOT NULL,
-              estado text NOT NULL, iniciada_en timestamptz NOT NULL,
-              finalizada_en timestamptz, leidas bigint NOT NULL DEFAULT 0,
-              insertadas bigint NOT NULL DEFAULT 0,
-              rechazadas bigint NOT NULL DEFAULT 0,
+              ejecucion_id uuid PRIMARY KEY, trabajo_id uuid,
+              farmacia_codigo text NOT NULL, sistema_origen text NOT NULL,
+              flujo text NOT NULL, iniciada_en timestamptz NOT NULL,
+              finalizada_en timestamptz, estado text NOT NULL,
+              leidas bigint NOT NULL DEFAULT 0, insertadas bigint NOT NULL DEFAULT 0,
+              modificadas bigint NOT NULL DEFAULT 0, rechazadas bigint NOT NULL DEFAULT 0,
               error_resumen text
             );
+            -- Compatibilidad con tablas antiguas creadas por el sincronizador:
+            -- renombrar la clave existente conserva PK, referencias e historial.
+            DO $migration$
+            BEGIN
+              IF EXISTS (SELECT 1 FROM pg_attribute
+                         WHERE attrelid='{history}'::regclass
+                           AND attname='id' AND NOT attisdropped)
+                 AND NOT EXISTS (SELECT 1 FROM pg_attribute
+                         WHERE attrelid='{history}'::regclass
+                           AND attname='ejecucion_id' AND NOT attisdropped)
+              THEN
+                ALTER TABLE {history} RENAME COLUMN id TO ejecucion_id;
+              END IF;
+            END $migration$;
+            -- Las columnas adicionales son aditivas, sin tocar ejecuciones previas.
+            ALTER TABLE {history} ADD COLUMN IF NOT EXISTS trabajo_id uuid;
+            ALTER TABLE {history} ADD COLUMN IF NOT EXISTS sistema_origen text
+              NOT NULL DEFAULT 'desconocido';
+            ALTER TABLE {history} ADD COLUMN IF NOT EXISTS modificadas bigint
+              NOT NULL DEFAULT 0;
             CREATE INDEX IF NOT EXISTS fm_sync_ejecuciones_codigo_fecha_idx
               ON {history}(farmacia_codigo,flujo,iniciada_en DESC);
             """;
@@ -185,25 +215,34 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
         // recuperar incidencias aunque PostgreSQL no estuviera disponible unos minutos.
         var recent = config.Runs.Where(r => r.FinishedUtc.HasValue)
             .Take(250).Select(r => new {
-                id = r.Id, trabajo_id = r.JobId,
+                ejecucion_id = r.Id, trabajo_id = r.JobId,
                 farmacia_codigo = r.PharmacyCode.Trim().ToUpperInvariant(),
+                sistema_origen = config.Pharmacies.FirstOrDefault(p =>
+                    p.Id == r.PharmacyId || string.Equals(p.Code.Trim(),
+                        r.PharmacyCode.Trim(), StringComparison.OrdinalIgnoreCase))?.SystemType
+                    ?? "desconocido",
                 flujo = r.EntityName, estado = r.Status,
                 iniciada_en = r.StartedUtc, finalizada_en = r.FinishedUtc,
-                leidas = r.Rows, insertadas = r.Inserted, rechazadas = 0,
-                error_resumen = r.Error.Length > 950 ? r.Error[..950] : r.Error
+                leidas = r.Rows, insertadas = r.Inserted, modificadas = r.Updated,
+                rechazadas = 0,
+                error_resumen = (r.Error ?? "").Length > 950
+                    ? r.Error![..950] : r.Error ?? ""
             }).ToArray();
         if (recent.Length == 0) return;
         var insertSql = $"""
             INSERT INTO {history}
-            (id,trabajo_id,farmacia_codigo,flujo,estado,iniciada_en,finalizada_en,
-             leidas,insertadas,rechazadas,error_resumen)
-            SELECT id,trabajo_id,farmacia_codigo,flujo,estado,iniciada_en,
-                   finalizada_en,leidas,insertadas,rechazadas,error_resumen
+            (ejecucion_id,trabajo_id,farmacia_codigo,sistema_origen,flujo,estado,
+             iniciada_en,finalizada_en,leidas,insertadas,modificadas,rechazadas,error_resumen)
+            SELECT ejecucion_id,trabajo_id,farmacia_codigo,sistema_origen,flujo,estado,
+                   iniciada_en,finalizada_en,leidas,insertadas,modificadas,rechazadas,
+                   error_resumen
             FROM jsonb_to_recordset(@history::jsonb) AS r (
-              id uuid,trabajo_id uuid,farmacia_codigo text,flujo text,estado text,
+              ejecucion_id uuid,trabajo_id uuid,farmacia_codigo text,
+              sistema_origen text,flujo text,estado text,
               iniciada_en timestamptz,finalizada_en timestamptz,
-              leidas bigint,insertadas bigint,rechazadas bigint,error_resumen text)
-            ON CONFLICT (id) DO NOTHING;
+              leidas bigint,insertadas bigint,modificadas bigint,
+              rechazadas bigint,error_resumen text)
+            ON CONFLICT (ejecucion_id) DO NOTHING;
             """;
         await using var historyCommand = new NpgsqlCommand(insertSql, db) { CommandTimeout = 20 };
         historyCommand.Parameters.AddWithValue("history", NpgsqlDbType.Jsonb,

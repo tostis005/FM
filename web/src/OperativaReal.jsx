@@ -83,7 +83,6 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  const [draft,setDraft]=useState(null),[newNeed,setNewNeed]=useState(defaultNeed);
  const [allocArticle,setAllocArticle]=useState(""),[allocProvider,setAllocProvider]=useState(""),
   [allocUnits,setAllocUnits]=useState("1"),[allocCost,setAllocCost]=useState("");
- const [policy,setPolicy]=useState({cobertura_saludable:90,intervalo_pedidos:7,plazo_entrega:2,stock_seguridad:0});
  useEffect(()=>{
    setPharmacy(current=>{
     if(pharmacies.some(p=>String(p.id)===current))return current;
@@ -124,8 +123,6 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    if(resource==="pedidos"){
     const suppliers=await api("/api/analytics/catalogos/proveedores?farmacia="+encodeURIComponent(pharmacy)).catch(()=>({items:[]}));
     setSupplierChoices(suppliers.items||[]);
-    const policies=await query("politicas").catch(()=>({items:[]}));
-    if(policies.items?.[0])setPolicy(policies.items[0]);
    }
   }catch(e){
    if(e.code==="migration_required"){setError("Esta función todavía no está habilitada para el cliente.");setMode("error");return;}
@@ -296,16 +293,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
        if(saved)setDraft(null);
       }}>Guardar borrador</Button></div>
     </section>}
-    <section className="card fm-preview-panel"><div className="fm-preview-panel-head"><h2>Política de reposición</h2></div>
-     <div className="fm-op-fields">{[["cobertura_saludable","Máxima cobertura saludable"],
-      ["intervalo_pedidos","Intervalo de pedido (días)"],["plazo_entrega","Plazo de entrega (días)"],
-      ["stock_seguridad","Stock de seguridad (uds.)"]].map(([key,label])=>
-      <FormField key={key} label={label}><input type="number" min="0" disabled={!canApprove} value={policy[key]}
-        onChange={e=>setPolicy(v=>({...v,[key]:e.target.value}))}/></FormField>)}</div>
-     {Number(policy.cobertura_saludable)<Number(policy.intervalo_pedidos)+Number(policy.plazo_entrega)&&
-      <div className="fm-op-message">La cobertura máxima no alcanza el intervalo de compra más el plazo de suministro.</div>}
-     {canApprove&&<div className="fm-preview-actions"><Button disabled={busy} onClick={()=>save("POST","politicas",policy)}>Guardar parámetros</Button></div>}
-    </section>
+
    </>}
    {resource==="oportunidades"&&<>
     <Cards entries={[["Oportunidades",NUM(items.length)],["Abiertas",NUM(items.filter(x=>!["aplicada","descartada"].includes(x.estado)).length)],

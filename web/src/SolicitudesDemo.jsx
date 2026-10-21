@@ -3,6 +3,7 @@ import React,{useEffect,useState} from "react";
 import {Mail,RefreshCw} from "lucide-react";
 import "./moduleDemo.css";
 import {LoadingPanel,LoadingStatus,SkeletonKpis,LoadingFrame} from "./LoadingState.jsx";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 const STATUS=[["nueva","Nueva"],["contactada","Contactada"],["cerrada","Cerrada"]];
 const labels={farmatic:"Farmatic",nixfarma:"Nixfarma",unycop:"Unycop",bitfarma:"Bitfarma",farmanager:"Farmanager",otro:"Otro",no_se:"No indicado",vision_global:"Visión global",compras:"Compras y costes",ventas:"Ventas",stock:"Stock y reposición",promociones:"Promociones",multi_farmacia:"Grupo de farmacias"};
 export default function SolicitudesDemo(){
@@ -11,6 +12,7 @@ export default function SolicitudesDemo(){
 }
 function CommercialInbox(){
  const [rows,setRows]=useState([]),[filter,setFilter]=useState("todas"),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState("");
+ const [updatedAt,setUpdatedAt]=useState(null);
  async function refresh(){
   setLoading(true);setError("");
   try{
@@ -33,8 +35,16 @@ function CommercialInbox(){
  }
  return <div className="fm-management">
   <WebTrafficSummary/>
-  <div className="page-header"><div><h1>Solicitudes de demostración</h1><p>Interesados que han enviado el formulario público. Acceso exclusivo del superadministrador.</p></div></div>
-  <div className="card fm-leads-toolbar"><label>Estado <select value={filter} onChange={e=>setFilter(e.target.value)}><option value="todas">Todas</option>{STATUS.map(([id,t])=><option key={id} value={id}>{t}</option>)}</select></label><button className="btn btn-secondary" type="button" onClick={refresh} disabled={loading}><RefreshCw size={16}/> Actualizar</button><span>{loading?<LoadingStatus compact label="Consultando solicitudes…"/>:rows.length+" solicitudes"+(rows.length===200?" (últimas 200)":"")}</span></div>
+  <ReportPageHeader title="Solicitudes de demostración"
+    description="Interesados que han enviado el formulario público. Acceso exclusivo del superadministrador."
+    updatedAt={updatedAt} onRefresh={()=>void refresh()} refreshing={loading}/>
+  <ReportFilterBar showPeriod={false} showPharmacies={false}>
+     <label className="fm-unified-filter"><span>Estado</span>
+      <select value={filter} onChange={e=>setFilter(e.target.value)}>
+       <option value="todas">Todas</option>{STATUS.map(([id,t])=><option key={id} value={id}>{t}</option>)}
+      </select></label>
+     <span className="fm-table-export-scope">{loading?"Consultando solicitudes…":rows.length+" solicitudes"+(rows.length===200?" (últimas 200)":"")}</span>
+    </ReportFilterBar>
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
   {loading&&!rows.length?<div className="card"><LoadingPanel kind="table" label="Cargando solicitudes de demostración…"/></div>:
    !rows.length&&!loading?<div className="card" style={{padding:22}}>No hay solicitudes con este estado.</div>:
@@ -49,6 +59,7 @@ function CommercialInbox(){
 
 function PrivacyInbox(){
  const [rows,setRows]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(""),[busy,setBusy]=useState("");
+ const [updatedAt,setUpdatedAt]=useState(null);
  async function refresh(){
   setLoading(true);setError("");
   try{
@@ -70,8 +81,10 @@ function PrivacyInbox(){
  }
  const types={acceso:"Acceso",rectificacion:"Rectificación",supresion:"Supresión",oposicion:"Oposición",limitacion:"Limitación",portabilidad:"Portabilidad",otro:"Consulta"};
  return <div className="fm-management">
-  <div className="page-header"><div><h1>Protección de datos</h1><p>Solicitudes privadas recibidas por el canal específico de protección de datos.</p></div></div>
-  <div className="card fm-leads-toolbar"><strong>{loading?<LoadingStatus compact label="Consultando solicitudes…"/>:rows.length+" solicitudes"}</strong><button type="button" className="btn btn-secondary" disabled={loading} onClick={refresh}><RefreshCw size={16}/> Actualizar</button></div>
+  <ReportPageHeader title="Protección de datos"
+    description="Solicitudes privadas recibidas por el canal específico de protección de datos."
+    updatedAt={updatedAt} onRefresh={()=>void refresh()} refreshing={loading}/>
+  
   {error&&<div role="alert" className="fm-manage-feedback">{error}</div>}
   {loading&&!rows.length?<div className="card"><LoadingPanel kind="table" label="Consultando solicitudes de privacidad…"/></div>:!rows.length&&!loading?<div className="card" style={{padding:22}}>No hay solicitudes de privacidad.</div>:<div className="fm-lead-grid">{rows.map(r=><article className="card fm-lead-card" key={r.id}>
    <div className="fm-lead-top"><div><strong>{r.nombre}</strong><small>{new Date(r.createdAt).toLocaleString("es-ES")}</small></div><span className="fm-lead-state">{types[r.tipo]||r.tipo}</span></div>

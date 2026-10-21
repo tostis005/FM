@@ -240,8 +240,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
        <small>Referencias equivalentes en esta farmacia:</small>
        {p.options.map(o=><small key={o.articleId}>{o.cn||"Sin CN"} · {o.articleName} · Código {o.articleId} · Stock {o.stock??"?"}</small>)}
       </div>}
-      <small>Ventas en los últimos 12 meses: <b>{p.saleDays??0} días</b>, {p.saleWeeks??0} semanas y {p.saleMonths??0} meses.
-       Última venta: {p.lastSale?String(p.lastSale).slice(0,10):"sin ventas verificadas"}.</small>
+      <small>Fechas de venta en los últimos 12 meses:
+       {p.firstSale?<> desde <b>{String(p.firstSale).slice(0,10)}</b> hasta <b>{String(p.lastSale).slice(0,10)}</b>,
+        intervalo de {p.saleSpanDays} días</>:" sin ventas verificadas"}.</small>
       <small>Demanda {p.demandPattern==="concentrada"?"concentrada en pocas fechas":
        p.demandPattern==="pico_reciente"?"pico reciente, revisar":
        p.demandPattern==="recurrente"?"recurrente":
@@ -281,8 +282,9 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       posible_estacional:"Posible temporada",concentrada:"Ventas concentradas",
       pico_reciente:"Pico reciente",sin_actividad:"Sin actividad reciente"})[g.patron]||"Sin clasificar"}
     <small className="fm-planner-pattern-evidence">
-      {g.saleDays??0} días / {g.saleWeeks??0} semanas con ventas en 12 meses
-      {g.lastSale?" · Última "+String(g.lastSale).slice(0,10):""}
+      {g.firstSale?"Ventas entre "+String(g.firstSale).slice(0,10)+
+       " y "+String(g.lastSale).slice(0,10)+
+       " ("+g.saleSpanDays+" días de intervalo)":"Sin ventas en 12 meses"}
     </small>
    </span>},
   {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},

@@ -6,6 +6,23 @@ const FIELD={
  units3:'g."units3"',units12:'g."units12"',
  stock:'g.stock',suggested:'g.suggested'
 };
+export function inferGenericGroupName(names,fallback=""){
+ const labels=[...new Set((names||[]).map(v=>String(v||"").trim()).filter(Boolean))];
+ if(labels.length<2)return "Genérico · "+(fallback||labels[0]||"sin DCPF");
+ const normalize=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().split(/\s+/).filter(Boolean);
+ const counts=new Map();
+ for(const name of labels)for(const token of new Set(normalize(name)))
+  counts.set(token,(counts.get(token)||0)+1);
+ const threshold=Math.max(2,Math.ceil(labels.length*.65));
+ const excluded=new Set(["EFG","GENERICA","GENERICO","GENERICOS","DE","DEL","POR","X",
+  "ENVASE","BLISTER","BLISTERS","COMPRIMIDOS","CAPSULAS","SOBRES","UNIDADES"]);
+ // Conservar forma/dosis, pero no cantidades variables de envase ni marca.
+ const representative=labels.slice().sort((a,b)=>a.length-b.length)[0];
+ const tokens=normalize(representative).filter(t=>(counts.get(t)||0)>=threshold&&!excluded.has(t));
+ const output=tokens.slice(0,7).join(" ").trim();
+ return output.length>=5?output:"Genérico · "+(fallback||representative);
+}
 // El detalle incluye también farmacias con existencias pero ninguna venta.
 // Consultar únicamente CNs de la página evita recorrer todo el catálogo en Node.
 export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
@@ -13,13 +30,17 @@ export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
  const dcpfs=[...new Set(groups.filter(g=>g.kind==="generico").map(g=>String(g.dcpf)).filter(Boolean))];
  let official=[];
  if(dcpfs.length){
-  const r=await pool.query("SELECT cn,dcpf FROM farmetrica.nomenclator_presentaciones"+
+  const r=await pool.query("SELECT cn,dcpf,nombre FROM farmetrica.nomenclator_presentaciones"+
    " WHERE generico=true AND dcpf=ANY($1::text[]) LIMIT 8000",[dcpfs]);
   official=r.rows;
  }
  const keyByCn=new Map();
  for(const g of groups)if(g.cn&&g.kind!=="generico")keyByCn.set(g.cn,g.key);
  for(const o of official)keyByCn.set(String(o.cn),"DCPF:"+o.dcpf);
+ for(const g of groups)if(g.kind==="generico"){
+  const labels=official.filter(o=>String(o.dcpf)===String(g.dcpf)).map(o=>o.nombre);
+  g.articleName=inferGenericGroupName(labels,g.dcpf);
+ }
  const codes=[...keyByCn.keys()];
  if(!codes.length)return groups;
  const q='"'+ctx.client.schema+'"',farmCode=pharmacyDataCodeSQL("f");

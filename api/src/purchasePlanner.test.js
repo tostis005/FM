@@ -38,6 +38,7 @@ test("API limita tenant/farmacias y recoge ventas, políticas y planes aprobados
   ]};
   if(text.includes("WITH sold AS MATERIALIZED"))return {rows:[{pharmacyId:"1",articleId:"77",
    articleName:"Crema",cn:"123456",stock:4,stockAt:null,unitsPeriod:18,units3:90,units12:250}]};
+  if(text.includes("SELECT DISTINCT ON (f.id,a.origen_id)"))return {rows:[]};
   if(text.includes("op_politicas_reposicion"))return {rows:[{farmacia_id:1,intervalo_pedidos:7,plazo_entrega:2,stock_seguridad:1}]};
   if(text.includes("op_pedidos"))return {rows:[{farmacia_id:1,lineas:[
    {articulo:"77",asignaciones:[{unidades:2,proveedor:"P5"}]}]}]};

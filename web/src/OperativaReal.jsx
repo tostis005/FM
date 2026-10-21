@@ -144,7 +144,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    setUnits(String(link.units||1));
   }catch{}
  },[section,clientSlug]);
- useEffect(()=>{setSelected("");setDraft(null);void refresh();},[section,clientSlug,pharmacy]);
+ useEffect(()=>{setSelected("");setDraft(null);if(section!=="compras-preparador")void refresh();},[section,clientSlug,pharmacy]);
  async function save(method,recurso,body={},id){
   setBusy(true);setNotice("");setError("");
   try{
@@ -206,6 +206,14 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
     </select></label>
   </div>
  </>;
+ // El preparador se consulta a escala de grupo, no depende de /api/operativa
+ // ni del selector local para abrir. Los planes ya guardados se gestionan aparte.
+ if(section==="compras-preparador")return <div className="fm-operativa-preview fm-operativa-real">
+  <ReportPageHeader title="Preparador de pedidos · Grupo"/>
+  <PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
+   canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}
+   onCreated={()=>{}}/>
+ </div>;
  if(mode==="loading")return <div className="fm-operativa-preview fm-operativa-real">{header}
   <section className="card fm-preview-panel" role="status">Cargando operativa…</section></div>;
  if(mode==="error")return <div className="fm-operativa-preview fm-operativa-real">{header}

@@ -172,12 +172,14 @@ api.MapGet("/config", (ConfigStore store, SyncWorker worker) =>
             p.Server, p.Database, p.LinkedServer, p.AuthMode, p.Username, p.TimeZoneId, p.TrustServerCertificate, p.Enabled,
             passwordPresent = p.PasswordProtected.Length > 0 }),
         entities = c.Entities,
-        templates = SqlTemplates.All,
+        templates = SqlTemplates.All.Where(t => t.Entity is not ("ventas" or "compras")),
         jobs = c.Jobs,
         states = c.States,
         // Runs ya se guarda de más reciente a más antigua: ordenar solo una
         // ventana de 100 en vez de todos los 10.000 históricos cada 3 segundos.
-        runs = worker.GetLiveRuns().Concat(c.Runs.Take(100))
+        runs = worker.GetLiveRuns().Concat(c.Runs.Where(r =>
+             !string.Equals(r.EntityName, "ventas", StringComparison.OrdinalIgnoreCase) &&
+             !string.Equals(r.EntityName, "compras", StringComparison.OrdinalIgnoreCase)).Take(100))
             .OrderByDescending(r => r.StartedUtc).Take(100)
     });
 });
@@ -187,7 +189,10 @@ api.MapGet("/runs", (Guid? pharmacyId, Guid? entityId, string? status, int? skip
     return store.Read(c =>
     {
         var jobs = c.Jobs.ToDictionary(j => j.Id);
-        IEnumerable<SyncRun> runs = worker.GetLiveRuns().Concat(c.Runs).OrderByDescending(r => r.StartedUtc);
+        IEnumerable<SyncRun> runs = worker.GetLiveRuns().Concat(c.Runs.Where(r =>
+             !string.Equals(r.EntityName, "ventas", StringComparison.OrdinalIgnoreCase) &&
+             !string.Equals(r.EntityName, "compras", StringComparison.OrdinalIgnoreCase)))
+             .OrderByDescending(r => r.StartedUtc);
         if (pharmacyId.HasValue) runs = runs.Where(r => r.PharmacyId == pharmacyId.Value || (jobs.TryGetValue(r.JobId, out var j) && j.PharmacyId == pharmacyId.Value));
         if (entityId.HasValue) runs = runs.Where(r => r.EntityId == entityId.Value || (jobs.TryGetValue(r.JobId, out var j) && j.EntityId == entityId.Value));
         if (!string.IsNullOrWhiteSpace(status)) runs = runs.Where(r => r.Status == status);

@@ -261,3 +261,111 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+
+  smoke_preparador_live:
+    needs: deploy_main_preparador
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Consultar aplicación desplegada contra ventas reales (solo lectura)
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --max-old-space-size=256 --input-type=module -' <<'JS'
+          import pg from "pg";
+          import {setupPurchasePlanner} from "./src/purchasePlanner.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,
+           max:2,connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          const routes={},app={get(p,...handlers){routes[p]=handlers.at(-1)}};
+          setupPurchasePlanner(app,pool,{requireTenant:()=>[]});
+          const context={role:"superadministrador",modules:{compras:true},
+           client:{schema:"ampedia",slug:"ampedia"},
+           pharmacies:[1,2,3,4,5].map(id=>({id,name:"Farmacia "+id}))};
+          const get=async extra=>{
+           let body=null,status=200,error=null;
+           const res={status(n){status=n;return this},json(v){body=v;return this}};
+           const started=Date.now();
+           await routes["/api/analytics/pedidos/propuesta"]({
+            query:{desde:"2026-10-01",hasta:"2026-10-21",farmacias:"1,2,3,4,5",
+             pagina:"1",tamano:"50",orden:"suggested",direccion:"desc",...extra},context
+           },res,e=>{error=e});
+           if(error||status!==200||body?.available!==true)
+            throw Error("Preparador no disponible: "+(error?.code||error?.message||body?.error||status));
+           console.log("APP_PRODUCCION",JSON.stringify({ms:Date.now()-started,
+            periodUnits:body.summary?.unitsPeriod,totalGroups:body.totalGroups,
+            pageRows:body.groups?.length,stock:body.summary?.stockKnown,
+            suggested:body.summary?.suggestedKnown,
+            multiPharmacy:body.groups?.filter(g=>g.pharmacies?.length>1).length,
+            genericGroups:body.groups?.filter(g=>g.kind==="generico").length,
+            oneOff:body.summary?.oneOffCount,seasonal:body.summary?.seasonalCount}));
+           return body;
+          };
+          try{
+           const body=await get({});
+           if(body.groups.length!==50||body.totalGroups<5000||
+             body.summary?.unitsPeriod<=10000||body.truncated)
+            throw Error("No está sirviendo la página de productos real sin truncar");
+           if(!body.groups.some(g=>g.pharmacies.length>1))
+            throw Error("No se muestran múltiples farmacias por CN");
+           if(!body.groups.some(g=>g.patron==="recurrente"&&g.saleSpanDays>=120))
+            throw Error("No se ha identificado ningún artículo con ventas recurrentes");
+           if(!body.groups.every(g=>g.pharmacies.every(p=>
+             Array.isArray(p.options)&&p.options.length>0)))
+            throw Error("Faltan referencias origen trazables en el detalle");
+           const {rows:[check]}=await pool.query("SELECT sum(unidades)::float8 AS total "+
+            "FROM ampedia.fm_ventas_analitica WHERE fecha >= $1::date "+
+            "AND fecha < $2::date+interval '1 day' AND farmacia_codigo=ANY($3::text[]) "+
+            "AND nullif(btrim(articulo_id),'') IS NOT NULL",
+            ["2026-10-01","2026-10-21",["ABA","EUR","BUE","EST","VAL"]]);
+           if(Math.abs(check.total-body.summary.unitsPeriod)>0.000001)
+            throw Error("Ventas del preparador distintas de la vista documental");
+           const eclipse=await get({buscar:"000294"});
+           const g=eclipse.groups.find(g=>g.cn==="000294");
+           if(!g||g.suggested!==0||g.patron!=="concentrada"||g.saleSpanDays!==3)
+             throw Error("El producto 000294 no se identificó por la concentración temporal real de sus ventas");
+           console.log("VERIFICACION_PREPARADOR_PRODUCCION_OK",check.total,
+            body.totalGroups,"referencias",g.patron,"eclipse",g.suggested,"a pedir");
+          }finally{await pool.end()}
+          JS
+
+
+  deploy_main_preparador:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Publicar código validado de main y reiniciar exclusivamente web y API
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          echo "Versión principal seleccionada: $(git rev-parse HEAD)"
+          node --check api/src/purchasePlanner.js
+          node --check api/src/purchasePlannerPaged.js
+          test -s api/src/purchasePlannerPaged.sql
+          tar -czf - -C api . | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. api/'
+          tar -czf - -C web --exclude=node_modules --exclude=dist . | \
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. web/'
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'set -eu; cd /opt/farmawao; docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api web; for i in $(seq 1 25); do if curl -fsS http://127.0.0.1:18080/api/health/database | grep -q connected; then exit 0; fi; sleep 3; done; echo "ERROR: API no responde después del despliegue" >&2; exit 1'

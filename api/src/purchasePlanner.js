@@ -99,7 +99,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
      " FROM farmetrica.op_politicas_reposicion WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])",
      [ctx.client.slug,chosen]),
     pool.query("SELECT farmacia_id,lineas FROM farmetrica.op_pedidos"+
-     " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND estado IN ('aprobado','exportado')"+
+     " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')"+
      " ORDER BY actualizado_en DESC LIMIT 1000",[ctx.client.slug,chosen])
    ]);
    const policyMap=new Map(policies.rows.map(p=>[Number(p.farmacia_id),p]));
@@ -126,7 +126,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     normalize([g.cn,g.articleName,...g.pharmacies.map(p=>p.articleId)].join(" ")).includes(search));
    res.json({available:true,from,to,groups,limit:MAX,truncated:sales.rows.length>MAX,
     pharmacies:ctx.pharmacies.filter(p=>chosen.includes(Number(p.id))).map(p=>({id:p.id,name:p.name})),
-    note:"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y pedidos internos aprobados/exportados; estos últimos no se concilian automáticamente con recepciones. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
+    note:"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y unidades ya preparadas en borradores o pedidos pendientes/aprobados/exportados para evitar duplicar compras. Las recepciones del ERP no están conciliadas con estos planes: revisa los pedidos antiguos. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
   }catch(e){next(e)}
  });
 }

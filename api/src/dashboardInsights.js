@@ -139,7 +139,8 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
     const diff=Number(row.coopPuc)-Number(row.labPuc);
     const expensiveUnits=diff>0?Number(row.coopUnits):Number(row.labUnits);
     return {...row,coopPuc:Number(row.coopPuc),labPuc:Number(row.labPuc),
-     difference:diff,differencePct:row.coopPuc>0?100*diff/row.coopPuc:null,
+     difference:diff,differencePct:Math.max(row.coopPuc,row.labPuc)>0?
+      100*Math.abs(diff)/Math.max(row.coopPuc,row.labPuc):null,
      potentialSaving:Math.abs(diff)*expensiveUnits};
    });
    const channels=channelsResult.rows.map(row=>({...row,

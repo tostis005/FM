@@ -18,7 +18,7 @@ test("PostgreSQL: cuenta interna inicia sesión y no convierte usuarios Google",
  setupAccess(app,pool,()=>{},false);
  const internalEmail="ci-interno@example.test",googleEmail="ci-google@example.test";
  try{
-  for(const [email,method] of [[internalEmail,"interno"],[googleEmail,"google"]]){
+  for(const [email,method] of [[internalEmail,"local"],[googleEmail,"google"]]){
    await pool.query(
     "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES($1,'QA','farmacia',ARRAY[5],true) ON CONFLICT(email) DO UPDATE SET activo=true",
     [email]);
@@ -41,7 +41,7 @@ test("PostgreSQL: cuenta interna inicia sesión y no convierte usuarios Google",
   }
   const okay=await attempt(internalEmail,pass);
   assert.equal(okay.code,200);
-  assert.equal(okay.body.user.source,"interno");
+  assert.equal(okay.body.user.source,"local");
   assert.equal(okay.body.user.tenants[0].slug,"ampedia");
   assert.match(okay.headers["Set-Cookie"],/HttpOnly.*SameSite=Lax/);
   const wrong=await attempt(internalEmail,"wrong");

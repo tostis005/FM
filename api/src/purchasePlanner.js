@@ -84,6 +84,22 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
    Date.parse(to)-Date.parse(from)>730*DAY||raw.length>1500||search.length>100||
    ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id)))
    return res.status(400).json({error:"Filtros no autorizados o inválidos"});
+  // Ordenación y filtros de todo el universo antes de enviar una página.
+  const sortKeys=new Set(["articleName","stock","unitsPeriod","units3","units12","suggested"]);
+  const sort=String(req.query.orden||"suggested"),direction=String(req.query.direccion||"desc").toLowerCase();
+  const page=Number(req.query.pagina||1),pageSize=Number(req.query.tamano||50);
+  const rawFilters=String(req.query.filtros||"{}");
+  let columnFilters={};
+  try{columnFilters=JSON.parse(rawFilters)}catch{
+   return res.status(400).json({error:"Filtros de columnas inválidos"});
+  }
+  if(!sortKeys.has(sort)||!["asc","desc"].includes(direction)||
+   !Number.isSafeInteger(page)||page<1||page>100000||
+   !Number.isSafeInteger(pageSize)||pageSize<1||pageSize>100||
+   rawFilters.length>1800||!columnFilters||typeof columnFilters!=="object"||
+   Array.isArray(columnFilters)||Object.entries(columnFilters).some(([key,value])=>
+    !sortKeys.has(key)||typeof value!=="string"||value.length>80))
+   return res.status(400).json({error:"Paginación, orden o filtros inválidos"});
   const chosen=[...new Set(ids)],MAX=70000;
   if(!chosen.length)return res.json({available:true,groups:[],pharmacies:[],truncated:false});
   try{
@@ -243,11 +259,32 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
        Date.now()-new Date(row.stockAt).getTime()>48*3600000?"stock_antiguo":"calculable"});
     }
    }
-   const groups=groupPurchaseRows(enriched).filter(g=>!search||
+   const baseGroups=groupPurchaseRows(enriched).filter(g=>!search||
     normalize([g.cn,g.dcpf,g.articleName,...g.pharmacies.flatMap(p=>
      p.options.flatMap(o=>[o.articleId,o.articleName,o.cn]))].join(" ")).includes(search));
-   res.json({available:true,from,to,groups,limit:MAX,commitmentsAvailable,
-    policiesDefaulted:Boolean(policies.unavailable),truncated:combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX||siblingsTruncated,
+   const groups=baseGroups.filter(g=>Object.entries(columnFilters).every(([key,value])=>
+    !value||normalize(key==="articleName"?[g.articleName,g.cn,g.dcpf].join(" "):g[key]??"")
+      .includes(normalize(value))));
+   const numeric=sort!=="articleName";
+   const descending=direction==="desc";
+   groups.sort((a,b)=>{
+    const x=a[sort],y=b[sort];
+    if(x==null||y==null)return x==null?(y==null?0:1):-1;
+    const cmp=numeric?Number(x)-Number(y):String(x).localeCompare(String(y),"es");
+    return (descending?-cmp:cmp)||String(a.key).localeCompare(String(b.key),"es");
+   });
+   const sum=key=>groups.reduce((n,g)=>n+Number(g[key]||0),0);
+   const missingStock=groups.filter(g=>g.stock===null).length;
+   const missingSuggested=groups.filter(g=>g.suggested===null).length;
+   const truncated=combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX||siblingsTruncated;
+   const summary={unitsPeriod:sum("unitsPeriod"),units3:sum("units3"),
+    units12:sum("units12"),stockKnown:sum("stock"),stockMissing:missingStock,
+    suggestedKnown:sum("suggested"),suggestedMissing:missingSuggested,
+    products:groups.length,referenceCount:groups.reduce((n,g)=>n+g.productCount,0),
+    partial:truncated};
+   res.json({available:true,from,to,groups:groups.slice((page-1)*pageSize,page*pageSize),
+    totalGroups:groups.length,page,pageSize,summary,limit:MAX,commitmentsAvailable,
+    policiesDefaulted:Boolean(policies.unavailable),truncated,
     pharmacies:ctx.pharmacies.filter(p=>chosen.includes(Number(p.id))).map(p=>({id:p.id,name:p.name})),
     note:(commitmentsAvailable?"":"No se han podido verificar los pedidos ya preparados. No se permite generar pedidos hasta recuperar su lectura. ")+(policies.unavailable?"Sin políticas cargadas se usan los valores estándar. ":"")+"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y unidades ya preparadas en borradores o pedidos pendientes/aprobados/exportados para evitar duplicar compras. Las recepciones del ERP no están conciliadas con estos planes: revisa los pedidos antiguos. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
   }catch(e){next(e)}

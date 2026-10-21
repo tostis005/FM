@@ -96,7 +96,7 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
    const base=" WITH classified AS (SELECT f.id::text AS pharmacy_id,"+
     " btrim("+article+"::text) AS article, t.unidades::numeric AS units,"+
     " "+unit+"::numeric AS puc,"+
-    " CASE WHEN pm.cooperativa=true OR pm.tipo='cooperativa' THEN 'cooperativa'"+
+    " CASE WHEN pm.cooperativa=true THEN 'cooperativa'"+
     " WHEN pm.tipo='laboratorio' THEN 'laboratorio' ELSE 'sin_clasificar' END AS channel"+
     " FROM "+q+".fm_recepciones_analitica t"+join+
     " LEFT JOIN farmetrica.proveedores_maestro pm"+

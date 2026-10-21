@@ -75,7 +75,7 @@ try{
  await pageTwo;
  await page.getByText("Gel de prueba").first().waitFor();
  await page.getByText("Ventas concentradas").first().waitFor();
- await page.getByText(/intervalo de 3 días/).first().waitFor();
+ await page.getByText(/3 días de intervalo/).first().waitFor();
  const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="1");
  await page.getByRole("button",{name:"Anterior"}).click();

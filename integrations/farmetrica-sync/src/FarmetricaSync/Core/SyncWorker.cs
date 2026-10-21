@@ -25,7 +25,7 @@ public sealed class SyncWorker(
                 messages.Add(current.GetType().Name + ": " + current.Message);
         var text = "Etapa: " + phase + ". " + string.Join(" → ", messages);
         text = System.Text.RegularExpressions.Regex.Replace(text,
-            @"(?i)(password|pwd)s*=s*[^;s]+", "$1=[oculta]");
+            @"(?i)(password|pwd)\s*=\s*[^;\s]+", "$1=[oculta]");
         return text.Length > 950 ? text[..950] : text;
     }
 

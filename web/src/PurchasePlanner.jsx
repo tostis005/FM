@@ -98,15 +98,20 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   return()=>ac.abort();
  },[clientSlug,codes]);
  const groups=result?.groups||[];
+ // Una necesidad DCPF no es una referencia facturable: antes de guardar
+ // o exportar se debe escoger el CN real que suministrará el proveedor.
+ const chosenArticle=(p,edit)=>String(edit.articleId||
+  (p.options?.length===1?p.options[0].articleId:""));
  const allLines=useMemo(()=>{
   const lines=[];
   for(const g of groups)for(const p of g.pharmacies){
    const edit=overrides[key(p)]||{},units=Number(edit.units??p.suggested??0);
    const supplier=String(edit.supplier||"").trim();
-   if(units>0&&Number.isSafeInteger(units)&&supplier){
+   const articleId=chosenArticle(p,edit),article=p.options?.find(x=>String(x.articleId)===articleId);
+   if(units>0&&Number.isSafeInteger(units)&&supplier&&article){
     const provider=(suppliers[String(p.pharmacyId)]||[]).find(s=>String(s.code).trim().toUpperCase()===supplier.toUpperCase());
     const supplierName=String(provider?.name||"").trim();
-    lines.push({...p,cn:g.cn,articleName:g.articleName,
+    lines.push({...p,articleId,cn:article.cn||g.cn,articleName:article.articleName||g.articleName,
      pharmacyName:pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId,
      units,supplier,supplierName,
      supplierKey:supplierName?"NAME:"+supplierName.toUpperCase():"LOCAL:"+p.pharmacyId+":"+supplier.toUpperCase()});
@@ -114,12 +119,19 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   }
   return lines;
  },[groups,overrides,pharmacies,suppliers]);
- const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>Number(overrides[key(p)]?.units??p.suggested??0)>0&&!String(overrides[key(p)]?.supplier||"").trim()).length,0);
+ const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>
+  Number(overrides[key(p)]?.units??p.suggested??0)>0&&
+  !String(overrides[key(p)]?.supplier||"").trim()).length,0);
+ const missingArticle=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>
+  Number(overrides[key(p)]?.units??p.suggested??0)>0&&
+  !chosenArticle(p,overrides[key(p)]||{})).length,0);
  const invalidQuantities=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>{
-  const raw=overrides[key(p)]?.units??p.suggested??0;
-  const qty=Number(raw);
+  const qty=Number(overrides[key(p)]?.units??p.suggested??0);
   return !Number.isSafeInteger(qty)||qty<0||qty>999999;
  }).length,0);
+ const total=field=>groups.reduce((n,g)=>n+Number(g[field]||0),0);
+ const totalStock=groups.some(g=>g.stock===null)?null:total("stock");
+ const totalSuggestion=groups.some(g=>g.suggested===null)?null:total("suggested");
  const bySupplier=Object.values(allLines.reduce((acc,line)=>{
   const k=line.supplierKey;
   if(!acc[k])acc[k]={key:k,name:line.supplierName||"Proveedor "+line.supplier,
@@ -133,6 +145,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  function exportGrouped(){
   if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de exportar.");
   if(invalidQuantities)return setError("Revisa las cantidades: solo se admiten unidades enteras no negativas.");
+  if(missingArticle)return setError("Selecciona una presentación real para cada necesidad genérica antes de exportar.");
+  if(missingSupplier)return setError("Asigna un proveedor o pon 0 en Pedir antes de exportar.");
   if(!allLines.length)return setError("Asigna un proveedor y unidades antes de exportar");
   // Un CSV por proveedor; conserva farmacia y ERP para que pueda prepararse
   // el formato propio de cada laboratorio sin perder trazabilidad.
@@ -151,6 +165,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   if(!canEdit)return;
   if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de guardar.");
   if(invalidQuantities)return setError("Hay cantidades inválidas. Introduce únicamente unidades enteras.");
+  if(missingArticle)return setError("Selecciona una presentación real para "+missingArticle+" necesidades genéricas.");
   if(!allLines.length)return setError("No hay líneas asignadas a proveedores");
   if(missingSupplier)return setError("Hay "+missingSupplier+" necesidades sin proveedor; asígnalas o pon 0 en Pedir.");
   setBusy(true);setError("");setNotice("");
@@ -239,12 +254,17 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
   {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}
   {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se puede guardar ni exportar una consulta incompleta.</p>}
-  <div className="fm-planner-summary">
-   <span>{whole(groups.length)} artículos consultados</span>
-   <span>{whole(allLines.length)} líneas con proveedor</span>
-   <strong>{whole(selectedTotal)} unidades preparadas</strong>
-   {missingSupplier>0&&<span>{missingSupplier} necesidades aún sin proveedor</span>}
-   {invalidQuantities>0&&<span role="alert">{invalidQuantities} cantidades inválidas</span>}
+  <div className="fm-planner-summary" aria-label="Resumen del grupo">
+   <div><span>Vendidas período</span><strong>{whole(total("unitsPeriod"))}</strong></div>
+   <div><span>Ventas 3 meses</span><strong>{whole(total("units3"))}</strong></div>
+   <div><span>Ventas 12 meses</span><strong>{whole(total("units12"))}</strong></div>
+   <div><span>Stock disponible</span><strong>{totalStock===null?"Parcial":whole(totalStock)}</strong></div>
+   <div><span>Pedido recomendado</span><strong>{totalSuggestion===null?"Parcial":whole(totalSuggestion)}</strong></div>
+  </div>
+  <div className="fm-planner-summary-note">{whole(groups.length)} conjuntos o artículos · {whole(allLines.length)} líneas con proveedor · {whole(selectedTotal)} unidades asignadas
+   {missingSupplier>0&&<span> · {missingSupplier} necesidades sin proveedor</span>}
+   {missingArticle>0&&<span> · {missingArticle} necesidades genéricas sin presentación elegida</span>}
+   {invalidQuantities>0&&<span role="alert"> · {invalidQuantities} cantidades inválidas</span>}
   </div>
   {bySupplier.length>0&&<div className="fm-planner-supplier-overview" aria-label="Pedidos agrupados por proveedor">
    <strong>Pedidos por proveedor</strong>
@@ -254,11 +274,11 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
    defaultSort={{key:"suggested",direction:"desc"}} loading={busy&&!result}
    loadingLabel="Calculando necesidades por farmacia…"
-   emptyText={busy?"Consultando artículos…":"No hay artículos vendidos para este filtro"}/>
+   emptyText={busy?"Consultando artículos…":"No hay artículos para este filtro"}/>
   <div className="fm-planner-actions">
-   <button type="button" className="btn btn-secondary" onClick={exportGrouped} disabled={!allLines.length||busy||invalidQuantities>0||result?.truncated}>
+   <button type="button" className="btn btn-secondary" onClick={exportGrouped} disabled={!allLines.length||busy||invalidQuantities>0||missingArticle>0||missingSupplier>0||result?.truncated}>
     <Download size={16}/> Exportar CSV por proveedor</button>
-   <button type="button" className="btn btn-primary" disabled={!canEdit||!allLines.length||busy||missingSupplier>0||invalidQuantities>0||result?.truncated}
+   <button type="button" className="btn btn-primary" disabled={!canEdit||!allLines.length||busy||missingSupplier>0||missingArticle>0||invalidQuantities>0||result?.truncated}
     onClick={saveDrafts}><Save size={16}/>{busy?"Guardando…":"Guardar borradores por proveedor"}</button>
   </div>
   <p className="fm-op-fine">{result?.note||"La propuesta necesita ventas y stock sincronizados."} No se envía automáticamente ningún pedido. Los borradores se revisan y aprueban en la sección inferior.</p>

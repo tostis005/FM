@@ -16,6 +16,10 @@ export function mapLaboratoryOffers(rows,items){
   byRef.get(key).push(it.groupKey);
  }
  for(const r of rows){
+  // Sin denominación verificada no mostrar un identificador numérico como nombre
+  // de laboratorio: un código de proveedor no es una recomendación comercial.
+  if(!String(r.supplierName||"").trim()||
+   String(r.supplierName).trim()===String(r.supplierCode).trim())continue;
   for(const groupKey of byRef.get(String(r.pharmacyId)+"|"+String(r.articleId))||[]){
    const item={groupKey,pharmacyId:String(r.pharmacyId),articleId:String(r.articleId),
     cn:String(r.cn||r.articleId),supplierCode:String(r.supplierCode),

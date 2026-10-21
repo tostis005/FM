@@ -114,6 +114,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   const qty=Number(raw);
   return !Number.isSafeInteger(qty)||qty<0||qty>999999;
  }).length,0);
+ const bySupplier=Object.values(allLines.reduce((acc,line)=>{
+  const k=line.supplierKey;
+  if(!acc[k])acc[k]={key:k,name:line.supplierName||"Proveedor "+line.supplier,
+   pharmacies:new Set(),products:0,units:0};
+  acc[k].pharmacies.add(String(line.pharmacyId));acc[k].products++;acc[k].units+=line.units;
+  return acc;
+ },{}));
  const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
  const setValue=(p,field,value)=>setOverrides(previous=>({...previous,
   [key(p)]:{units:p.suggested??0,supplier:"",...previous[key(p)],[field]:value}}));
@@ -229,6 +236,11 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    {missingSupplier>0&&<span>{missingSupplier} necesidades aún sin proveedor</span>}
    {invalidQuantities>0&&<span role="alert">{invalidQuantities} cantidades inválidas</span>}
   </div>
+  {bySupplier.length>0&&<div className="fm-planner-supplier-overview" aria-label="Pedidos agrupados por proveedor">
+   <strong>Pedidos por proveedor</strong>
+   {bySupplier.map(p=><div key={p.key}><span>{p.name}</span><small>{p.products} líneas · {p.pharmacies.size} farmacias</small>
+    <b>{whole(p.units)} uds.</b></div>)}
+  </div>}
   <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
    defaultSort={{key:"suggested",direction:"desc"}} loading={busy&&!result}
    loadingLabel="Calculando necesidades por farmacia…"

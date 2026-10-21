@@ -124,13 +124,16 @@ grupos AS MATERIALIZED (
   sum(n.v90)::float8 AS "units3",sum(n.v365)::float8 AS "units12",
   CASE WHEN count(n.stock)=count(*) THEN sum(n.stock)::float8 ELSE NULL END AS stock,
   CASE WHEN count(n.sugeridas)=count(*) THEN sum(n.sugeridas)::float8 ELSE NULL END AS suggested,
-  CASE WHEN bool_or(n.patron='estable') THEN 'estable'
-   WHEN bool_or(n.patron='intermitente') THEN 'intermitente'
-   WHEN bool_or(n.patron='estacional') THEN 'estacional'
-   ELSE 'puntual' END AS patron,
-  CASE WHEN bool_or(n.patron='estable') THEN 3
-   WHEN bool_or(n.patron='intermitente') THEN 2
-   WHEN bool_or(n.patron='estacional') THEN 1 ELSE 0 END AS prioridad
+  CASE WHEN sum(n.v30)=0 AND sum(n.v90)>0 AND sum(n.v365)<=sum(n.v90)
+   THEN 'puntual'
+   WHEN sum(n.v30)=0 THEN 'estacional'
+   WHEN bool_or(n.patron='estable') THEN 'estable'
+   ELSE 'intermitente' END AS patron,
+  CASE WHEN sum(n.v30)=0 AND sum(n.v90)>0 AND sum(n.v365)<=sum(n.v90)
+   THEN 0
+   WHEN sum(n.v30)=0 THEN 1
+   WHEN bool_or(n.patron='estable') THEN 3
+   ELSE 2 END AS prioridad
  FROM necesidades n GROUP BY n.grupo
 ),
 filtrados AS MATERIALIZED (

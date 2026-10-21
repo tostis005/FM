@@ -209,7 +209,7 @@ export async function buildLabSalesExcel(promo,lines){
     LAB_HEADERS,
     ...ordered.map(line=>{
       const {serial,time}=madridParts(line.at);
-      const amounts=ticketLineAmounts(line);
+      const amounts=ticketLineAmounts(line,{absolute:true});
       return [
         line.ticket||"",serial,time,
         sourceCN(line),line.articleName||line.description||"",
@@ -221,7 +221,7 @@ export async function buildLabSalesExcel(promo,lines){
   const products=[["Código","Descripción","P.v.p."],...Object.values(Object.fromEntries(
     ordered.filter(line=>sourceCN(line)).map(line=>[
       sourceCN(line),[sourceCN(line),line.articleName||line.description||"",
-        ticketLineAmounts(line).pvp]
+        ticketLineAmounts(line,{absolute:true}).pvp]
     ])
   ))];
   // Exportar importes numéricos: el porcentaje utiliza el formato Excel 0,00 %.

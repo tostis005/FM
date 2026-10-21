@@ -84,7 +84,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
    Date.parse(to)-Date.parse(from)>730*DAY||raw.length>1500||search.length>100||
    ids.some(id=>!Number.isSafeInteger(id)||!allowed.includes(id)))
    return res.status(400).json({error:"Filtros no autorizados o inválidos"});
-  const chosen=[...new Set(ids)],MAX=3500;
+  const chosen=[...new Set(ids)],MAX=35000;
   if(!chosen.length)return res.json({available:true,groups:[],pharmacies:[],truncated:false});
   try{
    const {rows:fields}=await pool.query(

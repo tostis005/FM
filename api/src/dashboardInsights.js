@@ -2,7 +2,7 @@
 // No se envían tickets ni líneas brutas al navegador.
 import {getFilters} from "./realReports.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {includedPurchaseSupplier} from "./supplierReporting.js";
+import {includedPurchaseSupplier,purchaseSupplierChannelSQL} from "./supplierReporting.js";
 import {nameCommercialRows} from "./commercialNames.js";
 import {nameArticleRows} from "./articleNames.js";
 
@@ -100,8 +100,7 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
    const base=" WITH classified AS (SELECT f.id::text AS pharmacy_id,"+
     " btrim("+article+"::text) AS article, t.unidades::numeric AS units,"+
     " "+unit+"::numeric AS puc,"+
-    " CASE WHEN pm.cooperativa=true THEN 'cooperativa'"+
-    " WHEN pm.tipo='laboratorio' THEN 'laboratorio' ELSE 'sin_clasificar' END AS channel"+
+    " "+purchaseSupplierChannelSQL("pm")+" AS channel"+
     " FROM "+q+".fm_recepciones_analitica t"+join+
     " LEFT JOIN farmetrica.proveedores_maestro pm"+
     " ON pm.cliente_slug=$4 AND upper(btrim(pm.codigo_origen))=upper(btrim(t.proveedor_id::text))"+

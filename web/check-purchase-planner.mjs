@@ -37,7 +37,14 @@ await page.route("**/api/**",async route=>{
     {pharmacyId:"2",articleId:"999",articleName:"Crema de manos",cn:"123456",
      unitsPeriod:12,units3:45,units12:150,stock:4,suggested:5,ordered:0,
      daily:0.5,interval:7,lead:2,safety:0,policyDefault:false,confidence:"calculable"}]};
-  body={available:true,groups:id&&id!=="123456"?[]:[g],truncated:false,pharmacies};
+  const pageNumber=Number(url.searchParams.get("pagina")||1);
+  const other={...g,key:"CN:654321",cn:"654321",articleName:"Gel de prueba",
+   pharmacies:g.pharmacies.map(p=>({...p,articleName:"Gel de prueba",cn:"654321"}))};
+  body={available:true,groups:id&&id!=="123456"?[]:pageNumber===2?[other]:[g],
+   totalGroups:100,page:pageNumber,pageSize:50,
+   summary:{unitsPeriod:240,units3:900,units12:3000,stockKnown:100,
+    stockMissing:0,suggestedKnown:80,suggestedMissing:0,products:100,referenceCount:150},
+   truncated:false,pharmacies};
  }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -53,6 +60,19 @@ try{
  await periodResponse;
  assert.equal(await page.getByRole("button",{name:"Esta semana"}).getAttribute("aria-pressed"),"true");
 
+ const dropdown=page.locator(".fm-unified-filters select").first();
+ assert.ok((await dropdown.locator("option").allTextContents()).includes("Todo el histórico"));
+ assert.ok((await page.getByText("240").first().isVisible()),"Los indicadores vienen del resumen total, no de la página");
+ const pageTwo=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
+  &&new URL(r.url()).searchParams.get("pagina")==="2");
+ await page.getByRole("button",{name:"Siguiente"}).click();
+ await pageTwo;
+ await page.getByText("Gel de prueba").first().waitFor();
+ const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
+  &&new URL(r.url()).searchParams.get("pagina")==="1");
+ await page.getByRole("button",{name:"Anterior"}).click();
+ await pageOne;
+ await page.getByText("Crema de manos").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.getByText("ERP 771").waitFor();
  await page.getByText("ERP 999").waitFor();

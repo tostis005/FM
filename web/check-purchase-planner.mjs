@@ -45,11 +45,20 @@ try{
  await page.goto(BASE+"/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Propuesta inteligente de compra"}).waitFor({timeout:15000});
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
+ await page.getByRole("button",{name:"Este mes"}).waitFor();
+ await page.getByText("Grupo completo").waitFor();
+ assert.equal(await page.getByLabel("Farmacia").count(),0,"La cabecera no debe imponer una farmacia");
+ await page.getByRole("button",{name:"Esta semana"}).click();
+ assert.equal(await page.getByRole("button",{name:"Esta semana"}).getAttribute("aria-pressed"),"true");
+
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.getByText("ERP 771").waitFor();
  await page.getByText("ERP 999").waitFor();
  assert.equal(await page.locator(".fm-planner-pharmacy").count(),2);
  const controls=page.locator(".fm-planner-pharmacy");
+ await controls.nth(0).getByRole("button",{name:/Usar recomendado/}).click();
+ await controls.nth(1).getByRole("button",{name:/Usar recomendado/}).click();
+
  await controls.nth(0).locator('input[list]').fill("P44");
  await controls.nth(1).locator('input[list]').fill("P44");
  await page.getByRole("button",{name:"Guardar borradores por proveedor"}).click();

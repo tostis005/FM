@@ -242,8 +242,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       </div>}
       <small>Fechas de venta en los últimos 12 meses:
        {p.firstSale?<> desde <b>{String(p.firstSale).slice(0,10)}</b> hasta <b>{String(p.lastSale).slice(0,10)}</b>,
-        intervalo de {p.saleSpanDays} días,
-        actividad en {p.activeQuarters??0} de 4 tramos de unos 90 días</>:" sin ventas verificadas"}.</small>
+        intervalo de {p.saleSpanDays} días</>:" sin ventas verificadas"}.</small>
       <small>Demanda {p.demandPattern==="concentrada"?"concentrada en pocas fechas":
        p.demandPattern==="pico_reciente"?"pico reciente, revisar":
        p.demandPattern==="recurrente"?"recurrente":
@@ -285,8 +284,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     <small className="fm-planner-pattern-evidence">
       {g.firstSale?"Ventas entre "+String(g.firstSale).slice(0,10)+
        " y "+String(g.lastSale).slice(0,10)+
-       " ("+g.saleSpanDays+" días de intervalo; "+
-        (g.activeQuarters??0)+" de 4 tramos del año con actividad)":"Sin ventas en 12 meses"}
+       " ("+g.saleSpanDays+" días de intervalo)":"Sin ventas en 12 meses"}
     </small>
    </span>},
   {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},

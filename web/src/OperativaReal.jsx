@@ -209,7 +209,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  // El preparador se consulta a escala de grupo, no depende de /api/operativa
  // ni del selector local para abrir. Los planes ya guardados se gestionan aparte.
  if(section==="compras-preparador")return <div className="fm-operativa-preview fm-operativa-real">
-  <ReportPageHeader title="Preparador de pedidos · Grupo"/>
+  <ReportPageHeader title="Preparador de pedidos"/>
   <PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}
    onCreated={()=>{}}/>

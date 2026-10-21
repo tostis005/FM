@@ -20,6 +20,8 @@ test("rechazar sobreasignación y valores erróneos",()=>{
 test("no permitir reabrir oportunidades cerradas ni editar pedidos aprobados",()=>{
  assert.equal(canTransition("oportunidades","aplicada","en_curso"),false);
  assert.equal(canTransition("pedidos","aprobado","aprobado"),false);
+ assert.equal(canTransition("pedidos","exportado","recibido"),true);
+ assert.equal(canTransition("pedidos","recibido","exportado"),false);
  assert.equal(canTransition("pedidos","pendiente_aprobacion","pendiente_aprobacion"),true);
  assert.equal(canTransition("traspasos","propuesta","realizada"),false);
 });

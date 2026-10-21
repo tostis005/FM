@@ -297,6 +297,15 @@ jobs:
             count(*) FILTER(WHERE generico=true) AS genericos,
             count(DISTINCT cn) AS cn_distintos
            FROM farmetrica.nomenclator_presentaciones;
+          SELECT 'NOMENCLATOR_FORMATO' AS tipo,length(cn) AS digitos,count(*) AS referencias
+           FROM farmetrica.nomenclator_presentaciones GROUP BY length(cn) ORDER BY digitos;
+          SELECT 'ERP_NOMENCLATOR' AS tipo,
+            count(*) AS catalogo,
+            count(n.cn) AS matches_directos,
+            count(*) FILTER(WHERE n.generico) AS genericos
+           FROM ampedia.articulos a
+           LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=a.origen_id
+           WHERE a.farmacia_codigo='ABA';
           SELECT 'ERP_REPETIDOS' AS tipo,origen_id,count(DISTINCT farmacia_codigo) AS farmacias,
             count(DISTINCT nombre) AS nombres
            FROM ampedia.articulos

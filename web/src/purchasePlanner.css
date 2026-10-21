@@ -89,3 +89,8 @@
 .fm-planner-lab-choice strong{font-size:11px;color:#245d40}
 .fm-planner-lab-choice small,.fm-planner-no-puc{font-size:10px;color:#687d6f;line-height:1.4}
 @media(max-width:700px){.fm-planner-details{width:calc(100vw - 35px);max-width:calc(100vw - 35px);padding:8px}.fm-planner-breakdown{font-size:10px}.fm-planner-qty{flex-direction:column;align-items:stretch}}
+
+
+.fm-planner .fm-expanded-row>td{padding:7px 12px!important;background:#f8fbf9;white-space:normal;overflow:visible}
+.fm-planner .fm-expanded-row .fm-planner-details{width:100%;max-width:100%;margin:0;box-shadow:none}
+.fm-planner .fm-expanded-row:hover>td{background:#f8fbf9}

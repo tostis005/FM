@@ -159,7 +159,7 @@ function Purchases({scope,pharmacies}){
     </div>
     {filtered.length?<div className="fm-purchase-scroll"><table className="fm-purchase-table"><thead>
      <tr><th>Artículo / farmacia</th><th>PUC coop.</th><th>PUC lab.</th>
-      <th>Diferencia</th><th>Diferencia %</th><th>Más económico</th><th>Ahorro potencial</th></tr></thead>
+      <th>Diferencia</th><th>Ahorro %</th><th>Más económico</th><th>Ahorro potencial</th></tr></thead>
      <tbody>{filtered.map(row=><tr key={row.pharmacyId+"|"+row.articleId}>
       <td><strong>{row.articleName||row.cn||row.articleId}</strong>
        <small>{row.articleName?row.cn||row.articleId:"Artículo ERP "+row.articleId} · {names.get(String(row.pharmacyId))||"Farmacia "+row.pharmacyId}</small></td>

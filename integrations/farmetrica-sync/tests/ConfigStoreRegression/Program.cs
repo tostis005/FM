@@ -103,6 +103,33 @@ try
     saved.Change(c => c.MonitorInstanceId = Guid.NewGuid());
     if (new ConfigStore(path).Read(c=>c.MonitorInstanceId) == Guid.Empty)
         throw new Exception("El identificador de monitor debe persistir tras reinicio.");
+    // Los flujos antiguos dejan de ejecutarse, sin perder datos ni historial.
+    var oldSales = new EntityDefinition { Name = "ventas" };
+    var oldPurchases = new EntityDefinition { Name = "compras" };
+    var docSales = saved.Read(c => c.Entities.Single(e => e.Name == "ventas_completas"));
+    var docPurchases = saved.Read(c => c.Entities.Single(e => e.Name == "recepciones_completas"));
+    var salesJob = new SyncJob { EntityId = oldSales.Id, Enabled = true };
+    var purchaseJob = new SyncJob { EntityId = oldPurchases.Id, Enabled = true };
+    var documentJob = new SyncJob { EntityId = docSales.Id, Enabled = true, EveryMinutes = 60 };
+    var watermark = start.AddDays(-2);
+    saved.Change(c => {
+        c.Entities.Add(oldSales); c.Entities.Add(oldPurchases);
+        c.Jobs.Add(salesJob); c.Jobs.Add(purchaseJob); c.Jobs.Add(documentJob);
+        c.States.Add(new SyncState { JobId = salesJob.Id, WatermarkUtc = watermark });
+        c.States.Add(new SyncState { JobId = documentJob.Id, WatermarkUtc = watermark });
+        c.Runs.Add(new SyncRun { JobId = salesJob.Id, EntityId = oldSales.Id, EntityName = "ventas" });
+    });
+    var cleaned = new ConfigStore(path);
+    if (cleaned.Read(c => c.Entities.Any(e => e.Name is "ventas" or "compras")) ||
+        cleaned.Read(c => c.Jobs.Any(j => j.Id == salesJob.Id || j.Id == purchaseJob.Id)) ||
+        cleaned.Read(c => c.States.Any(st => st.JobId == salesJob.Id)) ||
+        cleaned.Read(c => c.Entities.All(e => e.Id != docPurchases.Id)) ||
+        cleaned.Read(c => !c.Jobs.Any(j => j.Id == documentJob.Id) ||
+            !c.States.Any(st => st.JobId == documentJob.Id && st.WatermarkUtc == watermark)) ||
+        cleaned.Read(c => !c.Runs.Any(r => r.JobId == salesJob.Id)))
+        throw new Exception("La limpieza de ventas/compras antiguas debe conservar documentos e histórico.");
+    if (new ConfigStore(path).Read(c => c.Entities.Any(e => e.Name is "ventas" or "compras")))
+        throw new Exception("Las fuentes antiguas no deben recrearse.");
     Console.WriteLine("OK: caída VPN sin reintentos, horario diario, zona farmacia, DST y estado persistido.");
     Console.WriteLine("OK: /login and /config reads do not wait behind history writes; snapshot is atomic.");
 }

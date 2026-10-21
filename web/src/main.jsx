@@ -20,7 +20,6 @@ import ProveedoresMaestro from "./ProveedoresMaestro.jsx";
 import {ClientesPanel,EquipoCliente} from "./AdministracionSaas.jsx";
 import DetalleVentas from "./DetalleVentas.jsx";
 import SolicitudesDemo from "./SolicitudesDemo.jsx";
-import SyncVentas from "./SyncVentas.jsx";
 import PharmacyState from "./PharmacyState.jsx";
 import PoliticaReposicionFarmacia from "./PoliticaReposicionFarmacia.jsx";
 import OperativaReal,{REAL_SECTIONS} from "./OperativaReal.jsx";
@@ -165,7 +164,6 @@ const NAV=[
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
- {id:"sincronizacion",label:"Sincronización",icon:RefreshCcw,admin:true},
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
@@ -173,7 +171,7 @@ const NAV=[
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
 ];
 const ADMIN_IDS=new Set(["clientes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","sincronizacion","estado","ajustes"]);
+const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
@@ -550,7 +548,7 @@ function App(){
  const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
- const currentPharmacies=pharmacies.filter(f=>(f.id+" "+f.name+" "+f.city+" "+(f.sourceCode||"")+" "+(f.sourceHost||"")).toLocaleLowerCase("es").includes(filterText));
+ const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
    const p=promoId?promos.find(item=>item.id===promoId):null;
@@ -1108,10 +1106,8 @@ function App(){
  </ReportFilterBar><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" loading={pharmacyApiStatus==="cargando"} value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><ListTable rows={pharmacyApiStatus==="cargando"?[]:currentPharmacies} rowKey={f=>f.id} label="farmacias" defaultSort={{key:"name",direction:"asc"}} loading={pharmacyApiStatus==="cargando"} loadingLabel="Sincronizando maestro de farmacias…"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
-    {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
     {key:"name",label:"Nombre público",filterMode:"multi",value:f=>f.name,render:f=><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div>},
     {key:"code",label:"Código visible",filterMode:"multi",value:f=>f.displayCode||f.sourceCode||"",render:f=><span className="id-code">{f.displayCode||f.sourceCode||"—"}</span>},
-    {key:"host",label:"Servidor SQL",value:f=>pharmacyApiStatus==="connected"?f.sourceHost||"Servidor local":"Sin conexión",render:f=>pharmacyApiStatus==="connected"?(f.sourceHost||"Servidor local"):"—"},
     {key:"active",label:"Estado",filterMode:"multi",value:f=>f.active?"Activa":"Inactiva",render:f=><Pill status={f.active?"Activa":"Inactiva"}/>},
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
@@ -1119,7 +1115,6 @@ function App(){
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
-    {page==="sincronizacion"&&<SyncVentas key={tenantContext.client.slug} client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>} 
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}/>}
@@ -1136,11 +1131,7 @@ function App(){
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">
       <div className="page-header"><h1>Ajustes</h1></div>
-      <div className="fm-module-links">
-       {[["estado","Estado"],["usuarios","Usuarios"],["farmacias","Farmacias"],["proveedores-maestro","Proveedores"],["clientes","Clientes"],["solicitudes","Solicitudes"],["accesos","Accesos"]]
-        .filter(([id])=>visibleNav.some(item=>item.id===id))
-        .map(([id,label])=><button className="card fm-module-link" key={id} onClick={()=>nav(id)}><strong>{label}</strong><ArrowRight size={17}/></button>)}
-      </div>
+
       <ConfiguracionAnalisisVentas clientSlug={tenantContext.client.slug}
        initialMonths={tenantContext.client.analysisMonths}
        onSaved={()=>loadContext(tenantContext.client.slug)}/>

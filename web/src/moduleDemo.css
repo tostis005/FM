@@ -186,7 +186,7 @@
 }
 
 
-.fm-supplier-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.fm-supplier-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
 .fm-supplier-summary-item{padding:15px;display:grid;gap:8px;min-width:0}
 .fm-supplier-summary-item span{font-size:12px;font-weight:650;color:#658274}
 .fm-supplier-summary-item strong{font:800 24px Manrope,sans-serif;color:#24513d}

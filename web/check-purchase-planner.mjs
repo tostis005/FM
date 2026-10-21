@@ -87,6 +87,12 @@ try{
  await page.goto(BASE+"/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Preparador de pedidos"}).waitFor({timeout:15000});
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
+ assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0,
+  "La columna Demanda ya no debe mostrarse");
+ const width=await page.locator(".fm-planner .smart-table thead th").first()
+  .evaluate(el=>Math.round(el.getBoundingClientRect().width));
+ assert.ok(width<=210,"La columna Producto / genérico debe ser compacta: "+width+"px");
+
  await page.getByRole("button",{name:"Este mes"}).waitFor();
  await page.getByText(/Nueva propuesta por laboratorio/).waitFor();
  assert.equal(await page.locator(".fm-unified-header select[aria-label=\"Farmacia\"]").count(),0,"La cabecera no debe imponer una farmacia");

@@ -34,11 +34,15 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   [period,customFrom,customTo]);
  const from=resolved.valid?resolved.from:"",to=resolved.valid?resolved.to:"";
  const [search,setSearch]=useState("");
+ const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(50);
+ const [sort,setSort]=useState({key:"suggested",direction:"desc"});
+ const [columnFilters,setColumnFilters]=useState({});
  const [result,setResult]=useState(null);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState("");
  const [notice,setNotice]=useState("");
  const [overrides,setOverrides]=useState({});
+ const [editedRows,setEditedRows]=useState({});
  const [suppliers,setSuppliers]=useState({});
  const [open,setOpen]=useState({});
  const [reload,setReload]=useState(0);
@@ -58,8 +62,11 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   }catch{}
  },[clientSlug]);
  const codes=pharmacies.map(p=>String(p.id)).join(",");
- const setSharedPeriod=value=>{setPeriod(value);updateSharedReportFilters(clientSlug,{period:value})};
+ const clearSelection=()=>{setOverrides({});setEditedRows({});setOpen({})};
+ const setSharedPeriod=value=>{setPeriod(value);setPage(1);clearSelection();
+  updateSharedReportFilters(clientSlug,{period:value})};
  const setSharedDate=(field,value)=>{
+  setPage(1);clearSelection();
   if(field==="from")setCustomFrom(value);else setCustomTo(value);
   updateSharedReportFilters(clientSlug,{[field==="from"?"customFrom":"customTo"]:value});
  };
@@ -69,12 +76,14 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   const ac=new AbortController();
   const delay=setTimeout(()=>{
    setBusy(true);setError("");
-   const qs=new URLSearchParams({desde:from,hasta:to,farmacias:codes,buscar:search});
+   const qs=new URLSearchParams({desde:from,hasta:to,farmacias:codes,buscar:search,
+    pagina:String(page),tamano:String(pageSize),orden:sort.key,direccion:sort.direction,
+    filtros:JSON.stringify(columnFilters)});
    fetch("/api/analytics/pedidos/propuesta?"+qs,{
     credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:ac.signal
    }).then(async r=>{const data=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(data.error||"No se puede preparar el pedido");return data})
-    .then(data=>{if(!ac.signal.aborted){setResult(data);setOverrides({});
+    .then(data=>{if(!ac.signal.aborted){setResult(data);
       if(pendingLink?.supplier){
        const newAssignments={};
        for(const g of data.groups||[])for(const p of g.pharmacies)
@@ -89,7 +98,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     .finally(()=>{if(!ac.signal.aborted)setBusy(false)});
   },300);
   return()=>{clearTimeout(delay);ac.abort()};
- },[clientSlug,codes,from,to,search,reload,pendingLink]);
+ },[clientSlug,codes,from,to,search,page,pageSize,sort.key,sort.direction,JSON.stringify(columnFilters),reload,pendingLink]);
  useEffect(()=>{
   const ac=new AbortController();
   Promise.allSettled(pharmacies.map(async p=>{
@@ -109,34 +118,35 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   (Array.isArray(p.options)?(p.options.length===1?p.options[0].articleId:""):p.articleId||""));
  const allLines=useMemo(()=>{
   const lines=[];
-  for(const g of groups)for(const p of g.pharmacies){
+  for(const p of Object.values(editedRows)){
    const edit=overrides[key(p)]||{},units=Number(edit.units??0);
    const supplier=String(edit.supplier||"").trim();
    const articleId=chosenArticle(p,edit),article=p.options?.find(x=>String(x.articleId)===articleId)||(!p.options?p:null);
    if(units>0&&Number.isSafeInteger(units)&&supplier&&article){
     const provider=(suppliers[String(p.pharmacyId)]||[]).find(s=>String(s.code).trim().toUpperCase()===supplier.toUpperCase());
     const supplierName=String(provider?.name||"").trim();
-    lines.push({...p,articleId,cn:article.cn||g.cn,articleName:article.articleName||g.articleName,
+    lines.push({...p,articleId,cn:article.cn||p.cn,articleName:article.articleName||p.articleName,
      pharmacyName:pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId,
      units,supplier,supplierName,
      supplierKey:supplierName?"NAME:"+supplierName.toUpperCase():"LOCAL:"+p.pharmacyId+":"+supplier.toUpperCase()});
    }
   }
   return lines;
- },[groups,overrides,pharmacies,suppliers]);
- const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>
-  Number(overrides[key(p)]?.units??0)>0&&
-  !String(overrides[key(p)]?.supplier||"").trim()).length,0);
- const missingArticle=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>
-  Number(overrides[key(p)]?.units??0)>0&&
-  !chosenArticle(p,overrides[key(p)]||{})).length,0);
- const invalidQuantities=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>{
+ },[editedRows,overrides,pharmacies,suppliers]);
+ const edited=Object.values(editedRows);
+ const missingSupplier=edited.filter(p=>Number(overrides[key(p)]?.units??0)>0&&
+  !String(overrides[key(p)]?.supplier||"").trim()).length;
+ const missingArticle=edited.filter(p=>Number(overrides[key(p)]?.units??0)>0&&
+  !chosenArticle(p,overrides[key(p)]||{})).length;
+ const invalidQuantities=edited.filter(p=>{
   const qty=Number(overrides[key(p)]?.units??0);
   return !Number.isSafeInteger(qty)||qty<0||qty>999999;
- }).length,0);
- const total=field=>groups.reduce((n,g)=>n+Number(g[field]||0),0);
- const totalStock=groups.some(g=>g.stock===null)?null:total("stock");
- const totalSuggestion=groups.some(g=>g.suggested===null)?null:total("suggested");
+ }).length;
+ const total=field=>result?.summary?.[field]??groups.reduce((n,g)=>n+Number(g[field]||0),0);
+ const knownStock=result?.summary?.stockKnown??groups.reduce((n,g)=>n+Number(g.stock||0),0);
+ const knownSuggestion=result?.summary?.suggestedKnown??groups.reduce((n,g)=>n+Number(g.suggested||0),0);
+ const missingStock=result?.summary?.stockMissing??groups.filter(g=>g.stock===null).length;
+ const missingSuggested=result?.summary?.suggestedMissing??groups.filter(g=>g.suggested===null).length;
  const bySupplier=Object.values(allLines.reduce((acc,line)=>{
   const k=line.supplierKey;
   if(!acc[k])acc[k]={key:k,name:line.supplierName||"Proveedor "+line.supplier,
@@ -145,8 +155,11 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   return acc;
  },{}));
  const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
- const setValue=(p,field,value)=>setOverrides(previous=>({...previous,
-  [key(p)]:{units:0,supplier:"",...previous[key(p)],[field]:value}}));
+ const setValue=(p,field,value)=>{
+  setEditedRows(previous=>({...previous,[key(p)]:p}));
+  setOverrides(previous=>({...previous,
+   [key(p)]:{units:0,supplier:"",...previous[key(p)],[field]:value}}));
+ };
  function exportGrouped(){
   if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de exportar.");
   if(invalidQuantities)return setError("Revisa las cantidades: solo se admiten unidades enteras no negativas.");
@@ -200,7 +213,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    setNotice(saved+" borradores guardados. Revísalos y apruébalos en «Planes de compra» antes de marcar su exportación.");
    // Borrar confirmaciones inmediatamente y recalcular pendientes para no permitir
    // guardar una segunda vez las mismas unidades si se pulsa de nuevo.
-   setOverrides({});setReload(n=>n+1);
+   setOverrides({});setEditedRows({});setReload(n=>n+1);
    onCreated();
   }catch(e){setError(e.message+(saved?" ("+saved+" borradores ya guardados; revisa antes de repetir).":""))}
   finally{setBusy(false)}
@@ -259,7 +272,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {key:"stock",label:"Stock disponible",value:g=>g.stock??-1,render:g=>g.stock===null?"—":whole(g.stock)},
   {key:"suggested",label:"Pedido recomendado",value:g=>g.suggested??-1,
    render:g=>g.suggested===null?"Ver desglose":<strong>{whole(g.suggested)}</strong>},
-  {key:"selected",label:"Pedir",value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0),
+  {key:"selected",label:"Pedir",sortable:false,searchable:false,value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0),
    render:g=><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??0),0))}</strong>}
  ];
  return <section className="card fm-planner">
@@ -272,7 +285,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    onCustomToChange={value=>setSharedDate("to",value)}/>
   <p className="fm-planner-scope">Grupo completo · {pharmacies.length} farmacias autorizadas. Despliega los artículos para consultar su detalle por farmacia.</p>
   <div className="fm-planner-filters">
-   <label>Buscar artículo o CN <input type="search" value={search} onChange={e=>setSearch(e.target.value)}
+   <label>Buscar artículo o CN <input type="search" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);clearSelection()}}
     placeholder="Nombre o código nacional…"/></label>
   </div>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
@@ -281,13 +294,15 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se puede guardar ni exportar una consulta incompleta.</p>}
   {result?.available===true&&<>
   <div className="fm-planner-summary" aria-label="Resumen del grupo">
-   <div><span>Vendidas período</span><strong>{whole(total("unitsPeriod"))}</strong></div>
-   <div><span>Ventas 3 meses</span><strong>{whole(total("units3"))}</strong></div>
-   <div><span>Ventas 12 meses</span><strong>{whole(total("units12"))}</strong></div>
-   <div><span>Stock disponible</span><strong>{totalStock===null?"Parcial":whole(totalStock)}</strong></div>
-   <div><span>Pedido recomendado</span><strong>{totalSuggestion===null?"Parcial":whole(totalSuggestion)}</strong></div>
+   <div><span>Vendidas período</span><strong>{result?.truncated?"Parcial":whole(total("unitsPeriod"))}</strong></div>
+   <div><span>Ventas 3 meses</span><strong>{result?.truncated?"Parcial":whole(total("units3"))}</strong></div>
+   <div><span>Ventas 12 meses</span><strong>{result?.truncated?"Parcial":whole(total("units12"))}</strong></div>
+   <div><span>Stock disponible</span><strong>{result?.truncated?"Parcial":whole(knownStock)}</strong>
+    {missingStock>0&&<small>{missingStock} referencias sin stock verificable</small>}</div>
+   <div><span>Pedido recomendado</span><strong>{result?.truncated?"Parcial":whole(knownSuggestion)}</strong>
+    {missingSuggested>0&&<small>{missingSuggested} referencias sin propuesta calculable</small>}</div>
   </div>
-  <div className="fm-planner-summary-note">{whole(groups.length)} conjuntos o artículos · {whole(allLines.length)} líneas con proveedor · {whole(selectedTotal)} unidades asignadas
+  <div className="fm-planner-summary-note">{whole(result?.summary?.products??result?.totalGroups??groups.length)} conjuntos o artículos del grupo · {whole(result?.summary?.referenceCount??groups.length)} referencias · {whole(allLines.length)} líneas con proveedor · {whole(selectedTotal)} unidades asignadas
    {missingSupplier>0&&<span> · {missingSupplier} necesidades sin proveedor</span>}
    {missingArticle>0&&<span> · {missingArticle} necesidades genéricas sin presentación elegida</span>}
    {invalidQuantities>0&&<span role="alert"> · {invalidQuantities} cantidades inválidas</span>}
@@ -298,7 +313,11 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     <b>{whole(p.units)} uds.</b></div>)}
   </div>}
   <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
-   defaultSort={{key:"suggested",direction:"desc"}} loading={busy&&!result}
+   sort={sort} onSortChange={next=>{setSort(next||{key:"suggested",direction:"desc"});setPage(1)}}
+   serverFilters={columnFilters} onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
+   serverPagination={{page,pageSize,total:result?.totalGroups??groups.length,
+    onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);setPage(1)}}}
+   loading={busy&&!result}
    loadingLabel="Calculando necesidades por farmacia…"
    emptyText={busy?"Consultando artículos…":"No hay artículos para este filtro"}/>
   <div className="fm-planner-actions">

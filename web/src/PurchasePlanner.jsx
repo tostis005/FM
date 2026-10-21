@@ -208,6 +208,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      const confidence=p.confidence;
      return <div className="fm-planner-pharmacy" key={key(p)}>
       <strong>{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</strong>
+      {g.kind!=="generico"&&<small>Referencia ERP {p.articleId} · CN {g.cn||p.cn||"No disponible"}</small>}
       <div className="fm-planner-detail-metrics">
        <span>Vendidas período <b>{whole(p.unitsPeriod)}</b></span>
        <span>Ventas 3 meses <b>{whole(p.units3)}</b></span>

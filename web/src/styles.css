@@ -832,3 +832,12 @@ html,body{overflow-x:clip}
 }
 .fm-traffic-kpis>div>span,.fm-sync-metrics>div>span{margin:0}
 .fm-traffic-kpis>div>strong,.fm-sync-metrics>div>strong{align-self:start;min-height:30px}
+
+.fm-policy-pharmacy{padding:18px 22px 24px;border-top:1px solid var(--border,#dbe5e2)}
+.fm-policy-pharmacy h3{font-size:16px;margin:0 0 8px}
+.fm-policy-pharmacy p{font-size:12px;color:var(--text-muted,#60746b);line-height:1.6}
+.fm-policy-pharmacy-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fm-policy-pharmacy-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:600}
+.fm-policy-pharmacy-fields input{width:100%;padding:9px;border:1px solid #cedbd3;border-radius:8px}
+.fm-policy-pharmacy-fields button{grid-column:1/-1;justify-self:start}
+@media(max-width:640px){.fm-policy-pharmacy-fields{grid-template-columns:1fr}}

@@ -25,9 +25,11 @@ export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
  const q='"'+ctx.client.schema+'"',farmCode=pharmacyDataCodeSQL("f");
  const query="SELECT f.id::text AS \"pharmacyId\",a.origen_id AS \"articleId\","+
   "a.nombre AS \"articleName\",a.stock_actual::float8 AS stock,"+
-  "a.sincronizado_en AS \"stockAt\" FROM "+q+".articulos a"+
+  "a.sincronizado_en AS \"stockAt\",pol.cobertura_saludable AS \"coverageDays\","+
+  "pol.intervalo_pedidos AS interval_days FROM "+q+".articulos a"+
   " JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])"+
   " AND upper(btrim(a.farmacia_codigo))="+farmCode+
+  " LEFT JOIN farmetrica.op_politicas_reposicion pol ON pol.cliente_slug=$1 AND pol.farmacia_id=f.id"+
   " WHERE a.origen_id=ANY($3::text[])";
  const {rows}=await pool.query({text:query,values:[ctx.client.slug,chosen,codes],query_timeout:15000});
  const byGroup=new Map(groups.map(g=>[g.key,g]));
@@ -39,8 +41,8 @@ export async function addUnsoldPharmacies(pool,ctx,chosen,groups){
    p={pharmacyId:String(a.pharmacyId),groupKey:g.key,articleId:a.articleId,
     articleName:a.articleName,cn:a.articleId,stock:0,stockAt:a.stockAt,
     unitsPeriod:0,units3:0,units12:0,units30:0,ordered:0,daily:0,
-    interval:7,lead:0,safety:0,coverageDays:90,demandPattern:"sin_ventas",
-    suggested:0,policyDefault:true,confidence:"calculable",options:[]};
+    interval:Number(a.interval_days||7),lead:0,safety:0,coverageDays:Number(a.coverageDays||90),demandPattern:"sin_ventas",
+    suggested:0,policyDefault:!a.coverageDays,confidence:a.stockAt?"calculable":"fecha_desconocida",options:[]};
    g.pharmacies.push(p);
   }
   if(!Array.isArray(p.options))p.options=[];

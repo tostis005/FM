@@ -48,3 +48,6 @@
 .fm-planner-article{min-width:240px}
 @media(max-width:850px){.fm-planner-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:420px){.fm-planner-summary{grid-template-columns:1fr}.fm-planner-detail-metrics{grid-template-columns:1fr}}
+
+.fm-planner-use-suggestion{align-self:end;border:1px solid #a6d8b9;background:#edf8f0;color:#176944;border-radius:7px;cursor:pointer;padding:8px;font-size:11px;font-weight:600}
+.fm-planner-use-suggestion:disabled{opacity:.55;cursor:not-allowed}

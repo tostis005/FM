@@ -11,8 +11,7 @@ ventas AS MATERIALIZED (
    WHERE v.fecha >= current_date-interval '90 days' AND v.fecha < current_date+interval '1 day'),0)::float8 AS v90,
   COALESCE(sum(v.unidades) FILTER (
    WHERE v.fecha >= current_date-interval '365 days' AND v.fecha < current_date+interval '1 day'),0)::float8 AS v365,
-  count(DISTINCT date_trunc('month',v.fecha)) FILTER (
-   WHERE v.unidades>0 AND v.fecha >= current_date-interval '365 days')::int AS meses_venta
+  count(*)::int AS numero_lineas
  FROM __SCHEMA__.fm_ventas_analitica v
  JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
   AND upper(btrim(v.farmacia_codigo))=__FARMACIA_CODE__
@@ -22,34 +21,24 @@ ventas AS MATERIALIZED (
  GROUP BY f.id,upper(btrim(v.farmacia_codigo)),v.articulo_id
 ),
 catalogo AS MATERIALIZED (
- SELECT f.id AS fid, a.origen_id AS articulo,
-  upper(btrim(a.farmacia_codigo)) AS farmacia_codigo,
-  a.nombre AS nombre,
+ SELECT v.fid,v.articulo,v.farmacia_codigo,
+  coalesce(nullif(btrim(a.nombre),''),v.articulo) AS nombre,
   COALESCE(nullif(btrim(a.codigo_nacional),''),
-   CASE WHEN a.origen_id ~ '^[0-9]{6,7}$' THEN a.origen_id END) AS cn,
+   CASE WHEN v.articulo ~ '^[0-9]{6,7}$' THEN v.articulo END) AS cn,
   a.stock_actual::float8 AS stock,a.sincronizado_en AS fecha_stock,
-  COALESCE(v.periodo,0)::float8 AS periodo,
-  COALESCE(v.v30,0)::float8 AS v30,
-  COALESCE(v.v90,0)::float8 AS v90,
-  COALESCE(v.v365,0)::float8 AS v365,
-  COALESCE(v.meses_venta,0)::int AS meses_venta
- FROM __SCHEMA__.articulos a
- JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND f.id=ANY($3::int[])
-  AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
- JOIN (SELECT DISTINCT articulo FROM ventas) con ON con.articulo=a.origen_id
- LEFT JOIN ventas v ON v.fid=f.id AND v.articulo=a.origen_id
-),
-orfanos AS MATERIALIZED (
- SELECT v.fid,v.articulo,v.farmacia_codigo,v.articulo AS nombre,
-  CASE WHEN v.articulo ~ '^[0-9]{6,7}$' THEN v.articulo END AS cn,
-  NULL::float8 AS stock,NULL::timestamptz AS fecha_stock,
-  v.periodo,v.v30,v.v90,v.v365,v.meses_venta
- FROM ventas v WHERE NOT EXISTS (
-  SELECT 1 FROM catalogo c WHERE c.fid=v.fid AND c.articulo=v.articulo)
+  v.periodo,v.v30,v.v90,v.v365,
+  (CASE WHEN v.v30>0 THEN 1 ELSE 0 END+
+   CASE WHEN v.v90>v.v30 THEN 1 ELSE 0 END+
+   CASE WHEN v.v365>v.v90 THEN 1 ELSE 0 END)::int AS meses_venta
+ FROM ventas v LEFT JOIN LATERAL (
+  SELECT nombre,codigo_nacional,stock_actual,sincronizado_en
+  FROM __SCHEMA__.articulos a
+  WHERE a.farmacia_codigo=v.farmacia_codigo AND a.origen_id=v.articulo
+  ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+ ) a ON true
 ),
 articulos AS MATERIALIZED (
  SELECT * FROM catalogo
- UNION ALL SELECT * FROM orfanos
 ),
 clasificados AS MATERIALIZED (
  SELECT a.*, n.dcpf,n.nombre AS nombre_generico,

@@ -30,5 +30,14 @@ test("PostgreSQL: preparador consulta ventas documentales y stock real, filtrand
   assert.ok(line.pharmacies[0].units3>0);
   assert.ok(line.pharmacies[0].suggested>0);
   assert.equal(line.pharmacies[0].articleId,"ART-02");
+  // El preparador también puede recibir un artículo del comparador PUC
+  // sin ventas en el período: se permite añadirlo manualmente, sin inventar demanda.
+  req.query.buscar="654321";
+  body=null;error=null;
+  await routes["/api/analytics/pedidos/propuesta"](req,res,e=>{error=e});
+  if(error)throw error;
+  const unSold=body.groups.find(g=>g.cn==="654321");
+  assert.ok(unSold,"la búsqueda incluye artículos del catálogo sin ventas");
+  assert.equal(unSold.pharmacies[0].articleId,"ART-01");
  }finally{await pool.end()}
 });

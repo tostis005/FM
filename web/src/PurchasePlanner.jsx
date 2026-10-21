@@ -339,9 +339,10 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))}
      aria-expanded={Boolean(open[g.key])}>
      <ChevronDown size={15}/>
-     <span><strong>{g.articleName}</strong><small>
-      {g.kind==="generico"?g.productCount+" referencias del conjunto · Ver CN y PUC en el detalle":"CN "+(g.cn||"sin identificar")}
-     </small></span>
+     <span className="fm-planner-article-label" title={g.articleName}>
+      <strong>{g.articleName}</strong>
+      <small>{g.kind==="generico"?g.productCount+" referencias":"CN "+(g.cn||"—")}</small>
+     </span>
     </button>
 
    </div>},
@@ -355,17 +356,6 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      </div>:<small className="fm-planner-no-puc">{labLoading?"Consultando precios…":
       "Sin laboratorio con PUC contrastado"}</small>;
    }},
-  {key:"patron",label:"Demanda",sortable:false,searchable:false,value:g=>g.patron||"",
-   render:g=><span className={"fm-planner-pattern fm-planner-pattern-"+(g.patron||"desconocida")}>
-    {({recurrente:"Recurrente",intermitente:"Intermitente",
-      posible_estacional:"Posible temporada",concentrada:"Ventas concentradas",
-      pico_reciente:"Pico reciente",sin_actividad:"Sin actividad reciente"})[g.patron]||"Sin clasificar"}
-    <small className="fm-planner-pattern-evidence">
-      {g.firstSale?"Ventas entre "+String(g.firstSale).slice(0,10)+
-       " y "+String(g.lastSale).slice(0,10)+
-       " ("+g.saleSpanDays+" días de intervalo)":"Sin ventas en 12 meses"}
-    </small>
-   </span>},
   {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
   {key:"units3",label:"Ventas 3m",value:g=>g.units3,render:g=>whole(g.units3)},
   {key:"units12",label:"Ventas 12m",value:g=>g.units12,render:g=>whole(g.units12)},

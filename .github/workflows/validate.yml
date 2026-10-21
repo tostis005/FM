@@ -30,6 +30,7 @@ jobs:
           node --check api/src/tenant.js
           node --test api/src/supplierReporting.test.js
           node --test api/src/purchasePlanner.test.js
+          node --test api/src/purchasePlannerSuppliers.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
@@ -237,9 +238,9 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
+          node check-purchase-planner.mjs
           node check-responsive.mjs
           node check-dashboard-audit.mjs
-          node check-purchase-planner.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

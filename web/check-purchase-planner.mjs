@@ -87,6 +87,12 @@ try{
  await page.goto(BASE+"/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Preparador de pedidos"}).waitFor({timeout:15000});
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
+ assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0,
+  "La columna Demanda ya no debe mostrarse");
+ const width=await page.locator(".fm-planner .smart-table thead th").first()
+  .evaluate(el=>Math.round(el.getBoundingClientRect().width));
+ assert.ok(width<=210,"La columna Producto / genérico debe ser compacta: "+width+"px");
+
  await page.getByRole("button",{name:"Este mes"}).waitFor();
  await page.getByText(/Nueva propuesta por laboratorio/).waitFor();
  assert.equal(await page.locator(".fm-unified-header select[aria-label=\"Farmacia\"]").count(),0,"La cabecera no debe imponer una farmacia");
@@ -102,16 +108,18 @@ try{
  const pageTwo=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="2");
  await page.getByRole("button",{name:"Siguiente"}).click();
- await pageTwo;
+ const pageTwoRes=await pageTwo;
+ const pageTwoData=await pageTwoRes.json();
  await page.getByText("Gel de prueba").first().waitFor();
- await page.getByText("Ventas concentradas").first().waitFor();
- await page.getByText(/3 días de intervalo/).first().waitFor();
+ assert.equal(pageTwoData.groups[0].patron,"concentrada",
+  "La detección de demanda se conserva en API aunque no se muestre la columna");
+ assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0);
  const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="1");
  await page.getByRole("button",{name:"Anterior"}).click();
- await pageOne;
+ const pageOneRes=await pageOne;
+ assert.equal((await pageOneRes.json()).groups[0].patron,"recurrente");
  await page.getByText("Crema de manos").first().waitFor();
- await page.getByText("Recurrente").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.locator(".fm-planner-details").first().waitFor();
  await page.locator(".fm-planner-lab-choice strong").first().waitFor();

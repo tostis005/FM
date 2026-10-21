@@ -94,3 +94,32 @@
 .fm-planner .fm-expanded-row>td{padding:7px 12px!important;background:#f8fbf9;white-space:normal;overflow:visible}
 .fm-planner .fm-expanded-row .fm-planner-details{width:100%;max-width:100%;margin:0;box-shadow:none}
 .fm-planner .fm-expanded-row:hover>td{background:#f8fbf9}
+
+
+/* Preparador compacto: sin columna de demanda; nombre legible en dos líneas. */
+.fm-planner .smart-table{min-width:900px;table-layout:fixed}
+.fm-planner .smart-table>thead>tr>th:first-child,
+.fm-planner .smart-table>tbody>tr:not(.fm-expanded-row)>td:first-child{
+ width:188px;max-width:188px
+}
+.fm-planner .smart-table>thead>tr>th:nth-child(2),
+.fm-planner .smart-table>tbody>tr:not(.fm-expanded-row)>td:nth-child(2){
+ width:180px;max-width:180px
+}
+.fm-planner-article{min-width:0;width:100%;max-width:188px}
+.fm-planner-toggle{width:100%;min-width:0;max-width:100%;gap:4px;align-items:flex-start}
+.fm-planner-toggle svg{flex:0 0 auto;margin-top:2px}
+.fm-planner-article-label{min-width:0;max-width:100%;display:block}
+.fm-planner-article-label strong{
+ display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+ overflow:hidden;overflow-wrap:anywhere;line-height:1.35;
+ font-size:11px;max-width:100%
+}
+.fm-planner-article-label small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.fm-planner .fm-expanded-row>td{width:auto!important;max-width:none!important}
+@media(max-width:700px){
+ .fm-planner .smart-table{min-width:900px}
+ .fm-planner .smart-table>thead>tr>th:first-child,
+ .fm-planner .smart-table>tbody>tr:not(.fm-expanded-row)>td:first-child{width:158px;max-width:158px}
+ .fm-planner-article{max-width:158px}
+}

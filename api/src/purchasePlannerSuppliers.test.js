@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {pickBestLaboratory,mapLaboratoryOffers,readPlannerLaboratories} from "./purchasePlannerSuppliers.js";
+import {pickBestLaboratory,mapLaboratoryOffers,readPlannerLaboratories,
+ canonicalSupplierCode,resolveSupplierNames} from "./purchasePlannerSuppliers.js";
 
 test("PUC recomienda laboratorio más barato y conserva CN/farmacia concretos",()=>{
  const articles=[
@@ -47,7 +48,7 @@ test("SQL del PUC impide cooperativas, respeta los precios positivos y las farma
  assert.match(calls[2].text,/pm\.cooperativa IS NOT TRUE/);
  assert.match(calls[2].text,/pm\.ignorar_informes IS NOT TRUE/);
  assert.match(calls[2].text,/percentil|percentil,20/);
- assert.match(calls[2].text,/HAVING sum\(lines\)>=3/);
+ assert.match(calls[2].text,/HAVING sum\(taken\)>0/);
  assert.deepEqual(calls[2].values[1],[1]);
 });
 
@@ -63,4 +64,28 @@ test("El PUC de un CN comprado en otra farmacia también informa al conjunto DCP
  assert.equal(result.recommendations[0].recommended.cn,"662026");
  assert.equal(result.byPharmacy.length,0,
   "No asignar automáticamente un proveedor ERP de otra farmacia sin confirmar correspondencia local");
+});
+
+test("El catálogo local identifica proveedores por ID aunque otro establecimiento use el mismo código",()=>{
+ const offers=[
+  {pharmacyId:"1",supplierCode:"0005",supplierName:"0005",puc:1.3},
+  {pharmacyId:"2",supplierCode:"5",supplierName:"5",puc:1.1},
+  {pharmacyId:"3",supplierCode:"0005",supplierName:"0005",puc:1.5},
+  {pharmacyId:"4",supplierCode:"0256",supplierName:"0256",puc:2},
+  {pharmacyId:"1",supplierCode:"P44",supplierName:"",puc:3}
+ ];
+ const catalog=[
+  {pharmacyId:"1",supplierCode:"0005",name:"Laboratorios Medela"},
+  {pharmacyId:"2",supplierCode:"0005",name:"Laboratorios Cinfa"},
+  {pharmacyId:"1",supplierCode:"0256",name:"TEVA PHARMA S.L.U."},
+  {pharmacyId:"2",supplierCode:"256",name:"TEVA PHARMA S.L.U."}
+ ];
+ const result=resolveSupplierNames(offers,catalog,[{supplierCode:"P44",name:"Laboratorio Alfa"}]);
+ assert.equal(result[0].supplierName,"Laboratorios Medela");
+ assert.equal(result[1].supplierName,"Laboratorios Cinfa");
+ assert.equal(result[2].supplierName,"0005","Código ambiguo de otra farmacia no es un nombre seguro");
+ assert.equal(result[3].supplierName,"TEVA PHARMA S.L.U.","Código único compartido puede resolver el nombre");
+ assert.equal(result[4].supplierName,"Laboratorio Alfa","Nombre del maestro se resuelve por el código externo");
+ assert.equal(canonicalSupplierCode("0005"),"5");
+ assert.equal(canonicalSupplierCode("LAB-05"),"LAB-05");
 });

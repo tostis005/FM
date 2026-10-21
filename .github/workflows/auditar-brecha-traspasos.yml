@@ -92,5 +92,115 @@ jobs:
           WHERE fecha>=date '2026-07-20' AND fecha<date '2026-10-21'
              AND lineas_completas AND NOT eliminada_logicamente
           GROUP BY 2 ORDER BY documentos DESC LIMIT 15;
+
+          -- Auditoría ampliada (SOLO LECTURA): mapeos configurados, entradas
+          -- excluidas y salidas candidatas durante los últimos 45 días.
+          SELECT 'MAPEOS_CONFIGURADOS' AS tipo,
+            m.farmacia_id, f.nombre AS farmacia_origen,
+            m.proveedor_codigo,pm.nombre AS proveedor_interno,
+            m.cliente_erp_id,pm.ignorar_informes
+          FROM farmetrica.traspasos_salida_mapeos m
+          JOIN farmetrica.farmacias f ON f.id=m.farmacia_id
+          JOIN farmetrica.proveedores_maestro pm
+            ON pm.cliente_slug=m.cliente_slug AND pm.codigo_origen=m.proveedor_codigo
+          WHERE m.cliente_slug='ampedia'
+          ORDER BY f.nombre,pm.nombre LIMIT 80;
+          SELECT 'ENTRADAS_INTERNAS_45D' AS tipo,
+            f.nombre AS farmacia_receptora,
+            r.proveedor_id AS proveedor_erp,
+            max(pm.nombre) AS proveedor_nombre,
+            count(*)::int AS lineas,
+            count(DISTINCT (r.sistema_origen,r.documento_id))::int AS documentos,
+            sum(r.unidades)::float8 AS unidades_netas,
+            count(DISTINCT r.articulo_id)::int AS articulos
+          FROM ampedia.fm_recepciones_analitica r
+          JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+            AND upper(btrim(r.farmacia_codigo))=
+              CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+                THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+          JOIN farmetrica.proveedores_maestro pm ON pm.cliente_slug='ampedia'
+            AND pm.ignorar_informes=true
+            AND upper(btrim(pm.codigo_origen))=upper(btrim(r.proveedor_id))
+          WHERE r.fecha>=current_date-interval '45 days'
+          GROUP BY f.nombre,r.proveedor_id
+          ORDER BY abs(sum(r.unidades)) DESC LIMIT 40;
+          SELECT 'SALIDAS_POR_CLIENTE_45D' AS tipo,
+            f.nombre AS farmacia_origen,h.cliente_origen_id AS cliente_erp,
+            h.estado AS tipo_venta,
+            count(DISTINCT (h.sistema_origen,h.documento_id))::int AS documentos,
+            count(*)::int AS lineas,
+            coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END),0)::float8 AS unidades
+          FROM ampedia.fm_ventas_cabeceras h
+          JOIN ampedia.fm_ventas_lineas l ON l.farmacia_codigo=h.farmacia_codigo
+            AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+          JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+            AND upper(btrim(h.farmacia_codigo))=
+              CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+                THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+          WHERE h.fecha>=current_date-interval '45 days'
+            AND h.lineas_completas AND NOT h.eliminado_logicamente
+            AND NOT l.eliminada_logicamente AND NOT coalesce(l.anulada,false)
+            AND lower(btrim(coalesce(h.estado,''))) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+            AND nullif(btrim(h.cliente_origen_id),'') IS NOT NULL
+            AND l.articulo_origen_id IS NOT NULL
+          GROUP BY f.nombre,h.cliente_origen_id,h.estado
+          ORDER BY abs(sum(l.cantidad)) DESC LIMIT 40;
+          -- Una igualdad de código ERP entre farmacias es solo una PISTA.
+          -- La cuenta por par y fecha permite valorar si siquiera hay evidencias
+          -- antes de crear exclusiones automáticas.
+          WITH salidas AS MATERIALIZED (
+            SELECT h.farmacia_codigo AS farmacia,upper(btrim(h.cliente_origen_id)) AS cliente,
+              h.fecha::date AS fecha,upper(btrim(l.articulo_origen_id)) AS articulo,
+              sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END) AS unidades
+            FROM ampedia.fm_ventas_cabeceras h
+            JOIN ampedia.fm_ventas_lineas l ON l.farmacia_codigo=h.farmacia_codigo
+              AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+            WHERE h.fecha>=current_date-interval '30 days'
+              AND h.lineas_completas AND NOT h.eliminado_logicamente
+              AND NOT l.eliminada_logicamente AND NOT coalesce(l.anulada,false)
+              AND lower(btrim(coalesce(h.estado,''))) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+              AND nullif(btrim(h.cliente_origen_id),'') IS NOT NULL
+              AND nullif(btrim(l.articulo_origen_id),'') IS NOT NULL
+              AND l.cantidad>0
+            GROUP BY 1,2,3,4
+          ), entradas AS MATERIALIZED (
+            SELECT h.farmacia_codigo AS farmacia,upper(btrim(h.proveedor_origen_id)) AS proveedor,
+              h.fecha::date AS fecha,upper(btrim(l.articulo_origen_id)) AS articulo,
+              sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END) AS unidades
+            FROM ampedia.fm_recepciones_cabeceras h
+            JOIN ampedia.fm_recepciones_lineas l ON l.farmacia_codigo=h.farmacia_codigo
+              AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+            JOIN farmetrica.proveedores_maestro pm ON pm.cliente_slug='ampedia'
+              AND pm.ignorar_informes=true
+              AND upper(btrim(pm.codigo_origen))=upper(btrim(h.proveedor_origen_id))
+            WHERE h.fecha>=current_date-interval '30 days'
+              AND h.lineas_completas AND NOT h.eliminada_logicamente
+              AND NOT l.eliminada_logicamente
+              AND lower(btrim(coalesce(h.estado,''))) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+              AND nullif(btrim(l.articulo_origen_id),'') IS NOT NULL AND l.cantidad>0
+            GROUP BY 1,2,3,4
+          ), pistas AS (
+            SELECT e.farmacia AS receptora,e.proveedor,
+              s.farmacia AS emisora,s.cliente,
+              count(*)::int AS grupos_coincidentes,
+              sum(e.unidades)::float8 AS unidades_coincidentes,
+              count(DISTINCT e.articulo)::int AS articulos_coincidentes
+            FROM entradas e JOIN salidas s
+              ON s.farmacia<>e.farmacia
+              AND s.articulo=e.articulo AND s.unidades=e.unidades
+              AND e.fecha BETWEEN s.fecha-interval '1 day' AND s.fecha+interval '7 days'
+            GROUP BY 1,2,3,4
+          )
+          SELECT 'PISTAS_MISMO_ERP_30D_NO_VERIFICADAS' AS tipo,
+            receptora,proveedor,emisora,cliente,
+            grupos_coincidentes,unidades_coincidentes,articulos_coincidentes
+          FROM pistas ORDER BY grupos_coincidentes DESC,unidades_coincidentes DESC LIMIT 40;
+          -- La cobertura de CN determina si se pueden demostrar
+          -- correspondencias de producto entre sistemas independientes.
+          SELECT 'CN_CATALOGO_ERP' AS tipo,
+            upper(btrim(farmacia_codigo)) AS farmacia,
+            count(*)::int AS articulos,
+            count(*) FILTER(WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL)::int AS cn_disponibles
+          FROM ampedia.articulos GROUP BY 2 ORDER BY 2;
           ROLLBACK;
           SQL

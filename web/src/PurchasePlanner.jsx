@@ -250,18 +250,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   }catch(e){setError(e.message+(saved?" ("+saved+" borradores ya guardados; revisa antes de repetir).":""))}
   finally{setBusy(false)}
  }
- const columns=[
-  {key:"articleName",label:"Producto / genérico",value:g=>g.articleName,
-   render:g=><div className="fm-planner-article">
-    <button type="button" className="fm-planner-toggle"
-     onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))}
-     aria-expanded={Boolean(open[g.key])}>
-     <ChevronDown size={15}/>
-     <span><strong>{g.articleName}</strong><small>
-      {g.kind==="generico"?"Genérico DCPF "+g.dcpf+" · "+g.productCount+" referencias entre farmacias":"CN "+(g.cn||"sin identificar")}
-     </small></span>
-    </button>
-    {open[g.key]&&<div className="fm-planner-details" aria-label={"Desglose de "+g.articleName}>
+ const renderPlannerDetails=g=><div className="fm-planner-details" aria-label={"Desglose de "+g.articleName}>
       <div className="fm-planner-detail-head">
        <strong>Reparto de necesidad entre farmacias</strong>
        <span>Propuesta del grupo: <b>{g.suggested==null?"Sin cálculo":whole(g.suggested)+" uds."}</b></span>
@@ -337,7 +326,19 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
        </div>
        <small>El fabricante oficial y el laboratorio proveedor no son necesariamente el mismo. Solo se recomiendan proveedores no cooperativos con PUC suficiente y verificado.</small>
       </details>}
-     </div>}
+     </div>;
+ const columns=[
+  {key:"articleName",label:"Producto / genérico",value:g=>g.articleName,
+   render:g=><div className="fm-planner-article">
+    <button type="button" className="fm-planner-toggle"
+     onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))}
+     aria-expanded={Boolean(open[g.key])}>
+     <ChevronDown size={15}/>
+     <span><strong>{g.articleName}</strong><small>
+      {g.kind==="generico"?"Genérico DCPF "+g.dcpf+" · "+g.productCount+" referencias entre farmacias":"CN "+(g.cn||"sin identificar")}
+     </small></span>
+    </button>
+
    </div>},
   {key:"laboratorio",label:"Laboratorio recomendado",sortable:false,searchable:false,
    value:g=>laboratoryByGroup.get(g.key)?.supplierName||"",
@@ -415,6 +416,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     <b>{whole(p.units)} uds.</b></div>)}
   </div>}
   <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
+   renderExpandedRow={renderPlannerDetails}
+   expandedRowKeys={Object.entries(open).filter(([,expanded])=>expanded).map(([key])=>String(key))}
    sort={sort} onSortChange={next=>{setSort(next||{key:"suggested",direction:"desc"});setPage(1)}}
    serverFilters={columnFilters} onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
    serverPagination={{page,pageSize,total:result?.totalGroups??groups.length,

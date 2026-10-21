@@ -127,13 +127,29 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
               THEN
                 ALTER TABLE {history} RENAME COLUMN id TO ejecucion_id;
               END IF;
+              -- Evitar ALTER TABLE sobre el historial cada minuto: aunque una
+              -- columna exista, ALTER obtiene un bloqueo fuerte en PostgreSQL.
+              IF NOT EXISTS (SELECT 1 FROM pg_attribute
+                             WHERE attrelid='{history}'::regclass
+                               AND attname='trabajo_id' AND NOT attisdropped)
+              THEN
+                ALTER TABLE {history} ADD COLUMN trabajo_id uuid;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_attribute
+                             WHERE attrelid='{history}'::regclass
+                               AND attname='sistema_origen' AND NOT attisdropped)
+              THEN
+                ALTER TABLE {history} ADD COLUMN sistema_origen text
+                  NOT NULL DEFAULT 'desconocido';
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_attribute
+                             WHERE attrelid='{history}'::regclass
+                               AND attname='modificadas' AND NOT attisdropped)
+              THEN
+                ALTER TABLE {history} ADD COLUMN modificadas bigint
+                  NOT NULL DEFAULT 0;
+              END IF;
             END $migration$;
-            -- Las columnas adicionales son aditivas, sin tocar ejecuciones previas.
-            ALTER TABLE {history} ADD COLUMN IF NOT EXISTS trabajo_id uuid;
-            ALTER TABLE {history} ADD COLUMN IF NOT EXISTS sistema_origen text
-              NOT NULL DEFAULT 'desconocido';
-            ALTER TABLE {history} ADD COLUMN IF NOT EXISTS modificadas bigint
-              NOT NULL DEFAULT 0;
             CREATE INDEX IF NOT EXISTS fm_sync_ejecuciones_codigo_fecha_idx
               ON {history}(farmacia_codigo,flujo,iniciada_en DESC);
             """;

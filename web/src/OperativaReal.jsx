@@ -105,9 +105,9 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
   const search=new URLSearchParams({recurso,farmacia:pharmacy,...params});
   return api("/api/operativa?"+search);
  }
- async function refresh(){
+ async function refresh({silent=false}={}){
   if(!pharmacy){setError("No hay farmacias autorizadas para esta sección.");setMode("error");return;}
-  setMode("loading");setError("");
+  if(!silent)setMode("loading");setError("");
   try{
    const result=await query();
    setScope(result.scope||{});setItems(result.items||[]);setLastUpdated(new Date());setMode("ready");
@@ -204,7 +204,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    {error&&<div className="fm-op-message fm-op-error" role="alert">{error}</div>}
    {notice&&<div className="fm-op-message" role="status">{notice}</div>}
    {section==="compras-preparador"&&<PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
-    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)} onCreated={refresh}/>}
+    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)} onCreated={()=>void refresh({silent:true})}/>}
   {resource==="pedidos"&&<>
     <Cards entries={[["Planes",NUM(items.length)],["Pendientes de aprobación",NUM(items.filter(n=>n.estado==="pendiente_aprobacion").length)],
      ["Necesidades sin asignar",NUM(items.reduce((s,p)=>s+p.lineas.reduce((v,n)=>v+pending(n),0),0))+" uds."],

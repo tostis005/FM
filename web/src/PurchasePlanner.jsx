@@ -1,0 +1,222 @@
+import React,{useEffect,useMemo,useState} from "react";
+import {ShoppingCart,Download,Save,ChevronDown,AlertTriangle} from "lucide-react";
+import ListTable from "./ListTable.jsx";
+import "./purchasePlanner.css";
+
+const today=()=>new Date().toISOString().slice(0,10);
+const monthAgo=()=>new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
+const exportSafe=x=>{const str=String(x??"");return '"'+(/^[\s]*[=+@-]/.test(str)?"'"+str:str).replaceAll('"','""')+'"'};
+const key=p=>String(p.pharmacyId)+"|"+String(p.articleId);
+export const STAGING_PREFIX="fm_preparador_enlace:";
+export function putPurchaseLink(slug,link){
+ sessionStorage.setItem(STAGING_PREFIX+slug,JSON.stringify(link));
+}
+function makeCSV(lines){
+ return "\ufeff"+[["Proveedor","Farmacia","CN","Código ERP","Artículo","Unidades"],
+  ...lines.map(x=>[x.supplier,x.pharmacyName,x.cn||"",x.articleId,x.articleName,x.units])]
+  .map(line=>line.map(exportSafe).join(";")).join("\r\n");
+}
+function downloadCSV(filename,lines){
+ const url=URL.createObjectURL(new Blob([makeCSV(lines)],{type:"text/csv;charset=utf-8"}));
+ const link=document.createElement("a");link.href=url;link.download=filename+".csv";
+ document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+// En cada farmacia el ERP tiene sus códigos propios. Los borradores se guardan
+// bajo farmacia y proveedor; la exportación puede consolidar varias farmacias.
+export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated=()=>{}}){
+ const [selected,setSelected]=useState(()=>pharmacies.map(p=>String(p.id)));
+ const [from,setFrom]=useState(monthAgo);
+ const [to,setTo]=useState(today);
+ const [search,setSearch]=useState("");
+ const [result,setResult]=useState(null);
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState("");
+ const [notice,setNotice]=useState("");
+ const [overrides,setOverrides]=useState({});
+ const [suppliers,setSuppliers]=useState({});
+ const [open,setOpen]=useState({});
+ const [reload,setReload]=useState(0);
+ const [pendingLink,setPendingLink]=useState(null);
+ useEffect(()=>{
+  try{
+   const saved=JSON.parse(sessionStorage.getItem(STAGING_PREFIX+clientSlug)||"null");
+   if(saved?.cn||saved?.articleId){
+    setSearch(String(saved.cn||saved.articleId));
+    if(saved.pharmacyId&&pharmacies.some(p=>String(p.id)===String(saved.pharmacyId)))
+     setSelected([String(saved.pharmacyId)]);
+    setPendingLink(saved);
+    sessionStorage.removeItem(STAGING_PREFIX+clientSlug);
+   }
+  }catch{}
+ },[clientSlug]);
+ const codes=selected.join(",");
+ useEffect(()=>{
+  if(!codes||!from||!to||from>to){setResult({groups:[],pharmacies:[],available:true});return}
+  const ac=new AbortController();
+  const delay=setTimeout(()=>{
+   setBusy(true);setError("");
+   const qs=new URLSearchParams({desde:from,hasta:to,farmacias:codes,buscar:search});
+   fetch("/api/analytics/pedidos/propuesta?"+qs,{
+    credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:ac.signal
+   }).then(async r=>{const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw Error(data.error||"No se puede preparar el pedido");return data})
+    .then(data=>{if(!ac.signal.aborted){setResult(data);setOverrides({});setOpen({});
+      if(pendingLink?.supplier){
+       const newAssignments={};
+       for(const g of data.groups||[])for(const p of g.pharmacies)
+        if(String(p.pharmacyId)===String(pendingLink.pharmacyId)&&
+         (String(g.cn)===String(pendingLink.cn)||String(p.articleId)===String(pendingLink.articleId)))
+         newAssignments[key(p)]={supplier:String(pendingLink.supplier),units:Math.max(0,p.suggested||0)};
+       setOverrides(newAssignments);
+      }
+    }})
+    .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
+    .finally(()=>{if(!ac.signal.aborted)setBusy(false)});
+  },300);
+  return()=>{clearTimeout(delay);ac.abort()};
+ },[clientSlug,codes,from,to,search,reload,pendingLink]);
+ useEffect(()=>{
+  const ac=new AbortController();
+  Promise.allSettled(selected.map(async id=>{
+   const params=new URLSearchParams({farmacia:id});
+   const res=await fetch("/api/analytics/catalogos/proveedores?"+params,{
+    credentials:"same-origin",headers:{"X-Farmetrica-Cliente":clientSlug},signal:ac.signal});
+   if(!res.ok)return {id,items:[]};
+   const json=await res.json();return {id,items:json.items||[]};
+  })).then(data=>{if(!ac.signal.aborted)setSuppliers(Object.fromEntries(data.filter(x=>x.status==="fulfilled").map(x=>[x.value.id,x.value.items])))});
+  return()=>ac.abort();
+ },[clientSlug,codes]);
+ const groups=result?.groups||[];
+ const allLines=useMemo(()=>{
+  const lines=[];
+  for(const g of groups)for(const p of g.pharmacies){
+   const edit=overrides[key(p)]||{},units=Number(edit.units??p.suggested??0);
+   const supplier=String(edit.supplier||"").trim();
+   if(units>0&&Number.isSafeInteger(units)&&supplier)lines.push({...p,cn:g.cn,
+    articleName:g.articleName,pharmacyName:pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId,
+    units,supplier});
+  }
+  return lines;
+ },[groups,overrides,pharmacies]);
+ const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>Number(overrides[key(p)]?.units??p.suggested??0)>0&&!String(overrides[key(p)]?.supplier||"").trim()).length,0);
+ const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
+ const setValue=(p,field,value)=>setOverrides(previous=>({...previous,
+  [key(p)]:{units:p.suggested??0,supplier:"",...previous[key(p)],[field]:value}}));
+ function exportGrouped(){
+  if(!allLines.length)return setError("Asigna un proveedor y unidades antes de exportar");
+  // Un CSV por proveedor; conserva farmacia y ERP para que pueda prepararse
+  // el formato propio de cada laboratorio sin perder trazabilidad.
+  const bySupplier=new Map();
+  for(const line of allLines){
+   if(!bySupplier.has(line.supplier))bySupplier.set(line.supplier,[]);
+   bySupplier.get(line.supplier).push(line);
+  }
+  for(const [supplier,lines] of bySupplier)
+   downloadCSV("farmetrica-pedido-"+supplier.replace(/[^a-z0-9_-]/gi,"_").slice(0,60),lines);
+  setNotice("CSV preparado por proveedor. La descarga no envía ni aprueba pedidos.");
+ }
+ async function saveDrafts(){
+  if(!canEdit)return;
+  if(!allLines.length)return setError("No hay líneas asignadas a proveedores");
+  if(missingSupplier)return setError("Hay "+missingSupplier+" necesidades sin proveedor; asígnalas o pon 0 en Pedir.");
+  setBusy(true);setError("");setNotice("");
+  const batches=new Map();
+  for(const line of allLines){
+   const group=line.pharmacyId+"|"+line.supplier;
+   if(!batches.has(group))batches.set(group,[]);
+   batches.get(group).push(line);
+  }
+  let saved=0;
+  try{
+   for(const [,lines] of batches){
+    for(let i=0;i<lines.length;i+=150){
+     const part=lines.slice(i,i+150),supplier=part[0].supplier,pharmacy=part[0].pharmacyId;
+     const payload={recurso:"pedidos",farmacia:pharmacy,
+      nombre:"Propuesta · "+supplier+" · "+today(),
+      lineas:part.map(p=>({id:crypto.randomUUID(),articulo:p.articleId,
+       nombre:p.articleName,necesidad:p.units,
+       asignaciones:[{proveedor:supplier,unidades:p.units,coste:null}]}))};
+     const response=await fetch("/api/operativa",{method:"POST",credentials:"same-origin",
+      headers:{"content-type":"application/json","X-Farmetrica-Cliente":clientSlug},body:JSON.stringify(payload)});
+     const data=await response.json().catch(()=>({}));
+     if(!response.ok)throw Error(data.error||"Error al guardar el pedido");
+     saved++;
+    }
+   }
+   setNotice(saved+" borradores guardados. Revísalos y apruébalos en «Planes de compra» antes de marcar su exportación.");
+   onCreated();
+  }catch(e){setError(e.message+(saved?" ("+saved+" borradores ya guardados; revisa antes de repetir).":""))}
+  finally{setBusy(false)}
+ }
+ const columns=[
+  {key:"articleName",label:"Artículo / CN",value:g=>g.articleName,
+   render:g=><div className="fm-planner-article"><button type="button" className="fm-planner-toggle"
+    onClick={()=>setOpen(o=>({...o,[g.key]:!o[g.key]}))} aria-expanded={Boolean(open[g.key])}>
+    <ChevronDown size={15}/><span><strong>{g.articleName}</strong><small>{g.cn||"ERP (sin CN común)"}</small></span></button>
+    {open[g.key]&&<div className="fm-planner-details">{g.pharmacies.map(p=>{
+     const edit=overrides[key(p)]||{},options=suppliers[String(p.pharmacyId)]||[];
+     const confidence=p.confidence;
+     return <div className="fm-planner-pharmacy" key={key(p)}>
+      <strong>{pharmacies.find(f=>String(f.id)===String(p.pharmacyId))?.name||p.pharmacyId}</strong>
+      <small>ERP {p.articleId} · Stock {p.stock===null?"No disponible":whole(p.stock)} · Período {whole(p.unitsPeriod)} · 3m {whole(p.units3)} · 12m {whole(p.units12)}</small>
+      <small>Media {whole(p.daily)} uds./día × ({p.interval}+{p.lead} días) + seguridad {p.safety} − stock {whole(p.stock)} − preparados {p.ordered??0} = <b>{p.suggested??"Sin cálculo"} uds.</b></small>
+      {confidence!=="calculable"&&<small className="fm-planner-caution">{confidence==="stock_antiguo"?"Stock posiblemente desactualizado":confidence==="sin_stock"?"Sin stock: no se propone compra":"Sin fecha verificable de stock"}</small>}
+      {p.policyDefault&&<small className="fm-planner-caution">Política estándar; configura intervalos y plazos por farmacia.</small>}
+      <div className="fm-planner-edit">
+       <label>Pedir <input type="number" min="0" max="999999" step="1" disabled={!canEdit||p.suggested===null}
+        value={edit.units??p.suggested??0} onChange={e=>setValue(p,"units",e.target.value)}/></label>
+       <label>Proveedor <input list={"fm-pl-sup-"+p.pharmacyId} disabled={!canEdit||p.suggested===null}
+        placeholder="Código proveedor" value={edit.supplier||""}
+        onChange={e=>setValue(p,"supplier",e.target.value)}/>
+        <datalist id={"fm-pl-sup-"+p.pharmacyId}>{options.map(s=>
+         <option key={s.code} value={s.code} label={s.name}>{s.name}</option>)}</datalist>
+       </label>
+      </div>
+     </div>;
+    })}</div>}</div>},
+  {key:"stock",label:"Stock",value:g=>g.stock??-1,render:g=>g.stock===null?"—":whole(g.stock)},
+  {key:"unitsPeriod",label:"Ventas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
+  {key:"units3",label:"Ventas 3m",value:g=>g.units3,render:g=>whole(g.units3)},
+  {key:"units12",label:"Ventas 12m",value:g=>g.units12,render:g=>whole(g.units12)},
+  {key:"suggested",label:"Propuesta",value:g=>g.suggested??-1,
+   render:g=>g.suggested===null?"Ver desglose":<strong>{whole(g.suggested)}</strong>},
+  {key:"selected",label:"Pedir",value:g=>g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??p.suggested??0),0),
+   render:g=><strong>{whole(g.pharmacies.reduce((n,p)=>n+Number(overrides[key(p)]?.units??p.suggested??0),0))}</strong>}
+ ];
+ return <section className="card fm-planner">
+  <div className="fm-planner-head"><div><h2><ShoppingCart size={19}/> Propuesta inteligente de compra</h2>
+   <p>Ventas, stock y necesidades por farmacia en una única tabla. Despliega el artículo para ajustar cantidades y proveedor.</p></div>
+   <button className="btn btn-secondary" onClick={()=>setReload(n=>n+1)} type="button" disabled={busy}>Actualizar</button></div>
+  <div className="fm-planner-filters">
+   <label>Desde <input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <label>Hasta <input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+   <label>Buscar CN o artículo <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="CN o nombre…"/></label>
+  </div>
+  <div className="fm-planner-pharmacies" role="group" aria-label="Farmacias para el pedido">
+   {pharmacies.map(p=><label key={p.id}><input type="checkbox" checked={selected.includes(String(p.id))}
+    onChange={e=>setSelected(s=>e.target.checked?[...s,String(p.id)]:s.filter(id=>id!==String(p.id)))}/>{p.name}</label>)}
+  </div>
+  {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
+  {notice&&<p role="status" className="fm-op-message">{notice}</p>}
+  {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}
+  {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se presenta como inventario completo.</p>}
+  <div className="fm-planner-summary">
+   <span>{whole(groups.length)} artículos consultados</span>
+   <span>{whole(allLines.length)} líneas con proveedor</span>
+   <strong>{whole(selectedTotal)} unidades preparadas</strong>
+   {missingSupplier>0&&<span>{missingSupplier} necesidades aún sin proveedor</span>}
+  </div>
+  <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
+   defaultSort={{key:"suggested",direction:"desc"}} loading={busy&&!result}
+   loadingLabel="Calculando necesidades por farmacia…"
+   emptyText={busy?"Consultando artículos…":"No hay artículos vendidos para este filtro"}/>
+  <div className="fm-planner-actions">
+   <button type="button" className="btn btn-secondary" onClick={exportGrouped} disabled={!allLines.length||busy}>
+    <Download size={16}/> Exportar CSV por proveedor</button>
+   <button type="button" className="btn btn-primary" disabled={!canEdit||!allLines.length||busy||missingSupplier>0}
+    onClick={saveDrafts}><Save size={16}/>{busy?"Guardando…":"Guardar borradores por proveedor"}</button>
+  </div>
+  <p className="fm-op-fine">{result?.note||"La propuesta necesita ventas y stock sincronizados."} No se envía automáticamente ningún pedido. Los borradores se revisan y aprueban en la sección inferior.</p>
+ </section>;
+}

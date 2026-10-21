@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FarmetricaSync</RootNamespace>
     <AssemblyName>FarmetricaSync</AssemblyName>
-    <Version>0.16.0</Version>
+    <Version>0.17.0</Version>
     <ApplicationIcon>wwwroot/assets/farmetrica.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>

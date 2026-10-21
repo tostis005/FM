@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useState} from "react";
-import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import {ReportPageHeader} from "./ReportControls.jsx";
 import {RefreshCcw,Activity,Clock3,AlertTriangle,CheckCircle2,Store,ChevronDown,ChevronUp} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {syncFlowLabel} from "./syncFlowLabel.js";
@@ -52,8 +52,7 @@ function Detail({pharmacy}){
 }
 export default function PharmacyState({clientSlug}){
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
- const [scope,setScope]=useState("all"),[expanded,setExpanded]=useState([]);
- const [pharmacyIds,setPharmacyIds]=useState([]);
+ const [expanded,setExpanded]=useState([]);
  const refresh=useCallback(async signal=>{
   setLoading(true);
   try{
@@ -72,15 +71,11 @@ export default function PharmacyState({clientSlug}){
   return()=>{controller.abort();clearInterval(timer)};
  },[refresh]);
  const pharmacies=data?.pharmacies||[];
- const scoped=pharmacies.filter(p=>!pharmacyIds.length||pharmacyIds.includes(p.id));
+ const scoped=pharmacies;
  const healthy=scoped.filter(p=>p.state==="Correcto").length;
  const errors=scoped.filter(p=>p.state==="Error").length;
  const warning=scoped.filter(p=>p.state==="Revisar"||p.state==="Sincronizando").length;
  const pending=scoped.filter(p=>!p.monitored&&p.active).length;
- const filtered=scoped.filter(p=>scope==="all"||
-  scope==="issues"&&(p.state==="Error"||p.state==="Revisar")||
-  scope==="healthy"&&p.state==="Correcto"||
-  scope==="unknown"&&!p.monitored);
  const toggle=id=>setExpanded(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
  const priority={Error:0,Revisar:1,Sincronizando:2,Correcto:3,Inactiva:4};
  const columns=[
@@ -117,15 +112,6 @@ export default function PharmacyState({clientSlug}){
    description="Supervisión de los trabajos y de la recepción de datos, actualizada cada minuto."
    updatedAt={data?.checkedAt?new Date(data.checkedAt):null}
    onRefresh={()=>void refresh()} refreshing={loading}/>
-  <ReportFilterBar showPeriod={false} pharmacies={pharmacies}
-   pharmacyIds={pharmacyIds} onPharmacyChange={setPharmacyIds}>
-   <label className="fm-unified-filter"><span>Situación</span>
-    <select aria-label="Filtrar por estado" value={scope} onChange={e=>setScope(e.target.value)}>
-     <option value="all">Todas</option><option value="issues">Incidencias</option>
-     <option value="healthy">Correctas</option>
-     <option value="unknown">Sin supervisión</option>
-    </select></label>
-  </ReportFilterBar>
   {error&&<div className="access-alert access-alert-error" role="alert"><AlertTriangle size={17}/>{error}</div>}
   <div className="fm-pharmacy-status-kpis">
    <div className="card"><Store size={19}/><span>Farmacias</span><strong>{integer(scoped.length)}</strong></div>
@@ -146,7 +132,7 @@ export default function PharmacyState({clientSlug}){
    <div className="fm-pharmacy-table-heading">
     <div><h2>Seguimiento por farmacia</h2><p>Las incidencias tienen prioridad. Abre los detalles para ver cada trabajo y su horario.</p></div>
    </div>
-   <ListTable rows={[...filtered].sort((a,b)=>(priority[a.state]??5)-(priority[b.state]??5)||a.name.localeCompare(b.name))}
+   <ListTable rows={[...scoped].sort((a,b)=>(priority[a.state]??5)-(priority[b.state]??5)||a.name.localeCompare(b.name))}
     columns={columns} rowKey={p=>p.id} label="farmacias"
     loading={loading&&!data}
     loadingLabel="Comprobando trabajos y recepciones…"

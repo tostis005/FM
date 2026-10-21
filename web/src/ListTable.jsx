@@ -30,7 +30,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName=""}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName="",renderExpandedRow=null,expandedRowKeys=[]}){
   const [localFilters,setLocalFilters]=useState({});
  const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
  const filters=remotelyFiltered?serverFilters:localFilters;
@@ -128,7 +128,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
           </th>)}</tr>
         </thead>
-        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length+(selection?1:0)}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(activeSize,5)}/></td></tr>:slice.map(row=><tr key={rowKey(row)} className={onRowClick?"click-row":undefined}
+        <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length+(selection?1:0)}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(activeSize,5)}/></td></tr>:slice.map(row=><React.Fragment key={rowKey(row)}><tr className={onRowClick?"click-row":undefined}
           tabIndex={onRowClick?0:undefined} aria-label={onRowClick?"Abrir registro":undefined}
           onKeyDown={onRowClick?e=>{if(e.target===e.currentTarget&&(e.key==="Enter"||e.key===" ")){e.preventDefault();onRowClick(row);}}:undefined}
           onClick={onRowClick?()=>onRowClick(row):undefined}>
@@ -139,7 +139,11 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
              onChange={e=>{e.stopPropagation();toggleSelection(String(rowKey(row)))}}/>
            </td>}
           {columns.map(col=><td key={col.key}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
-        </tr>)}</tbody>
+        </tr>
+        {renderExpandedRow&&expandedRowKeys.includes(String(rowKey(row)))&&<tr className="fm-expanded-row">
+         <td colSpan={columns.length+(selection?1:0)}>{renderExpandedRow(row)}</td>
+        </tr>}
+       </React.Fragment>)}</tbody>
       </table>
       {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{!remotelyFiltered&&rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </HorizontalTableScroll>

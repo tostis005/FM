@@ -26,6 +26,21 @@ button,input,select,textarea{font-family:inherit}
   border-right:1px solid #315d4e;
   box-shadow:8px 0 28px rgba(9,42,30,.08);
   isolation:isolate;
+  /* La barra pertenece a TODO el menú: logo y submenús, justo en su borde. */
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior-y:contain;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(183,236,201,.70) rgba(9,42,30,.14);
+  scrollbar-gutter:stable;
+}
+.sidebar::-webkit-scrollbar{width:8px}
+.sidebar::-webkit-scrollbar-track{background:rgba(9,42,30,.14)}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(183,236,201,.70);border-radius:8px}
+.sidebar .side-nav{
+  flex:0 0 auto;
+  min-height:auto;
+  overflow:visible;
 }
 .sidebar:before,.sidebar:after{
   content:"";position:absolute;border:1px solid rgba(199,236,202,.15);

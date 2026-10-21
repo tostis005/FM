@@ -237,9 +237,9 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
-          node check-purchase-planner.mjs
           node check-responsive.mjs
           node check-dashboard-audit.mjs
+          node check-purchase-planner.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs
@@ -263,45 +263,3 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
-
-
-  diagnostico_laboratorios_puc:
-    runs-on: ubuntu-latest
-    timeout-minutes: 4
-    env:
-      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
-      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
-      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
-    steps:
-      - name: Comprobar origen de proveedores y PUC solo lectura
-        run: |
-          set -euo pipefail
-          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
-          chmod 600 ~/.ssh/id_fm
-          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
-          BEGIN READ ONLY;
-          SET LOCAL statement_timeout='45000ms';
-          SELECT 'EFG_NAMES' AS tipo,cn,dcpf,left(nombre,55) AS nombre,
-           left(principio_activo,55) AS activo,left(laboratorio,40) AS laboratorio
-          FROM farmetrica.nomenclator_presentaciones
-          WHERE generico=true AND cn IN ('726064','960526','209743')
-          ORDER BY cn LIMIT 10;
-          SELECT 'LABS_PUC_SAMPLE' AS tipo,c.articulo_id,c.proveedor_id,
-            left(max(c.proveedor_nombre),45) AS proveedor,
-            max(pm.cooperativa::int) AS es_cooperativa,
-            count(*) AS recepciones,
-            round(avg(c.coste_unitario)::numeric,3) AS coste_medio
-          FROM ampedia.fm_recepciones_analitica c
-          LEFT JOIN farmetrica.proveedores_maestro pm
-           ON pm.cliente_slug='ampedia'
-            AND upper(btrim(pm.codigo_origen))=upper(btrim(c.proveedor_id))
-          WHERE c.fecha>=date '2026-04-21' AND c.fecha<date '2026-10-22'
-           AND c.articulo_id IN ('726064','960526','209743','000294')
-           AND c.unidades>0 AND c.coste_unitario>0
-          GROUP BY c.articulo_id,c.proveedor_id ORDER BY recepciones DESC LIMIT 25;
-          ROLLBACK;
-          SQL

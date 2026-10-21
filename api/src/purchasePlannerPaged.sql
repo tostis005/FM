@@ -170,14 +170,18 @@ grupos AS MATERIALIZED (
    WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6
     AND max(n.ultima_venta)<current_date-interval '14 days'
     THEN 'concentrada'
-   WHEN bool_or(n.patron='recurrente') THEN 'recurrente'
+   WHEN sum(n.v30)>0 AND max(n.ultima_venta)-min(n.primera_venta)>=120
+    AND sum(n.lineas_venta)>=12
+    AND bit_count(bit_or(n.tramos_actividad)::bit(4))>=3 THEN 'recurrente'
    WHEN sum(n.v30)=0 AND bool_or(n.patron='posible_estacional') THEN 'posible_estacional'
    WHEN sum(n.v30)=0 THEN 'sin_actividad'
    ELSE 'intermitente'
   END AS patron,
   CASE
    WHEN sum(n.v365)>=20 AND max(n.ultima_venta)-min(n.primera_venta)<=6 THEN 1
-   WHEN bool_or(n.patron='recurrente') THEN 4
+   WHEN sum(n.v30)>0 AND max(n.ultima_venta)-min(n.primera_venta)>=120
+    AND sum(n.lineas_venta)>=12
+    AND bit_count(bit_or(n.tramos_actividad)::bit(4))>=3 THEN 4
    WHEN sum(n.v30)>0 AND bool_or(n.patron='intermitente') THEN 3
    WHEN bool_or(n.patron='pico_reciente') THEN 2
    WHEN bool_or(n.patron='posible_estacional') THEN 1

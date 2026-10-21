@@ -383,7 +383,6 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      placeholder="Nombre o código nacional…"/></label>
   </ReportFilterBar>
   <section className="card fm-planner">
-  <p className="fm-planner-scope">Nueva propuesta por laboratorio (sin cooperativas) · {queriedPharmacyIds.length} farmacias seleccionadas. Prioridad calculada a partir de ventas, recurrencia y actividad reciente. Despliega cada artículo para el desglose por farmacia.</p>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
   {labError&&<p role="status" className="fm-op-message fm-op-warning">
    No se pudo verificar el PUC: {labError}. No se recomiendan proveedores sin un precio fiable.</p>}

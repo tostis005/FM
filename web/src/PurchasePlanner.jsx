@@ -1,17 +1,12 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ShoppingCart,Download,Save,ChevronDown,AlertTriangle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import {ReportFilterBar} from "./ReportControls.jsx";
+import {resolveSalesPeriod} from "./salesPeriods.js";
+import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import "./purchasePlanner.css";
 
-const toISO=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");
-const today=()=>toISO(new Date());
-function periodDates(period){
- const now=new Date(),start=new Date(now);
- if(period==="week")start.setDate(now.getDate()-(now.getDay()+6)%7);
- if(period==="month")start.setDate(1);
- if(period==="year"){start.setMonth(0);start.setDate(1)}
- return [toISO(start),toISO(now)];
-}
+const today=()=>resolveSalesPeriod("today").from;
 const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
 const exportSafe=x=>{const str=String(x??"");return '"'+(/^[\s]*[=+@-]/.test(str)?"'"+str:str).replaceAll('"','""')+'"'};
 const key=p=>String(p.pharmacyId)+"|"+String(p.groupKey||p.articleId);
@@ -32,9 +27,12 @@ function downloadCSV(filename,lines){
 // En cada farmacia el ERP tiene sus códigos propios. Los borradores se guardan
 // bajo farmacia y proveedor; la exportación puede consolidar varias farmacias.
 export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated=()=>{}}){
- const [period,setPeriod]=useState("month");
- const [from,setFrom]=useState(()=>periodDates("month")[0]);
- const [to,setTo]=useState(today);
+ const [period,setPeriod]=useState(()=>readSharedReportFilters(clientSlug).period||"this_month");
+ const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
+ const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
+ const resolved=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),
+  [period,customFrom,customTo]);
+ const from=resolved.valid?resolved.from:"",to=resolved.valid?resolved.to:"";
  const [search,setSearch]=useState("");
  const [result,setResult]=useState(null);
  const [busy,setBusy]=useState(false);
@@ -52,7 +50,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
     setSearch(String(saved.cn||saved.articleId));
     if(/^\d{4}-\d{2}-\d{2}$/.test(saved.from||"")&&
        /^\d{4}-\d{2}-\d{2}$/.test(saved.to||"")&&saved.from<=saved.to){
-      setFrom(saved.from);setTo(saved.to);setPeriod("custom");
+      setCustomFrom(saved.from);setCustomTo(saved.to);setPeriod("custom");
     }
     setPendingLink(saved);
     sessionStorage.removeItem(STAGING_PREFIX+clientSlug);
@@ -60,8 +58,14 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   }catch{}
  },[clientSlug]);
  const codes=pharmacies.map(p=>String(p.id)).join(",");
+ const setSharedPeriod=value=>{setPeriod(value);updateSharedReportFilters(clientSlug,{period:value})};
+ const setSharedDate=(field,value)=>{
+  if(field==="from")setCustomFrom(value);else setCustomTo(value);
+  updateSharedReportFilters(clientSlug,{[field==="from"?"customFrom":"customTo"]:value});
+ };
  useEffect(()=>{
-  if(!codes||!from||!to||from>to){setResult({groups:[],pharmacies:[],available:true});return}
+  if(!codes){setResult(null);setError("No hay farmacias autorizadas en el grupo.");return}
+  if(!resolved.valid){setResult(null);setError(resolved.reason||"Período no válido");return}
   const ac=new AbortController();
   const delay=setTimeout(()=>{
    setBusy(true);setError("");
@@ -262,19 +266,15 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   <div className="fm-planner-head"><div><h2><ShoppingCart size={19}/> Propuesta inteligente de compra</h2>
    <p>Visión global de la necesidad de compra. Los genéricos se agrupan por conjunto DCPF oficial y se preparan por farmacia.</p></div>
    <button className="btn btn-secondary" onClick={()=>setReload(n=>n+1)} type="button" disabled={busy}>Actualizar</button></div>
-  <div className="fm-planner-period" role="group" aria-label="Período de ventas">
-   {[["week","Esta semana"],["month","Este mes"],["year","Este año"],["custom","Personalizado"]].map(([id,label])=>
-    <button type="button" key={id} className={"fm-planner-period-option "+(period===id?"active":"")}
-     aria-pressed={period===id} onClick={()=>{
-      setPeriod(id);if(id!=="custom"){const [a,b]=periodDates(id);setFrom(a);setTo(b)}
-     }}>{label}</button>)}
-  </div>
+  <ReportFilterBar periodKey={period} onPeriodChange={setSharedPeriod}
+   showPharmacies={false} customFrom={customFrom} customTo={customTo}
+   onCustomFromChange={value=>setSharedDate("from",value)}
+   onCustomToChange={value=>setSharedDate("to",value)}/>
+  <p className="fm-planner-scope">Grupo completo · {pharmacies.length} farmacias autorizadas. Despliega los artículos para consultar su detalle por farmacia.</p>
   <div className="fm-planner-filters">
-   <label>Desde <input type="date" value={from} onChange={e=>{setFrom(e.target.value);setPeriod("custom")}}/></label>
-   <label>Hasta <input type="date" value={to} onChange={e=>{setTo(e.target.value);setPeriod("custom")}}/></label>
-   <label>Buscar CN o artículo <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="CN o nombre…"/></label>
+   <label>Buscar artículo o CN <input type="search" value={search} onChange={e=>setSearch(e.target.value)}
+    placeholder="Nombre o código nacional…"/></label>
   </div>
-  <p className="fm-planner-scope">Grupo completo · {pharmacies.length} farmacias autorizadas. Los totales se calculan sobre el grupo; despliega cada fila para consultar el detalle de sus farmacias.</p>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
   {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}

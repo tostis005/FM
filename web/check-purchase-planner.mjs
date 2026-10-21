@@ -48,7 +48,9 @@ try{
  await page.getByRole("button",{name:"Este mes"}).waitFor();
  await page.getByText("Grupo completo").waitFor();
  assert.equal(await page.getByLabel("Farmacia").count(),0,"La cabecera no debe imponer una farmacia");
+ const periodResponse=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta");
  await page.getByRole("button",{name:"Esta semana"}).click();
+ await periodResponse;
  assert.equal(await page.getByRole("button",{name:"Esta semana"}).getAttribute("aria-pressed"),"true");
 
  await page.getByRole("button",{name:/Crema de manos/}).first().click();

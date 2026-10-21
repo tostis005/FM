@@ -345,26 +345,25 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
  }catch(err){next(err)}
 });
 
-// El detalle usa importes del ERP sin alterar los originales. Para
-// devoluciones, la presentación, ordenación y búsqueda numérica son absolutas.
-// El importe bruto se reconstruye a partir de neto + descuento de línea;
-// en ausencia de ambos importes, PVP x unidades es solo una alternativa.
-const ticketGrossSQL = `(CASE
+// Los importes originales no se modifican. En la pantalla, la ordenación y el
+// filtrado respetan el signo de las devoluciones; el Excel lo convierte aparte.
+const ticketSignSQL = "(CASE WHEN v.unidades<0 OR v.importe<0 THEN -1 ELSE 1 END)";
+const ticketGrossSQL = `(${ticketSignSQL} * (CASE
   WHEN v.importe IS NOT NULL AND v.descuento_linea IS NOT NULL
    THEN abs(v.importe)+abs(v.descuento_linea)
   WHEN v.precio_unitario IS NOT NULL AND v.unidades IS NOT NULL
    THEN abs(v.precio_unitario*v.unidades)
-  ELSE NULL END)`;
+  ELSE NULL END))`;
 const ticketDiscountPercentSQL = `(CASE WHEN v.descuento_linea IS NOT NULL
-  AND ${ticketGrossSQL}>0
-  THEN 100*abs(v.descuento_linea)/NULLIF(${ticketGrossSQL},0)
+  AND abs(${ticketGrossSQL})>0
+  THEN 100*abs(v.descuento_linea)/NULLIF(abs(${ticketGrossSQL}),0)
   ELSE NULL END)`;
 const ticketColumns = Object.freeze({
   pharmacy:"f.nombre",seller:"v.vendedor_id",
   ticket:"v.numero_ticket",at:"v.fecha",cn:"v.articulo_id",
-  pvp:"abs(v.precio_unitario)",quantity:"abs(v.unidades)",
-  gross:ticketGrossSQL,lineDiscount:"abs(v.descuento_linea)",
-  net:"abs(v.importe)",discountPercent:ticketDiscountPercentSQL,
+  pvp:"abs(v.precio_unitario)",quantity:`${ticketSignSQL}*abs(v.unidades)`,
+  gross:ticketGrossSQL,lineDiscount:`${ticketSignSQL}*abs(v.descuento_linea)`,
+  net:`${ticketSignSQL}*abs(v.importe)`,discountPercent:ticketDiscountPercentSQL,
 });
 app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (req, res, next) => {
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,

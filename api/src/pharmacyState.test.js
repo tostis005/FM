@@ -26,7 +26,7 @@ test("Estado devuelve todas las farmacias autorizadas, incluidas las sin recepci
  const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  const pool={async query(query,args){
   const sql=typeof query==="string"?query:query.text;
-  queries.push({sql,args});
+  queries.push({sql,args:typeof query==="string"?args:query.values});
   if(sql.includes("information_schema.tables"))return {rows:[
    {table_name:"fm_sync_ejecuciones"},{table_name:"fm_ventas_cabeceras"},{table_name:"fm_recepciones_cabeceras"}]};
   if(sql.includes(".fm_sync_ejecuciones"))return {rows:[{code:"ABA",flow:"ventas_completas",state:"completado",

@@ -337,7 +337,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
          </tbody></table></HorizontalTableScroll>}
        {receiptDetail.truncated&&<p role="status">Se muestran las primeras 500 líneas de la recepción.</p>}
       </section>}
-     <ListPagination total={count} page={page-1} pageSize={size} loading={loading}
+     <ListPagination total={count} page={page-1} pageSize={size} pageSizes={[25,50,100]} loading={loading}
       label="registros" onPageChange={n=>setPage(n+1)}
       onPageSizeChange={n=>{setSize(n);setPage(1)}}/>
     </section>

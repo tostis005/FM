@@ -8,28 +8,42 @@ export function pickBestLaboratory(rows){
    Number(b.sampleLines||0)-Number(a.sampleLines||0)||
    String(a.supplierName||"").localeCompare(String(b.supplierName||""),"es"))[0]||null;
 }
-export function mapLaboratoryOffers(rows,items){
+export function mapLaboratoryOffers(rows,items,groupLinks=new Map()){
  const byRef=new Map(),byPh=new Map(),byGroup=new Map();
  for(const it of items){
   const key=String(it.pharmacyId)+"|"+String(it.articleId);
   if(!byRef.has(key))byRef.set(key,[]);
-  byRef.get(key).push(it.groupKey);
+  byRef.get(key).push(it);
  }
  for(const r of rows){
-  // Sin denominación verificada no mostrar un identificador numérico como nombre
-  // de laboratorio: un código de proveedor no es una recomendación comercial.
-  if(!String(r.supplierName||"").trim()||
-   String(r.supplierName).trim()===String(r.supplierCode).trim())continue;
-  for(const groupKey of byRef.get(String(r.pharmacyId)+"|"+String(r.articleId))||[]){
+  const ref=String(r.pharmacyId)+"|"+String(r.articleId);
+  const local=byRef.get(ref)||[];
+  const allKeys=[...new Set([...local.map(v=>v.groupKey),
+   ...(groupLinks.get(String(r.cn||r.articleId))||[])])];
+  const name=String(r.supplierName||"").trim();
+  for(const groupKey of allKeys){
    const item={groupKey,pharmacyId:String(r.pharmacyId),articleId:String(r.articleId),
     cn:String(r.cn||r.articleId),supplierCode:String(r.supplierCode),
-    supplierName:String(r.supplierName||r.supplierCode),
-    puc:Number(r.puc),sampleLines:Number(r.sampleLines||0)};
-   const pk=groupKey+"|"+item.pharmacyId;
-   if(!byPh.has(pk))byPh.set(pk,[]);
-   byPh.get(pk).push(item);
+    supplierName:name&&name!==String(r.supplierCode)?name:"Proveedor "+r.supplierCode+" (nombre pendiente)",
+    supplierIdentified:Boolean(name)&&name!==String(r.supplierCode),
+    puc:Number(r.puc),sampleLines:Number(r.sampleLines||0),
+    sourcePharmacyId:String(r.pharmacyId)};
    if(!byGroup.has(groupKey))byGroup.set(groupKey,[]);
    byGroup.get(groupKey).push(item);
+   // El mismo CN puede tener un ID de artículo diferente en otra farmacia.
+   // La compra automática solo se puede ofrecer cuando el CN y el
+   // código de proveedor coinciden con registros de ESTA farmacia.
+   const targets=items.filter(it=>it.groupKey===groupKey&&
+    String(it.pharmacyId)===String(r.pharmacyId)&&
+    String(it.cn||it.articleId)===item.cn);
+   for(const target of targets){
+    const option={...item,articleId:String(target.articleId)};
+    const pk=groupKey+"|"+item.pharmacyId;
+    if(!byPh.has(pk))byPh.set(pk,[]);
+    if(!byPh.get(pk).some(v=>v.articleId===option.articleId&&
+      v.supplierCode===option.supplierCode))
+     byPh.get(pk).push(option);
+   }
   }
  }
  return {byPharmacy:[...byPh.values()].map(options=>({
@@ -37,7 +51,8 @@ export function mapLaboratoryOffers(rows,items){
    recommended:pickBestLaboratory(options),
    options:options.sort((a,b)=>a.puc-b.puc)
   })),recommendations:[...byGroup].map(([groupKey,offers])=>({
-   groupKey,recommended:pickBestLaboratory(offers)
+   groupKey,recommended:pickBestLaboratory(offers),
+   options:offers.sort((a,b)=>a.puc-b.puc)
   }))};
 }
 export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,reportTo){

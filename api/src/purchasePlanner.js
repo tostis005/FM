@@ -49,6 +49,8 @@ export function groupPurchaseRows(rows){
     {suggested:first.suggested,daily:first.daily,demand:first.demand}:
     proposePurchase({stock,units3,units12,ordered,interval:first.interval,
      lead:first.lead,safety:first.safety});
+   if(options.some(p=>p.commitmentsAvailable===false))
+    calculated.suggested=null;
    return {...first,pharmacyId,groupKey:group.key,options:options.map(p=>({
     articleId:p.articleId,articleName:p.articleName,cn:p.cn,stock:p.stock,
     unitsPeriod:p.unitsPeriod,units3:p.units3,units12:p.units12
@@ -132,10 +134,16 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
     pool.query({text:sql,values:[from,to,chosen,ctx.client.slug,MAX+1,search],query_timeout:30000}),
     pool.query("SELECT farmacia_id,intervalo_pedidos,plazo_entrega,stock_seguridad"+
      " FROM farmetrica.op_politicas_reposicion WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])",
-     [ctx.client.slug,chosen]),
+     [ctx.client.slug,chosen]).catch(e=>{
+     if(e.code==="42P01"||e.code==="42703")return {rows:[],unavailable:true};
+     throw e;
+    }),
     pool.query("SELECT farmacia_id,lineas FROM farmetrica.op_pedidos"+
      " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')"+
-     " ORDER BY actualizado_en DESC LIMIT 1000",[ctx.client.slug,chosen]),
+     " ORDER BY actualizado_en DESC LIMIT 1000",[ctx.client.slug,chosen]).catch(e=>{
+     if(e.code==="42P01"||e.code==="42703")return {rows:[],unavailable:true};
+     throw e;
+    }),
     search?pool.query({text:[
      "SELECT DISTINCT ON (f.id,a.origen_id)",
      " f.id::text AS \"pharmacyId\",a.origen_id::text AS \"articleId\",",
@@ -150,6 +158,7 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
      " LIMIT $4::int"
     ].join(" "),values:[chosen,ctx.client.slug,search,MAX+1],query_timeout:30000}):Promise.resolve({rows:[]})
    ]);
+   const commitmentsAvailable=!orders.unavailable;
    const policyMap=new Map(policies.rows.map(p=>[Number(p.farmacia_id),p]));
    const ordered=new Map();
    for(const o of orders.rows)for(const line of Array.isArray(o.lineas)?o.lineas:[]){
@@ -170,7 +179,8 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
      ordered:ordered.get(s.pharmacyId+"|"+normalize(s.articleId))||0,
      interval:policy?.intervalo_pedidos??7,lead:policy?.plazo_entrega??2,
      safety:policy?.stock_seguridad??0});
-    return {...s,stock,...calculated,policyDefault:!policy,
+    return {...s,stock,...calculated,commitmentsAvailable,
+     ...(!commitmentsAvailable?{suggested:null,reason:"Pedidos pendientes sin verificar"}:{}),policyDefault:!policy,
      interval:policy?.intervalo_pedidos??7,lead:policy?.plazo_entrega??2,
      safety:policy?.stock_seguridad??0,
      confidence:stock===null?"sin_stock":s.stockAt==null?"fecha_desconocida":
@@ -227,8 +237,9 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
      const interval=policy?.intervalo_pedidos??7,lead=policy?.plazo_entrega??2,
       safety=policy?.stock_seguridad??0;
      const prepared=ordered.get(composite)||0;
-     enriched.push({...row,stock,ordered:prepared,interval,lead,safety,
+     enriched.push({...row,stock,ordered:prepared,interval,lead,safety,commitmentsAvailable,
       policyDefault:!policy,...proposePurchase({stock,ordered:prepared,interval,lead,safety}),
+      ...(!commitmentsAvailable?{suggested:null,reason:"Pedidos pendientes sin verificar"}:{}),
       confidence:stock===null?"sin_stock":row.stockAt==null?"fecha_desconocida":
        Date.now()-new Date(row.stockAt).getTime()>48*3600000?"stock_antiguo":"calculable"});
     }
@@ -236,9 +247,10 @@ export function setupPurchasePlanner(app,pool,{requireTenant}){
    const groups=groupPurchaseRows(enriched).filter(g=>!search||
     normalize([g.cn,g.dcpf,g.articleName,...g.pharmacies.flatMap(p=>
      p.options.flatMap(o=>[o.articleId,o.articleName,o.cn]))].join(" ")).includes(search));
-   res.json({available:true,from,to,groups,limit:MAX,truncated:combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX||siblingsTruncated,
+   res.json({available:true,from,to,groups,limit:MAX,commitmentsAvailable,
+    policiesDefaulted:Boolean(policies.unavailable),truncated:combined.length>MAX||sales.rows.length>MAX||catalogSearch.rows.length>MAX||siblingsTruncated,
     pharmacies:ctx.pharmacies.filter(p=>chosen.includes(Number(p.id))).map(p=>({id:p.id,name:p.name})),
-    note:"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y unidades ya preparadas en borradores o pedidos pendientes/aprobados/exportados para evitar duplicar compras. Las recepciones del ERP no están conciliadas con estos planes: revisa los pedidos antiguos. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
+    note:(commitmentsAvailable?"":"No se han podido verificar los pedidos ya preparados. No se permite generar pedidos hasta recuperar su lectura. ")+(policies.unavailable?"Sin políticas cargadas se usan los valores estándar. ":"")+"Propuesta por medias de ventas de 90 y 365 días. Se descuentan stock y unidades ya preparadas en borradores o pedidos pendientes/aprobados/exportados para evitar duplicar compras. Las recepciones del ERP no están conciliadas con estos planes: revisa los pedidos antiguos. Sin política configurada se asumen 7 días entre pedidos, 2 de entrega y 0 unidades de seguridad."});
   }catch(e){next(e)}
  });
 }

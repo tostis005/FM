@@ -105,10 +105,17 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   return lines;
  },[groups,overrides,pharmacies,suppliers]);
  const missingSupplier=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>Number(overrides[key(p)]?.units??p.suggested??0)>0&&!String(overrides[key(p)]?.supplier||"").trim()).length,0);
+ const invalidQuantities=groups.reduce((n,g)=>n+g.pharmacies.filter(p=>{
+  const raw=overrides[key(p)]?.units??p.suggested??0;
+  const qty=Number(raw);
+  return !Number.isSafeInteger(qty)||qty<0||qty>999999;
+ }).length,0);
  const selectedTotal=allLines.reduce((n,l)=>n+l.units,0);
  const setValue=(p,field,value)=>setOverrides(previous=>({...previous,
   [key(p)]:{units:p.suggested??0,supplier:"",...previous[key(p)],[field]:value}}));
  function exportGrouped(){
+  if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de exportar.");
+  if(invalidQuantities)return setError("Revisa las cantidades: solo se admiten unidades enteras no negativas.");
   if(!allLines.length)return setError("Asigna un proveedor y unidades antes de exportar");
   // Un CSV por proveedor; conserva farmacia y ERP para que pueda prepararse
   // el formato propio de cada laboratorio sin perder trazabilidad.
@@ -125,6 +132,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
  }
  async function saveDrafts(){
   if(!canEdit)return;
+  if(result?.truncated)return setError("La consulta está incompleta. Acota la búsqueda antes de guardar.");
+  if(invalidQuantities)return setError("Hay cantidades inválidas. Introduce únicamente unidades enteras.");
   if(!allLines.length)return setError("No hay líneas asignadas a proveedores");
   if(missingSupplier)return setError("Hay "+missingSupplier+" necesidades sin proveedor; asígnalas o pon 0 en Pedir.");
   setBusy(true);setError("");setNotice("");
@@ -208,21 +217,22 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
   {result?.available===false&&<p role="status" className="fm-op-message">{result.reason}</p>}
-  {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se presenta como inventario completo.</p>}
+  {result?.truncated&&<p className="fm-op-message">El resultado supera {result.limit} referencias de farmacia. Usa la búsqueda para acotar antes de preparar una compra; no se puede guardar ni exportar una consulta incompleta.</p>}
   <div className="fm-planner-summary">
    <span>{whole(groups.length)} artículos consultados</span>
    <span>{whole(allLines.length)} líneas con proveedor</span>
    <strong>{whole(selectedTotal)} unidades preparadas</strong>
    {missingSupplier>0&&<span>{missingSupplier} necesidades aún sin proveedor</span>}
+   {invalidQuantities>0&&<span role="alert">{invalidQuantities} cantidades inválidas</span>}
   </div>
   <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
    defaultSort={{key:"suggested",direction:"desc"}} loading={busy&&!result}
    loadingLabel="Calculando necesidades por farmacia…"
    emptyText={busy?"Consultando artículos…":"No hay artículos vendidos para este filtro"}/>
   <div className="fm-planner-actions">
-   <button type="button" className="btn btn-secondary" onClick={exportGrouped} disabled={!allLines.length||busy}>
+   <button type="button" className="btn btn-secondary" onClick={exportGrouped} disabled={!allLines.length||busy||invalidQuantities>0||result?.truncated}>
     <Download size={16}/> Exportar CSV por proveedor</button>
-   <button type="button" className="btn btn-primary" disabled={!canEdit||!allLines.length||busy||missingSupplier>0}
+   <button type="button" className="btn btn-primary" disabled={!canEdit||!allLines.length||busy||missingSupplier>0||invalidQuantities>0||result?.truncated}
     onClick={saveDrafts}><Save size={16}/>{busy?"Guardando…":"Guardar borradores por proveedor"}</button>
   </div>
   <p className="fm-op-fine">{result?.note||"La propuesta necesita ventas y stock sincronizados."} No se envía automáticamente ningún pedido. Los borradores se revisan y aprueban en la sección inferior.</p>

@@ -190,5 +190,5 @@ SELECT (SELECT to_jsonb(t) FROM totales t) AS summary,
     )
    ) ORDER BY n.fid),'[]'::jsonb)
    FROM necesidades n WHERE n.grupo=g.key
-  ))) ORDER BY g.prioridad DESC,g.suggested DESC,g.key),'[]'::jsonb)
+  )) ORDER BY __ORDER__),'[]'::jsonb)
  FROM pagina g) AS groups

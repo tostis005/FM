@@ -186,7 +186,7 @@ function Purchases({scope,pharmacies}){
       {["cooperativa","laboratorio"].map(channel=>{
        const item=channels.find(x=>x.channel===channel),value=item?.value||0;
        return <div key={channel} className="fm-purchase-legend-row">
-        <span className="fm-channel-dot" style={{background:COLORS[channel]}/>
+        <span className="fm-channel-dot" style={{background:COLORS[channel]}}/>
         <span>{CHANNELS[channel]}</span><strong>{euro(value)}</strong>
         <small>{known>0?pct(value/known*100):"—"}</small>
        </div>;

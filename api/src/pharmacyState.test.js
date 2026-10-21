@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {pharmacySyncSummary,setupPharmacyState} from "./pharmacyState.js";
+import {evaluateMonitor,pharmacySyncSummary,setupPharmacyState} from "./pharmacyState.js";
 
 test("sin filas recientes no se afirma avería de VPN, pero se conservan incidencias explícitas",()=>{
  const p={id:"1",name:"Centro",active:true,sourceCode:"ABA"};
@@ -47,4 +47,41 @@ test("Estado devuelve todas las farmacias autorizadas, incluidas las sin recepci
  assert.equal(json.pharmacies[1].state,"Sin información");
  assert.ok(queries.some(x=>x.sql.includes("fm_sync_ejecuciones")));
  assert.ok(queries.some(x=>x.sql.includes("fm_recepciones_cabeceras")));
+});
+
+
+test("cada hora: verde con éxito, rojo al fallar y rojo tras dos intervalos sin pulso",()=>{
+ const now=new Date("2026-10-21T12:00:00Z");
+ const base={jobId:"j1",flow:"ventas_completas",enabled:true,everyMinutes:60,
+  registeredAt:"2026-10-21T08:00:00Z",heartbeatAt:"2026-10-21T11:59:00Z",
+  lastAttemptAt:"2026-10-21T11:00:00Z",lastFinishedAt:"2026-10-21T11:01:00Z",
+  lastSuccessAt:"2026-10-21T11:01:00Z",lastState:"ok",
+  nextDueAt:"2026-10-21T12:01:00Z",currentState:"idle"};
+ assert.equal(evaluateMonitor(base,now).health,"ok");
+ assert.equal(evaluateMonitor({...base,lastState:"error",error:"VPN inaccesible"},now).health,"error");
+ assert.equal(evaluateMonitor({...base,heartbeatAt:"2026-10-21T09:59:00Z"},now).health,"error");
+ assert.equal(evaluateMonitor({...base,nextDueAt:"2026-10-21T10:59:00Z"},now).health,"error");
+ assert.equal(evaluateMonitor({...base,nextDueAt:"2026-10-21T11:59:00Z"},now).health,"warning");
+ assert.equal(evaluateMonitor({...base,enabled:false},now).health,"paused");
+});
+
+test("la falta de movimientos no convierte en error un sincronizador correcto",()=>{
+ const now=new Date("2026-10-21T12:00:00Z");
+ const pharmacy={id:"1",name:"Centro",active:true,sourceCode:"ABA"};
+ const m={jobId:"j1",flow:"ventas",enabled:true,everyMinutes:60,
+  heartbeatAt:"2026-10-21T11:59:00Z",lastState:"ok",
+  lastAttemptAt:"2026-10-21T11:00:00Z",lastFinishedAt:"2026-10-21T11:00:01Z",
+  nextDueAt:"2026-10-21T12:00:01Z"};
+ const summary=pharmacySyncSummary(pharmacy,[],{ventas:{lastReceivedAt:"2026-10-01T00:00:00Z"}},now,[m]);
+ assert.equal(summary.state,"Correcto");
+ assert.equal(summary.monitored,true);
+ assert.equal(summary.incidents.length,0);
+});
+
+test("sin información inicial de trabajos no debe dibujarse un estado verde ficticio",()=>{
+ const m={flow:"compras",enabled:true,everyMinutes:60,heartbeatAt:"2026-10-21T12:00:00Z",
+  registeredAt:"2026-10-21T11:40:00Z",lastState:"pending"};
+ assert.equal(evaluateMonitor(m,new Date("2026-10-21T12:00:00Z")).health,"warning");
+ assert.equal(evaluateMonitor({...m,registeredAt:"2026-10-21T08:00:00Z"},
+  new Date("2026-10-21T12:00:00Z")).health,"error");
 });

@@ -106,7 +106,7 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
             CREATE INDEX IF NOT EXISTS fm_sync_monitor_codigo_idx
               ON {monitor}(farmacia_codigo);
             CREATE TABLE IF NOT EXISTS {history} (
-              ejecucion_id uuid PRIMARY KEY, trabajo_id uuid,
+              ejecucion_id uuid PRIMARY KEY,
               farmacia_codigo text NOT NULL, sistema_origen text NOT NULL,
               flujo text NOT NULL, iniciada_en timestamptz NOT NULL,
               finalizada_en timestamptz, estado text NOT NULL,
@@ -131,12 +131,6 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
               -- columna exista, ALTER obtiene un bloqueo fuerte en PostgreSQL.
               IF NOT EXISTS (SELECT 1 FROM pg_attribute
                              WHERE attrelid='{history}'::regclass
-                               AND attname='trabajo_id' AND NOT attisdropped)
-              THEN
-                ALTER TABLE {history} ADD COLUMN trabajo_id uuid;
-              END IF;
-              IF NOT EXISTS (SELECT 1 FROM pg_attribute
-                             WHERE attrelid='{history}'::regclass
                                AND attname='sistema_origen' AND NOT attisdropped)
               THEN
                 ALTER TABLE {history} ADD COLUMN sistema_origen text
@@ -155,6 +149,18 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
             """;
         await using (var command = new NpgsqlCommand(ddl, db) { CommandTimeout = 20 })
             await command.ExecuteNonQueryAsync(ct);
+
+        // La tabla oficial de la API no tiene trabajo_id. No intentar añadirlo:
+        // el rol del sincronizador puede tener INSERT sin ser dueño de la tabla.
+        // Una tabla antigua sí lo tiene y su NOT NULL debe respetarse.
+        var jobColumnSql = $"""
+            SELECT EXISTS (SELECT 1 FROM pg_attribute
+              WHERE attrelid='{history}'::regclass
+                AND attname='trabajo_id' AND NOT attisdropped)
+            """;
+        await using var jobColumnCommand = new NpgsqlCommand(jobColumnSql, db);
+        var hasHistoryJobId = (bool)(await jobColumnCommand.ExecuteScalarAsync(ct) ?? false);
+        var historyJobField = hasHistoryJobId ? ",trabajo_id" : "";
 
         var now = DateTimeOffset.UtcNow;
         var active = liveRuns.GroupBy(x => x.JobId).ToDictionary(g => g.Key,
@@ -247,9 +253,9 @@ public sealed class PostgresDestination(Secrets secrets, SshForward tunnels)
         if (recent.Length == 0) return;
         var insertSql = $"""
             INSERT INTO {history}
-            (ejecucion_id,trabajo_id,farmacia_codigo,sistema_origen,flujo,estado,
+            (ejecucion_id{historyJobField},farmacia_codigo,sistema_origen,flujo,estado,
              iniciada_en,finalizada_en,leidas,insertadas,modificadas,rechazadas,error_resumen)
-            SELECT ejecucion_id,trabajo_id,farmacia_codigo,sistema_origen,flujo,estado,
+            SELECT ejecucion_id{historyJobField},farmacia_codigo,sistema_origen,flujo,estado,
                    iniciada_en,finalizada_en,leidas,insertadas,modificadas,rechazadas,
                    error_resumen
             FROM jsonb_to_recordset(@history::jsonb) AS r (

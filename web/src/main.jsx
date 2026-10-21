@@ -955,6 +955,7 @@ function App(){
      </section>}
     {page==="promociones"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Promociones" updatedAt={salesLastUpdated}
+  onRefresh={()=>void retryPromotions()} refreshing={promotionStoreStatus==="checking"||salesStatus==="cargando"}
   period={from&&to&&from<=to?{valid:true,from,to}:null}
   actions={<div className="campaign-header-actions">
    <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
@@ -1026,6 +1027,7 @@ function App(){
 </>}
 {page==="seguimiento-global"&&promotionStoreStatus==="connected"&&<>
  <ReportPageHeader title="Seguimiento" updatedAt={salesLastUpdated}
+  onRefresh={()=>void retryPromotions()} refreshing={promotionStoreStatus==="checking"||salesStatus==="cargando"}
   actions={<div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/>
     Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
@@ -1088,7 +1090,20 @@ function App(){
  {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
 </>}
-{page==="farmacias"&&<><div className="page-header"><div><h1>Maestro de farmacias</h1></div><div className="pharmacy-header-actions">{pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&<button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}<button className="btn btn-primary" onClick={()=>startPharmacy()} disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button></div></div><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" loading={pharmacyApiStatus==="cargando"} value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><div className="toolbar"><div className="search-wrap"><Search size={17}/><input placeholder="Buscar por código, nombre o ciudad..." value={search} onChange={e=>setSearch(e.target.value)}/></div></div><ListTable rows={pharmacyApiStatus==="cargando"?[]:currentPharmacies} rowKey={f=>f.id} label="farmacias" defaultSort={{key:"name",direction:"asc"}} loading={pharmacyApiStatus==="cargando"} loadingLabel="Sincronizando maestro de farmacias…"
+{page==="farmacias"&&<>
+ <ReportPageHeader title="Maestro de farmacias"
+   onRefresh={()=>void refreshPharmacies()} refreshing={pharmacyApiStatus==="cargando"}
+   actions={<div className="pharmacy-header-actions">
+     {pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&
+      <button className="btn btn-secondary" onClick={()=>nav("accesos")}><ShieldCheck size={17}/> Iniciar sesión</button>}
+     <button className="btn btn-primary" onClick={()=>startPharmacy()}
+      disabled={pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"}><Plus size={17}/> Nueva farmacia</button>
+   </div>}/>
+ <ReportFilterBar showPeriod={false} showPharmacies={false}>
+  <label className="fm-unified-filter"><span>Buscar farmacia</span>
+   <input type="search" placeholder="Código, nombre o ciudad…" value={search}
+    onChange={e=>setSearch(e.target.value)}/></label>
+ </ReportFilterBar><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" loading={pharmacyApiStatus==="cargando"} value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><ListTable rows={pharmacyApiStatus==="cargando"?[]:currentPharmacies} rowKey={f=>f.id} label="farmacias" defaultSort={{key:"name",direction:"asc"}} loading={pharmacyApiStatus==="cargando"} loadingLabel="Sincronizando maestro de farmacias…"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},

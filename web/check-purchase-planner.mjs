@@ -117,9 +117,9 @@ try{
  const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
   &&new URL(r.url()).searchParams.get("pagina")==="1");
  await page.getByRole("button",{name:"Anterior"}).click();
- await pageOne;
+ const pageOneRes=await pageOne;
+ assert.equal((await pageOneRes.json()).groups[0].patron,"recurrente");
  await page.getByText("Crema de manos").first().waitFor();
- await page.getByText("Recurrente").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.locator(".fm-planner-details").first().waitFor();
  await page.locator(".fm-planner-lab-choice strong").first().waitFor();

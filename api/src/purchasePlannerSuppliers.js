@@ -79,10 +79,30 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
   if(!groupLinks.has(cn))groupLinks.set(cn,[]);
   if(!groupLinks.get(cn).includes(key))groupLinks.get(cn).push(key);
  }
- const codes=[...new Set([...selected.map(r=>String(r.articleId)),
-  ...presentations.filter(n=>dcpfs.includes(String(n.dcpf))).map(n=>n.cn)])];
- let offers=[];
  const q='"'+ctx.client.schema+'"';
+ const cnCodes=presentations.filter(n=>dcpfs.includes(String(n.dcpf))).map(n=>n.cn);
+ // El código ERP de un artículo puede ser distinto del CN en ciertas cargas.
+ // Resolver los alias del catálogo de TODAS las farmacias para cada CN del DCPF.
+ let aliases=[];
+ if(cnCodes.length){
+  const {rows}=await pool.query({
+   text:`SELECT f.id::text AS "pharmacyId",a.origen_id AS "articleId",
+     btrim(a.codigo_nacional) AS cn
+    FROM ${q}.articulos a JOIN farmetrica.farmacias f
+     ON f.cliente_slug=$2 AND f.id=ANY($3::int[])
+     AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    WHERE btrim(coalesce(a.codigo_nacional,''))=ANY($1::text[])`,
+   values:[cnCodes,ctx.client.slug,chosen],query_timeout:12000
+  });
+  aliases=rows;
+ }
+ const sourceCn=new Map();
+ for(const entry of [...aliases,...selected])
+  sourceCn.set(String(entry.pharmacyId)+"|"+String(entry.articleId),
+   String(entry.cn||entry.articleId));
+ const codes=[...new Set([...selected.map(r=>String(r.articleId)),
+  ...cnCodes,...aliases.map(r=>String(r.articleId))])];
+ let offers=[];
  if(codes.length){
   const sql=`
   WITH base AS MATERIALIZED (
@@ -153,7 +173,8 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
  const result=mapLaboratoryOffers(offers.map(r=>{
   const direct=selected.find(it=>String(it.articleId)===String(r.articleId)&&
    String(it.pharmacyId)===String(r.pharmacyId));
-  return {...r,cn:direct?.cn||String(r.articleId)};
+  return {...r,cn:sourceCn.get(String(r.pharmacyId)+"|"+String(r.articleId))||
+   direct?.cn||String(r.articleId)};
  }),selected,groupLinks);
  return {...result,presentations,observedPrices:offers.length,
   policy:"percentil_puc_12m",priceWindowMonths:12};

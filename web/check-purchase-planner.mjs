@@ -98,11 +98,8 @@ try{
  await page.getByText("Crema de manos").first().waitFor();
  await page.getByText("Recurrente").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
- console.log("DEBUG_DETALLE",JSON.stringify({visible:await page.locator(".fm-planner-details").count(),
-  toggles:await page.locator(".fm-planner-toggle").count(),
-  errors,html:((await page.locator(".fm-planner-article").first().innerHTML().catch(()=>''))||'').slice(0,1300)}));
  await page.locator(".fm-planner-details").first().waitFor();
- await page.getByText("Laboratorio Alfa").first().waitFor();
+ await page.locator(".fm-planner-lab-choice strong").first().waitFor();
  const detail=page.locator(".fm-planner-details");
  const rows=detail.locator("tbody tr");
  assert.equal(await rows.count(),2,"Una fila de detalle por farmacia");

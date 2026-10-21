@@ -5,7 +5,7 @@ import {ReportFilterBar,ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {reconcilePharmacyIds} from "./reportFilterScopes.js";
+import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
 import "./purchasePlanner.css";
 
 const today=()=>resolveSalesPeriod("today").from;
@@ -67,7 +67,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    }
   }catch{}
  },[clientSlug]);
- const codes=pharmacies.filter(p=>!pharmacyIds.length||pharmacyIds.includes(String(p.id))).map(p=>String(p.id)).join(",");
+ const queriedPharmacyIds=effectivePharmacyIds(pharmacyIds,pharmacies);
+ const codes=queriedPharmacyIds.join(",");
  const clearSelection=()=>{setOverrides({});setEditedRows({});setOpen({})};
  const setSharedPeriod=value=>{setPeriod(value);setPage(1);clearSelection();
   updateSharedReportFilters(clientSlug,{period:value})};
@@ -117,14 +118,14 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   fetch("/api/analytics/pedidos/laboratorios",{
    method:"POST",credentials:"same-origin",signal:ac.signal,
    headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug},
-   body:JSON.stringify({items,dcpfs,pharmacies:pharmacyIds.map(Number),to})
+   body:JSON.stringify({items,dcpfs,pharmacies:queriedPharmacyIds.map(Number),to})
   }).then(async r=>{const data=await r.json().catch(()=>({}));
    if(!r.ok)throw Error(data.error||"No se pudieron consultar los PUC");return data
   }).then(data=>{if(!ac.signal.aborted)setLabData(data)})
    .catch(e=>{if(!ac.signal.aborted)setLabError(e.message)})
    .finally(()=>{if(!ac.signal.aborted)setLabLoading(false)});
   return()=>ac.abort();
- },[result,clientSlug,to,pharmacyIds.join(",")]);
+ },[result,clientSlug,to,codes]);
  const groups=result?.groups||[];
  const laboratoryByGroup=new Map((labData?.recommendations||[])
   .map(r=>[String(r.groupKey),r.recommended]));
@@ -291,7 +292,8 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
             {recommendation&&<small className="fm-planner-supplier-hint">
              Mejor PUC observado: {recommendation.supplierName} · {euro(recommendation.puc)}
             </small>}
-            {!offers.length&&!labLoading&&<small>{laboratoryByGroup.get(g.key)?
+            {!offers.length&&!labLoading&&<small>{labError?
+              "No se pudo consultar el PUC; vuelve a actualizar":laboratoryByGroup.get(g.key)?
               "Precio del conjunto: "+euro(laboratoryByGroup.get(g.key).puc)+
               " (comprado en otra farmacia o presentación; verificar proveedor local)":
               "Sin PUC de laboratorio en los últimos 12 meses"}</small>}
@@ -354,6 +356,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      <small>PUC {euro(choice.puc)} · CN {choice.cn} · {choice.sampleLines} compra(s) en 12 meses
       {!choice.supplierIdentified?" · Nombre del proveedor pendiente":""}</small>
      </div>:<small className="fm-planner-no-puc">{labLoading?"Consultando precios…":
+      labError?"No se pudo consultar el PUC":
       "Sin laboratorio con PUC contrastado"}</small>;
    }},
   {key:"unitsPeriod",label:"Vendidas período",value:g=>g.unitsPeriod,render:g=>whole(g.unitsPeriod)},
@@ -380,7 +383,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      placeholder="Nombre o código nacional…"/></label>
   </ReportFilterBar>
   <section className="card fm-planner">
-  <p className="fm-planner-scope">Nueva propuesta por laboratorio (sin cooperativas) · {pharmacyIds.length||pharmacies.length} farmacias seleccionadas. Prioridad calculada a partir de ventas, recurrencia y actividad reciente. Despliega cada artículo para el desglose por farmacia.</p>
+  <p className="fm-planner-scope">Nueva propuesta por laboratorio (sin cooperativas) · {queriedPharmacyIds.length} farmacias seleccionadas. Prioridad calculada a partir de ventas, recurrencia y actividad reciente. Despliega cada artículo para el desglose por farmacia.</p>
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
   {labError&&<p role="status" className="fm-op-message fm-op-warning">
    No se pudo verificar el PUC: {labError}. No se recomiendan proveedores sin un precio fiable.</p>}

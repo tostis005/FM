@@ -9,15 +9,24 @@ test("bruto y descuento porcentual se calculan a partir de neto + descuento",()=
  });
 });
 
-test("devoluciones negativas se muestran en positivo sin mutar el original",()=>{
+test("devoluciones negativas en pantalla y positivas solo en Excel sin mutar el origen",()=>{
  const refund={pvp:10,quantity:-2,net:-16,lineDiscount:-4};
- const amounts=ticketLineAmounts(refund);
- assert.deepEqual(amounts,{
+ assert.deepEqual(ticketLineAmounts(refund),{
+  pvp:10,quantity:-2,gross:-20,lineDiscount:-4,net:-16,discountRate:0.2
+ });
+ assert.deepEqual(ticketLineAmounts(refund,{absolute:true}),{
   pvp:10,quantity:2,gross:20,lineDiscount:4,net:16,discountRate:0.2
  });
  assert.equal(refund.quantity,-2);
  assert.equal(refund.net,-16);
  assert.equal(refund.lineDiscount,-4);
+});
+
+test("el signo de una devolución se mantiene también con descuento positivo en origen",()=>{
+ const refund={pvp:10,quantity:-2,net:-16,lineDiscount:4};
+ assert.deepEqual(ticketLineAmounts(refund),{
+  pvp:10,quantity:-2,gross:-20,lineDiscount:-4,net:-16,discountRate:0.2
+ });
 });
 
 test("descuento cero conocido muestra 0 %; descuento desconocido queda vacío",()=>{

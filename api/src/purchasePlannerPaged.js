@@ -19,7 +19,9 @@ export function inferGenericGroupName(names,fallback=""){
   "ENVASE","BLISTER","BLISTERS","COMPRIMIDOS","CAPSULAS","SOBRES","UNIDADES"]);
  // Conservar forma/dosis, pero no cantidades variables de envase ni marca.
  const representative=labels.slice().sort((a,b)=>a.length-b.length)[0];
- const tokens=normalize(representative).filter(t=>(counts.get(t)||0)>=threshold&&!excluded.has(t));
+ const sample=normalize(representative),cut=sample.indexOf("EFG");
+ const core=cut>=0?sample.slice(0,cut):sample;
+ const tokens=core.filter(t=>(counts.get(t)||0)>=threshold&&!excluded.has(t));
  const output=tokens.slice(0,7).join(" ").trim();
  return output.length>=5?output:"Genérico · "+(fallback||representative);
 }

@@ -47,14 +47,15 @@ public sealed class ConfigStore
             if (pharmacy is not null && entity is not null)
                 job.Sql = SqlTemplates.NormalizeForMode(pharmacy.SystemType, entity.Name, job.Mode, job.Sql);
         }
-        // Retirar trabajos y entidad "stock" heredados. El estado solo pertenece a
-        // esos trabajos retirados; el historial de ejecuciones se conserva para auditoría.
-        // No se borra automáticamente farmetrica.stock: requiere confirmación explícita.
+        // Retirar los flujos antiguos de ventas y compras (líneas/cabeceras parciales).
+        // Mantener Runs para auditoría y no borrar datos ni tablas en PostgreSQL.
         var retiredIds = _config.Entities
-            .Where(e => e.Name.Equals("stock", StringComparison.OrdinalIgnoreCase))
+            .Where(e => e.Name.Equals("stock", StringComparison.OrdinalIgnoreCase) ||
+                        e.Name.Equals("ventas", StringComparison.OrdinalIgnoreCase) ||
+                        e.Name.Equals("compras", StringComparison.OrdinalIgnoreCase))
             .Select(e => e.Id).ToHashSet();
-        bool retiredStock = retiredIds.Count > 0;
-        if (retiredStock)
+        bool retiredEntities = retiredIds.Count > 0;
+        if (retiredEntities)
         {
             var obsoleteJobIds = _config.Jobs.Where(j => retiredIds.Contains(j.EntityId))
                 .Select(j => j.Id).ToHashSet();
@@ -81,27 +82,19 @@ public sealed class ConfigStore
             articleJob.FullSql = SqlTemplates.UpgradeStandardArticleSql(articleJob.FullSql);
         }
 
-        // Migración exclusivamente aditiva. Los clientes existentes conservan IDs,
-        // consultas y cursores; nunca borrar columnas ni modificar tipos establecidos.
-        // Eliminar del contrato de compras el antiguo campo Descuento2, que no
-        // existe en todas las versiones de Farmatic. No modifica los trabajos ni
-        // sus puntos de control. La columna física se migra en PostgreSQL aparte.
-        var purchases = _config.Entities.FirstOrDefault(e =>
-            e.Name.Equals("compras", StringComparison.OrdinalIgnoreCase));
-        purchases?.Columns.RemoveAll(c =>
-            c.Name.Equals("descuento_recepcion", StringComparison.OrdinalIgnoreCase));
-
+        // Conservar los IDs, cursores y consultas de los flujos documentales vigentes.
         foreach (var canonical in CanonicalEntities.Create())
         {
+            if (canonical.Name is "ventas" or "compras") continue;
             var existing = _config.Entities.FirstOrDefault(x => x.Name.Equals(canonical.Name, StringComparison.OrdinalIgnoreCase));
             if (existing is null) { _config.Entities.Add(canonical); continue; }
             foreach (var column in canonical.Columns)
                 if (!existing.Columns.Any(c => c.Name.Equals(column.Name, StringComparison.OrdinalIgnoreCase)))
                     existing.Columns.Add(new EntityColumn { Name = column.Name, Type = column.Type });
         }
-        if (retiredStock)
+        if (retiredEntities)
         {
-            // Persistir jubilación una única vez, sin guardar credenciales en logs.
+            // Persistir la limpieza una única vez, sin guardar credenciales en logs.
             string tmp = _path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(_config, Json));
             File.Move(tmp, _path, overwrite: true);

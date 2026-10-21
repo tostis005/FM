@@ -141,7 +141,8 @@ filtrados AS MATERIALIZED (
    OR upper(coalesce(g.dcpf,'')) LIKE '%'||$5||'%'
    OR EXISTS(SELECT 1 FROM clasificados c WHERE c.grupo=g.key AND
     (upper(c.articulo) LIKE '%'||$5||'%'
-      OR upper(c.nombre) LIKE '%'||$5||'%')))
+      OR upper(c.nombre) LIKE '%'||$5||'%'
+      OR upper(coalesce(c.cn,'')) LIKE '%'||$5||'%')))
   AND ($8::text='' OR g."articleName" ILIKE '%'||$8||'%' OR g.cn ILIKE '%'||$8||'%')
   AND ($9::text='' OR coalesce(g.stock::text,'') ILIKE '%'||$9||'%')
   AND ($10::text='' OR g."unitsPeriod"::text ILIKE '%'||$10||'%')

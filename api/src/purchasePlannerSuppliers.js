@@ -212,6 +212,7 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
    ]);
    offers=resolveSupplierNames(offers,localNames.rows,masterNames.rows);
   }
+ }
  // Un registro documental comprado en cualquiera de las farmacias puede
  // informar el PUC de un genérico DCPF, aunque su CN no esté en la primera
  // presentación del grupo ni en la farmacia actual.

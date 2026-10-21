@@ -3,7 +3,8 @@ import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,
 
 import SortableDataTable from "./SortableDataTable.jsx";
 import PurchasePlanner from "./PurchasePlanner.jsx";
-import {ReportPageHeader} from "./ReportControls.jsx";
+import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import {LoadingPanel} from "./LoadingState.jsx";
 import {readSharedReportFilters} from "./sharedReportFilters.js";
 import "./operativaReal.css";
 
@@ -194,25 +195,24 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  const header=<>
   <ReportPageHeader title={title} updatedAt={lastUpdated}
    refreshing={mode==="loading"||busy} onRefresh={()=>void refresh()}/>
-  <div className="card fm-unified-filters">
-   <label className="fm-unified-filter">Farmacias
+  <ReportFilterBar showPeriod={false} showPharmacies={false}>
+   <label className="fm-unified-filter"><span>Farmacia</span>
     <select aria-label="Farmacia" value={pharmacy}
      onChange={e=>{const id=e.target.value;setPharmacy(id);
       sessionStorage.setItem(operationalPharmacyKey,id);}}>
      {pharmacies.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}
     </select></label>
-  </div>
+  </ReportFilterBar>
  </>;
  // El preparador se consulta a escala de grupo, no depende de /api/operativa
  // ni del selector local para abrir. Los planes ya guardados se gestionan aparte.
  if(section==="compras-preparador")return <div className="fm-operativa-preview fm-operativa-real">
-  <ReportPageHeader title="Preparador de pedidos"/>
   <PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}
    onCreated={()=>{}}/>
  </div>;
  if(mode==="loading")return <div className="fm-operativa-preview fm-operativa-real">{header}
-  <section className="card fm-preview-panel" role="status">Cargando operativa…</section></div>;
+  <section className="card fm-preview-panel"><LoadingPanel kind="table" label="Cargando registros de operativa…" rows={5}/></section></div>;
  if(mode==="error")return <div className="fm-operativa-preview fm-operativa-real">{header}
   <section className="card fm-preview-panel"><h2>Datos no disponibles</h2>
    <p role="alert">{error}</p><Button onClick={refresh}>Reintentar</Button></section></div>;

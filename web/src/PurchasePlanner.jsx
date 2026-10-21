@@ -43,6 +43,10 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    const saved=JSON.parse(sessionStorage.getItem(STAGING_PREFIX+clientSlug)||"null");
    if(saved?.cn||saved?.articleId){
     setSearch(String(saved.cn||saved.articleId));
+    if(/^\d{4}-\d{2}-\d{2}$/.test(saved.from||"")&&
+       /^\d{4}-\d{2}-\d{2}$/.test(saved.to||"")&&saved.from<=saved.to){
+      setFrom(saved.from);setTo(saved.to);
+    }
     if(saved.pharmacyId&&pharmacies.some(p=>String(p.id)===String(saved.pharmacyId)))
      setSelected([String(saved.pharmacyId)]);
     setPendingLink(saved);

@@ -274,7 +274,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    <div className="section-heading"><div><h2>Conjuntos genéricos</h2>
     <p>{loading?"Consultando catálogo…":number(data?.totalGroups||0)+" conjuntos · "+number(groups.length)+" visibles en la consulta"}</p></div>
     <button type="button" className="btn btn-secondary" disabled={loading||!visibleGroups.length}
-     onClick={()=>downloadRows(visibleGroups)}><Download size={16}/> CSV</button></div>
+     onClick={()=>downloadRows(visibleGroups)}><Download size={16}/> Exportar CSV</button></div>
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
     !groups.length?<div className="fm-generic-empty-text">No hay conjuntos para estos filtros.</div>:
     <HorizontalTableScroll className="fm-generic-table-scroll" label="genéricos"><table>

@@ -80,10 +80,10 @@ jobs:
           SHA=$(python3 -c 'import json;print(json.load(open("/tmp/nomenclator/meta.json"))["sha256"])')
           [[ "$SHA" =~ ^[0-9a-f]{64}$ ]]
           EXISTING=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            "cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \"SELECT CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_versiones WHERE sha256='$SHA') THEN 1 ELSE 0 END;\"")
+            "cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \"SELECT CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_versiones WHERE sha256='$SHA' AND transformacion_version>=2) THEN 1 ELSE 0 END;\"")
           if [ "$EXISTING" = "1" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Nomenclátor ya importado; sin cambios."
+            echo "Nomenclátor con mapeo AEMPS v2 ya importado; sin cambios."
           else
             test "$EXISTING" = "0"
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -104,6 +104,20 @@ jobs:
             "cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \
             \"SELECT importado_en,fecha_fuente,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo;\""
 
+      - name: Verificar nombres oficiales de laboratorios y presentaciones
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Rechazar una nueva importación si vuelve a perderse el
+          # diccionario de laboratorios o los títulos de presentaciones.
+          RESULT=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FILTER(WHERE generico),count(*) FILTER(WHERE generico AND nullif(btrim(laboratorio_titular),\x27\x27) IS NOT NULL),count(*) FILTER(WHERE generico AND nullif(btrim(laboratorio_comercializador),\x27\x27) IS NOT NULL),count(*) FILTER(WHERE generico AND nullif(btrim(principio_activo),\x27\x27) IS NOT NULL) FROM farmetrica.nomenclator_presentaciones;"')
+          IFS='|' read -r GENERICS TITULAR COMMERCIAL PRINCIPLES <<< "$RESULT"
+          echo "AEMPS: $GENERICS genéricos, $TITULAR nombres de titulares, $COMMERCIAL comercializadores, $PRINCIPLES principios activos"
+          test "${GENERICS:-0}" -gt 1000
+          test "${TITULAR:-0}" -gt $((GENERICS*3/4))
+          test "${COMMERCIAL:-0}" -gt $((GENERICS*3/4))
+          test "${PRINCIPLES:-0}" -gt $((GENERICS/2))
       - name: Verificar integridad de presentaciones y agrupaciones DCPF importadas
         shell: bash
         run: |

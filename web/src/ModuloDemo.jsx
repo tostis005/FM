@@ -15,6 +15,7 @@ import {loadHistoricalSummary} from "./historicalSummaries.js";
 import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import DashboardInsights from "./DashboardInsights.jsx";
+import SavingsAnalysis from "./SavingsAnalysis.jsx";
 import "./moduleDemo.css";
 
 // Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
@@ -199,7 +200,7 @@ function readFilters(key){
  }catch{}
  return {period:"6",customFrom:"",customTo:"",pharmacyIds:[],families:[],search:""};
 }
-export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",analysisMonths=12,onNavigate=()=>{},canNavigate=()=>true,realTables=null}){
+export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",analysisMonths=12,onNavigate=()=>{},canNavigate=()=>true,realTables=null,tenantRole=""}){
  const storageKey=STORAGE+clientSlug+"_"+module;
  const [filters,setFilters]=useState(()=>({
     ...readFilters(storageKey),
@@ -831,6 +832,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {isDashboard&&<DashboardInsights clientSlug={clientSlug} period={period}
    pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
    onNavigate={onNavigate} canNavigate={canNavigate}/>}
+  {isDashboard&&["administrador","superadministrador"].includes(tenantRole)&&<SavingsAnalysis clientSlug={clientSlug} period={period} pharmacyIds={filters.pharmacyIds}/> }
   {isReports?<section className="card fm-demo-table">
    <div className="section-heading"><h2>Informes por área</h2></div>
    <div className="fm-link-list">{REPORTS.filter(([id])=>canNavigate(id)).map(([id,title,scope])=>

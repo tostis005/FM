@@ -1,4 +1,4 @@
-name: Verificar protección del MCP demo con datos reales
+name: Verificar MCP demo pública sin autenticación
 on:
   workflow_run:
     workflows: ["Build and deploy Farmetrica SaaS"]
@@ -12,18 +12,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Confirmar API Key requerida y OAuth principal intacto
+      - name: Comprobar respuestas sintéticas sin token y MCP privado protegido
         shell: bash
         run: |
           set -euo pipefail
           demo=https://farmetrica.com/api/mcp-demo
           private=https://farmetrica.com/api/mcp
-          for method in initialize tools/list tools/call; do
-            demo_status=$(curl -sS --max-time 15 -o /tmp/mcp_demo.json -w '%{http_code}' \
+          for method in initialize tools/list; do
+            status=$(curl -sS --max-time 15 -o "/tmp/demo-$method.json" -w '%{http_code}' \
               -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\"}" "$demo")
-            test "$demo_status" = 401 || { echo "El MCP demo no requiere API Key: $demo_status"; exit 1; }
+            test "$status" = 200 || { echo "MCP demo $method: HTTP $status"; exit 1; }
           done
+          status=$(curl -sS --max-time 15 -o /tmp/demo-contexto.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"listar_contexto","arguments":{}}}' "$demo")
+          test "$status" = 200 || { echo "MCP demo contexto: HTTP $status"; exit 1; }
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/demo-contexto.json'))['result']['structuredContent']
+          assert data['ficticio'] is True
+          assert len(data['farmacias'])==3
+          assert all(p['id']>=90001 for p in data['farmacias'])
+          assert 'SINTÉTICOS' in data['aviso']
+          tools=json.load(open('/tmp/demo-tools/list.json'))['result']['tools']
+          assert len(tools)==4
+          assert all(t['annotations']['readOnlyHint'] is True for t in tools)
+          PY
           main_status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
-            -H 'Content-Type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' "$private")
-          test "$main_status" = 401 || { echo "MCP OAuth privado dejó de estar protegido: $main_status"; exit 1; }
-          echo "MCP demo con clave obligatoria y MCP real con OAuth"
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' "$private")
+          test "$main_status" = 401 || { echo "MCP privado no protegido: HTTP $main_status"; exit 1; }
+          echo "MCP demo público con datos ficticios; MCP principal con OAuth"

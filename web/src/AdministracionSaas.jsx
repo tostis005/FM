@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from "react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
-import {Building2,CheckCircle2,ShieldCheck,Users} from "lucide-react";
+import {Building2,CheckCircle2,Users} from "lucide-react";
 import "./moduleDemo.css";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 const MODULES=[
@@ -117,74 +117,6 @@ function ClientDomains({client}){
  </div>;
 }
 
-function McpDemoKey({clients}){
- const [status,setStatus]=useState(null),[clientSlug,setClientSlug]=useState(""),
-  [oneTimeKey,setOneTimeKey]=useState(""),[busy,setBusy]=useState(false),
-  [error,setError]=useState(""),[notice,setNotice]=useState("");
- const headers={"X-Farmetrica-Admin-Action":"mcp-demo-key"};
- useEffect(()=>{
-  api("/api/admin/ai/mcp-demo").then(data=>{setStatus(data);setClientSlug(data.clientSlug||"");})
-   .catch(e=>setError(e.message));
- },[]);
- async function create(){
-  const slug=clientSlug||clients.find(c=>c.active)?.slug;
-  if(!slug)return;
-  if(status?.configured&&!window.confirm("¿Rotar la clave? La anterior dejará de funcionar inmediatamente."))return;
-  setBusy(true);setError("");setNotice("");setOneTimeKey("");
-  try{
-   const data=await api("/api/admin/ai/mcp-demo",{
-    method:"POST",headers,body:JSON.stringify({clientSlug:slug})});
-   setOneTimeKey(data.key);
-   setStatus({configured:true,clientSlug:slug,createdAt:new Date().toISOString()});
-   setNotice("Clave creada. Cópiala ahora: no podrá recuperarse después.");
-  }catch(e){setError(e.message)}finally{setBusy(false)}
- }
- async function revoke(){
-  if(!window.confirm("¿Revocar el acceso MCP demo desde Claude y otros clientes?"))return;
-  setBusy(true);setError("");setNotice("");setOneTimeKey("");
-  try{
-   await api("/api/admin/ai/mcp-demo",{method:"DELETE",headers});
-   setStatus({configured:false,clientSlug:null});setNotice("Clave revocada.");
-  }catch(e){setError(e.message)}finally{setBusy(false)}
- }
- return <section className="card fm-manage-client">
-  <div className="section-heading"><h2>Conexiones IA · Clave API opcional</h2><ShieldCheck size={19}/></div>
-  <div className="fm-manage-wide">
-   <p>ChatGPT utiliza este MCP mediante OAuth con la sesión de Farmétrica: no necesita ninguna clave API. Para clientes técnicos que admitan cabeceras personalizadas, puedes generar una clave adicional de solo lectura.</p>
-   <p>Servidor: <code>https://farmetrica.com/api/mcp-demo</code>. El MCP principal conserva su conexión OAuth independiente.</p>
-   <p>{status?.configured?"Clave activa para el cliente "+status.clientSlug:"No hay una clave activada."}</p>
-   <div className="fm-manage-form">
-    <label>Cliente que consultará la clave
-     <select value={clientSlug} onChange={e=>setClientSlug(e.target.value)}>
-      <option value="">Selecciona un cliente</option>
-      {clients.filter(c=>c.active).map(c=><option key={c.slug} value={c.slug}>{c.name} ({c.slug})</option>)}
-     </select>
-    </label>
-    <div style={{display:"flex",alignItems:"end",gap:8,flexWrap:"wrap"}}>
-     <button type="button" className="btn btn-primary" disabled={busy||!clientSlug}
-      onClick={create}>{busy?"Guardando…":status?.configured?"Rotar clave":"Generar clave API"}</button>
-     {status?.configured&&<button type="button" className="btn btn-secondary" disabled={busy}
-       onClick={revoke}>Revocar</button>}
-    </div>
-   </div>
-   {oneTimeKey&&<div style={{marginTop:12}}>
-    <label>Clave API (solo visible ahora)
-     <input aria-label="Clave API MCP demo" readOnly autoComplete="off"
-      style={{width:"100%"}} value={oneTimeKey}/>
-    </label>
-    <button type="button" className="btn btn-secondary" onClick={()=>
-     navigator.clipboard.writeText(oneTimeKey).then(()=>setNotice("Clave copiada."))
-      .catch(()=>setError("Copia manualmente el texto de la clave."))}>Copiar clave</button>
-   </div>}
-   <p>En Claude configura la URL anterior y una cabecera personalizada:
-    <code>Authorization</code> con valor <code>Bearer TU_CLAVE</code>.
-    No pegues la clave en el chat ni en GitHub.</p>
-   {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
-   {notice&&<p role="status" className="fm-manage-feedback">{notice}</p>}
-  </div>
- </section>;
-}
-
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
  const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:""});
@@ -227,7 +159,6 @@ export function ClientesPanel({onUpdated}){
     <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>
    </form>
   </section>
-  <McpDemoKey clients={clients}/>
   {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>

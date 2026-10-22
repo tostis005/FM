@@ -6,14 +6,13 @@ import {tenantChoices,validPkce,validAuthorizeRequest,readAnalytics,MCP_TOOLS} f
 const CLIENT="https://chatgpt.com/oauth/client.json";
 const REDIRECT="https://chatgpt.com/connector_platform_oauth_redirect";
 const client={redirect_uris:[REDIRECT],scope:"farmetrica.read offline_access"};
-const URLS={resource:"https://fm.example/api/mcp",demoResource:"https://fm.example/api/mcp-demo"};
+const URLS={resource:"https://fm.example/api/mcp"};
 const challenge=createHash("sha256").update("a".repeat(64)).digest("base64url");
 const params={response_type:"code",client_id:CLIENT,redirect_uri:REDIRECT,code_challenge_method:"S256",
   code_challenge:challenge,resource:URLS.resource,state:"opaque",scope:"farmetrica.read offline_access"};
 
 test("OAuth exige callback registrado, recurso, permisos y PKCE S256",()=>{
   assert.equal(validAuthorizeRequest(params,URLS,client),true);
-  assert.equal(validAuthorizeRequest({...params,resource:URLS.demoResource},URLS,client),true);
   assert.equal(validAuthorizeRequest({...params,redirect_uri:"https://evil.example/callback"},URLS,client),false);
   assert.equal(validAuthorizeRequest({...params,resource:"https://evil.example/api/mcp"},URLS,client),false);
   assert.equal(validAuthorizeRequest({...params,code_challenge_method:"plain"},URLS,client),false);

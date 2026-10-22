@@ -30,7 +30,7 @@ test("No inventa significado, períodos ni accesos entre clientes",()=>{
   "¿Cuánto vendió cada farmacia?",
   "Ventas y compras por farmacia hoy",
   "¿Cuánto beneficio obtuvimos hoy?",
-  "Compara las ventas de este mes con el mes pasado",
+  "Compara las ventas de enero de 2026 frente a diciembre de 2025",
   "¿Cuántas ventas en la farmacia de Atlantis hoy?",
   "Ventas por farmacia el 31 de febrero de 2026"
  ];

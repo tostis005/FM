@@ -80,7 +80,7 @@ jobs:
           SHA=$(python3 -c 'import json;print(json.load(open("/tmp/nomenclator/meta.json"))["sha256"])')
           [[ "$SHA" =~ ^[0-9a-f]{64}$ ]]
           EXISTING=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            "cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \"SELECT CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_versiones WHERE sha256='$SHA' AND transformacion_version>=2) THEN 1 ELSE 0 END;\"")
+            "cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c \"SELECT CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_versiones WHERE sha256='$SHA' AND transformacion_version>=2 AND fecha_fuente IS NOT NULL) THEN 1 ELSE 0 END;\"")
           if [ "$EXISTING" = "1" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Nomenclátor con mapeo AEMPS v2 ya importado; sin cambios."

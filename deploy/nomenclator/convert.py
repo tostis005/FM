@@ -83,6 +83,9 @@ def parse(archive):
     with archive.open(prescription) as handle:
         for _, el in ET.iterparse(handle, events=("end",)):
             values = children(el)
+            # La fecha de corte aparece en <header>, no en cada <prescription>.
+            # Retenerla antes de recorrer los medicamentos individuales.
+            source_date = source_date or values.get("listprescriptiondate", "")
             cn = values.get("cod_nacion", "")
             dcpf = values.get("cod_dcpf", "")
             if cn and dcpf:

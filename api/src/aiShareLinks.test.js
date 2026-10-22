@@ -14,6 +14,7 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   query:async(sql,params=[])=>{
    statements.push({sql,params});
    if(sql.startsWith("SELECT slug FROM farmetrica.clientes"))return {rows:[{slug:"grupo_demo"}]};
+   if(sql.includes("FROM information_schema.columns"))return {rows:[]};
    if(sql.startsWith("INSERT INTO farmetrica.ai_mcp_demo_keys")){
     active={secret_hash:params[0],cliente_slug:params[1],duracion:params[2],creado_en:new Date().toISOString()};
     expired=false;return {rows:[{creado_en:active.creado_en}]};

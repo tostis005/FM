@@ -363,7 +363,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
         body:JSON.stringify({question,history,section})
       });
       const result=await response.json().catch(()=>({}));
-      if(!response.ok)throw Error(result.error||"No se pudo completar la consulta");
+      if(!response.ok||result.error)throw Error(result.error||"No se pudo completar la consulta");
       if(controller.signal.aborted)return;
       const sources=Array.isArray(result.sources)?result.sources.filter(x=>x.available).map(x=>x.label).join(" · "):"";
       setMessages(previous=>[...previous,createMessage("assistant",result.answer+

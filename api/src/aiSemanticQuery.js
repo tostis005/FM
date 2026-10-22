@@ -301,7 +301,7 @@ export function compileSemanticQuery(input,context){
  // Rows are always scoped by client and authorized IDs before aggregation.
  const needsArticle=q.source==="stock"||q.producto!==undefined||
   q.dims.some(d=>["producto","codigo_nacional","familia"].includes(d))||
-  q.metrics.includes("margen_estimado");
+  q.metrics.includes("margen_estimado")||q.metrics.includes("lineas_con_coste");
  let base=baseSql(q.source,schema,params,where,needsArticle);
  if(q.source==="stock"){
   let state="";

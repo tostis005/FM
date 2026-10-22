@@ -29,7 +29,7 @@ function landing(token,ctx){
   indicador:id,desde:(id==="ahorro_economico"?year:dates).from,
   hasta:(id==="ahorro_economico"?year:dates).to
  })).join("");
- const qs=["¿Cuánto hemos vendido este mes?","¿Cuánto hemos comprado el mes pasado?",
+ const qs=["¿Cuánto hemos facturado este mes?","¿Cuánto hemos comprado el mes pasado?",
   "¿Cuál es el capital de stock?","¿Qué artículos se han vendido más?","¿Qué ahorro potencial hay este año?"]
   .map(pregunta=>link(pregunta,{pregunta})).join("");
  return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Farmétrica · consultas reales</title></head>'+

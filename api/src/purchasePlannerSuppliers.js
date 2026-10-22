@@ -104,12 +104,22 @@ export async function readPlannerLaboratories(pool,ctx,chosen,items,dcpfs,report
  let presentations=[];
  if(lookups.length||dcpfs.length){
   const {rows}=await pool.query(`SELECT DISTINCT ON (cn) cn,dcpf,nombre,
-   laboratorio,laboratorio_codigo,principio_activo,generico,comercializado
+   laboratorio,laboratorio_codigo,laboratorio_titular_codigo,laboratorio_titular,
+   laboratorio_comercializador_codigo,laboratorio_comercializador,
+   principio_activo,generico,comercializado
    FROM farmetrica.nomenclator_presentaciones
    WHERE dcpf=ANY($1::text[]) OR cn=ANY($2::text[])
    ORDER BY cn,dcpf LIMIT 10000`,[dcpfs,lookups]);
   presentations=rows.map(r=>({cn:String(r.cn),dcpf:r.dcpf,
-   name:r.nombre,laboratory:r.laboratorio,laboratoryCode:r.laboratorio_codigo,
+   name:r.nombre,
+   // Titular de autorización y comercializador AEMPS son conceptos
+   // distintos: ninguno implica fabricante físico ni proveedor ERP.
+   titular:r.laboratorio_titular||r.laboratorio||null,
+   titularCode:r.laboratorio_titular_codigo||r.laboratorio_codigo||null,
+   commercializer:r.laboratorio_comercializador||null,
+   commercializerCode:r.laboratorio_comercializador_codigo||null,
+   laboratory:r.laboratorio_titular||r.laboratorio,
+   laboratoryCode:r.laboratorio_titular_codigo||r.laboratorio_codigo,
    principle:r.principio_activo,generic:r.generico,marketed:r.comercializado}));
  }
  const groupLinks=new Map();

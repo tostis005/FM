@@ -10,8 +10,11 @@ CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_versiones (
   total_presentaciones integer NOT NULL CHECK(total_presentaciones>=0),
   total_genericos integer NOT NULL CHECK(total_genericos>=0),
   fichero text NOT NULL,
+  transformacion_version integer NOT NULL DEFAULT 1,
   activo boolean NOT NULL DEFAULT false
 );
+ALTER TABLE farmetrica.nomenclator_versiones
+ ADD COLUMN IF NOT EXISTS transformacion_version integer NOT NULL DEFAULT 1;
 CREATE UNIQUE INDEX IF NOT EXISTS nomenclator_version_activa
   ON farmetrica.nomenclator_versiones (activo) WHERE activo;
 CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_presentaciones (
@@ -19,6 +22,10 @@ CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_presentaciones (
   nombre text NOT NULL,
   laboratorio_codigo text,
   laboratorio text,
+  laboratorio_titular_codigo text,
+  laboratorio_titular text,
+  laboratorio_comercializador_codigo text,
+  laboratorio_comercializador text,
   principio_activo text,
   dcpf text NOT NULL,
   dcp text,
@@ -27,6 +34,12 @@ CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_presentaciones (
   comercializado boolean,
   actualizado_en timestamptz NOT NULL DEFAULT now()
 );
+-- Los catálogos existentes deben recibir las nuevas columnas antes de importar.
+ALTER TABLE farmetrica.nomenclator_presentaciones
+ ADD COLUMN IF NOT EXISTS laboratorio_titular_codigo text,
+ ADD COLUMN IF NOT EXISTS laboratorio_titular text,
+ ADD COLUMN IF NOT EXISTS laboratorio_comercializador_codigo text,
+ ADD COLUMN IF NOT EXISTS laboratorio_comercializador text;
 CREATE INDEX IF NOT EXISTS nomenclator_presentaciones_dcpf
  ON farmetrica.nomenclator_presentaciones(dcpf) WHERE generico;
 CREATE INDEX IF NOT EXISTS nomenclator_presentaciones_dcp

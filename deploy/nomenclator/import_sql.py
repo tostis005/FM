@@ -6,7 +6,10 @@ import re
 import sys
 from pathlib import Path
 
-FIELDS = "cn,nombre,laboratorio_codigo,laboratorio,principio_activo,dcpf,dcp,dcsa,generico,comercializado"
+FIELDS = ("cn,nombre,laboratorio_codigo,laboratorio,"
+          "laboratorio_titular_codigo,laboratorio_titular,"
+          "laboratorio_comercializador_codigo,laboratorio_comercializador,"
+          "principio_activo,dcpf,dcp,dcsa,generico,comercializado")
 def main():
     metadata=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     csv_path=Path(sys.argv[2])
@@ -23,6 +26,8 @@ def main():
     print("SET LOCAL lock_timeout='15s';")
     print("CREATE TEMP TABLE fm_nomen_stage ("
           "cn text,nombre text,laboratorio_codigo text,laboratorio text,"
+          "laboratorio_titular_codigo text,laboratorio_titular text,"
+          "laboratorio_comercializador_codigo text,laboratorio_comercializador text,"
           "principio_activo text,dcpf text,dcp text,dcsa text,"
           "generico boolean,comercializado boolean) ON COMMIT DROP;")
     # PostgreSQL COPY FROM STDIN puede fallar con finales de línea de los XML
@@ -58,20 +63,38 @@ def main():
            (SELECT count(*) FROM fm_nomen_stage WHERE generico)<1000 OR
            (SELECT count(*) FROM fm_nomen_stage WHERE cn !~ '^[0-9]{6,7}$')>0 OR
            (SELECT count(*) FROM fm_nomen_stage WHERE dcpf IS NULL OR dcpf='')>0 OR
-           (SELECT count(DISTINCT cn) FROM fm_nomen_stage)<>(SELECT count(*) FROM fm_nomen_stage)
+           (SELECT count(DISTINCT cn) FROM fm_nomen_stage)<>(SELECT count(*) FROM fm_nomen_stage) OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+              nullif(btrim(laboratorio_titular),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.8 OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+              nullif(btrim(laboratorio_comercializador),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.8 OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+              nullif(btrim(principio_activo),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.6
         THEN RAISE EXCEPTION 'AEMPS: datos incompletos o inválidos. Conservada versión vigente.';
         END IF;
       END $nomen$;""")
     print("""INSERT INTO farmetrica.nomenclator_presentaciones
-      (cn,nombre,laboratorio_codigo,laboratorio,principio_activo,dcpf,dcp,dcsa,
-       generico,comercializado,actualizado_en)
+      (cn,nombre,laboratorio_codigo,laboratorio,
+       laboratorio_titular_codigo,laboratorio_titular,
+       laboratorio_comercializador_codigo,laboratorio_comercializador,
+       principio_activo,dcpf,dcp,dcsa,generico,comercializado,actualizado_en)
       SELECT cn,nombre,nullif(laboratorio_codigo,''),nullif(laboratorio,''),
+       nullif(laboratorio_titular_codigo,''),nullif(laboratorio_titular,''),
+       nullif(laboratorio_comercializador_codigo,''),nullif(laboratorio_comercializador,''),
        nullif(principio_activo,''),dcpf,nullif(dcp,''),nullif(dcsa,''),
        generico,comercializado,now()
       FROM fm_nomen_stage
       ON CONFLICT (cn) DO UPDATE SET
        nombre=excluded.nombre,laboratorio_codigo=excluded.laboratorio_codigo,
-       laboratorio=excluded.laboratorio,principio_activo=excluded.principio_activo,
+       laboratorio=excluded.laboratorio,
+       laboratorio_titular_codigo=excluded.laboratorio_titular_codigo,
+       laboratorio_titular=excluded.laboratorio_titular,
+       laboratorio_comercializador_codigo=excluded.laboratorio_comercializador_codigo,
+       laboratorio_comercializador=excluded.laboratorio_comercializador,
+       principio_activo=excluded.principio_activo,
        dcpf=excluded.dcpf,dcp=excluded.dcp,dcsa=excluded.dcsa,
        generico=excluded.generico,comercializado=excluded.comercializado,
        actualizado_en=now();""")
@@ -79,10 +102,15 @@ def main():
           "WHERE NOT EXISTS(SELECT 1 FROM fm_nomen_stage st WHERE st.cn=p.cn);")
     print("UPDATE farmetrica.nomenclator_versiones SET activo=false WHERE activo;")
     print("INSERT INTO farmetrica.nomenclator_versiones "
-          "(fuente,sha256,fecha_fuente,total_presentaciones,total_genericos,fichero,activo)"
+          "(fuente,sha256,fecha_fuente,total_presentaciones,total_genericos,fichero,transformacion_version,activo)"
           f" VALUES('AEMPS Nomenclátor de Prescripción','{sha}',"
           f"{chr(39)+date+chr(39) if date else 'NULL'},"
-          f"{rows},{generics},'prescripcion.zip',true);")
+          f"{rows},{generics},'prescripcion.zip',2,true)"
+      " ON CONFLICT (sha256) DO UPDATE SET "
+      "importado_en=now(),fecha_fuente=excluded.fecha_fuente,"
+      "total_presentaciones=excluded.total_presentaciones,"
+      "total_genericos=excluded.total_genericos,"
+      "transformacion_version=excluded.transformacion_version,activo=true;")
     print("COMMIT;")
 
 if __name__=="__main__":

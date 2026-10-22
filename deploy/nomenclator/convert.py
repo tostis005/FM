@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Transforma el ZIP de Prescripción AEMPS a un catálogo mínimo para Farmétrica.
+"""Transforma el ZIP de Prescripción AEMPS a un catálogo oficial por CN.
+Conserva titular y comercializador, que NO equivalen necesariamente al fabricante.
 No publica el ZIP ni sus XML. Campos según documento técnico AEMPS v15 (2025).
 """
 import argparse
@@ -15,6 +16,8 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 COLUMNS = ("cn", "nombre", "laboratorio_codigo", "laboratorio",
+           "laboratorio_titular_codigo", "laboratorio_titular",
+           "laboratorio_comercializador_codigo", "laboratorio_comercializador",
            "principio_activo", "dcpf", "dcp", "dcsa", "generico", "comercializado")
 CN = re.compile(r"^[0-9]{6,7}$")
 FIELDS = {
@@ -64,17 +67,17 @@ def parse(archive):
         raise ValueError("El ZIP no contiene Prescripcion.xml")
     labs = dictionary(
         archive, "DICCIONARIO_LABORATORIOS.xml",
-        ["cod_laboratorio", "laboratorio", "codigo", "cod_lab", "cod_labo"],
-        ["nombre", "nombre_laboratorio", "des_laboratorio", "descripcion",
+        ["codigolaboratorio", "cod_laboratorio", "codigo", "cod_lab", "cod_labo"],
+        ["laboratorio", "nombre", "nombre_laboratorio", "des_laboratorio", "descripcion",
          "des_lab", "nom_labo"])
     substances = dictionary(
         archive, "DICCIONARIO_DCSA.xml",
-        ["cod_dcsa", "codigo", "cod_snomed"],
-        ["des_dcsa", "descripcion", "nombre", "denominacion", "denominacion_dcsa"])
+        ["codigodcsa", "cod_dcsa", "codigo", "cod_snomed"],
+        ["nombredcsa", "des_dcsa", "descripcion", "nombre", "denominacion", "denominacion_dcsa"])
     dcpf_names = dictionary(
         archive, "DICCIONARIO_DCPF.xml",
-        ["cod_dcpf", "codigo", "cod_snomed"],
-        ["des_dcpf", "descripcion", "nombre", "denominacion"])
+        ["codigodcpf", "cod_dcpf", "codigo", "cod_snomed"],
+        ["nombredcpf", "des_dcpf", "descripcion", "nombre", "denominacion"])
     seen = set()
     source_date = ""
     with archive.open(prescription) as handle:
@@ -90,14 +93,20 @@ def parse(archive):
                     el.clear()
                     continue
                 seen.add(cn)
-                lab_code = text_or(values, "laboratorio_comercializador", "laboratorio_titular")
+                titular_code = values.get("laboratorio_titular", "")
+                comercial_code = values.get("laboratorio_comercializador", "")
+                lab_code = titular_code or comercial_code
                 source_date = source_date or values.get("listprescriptiondate", "")
                 yield {
                     "cn": cn,
-                    "nombre": (dcpf_names.get(dcpf) or
-                               text_or(values, "des_prese", "des_nomco", "cod_nacion"))[:450],
+                    "nombre": (text_or(values, "des_prese", "des_nomco") or
+                               dcpf_names.get(dcpf) or cn)[:450],
                     "laboratorio_codigo": lab_code,
                     "laboratorio": labs.get(lab_code, ""),
+                    "laboratorio_titular_codigo": titular_code,
+                    "laboratorio_titular": labs.get(titular_code, ""),
+                    "laboratorio_comercializador_codigo": comercial_code,
+                    "laboratorio_comercializador": labs.get(comercial_code, ""),
                     "principio_activo": substances.get(values.get("cod_dcsa", ""), ""),
                     "dcpf": dcpf,
                     "dcp": values.get("cod_dcp", ""),

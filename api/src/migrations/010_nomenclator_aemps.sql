@@ -10,8 +10,11 @@ CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_versiones (
   total_presentaciones integer NOT NULL CHECK(total_presentaciones>=0),
   total_genericos integer NOT NULL CHECK(total_genericos>=0),
   fichero text NOT NULL,
+  transformacion_version integer NOT NULL DEFAULT 1,
   activo boolean NOT NULL DEFAULT false
 );
+ALTER TABLE farmetrica.nomenclator_versiones
+ ADD COLUMN IF NOT EXISTS transformacion_version integer NOT NULL DEFAULT 1;
 CREATE UNIQUE INDEX IF NOT EXISTS nomenclator_version_activa
   ON farmetrica.nomenclator_versiones (activo) WHERE activo;
 CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_presentaciones (

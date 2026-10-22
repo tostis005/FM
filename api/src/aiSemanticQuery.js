@@ -190,7 +190,9 @@ export function validateSemanticQuery(input,ctx){
   throw err("Estado de stock inválido");
  const diasMax=input.dias_max??15;
  if(!Number.isInteger(diasMax)||diasMax<1||diasMax>180)throw err("Umbral inválido");
- const ids=authorizedIds(ctx,input.farmacias??[]);
+ let ids;
+ try{ids=authorizedIds(ctx,input.farmacias??[])}
+ catch{throw err("Farmacias no autorizadas");}
  if(source==="ventas"&&dims.includes("vendedor")&&!dims.includes("farmacia")&&ids.length>1)
   throw err("Al agrupar vendedores de varias farmacias incluye la dimensión farmacia: los códigos de vendedor no son globales.");
  const dates=resolveDates(input);

@@ -4,6 +4,7 @@ import React,{useEffect,useState} from "react";
  // no se guarda en localStorage ni en un archivo, y desaparece al salir.
 export default function AIShareLinks({clients=[]}){
  const [clientSlug,setClientSlug]=useState("");
+ const [duracion,setDuracion]=useState("24h");
  const [current,setCurrent]=useState(null);
  const [generatedUrl,setGeneratedUrl]=useState("");
  const [busy,setBusy]=useState(false);
@@ -21,7 +22,7 @@ export default function AIShareLinks({clients=[]}){
  };
  useEffect(()=>{
   let active=true;
-  request().then(data=>{if(active){setCurrent(data);setClientSlug(data.clientSlug||"");}})
+  request().then(data=>{if(active){setCurrent(data);setClientSlug(data.clientSlug||"");setDuracion(data.duracion||"24h");}})
    .catch(e=>{if(active)setError(e.message)});
   return()=>{active=false};
  },[]);
@@ -30,8 +31,8 @@ export default function AIShareLinks({clients=[]}){
   if(current?.configured&&!window.confirm("El enlace anterior dejará de funcionar. ¿Generar otro?"))return;
   setBusy(true);setError("");setNotice("");setGeneratedUrl("");
   try{
-   const data=await request("POST",{clientSlug});
-   setCurrent({configured:true,clientSlug,expiresAt:data.expiresAt});
+   const data=await request("POST",{clientSlug,duracion});
+   setCurrent({configured:true,clientSlug,duracion,expiresAt:data.expiresAt});
    setGeneratedUrl(data.url);
    setNotice("Enlace generado. Cópialo ahora: no se volverá a mostrar.");
   }catch(e){setError(e.message)}
@@ -50,9 +51,11 @@ export default function AIShareLinks({clients=[]}){
  return <section className="card fm-manage-client">
   <div className="section-heading"><h2>Enlace temporal de consultas IA</h2></div>
   <div className="fm-manage-wide">
-   <p>Genera una URL para consultar durante 24 horas las ventas, compras, existencias y oportunidades
+   <p>Genera una URL para consultar las ventas, compras, existencias y oportunidades
     de ahorro <strong>reales</strong> mediante API. Cópiala y pégala en ChatGPT:
     permite abrir el catálogo y consultar diferentes indicadores sin instalar un MCP.</p>
+   <p>El catálogo semántico permite que la IA combine farmacias, vendedores, artículos, proveedores,
+    fechas y métricas del histórico. Los márgenes basados en costes actuales se identifican como estimaciones.</p>
    <p><strong>Confidencialidad:</strong> cualquiera que posea el enlace puede leer los indicadores
     comerciales del cliente seleccionado hasta su caducidad o revocación. Es de solo lectura.
     No lo publiques; si se filtra, revócalo. La clave no se almacena en el navegador.</p>
@@ -64,9 +67,18 @@ export default function AIShareLinks({clients=[]}){
        <option key={c.slug} value={c.slug}>{c.name} ({c.slug})</option>)}
      </select>
     </label>
+    <label>Vigencia del enlace
+     <select value={duracion} onChange={e=>setDuracion(e.target.value)} aria-label="Duración del enlace">
+      <option value="24h">24 horas</option>
+      <option value="7d">1 semana</option>
+      <option value="30d">1 mes (30 días)</option>
+      <option value="365d">1 año (365 días)</option>
+      <option value="indefinido">Sin caducidad, hasta revocación</option>
+     </select>
+    </label>
     <div style={{display:"flex",alignItems:"end",gap:8,flexWrap:"wrap"}}>
      <button className="btn btn-primary" type="button" disabled={busy||!clientSlug} onClick={generate}>
-      {busy?"Guardando…":"Generar enlace (24 horas)"}
+      {busy?"Guardando…":"Generar enlace de consulta"}
      </button>
      {current?.configured&&<button className="btn btn-secondary" type="button"
       disabled={busy} onClick={revoke}>Revocar enlace</button>}
@@ -74,7 +86,7 @@ export default function AIShareLinks({clients=[]}){
    </div>
    {current?.configured&&<p role="status">
     Enlace vigente para {current.clientSlug}.
-    {current.expiresAt?" Caduca: "+new Date(current.expiresAt).toLocaleString("es-ES"):""}
+    {current.expiresAt?" Caduca: "+new Date(current.expiresAt).toLocaleString("es-ES"):" Sin fecha de caducidad: revócalo cuando termines."}
    </p>}
    {generatedUrl&&<div className="fm-manage-form">
     <label>Enlace generado (solo se muestra esta vez)

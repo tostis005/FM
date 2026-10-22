@@ -1,0 +1,54 @@
+name: Verificar MCP privado Farmetrica
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/src/aiMcp.js"
+      - "deploy/compose.farmacias.yml"
+      - ".github/workflows/verify-farmetrica-mcp.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Comprobar interfaz OAuth y MCP con protección real
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin=https://farmetrica.com
+          ready=false
+          for i in $(seq 1 30); do
+            status=$(curl -sS -L --max-time 12 -o /tmp/fm_oauth.json -w '%{http_code}' "$origin/.well-known/oauth-authorization-server" || true)
+            if [ "$status" = 200 ] && python3 -m json.tool /tmp/fm_oauth.json >/dev/null 2>&1; then
+              if python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/fm_oauth.json'))
+          assert data['issuer']=='https://farmetrica.com'
+          assert data['authorization_endpoint']=='https://farmetrica.com/api/ai/oauth/authorize'
+          assert data['token_endpoint']=='https://farmetrica.com/api/ai/oauth/token'
+          assert data['client_id_metadata_document_supported'] is True
+          assert 'S256' in data['code_challenge_methods_supported']
+          PY
+              then ready=true; break; fi
+            fi
+            if [ "$i" = 30 ]; then echo "OAuth metadata no disponible (HTTP $status)"; exit 1; fi
+            sleep 10
+          done
+          test "$ready" = true
+          curl -fsS --max-time 12 "$origin/.well-known/oauth-protected-resource/api/mcp" -o /tmp/fm_resource.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/fm_resource.json'))
+          assert data['resource']=='https://farmetrica.com/api/mcp'
+          assert 'https://farmetrica.com' in data['authorization_servers']
+          PY
+          code=$(curl -sS --max-time 12 -o /tmp/fm_autherror.json -w '%{http_code}' -X POST             -H 'Content-Type: application/json'             -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}' "$origin/api/mcp")
+          test "$code" = 401 || { echo "Error de autorizacion: HTTP $code"; exit 1; }
+          code=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' "$origin/api/mcp")
+          test "$code" = 405 || { echo "Endpoint GET inesperado: HTTP $code"; exit 1; }
+          health=$(curl -fsS --max-time 12 "$origin/api/health")
+          python3 -c 'import json,sys;assert json.loads(sys.argv[1])["status"]=="ok"' "$health"
+          echo "OAuth discovery, MCP protegido y API correcta"

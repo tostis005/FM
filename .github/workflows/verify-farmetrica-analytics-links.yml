@@ -1,0 +1,28 @@
+name: Verificar enlaces temporales de analítica real
+on:
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  comprobar:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validar ruta temporal y acceso administrativo protegido
+        run: |
+          set -euo pipefail
+          origin=https://farmetrica.com
+          status=$(curl -sS --max-time 15 -o /tmp/invalid.txt -D /tmp/invalid.headers -w '%{http_code}'             "$origin/api/consulta-temporal/fm_share_invalido")
+          test "$status" = 404 || { echo "Ruta temporal no disponible: $status"; exit 1; }
+          grep -q 'Enlace inválido' /tmp/invalid.txt
+          grep -qi 'no-store' /tmp/invalid.headers
+          grep -qi 'no-referrer' /tmp/invalid.headers
+          status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}'             "$origin/api/admin/ai/mcp-demo")
+          test "$status" = 401 || { echo "Administración no protegida: $status"; exit 1; }
+          status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}'             -H 'Content-Type: application/json'             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' "$origin/api/mcp")
+          test "$status" = 401 || { echo "MCP principal no protegido: $status"; exit 1; }
+          echo "Rutas de enlace temporal y OAuth privado verificadas"

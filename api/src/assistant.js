@@ -70,7 +70,8 @@ async function safeQuery(pool,ctx,names,period,ids) {
  const db=await pool.connect();
  try{
   await db.query("BEGIN TRANSACTION READ ONLY");
-  await db.query("SET LOCAL statement_timeout = '5000ms'");
+  await db.query(names.includes("ahorro_economico")?
+   "SET LOCAL statement_timeout = '25000ms'": "SET LOCAL statement_timeout = '5000ms'");
   await db.query("SET LOCAL lock_timeout = '1000ms'");
   const results=[];
   for(const name of names)results.push(await runAssistantTool(db,ctx,name,period,ids));

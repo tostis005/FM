@@ -33,6 +33,7 @@ jobs:
           node --test api/src/aiMcpDemo.test.js
           node --check api/src/assistantAnalytics.js
           node --test api/src/assistant.test.js
+          node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js

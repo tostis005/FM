@@ -91,6 +91,8 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.ok(catalog.consultas_semanticas.fuentes.ventas.dimensiones.includes("vendedor"));
   assert.ok(catalog.consultas_semanticas.fuentes.stock.metricas.dias_cobertura);
   assert.ok(catalog.consultas.some(x=>x.url.includes("consulta=")));
+  assert.ok(catalog.consultas.every(x=>!x.url.includes("/ventas/hoy/vendedores")));
+  assert.equal((await fetch(base+path+"/farmacias/101/ventas/hoy/vendedores")).status,404);
   assert.match(landing.headers.get("referrer-policy"),/no-referrer/);
   const sales=await fetch(base+path+"?indicador=ventas_resumen&desde=2026-10-01&hasta=2026-10-22&formato=json");
   assert.equal(sales.status,200);

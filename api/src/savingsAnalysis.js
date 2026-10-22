@@ -53,11 +53,16 @@ const supplierCode=col=>{
 };
 const supplierJoins=(schema)=>`
  LEFT JOIN ${schema}.proveedores sp ON upper(btrim(sp.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
-   AND ${supplierCode("sp.origen_id")}=${supplierCode("r.proveedor_id")}
- LEFT JOIN farmetrica.proveedores_maestro pm ON pm.cliente_slug=$4
-   AND ${supplierCode("pm.codigo_origen")}=${supplierCode("r.proveedor_id")}
-   AND nullif(btrim(sp.nombre),'') IS NOT NULL
-   AND upper(btrim(pm.nombre))=upper(btrim(sp.nombre))`;
+   AND upper(btrim(sp.origen_id))=upper(btrim(r.proveedor_id::text))
+ LEFT JOIN LATERAL (
+   SELECT x.codigo_origen,x.cooperativa,x.ignorar_informes
+   FROM farmetrica.proveedores_maestro x
+   WHERE x.cliente_slug=$4 AND ${supplierCode("x.codigo_origen")}=${supplierCode("r.proveedor_id")}
+     AND nullif(btrim(sp.nombre),'') IS NOT NULL
+     AND upper(btrim(x.nombre))=upper(btrim(sp.nombre))
+   ORDER BY (upper(btrim(x.codigo_origen))=upper(btrim(r.proveedor_id::text))) DESC,
+     x.codigo_origen LIMIT 1
+ ) pm ON true`;
 const channel=`CASE WHEN pm.ignorar_informes IS TRUE THEN 'excluido'
  WHEN pm.cooperativa IS TRUE THEN 'cooperativa'
  WHEN pm.codigo_origen IS NOT NULL AND pm.cooperativa IS FALSE THEN 'no_cooperativa'

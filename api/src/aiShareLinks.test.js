@@ -162,6 +162,7 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  assert.equal(data.params[3],"demo");
  assert.equal(data.params.at(-1),20);
  assert.match(data.sql,/ORDER BY "importe" DESC/);
+ assert.doesNotMatch(data.sql,/LEFT JOIN LATERAL/,"Ventas por vendedor no deben consultar el catálogo de artículos");
  const long=compileSemanticQuery({fuente:"ventas",agrupar:["anio"],metricas:["importe"],
   periodo:"historico"},ctx);
  assert.equal(long.params[0],null);
@@ -169,6 +170,7 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  const margin=compileSemanticQuery({fuente:"ventas",agrupar:["producto"],
   metricas:["margen_estimado","lineas_con_coste"],periodo:"este_mes"},ctx);
  assert.match(margin.sql,/a\.pmc>0/);
+ assert.match(margin.sql,/LEFT JOIN LATERAL/);
  const inventory=compileSemanticQuery({fuente:"stock",agrupar:["farmacia","producto"],
   metricas:["stock_actual","venta_90d","dias_cobertura"],estado_stock:"bajo",
   dias_max:15},ctx);

@@ -96,17 +96,32 @@
 .fm-planner .fm-expanded-row:hover>td{background:#f8fbf9}
 
 
-/* Preparador compacto: sin columna de demanda; nombre legible en dos líneas. */
-.fm-planner .smart-table{min-width:900px;table-layout:fixed}
-.fm-planner .smart-table>thead>tr>th:first-child,
-.fm-planner .smart-table>tbody>tr:not(.fm-expanded-row)>td:first-child{
- width:188px;max-width:188px
+/* La tabla principal siempre dispone de ancho real; en móviles se desplaza
+   horizontalmente. No comprimir ocho columnas dentro de 900px: los textos
+   terminaban pintándose encima de las celdas siguientes. */
+.fm-planner .smart-table.fm-planner-main-table{
+ width:1240px;min-width:1240px;max-width:none;table-layout:fixed;
+ border-collapse:collapse;
 }
-.fm-planner .smart-table>thead>tr>th:nth-child(2),
-.fm-planner .smart-table>tbody>tr:not(.fm-expanded-row)>td:nth-child(2){
- width:180px;max-width:180px
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(1){width:218px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(2){width:230px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(3){width:137px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(4){width:115px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(5){width:115px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(6){width:125px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(7){width:175px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(8){width:125px}
+.fm-planner .fm-planner-main-table>tbody>tr:not(.fm-expanded-row)>td,
+.fm-planner .fm-planner-main-table>thead>tr>th{
+ box-sizing:border-box;min-width:0;overflow:hidden;overflow-wrap:anywhere;
+ vertical-align:top;white-space:normal;
 }
-.fm-planner-article{min-width:0;width:100%;max-width:188px}
+.fm-planner .fm-planner-main-table .smart-sort,
+.fm-planner .fm-planner-main-table .smart-th-label,
+.fm-planner .fm-planner-main-table .smart-column-filter{
+ min-width:0;max-width:100%;box-sizing:border-box;
+}
+.fm-planner-article{min-width:0;width:100%;max-width:100%}
 .fm-planner-toggle{width:100%;min-width:0;max-width:100%;gap:4px;align-items:flex-start}
 .fm-planner-toggle svg{flex:0 0 auto;margin-top:2px}
 .fm-planner-article-label{min-width:0;max-width:100%;display:block}
@@ -116,10 +131,20 @@
  font-size:11px;max-width:100%
 }
 .fm-planner-article-label small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.fm-planner .fm-expanded-row>td{width:auto!important;max-width:none!important}
+.fm-planner .fm-planner-lab-choice{min-width:0;max-width:100%}
+.fm-planner .fm-planner-lab-choice strong,
+.fm-planner .fm-planner-lab-choice small{overflow-wrap:anywhere;white-space:normal}
+.fm-planner .fm-expanded-row>td{
+ width:auto!important;max-width:none!important;overflow:visible!important;
+}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown{
+ table-layout:fixed;min-width:1050px;
+}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(1){width:95px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(2){width:350px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(3){width:235px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(4){width:370px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown td{overflow-wrap:anywhere}
 @media(max-width:700px){
- .fm-planner .smart-table{min-width:900px}
- .fm-planner .smart-table>thead>tr>th:first-child,
- .fm-planner .smart-table>tbody>tr:not(.fm-expanded-row)>td:first-child{width:158px;max-width:158px}
- .fm-planner-article{max-width:158px}
+ .fm-planner .smart-table.fm-planner-main-table{width:1240px;min-width:1240px}
 }

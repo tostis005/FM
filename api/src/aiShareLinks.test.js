@@ -75,6 +75,14 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   const path="/api/consulta-temporal/"+token;
   const landing=await fetch(base+path);
   assert.equal(landing.status,200);
+  // El mismo endpoint devuelve datos diferentes para cada periodo: nunca cachear.
+  for(const [header,pattern] of [
+   ["cache-control",/no-store.*no-cache.*max-age=0/],
+   ["cdn-cache-control",/no-store/],
+   ["surrogate-control",/no-store/],
+   ["pragma",/no-cache/],["expires",/^0$/],["x-accel-expires",/^0$/],
+   ["vary",/^\*$/]
+  ])assert.match(landing.headers.get(header)||"",pattern,"cabecera "+header);
   const landingText=await landing.text();
   assert.match(landingText,/Datos reales de PostgreSQL/);
   assert.match(landingText,/Ventas de hoy por farmacia/);
@@ -109,6 +117,7 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal(catalog.ficticio,false);
   assert.equal(catalog.farmacias[0].nombre,"Farmacia Real Uno");
   assert.ok(catalog.consultas.some(x=>x.titulo.includes("hoy")));
+  assert.ok(catalog.consultas.some(x=>x.titulo.includes("este año")));
   assert.ok(catalog.consultas.every(x=>x.url.startsWith(path+"?")));
   assert.equal(catalog.consultas_semanticas.version,1);
   assert.ok(catalog.consultas_semanticas.fuentes.ventas.dimensiones.includes("vendedor"));
@@ -128,6 +137,19 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.deepEqual(actual.dimensiones,["farmacia","vendedor"]);
   assert.deepEqual(actual.metricas,["importe","unidades"]);
   assert.equal(actual.farmacias_autorizadas,1);
+  const yearRanking=await fetch(base+path+"?fuente=ventas&agrupar=vendedor&"+
+   "metricas=importe&periodo=este_anio&ordenar=importe&direccion=desc&formato=json");
+  assert.equal(yearRanking.status,200);
+  assert.match(yearRanking.headers.get("cache-control"),/no-store/);
+  const annual=await yearRanking.json();
+  assert.deepEqual(annual.dimensiones,["farmacia","vendedor"]);
+  assert.match(annual.periodo.desde,/^20[0-9]{2}-01-01$/);
+  const sellerQueries=statements.filter(x=>x.sql.includes(' AS "vendedor"')&&
+   x.sql.includes("fm_ventas_analitica"));
+  assert.ok(sellerQueries.some(x=>x.params[0]===annual.periodo.desde));
+  assert.ok(sellerQueries.some(x=>x.params[0]===actual.periodo.desde));
+  assert.notEqual(annual.periodo.desde,actual.periodo.desde,
+   "Los periodos año y hoy deben generar distintos parámetros SQL");
   assert.equal((await fetch(base+path+"?fuente=ventas&metricas=importe&farmacias=999&formato=json")).status,400);
   assert.equal((await fetch(base+path+"?fuente=ventas&metricas=importe&sql=DELETE")).status,400);
   assert.equal((await fetch(base+path+"?fuente=ventas&metricas=importe&ordenar=importe")).status,400);
@@ -210,6 +232,13 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  assert.equal(data.params.at(-1),20);
  assert.match(data.sql,/ORDER BY "importe" DESC/);
  assert.doesNotMatch(data.sql,/LEFT JOIN LATERAL/,"Ventas por vendedor no deben consultar el catálogo de artículos");
+ const annualSellers=compileSemanticQuery({fuente:"ventas",agrupar:["vendedor"],
+  metricas:["importe"],periodo:"este_anio",ordenar:{campo:"importe",direccion:"desc"}},ctx);
+ assert.deepEqual(annualSellers.q.dims,["farmacia","vendedor"]);
+ assert.match(annualSellers.sql,/GROUP BY b\.farmacia,b\.vendedor/);
+ assert.match(annualSellers.params[0],/^20\d{2}-01-01$/);
+ assert.throws(()=>validateSemanticQuery({fuente:"ventas",agrupar:["vendedor","dia","mes"],
+  metricas:["importe"],periodo:"este_anio"},ctx),/incluye farmacia/);
  const long=compileSemanticQuery({fuente:"ventas",agrupar:["anio"],metricas:["importe"],
   periodo:"historico"},ctx);
  assert.equal(long.params[0],null);

@@ -148,10 +148,10 @@ function McpDemoKey({clients}){
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <section className="card fm-manage-client">
-  <div className="section-heading"><h2>MCP demo · Claude / IA</h2><ShieldCheck size={19}/></div>
+  <div className="section-heading"><h2>Conexiones IA · Clave API opcional</h2><ShieldCheck size={19}/></div>
   <div className="fm-manage-wide">
-   <p>Conexión <code>https://farmetrica.com/api/mcp-demo</code> con datos reales de PostgreSQL y clave API.
-    Es independiente del MCP principal con OAuth. Consultas de solo lectura.</p>
+   <p>ChatGPT utiliza este MCP mediante OAuth con la sesión de Farmétrica: no necesita ninguna clave API. Para clientes técnicos que admitan cabeceras personalizadas, puedes generar una clave adicional de solo lectura.</p>
+   <p>Servidor: <code>https://farmetrica.com/api/mcp-demo</code>. El MCP principal conserva su conexión OAuth independiente.</p>
    <p>{status?.configured?"Clave activa para el cliente "+status.clientSlug:"No hay una clave activada."}</p>
    <div className="fm-manage-form">
     <label>Cliente que consultará la clave

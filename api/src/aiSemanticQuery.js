@@ -57,7 +57,7 @@ const ALL_DIMENSIONS=[...new Set(Object.values(DIMENSIONS).flatMap(x=>Object.key
 const ALL_METRICS=[...new Set(Object.values(METRICS).flatMap(x=>Object.keys(x)))];
 export const SEMANTIC_MCP_QUERY_SCHEMA={
  type:"object",
- description:"Plan de consulta generado por la IA a partir de la pregunta libre y catalogo_semantico; no es SQL.",
+ description:"Plan estructurado avanzado para consultas explícitas. Para texto libre usar resolver_pregunta_temporal o resolver_pregunta; no es SQL.",
  properties:{
   fuente:{type:"string",enum:["ventas","compras","stock"]},
   agrupar:{type:"array",items:{type:"string",enum:ALL_DIMENSIONS},maxItems:3,
@@ -95,7 +95,7 @@ export function semanticCatalogForContext(ctx){
 export function semanticCatalog(){
  return {
   version:1,modo:"consulta_estructurada",soloLectura:true,
-  descripcion:"La IA elige fuente, dimensiones, métricas y filtros; el servidor genera SQL parametrizado y aislado por cliente. No se ejecuta SQL libre.",
+  descripcion:"El servidor ofrece interpretación canónica de preguntas naturales; aquí se publica el contrato avanzado de planes explícitos. SQL parametrizado y aislado por cliente, nunca SQL libre.",
   fuentes:Object.fromEntries(Object.keys(DIMENSIONS).map(k=>[k,{
    descripcion:k==="ventas"?"Ventas por farmacia, producto, vendedor y período":
     k==="compras"?"Recepciones por farmacia, proveedor, artículo y período":

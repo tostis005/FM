@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useRef,useState} from "react";
 import {Download,RefreshCw} from "lucide-react";
 import {downloadTableCSV} from "./tableExport.js";
 
@@ -8,10 +8,12 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
  const [report,setReport]=useState(null),[error,setError]=useState("");
  const [busy,setBusy]=useState(false);
  const filterKey=[clientSlug,period.from,period.to,pharmacyIds.join(",")].join("|");
+ const latestKey=useRef(filterKey);latestKey.current=filterKey;
+ const inRange=period.valid&&Date.parse(period.to)-Date.parse(period.from)<=366*86400000;
  // No mostrar un informe anterior con un período o farmacias nuevos.
  useEffect(()=>{setReport(null);setError("")},[filterKey]);
  const run=async()=>{
-  if(!period.valid||busy)return;
+  if(!inRange||busy)return;
   const current=filterKey;
   setBusy(true);setError("");setReport(null);
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
@@ -25,7 +27,7 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
   };
   try{
    const results=await Promise.allSettled(["resumen","precios","stock"].map(load));
-   if(filterKey!==current)return;
+   if(latestKey.current!==current)return;
    const values=results.map(x=>x.status==="fulfilled"?x.value:null);
    const problems=results.map((x,i)=>x.status==="rejected"?["resumen","precios","stock"][i]+": "+x.reason.message:null).filter(Boolean);
    setReport({summary:values[0],prices:values[1],stock:values[2]});
@@ -46,12 +48,12 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
    <h2>Análisis de ahorro con datos reales</h2>
    <p>Comparación por artículo y farmacia, sin aplicar un porcentaje supuesto a las ventas.</p>
   </div>
-   <button type="button" className="btn btn-secondary" onClick={run} disabled={busy||!period.valid}>
+   <button type="button" className="btn btn-secondary" onClick={run} disabled={busy||!inRange}>
     <RefreshCw size={16}/>{busy?" Calculando…":" Calcular ahorro real"}
    </button>
   </div>
   {report&&<p className="fm-insight-foot">Período: {period.from} — {period.to}. Farmacias: {pharmacyIds.length?"seleccionadas":"todas las autorizadas"}.</p>}
-  {!period.valid&&<p role="alert">Selecciona un período válido, máximo 367 días.</p>}
+  {!inRange&&<p role="alert">Selecciona un período válido, máximo 367 días.</p>}
   {error&&<p role="alert" className="fm-insight-status">{error}</p>}
   {summary&&<div className="kpi-grid small-kpis">
    <div className="card"><span>Ventas netas</span><strong>{euro(summary.sales.amount)}</strong></div>
@@ -59,7 +61,7 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
    <div className="card"><span>Stock valorado</span><strong>{euro(summary.stock.amount)}</strong><small>{summary.stock.pricedReferences}/{summary.stock.references} referencias valoradas</small></div>
    <div className="card"><span>Diferencial de precios contrastado</span><strong>{euro(priced)}</strong><small>Histórico; no ahorro realizado</small></div>
   </div>}
-  {summary&&<p className="fm-insight-foot">Gasto por canal identificado: cooperativas {euro(summary.purchases.channels.cooperativa?.amount??0)}; proveedores no cooperativos identificados {euro(summary.purchases.channels.no_cooperativa?.amount??0)}; sin clasificación verificada {euro(summary.purchases.channels.sin_verificar?.amount??0)}. Los importes solo se consideran completos si todas las líneas tienen importe.</p>}
+  {summary&&<p className="fm-insight-foot">Gasto por canal identificado: cooperativas {euro(summary.purchases.channels.cooperativa?.amount??(summary.purchases.channels.cooperativa?null:0))}; proveedores no cooperativos identificados {euro(summary.purchases.channels.no_cooperativa?.amount??(summary.purchases.channels.no_cooperativa?null:0))}; sin clasificación verificada {euro(summary.purchases.channels.sin_verificar?.amount??(summary.purchases.channels.sin_verificar?null:0))}. Los importes solo se consideran completos si todas las líneas tienen importe.</p>}
   {prices&&<div>
    <h3>Comparación de costes realmente pagados</h3>
    <p>{integer(prices.totals?.verified)} referencias con al menos dos compras en cada canal. Diferencial histórico observado: <strong>{euro(priced)}</strong>. Importe indicativo incluyendo referencias con menos evidencia: {euro(prices.totals?.indicative)}.</p>

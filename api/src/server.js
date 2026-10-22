@@ -21,6 +21,7 @@ import {setupSalesInsights} from "./salesInsights.js";
 import {setupHistoryCoverage} from "./historyCoverage.js";
 import { setupAssistant } from "./assistant.js";
 import { setupAIMcp } from "./aiMcp.js";
+import { setupPublicDemoMcp } from "./aiMcpDemo.js";
 import {setupSalesDetail} from "./salesDetail.js";
 import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
@@ -107,6 +108,8 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
 setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
+// MCP demo aislado: datos inventados, sin pool ni sesiones reales.
+setupPublicDemoMcp(app);
 setupDemoClients(app,pool,{requireSuperadmin});
 // Impedir mutaciones de datos reales desde un tenant demo enlazado.
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas

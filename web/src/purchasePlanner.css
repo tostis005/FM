@@ -138,12 +138,13 @@
  width:auto!important;max-width:none!important;overflow:visible!important;
 }
 .fm-planner .fm-planner-presentations .fm-planner-breakdown{
- table-layout:fixed;min-width:1050px;
+ width:1280px;min-width:1280px;table-layout:fixed
 }
-.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(1){width:95px}
-.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(2){width:350px}
-.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(3){width:235px}
-.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(4){width:370px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(1){width:90px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(2){width:335px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(3){width:225px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(4){width:225px}
+.fm-planner .fm-planner-presentations .fm-planner-breakdown th:nth-child(5){width:405px}
 .fm-planner .fm-planner-presentations .fm-planner-breakdown td{overflow-wrap:anywhere}
 @media(max-width:700px){
  .fm-planner .smart-table.fm-planner-main-table{width:1240px;min-width:1240px}

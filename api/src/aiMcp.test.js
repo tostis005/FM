@@ -24,7 +24,12 @@ test("OAuth exige callback registrado, recurso, permisos y PKCE S256",()=>{
 });
 
 test("las herramientas son estrictamente lectura y nunca aceptan SQL libre",()=>{
-  assert.equal(MCP_TOOLS.length,4);
+  assert.equal(MCP_TOOLS.length,6);
+  assert.ok(MCP_TOOLS.some(t=>t.name==="catalogo_semantico"));
+  const flexible=MCP_TOOLS.find(t=>t.name==="consultar_semantica");
+  assert.ok(flexible.inputSchema.required.includes("fuente"));
+  assert.ok(flexible.inputSchema.properties.agrupar.items.enum.includes("vendedor"));
+  assert.equal(flexible.inputSchema.properties.sql,undefined);
   for(const item of MCP_TOOLS){
     assert.equal(item.annotations.readOnlyHint,true);
     assert.equal(item.inputSchema.additionalProperties,false);

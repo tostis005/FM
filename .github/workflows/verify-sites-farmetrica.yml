@@ -1,0 +1,26 @@
+name: Verificar adaptador Farmetrica Sites
+on:
+  push:
+    branches:
+      - feature/sites-farmetrica-mcp-bridge
+    paths:
+      - 'sites/farmetrica/**'
+      - '.github/workflows/verify-sites-farmetrica.yml'
+  pull_request:
+    paths:
+      - 'sites/farmetrica/**'
+      - '.github/workflows/verify-sites-farmetrica.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Comprobar puente de solo lectura sin tokens reales
+        run: node --test sites/farmetrica/mcp-bridge.test.mjs

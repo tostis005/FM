@@ -266,12 +266,14 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
     name="consultar_indicador";args.indicador=req.query.indicador;
    }else{
     if(typeof req.query.pregunta!=="string"||req.query.pregunta.length>1000||req.query.pregunta.trim().length<2)return res.status(400).send("Pregunta inválida");
-    name="explorar_pregunta";args.pregunta=req.query.pregunta;
+    if(Object.keys(args).length)
+      return res.status(400).json({error:"Para preguntas libres, incluye el período y la farmacia en el propio texto. Los filtros adicionales se admiten en consultas estructuradas."});
+     name="resolver_pregunta";args.pregunta=req.query.pregunta;
    }
    const result=await handlePublicDemoMcp({jsonrpc:"2.0",id:1,method:"tools/call",params:{name,arguments:args}},pool,ctx.client.slug,ctx);
    const data=result.body?.result?.structuredContent;
    if(!data)return res.status(result.http===503?503:400).send(result.body?.result?.content?.[0]?.text||"Consulta no disponible");
-   const output={...data,cliente:ctx.client.name,origen:"PostgreSQL",ficticio:false};
+   const output={...data,cliente:ctx.client.name,origen:data.estado&&data.estado!=="ok"?"Farmétrica":"PostgreSQL",ficticio:false};
    if(req.query.formato==="json")return res.json(output);
    return res.type("html").send('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Farmétrica · consulta</title></head><body><h1>Resultado real de Farmétrica</h1><pre>'+html(JSON.stringify(output,null,2))+'</pre><a href="'+html(PREFIX+token)+'">Volver al catálogo</a></body></html>');
   }catch(e){next(e);}

@@ -111,7 +111,7 @@ jobs:
           # Rechazar una nueva importación si vuelve a perderse el
           # diccionario de laboratorios o los títulos de presentaciones.
           RESULT=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FILTER(WHERE generico),count(*) FILTER(WHERE generico AND nullif(btrim(laboratorio_titular),\x27\x27) IS NOT NULL),count(*) FILTER(WHERE generico AND nullif(btrim(laboratorio_comercializador),\x27\x27) IS NOT NULL),count(*) FILTER(WHERE generico AND nullif(btrim(principio_activo),\x27\x27) IS NOT NULL) FROM farmetrica.nomenclator_presentaciones;"')
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FILTER(WHERE generico),count(*) FILTER(WHERE generico AND laboratorio_titular IS NOT NULL),count(*) FILTER(WHERE generico AND laboratorio_comercializador IS NOT NULL),count(*) FILTER(WHERE generico AND principio_activo IS NOT NULL) FROM farmetrica.nomenclator_presentaciones;"')
           IFS='|' read -r GENERICS TITULAR COMMERCIAL PRINCIPLES <<< "$RESULT"
           echo "AEMPS: $GENERICS genéricos, $TITULAR nombres de titulares, $COMMERCIAL comercializadores, $PRINCIPLES principios activos"
           test "${GENERICS:-0}" -gt 1000

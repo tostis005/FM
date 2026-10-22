@@ -44,6 +44,12 @@ function shareCatalog(token,ctx){
   titulo:entry.titulo,
   url:url({consulta:JSON.stringify(entry.consulta),formato:"json"})
  }));
+ const enlacesFarmacia=ctx.pharmacies.flatMap(p=>[
+  {titulo:"Ventas de hoy · "+p.name,
+   url:PREFIX+token+"/farmacias/"+Number(p.id)+"/ventas/hoy"},
+  {titulo:"Vendedores de hoy · "+p.name,
+   url:PREFIX+token+"/farmacias/"+Number(p.id)+"/ventas/hoy/vendedores"}
+ ]);
  const entradas=[
   {titulo:"Ventas de hoy por farmacia",url:url({indicador:"ventas_resumen",desde:today.from,hasta:today.to})},
   {titulo:"Compras de hoy por farmacia",url:url({indicador:"compras_resumen",desde:today.from,hasta:today.to})},
@@ -68,7 +74,7 @@ function shareCatalog(token,ctx){
   soloLectura:true,
   farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name,ciudad:p.city})),
   indicadores:TOOL_CATALOG,
-  consultas:[...semanticLinks,...entradas],
+  consultas:[...enlacesFarmacia,...semanticLinks,...entradas],
   consultas_semanticas:semantic,
   ayuda_ia:"Para nuevas preguntas, utiliza fuentes, dimensiones y métricas de consultas_semanticas y construye ?consulta=JSON_CODIFICADO&formato=json. No mandes SQL.",
   formato:"Para obtener JSON agrega formato=json a cualquier URL de consulta.",
@@ -128,6 +134,67 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
   try{await pool.query("DELETE FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true");headers(res).json({ok:true});}
   catch(e){next(e);}
  });
+ // Enlaces cortos prepublicados: ChatGPT puede seguirlos sin construir query strings.
+ // La operación utiliza el mismo planificador semántico que el resto de la API.
+ const salesByPharmacyToday=async(req,res,next)=>{
+  try{
+   headers(res);
+   if(!validTemporaryLinkToken(req.params.token))return res.status(404).send("Enlace inválido");
+   const {rows}=await pool.query("SELECT cliente_slug FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true AND secret_hash=$1 AND "+activeSQL,
+    [hash(req.params.token)]);
+   if(!rows.length)return res.status(410).send("Enlace caducado o revocado");
+   if(!allow(req.params.token))return res.status(429).send("Demasiadas consultas");
+   const ctx=await loadDemoMcpContext(pool,rows[0].cliente_slug);
+   if(!/^[1-9][0-9]{0,6}$/.test(req.params.pharmacyId))return res.status(404).send("Farmacia inválida");
+   const id=Number(req.params.pharmacyId);
+   const pharmacy=ctx.pharmacies.find(p=>Number(p.id)===id);
+   if(!pharmacy)return res.status(403).send("Farmacia no autorizada");
+   const base={fuente:"ventas",farmacias:[id],periodo:"hoy",limite:100};
+   const summary=await runSemanticQuery(pool,ctx,{...base,agrupar:["farmacia"],
+    metricas:["importe","unidades","movimientos"]});
+   const rawTotal=summary.filas[0]||{importe:0,unidades:0,movimientos:0};
+   const total=Number(rawTotal.importe||0);
+   let sellers=null,amountSellers=null,difference=null;
+   if(req.path.endsWith("/vendedores")){
+    sellers=await runSemanticQuery(pool,ctx,{...base,agrupar:["vendedor"],
+     metricas:["importe","unidades","movimientos"],
+     ordenar:{campo:"importe",direccion:"desc"}});
+    amountSellers=sellers.filas.reduce((sum,row)=>sum+Number(row.importe||0),0);
+    difference=Math.round((total-amountSellers)*100)/100;
+   }
+   const output={cliente:ctx.client.name,farmacia:pharmacy.name,
+    fecha:summary.periodo?.desde,origen:"PostgreSQL",ficticio:false,
+    totalVentas:total,unidades:Number(rawTotal.unidades||0),
+    movimientos:Number(rawTotal.movimientos||0),
+    ...(sellers?{vendedores:sellers.filas,importeDesglosado:Number(amountSellers.toFixed(2)),
+     diferenciaConTotal:difference,
+     detalleCompleto:sellers.filas.length<sellers.limite}:{}),
+    soloLectura:true};
+   if(req.query.formato==="json")return res.json(output);
+   const sellerTable=sellers?'<h2>Ventas por vendedor</h2>'+
+    '<table border="1" cellpadding="6"><thead><tr><th>Vendedor</th><th>Importe (€)</th><th>Unidades</th><th>Movimientos</th></tr></thead><tbody>'+
+    sellers.filas.map(row=>'<tr><td>'+html(row.vendedorNombre||row.vendedor||"Sin identificar")+
+     '</td><td>'+html(row.importe)+'</td><td>'+html(row.unidades)+'</td><td>'+html(row.movimientos)+'</td></tr>').join("")+
+    '</tbody></table><p>Diferencia respecto al total: '+html(difference)+
+    ' €'+(sellers.filas.length===sellers.limite?" (resultado limitado a 100 vendedores)":"")+'</p>':
+    '<p><a href="'+html(PREFIX+req.params.token+"/farmacias/"+id+"/ventas/hoy/vendedores")+
+     '">Ver cada vendedor</a></p>';
+   return res.type("html").send('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<meta name="viewport" content="width=device-width,initial-scale=1">'+
+    '<title>Farmétrica · ventas de hoy</title></head><body>'+
+    '<h1>Ventas reales de hoy · '+html(pharmacy.name)+'</h1>'+
+    '<p>Fecha: '+html(output.fecha)+' · Fuente: PostgreSQL</p>'+
+    '<p><strong>Total ventas: '+html(total)+' €</strong>. Unidades: '+
+     html(output.unidades)+'. Movimientos: '+html(output.movimientos)+'</p>'+
+    sellerTable+'<p><a href="'+html(PREFIX+req.params.token)+'">Catálogo</a></p></body></html>');
+  }catch(e){
+   if(["57014","55P03"].includes(e.code))return res.status(503).json({
+    error:"Consulta demasiado costosa; reduce filtros o inténtalo de nuevo"});
+   next(e);
+  }
+ };
+ app.get(PREFIX+":token/farmacias/:pharmacyId/ventas/hoy",salesByPharmacyToday);
+ app.get(PREFIX+":token/farmacias/:pharmacyId/ventas/hoy/vendedores",salesByPharmacyToday);
  app.get(PREFIX+":token",async(req,res,next)=>{
   try{
    headers(res);

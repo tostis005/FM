@@ -493,6 +493,9 @@ try {
   await pool.query(mcpMigration);
   const oauthClientsMigration=await readFile(new URL("./migrations/023_oauth_clients.sql",import.meta.url),"utf8");
   await pool.query(oauthClientsMigration);
+  // Migración aditiva: respeta automáticamente 24h en los enlaces antiguos.
+  const shareLinkDurationMigration=await readFile(new URL("./migrations/025_ai_share_link_duration.sql",import.meta.url),"utf8");
+  await pool.query(shareLinkDurationMigration);
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

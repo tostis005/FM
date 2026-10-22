@@ -20,7 +20,18 @@
 
 Esto es una **base real pero no todavía cobertura total del negocio**. El siguiente bloque de desarrollo puede reutilizar las APIs existentes de informes/documentos/stock/proveedores/promociones en nuevas herramientas cerradas, verificando filtros, exclusiones y permisos. No exponer endpoints administrativos ni datos de pacientes. La métrica ahorro es un diferencial de PUC documentado, **no ahorro garantizado**. Las tablas ventas y compras básicas pueden diferir de los informes documentales netos; las preguntas de conciliación requieren ampliar herramientas usando las funciones oficiales.
 
-## Activación segura en el VPS
+## Activación del piloto en producción (22-10-2026)
+
+**Activado y verificado** para uso privado por OAuth. El servicio usa la API actual y no altera pantallas ni la lógica web. Se activa por `deploy/compose.farmacias.yml` con `AI_MCP_ENABLED: 'true'` y `AI_MCP_PUBLIC_ORIGIN: 'https://farmetrica.com'`. De esta forma no hay que editar el archivo privado `/opt/farmawao/.env`, que pertenece a otro usuario.
+
+- Despliegue validado: GitHub Actions `Build and deploy Farmetrica SaaS` (39754910206).
+- Validación externa validada: `Verificar MCP privado Farmetrica` (39755159879), con descubrimiento OAuth y `401` sin token.
+- Complemento privado creado en ChatGPT: `https://chatgpt.com/plugins/plugins_6ad9d2c08bfc81918bdf70793c89ac75`.
+- Falta el consentimiento OAuth de la persona propietaria y una consulta real usando su cuenta; nunca se debe automatizar ni suplantar este paso.
+- Desactivar: cambiar la variable `AI_MCP_ENABLED` a `'false'` en el override de Compose y desplegar/recrear `api`. Revocación individual vía `/api/ai/conexiones/:id/revocar`.
+
+## Procedimiento manual alternativo (si se abandona el override desplegado)
+
 
 1. Publicar el código con el proceso de despliegue habitual y verificar que la migración aditiva 022_ai_mcp.sql se aplica; también se ejecuta en el arranque de la API. El conector está **desactivado por defecto**.
 2. Confirmar HTTPS público, PUBLIC_APP_ORIGIN exacto y rutas Nginx de descubrimiento OAuth.

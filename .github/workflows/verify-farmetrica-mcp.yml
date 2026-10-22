@@ -51,4 +51,22 @@ jobs:
           test "$code" = 405 || { echo "Endpoint GET inesperado: HTTP $code"; exit 1; }
           health=$(curl -fsS --max-time 12 "$origin/api/health")
           python3 -c 'import json,sys;assert json.loads(sys.argv[1])["status"]=="ok"' "$health"
-          echo "OAuth discovery, MCP protegido y API correcta"
+          echo "Comprobando paso inicial de autorización OAuth sin credenciales"
+          status=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' -G "$origin/api/ai/oauth/authorize" \
+            --data-urlencode 'response_type=code' \
+            --data-urlencode 'client_id=https://chatgpt.com/oauth/client.json' \
+            --data-urlencode 'redirect_uri=https://chatgpt.com/connector_platform_oauth_redirect' \
+            --data-urlencode 'code_challenge_method=S256' \
+            --data-urlencode 'code_challenge=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' \
+            --data-urlencode 'resource=https://farmetrica.com/api/mcp' \
+            --data-urlencode 'scope=farmetrica.read offline_access' \
+            --data-urlencode 'state=smoke-test')
+          test "$status" = 302 || { echo "OAuth no redirige al login: HTTP $status"; exit 1; }
+          token_status=$(curl -sS --max-time 12 -o /tmp/fm_invalid_grant.json -w '%{http_code}' \
+            -d 'grant_type=authorization_code' \
+            --data-urlencode 'client_id=https://chatgpt.com/oauth/client.json' \
+            --data-urlencode 'redirect_uri=https://chatgpt.com/connector_platform_oauth_redirect' \
+            --data-urlencode 'resource=https://farmetrica.com/api/mcp' \
+            "$origin/api/ai/oauth/token")
+          test "$token_status" = 400 || { echo "Solicitud OAuth inválida no rechazada: HTTP $token_status"; exit 1; }
+          echo "OAuth discovery, login OAuth, token inválido, MCP protegido y API correcta"

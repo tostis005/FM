@@ -77,6 +77,8 @@ function shareCatalog(token,ctx){
 }
 function landing(token,ctx){
  const catalog=shareCatalog(token,ctx);
+ const model=makeTemporaryModel(ctx,"https://farmetrica.com"+PREFIX+token);
+ const instructions=temporaryAgentsMarkdown(model);
  const link=item=>'<li><a href="'+html(item.url)+'">'+html(item.titulo)+'</a></li>';
  const pharmacies=catalog.farmacias.map(p=>'<li>'+html(p.nombre)+' (ID '+p.id+')</li>').join("");
  return '<!doctype html><html lang="es"><head><meta charset="utf-8">'+
@@ -98,9 +100,11 @@ function landing(token,ctx){
   'de consulta. Fechas: <code>desde=AAAA-MM-DD</code> y <code>hasta=AAAA-MM-DD</code>.</p>'+
   '<p>Para un catálogo legible por máquinas, abre <a href="'+html(PREFIX+token+"?formato=json")+
   '">Catálogo JSON</a>. Para el resultado de una consulta, añade <code>formato=json</code>.</p>'+
-  '<p>Una IA puede combinar métricas y dimensiones usando el catálogo semántico. '+
- 'Genera un objeto JSON para <code>consulta</code> y codifícalo en la URL. '+
- 'No se permite SQL arbitrario.</p></body></html>';
+  '<p>ChatGPT transforma preguntas libres en combinaciones permitidas de campos. '+
+  'Envía el plan por <code>consulta=</code> o los campos mediante parámetros GET. '+
+  'No hay un segundo modelo de IA ni se admite SQL arbitrario.</p>'+
+  '<h2>AGENTS.md integrado en este mismo punto de entrada</h2>'+
+  '<pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+html(instructions)+'</pre></body></html>';
 }
 export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
  const admin="/api/admin/ai/mcp-demo";

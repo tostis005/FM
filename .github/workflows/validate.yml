@@ -265,3 +265,52 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+
+  smoke_nomenclator_vivo_temporal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Comprobar API y nomenclátor AEMPS activo (solo lectura)
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --input-type=module -' <<'JS'
+          import pg from "pg";
+          import {readPlannerLaboratories} from "./src/purchasePlannerSuppliers.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,
+            max:2,connectionTimeoutMillis:5000,statement_timeout:30000,query_timeout:35000});
+          try{
+            const {rows:versions}=await pool.query(
+              "SELECT fecha_fuente,transformacion_version FROM farmetrica.nomenclator_versiones WHERE activo");
+            const result=await readPlannerLaboratories(pool,
+              {client:{schema:"ampedia",slug:"ampedia"}},[1,2,3,4,5],
+              [{groupKey:"DCPF:17531000140106",pharmacyId:"1",articleId:"726064",cn:"726064"}],
+              ["17531000140106"],"2026-10-21");
+            const examples=result.presentations.slice(0,3).map(p=>({cn:p.cn,
+              name:p.name, titular:p.titular,comercializador:p.commercializer,
+              principle:p.principle}));
+            const report={date:versions[0]?.fecha_fuente,
+              parser:versions[0]?.transformacion_version,
+              presentations:result.presentations.length,
+              titled:result.presentations.filter(p=>p.titular).length,
+              marketedBy:result.presentations.filter(p=>p.commercializer).length,
+              named:result.presentations.filter(p=>p.name).length,examples};
+            console.log("NOMENCLATOR_API_VIVO",JSON.stringify(report));
+            if(versions[0]?.transformacion_version!==2)throw Error("Transformación AEMPS no activa");
+            if(!versions[0]?.fecha_fuente)throw Error("Fecha oficial sin informar");
+            if(result.presentations.length<20||
+              result.presentations.some(p=>!p.titular||!p.commercializer||!p.name))
+              throw Error("Desglose por CN todavía no contiene laboratorios AEMPS");
+            console.log("NOMENCLATOR_API_REAL_OK");
+          }finally{await pool.end()}
+          JS

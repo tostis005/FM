@@ -32,6 +32,7 @@ test("consulta sólo SELECT en transacción read-only y aplica filtros por tenan
  const seen=[];
  const db={async query(sql,params){
   seen.push({sql,params});
+  if(sql==="BEGIN TRANSACTION READ ONLY"||sql==="ROLLBACK"||sql.startsWith("SET LOCAL "))return {rows:[]};
   if(sql.startsWith("SELECT f.id::text AS")&&sql.includes("fm_ventas_analitica"))
    return {rows:[{pharmacyId:"1",pharmacy:"ABA",lines:2,withAmount:2,amount:100,units:3}]};
   if(sql.startsWith("SELECT f.id::text AS")&&sql.includes("fm_recepciones_analitica"))

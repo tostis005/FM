@@ -157,7 +157,7 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
 });
 
 test("Catálogo semántico SQL controlado: vendedores, productos, stock e histórico",()=>{
- const ctx={client:{slug:"demo",schema:"demo"},allowedPharmacyIds:[101,102]};
+ const ctx={role:"administrador",modules:{ventas:true,compras:true,stock:true},client:{slug:"demo",schema:"demo"},allowedPharmacyIds:[101,102]};
  const sales={fuente:"ventas",agrupar:["farmacia","vendedor"],metricas:["importe","unidades"],
   periodo:"hoy",ordenar:{campo:"importe",direccion:"desc"},farmacias:[101],limite:20};
  const data=compileSemanticQuery(sales,ctx);
@@ -200,6 +200,9 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
   {fuente:"ventas",metricas:["capital_estimado"]},
   {fuente:"ventas",desde:"2026-02-30",hasta:"2026-03-01"}
  ])assert.throws(()=>validateSemanticQuery(bad,ctx));
+ const denied={...ctx,modules:{ventas:true,compras:false,stock:false}};
+ assert.throws(()=>validateSemanticQuery({fuente:"compras",metricas:["importe"]},denied),/acceso/i);
+ assert.throws(()=>validateSemanticQuery({fuente:"stock",metricas:["stock_actual"]},denied),/acceso/i);
  assert.equal(shareLinkExpiry("2026-10-22T10:00:00Z","indefinido"),null);
  assert.equal(shareLinkExpiry("2026-10-22T10:00:00Z","7d"),"2026-10-29T10:00:00.000Z");
 });

@@ -44,3 +44,22 @@ test("stock usa dos parámetros, solo SELECT y cláusula por cliente",async()=>{
  assert.match(calls[0].sql,/^SELECT /);
 
 });
+
+test("los indicadores clásicos leen fuentes actualizadas con filtro de fecha y tenant",async()=>{
+  const calls=[],db={query:async(sql,params)=>{calls.push({sql,params});return {rows:[]};}};
+  const context={...ctx,client:{...ctx.client,slug:"ampedia"}};
+  const dates={from:"2026-10-22",to:"2026-10-22"};
+  for(const [name,table] of [
+    ["ventas_resumen","fm_ventas_analitica"],
+    ["compras_resumen","fm_recepciones_analitica"],
+    ["ventas_articulos","fm_ventas_analitica"]
+  ]){
+    const result=await runAssistantTool(db,context,name,dates,[1]);
+    const {sql,params}=calls.at(-1);
+    assert.equal(result.available,true);
+    assert.ok(sql.includes('FROM "ampedia".'+table+' t'),name+" debe leer "+table);
+    assert.ok(sql.includes("t.fecha >= $1::date"));
+    assert.ok(sql.includes("t.fecha < ($2::date+interval '1 day')"));
+    assert.deepEqual(params,[dates.from,dates.to,[1],"ampedia"]);
+  }
+});

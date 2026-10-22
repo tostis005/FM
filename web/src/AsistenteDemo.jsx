@@ -349,7 +349,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     chatAbortRef.current?.abort();
     const id=pendingChatIdRef.current;
     if(id!==null)setMessages(previous=>previous.map(m=>m.id===id?{
-      ...m,text:m.text?m.text+"\\n\\n*Respuesta interrumpida.*":"*Consulta cancelada.*"
+      ...m,text:m.text?m.text+"\n\n*Respuesta interrumpida.*":"*Consulta cancelada.*"
     }:m));
     pendingChatIdRef.current=null;
     chatAbortRef.current=null;

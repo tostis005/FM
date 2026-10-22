@@ -4,11 +4,12 @@ import express from "express";
 import {createHash} from "node:crypto";
 import {setupAIMcp} from "./aiMcp.js";
 
-test("DCR → login → consent → token; reject callback tampering, CSRF and code replay",async()=>{
+for(const superAdmin of [false,true])test("OAuth complete flow, superadmin="+superAdmin,async()=>{
   process.env.AI_MCP_ENABLED="true";
   process.env.AI_MCP_PUBLIC_ORIGIN="https://fm.example";
   const clients=new Map(),codes=new Map(),connections=[];
   const pool={query:async(sql,p)=>{
+    if(sql.startsWith("SELECT slug FROM farmetrica.clientes"))return {rows:[{slug:"pharmacy"}]};
     if(sql.startsWith("INSERT INTO farmetrica.ai_oauth_clientes")){clients.set(p[0],p[1]);return {rows:[]};}
     if(sql.startsWith("SELECT metadata"))return {rows:clients.has(p[0])?[{metadata:clients.get(p[0])}]:[]};
     if(sql.startsWith("INSERT INTO farmetrica.ai_oauth_codigos")){
@@ -19,7 +20,7 @@ test("DCR → login → consent → token; reject callback tampering, CSRF and c
     if(sql.startsWith("INSERT INTO farmetrica.ai_oauth_conexiones")){connections.push(p);return {rows:[]};}
     throw Error("Unexpected SQL: "+sql);
   }};
-  const user={email:"test@example.com",source:"google",tenants:[{slug:"pharmacy",active:true}]};
+  const user={email:"test@example.com",source:"google",role:superAdmin?"superadministrador":"gestor",tenants:superAdmin?[]:[{slug:"pharmacy",active:true}]};
   const app=express();app.use(express.json());
   setupAIMcp(app,pool,{sessionUser:async req=>req.get("x-test-session")?user:null,
     resolveAccess:async()=>user,resolveTenant:async()=>({client:{slug:"pharmacy"}}),
@@ -49,6 +50,7 @@ test("DCR → login → consent → token; reject callback tampering, CSRF and c
     assert.equal(response.status,200);assert.match(await response.text(),/Future AI/);
     const consent={...params,confirm:"yes",tenant:"pharmacy"};
     assert.equal((await post(authorize,consent,{"x-test-session":"yes",Origin:"https://evil.example"})).status,403);
+    assert.equal((await post(authorize,{...consent,tenant:"unauthorized"},{"x-test-session":"yes",Origin:"https://fm.example"})).status,403);
     assert.equal(codes.size,0);
     response=await post(authorize,consent,{"x-test-session":"yes",Origin:"https://fm.example"});
     assert.equal(response.status,302);

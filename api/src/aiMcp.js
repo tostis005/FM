@@ -45,7 +45,14 @@ export function validAuthorizeRequest(body,urls,client){
   const scopes=String(body.scope||"").split(/\s+/).filter(Boolean);
   return scopes.includes(READ_SCOPE)&&scopes.every(x=>[READ_SCOPE,"offline_access"].includes(x)&&client.scope.split(/\s+/).includes(x));
 }
-const tenantChoices=user=>(user?.tenants||[]).filter(t=>t.active).map(t=>t.slug);
+export async function tenantChoices(pool,user){
+  if(!user)return [];
+  // Same policy as /api/tenant/context: superadministrators do not need
+  // individual memberships. Other users keep their authenticated memberships.
+  const {rows}=await pool.query("SELECT slug FROM farmetrica.clientes WHERE activo=true ORDER BY nombre");
+  const memberships=new Set((user.tenants||[]).filter(t=>t.active).map(t=>t.slug));
+  return rows.filter(c=>user.role==="superadministrador"||memberships.has(c.slug)).map(c=>c.slug);
+}
 function retryOk(key,now=Date.now(),limit=REQ_LIMIT){
   const hits=(counters.get(key)||[]).filter(t=>now-t<10*60*1000);
   if(hits.length>=limit)return false;
@@ -85,8 +92,7 @@ function toolDefinitions(){
 }
 export const MCP_TOOLS=toolDefinitions();
 
-function renderConsent(req,body,user,client){
-  const slugs=tenantChoices(user);
+function renderConsent(req,body,user,client,slugs){
   const hidden=["response_type","client_id","redirect_uri","state","scope","resource","code_challenge","code_challenge_method"]
     .map(k=>'<input type="hidden" name="'+k+'" value="'+safeText(body[k])+'">').join("");
   const options=slugs.map(s=>'<option value="'+safeText(s)+'">'+safeText(s)+'</option>').join("");
@@ -152,10 +158,11 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
       if(!validAuthorizeRequest(req.query,urls,client))return res.status(400).send("Solicitud OAuth inválida: revisa callback, recurso, permisos y PKCE S256.");
       const user=await sessionUser(req);
       if(!user)return res.redirect(302,"/login?next="+encodeURIComponent(req.originalUrl));
-      if(!tenantChoices(user).length)return res.status(403).send("No tienes ningún cliente autorizado");
+      const slugs=await tenantChoices(pool,user);
+      if(!slugs.length)return res.status(403).send("No tienes ningún cliente autorizado");
       // Browsers may apply form-action to the OAuth redirect after POST.
       res.set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+new URL(req.query.redirect_uri).origin+"; frame-ancestors 'none'; base-uri 'none'");
-      res.type("html").send(renderConsent(req,req.query,user,client));
+      res.type("html").send(renderConsent(req,req.query,user,client,slugs));
     }catch(e){next(e);}
   });
   app.post("/api/ai/oauth/authorize",active,urlEncoded,oauthLimit,async(req,res,next)=>{
@@ -166,7 +173,7 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
       if(!client||!validAuthorizeRequest(body,urls,client)||body.confirm!=="yes")return res.status(400).send("Autorización inválida");
       const user=await sessionUser(req);
       if(!user)return res.status(401).send("Vuelve a iniciar sesión en Farmétrica");
-      if(typeof body.tenant!=="string"||!tenantChoices(user).includes(body.tenant))return res.status(403).send("Cliente no autorizado");
+      if(typeof body.tenant!=="string"||!(await tenantChoices(pool,user)).includes(body.tenant))return res.status(403).send("Cliente no autorizado");
       const code=opaque();
       await pool.query("INSERT INTO farmetrica.ai_oauth_codigos(code_hash,email,metodo_acceso,cliente_slug,client_id,redirect_uri,challenge,scope,resource,caduca_en) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,now()+interval '5 minutes')",
         [sha(code),user.email,user.source,body.tenant,body.client_id,body.redirect_uri,body.code_challenge,body.scope,body.resource]);
@@ -292,4 +299,5 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
   app.get("/api/mcp",active,(_req,res)=>res.status(405).set("Allow","POST").end());
   app.delete("/api/mcp",active,(_req,res)=>res.status(204).end());
 }
+
 

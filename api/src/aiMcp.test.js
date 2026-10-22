@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createHash} from "node:crypto";
-import {validPkce,validAuthorizeRequest,readAnalytics,MCP_TOOLS} from "./aiMcp.js";
+import {tenantChoices,validPkce,validAuthorizeRequest,readAnalytics,MCP_TOOLS} from "./aiMcp.js";
 
 const CLIENT="https://chatgpt.com/oauth/client.json";
 const REDIRECT="https://chatgpt.com/connector_platform_oauth_redirect";
@@ -53,3 +53,11 @@ test("consulta con farmacia autorizada, transacción READ ONLY y rollback",async
   assert.equal(calls.filter(x=>x.text==="BEGIN TRANSACTION READ ONLY").length,1);
 });
 
+
+test("MCP tenant choices match web superadmin and membership policy",async()=>{
+ const pool={query:async sql=>{assert.match(sql,/WHERE activo=true/);return {rows:[{slug:"ampedia"},{slug:"other"}]};}};
+ assert.deepEqual(await tenantChoices(pool,{role:"superadministrador",tenants:[]}),["ampedia","other"]);
+ assert.deepEqual(await tenantChoices(pool,{role:"administrador",tenants:[]}),[]);
+ assert.deepEqual(await tenantChoices(pool,{role:"gestor",tenants:[{slug:"ampedia",active:true},{slug:"other",active:false},{slug:"disabled_client",active:true}]}),["ampedia"]);
+ assert.deepEqual(await tenantChoices(pool,null),[]);
+});

@@ -28,6 +28,8 @@ jobs:
           node --test api/src/assistant.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/savingsAnalysis.js
+          node --test api/src/savingsAnalysis.test.js
           node --test api/src/supplierReporting.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js

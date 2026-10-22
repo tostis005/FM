@@ -15,6 +15,24 @@ const voiceEnabled=()=>enabled()&&process.env.AI_VOICE_ENABLED==="true";
 const model=()=>process.env.AI_MODEL||"qwen3:1.7b";
 const ollama=()=>process.env.AI_OLLAMA_URL||"http://ollama:11434";
 const whisper=()=>process.env.AI_WHISPER_URL||"http://whisper:8080";
+// Margen temporal para la demo en VPS sin GPU. Puede ajustarse sin tocar código.
+const chatTimeoutMs=()=>{
+ const n=Number(process.env.AI_CHAT_TIMEOUT_MS);
+ return Number.isFinite(n)&&n>=65000&&n<=1800000?n:900000;
+};
+// Emitir espacios válidos como prefijo de JSON evita que proxies con timeout
+// de inactividad corten una respuesta mientras Ollama genera en CPU.
+export function startJsonHeartbeat(res,intervalMs=12000){
+ res.status(200);
+ res.type("json");
+ res.set("X-Accel-Buffering","no");
+ res.write("\n");
+ const timer=setInterval(()=>{
+  if(!res.destroyed&&!res.writableEnded)res.write("\n");
+ },intervalMs);
+ timer.unref?.();
+ return ()=>clearInterval(timer);
+}
 const isAllowedUrl=value=>{
  try{const url=new URL(value);return ["http:","https:"].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}
 };
@@ -47,7 +65,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   {role:"user",content:question}
  ];
  const controller=new AbortController();
- const timeout=setTimeout(()=>controller.abort(),65000);
+ const timeout=setTimeout(()=>controller.abort(),chatTimeoutMs());
  try {
   const response=await fetch(endpoint.replace(/\/+$/,"")+"/api/chat",{
    method:"POST",headers:{"Content-Type":"application/json"},
@@ -120,20 +138,26 @@ export function setupAssistant(app,pool,{requireTenant}) {
   if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});
   if(active>=1)return res.status(429).json({error:"El asistente está ocupado. Prueba de nuevo en unos momentos"});
   active+=1;
+  let stopHeartbeat=()=>{};
   try{
    const names=selectTools(body.question,req.context);
    const period=periodFromQuestion(body.question);
    const results=await safeQuery(pool,req.context,names,period,ids);
+   stopHeartbeat=startJsonHeartbeat(res);
    const answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
    },results);
-   res.json({answer,model:model(),period,sources:results.map(x=>({
+   res.end(JSON.stringify({answer,model:model(),period,sources:results.map(x=>({
     tool:x.tool,label:x.label||x.tool,period:x.period,available:x.available
-   }))});
+   }))}));
   }catch(error){
    console.error("Asistente IA:",error?.name||"error",error?.code||"");
-   res.status(503).json({error:"No se ha podido completar la consulta. Comprueba la disponibilidad del modelo y vuelve a intentarlo"});
-  }finally{active-=1;}
+   const problem={error:"No se ha podido completar la consulta. Comprueba la disponibilidad del modelo y vuelve a intentarlo"};
+   // Tras iniciar el heartbeat HTTP 200 ya está enviado; el frontend
+   // inspecciona también el campo error y no presenta respuestas ficticias.
+   if(res.headersSent){if(!res.writableEnded)res.end(JSON.stringify(problem));}
+   else res.status(503).json(problem);
+  }finally{stopHeartbeat();active-=1;}
  });
  // Audio recibido como cuerpo binario; no se persiste y se elimina el WAV temporal.
  const raw=express.raw({type:["audio/webm","audio/mp4","audio/ogg","audio/wav","application/octet-stream"],limit:"6mb"});

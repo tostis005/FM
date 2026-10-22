@@ -4,18 +4,47 @@ import {interpretSemanticQuestion} from "./semanticInterpreter.js";
 import {runSemanticQuery} from "./aiSemanticQuery.js";
 
 const round2=value=>Math.round((value+Number.EPSILON)*100)/100;
-const num=x=>x===null||x===undefined?null:
- typeof x==="number"&&Number.isFinite(x)?x:null;
+// pg devuelve NUMERIC/DECIMAL como texto, nunca asumir que un string es inválido
+// ni aceptar cadenas con unidades, comas o valores no finitos.
+const num=x=>{
+ if(typeof x==="number")return Number.isFinite(x)?x:null;
+ if(typeof x==="string"&&/^-?(?:[0-9]+)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.test(x)){
+  const n=Number(x);return Number.isFinite(n)?n:null;
+ }
+ return null;
+};
 const hasOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
-const groupingKey=(row,dims)=>JSON.stringify([
- ...(dims.includes("farmacia")?[row.farmaciaId??null]:[]),
- ...dims.map(d=>hasOwn(row,d)?row[d]:null)
-]);
+const groupingKey=(row,dims)=>{
+ if(dims.includes("farmacia")&&(!Number.isSafeInteger(Number(row.farmaciaId))||
+  Number(row.farmaciaId)<=0))throw new TypeError("El resultado no identifica la farmacia");
+ if(dims.some(d=>!hasOwn(row,d)))
+  throw new TypeError("El resultado no contiene todas las dimensiones solicitadas");
+ return JSON.stringify([
+  ...(dims.includes("farmacia")?[Number(row.farmaciaId)]:[]),
+  ...dims.map(d=>row[d])
+ ]);
+};
+function indexGroups(rows,dims){
+ const indexed=new Map();
+ for(const row of rows){
+  if(!row||typeof row!=="object")throw new TypeError("Fila analítica inválida");
+  const key=groupingKey(row,dims);
+  if(indexed.has(key))throw new TypeError("Grupos duplicados en la consulta");
+  indexed.set(key,row);
+ }
+ return indexed;
+}
 function mergeComparedRows(previous,current,{metrica,dimensiones,direccion}){
  if(previous.length>=100||current.length>=100)
   return {estado:"no_disponible",mensaje:"Hay al menos 100 grupos en uno de los períodos. No puedo garantizar una comparación completa con el límite actual; reduce las farmacias o agrupaciones."};
- const prev=new Map(previous.map(row=>[groupingKey(row,dimensiones),row]));
- const now=new Map(current.map(row=>[groupingKey(row,dimensiones),row]));
+ let prev,now;
+ try{
+  prev=indexGroups(previous,dimensiones);
+  now=indexGroups(current,dimensiones);
+ }catch{
+  return {estado:"no_disponible",
+   mensaje:"Las filas recibidas no permiten comparar grupos con identificadores únicos y verificables."};
+ }
  const keys=new Set([...prev.keys(),...now.keys()]);
  const rows=[];
  for(const key of keys){
@@ -23,14 +52,22 @@ function mergeComparedRows(previous,current,{metrica,dimensiones,direccion}){
   const a=num(before?.[metrica]),b=num(after?.[metrica]);
   if((before&&a===null)||(after&&b===null))
    return {estado:"no_disponible",mensaje:"La comparación contiene métricas sin valor verificable; no se convierten valores NULL en cero."};
-  const baseline=a??0,recent=b??0;
   const values={};
   for(const dim of dimensiones)values[dim]=(after||before)?.[dim]??null;
   if(dimensiones.includes("farmacia"))values.farmaciaId=(after||before)?.farmaciaId??null;
   if(dimensiones.includes("vendedor"))values.vendedorNombre=(after||before)?.vendedorNombre??null;
-  rows.push({...values,anterior:round2(baseline),actual:round2(recent),
-   diferencia:round2(recent-baseline),
-   variacion_pct:baseline===0?null:round2((recent-baseline)/Math.abs(baseline)*100)});
+  // Una fila ausente no demuestra un cero contable: evitar una variación
+  // inventada, incluso cuando una farmacia aparece en otro período.
+  if(!before||!after){
+   rows.push({...values,anterior:before?round2(a):null,actual:after?round2(b):null,
+    diferencia:null,variacion_pct:null,
+    estado:!before?"sin_datos_anteriores":"sin_datos_actuales"});
+   continue;
+  }
+  rows.push({...values,anterior:round2(a),actual:round2(b),
+   diferencia:round2(b-a),
+   variacion_pct:a===0?null:round2((b-a)/Math.abs(a)*100),
+   estado:"completo"});
  }
  rows.sort((a,b)=>(direccion==="asc"?a.diferencia-b.diferencia:b.diferencia-a.diferencia)||
   groupingKey(a,dimensiones).localeCompare(groupingKey(b,dimensiones)));
@@ -54,7 +91,7 @@ export async function executeResolvedQuestion(pool,ctx,resolution){
    anterior:before.periodo,actual:after.periodo,
    unidad:comparacion.metrica==="importe"?"EUR":comparacion.metrica==="unidades"?"unidades":"movimientos"},
   advertencias:[...new Set([...before.advertencias,...after.advertencias,
-   "Comparación por grupos con actividad. Los grupos ausentes equivalen a cero movimientos en ese período.",
+   "Un grupo ausente no se interpreta como importe cero: sus variaciones quedan sin calcular.",
    "Variación porcentual NULL cuando el período anterior es cero o no hay base comparable."])],
   farmacias_autorizadas:after.farmacias_autorizadas};
 }
@@ -74,6 +111,7 @@ export function formatComparisonAnswer(data){
  const lines=data.filas.slice(0,10).map(row=>{
   const id=[row.farmacia,row.vendedorNombre??row.vendedor,row.proveedor===null?"Proveedor no identificado":row.proveedor,row.producto]
    .filter(x=>x!==undefined&&x!==null&&String(x).trim()).join(" · ")||"Total";
+  if(row.estado!=="completo")return id+": faltan datos verificables de uno de los períodos; variación no calculable.";
   const pct=row.variacion_pct===null?"sin porcentaje (base cero)":
     (row.variacion_pct>0?"+":"")+number(row.variacion_pct)+" %";
   return id+": "+format(row.actual)+" frente a "+format(row.anterior)+

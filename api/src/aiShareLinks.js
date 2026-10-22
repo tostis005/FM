@@ -5,6 +5,7 @@ import {loadDemoMcpContext,handlePublicDemoMcp} from "./aiMcpDemo.js";
 import {TOOL_CATALOG,periodFromQuestion} from "./assistantAnalytics.js";
 import {semanticCatalogForContext,runSemanticQuery} from "./aiSemanticQuery.js";
 import {makeTemporaryModel,temporaryAgentsMarkdown} from "./aiShareContract.js";
+import {setupShareMcp} from "./aiShareMcp.js";
 const PREFIX="/api/consulta-temporal/";
 const TOKEN=/^fm_share_[A-Za-z0-9_-]{43}$/;
 const SLUG=/^[a-z][a-z0-9_]{1,62}$/;
@@ -107,6 +108,11 @@ function landing(token,ctx){
   '<pre style="white-space:pre-wrap;overflow-wrap:anywhere">'+html(instructions)+'</pre></body></html>';
 }
 export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
+ setupShareMcp(app,pool,{resolveLink:async token=>{
+  if(!validTemporaryLinkToken(token))return null;
+  const {rows}=await pool.query("SELECT cliente_slug FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true AND secret_hash=$1 AND "+activeSQL,[hash(token)]);
+  return rows[0]?.cliente_slug||null;
+ }});
  const admin="/api/admin/ai/mcp-demo";
  const canChange=(req,res,next)=>req.get("x-farmetrica-admin-action")==="mcp-demo-key"?
    next():res.status(403).json({error:"Acción no autorizada"});

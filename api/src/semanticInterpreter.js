@@ -126,6 +126,8 @@ export function interpretSemanticQuestion(question,ctx,{now=new Date()}={}){
   return response("no_disponible","La pregunta requiere datos contables que no figuran en este contrato. No los sustituiré por ventas.");
  if(/\b(comparar|comparacion|comparativa|diferencia|variacion|crecimiento|evolucion|respecto|versus|frente a)\b/.test(q))
   return response("no_disponible","La comparación entre períodos todavía no está definida en este intérprete. No inventaré variaciones.");
+ if(/\bmargen\b/.test(q)&&!/\bestimad[oa]\b/.test(q))
+  return response("aclaracion","¿Te refieres al margen estimado con coste PMC actual, no al beneficio contable?");
  const found=Object.entries(SOURCES).filter(([,p])=>p.test(q)).map(([k])=>k);
  if(!found.length)return response("general","La pregunta no exige una consulta analítica identificable.");
  if(found.length>1)return response("aclaracion",

@@ -88,9 +88,11 @@ export async function executeCanonicalQuestion(pool,context,pregunta,opts={}){
   const second=await runSemanticQuery(pool,context,interpreted.consultas[1]);
   const dimensions=first.dimensiones??interpreted.consultas[0].agrupar;
   const metric=first.metricas?.[0]??interpreted.consultas[0].metricas[0];
+  const secondDimensions=second.dimensiones??interpreted.consultas[1].agrupar;
+  const secondMetrics=second.metricas??interpreted.consultas[1].metricas;
   if(first.fuente!==second.fuente||
-    JSON.stringify(dimensions)!==JSON.stringify(second.dimensiones)||
-    JSON.stringify(first.metricas)!==JSON.stringify(second.metricas))
+    JSON.stringify(dimensions)!==JSON.stringify(secondDimensions)||
+    JSON.stringify(first.metricas??interpreted.consultas[0].metricas)!==JSON.stringify(secondMetrics))
    throw new Error("Los períodos tienen métricas incompatibles");
   const filas=combineCanonicalPeriods(first.filas,second.filas,{dimensions,metric});
   const result={...interpreted,modo:"comparacion_semantica",origen:"PostgreSQL",

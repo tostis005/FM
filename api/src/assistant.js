@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 import {runAssistantSemanticQueries} from "./assistantSemantic.js";
 import {interpretSemanticQuestion} from "./semanticInterpreter.js";
+import {executeCanonicalQuestion} from "./semanticExecution.js";
 import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
@@ -140,6 +141,12 @@ export function setupAssistant(app,pool,{requireTenant}) {
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
    stopHeartbeat=startJsonHeartbeat(res);
    const resolution=interpretSemanticQuestion(body.question,context);
+   if(resolution.estado==="comparacion"){
+    const verified=await executeCanonicalQuestion(pool,context,body.question);
+    return res.end(JSON.stringify({answer:verified.respuesta,model:"farmetrica-semantica",
+     sources:[{tool:"comparacion_semantica",label:"MCP · comparación verificada",
+      period:verified.periodos,available:true}],interpretacion:resolution}));
+   }
    if(!["ok","general"].includes(resolution.estado)){
     return res.end(JSON.stringify({answer:resolution.mensaje,
      model:"farmetrica-semantica",sources:[],interpretacion:resolution}));
@@ -196,6 +203,17 @@ export function setupAssistant(app,pool,{requireTenant}) {
    progress("planning","Farmétrica está interpretando la pregunta con sus reglas semánticas…");
    const resolution=interpretSemanticQuestion(body.question,context);
    if(controller.signal.aborted)return;
+   if(resolution.estado==="comparacion"){
+    progress("querying","Farmétrica está consultando y comparando ambos períodos…");
+    const verified=await executeCanonicalQuestion(pool,context,body.question);
+    if(controller.signal.aborted)return;
+    const sources=[{tool:"comparacion_semantica",label:"MCP · comparación verificada",
+     period:verified.periodos,available:true}];
+    writeAssistantEvent(res,"delta",{text:verified.respuesta});
+    writeAssistantEvent(res,"done",{answer:verified.respuesta,model:"farmetrica-semantica",
+     sources,interpretacion:resolution});
+    return;
+   }
    if(!["ok","general"].includes(resolution.estado)){
     writeAssistantEvent(res,"done",{answer:resolution.mensaje,
      model:"farmetrica-semantica",sources:[],interpretacion:resolution});

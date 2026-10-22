@@ -104,7 +104,7 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal(modelResponse.status,200);
   const model=await modelResponse.json();
   assert.equal(model.contrato,"farmetrica.analytics.readonly.v1");
-  assert.equal(model.interprete,"farmetrica.nl.v1");
+  assert.equal(model.interprete,"farmetrica.nl.v2");
   assert.match(model.motor_ia,/Farmétrica/);
   assert.equal(model.maestro_farmacias.tabla,"farmetrica.farmacias");
   assert.equal(model.fuentes.ventas.tabla,"{esquema_cliente}.fm_ventas_analitica");

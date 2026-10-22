@@ -22,7 +22,7 @@ test("MCP sin OAuth no expone datos ni tokens hasta recibir la URL vigente",asyn
   },
   connect:async()=>({query:async(sql,params=[])=>{
    queries.push({sql,params});
-   if(sql.startsWith("SELECT"))return {rows:[{farmacia:"Farmacia Real Uno",importe:221.14}]};
+   if(sql.startsWith("SELECT"))return {rows:[{farmaciaId:101,farmacia:"Farmacia Real Uno",importe:221.14}]};
    return {rows:[]};
   },release:()=>{}})
  };
@@ -68,6 +68,14 @@ test("MCP sin OAuth no expone datos ni tokens hasta recibir la URL vigente",asyn
    const invalidUrl=await (await post(rpc(52,"tools/call",{name:"resolver_pregunta_temporal",
     arguments:{url:"https://evil.example/",pregunta:"Ventas de hoy"}}))).json();
    assert.equal(invalidUrl.result.isError,true);
+   const compared=await (await post(rpc(53,"tools/call",{name:"resolver_pregunta_temporal",
+    arguments:{url,pregunta:"Compara las ventas por farmacia este mes respecto al mes pasado"}}))).json();
+   assert.equal(compared.result.structuredContent.estado,"comparacion");
+   assert.equal(compared.result.structuredContent.ficticio,false);
+   assert.equal(compared.result.structuredContent.filas[0].diferencia,0);
+   assert.equal(compared.result.structuredContent.filas[0].variacion_pct,0);
+   assert.match(compared.result.structuredContent.respuesta,/221,14 €/);
+   assert.ok(queries.some(q=>q.sql.includes("BEGIN TRANSACTION READ ONLY")));
    const injection=await (await post(rpc(6,"tools/call",{name:"consultar_datos_temporales",
    arguments:{url,consulta:{fuente:"ventas",metricas:["importe"],sql:"DELETE FROM clientes"}}}))).json();
   assert.equal(injection.result.isError,true);

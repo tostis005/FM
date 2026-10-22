@@ -28,6 +28,7 @@ export default function AIShareLinks({clients=[]}){
  },[]);
  async function generate(){
   if(!clientSlug)return;
+  if(duracion==="indefinido"&&!window.confirm("Este enlace permitirá consultar datos comerciales reales sin caducidad, hasta revocarlo. ¿Confirmas que deseas crearlo?"))return;
   if(current?.configured&&!window.confirm("El enlace anterior dejará de funcionar. ¿Generar otro?"))return;
   setBusy(true);setError("");setNotice("");setGeneratedUrl("");
   try{

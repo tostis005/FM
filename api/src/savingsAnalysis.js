@@ -216,9 +216,18 @@ export async function economicStock(db,scope){
 }
 export function setupSavingsAnalysis(app,pool,{requireTenant}){
  const access=requireTenant();
+ const lastByUser=new Map();
+ let active=0;
  const endpoint=(path,fn)=>app.get("/api/analytics/ahorro/"+path,...access,async(req,res,next)=>{
+  let admitted=false;
   try{
    const scope=economicScope(req);
+   const key=scope.slug+":"+String(req.user?.email||"").toLowerCase()+":"+path;
+   const now=Date.now();
+   if(active>=3||now-(lastByUser.get(key)||0)<8000)
+    return res.status(429).json({error:"Análisis en curso. Evita consultas repetidas."});
+   active+=1;admitted=true;lastByUser.set(key,now);
+   if(lastByUser.size>2000)lastByUser.clear();
    if(!scope.ids.length)return res.json({period:{from:scope.from,to:scope.to},empty:true});
    const result=await readOnly(pool,db=>fn(db,scope,req));
    res.json(result);
@@ -227,7 +236,7 @@ export function setupSavingsAnalysis(app,pool,{requireTenant}){
    if(["57014","55P03"].includes(error.code))
     return res.status(503).json({error:"Análisis demasiado pesado para este momento; reduce el período o las farmacias."});
    next(error);
-  }
+  }finally{if(admitted)active-=1;}
  });
  endpoint("resumen",economicOverview);
  endpoint("precios",(db,scope,req)=>economicPrices(db,scope,Number(req.query.limite||25)));

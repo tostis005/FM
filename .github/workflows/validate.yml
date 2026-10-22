@@ -265,3 +265,36 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+
+  inspeccionar_xml_aemps_temporal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verificar etiquetas reales del diccionario de laboratorios AEMPS
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --max-time 180 \
+            'https://listadomedicamentos.aemps.gob.es/prescripcion.zip' -o /tmp/aemps-prescripcion.zip
+          python3 - <<'PY'
+          import zipfile,xml.etree.ElementTree as ET,collections,pathlib
+          z=zipfile.ZipFile('/tmp/aemps-prescripcion.zip')
+          print('ZIP_SIZE',pathlib.Path('/tmp/aemps-prescripcion.zip').stat().st_size)
+          print('LAB_FILES',[n for n in z.namelist() if 'LABORATORI' in n.upper()][:10])
+          for keyword in ['DICCIONARIO_LABORATORIOS.XML','PRESCRIPCION.XML','DICCIONARIO_DCSA.XML']:
+           name=next((n for n in z.namelist() if pathlib.Path(n).name.upper()==keyword),None)
+           if not name: print('MISSING',keyword);continue
+           print('FILE',name)
+           with z.open(name) as f:
+            print('HEAD',f.read(1500).decode('utf-8','replace')[:1500])
+           with z.open(name) as f:
+            samples=[]
+            for event,el in ET.iterparse(f,events=('end',)):
+             dic={c.tag.split('}')[-1]:(c.text or '').strip() for c in el if len(c)==0}
+             if keyword=='PRESCRIPCION.XML':
+              if dic.get('laboratorio_titular') and dic.get('cod_nacion'):
+               samples.append({k:dic.get(k) for k in ['cod_nacion','laboratorio_titular','laboratorio_comercializador','des_prese']})
+             elif len(dic)>1:samples.append(dic)
+             if len(samples)>=3:break
+            print('SAMPLES',keyword,samples)
+          PY

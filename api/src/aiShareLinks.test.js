@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 import {createHash} from "node:crypto";
-import {setupTemporaryAnalyticsLinks,validTemporaryLinkToken} from "./aiShareLinks.js";
+import {setupTemporaryAnalyticsLinks,validTemporaryLinkToken,shareLinkExpiry} from "./aiShareLinks.js";
+import {semanticCatalog,validateSemanticQuery,compileSemanticQuery} from "./aiSemanticQuery.js";
 
 const hash=s=>createHash("sha256").update(s).digest("hex");
 
@@ -14,12 +15,13 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
    statements.push({sql,params});
    if(sql.startsWith("SELECT slug FROM farmetrica.clientes"))return {rows:[{slug:"grupo_demo"}]};
    if(sql.startsWith("INSERT INTO farmetrica.ai_mcp_demo_keys")){
-    active={secret_hash:params[0],cliente_slug:params[1],creado_en:new Date().toISOString()};
+    active={secret_hash:params[0],cliente_slug:params[1],duracion:params[2],creado_en:new Date().toISOString()};
     expired=false;return {rows:[{creado_en:active.creado_en}]};
    }
    if(sql.startsWith("DELETE FROM farmetrica.ai_mcp_demo_keys")){active=null;return {rows:[]};}
-   if(sql.startsWith("SELECT cliente_slug,creado_en FROM farmetrica.ai_mcp_demo_keys"))
-    return {rows:active&&!expired?[{cliente_slug:active.cliente_slug,creado_en:active.creado_en}]:[]};
+   if(sql.startsWith("SELECT cliente_slug,creado_en,duracion FROM farmetrica.ai_mcp_demo_keys"))
+    return {rows:active&&!expired?[{cliente_slug:active.cliente_slug,
+      creado_en:active.creado_en,duracion:active.duracion}]:[]};
    if(sql.startsWith("SELECT cliente_slug FROM farmetrica.ai_mcp_demo_keys"))
     return {rows:active&&!expired&&active.secret_hash===params[0]?[{cliente_slug:active.cliente_slug}]:[]};
    if(sql.includes("SELECT slug,nombre,esquema_datos FROM farmetrica.clientes"))
@@ -60,6 +62,8 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal(validTemporaryLinkToken("fm_share_wrong"),false);
   assert.ok(new Date(generated.expiresAt)>new Date());
   assert.equal(active.secret_hash,hash(token));
+  assert.equal(active.duracion,"24h");
+  assert.equal(shareLinkExpiry(active.creado_en,"24h"),generated.expiresAt);
   const path="/api/consulta-temporal/"+token;
   const landing=await fetch(base+path);
   assert.equal(landing.status,200);
@@ -75,6 +79,10 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal(catalog.farmacias[0].nombre,"Farmacia Real Uno");
   assert.ok(catalog.consultas.some(x=>x.titulo.includes("hoy")));
   assert.ok(catalog.consultas.every(x=>x.url.startsWith(path+"?")));
+  assert.equal(catalog.consultas_semanticas.version,1);
+  assert.ok(catalog.consultas_semanticas.fuentes.ventas.dimensiones.includes("vendedor"));
+  assert.ok(catalog.consultas_semanticas.fuentes.stock.metricas.dias_cobertura);
+  assert.ok(catalog.consultas.some(x=>x.url.includes("consulta=")));
   assert.match(landing.headers.get("referrer-policy"),/no-referrer/);
   const sales=await fetch(base+path+"?indicador=ventas_resumen&desde=2026-10-01&hasta=2026-10-22&formato=json");
   assert.equal(sales.status,200);
@@ -97,9 +105,73 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   const renewed=await (await fetch(base+admin,opts)).json();
   assert.notEqual(renewed.url,generated.url);
   assert.equal((await fetch(base+path)).status,410);
+  const longOpts={...opts,body:JSON.stringify({clientSlug:"grupo_demo",duracion:"indefinido"})};
+  const foreverResponse=await fetch(base+admin,longOpts);
+  assert.equal(foreverResponse.status,200);
+  const forever=await foreverResponse.json();
+  assert.equal(forever.duracion,"indefinido");
+  assert.equal(forever.expiresAt,null);
+  const status=await (await fetch(base+admin,{headers:{"x-test-admin":"yes"}})).json();
+  assert.equal(status.configured,true);
+  assert.equal(status.duracion,"indefinido");
+  for(const [duracion,days] of [["7d",7],["30d",30],["365d",365]]){
+   const response=await fetch(base+admin,{...opts,body:JSON.stringify({clientSlug:"grupo_demo",duracion})});
+   assert.equal(response.status,200);
+   const data=await response.json();
+   assert.equal(data.duracion,duracion);
+   assert.equal(new Date(data.expiresAt).getTime()-new Date(active.creado_en).getTime(),days*86400000);
+  }
+  const invalid=await fetch(base+admin,{...opts,body:JSON.stringify({clientSlug:"grupo_demo",duracion:"600d"})});
+  assert.equal(invalid.status,400);
   const revoked=await fetch(base+admin,{method:"DELETE",headers:opts.headers});
   assert.equal(revoked.status,200);
   assert.equal((await fetch(base+"/api/consulta-temporal/"+renewed.url.split("/").at(-1))).status,410);
   assert.equal((await fetch(base+"/api/consulta-temporal/fm_share_wrong")).status,404);
  }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test("Catálogo semántico SQL controlado: vendedores, productos, stock e histórico",()=>{
+ const ctx={client:{slug:"demo",schema:"demo"},allowedPharmacyIds:[101,102]};
+ const sales={fuente:"ventas",agrupar:["farmacia","vendedor"],metricas:["importe","unidades"],
+  periodo:"hoy",ordenar:{campo:"importe",direccion:"desc"},farmacias:[101],limite:20};
+ const data=compileSemanticQuery(sales,ctx);
+ assert.match(data.sql,/fm_ventas_analitica/);
+ assert.match(data.sql,/vendedor/);
+ assert.match(data.sql,/READ ONLY|SELECT/);
+ assert.match(data.sql,/f\.cliente_slug=\$4/);
+ assert.match(data.sql,/f\.id=ANY\(\$3::int\[\]\)/);
+ assert.deepEqual(data.params[2],[101]);
+ assert.equal(data.params[3],"demo");
+ assert.equal(data.params.at(-1),20);
+ assert.match(data.sql,/ORDER BY "importe" DESC/);
+ const long=compileSemanticQuery({fuente:"ventas",agrupar:["anio"],metricas:["importe"],
+  periodo:"historico"},ctx);
+ assert.equal(long.params[0],null);
+ assert.equal(long.params[1],null);
+ const margin=compileSemanticQuery({fuente:"ventas",agrupar:["producto"],
+  metricas:["margen_estimado","lineas_con_coste"],periodo:"este_mes"},ctx);
+ assert.match(margin.sql,/a\.pmc>0/);
+ const inventory=compileSemanticQuery({fuente:"stock",agrupar:["farmacia","producto"],
+  metricas:["stock_actual","venta_90d","dias_cobertura"],estado_stock:"bajo",
+  dias_max:15},ctx);
+ assert.match(inventory.sql,/fm_ventas_analitica/);
+ assert.match(inventory.sql,/stock_actual/);
+ assert.match(inventory.sql,/f\.id=ANY\(\$3::int\[\]\)/);
+ assert.ok(inventory.params.includes(15));
+ const purchases=compileSemanticQuery({fuente:"compras",agrupar:["proveedor","mes"],
+  metricas:["importe","coste_unitario_medio"],periodo:"mes_pasado"},ctx);
+ assert.match(purchases.sql,/fm_recepciones_analitica/);
+ assert.equal(semanticCatalog().fuentes.stock.origen,"articulos");
+ for(const bad of [
+  {fuente:"ventas",agrupar:["secreto"]},
+  {fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],farmacias:[999]},
+  {fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],limite:9999},
+  {fuente:"stock",estado_stock:"bajo",dias_max:999},
+  {fuente:"ventas",sql:"SELECT * FROM users"},
+  {fuente:"ventas",ordenar:{campo:"1;DROP TABLE",direccion:"asc"}},
+  {fuente:"ventas",metricas:["capital_estimado"]},
+  {fuente:"ventas",desde:"2026-02-30",hasta:"2026-03-01"}
+ ])assert.throws(()=>validateSemanticQuery(bad,ctx));
+ assert.equal(shareLinkExpiry("2026-10-22T10:00:00Z","indefinido"),null);
+ assert.equal(shareLinkExpiry("2026-10-22T10:00:00Z","7d"),"2026-10-29T10:00:00.000Z");
 });

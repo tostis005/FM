@@ -70,7 +70,7 @@ function landing(token,ctx){
   '<body style="font:16px system-ui;max-width:850px;margin:30px auto;padding:16px">'+
   '<h1>Farmétrica · consultas reales por API</h1>'+
   '<p>Cliente: <strong>'+html(ctx.client.name)+'</strong></p>'+
-  '<p>Acceso temporal de lectura a PostgreSQL. Este enlace permite consultar indicadores reales '+
+  '<p>Datos reales de PostgreSQL. Acceso temporal de solo lectura que permite consultar indicadores reales '+
   'durante 24 horas desde su creación y puede revocarse desde Farmétrica.</p>'+
   '<h2>Consultas disponibles</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
   '<h2>Farmacias incluidas</h2><ul>'+pharmacies+'</ul>'+
@@ -132,7 +132,7 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
    if(req.query.farmacia!==undefined){
     if(typeof req.query.farmacia!=="string"||req.query.farmacia.length>150)
      return res.status(400).send("Nombre de farmacia inválido");
-    const normalize=value=>String(value).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().toLowerCase();
+    const normalize=value=>String(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
     const matches=ctx.pharmacies.filter(p=>normalize(p.name)===normalize(req.query.farmacia));
     if(matches.length!==1)return res.status(400).send("Farmacia desconocida o ambigua. Consulta el catálogo.");
     args.farmacias=[Number(matches[0].id)];

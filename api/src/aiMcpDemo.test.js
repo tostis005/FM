@@ -13,6 +13,7 @@ const pool={
   query:async(sql,args)=>{
    calls.push({sql,args});
    if(sql.startsWith("SELECT f.nombre"))return {rows:[{farmacia:"Farmacia 1",importe:1234.56,unidades:15}]};
+   if(sql.startsWith("SELECT b.farmacia_id"))return {rows:[{farmaciaId:101,farmacia:"Farmacia 1",importe:1234.56}]};
    return {rows:[]};
   },
   release:()=>calls.push({sql:"released"})
@@ -63,6 +64,17 @@ test("el MCP OAuth interpreta preguntas con reglas de Farmétrica, nunca con un 
  assert.equal(unclear.body.result.structuredContent.filas,undefined);
  assert.equal(calls.filter(c=>c.sql==="BEGIN TRANSACTION READ ONLY").length,
   analyticsBefore,"una pregunta ambigua no debe ejecutar SQL analítico");
+});
+test("el MCP OAuth calcula diferencias canónicas sin alucinar importes",async()=>{
+ const r=await call("tools/call",{name:"resolver_pregunta",arguments:{
+  pregunta:"Compara las ventas por farmacia este mes respecto al mes pasado"
+ }});
+ const data=r.body.result.structuredContent;
+ assert.equal(data.estado,"comparacion");
+ assert.equal(data.origen,"PostgreSQL");
+ assert.equal(data.filas[0].farmaciaId,101);
+ assert.equal(data.filas[0].diferencia,0);
+ assert.match(data.respuesta,/1.234,56 €/);
 });
 test("MCP demo permite consultas libres componiendo métricas y dimensiones sin SQL",async()=>{
  const context=(await call("tools/call",{name:"catalogo_semantico",arguments:{}})).body.result.structuredContent;

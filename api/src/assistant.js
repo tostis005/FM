@@ -6,9 +6,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import {
-  periodFromQuestion, selectTools, authorizedIds, pharmacyIdsFromQuestion, runAssistantTool
-} from "./assistantAnalytics.js";
+import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
+import {semanticPlannerPrompt,parseSemanticPlans,runAssistantSemanticQueries} from "./assistantSemantic.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
 const voiceEnabled=()=>enabled()&&process.env.AI_VOICE_ENABLED==="true";
@@ -41,10 +40,11 @@ let active=0;
 function compactFacts(results) {
  return results.map(result=>({
   tool:result.tool,period:result.period,available:result.available,
-  ...(result.available?{rows:result.rows,pharmacies:result.pharmacies}:{reason:result.reason})
+  ...(result.available?{rows:result.rows,pharmacies:result.pharmacies,
+   metrics:result.metrics,dimensions:result.dimensions,warnings:result.warnings}:{reason:result.reason})
  }));
 }
-export async function callOllama(question,history,context,results,endpoint=ollama(),chosenModel=model()){
+export async function callOllama(question,history,context,results,endpoint=ollama(),chosenModel=model(),settings={}){
  if(!isAllowedUrl(endpoint))throw Error("URL de IA no válida");
  const system=[
   "Eres el asistente de Farmétrica, un analista de farmacias. Responde siempre en español claro y conciso.",
@@ -60,7 +60,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
  const facts="CONTEXTO: sección "+String(context.section||"General").slice(0,70)+
   ". DATOS_VERIFICADOS="+JSON.stringify(compactFacts(results)).slice(0,14000);
  const messages=[
-  {role:"system",content:system+" "+facts},
+  {role:"system",content:settings.system||system+" "+facts},
   ...history.map(x=>({role:x.role,content:x.content})),
   {role:"user",content:question}
  ];
@@ -72,8 +72,9 @@ export async function callOllama(question,history,context,results,endpoint=ollam
    signal:controller.signal,
    body:JSON.stringify({
     model:chosenModel,stream:false,think:false,messages,
-    options:{temperature:0.1,num_ctx:2048,num_predict:370},
-    keep_alive:"30s"
+    ...(settings.format?{format:settings.format}:{}),
+    options:{temperature:0.1,num_ctx:2048,num_predict:settings.numPredict??370},
+    keep_alive:"2m"
    })
   });
   if(!response.ok)throw Error("Modelo no disponible (HTTP "+response.status+")");
@@ -82,22 +83,6 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   if(!answer)throw Error("El modelo no ha devuelto ninguna respuesta");
   return answer.slice(0,4200);
  }finally{clearTimeout(timeout);}
-}
-async function safeQuery(pool,ctx,names,period,ids) {
- if(!names.length)return [];
- const db=await pool.connect();
- try{
-  await db.query("BEGIN TRANSACTION READ ONLY");
-  await db.query(names.includes("ahorro_economico")?
-   "SET LOCAL statement_timeout = '25000ms'": "SET LOCAL statement_timeout = '5000ms'");
-  await db.query("SET LOCAL lock_timeout = '1000ms'");
-  const results=[];
-  for(const name of names)results.push(await runAssistantTool(db,ctx,name,period,ids));
-  return results;
- }finally {
-  try{await db.query("ROLLBACK");}catch{}
-  db.release();
- }
 }
 function ffmpegConvert(buffer,directory){
  return new Promise((resolve,reject)=>{
@@ -140,14 +125,19 @@ export function setupAssistant(app,pool,{requireTenant}) {
   active+=1;
   let stopHeartbeat=()=>{};
   try{
-   const names=selectTools(body.question,req.context);
-   const period=periodFromQuestion(body.question);
-   const results=await safeQuery(pool,req.context,names,period,ids);
+   // El MCP y el chat comparten catálogo, validador y motor de SQL seguro.
+   // Los IDs autorizados se restringen también al subconjunto pedido.
+   const context={...req.context,allowedPharmacyIds:ids,
+    pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
    stopHeartbeat=startJsonHeartbeat(res);
+   const planRaw=await callOllama(body.question,body.history,{section:"Plan MCP"},[],
+    ollama(),model(),{system:semanticPlannerPrompt(context),format:"json",numPredict:230});
+   const plans=parseSemanticPlans(planRaw,context);
+   const results=await runAssistantSemanticQueries(pool,context,plans);
    const answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
-   },results);
-   res.end(JSON.stringify({answer,model:model(),period,sources:results.map(x=>({
+   },results,ollama(),model(),{numPredict:240});
+   res.end(JSON.stringify({answer,model:model(),sources:results.map(x=>({
     tool:x.tool,label:x.label||x.tool,period:x.period,available:x.available
    }))}));
   }catch(error){

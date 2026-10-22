@@ -1,4 +1,8 @@
-/* Farmétrica · asistente conversacional (maqueta sin backend) */
+/* Farmétrica · asistente conectado al motor semántico MCP */
+/* Ocultar scrollbar de la pantalla que queda detrás del chat, también en móviles. */
+html.fm-ai-modal-open,body.fm-ai-modal-open{overflow:hidden!important;scrollbar-width:none}
+html.fm-ai-modal-open::-webkit-scrollbar,body.fm-ai-modal-open::-webkit-scrollbar{display:none}
+.fm-ai-root{overscroll-behavior:contain}
 .fm-ai-launcher{position:fixed;right:max(25px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));z-index:1900;display:flex;align-items:center;gap:10px;border:1px solid rgba(255,255,255,.2);border-radius:100px;padding:15px 19px;background:linear-gradient(130deg,#078d65,#10b981);color:#fff;font-size:13px;font-weight:800;letter-spacing:.01em;box-shadow:0 10px 28px rgba(0,113,77,.26),0 3px 10px rgba(0,57,43,.12);transition:transform .16s,box-shadow .16s}
 .fm-ai-launcher:hover{transform:translateY(-2px);box-shadow:0 15px 34px rgba(0,113,77,.32)}
 .fm-ai-launcher:focus-visible,.fm-ai-root button:focus-visible,.fm-ai-root textarea:focus-visible{outline:3px solid #83d5bb;outline-offset:3px}
@@ -52,6 +56,19 @@
 .fm-ai-msg-bubble{padding:15px 18px;border:1px solid #e6eeea;background:#fff;border-radius:4px 15px 15px 15px;line-height:1.7;font-size:13px;color:#334e44;white-space:pre-wrap;overflow-wrap:anywhere}
 .fm-ai-msg-user .fm-ai-msg-bubble{background:#e0f6ea;border-color:#d0ebdd;border-radius:15px 4px 15px 15px;color:#21533f}
 .fm-ai-msg-bubble p{margin:0}
+.fm-ai-msg-bubble>*+*{margin-top:10px}
+.fm-ai-msg-bubble ul,.fm-ai-msg-bubble ol{padding-left:21px;margin-bottom:0}
+.fm-ai-msg-bubble li+li{margin-top:5px}
+.fm-ai-msg-bubble li p{margin:0}
+.fm-ai-msg-bubble strong{font-weight:800}
+.fm-ai-msg-bubble h1,.fm-ai-msg-bubble h2,.fm-ai-msg-bubble h3{font-size:1em;font-weight:800;line-height:1.4;margin:13px 0 6px}
+.fm-ai-msg-bubble a{text-decoration:underline;color:#087e5f;overflow-wrap:anywhere}
+.fm-ai-msg-bubble code{font-size:.9em;padding:1px 4px;background:#ecf4ef;border-radius:4px}
+.fm-ai-msg-bubble pre{max-width:100%;overflow-x:auto;background:#eff6f2;border-radius:8px;padding:12px}
+.fm-ai-msg-bubble pre code{padding:0;background:none}
+.fm-ai-msg-bubble table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse;font-size:.92em}
+.fm-ai-msg-bubble th,.fm-ai-msg-bubble td{border:1px solid #dcebe2;padding:6px 9px;text-align:left}
+.fm-ai-msg-bubble blockquote{border-left:3px solid #a7ceb9;padding-left:12px;margin-left:0;color:#52695f}
 .fm-ai-msg-bubble audio{display:block;max-width:100%;min-width:min(240px,65vw);margin-top:9px;height:42px}
 .fm-ai-msg-time{font-size:10px;color:#92a39b}
 .fm-ai-bottom{background:linear-gradient(180deg,rgba(251,252,251,.94),#fbfcfb 24%);flex-shrink:0;padding:8px 24px max(17px,env(safe-area-inset-bottom))}

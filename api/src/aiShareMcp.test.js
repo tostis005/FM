@@ -36,8 +36,8 @@ test("MCP sin OAuth no expone datos ni tokens hasta recibir la URL vigente",asyn
   const init=await (await post(rpc(1,"initialize",{}))).json();
   assert.equal(init.result.serverInfo.name,"Farmetrica Temporary Link");
   const list=await (await post(rpc(2,"tools/list"))).json();
-  assert.equal(list.result.tools.length,2);
-  assert.equal(SHARE_MCP_TOOLS.length,2);
+  assert.equal(list.result.tools.length,3);
+  assert.equal(SHARE_MCP_TOOLS.length,3);
   assert.ok(list.result.tools.some(t=>t.name==="consultar_datos_temporales"));
   assert.equal(queries.length,0,"Listing unauthenticated tools must not touch the DB");
   const bad=await (await post(rpc(3,"tools/call",{name:"leer_modelo_temporal",
@@ -55,7 +55,20 @@ test("MCP sin OAuth no expone datos ni tokens hasta recibir la URL vigente",asyn
   assert.equal(query.result.structuredContent.origen,"PostgreSQL");
   assert.ok(queries.some(q=>q.sql.includes("BEGIN TRANSACTION READ ONLY")));
   assert.ok(queries.some(q=>q.sql.includes("fm_ventas_analitica")));
-  const injection=await (await post(rpc(6,"tools/call",{name:"consultar_datos_temporales",
+  const resolved=await (await post(rpc(50,"tools/call",{name:"resolver_pregunta_temporal",
+    arguments:{url,pregunta:"¿Cuánto vendió cada farmacia el 22 de octubre de 2026?"}}))).json();
+   assert.equal(resolved.result.structuredContent.estado,"ok");
+   assert.equal(resolved.result.structuredContent.consulta.fuente,"ventas");
+   assert.deepEqual(resolved.result.structuredContent.consulta.agrupar,["farmacia"]);
+   assert.equal(resolved.result.structuredContent.filas[0].importe,221.14);
+   const ambiguous=await (await post(rpc(51,"tools/call",{name:"resolver_pregunta_temporal",
+    arguments:{url,pregunta:"¿Cuánto vendió cada farmacia?"}}))).json();
+   assert.equal(ambiguous.result.structuredContent.estado,"aclaracion");
+   assert.equal(ambiguous.result.structuredContent.filas,undefined);
+   const invalidUrl=await (await post(rpc(52,"tools/call",{name:"resolver_pregunta_temporal",
+    arguments:{url:"https://evil.example/",pregunta:"Ventas de hoy"}}))).json();
+   assert.equal(invalidUrl.result.isError,true);
+   const injection=await (await post(rpc(6,"tools/call",{name:"consultar_datos_temporales",
    arguments:{url,consulta:{fuente:"ventas",metricas:["importe"],sql:"DELETE FROM clientes"}}}))).json();
   assert.equal(injection.result.isError,true);
   const denied=await (await post(rpc(7,"tools/call",{name:"consultar_datos_temporales",

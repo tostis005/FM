@@ -55,11 +55,7 @@ function shareCatalog(token,ctx){
    url:url({indicador,desde:(indicador==="ahorro_economico"?year:dates).from,
      hasta:(indicador==="ahorro_economico"?year:dates).to})
   })),
-  ...["¿Cuánto hemos facturado este mes?","¿Cuánto hemos comprado el mes pasado?",
-    "¿Cuál es el capital de stock?","¿Qué artículos se han vendido más?",
-    "¿Qué ahorro potencial hay este año?"].map(pregunta=>({
-   titulo:pregunta,url:url({pregunta})
-  }))
+  // Los ejemplos guiados utilizan un único plan JSON; no rutas por cada pregunta.
  ];
  return {
   api:"Farmétrica - consultas temporales de lectura",
@@ -208,7 +204,7 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
      if(req.query.farmacia!==undefined){
       if(typeof req.query.farmacia!=="string"||req.query.farmacia.length>150)
        return res.status(400).json({error:"Nombre de farmacia inválido"});
-      const normalize=x=>String(x).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().trim();
+      const normalize=x=>String(x).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
       const matches=ctx.pharmacies.filter(p=>normalize(p.name)===normalize(req.query.farmacia));
       if(matches.length!==1)return res.status(400).json({error:"Nombre de farmacia no identificado o ambiguo"});
       plan.farmacias=[Number(matches[0].id)];

@@ -43,7 +43,10 @@ jobs:
           echo 'Diagnostico: archivos y permisos del despliegue'
           test -f api/src/aiMcp.js || { echo 'Falta aiMcp.js en VPS'; exit 1; }
           test -f compose.farmacias.yml || { echo 'Falta compose.farmacias.yml en VPS'; exit 1; }
-          test -w .env || { echo 'El usuario SSH no puede editar .env'; exit 1; }
+          ELEVATE=""
+          if ! test -w .env; then
+            if sudo -n test -w .env; then ELEVATE="sudo -n"; else echo "El usuario SSH no dispone de sudo autorizado para .env"; exit 1; fi
+          fi
           grep -q AI_MCP_ENABLED compose.farmacias.yml || { echo 'Falta AI_MCP_ENABLED en compose'; exit 1; }
           docker compose -f compose.yaml -f compose.farmacias.yml config --quiet || { echo 'Compose invalido'; exit 1; }
           echo 'Diagnostico: migracion MCP'
@@ -51,26 +54,26 @@ jobs:
             -c "SELECT to_regclass('farmetrica.ai_oauth_conexiones') IS NOT NULL")
           test "$migrated" = t || { echo 'La tabla OAuth aun no existe'; exit 1; }
           echo 'Diagnostico: comprobar origen publico'
-          actual=$(grep '^PUBLIC_APP_ORIGIN=' .env | tail -n1 | cut -d= -f2- | tr -d '\r')
+          actual=$($ELEVATE grep '^PUBLIC_APP_ORIGIN=' .env | tail -n1 | cut -d= -f2- | tr -d '\r')
           test "$actual" = https://farmetrica.com || {
             echo "Origen web distinto al dominio solicitado; no se modifica el servidor"; exit 1;
           }
           backup=$(mktemp /opt/farmawao/.env.ai-mcp.backup.XXXXXXXX)
           chmod 600 "$backup"
-          cp -p .env "$backup"
+          $ELEVATE cp -p .env "$backup"
           rollback() {
             rc=$?
             trap - EXIT
             if [ "$rc" -ne 0 ]; then
-              cp -p "$backup" .env
+              $ELEVATE cp -p "$backup" .env
               docker compose -f compose.yaml -f compose.farmacias.yml up -d --no-deps --force-recreate api || true
               echo "Activacion revertida"
             fi
-            rm -f "$backup"
+            $ELEVATE rm -f "$backup"
             exit "$rc"
           }
           trap rollback EXIT
-          python3 - <<'PY'
+          $ELEVATE python3 - <<'PY'
           from pathlib import Path
           p=Path('.env')
           lines=p.read_text().splitlines()
@@ -108,7 +111,9 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -se' <<'REMOTE'
           set -euo pipefail
           cd /opt/farmawao
-          python3 - <<'PY'
+          ELEVATE=""
+          if ! test -w .env; then ELEVATE="sudo -n"; fi
+          $ELEVATE python3 - <<'PY'
           from pathlib import Path
           p=Path('.env')
           lines=[l for l in p.read_text().splitlines() if not l.startswith(('AI_MCP_ENABLED=','AI_MCP_PUBLIC_ORIGIN='))]

@@ -1,0 +1,31 @@
+name: Diagnosticar acceso externo Farmetrica
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/diagnose-public-access.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Resolver DNS y comprobar HTTPS sin credenciales
+        shell: bash
+        run: |
+          set -euo pipefail
+          host=farmetrica.com
+          echo "DNS del sitio, sin informacion privada:"
+          getent ahostsv4 "$host" | head -n 4 || true
+          echo "Respuestas HTTPS a rutas publicas y token intencionadamente invalido:"
+          for agent in "Mozilla/5.0" "OAI-SearchBot" "ChatGPT-User" "Googlebot"; do
+            for path in "/" "/robots.txt" "/api/consulta-temporal/fm_share_invalid"; do
+              code=$(curl --location --silent --show-error --max-time 18 \
+                --user-agent "$agent" --output /dev/null \
+                --write-out '%{http_code};IP=%{remote_ip};TLS=%{ssl_verify_result};redirects=%{num_redirects}' \
+                "https://$host$path" || echo FAILED)
+              echo "user_agent=$agent path=$path result=$code"
+            done
+          done
+          echo "No se ha utilizado ni registrado ningun token de consulta real."

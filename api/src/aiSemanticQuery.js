@@ -190,6 +190,8 @@ export function validateSemanticQuery(input,ctx){
  const diasMax=input.dias_max??15;
  if(!Number.isInteger(diasMax)||diasMax<1||diasMax>180)throw err("Umbral inválido");
  const ids=authorizedIds(ctx,input.farmacias??[]);
+ if(source==="ventas"&&dims.includes("vendedor")&&!dims.includes("farmacia")&&ids.length>1)
+  throw err("Al agrupar vendedores de varias farmacias incluye la dimensión farmacia: los códigos de vendedor no son globales.");
  const dates=resolveDates(input);
  if(source==="stock"&&(input.desde!==undefined||input.hasta!==undefined||input.periodo!==undefined))
   throw err("El stock es actual; su ritmo de venta se calcula sobre los últimos 90 días");

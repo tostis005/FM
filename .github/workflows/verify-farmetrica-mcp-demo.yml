@@ -1,4 +1,4 @@
-name: Verificar MCP demo pública sin autenticación
+name: Verificar Demo MCP con datos PostgreSQL y OAuth
 on:
   workflow_run:
     workflows: ["Build and deploy Farmetrica SaaS"]
@@ -12,34 +12,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Comprobar respuestas sintéticas sin token y MCP privado protegido
+      - name: El MCP demo consulta PostgreSQL solo tras autenticar
         shell: bash
         run: |
           set -euo pipefail
-          demo=https://farmetrica.com/api/mcp-demo
-          private=https://farmetrica.com/api/mcp
-          for method in initialize tools/list; do
-            status=$(curl -sS --max-time 15 -o "/tmp/demo-$method.json" -w '%{http_code}' \
-              -H 'Content-Type: application/json' -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\"}" "$demo")
-            test "$status" = 200 || { echo "MCP demo $method: HTTP $status"; exit 1; }
-          done
-          status=$(curl -sS --max-time 15 -o /tmp/demo-contexto.json -w '%{http_code}' \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"listar_contexto","arguments":{}}}' "$demo")
-          test "$status" = 200 || { echo "MCP demo contexto: HTTP $status"; exit 1; }
+          origin=https://farmetrica.com
+          curl -fsS --max-time 15 "$origin/.well-known/oauth-protected-resource/api/mcp-demo" > /tmp/demo-oauth.json
           python3 - <<'PY'
           import json
-          data=json.load(open('/tmp/demo-contexto.json'))['result']['structuredContent']
-          assert data['ficticio'] is True
-          assert len(data['farmacias'])==3
-          assert all(p['id']>=90001 for p in data['farmacias'])
-          assert 'SINTÉTICOS' in data['aviso']
-          tools=json.load(open('/tmp/demo-tools/list.json'))['result']['tools']
-          assert len(tools)==4
-          assert all(t['annotations']['readOnlyHint'] is True for t in tools)
+          metadata=json.load(open('/tmp/demo-oauth.json'))
+          assert metadata['resource']=='https://farmetrica.com/api/mcp-demo'
+          assert metadata['authorization_servers']==['https://farmetrica.com']
           PY
-          main_status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' "$private")
-          test "$main_status" = 401 || { echo "MCP privado no protegido: HTTP $main_status"; exit 1; }
-          echo "MCP demo público con datos ficticios; MCP principal con OAuth"
+          for endpoint in mcp-demo mcp; do
+            for method in initialize tools/list tools/call; do
+              status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
+                -H 'Content-Type: application/json' \
+                -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$method\"}" \
+                "$origin/api/$endpoint")
+              test "$status" = 401 || { echo "$endpoint $method sin sesión OAuth: HTTP $status"; exit 1; }
+            done
+          done
+          echo "MCP demo y MCP principal: acceso real protegido por OAuth"

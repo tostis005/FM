@@ -20,7 +20,12 @@ export function shareLinkExpiry(created,duration="24h"){
 const activeSQL="(duracion='indefinido' OR creado_en + "+
  "CASE duracion WHEN '7d' THEN interval '7 days' WHEN '30d' THEN interval '30 days' "+
  "WHEN '365d' THEN interval '365 days' ELSE interval '24 hours' END > now())";
-const headers=res=>res.set("Cache-Control","private, no-store, max-age=0")
+// Enlaces revocables: ni navegador, ni proxy/CDN deben reutilizar respuestas
+// de otro token, filtro o periodo. Incluye compatibilidad HTTP/1.0 y nginx.
+const headers=res=>res.set("Cache-Control","private, no-store, no-cache, max-age=0, must-revalidate")
+  .set("CDN-Cache-Control","no-store").set("Surrogate-Control","no-store")
+  .set("Pragma","no-cache").set("Expires","0").set("X-Accel-Expires","0")
+  .set("Vary","*")
   .set("Referrer-Policy","no-referrer").set("X-Robots-Tag","noindex, nofollow, noarchive")
   .set("X-Content-Type-Options","nosniff")
   .set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");

@@ -42,7 +42,10 @@ function admit(token){
 export function setupShareMcp(app,pool,{resolveLink}){
  const endpoint="/api/consulta-temporal/mcp";
  app.post(endpoint,async(req,res)=>{
-  res.set("Cache-Control","no-store").set("Referrer-Policy","no-referrer")
+  res.set("Cache-Control","private, no-store, no-cache, max-age=0, must-revalidate")
+   .set("CDN-Cache-Control","no-store").set("Surrogate-Control","no-store")
+   .set("Pragma","no-cache").set("Expires","0").set("X-Accel-Expires","0")
+   .set("Referrer-Policy","no-referrer")
    .set("X-Robots-Tag","noindex, nofollow")
    .set("X-Content-Type-Options","nosniff");
   if(Number(req.get("content-length")||0)>16384)return res.status(413).end();

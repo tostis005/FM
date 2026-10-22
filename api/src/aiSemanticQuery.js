@@ -35,6 +35,8 @@ const WARNINGS={
 const examples=[
  {titulo:"Vendedores que más venden hoy",consulta:{fuente:"ventas",agrupar:["farmacia","vendedor"],
   metricas:["importe","unidades"],periodo:"hoy",ordenar:{campo:"importe",direccion:"desc"},limite:30}},
+ {titulo:"Vendedores con más ventas este año",consulta:{fuente:"ventas",agrupar:["farmacia","vendedor"],
+  metricas:["importe","unidades"],periodo:"este_anio",ordenar:{campo:"importe",direccion:"desc"},limite:50}},
  {titulo:"Ventas por farmacia del mes pasado",consulta:{fuente:"ventas",agrupar:["farmacia"],
   metricas:["importe","movimientos"],periodo:"mes_pasado"}},
  {titulo:"Artículos con mayor margen estimado",consulta:{fuente:"ventas",agrupar:["farmacia","producto"],
@@ -103,7 +105,7 @@ export function semanticCatalog(){
   }])),
   parametros:{
    fuente:"ventas | compras | stock",
-   agrupar:"Array de 0 a 3 dimensiones permitidas para la fuente.",
+   agrupar:"Array de 0 a 3 dimensiones permitidas para la fuente. Si se agrupa por vendedor en varias farmacias, el servidor añade farmacia automáticamente (máximo tres dimensiones).",
    metricas:"Array de 1 a 5 métricas permitidas para la fuente.",
    periodo:"hoy | ayer | esta_semana | semana_pasada | este_mes | mes_pasado | este_anio | historico | ultimos_7_dias | ultimos_30_dias | ultimos_90_dias | ultimos_365_dias",
    desde:"AAAA-MM-DD; con hasta; puede ser cualquier año disponible.",
@@ -165,7 +167,7 @@ export function validateSemanticQuery(input,ctx){
  const allowed=ctx?.role==="superadministrador"||modules[source]===true||
   (source==="ventas"&&modules.dashboard===true);
  if(!allowed)throw err("No tienes acceso al módulo de "+source);
- const dims=input.agrupar??["farmacia"];
+ let dims=input.agrupar??["farmacia"];
  const metrics=input.metricas??(source==="stock"?["stock_actual","venta_90d"]:["importe"]);
  if(!Array.isArray(dims)||dims.length>3||dims.some(d=>typeof d!=="string"||!Object.hasOwn(DIMENSIONS[source],d))||
   new Set(dims).size!==dims.length)throw err("Dimensiones no permitidas");
@@ -193,8 +195,12 @@ export function validateSemanticQuery(input,ctx){
  let ids;
  try{ids=authorizedIds(ctx,input.farmacias??[])}
  catch{throw err("Farmacias no autorizadas");}
- if(source==="ventas"&&dims.includes("vendedor")&&!dims.includes("farmacia")&&ids.length>1)
-  throw err("Al agrupar vendedores de varias farmacias incluye la dimensión farmacia: los códigos de vendedor no son globales.");
+ // La IA puede pedir solo "vendedor"; incorporar farmacia mantiene la identidad
+ // local de los códigos sin rechazar la consulta ni mezclar vendedores distintos.
+ if(source==="ventas"&&dims.includes("vendedor")&&!dims.includes("farmacia")&&ids.length>1){
+  if(dims.length===3)throw err("Para comparar vendedores de varias farmacias, incluye farmacia entre las tres dimensiones");
+  dims=["farmacia",...dims];
+ }
  const dates=resolveDates(input);
  if(source==="stock"&&(input.desde!==undefined||input.hasta!==undefined||input.periodo!==undefined))
   throw err("El stock es actual; su ritmo de venta se calcula sobre los últimos 90 días");
@@ -253,7 +259,7 @@ function baseSql(source,schema,params,where,needsArticle){
   const product=needsArticle?"coalesce(nullif(a.nombre,''),t.articulo_id,'Sin referencia')":"t.articulo_id";
   const cn=needsArticle?"a.codigo_nacional":"NULL::text";
   const family=needsArticle?"a.familia":"NULL::text";
-  return `SELECT f.nombre AS farmacia,${extra}
+  return `SELECT f.id AS farmacia_id,f.nombre AS farmacia,${extra}
    ${product} AS producto,
    ${cn} AS codigo_nacional,${family} AS familia,t.fecha::date AS dia,
    to_char(t.fecha,'YYYY-MM') AS mes,extract(year from t.fecha)::int AS anio,
@@ -270,7 +276,7 @@ function baseSql(source,schema,params,where,needsArticle){
    AND upper(btrim(v.farmacia_codigo))=${code}
   WHERE f.id=ANY($3::int[]) AND v.fecha>=current_date-interval '89 days'
   GROUP BY upper(btrim(v.farmacia_codigo)),btrim(v.articulo_id)`;
- const base=`SELECT f.nombre AS farmacia,a.origen_id AS articulo_id,
+ const base=`SELECT f.id AS farmacia_id,f.nombre AS farmacia,a.origen_id AS articulo_id,
    coalesce(nullif(a.nombre,''),a.origen_id) AS producto,a.codigo_nacional,a.familia,
    a.stock_actual::numeric AS stock_actual,
    CASE WHEN a.pmc>0 THEN a.pmc WHEN a.puc>0 THEN a.puc END AS coste,
@@ -320,10 +326,16 @@ export function compileSemanticQuery(input,context){
   base=base.slice(0,ix)+`SELECT * FROM inventory b${state?" WHERE "+state:""}`;
  }
  const projections=[
+  // El nombre de farmacia no es una clave única: exponer su ID evita
+  // fusionar vendedores de dos farmacias que casualmente se llamen igual.
+  ...(q.dims.includes("farmacia")?['b.farmacia_id AS "farmaciaId"']:[]),
   ...q.dims.map(d=>`${DIM_SQL[d]} AS "${d}"`),
   ...q.metrics.map(m=>`${measures[q.source][m]} AS "${m}"`)
  ];
- const group=q.dims.length?" GROUP BY "+q.dims.map(d=>DIM_SQL[d]).join(","):"";
+ const group=q.dims.length?" GROUP BY "+[
+  ...(q.dims.includes("farmacia")?["b.farmacia_id"]:[]),
+  ...q.dims.map(d=>DIM_SQL[d])
+ ].join(","):"";
  const order=` ORDER BY "${q.order.campo}" ${q.order.direccion.toUpperCase()} NULLS LAST`;
  params.push(q.limit);
  const result={
@@ -341,21 +353,15 @@ export async function runSemanticQuery(pool,context,input){
  });
  let rows=result.rows;
  if(q.source==="ventas"&&q.dims.includes("vendedor")&&rows.length){
-  const active=context.pharmacies.filter(p=>q.ids.includes(Number(p.id)));
-  const nameToId=new Map();
-  for(const pharmacy of active){
-   const name=String(pharmacy.name);
-   nameToId.set(name,nameToId.has(name)?null:Number(pharmacy.id));
-  }
   const entries=rows.map(row=>({
-   pharmacyId:q.ids.length===1?q.ids[0]:nameToId.get(row.farmacia),
+   pharmacyId:q.ids.length===1?q.ids[0]:Number(row.farmaciaId),
    sellerId:row.vendedor
-  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&x.sellerId);
+  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&q.ids.includes(x.pharmacyId)&&x.sellerId);
   if(entries.length){
    const names=await loadCommercialNames(pool,context,entries);
    rows=rows.map(row=>{
-    const pharmacyId=q.ids.length===1?q.ids[0]:nameToId.get(row.farmacia);
-    return {...row,vendedorNombre:Number.isSafeInteger(pharmacyId)&&row.vendedor?
+    const pharmacyId=q.ids.length===1?q.ids[0]:Number(row.farmaciaId);
+    return {...row,vendedorNombre:Number.isSafeInteger(pharmacyId)&&q.ids.includes(pharmacyId)&&row.vendedor?
      names.seller(pharmacyId,row.vendedor):row.vendedor};
    });
   }

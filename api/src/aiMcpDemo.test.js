@@ -22,7 +22,8 @@ const call=(method,params={},id=1)=>handlePublicDemoMcp({jsonrpc:"2.0",id,method
 test("MCP demo expone catálogo y consulta semántica con protocolo correcto",async()=>{
  assert.equal((await call("initialize")).body.result.serverInfo.name,"Farmetrica Demo Real");
  const tools=(await call("tools/list")).body.result.tools;
- assert.equal(tools.length,6);
+ assert.equal(tools.length,7);
+  assert.ok(tools.some(t=>t.name==="resolver_pregunta"));
  assert.ok(tools.some(t=>t.name==="catalogo_semantico"));
  assert.ok(tools.some(t=>t.name==="consultar_semantica"));
  assert.ok(tools.every(t=>t.annotations.readOnlyHint===true));
@@ -45,6 +46,23 @@ test("consultas analíticas reales reutilizan transacción READ ONLY y filtros d
  assert.ok(calls.some(c=>c.sql==="BEGIN TRANSACTION READ ONLY"));
  assert.ok(calls.some(c=>c.sql==="ROLLBACK"));
  assert.ok(calls.some(c=>c.args?.[3]==="farmacias_demo"));
+});
+test("el MCP OAuth interpreta preguntas con reglas de Farmétrica, nunca con un modelo",async()=>{
+ const result=await call("tools/call",{name:"resolver_pregunta",arguments:{
+  pregunta:"¿Cuánto vendió cada farmacia el 22 de octubre de 2026?"
+ }});
+ assert.equal(result.body.result.structuredContent.estado,"ok");
+ assert.equal(result.body.result.structuredContent.consulta.fuente,"ventas");
+ assert.deepEqual(result.body.result.structuredContent.consulta.agrupar,["farmacia"]);
+ assert.equal(result.body.result.structuredContent.origen,"PostgreSQL");
+ const analyticsBefore=calls.filter(c=>c.sql==="BEGIN TRANSACTION READ ONLY").length;
+ const unclear=await call("tools/call",{name:"resolver_pregunta",arguments:{
+  pregunta:"Ventas por farmacia"
+ }});
+ assert.equal(unclear.body.result.structuredContent.estado,"aclaracion");
+ assert.equal(unclear.body.result.structuredContent.filas,undefined);
+ assert.equal(calls.filter(c=>c.sql==="BEGIN TRANSACTION READ ONLY").length,
+  analyticsBefore,"una pregunta ambigua no debe ejecutar SQL analítico");
 });
 test("MCP demo permite consultas libres componiendo métricas y dimensiones sin SQL",async()=>{
  const context=(await call("tools/call",{name:"catalogo_semantico",arguments:{}})).body.result.structuredContent;

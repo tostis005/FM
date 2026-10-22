@@ -7,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
-import {semanticPlannerPrompt,parseSemanticPlans,runAssistantSemanticQueries} from "./assistantSemantic.js";
+import {runAssistantSemanticQueries} from "./assistantSemantic.js";
+import {interpretSemanticQuestion} from "./semanticInterpreter.js";
 import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
@@ -138,9 +139,12 @@ export function setupAssistant(app,pool,{requireTenant}) {
    const context={...req.context,allowedPharmacyIds:ids,
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
    stopHeartbeat=startJsonHeartbeat(res);
-   const planRaw=await callOllama(body.question,body.history,{section:"Plan MCP"},[],
-    ollama(),model(),{system:semanticPlannerPrompt(context),format:"json",numPredict:230});
-   const plans=parseSemanticPlans(planRaw,context);
+   const resolution=interpretSemanticQuestion(body.question,context);
+   if(!["ok","general"].includes(resolution.estado)){
+    return res.end(JSON.stringify({answer:resolution.mensaje,
+     model:"farmetrica-semantica",sources:[],interpretacion:resolution}));
+   }
+   const plans=resolution.estado==="ok"?[resolution.consulta]:[];
    const results=await runAssistantSemanticQueries(pool,context,plans);
    const answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
@@ -189,11 +193,15 @@ export function setupAssistant(app,pool,{requireTenant}) {
   try{
    const context={...req.context,allowedPharmacyIds:ids,
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
-   progress("planning","Qwen está preparando las consultas de datos…");
-   const planRaw=await callOllama(body.question,body.history,{section:"Plan MCP"},[],
-    ollama(),model(),{system:semanticPlannerPrompt(context),format:"json",numPredict:230,signal:controller.signal});
+   progress("planning","Farmétrica está interpretando la pregunta con sus reglas semánticas…");
+   const resolution=interpretSemanticQuestion(body.question,context);
    if(controller.signal.aborted)return;
-   const plans=parseSemanticPlans(planRaw,context);
+   if(!["ok","general"].includes(resolution.estado)){
+    writeAssistantEvent(res,"done",{answer:resolution.mensaje,
+     model:"farmetrica-semantica",sources:[],interpretacion:resolution});
+    return;
+   }
+   const plans=resolution.estado==="ok"?[resolution.consulta]:[];
    progress("querying",plans.length?
     "Consultando "+plans.length+" "+(plans.length===1?"fuente":"fuentes")+" de Farmétrica…":
     "La pregunta no requiere consultas a la base de datos…");

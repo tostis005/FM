@@ -93,14 +93,15 @@ def main():
           "WHERE NOT EXISTS(SELECT 1 FROM fm_nomen_stage st WHERE st.cn=p.cn);")
     print("UPDATE farmetrica.nomenclator_versiones SET activo=false WHERE activo;")
     print("INSERT INTO farmetrica.nomenclator_versiones "
-          "(fuente,sha256,fecha_fuente,total_presentaciones,total_genericos,fichero,activo)"
+          "(fuente,sha256,fecha_fuente,total_presentaciones,total_genericos,fichero,transformacion_version,activo)"
           f" VALUES('AEMPS Nomenclátor de Prescripción','{sha}',"
           f"{chr(39)+date+chr(39) if date else 'NULL'},"
-          f"{rows},{generics},'prescripcion.zip',true)"
+          f"{rows},{generics},'prescripcion.zip',2,true)"
       " ON CONFLICT (sha256) DO UPDATE SET "
       "importado_en=now(),fecha_fuente=excluded.fecha_fuente,"
       "total_presentaciones=excluded.total_presentaciones,"
-      "total_genericos=excluded.total_genericos,activo=true;")
+      "total_genericos=excluded.total_genericos,"
+      "transformacion_version=excluded.transformacion_version,activo=true;")
     print("COMMIT;")
 
 if __name__=="__main__":

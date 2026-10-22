@@ -4,6 +4,7 @@ import {createHash, randomBytes, timingSafeEqual} from "node:crypto";
 import express from "express";
 import {clientMetadata,resolveOAuthClient} from "./oauthClients.js";
 import {authorizedIds, normalizedPeriod, periodFromQuestion, pharmacyIdsFromQuestion, selectTools, TOOL_CATALOG, runAssistantTool} from "./assistantAnalytics.js";
+import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 
 const READ_SCOPE="farmetrica.read";
 const MCP_VERSION="2025-06-18";
@@ -83,7 +84,9 @@ function toolDefinitions(){
   const securitySchemes=[{type:"oauth2",scopes:[READ_SCOPE]}];
   return [
     {name:"listar_contexto",securitySchemes,description:"Lista únicamente las farmacias y módulos a los que tiene acceso el usuario conectado. Úsala antes de filtrar por farmacias.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-    {name:"catalogo_analitico",securitySchemes,description:"Indica qué métricas están implementadas, requisitos de permisos y límites. Nunca prometas análisis sin herramienta.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+    {name:"catalogo_analitico",securitySchemes,description:"Indicadores clásicos de Farmétrica.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+    {name:"catalogo_semantico",securitySchemes,description:"Lee las fuentes, métricas y dimensiones reales para responder preguntas libres. Úsala antes de construir el plan de consultar_semantica. No hay una ruta por pregunta y no se ejecuta SQL arbitrario.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+    {name:"consultar_semantica",securitySchemes,description:"Ejecuta un plan flexible generado por la IA: fechas libres o histórico, agregación y filtros de farmacia, vendedor, artículo, proveedor, stock y métricas verificadas. Usa catalogo_semantico para saber qué combinar. Sólo lectura y cliente autorizado.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:SEMANTIC_MCP_QUERY_SCHEMA},
     {name:"consultar_indicador",securitySchemes,description:"Consulta una métrica verificable de Farmétrica. SQL predefinido, fechas <=366 días y farmacias autorizadas. Especifica fechas; no infieras que importe es margen.",annotations:{readOnlyHint:true,openWorldHint:false},
       inputSchema:{type:"object",properties:{indicador:{type:"string",enum:Object.keys(TOOL_CATALOG)},desde:period,hasta:period,farmacias:ids},required:["indicador","desde","hasta"],additionalProperties:false}},
     {name:"explorar_pregunta",securitySchemes,description:"Selecciona hasta dos herramientas analíticas para una pregunta en español y devuelve sus datos verificados; no redacta respuesta con LLM. Para precisión preferir consultar_indicador.",annotations:{readOnlyHint:true,openWorldHint:false},
@@ -277,6 +280,11 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
         modulos:ctx.modules};
       else if(name==="catalogo_analitico")data={indicadores:TOOL_CATALOG,
         advertencias:["No se calculan márgenes reales sin costes contrastables.","El diferencial de PUC histórico no es ahorro garantizado.","Las cifras pueden depender de la cobertura de sincronización.","No hay acceso a datos de pacientes ni SQL arbitrario."]};
+      else if(name==="catalogo_semantico")data={
+        catalogo:semanticCatalogForContext(ctx),
+        farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name}))};
+      else if(name==="consultar_semantica")data={...await runSemanticQuery(pool,ctx,args),
+        cliente:ctx.client.name};
       else if(name==="consultar_indicador"){
         if(typeof args.indicador!=="string"||typeof args.desde!=="string"||typeof args.hasta!=="string")throw new TypeError("Indicador o fechas inválidas");
         data=await readAnalytics(pool,ctx,args.indicador,{from:args.desde,to:args.hasta},

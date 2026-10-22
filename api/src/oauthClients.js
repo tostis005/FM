@@ -29,7 +29,10 @@ export function clientMetadata(body,clientId){
   if(clientId&&(body.client_id!==clientId||typeof body.client_name!=="string"||!body.client_name.trim()))return null;
   if(!Array.isArray(body.redirect_uris)||!body.redirect_uris.length||
     body.redirect_uris.length>10||!body.redirect_uris.every(validRedirect))return null;
-  if(body.token_endpoint_auth_method!==undefined&&body.token_endpoint_auth_method!=="none")return null;
+  // Some published clients prefer private_key_jwt but explicitly support none.
+  const supportsNone=clientId&&Array.isArray(body.token_endpoint_auth_methods_supported)&&
+    body.token_endpoint_auth_methods_supported.includes("none");
+  if(body.token_endpoint_auth_method!==undefined&&body.token_endpoint_auth_method!=="none"&&!supportsNone)return null;
   const grants=body.grant_types??["authorization_code"];
   const responses=body.response_types??["code"];
   if(!Array.isArray(grants)||!grants.includes("authorization_code")||

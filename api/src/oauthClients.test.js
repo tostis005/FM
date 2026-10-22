@@ -44,3 +44,12 @@ test("Claude published metadata may advertise additional grants without enabling
  assert.deepEqual(clientMetadata(metadata,client_id).grant_types,["authorization_code","refresh_token"]);
  assert.equal(clientMetadata(metadata),null);
 });
+
+test("ChatGPT published identity explicitly supports public PKCE clients",()=>{
+ const client_id="https://chatgpt.com/oauth/client.json";
+ const metadata={client_id,client_name:"ChatGPT",redirect_uris:["https://chatgpt.com/connector_platform_oauth_redirect"],
+  grant_types:["authorization_code","refresh_token"],response_types:["code"],
+  token_endpoint_auth_method:"private_key_jwt",token_endpoint_auth_methods_supported:["none","private_key_jwt"]};
+ assert.equal(clientMetadata(metadata,client_id).token_endpoint_auth_method,"none");
+ assert.equal(clientMetadata({...metadata,token_endpoint_auth_methods_supported:["private_key_jwt"]},client_id),null);
+});

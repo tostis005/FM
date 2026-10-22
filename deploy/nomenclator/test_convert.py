@@ -12,7 +12,7 @@ from convert import convert
 def xml(rows):
     def el(row):
         return "<prescripcion>"+''.join(f"<{k}>{v}</{k}>" for k,v in row.items())+"</prescripcion>"
-    return "<listado>"+''.join(el(r) for r in rows)+"</listado>"
+    return ("<listado><header><listprescriptiondate>2026-10-21</listprescriptiondate></header>"+''.join(el(r) for r in rows)+"</listado>")
 
 class ConverterTest(unittest.TestCase):
     def test_mapping_and_generic_flag_are_official(self):
@@ -23,7 +23,7 @@ class ConverterTest(unittest.TestCase):
                      cod_dcsa="101",des_prese="Medicamento A\n presentación especial",sw_generico="1",
                      sw_comercializado="1",laboratorio_comercializador="LAB02",
                      laboratorio_titular="LAB01",
-                     listprescriptiondate="18/10/2026"),
+                     ),
                 dict(cod_nacion="654322",cod_dcpf="123456789",cod_dcp="98765",
                      cod_dcsa="101",des_prese="Medicamento B",sw_generico="1",
                      sw_comercializado="0",laboratorio_comercializador="LAB02",
@@ -66,7 +66,7 @@ class ConverterTest(unittest.TestCase):
             self.assertEqual(rows[0]["generico"],"true")
             self.assertEqual(rows[2]["generico"],"false")
             self.assertEqual(rows[1]["comercializado"],"false")
-            self.assertEqual(json.loads(meta.read_text())["fecha_fuente"],"2026-10-18")
+            self.assertEqual(json.loads(meta.read_text())["fecha_fuente"],"2026-10-21")
 
     def test_fails_closed_if_zip_is_incomplete(self):
         with tempfile.TemporaryDirectory() as d:

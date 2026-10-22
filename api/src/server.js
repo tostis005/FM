@@ -22,6 +22,7 @@ import {setupHistoryCoverage} from "./historyCoverage.js";
 import { setupAssistant } from "./assistant.js";
 import { setupAIMcp } from "./aiMcp.js";
 import { setupPublicDemoMcp } from "./aiMcpDemo.js";
+import { setupTemporaryAnalyticsLinks } from "./aiShareLinks.js";
 import {setupSalesDetail} from "./salesDetail.js";
 import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
@@ -110,6 +111,7 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
 const {authenticateDemo}=setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
 // MCP demo: PostgreSQL real y conexión OAuth, sin claves API.
 setupPublicDemoMcp(app,pool,{authenticateOAuthDemo:authenticateDemo});
+setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin});
 setupDemoClients(app,pool,{requireSuperadmin});
 // Impedir mutaciones de datos reales desde un tenant demo enlazado.
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas

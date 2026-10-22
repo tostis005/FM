@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from "react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
+import AIShareLinks from "./AIShareLinks.jsx";
 import {Building2,CheckCircle2,Users} from "lucide-react";
 import "./moduleDemo.css";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
@@ -160,6 +161,7 @@ export function ClientesPanel({onUpdated}){
    </form>
   </section>
   {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
+  <AIShareLinks clients={clients}/>
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}

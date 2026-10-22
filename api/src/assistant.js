@@ -77,7 +77,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
    body:JSON.stringify({
     model:chosenModel,stream:Boolean(settings.onDelta),think:false,messages,
     ...(settings.format?{format:settings.format}:{}),
-    options:{temperature:0.1,num_ctx:2048,num_predict:settings.numPredict??370},
+    options:{temperature:0.1,num_ctx:2048,num_predict:settings.numPredict??370,num_thread:2},
     keep_alive:"2m"
    })
   });

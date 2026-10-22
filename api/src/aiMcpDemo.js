@@ -1,6 +1,7 @@
 // MCP demo con PostgreSQL real, autenticación OAuth y herramientas semánticas sin SQL libre.
 // Reutiliza el motor de indicadores del MCP principal. No acepta SQL arbitrario.
 import {readAnalytics} from "./aiMcp.js";
+import {interpretSemanticQuestion} from "./semanticInterpreter.js";
 import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 import {authorizedIds,normalizedPeriod,periodFromQuestion,pharmacyIdsFromQuestion,
   selectTools,TOOL_CATALOG} from "./assistantAnalytics.js";
@@ -13,17 +14,19 @@ const rpcResult=(id,data)=>({jsonrpc:"2.0",id,result:{
   content:[{type:"text",text:JSON.stringify(data)}],structuredContent:data}});
 const metadata={modo:"DEMO_REAL",ficticio:false,origen:"PostgreSQL",soloLectura:true};
 export const DEMO_MCP_TOOLS=[
+   {name:"resolver_pregunta",description:"MÉTODO PREFERIDO para lenguaje natural: interpreta en el servidor con reglas únicas, ejecuta consulta segura y entrega filas reales o explica ambigüedad. Independiente de ChatGPT/Claude/Qwen.",annotations:{readOnlyHint:true,openWorldHint:false},
+     inputSchema:{type:"object",properties:{pregunta:{type:"string",minLength:2,maxLength:1000}},required:["pregunta"],additionalProperties:false}},
   {name:"listar_contexto",description:"Consulta las farmacias del cliente autorizado mediante OAuth.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
   {name:"catalogo_analitico",description:"Catálogo de indicadores clásicos con datos reales.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-  {name:"catalogo_semantico",description:"Usa primero esta herramienta para entender fuentes, métricas, dimensiones, filtros y ejemplos. La IA convierte cualquier pregunta sobre estos datos en un plan para consultar_semantica; no construyas endpoints ni SQL.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-  {name:"consultar_semantica",description:"Ejecuta una consulta flexible sobre datos reales de ventas, compras o existencias; combina fuentes permitidas, períodos históricos, agrupación por farmacia/vendedor/producto/proveedor y métricas auditadas. Planifica los argumentos con catalogo_semantico. Nunca envíes SQL.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:SEMANTIC_MCP_QUERY_SCHEMA},
+  {name:"catalogo_semantico",description:"Catálogo avanzado de fuentes, métricas y dimensiones; para preguntas en español utiliza resolver_pregunta, que aplica una interpretación única.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+  {name:"consultar_semantica",description:"Consulta avanzada con un plan estructurado explícito, validado por Farmétrica. Para texto libre usa resolver_pregunta. Nunca envíes SQL.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:SEMANTIC_MCP_QUERY_SCHEMA},
   {name:"consultar_indicador",description:"Consulta datos reales de compras, ventas, stock o ahorro con SQL predefinido y solo lectura.",annotations:{readOnlyHint:true,openWorldHint:false},
     inputSchema:{type:"object",properties:{indicador:{type:"string",enum:Object.keys(TOOL_CATALOG)},
       desde:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
       hasta:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
       farmacias:{type:"array",items:{type:"integer"},maxItems:50}},
       required:["indicador"],additionalProperties:false}},
-  {name:"explorar_pregunta",description:"Interpreta una pregunta en español y ejecuta hasta dos indicadores SQL reales, de solo lectura.",annotations:{readOnlyHint:true,openWorldHint:false},
+  {name:"explorar_pregunta",description:"Compatibilidad con API antigua de indicadores; para interpretación canónica de lenguaje natural usa resolver_pregunta.",annotations:{readOnlyHint:true,openWorldHint:false},
     inputSchema:{type:"object",properties:{pregunta:{type:"string",minLength:2,maxLength:1000},
       desde:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
       hasta:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
@@ -93,7 +96,13 @@ export async function handlePublicDemoMcp(input,pool,slug,authenticatedContext=n
     else if(name==="catalogo_semantico")data={...metadata,
       catalogo:semanticCatalogForContext(ctx),
       farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name}))};
-    else if(name==="consultar_semantica")data={...metadata,...await runSemanticQuery(pool,ctx,args),
+    else if(name==="resolver_pregunta"){
+       const resolution=interpretSemanticQuestion(args.pregunta,ctx);
+       data=resolution.estado==="ok"?
+        {...metadata,...resolution,...await runSemanticQuery(pool,ctx,resolution.consulta),cliente:ctx.client.name}:
+        {...metadata,...resolution,cliente:ctx.client.name};
+     }
+     else if(name==="consultar_semantica")data={...metadata,...await runSemanticQuery(pool,ctx,args),
       cliente:ctx.client.name};
     else if(name==="consultar_indicador"){
       if(typeof args.indicador!=="string"||!Object.hasOwn(TOOL_CATALOG,args.indicador))

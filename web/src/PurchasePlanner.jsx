@@ -11,6 +11,10 @@ import "./purchasePlanner.css";
 const today=()=>resolveSalesPeriod("today").from;
 const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
 const euro=n=>n==null?"Sin PUC":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:3}).format(Number(n));
+const labOfficial=(name,code)=>{
+ const text=String(name||"").trim();
+ return text|| (code?"Código AEMPS "+code+" · nombre no resuelto":"No consta en el nomenclátor");
+};
 const exportSafe=x=>{const str=String(x??"");return '"'+(/^[\s]*[=+@-]/.test(str)?"'"+str:str).replaceAll('"','""')+'"'};
 const key=p=>String(p.pharmacyId)+"|"+String(p.groupKey||p.articleId);
 export const STAGING_PREFIX="fm_preparador_enlace:";
@@ -320,9 +324,13 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
       {g.kind==="generico"&&<details className="fm-planner-presentations">
        <summary>CN y laboratorios del conjunto genérico ({(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).length} presentaciones oficiales)</summary>
        <div className="fm-planner-table-scroll">
-        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación del nomenclátor</th><th>Fabricante oficial</th><th>Proveedor / PUC observado</th></tr></thead>
+        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación AEMPS</th>
+         <th>Titular de autorización (AEMPS)</th><th>Laboratorio comercializador (AEMPS)</th>
+         <th>Proveedor / PUC observado</th></tr></thead>
          <tbody>{(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).map(v=><tr key={v.cn}>
-          <td>{v.cn}</td><td>{v.name}</td><td>{v.laboratory||"No informado en el nomenclátor"}</td>
+          <td>{v.cn}</td><td>{v.name}</td>
+          <td>{labOfficial(v.titular||v.laboratory,v.titularCode||v.laboratoryCode)}</td>
+          <td>{labOfficial(v.commercializer,v.commercializerCode)}</td>
           <td>{(labData?.recommendations||[]).find(r=>r.groupKey===g.key)?.options
            ?.filter(o=>String(o.cn)===String(v.cn)).slice(0,3)
            .map(o=>o.supplierName+" · "+euro(o.puc)+
@@ -331,7 +339,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
          </tr>)}</tbody>
         </table>
        </div>
-       <small>El fabricante oficial y el laboratorio proveedor no son necesariamente el mismo. Solo se recomiendan proveedores no cooperativos con PUC suficiente y verificado.</small>
+       <small>El titular de autorización y el comercializador constan en el nomenclátor AEMPS por CN. No equivalen necesariamente al fabricante físico ni al proveedor de la farmacia; los PUC proceden de compras históricas verificadas.</small>
       </details>}
      </div>;
  const columns=[

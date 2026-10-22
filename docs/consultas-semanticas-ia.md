@@ -49,3 +49,31 @@ y derivar la consulta estructurada desde el catálogo. Esta implementación no i
 un conector MCP ni garantiza invocaciones automáticas desde todas las interfaces.
 Preguntas que requieran fuentes fuera de ventas, compras y stock deberán esperar
 la ampliación de un catálogo auditado; no se responde con columnas imaginadas.
+
+
+## MCP para preguntas libres
+
+Tanto `/api/mcp` como `/api/mcp-demo` publican las mismas herramientas semánticas,
+además de las herramientas analíticas clásicas:
+
+- `listar_contexto`: farmacias y módulos permitidos.
+- `catalogo_semantico`: tablas semánticas, dimensiones, métricas, sus límites y ejemplos.
+- `consultar_semantica`: recibe una combinación válida de esos elementos y devuelve
+  filas verificadas de PostgreSQL.
+
+El modelo de IA interpreta la pregunta libre del usuario y **construye él mismo**
+el plan JSON según el catálogo. La API no requiere rutas por farmacia, período ni
+tipo de análisis. Una misma herramienta resuelve vendedores de hoy, artículos de
+julio pasado, tendencias históricas por mes o referencias con riesgo de falta de stock.
+
+Este servidor no incluye un modelo propio que traduzca texto libre a SQL;
+esa responsabilidad corresponde al cliente con IA que consume MCP. Las consultas
+del MCP requieren OAuth. El acceso por enlace es distinto: expone el catálogo
+y una URL genérica `?consulta=<JSON_URLENCODED>&formato=json`, no convierte por sí
+mismo cualquier frase en una consulta. Si el cliente ChatGPT no soporta llamadas
+a herramientas MCP o no puede seguir URL parametrizadas, el servidor por sí solo
+no suprime esa limitación.
+
+Solo se autorizan los datos comerciales identificados en el catálogo (ventas,
+compras, stock). No se promete responder preguntas sobre tablas ajenas ni datos
+no contrastados; ampliar fuentes requiere auditar y añadir su modelo semántico.

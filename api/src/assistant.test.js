@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {startJsonHeartbeat} from "./assistant.js";
+import {callOllama,startJsonHeartbeat} from "./assistant.js";
 import test from "node:test";
 import {validateAssistantBody,rateCheck} from "./assistantPolicy.js";
 import {quoteSchema,authorizedIds,selectTools,periodFromQuestion,normalizedPeriod,runAssistantTool,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
@@ -78,4 +78,25 @@ test("los indicadores clásicos leen fuentes actualizadas con filtro de fecha y 
     assert.ok(sql.includes("t.fecha < ($2::date+interval '1 day')"));
     assert.deepEqual(params,[dates.from,dates.to,[1],"ampedia"]);
   }
+});
+
+test("usa dos hilos en planificación y redacción con Ollama",async()=>{
+ const originalFetch=globalThis.fetch;
+ const requests=[];
+ try{
+  globalThis.fetch=async(_url,init)=>{
+   requests.push(JSON.parse(init.body));
+   return {ok:true,json:async()=>({message:{content:"OK"}})};
+  };
+  const base=["¿Cuánto se ha vendido hoy?",[],{section:"Farmétrica"},[],
+   "http://ollama:11434","qwen3:0.6b"];
+  await callOllama(...base,{numPredict:230,format:"json"});
+  await callOllama(...base,{numPredict:240});
+  assert.equal(requests.length,2);
+  assert.deepEqual(requests.map(x=>x.options.num_thread),[2,2]);
+  assert.deepEqual(requests.map(x=>x.options.num_predict),[230,240]);
+  assert.ok(requests.every(x=>x.think===false));
+ }finally{
+  globalThis.fetch=originalFetch;
+ }
 });

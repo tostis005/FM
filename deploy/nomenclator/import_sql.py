@@ -6,7 +6,10 @@ import re
 import sys
 from pathlib import Path
 
-FIELDS = "cn,nombre,laboratorio_codigo,laboratorio,principio_activo,dcpf,dcp,dcsa,generico,comercializado"
+FIELDS = ("cn,nombre,laboratorio_codigo,laboratorio,"
+          "laboratorio_titular_codigo,laboratorio_titular,"
+          "laboratorio_comercializador_codigo,laboratorio_comercializador,"
+          "principio_activo,dcpf,dcp,dcsa,generico,comercializado")
 def main():
     metadata=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     csv_path=Path(sys.argv[2])
@@ -23,6 +26,8 @@ def main():
     print("SET LOCAL lock_timeout='15s';")
     print("CREATE TEMP TABLE fm_nomen_stage ("
           "cn text,nombre text,laboratorio_codigo text,laboratorio text,"
+          "laboratorio_titular_codigo text,laboratorio_titular text,"
+          "laboratorio_comercializador_codigo text,laboratorio_comercializador text,"
           "principio_activo text,dcpf text,dcp text,dcsa text,"
           "generico boolean,comercializado boolean) ON COMMIT DROP;")
     # PostgreSQL COPY FROM STDIN puede fallar con finales de línea de los XML
@@ -63,15 +68,24 @@ def main():
         END IF;
       END $nomen$;""")
     print("""INSERT INTO farmetrica.nomenclator_presentaciones
-      (cn,nombre,laboratorio_codigo,laboratorio,principio_activo,dcpf,dcp,dcsa,
-       generico,comercializado,actualizado_en)
+      (cn,nombre,laboratorio_codigo,laboratorio,
+       laboratorio_titular_codigo,laboratorio_titular,
+       laboratorio_comercializador_codigo,laboratorio_comercializador,
+       principio_activo,dcpf,dcp,dcsa,generico,comercializado,actualizado_en)
       SELECT cn,nombre,nullif(laboratorio_codigo,''),nullif(laboratorio,''),
+       nullif(laboratorio_titular_codigo,''),nullif(laboratorio_titular,''),
+       nullif(laboratorio_comercializador_codigo,''),nullif(laboratorio_comercializador,''),
        nullif(principio_activo,''),dcpf,nullif(dcp,''),nullif(dcsa,''),
        generico,comercializado,now()
       FROM fm_nomen_stage
       ON CONFLICT (cn) DO UPDATE SET
        nombre=excluded.nombre,laboratorio_codigo=excluded.laboratorio_codigo,
-       laboratorio=excluded.laboratorio,principio_activo=excluded.principio_activo,
+       laboratorio=excluded.laboratorio,
+       laboratorio_titular_codigo=excluded.laboratorio_titular_codigo,
+       laboratorio_titular=excluded.laboratorio_titular,
+       laboratorio_comercializador_codigo=excluded.laboratorio_comercializador_codigo,
+       laboratorio_comercializador=excluded.laboratorio_comercializador,
+       principio_activo=excluded.principio_activo,
        dcpf=excluded.dcpf,dcp=excluded.dcp,dcsa=excluded.dcsa,
        generico=excluded.generico,comercializado=excluded.comercializado,
        actualizado_en=now();""")
@@ -82,7 +96,11 @@ def main():
           "(fuente,sha256,fecha_fuente,total_presentaciones,total_genericos,fichero,activo)"
           f" VALUES('AEMPS Nomenclátor de Prescripción','{sha}',"
           f"{chr(39)+date+chr(39) if date else 'NULL'},"
-          f"{rows},{generics},'prescripcion.zip',true);")
+          f"{rows},{generics},'prescripcion.zip',true)"
+      " ON CONFLICT (sha256) DO UPDATE SET "
+      "importado_en=now(),fecha_fuente=excluded.fecha_fuente,"
+      "total_presentaciones=excluded.total_presentaciones,"
+      "total_genericos=excluded.total_genericos,activo=true;")
     print("COMMIT;")
 
 if __name__=="__main__":

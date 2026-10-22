@@ -100,6 +100,24 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal((await fetch(base+path+"?indicador=DROP%20TABLE")).status,400);
   assert.equal((await fetch(base+path+"?indicador=ventas_resumen&desde=2026-01-01&hasta=2026-12-31&farmacias=999")).status,400);
   assert.equal((await fetch(base+path+"?indicador=ventas_resumen&pregunta=hola")).status,400);
+  const semanticPlan={fuente:"ventas",agrupar:["farmacia","vendedor"],metricas:["importe"],
+   periodo:"hoy",limite:10};
+  const semanticResponse=await fetch(base+path+"?consulta="+
+   encodeURIComponent(JSON.stringify(semanticPlan))+"&formato=json");
+  assert.equal(semanticResponse.status,200);
+  const semanticData=await semanticResponse.json();
+  assert.equal(semanticData.modo,"consulta_semantica");
+  assert.equal(semanticData.fuente,"ventas");
+  assert.equal(semanticData.ficticio,false);
+  assert.ok(statements.some(x=>x.sql.includes("fm_ventas_analitica")));
+  assert.ok(statements.some(x=>x.sql.includes("SET LOCAL statement_timeout='12000ms'")));
+  const deniedSemantic=await fetch(base+path+"?consulta="+
+   encodeURIComponent(JSON.stringify({fuente:"ventas",sql:"DROP TABLE clientes"})));
+  assert.equal(deniedSemantic.status,400);
+  const stockPlan={fuente:"stock",agrupar:["farmacia","producto"],
+   metricas:["stock_actual","dias_cobertura"],estado_stock:"bajo"};
+  assert.equal((await fetch(base+path+"?consulta="+
+   encodeURIComponent(JSON.stringify(stockPlan))+"&formato=json")).status,200);
   expired=true;
   assert.equal((await fetch(base+path)).status,410);
   const renewed=await (await fetch(base+admin,opts)).json();

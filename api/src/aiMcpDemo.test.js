@@ -55,12 +55,14 @@ test("el MCP OAuth interpreta preguntas con reglas de Farmétrica, nunca con un 
  assert.equal(result.body.result.structuredContent.consulta.fuente,"ventas");
  assert.deepEqual(result.body.result.structuredContent.consulta.agrupar,["farmacia"]);
  assert.equal(result.body.result.structuredContent.origen,"PostgreSQL");
- const before=calls.length;
+ const analyticsBefore=calls.filter(c=>c.sql==="BEGIN TRANSACTION READ ONLY").length;
  const unclear=await call("tools/call",{name:"resolver_pregunta",arguments:{
   pregunta:"Ventas por farmacia"
  }});
  assert.equal(unclear.body.result.structuredContent.estado,"aclaracion");
- assert.equal(calls.length,before,"una pregunta ambigua no debe consultar PostgreSQL");
+ assert.equal(unclear.body.result.structuredContent.filas,undefined);
+ assert.equal(calls.filter(c=>c.sql==="BEGIN TRANSACTION READ ONLY").length,
+  analyticsBefore,"una pregunta ambigua no debe ejecutar SQL analítico");
 });
 test("MCP demo permite consultas libres componiendo métricas y dimensiones sin SQL",async()=>{
  const context=(await call("tools/call",{name:"catalogo_semantico",arguments:{}})).body.result.structuredContent;

@@ -413,7 +413,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
    {bySupplier.map(p=><div key={p.key}><span>{p.name}</span><small>{p.products} líneas · {p.pharmacies.size} farmacias</small>
     <b>{whole(p.units)} uds.</b></div>)}
   </div>}
-  <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador"
+  <ListTable rows={groups} columns={columns} rowKey={g=>g.key} label="artículos del preparador" tableClass="fm-planner-main-table"
    renderExpandedRow={renderPlannerDetails}
    expandedRowKeys={Object.entries(open).filter(([,expanded])=>expanded).map(([key])=>String(key))}
    sort={sort} onSortChange={next=>{setSort(next||{key:"suggested",direction:"desc"});setPage(1)}}

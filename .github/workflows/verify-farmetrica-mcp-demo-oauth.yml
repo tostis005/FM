@@ -1,0 +1,52 @@
+name: Verificar OAuth MCP Demo ChatGPT
+on:
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Probar discovery y redireccion OAuth del MCP demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin=https://farmetrica.com
+          curl -fsS --max-time 15 "$origin/.well-known/oauth-protected-resource/api/mcp-demo" > /tmp/demo.json
+          curl -fsS --max-time 15 "$origin/.well-known/oauth-protected-resource/api/mcp" > /tmp/main.json
+          curl -fsS --max-time 15 "$origin/.well-known/oauth-authorization-server" > /tmp/oauth.json
+          python3 - <<'PY'
+          import json
+          demo=json.load(open('/tmp/demo.json'))
+          main=json.load(open('/tmp/main.json'))
+          oauth=json.load(open('/tmp/oauth.json'))
+          assert demo['resource']=='https://farmetrica.com/api/mcp-demo'
+          assert main['resource']=='https://farmetrica.com/api/mcp'
+          assert demo['authorization_servers']==[oauth['issuer']]
+          assert oauth['client_id_metadata_document_supported'] is True
+          assert 'S256' in oauth['code_challenge_methods_supported']
+          print('OK: recursos independientes, metadata OAuth CIMD y PKCE')
+          PY
+          for route in mcp mcp-demo; do
+            code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' "$origin/api/$route")
+            test "$code" = 401 || { echo "$route debería devolver 401, devuelve $code"; exit 1; }
+          done
+          code=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -G \
+            "$origin/api/ai/oauth/authorize" \
+            --data-urlencode 'client_id=https://chatgpt.com/oauth/client.json' \
+            --data-urlencode 'response_type=code' \
+            --data-urlencode 'redirect_uri=https://chatgpt.com/connector_platform_oauth_redirect' \
+            --data-urlencode 'code_challenge_method=S256' \
+            --data-urlencode 'code_challenge=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' \
+            --data-urlencode 'resource=https://farmetrica.com/api/mcp-demo' \
+            --data-urlencode 'scope=farmetrica.read offline_access' \
+            --data-urlencode 'state=smoke-test')
+          test "$code" = 302 || { echo "OAuth demo no inicia el login: $code"; exit 1; }
+          echo 'OK: autorización OAuth y MCP protegidos'

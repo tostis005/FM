@@ -4,14 +4,17 @@
 import {loadDemoMcpContext} from "./aiMcpDemo.js";
 import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 import {makeTemporaryModel} from "./aiShareContract.js";
+import {interpretSemanticQuestion} from "./semanticInterpreter.js";
 
 const ROOT="https://farmetrica.com/api/consulta-temporal/";
 const RE=/^fm_share_[A-Za-z0-9_-]{43}$/;
 const SCHEMA_URL={type:"string",description:"URL temporal de Farmétrica copiada por el usuario; nunca otra URL."};
 const tools=[
- {name:"leer_modelo_temporal",description:"Primero: carga tablas autorizadas, relaciones, fórmulas, farmacias e IDs del enlace temporal. ChatGPT debe interpretar la pregunta; no hay un modelo de IA detrás.",annotations:{readOnlyHint:true,openWorldHint:false},
+ {name:"resolver_pregunta_temporal",description:"MÉTODO RECOMENDADO: envía la pregunta en español literalmente. Farmétrica interpreta fuente, métricas, dimensiones y fechas con reglas únicas independientes de la IA; ejecuta SQL seguro y devuelve el resultado. Si hay ambigüedad devuelve aclaración, no datos inventados.",annotations:{readOnlyHint:true,openWorldHint:false},
+  inputSchema:{type:"object",properties:{url:SCHEMA_URL,pregunta:{type:"string",minLength:2,maxLength:1000}},required:["url","pregunta"],additionalProperties:false}},
+ {name:"leer_modelo_temporal",description:"Consulta el catálogo único y las definiciones auditadas. Para preguntas en español utiliza resolver_pregunta_temporal, que evita planes distintos entre modelos.",annotations:{readOnlyHint:true,openWorldHint:false},
   inputSchema:{type:"object",properties:{url:SCHEMA_URL},required:["url"],additionalProperties:false}},
- {name:"consultar_datos_temporales",description:"Ejecuta UNA consulta genérica de solo lectura en PostgreSQL a partir de un plan creado por ChatGPT según leer_modelo_temporal. Sin rutas por pregunta ni SQL libre.",annotations:{readOnlyHint:true,openWorldHint:false},
+ {name:"consultar_datos_temporales",description:"Consulta avanzada para clientes que proporcionen planes estructurados explícitos validados por Farmétrica; preferir resolver_pregunta_temporal cuando se parte de texto libre.",annotations:{readOnlyHint:true,openWorldHint:false},
   inputSchema:{type:"object",properties:{url:SCHEMA_URL,consulta:SEMANTIC_MCP_QUERY_SCHEMA},
    required:["url","consulta"],additionalProperties:false}}
 ];
@@ -62,7 +65,7 @@ export function setupShareMcp(app,pool,{resolveLink}){
   if(b.method!=="tools/call")return res.json(fail(id,-32601,"Method not found"));
   const name=b.params?.name,args=b.params?.arguments;
   if(!tools.some(t=>t.name===name)||!args||typeof args!=="object"||Array.isArray(args)||
-     Object.keys(args).some(x=>!["url",...(name==="consultar_datos_temporales"?["consulta"]:[])].includes(x)))
+     Object.keys(args).some(x=>!["url",...(name==="consultar_datos_temporales"?["consulta"]:name==="resolver_pregunta_temporal"?["pregunta"]:[])].includes(x)))
    return res.json(toolError(id,"Herramienta o argumentos no permitidos"));
   try{
    const token=parseShareUrl(args.url);
@@ -72,6 +75,15 @@ export function setupShareMcp(app,pool,{resolveLink}){
    const ctx=await loadDemoMcpContext(pool,slug);
    if(name==="leer_modelo_temporal")
     return res.json(textResult(id,makeTemporaryModel(ctx,ROOT+token)));
+   if(name==="resolver_pregunta_temporal"){
+    const interpretation=interpretSemanticQuestion(args.pregunta,ctx);
+    if(interpretation.estado!=="ok")
+     return res.json(textResult(id,{...interpretation,origen:"Farmétrica",
+      soloLectura:true,cliente:ctx.client.name}));
+    const result=await runSemanticQuery(pool,ctx,interpretation.consulta);
+    return res.json(textResult(id,{...interpretation,...result,
+      cliente:ctx.client.name,origen:"PostgreSQL",ficticio:false}));
+   }
    if(!args.consulta||typeof args.consulta!=="object"||Array.isArray(args.consulta)||
      JSON.stringify(args.consulta).length>6000)
     return res.json(toolError(id,"Consulta semántica inválida; lee primero el modelo"));

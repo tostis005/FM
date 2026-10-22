@@ -1,4 +1,4 @@
-# Farmétrica ↔ ChatGPT: conector privado MCP (piloto)
+# Farmétrica ↔ clientes IA: conector privado MCP (piloto)
 
 ## Diseño: una sola API de negocio, dos interfaces
 
@@ -49,7 +49,19 @@ Esto es una **base real pero no todavía cobertura total del negocio**. El sigui
 5. En ChatGPT web, abrir **Plugins → + → Add custom MCP server**, añadir «Farmétrica», URL https://TU_DOMINIO_REAL/api/mcp, autenticación OAuth mediante **Client ID Metadata Document (CIMD)** y alcance farmetrica.read offline_access si solicita scopes. Elegir privado, instalarlo y comenzar un chat indicando @Farmétrica.
 6. ChatGPT abrirá Farmétrica para autenticación (Google o cuenta local) y consentimiento de cliente. No enviar passwords, claves de base de datos ni cookies a ChatGPT. Después probar listar_contexto y una consulta de un período corto. Si ChatGPT utiliza un callback no contemplado, examinar su metadata y validar ese callback antes de ampliarlo (jamás permitir redirecciones arbitrarias).
 
-> Esta implementación acepta **solo** los client ID metadata documents de chatgpt.com y sus callbacks oficiales. No ofrece DCR ni acepta client secrets, bearer tokens estáticos introducidos a mano o autenticación sin usuario. La disponibilidad de complementos MCP depende del plan/entorno de ChatGPT y se comprueba al conectarlo.
+## Clientes MCP de distintos proveedores
+
+Se admiten clientes públicos OAuth con código de autorización + PKCE S256, sin lista cerrada de proveedores:
+
+- **CIMD**: el identificador HTTPS se resuelve como un documento JSON; se exige coincidencia exacta de identidad y callback. No se siguen redirecciones HTTP. La descarga limita tamaño y tiempo, rechaza redes privadas y fija la dirección DNS durante TLS. Actualmente requiere un destino IPv4 público; un cliente sin él puede usar DCR.
+- **DCR (RFC 7591)**: `POST /api/ai/oauth/register`, anunciado en los metadatos OAuth. Guarda el ID y sus callbacks en PostgreSQL mediante la migración 023. El registro por sí solo no concede acceso a datos.
+- **Claude**: usar `https://farmetrica.com/api/mcp`, OAuth y la identidad publicada de Claude; si el documento no está disponible, elegir «Register automatically». No introducir las credenciales OAuth de Google en Claude.
+- **Otros clientes**: deben implementar CIMD o DCR, autenticación de cliente `none`, PKCE S256, `resource=https://farmetrica.com/api/mcp` y scope `farmetrica.read` (opcional `offline_access`). No se promete compatibilidad con clientes que solo admitan otros mecanismos de autenticación.
+- Callbacks HTTPS o HTTP con IP de loopback para aplicaciones locales; coincidencia exacta, sin comodines, credenciales ni fragmentos.
+- Cada conexión requiere sesión de Farmétrica (Google o cuenta local), consentimiento explícito y un cliente/farmacias autorizados. Se muestra el identificador y el destino además del nombre declarado por la aplicación. POST de consentimiento exige Origin de Farmétrica.
+- Permisos de lectura, revocación, tokens guardados como hash, vinculación al recurso y comprobación de permisos en cada consulta se mantienen.
+
+Pruebas: `node --test api/src/aiMcp.test.js api/src/oauthClients.test.js api/src/oauthFlow.test.js`. El test de flujo utiliza una base simulada; la conexión personal en Claude requiere que el usuario complete el consentimiento.
 
 ## Gestión de accesos
 
@@ -67,3 +79,4 @@ Esto es una **base real pero no todavía cobertura total del negocio**. El sigui
 - Controlar retención de auditorías/conexiones mediante política de datos antes de un despliegue comercial.
 
 El acceso es privado por **autenticación y autorización de Farmétrica**. La distribución del plugin a distintas cuentas externas de ChatGPT depende de las modalidades de publicación/compartición de ChatGPT; no se puede prometer una lista privada de correos externos sin comprobar esa opción.
+

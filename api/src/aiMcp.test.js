@@ -1,25 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createHash} from "node:crypto";
-import {validChatGPTClient,validPkce,validAuthorizeRequest,readAnalytics,MCP_TOOLS} from "./aiMcp.js";
+import {validPkce,validAuthorizeRequest,readAnalytics,MCP_TOOLS} from "./aiMcp.js";
 
 const CLIENT="https://chatgpt.com/oauth/client.json";
 const REDIRECT="https://chatgpt.com/connector_platform_oauth_redirect";
+const client={redirect_uris:[REDIRECT],scope:"farmetrica.read offline_access"};
 const URLS={resource:"https://fm.example/api/mcp"};
 const challenge=createHash("sha256").update("a".repeat(64)).digest("base64url");
 const params={response_type:"code",client_id:CLIENT,redirect_uri:REDIRECT,code_challenge_method:"S256",
   code_challenge:challenge,resource:URLS.resource,state:"opaque",scope:"farmetrica.read offline_access"};
 
-test("OAuth exige el cliente ChatGPT, redirect fijo, recurso y PKCE S256",()=>{
-  assert.equal(validAuthorizeRequest(params,URLS),true);
-  assert.equal(validAuthorizeRequest({...params,redirect_uri:"https://evil.example/callback"},URLS),false);
-  assert.equal(validAuthorizeRequest({...params,resource:"https://evil.example/api/mcp"},URLS),false);
-  assert.equal(validAuthorizeRequest({...params,code_challenge_method:"plain"},URLS),false);
-  assert.equal(validAuthorizeRequest({...params,scope:"admin.write"},URLS),false);
-  assert.equal(validChatGPTClient("https://chatgpt.com/oauth/example_callback12/client.json",
-    "https://chatgpt.com/connector/oauth/example_callback12"),true);
-  assert.equal(validChatGPTClient("https://attacker.example/oauth/client.json",REDIRECT),false);
-  assert.equal(validChatGPTClient(CLIENT,"https://chatgpt.com/connector/oauth/other"),false);
+test("OAuth exige callback registrado, recurso, permisos y PKCE S256",()=>{
+  assert.equal(validAuthorizeRequest(params,URLS,client),true);
+  assert.equal(validAuthorizeRequest({...params,redirect_uri:"https://evil.example/callback"},URLS,client),false);
+  assert.equal(validAuthorizeRequest({...params,resource:"https://evil.example/api/mcp"},URLS,client),false);
+  assert.equal(validAuthorizeRequest({...params,code_challenge_method:"plain"},URLS,client),false);
+  assert.equal(validAuthorizeRequest({...params,scope:"admin.write"},URLS,client),false);
   assert.equal(validPkce("a".repeat(64),challenge),true);
   assert.equal(validPkce("b".repeat(64),challenge),false);
   assert.equal(validPkce("bad",challenge),false);
@@ -55,3 +52,4 @@ test("consulta con farmacia autorizada, transacción READ ONLY y rollback",async
   await assert.rejects(readAnalytics(pool,context,"DROP TABLE",{from:"2026-10-01",to:"2026-10-22"},[]),/desconocido/);
   assert.equal(calls.filter(x=>x.text==="BEGIN TRANSACTION READ ONLY").length,1);
 });
+

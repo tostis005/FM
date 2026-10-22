@@ -2,6 +2,7 @@
 // Solo lectura: no acepta SQL, nombres de tablas, esquemas ni credenciales del cliente.
 import {createHash, randomBytes, timingSafeEqual} from "node:crypto";
 import express from "express";
+import {clientMetadata,resolveOAuthClient} from "./oauthClients.js";
 import {authorizedIds, normalizedPeriod, periodFromQuestion, pharmacyIdsFromQuestion, selectTools, TOOL_CATALOG, runAssistantTool} from "./assistantAnalytics.js";
 
 const READ_SCOPE="farmetrica.read";
@@ -29,33 +30,25 @@ const URLS=()=>{const origin=mcpOrigin();return origin?{
   token:origin+"/api/ai/oauth/token",revoke:origin+"/api/ai/oauth/revoke"
 }:null;};
 
-export function validChatGPTClient(clientId,redirectUri){
-  // El redirect no se obtiene de una cabecera Host ni de parámetros arbitrarios.
-  if(typeof clientId!=="string"||typeof redirectUri!=="string")return false;
-  if(clientId==="https://chatgpt.com/oauth/client.json")
-    return redirectUri==="https://chatgpt.com/connector_platform_oauth_redirect";
-  const match=/^https:\/\/chatgpt\.com\/oauth\/([a-zA-Z0-9_-]{8,128})\/client\.json$/.exec(clientId);
-  return Boolean(match&&redirectUri==="https://chatgpt.com/connector/oauth/"+match[1]);
-}
 export function validPkce(verifier,challenge){
-  if(typeof verifier!=="string"||!/^[A-Za-z0-9._~-]{43,128}$/.test(verifier))return false;
+  if(typeof challenge!=="string"||typeof verifier!=="string"||!/^[A-Za-z0-9._~-]{43,128}$/.test(verifier))return false;
   const actual=createHash("sha256").update(verifier).digest("base64url");
   return actual.length===challenge.length&&timingSafeEqual(Buffer.from(actual),Buffer.from(challenge));
 }
-export function validAuthorizeRequest(body,urls){
+export function validAuthorizeRequest(body,urls,client){
   if(!urls||!body||body.response_type!=="code"||
-    !validChatGPTClient(body.client_id,body.redirect_uri)||
+    !(client&&client.redirect_uris.includes(body.redirect_uri))||
     body.code_challenge_method!=="S256"||
     typeof body.code_challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(body.code_challenge)||
     body.resource!==urls.resource||
     typeof body.state!=="string"||body.state.length>1024)return false;
   const scopes=String(body.scope||"").split(/\s+/).filter(Boolean);
-  return scopes.includes(READ_SCOPE)&&scopes.every(x=>[READ_SCOPE,"offline_access"].includes(x));
+  return scopes.includes(READ_SCOPE)&&scopes.every(x=>[READ_SCOPE,"offline_access"].includes(x)&&client.scope.split(/\s+/).includes(x));
 }
 const tenantChoices=user=>(user?.tenants||[]).filter(t=>t.active).map(t=>t.slug);
-function retryOk(key,now=Date.now()){
+function retryOk(key,now=Date.now(),limit=REQ_LIMIT){
   const hits=(counters.get(key)||[]).filter(t=>now-t<10*60*1000);
-  if(hits.length>=REQ_LIMIT)return false;
+  if(hits.length>=limit)return false;
   hits.push(now);counters.set(key,hits);
   if(counters.size>3000)for(const [k,v] of counters)if(now-v.at(-1)>10*60*1000)counters.delete(k);
   return true;
@@ -92,19 +85,19 @@ function toolDefinitions(){
 }
 export const MCP_TOOLS=toolDefinitions();
 
-function renderConsent(req,body,user){
+function renderConsent(req,body,user,client){
   const slugs=tenantChoices(user);
   const hidden=["response_type","client_id","redirect_uri","state","scope","resource","code_challenge","code_challenge_method"]
     .map(k=>'<input type="hidden" name="'+k+'" value="'+safeText(body[k])+'">').join("");
   const options=slugs.map(s=>'<option value="'+safeText(s)+'">'+safeText(s)+'</option>').join("");
   return '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
-    '<title>Conectar Farmétrica a ChatGPT</title></head><body style="font:16px system-ui;max-width:560px;margin:10vh auto;padding:20px">'+
-    '<h1>Conectar Farmétrica con ChatGPT</h1><p>Sesión: '+safeText(user.email)+
-    '</p><p>ChatGPT podrá consultar datos de lectura de las farmacias que tengas autorizadas. No podrá modificar datos. Puedes revocar permisos desde Farmétrica.</p>'+
+    '<title>Conectar Farmétrica</title></head><body style="font:16px system-ui;max-width:560px;margin:10vh auto;padding:20px">'+
+    '<h1>Autorizar una aplicación</h1><p>Sesión: '+safeText(user.email)+
+    '</p><p>Aplicación: <strong>'+safeText(client.client_name)+'</strong></p><p>Identificador: '+safeText(body.client_id)+'</p><p>Destino: '+safeText(body.redirect_uri)+'</p><p>Esta aplicación podrá consultar datos de lectura de las farmacias que tengas autorizadas. No podrá modificar datos. Puedes revocar permisos desde Farmétrica.</p>'+
     '<form method="post" action="/api/ai/oauth/authorize">'+hidden+
     '<label>Cliente <select name="tenant" required>'+options+'</select></label>'+
     '<p><button type="submit" name="confirm" value="yes" style="padding:12px">Autorizar consultas</button></p></form>'+
-    '<p><small>Las consultas compartidas con ChatGPT están sujetas a sus ajustes de privacidad.</small></p></body></html>';
+    '<p><small>Autoriza solo aplicaciones que reconozcas. Los datos compartidos están sujetos a la privacidad de la aplicación receptora.</small></p></body></html>';
 }
 function tokenResponse(row,access,refresh){
   return {access_token:access,token_type:"Bearer",expires_in:Math.floor(ACCESS_LIFE_MS/1000),
@@ -135,26 +128,42 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
   });
   app.get(["/.well-known/oauth-authorization-server","/.well-known/oauth-authorization-server/api"],active,(_req,res)=>{
     const urls=URLS();res.json({issuer:urls.issuer,authorization_endpoint:urls.authorize,
-      token_endpoint:urls.token,revocation_endpoint:urls.revoke,
+      token_endpoint:urls.token,revocation_endpoint:urls.revoke,registration_endpoint:urls.origin+"/api/ai/oauth/register",
       response_types_supported:["code"],grant_types_supported:["authorization_code","refresh_token"],
       token_endpoint_auth_methods_supported:["none"],code_challenge_methods_supported:["S256"],
-      scopes_supported:[READ_SCOPE,"offline_access"],code_challenge_methods_supported:["S256"],
+      scopes_supported:[READ_SCOPE,"offline_access"],
       client_id_metadata_document_supported:true});
   });
-  app.get("/api/ai/oauth/authorize",active,async(req,res,next)=>{
+  const oauthLimit=(req,res,next)=>retryOk("oauth:"+req.ip)&&retryOk("oauth:global",Date.now(),200)?next():oauthError(res,429,"temporarily_unavailable");
+  app.post("/api/ai/oauth/register",active,oauthLimit,async(req,res,next)=>{
+    try{
+      const metadata=clientMetadata(req.body);
+      if(!metadata)return oauthError(res,400,"invalid_client_metadata");
+      const client_id="mcp_"+opaque();
+      await pool.query("INSERT INTO farmetrica.ai_oauth_clientes(client_id,metadata) VALUES($1,$2)",[client_id,metadata]);
+      res.status(201).set("Cache-Control","no-store").json({client_id,client_id_issued_at:Math.floor(Date.now()/1000),...metadata});
+    }catch(e){next(e);}
+  });
+  app.get("/api/ai/oauth/authorize",active,oauthLimit,async(req,res,next)=>{
     try{
       const urls=URLS();
-      if(!validAuthorizeRequest(req.query,urls))return res.status(400).send("Solicitud OAuth inválida");
+      const client=await resolveOAuthClient(pool,req.query.client_id);
+      if(!client)return res.status(400).send("Cliente OAuth no válido: comprueba su documento de identidad o utiliza el registro automático.");
+      if(!validAuthorizeRequest(req.query,urls,client))return res.status(400).send("Solicitud OAuth inválida: revisa callback, recurso, permisos y PKCE S256.");
       const user=await sessionUser(req);
       if(!user)return res.redirect(302,"/login?next="+encodeURIComponent(req.originalUrl));
       if(!tenantChoices(user).length)return res.status(403).send("No tienes ningún cliente autorizado");
-      res.type("html").send(renderConsent(req,req.query,user));
+      // Browsers may apply form-action to the OAuth redirect after POST.
+      res.set("Content-Security-Policy","default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+new URL(req.query.redirect_uri).origin+"; frame-ancestors 'none'; base-uri 'none'");
+      res.type("html").send(renderConsent(req,req.query,user,client));
     }catch(e){next(e);}
   });
-  app.post("/api/ai/oauth/authorize",active,urlEncoded,async(req,res,next)=>{
+  app.post("/api/ai/oauth/authorize",active,urlEncoded,oauthLimit,async(req,res,next)=>{
     try{
       const urls=URLS(),body=req.body;
-      if(!validAuthorizeRequest(body,urls)||body.confirm!=="yes")return res.status(400).send("Autorización inválida");
+      if(req.get("origin")!==urls.origin)return oauthError(res,403,"access_denied");
+      const client=await resolveOAuthClient(pool,body?.client_id);
+      if(!client||!validAuthorizeRequest(body,urls,client)||body.confirm!=="yes")return res.status(400).send("Autorización inválida");
       const user=await sessionUser(req);
       if(!user)return res.status(401).send("Vuelve a iniciar sesión en Farmétrica");
       if(typeof body.tenant!=="string"||!tenantChoices(user).includes(body.tenant))return res.status(403).send("Cliente no autorizado");
@@ -169,8 +178,10 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
   app.post("/api/ai/oauth/token",active,urlEncoded,async(req,res,next)=>{
     try{
       const urls=URLS(),body=req.body||{};
-      if(!validChatGPTClient(body.client_id,body.redirect_uri||"https://chatgpt.com/connector_platform_oauth_redirect")&&body.grant_type==="authorization_code")
-        return oauthError(res,400,"invalid_client");
+      res.set("Cache-Control","no-store").set("Pragma","no-cache");
+      if(typeof body.client_id!=="string"||body.client_id.length>2048)return oauthError(res,400,"invalid_client");
+      // Code exchange binds to the exact identity/callback approved at consent.
+      // No provider allowlist and no remote metadata fetch on the token path.
       if(body.resource!==urls.resource)return oauthError(res,400,"invalid_target");
       if(body.grant_type==="authorization_code"){
         if(typeof body.code!=="string"||body.code.length>128)return oauthError(res,400,"invalid_grant");
@@ -281,3 +292,4 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
   app.get("/api/mcp",active,(_req,res)=>res.status(405).set("Allow","POST").end());
   app.delete("/api/mcp",active,(_req,res)=>res.status(204).end());
 }
+

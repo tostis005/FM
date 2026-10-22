@@ -486,6 +486,8 @@ try {
   await pool.query(operationalMigration);
   const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");
   await pool.query(mcpMigration);
+  const oauthClientsMigration=await readFile(new URL("./migrations/023_oauth_clients.sql",import.meta.url),"utf8");
+  await pool.query(oauthClientsMigration);
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{
@@ -504,3 +506,4 @@ try {
   await pool.end();
   process.exit(1);
 }
+

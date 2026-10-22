@@ -25,6 +25,7 @@ jobs:
       - name: Comprobar API
         run: |
           node --check api/src/server.js
+          node --test api/src/oauthClients.test.js api/src/oauthFlow.test.js
           node --check api/src/assistant.js
           node --check api/src/aiMcp.js
           node --test api/src/aiMcp.test.js
@@ -302,3 +303,4 @@ jobs:
         run: |
           npm install --prefix api --no-audit --no-fund
           node --test api/src/savingsAnalysis.pg.test.js
+

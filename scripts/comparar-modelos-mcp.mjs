@@ -59,8 +59,12 @@ function decode(text){
 function expectedErrors(plan,expected){
  const problems=[];
  if(plan.fuente!==expected.fuente)problems.push("fuente");
- for(const dim of expected.agrupar)if(!Array.isArray(plan.agrupar)||!plan.agrupar.includes(dim))problems.push("agrupar "+dim);
- for(const metric of expected.metricas)if(!Array.isArray(plan.metricas)||!plan.metricas.includes(metric))problems.push("métrica "+metric);
+ if(!Array.isArray(plan.agrupar)||
+    plan.agrupar.length!==expected.agrupar.length||
+    expected.agrupar.some(dim=>!plan.agrupar.includes(dim)))problems.push("agrupación");
+ if(!Array.isArray(plan.metricas)||
+    plan.metricas.length!==expected.metricas.length||
+    expected.metricas.some(metric=>!plan.metricas.includes(metric)))problems.push("métricas");
  if(plan.desde!==expected.desde||plan.hasta!==expected.hasta)problems.push("fechas");
  return problems;
 }

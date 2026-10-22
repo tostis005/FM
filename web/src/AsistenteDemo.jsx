@@ -4,6 +4,8 @@ import {
   Plus, RotateCcw, ShieldCheck, Sparkles, Square, Trash2, X
 } from "lucide-react";
 import "./AsistenteDemo.css";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { collectSpeechResults, mergeDictationDraft } from "./dictadoVoz.js";
 
 const SUGGESTIONS = [
@@ -274,8 +276,10 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
 
   useEffect(() => {
     if (!open) return undefined;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Oculta las barras y el desplazamiento de la página del dashboard.
+    // La conversación conserva su propio scroll interno.
+    document.documentElement.classList.add("fm-ai-modal-open");
+    document.body.classList.add("fm-ai-modal-open");
     inputRef.current?.focus();
     function handleKeyDown(event) {
       if (event.key === "Escape") {
@@ -293,7 +297,8 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.body.style.overflow = oldOverflow;
+      document.documentElement.classList.remove("fm-ai-modal-open");
+      document.body.classList.remove("fm-ai-modal-open");
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
@@ -454,7 +459,9 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                         <div className="fm-ai-msg-avatar">{message.role === "assistant" ? <Sparkles size={16}/> : "TÚ"}</div>
                         <div className="fm-ai-msg-content">
                           <div className="fm-ai-msg-bubble">
-                            <p>{message.text}</p>
+                            {message.role==="assistant"
+                              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+                              : <p>{message.text}</p>}
                             
                           </div>
                           <time className="fm-ai-msg-time">{message.time}{message.role === "assistant" ? "" : ""}</time>

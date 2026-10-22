@@ -26,7 +26,7 @@ const mcpOrigin=()=>{
   } catch{return null;}
 };
 const URLS=()=>{const origin=mcpOrigin();return origin?{
-  origin,resource:origin+"/api/mcp",issuer:origin,authorize:origin+"/api/ai/oauth/authorize",
+  origin,resource:origin+"/api/mcp",demoResource:origin+"/api/mcp-demo",issuer:origin,authorize:origin+"/api/ai/oauth/authorize",
   token:origin+"/api/ai/oauth/token",revoke:origin+"/api/ai/oauth/revoke"
 }:null;};
 
@@ -40,7 +40,7 @@ export function validAuthorizeRequest(body,urls,client){
     !(client&&client.redirect_uris.includes(body.redirect_uri))||
     body.code_challenge_method!=="S256"||
     typeof body.code_challenge!=="string"||!/^[A-Za-z0-9_-]{43}$/.test(body.code_challenge)||
-    body.resource!==urls.resource||
+    ![urls.resource,urls.demoResource].includes(body.resource)||
     typeof body.state!=="string"||body.state.length>1024)return false;
   const scopes=String(body.scope||"").split(/\s+/).filter(Boolean);
   return scopes.includes(READ_SCOPE)&&scopes.every(x=>[READ_SCOPE,"offline_access"].includes(x)&&client.scope.split(/\s+/).includes(x));
@@ -113,13 +113,13 @@ function tokenResponse(row,access,refresh){
 export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser}){
   const urlEncoded=express.urlencoded({extended:false,limit:"16kb"});
   const active=(_req,res,next)=>ENABLED()&&URLS()?next():res.status(404).json({error:"Conector MCP desactivado"});
-  const authenticate=async(req,res,next)=>{
+  const authenticateFor=resourceKey=>async(req,res,next)=>{
     try{
       const urls=URLS(),bearer=/^Bearer ([A-Za-z0-9_-]{30,128})$/.exec(req.get("authorization")||"");
-      if(!bearer)return res.status(401).set("WWW-Authenticate",'Bearer resource_metadata="'+urls.origin+'/.well-known/oauth-protected-resource/api/mcp"').json({error:"Autenticación requerida"});
+      if(!bearer)return res.status(401).set("WWW-Authenticate",'Bearer resource_metadata="'+urls.origin+'/.well-known/oauth-protected-resource/'+(resourceKey==="demoResource"?"api/mcp-demo":"api/mcp")+'"').json({error:"Autenticación requerida"});
       const {rows}=await pool.query("SELECT * FROM farmetrica.ai_oauth_conexiones WHERE access_hash=$1 AND revocado_en IS NULL AND access_caduca_en>now() LIMIT 1",[sha(bearer[1])]);
       const connection=rows[0];
-      if(!connection||connection.resource!==urls.resource||!connection.scope.split(" ").includes(READ_SCOPE))return res.status(401).json({error:"Token inválido"});
+      if(!connection||connection.resource!==urls[resourceKey]||!connection.scope.split(" ").includes(READ_SCOPE))return res.status(401).json({error:"Token inválido"});
       const user=await resolveAccess(connection.email,connection.metodo_acceso);
       if(!user)return res.status(403).json({error:"Cuenta desactivada o sin permisos"});
       // Recalcular tenant y farmacias EN CADA LLAMADA: nunca confiar en alcances del token antiguos.
@@ -129,8 +129,13 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
       next();
     }catch(e){next(e);}
   };
-  app.get(["/.well-known/oauth-protected-resource","/.well-known/oauth-protected-resource/api/mcp"],active,(_req,res)=>{
-    const urls=URLS();res.json({resource:urls.resource,authorization_servers:[urls.issuer],scopes_supported:[READ_SCOPE,"offline_access"],bearer_methods_supported:["header"]});
+  const authenticate=authenticateFor("resource");
+  const authenticateDemo=authenticateFor("demoResource");
+  app.get(["/.well-known/oauth-protected-resource","/.well-known/oauth-protected-resource/api/mcp",
+    "/.well-known/oauth-protected-resource/api/mcp-demo"],active,(req,res)=>{
+    const urls=URLS();
+    const resource=req.path.endsWith("/api/mcp-demo")?urls.demoResource:urls.resource;
+    res.json({resource,authorization_servers:[urls.issuer],scopes_supported:[READ_SCOPE,"offline_access"],bearer_methods_supported:["header"]});
   });
   app.get(["/.well-known/oauth-authorization-server","/.well-known/oauth-authorization-server/api"],active,(_req,res)=>{
     const urls=URLS();res.json({issuer:urls.issuer,authorization_endpoint:urls.authorize,
@@ -189,7 +194,7 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
       if(typeof body.client_id!=="string"||body.client_id.length>2048)return oauthError(res,400,"invalid_client");
       // Code exchange binds to the exact identity/callback approved at consent.
       // No provider allowlist and no remote metadata fetch on the token path.
-      if(body.resource!==urls.resource)return oauthError(res,400,"invalid_target");
+      if(![urls.resource,urls.demoResource].includes(body.resource))return oauthError(res,400,"invalid_target");
       if(body.grant_type==="authorization_code"){
         if(typeof body.code!=="string"||body.code.length>128)return oauthError(res,400,"invalid_grant");
         const {rows}=await pool.query("DELETE FROM farmetrica.ai_oauth_codigos WHERE code_hash=$1 AND caduca_en>now() RETURNING *",[sha(body.code)]);
@@ -298,6 +303,7 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
   });
   app.get("/api/mcp",active,(_req,res)=>res.status(405).set("Allow","POST").end());
   app.delete("/api/mcp",active,(_req,res)=>res.status(204).end());
+  return {authenticateDemo};
 }
 
 

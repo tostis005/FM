@@ -79,7 +79,7 @@ export async function loadDemoMcpContext(pool,slug){
     pharmacies:pharmacies.map(p=>({id:Number(p.id),name:p.name,city:p.city})),
     allowedPharmacyIds:pharmacies.map(p=>Number(p.id))};
 }
-export async function handlePublicDemoMcp(input,pool,slug){
+export async function handlePublicDemoMcp(input,pool,slug,authenticatedContext=null){
   if(!input||typeof input!=="object"||Array.isArray(input)||input.jsonrpc!=="2.0"||
     typeof input.method!=="string")return {http:400,body:rpcError(input?.id,-32600,"Invalid Request")};
   const id=input.id??null;
@@ -88,11 +88,11 @@ export async function handlePublicDemoMcp(input,pool,slug){
     protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},
     serverInfo:{name:"Farmetrica Demo Real",version:"0.2.0"}}}};
   if(input.method==="ping")return {http:200,body:{jsonrpc:"2.0",id,result:{}}};
-  if(input.method==="tools/list")return {http:200,body:{jsonrpc:"2.0",id,result:{tools:DEMO_MCP_TOOLS}}};
+  if(input.method==="tools/list")return {http:200,body:{jsonrpc:"2.0",id,result:{tools:DEMO_MCP_TOOLS.map(t=>({...t,securitySchemes:[{type:"oauth2",scopes:["farmetrica.read"]}]}))}}};
   if(input.method!=="tools/call")return {http:200,body:rpcError(id,-32601,"Method not found")};
   try{
     const name=input.params?.name,args=validInput(name,input.params?.arguments??{});
-    const ctx=await loadDemoMcpContext(pool,slug);
+    const ctx=authenticatedContext??await loadDemoMcpContext(pool,slug);
     let data;
     if(name==="listar_contexto")data={...metadata,cliente:ctx.client.name,
       farmacias:ctx.pharmacies.map(p=>({id:p.id,nombre:p.name,ciudad:p.city})),modulos:ctx.modules};
@@ -120,7 +120,7 @@ export async function handlePublicDemoMcp(input,pool,slug){
     return {http:503,body:rpcError(id,-32000,"No se pudo consultar PostgreSQL")};
   }
 }
-export function setupPublicDemoMcp(app,pool,{requireSuperadmin}){
+export function setupPublicDemoMcp(app,pool,{requireSuperadmin,authenticateOAuthDemo}){
   const adminBase="/api/admin/ai/mcp-demo";
   const adminAction=(req,res,next)=>{
     // El header personalizado exige CORS preflight a páginas ajenas:
@@ -162,17 +162,34 @@ export function setupPublicDemoMcp(app,pool,{requireSuperadmin}){
   app.post("/api/mcp-demo",async(req,res,next)=>{
     try{
       if(Number(req.get("content-length")||0)>16384)return res.status(413).end();
-      const {rows}=await pool.query(
-        "SELECT secret_hash,cliente_slug FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true");
-      const credential=rows[0];
-      if(!credential||!demoBearerMatches(req.get("authorization"),credential.secret_hash))
-        return res.status(401).set("WWW-Authenticate",'Bearer realm="Farmetrica Demo"')
-          .json({error:"API Key requerida o incorrecta"});
-      if(req.body?.method==="tools/call"&&!limitOk(credential.secret_hash))
-        return res.status(429).json(rpcError(req.body?.id,-32000,"Demasiadas consultas"));
-      const outcome=await handlePublicDemoMcp(req.body,pool,credential.cliente_slug);
-      if(!outcome.body)return res.status(outcome.http).end();
-      return res.status(outcome.http).json(outcome.body);
+      const authorization=req.get("authorization")||"";
+      // Conservamos las claves existentes para clientes técnicos, pero ChatGPT
+      // emplea OAuth ligado al usuario, al tenant, al recurso y a sus permisos actuales.
+      if(authorization.startsWith("Bearer fm_demo_")){
+        const {rows}=await pool.query(
+          "SELECT secret_hash,cliente_slug FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true");
+        const credential=rows[0];
+        if(!credential||!demoBearerMatches(authorization,credential.secret_hash))
+          return res.status(401).json({error:"Clave de integración inválida"});
+        if(req.body?.method==="tools/call"&&!limitOk(credential.secret_hash))
+          return res.status(429).json(rpcError(req.body?.id,-32000,"Demasiadas consultas"));
+        const outcome=await handlePublicDemoMcp(req.body,pool,credential.cliente_slug);
+        if(!outcome.body)return res.status(outcome.http).end();
+        return res.status(outcome.http).json(outcome.body);
+      }
+      if(typeof authenticateOAuthDemo!=="function")
+        return res.status(401).json({error:"OAuth no configurado"});
+      // El middleware central revalida cuenta, membresía, farmacias y módulos.
+      return authenticateOAuthDemo(req,res,(err)=>{
+        if(err)return next(err);
+        (async()=>{
+          if(req.body?.method==="tools/call"&&!limitOk("oauth:"+req.aiConnection.id))
+            return res.status(429).json(rpcError(req.body?.id,-32000,"Demasiadas consultas"));
+          const outcome=await handlePublicDemoMcp(req.body,pool,req.context.client.slug,req.context);
+          if(!outcome.body)return res.status(outcome.http).end();
+          return res.status(outcome.http).json(outcome.body);
+        })().catch(next);
+      });
     }catch(e){next(e)}
   });
   app.get("/api/mcp-demo",(_req,res)=>res.status(405).set("Allow","POST").end());

@@ -30,7 +30,7 @@ test("No inventa significado, períodos ni accesos entre clientes",()=>{
   "¿Cuánto vendió cada farmacia?",
   "Ventas y compras por farmacia hoy",
   "¿Cuánto beneficio obtuvimos hoy?",
-  "Compara las ventas de este mes con el mes pasado",
+  "Compara las ventas de este mes con las ventas de hace 5 días",
   "¿Cuántas ventas en la farmacia de Atlantis hoy?",
   "Ventas por farmacia el 31 de febrero de 2026"
  ];
@@ -65,4 +65,52 @@ test("Cada plan aceptado supera la misma validación del MCP",()=>{
   "¿Cuántas unidades vendidas por producto ayer?",
   "¿Cuánto stock tenemos por farmacia?"
  ])assert.doesNotThrow(()=>validateSemanticQuery(ok(question),ctx));
+});
+
+test("comparaciones canónicas: ventanas alineadas Madrid y dos planes autorizados",()=>{
+ const m=resolve("Compara las ventas por farmacia este mes respecto al mes pasado");
+ assert.equal(m.estado,"comparacion");
+ assert.equal(m.version,SEMANTIC_LANGUAGE_VERSION);
+ assert.deepEqual(m.consultas,[
+  {fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],
+   desde:"2026-10-01",hasta:"2026-10-23",limite:100},
+  {fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],
+   desde:"2026-09-01",hasta:"2026-09-23",limite:100}
+ ]);
+ const year=resolve("¿Cuánto crecieron las ventas este año frente al año pasado?");
+ assert.equal(year.estado,"comparacion");
+ assert.deepEqual(year.consultas.map(x=>[x.desde,x.hasta]),[
+  ["2026-01-01","2026-10-23"],["2025-01-01","2025-10-23"]
+ ]);
+ const week=resolve("Compara compras por farmacia esta semana versus semana pasada");
+ assert.equal(week.estado,"comparacion");
+ assert.deepEqual(week.consultas.map(x=>[x.desde,x.hasta]),[
+  ["2026-10-19","2026-10-23"],["2026-10-12","2026-10-16"]
+ ]);
+ const daily=resolve("Compara las ventas hoy frente a ayer");
+ assert.equal(daily.estado,"comparacion");
+ assert.deepEqual(daily.consultas.map(x=>[x.desde,x.hasta]),[
+  ["2026-10-23","2026-10-23"],["2026-10-22","2026-10-22"]
+ ]);
+ for(const q of [
+  "Compara stock hoy frente a ayer",
+  "Compara vendedores más vendidos este mes frente al mes pasado",
+  "Compara ventas de enero 2025 con ventas de febrero 2025",
+  "Compara ventas y compras este mes frente al mes pasado",
+  "Crecimiento de beneficio este año frente al año anterior"
+ ]){
+  const result=resolve(q);
+  assert.notEqual(result.estado,"comparacion",q);
+  assert.equal(result.consultas,undefined,q);
+ }
+ for(const result of [m,year,week,daily])
+  for(const plan of result.consultas)assert.doesNotThrow(()=>validateSemanticQuery(plan,ctx));
+});
+test("el calendario limita el período anterior en meses cortos",()=>{
+ const date=new Date("2026-03-31T22:00:00Z"); // 1 abril en Madrid
+ const m=interpretSemanticQuestion("Ventas este mes respecto al mes anterior",ctx,{now:date});
+ assert.equal(m.estado,"comparacion");
+ assert.deepEqual(m.consultas.map(x=>[x.desde,x.hasta]),[
+  ["2026-04-01","2026-04-01"],["2026-03-01","2026-03-01"]
+ ]);
 });

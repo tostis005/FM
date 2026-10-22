@@ -15,6 +15,7 @@ const DIMENSIONS={
 const METRICS={
  ventas:{importe:"Importe neto de ventas (€)",unidades:"Unidades vendidas",movimientos:"Líneas de venta",
   margen_estimado:"Importe neto menos unidades por coste PMC actual; NO beneficio contable",
+  margen_estimado_pct:"Porcentaje estimado sobre ventas con PMC disponible: suma(margen estimado)/suma(ventas cubiertas)*100; no es margen neto contable",
   lineas_con_coste:"Líneas con coste PMC contrastable"},
  compras:{importe:"Importe documentado de recepciones (€)",unidades:"Unidades recibidas",
   movimientos:"Líneas de recepción",coste_unitario_medio:"Media ponderada de coste unitario válido"},
@@ -213,6 +214,7 @@ const measures={
   unidades:"coalesce(sum(b.unidades),0)::float8",
   movimientos:"count(*)::int",
   margen_estimado:"sum(b.margen_estimado)::float8",
+  margen_estimado_pct:"(100.0*sum(b.margen_estimado)/nullif(sum(b.importe) FILTER(WHERE b.margen_estimado IS NOT NULL),0))::float8",
   lineas_con_coste:"count(b.margen_estimado)::int"
  },
  compras:{
@@ -301,7 +303,7 @@ export function compileSemanticQuery(input,context){
  // Rows are always scoped by client and authorized IDs before aggregation.
  const needsArticle=q.source==="stock"||q.producto!==undefined||
   q.dims.some(d=>["producto","codigo_nacional","familia"].includes(d))||
-  q.metrics.includes("margen_estimado")||q.metrics.includes("lineas_con_coste");
+  q.metrics.some(k=>["margen_estimado","margen_estimado_pct","lineas_con_coste"].includes(k));
  let base=baseSql(q.source,schema,params,where,needsArticle);
  if(q.source==="stock"){
   let state="";

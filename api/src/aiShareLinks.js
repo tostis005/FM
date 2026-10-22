@@ -3,12 +3,21 @@
 import {createHash,randomBytes} from "node:crypto";
 import {loadDemoMcpContext,handlePublicDemoMcp} from "./aiMcpDemo.js";
 import {TOOL_CATALOG,periodFromQuestion} from "./assistantAnalytics.js";
+import {semanticCatalog,runSemanticQuery} from "./aiSemanticQuery.js";
 const PREFIX="/api/consulta-temporal/";
 const TOKEN=/^fm_share_[A-Za-z0-9_-]{43}$/;
 const SLUG=/^[a-z][a-z0-9_]{1,62}$/;
 const hash=s=>createHash("sha256").update(s).digest("hex");
 const html=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const expiresAt=t=>new Date(new Date(t).getTime()+86400000).toISOString();
+const DURATIONS=Object.freeze({"24h":1,"7d":7,"30d":30,"365d":365,"indefinido":null});
+export function shareLinkExpiry(created,duration="24h"){
+ if(!Object.hasOwn(DURATIONS,duration))throw new TypeError("Duración no autorizada");
+ return DURATIONS[duration]===null?null:
+  new Date(new Date(created).getTime()+DURATIONS[duration]*86400000).toISOString();
+}
+const activeSQL="(duracion='indefinido' OR creado_en + "+
+ "CASE duracion WHEN '7d' THEN interval '7 days' WHEN '30d' THEN interval '30 days' "+
+ "WHEN '365d' THEN interval '365 days' ELSE interval '24 hours' END > now())";
 const headers=res=>res.set("Cache-Control","private, no-store, max-age=0")
   .set("Referrer-Policy","no-referrer").set("X-Robots-Tag","noindex, nofollow, noarchive")
   .set("X-Content-Type-Options","nosniff")
@@ -30,6 +39,11 @@ function shareCatalog(token,ctx){
  const dates=periodFromQuestion("últimos 30 días");
  const year=periodFromQuestion("últimos 12 meses");
  const url=options=>PREFIX+encodeURIComponent(token)+"?"+new URLSearchParams(options).toString();
+ const semantic=semanticCatalog();
+ const semanticLinks=semantic.ejemplos.map(entry=>({
+  titulo:entry.titulo,
+  url:url({consulta:JSON.stringify(entry.consulta),formato:"json"})
+ }));
  const entradas=[
   {titulo:"Ventas de hoy por farmacia",url:url({indicador:"ventas_resumen",desde:today.from,hasta:today.to})},
   {titulo:"Compras de hoy por farmacia",url:url({indicador:"compras_resumen",desde:today.from,hasta:today.to})},
@@ -54,10 +68,12 @@ function shareCatalog(token,ctx){
   soloLectura:true,
   farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name,ciudad:p.city})),
   indicadores:TOOL_CATALOG,
-  consultas:entradas,
+  consultas:[...semanticLinks,...entradas],
+  consultas_semanticas:semantic,
+  ayuda_ia:"Para nuevas preguntas, utiliza fuentes, dimensiones y métricas de consultas_semanticas y construye ?consulta=JSON_CODIFICADO&formato=json. No mandes SQL.",
   formato:"Para obtener JSON agrega formato=json a cualquier URL de consulta.",
   parametros:"indicador o pregunta, desde y hasta en AAAA-MM-DD, farmacias=ID,ID o farmacia=nombre exacto.",
-  alcance:"Solo indicadores predefinidos y hasta 366 días por consulta; no incluye SQL arbitrario."
+  alcance:"Consultas semánticas por períodos arbitrarios o histórico, con límite de 100 filas y tiempo máximo de ejecución; SQL libre deshabilitado."
  };
 }
 function landing(token,ctx){
@@ -71,15 +87,16 @@ function landing(token,ctx){
   '<h1>Farmétrica · consultas reales por API</h1>'+
   '<p>Cliente: <strong>'+html(ctx.client.name)+'</strong></p>'+
   '<p>Datos reales de PostgreSQL. Acceso temporal de solo lectura que permite consultar indicadores reales '+
-  'durante 24 horas desde su creación y puede revocarse desde Farmétrica.</p>'+
-  '<h2>Consultas disponibles</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
+  'durante la vigencia elegida al generarlo y puede revocarse desde Farmétrica.</p>'+
+  '<h2>Consultas semánticas y directas</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
   '<h2>Farmacias incluidas</h2><ul>'+pharmacies+'</ul>'+
   '<p>Para filtrar, añade <code>farmacia=nombre</code> o <code>farmacias=ID,ID</code> a un enlace '+
   'de consulta. Fechas: <code>desde=AAAA-MM-DD</code> y <code>hasta=AAAA-MM-DD</code>.</p>'+
   '<p>Para un catálogo legible por máquinas, abre <a href="'+html(PREFIX+token+"?formato=json")+
   '">Catálogo JSON</a>. Para el resultado de una consulta, añade <code>formato=json</code>.</p>'+
-  '<p>La pregunta en lenguaje natural solo selecciona indicadores implementados; '+
-  'no equivale a una consulta libre a la base de datos.</p></body></html>';
+  '<p>Una IA puede combinar métricas y dimensiones usando el catálogo semántico. '+
+ 'Genera un objeto JSON para <code>consulta</code> y codifícalo en la URL. '+
+ 'No se permite SQL arbitrario.</p></body></html>';
 }
 export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
  const admin="/api/admin/ai/mcp-demo";
@@ -87,20 +104,24 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
    next():res.status(403).json({error:"Acción no autorizada"});
  app.get(admin,requireSuperadmin,async(_req,res,next)=>{
   try{
-   const {rows}=await pool.query("SELECT cliente_slug,creado_en FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true AND creado_en>now()-interval '24 hours'");
+   const {rows}=await pool.query("SELECT cliente_slug,creado_en,duracion FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true AND "+activeSQL);
    res.json({configured:!!rows[0],clientSlug:rows[0]?.cliente_slug||null,
-    expiresAt:rows[0]?expiresAt(rows[0].creado_en):null});
+    duracion:rows[0]?.duracion||null,
+    expiresAt:rows[0]?shareLinkExpiry(rows[0].creado_en,rows[0].duracion):null});
   }catch(e){next(e);}
  });
  app.post(admin,requireSuperadmin,canChange,async(req,res,next)=>{
   try{
    const slug=req.body?.clientSlug;
+   const duracion=req.body?.duracion??"24h";
+   if(!Object.hasOwn(DURATIONS,duracion))return res.status(400).json({error:"Duración inválida"});
    if(typeof slug!=="string"||!SLUG.test(slug))return res.status(400).json({error:"Cliente inválido"});
    const {rows}=await pool.query("SELECT slug FROM farmetrica.clientes WHERE slug=$1 AND activo=true",[slug]);
    if(!rows.length)return res.status(400).json({error:"Cliente inactivo"});
    const token="fm_share_"+randomBytes(32).toString("base64url");
-   const saved=await pool.query("INSERT INTO farmetrica.ai_mcp_demo_keys(singleton,secret_hash,cliente_slug,creado_en) VALUES(true,$1,$2,now()) ON CONFLICT(singleton) DO UPDATE SET secret_hash=EXCLUDED.secret_hash,cliente_slug=EXCLUDED.cliente_slug,creado_en=now() RETURNING creado_en",[hash(token),slug]);
-   headers(res).json({url:"https://farmetrica.com"+PREFIX+token,clientSlug:slug,expiresAt:expiresAt(saved.rows[0].creado_en)});
+   const saved=await pool.query("INSERT INTO farmetrica.ai_mcp_demo_keys(singleton,secret_hash,cliente_slug,creado_en,duracion) VALUES(true,$1,$2,now(),$3) ON CONFLICT(singleton) DO UPDATE SET secret_hash=EXCLUDED.secret_hash,cliente_slug=EXCLUDED.cliente_slug,creado_en=now(),duracion=EXCLUDED.duracion RETURNING creado_en",[hash(token),slug,duracion]);
+   headers(res).json({url:"https://farmetrica.com"+PREFIX+token,clientSlug:slug,duracion,
+    expiresAt:shareLinkExpiry(saved.rows[0].creado_en,duracion)});
   }catch(e){next(e);}
  });
  app.delete(admin,requireSuperadmin,canChange,async(_req,res,next)=>{
@@ -112,10 +133,33 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
    headers(res);
    const token=req.params.token;
    if(!validTemporaryLinkToken(token))return res.status(404).send("Enlace inválido");
-   const {rows}=await pool.query("SELECT cliente_slug FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true AND secret_hash=$1 AND creado_en>now()-interval '24 hours'",[hash(token)]);
+   const {rows}=await pool.query("SELECT cliente_slug FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true AND secret_hash=$1 AND "+activeSQL,[hash(token)]);
    if(!rows.length)return res.status(410).send("Enlace caducado o revocado");
    if(!allow(token))return res.status(429).send("Demasiadas consultas");
    const ctx=await loadDemoMcpContext(pool,rows[0].cliente_slug);
+   if(req.query.consulta!==undefined){
+    if(req.query.indicador!==undefined||req.query.pregunta!==undefined)
+     return res.status(400).json({error:"Elige consulta, indicador o pregunta"});
+    if(typeof req.query.consulta!=="string"||req.query.consulta.length>6000)
+     return res.status(400).json({error:"Consulta demasiado larga"});
+    let plan;
+    try{plan=JSON.parse(req.query.consulta)}catch{
+     return res.status(400).json({error:"La consulta debe ser JSON válido"});
+    }
+    try{
+     const output={...await runSemanticQuery(pool,ctx,plan),cliente:ctx.client.name};
+     if(req.query.formato==="json")return res.json(output);
+     return res.type("html").send('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+      '<title>Farmétrica · consulta semántica</title></head><body>'+
+      '<h1>Consulta real de Farmétrica</h1><pre>'+html(JSON.stringify(output,null,2))+'</pre>'+
+      '<p><a href="'+html(PREFIX+token)+'">Volver al catálogo</a></p></body></html>');
+    }catch(e){
+     if(e instanceof TypeError||e.status===400)return res.status(400).json({error:e.message});
+     if(["57014","55P03"].includes(e.code))return res.status(503).json({
+      error:"Consulta demasiado pesada; reduce período, agrupaciones o filtros"});
+     throw e;
+    }
+   }
    if(req.query.indicador===undefined&&req.query.pregunta===undefined){
     if(req.query.formato==="json")return res.json(shareCatalog(token,ctx));
     return res.type("html").send(landing(token,ctx));

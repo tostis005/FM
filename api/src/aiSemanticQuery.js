@@ -259,7 +259,7 @@ function baseSql(source,schema,params,where,needsArticle){
   const product=needsArticle?"coalesce(nullif(a.nombre,''),t.articulo_id,'Sin referencia')":"t.articulo_id";
   const cn=needsArticle?"a.codigo_nacional":"NULL::text";
   const family=needsArticle?"a.familia":"NULL::text";
-  return `SELECT f.nombre AS farmacia,${extra}
+  return `SELECT f.id AS farmacia_id,f.nombre AS farmacia,${extra}
    ${product} AS producto,
    ${cn} AS codigo_nacional,${family} AS familia,t.fecha::date AS dia,
    to_char(t.fecha,'YYYY-MM') AS mes,extract(year from t.fecha)::int AS anio,
@@ -276,7 +276,7 @@ function baseSql(source,schema,params,where,needsArticle){
    AND upper(btrim(v.farmacia_codigo))=${code}
   WHERE f.id=ANY($3::int[]) AND v.fecha>=current_date-interval '89 days'
   GROUP BY upper(btrim(v.farmacia_codigo)),btrim(v.articulo_id)`;
- const base=`SELECT f.nombre AS farmacia,a.origen_id AS articulo_id,
+ const base=`SELECT f.id AS farmacia_id,f.nombre AS farmacia,a.origen_id AS articulo_id,
    coalesce(nullif(a.nombre,''),a.origen_id) AS producto,a.codigo_nacional,a.familia,
    a.stock_actual::numeric AS stock_actual,
    CASE WHEN a.pmc>0 THEN a.pmc WHEN a.puc>0 THEN a.puc END AS coste,
@@ -326,10 +326,16 @@ export function compileSemanticQuery(input,context){
   base=base.slice(0,ix)+`SELECT * FROM inventory b${state?" WHERE "+state:""}`;
  }
  const projections=[
+  // El nombre de farmacia no es una clave única: exponer su ID evita
+  // fusionar vendedores de dos farmacias que casualmente se llamen igual.
+  ...(q.dims.includes("farmacia")?['b.farmacia_id AS "farmaciaId"']:[]),
   ...q.dims.map(d=>`${DIM_SQL[d]} AS "${d}"`),
   ...q.metrics.map(m=>`${measures[q.source][m]} AS "${m}"`)
  ];
- const group=q.dims.length?" GROUP BY "+q.dims.map(d=>DIM_SQL[d]).join(","):"";
+ const group=q.dims.length?" GROUP BY "+[
+  ...(q.dims.includes("farmacia")?["b.farmacia_id"]:[]),
+  ...q.dims.map(d=>DIM_SQL[d])
+ ].join(","):"";
  const order=` ORDER BY "${q.order.campo}" ${q.order.direccion.toUpperCase()} NULLS LAST`;
  params.push(q.limit);
  const result={
@@ -347,21 +353,15 @@ export async function runSemanticQuery(pool,context,input){
  });
  let rows=result.rows;
  if(q.source==="ventas"&&q.dims.includes("vendedor")&&rows.length){
-  const active=context.pharmacies.filter(p=>q.ids.includes(Number(p.id)));
-  const nameToId=new Map();
-  for(const pharmacy of active){
-   const name=String(pharmacy.name);
-   nameToId.set(name,nameToId.has(name)?null:Number(pharmacy.id));
-  }
   const entries=rows.map(row=>({
-   pharmacyId:q.ids.length===1?q.ids[0]:nameToId.get(row.farmacia),
+   pharmacyId:q.ids.length===1?q.ids[0]:Number(row.farmaciaId),
    sellerId:row.vendedor
-  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&x.sellerId);
+  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&q.ids.includes(x.pharmacyId)&&x.sellerId);
   if(entries.length){
    const names=await loadCommercialNames(pool,context,entries);
    rows=rows.map(row=>{
-    const pharmacyId=q.ids.length===1?q.ids[0]:nameToId.get(row.farmacia);
-    return {...row,vendedorNombre:Number.isSafeInteger(pharmacyId)&&row.vendedor?
+    const pharmacyId=q.ids.length===1?q.ids[0]:Number(row.farmaciaId);
+    return {...row,vendedorNombre:Number.isSafeInteger(pharmacyId)&&q.ids.includes(pharmacyId)&&row.vendedor?
      names.seller(pharmacyId,row.vendedor):row.vendedor};
    });
   }

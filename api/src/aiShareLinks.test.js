@@ -36,8 +36,8 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
     statements.push({sql,params});
     if(sql.startsWith("SELECT f.nombre"))return {rows:[{farmacia:"Farmacia Real Uno",importe:4321.09,unidades:30}]};
     if(sql.includes(' AS "vendedor"'))return {rows:[
-     {vendedor:"SELL-01",importe:110.40,unidades:4,movimientos:3},
-     {vendedor:"SELL-02",importe:99.60,unidades:3,movimientos:2}
+     {farmaciaId:101,farmacia:"Farmacia Real Uno",vendedor:"SELL-01",importe:110.40,unidades:4,movimientos:3},
+     {farmaciaId:101,farmacia:"Farmacia Real Uno",vendedor:"SELL-02",importe:99.60,unidades:3,movimientos:2}
     ]};
     if(sql.includes(' AS "farmacia"'))return {rows:[
      {farmacia:"Farmacia Real Uno",importe:210,unidades:7,movimientos:5}
@@ -224,6 +224,7 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  const data=compileSemanticQuery(sales,ctx);
  assert.match(data.sql,/fm_ventas_analitica/);
  assert.match(data.sql,/vendedor/);
+ assert.match(data.sql,/b\.farmacia_id AS "farmaciaId"/);
  assert.match(data.sql,/READ ONLY|SELECT/);
  assert.match(data.sql,/f\.cliente_slug=\$4/);
  assert.match(data.sql,/f\.id=ANY\(\$3::int\[\]\)/);
@@ -235,7 +236,8 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  const annualSellers=compileSemanticQuery({fuente:"ventas",agrupar:["vendedor"],
   metricas:["importe"],periodo:"este_anio",ordenar:{campo:"importe",direccion:"desc"}},ctx);
  assert.deepEqual(annualSellers.q.dims,["farmacia","vendedor"]);
- assert.match(annualSellers.sql,/GROUP BY b\.farmacia,b\.vendedor/);
+ assert.match(annualSellers.sql,/GROUP BY b\.farmacia_id,b\.farmacia,b\.vendedor/);
+ assert.match(annualSellers.sql,/b\.farmacia_id AS "farmaciaId"/);
  assert.match(annualSellers.params[0],/^20\d{2}-01-01$/);
  assert.throws(()=>validateSemanticQuery({fuente:"ventas",agrupar:["vendedor","dia","mes"],
   metricas:["importe"],periodo:"este_anio"},ctx),/incluye farmacia/);

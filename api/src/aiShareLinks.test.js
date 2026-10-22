@@ -79,6 +79,26 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.match(landingText,/Datos reales de PostgreSQL/);
   assert.match(landingText,/Ventas de hoy por farmacia/);
   assert.match(landingText,/Farmacias incluidas/);
+  assert.match(landingText,/AGENTS.md: instrucciones, tablas, conexiones y cálculos/);
+  const agents=await fetch(base+path+"/AGENTS.md");
+  assert.equal(agents.status,200);
+  assert.match(agents.headers.get("content-type"),/text\/markdown/);
+  const agentText=await agents.text();
+  assert.match(agentText,/# AGENTS.md/);
+  assert.match(agentText,/Granularidad:/);
+  assert.match(agentText,/margen_estimado/);
+  assert.match(agentText,/fm_ventas_analitica/);
+  const modelResponse=await fetch(base+path+"?modelo=json");
+  assert.equal(modelResponse.status,200);
+  const model=await modelResponse.json();
+  assert.equal(model.contrato,"farmetrica.analytics.readonly.v1");
+  assert.equal(model.motor_ia.includes("ChatGPT"),true);
+  assert.equal(model.maestro_farmacias.tabla,"farmetrica.farmacias");
+  assert.equal(model.fuentes.ventas.tabla,"{esquema_cliente}.fm_ventas_analitica");
+  assert.equal(model.farmacias[0].id,101);
+  assert.equal(model.fuentes.ventas.calculos.importe.includes("SUM"),true);
+  assert.equal(model.llamada.metodo,"GET");
+  assert.equal((await fetch(base+path+"?modelo=sql")).status,400);
   const catalogResponse=await fetch(base+path+"?formato=json");
   assert.equal(catalogResponse.status,200);
   const catalog=await catalogResponse.json();
@@ -94,6 +114,20 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.ok(catalog.consultas.every(x=>!x.url.includes("/ventas/hoy/vendedores")));
   assert.equal((await fetch(base+path+"/farmacias/101/ventas/hoy/vendedores")).status,404);
   assert.match(landing.headers.get("referrer-policy"),/no-referrer/);
+  const flat=await fetch(base+path+"?fuente=ventas&agrupar=farmacia,vendedor&"+
+   "metricas=importe,unidades&periodo=hoy&farmacia=Farmacia%20Real%20Uno&"+
+   "ordenar=importe&direccion=desc&limite=50&formato=json");
+  assert.equal(flat.status,200);
+  const actual=await flat.json();
+  assert.equal(actual.modo,"consulta_semantica");
+  assert.equal(actual.ficticio,false);
+  assert.equal(actual.fuente,"ventas");
+  assert.deepEqual(actual.dimensiones,["farmacia","vendedor"]);
+  assert.deepEqual(actual.metricas,["importe","unidades"]);
+  assert.equal(actual.farmacias_autorizadas,1);
+  assert.equal((await fetch(base+path+"?fuente=ventas&metricas=importe&farmacias=999&formato=json")).status,400);
+  assert.equal((await fetch(base+path+"?fuente=ventas&metricas=importe&sql=DELETE")).status,400);
+  assert.equal((await fetch(base+path+"?fuente=ventas&metricas=importe&ordenar=importe")).status,400);
   const sales=await fetch(base+path+"?indicador=ventas_resumen&desde=2026-10-01&hasta=2026-10-22&formato=json");
   assert.equal(sales.status,200);
   const result=await sales.json();

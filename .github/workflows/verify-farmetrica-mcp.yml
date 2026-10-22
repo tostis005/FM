@@ -70,3 +70,25 @@ jobs:
             "$origin/api/ai/oauth/token")
           test "$token_status" = 400 || { echo "Solicitud OAuth inválida no rechazada: HTTP $token_status"; exit 1; }
           echo "OAuth discovery, login OAuth, token inválido, MCP protegido y API correcta"
+          curl -fsS --max-time 12 "$origin/.well-known/oauth-protected-resource/api/mcp-demo" -o /tmp/fm_demo_resource.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/fm_demo_resource.json'))
+          assert data['resource']=='https://farmetrica.com/api/mcp-demo'
+          assert 'https://farmetrica.com' in data['authorization_servers']
+          PY
+          demo_status=$(curl -sS --max-time 12 -o /tmp/fm_demo_autherror.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}' "$origin/api/mcp-demo")
+          test "$demo_status" = 401 || { echo "OAuth demo sin protección: HTTP $demo_status"; exit 1; }
+          demo_auth=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' -G "$origin/api/ai/oauth/authorize" \
+            --data-urlencode 'response_type=code' \
+            --data-urlencode 'client_id=https://chatgpt.com/oauth/client.json' \
+            --data-urlencode 'redirect_uri=https://chatgpt.com/connector_platform_oauth_redirect' \
+            --data-urlencode 'code_challenge_method=S256' \
+            --data-urlencode 'code_challenge=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' \
+            --data-urlencode 'resource=https://farmetrica.com/api/mcp-demo' \
+            --data-urlencode 'scope=farmetrica.read offline_access' \
+            --data-urlencode 'state=smoke-test')
+          test "$demo_auth" = 302 || { echo "OAuth demo no redirige al login: HTTP $demo_auth"; exit 1; }
+          echo "OAuth Demo discovery, 401, solicitud CIMD y redirect del login confirmados"

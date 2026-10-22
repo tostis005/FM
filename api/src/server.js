@@ -107,9 +107,9 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
 });
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
-setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
-// Demo PÚBLICA: solo cifras sintéticas. Sin tokens, OAuth ni conexión a PostgreSQL.
-setupPublicDemoMcp(app);
+const {authenticateDemo}=setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
+// MCP demo: PostgreSQL real y conexión OAuth, sin claves API.
+setupPublicDemoMcp(app,pool,{authenticateOAuthDemo:authenticateDemo});
 setupDemoClients(app,pool,{requireSuperadmin});
 // Impedir mutaciones de datos reales desde un tenant demo enlazado.
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas

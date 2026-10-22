@@ -7,7 +7,7 @@ import {setupAIMcp} from "./aiMcp.js";
 for(const superAdmin of [false,true])test("OAuth complete flow, superadmin="+superAdmin,async()=>{
   process.env.AI_MCP_ENABLED="true";
   process.env.AI_MCP_PUBLIC_ORIGIN="https://fm.example";
-  const clients=new Map(),codes=new Map(),connections=[];
+  const clients=new Map(),codes=new Map(),connections=[],accessTokens=new Map();
   const pool={query:async(sql,p)=>{
     if(sql.startsWith("SELECT slug FROM farmetrica.clientes"))return {rows:[{slug:"pharmacy"}]};
     if(sql.startsWith("INSERT INTO farmetrica.ai_oauth_clientes")){clients.set(p[0],p[1]);return {rows:[]};}
@@ -17,7 +17,8 @@ for(const superAdmin of [false,true])test("OAuth complete flow, superadmin="+sup
       codes.set(p[0],Object.fromEntries(keys.map((k,i)=>[k,p[i]])));return {rows:[]};
     }
     if(sql.startsWith("DELETE FROM farmetrica.ai_oauth_codigos")){const row=codes.get(p[0]);codes.delete(p[0]);return {rows:row?[row]:[]};}
-    if(sql.startsWith("INSERT INTO farmetrica.ai_oauth_conexiones")){connections.push(p);return {rows:[]};}
+    if(sql.startsWith("INSERT INTO farmetrica.ai_oauth_conexiones")){connections.push(p);accessTokens.set(p[6],{id:connections.length,email:p[0],metodo_acceso:p[1],cliente_slug:p[2],client_id:p[3],resource:p[4],scope:p[5]});return {rows:[]};}
+    if(sql.startsWith("SELECT * FROM farmetrica.ai_oauth_conexiones WHERE access_hash="))return {rows:accessTokens.has(p[0])?[accessTokens.get(p[0])]:[]};
     throw Error("Unexpected SQL: "+sql);
   }};
   const user={email:"test@example.com",source:"google",role:superAdmin?"superadministrador":"gestor",tenants:superAdmin?[]:[{slug:"pharmacy",active:true}]};
@@ -31,6 +32,8 @@ for(const superAdmin of [false,true])test("OAuth complete flow, superadmin="+sup
     headers:{"Content-Type":"application/x-www-form-urlencoded",...headers},body:new URLSearchParams(body)});
   try{
     const discovery=await (await fetch(base+"/.well-known/oauth-authorization-server")).json();
+    const demoMetadata=await (await fetch(base+"/.well-known/oauth-protected-resource/api/mcp-demo")).json();
+    assert.equal(demoMetadata.resource,"https://fm.example/api/mcp-demo");
     assert.equal(discovery.registration_endpoint,"https://fm.example/api/ai/oauth/register");
     const registration=await fetch(base+"/api/ai/oauth/register",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({client_name:"Future AI",redirect_uris:["https://future-ai.example/callback"],
@@ -63,5 +66,20 @@ for(const superAdmin of [false,true])test("OAuth complete flow, superadmin="+sup
     assert.equal((await post("/api/ai/oauth/token",token)).status,400);
     assert.equal((await post("/api/ai/oauth/token",{...token,resource:"https://other.example/mcp"})).status,400);
     assert.equal((await post("/api/mcp",{jsonrpc:"2.0"})).status,401);
+    // El mismo servidor OAuth admite un segundo recurso sin compartir tokens.
+    const demoParams={...params,resource:"https://fm.example/api/mcp-demo"};
+    response=await fetch(base+authorize+"?"+new URLSearchParams(demoParams),{headers:{"x-test-session":"yes"}});
+    assert.equal(response.status,200);
+    response=await post(authorize,{...demoParams,confirm:"yes",tenant:"pharmacy"},
+      {"x-test-session":"yes",Origin:"https://fm.example"});
+    assert.equal(response.status,302);
+    const demoCode=new URL(response.headers.get("location")).searchParams.get("code");
+    response=await post("/api/ai/oauth/token",{...token,resource:demoParams.resource,code:demoCode});
+    assert.equal(response.status,200);
+    const demoToken=await response.json();
+    const denied=await fetch(base+"/api/mcp",{method:"POST",headers:{
+      "Authorization":"Bearer "+demoToken.access_token,"Content-Type":"application/json"},
+      body:JSON.stringify({jsonrpc:"2.0",id:1,method:"tools/list"})});
+    assert.equal(denied.status,401,"Token demo no puede acceder al MCP principal");
   }finally{await new Promise(resolve=>server.close(resolve));}
 });

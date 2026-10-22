@@ -1,104 +1,131 @@
-// MCP publico SOLO para demostraciones con datos 100 % inventados.
-// NO consulta PostgreSQL, servicios internos, OAuth ni datos de clientes reales.
+// MCP demo con datos REALES de PostgreSQL y clave de acceso independiente de OAuth.
+// Reutiliza el motor de indicadores del MCP principal. No acepta SQL arbitrario.
+import {readAnalytics} from "./aiMcp.js";
+import {authorizedIds,normalizedPeriod,periodFromQuestion,pharmacyIdsFromQuestion,
+  selectTools,TOOL_CATALOG} from "./assistantAnalytics.js";
+
 const VERSION="2025-06-18";
-const PHARMACIES=Object.freeze([
-  {id:90001,nombre:"Farmacia Ejemplo Norte",ciudad:"Ciudad Ficticia"},
-  {id:90002,nombre:"Farmacia Ejemplo Centro",ciudad:"Ciudad Ficticia"},
-  {id:90003,nombre:"Farmacia Ejemplo Sur",ciudad:"Ciudad Ficticia"}
-]);
-const INDICATORS=Object.freeze({
-  ventas_resumen:{modulo:"ventas",etiqueta:"Ventas de ejemplo"},
-  compras_resumen:{modulo:"compras",etiqueta:"Compras de ejemplo"},
-  stock_capital:{modulo:"stock",etiqueta:"Stock de ejemplo"},
-  ventas_articulos:{modulo:"ventas",etiqueta:"Artículos de ejemplo"},
-  ahorro_economico:{modulo:"compras",etiqueta:"Oportunidad estimada de ejemplo"}
-});
-const META={modo:"DEMO",ficticio:true,aviso:"DATOS SINTÉTICOS. No corresponden a ninguna farmacia real ni proceden de PostgreSQL."};
-const DATE=/^\d{4}-\d{2}-\d{2}$/;
-function period(from,to){
-  const d=from||"2026-10-01",h=to||"2026-10-22";
-  if(!DATE.test(d)||!DATE.test(h))throw new TypeError("Fechas inválidas");
-  const left=new Date(d+"T00:00:00Z"),right=new Date(h+"T00:00:00Z");
-  if(Number.isNaN(left.valueOf())||Number.isNaN(right.valueOf())||
-    left.toISOString().slice(0,10)!==d||right.toISOString().slice(0,10)!==h)
-    throw new TypeError("Fecha no existente");
-  const days=Math.round((right-left)/86400000)+1;
-  if(days<1||days>366)throw new TypeError("El período debe tener entre 1 y 366 días");
-  return {desde:d,hasta:h,dias:days};
-}
-function demoIds(ids){
-  if(ids===undefined)return PHARMACIES.map(p=>p.id);
-  if(!Array.isArray(ids)||ids.length>3||ids.some(n=>!Number.isInteger(n)||!PHARMACIES.some(p=>p.id===n)))
-    throw new TypeError("Solo se aceptan IDs ficticios del catálogo demo");
-  return ids.length?[...new Set(ids)]:PHARMACIES.map(p=>p.id);
-}
-function summary(name,arguments_={}){
-  const {desde,hasta,dias}=period(arguments_.desde,arguments_.hasta);
-  const ids=demoIds(arguments_.farmacias);
-  if(!Object.hasOwn(INDICATORS,name))throw new TypeError("Indicador inexistente");
-  const factor=dias/30;
-  const selected=PHARMACIES.filter(p=>ids.includes(p.id));
-  const items=selected.map((p,i)=>{
-    const base=(p.id-90000)*10000;
-    const euro=(n)=>Math.round(n*factor*100)/100;
-    if(name==="ventas_resumen")return {farmacia:p.nombre,ventas_eur:euro(40000+base),tickets:Math.round((1100+i*180)*factor)};
-    if(name==="compras_resumen")return {farmacia:p.nombre,compras_eur:euro(25000+base*.8),unidades:Math.round((2300+i*240)*factor)};
-    if(name==="stock_capital")return {farmacia:p.nombre,capital_estimado_eur:Math.round(39000+base*1.1)};
-    if(name==="ventas_articulos")return {farmacia:p.nombre,articulos:[{nombre:"Producto de prueba A",unidades:Math.round(130*factor)},{nombre:"Producto de prueba B",unidades:Math.round(95*factor)}]};
-    return {farmacia:p.nombre,diferencial_historico_puc_eur:euro(600+i*110),nota:"No representa ahorro real ni garantizado"};
-  });
-  return {...META,indicador:name,periodo:{desde,hasta,dias},farmacias:items,moneda:"EUR"};
-}
-const demoTools=[
-  {name:"listar_contexto",description:"DEMO SIN LOGIN: tres farmacias completamente ficticias. Jamás devuelve datos reales.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-  {name:"catalogo_analitico",description:"DEMO SIN LOGIN: catálogo con indicadores sintéticos.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-  {name:"consultar_indicador",description:"DEMO: consulta cifras inventadas para probar ChatGPT, sin acceso a BD.",annotations:{readOnlyHint:true,openWorldHint:false},
-    inputSchema:{type:"object",properties:{indicador:{type:"string",enum:Object.keys(INDICATORS)},desde:{type:"string"},hasta:{type:"string"},farmacias:{type:"array",items:{type:"integer"}}},required:["indicador"],additionalProperties:false}},
-  {name:"explorar_pregunta",description:"DEMO: simula una consulta por lenguaje natural sin consultar datos reales.",annotations:{readOnlyHint:true,openWorldHint:false},
-    inputSchema:{type:"object",properties:{pregunta:{type:"string",minLength:2,maxLength:300},desde:{type:"string"},hasta:{type:"string"},farmacias:{type:"array",items:{type:"integer"}}},required:["pregunta"],additionalProperties:false}}
+const SLUG=/^[a-z][a-z0-9_]{1,62}$/;
+const rate=new Map();
+const rpcError=(id,code,message)=>({jsonrpc:"2.0",id:id??null,error:{code,message}});
+const rpcResult=(id,data)=>({jsonrpc:"2.0",id,result:{
+  content:[{type:"text",text:JSON.stringify(data)}],structuredContent:data}});
+const metadata={modo:"DEMO_REAL",ficticio:false,origen:"PostgreSQL",soloLectura:true};
+export const DEMO_MCP_TOOLS=[
+  {name:"listar_contexto",description:"Consulta las farmacias del cliente autorizado mediante OAuth.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+  {name:"catalogo_analitico",description:"Catálogo de indicadores disponibles con datos reales.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+  {name:"consultar_indicador",description:"Consulta datos reales de compras, ventas, stock o ahorro con SQL predefinido y solo lectura.",annotations:{readOnlyHint:true,openWorldHint:false},
+    inputSchema:{type:"object",properties:{indicador:{type:"string",enum:Object.keys(TOOL_CATALOG)},
+      desde:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
+      hasta:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
+      farmacias:{type:"array",items:{type:"integer"},maxItems:50}},
+      required:["indicador"],additionalProperties:false}},
+  {name:"explorar_pregunta",description:"Interpreta una pregunta en español y ejecuta hasta dos indicadores SQL reales, de solo lectura.",annotations:{readOnlyHint:true,openWorldHint:false},
+    inputSchema:{type:"object",properties:{pregunta:{type:"string",minLength:2,maxLength:1000},
+      desde:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
+      hasta:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
+      farmacias:{type:"array",items:{type:"integer"},maxItems:50}},
+      required:["pregunta"],additionalProperties:false}}
 ];
-const error=(id,code,message)=>({jsonrpc:"2.0",id,error:{code,message}});
-const result=(id,data)=>({jsonrpc:"2.0",id,result:{content:[{type:"text",text:JSON.stringify(data)}],structuredContent:data}});
-export function handlePublicDemoMcp(input){
+function limitOk(key,now=Date.now()){
+  const hits=(rate.get(key)||[]).filter(t=>now-t<600000);
+  if(hits.length>=100)return false;
+  hits.push(now);rate.set(key,hits);
+  if(rate.size>100)for(const [k,v] of rate)if(now-v.at(-1)>600000)rate.delete(k);
+  return true;
+}
+function validInput(name,args){
+  const tool=DEMO_MCP_TOOLS.find(t=>t.name===name);
+  if(!tool||!args||typeof args!=="object"||Array.isArray(args))throw new TypeError("Herramienta o argumentos inválidos");
+  if(Object.keys(args).some(k=>!Object.hasOwn(tool.inputSchema.properties,k)))throw new TypeError("Argumentos no admitidos");
+  if(args.farmacias!==undefined&&(!Array.isArray(args.farmacias)||args.farmacias.length>50||
+      args.farmacias.some(n=>!Number.isSafeInteger(n))))throw new TypeError("Farmacias inválidas");
+  if((args.desde===undefined)!==(args.hasta===undefined))throw new TypeError("Indica desde y hasta");
+  if(args.desde!==undefined&&(!/^\d{4}-\d{2}-\d{2}$/.test(args.desde)||!/^\d{4}-\d{2}-\d{2}$/.test(args.hasta)))
+    throw new TypeError("Fechas inválidas");
+  return args;
+}
+function checkedPeriod(args,question=""){
+  const period=args.desde===undefined?periodFromQuestion(question||"últimos 30 días"):
+    {from:args.desde,to:args.hasta};
+  for(const val of [period.from,period.to]){
+    const d=new Date(val+"T00:00:00Z");
+    if(!Number.isFinite(d.valueOf())||d.toISOString().slice(0,10)!==val)
+      throw new TypeError("Fecha inexistente");
+  }
+  return normalizedPeriod(period);
+}
+export async function loadDemoMcpContext(pool,slug){
+  if(!SLUG.test(slug||""))throw new Error("Cliente de clave demo inválido");
+  const {rows:clients}=await pool.query(
+    "SELECT slug,nombre,esquema_datos FROM farmetrica.clientes WHERE slug=$1 AND activo=true",[slug]);
+  const c=clients[0];
+  if(!c||!SLUG.test(c.esquema_datos))throw new Error("Cliente demo no disponible");
+  const {rows:pharmacies}=await pool.query(
+    "SELECT id,nombre AS name,ciudad AS city FROM farmetrica.farmacias WHERE cliente_slug=$1 AND activo=true ORDER BY id",[slug]);
+  if(!pharmacies.length)throw new Error("Sin farmacias activas");
+  return {client:{slug:c.slug,name:c.nombre,schema:c.esquema_datos},
+    role:"administrador",modules:{dashboard:true,ventas:true,compras:true,stock:true},
+    pharmacies:pharmacies.map(p=>({id:Number(p.id),name:p.name,city:p.city})),
+    allowedPharmacyIds:pharmacies.map(p=>Number(p.id))};
+}
+export async function handlePublicDemoMcp(input,pool,slug,authenticatedContext=null){
   if(!input||typeof input!=="object"||Array.isArray(input)||input.jsonrpc!=="2.0"||
-     typeof input.method!=="string")return {http:400,body:error(input?.id??null,-32600,"Invalid Request")};
+    typeof input.method!=="string")return {http:400,body:rpcError(input?.id,-32600,"Invalid Request")};
   const id=input.id??null;
   if(input.method==="notifications/initialized"||input.method==="notifications/cancelled")return {http:202,body:null};
-  if(input.method==="initialize")return {http:200,body:{jsonrpc:"2.0",id,result:{protocolVersion:VERSION,
-    capabilities:{tools:{listChanged:false}},serverInfo:{name:"Farmetrica Demo Ficticia",version:"0.1.0"}}}};
+  if(input.method==="initialize")return {http:200,body:{jsonrpc:"2.0",id,result:{
+    protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},
+    serverInfo:{name:"Farmetrica Demo Real",version:"0.2.0"}}}};
   if(input.method==="ping")return {http:200,body:{jsonrpc:"2.0",id,result:{}}};
-  if(input.method==="tools/list")return {http:200,body:{jsonrpc:"2.0",id,result:{tools:demoTools}}};
-  if(input.method!=="tools/call")return {http:200,body:error(id,-32601,"Method not found")};
-  const name=input.params?.name,args=input.params?.arguments??{};
-  if(!demoTools.some(t=>t.name===name)||!args||typeof args!=="object"||Array.isArray(args))
-    return {http:200,body:error(id,-32602,"Invalid params")};
+  if(input.method==="tools/list")return {http:200,body:{jsonrpc:"2.0",id,result:{tools:DEMO_MCP_TOOLS.map(t=>({...t,securitySchemes:[{type:"oauth2",scopes:["farmetrica.read"]}]}))}}};
+  if(input.method!=="tools/call")return {http:200,body:rpcError(id,-32601,"Method not found")};
   try{
-    if(Object.keys(args).some(k=>!(demoTools.find(x=>x.name===name).inputSchema.properties[k])))
-      throw new TypeError("Argumentos no admitidos");
-    if(name==="listar_contexto")return {http:200,body:result(id,{...META,cliente:"Organización DEMO",farmacias:PHARMACIES,modulos:["compras","ventas","stock"]})};
-    if(name==="catalogo_analitico")return {http:200,body:result(id,{...META,indicadores:INDICATORS})};
-    if(name==="consultar_indicador")return {http:200,body:result(id,summary(args.indicador,args))};
-    if(typeof args.pregunta!=="string"||args.pregunta.trim().length<2||args.pregunta.length>300)throw new TypeError("Pregunta inválida");
-    const q=args.pregunta.toLowerCase();
-    const indicator=/stock|existenc|inmoviliz/.test(q)?"stock_capital":
-      /ahorr|optimiza|diferencia/.test(q)?"ahorro_economico":
-      /compr|proveedor/.test(q)?"compras_resumen":
-      /art[ií]cul|producto|m[aá]s vendid/.test(q)?"ventas_articulos":"ventas_resumen";
-    return {http:200,body:result(id,{...summary(indicator,args),pregunta:args.pregunta})};
+    const name=input.params?.name,args=validInput(name,input.params?.arguments??{});
+    const ctx=authenticatedContext??await loadDemoMcpContext(pool,slug);
+    let data;
+    if(name==="listar_contexto")data={...metadata,cliente:ctx.client.name,
+      farmacias:ctx.pharmacies.map(p=>({id:p.id,nombre:p.name,ciudad:p.city})),modulos:ctx.modules};
+    else if(name==="catalogo_analitico")data={...metadata,indicadores:TOOL_CATALOG};
+    else if(name==="consultar_indicador"){
+      if(typeof args.indicador!=="string"||!Object.hasOwn(TOOL_CATALOG,args.indicador))
+        throw new TypeError("Indicador desconocido");
+      data={...metadata,...await readAnalytics(pool,ctx,args.indicador,checkedPeriod(args),args.farmacias??[])};
+    }else{
+      if(typeof args.pregunta!=="string"||args.pregunta.trim().length<2||args.pregunta.length>1000)
+        throw new TypeError("Pregunta inválida");
+      const period=checkedPeriod(args,args.pregunta);
+      const ids=authorizedIds(ctx,args.farmacias===undefined?
+        pharmacyIdsFromQuestion(args.pregunta,ctx):args.farmacias);
+      const names=selectTools(args.pregunta,ctx);
+      data={...metadata,pregunta:args.pregunta,periodo:period,
+        consultas:await Promise.all(names.map(n=>readAnalytics(pool,ctx,n,period,ids))),
+        ...(names.length?{}:{aviso:"No se ha identificado un indicador para esta pregunta."})};
+    }
+    return {http:200,body:rpcResult(id,data)};
   }catch(e){
-    if(e instanceof TypeError)return {http:200,body:{jsonrpc:"2.0",id,result:{isError:true,
-      content:[{type:"text",text:"Consulta demo inválida: "+e.message}]}}};
-    throw e;
+    if(e instanceof TypeError||/autorizadas|inválid|desconocid|Período|Farmacias/.test(e.message||""))
+      return {http:200,body:{jsonrpc:"2.0",id,result:{isError:true,
+        content:[{type:"text",text:"Consulta inválida: "+e.message}]}}};
+    return {http:503,body:rpcError(id,-32000,"No se pudo consultar PostgreSQL")};
   }
 }
-export function setupPublicDemoMcp(app){
-  // Falso entorno sin conexion a BD. No se montan endpoints OAuth ni rutas reales.
-  app.post("/api/mcp-demo",(req,res)=>{
-    // Carga limitada de la petición además del límite general de Express.
-    if(Number(req.get("content-length")||0)>16384)return res.status(413).end();
-    const outcome=handlePublicDemoMcp(req.body);
-    if(!outcome.body)return res.status(outcome.http).end();
-    return res.status(outcome.http).json(outcome.body);
+
+export function setupPublicDemoMcp(app,pool,{authenticateOAuthDemo}){
+  if(typeof authenticateOAuthDemo!=="function")
+    throw new Error("MCP demo real necesita un autenticador OAuth activo");
+  // PostgreSQL real sin claves API, con el contexto de usuario verificado.
+  // Un endpoint anónimo nunca obtiene permiso para consultar clientes.
+  app.post("/api/mcp-demo",authenticateOAuthDemo,async(req,res,next)=>{
+    try{
+      if(Number(req.get("content-length")||0)>16384)return res.status(413).end();
+      if(req.body?.method==="tools/call"&&!limitOk("oauth:"+req.aiConnection.id))
+        return res.status(429).json(rpcError(req.body?.id,-32000,"Demasiadas consultas"));
+      const outcome=await handlePublicDemoMcp(req.body,pool,req.context.client.slug,req.context);
+      if(!outcome.body)return res.status(outcome.http).end();
+      return res.status(outcome.http).json(outcome.body);
+    }catch(e){next(e)}
   });
   app.get("/api/mcp-demo",(_req,res)=>res.status(405).set("Allow","POST").end());
+  app.delete("/api/mcp-demo",(_req,res)=>res.status(204).end());
 }

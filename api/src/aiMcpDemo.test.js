@@ -1,45 +1,102 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {handlePublicDemoMcp,setupPublicDemoMcp} from "./aiMcpDemo.js";
-const call=(method,params={},id=1)=>handlePublicDemoMcp({jsonrpc:"2.0",id,method,params});
-test("MCP demo exposes protocol and four read-only tools without authentication",()=>{
-  assert.equal(call("initialize").body.result.serverInfo.name,"Farmetrica Demo Ficticia");
-  const list=call("tools/list").body.result.tools;
-  assert.equal(list.length,4);
-  for(const tool of list) assert.equal(tool.annotations.readOnlyHint,true);
-  assert.equal(call("notifications/initialized").http,202);
+const calls=[];
+const pool={
+ query:async(sql,args)=>{
+  calls.push({sql,args});
+  if(sql.includes("SELECT slug,nombre,esquema_datos"))return {rows:[{slug:"farmacias_demo",nombre:"Grupo Demo",esquema_datos:"farmacias_demo"}]};
+  if(sql.includes("SELECT id,nombre AS name"))return {rows:[{id:101,name:"Farmacia 1",city:""},{id:102,name:"Farmacia 2",city:""}]};
+  return {rows:[]};
+ },
+ connect:async()=>({
+  query:async(sql,args)=>{
+   calls.push({sql,args});
+   if(sql.startsWith("SELECT f.nombre"))return {rows:[{farmacia:"Farmacia 1",importe:1234.56,unidades:15}]};
+   return {rows:[]};
+  },
+  release:()=>calls.push({sql:"released"})
+ })
+};
+const call=(method,params={},id=1)=>handlePublicDemoMcp({jsonrpc:"2.0",id,method,params},pool,"farmacias_demo");
+test("MCP demo mantiene las cuatro herramientas de lectura con protocolo correcto",async()=>{
+ assert.equal((await call("initialize")).body.result.serverInfo.name,"Farmetrica Demo Real");
+ const tools=(await call("tools/list")).body.result.tools;
+ assert.equal(tools.length,4);
+ assert.ok(tools.every(t=>t.annotations.readOnlyHint===true));
+ assert.equal((await call("notifications/initialized")).http,202);
 });
-test("all public data is clearly fictitious and uses only synthetic pharmacies",()=>{
-  const context=call("tools/call",{name:"listar_contexto"}).body.result.structuredContent;
-  assert.equal(context.ficticio,true);
-  assert.equal(context.farmacias.length,3);
-  assert.equal(context.farmacias.every(p=>p.id>=90001 && p.nombre.includes("Ejemplo")),true);
-  const catalog=call("tools/call",{name:"catalogo_analitico"}).body.result.structuredContent;
-  assert.equal(catalog.ficticio,true);
-  for(const indicator of Object.keys(catalog.indicadores)){
-    const row=call("tools/call",{name:"consultar_indicador",arguments:{indicador:indicator,desde:"2026-10-01",hasta:"2026-10-22"}}).body.result.structuredContent;
-    assert.equal(row.ficticio,true);
-    assert.match(row.aviso,/SINTÉTICOS/);
-    assert.equal(row.farmacias.every(p=>p.farmacia.includes("Ejemplo")),true);
-  }
+test("contexto demo carga el cliente y las farmacias reales de PostgreSQL",async()=>{
+ const r=(await call("tools/call",{name:"listar_contexto"})).body.result.structuredContent;
+ assert.equal(r.ficticio,false);
+ assert.equal(r.farmacias[0].id,101);
+ assert.equal(r.cliente,"Grupo Demo");
+ assert.ok(calls.some(c=>c.sql.includes("farmetrica.clientes")));
 });
-test("rejects arbitrary SQL, real pharmacy identifiers and unintended arguments",()=>{
-  const query=(args)=>call("tools/call",{name:"consultar_indicador",arguments:args}).body.result;
-  assert.equal(query({indicador:"DROP TABLE foo"}).isError,true);
-  assert.equal(query({indicador:"compras_resumen",farmacias:[1]}).isError,true);
-  assert.equal(query({indicador:"compras_resumen",sql:"SELECT *"}).isError,true);
-  assert.equal(query({indicador:"compras_resumen",desde:"2026-02-30",hasta:"2026-03-01"}).isError,true);
-  assert.equal(query({indicador:"compras_resumen",desde:"2023-01-01",hasta:"2026-01-01"}).isError,true);
+test("consultas analíticas reales reutilizan transacción READ ONLY y filtros del tenant",async()=>{
+ const data=(await call("tools/call",{name:"consultar_indicador",arguments:{
+  indicador:"ventas_resumen",desde:"2026-10-01",hasta:"2026-10-22",farmacias:[101]
+ }})).body.result.structuredContent;
+ assert.equal(data.available,true);
+ assert.equal(data.ficticio,false);
+ assert.equal(data.rows[0].importe,1234.56);
+ assert.ok(calls.some(c=>c.sql==="BEGIN TRANSACTION READ ONLY"));
+ assert.ok(calls.some(c=>c.sql==="ROLLBACK"));
+ assert.ok(calls.some(c=>c.args?.[3]==="farmacias_demo"));
 });
-test("public endpoint never injects DB pool and handles invalid requests",()=>{
-  const registered=[];
-  const app={post:(path,cb)=>registered.push({method:"POST",path,cb}),
-    get:(path,cb)=>registered.push({method:"GET",path,cb})};
-  setupPublicDemoMcp(app);
-  assert.equal(registered.length,2);
-  assert.equal(registered.every(x=>x.path==="/api/mcp-demo"),true);
-  assert.equal(handlePublicDemoMcp({jsonrpc:"2.0",method:"irrelevant"}).body.error.code,-32601);
-  assert.equal(handlePublicDemoMcp(null).http,400);
-  const r=call("tools/call",{name:"explorar_pregunta",arguments:{pregunta:"¿Cuánto compramos?"}});
-  assert.equal(r.body.result.structuredContent.indicador,"compras_resumen");
+test("se rechazan SQL libre, farmacias ajenas y fechas inexistentes",async()=>{
+ for(const args of [
+  {indicador:"DROP TABLE clientes"},
+  {indicador:"ventas_resumen",sql:"SELECT * FROM secretos"},
+  {indicador:"ventas_resumen",farmacias:[999]},
+  {indicador:"ventas_resumen",desde:"2026-02-30",hasta:"2026-03-01"}
+ ])assert.equal((await call("tools/call",{name:"consultar_indicador",arguments:args})).body.result.isError,true);
+});
+test("el endpoint solo utiliza el tenant OAuth autorizado y nunca consulta sin iniciar sesión",async()=>{
+ const route=[];
+ const app={
+  post:(path,...handlers)=>route.push({method:"POST",path,handlers}),
+  get:(path,...handlers)=>route.push({method:"GET",path,handlers}),
+  delete:(path,...handlers)=>route.push({method:"DELETE",path,handlers})
+ };
+ const context={
+  client:{slug:"farmacias_demo",name:"Grupo Demo",schema:"farmacias_demo"},
+  role:"administrador",modules:{ventas:true,compras:true,stock:true},
+  pharmacies:[{id:101,name:"Farmacia 1",city:""}],allowedPharmacyIds:[101]
+ };
+ const authenticate=(req,res,next)=>{
+  if(req.get("authorization")!=="Bearer oauth-confirmado")
+    return res.status(401).json({error:"Autenticación requerida"});
+  req.context=context;req.aiConnection={id:777};return next();
+ };
+ setupPublicDemoMcp(app,pool,{authenticateOAuthDemo:authenticate});
+ const handlers=route.find(x=>x.method==="POST"&&x.path==="/api/mcp-demo").handlers;
+ assert.equal(handlers.length,2);
+ let status=200,body;
+ const res={status(n){status=n;return this},set(){return this},
+  json(x){body=x;return this},end(){return this}};
+ const makeReq=auth=>({get:key=>key==="authorization"?auth:"",body:{
+  jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"listar_contexto",arguments:{}}}});
+ const before=calls.length;
+ handlers[0](makeReq(""),res,()=>{throw Error("Debe bloquear sin OAuth")});
+ assert.equal(status,401);
+ assert.equal(calls.length,before);
+ const req=makeReq("Bearer oauth-confirmado");
+ await new Promise((resolve,reject)=>{
+  handlers[0](req,res,err=>{
+   if(err)return reject(err);
+   handlers[1](req,res,e=>e?reject(e):resolve());
+   // La respuesta es síncrona en el mock: async handler termina tras devolver JSON.
+  });
+  const check=setInterval(()=>{
+   if(body?.result?.structuredContent?.cliente==="Grupo Demo"){
+    clearInterval(check);resolve();
+   }
+  },1);
+  setTimeout(()=>{clearInterval(check);reject(Error("La respuesta OAuth no llegó"))},2000);
+ });
+ assert.equal(status,200);
+ assert.equal(body.result.structuredContent.ficticio,false);
+ assert.equal(body.result.structuredContent.farmacias[0].id,101);
+ assert.equal(route.filter(x=>x.path==="/api/mcp-demo").length,3);
 });

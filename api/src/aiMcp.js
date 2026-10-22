@@ -305,7 +305,12 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
       res.json({jsonrpc:"2.0",id,result:{content:[{type:"text",text:JSON.stringify(data)}],structuredContent:data}});
     }catch(e){
       if(e instanceof TypeError||/autorizadas|inválid|desconocid|Período|Farmacias/.test(e.message||""))
-        return res.json({jsonrpc:"2.0",id,result:{isError:true,content:[{type:"text",text:"Consulta no válida o farmacia no autorizada."}]}});
+        return res.json({jsonrpc:"2.0",id,result:{isError:true,content:[
+          {type:"text",text:"Plan de consulta no válido: "+String(e.message||"Argumentos no admitidos").slice(0,240)+
+          ". Consulta catalogo_semantico y corrige solo los campos indicados."}]}});
+      if(["57014","55P03"].includes(e.code))
+        return res.json({jsonrpc:"2.0",id,result:{isError:true,
+          content:[{type:"text",text:"Consulta demasiado costosa: reduce período, filtros o agrupaciones."}]}});
       next(e);
     }
   });

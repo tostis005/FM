@@ -30,7 +30,7 @@ jobs:
           npm install --prefix api --no-audit --no-fund
           node --check api/src/server.js
           node --test api/src/assistantStream.test.js
-          node --test api/src/semanticInterpreter.test.js
+          node --test api/src/semanticInterpreter.test.js api/src/semanticExecution.test.js
           node --check api/src/aiMcpDemo.js
           node --check api/src/aiShareMcp.js
           node --test api/src/aiMcpDemo.test.js api/src/aiShareLinks.test.js api/src/aiShareMcp.test.js

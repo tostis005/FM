@@ -37,8 +37,14 @@ function indexGroups(rows,dims){
 function mergeComparedRows(previous,current,{metrica,dimensiones,direccion}){
  if(previous.length>=100||current.length>=100)
   return {estado:"no_disponible",mensaje:"Hay al menos 100 grupos en uno de los períodos. No puedo garantizar una comparación completa con el límite actual; reduce las farmacias o agrupaciones."};
- const prev=indexGroups(previous,dimensiones);
- const now=indexGroups(current,dimensiones);
+ let prev,now;
+ try{
+  prev=indexGroups(previous,dimensiones);
+  now=indexGroups(current,dimensiones);
+ }catch{
+  return {estado:"no_disponible",
+   mensaje:"Las filas recibidas no permiten comparar grupos con identificadores únicos y verificables."};
+ }
  const keys=new Set([...prev.keys(),...now.keys()]);
  const rows=[];
  for(const key of keys){

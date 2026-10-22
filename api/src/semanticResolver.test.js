@@ -91,3 +91,61 @@ test("límite de 100 grupos rechaza rankings incompletos",async()=>{
  assert.equal(result.estado,"no_disponible");
  assert.equal(result.filas,undefined);
 });
+
+test("interpreta NUMERIC de PostgreSQL en texto y no inventa ceros en grupos ausentes",async()=>{
+ const pool={connect:async()=>({query:async(sql,params=[])=>{
+  if(sql.startsWith("SELECT")){
+   if(params[0]==="2026-09-01")return {rows:[
+    {farmaciaId:1,farmacia:"Abadía",importe:"50.00"},
+    {farmaciaId:2,farmacia:"Europa",importe:"10.00"}
+   ]};
+   return {rows:[{farmaciaId:1,farmacia:"Abadía",importe:"75.25"}]};
+  }
+  return {rows:[]};
+ },release(){}})};
+ const data=await resolveAndExecuteQuestion(pool,ctx,
+  "Compara ventas por farmacia este mes respecto al mes pasado",{now});
+ assert.equal(data.estado,"ok");
+ assert.equal(data.filas.length,2);
+ const abad=data.filas.find(x=>x.farmaciaId===1);
+ assert.equal(abad.anterior,50);
+ assert.equal(abad.actual,75.25);
+ assert.equal(abad.diferencia,25.25);
+ assert.equal(abad.variacion_pct,50.5);
+ const europa=data.filas.find(x=>x.farmaciaId===2);
+ assert.equal(europa.anterior,10);
+ assert.equal(europa.actual,null);
+ assert.equal(europa.diferencia,null);
+ assert.equal(europa.variacion_pct,null);
+ assert.equal(europa.estado,"sin_datos_actuales");
+ assert.match(formatComparisonAnswer(data),/faltan datos verificables/);
+ assert.ok(data.advertencias.some(x=>x.includes("no se interpreta como importe cero")));
+});
+test("rechaza resultados sin ID de farmacia o con claves de agrupación duplicadas",async()=>{
+ for(const rows of [
+  [{farmacia:"Europa",importe:"100"}],
+  [{farmaciaId:1,farmacia:"Abadía",importe:"100"},
+   {farmaciaId:1,farmacia:"Abadía",importe:"20"}]
+ ]){
+  const pool={connect:async()=>({query:async(sql)=>{
+   if(sql.startsWith("SELECT"))return {rows};
+   return {rows:[]};
+  },release(){}})};
+  const data=await resolveAndExecuteQuestion(pool,ctx,
+   "Compara ventas por farmacia este mes respecto al mes pasado",{now});
+  assert.equal(data.estado,"no_disponible");
+  assert.equal(data.filas,undefined);
+ }
+});
+test("un valor nulo, infinito o con unidad monetaria no se convierte en cifra",async()=>{
+ for(const invalid of ["NaN","10 €",null]){
+  const pool={connect:async()=>({query:async(sql)=>{
+   if(sql.startsWith("SELECT"))return {rows:[{farmaciaId:1,farmacia:"Abadía",importe:invalid}]};
+   return {rows:[]};
+  },release(){}})};
+  const data=await resolveAndExecuteQuestion(pool,ctx,
+   "Compara ventas por farmacia este mes respecto al mes pasado",{now});
+  assert.equal(data.estado,"no_disponible");
+  assert.equal(data.filas,undefined);
+ }
+});

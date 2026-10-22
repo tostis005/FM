@@ -108,8 +108,8 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
 setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
-// MCP demo aislado: datos inventados, sin pool ni sesiones reales.
-setupPublicDemoMcp(app);
+// MCP demo con clave API independiente y consultas PostgreSQL de solo lectura.
+setupPublicDemoMcp(app,pool,{requireSuperadmin});
 setupDemoClients(app,pool,{requireSuperadmin});
 // Impedir mutaciones de datos reales desde un tenant demo enlazado.
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas

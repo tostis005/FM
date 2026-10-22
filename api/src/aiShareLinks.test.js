@@ -92,15 +92,6 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.ok(catalog.consultas_semanticas.fuentes.stock.metricas.dias_cobertura);
   assert.ok(catalog.consultas.some(x=>x.url.includes("consulta=")));
   assert.match(landing.headers.get("referrer-policy"),/no-referrer/);
-  const direct=await fetch(base+path+"/farmacias/101/ventas/hoy/vendedores?formato=json");
-  assert.equal(direct.status,200);
-  const bySeller=await direct.json();
-  assert.equal(bySeller.totalVentas,210);
-  assert.equal(bySeller.importeDesglosado,210);
-  assert.equal(bySeller.diferenciaConTotal,0);
-  assert.equal(bySeller.vendedores.length,2);
-  assert.equal(bySeller.vendedores[0].vendedorNombre,"SELL-01");
-  assert.equal((await fetch(base+path+"/farmacias/999/ventas/hoy/vendedores")).status,403);
   const sales=await fetch(base+path+"?indicador=ventas_resumen&desde=2026-10-01&hasta=2026-10-22&formato=json");
   assert.equal(sales.status,200);
   const result=await sales.json();

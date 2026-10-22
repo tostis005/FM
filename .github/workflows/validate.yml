@@ -28,6 +28,8 @@ jobs:
           node --check api/src/assistant.js
           node --check api/src/aiMcp.js
           node --test api/src/aiMcp.test.js
+          node --check api/src/aiMcpDemo.js
+          node --test api/src/aiMcpDemo.test.js
           node --check api/src/assistantAnalytics.js
           node --test api/src/assistant.test.js
           node --check api/src/accesos.js

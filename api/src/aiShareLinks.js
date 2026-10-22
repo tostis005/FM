@@ -75,7 +75,7 @@ function shareCatalog(token,ctx){
   consultas_semanticas:semantic,
   modelo_json:PREFIX+token+"?modelo=json",
   modelo_agents:PREFIX+token+"/AGENTS.md",
-  ayuda_ia:"Lee modelo_agents o modelo_json. ChatGPT interpreta tu pregunta, construye una consulta permitida y utiliza el mismo enlace mediante ?consulta=JSON_CODIFICADO&formato=json o ?fuente=...&agrupar=...&metricas=... . No hay IA en el servidor, rutas por pregunta ni SQL libre.",
+  ayuda_ia:"Para preguntas naturales utiliza resolver_pregunta_temporal en el MCP: Farmétrica interpreta la pregunta en el servidor sin otro modelo de IA. Las consultas estructuradas explícitas siguen disponibles mediante consulta=JSON_CODIFICADO; no hay SQL libre.",
   formato:"Para obtener JSON agrega formato=json a cualquier URL de consulta.",
   parametros:"indicador o pregunta, desde y hasta en AAAA-MM-DD, farmacias=ID,ID o farmacia=nombre exacto.",
   alcance:"Consultas semánticas por períodos arbitrarios o histórico, con límite de 100 filas y tiempo máximo de ejecución; SQL libre deshabilitado."
@@ -96,8 +96,8 @@ function landing(token,ctx){
   '<p>Datos reales de PostgreSQL. Acceso temporal de solo lectura que permite consultar indicadores reales '+
   'durante la vigencia elegida al generarlo y puede revocarse desde Farmétrica.</p>'+
   '<h2>Modelo para ChatGPT (fuente de verdad)</h2>'+
-  '<p>Este servidor no tiene un segundo modelo de IA. ChatGPT lee el contrato de datos, '+
-  'decide qué consultar, y el servidor ejecuta exclusivamente SELECT autorizados.</p>'+
+  '<p>Farmétrica interpreta las preguntas en español compatibles con reglas únicas, sin otra IA. '+
+  'El servidor ejecuta exclusivamente consultas de solo lectura autorizadas.</p>'+
   '<ul><li><a href="'+html(catalog.modelo_agents)+'">AGENTS.md: instrucciones, tablas, conexiones y cálculos</a></li>'+
   '<li><a href="'+html(catalog.modelo_json)+'">Contrato JSON con esquema exacto de consulta</a></li></ul>'+
   '<h2>Ejemplos de la única API genérica</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
@@ -106,7 +106,7 @@ function landing(token,ctx){
   'de consulta. Fechas: <code>desde=AAAA-MM-DD</code> y <code>hasta=AAAA-MM-DD</code>.</p>'+
   '<p>Para un catálogo legible por máquinas, abre <a href="'+html(PREFIX+token+"?formato=json")+
   '">Catálogo JSON</a>. Para el resultado de una consulta, añade <code>formato=json</code>.</p>'+
-  '<p>ChatGPT transforma preguntas libres en combinaciones permitidas de campos. '+
+  '<p>Para texto libre utiliza la herramienta MCP <code>resolver_pregunta_temporal</code>. '+
   'Envía el plan por <code>consulta=</code> o los campos mediante parámetros GET. '+
   'No hay un segundo modelo de IA ni se admite SQL arbitrario.</p>'+
   '<h2>AGENTS.md integrado en este mismo punto de entrada</h2>'+

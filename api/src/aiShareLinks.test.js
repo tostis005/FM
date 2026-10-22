@@ -80,6 +80,9 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.match(landingText,/Ventas de hoy por farmacia/);
   assert.match(landingText,/Farmacias incluidas/);
   assert.match(landingText,/AGENTS.md: instrucciones, tablas, conexiones y cálculos/);
+  assert.match(landingText,/AGENTS.md integrado en este mismo punto de entrada/);
+  assert.match(landingText,/fm_ventas_analitica/);
+  assert.match(landingText,/margen_estimado/);
   const agents=await fetch(base+path+"/AGENTS.md");
   assert.equal(agents.status,200);
   assert.match(agents.headers.get("content-type"),/text\/markdown/);

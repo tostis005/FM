@@ -23,6 +23,7 @@ test("SQL económico PostgreSQL: unidades y PUC ponderado, cooperativas, locales
   await prep.query(`INSERT INTO farmetrica.proveedores_maestro VALUES
     ('fm_savings_ci','0005','COOP A',true,false),
     ('fm_savings_ci','0256','LAB A',false,false),
+    ('fm_savings_ci','256','LAB A',false,false),
     ('fm_savings_ci','8000','TRASPASO',false,true)`);
   await prep.query(`INSERT INTO fm_savings_ci.proveedores VALUES
     ('ABA','0005','COOP A'),('ABA','256','LAB A'),('ABA','8000','TRASPASO'),

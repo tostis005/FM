@@ -22,6 +22,7 @@ const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({
 const EquipoCliente=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.EquipoCliente})));
 const DetalleVentas=React.lazy(()=>import("./DetalleVentas.jsx"));
 const SolicitudesDemo=React.lazy(()=>import("./SolicitudesDemo.jsx"));
+const AsistenteDemo=React.lazy(()=>import("./AsistenteDemo.jsx"));
 const PharmacyState=React.lazy(()=>import("./PharmacyState.jsx"));
 const PoliticaReposicionFarmacia=React.lazy(()=>import("./PoliticaReposicionFarmacia.jsx"));
 const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
@@ -1211,6 +1212,7 @@ function App(){
    canEdit={pharmacyApiStatus==="connected"}/></React.Suspense>}
  </div></div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
+  <React.Suspense fallback={null}><AsistenteDemo section={title}/></React.Suspense>
 
  </div>
 }

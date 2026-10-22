@@ -28,7 +28,8 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
    if(sql.includes("SELECT slug,nombre,esquema_datos FROM farmetrica.clientes"))
     return {rows:[{slug:"grupo_demo",nombre:"Grupo de pruebas real",esquema_datos:"grupo_demo"}]};
    if(sql.includes("SELECT id,nombre AS name,ciudad AS city"))
-    return {rows:[{id:101,name:"Farmacia Real Uno",city:"Madrid"}]};
+    return {rows:[{id:101,name:"Farmacia Real Uno",city:"Madrid"},
+     {id:102,name:"Farmacia Real Dos",city:"Madrid"}]};
    throw Error("SQL inesperado: "+sql);
   },
   connect:async()=>({

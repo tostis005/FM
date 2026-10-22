@@ -183,7 +183,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   res.flushHeaders();
   const progress=(stage,label)=>writeAssistantEvent(res,"progress",{stage,label});
   const heartbeat=setInterval(()=>{
-   if(!res.destroyed&&!res.writableEnded)res.write(": procesando\\n\\n");
+   if(!res.destroyed&&!res.writableEnded)res.write(": procesando\n\n");
   },12000);
   heartbeat.unref?.();
   try{

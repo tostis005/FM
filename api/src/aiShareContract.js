@@ -92,8 +92,10 @@ export function makeTemporaryModel(ctx,root){
  }]));
  return {
   contrato:"farmetrica.analytics.readonly.v1",
+  interprete:"farmetrica.nl.v1",
+  politica_preguntas:"Usa resolver_pregunta_temporal del MCP en preguntas en español. En caso de aclaracion/no_disponible no inventes cifras.",
   titulo:"Contrato semántico de datos reales de Farmétrica",
-  motor_ia:"ChatGPT: el backend no interpreta preguntas con ningún otro modelo",
+  motor_ia:"Farmétrica interpreta preguntas analíticas compatibles en el servidor; cualquier IA recibe el mismo resultado",
   cliente:ctx.client.name,
   zona_horaria_operativa:"Europe/Madrid",
   origen:"PostgreSQL",ficticio:false,solo_lectura:true,
@@ -112,9 +114,11 @@ export function makeTemporaryModel(ctx,root){
    modelo_agents:root+"/AGENTS.md",
    resultado:"GET "+root+"?consulta={JSON_URI_ENCODED}&formato=json",
    resultado_simple:"GET "+root+"?fuente=ventas&agrupar=farmacia,vendedor&metricas=importe,unidades&periodo=hoy&farmacias={ID}&formato=json",
-   regla:"Elige una fuente autorizada; construye dimensiones, métricas y filtros según esquema_consulta; nunca escribas SQL."
+   regla:"Para texto libre usa resolver_pregunta_temporal del MCP. Para consultas avanzadas explícitas utiliza esquema_consulta; nunca envíes SQL."
   },
   reglas:[
+   "Para preguntas naturales usa resolver_pregunta_temporal: interpretación única e independiente de la IA.",
+   "Si el estado es aclaracion o no_disponible, no cambies de fuente ni inventes cifras.",
    "Lee el contrato antes de contestar preguntas sobre datos privados de Farmétrica.",
    "Busca los IDs de farmacia por su nombre en farmacias; usa únicamente esos IDs.",
    "Si preguntan por un vendedor en varias farmacias, agrupa también por farmacia para evitar códigos repetidos.",
@@ -134,10 +138,12 @@ export function temporaryAgentsMarkdown(model){
  const lines=[
   "# AGENTS.md — Farmétrica · acceso autorizado por enlace",
   "",
-  "> Este archivo es documentación operativa para ChatGPT, no un segundo modelo de IA.",
+  "> Este archivo describe la semántica única del backend de Farmétrica, no otro modelo de IA.",
   "",
   "## Objetivo y seguridad",
-  "ChatGPT interpreta la pregunta del usuario. El servidor solo verifica el plan y consulta PostgreSQL.",
+  "Farmétrica interpreta las preguntas compatibles y ejecuta consultas deterministas.",
+  "Herramienta MCP recomendada: resolver_pregunta_temporal({url,pregunta}).",
+  "Para planes explícitos existe consultar_datos_temporales.",
   "Usa exclusivamente las fuentes y métricas siguientes; NO envíes SQL, credenciales, cookies o datos de pacientes.",
   "Solo lectura, cliente **"+md(model.cliente)+"** y farmacias autorizadas.",
   "Zona horaria para hoy/ayer: **Europe/Madrid**. El resultado debe citar el período.",

@@ -72,7 +72,7 @@ export function formatComparisonAnswer(data){
  if(!data.filas.length)return "No hay actividad registrada en ninguno de los dos períodos comparados.";
  const periods="Del "+actual.desde+" al "+actual.hasta+" frente al "+anterior.desde+" al "+anterior.hasta;
  const lines=data.filas.slice(0,10).map(row=>{
-  const id=[row.farmacia,row.vendedorNombre??row.vendedor,row.proveedor,row.producto]
+  const id=[row.farmacia,row.vendedorNombre??row.vendedor,row.proveedor===null?"Proveedor no identificado":row.proveedor,row.producto]
    .filter(x=>x!==undefined&&x!==null&&String(x).trim()).join(" · ")||"Total";
   const pct=row.variacion_pct===null?"sin porcentaje (base cero)":
     (row.variacion_pct>0?"+":"")+number(row.variacion_pct)+" %";

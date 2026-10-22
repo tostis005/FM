@@ -83,8 +83,9 @@ export function writeCanonicalComparison(result){
 export async function executeCanonicalQuestion(pool,context,pregunta,opts={}){
  const interpreted=interpretSemanticQuestion(pregunta,context,opts);
  if(interpreted.estado==="comparacion"){
-  const [first,second]=await Promise.all(
-   interpreted.consultas.map(plan=>runSemanticQuery(pool,context,plan)));
+  // Secuencial: no duplicar carga SQL pesada en el VPS de producción.
+  const first=await runSemanticQuery(pool,context,interpreted.consultas[0]);
+  const second=await runSemanticQuery(pool,context,interpreted.consultas[1]);
   const dimensions=first.dimensiones??interpreted.consultas[0].agrupar;
   const metric=first.metricas?.[0]??interpreted.consultas[0].metricas[0];
   if(first.fuente!==second.fuente||

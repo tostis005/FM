@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 import {semanticPlannerPrompt,parseSemanticPlans,runAssistantSemanticQueries} from "./assistantSemantic.js";
+import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
 const voiceEnabled=()=>enabled()&&process.env.AI_VOICE_ENABLED==="true";
@@ -65,24 +66,31 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   {role:"user",content:question}
  ];
  const controller=new AbortController();
+ const onExternalAbort=()=>controller.abort();
+ if(settings.signal?.aborted)controller.abort();
+ else settings.signal?.addEventListener("abort",onExternalAbort,{once:true});
  const timeout=setTimeout(()=>controller.abort(),chatTimeoutMs());
  try {
   const response=await fetch(endpoint.replace(/\/+$/,"")+"/api/chat",{
    method:"POST",headers:{"Content-Type":"application/json"},
    signal:controller.signal,
    body:JSON.stringify({
-    model:chosenModel,stream:false,think:false,messages,
+    model:chosenModel,stream:Boolean(settings.onDelta),think:false,messages,
     ...(settings.format?{format:settings.format}:{}),
     options:{temperature:0.1,num_ctx:2048,num_predict:settings.numPredict??370},
     keep_alive:"2m"
    })
   });
   if(!response.ok)throw Error("Modelo no disponible (HTTP "+response.status+")");
+  if(settings.onDelta)return collectOllamaStream(response.body,settings.onDelta);
   const data=await response.json();
   const answer=typeof data?.message?.content==="string"?data.message.content.trim():"";
   if(!answer)throw Error("El modelo no ha devuelto ninguna respuesta");
   return answer.slice(0,4200);
- }finally{clearTimeout(timeout);}
+ }finally{
+  clearTimeout(timeout);
+  settings.signal?.removeEventListener("abort",onExternalAbort);
+ }
 }
 function ffmpegConvert(buffer,directory){
  return new Promise((resolve,reject)=>{
@@ -148,6 +156,71 @@ export function setupAssistant(app,pool,{requireTenant}) {
    if(res.headersSent){if(!res.writableEnded)res.end(JSON.stringify(problem));}
    else res.status(503).json(problem);
   }finally{stopHeartbeat();active-=1;}
+ });
+
+ // SSE autenticado por POST: el navegador recibe el plan, las consultas MCP
+ // y la respuesta token a token. No altera el contrato JSON anterior.
+ app.post("/api/asistente/chat/stream",...requireTenant(),async(req,res)=>{
+  if(!enabled())return res.status(503).json({error:"El asistente está pendiente de activación en el servidor"});
+  const body=validateAssistantBody(req.body);
+  if(!body)return res.status(400).json({error:"Pregunta o historial inválidos"});
+  let ids;
+  try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:pharmacyIdsFromQuestion(body.question,req.context));}
+  catch{return res.status(403).json({error:"Farmacia no autorizada"});}
+  const key=req.context.client.slug+":"+req.user.email;
+  if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});
+  if(active>=1)return res.status(429).json({error:"El asistente está ocupado. Prueba de nuevo en unos momentos"});
+  active+=1;
+  const controller=new AbortController();
+  const abort=()=>controller.abort();
+  res.once("close",abort);
+  res.status(200).set({
+   "Content-Type":"text/event-stream; charset=utf-8",
+   "Cache-Control":"no-cache, no-store, no-transform",
+   "X-Accel-Buffering":"no",
+   "Connection":"keep-alive"
+  });
+  res.flushHeaders();
+  const progress=(stage,label)=>writeAssistantEvent(res,"progress",{stage,label});
+  const heartbeat=setInterval(()=>{
+   if(!res.destroyed&&!res.writableEnded)res.write(": procesando\n\n");
+  },12000);
+  heartbeat.unref?.();
+  try{
+   const context={...req.context,allowedPharmacyIds:ids,
+    pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
+   progress("planning","Qwen está preparando las consultas de datos…");
+   const planRaw=await callOllama(body.question,body.history,{section:"Plan MCP"},[],
+    ollama(),model(),{system:semanticPlannerPrompt(context),format:"json",numPredict:230,signal:controller.signal});
+   if(controller.signal.aborted)return;
+   const plans=parseSemanticPlans(planRaw,context);
+   progress("querying",plans.length?
+    "Consultando "+plans.length+" "+(plans.length===1?"fuente":"fuentes")+" de Farmétrica…":
+    "La pregunta no requiere consultas a la base de datos…");
+   const results=await runAssistantSemanticQueries(pool,context,plans);
+   if(controller.signal.aborted)return;
+   progress("writing","Qwen está redactando la respuesta…");
+   const answer=await callOllama(body.question,body.history,{
+     section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
+   },results,ollama(),model(),{
+    numPredict:240,signal:controller.signal,
+    onDelta:part=>writeAssistantEvent(res,"delta",{text:part})
+   });
+   if(controller.signal.aborted)return;
+   writeAssistantEvent(res,"done",{answer,model:model(),sources:results.map(x=>({
+    tool:x.tool,label:x.label||x.tool,period:x.period,available:x.available
+   }))});
+  }catch(error){
+   if(!controller.signal.aborted){
+    console.error("Asistente IA stream:",error?.name||"error",error?.code||"");
+    writeAssistantEvent(res,"error",{error:"No se ha podido completar la consulta. Inténtalo de nuevo."});
+   }
+  }finally{
+   clearInterval(heartbeat);
+   res.removeListener("close",abort);
+   if(!res.writableEnded&&!res.destroyed)res.end();
+   active-=1;
+  }
  });
  // Audio recibido como cuerpo binario; no se persiste y se elimina el WAV temporal.
  const raw=express.raw({type:["audio/webm","audio/mp4","audio/ogg","audio/wav","application/octet-stream"],limit:"6mb"});

@@ -32,7 +32,7 @@ jobs:
           node --check api/src/aiMcpDemo.js
           node --test api/src/aiMcpDemo.test.js
           node --check api/src/assistantAnalytics.js
-          node --test api/src/assistant.test.js api/src/assistantSemantic.test.js
+          node --test api/src/assistant.test.js api/src/assistantSemantic.test.js api/src/assistantStream.test.js
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
@@ -103,7 +103,7 @@ jobs:
           node --test src/localeES.test.js
           node --test src/promotionMetrics.test.js
           node --test src/laboratoryExport.test.js
-          node --test src/dictadoVoz.test.js
+          node --test src/dictadoVoz.test.js src/assistantStreamClient.test.js
           node check-login.mjs
           node generate-seo.mjs
           node check-marketing.mjs

@@ -33,6 +33,8 @@ jobs:
           node --test api/src/operativaRules.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/savingsAnalysis.js
+          node --test api/src/savingsAnalysis.test.js
           node --test api/src/supplierReporting.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js

@@ -1,14 +1,16 @@
 // Catálogo de consultas SQL de solo lectura. La IA nunca genera SQL ejecutable.
 import { pharmacyDataCodeSQL } from "./pharmacyCodes.js";
+import {economicOverview,economicPrices} from "./savingsAnalysis.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
-export const TOOL_NAMES=["ventas_resumen","compras_resumen","stock_capital","ventas_articulos"];
+export const TOOL_NAMES=["ventas_resumen","compras_resumen","stock_capital","ventas_articulos","ahorro_economico"];
 export const TOOL_CATALOG=Object.freeze({
  ventas_resumen:{module:"ventas",label:"Ventas del período"},
  compras_resumen:{module:"compras",label:"Compras del período"},
  stock_capital:{module:"stock",label:"Capital en existencias (estimación)"},
- ventas_articulos:{module:"ventas",label:"Artículos más vendidos"}
+ ventas_articulos:{module:"ventas",label:"Artículos más vendidos"},
+ ahorro_economico:{module:"compras",label:"Ahorro de compras con PUC real, ventas y stock"}
 });
 export function quoteSchema(schema){
  if(!SCHEMA.test(schema||""))throw Error("Esquema no autorizado");
@@ -34,17 +36,21 @@ export function periodFromQuestion(question="",now=new Date()){
  if(/este ano|ano actual/.test(q))return {from:first(y,1),to:today,label:"año actual"};
  if(/ultim[oa]s? (?:siete|7) dias/.test(q))return {from:shifted(today,-6),to:today,label:"últimos 7 días"};
  if(/ultim[oa]s? (?:noventa|90) dias|ultim[oa]s? tres meses/.test(q))return {from:shifted(today,-89),to:today,label:"últimos 90 días"};
+ if(/ultim[oa]s? (?:doce|12) meses|ultim[oa]s? (?:un|1) an[oa]|anual|al ano|por ano|ahorro|optimiz/.test(q))return {from:shifted(today,-364),to:today,label:"últimos 365 días"};
  return {from:shifted(today,-29),to:today,label:"últimos 30 días"};
 }
 export function selectTools(question,context){
  const q=String(question).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
  const can=key=>context.role==="superadministrador"||context.modules?.[key]===true||(key==="ventas"&&context.modules?.dashboard===true);
  const found=[];
+ if(/ahorr|optimiz|cooperativ|laboratori|diferencia de precio|pu[c|m]/.test(q))found.push("ahorro_economico");
  if(/stock|inmoviliz|sobrestock|existencia|almacen/.test(q))found.push("stock_capital");
  if(/compr|proveedor|recepcion|coste de adquisicion/.test(q))found.push("compras_resumen");
  if(/producto|articulo|referencia|generico|rotaci|mas vendido|ranking|top /.test(q))found.push("ventas_articulos");
  if(/venta|factur|ingres|margen|rentab|beneficio|compar|evoluc|tendenc/.test(q))found.push("ventas_resumen");
- return [...new Set(found)].filter(name=>can(TOOL_CATALOG[name].module)).slice(0,2);
+ return [...new Set(found)].filter(name=>name==="ahorro_economico"?
+  ["administrador","superadministrador"].includes(context.role)&&["compras","ventas","stock"].every(can):
+  can(TOOL_CATALOG[name].module)).slice(0,2);
 }
 export function authorizedIds(context,requested=[]){
  const allowed=context.allowedPharmacyIds.map(Number);
@@ -73,6 +79,25 @@ export async function runAssistantTool(db,context,name,period,ids=[]){
  if(context.role!=="superadministrador"&&!context.modules?.[module]&&!(module==="ventas"&&context.modules?.dashboard))
   return {tool:name,available:false,reason:"Módulo no autorizado"};
  const schema=quoteSchema(context.client.schema),permitted=authorizedIds(context,ids),dates=normalizedPeriod(period);
+ if(name==="ahorro_economico"){
+  if(!["administrador","superadministrador"].includes(context.role)||
+   !["compras","ventas","stock"].every(k=>context.role==="superadministrador"||context.modules?.[k]===true))
+   return {tool:name,available:false,reason:"Análisis económico no autorizado"};
+  if(!permitted.length)return {tool:name,available:true,period:dates,rows:[]};
+  const scope={from:dates.from,to:dates.to,ids:permitted,slug:context.client.slug,schema};
+  const summary=await economicOverview(db,scope);
+  const prices=await economicPrices(db,scope,5);
+  return {tool:name,label:TOOL_CATALOG[name].label,period:dates,
+   pharmacies:permitted.length,available:true,rows:[{
+    sales:summary.totals.sales,purchases:summary.totals.purchases,stock:summary.totals.stock,
+    observedPriceDifferential:prices.totals?.observed||0,
+    comparedArticles:prices.totals?.references||0,
+    contrastedArticles:prices.totals?.verified||0,
+    leadingOpportunities:prices.rows||[],
+    caveat:"Diferencial de PUC histórico, NO ahorro comprometido. Stock es capital, NO ahorro anual. Proveedores sin verificación no son laboratorios."
+   }]};
+ }
+
  if(!permitted.length)return {tool:name,available:true,period:dates,pharmacies:0,rows:[]};
  const join="JOIN farmetrica.farmacias f ON f.cliente_slug=$4 AND upper(btrim(t.farmacia_codigo))="+pharmacyDataCodeSQL("f");
  const where="f.id=ANY($3::int[]) AND t.fecha >= $1::date AND t.fecha < ($2::date+interval '1 day')";

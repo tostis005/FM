@@ -28,6 +28,8 @@ jobs:
           node --test api/src/assistant.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/savingsAnalysis.js
+          node --test api/src/savingsAnalysis.test.js
           node --test api/src/supplierReporting.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
@@ -240,6 +242,7 @@ jobs:
             sleep 1
           done
           node check-purchase-planner.mjs
+          node check-savings-analysis.mjs
           node check-responsive.mjs
           node check-dashboard-audit.mjs
           node check-sales-loading.mjs
@@ -265,3 +268,31 @@ jobs:
           name: responsive-failures
           path: web/responsive-artifacts/
           if-no-files-found: ignore
+
+  validar_ahorro_postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testfm
+          POSTGRES_PASSWORD: testfm
+          POSTGRES_DB: farmawao
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U testfm -d farmawao"
+          --health-interval 2s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Instalar cliente PostgreSQL y verificar analítica sin tocar producción
+        env:
+          FM_SAVINGS_PG_TEST: "1"
+          DATABASE_URL: postgresql://testfm:testfm@127.0.0.1:5432/farmawao
+        run: |
+          npm install --prefix api --no-audit --no-fund
+          node --test api/src/savingsAnalysis.pg.test.js

@@ -1125,6 +1125,7 @@ function App(){
     {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
+      tenantRole={tenantContext.role}
       onNavigate={nav} canNavigate={id=>visibleNav.some(item=>item.id===id)}/>} 
     {REAL_SECTIONS.has(page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}

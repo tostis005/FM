@@ -63,7 +63,16 @@ def main():
            (SELECT count(*) FROM fm_nomen_stage WHERE generico)<1000 OR
            (SELECT count(*) FROM fm_nomen_stage WHERE cn !~ '^[0-9]{6,7}$')>0 OR
            (SELECT count(*) FROM fm_nomen_stage WHERE dcpf IS NULL OR dcpf='')>0 OR
-           (SELECT count(DISTINCT cn) FROM fm_nomen_stage)<>(SELECT count(*) FROM fm_nomen_stage)
+           (SELECT count(DISTINCT cn) FROM fm_nomen_stage)<>(SELECT count(*) FROM fm_nomen_stage) OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+              nullif(btrim(laboratorio_titular),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.8 OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+              nullif(btrim(laboratorio_comercializador),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.8 OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+              nullif(btrim(principio_activo),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.6
         THEN RAISE EXCEPTION 'AEMPS: datos incompletos o inválidos. Conservada versión vigente.';
         END IF;
       END $nomen$;""")

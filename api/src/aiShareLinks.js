@@ -23,7 +23,7 @@ function allow(token){
  return true;
 }
 function landing(token,ctx){
- const dates=periodFromQuestion("últimos 30 días"),year=periodFromQuestion("últimos 365 días");
+ const dates=periodFromQuestion("últimos 30 días"),year=periodFromQuestion("últimos 12 meses");
  const link=(text,args)=>'<li><a href="'+html(PREFIX+token+"?"+new URLSearchParams(args))+'">'+html(text)+'</a></li>';
  const options=Object.entries(TOOL_CATALOG).map(([id,m])=>link(m.label,{
   indicador:id,desde:(id==="ahorro_economico"?year:dates).from,

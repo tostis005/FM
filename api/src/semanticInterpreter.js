@@ -50,6 +50,12 @@ function readPeriod(q,now){
    if(!first||first>full[0])return response("aclaracion","Intervalo de fechas inválido.");
    return {desde:first,hasta:full[0]};
   }
+  const inferred=q.match(/\bdesde\s+(?:el\s+)?(\d{1,2})\s+de\s+([a-z]+)\s+(?:hasta|al)\b/);
+  if(inferred){
+   const first=day(Number(full[0].slice(0,4)),months[inferred[2]],Number(inferred[1]));
+   if(!first||first>full[0])return response("aclaracion","El intervalo no es válido.");
+   return {desde:first,hasta:full[0]};
+  }
   if(/\b(desde|hasta|entre)\b/.test(q))
    return response("aclaracion","Indica ambas fechas del intervalo.");
   return {desde:full[0],hasta:full[0]};
@@ -84,21 +90,21 @@ function readPeriod(q,now){
  return null;
 }
 const SOURCES={
- ventas:/\b(ventas?|vendid[oa]s?|vendieron|vendemos|vendio|vender|facturacion|facturad[oa]s?|facturamos)\b/,
- compras:/\b(compras?|comprad[oa]s?|compramos|comprar|recepciones?|proveedores?)\b/,
+ ventas:/\b(ventas?|vendid[oa]s?|vendieron|vendemos|vendimos|vendio|vender|facturacion|facturad[oa]s?|facturamos)\b/,
+ compras:/\b(compras?|comprad[oa]s?|compramos|comprar|recepciones?|proveedor(?:es)?)\b/,
  stock:/\b(stock|existencias?|inventario|almacen)\b/
 };
 const DIMENSIONS={
- farmacia:/\bfarmacias?\b/,vendedor:/\b(vendedores?|vendedoras?|comerciales?)\b/,
- producto:/\b(productos?|articulos?)\b/,proveedor:/\bproveedores?\b/,
+ farmacia:/\bfarmacias?\b/,vendedor:/\b(vendedor(?:es)?|vendedora(?:s)?|comercial(?:es)?)\b/,
+ producto:/\b(productos?|articulos?)\b/,proveedor:/\bproveedor(?:es)?\b/,
  dia:/\b(dias?|diariamente)\b/,mes:/\b(meses?|mensualmente)\b/,
  anio:/\b(anos?|anios?|anualmente)\b/
 };
 const GROUP={
  farmacia:/\b(por|cada|segun)\s+(?:la|las|el|los)?\s*farmacias?\b/,
- vendedor:/\b(por|cada|segun)\s+(?:el|los|la|las)?\s*(vendedores?|vendedoras?|comerciales?)\b/,
+ vendedor:/\b(por|cada|segun)\s+(?:el|los|la|las)?\s*(vendedor(?:es)?|vendedora(?:s)?|comercial(?:es)?)\b/,
  producto:/\b(por|cada|segun)\s+(?:el|los|la|las)?\s*(productos?|articulos?)\b/,
- proveedor:/\b(por|cada|segun|a cada)\s+(?:el|los|la|las)?\s*proveedores?\b/,
+ proveedor:/\b(por|cada|segun|a cada)\s+(?:el|los|la|las)?\s*proveedor(?:es)?\b/,
  dia:/\b(por|cada)\s+(?:el|los)?\s*dias?\b/,
  mes:/\b(por|cada)\s+(?:el|los)?\s*mes(?:es)?\b/,
  anio:/\b(por|cada)\s+(?:el|los)?\s*(anos?|anios?)\b/

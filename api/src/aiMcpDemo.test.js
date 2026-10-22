@@ -74,7 +74,7 @@ test("el MCP OAuth calcula diferencias canónicas sin alucinar importes",async()
  assert.equal(data.origen,"PostgreSQL");
  assert.equal(data.filas[0].farmaciaId,101);
  assert.equal(data.filas[0].diferencia,0);
- assert.match(data.respuesta,/1.234,56 €/);
+ assert.match(data.respuesta,/(?:1\.234|1234),56 €/);
 });
 test("MCP demo permite consultas libres componiendo métricas y dimensiones sin SQL",async()=>{
  const context=(await call("tools/call",{name:"catalogo_semantico",arguments:{}})).body.result.structuredContent;

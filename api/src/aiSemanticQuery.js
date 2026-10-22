@@ -3,6 +3,7 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {quoteSchema,periodFromQuestion,authorizedIds} from "./assistantAnalytics.js";
 import {readOnly} from "./savingsAnalysis.js";
+import {loadCommercialNames} from "./commercialNames.js";
 
 const DIMENSIONS={
  ventas:{farmacia:"farmacia",vendedor:"vendedor",producto:"producto",
@@ -287,8 +288,29 @@ export async function runSemanticQuery(pool,context,input){
   await db.query("SET LOCAL statement_timeout='12000ms'");
   return db.query(sql,params);
  });
+ let rows=result.rows;
+ if(q.source==="ventas"&&q.dims.includes("vendedor")&&rows.length){
+  const active=context.pharmacies.filter(p=>q.ids.includes(Number(p.id)));
+  const nameToId=new Map();
+  for(const pharmacy of active){
+   const name=String(pharmacy.name);
+   nameToId.set(name,nameToId.has(name)?null:Number(pharmacy.id));
+  }
+  const entries=rows.map(row=>({
+   pharmacyId:q.ids.length===1?q.ids[0]:nameToId.get(row.farmacia),
+   sellerId:row.vendedor
+  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&x.sellerId);
+  if(entries.length){
+   const names=await loadCommercialNames(pool,context,entries);
+   rows=rows.map(row=>{
+    const pharmacyId=q.ids.length===1?q.ids[0]:nameToId.get(row.farmacia);
+    return {...row,vendedorNombre:Number.isSafeInteger(pharmacyId)&&row.vendedor?
+     names.seller(pharmacyId,row.vendedor):row.vendedor};
+   });
+  }
+ }
  return {modo:"consulta_semantica",origen:"PostgreSQL",ficticio:false,
   fuente:q.source,periodo:q.dates,dimensiones:q.dims,metricas:q.metrics,
-  farmacias_autorizadas:q.ids.length,filas:result.rows,
+  farmacias_autorizadas:q.ids.length,filas:rows,
   limite:q.limit,advertencias:WARNINGS[q.source]};
 }

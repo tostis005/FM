@@ -20,6 +20,7 @@ import {setupSalesTotals} from "./salesTotals.js";
 import {setupSalesInsights} from "./salesInsights.js";
 import {setupHistoryCoverage} from "./historyCoverage.js";
 import { setupAssistant } from "./assistant.js";
+import { setupAIMcp } from "./aiMcp.js";
 import {setupSalesDetail} from "./salesDetail.js";
 import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
@@ -99,10 +100,13 @@ async function requireEntraAdmin(req, res, next) {
 }
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins,
-  sendLocalInvitation,localInvitationsReady } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
-const { requireTenantModule,requireTenant,requireTenantAdmin } = setupTenant(app, pool, {
+  sendLocalInvitation,localInvitationsReady,sessionUser,resolveAccess } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
+const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = setupTenant(app, pool, {
   requireUser,requireSuperadmin,sendLocalInvitation,localInvitationsReady,
 });
+// El puente MCP se registra antes de las restricciones de escrituras operativas.
+// Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
+setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
 setupDemoClients(app,pool,{requireSuperadmin});
 // Impedir mutaciones de datos reales desde un tenant demo enlazado.
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas
@@ -480,6 +484,8 @@ try {
   await pool.query(cacheMigration);
   const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
   await pool.query(operationalMigration);
+  const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");
+  await pool.query(mcpMigration);
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

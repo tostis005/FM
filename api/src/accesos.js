@@ -572,5 +572,5 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
   }
 
   return { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins,
-    localInvitationsReady,sendLocalInvitation };
+    localInvitationsReady,sendLocalInvitation,sessionUser,resolveAccess };
 }

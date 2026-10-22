@@ -269,13 +269,31 @@ jobs:
 
   inspeccionar_xml_aemps_temporal:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
     steps:
       - name: Verificar etiquetas reales del diccionario de laboratorios AEMPS
         run: |
           set -euo pipefail
-          curl --fail --location --silent --show-error --max-time 180 \
-            'https://listadomedicamentos.aemps.gob.es/prescripcion.zip' -o /tmp/aemps-prescripcion.zip
+          DEST=/tmp/aemps-prescripcion.zip
+          URL=https://listadomedicamentos.aemps.gob.es/prescripcion.zip
+          if ! curl --fail --location --silent --show-error --max-time 180 \
+            --user-agent "Mozilla/5.0 (compatible; Farmetrica/1.0; fuente AEMPS)" \
+            "$URL" -o "$DEST"; then
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+            chmod 600 ~/.ssh/id_fm
+            ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+            ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+              'set -eu; TMP=$(mktemp); trap "rm -f \"$TMP\"" EXIT;
+               curl --fail --show-error --silent --location --connect-timeout 20 \
+                 --max-time 200 --user-agent "Mozilla/5.0" \
+                 https://listadomedicamentos.aemps.gob.es/prescripcion.zip \
+                 -o "$TMP"; cat "$TMP"' > "$DEST"
+          fi
           python3 - <<'PY'
           import zipfile,xml.etree.ElementTree as ET,collections,pathlib
           z=zipfile.ZipFile('/tmp/aemps-prescripcion.zip')

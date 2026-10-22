@@ -1,13 +1,14 @@
 name: Verificar protección del MCP demo con datos reales
 on:
-  push:
-    branches: [main]
-    paths: ["api/src/aiMcpDemo.js", ".github/workflows/verify-farmetrica-mcp-demo.yml"]
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   verificar:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

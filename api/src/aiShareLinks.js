@@ -1,9 +1,10 @@
-// Enlaces de lectura de 24 horas: al compartirlos, el poseedor puede consultar
-// únicamente indicadores predefinidos del cliente elegido por el superadministrador.
+// Enlace temporal autoexplicativo: la IA del cliente lee el modelo, construye el plan
+// y el servidor valida/ejecuta SQL parametrizado en lectura. No ejecuta otro modelo de IA.
 import {createHash,randomBytes} from "node:crypto";
 import {loadDemoMcpContext,handlePublicDemoMcp} from "./aiMcpDemo.js";
 import {TOOL_CATALOG,periodFromQuestion} from "./assistantAnalytics.js";
-import {semanticCatalog,runSemanticQuery} from "./aiSemanticQuery.js";
+import {semanticCatalogForContext,runSemanticQuery} from "./aiSemanticQuery.js";
+import {makeTemporaryModel,temporaryAgentsMarkdown} from "./aiShareContract.js";
 const PREFIX="/api/consulta-temporal/";
 const TOKEN=/^fm_share_[A-Za-z0-9_-]{43}$/;
 const SLUG=/^[a-z][a-z0-9_]{1,62}$/;
@@ -39,7 +40,7 @@ function shareCatalog(token,ctx){
  const dates=periodFromQuestion("últimos 30 días");
  const year=periodFromQuestion("últimos 12 meses");
  const url=options=>PREFIX+encodeURIComponent(token)+"?"+new URLSearchParams(options).toString();
- const semantic=semanticCatalog();
+ const semantic=semanticCatalogForContext(ctx);
  const semanticLinks=semantic.ejemplos.map(entry=>({
   titulo:entry.titulo,
   url:url({consulta:JSON.stringify(entry.consulta),formato:"json"})
@@ -70,7 +71,9 @@ function shareCatalog(token,ctx){
   indicadores:TOOL_CATALOG,
   consultas:[...semanticLinks,...entradas],
   consultas_semanticas:semantic,
-  ayuda_ia:"Para nuevas preguntas, utiliza fuentes, dimensiones y métricas de consultas_semanticas y construye ?consulta=JSON_CODIFICADO&formato=json. No mandes SQL.",
+  modelo_json:PREFIX+token+"?modelo=json",
+  modelo_agents:PREFIX+token+"/AGENTS.md",
+  ayuda_ia:"Lee modelo_agents o modelo_json. ChatGPT interpreta tu pregunta, construye una consulta permitida y utiliza el mismo enlace mediante ?consulta=JSON_CODIFICADO&formato=json o ?fuente=...&agrupar=...&metricas=... . No hay IA en el servidor, rutas por pregunta ni SQL libre.",
   formato:"Para obtener JSON agrega formato=json a cualquier URL de consulta.",
   parametros:"indicador o pregunta, desde y hasta en AAAA-MM-DD, farmacias=ID,ID o farmacia=nombre exacto.",
   alcance:"Consultas semánticas por períodos arbitrarios o histórico, con límite de 100 filas y tiempo máximo de ejecución; SQL libre deshabilitado."
@@ -88,7 +91,12 @@ function landing(token,ctx){
   '<p>Cliente: <strong>'+html(ctx.client.name)+'</strong></p>'+
   '<p>Datos reales de PostgreSQL. Acceso temporal de solo lectura que permite consultar indicadores reales '+
   'durante la vigencia elegida al generarlo y puede revocarse desde Farmétrica.</p>'+
-  '<h2>Consultas semánticas y directas</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
+  '<h2>Modelo para ChatGPT (fuente de verdad)</h2>'+
+  '<p>Este servidor no tiene un segundo modelo de IA. ChatGPT lee el contrato de datos, '+
+  'decide qué consultar, y el servidor ejecuta exclusivamente SELECT autorizados.</p>'+
+  '<ul><li><a href="'+html(catalog.modelo_agents)+'">AGENTS.md: instrucciones, tablas, conexiones y cálculos</a></li>'+
+  '<li><a href="'+html(catalog.modelo_json)+'">Contrato JSON con esquema exacto de consulta</a></li></ul>'+
+  '<h2>Ejemplos de la única API genérica</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
   '<h2>Farmacias incluidas</h2><ul>'+pharmacies+'</ul>'+
   '<p>Para filtrar, añade <code>farmacia=nombre</code> o <code>farmacias=ID,ID</code> a un enlace '+
   'de consulta. Fechas: <code>desde=AAAA-MM-DD</code> y <code>hasta=AAAA-MM-DD</code>.</p>'+
@@ -128,7 +136,7 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
   try{await pool.query("DELETE FROM farmetrica.ai_mcp_demo_keys WHERE singleton=true");headers(res).json({ok:true});}
   catch(e){next(e);}
  });
- app.get(PREFIX+":token",async(req,res,next)=>{
+ app.get([PREFIX+":token",PREFIX+":token/AGENTS.md"],async(req,res,next)=>{
   try{
    headers(res);
    const token=req.params.token;
@@ -137,14 +145,74 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
    if(!rows.length)return res.status(410).send("Enlace caducado o revocado");
    if(!allow(token))return res.status(429).send("Demasiadas consultas");
    const ctx=await loadDemoMcpContext(pool,rows[0].cliente_slug);
-   if(req.query.consulta!==undefined){
-    if(req.query.indicador!==undefined||req.query.pregunta!==undefined)
-     return res.status(400).json({error:"Elige consulta, indicador o pregunta"});
-    if(typeof req.query.consulta!=="string"||req.query.consulta.length>6000)
-     return res.status(400).json({error:"Consulta demasiado larga"});
+   if(req.path.endsWith("/AGENTS.md")||req.query.modelo!==undefined){
+    if(req.query.modelo!==undefined&&!["agents","json"].includes(req.query.modelo))
+     return res.status(400).json({error:"Modelo inválido"});
+    const model=makeTemporaryModel(ctx,"https://farmetrica.com"+PREFIX+token);
+    if(req.path.endsWith("/AGENTS.md")||req.query.modelo==="agents")
+     return res.type("text/markdown; charset=utf-8").send(temporaryAgentsMarkdown(model));
+    return res.json(model);
+   }
+   if(req.query.consulta!==undefined||req.query.fuente!==undefined){
+    if(req.query.indicador!==undefined||req.query.pregunta!==undefined||
+       (req.query.consulta!==undefined&&req.query.fuente!==undefined))
+     return res.status(400).json({error:"Selecciona consulta estructurada, consulta simple, indicador o pregunta"});
     let plan;
-    try{plan=JSON.parse(req.query.consulta)}catch{
-     return res.status(400).json({error:"La consulta debe ser JSON válido"});
+    if(req.query.consulta!==undefined){
+     if(typeof req.query.consulta!=="string"||req.query.consulta.length>6000)
+      return res.status(400).json({error:"Consulta demasiado larga"});
+     try{plan=JSON.parse(req.query.consulta)}catch{
+      return res.status(400).json({error:"La consulta debe ser JSON válido"});
+     }
+    }else{
+     const fields=["fuente","agrupar","metricas","periodo","desde","hasta","farmacias",
+      "farmacia","producto","vendedor","proveedor","estado_stock","dias_max",
+      "ordenar","direccion","limite","formato"];
+     if(Object.keys(req.query).some(k=>!fields.includes(k)))
+      return res.status(400).json({error:"Parámetro no permitido; consulta el modelo JSON"});
+     if(typeof req.query.fuente!=="string")return res.status(400).json({error:"Fuente inválida"});
+     plan={fuente:req.query.fuente};
+     for(const k of ["agrupar","metricas"]){
+      if(req.query[k]!==undefined){
+       if(typeof req.query[k]!=="string"||req.query[k].length>150)
+        return res.status(400).json({error:"Dimensiones o métricas inválidas"});
+       plan[k]=req.query[k].split(",");
+      }
+     }
+     for(const k of ["periodo","desde","hasta","producto","vendedor","proveedor","estado_stock"]){
+      if(req.query[k]!==undefined){
+       if(typeof req.query[k]!=="string"||req.query[k].length>100)
+        return res.status(400).json({error:"Filtro inválido"});
+       plan[k]=req.query[k];
+      }
+     }
+     for(const [field,key] of [["limite","limite"],["dias_max","dias_max"]]){
+      if(req.query[field]!==undefined){
+       if(typeof req.query[field]!=="string"||!/^[1-9][0-9]{0,3}$/.test(req.query[field]))
+        return res.status(400).json({error:"Límite inválido"});
+       plan[key]=Number(req.query[field]);
+      }
+     }
+     if(req.query.ordenar!==undefined||req.query.direccion!==undefined){
+      if(typeof req.query.ordenar!=="string"||typeof req.query.direccion!=="string")
+       return res.status(400).json({error:"Ordenación incompleta"});
+      plan.ordenar={campo:req.query.ordenar,direccion:req.query.direccion};
+     }
+     if(req.query.farmacias!==undefined&&req.query.farmacia!==undefined)
+      return res.status(400).json({error:"Usa farmacia o farmacias"});
+     if(req.query.farmacias!==undefined){
+      if(typeof req.query.farmacias!=="string"||!/^[1-9][0-9]{0,6}(?:,[1-9][0-9]{0,6}){0,49}$/.test(req.query.farmacias))
+       return res.status(400).json({error:"IDs de farmacia inválidos"});
+      plan.farmacias=req.query.farmacias.split(",").map(Number);
+     }
+     if(req.query.farmacia!==undefined){
+      if(typeof req.query.farmacia!=="string"||req.query.farmacia.length>150)
+       return res.status(400).json({error:"Nombre de farmacia inválido"});
+      const normalize=x=>String(x).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase().trim();
+      const matches=ctx.pharmacies.filter(p=>normalize(p.name)===normalize(req.query.farmacia));
+      if(matches.length!==1)return res.status(400).json({error:"Nombre de farmacia no identificado o ambiguo"});
+      plan.farmacias=[Number(matches[0].id)];
+     }
     }
     try{
      const output={...await runSemanticQuery(pool,ctx,plan),cliente:ctx.client.name};

@@ -156,7 +156,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
      model:"farmetrica-semantica",sources:[],interpretacion:resolution}));
    }
    const data=await executeResolvedQuestion(pool,context,resolution);
-   if(data.estado!=="ok")return res.end(JSON.stringify({
+   if(!["ok","general"].includes(data.estado))return res.end(JSON.stringify({
     answer:data.mensaje,model:"farmetrica-semantica",sources:[],interpretacion:data}));
    const results=resolvedFacts(data);
    if(data.comparacion)return res.end(JSON.stringify({
@@ -222,7 +222,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
     "Consultando datos reales de Farmétrica…":"La pregunta no necesita datos privados…");
    const data=await executeResolvedQuestion(pool,context,resolution);
    if(controller.signal.aborted)return;
-   if(data.estado!=="ok"){
+   if(!["ok","general"].includes(data.estado)){
     writeAssistantEvent(res,"done",{answer:data.mensaje,
      model:"farmetrica-semantica",sources:[],interpretacion:data});
     return;

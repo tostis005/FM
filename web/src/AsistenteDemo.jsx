@@ -7,6 +7,7 @@ import "./AsistenteDemo.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { collectSpeechResults, mergeDictationDraft } from "./dictadoVoz.js";
+import {readAssistantEvents} from "./assistantStreamClient.js";
 
 const SUGGESTIONS = [
   { icon: Database, text: "¿Qué productos tienen más stock inmovilizado?" },
@@ -48,6 +49,9 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   const [sessionNumber, setSessionNumber] = useState(1);
   const [assistantStatus, setAssistantStatus] = useState(null);
   const [chatBusy, setChatBusy] = useState(false);
+  const [chatStep,setChatStep] = useState("");
+  const [chatElapsed,setChatElapsed] = useState(0);
+  const pendingChatIdRef=useRef(null);
   const chatAbortRef = useRef(null);
   const voiceRecorderRef = useRef(null);
   const voiceStreamRef = useRef(null);
@@ -318,6 +322,12 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     if (open && conversationRef.current) conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
   }, [messages, open]);
 
+  useEffect(()=>{
+    if(!chatBusy)return undefined;
+    const timer=window.setInterval(()=>setChatElapsed(value=>value+1),1000);
+    return ()=>window.clearInterval(timer);
+  },[chatBusy]);
+
   useEffect(() => () => {
     dictationTokenRef.current += 1;
     clearTicker();
@@ -335,9 +345,20 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
     voiceStreamRef.current?.getTracks().forEach(track=>track.stop());
   }, []);
 
-  function closeAssistant() {
+  function cancelActiveChat(){
     chatAbortRef.current?.abort();
+    const id=pendingChatIdRef.current;
+    if(id!==null)setMessages(previous=>previous.map(m=>m.id===id?{
+      ...m,text:m.text?m.text+"\\n\\n*Respuesta interrumpida.*":"*Consulta cancelada.*"
+    }:m));
+    pendingChatIdRef.current=null;
+    chatAbortRef.current=null;
     setChatBusy(false);
+    setChatStep("");
+  }
+
+  function closeAssistant() {
+    cancelActiveChat();
     cancelDictation();
     setOpen(false);
     launcherRef.current?.focus();
@@ -358,32 +379,51 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
         "La interfaz está preparada, pero todavía falta activar el modelo en el servidor. Cuando se configure Ollama, responderé con los datos de tus farmacias.")]);
       return;
     }
+    const pending=createMessage("assistant","");
+    pendingChatIdRef.current=pending.id;
+    setMessages(previous=>[...previous,pending]);
+    setChatStep("Conectando con Qwen…");
+    setChatElapsed(0);
     setChatBusy(true);
     const controller=new AbortController();
     chatAbortRef.current=controller;
     try{
-      const response=await fetch("/api/asistente/chat",{
+      const response=await fetch("/api/asistente/chat/stream",{
         method:"POST",credentials:"same-origin",signal:controller.signal,
         headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":localStorage.getItem("fm_active_tenant")||"ampedia"},
         body:JSON.stringify({question,history,section})
       });
-      const result=await response.json().catch(()=>({}));
-      if(!response.ok||result.error)throw Error(result.error||"No se pudo completar la consulta");
-      if(controller.signal.aborted)return;
-      const sources=Array.isArray(result.sources)?result.sources.filter(x=>x.available).map(x=>x.label).join(" · "):"";
-      setMessages(previous=>[...previous,createMessage("assistant",result.answer+
-        (sources?"\n\nFuentes: "+sources:""))]);
+      await readAssistantEvents(response,(type,result)=>{
+        if(controller.signal.aborted)return;
+        if(type==="progress")setChatStep(result.label||"Procesando consulta…");
+        if(type==="delta"&&typeof result.text==="string"){
+          setMessages(previous=>previous.map(m=>m.id===pending.id?
+            {...m,text:m.text+result.text}:m));
+        }
+        if(type==="done"){
+          const sources=Array.isArray(result.sources)?result.sources.filter(x=>x.available).map(x=>x.label).join(" · "):"";
+          setMessages(previous=>previous.map(m=>m.id===pending.id?
+            {...m,text:(result.answer||"")+(sources?"\n\nFuentes: "+sources:"")}:m));
+          setChatStep("Respuesta completada");
+        }
+      });
     }catch(error){
       if(controller.signal.aborted)return;
-      setMessages(previous=>[...previous,createMessage("assistant","No se pudo responder: "+(error.message||"Error del servidor"))]);
+      setMessages(previous=>previous.map(m=>m.id===pending.id?{
+        ...m,text:(m.text?m.text+"\n\n":"")+"**No se pudo completar la respuesta:** "+(error.message||"Error del servidor")
+      }:m));
     }finally{
-      if(chatAbortRef.current===controller){chatAbortRef.current=null;setChatBusy(false);}
+      if(chatAbortRef.current===controller){
+        chatAbortRef.current=null;
+        pendingChatIdRef.current=null;
+        setChatBusy(false);
+        setChatStep("");
+      }
     }
   }
 
   function newConversation() {
-    chatAbortRef.current?.abort();
-    setChatBusy(false);
+    cancelActiveChat();
     cancelDictation();
     setMessages([]);
     setDraft("");
@@ -460,7 +500,8 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                         <div className="fm-ai-msg-content">
                           <div className="fm-ai-msg-bubble">
                             {message.role==="assistant"
-                              ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+                              ? (message.text?<ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+                                : <span className="fm-ai-waiting-dots" aria-label="Preparando respuesta">•••</span>)
                               : <p>{message.text}</p>}
                             
                           </div>
@@ -491,7 +532,12 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                     </button>
                   </div>
                 </section>}
-                {chatBusy && <p className="fm-ai-transcription-ready" role="status">Analizando la consulta…</p>}
+                {chatBusy && <div className="fm-ai-stream-progress" role="status">
+                  <span className="fm-ai-stream-spinner" aria-hidden="true"/>
+                  <span className="fm-ai-stream-step" aria-live="polite">{chatStep||"Procesando consulta…"}</span>
+                  <span className="fm-ai-stream-elapsed" aria-label="Tiempo transcurrido">{timerLabel(chatElapsed)}</span>
+                  <button type="button" onClick={cancelActiveChat}>Cancelar</button>
+                </div>}
                 {transcriptionReady && !isDictating && <p className="fm-ai-transcription-ready" role="status">Transcripción lista: revísala o edítala antes de enviarla.</p>}
                 <div className="fm-ai-composer">
                   <textarea

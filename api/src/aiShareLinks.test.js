@@ -35,6 +35,13 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
    query:async(sql,params=[])=>{
     statements.push({sql,params});
     if(sql.startsWith("SELECT f.nombre"))return {rows:[{farmacia:"Farmacia Real Uno",importe:4321.09,unidades:30}]};
+    if(sql.includes(' AS "vendedor"'))return {rows:[
+     {vendedor:"SELL-01",importe:110.40,unidades:4,movimientos:3},
+     {vendedor:"SELL-02",importe:99.60,unidades:3,movimientos:2}
+    ]};
+    if(sql.includes(' AS "farmacia"'))return {rows:[
+     {farmacia:"Farmacia Real Uno",importe:210,unidades:7,movimientos:5}
+    ]};
     return {rows:[]};
    },
    release:()=>{}

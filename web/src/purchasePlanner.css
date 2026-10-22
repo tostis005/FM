@@ -103,14 +103,14 @@
  width:1240px;min-width:1240px;max-width:none;table-layout:fixed;
  border-collapse:collapse;
 }
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(1){width:218px}
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(2){width:230px}
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(3){width:137px}
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(4){width:115px}
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(5){width:115px}
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(6){width:125px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(1){width:200px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(2){width:235px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(3){width:145px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(4){width:125px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(5){width:125px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(6){width:135px}
 .fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(7){width:175px}
-.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(8){width:125px}
+.fm-planner .fm-planner-main-table :is(thead,tbody)>tr>:nth-child(8){width:100px}
 .fm-planner .fm-planner-main-table>tbody>tr:not(.fm-expanded-row)>td,
 .fm-planner .fm-planner-main-table>thead>tr>th{
  box-sizing:border-box;min-width:0;overflow:hidden;overflow-wrap:anywhere;

@@ -173,6 +173,15 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal((await fetch(base+path+"?indicador=DROP%20TABLE")).status,400);
   assert.equal((await fetch(base+path+"?indicador=ventas_resumen&desde=2026-01-01&hasta=2026-12-31&farmacias=999")).status,400);
   assert.equal((await fetch(base+path+"?indicador=ventas_resumen&pregunta=hola")).status,400);
+  const natural=await (await fetch(base+path+"?pregunta="+
+   encodeURIComponent("¿Cuánto vendió cada farmacia el 22 de octubre de 2026?")+
+   "&formato=json")).json();
+  assert.equal(natural.estado,"ok");
+  assert.equal(natural.consulta.fuente,"ventas");
+  assert.deepEqual(natural.consulta.agrupar,["farmacia"]);
+  assert.equal(natural.origen,"PostgreSQL");
+  assert.equal((await fetch(base+path+"?pregunta=Ventas%20hoy&desde=2026-10-22&formato=json")).status,400);
+
   const semanticPlan={fuente:"ventas",agrupar:["farmacia","vendedor"],metricas:["importe"],
    periodo:"hoy",limite:10};
   const semanticResponse=await fetch(base+path+"?consulta="+

@@ -7,8 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
-import {runAssistantSemanticQueries} from "./assistantSemantic.js";
 import {interpretSemanticQuestion} from "./semanticInterpreter.js";
+import {executeResolvedQuestion,formatComparisonAnswer} from "./semanticResolver.js";
 import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
@@ -93,6 +93,17 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   settings.signal?.removeEventListener("abort",onExternalAbort);
  }
 }
+
+function resolvedFacts(data){
+ if(data.estado!=="ok")return [];
+ return [{tool:data.comparacion?"comparacion_semantica":"consulta_semantica_"+data.fuente,
+  label:data.comparacion?"Farmétrica · comparación":"MCP · "+data.fuente,
+  available:true,period:data.comparacion??data.periodo,
+  pharmacies:data.farmacias_autorizadas,
+  metrics:data.comparacion?[data.comparacion.metrica]:data.metricas,
+  dimensions:data.comparacion?data.comparacion.dimensiones:data.dimensiones,
+  warnings:data.advertencias,rows:data.filas}];
+}
 function ffmpegConvert(buffer,directory){
  return new Promise((resolve,reject)=>{
   const out=join(directory,"voice.wav");
@@ -144,8 +155,14 @@ export function setupAssistant(app,pool,{requireTenant}) {
     return res.end(JSON.stringify({answer:resolution.mensaje,
      model:"farmetrica-semantica",sources:[],interpretacion:resolution}));
    }
-   const plans=resolution.estado==="ok"?[resolution.consulta]:[];
-   const results=await runAssistantSemanticQueries(pool,context,plans);
+   const data=await executeResolvedQuestion(pool,context,resolution);
+   if(!["ok","general"].includes(data.estado))return res.end(JSON.stringify({
+    answer:data.mensaje,model:"farmetrica-semantica",sources:[],interpretacion:data}));
+   const results=resolvedFacts(data);
+   if(data.comparacion)return res.end(JSON.stringify({
+    answer:formatComparisonAnswer(data),model:"farmetrica-semantica",
+    sources:results.map(x=>({tool:x.tool,label:x.label,period:x.period,available:true})),
+    comparacion:data.comparacion}));
    const answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
    },results,ollama(),model(),{numPredict:240});
@@ -201,12 +218,24 @@ export function setupAssistant(app,pool,{requireTenant}) {
      model:"farmetrica-semantica",sources:[],interpretacion:resolution});
     return;
    }
-   const plans=resolution.estado==="ok"?[resolution.consulta]:[];
-   progress("querying",plans.length?
-    "Consultando "+plans.length+" "+(plans.length===1?"fuente":"fuentes")+" de Farmétrica…":
-    "La pregunta no requiere consultas a la base de datos…");
-   const results=await runAssistantSemanticQueries(pool,context,plans);
+   progress("querying",resolution.estado==="ok"?
+    "Consultando datos reales de Farmétrica…":"La pregunta no necesita datos privados…");
+   const data=await executeResolvedQuestion(pool,context,resolution);
    if(controller.signal.aborted)return;
+   if(!["ok","general"].includes(data.estado)){
+    writeAssistantEvent(res,"done",{answer:data.mensaje,
+     model:"farmetrica-semantica",sources:[],interpretacion:data});
+    return;
+   }
+   const results=resolvedFacts(data);
+   if(data.comparacion){
+    const answer=formatComparisonAnswer(data);
+    writeAssistantEvent(res,"delta",{text:answer});
+    writeAssistantEvent(res,"done",{answer,model:"farmetrica-semantica",
+     sources:results.map(x=>({tool:x.tool,label:x.label,period:x.period,available:true})),
+     comparacion:data.comparacion});
+    return;
+   }
    progress("writing","Qwen está redactando la respuesta…");
    const answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"

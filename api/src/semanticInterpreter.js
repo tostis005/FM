@@ -1,6 +1,7 @@
 // Interpretación canónica de consultas analíticas: sin IA ni SQL generado.
 // El mismo texto, catálogo autorizado y fecha operativa producen el mismo plan.
 import {semanticCatalogForContext,validateSemanticQuery} from "./aiSemanticQuery.js";
+import {parsePeriodComparison} from "./semanticPeriodComparison.js";
 
 export const SEMANTIC_LANGUAGE_VERSION="farmetrica.nl.v1";
 const months={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,
@@ -118,10 +119,35 @@ function pharmacyScope(q,ctx){
   return response("aclaracion","La farmacia indicada no coincide con las autorizadas. Escribe su nombre exacto.");
  return undefined;
 }
-export function interpretSemanticQuestion(question,ctx,{now=new Date()}={}){
+export function interpretSemanticQuestion(question,ctx,{now=new Date(),single=false}={}){
  if(typeof question!=="string"||question.trim().length<2||question.length>1000)
   return response("aclaracion","La pregunta debe tener entre 2 y 1.000 caracteres.");
  const q=norm(question),catalog=semanticCatalogForContext(ctx);
+ if(!single){
+  const comparison=parsePeriodComparison(question,{now});
+  if(comparison){
+   if(comparison.estado)return response(comparison.estado,comparison.mensaje);
+   const base=interpretSemanticQuestion(comparison.preguntaBase,ctx,{now,single:true});
+   if(base.estado!=="ok")return base;
+   const source=base.consulta.fuente,metric=base.consulta.metricas[0];
+   if(source==="stock"||!["importe","unidades","movimientos"].includes(metric))
+    return response("no_disponible","Esta comparación requiere una métrica aditiva de ventas o compras.");
+   // Dos planes completos con idénticos filtros, dimensiones y métrica.
+   // Límite máximo: 100 grupos por periodo. El ejecutor rechazará el resultado
+   // si alcanza el límite y no puede asegurar que esté completo.
+   const common={...base.consulta};
+   for(const key of ["periodo","desde","hasta","ordenar","limite"])delete common[key];
+   const anterior={...common,...comparison.anterior,limite:100};
+   const actual={...common,...comparison.actual,limite:100};
+   try{validateSemanticQuery(anterior,ctx);validateSemanticQuery(actual,ctx);}
+   catch{return response("no_disponible","La comparación no está autorizada por el contrato semántico.");}
+   return response("ok","Comparación resuelta por Farmétrica.",{
+    consulta:actual,comparacion:{version:comparison.version,tipo:comparison.tipo,
+     anterior,actual,metrica:metric,dimensiones:base.consulta.agrupar,
+     direccion:/\b(menos|menores|bajado|disminuido|reduccion)\b/.test(q)?"asc":"desc"}
+   });
+  }
+ }
  if(/\b(beneficio|beneficios|rentabilidad|stock inmovilizado|beneficio neto)\b/.test(q))
   return response("no_disponible","La pregunta requiere datos contables que no figuran en este contrato. No los sustituiré por ventas.");
  if(/\b(comparar|comparacion|comparativa|diferencia|variacion|crecimiento|evolucion|respecto|versus|frente a)\b/.test(q))

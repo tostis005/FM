@@ -1,7 +1,7 @@
 // MCP demo con PostgreSQL real, autenticación OAuth y herramientas semánticas sin SQL libre.
 // Reutiliza el motor de indicadores del MCP principal. No acepta SQL arbitrario.
 import {readAnalytics} from "./aiMcp.js";
-import {interpretSemanticQuestion} from "./semanticInterpreter.js";
+import {resolveAndExecuteQuestion} from "./semanticResolver.js";
 import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 import {authorizedIds,normalizedPeriod,periodFromQuestion,pharmacyIdsFromQuestion,
   selectTools,TOOL_CATALOG} from "./assistantAnalytics.js";
@@ -97,10 +97,8 @@ export async function handlePublicDemoMcp(input,pool,slug,authenticatedContext=n
       catalogo:semanticCatalogForContext(ctx),
       farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name}))};
     else if(name==="resolver_pregunta"){
-       const resolution=interpretSemanticQuestion(args.pregunta,ctx);
-       data=resolution.estado==="ok"?
-        {...metadata,...resolution,...await runSemanticQuery(pool,ctx,resolution.consulta),cliente:ctx.client.name}:
-        {...metadata,...resolution,cliente:ctx.client.name};
+       const resolved=await resolveAndExecuteQuestion(pool,ctx,args.pregunta);
+       data={...metadata,...resolved,cliente:ctx.client.name};
      }
      else if(name==="consultar_semantica")data={...metadata,...await runSemanticQuery(pool,ctx,args),
       cliente:ctx.client.name};

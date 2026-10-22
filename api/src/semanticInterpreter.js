@@ -139,7 +139,7 @@ function interpretationOfComparison(q,ctx,now){
  // No se interpretan los planes temporales con IA ni se usa SQL construido por texto.
  const c=chosen[0];
  let simplified=q.replace(c.actual," ").replace(c.anterior," ")
-  .replace(comparisonIntent," ").replace(/\b(con|y|al|del|los|las|el)\s*(?=vs\b|frente\b|respecto\b)/g," ");
+  .replace(new RegExp(comparisonIntent.source,"g")," ");
  simplified+=" hoy";
  const base=interpretSemanticQuestion(simplified,ctx,{now});
  if(base.estado!=="ok")return base.estado==="general"?

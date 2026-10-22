@@ -80,12 +80,13 @@ export async function readAnalytics(pool,context,name,period,ids){
 function toolDefinitions(){
   const ids={type:"array",items:{type:"integer"},maxItems:50,description:"IDs de farmacias que aparecen en listar_contexto; omitir para todas las autorizadas."};
   const period={type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"};
+  const securitySchemes=[{type:"oauth2",scopes:[READ_SCOPE]}];
   return [
-    {name:"listar_contexto",description:"Lista únicamente las farmacias y módulos a los que tiene acceso el usuario conectado. Úsala antes de filtrar por farmacias.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-    {name:"catalogo_analitico",description:"Indica qué métricas están implementadas, requisitos de permisos y límites. Nunca prometas análisis sin herramienta.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
-    {name:"consultar_indicador",description:"Consulta una métrica verificable de Farmétrica. SQL predefinido, fechas <=366 días y farmacias autorizadas. Especifica fechas; no infieras que importe es margen.",annotations:{readOnlyHint:true,openWorldHint:false},
+    {name:"listar_contexto",securitySchemes,description:"Lista únicamente las farmacias y módulos a los que tiene acceso el usuario conectado. Úsala antes de filtrar por farmacias.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+    {name:"catalogo_analitico",securitySchemes,description:"Indica qué métricas están implementadas, requisitos de permisos y límites. Nunca prometas análisis sin herramienta.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
+    {name:"consultar_indicador",securitySchemes,description:"Consulta una métrica verificable de Farmétrica. SQL predefinido, fechas <=366 días y farmacias autorizadas. Especifica fechas; no infieras que importe es margen.",annotations:{readOnlyHint:true,openWorldHint:false},
       inputSchema:{type:"object",properties:{indicador:{type:"string",enum:Object.keys(TOOL_CATALOG)},desde:period,hasta:period,farmacias:ids},required:["indicador","desde","hasta"],additionalProperties:false}},
-    {name:"explorar_pregunta",description:"Selecciona hasta dos herramientas analíticas para una pregunta en español y devuelve sus datos verificados; no redacta respuesta con LLM. Para precisión preferir consultar_indicador.",annotations:{readOnlyHint:true,openWorldHint:false},
+    {name:"explorar_pregunta",securitySchemes,description:"Selecciona hasta dos herramientas analíticas para una pregunta en español y devuelve sus datos verificados; no redacta respuesta con LLM. Para precisión preferir consultar_indicador.",annotations:{readOnlyHint:true,openWorldHint:false},
       inputSchema:{type:"object",properties:{pregunta:{type:"string",minLength:2,maxLength:1000},desde:period,hasta:period,farmacias:ids},required:["pregunta"],additionalProperties:false}}
   ];
 }
@@ -137,7 +138,8 @@ export function setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,req
       token_endpoint:urls.token,revocation_endpoint:urls.revoke,
       response_types_supported:["code"],grant_types_supported:["authorization_code","refresh_token"],
       token_endpoint_auth_methods_supported:["none"],code_challenge_methods_supported:["S256"],
-      scopes_supported:[READ_SCOPE,"offline_access"],client_id_metadata_document_supported:true});
+      scopes_supported:[READ_SCOPE,"offline_access"],code_challenge_methods_supported:["S256"],
+      client_id_metadata_document_supported:true});
   });
   app.get("/api/ai/oauth/authorize",active,async(req,res,next)=>{
     try{

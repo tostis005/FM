@@ -19,10 +19,12 @@ const pool={
  })
 };
 const call=(method,params={},id=1)=>handlePublicDemoMcp({jsonrpc:"2.0",id,method,params},pool,"farmacias_demo");
-test("MCP demo mantiene las cuatro herramientas de lectura con protocolo correcto",async()=>{
+test("MCP demo expone catálogo y consulta semántica con protocolo correcto",async()=>{
  assert.equal((await call("initialize")).body.result.serverInfo.name,"Farmetrica Demo Real");
  const tools=(await call("tools/list")).body.result.tools;
- assert.equal(tools.length,4);
+ assert.equal(tools.length,6);
+ assert.ok(tools.some(t=>t.name==="catalogo_semantico"));
+ assert.ok(tools.some(t=>t.name==="consultar_semantica"));
  assert.ok(tools.every(t=>t.annotations.readOnlyHint===true));
  assert.equal((await call("notifications/initialized")).http,202);
 });
@@ -44,6 +46,29 @@ test("consultas analíticas reales reutilizan transacción READ ONLY y filtros d
  assert.ok(calls.some(c=>c.sql==="ROLLBACK"));
  assert.ok(calls.some(c=>c.args?.[3]==="farmacias_demo"));
 });
+test("MCP demo permite consultas libres componiendo métricas y dimensiones sin SQL",async()=>{
+ const context=(await call("tools/call",{name:"catalogo_semantico",arguments:{}})).body.result.structuredContent;
+ assert.equal(context.catalogo.version,1);
+ assert.ok(context.catalogo.fuentes.ventas.dimensiones.includes("vendedor"));
+ const query=await call("tools/call",{name:"consultar_semantica",arguments:{
+  fuente:"ventas",agrupar:["farmacia","vendedor"],
+  metricas:["importe","unidades"],periodo:"hoy",farmacias:[101],limite:20
+ }});
+ const data=query.body.result.structuredContent;
+ assert.equal(data.origen,"PostgreSQL");
+ assert.equal(data.ficticio,false);
+ assert.equal(data.fuente,"ventas");
+ assert.ok(calls.some(c=>c.sql==="BEGIN TRANSACTION READ ONLY"));
+ const denied=await call("tools/call",{name:"consultar_semantica",arguments:{
+  fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],farmacias:[999]
+ }});
+ assert.equal(denied.body.result.isError,true);
+ const sql=await call("tools/call",{name:"consultar_semantica",arguments:{
+  fuente:"ventas",metricas:["importe"],sql:"SELECT * FROM clientes"
+ }});
+ assert.equal(sql.body.result.isError,true);
+});
+
 test("se rechazan SQL libre, farmacias ajenas y fechas inexistentes",async()=>{
  for(const args of [
   {indicador:"DROP TABLE clientes"},

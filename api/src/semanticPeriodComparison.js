@@ -39,7 +39,7 @@ const dayComparison=now=>{
  const day=todayMadrid(now),prev=addDays(day,-1);
  return {actual:{desde:day,hasta:day},anterior:{desde:prev,hasta:prev}};
 };
-const TRIGGER=/\b(respecto|frente a|versus|vs|comparar|comparado|comparada|comparacion|variacion|diferencia|crecimiento|evolucion|aumentado|aumentaron|mejorado)\b/;
+const TRIGGER=/\b(respecto|frente al?|versus|vs|compara|comparar|comparadas?|comparados?|comparacion|variacion|diferencia|crecimiento|evolucion|aumentad[oa]s?|aumentaron|mejorado)\b/g;
 const PERIODS=[
  {label:"mes",match:/\b(mes pasado|mes anterior)\b/,remove:/\b(este mes|mes actual|mes pasado|mes anterior)\b/g,now:"este mes",calc:monthComparison},
  {label:"anio",match:/\b(ano pasado|anio pasado)\b/,remove:/\b(este ano|este anio|ano actual|anio actual|ano pasado|anio pasado)\b/g,now:"este año",calc:yearComparison},
@@ -50,7 +50,7 @@ const unsupported=msg=>({estado:"no_disponible",mensaje:msg});
 // Devuelve null si NO es una comparación; de otro modo dos períodos concretos o un error.
 export function parsePeriodComparison(question,{now=new Date()}={}){
  const q=norm(question);
- if(!TRIGGER.test(q))return null;
+ if(!new RegExp(TRIGGER.source).test(q))return null;
  const candidates=PERIODS.filter(x=>x.match.test(q));
  if(candidates.length!==1)return unsupported("Indica qué dos períodos quieres comparar, por ejemplo este mes respecto al mes pasado.");
  const slot=candidates[0];

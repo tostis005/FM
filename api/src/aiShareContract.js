@@ -92,7 +92,7 @@ export function makeTemporaryModel(ctx,root){
  }]));
  return {
   contrato:"farmetrica.analytics.readonly.v1",
-  interprete:"farmetrica.nl.v1",
+  interprete:"farmetrica.nl.v2",
   politica_preguntas:"Usa resolver_pregunta_temporal del MCP en preguntas en español. En caso de aclaracion/no_disponible no inventes cifras.",
   titulo:"Contrato semántico de datos reales de Farmétrica",
   motor_ia:"Farmétrica interpreta preguntas analíticas compatibles en el servidor; cualquier IA recibe el mismo resultado",
@@ -117,7 +117,7 @@ export function makeTemporaryModel(ctx,root){
    regla:"Para texto libre usa resolver_pregunta_temporal del MCP. Para consultas avanzadas explícitas utiliza esquema_consulta; nunca envíes SQL."
   },
   reglas:[
-   "Para preguntas naturales usa resolver_pregunta_temporal: interpretación única e independiente de la IA.",
+   "Para preguntas naturales usa resolver_pregunta_temporal: interpretación única e independiente de la IA. Se admiten comparaciones entre este mes y mes pasado, este año y año pasado, esta semana y pasada, hoy y ayer; con ventanas temporales equiparadas.",
    "Si el estado es aclaracion o no_disponible, no cambies de fuente ni inventes cifras.",
    "Lee el contrato antes de contestar preguntas sobre datos privados de Farmétrica.",
    "Busca los IDs de farmacia por su nombre en farmacias; usa únicamente esos IDs.",

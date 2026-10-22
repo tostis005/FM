@@ -159,6 +159,8 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   const result=await sales.json();
   assert.equal(result.ficticio,false);
   assert.equal(result.rows[0].importe,4321.09);
+  assert.ok(statements.some(x=>x.sql.includes('FROM "grupo_demo".fm_ventas_analitica t')&&x.params[0]==="2026-10-01"));
+  assert.ok(!statements.some(x=>x.sql.includes('FROM "grupo_demo".ventas t')));
   assert.equal(result.cliente,"Grupo de pruebas real");
   assert.ok(statements.some(x=>x.sql==="BEGIN TRANSACTION READ ONLY"));
   assert.ok(statements.some(x=>x.sql==="ROLLBACK"));

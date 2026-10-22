@@ -2,6 +2,8 @@
 // Ejecutar DENTRO de farmawao-api-1 por stdin. Nunca imprimir ni enviar el token a Ollama.
 const LINK=process.env.FM_TEMP_LINK;
 const MODELS=(process.env.FM_MODELS||"qwen3:0.6b,llama3.2:1b,gemma3:1b").split(",").map(x=>x.trim()).filter(Boolean);
+// Selección opcional 1,2,3 para probar un solo caso sin saturar el VPS.
+const CASES=String(process.env.FM_TEST_CASES||"1,2,3").split(",").map(x=>Number(x.trim()));
 const API="http://127.0.0.1:8000/api/consulta-temporal/mcp", OLLAMA="http://ollama:11434/api/chat";
 const TESTS=[
  ["¿Cuánto vendió cada farmacia el 22 de octubre de 2026?",{fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],desde:"2026-10-22",hasta:"2026-10-22"}],
@@ -36,7 +38,9 @@ async function llm(model,messages,format=null,limit=150){
   method:"POST",headers:{"Content-Type":"application/json"},
   signal:AbortSignal.timeout(900000),
   body:JSON.stringify({model,stream:false,think:false,messages,
-   options:{temperature:0,num_ctx:2048,num_predict:limit},
+   // Igual que el asistente desplegado: dos hilos por petición.
+// Mantener la cuota de Docker sin modificar en este diagnóstico.
+   options:{temperature:0,num_ctx:2048,num_predict:limit,num_thread:2},
    ...(format?{format}:{}),keep_alive:"8m"})
  });
  if(!resp.ok)throw Error("Ollama HTTP "+resp.status);
@@ -118,6 +122,10 @@ if(!validLink()){console.error("Introduce un enlace temporal válido desde Farm�
 if(!MODELS.length||MODELS.length>5||MODELS.some(x=>!/^[a-z0-9_.:-]{2,60}$/i.test(x))){
  console.error("Lista de modelos no válida");process.exit(2);
 }
+if(!CASES.length||new Set(CASES).size!==CASES.length||
+ CASES.some(n=>!Number.isInteger(n)||n<1||n>TESTS.length)){
+ console.error("FM_TEST_CASES debe contener números únicos entre 1 y "+TESTS.length);process.exit(2);
+}
 try{
  console.log("Conectando al MCP REAL, mediante POST interno, sin navegador ni caché...");
  const list=await rpc("tools/list");
@@ -131,11 +139,12 @@ try{
  const toolSpec=(list.tools||[]).find(t=>t.name==="consultar_datos_temporales");
  const schema=planSchema(toolSpec?.inputSchema?.properties?.consulta,catalog);
  console.log("Cliente:",model.cliente,"· Farmacias autorizadas:",model.farmacias?.length??0);
- console.log("Modelos:",MODELS.join(", "));
+ console.log("Modelos:",MODELS.join(", "),"· 2 hilos por llamada · casos:",CASES.join(","));
  const all=[];
  for(const selected of MODELS){
   console.log("\n==================== "+selected+" ====================");
-  for(const [question,expected] of TESTS){
+  for(const caseNumber of CASES){
+   const [question,expected]=TESTS[caseNumber-1];
    const record={model:selected,question};
    console.log("\nPREGUNTA:",question);
    try{
@@ -160,6 +169,9 @@ try{
     console.log("INTENCIÓN:",record.problems.length?"DIFERENCIAS: "+record.problems.join(", "):"CORRECTA");
     const invalid=localValidate(record.plan,catalog);
     if(invalid.length)throw Error("Plan inválido del modelo: "+invalid.join(", "));
+    // Un MCP puede ejecutar una consulta formalmente válida con la fuente
+    // equivocada; en la comparativa nunca se ejecutan esos falsos positivos.
+    if(record.problems.length)throw Error("Plan semánticamente incorrecto: "+record.problems.join(", "));
     const start=Date.now();
     let result;
     try{result=await call("consultar_datos_temporales",{consulta:record.plan});}

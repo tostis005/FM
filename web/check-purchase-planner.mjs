@@ -200,7 +200,7 @@ try{
  await page.getByText(/Proveedor 0005.*nombre pendiente/).first().waitFor();
  await page.getByRole("button",{name:/Genérico.*Paracetamol 1000 mg/}).first().click();
  await page.locator(".fm-planner-presentations summary").click();
- await page.getByRole("columnheader",{name:"Titular de autorización (AEMPS)"}).waitFor();
+ await page.locator(".fm-planner-presentations[open] thead th").filter({hasText:"Titular de autorización"}).first().waitFor({state:"visible"});
  await page.getByText("LABORATORIOS TEVA S.L.U.").first().waitFor();
  await page.getByText("TEVA PHARMA S.L.U.").first().waitFor();
  await page.getByText(/Código AEMPS 1234 · nombre no resuelto/).first().waitFor();

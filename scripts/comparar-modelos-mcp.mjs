@@ -30,14 +30,14 @@ async function rpc(method,params){
  return data;
 }
 const call=(name,extra={})=>rpc("tools/call",{name,arguments:{url:LINK,...extra}});
-async function llm(model,messages,asJson=false,limit=150){
+async function llm(model,messages,format=null,limit=150){
  const start=Date.now();
  const resp=await fetch(OLLAMA,{
   method:"POST",headers:{"Content-Type":"application/json"},
   signal:AbortSignal.timeout(900000),
   body:JSON.stringify({model,stream:false,think:false,messages,
    options:{temperature:0,num_ctx:2048,num_predict:limit},
-   ...(asJson?{format:"json"}:{}),keep_alive:"8m"})
+   ...(format?{format}:{}),keep_alive:"8m"})
  });
  if(!resp.ok)throw Error("Ollama HTTP "+resp.status);
  const data=await resp.json();
@@ -59,21 +59,56 @@ function decode(text){
 function expectedErrors(plan,expected){
  const problems=[];
  if(plan.fuente!==expected.fuente)problems.push("fuente");
- for(const dim of expected.agrupar)if(!plan.agrupar?.includes(dim))problems.push("agrupar "+dim);
- for(const metric of expected.metricas)if(!plan.metricas?.includes(metric))problems.push("métrica "+metric);
+ for(const dim of expected.agrupar)if(!Array.isArray(plan.agrupar)||!plan.agrupar.includes(dim))problems.push("agrupar "+dim);
+ for(const metric of expected.metricas)if(!Array.isArray(plan.metricas)||!plan.metricas.includes(metric))problems.push("métrica "+metric);
  if(plan.desde!==expected.desde||plan.hasta!==expected.hasta)problems.push("fechas");
  return problems;
 }
+
 function compact(model){
- return {
-  cliente:model.cliente,zona:model.zona_horaria_operativa,
-  farmacias:(model.farmacias||[]).map(p=>({id:p.id,nombre:p.nombre})),
+ return {zona:model.zona_horaria_operativa,
   fuentes:Object.fromEntries(Object.entries(model.fuentes||{}).map(([k,v])=>[k,{
    dimensiones:v.dimensiones_admitidas,metricas:Object.keys(v.metricas_admitidas||{})
-  }])),
-  periodos:model.esquema_consulta?.properties?.periodo?.enum,
-  nota:"Fechas explícitas con desde y hasta AAAA-MM-DD. ordenar={campo,direccion}. limite=1..100."
- };
+  }]))};
+}
+// Restricción de salida común a las tres preguntas fechadas del benchmark.
+// Enum y metadatos derivados del contrato publicado por el MCP: no hay planes
+// prefabricados ni se suministran fechas de respuesta a ninguno de los modelos.
+function planSchema(mcpSchema,catalog){
+ const p=mcpSchema?.properties||{};
+ const dim=[...new Set(Object.values(catalog.fuentes).flatMap(v=>v.dimensiones||[]))];
+ const metrics=[...new Set(Object.values(catalog.fuentes).flatMap(v=>v.metricas||[]))];
+ if(!p.fuente||!p.agrupar||!p.metricas||!p.desde||!p.hasta||!dim.length||!metrics.length)
+  throw Error("Contrato MCP incompleto");
+ return {type:"object",properties:{
+  fuente:{type:"string",enum:Object.keys(catalog.fuentes)},
+  agrupar:{type:"array",minItems:1,maxItems:3,items:{type:"string",enum:dim}},
+  metricas:{type:"array",minItems:1,maxItems:3,items:{type:"string",enum:metrics}},
+  desde:{type:"string",pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+  hasta:{type:"string",pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}
+ },required:["fuente","agrupar","metricas","desde","hasta"],additionalProperties:false};
+}
+function localValidate(plan,catalog){
+ const errors=[],keys=["fuente","agrupar","metricas","desde","hasta"];
+ if(Object.keys(plan).some(k=>!keys.includes(k))||keys.some(k=>!Object.hasOwn(plan,k)))
+  errors.push("campos inesperados o ausentes");
+ const source=catalog.fuentes[plan.fuente];
+ if(!source)errors.push("fuente no autorizada");
+ for(const [field,allowed] of [["agrupar",source?.dimensiones],["metricas",source?.metricas]]){
+  const values=plan[field];
+  if(!Array.isArray(values)||values.length<1||values.length>3||values.some(x=>!allowed?.includes(x)))
+   errors.push(field+" incompatible con fuente");
+ }
+ for(const field of ["desde","hasta"]){
+  const value=plan[field];
+  if(typeof value!=="string"||!/^20[0-9]{2}-[0-9]{2}-[0-9]{2}$/.test(value)||
+     !Number.isFinite(Date.parse(value+"T00:00:00Z"))||
+     new Date(value+"T00:00:00Z").toISOString().slice(0,10)!==value)
+   errors.push(field+" no es fecha válida ISO");
+ }
+ if(typeof plan.desde==="string"&&typeof plan.hasta==="string"&&plan.desde>plan.hasta)
+  errors.push("fechas invertidas");
+ return errors;
 }
 if(!validLink()){console.error("Introduce un enlace temporal válido desde Farmétrica (no se mostrará).");process.exit(2);}
 if(!MODELS.length||MODELS.length>5||MODELS.some(x=>!/^[a-z0-9_.:-]{2,60}$/i.test(x))){
@@ -89,6 +124,8 @@ try{
  if(model.origen!=="PostgreSQL"||model.ficticio!==false)
   throw Error("El MCP no confirmó su origen real de PostgreSQL");
  const catalog=compact(model);
+ const toolSpec=(list.tools||[]).find(t=>t.name==="consultar_datos_temporales");
+ const schema=planSchema(toolSpec?.inputSchema?.properties?.consulta,catalog);
  console.log("Cliente:",model.cliente,"· Farmacias autorizadas:",model.farmacias?.length??0);
  console.log("Modelos:",MODELS.join(", "));
  const all=[];
@@ -98,18 +135,27 @@ try{
    const record={model:selected,question};
    console.log("\nPREGUNTA:",question);
    try{
+    const prompt=[
+      'Eres el planificador de consultas de Farmétrica. Escribe ÚNICAMENTE el objeto JSON según el esquema.',
+      'Son cinco campos: fuente, agrupar, metricas, desde, hasta. No incluyas campos extra.',
+      'agrupar y metricas son arrays de los nombres EXACTOS publicados en el catálogo.',
+      'Fuente ventas para ventas, compras para compras, stock para existencias.',
+      'Fechas YYYY-MM-DD según la pregunta. Enero es 01, octubre es 10. No uses palabras en las fechas.',
+      'Para comparar vendedores en varias farmacias incluye farmacia y vendedor en agrupar.',
+      'NO generes SQL, no inventes datos, no añadas periodo si hay desde y hasta.',
+      'ESQUEMA='+JSON.stringify(schema),
+      'CATÁLOGO='+JSON.stringify(catalog)
+    ].join(' ');
     const planReply=await llm(selected,[
-     {role:"system",content:"Eres un planificador de consultas semánticas de Farmétrica. Devuelve SOLO un JSON " +
-      "con los campos permitidos: fuente, agrupar, metricas, desde, hasta, periodo, filtros, ordenar y limite. " +
-      "No generes SQL, URL, token, explicaciones ni columnas inventadas. " +
-      "Para vendedor en varias farmacias incluye farmacia. Usa fechas explícitas si la pregunta las da. " +
-      "CATALOGO="+JSON.stringify(catalog)},
-     {role:"user",content:question}],true,180);
+     {role:"system",content:prompt},
+     {role:"user",content:question}],schema,160);
     record.planTime=planReply.seconds;
     record.plan=decode(planReply.content);
     console.log("PLAN GENERADO:",JSON.stringify(record.plan));
     record.problems=expectedErrors(record.plan,expected);
     console.log("INTENCIÓN:",record.problems.length?"DIFERENCIAS: "+record.problems.join(", "):"CORRECTA");
+    const invalid=localValidate(record.plan,catalog);
+    if(invalid.length)throw Error("Plan inválido del modelo: "+invalid.join(", "));
     const start=Date.now();
     let result;
     try{result=await call("consultar_datos_temporales",{consulta:record.plan});}
@@ -126,7 +172,7 @@ try{
      {role:"user",content:"Pregunta: "+question+"\nPeríodo de PostgreSQL: "+JSON.stringify(result.periodo)+
        "\nFilas recibidas: "+result.filas.length+"\nPrimeras 15 filas: "+JSON.stringify(result.filas.slice(0,15))+
        "\nAdvertencias: "+JSON.stringify(result.advertencias||[])+"\nRedacta la respuesta según las filas disponibles."}
-    ],false,150);
+    ],null,150);
     record.answerTime=answer.seconds;
     record.success=true;
     console.log("RESPUESTA DEL MODELO:\n"+red(answer.content));

@@ -40,11 +40,17 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -se' <<'REMOTE'
           set -euo pipefail
           cd /opt/farmawao
-          test -f api/src/aiMcp.js && test -f compose.farmacias.yml && test -w .env
-          grep -q AI_MCP_ENABLED compose.farmacias.yml
-          docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
-          docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
-            -c "SELECT to_regclass('farmetrica.ai_oauth_conexiones') IS NOT NULL" | grep -qx t
+          echo 'Diagnostico: archivos y permisos del despliegue'
+          test -f api/src/aiMcp.js || { echo 'Falta aiMcp.js en VPS'; exit 1; }
+          test -f compose.farmacias.yml || { echo 'Falta compose.farmacias.yml en VPS'; exit 1; }
+          test -w .env || { echo 'El usuario SSH no puede editar .env'; exit 1; }
+          grep -q AI_MCP_ENABLED compose.farmacias.yml || { echo 'Falta AI_MCP_ENABLED en compose'; exit 1; }
+          docker compose -f compose.yaml -f compose.farmacias.yml config --quiet || { echo 'Compose invalido'; exit 1; }
+          echo 'Diagnostico: migracion MCP'
+          migrated=$(docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+            -c "SELECT to_regclass('farmetrica.ai_oauth_conexiones') IS NOT NULL")
+          test "$migrated" = t || { echo 'La tabla OAuth aun no existe'; exit 1; }
+          echo 'Diagnostico: comprobar origen publico'
           actual=$(grep '^PUBLIC_APP_ORIGIN=' .env | tail -n1 | cut -d= -f2- | tr -d '\r')
           test "$actual" = https://farmetrica.com || {
             echo "Origen web distinto al dominio solicitado; no se modifica el servidor"; exit 1;

@@ -74,3 +74,23 @@ Se define antes de ejecutar el bloque y se debe añadir `-e FM_MODELS` al comand
   modelos secuencialmente. No ejecutar con usuarios utilizando el asistente.
 - Este código no se ha probado todavía con datos reales de Ampedia porque no se ha
   introducido un enlace temporal válido en esta conversación.
+
+## Ejecutar una prueba aislada sin repetir toda la comparativa
+
+El benchmark usa **num_thread=2** en las dos llamadas a Ollama, igual que el
+asistente de producción; no cambia la cuota de CPU de Docker.
+
+Se puede restringir el modelo y la pregunta antes de ejecutar el bloque:
+```bash
+export FM_MODELS="gemma3:1b"
+export FM_TEST_CASES="1"
+```
+En la invocación al contenedor también hay que añadir las variables:
+```bash
+docker exec -i -e FM_TEMP_LINK -e FM_MODELS -e FM_TEST_CASES farmawao-api-1 node --input-type=module - < "$ARCHIVO"
+```
+
+Los casos 1, 2 y 3 corresponden a ventas por farmacia, vendedores y compras
+por proveedor. Solo ejecuta la consulta MCP cuando el plan del modelo coincide
+con la intención de la prueba y supera la validación local. Evita confundir
+**0 filas de una fuente equivocada** con ausencia real de datos.

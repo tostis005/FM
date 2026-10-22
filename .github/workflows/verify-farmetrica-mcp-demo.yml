@@ -1,0 +1,53 @@
+name: Verificar demo MCP aislada
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verify-farmetrica-mcp-demo.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Comprobar endpoint publico ficticio y endpoint real privado
+        shell: bash
+        run: |
+          set -euo pipefail
+          url=https://farmetrica.com/api/mcp-demo
+          for i in $(seq 1 30); do
+            status=$(curl -sS -o /tmp/demo_initial.json -w '%{http_code}' --max-time 10 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' "$url" || true)
+            if [ "$status" = 200 ] && python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/demo_initial.json'))
+          assert d['result']['serverInfo']['name']=='Farmetrica Demo Ficticia'
+          PY
+            then break; fi
+            if [ "$i" = 30 ]; then echo "MCP demo no desplegado, status: $status"; exit 1; fi
+            sleep 10
+          done
+          curl -fsS --max-time 12 -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' "$url" > /tmp/demo_tools.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/demo_tools.json'))['result']['tools']
+          assert len(x)==4
+          assert all(t['annotations']['readOnlyHint'] for t in x)
+          PY
+          curl -fsS --max-time 12 -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"consultar_indicador","arguments":{"indicador":"compras_resumen"}}}' "$url" > /tmp/demo_data.json
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/tmp/demo_data.json'))['result']['structuredContent']
+          assert x['ficticio'] is True
+          assert 'SINTÉTICOS' in x['aviso']
+          assert len(x['farmacias'])==3
+          assert all('Ejemplo' in p['farmacia'] for p in x['farmacias'])
+          PY
+          auth_status=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":4,"method":"tools/list"}' https://farmetrica.com/api/mcp)
+          test "$auth_status" = 401 || { echo "Peligro: MCP real no protegido, HTTP $auth_status"; exit 1; }
+          echo "ÉXITO: demo pública sintética, MCP privado protegido"

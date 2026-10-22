@@ -35,6 +35,8 @@ const WARNINGS={
 const examples=[
  {titulo:"Vendedores que más venden hoy",consulta:{fuente:"ventas",agrupar:["farmacia","vendedor"],
   metricas:["importe","unidades"],periodo:"hoy",ordenar:{campo:"importe",direccion:"desc"},limite:30}},
+ {titulo:"Vendedores con más ventas este año",consulta:{fuente:"ventas",agrupar:["farmacia","vendedor"],
+  metricas:["importe","unidades"],periodo:"este_anio",ordenar:{campo:"importe",direccion:"desc"},limite:50}},
  {titulo:"Ventas por farmacia del mes pasado",consulta:{fuente:"ventas",agrupar:["farmacia"],
   metricas:["importe","movimientos"],periodo:"mes_pasado"}},
  {titulo:"Artículos con mayor margen estimado",consulta:{fuente:"ventas",agrupar:["farmacia","producto"],
@@ -103,7 +105,7 @@ export function semanticCatalog(){
   }])),
   parametros:{
    fuente:"ventas | compras | stock",
-   agrupar:"Array de 0 a 3 dimensiones permitidas para la fuente.",
+   agrupar:"Array de 0 a 3 dimensiones permitidas para la fuente. Si se agrupa por vendedor en varias farmacias, el servidor añade farmacia automáticamente (máximo tres dimensiones).",
    metricas:"Array de 1 a 5 métricas permitidas para la fuente.",
    periodo:"hoy | ayer | esta_semana | semana_pasada | este_mes | mes_pasado | este_anio | historico | ultimos_7_dias | ultimos_30_dias | ultimos_90_dias | ultimos_365_dias",
    desde:"AAAA-MM-DD; con hasta; puede ser cualquier año disponible.",
@@ -165,7 +167,7 @@ export function validateSemanticQuery(input,ctx){
  const allowed=ctx?.role==="superadministrador"||modules[source]===true||
   (source==="ventas"&&modules.dashboard===true);
  if(!allowed)throw err("No tienes acceso al módulo de "+source);
- const dims=input.agrupar??["farmacia"];
+ let dims=input.agrupar??["farmacia"];
  const metrics=input.metricas??(source==="stock"?["stock_actual","venta_90d"]:["importe"]);
  if(!Array.isArray(dims)||dims.length>3||dims.some(d=>typeof d!=="string"||!Object.hasOwn(DIMENSIONS[source],d))||
   new Set(dims).size!==dims.length)throw err("Dimensiones no permitidas");
@@ -193,8 +195,12 @@ export function validateSemanticQuery(input,ctx){
  let ids;
  try{ids=authorizedIds(ctx,input.farmacias??[])}
  catch{throw err("Farmacias no autorizadas");}
- if(source==="ventas"&&dims.includes("vendedor")&&!dims.includes("farmacia")&&ids.length>1)
-  throw err("Al agrupar vendedores de varias farmacias incluye la dimensión farmacia: los códigos de vendedor no son globales.");
+ // La IA puede pedir solo "vendedor"; incorporar farmacia mantiene la identidad
+ // local de los códigos sin rechazar la consulta ni mezclar vendedores distintos.
+ if(source==="ventas"&&dims.includes("vendedor")&&!dims.includes("farmacia")&&ids.length>1){
+  if(dims.length===3)throw err("Para comparar vendedores de varias farmacias, incluye farmacia entre las tres dimensiones");
+  dims=["farmacia",...dims];
+ }
  const dates=resolveDates(input);
  if(source==="stock"&&(input.desde!==undefined||input.hasta!==undefined||input.periodo!==undefined))
   throw err("El stock es actual; su ritmo de venta se calcula sobre los últimos 90 días");

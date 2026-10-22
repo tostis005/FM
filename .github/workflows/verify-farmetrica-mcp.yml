@@ -1,16 +1,14 @@
 name: Verificar MCP privado Farmetrica
 on:
-  push:
-    branches: [main]
-    paths:
-      - "api/src/aiMcp.js"
-      - "deploy/compose.farmacias.yml"
-      - ".github/workflows/verify-farmetrica-mcp.yml"
+  workflow_run:
+    workflows: ["Build and deploy Farmetrica SaaS"]
+    types: [completed]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   verificar:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:

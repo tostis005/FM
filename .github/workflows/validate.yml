@@ -242,6 +242,7 @@ jobs:
             sleep 1
           done
           node check-purchase-planner.mjs
+          node check-savings-analysis.mjs
           node check-responsive.mjs
           node check-dashboard-audit.mjs
           node check-sales-loading.mjs

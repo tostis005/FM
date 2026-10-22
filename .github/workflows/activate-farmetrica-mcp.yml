@@ -1,0 +1,112 @@
+name: Activar MCP privado Farmetrica
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/activate-farmetrica-mcp.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: farmawao-api-production
+  cancel-in-progress: false
+jobs:
+  activar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Comprobar HTTPS y API publica antes de modificar produccion
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          body=$(curl -fsS --max-time 15 --retry 2 https://farmetrica.com/api/health)
+          python3 -c 'import sys,json; assert json.loads(sys.argv[1])["status"]=="ok"' "$body"
+      - name: Preparar SSH autorizado
+        run: |
+          set -euo pipefail
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Habilitar solamente MCP con rollback automatico
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/farmawao
+          test -f api/src/aiMcp.js && test -f compose.farmacias.yml && test -w .env
+          grep -q AI_MCP_ENABLED compose.farmacias.yml
+          docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
+          docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao \
+            -c "SELECT to_regclass('farmetrica.ai_oauth_conexiones') IS NOT NULL" | grep -qx t
+          actual=$(grep '^PUBLIC_APP_ORIGIN=' .env | tail -n1 | cut -d= -f2- | tr -d '\r')
+          test "$actual" = https://farmetrica.com || {
+            echo "Origen web distinto al dominio solicitado; no se modifica el servidor"; exit 1;
+          }
+          backup=$(mktemp /opt/farmawao/.env.ai-mcp.backup.XXXXXXXX)
+          chmod 600 "$backup"
+          cp -p .env "$backup"
+          rollback() {
+            rc=$?
+            trap - EXIT
+            if [ "$rc" -ne 0 ]; then
+              cp -p "$backup" .env
+              docker compose -f compose.yaml -f compose.farmacias.yml up -d --no-deps --force-recreate api || true
+              echo "Activacion revertida"
+            fi
+            rm -f "$backup"
+            exit "$rc"
+          }
+          trap rollback EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.env')
+          lines=p.read_text().splitlines()
+          lines=[l for l in lines if not l.startswith(('AI_MCP_ENABLED=','AI_MCP_PUBLIC_ORIGIN='))]
+          p.write_text('\n'.join(lines+['AI_MCP_ENABLED=true','AI_MCP_PUBLIC_ORIGIN=https://farmetrica.com'])+'\n')
+          PY
+          docker compose -f compose.yaml -f compose.farmacias.yml config --quiet
+          docker compose -f compose.yaml -f compose.farmacias.yml up -d --no-deps --force-recreate api
+          for i in $(seq 1 15); do
+            curl -fsS --max-time 5 http://127.0.0.1:18080/api/health/database | grep -q connected && break
+            sleep 2
+          done
+          meta=$(curl -fsS --max-time 10 http://127.0.0.1:18080/.well-known/oauth-authorization-server)
+          python3 -c 'import sys,json; m=json.loads(sys.argv[1]); assert m["issuer"]=="https://farmetrica.com" and "S256" in m["code_challenge_methods_supported"]' "$meta"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 -H 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' http://127.0.0.1:18080/api/mcp)
+          test "$code" = 401
+          REMOTE
+          touch "$RUNNER_TEMP/mcp-enabled"
+      - name: Validar enlace HTTPS desde internet
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 15 https://farmetrica.com/.well-known/oauth-authorization-server | \
+            python3 -c 'import json,sys; m=json.load(sys.stdin); assert m["issuer"]=="https://farmetrica.com"; assert "S256" in m["code_challenge_methods_supported"]'
+          curl -fsS --max-time 15 https://farmetrica.com/.well-known/oauth-protected-resource/api/mcp | \
+            python3 -c 'import json,sys; assert json.load(sys.stdin)["resource"]=="https://farmetrica.com/api/mcp"'
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 -H 'Content-Type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' https://farmetrica.com/api/mcp)
+          test "$code" = 401
+      - name: Desactivar MCP si falla la validacion externa
+        if: failure()
+        run: |
+          set -euo pipefail
+          test -f "$RUNNER_TEMP/mcp-enabled" || exit 0
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/farmawao
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.env')
+          lines=[l for l in p.read_text().splitlines() if not l.startswith(('AI_MCP_ENABLED=','AI_MCP_PUBLIC_ORIGIN='))]
+          p.write_text('\n'.join(lines+['AI_MCP_ENABLED=false'])+'\n')
+          PY
+          docker compose -f compose.yaml -f compose.farmacias.yml up -d --no-deps --force-recreate api
+          REMOTE

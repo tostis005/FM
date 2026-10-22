@@ -1,5 +1,5 @@
 // El asistente usa el mismo contrato semántico de solo lectura que el MCP
-// temporal. La IA elige planes; PostgreSQL nunca ejecuta SQL generado por IA.
+// temporal. El planificador LLM heredado no se usa en la ruta principal; SQL auditado.
 import {semanticCatalogForContext,validateSemanticQuery,runSemanticQuery} from "./aiSemanticQuery.js";
 
 export function semanticPlannerPrompt(context){

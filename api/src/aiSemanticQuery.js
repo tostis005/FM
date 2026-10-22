@@ -48,6 +48,47 @@ const examples=[
  {titulo:"Ventas históricas por año",consulta:{fuente:"ventas",agrupar:["anio"],
   metricas:["importe","unidades"],periodo:"historico",ordenar:{campo:"anio",direccion:"asc"}}}
 ];
+// Esquema compartido por ambos servidores MCP; los nombres reales del catálogo
+// son las únicas dimensiones y métricas que pueden incluirse en SQL.
+const ALL_DIMENSIONS=[...new Set(Object.values(DIMENSIONS).flatMap(x=>Object.keys(x)))];
+const ALL_METRICS=[...new Set(Object.values(METRICS).flatMap(x=>Object.keys(x)))];
+export const SEMANTIC_MCP_QUERY_SCHEMA={
+ type:"object",
+ description:"Plan de consulta generado por la IA a partir de la pregunta libre y catalogo_semantico; no es SQL.",
+ properties:{
+  fuente:{type:"string",enum:["ventas","compras","stock"]},
+  agrupar:{type:"array",items:{type:"string",enum:ALL_DIMENSIONS},maxItems:3,
+   description:"Columnas para agrupar las métricas, según la fuente seleccionada."},
+  metricas:{type:"array",items:{type:"string",enum:ALL_METRICS},minItems:1,maxItems:5,
+   description:"Métricas reales de la fuente; consulta su significado en catalogo_semantico."},
+  periodo:{type:"string",enum:["hoy","ayer","esta_semana","semana_pasada","este_mes",
+   "mes_pasado","este_anio","historico","ultimos_7_dias","ultimos_30_dias","ultimos_90_dias",
+   "ultimos_365_dias"]},
+  desde:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
+  hasta:{type:"string",pattern:"^\\d{4}-\\d{2}-\\d{2}$"},
+  farmacias:{type:"array",items:{type:"integer"},maxItems:50},
+  producto:{type:"string",maxLength:80},
+  vendedor:{type:"string",maxLength:80},
+  proveedor:{type:"string",maxLength:80},
+  estado_stock:{type:"string",enum:["agotado","bajo","sin_ventas"]},
+  dias_max:{type:"integer",minimum:1,maximum:180},
+  ordenar:{type:"object",properties:{campo:{type:"string",enum:[...ALL_DIMENSIONS,...ALL_METRICS]},
+   direccion:{type:"string",enum:["asc","desc"]}},required:["campo","direccion"],additionalProperties:false},
+  limite:{type:"integer",minimum:1,maximum:100}
+ },
+ required:["fuente","metricas"],
+ additionalProperties:false
+};
+export function semanticCatalogForContext(ctx){
+ const catalog=semanticCatalog();
+ const mods=ctx?.modules||{};
+ const can=key=>ctx?.role==="superadministrador"||mods[key]===true||
+   (key==="ventas"&&mods.dashboard===true);
+ catalog.fuentes=Object.fromEntries(Object.entries(catalog.fuentes)
+  .filter(([k])=>can(k)).map(([k,v])=>[k,v]));
+ catalog.ejemplos=catalog.ejemplos.filter(x=>Object.hasOwn(catalog.fuentes,x.consulta.fuente));
+ return catalog;
+}
 export function semanticCatalog(){
  return {
   version:1,modo:"consulta_estructurada",soloLectura:true,
@@ -119,6 +160,10 @@ export function validateSemanticQuery(input,ctx){
   throw err("Consulta o atributos no autorizados");
  const source=input.fuente;
  if(!Object.hasOwn(DIMENSIONS,source))throw err("Fuente desconocida");
+ const modules=ctx?.modules||{};
+ const allowed=ctx?.role==="superadministrador"||modules[source]===true||
+  (source==="ventas"&&modules.dashboard===true);
+ if(!allowed)throw err("No tienes acceso al módulo de "+source);
  const dims=input.agrupar??["farmacia"];
  const metrics=input.metricas??(source==="stock"?["stock_actual","venta_90d"]:["importe"]);
  if(!Array.isArray(dims)||dims.length>3||dims.some(d=>typeof d!=="string"||!Object.hasOwn(DIMENSIONS[source],d))||

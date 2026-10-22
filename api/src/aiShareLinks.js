@@ -22,21 +22,64 @@ function allow(token){
  if(hitCount.size>100)for(const [k,v] of hitCount)if(now-v.at(-1)>600000)hitCount.delete(k);
  return true;
 }
+
+function shareCatalog(token,ctx){
+ const today=periodFromQuestion("hoy");
+ const month=periodFromQuestion("este mes");
+ const previous=periodFromQuestion("mes pasado");
+ const dates=periodFromQuestion("últimos 30 días");
+ const year=periodFromQuestion("últimos 12 meses");
+ const url=options=>PREFIX+encodeURIComponent(token)+"?"+new URLSearchParams(options).toString();
+ const entradas=[
+  {titulo:"Ventas de hoy por farmacia",url:url({indicador:"ventas_resumen",desde:today.from,hasta:today.to})},
+  {titulo:"Compras de hoy por farmacia",url:url({indicador:"compras_resumen",desde:today.from,hasta:today.to})},
+  {titulo:"Ventas de este mes por farmacia",url:url({indicador:"ventas_resumen",desde:month.from,hasta:month.to})},
+  {titulo:"Compras del mes pasado por farmacia",url:url({indicador:"compras_resumen",desde:previous.from,hasta:previous.to})},
+  ...Object.entries(TOOL_CATALOG).map(([indicador,info])=>({
+   titulo:info.label,
+   url:url({indicador,desde:(indicador==="ahorro_economico"?year:dates).from,
+     hasta:(indicador==="ahorro_economico"?year:dates).to})
+  })),
+  ...["¿Cuánto hemos facturado este mes?","¿Cuánto hemos comprado el mes pasado?",
+    "¿Cuál es el capital de stock?","¿Qué artículos se han vendido más?",
+    "¿Qué ahorro potencial hay este año?"].map(pregunta=>({
+   titulo:pregunta,url:url({pregunta})
+  }))
+ ];
+ return {
+  api:"Farmétrica - consultas temporales de lectura",
+  cliente:ctx.client.name,
+  origen:"PostgreSQL",
+  ficticio:false,
+  soloLectura:true,
+  farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name,ciudad:p.city})),
+  indicadores:TOOL_CATALOG,
+  consultas:entradas,
+  formato:"Para obtener JSON agrega formato=json a cualquier URL de consulta.",
+  parametros:"indicador o pregunta, desde y hasta en AAAA-MM-DD, farmacias=ID,ID o farmacia=nombre exacto.",
+  alcance:"Solo indicadores predefinidos y hasta 366 días por consulta; no incluye SQL arbitrario."
+ };
+}
 function landing(token,ctx){
- const dates=periodFromQuestion("últimos 30 días"),year=periodFromQuestion("últimos 12 meses");
- const link=(text,args)=>'<li><a href="'+html(PREFIX+token+"?"+new URLSearchParams(args))+'">'+html(text)+'</a></li>';
- const options=Object.entries(TOOL_CATALOG).map(([id,m])=>link(m.label,{
-  indicador:id,desde:(id==="ahorro_economico"?year:dates).from,
-  hasta:(id==="ahorro_economico"?year:dates).to
- })).join("");
- const qs=["¿Cuánto hemos facturado este mes?","¿Cuánto hemos comprado el mes pasado?",
-  "¿Cuál es el capital de stock?","¿Qué artículos se han vendido más?","¿Qué ahorro potencial hay este año?"]
-  .map(pregunta=>link(pregunta,{pregunta})).join("");
- return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Farmétrica · consultas reales</title></head>'+
- '<body><h1>Farmétrica · consultas reales por API</h1><p>Cliente: '+html(ctx.client.name)+
- '</p><p>Acceso temporal de solo lectura. Datos reales de PostgreSQL. URL sensible: permite consultar cifras durante 24 horas desde su creación.</p>'+
- '<h2>Indicadores</h2><ul>'+options+'</ul><h2>Preguntas</h2><ul>'+qs+'</ul>'+
- '<p>Parámetros opcionales: desde, hasta (AAAA-MM-DD), farmacias (IDs separados por comas). Máximo 366 días por consulta. Añade formato=json para respuesta JSON.</p></body></html>';
+ const catalog=shareCatalog(token,ctx);
+ const link=item=>'<li><a href="'+html(item.url)+'">'+html(item.titulo)+'</a></li>';
+ const pharmacies=catalog.farmacias.map(p=>'<li>'+html(p.nombre)+' (ID '+p.id+')</li>').join("");
+ return '<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+  '<meta name="viewport" content="width=device-width, initial-scale=1">'+
+  '<title>Farmétrica · consultas reales</title></head>'+
+  '<body style="font:16px system-ui;max-width:850px;margin:30px auto;padding:16px">'+
+  '<h1>Farmétrica · consultas reales por API</h1>'+
+  '<p>Cliente: <strong>'+html(ctx.client.name)+'</strong></p>'+
+  '<p>Acceso temporal de lectura a PostgreSQL. Este enlace permite consultar indicadores reales '+
+  'durante 24 horas desde su creación y puede revocarse desde Farmétrica.</p>'+
+  '<h2>Consultas disponibles</h2><ul>'+catalog.consultas.map(link).join("")+'</ul>'+
+  '<h2>Farmacias incluidas</h2><ul>'+pharmacies+'</ul>'+
+  '<p>Para filtrar, añade <code>farmacia=nombre</code> o <code>farmacias=ID,ID</code> a un enlace '+
+  'de consulta. Fechas: <code>desde=AAAA-MM-DD</code> y <code>hasta=AAAA-MM-DD</code>.</p>'+
+  '<p>Para un catálogo legible por máquinas, abre <a href="'+html(PREFIX+token+"?formato=json")+
+  '">Catálogo JSON</a>. Para el resultado de una consulta, añade <code>formato=json</code>.</p>'+
+  '<p>La pregunta en lenguaje natural solo selecciona indicadores implementados; '+
+  'no equivale a una consulta libre a la base de datos.</p></body></html>';
 }
 export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
  const admin="/api/admin/ai/mcp-demo";
@@ -73,13 +116,26 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
    if(!rows.length)return res.status(410).send("Enlace caducado o revocado");
    if(!allow(token))return res.status(429).send("Demasiadas consultas");
    const ctx=await loadDemoMcpContext(pool,rows[0].cliente_slug);
-   if(req.query.indicador===undefined&&req.query.pregunta===undefined)return res.type("html").send(landing(token,ctx));
+   if(req.query.indicador===undefined&&req.query.pregunta===undefined){
+    if(req.query.formato==="json")return res.json(shareCatalog(token,ctx));
+    return res.type("html").send(landing(token,ctx));
+   }
    if(req.query.indicador!==undefined&&req.query.pregunta!==undefined)return res.status(400).send("Indica solo un tipo de consulta");
    const args={};
    for(const k of ["desde","hasta"])if(req.query[k]!==undefined)args[k]=req.query[k];
+   if(req.query.farmacias!==undefined&&req.query.farmacia!==undefined)
+    return res.status(400).send("Utiliza farmacia o farmacias, no ambos");
    if(req.query.farmacias!==undefined){
     if(typeof req.query.farmacias!=="string"||!/^[0-9]+(?:,[0-9]+){0,49}$/.test(req.query.farmacias))return res.status(400).send("Farmacias inválidas");
     args.farmacias=req.query.farmacias.split(",").map(Number);
+   }
+   if(req.query.farmacia!==undefined){
+    if(typeof req.query.farmacia!=="string"||req.query.farmacia.length>150)
+     return res.status(400).send("Nombre de farmacia inválido");
+    const normalize=value=>String(value).normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim().toLowerCase();
+    const matches=ctx.pharmacies.filter(p=>normalize(p.name)===normalize(req.query.farmacia));
+    if(matches.length!==1)return res.status(400).send("Farmacia desconocida o ambigua. Consulta el catálogo.");
+    args.farmacias=[Number(matches[0].id)];
    }
    let name;
    if(req.query.indicador!==undefined){

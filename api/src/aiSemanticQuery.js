@@ -182,8 +182,8 @@ const measures={
   referencias_sin_coste:"count(*) FILTER(WHERE b.coste IS NULL)::int"
  }
 };
-function baseSql(source,schema,params,where){
- const articleJoin=source==="stock"?"":`
+function baseSql(source,schema,params,where,needsArticle){
+ const articleJoin=source==="stock"||!needsArticle?"":`
  LEFT JOIN LATERAL (
   SELECT a.nombre,a.codigo_nacional,a.familia,a.pmc,a.puc
   FROM ${schema}.articulos a WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(t.farmacia_codigo))
@@ -192,12 +192,18 @@ function baseSql(source,schema,params,where){
  if(source!=="stock"){
   where.push("($1::date IS NULL OR t.fecha >= $1::date)");
   where.push("($2::date IS NULL OR t.fecha < ($2::date+interval '1 day'))");
+  const estimated=needsArticle?
+   "CASE WHEN a.pmc>0 AND t.importe IS NOT NULL AND t.unidades IS NOT NULL THEN t.importe-t.unidades*a.pmc END":
+   "NULL::numeric";
   const extra=source==="ventas"?
-   "nullif(btrim(t.vendedor_id::text),'') AS vendedor,NULL::text AS proveedor, CASE WHEN a.pmc>0 AND t.importe IS NOT NULL AND t.unidades IS NOT NULL THEN t.importe-t.unidades*a.pmc ELSE NULL END AS margen_estimado,":
+   "nullif(btrim(t.vendedor_id::text),'') AS vendedor,NULL::text AS proveedor, "+estimated+" AS margen_estimado,":
    "NULL::text AS vendedor,t.proveedor_nombre AS proveedor,NULL::numeric AS margen_estimado,";
+  const product=needsArticle?"coalesce(nullif(a.nombre,''),t.articulo_id,'Sin referencia')":"t.articulo_id";
+  const cn=needsArticle?"a.codigo_nacional":"NULL::text";
+  const family=needsArticle?"a.familia":"NULL::text";
   return `SELECT f.nombre AS farmacia,${extra}
-   coalesce(nullif(a.nombre,''),t.articulo_id,'Sin referencia') AS producto,
-   a.codigo_nacional, a.familia, t.fecha::date AS dia,
+   ${product} AS producto,
+   ${cn} AS codigo_nacional,${family} AS familia,t.fecha::date AS dia,
    to_char(t.fecha,'YYYY-MM') AS mes,extract(year from t.fecha)::int AS anio,
    t.importe,t.unidades,${source==="compras"?"t.coste_unitario":"NULL::numeric"} AS coste_unitario
    FROM ${schema}.${source==="ventas"?"fm_ventas_analitica":"fm_recepciones_analitica"} t
@@ -245,7 +251,10 @@ export function compileSemanticQuery(input,context){
   params.push("%"+q.proveedor.trim()+"%");where.push(`t.proveedor_nombre ILIKE $${params.length}`);
  }
  // Rows are always scoped by client and authorized IDs before aggregation.
- let base=baseSql(q.source,schema,params,where);
+ const needsArticle=q.source==="stock"||q.producto!==undefined||
+  q.dims.some(d=>["producto","codigo_nacional","familia"].includes(d))||
+  q.metrics.includes("margen_estimado");
+ let base=baseSql(q.source,schema,params,where,needsArticle);
  if(q.source==="stock"){
   let state="";
   if(q.estadoStock==="agotado")state="b.stock_actual<=0";

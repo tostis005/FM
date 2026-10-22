@@ -4,7 +4,7 @@
 import {loadDemoMcpContext} from "./aiMcpDemo.js";
 import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 import {makeTemporaryModel} from "./aiShareContract.js";
-import {interpretSemanticQuestion} from "./semanticInterpreter.js";
+import {executeCanonicalQuestion} from "./semanticExecution.js";
 
 const ROOT="https://farmetrica.com/api/consulta-temporal/";
 const RE=/^fm_share_[A-Za-z0-9_-]{43}$/;
@@ -76,13 +76,8 @@ export function setupShareMcp(app,pool,{resolveLink}){
    if(name==="leer_modelo_temporal")
     return res.json(textResult(id,makeTemporaryModel(ctx,ROOT+token)));
    if(name==="resolver_pregunta_temporal"){
-    const interpretation=interpretSemanticQuestion(args.pregunta,ctx);
-    if(interpretation.estado!=="ok")
-     return res.json(textResult(id,{...interpretation,origen:"Farmétrica",
-      soloLectura:true,cliente:ctx.client.name}));
-    const result=await runSemanticQuery(pool,ctx,interpretation.consulta);
-    return res.json(textResult(id,{...interpretation,...result,
-      cliente:ctx.client.name,origen:"PostgreSQL",ficticio:false}));
+    const result=await executeCanonicalQuestion(pool,ctx,args.pregunta);
+    return res.json(textResult(id,{...result,cliente:ctx.client.name}));
    }
    if(!args.consulta||typeof args.consulta!=="object"||Array.isArray(args.consulta)||
      JSON.stringify(args.consulta).length>6000)

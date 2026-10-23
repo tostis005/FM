@@ -83,12 +83,13 @@ function limitWarning(data,notes){
  else if(!data.comparacion&&Number.isInteger(data.limite)&&numberRows>=data.limite)
   notes.add("Se alcanzó el límite de "+data.limite+" filas; pueden faltar resultados.");
 }
-export function presentSemanticResult(data){
+export function presentSemanticResult(data,{maxRows=100}={}){
  if(data?.estado!=="ok")return {estado:data?.estado||"no_disponible",
   mensaje:clean(data?.mensaje||"No se pudo consultar Farmétrica.")};
  const dims=dimensionNames(data),metrics=metricNames(data),notes=new Set();
  const source=data.fuente??data.consulta?.fuente??data.interpretacion?.fuente;
- const items=Array.isArray(data.filas)?data.filas:[];
+ const allItems=Array.isArray(data.filas)?data.filas:[];
+ const items=allItems.slice(0,maxRows);
  if(!metrics.length)return {estado:"no_disponible",mensaje:"La consulta no contiene métricas reconocidas para presentar."};
  const columns=[...dims.map(k=>DIM_LABELS[k]),...metrics.map(k=>labels(k,source))];
  const rows=items.map(row=>{
@@ -109,6 +110,7 @@ export function presentSemanticResult(data){
   return out;
  });
  if(!rows.length)notes.add("No se han encontrado registros para esta consulta; no equivale a un importe de cero.");
+ if(allItems.length>items.length)notes.add("Se muestran solo "+items.length+" de "+allItems.length+" filas; la selección no es el resultado completo.");
  limitWarning(data,notes);
  if(dims.includes("vendedor")){
   notes.add("Los nombres de vendedores se corresponden con cada farmacia; un mismo código interno puede pertenecer a personas distintas.");

@@ -51,6 +51,7 @@ jobs:
           node --check api/src/promocionesTenant.js
           node --test api/src/promocionesTenant.test.js
           node --test api/src/promocionesReplace.test.js
+          node --test api/src/promotionEligibility.test.js
           node --test api/src/promotionImportIdentity.test.js
           node --check api/src/genericos.js
           node --check api/src/genericosReales.js
@@ -88,7 +89,7 @@ jobs:
           npm install --no-audit --no-fund
           node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
           node --test src/businessAnalytics.test.js
-          node --test src/promotionMetrics.test.js
+          node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js
           node --test src/salesPeriods.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/asyncBatches.test.js

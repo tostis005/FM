@@ -367,8 +367,10 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
   async function sendText(text = draft) {
     const question = text.trim();
     if (!question || isDictating || chatBusy) return;
-    const history = messages.filter(m=>m.role==="user"||m.role==="assistant")
-      .slice(-8).map(m=>({role:m.role,content:m.text}));
+    // Solo enviamos preguntas previas: las tablas Markdown pueden superar el
+    // límite del historial y las respuestas del modelo no son contexto fiable.
+    const history = messages.filter(m=>m.role==="user")
+      .slice(-8).map(m=>({role:"user",content:m.text}));
     setMessages(previous=>[...previous,createMessage("user",question)]);
     setDraft("");
     setAudioError("");
@@ -401,9 +403,8 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
             {...m,text:m.text+result.text}:m));
         }
         if(type==="done"){
-          const sources=Array.isArray(result.sources)?result.sources.filter(x=>x.available).map(x=>x.label).join(" · "):"";
           setMessages(previous=>previous.map(m=>m.id===pending.id?
-            {...m,text:(result.answer||"")+(sources?"\n\nFuentes: "+sources:"")}:m));
+            {...m,text:result.answer||""}:m));
           setChatStep("Respuesta completada");
         }
       });

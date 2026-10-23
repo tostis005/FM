@@ -6,10 +6,10 @@ import {validateSemanticQuery} from "./aiSemanticQuery.js";
 const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
  .toLowerCase().replace(/[¿?¡!.,:;]+/g," ").replace(/\s+/g," ").trim();
 const PERIOD=/\b(hoy|ayer|este mes|mes actual|mes pasado|mes anterior|este ano|este anio|ano pasado|anio pasado|esta semana|semana pasada|ultimos? \d+ dias?|pasados? \d+ dias?|desde|hasta|entre|20\d{2}|historico|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/;
-const DIMS=/\b(?:por|cada)\s+(?:(?:el|la|los|las)\s+)?(?:farmacias?|vendedores?|vendedoras?|proveedores?|productos?|articulos?|dias?|fechas?|meses?|anos?|anios?)\b/;
+const DIMS=/\b(?:por|cada)\s+(?:(?:el|la|los|las)\s+)?(?:farmacias?|vendedor(?:es)?|vendedoras?|proveedor(?:es)?|productos?|articulos?|dias?|fechas?|meses?|anos?|anios?)\b/;
 const FOLLOW=/^(?:y\b|ahora\b|lo mismo\b|que hay de\b|en cambio\b|para\b|respecto a\b)/;
-const SOURCES={ventas:/\b(ventas?|vendieron|vendimos|vendido|vendida|vendedores?|facturacion|facturado)\b/,
- compras:/\b(compras?|compramos|comprado|comprada|proveedores?|gastamos|gastado|gasto)\b/,
+const SOURCES={ventas:/\b(ventas?|vendieron|vendimos|vendido|vendida|vendedor(?:es)?|facturacion|facturado)\b/,
+ compras:/\b(compras?|compramos|comprado|comprada|proveedor(?:es)?|gastamos|gastado|gasto)\b/,
  stock:/\b(stock|existencias?|inventario)\b/};
 const sourceOf=q=>{
  const match=Object.entries(SOURCES).filter(([,re])=>re.test(q));

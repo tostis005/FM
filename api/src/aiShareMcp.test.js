@@ -58,9 +58,12 @@ test("MCP sin OAuth no expone datos ni tokens hasta recibir la URL vigente",asyn
   const resolved=await (await post(rpc(50,"tools/call",{name:"resolver_pregunta_temporal",
     arguments:{url,pregunta:"¿Cuánto vendió cada farmacia el 22 de octubre de 2026?"}}))).json();
    assert.equal(resolved.result.structuredContent.estado,"ok");
-   assert.equal(resolved.result.structuredContent.consulta.fuente,"ventas");
-   assert.deepEqual(resolved.result.structuredContent.consulta.agrupar,["farmacia"]);
-   assert.equal(resolved.result.structuredContent.filas[0].importe,221.14);
+   assert.deepEqual(resolved.result.structuredContent.columnas,["Farmacia","Ventas"]);
+   assert.deepEqual(resolved.result.structuredContent.filas[0],
+    {Farmacia:"Farmacia Real Uno",Ventas:"221,14 €"});
+   assert.equal(resolved.result.structuredContent.consulta,undefined);
+   assert.match(resolved.result.content[0].text,/\\| Farmacia \\| Ventas \\|/);
+   assert.doesNotMatch(JSON.stringify(resolved.result),/farmaciaId|vendedorNombre|estado":"completo/);
    const ambiguous=await (await post(rpc(51,"tools/call",{name:"resolver_pregunta_temporal",
     arguments:{url,pregunta:"¿Cuánto vendió cada farmacia?"}}))).json();
    assert.equal(ambiguous.result.structuredContent.estado,"aclaracion");

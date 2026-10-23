@@ -195,7 +195,7 @@ function madridParts(isoDate){
   const time=(Number(p.hour)*3600+Number(p.minute)*60+Number(p.second))/86400;
   return {serial,time};
 }
-export async function buildLabSalesExcel(promo,lines){
+export async function buildLabSalesExcel(promo,lines,{includeSeller=false,mode="real"}={}){
   ensureValidCNs(promo);
   const ordered=[...lines].sort((a,b)=>new Date(a.at)-new Date(b.at));
   const sourceCN=line=>{
@@ -207,11 +207,12 @@ export async function buildLabSalesExcel(promo,lines){
   };
   const rows=[
     [promo.name],
-    LAB_HEADERS,
+    includeSeller?["VENDEDOR",...LAB_HEADERS]:LAB_HEADERS,
     ...ordered.map(line=>{
       const {serial,time}=madridParts(line.at);
       const amounts=ticketLineAmounts(line,{absolute:true});
       return [
+        ...(includeSeller?[String(line.sellerName||line.sellerId||"")]:[]),
         line.ticket||"",serial,time,
         sourceCN(line),line.articleName||line.description||"",
         amounts.pvp,amounts.quantity,amounts.gross,
@@ -228,27 +229,28 @@ export async function buildLabSalesExcel(promo,lines){
   // Exportar importes numéricos: el porcentaje utiliza el formato Excel 0,00 %.
   // Las devoluciones muestran cantidades e importes absolutos sin tocar el origen.
   const blob=await workbook([
-    {name:"Export",rows,widths:[23,17,15,14,65,14,13,19,20,19,20],
-      dateCols:[1],timeCols:[2],percentCols:[10]},
+    {name:"Export",rows,widths:[...(includeSeller?[26]:[]),23,17,15,14,65,14,13,19,20,19,20],
+      dateCols:[includeSeller?2:1],timeCols:[includeSeller?3:2],
+      percentCols:[includeSeller?11:10]},
     {name:"Hoja1",rows:products,widths:[17,72,16]},
   ]);
   const safe=String(promo.name||"promocion").normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9_-]+/g,"_").slice(0,55);
   const id=String(promo.id||"").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,24);
-  const name=(safe||"promocion")+(id?"_"+id:"")+"_laboratorio.xlsx";
+  const name=(safe||"promocion")+(id?"_"+id:"")+(mode==="simulated"?"_promociones_aplicadas":"")+"_laboratorio.xlsx";
   return {blob,name};
 }
-export async function exportLabSalesExcel(promo,lines) {
-  const {blob,name}=await buildLabSalesExcel(promo,lines);
+export async function exportLabSalesExcel(promo,lines,options={}) {
+  const {blob,name}=await buildLabSalesExcel(promo,lines,options);
   downloadBlob(blob,name);
 }
-export async function buildLabSalesZip(items) {
+export async function buildLabSalesZip(items,options={}) {
   const {default: JSZip}=await import("jszip");
   if(!items.length)throw new Error("Selecciona al menos una promoción");
   const archive=new JSZip();
   const seen=new Set();
   for(const {promo,lines} of items){
-    const {blob,name}=await buildLabSalesExcel(promo,lines);
+    const {blob,name}=await buildLabSalesExcel(promo,lines,options);
     // Evitar sobrescrituras si varias promociones se llaman igual.
     let unique=name,index=2;
     while(seen.has(unique)){unique=name.replace(/\.xlsx$/,"_"+index+++".xlsx");}
@@ -256,9 +258,9 @@ export async function buildLabSalesZip(items) {
     archive.file(unique,await blob.arrayBuffer());
   }
   const blob=await archive.generateAsync({type:"blob",compression:"DEFLATE"});
-  return {blob,name:"laboratorios_"+items.length+"_promociones.zip"};
+  return {blob,name:"laboratorios_"+items.length+"_promociones"+(options.mode==="simulated"?"_aplicadas":"")+".zip"};
 }
-export async function exportLabSalesZip(items) {
-  const {blob,name}=await buildLabSalesZip(items);
+export async function exportLabSalesZip(items,options={}) {
+  const {blob,name}=await buildLabSalesZip(items,options);
   downloadBlob(blob,name);
 }

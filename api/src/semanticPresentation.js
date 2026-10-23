@@ -15,7 +15,7 @@ const METRIC_LABELS={
  anterior:"Período anterior",actual:"Período actual",
  diferencia:"Diferencia",variacion_pct:"Variación"
 };
-const CURRENCY=new Set(["importe","margen_estimado","capital_estimado","coste_unitario_medio","anterior","actual","diferencia"]);
+const CURRENCY=new Set(["importe","margen_estimado","capital_estimado","coste_unitario_medio"]);
 const PERCENT=new Set(["margen_estimado_pct","variacion_pct"]);
 const nf=new Intl.NumberFormat("es-ES",{maximumFractionDigits:2,minimumFractionDigits:2});
 const count=new Intl.NumberFormat("es-ES",{maximumFractionDigits:2});
@@ -69,7 +69,7 @@ const labels=(metric,source)=>{
  return METRIC_LABELS[metric];
 };
 const titleFor=(data,dims)=>{
- const source=data.fuente??data.comparacion?.actual?.fuente??data.interpretacion?.fuente;
+ const source=data.fuente??data.consulta?.fuente??data.comparacion?.actual?.fuente??data.interpretacion?.fuente;
  const sourceTitle={ventas:"Ventas",compras:"Compras",stock:"Existencias"}[source]||"Resultados";
  const suffix=dims.length?" por "+dims.map(x=>DIM_LABELS[x].toLowerCase()).join(" y "):"";
  return (data.comparacion?"Comparación de ":"")+sourceTitle.toLowerCase().replace(/^./,c=>c.toUpperCase())+suffix;
@@ -87,7 +87,7 @@ export function presentSemanticResult(data){
  if(data?.estado!=="ok")return {estado:data?.estado||"no_disponible",
   mensaje:clean(data?.mensaje||"No se pudo consultar Farmétrica.")};
  const dims=dimensionNames(data),metrics=metricNames(data),notes=new Set();
- const source=data.fuente??data.interpretacion?.fuente;
+ const source=data.fuente??data.consulta?.fuente??data.interpretacion?.fuente;
  const items=Array.isArray(data.filas)?data.filas:[];
  if(!metrics.length)return {estado:"no_disponible",mensaje:"La consulta no contiene métricas reconocidas para presentar."};
  const columns=[...dims.map(k=>DIM_LABELS[k]),...metrics.map(k=>labels(k,source))];

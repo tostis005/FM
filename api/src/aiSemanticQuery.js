@@ -248,8 +248,9 @@ function baseSql(source,schema,params,where,needsArticle){
    AND a.origen_id=t.articulo_id LIMIT 1
  ) a ON true`;
  if(source!=="stock"){
-  where.push("($1::date IS NULL OR t.fecha >= $1::date)");
-  where.push("($2::date IS NULL OR t.fecha < ($2::date+interval '1 day'))");
+  // Evitar condiciones OR cuando ya sabemos el período: índices fecha.
+  if(params[0]!==null)where.push("t.fecha >= $1::date");
+  if(params[1]!==null)where.push("t.fecha < ($2::date+interval '1 day')");
   const estimated=needsArticle?
    "CASE WHEN a.pmc>0 AND t.importe IS NOT NULL AND t.unidades IS NOT NULL THEN t.importe-t.unidades*a.pmc END":
    "NULL::numeric";
@@ -348,7 +349,10 @@ export async function runSemanticQuery(pool,context,input){
  const {sql,params,q}=compileSemanticQuery(input,context);
  if(!q.ids.length)return {fuente:q.source,periodo:q.dates,filas:[],advertencias:WARNINGS[q.source]};
  const result=await readOnly(pool,async db=>{
-  await db.query("SET LOCAL statement_timeout='12000ms'");
+  await db.query(q.source==="ventas"&&q.dims.includes("vendedor")&&
+   (q.dates.desde===null||q.dates.hasta===null||
+    Date.parse(q.dates.hasta)-Date.parse(q.dates.desde)>90*86400000)?
+   "SET LOCAL statement_timeout='24000ms'":"SET LOCAL statement_timeout='12000ms'");
   return db.query(sql,params);
  });
  let rows=result.rows;

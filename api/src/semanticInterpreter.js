@@ -44,6 +44,13 @@ function readPeriod(q,now){
   return {desde:full[0],hasta:full[1]};
  }
  if(full.length===1){
+  // Una fecha inicial explícita seguida de "hasta hoy" conserva el año y
+  // no convierte indebidamente el intervalo en un día.
+  if(/\bdesde\b/.test(q)&&/\bhasta\s+(?:el\s+d[ií]a\s+de\s+)?hoy\b/.test(q)){
+   const today=madridDate(now);
+   if(full[0]>today)return response("aclaracion","La fecha inicial es posterior a hoy.");
+   return {desde:full[0],hasta:today};
+  }
   // "entre el 1 y el 22 de octubre de 2026" / "del 1 al 22 de octubre de 2026".
   const range=q.match(/\b(?:entre\s+(?:el\s+)?|del\s+)(\d{1,2})\s+(?:y\s+(?:el\s+)?|al\s+(?:el\s+)?)\d{1,2}\s+de\s+([a-z]+)\s+(?:de|del)\s+(20\d{2})\b/);
   if(range){
@@ -69,6 +76,14 @@ function readPeriod(q,now){
  }
  if(/\banteayer\b/.test(q)||/\btrimestre|semestre\b/.test(q))
   return response("no_disponible","Expresa ese período mediante fechas de inicio y fin.");
+ const trailingDays=q.match(/\b(?:ultimos?|pasados?)\s+(\d{1,4})\s+dias?\b/);
+ if(trailingDays){
+  const count=Number(trailingDays[1]);
+  if(count<1||count>3660)return response("aclaracion","Indica entre 1 y 3660 días.");
+  const end=madridDate(now),start=new Date(end+"T12:00:00Z");
+  start.setUTCDate(start.getUTCDate()+1-count);
+  return {desde:start.toISOString().slice(0,10),hasta:end};
+ }
  const rel=[
   [/\bhoy\b/,"hoy"],[/\bayer\b/,"ayer"],
   [/\besta semana\b/,"esta_semana"],[/\bsemana pasada\b/,"semana_pasada"],
@@ -92,13 +107,13 @@ function readPeriod(q,now){
 }
 const SOURCES={
  ventas:/\b(ventas?|vendid[oa]s?|vendieron|vendemos|vendimos|vendio|vender|facturacion|facturad[oa]s?|facturamos)\b/,
- compras:/\b(compras?|comprad[oa]s?|compramos|comprar|recepciones?|proveedor(?:es)?)\b/,
+ compras:/\b(compras?|comprad[oa]s?|compramos|comprar|recepciones?|proveedor(?:es)?|gastad[oa]s?|gastamos|gasto)\b/,
  stock:/\b(stock|existencias?|inventario|almacen)\b/
 };
 const DIMENSIONS={
  farmacia:/\bfarmacias?\b/,vendedor:/\b(vendedor(?:es)?|vendedora(?:s)?|comercial(?:es)?)\b/,
  producto:/\b(productos?|articulos?)\b/,proveedor:/\bproveedor(?:es)?\b/,
- dia:/\b(dias?|diariamente)\b/,mes:/\b(meses?|mensualmente)\b/,
+ dia:/\b(dias?|diariamente|fechas?)\b/,mes:/\b(meses?|mensualmente)\b/,
  anio:/\b(anos?|anios?|anualmente)\b/
 };
 const GROUP={
@@ -106,7 +121,7 @@ const GROUP={
  vendedor:/\b(por|cada|segun)\s+(?:el|los|la|las)?\s*(vendedor(?:es)?|vendedora(?:s)?|comercial(?:es)?)\b/,
  producto:/\b(por|cada|segun)\s+(?:el|los|la|las)?\s*(productos?|articulos?)\b/,
  proveedor:/\b(por|cada|segun|a cada)\s+(?:el|los|la|las)?\s*proveedor(?:es)?\b/,
- dia:/\b(por|cada)\s+(?:el|los)?\s*dias?\b/,
+ dia:/\b(por|cada)\s+(?:(?:el|los|la|las)\s+)?(?:dias?|fechas?)\b/,
  mes:/\b(por|cada)\s+(?:el|los)?\s*mes(?:es)?\b/,
  anio:/\b(por|cada)\s+(?:el|los)?\s*(anos?|anios?)\b/
 };
@@ -155,6 +170,7 @@ export function interpretSemanticQuestion(question,ctx,{now=new Date(),single=fa
  if(/\bmargen\b/.test(q)&&!/\bestimad[oa]\b/.test(q))
   return response("aclaracion","¿Te refieres al margen estimado con coste PMC actual, no al beneficio contable?");
  const found=Object.entries(SOURCES).filter(([,p])=>p.test(q)).map(([k])=>k);
+ if(!found.length&&/\bmargen(?:es)?\s+estimad[oa]s?\b/.test(q))found.push("ventas");
  if(!found.length)return response("general","La pregunta no exige una consulta analítica identificable.");
  if(found.length>1)return response("aclaracion",
   "La pregunta mezcla fuentes ("+found.join(", ")+"). Indica qué fuente quieres consultar.");
@@ -183,9 +199,9 @@ export function interpretSemanticQuestion(question,ctx,{now=new Date(),single=fa
  if(fuente==="stock"){
   metricas=/\b(cobertura|dias de stock)\b/.test(q)?["dias_cobertura"]:
    /\b(valor|capital|euros|importe)\b/.test(q)?["capital_estimado"]:["stock_actual"];
- }else if(/\bmargen estimad[oa]\b/.test(q)){
+ }else if(/\bmargen(?:es)?\s+estimad[oa]s?\b/.test(q)){
   if(fuente!=="ventas")return response("no_disponible","El margen estimado solo está definido en ventas.");
-  metricas=["margen_estimado"];
+  metricas=/\b(porcentaje|porcentual|%|pct)\b/.test(q)?["margen_estimado_pct"]:["margen_estimado"];
  }else if(/\b(tickets?|movimientos?|operaciones?|transacciones?|lineas?)\b/.test(q)){
   metricas=["movimientos"];
  }else if(/\b(unidades?|cantidad|volumen)\b/.test(q)&&!/\b(importe|euros|facturacion)\b/.test(q)){
@@ -196,6 +212,17 @@ export function interpretSemanticQuestion(question,ctx,{now=new Date(),single=fa
  if(metricas.some(m=>!Object.hasOwn(meta.metricas,m)))
   return response("no_disponible","Esa métrica no está disponible para la fuente indicada.");
  const consulta={fuente,agrupar,metricas,...(period||{})};
+ // Filtro explícito de proveedor. El nombre se resuelve en PostgreSQL
+ // por (tenant, farmacia, código) sin consultar datos de otros clientes.
+ if(fuente==="compras"){
+  const named=q.match(/\b(?:al|del|de|en\s+el|para\s+el)\s+proveedor\s+([a-z0-9][a-z0-9 ._-]{1,70})/);
+  if(named){
+   const name=named[1].split(/\s+(?:durante|desde|hasta|entre|este|esta|el|la|los|las|del|de\s+este|en\s+el|en\s+la|en\s+octubre|en\s+enero)\b/)[0].trim();
+   if(name&&name!=="no identificado")consulta.proveedor=name;
+  }
+ }
+ if(fuente==="ventas"&&/\b(solares?|fotoprotectores?|protectores?\s+solares?|cremas?\s+solares?)\b/.test(q))
+  consulta.producto="categoria:solares";
  if(scope)consulta.farmacias=scope;
  if(rank&&agrupar.length){
   consulta.ordenar={campo:metricas[0],direccion:/\b(menos|menores|peores)\b/.test(q)?"asc":"desc"};

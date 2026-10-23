@@ -321,17 +321,13 @@ export function validateShortSummary(draft,p){
   if(trendDown.test(normalized))kind=kind?"incompatible":"descenso";
   if(rank.test(normalized))kind=kind?"incompatible":"maximo";
   if(kind){
-   if(kind==="incompatible"){
-    if(!(trendUp.test(normalized)&&trendDown.test(normalized)&&!rank.test(normalized)))
-     return null;
-    for(const trend of ["aumento","descenso"])
-     if(!allowCompare.some(f=>f.tipo===trend&&f.nombres.some(name=>
-      normalized.includes(normFact(name)))))return null;
-   }else{
-    const matched=allowCompare.some(f=>f.tipo===kind&&f.nombres.some(name=>
-     normalized.includes(normFact(name))));
-    if(!matched)return null;
-   }
+   if(kind==="incompatible")return null; // asociaciones cruzadas entre sujetos
+   // Un ranking de vendedores no acredita rankings de farmacias, y viceversa.
+   if(kind==="maximo"&&p.columnas.includes("Vendedor")&&
+    /\bfarmacia\b/.test(normalized)&&! /\bvendedor\b/.test(normalized))return null;
+   const matched=allowCompare.some(f=>f.tipo===kind&&f.nombres.some(name=>
+    normalized.includes(normFact(name))));
+   if(!matched)return null;
   }
  }
  if(p.filas.some(r=>r.Proveedor==="Proveedor no identificado")&&

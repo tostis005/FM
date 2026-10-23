@@ -100,3 +100,27 @@ test("usa dos hilos en planificación y redacción con Ollama",async()=>{
   globalThis.fetch=originalFetch;
  }
 });
+
+
+test("para respuestas analíticas Ollama solo recibe datos limpios y no debe devolver JSON",async()=>{
+ const old=globalThis.fetch,requests=[];
+ try{
+  globalThis.fetch=async(_url,init)=>{
+   requests.push(JSON.parse(init.body));
+   return {ok:true,json:async()=>({message:{content:"| Farmacia | Ventas |\n|---|---|\n| Abadía | 7392,15 € |"}})};
+  };
+  const presentation={estado:"ok",titulo:"Ventas por farmacia",
+   columnas:["Farmacia","Ventas"],filas:[{Farmacia:"Abadía",Ventas:"7392,15 €"}],
+   advertencias:[]};
+  const content=await callOllama("¿Cuánto vendió cada farmacia?",[],{section:"Farmétrica"},[],
+   "http://ollama:11434","qwen3:0.6b",{numPredict:450,presentation});
+  assert.match(content,/\| Farmacia \| Ventas \|/);
+  assert.equal(requests.length,1);
+  assert.match(requests[0].messages[0].content,/DATOS_LIMPIOS/);
+  assert.match(requests[0].messages[0].content,/Markdown/);
+  assert.match(requests[0].messages[0].content,/Nunca respondas con JSON/);
+  assert.doesNotMatch(requests[0].messages[0].content,/farmaciaId|vendedorNombre|estado":"completo/);
+  assert.equal(requests[0].format,undefined);
+  assert.equal(requests[0].options.num_thread,2);
+ }finally{globalThis.fetch=old}
+});

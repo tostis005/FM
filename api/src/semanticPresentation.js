@@ -292,10 +292,10 @@ const quantities=s=>[...String(s).matchAll(quantityPattern)]
 const strictNumbers=s=>[...String(s).matchAll(numeralsPattern)].map(m=>m[0]);
 const comparable=(a,b)=>a.unit===b.unit&&Math.abs(a.n-b.n)<=0.011;
 const forbidden=/\b(total(?:es)?|suma|promedio|media|beneficio|rentabilidad|estimaci[oó]n|estimad[oa]|previsi[oó]n)\b/i;
-const causal=/\b(debido\s+a|gracias\s+a|provocad[oa]|causad[oa]|por\s+el\s+motivo)\b/i;
+const causal=/\b(debido\s+a|gracias\s+a|provocad[oa]|causad[oa]|por\s+el\s+motivo|por\s+una?\s+campa[nñ]a|por\s+una?\s+promoci[oó]n)\b/i;
 const trendUp=/\b(aument\w*|creci\w*|subi\w*|increment\w*)\b/i;
 const trendDown=/\b(descend\w*|disminu\w*|baj\w*|cay\w*|descens\w*)\b/i;
-const rank=/\b(lider\w*|encabez\w*|mayor|m[aá]s\s+(?:vend\w*|alt\w*|elevad\w*)|primero|mejor|superior)\b/i;
+const rank=/\b(lider\w*|encabez\w*|mayor\w*|m[aá]s\s+(?:vend\w*|alt\w*|elevad\w*)|primero|mejor|superior)\b/i;
 export function validateShortSummary(draft,p){
  if(typeof draft!=="string"||p?.estado!=="ok")return null;
  const summary=draft.trim();

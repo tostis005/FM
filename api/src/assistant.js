@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
-import {interpretSemanticQuestion} from "./semanticInterpreter.js";
+import {resolveConversationQuestion} from "./assistantConversation.js";
 import {executeResolvedQuestion} from "./semanticResolver.js";
 import {presentSemanticResult,SHORT_SUMMARY_SYSTEM,shortSummaryContext,composeOfficialSemanticAnswer} from "./semanticPresentation.js";
 import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
@@ -155,7 +155,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   const body=validateAssistantBody(req.body);
   if(!body)return res.status(400).json({error:"Pregunta o historial inválidos"});
   let ids;
-  try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:pharmacyIdsFromQuestion(body.question,req.context));}
+  try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:undefined);}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
   const key=req.context.client.slug+":"+req.user.email;
   if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});
@@ -168,7 +168,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
    const context={...req.context,allowedPharmacyIds:ids,
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
    stopHeartbeat=startJsonHeartbeat(res);
-   const resolution=interpretSemanticQuestion(body.question,context);
+   const resolution=resolveConversationQuestion(body.question,body.history,context);
    if(!["ok","general"].includes(resolution.estado)){
     return res.end(JSON.stringify({answer:resolution.mensaje,
      model:"farmetrica-semantica",sources:[],interpretacion:resolution}));
@@ -180,15 +180,9 @@ export function setupAssistant(app,pool,{requireTenant}) {
    const presentation=data.estado==="ok"?presentSemanticResult(data,{maxRows:10}):null;
    let answer;
    if(presentation){
-    let summary="";
-    try{
-     summary=await callOllama(body.question,[],{section:"Farmétrica"},[],
-      ollama(),model(),{numPredict:90,shortSummaryPresentation:presentation});
-    }catch(error){
-     console.warn("Asistente: resumen opcional no disponible",error?.name||"error");
-    }
-    // El modelo nunca construye la tabla ni altera filas originales.
-    answer=composeOfficialSemanticAnswer(presentation,summary);
+    // La IA de 0,6B no debe poder inventar narraciones como «Abadía
+    // lleva Abadía». La frase natural y la tabla se basan en datos auditados.
+    answer=composeOfficialSemanticAnswer(presentation,"",{chatMode:true});
    }else{
     answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
@@ -214,7 +208,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   const body=validateAssistantBody(req.body);
   if(!body)return res.status(400).json({error:"Pregunta o historial inválidos"});
   let ids;
-  try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:pharmacyIdsFromQuestion(body.question,req.context));}
+  try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:undefined);}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
   const key=req.context.client.slug+":"+req.user.email;
   if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});
@@ -238,8 +232,8 @@ export function setupAssistant(app,pool,{requireTenant}) {
   try{
    const context={...req.context,allowedPharmacyIds:ids,
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
-   progress("planning","Farmétrica está interpretando la pregunta con sus reglas semánticas…");
-   const resolution=interpretSemanticQuestion(body.question,context);
+   progress("planning","Entendiendo tu pregunta…");
+   const resolution=resolveConversationQuestion(body.question,body.history,context);
    if(controller.signal.aborted)return;
    if(!["ok","general"].includes(resolution.estado)){
     writeAssistantEvent(res,"done",{answer:resolution.mensaje,
@@ -247,7 +241,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
     return;
    }
    progress("querying",resolution.estado==="ok"?
-    "Consultando datos reales de Farmétrica…":"La pregunta no necesita datos privados…");
+    "Buscando los resultados…":"Preparando la respuesta…");
    const data=await executeResolvedQuestion(pool,context,resolution);
    if(controller.signal.aborted)return;
    if(!["ok","general"].includes(data.estado)){
@@ -257,22 +251,10 @@ export function setupAssistant(app,pool,{requireTenant}) {
    }
    const results=resolvedFacts(data);
    const presentation=data.estado==="ok"?presentSemanticResult(data,{maxRows:10}):null;
-   progress("writing","Generando un resumen breve; la tabla ya está verificada por Farmétrica…");
+   progress("writing","Preparando la respuesta…");
    let answer;
    if(presentation){
-    let summary="";
-    try{
-     summary=await callOllama(body.question,[],{section:"Farmétrica"},[],
-      ollama(),model(),{
-       numPredict:90,signal:controller.signal,
-       shortSummaryPresentation:presentation,onDelta:()=>{}
-      });
-    }catch(error){
-     if(controller.signal.aborted)return;
-     console.warn("Asistente stream: resumen opcional no disponible",error?.name||"error");
-    }
-    if(controller.signal.aborted)return;
-    answer=composeOfficialSemanticAnswer(presentation,summary);
+    answer=composeOfficialSemanticAnswer(presentation,"",{chatMode:true});
    }else{
     answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"

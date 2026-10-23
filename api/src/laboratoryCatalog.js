@@ -128,12 +128,12 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  const auth=requireTenant();
  const access=(req,res)=>req.context.role==="superadministrador"||
   req.context.modules?.compras===true;
- app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
   if(!access(req,res)&&req.context.modules?.proveedores!==true)
    return res.status(403).json({error:"Catálogo no habilitado"});
   try{res.json({laboratories:await listLaboratoryOptions(pool)});}catch(e){next(e);}
  });
- app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{
   if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});
   const key=normalizeLaboratoryKey(req.query.laboratorio);
   const pharmacies=selectedPharmacies(req.context,req.query.farmacias);
@@ -152,7 +152,7 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
    next(e);
   }
  });
- app.get("/api/tenant/proveedores/correspondencias",...auth,async(req,res,next)=>{
+ if(typeof app.get==="function")app.get("/api/tenant/proveedores/correspondencias",...auth,async(req,res,next)=>{
   if(!["administrador","superadministrador"].includes(req.context.role))
    return res.status(403).json({error:"Requiere administración"});
   try{
@@ -165,7 +165,7 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
    res.json(rows);
   }catch(e){next(e);}
  });
- app.put("/api/tenant/proveedores/correspondencias",...auth,async(req,res,next)=>{
+ if(typeof app.put==="function")app.put("/api/tenant/proveedores/correspondencias",...auth,async(req,res,next)=>{
   if(!["administrador","superadministrador"].includes(req.context.role))
    return res.status(403).json({error:"Requiere administración"});
   const pharmacyId=Number(req.body?.pharmacyId);

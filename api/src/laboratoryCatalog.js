@@ -81,6 +81,10 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    LEFT JOIN farmetrica.nomenclator_presentaciones med
     ON med.cn=nullif(btrim(a.codigo_nacional),'')
    WHERE nullif(btrim(r.articulo_id::text),'') IS NOT NULL
+    -- Un proveedor asignado no puede atribuir a su laboratorio un
+    -- medicamento cuyo titular/comercializador AEMPS sea otro.
+    AND (med.cn IS NULL OR
+     ${commercialKey}=$1 OR ${titularKey}=$1)
   ),
   combined AS (
    SELECT * FROM official

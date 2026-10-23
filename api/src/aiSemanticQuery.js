@@ -248,7 +248,6 @@ function baseSql(source,schema,params,where,needsArticle){
    AND a.origen_id=t.articulo_id LIMIT 1
  ) a ON true`;
  if(source!=="stock"){
-  // Evitar condiciones OR cuando ya sabemos el período: índices fecha.
   if(params[0]!==null)where.push("t.fecha >= $1::date");
   if(params[1]!==null)where.push("t.fecha < ($2::date+interval '1 day')");
   const estimated=needsArticle?
@@ -292,12 +291,12 @@ function baseSql(source,schema,params,where,needsArticle){
  return `WITH sold AS (${sold}), inventory AS (${base}) SELECT * FROM inventory`;
 }
 
-// Ruta SQL simplificada para vendedores: no calcula columnas que no solicita.
+// Agrupación de vendedores histórica: evita proyecciones ajenas a la consulta.
 function compileSellerSales(q,schema,params){
  if(q.source!=="ventas"||q.dims.join(",")!=="farmacia,vendedor"||
-  q.metrics.some(m=>!["importe","unidades","movimientos"].includes(m))||
-  q.producto!==undefined||q.proveedor!==undefined||q.estadoStock!==undefined||
-  q.dates.desde===null||q.dates.hasta===null)return null;
+    q.metrics.some(m=>!["importe","unidades","movimientos"].includes(m))||
+    q.producto!==undefined||q.proveedor!==undefined||q.estadoStock!==undefined||
+    q.dates.desde===null||q.dates.hasta===null)return null;
  const expressions={
   importe:"coalesce(sum(t.importe),0)::float8",
   unidades:"coalesce(sum(t.unidades),0)::float8",
@@ -317,93 +316,9 @@ function compileSellerSales(q,schema,params){
   'JOIN farmetrica.farmacias f ON f.cliente_slug=$4 '+
   'AND upper(btrim(t.farmacia_codigo))='+code+
   ' WHERE '+where.join(" AND ")+
-  ' GROUP BY f.id,f.nombre,t.vendedor_id'+
+  ' GROUP BY f.id,f.nombre,nullif(btrim(t.vendedor_id::text), \'\')'+
   ' ORDER BY "'+q.order.campo+'" '+q.order.direccion.toUpperCase()+
-  ' NULLS LAST LIMIT 
- const q=validateSemanticQuery(input,context);
- const schema=quoteSchema(context.client.schema);
- const params=[q.dates.desde,q.dates.hasta,q.ids,context.client.slug];
- let where=["f.id=ANY($3::int[])"];
- if(q.producto!==undefined){
-  params.push("%"+q.producto.trim()+"%");
-  const alias=q.source==="stock"?"a":"t";
-  const productName=q.source==="stock"?"a.nombre":"a.nombre";
-  const productID=q.source==="stock"?"a.origen_id":"t.articulo_id";
-  where.push(`(coalesce(${productName},'') ILIKE $${params.length} OR coalesce(${productID},'') ILIKE $${params.length})`);
- }
- if(q.vendedor!==undefined){
-  params.push(q.vendedor.trim());where.push(`t.vendedor_id::text=$${params.length}`);
- }
- if(q.proveedor!==undefined){
-  params.push("%"+q.proveedor.trim()+"%");where.push(`t.proveedor_nombre ILIKE $${params.length}`);
- }
- // Rows are always scoped by client and authorized IDs before aggregation.
- const needsArticle=q.source==="stock"||q.producto!==undefined||
-  q.dims.some(d=>["producto","codigo_nacional","familia"].includes(d))||
-  q.metrics.some(k=>["margen_estimado","margen_estimado_pct","lineas_con_coste"].includes(k));
- let base=baseSql(q.source,schema,params,where,needsArticle);
- if(q.source==="stock"){
-  let state="";
-  if(q.estadoStock==="agotado")state="b.stock_actual<=0";
-  if(q.estadoStock==="bajo"){
-   params.push(q.diasMax);
-   state=`b.stock_actual>0 AND b.venta_90d>0 AND b.stock_actual/nullif(b.venta_90d/90.0,0)<=$${params.length}`;
-  }
-  if(q.estadoStock==="sin_ventas")state="b.venta_90d<=0";
-  const ix=base.lastIndexOf("SELECT * FROM inventory");
-  if(ix<0)throw Error("Consulta de stock mal configurada");
-  base=base.slice(0,ix)+`SELECT * FROM inventory b${state?" WHERE "+state:""}`;
- }
- const projections=[
-  // El nombre de farmacia no es una clave única: exponer su ID evita
-  // fusionar vendedores de dos farmacias que casualmente se llamen igual.
-  ...(q.dims.includes("farmacia")?['b.farmacia_id AS "farmaciaId"']:[]),
-  ...q.dims.map(d=>`${DIM_SQL[d]} AS "${d}"`),
-  ...q.metrics.map(m=>`${measures[q.source][m]} AS "${m}"`)
- ];
- const group=q.dims.length?" GROUP BY "+[
-  ...(q.dims.includes("farmacia")?["b.farmacia_id"]:[]),
-  ...q.dims.map(d=>DIM_SQL[d])
- ].join(","):"";
- const order=` ORDER BY "${q.order.campo}" ${q.order.direccion.toUpperCase()} NULLS LAST`;
- params.push(q.limit);
- const result={
-  sql:`SELECT ${projections.join(",")} FROM (${base}) b${group}${order} LIMIT $${params.length}::int`,
-  params,q
- };
- return result;
-}
-export async function runSemanticQuery(pool,context,input){
- const {sql,params,q}=compileSemanticQuery(input,context);
- if(!q.ids.length)return {fuente:q.source,periodo:q.dates,filas:[],advertencias:WARNINGS[q.source]};
- const result=await readOnly(pool,async db=>{
-  await db.query(q.source==="ventas"&&q.dims.includes("vendedor")&&
-   (q.dates.desde===null||q.dates.hasta===null||
-    Date.parse(q.dates.hasta)-Date.parse(q.dates.desde)>90*86400000)?
-   "SET LOCAL statement_timeout='24000ms'":"SET LOCAL statement_timeout='12000ms'");
-  return db.query(sql,params);
- });
- let rows=result.rows;
- if(q.source==="ventas"&&q.dims.includes("vendedor")&&rows.length){
-  const entries=rows.map(row=>({
-   pharmacyId:q.ids.length===1?q.ids[0]:Number(row.farmaciaId),
-   sellerId:row.vendedor
-  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&q.ids.includes(x.pharmacyId)&&x.sellerId);
-  if(entries.length){
-   const names=await loadCommercialNames(pool,context,entries);
-   rows=rows.map(row=>{
-    const pharmacyId=q.ids.length===1?q.ids[0]:Number(row.farmaciaId);
-    return {...row,vendedorNombre:Number.isSafeInteger(pharmacyId)&&q.ids.includes(pharmacyId)&&row.vendedor?
-     names.seller(pharmacyId,row.vendedor):row.vendedor};
-   });
-  }
- }
- return {modo:"consulta_semantica",origen:"PostgreSQL",ficticio:false,
-  fuente:q.source,periodo:q.dates,dimensiones:q.dims,metricas:q.metrics,
-  farmacias_autorizadas:q.ids.length,filas:rows,
-  limite:q.limit,advertencias:WARNINGS[q.source]};
-}
-+params.length+'::int';
+  ' NULLS LAST LIMIT $'+params.length+'::int';
  return {sql,params,q};
 }
 

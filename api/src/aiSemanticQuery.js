@@ -13,7 +13,8 @@ const DIMENSIONS={
  stock:{farmacia:"farmacia",producto:"producto",codigo_nacional:"codigo_nacional",familia:"familia"}
 };
 const METRICS={
- ventas:{importe:"Importe neto de ventas (€)",unidades:"Unidades vendidas",movimientos:"Líneas de venta",
+ ventas:{importe:"Importe neto de ventas (€)",unidades:"Unidades vendidas",
+  precio_medio:"Precio medio realizado por unidad vendida (ventas / unidades; no tarifa vigente)",movimientos:"Líneas de venta",
   margen_estimado:"Importe neto menos unidades por coste PMC actual; NO beneficio contable",
   margen_estimado_pct:"Porcentaje estimado sobre ventas con PMC disponible: suma(margen estimado)/suma(ventas cubiertas)*100; no es margen neto contable",
   lineas_con_coste:"Líneas con coste PMC contrastable"},
@@ -33,6 +34,7 @@ const WARNINGS={
   "Valor de stock a PMC o PUC disponible; subtotal cuando faltan costes."]
 };
 const examples=[
+ {titulo:"Top productos por unidades, ventas y precio medio realizado",consulta:{fuente:"ventas",agrupar:["farmacia","producto"],metricas:["unidades","importe","precio_medio"],periodo:"este_mes",ordenar:{campo:"unidades",direccion:"desc"},limite:20}},
  {titulo:"Vendedores que más venden hoy",consulta:{fuente:"ventas",agrupar:["farmacia","vendedor"],
   metricas:["importe","unidades"],periodo:"hoy",ordenar:{campo:"importe",direccion:"desc"},limite:30}},
  {titulo:"Vendedores con más ventas este año",consulta:{fuente:"ventas",agrupar:["farmacia","vendedor"],
@@ -114,6 +116,7 @@ export function semanticCatalog(){
    solares:"producto=categoria:solares busca solar/fotoprotector/SPF en nombre de artículo; resultado aproximado, no clasificación garantizada por familia.",
    gasto:"Compras equivale a importes documentados de recepciones; no es gasto contable fiscal.",
    margen:"margen_estimado y margen_estimado_pct usan coste PMC ACTUAL por línea con coste disponible, NO ventas menos compras del período ni beneficio neto.",
+   precio:"precio_medio es importe vendido dividido por unidades netas; no es PVP vigente ni precio de catálogo; sin unidades no se calcula.",
    privacidad:"No se devuelve un esquema privado ni se permite SQL arbitrario, DDL, DML, funciones o columnas no catalogadas.",
    avanzado:"Si resolver_pregunta devuelve aclaracion o no_disponible, una IA avanzada puede usar consultar_semantica con un plan de consulta admitido. Nunca redactar SQL libre."
   },
@@ -247,6 +250,7 @@ const measures={
  ventas:{
   importe:"coalesce(sum(b.importe),0)::float8",
   unidades:"coalesce(sum(b.unidades),0)::float8",
+  precio_medio:"(sum(b.importe)/nullif(sum(b.unidades),0))::float8",
   movimientos:"count(*)::int",
   margen_estimado:"sum(b.margen_estimado)::float8",
   margen_estimado_pct:"(100.0*sum(b.margen_estimado)/nullif(sum(b.importe) FILTER(WHERE b.margen_estimado IS NOT NULL),0))::float8",
@@ -335,13 +339,14 @@ function baseSql(source,schema,params,where,needsArticle,{solar=false}={}){
 // Agrupación de vendedores histórica: evita proyecciones ajenas a la consulta.
 function compileSellerSales(q,schema,params){
  if(q.source!=="ventas"||q.dims.join(",")!=="farmacia,vendedor"||
-    q.metrics.some(m=>!["importe","unidades","movimientos"].includes(m))||
+    q.metrics.some(m=>!["importe","unidades","movimientos","precio_medio"].includes(m))||
     q.producto!==undefined||q.proveedor!==undefined||q.estadoStock!==undefined||
     q.dates.desde===null||q.dates.hasta===null)return null;
  const expressions={
   importe:"coalesce(sum(t.importe),0)::float8",
   unidades:"coalesce(sum(t.unidades),0)::float8",
-  movimientos:"count(*)::int"
+  movimientos:"count(*)::int",
+  precio_medio:"(sum(t.importe)/nullif(sum(t.unidades),0))::float8"
  };
  const metrics=q.metrics.map(m=>expressions[m]+' AS "'+m+'"').join(", ");
  const where=["f.id=ANY($3::int[])","t.fecha >= $1::date",

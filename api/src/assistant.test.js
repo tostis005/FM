@@ -145,9 +145,10 @@ test("la generación real del resumen usa 90 tokens, contexto pequeño y nunca r
   assert.equal(output,"Se muestran las ventas de las farmacias consultadas.");
   assert.equal(requests.length,1);
   assert.equal(requests[0].messages.length,2,"el historial no debe inyectar cifras ajenas");
-  assert.match(requests[0].messages[0].content,/Escribe SOLO un resumen breve/);
+  assert.match(requests[0].messages[0].content,/hechos verificados/i);
   assert.match(requests[0].messages[1].content,/Evidencia verificada/);
-  assert.doesNotMatch(JSON.stringify(requests[0].messages),/7\.392|3000|farmaciaId/);
+  assert.match(JSON.stringify(requests[0].messages),/7\\.392|7.392|7392,15/);
+  assert.doesNotMatch(JSON.stringify(requests[0].messages),/3000|farmaciaId/);
   assert.deepEqual(requests[0].options.num_thread,2);
   assert.equal(requests[0].options.num_predict,90);
   assert.equal(requests[0].options.num_ctx,1024);

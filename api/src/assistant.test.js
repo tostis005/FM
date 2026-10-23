@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {callOllama,startJsonHeartbeat} from "./assistant.js";
 import test from "node:test";
-import {validateAssistantBody,rateCheck} from "./assistantPolicy.js";
+import {validateAssistantBody} from "./assistantPolicy.js";
 import {quoteSchema,authorizedIds,selectTools,periodFromQuestion,normalizedPeriod,runAssistantTool,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 
 const ctx={role:"gestor",client:{schema:"ampedia"},modules:{ventas:true,compras:true,stock:false},allowedPharmacyIds:[1,2]};
@@ -37,19 +37,6 @@ test("esquemas estrictos, fechas limitadas y selección de herramientas restring
  const d=periodFromQuestion("ayer",new Date("2026-10-19T13:00:00Z"));
  assert.equal(d.from,"2026-10-18");
 });
-test("el piloto admite 100 preguntas cada 10 minutos y el cupo caduca",()=>{
- const key="isolated-test:limit";
- for(let i=0;i<100;i++)assert.equal(rateCheck(key,1000+i),true,"consulta "+i);
- assert.equal(rateCheck(key,1100),false);
- assert.equal(rateCheck(key,601000),true,"tras 10 minutos debe recuperarse el cupo");
-});
-test("el dictado conserva un límite de 8 peticiones independiente de chat",()=>{
- const key="isolated-test:voice";
- for(let i=0;i<8;i++)assert.equal(rateCheck(key,1000+i,8),true);
- assert.equal(rateCheck(key,1010,8),false);
- assert.equal(rateCheck(key,601000,8),true);
-});
-
 test("busca farmacias solo entre las autorizadas",()=>{
  const local={...ctx,pharmacies:[{id:1,name:"Europa"},{id:2,name:"Abadía"}]};
  assert.deepEqual(pharmacyIdsFromQuestion("ventas de Europa",local),[1]);

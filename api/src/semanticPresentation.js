@@ -189,7 +189,7 @@ const monetaryNumber=s=>{
  return Number.isFinite(n)?n:null;
 };
 const namedSubject=(p,row)=>{
- const labels=["Vendedor","Farmacia","Proveedor","Producto"];
+ const labels=["Vendedor","Farmacia","Proveedor","Producto","Día","Mes","Año"];
  const named=labels.filter(k=>p.columnas.includes(k)&&row[k]&&
   !/no identificad/i.test(row[k])).map(k=>String(row[k]));
  return named.length?named.join(" · "):null;
@@ -239,7 +239,7 @@ export function verifiedBusinessFacts(p){
    "No existen aumentos o descensos verificables en los grupos comparados."));
  }else{
   const metric=p.columnas.find(c=>["Ventas","Compras","Importe","Unidades","Movimientos",
-   "Stock actual","Capital estimado"].includes(c));
+   "Stock actual","Capital estimado","Margen estimado","Margen estimado (%)"].includes(c));
   if(metric){
    const relevant=rows.map(row=>({row,n:monetaryNumber(row[metric]),nombre:namedSubject(p,row)}))
     .filter(x=>x.n!==null&&x.nombre);

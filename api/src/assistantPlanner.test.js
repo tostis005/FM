@@ -67,7 +67,23 @@ test("Ollama propone plan sin ejecutar SQL; error mantiene respuesta semántica"
  assert.deepEqual(r.consulta.metricas,["importe","unidades","precio_medio"]);
  assert.equal(r.consulta.periodo,"este_mes");
  assert.equal(calls,0,"follow-up reconocido por motor semántico no necesita IA");
- const unresolved=await adaptiveAssistantResolution("¿Cuánto representan las unidades por proveedor este mes?",[],ctx,{now,generate});
- assert.equal(unresolved.estado,"ok");
- assert.equal(unresolved.consulta.fuente,"ventas"===unresolved.consulta.fuente?"ventas":"compras");
+ const family=await adaptiveAssistantResolution("Ventas por familia este mes",[],ctx,{
+  now,generate:async(_question,_history,_context,_results,_url,_model,settings)=>{
+   calls++;
+   assert.equal(settings.format,"json");
+   return JSON.stringify({fuente:"ventas",agrupar:["familia"],
+    metricas:["importe","unidades"],periodo:"este_mes"});
+  }
+ });
+ assert.equal(family.estado,"ok");
+ assert.deepEqual(family.consulta.agrupar,["familia"]);
+ assert.deepEqual(family.consulta.metricas,["importe","unidades"]);
+ assert.equal(calls,1,"se usa planificador para dimensiones que el intérprete omite");
+ const rejected=await adaptiveAssistantResolution("Ventas por familia este mes",[],ctx,{
+  now,generate:async()=>JSON.stringify({fuente:"ventas",metricas:["importe"],
+   agrupar:["untrusted_table"],periodo:"este_mes"})
+ });
+ assert.equal(rejected.consulta.agrupar.includes("familia"),false,
+  "un plan con dimensión ficticia no se ejecuta, se conserva ruta segura");
+
 });

@@ -23,7 +23,7 @@ test("compra sin proveedor: no atribuir a proveedor real ni exponer null",()=>{
  const p=presentSemanticResult({estado:"ok",fuente:"compras",periodo:{desde:"2026-10-01",hasta:"2026-10-22"},
   dimensiones:["proveedor"],metricas:["importe"],filas:[{proveedor:null,importe:"670860.289839"}],
   advertencias:[]});
- assert.deepEqual(p.filas,[{Proveedor:"Proveedor no identificado",Compras:"670860,29 €"}]);
+ assert.deepEqual(p.filas,[{Proveedor:"Proveedor no identificado",Compras:"670.860,29 €"}]);
  assert.ok(p.advertencias.some(x=>x.includes("no permiten un desglose")));
  assert.doesNotMatch(JSON.stringify(p),/null|proveedor":null|farmaciaId/);
  const rendered=renderSemanticMarkdown(p);
@@ -35,7 +35,7 @@ test("vendedores: nombres comerciales visibles, IDs ERP ocultos incluso sin nomb
   metricas:["importe"],limite:30,filas:[
    {farmaciaId:1,farmacia:"Abadía",vendedor:"6",vendedorNombre:"SILVIA RODRIGUEZ",importe:270713.7},
    {farmaciaId:2,farmacia:"Europa",vendedor:"77",vendedorNombre:"77",importe:123}]});
- assert.deepEqual(p.filas[0],{Farmacia:"Abadía",Vendedor:"SILVIA RODRIGUEZ",Ventas:"270713,70 €"});
+ assert.deepEqual(p.filas[0],{Farmacia:"Abadía",Vendedor:"SILVIA RODRIGUEZ",Ventas:"270.713,70 €"});
  assert.equal(p.filas[1].Vendedor,"Vendedor no identificado");
  assert.doesNotMatch(JSON.stringify(p),/"farmaciaId"|"vendedor"|"77"/);
  const short=presentSemanticResult({...{estado:"ok",fuente:"ventas",dimensiones:["vendedor"],

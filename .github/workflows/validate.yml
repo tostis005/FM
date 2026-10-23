@@ -28,6 +28,7 @@ jobs:
           node --test api/src/oauthClients.test.js api/src/oauthFlow.test.js
           node --check api/src/assistant.js
           node --check scripts/benchmark-resumen-mcp.mjs
+          node --check scripts/benchmark-cobertura-mcp.mjs
           node --check api/src/aiMcp.js
           node --test api/src/aiMcp.test.js
           node --check api/src/aiMcpDemo.js

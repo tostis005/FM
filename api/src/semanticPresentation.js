@@ -147,6 +147,8 @@ export function chatWarnings(p){
   output.push("Algunos productos no tienen coste disponible.");
  if(p.columnas?.some(c=>/^Margen estimado/.test(c)))
   output.push("El margen es orientativo: utiliza el coste de compra actual.");
+ if(p.columnas?.includes("Precio medio"))
+  output.push("Precio medio calculado a partir de las ventas y unidades del período, no del PVP actual.");
  return output;
 }
 export function renderSemanticMarkdown(data,{chatMode=false}={}){

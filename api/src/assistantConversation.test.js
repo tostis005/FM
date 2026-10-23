@@ -65,3 +65,31 @@ test("aislamiento por autorización, solo preguntas del usuario; no confiar en e
  ],restricted,{now});
  assert.notEqual(r.estado,"ok","no debe ampliar farmacias a las no autorizadas");
 });
+
+
+test("los seguimientos sobre solares conservan el período y los vendedores",()=>{
+ const first=should(ask("¿Y de solares?","¿Cuánto vendimos por farmacia este mes?"));
+ assert.equal(first.periodo,"este_mes");
+ assert.equal(first.producto,"categoria:solares");
+ assert.deepEqual(first.agrupar,["farmacia"]);
+ const second=should(ask("¿Y el precio medio?","Top 10 productos más vendidos este mes","¿Y de solares?"));
+ assert.equal(second.producto,"categoria:solares");
+ assert.deepEqual(second.metricas,["importe","unidades","precio_medio"]);
+ assert.deepEqual(second.agrupar,["producto"],"mantiene las dimensiones de la consulta original");
+ assert.equal(second.limite,10);
+});
+test("compras: seguimiento de coste medio respeta el proveedor seleccionado",()=>{
+ const c=should(ask("¿Y el precio medio?","¿Cuánto compramos al proveedor Cofares este mes?"));
+ assert.equal(c.fuente,"compras");
+ assert.equal(c.periodo,"este_mes");
+ assert.equal(c.proveedor,"cofares");
+ assert.deepEqual(c.metricas,["importe","unidades","coste_unitario_medio"]);
+});
+test("una farmacia ajena no puede inferirse de una repregunta",()=>{
+ const c=ask("¿Y en Atlantis?","¿Cuánto vendimos en Abadía este mes?");
+ assert.notEqual(c.estado,"ok");
+ const price=ask("¿Y en Atlantis con el precio medio?","¿Cuánto vendimos en Abadía este mes?");
+ assert.notEqual(price.estado,"ok","no confundir una farmacia desconocida con una métrica comercial");
+ const allowed=should(ask("¿Y en Europa?","Ventas en Abadía este mes"));
+ assert.deepEqual(allowed.farmacias,[2]);
+});

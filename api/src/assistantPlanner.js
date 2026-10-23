@@ -67,6 +67,8 @@ export function shouldTryAssistantPlanner(question,resolution){
   const plan=resolution.consulta;
   if(/\bprecios?\b/.test(q)&&plan?.fuente==="ventas"&&
    !plan?.metricas?.includes("precio_medio"))return true;
+  if(/\b(?:coste|precio)(?:s)?\b/.test(q)&&plan?.fuente==="compras"&&
+   !plan?.metricas?.includes("coste_unitario_medio"))return true;
   if(/\bfamilias?\b/.test(q)&&!plan?.agrupar?.includes("familia"))return true;
   if(/\b(?:importe|ventas|euros)\b/.test(q)&&/\bunidades?\b/.test(q)&&
    !["importe","unidades"].every(m=>plan?.metricas?.includes(m)))return true;
@@ -101,6 +103,7 @@ export function plannerPrompt(question,history,ctx,{now=new Date()}={}){
    "Usa SOLO fuentes, dimensiones y métricas del catálogo. No inventes tablas.",
    "Propiedades: fuente, agrupar, metricas, periodo o desde/hasta, producto, proveedor, vendedor, ordenar, limite.",
    "precio_medio significa importe vendido dividido por unidades, no PVP actual.",
+   "coste_unitario_medio es el coste ponderado de recepciones (compras), no el PVP de venta.",
    "Conserva la farmacia, el producto y el período de la pregunta anterior en repreguntas.",
    "No inventes fechas ni filtros. Si no se puede, responde {}."
   ].join(" ")},

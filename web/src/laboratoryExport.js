@@ -14,10 +14,14 @@ export function validateLabPromotion(promo){
   if(!validDate(promo.start)||!validDate(promo.end)||promo.start>promo.end)
     throw new Error("Revisa las fechas de la campaña "+promo.name+" antes de exportarla.");
 }
-export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{}){
+export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{},{pharmacyIds=null}={}){
+  const selected=pharmacyIds===null?null:[...new Set(pharmacyIds.map(String))];
+  if(selected!==null&&(!selected.length||selected.some(id=>!/^[1-9]\d{0,5}$/.test(id))))
+    throw new Error("Selecciona farmacias válidas antes de exportar");
   validateLabPromotion(promo);
   const rows=[];
   const filters={cns:promo.cns,start:promo.start,end:promo.end,
+    ...(selected===null?{}:{columnFilters:{pharmacy:selected}}),
     orderBy:"at",orderDir:"asc"};
   let expected=null;
   for(let offset=0;offset<LAB_EXPORT_MAX_LINES;offset+=LAB_EXPORT_PAGE_SIZE){
@@ -33,6 +37,8 @@ export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{}){
     }else if(expected!==total){
       throw new Error("Las ventas de "+promo.name+" han cambiado durante la exportación. Vuelve a intentarlo.");
     }
+    if(selected!==null&&response.rows.some(row=>!selected.includes(String(row.pharmacyId))))
+      throw new Error("El servidor ha devuelto datos de farmacias no seleccionadas");
     if(response.rows.length>LAB_EXPORT_PAGE_SIZE || rows.length+response.rows.length>expected)
       throw new Error("El servidor ha devuelto una página incorrecta para "+promo.name);
     rows.push(...response.rows);

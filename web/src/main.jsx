@@ -43,6 +43,7 @@ import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
+import {eligiblePromotionLines,promotionTicketPolicy} from "./promotionTicketRules.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
@@ -356,6 +357,7 @@ function App(){
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
   const [labExportBusy,setLabExportBusy]=useState(false);
+  const [labIncludeSeller,setLabIncludeSeller]=useState(false);
   const [toast,setToast]=useState("");
  const [deletingPromoId,setDeletingPromoId]=useState(null);
  const [selectedPromotionIds,setSelectedPromotionIds]=useState([]);
@@ -398,10 +400,8 @@ function App(){
          const segments=[];
          for(const p of data.promos){
            if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(p.end||""))continue;
-           for(let i=0;i<(p.cns||[]).length;i+=100){
-             const cns=p.cns.slice(i,i+100);
-             if(cns.length)segments.push({id:p.id+"__"+i,sourceId:p.id,start:p.start,end:p.end,cns});
-           }
+           if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
+           if((p.cns||[]).length)segments.push(p);
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
@@ -411,7 +411,7 @@ function App(){
          const byPromotion={};
          for(let i=0;i<segments.length;i++){
            const seg=segments[i],partial=results[Math.floor(i/25)]?.sales?.[seg.id]||{};
-           const out=byPromotion[seg.sourceId]||(byPromotion[seg.sourceId]={});
+           const out=byPromotion[seg.id]||(byPromotion[seg.id]={});
            for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
          }
 
@@ -628,6 +628,9 @@ function App(){
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
      return setToast("Introduce el porcentaje de descuento antes de activar");
   if(promoForm.status==="Activa"&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
+   if(promoForm.status==="Activa"&&promoForm.type==="precio_especial"&&
+     (promoForm.specialPrice===""||promoForm.specialPrice==null||!(Number(promoForm.specialPrice)>=0)))
+      return setToast("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
   const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
@@ -746,7 +749,7 @@ function App(){
   try{await exportPromotionExcel(p,pharmaName);setToast("Excel de la promoción descargado");}
   catch(error){console.error(error);setToast("No se pudo generar el Excel");}
  }
- async function exportLabCampaigns(campaigns){
+ async function exportLabCampaigns(campaigns,mode="real"){
   if(labExportBusy)return;
   if(!campaigns.length){setToast("Selecciona alguna campaña para exportar");return;}
   if(salesStatus!=="real"){
@@ -754,8 +757,8 @@ function App(){
     return;
   }
   try{
-    // Validación global previa: no iniciar una exportación parcial.
-    campaigns.forEach(validateLabPromotion);
+    campaigns.forEach(p=>{validateLabPromotion(p);promotionTicketPolicy(p);});
+    if(!effectivePharmacyIds.length)throw Error("Selecciona al menos una farmacia");
   }catch(error){setToast(error.message);return;}
   if(campaigns.length>10&&!window.confirm(
     "¿Preparar "+campaigns.length+" Excel de laboratorio en un ZIP? Puede tardar unos minutos."))return;
@@ -764,23 +767,26 @@ function App(){
     const items=[];
     for(let i=0;i<campaigns.length;i++){
       const promo=campaigns[i];
+      const selectedIds=effectivePharmacyIds.filter(id=>Object.hasOwn(promo.targets||{},id));
+      if(!selectedIds.length)continue;
       setToast("Preparando laboratorio "+(i+1)+"/"+campaigns.length+": "+promo.name);
-      const lines=await readFullLabSales(promo,loadTicketLines);
+      const original=await readFullLabSales(promo,loadTicketLines,()=>{},{pharmacyIds:selectedIds});
+      const lines=eligiblePromotionLines(promo,original,{simulate:mode==="simulated"});
       items.push({promo,lines});
     }
-    // Se descarga cuando todas las promociones se han leído correctamente.
+    if(!items.length)throw Error("No hay farmacias participantes en la selección.");
+    const options={includeSeller:labIncludeSeller,mode};
     if(items.length===1){
-      await exportLabSalesExcel(items[0].promo,items[0].lines);
-      setToast("Excel para laboratorio descargado: "+items[0].promo.name);
+      await exportLabSalesExcel(items[0].promo,items[0].lines,options);
+      setToast("Excel "+(mode==="simulated"?"con promociones aplicadas":"real")+" descargado.");
     }else{
-      await exportLabSalesZip(items);
-      setToast("ZIP para laboratorios descargado: "+items.length+" Excel, uno por campaña.");
+      await exportLabSalesZip(items,options);
+      setToast("ZIP descargado: "+items.length+" Excel de laboratorio.");
     }
   }catch(error){
     setToast("No se pudo exportar para laboratorio: "+(error.message||"Error inesperado"));
   }finally{setLabExportBusy(false);}
  }
-
  function startUser(u){setEditingUser(u?.id||"nuevo");setUserForm(u?{...u,pharmacies:[...u.pharmacies]}:{id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});}
  function saveUser(e) {
   e.preventDefault();if(!userForm.name.trim()||!userForm.email.includes("@"))return setToast("Revisa el nombre y correo");
@@ -1036,12 +1042,23 @@ function App(){
   actions={<div className="campaign-header-actions">
    <button className="btn btn-secondary" onClick={openReportFilters}><Filter size={17}/>
     Filtrar campañas <span className="report-button-count">{reportSelected.length}</span></button>
-   <button className="btn btn-primary" type="button" disabled={!reportSelected.length||labExportBusy}
-    onClick={()=>void exportLabCampaigns(reportSelected)}
-    title="Exportar tickets de cada promoción con el formato del laboratorio">
+   <label className="fm-lab-seller-option">
+    <input type="checkbox" checked={labIncludeSeller} disabled={labExportBusy}
+      onChange={e=>setLabIncludeSeller(e.target.checked)}/> Incluir vendedor
+   </label>
+   <button className="btn btn-secondary" type="button"
+    disabled={!reportFilteredCampaigns.length||!effectivePharmacyIds.length||labExportBusy}
+    onClick={()=>void exportLabCampaigns(reportFilteredCampaigns,"real")}
+    title="Ventas reales de tickets válidos; importes sin modificar">
     {labExportBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<ArrowDownToLine size={17}/>}
-    {labExportBusy?"Preparando Excel…":reportSelected.length===1?"Exportar Excel laboratorio":
-     reportSelected.length?"Exportar "+reportSelected.length+" Excel (ZIP)":"Selecciona campañas"}
+    Exportar real
+   </button>
+   <button className="btn btn-primary" type="button"
+    disabled={!reportFilteredCampaigns.length||!effectivePharmacyIds.length||labExportBusy}
+    onClick={()=>void exportLabCampaigns(reportFilteredCampaigns,"simulated")}
+    title="Importes teóricos aplicando la promoción por ticket">
+    {labExportBusy?<span className="fm-load-spinner" aria-hidden="true"/>:<ArrowDownToLine size={17}/>}
+    Exportar con promociones aplicadas
    </button>
   </div>}/>
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies}
@@ -1194,6 +1211,7 @@ function App(){
    <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></Field>
     <Field label="Tipo de promoción"><select value={promoForm.type||"sin_clasificar"} onChange={e=>setPromoForm({...promoForm,type:e.target.value,discountPercent:PROMOTION_TYPES.find(t=>t.id===e.target.value)?.needsPercent?promoForm.discountPercent:""})}>{PROMOTION_TYPES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&<Field label="Importe de descuento (€)"><input type="number" min="0.01" step="0.01" value={promoForm.discountAmount||""} onChange={e=>setPromoForm({...promoForm,discountAmount:e.target.value})}/></Field>}
+    {promoForm.type==="precio_especial"&&<Field label="Precio especial por unidad (€)"><input type="number" min="0" step="0.01" value={promoForm.specialPrice??""} onChange={e=>setPromoForm({...promoForm,specialPrice:e.target.value})}/></Field>}
     {promoForm.importWarnings?.length>0&&<div className="note data-note"><CircleHelp size={16}/> Pendiente de revisar: {promoForm.importWarnings.join(" · ")}</div>}
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent&&<Field label="Porcentaje de descuento (%)"><input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
    <div className="form-divider"/><div className="field-heading"><div><strong>CNs (6 dígitos)</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}

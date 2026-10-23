@@ -841,3 +841,10 @@ html,body{overflow-x:clip}
 .fm-policy-pharmacy-fields input{width:100%;padding:9px;border:1px solid #cedbd3;border-radius:8px}
 .fm-policy-pharmacy-fields button{grid-column:1/-1;justify-self:start}
 @media(max-width:640px){.fm-policy-pharmacy-fields{grid-template-columns:1fr}}
+
+
+/* Laboratorio: opción consistente con los filtros y los botones de exportación. */
+.fm-lab-seller-option{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+ font-size:12px;font-weight:700;color:#334e45;cursor:pointer}
+.fm-lab-seller-option input{width:16px;height:16px;accent-color:#128867;cursor:pointer}
+.fm-lab-seller-option input:disabled{cursor:not-allowed}

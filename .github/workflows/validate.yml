@@ -32,7 +32,7 @@ jobs:
           node --check api/src/aiMcpDemo.js
           node --test api/src/aiMcpDemo.test.js
           node --check api/src/assistantAnalytics.js
-          node --test api/src/assistant.test.js api/src/assistantSemantic.test.js api/src/assistantStream.test.js api/src/semanticInterpreter.test.js api/src/semanticResolver.test.js api/src/semanticPeriodComparison.test.js api/src/semanticSellerSql.test.js
+          node --test api/src/assistant.test.js api/src/assistantSemantic.test.js api/src/assistantStream.test.js api/src/semanticInterpreter.test.js api/src/semanticResolver.test.js api/src/semanticPresentation.test.js api/src/semanticPeriodComparison.test.js api/src/semanticSellerSql.test.js
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js

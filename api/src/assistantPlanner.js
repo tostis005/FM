@@ -41,7 +41,7 @@ export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Dat
    Object.assign(plan,periodOf(canonical.consulta));
   }
  }
- if(!previous?.consulta?.farmacias&&!/\bfarmacia\b/.test(q))delete plan.farmacias;
+ if(plan.farmacias&&!previous?.consulta?.farmacias&&!/\bfarmacia\b/.test(q))return null;
  if(previous?.consulta?.farmacias&&!/\btodas las farmacias\b/.test(q))
   plan.farmacias=previous.consulta.farmacias;
  // Fechas, nombres y métricas deberán además superar el validador real.

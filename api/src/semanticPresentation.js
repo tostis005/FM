@@ -202,9 +202,15 @@ export function verifiedBusinessFacts(p){
  if(p?.estado!=="ok")return [];
  const rows=p.filas??[],facts=[];
  const unknown=rows.some(r=>r.Proveedor==="Proveedor no identificado");
- if(unknown)facts.push(highlight("proveedor_no_identificado",
-  "Existen compras con proveedor no identificado; no se pueden atribuir a un proveedor concreto.",
-  ["Proveedor no identificado"]));
+ if(unknown){
+  const unknownRow=rows.find(r=>r.Proveedor==="Proveedor no identificado");
+  const amount=unknownRow?.Compras??unknownRow?.Importe;
+  facts.push(highlight("proveedor_no_identificado",
+   "Existen compras con proveedor no identificado"+
+   (amount&&monetaryNumber(amount)!==null?" por "+amount:"")+
+   "; no se pueden atribuir a un proveedor concreto.",
+   ["Proveedor no identificado"],amount?[amount]:[]));
+ }
  if(!rows.length){
   facts.push(highlight("sin_filas","No hay filas verificadas para el período solicitado; esto no equivale a un importe cero."));
   return facts;
@@ -221,12 +227,12 @@ export function verifiedBusinessFacts(p){
   if(top)facts.push(highlight("aumento",
    top.nombre+" registra un aumento de "+top.row.Diferencia+
    (top.pct!==null?" ("+top.row["Variación"]+")":"")+" "+scope+".",
-   [top.nombre], [top.row.Diferencia,top.row["Variación"]]));
+   [top.row.Vendedor??top.row.Farmacia??top.nombre,top.nombre], [top.row.Diferencia,top.row["Variación"]]));
   if(bottom)facts.push(highlight("descenso",
    bottom.nombre+" registra una disminución de ventas, con diferencia "+
    bottom.row.Diferencia+(bottom.pct!==null?" ("+bottom.row["Variación"]+")":"")+
    " "+scope+".",
-   [bottom.nombre],[bottom.row.Diferencia,bottom.row["Variación"]]));
+   [bottom.row.Vendedor??bottom.row.Farmacia??bottom.nombre,bottom.nombre],[bottom.row.Diferencia,bottom.row["Variación"]]));
   if(!top&&!bottom)facts.push(highlight("sin_variaciones",
    "No existen aumentos o descensos verificables en los grupos comparados."));
  }else{
@@ -246,7 +252,7 @@ export function verifiedBusinessFacts(p){
      facts.push(highlight("maximo",
       top.nombre+" registra la mayor cifra de "+measureLabel(metric)+" ("+
        top.row[metric]+") "+scope+".",
-      [top.nombre],[top.row[metric]]));
+      [top.row.Vendedor??top.row.Farmacia??top.nombre,top.nombre],[top.row[metric]]));
     }
    }
   }
@@ -287,7 +293,7 @@ const forbidden=/\b(total(?:es)?|suma|promedio|media|beneficio|rentabilidad|esti
 const causal=/\b(debido\s+a|gracias\s+a|provocad[oa]|causad[oa]|por\s+el\s+motivo)\b/i;
 const trendUp=/\b(aument\w*|creci\w*|subi\w*|increment\w*)\b/i;
 const trendDown=/\b(descend\w*|disminu\w*|baj\w*|cay\w*|descens\w*)\b/i;
-const rank=/\b(lider\w*|encabez\w*|mayor|m[aá]s\s+vend\w*|primero|mejor|superior)\b/i;
+const rank=/\b(lider\w*|encabez\w*|mayor|m[aá]s\s+(?:vend\w*|alt\w*|elevad\w*)|primero|mejor|superior)\b/i;
 export function validateShortSummary(draft,p){
  if(typeof draft!=="string"||p?.estado!=="ok")return null;
  const summary=draft.trim();
@@ -313,10 +319,17 @@ export function validateShortSummary(draft,p){
   if(trendDown.test(normalized))kind=kind?"incompatible":"descenso";
   if(rank.test(normalized))kind=kind?"incompatible":"maximo";
   if(kind){
-   if(kind==="incompatible")return null;
-   const matched=allowCompare.some(f=>f.tipo===kind&&f.nombres.some(name=>
-    normalized.includes(normFact(name))));
-   if(!matched)return null;
+   if(kind==="incompatible"){
+    if(!(trendUp.test(normalized)&&trendDown.test(normalized)&&!rank.test(normalized)))
+     return null;
+    for(const trend of ["aumento","descenso"])
+     if(!allowCompare.some(f=>f.tipo===trend&&f.nombres.some(name=>
+      normalized.includes(normFact(name)))))return null;
+   }else{
+    const matched=allowCompare.some(f=>f.tipo===kind&&f.nombres.some(name=>
+     normalized.includes(normFact(name))));
+    if(!matched)return null;
+   }
   }
  }
  if(p.filas.some(r=>r.Proveedor==="Proveedor no identificado")&&

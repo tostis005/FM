@@ -84,3 +84,4 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    {!mappings.length&&!loading&&<p>Sin correspondencias todavía. Hasta que asignes proveedores, solo aparecerán los medicamentos del maestro AEMPS.</p>}
   </div>
  </section>;
+}

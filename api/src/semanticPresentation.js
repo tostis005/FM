@@ -304,7 +304,8 @@ export function validateShortSummary(draft,p){
  if(/\b(farmaciaId|vendedorNombre|variacion_pct|SQL|JSON|NULL)\b/i.test(summary))return null;
  if(p.filas.length&&/\b(no hay datos|no se proporcionan datos|no hay cifras|no se dispone de datos|no tengo acceso)\b/i.test(summary))
   return null;
- if(forbidden.test(summary)||causal.test(summary))return null;
+ if(forbidden.test(summary)||causal.test(summary)||
+  /\b(mill[oó]n(?:es)?|mil(?:es)?|cientos?|decenas?)\b/i.test(summary))return null;
  const facts=p.hechos??verifiedBusinessFacts(p),text=facts.map(f=>f.texto).join(" ");
  const authorized=quantities(text);
  for(const q of quantities(summary))if(!authorized.some(a=>comparable(a,q)))return null;

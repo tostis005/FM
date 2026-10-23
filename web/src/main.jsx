@@ -628,6 +628,9 @@ function App(){
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
      return setToast("Introduce el porcentaje de descuento antes de activar");
   if(promoForm.status==="Activa"&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
+   if(promoForm.status==="Activa"&&promoForm.type==="precio_especial"&&
+     (promoForm.specialPrice===""||promoForm.specialPrice==null||!(Number(promoForm.specialPrice)>=0)))
+      return setToast("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
   const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
@@ -1208,6 +1211,7 @@ function App(){
    <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></Field>
     <Field label="Tipo de promoción"><select value={promoForm.type||"sin_clasificar"} onChange={e=>setPromoForm({...promoForm,type:e.target.value,discountPercent:PROMOTION_TYPES.find(t=>t.id===e.target.value)?.needsPercent?promoForm.discountPercent:""})}>{PROMOTION_TYPES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&<Field label="Importe de descuento (€)"><input type="number" min="0.01" step="0.01" value={promoForm.discountAmount||""} onChange={e=>setPromoForm({...promoForm,discountAmount:e.target.value})}/></Field>}
+    {promoForm.type==="precio_especial"&&<Field label="Precio especial por unidad (€)"><input type="number" min="0" step="0.01" value={promoForm.specialPrice??""} onChange={e=>setPromoForm({...promoForm,specialPrice:e.target.value})}/></Field>}
     {promoForm.importWarnings?.length>0&&<div className="note data-note"><CircleHelp size={16}/> Pendiente de revisar: {promoForm.importWarnings.join(" · ")}</div>}
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent&&<Field label="Porcentaje de descuento (%)"><input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
    <div className="form-divider"/><div className="field-heading"><div><strong>CNs (6 dígitos)</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}

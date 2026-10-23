@@ -49,7 +49,15 @@ const examples=[
   metricas:["stock_actual","venta_90d","dias_cobertura"],estado_stock:"bajo",
   ordenar:{campo:"dias_cobertura",direccion:"asc"},limite:40}},
  {titulo:"Ventas históricas por año",consulta:{fuente:"ventas",agrupar:["anio"],
-  metricas:["importe","unidades"],periodo:"historico",ordenar:{campo:"anio",direccion:"asc"}}}
+  metricas:["importe","unidades"],periodo:"historico",ordenar:{campo:"anio",direccion:"asc"}}},
+ {titulo:"Compras por proveedor y farmacia este mes",consulta:{fuente:"compras",agrupar:["farmacia","proveedor"],
+  metricas:["importe"],periodo:"este_mes",ordenar:{campo:"importe",direccion:"desc"}}},
+ {titulo:"Importe recibido de un proveedor concreto",consulta:{fuente:"compras",agrupar:["farmacia","proveedor"],
+  metricas:["importe"],periodo:"ultimos_90_dias",proveedor:"Nombre o código del proveedor"}},
+ {titulo:"Ventas de productos solares el año pasado (clasificación aproximada)",consulta:{fuente:"ventas",
+  agrupar:["farmacia"],metricas:["importe"],periodo:"ultimos_365_dias",producto:"categoria:solares"}},
+ {titulo:"Margen estimado en porcentaje por farmacia",consulta:{fuente:"ventas",agrupar:["farmacia"],
+  metricas:["margen_estimado_pct","lineas_con_coste"],periodo:"este_mes"}}
 ];
 // Esquema compartido por ambos servidores MCP; los nombres reales del catálogo
 // son las únicas dimensiones y métricas que pueden incluirse en SQL.
@@ -95,7 +103,20 @@ export function semanticCatalogForContext(ctx){
 export function semanticCatalog(){
  return {
   version:1,modo:"consulta_estructurada",soloLectura:true,
-  descripcion:"La IA elige fuente, dimensiones, métricas y filtros; el servidor genera SQL parametrizado y aislado por cliente. No se ejecuta SQL libre.",
+  descripcion:"La IA elige fuente, dimensiones, métricas y filtros del catálogo. Farmétrica genera SQL parametrizado y limitado al cliente/farmacias permitidas. No se ejecuta SQL libre.",
+  mapa_relaciones:{
+   ventas:"fm_ventas_analitica: fecha, farmacia_codigo, articulo_id, vendedor_id, unidades, importe. Farmacia + vendedor_id identifica al vendedor; artículo + farmacia resuelve catálogo/coste PMC actual.",
+   compras:"fm_recepciones_analitica: fecha, farmacia_codigo, articulo_id, proveedor_id, unidades, importe. proveedor_nombre puede ser NULL permanente; agrupar por farmacia y proveedor_id, resolver el nombre en (farmacia_codigo, origen_id) del maestro proveedores o en proveedores_maestro del mismo tenant.",
+   stock:"articulos: farmacia_codigo, origen_id, nombre, familia, codigo_nacional, stock_actual, pmc, puc; stock actual no admite fecha histórica."
+  },
+  interpretacion:{
+   fechas:"Períodos relativos según Europe/Madrid o fechas ISO desde/hasta. Para los últimos N días use fechas explícitas calculadas por la IA.",
+   solares:"producto=categoria:solares busca solar/fotoprotector/SPF en nombre de artículo; resultado aproximado, no clasificación garantizada por familia.",
+   gasto:"Compras equivale a importes documentados de recepciones; no es gasto contable fiscal.",
+   margen:"margen_estimado y margen_estimado_pct usan coste PMC ACTUAL por línea con coste disponible, NO ventas menos compras del período ni beneficio neto.",
+   privacidad:"No se devuelve un esquema privado ni se permite SQL arbitrario, DDL, DML, funciones o columnas no catalogadas.",
+   avanzado:"Si resolver_pregunta devuelve aclaracion o no_disponible, una IA avanzada puede usar consultar_semantica con un plan de consulta admitido. Nunca redactar SQL libre."
+  },
   fuentes:Object.fromEntries(Object.keys(DIMENSIONS).map(k=>[k,{
    descripcion:k==="ventas"?"Ventas por farmacia, producto, vendedor y período":
     k==="compras"?"Recepciones por farmacia, proveedor, artículo y período":
@@ -105,13 +126,13 @@ export function semanticCatalog(){
   }])),
   parametros:{
    fuente:"ventas | compras | stock",
-   agrupar:"Array de 0 a 3 dimensiones permitidas para la fuente. Si se agrupa por vendedor en varias farmacias, el servidor añade farmacia automáticamente (máximo tres dimensiones).",
+   agrupar:"Array de 0 a 3 dimensiones permitidas por fuente. Para vendedor o proveedor en varias farmacias se añade farmacia automáticamente para no mezclar IDs ERP.",
    metricas:"Array de 1 a 5 métricas permitidas para la fuente.",
    periodo:"hoy | ayer | esta_semana | semana_pasada | este_mes | mes_pasado | este_anio | historico | ultimos_7_dias | ultimos_30_dias | ultimos_90_dias | ultimos_365_dias",
    desde:"AAAA-MM-DD; con hasta; puede ser cualquier año disponible.",
    hasta:"AAAA-MM-DD; con desde; puede ser cualquier año disponible.",
    farmacias:"IDs autorizados; omitir para todas las farmacias del enlace.",
-   producto:"Cadena de texto con parte del nombre, CN o identificador ERP (máximo 80 caracteres).",
+   producto:"Parte del nombre, CN o ID de artículo. categoria:solares activa sinónimos comerciales aproximados (máximo 80 caracteres).",
    vendedor:"Identificador del vendedor (máximo 80 caracteres).",
    proveedor:"Nombre o código del proveedor, siempre aislado por farmacia y cliente (máximo 80 caracteres).",
    estado_stock:"agotado | bajo | sin_ventas; solo fuente stock.",

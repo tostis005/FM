@@ -33,6 +33,10 @@ function continueFrom(previous,question,ctx,now){
   (hasPeriod?"":" "+periodText(prior)),ctx,{now});
  if(probe.estado!=="ok")return null;
  const candidate=probe.consulta;
+ // No sustituir silenciosamente una farmacia nombrada por la anterior si
+ // el nombre no pertenece a las farmacias autorizadas para este usuario.
+ const namedPharmacy=/\b(?:en|de|para)\s+(?!el\b|la\b|los\b|las\b|este\b|esta\b|un\b|una\b|mes\b|ano\b|anio\b|hoy\b|ayer\b)([a-z][a-z0-9-]*)\b/.test(fragment);
+ if(namedPharmacy&&!candidate.farmacias&&!/\bproveedor\b/.test(fragment))return null;
  const changedPeriod=hasPeriod?periodOf(candidate):periodOf(prior);
  const merged={...prior,
   fuente:source,

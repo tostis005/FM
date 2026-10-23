@@ -126,6 +126,8 @@ export function presentSemanticResult(data,{maxRows=100}={}){
  const result={estado:"ok",titulo:titleFor(data,dims),
   ...(dateRange?{periodo:dateRange}:{}),...(comparacion?{comparacion}:{}),
   columnas:columns,filas:rows,advertencias:[...notes]};
+ // Evidencia pública sin ID ERP, precomputada una única vez.
+ result.hechos=verifiedBusinessFacts(result);
  return result;
 }
 export function renderSemanticMarkdown(data){
@@ -272,7 +274,7 @@ export const SHORT_SUMMARY_SYSTEM=[
 ].join(" ");
 export function shortSummaryContext(p){
  if(p?.estado!=="ok")return null;
- return {titulo:p.titulo,hechos:verifiedBusinessFacts(p),
+ return {titulo:p.titulo,hechos:p.hechos??verifiedBusinessFacts(p),
   ...(p.periodo?{periodo:p.periodo}:{}),
   ...(p.comparacion?{periodos:{
    anterior:p.comparacion.anterior,actual:p.comparacion.actual}}:{}),
@@ -303,7 +305,7 @@ export function validateShortSummary(draft,p){
  if(p.filas.length&&/\b(no hay datos|no se proporcionan datos|no hay cifras|no se dispone de datos|no tengo acceso)\b/i.test(summary))
   return null;
  if(forbidden.test(summary)||causal.test(summary))return null;
- const facts=verifiedBusinessFacts(p),text=facts.map(f=>f.texto).join(" ");
+ const facts=p.hechos??verifiedBusinessFacts(p),text=facts.map(f=>f.texto).join(" ");
  const authorized=quantities(text);
  for(const q of quantities(summary))if(!authorized.some(a=>comparable(a,q)))return null;
  const leftover=summary.replace(quantityPattern," ");
@@ -341,7 +343,7 @@ export function validateShortSummary(draft,p){
 export function composeOfficialSemanticAnswer(p,draft){
  const table=renderSemanticMarkdown(p);
  const verified=validateShortSummary(draft,p);
- const facts=verifiedBusinessFacts(p);
+ const facts=p.hechos??verifiedBusinessFacts(p);
  const fallback=facts.length?facts.map(f=>f.texto).slice(0,2).join(" "):
   "Estos son los datos verificados por Farmétrica.";
  return "**Resumen:** "+(verified||fallback)+"\n\n"+table;

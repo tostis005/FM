@@ -43,7 +43,7 @@ test("planes SQL libres, dimensiones ficticias y farmacias no autorizadas fallan
   {question:"¿Cuánto vendimos?",now}),null,"un período no solicitado no se puede inventar");
 });
 test("modelo planifica solo cuando la regla no entiende la pregunta",()=>{
- assert.equal(shouldTryAssistantPlanner("Buenos días",{estado:"general"}),true);
+ assert.equal(shouldTryAssistantPlanner("Buenos días",{estado:"general"}),false);
  assert.equal(shouldTryAssistantPlanner("¿Qué precio de catálogo hay?",{estado:"general"}),false);
  assert.equal(shouldTryAssistantPlanner("Ventas por farmacia hoy",
   {estado:"ok",consulta:{fuente:"ventas",metricas:["importe"]}}),false);

@@ -69,8 +69,12 @@ function mergeComparedRows(previous,current,{metrica,dimensiones,direccion}){
    variacion_pct:a===0?null:round2((b-a)/Math.abs(a)*100),
    estado:"completo"});
  }
- rows.sort((a,b)=>(direccion==="asc"?a.diferencia-b.diferencia:b.diferencia-a.diferencia)||
-  groupingKey(a,dimensiones).localeCompare(groupingKey(b,dimensiones)));
+ rows.sort((a,b)=>{
+  if(a.diferencia===null)return b.diferencia===null?0:1;
+  if(b.diferencia===null)return -1;
+  return (direccion==="asc"?a.diferencia-b.diferencia:b.diferencia-a.diferencia)||
+   groupingKey(a,dimensiones).localeCompare(groupingKey(b,dimensiones));
+ });
  return {estado:"ok",filas:rows.slice(0,30),total_grupos:rows.length};
 }
 export async function executeResolvedQuestion(pool,ctx,resolution){
@@ -85,12 +89,17 @@ export async function executeResolvedQuestion(pool,ctx,resolution){
  const after=await runSemanticQuery(pool,ctx,comparacion.actual);
  const merged=mergeComparedRows(before.filas,after.filas,comparacion);
  if(merged.estado!=="ok")return {...merged,version:resolution.version};
+ const days=p=>(Date.parse(p.hasta+"T00:00:00Z")-Date.parse(p.desde+"T00:00:00Z"))/86400000+1;
+ const daysNow=days(after.periodo),daysBefore=days(before.periodo);
  return {...resolution,modo:"comparacion_semantica",origen:"PostgreSQL",ficticio:false,
   ...merged,comparacion:{version:comparacion.version,tipo:comparacion.tipo,
    metrica:comparacion.metrica,dimensiones:comparacion.dimensiones,
    anterior:before.periodo,actual:after.periodo,
+   dias_actual:daysNow,dias_anterior:daysBefore,
    unidad:comparacion.metrica==="importe"?"EUR":comparacion.metrica==="unidades"?"unidades":"movimientos"},
   advertencias:[...new Set([...before.advertencias,...after.advertencias,
+   ...(daysNow!==daysBefore?["Períodos de distinta duración ("+daysNow+
+    " frente a "+daysBefore+" días). Totales no normalizados por día."]:[]),
    "Un grupo ausente no se interpreta como importe cero: sus variaciones quedan sin calcular.",
    "Variación porcentual NULL cuando el período anterior es cero o no hay base comparable."])],
   farmacias_autorizadas:after.farmacias_autorizadas};
@@ -118,5 +127,7 @@ export function formatComparisonAnswer(data){
    " (diferencia "+(row.diferencia>0?"+":"")+format(row.diferencia)+", "+pct+").";
  });
  return periods+". Métrica: "+metrica+".\n"+lines.join("\n")+
- (data.total_grupos>10?"\nSe muestran 10 de "+data.total_grupos+" grupos.":"");
+ (data.total_grupos>10?"\nSe muestran 10 de "+data.total_grupos+" grupos.":"")+
+ (data.comparacion.dias_actual!==data.comparacion.dias_anterior?
+  "\nAtención: períodos de distinta duración; los totales no están normalizados.":"");
 }

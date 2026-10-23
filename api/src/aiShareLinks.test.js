@@ -237,7 +237,7 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  const data=compileSemanticQuery(sales,ctx);
  assert.match(data.sql,/fm_ventas_analitica/);
  assert.match(data.sql,/vendedor/);
- assert.match(data.sql,/b\.farmacia_id AS "farmaciaId"/);
+ assert.match(data.sql,/(?:b\.farmacia_id|f\.id) AS "farmaciaId"/);
  assert.match(data.sql,/READ ONLY|SELECT/);
  assert.match(data.sql,/f\.cliente_slug=\$4/);
  assert.match(data.sql,/f\.id=ANY\(\$3::int\[\]\)/);
@@ -249,8 +249,8 @@ test("Catálogo semántico SQL controlado: vendedores, productos, stock e histó
  const annualSellers=compileSemanticQuery({fuente:"ventas",agrupar:["vendedor"],
   metricas:["importe"],periodo:"este_anio",ordenar:{campo:"importe",direccion:"desc"}},ctx);
  assert.deepEqual(annualSellers.q.dims,["farmacia","vendedor"]);
- assert.match(annualSellers.sql,/GROUP BY b\.farmacia_id,b\.farmacia,b\.vendedor/);
- assert.match(annualSellers.sql,/b\.farmacia_id AS "farmaciaId"/);
+ assert.match(annualSellers.sql,/GROUP BY (?:b\.farmacia_id,b\.farmacia,b\.vendedor|f\.id,f\.nombre,nullif\(btrim\(t\.vendedor_id::text\))/);
+ assert.match(annualSellers.sql,/(?:b\.farmacia_id|f\.id) AS "farmaciaId"/);
  assert.match(annualSellers.params[0],/^20\d{2}-01-01$/);
  assert.throws(()=>validateSemanticQuery({fuente:"ventas",agrupar:["vendedor","dia","mes"],
   metricas:["importe"],periodo:"este_anio"},ctx),/incluye farmacia/);

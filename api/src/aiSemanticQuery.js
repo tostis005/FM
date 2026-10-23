@@ -248,8 +248,8 @@ function baseSql(source,schema,params,where,needsArticle){
    AND a.origen_id=t.articulo_id LIMIT 1
  ) a ON true`;
  if(source!=="stock"){
-  where.push("($1::date IS NULL OR t.fecha >= $1::date)");
-  where.push("($2::date IS NULL OR t.fecha < ($2::date+interval '1 day'))");
+  if(params[0]!==null)where.push("t.fecha >= $1::date");
+  if(params[1]!==null)where.push("t.fecha < ($2::date+interval '1 day')");
   const estimated=needsArticle?
    "CASE WHEN a.pmc>0 AND t.importe IS NOT NULL AND t.unidades IS NOT NULL THEN t.importe-t.unidades*a.pmc END":
    "NULL::numeric";
@@ -290,10 +290,44 @@ function baseSql(source,schema,params,where,needsArticle){
    WHERE ${where.join(" AND ")}`;
  return `WITH sold AS (${sold}), inventory AS (${base}) SELECT * FROM inventory`;
 }
+
+// Agrupación de vendedores histórica: evita proyecciones ajenas a la consulta.
+function compileSellerSales(q,schema,params){
+ if(q.source!=="ventas"||q.dims.join(",")!=="farmacia,vendedor"||
+    q.metrics.some(m=>!["importe","unidades","movimientos"].includes(m))||
+    q.producto!==undefined||q.proveedor!==undefined||q.estadoStock!==undefined||
+    q.dates.desde===null||q.dates.hasta===null)return null;
+ const expressions={
+  importe:"coalesce(sum(t.importe),0)::float8",
+  unidades:"coalesce(sum(t.unidades),0)::float8",
+  movimientos:"count(*)::int"
+ };
+ const metrics=q.metrics.map(m=>expressions[m]+' AS "'+m+'"').join(", ");
+ const where=["f.id=ANY($3::int[])","t.fecha >= $1::date",
+  "t.fecha < ($2::date + interval '1 day')"];
+ if(q.vendedor!==undefined){
+  params.push(q.vendedor.trim());
+  where.push("t.vendedor_id::text=$"+params.length);
+ }
+ params.push(q.limit);
+ const sql='SELECT f.id AS "farmaciaId", f.nombre AS "farmacia", '+
+  'nullif(btrim(t.vendedor_id::text), \'\') AS "vendedor", '+metrics+
+  ' FROM '+schema+'.fm_ventas_analitica t '+
+  'JOIN farmetrica.farmacias f ON f.cliente_slug=$4 '+
+  'AND upper(btrim(t.farmacia_codigo))='+code+
+  ' WHERE '+where.join(" AND ")+
+  ' GROUP BY f.id,f.nombre,nullif(btrim(t.vendedor_id::text), \'\')'+
+  ' ORDER BY "'+q.order.campo+'" '+q.order.direccion.toUpperCase()+
+  ' NULLS LAST LIMIT $'+params.length+'::int';
+ return {sql,params,q};
+}
+
 export function compileSemanticQuery(input,context){
  const q=validateSemanticQuery(input,context);
  const schema=quoteSchema(context.client.schema);
  const params=[q.dates.desde,q.dates.hasta,q.ids,context.client.slug];
+ const seller=compileSellerSales(q,schema,params);
+ if(seller)return seller;
  let where=["f.id=ANY($3::int[])"];
  if(q.producto!==undefined){
   params.push("%"+q.producto.trim()+"%");
@@ -348,7 +382,10 @@ export async function runSemanticQuery(pool,context,input){
  const {sql,params,q}=compileSemanticQuery(input,context);
  if(!q.ids.length)return {fuente:q.source,periodo:q.dates,filas:[],advertencias:WARNINGS[q.source]};
  const result=await readOnly(pool,async db=>{
-  await db.query("SET LOCAL statement_timeout='12000ms'");
+  await db.query(q.source==="ventas"&&q.dims.includes("vendedor")&&
+   (q.dates.desde===null||q.dates.hasta===null||
+    Date.parse(q.dates.hasta)-Date.parse(q.dates.desde)>90*86400000)?
+   "SET LOCAL statement_timeout='24000ms'":"SET LOCAL statement_timeout='12000ms'");
   return db.query(sql,params);
  });
  let rows=result.rows;

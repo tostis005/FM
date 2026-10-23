@@ -43,6 +43,8 @@ jobs:
           node --test api/src/supplierReporting.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
+          node --check api/src/laboratoryCatalog.js
+          node --test api/src/laboratoryCatalog.test.js
           node --test api/src/stockTargetDays.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
@@ -153,6 +155,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/003_multitenant.sql
           psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql
           psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
+          psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
+          psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
           psql_test --single-transaction < api/src/migrations/012_analisis_ventas_cliente.sql
           psql_test --single-transaction < api/src/migrations/013_accesos_locales.sql

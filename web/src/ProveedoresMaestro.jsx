@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {Plus,X} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
+import SupplierLaboratoryMappings from "./SupplierLaboratoryMappings.jsx";
 import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
@@ -77,6 +78,7 @@ export default function ProveedoresMaestro({clientSlug}){
         onChange={e=>{e.stopPropagation();void changeFlag(r,"ignoreReports",e.target.checked)}}/>},
      ]}/>
    </section>
+   <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
    {form&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setForm(null)}}>
     <div className="fm-demo-detail fm-provider-dialog" role="dialog" aria-modal="true" aria-label={form.id?"Editar proveedor":"Nuevo proveedor"}>

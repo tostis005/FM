@@ -472,7 +472,7 @@ export default function AsistenteDemo({ section = "Dashboard" }) {
                   <div><h1 id="fm-ai-title">Asistente</h1><p>Tu espacio de análisis en lenguaje natural</p></div>
                 </div>
                 <div className="fm-ai-top-actions">
-                  <span className="fm-ai-demo-status"><span/> {assistantStatus?.enabled?"Conectado":"Por activar"}</span>
+                  <span className="fm-ai-demo-status"><span/> {assistantStatus?.enabled?`Conectado · ${assistantStatus.model==="qwen3:0.6b"?"Qwen3 0.6B":assistantStatus.model||"modelo local"}`:assistantStatus?.configured?"Modelo no disponible":"Por activar"}</span>
                   <button type="button" className="fm-ai-icon-btn fm-ai-mobile-new" title="Nueva conversación" aria-label="Nueva conversación" onClick={newConversation}><RotateCcw size={19}/></button>
                   <button type="button" className="fm-ai-icon-btn" aria-label="Cerrar asistente" title="Cerrar asistente" onClick={closeAssistant}><X size={22}/></button>
                 </div>

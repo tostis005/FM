@@ -21,7 +21,7 @@ const groupingKey=(row,dims)=>{
   throw new TypeError("El resultado no contiene todas las dimensiones solicitadas");
  return JSON.stringify([
   ...(dims.includes("farmacia")?[Number(row.farmaciaId)]:[]),
-  ...dims.map(d=>row[d])
+  ...dims.map(d=>d==="proveedor"?(row.proveedorCodigo??row.proveedor):row[d])
  ]);
 };
 function indexGroups(rows,dims){
@@ -56,6 +56,7 @@ function mergeComparedRows(previous,current,{metrica,dimensiones,direccion}){
   for(const dim of dimensiones)values[dim]=(after||before)?.[dim]??null;
   if(dimensiones.includes("farmacia"))values.farmaciaId=(after||before)?.farmaciaId??null;
   if(dimensiones.includes("vendedor"))values.vendedorNombre=(after||before)?.vendedorNombre??null;
+  if(dimensiones.includes("proveedor"))values.proveedorCodigo=(after||before)?.proveedorCodigo??null;
   // Una fila ausente no demuestra un cero contable: evitar una variación
   // inventada, incluso cuando una farmacia aparece en otro período.
   if(!before||!after){
@@ -87,13 +88,15 @@ export async function executeResolvedQuestion(pool,ctx,resolution){
  // Las dos consultas permanecen aisladas por tenant y validadas individualmente.
  const before=await runSemanticQuery(pool,ctx,comparacion.anterior);
  const after=await runSemanticQuery(pool,ctx,comparacion.actual);
- const merged=mergeComparedRows(before.filas,after.filas,comparacion);
+ const accurateDimensions=after.dimensiones??comparacion.dimensiones;
+ const merged=mergeComparedRows(before.filas,after.filas,{...comparacion,
+  dimensiones:accurateDimensions});
  if(merged.estado!=="ok")return {...merged,version:resolution.version};
  const days=p=>(Date.parse(p.hasta+"T00:00:00Z")-Date.parse(p.desde+"T00:00:00Z"))/86400000+1;
  const daysNow=days(after.periodo),daysBefore=days(before.periodo);
  return {...resolution,modo:"comparacion_semantica",origen:"PostgreSQL",ficticio:false,
   ...merged,comparacion:{version:comparacion.version,tipo:comparacion.tipo,
-   metrica:comparacion.metrica,dimensiones:comparacion.dimensiones,
+   metrica:comparacion.metrica,dimensiones:accurateDimensions,
    anterior:before.periodo,actual:after.periodo,
    dias_actual:daysNow,dias_anterior:daysBefore,
    unidad:comparacion.metrica==="importe"?"EUR":comparacion.metrica==="unidades"?"unidades":"movimientos"},

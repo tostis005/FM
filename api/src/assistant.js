@@ -126,7 +126,7 @@ export async function adaptiveAssistantResolution(question,history,context,{
    ollama(),model(),{numPredict:230,format:"json",
     planMessages:plannerPrompt(question,history,context,{now}),signal});
   const query=parseProposedPlan(draft,context,{
-   question,previous:previousResolvedQuestion(history,context,{now}),now});
+   question,previous:previousResolvedQuestion(history,context,{now}),baseline,now});
   if(!query)return baseline;
   return {version:"farmetrica.nl.plan.v1",estado:"ok",
    mensaje:"Consulta planificada con el catálogo de Farmétrica.",

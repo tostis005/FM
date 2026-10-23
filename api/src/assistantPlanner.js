@@ -15,7 +15,7 @@ const SOURCE={
 };
 const periodOf=p=>Object.fromEntries(["periodo","desde","hasta"].filter(k=>p?.[k]!==undefined)
  .map(k=>[k,p[k]]));
-export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Date()}={}){
+export function parseProposedPlan(raw,ctx,{question="",previous=null,baseline=null,now=new Date()}={}){
  if(typeof raw!=="string"||raw.length>5000)return null;
  let proposal;
  try{proposal=JSON.parse(raw);if(proposal?.consulta)proposal=proposal.consulta}
@@ -27,6 +27,7 @@ export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Dat
  if(sources.length>1||sources.length===1&&proposal.fuente!==sources[0])return null;
  if(sources.length===0&&previous?.consulta&&proposal.fuente!==previous.consulta.fuente)return null;
  const plan={...proposal};
+ if(baseline?.estado==="ok"&&baseline.consulta?.fuente!==plan.fuente)return null;
  if(/\bfamilias?\b/.test(q)&&!plan.agrupar?.includes("familia"))return null;
  const previousPeriod=periodOf(previous?.consulta);
  if(!TIME.test(q)){
@@ -39,11 +40,22 @@ export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Dat
   if(canonical.estado==="ok"&&canonical.consulta?.fuente===plan.fuente){
    delete plan.periodo;delete plan.desde;delete plan.hasta;
    Object.assign(plan,periodOf(canonical.consulta));
-  }
+  }else return null; // No usar un período adivinado por la IA.
  }
  if(plan.farmacias&&!previous?.consulta?.farmacias&&!/\bfarmacia\b/.test(q))return null;
  if(previous?.consulta?.farmacias&&!/\btodas las farmacias\b/.test(q))
   plan.farmacias=previous.consulta.farmacias;
+ // Heredar SIEMPRE los filtros que el intérprete ya ha entendido en la
+ // pregunta actual; un plan alternativo nunca debe ampliar su alcance.
+ if(baseline?.estado==="ok"){
+  for(const key of ["farmacias","producto","proveedor","vendedor"])
+   if(baseline.consulta[key]!==undefined)plan[key]=baseline.consulta[key];
+ }
+ if(previous?.consulta?.fuente===plan.fuente){
+  for(const key of ["producto","proveedor","vendedor"])
+   if(previous.consulta[key]!==undefined&&plan[key]===undefined)
+    plan[key]=previous.consulta[key];
+ }
  // Fechas, nombres y métricas deberán además superar el validador real.
  try{validateSemanticQuery(plan,ctx)}catch{return null}
  return plan;
@@ -76,7 +88,9 @@ export function plannerPrompt(question,history,ctx,{now=new Date()}={}){
  const context={
   fecha_madrid:new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Madrid",year:"numeric",
    month:"2-digit",day:"2-digit"}).format(now),
-  fuentes:sources,pregunta:question.slice(0,1000),preguntas_anteriores:recent,
+  fuentes:sources,relaciones:catalog.mapa_relaciones,
+  reglas_de_negocio:catalog.interpretacion,
+  pregunta:question.slice(0,1000),preguntas_anteriores:recent,
   ejemplo:{fuente:"ventas",agrupar:["farmacia","producto"],
    metricas:["unidades","importe","precio_medio"],periodo:"este_mes",
    ordenar:{campo:"unidades",direccion:"desc"},limite:20}

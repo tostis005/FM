@@ -49,6 +49,8 @@ test("modelo planifica solo cuando la regla no entiende la pregunta",()=>{
   {estado:"ok",consulta:{fuente:"ventas",metricas:["importe"]}}),false);
  const prompt=plannerPrompt("Precio medio de ventas por producto este mes",[],ctx,{now});
  assert.ok(prompt[1].content.includes("precio_medio"));
+ assert.ok(prompt[1].content.includes("fm_ventas_analitica"));
+ assert.ok(prompt[1].content.includes("fm_recepciones_analitica"));
  assert.ok(!prompt[1].content.includes("clientes no autorizados"));
 });
 test("Ollama propone plan sin ejecutar SQL; error mantiene respuesta semántica",async()=>{
@@ -86,4 +88,20 @@ test("Ollama propone plan sin ejecutar SQL; error mantiene respuesta semántica"
  assert.equal(rejected.consulta.agrupar.includes("familia"),false,
   "un plan con dimensión ficticia no se ejecuta, se conserva ruta segura");
 
+});
+
+test("el modelo no puede quitar farmacia ni producto entendidos por las reglas",()=>{
+ const baseline={estado:"ok",consulta:{fuente:"ventas",agrupar:["farmacia"],
+  metricas:["importe"],periodo:"este_mes",farmacias:[1],producto:"categoria:solares"}};
+ const proposed=JSON.stringify({fuente:"ventas",agrupar:["farmacia","producto"],
+  metricas:["unidades","importe","precio_medio"],periodo:"este_mes"});
+ const plan=parseProposedPlan(proposed,ctx,{question:"Ventas solares por familia este mes",
+  baseline,now});
+ assert.equal(plan,null,"pedir familia exige incluir dimensión familia");
+ const good=parseProposedPlan(JSON.stringify({fuente:"ventas",agrupar:["farmacia","familia"],
+  metricas:["unidades","importe"],periodo:"este_mes"}),ctx,
+  {question:"Ventas solares por familia este mes",baseline,now});
+ assert.deepEqual(good?.farmacias,[1]);
+ assert.equal(good?.producto,"categoria:solares");
+ assert.equal(good?.fuente,"ventas");
 });

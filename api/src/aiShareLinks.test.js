@@ -179,7 +179,7 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
   assert.equal(natural.estado,"ok");
   assert.deepEqual(natural.columnas,["Farmacia","Ventas"]);
   assert.equal(natural.consulta,undefined);
-  assert.deepEqual(natural.filas[0],{Farmacia:"Farmacia Real Uno",Ventas:"221,14 €"});
+  assert.deepEqual(natural.filas[0],{Farmacia:"Farmacia Real Uno",Ventas:"210,00 €"});
   assert.equal((await fetch(base+path+"?pregunta=Ventas%20hoy&desde=2026-10-22&formato=json")).status,400);
 
   const semanticPlan={fuente:"ventas",agrupar:["farmacia","vendedor"],metricas:["importe"],

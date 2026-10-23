@@ -86,6 +86,9 @@ export const loadPromotionSales = (promotions) => request("/api/ventas/seguimien
   method: "POST",
   body: JSON.stringify({ promotions: promotions.map(p => ({
     id: String(p.id), start: p.start, end: p.end, cns: p.cns || [],
+    type:p.type||"sin_clasificar",discountPercent:p.discountPercent,
+    discountAmount:p.discountAmount,specialPrice:p.specialPrice,
+    formula:p.formula,originalOffer:p.originalOffer,description:p.description,name:p.name,
   })) }),
 });
 

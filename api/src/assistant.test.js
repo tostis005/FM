@@ -37,10 +37,17 @@ test("esquemas estrictos, fechas limitadas y selección de herramientas restring
  const d=periodFromQuestion("ayer",new Date("2026-10-19T13:00:00Z"));
  assert.equal(d.from,"2026-10-18");
 });
-test("limita el número de preguntas",()=>{
+test("el piloto admite 100 preguntas cada 10 minutos y el cupo caduca",()=>{
  const key="isolated-test:limit";
- for(let i=0;i<8;i++)assert.equal(rateCheck(key,1000+i),true);
- assert.equal(rateCheck(key,1010),false);
+ for(let i=0;i<100;i++)assert.equal(rateCheck(key,1000+i),true,"consulta "+i);
+ assert.equal(rateCheck(key,1100),false);
+ assert.equal(rateCheck(key,601000),true,"tras 10 minutos debe recuperarse el cupo");
+});
+test("el dictado conserva un límite de 8 peticiones independiente de chat",()=>{
+ const key="isolated-test:voice";
+ for(let i=0;i<8;i++)assert.equal(rateCheck(key,1000+i,8),true);
+ assert.equal(rateCheck(key,1010,8),false);
+ assert.equal(rateCheck(key,601000,8),true);
 });
 
 test("busca farmacias solo entre las autorizadas",()=>{

@@ -158,8 +158,8 @@ export function setupAssistant(app,pool,{requireTenant}) {
   try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:undefined);}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
   const key=req.context.client.slug+":"+req.user.email;
-  if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});
   if(active>=1)return res.status(429).json({error:"El asistente está ocupado. Prueba de nuevo en unos momentos"});
+  if(!rateCheck(key))return res.status(429).json({error:"Se ha alcanzado el límite temporal de consultas de esta sesión. Inténtalo más tarde."});
   active+=1;
   let stopHeartbeat=()=>{};
   try{
@@ -211,8 +211,8 @@ export function setupAssistant(app,pool,{requireTenant}) {
   try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:undefined);}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
   const key=req.context.client.slug+":"+req.user.email;
-  if(!rateCheck(key))return res.status(429).json({error:"Has realizado muchas consultas. Inténtalo dentro de unos minutos"});
   if(active>=1)return res.status(429).json({error:"El asistente está ocupado. Prueba de nuevo en unos momentos"});
+  if(!rateCheck(key))return res.status(429).json({error:"Se ha alcanzado el límite temporal de consultas de esta sesión. Inténtalo más tarde."});
   active+=1;
   const controller=new AbortController();
   const abort=()=>controller.abort();
@@ -284,7 +284,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   if(active>=1)return res.status(429).json({error:"La IA está ocupada. Repite el dictado más tarde"});
   if(!Buffer.isBuffer(req.body)||req.body.length<512||req.body.length>6*1024*1024)
    return res.status(400).json({error:"Archivo de audio inválido"});
-  if(!rateCheck(req.context.client.slug+":"+req.user.email+":voz"))
+  if(!rateCheck(req.context.client.slug+":"+req.user.email+":voz",Date.now(),8))
    return res.status(429).json({error:"Demasiadas transcripciones seguidas"});
   let directory;active+=1;
   try{

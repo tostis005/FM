@@ -8,10 +8,19 @@ export function validateAssistantBody(body){
  body.pharmacyIds.some(x=>!Number.isInteger(x)))))return null;
  return {question:body.question.trim(),history:body.history,pharmacyIds:body.pharmacyIds||[]};
 }
-export function rateCheck(key,now=Date.now()){
- const previous=(limits.get(key)||[]).filter(x=>now-x<10*60*1000);
- if(previous.length>=8)return false;
+// Piloto autenticado: capacidad para conversaciones largas, sin bloqueo tras 8 turnos.
+// El límite mantiene el backend protegido, es configurable y tiene tope seguro.
+export function assistantRateLimit(){
+ const value=Number(process.env.AI_RATE_LIMIT_PER_10M);
+ return Number.isInteger(value)&&value>=8&&value<=300?value:100;
+}
+export function rateCheck(key,now=Date.now(),maximum=assistantRateLimit()){
+ const max=Number.isInteger(maximum)&&maximum>0?maximum:assistantRateLimit();
+ const windowMs=10*60*1000;
+ const previous=(limits.get(key)||[]).filter(x=>now-x<windowMs);
+ if(previous.length>=max){limits.set(key,previous);return false;}
  previous.push(now);limits.set(key,previous);
- if(limits.size>1000)for(const [k,values] of limits)if(now-values.at(-1)>10*60*1000)limits.delete(k);
+ if(limits.size>1000)for(const [k,values] of limits)
+  if(!values.length||now-values.at(-1)>=windowMs)limits.delete(k);
  return true;
 }

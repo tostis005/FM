@@ -61,6 +61,8 @@ export function shouldTryAssistantPlanner(question,resolution){
   return false;
  }
  if(!["general","aclaracion","no_disponible"].includes(resolution?.estado))return false;
+ if(resolution.estado==="general"&&
+  !/\b(ventas?|vendid[oa]s?|precios?|costes?|productos?|familias?|compras?|proveedores?|stock|existencias?|facturac\w*|margen)\b/.test(q))return false;
  if(/\bbeneficio|rentabilidad|stock historico\b/.test(q))return false;
  if(resolution.estado==="aclaracion"&&!TIME.test(q)&&!/\bstock\b/.test(q))return false;
  return true;

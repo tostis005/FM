@@ -36,7 +36,15 @@ function continueFrom(previous,question,ctx,now){
  // No sustituir silenciosamente una farmacia nombrada por la anterior si
  // el nombre no pertenece a las farmacias autorizadas para este usuario.
  const namedPharmacy=/\b(?:en|de|para)\s+(?!el\b|la\b|los\b|las\b|este\b|esta\b|un\b|una\b|mes\b|ano\b|anio\b|hoy\b|ayer\b)([a-z][a-z0-9-]*)\b/.test(fragment);
- if(namedPharmacy&&!candidate.farmacias&&!/\bproveedor\b/.test(fragment))return null;
+ // "de solares", "de ese producto" y "de precio medio" no son
+ // farmacias desconocidas. Un filtro comercial verificable prevalece;
+ // una localidad no autorizada nunca debe sustituir la anterior.
+ const businessReference=Boolean(candidate.producto||candidate.proveedor)||
+  /\b(?:precios?|costes?|unidades?|productos?|articulos?|m[aá]rgenes?|euros?|porcentajes?|cantidad|medio|promedio|importe)\b/.test(fragment);
+ if(namedPharmacy&&!candidate.farmacias&&!businessReference){
+  const generic=/\b(?:en|de|para)\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ventas?|compras?|stock)\b/.test(fragment);
+  if(!generic)return null;
+ }
  const changedPeriod=hasPeriod?periodOf(candidate):periodOf(prior);
  const merged={...prior,
   fuente:source,

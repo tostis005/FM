@@ -71,58 +71,58 @@ function parseExplicitComparison(q){
   });
  };
  // Intervalo con mes/año en ambos extremos.
- capture(new RegExp("\\\\b(?:desde\\\\s+(?:el\\\\s+)?|del\\\\s+)(\\\\d{1,2})\\\\s+de\\\\s+("+MONTH_NAMES+
-  ")\\\\s+(?:de|del)\\\\s+(20\\\\d{2})\\\\s+(?:hasta\\\\s+(?:el\\\\s+)?|al\\\\s+(?:el\\\\s+)?)(\\\\d{1,2})\\\\s+de\\\\s+("+MONTH_NAMES+
-  ")\\\\s+(?:de|del)\\\\s+(20\\\\d{2})\\\\b","g"),a=>({
+ capture(new RegExp("\\b(?:desde\\s+(?:el\\s+)?|del\\s+)(\\d{1,2})\\s+de\\s+("+MONTH_NAMES+
+  ")\\s+(?:de|del)\\s+(20\\d{2})\\s+(?:hasta\\s+(?:el\\s+)?|al\\s+(?:el\\s+)?)(\\d{1,2})\\s+de\\s+("+MONTH_NAMES+
+  ")\\s+(?:de|del)\\s+(20\\d{2})\\b","g"),a=>({
   desde:validateDate(Number(a[2]),MON[a[1]],Number(a[0])),
   hasta:validateDate(Number(a[5]),MON[a[4]],Number(a[3]))
  }));
  // Intervalo corto dentro de un mismo mes.
- capture(new RegExp("\\\\b(?:del\\\\s+|entre\\\\s+(?:el\\\\s+)?)(\\\\d{1,2})\\\\s+(?:al\\\\s+(?:el\\\\s+)?|y\\\\s+(?:el\\\\s+)?)(\\\\d{1,2})\\\\s+de\\\\s+("+MONTH_NAMES+
-  ")\\\\s+(?:de|del)\\\\s+(20\\\\d{2})\\\\b","g"),a=>({
+ capture(new RegExp("\\b(?:del\\s+|entre\\s+(?:el\\s+)?)(\\d{1,2})\\s+(?:al\\s+(?:el\\s+)?|y\\s+(?:el\\s+)?)(\\d{1,2})\\s+de\\s+("+MONTH_NAMES+
+  ")\\s+(?:de|del)\\s+(20\\d{2})\\b","g"),a=>({
   desde:validateDate(Number(a[3]),MON[a[2]],Number(a[0])),
   hasta:validateDate(Number(a[3]),MON[a[2]],Number(a[1]))
  }));
  // Intervalo 01/10/2026 al 15/10/2026.
- capture(/\\b(?:del\\s+|desde\\s+)?(\\d{1,2})[/-](\\d{1,2})[/-](20\\d{2})\\s+(?:al|hasta)\\s+(\\d{1,2})[/-](\\d{1,2})[/-](20\\d{2})\\b/g,a=>({
+ capture(/\b(?:del\s+|desde\s+)?(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\s+(?:al|hasta)\s+(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/g,a=>({
   desde:validateDate(Number(a[2]),Number(a[1]),Number(a[0])),
   hasta:validateDate(Number(a[5]),Number(a[4]),Number(a[3]))
  }));
  // Días sueltos con fecha completa.
- capture(new RegExp("\\\\b(\\\\d{1,2})\\\\s+de\\\\s+("+MONTH_NAMES+
-  ")\\\\s+(?:de|del)\\\\s+(20\\\\d{2})\\\\b","g"),a=>{
+ capture(new RegExp("\\b(\\d{1,2})\\s+de\\s+("+MONTH_NAMES+
+  ")\\s+(?:de|del)\\s+(20\\d{2})\\b","g"),a=>{
   const date=validateDate(Number(a[2]),MON[a[1]],Number(a[0]));
   return {desde:date,hasta:date};
  });
- capture(/\\b(\\d{1,2})[/-](\\d{1,2})[/-](20\\d{2})\\b/g,a=>{
+ capture(/\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b/g,a=>{
   const date=validateDate(Number(a[2]),Number(a[1]),Number(a[0]));
   return {desde:date,hasta:date};
  });
  // Mes/año exacto.
- capture(new RegExp("\\\\b("+MONTH_NAMES+")\\\\s+(?:de\\\\s+|del\\\\s+)?(20\\\\d{2})\\\\b","g"),a=>{
+ capture(new RegExp("\\b("+MONTH_NAMES+")\\s+(?:de\\s+|del\\s+)?(20\\d{2})\\b","g"),a=>{
   const y=Number(a[1]),m=MON[a[0]];
   return {desde:validateDate(y,m,1),hasta:validateDate(y,m,lastDay(y,m))};
  });
  // Año completo; el mes/año ya sustituido no aporta años duplicados.
- capture(/\\b(20\\d{2})\\b/g,a=>({
+ capture(/\b(20\d{2})\b/g,a=>({
   desde:validateDate(Number(a[0]),1,1),hasta:validateDate(Number(a[0]),12,31)
  }));
  if(!candidates.length)return null;
  if(candidates.length!==2)return explicitError();
- const ordered=[...rest.matchAll(/__p(\\d+)__/g)].map(m=>Number(m[1]));
+ const ordered=[...rest.matchAll(/__p(\d+)__/g)].map(m=>Number(m[1]));
  if(ordered.length!==2)return explicitError();
  const [left,right]=ordered.map(i=>candidates[i].range);
  if([left,right].some(p=>!p.desde||!p.hasta||p.desde>p.hasta))return explicitError();
- const indices=[...rest.matchAll(/__p\\d+__/g)];
+ const indices=[...rest.matchAll(/__p\d+__/g)];
  const middle=rest.slice(indices[0].index+indices[0][0].length,indices[1].index);
- if(!/\\b(frente\\s+a|respecto\\s+a|versus|vs|contra|con|y)\\b/.test(middle))
+ if(!/\b(frente\s+a|respecto\s+a|versus|vs|contra|con|y)\b/.test(middle))
   return unsupported("Indica qué período comparas frente a cuál, separándolos por 'frente a', 'con' o 'vs'.");
  // Debe ser imposible que quede una tercera referencia temporal sin parsear.
- const leftover=rest.replace(/__p\\d+__/g," ");
- if(/\\b(20\\d{2}|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|hoy|ayer|mes\\s+pasado|este\\s+mes|ano\\s+pasado|este\\s+ano)\\b/.test(leftover))
+ const leftover=rest.replace(/__p\d+__/g," ");
+ if(/\b(20\d{2}|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|hoy|ayer|mes\s+pasado|este\s+mes|ano\s+pasado|este\s+ano)\b/.test(leftover))
   return unsupported("La comparación mezcla fechas o períodos incompatibles.");
- const questionBase=leftover.replace(TRIGGER," ").replace(/\\b(frente\\s+a|respecto\\s+a|versus|vs|con|contra|y|el|la|los|las|del|de|al|que|ha|han|su|sus)\\b/g," ")
-  .replace(/\\s+/g," ").trim();
+ const questionBase=leftover.replace(TRIGGER," ").replace(/\b(frente\s+a|respecto\s+a|versus|vs|con|contra|y|el|la|los|las|del|de|al|que|ha|han|su|sus)\b/g," ")
+  .replace(/\s+/g," ").trim();
  if(questionBase.length<3)return unsupported("Indica qué dato de Farmétrica deseas comparar.");
  return {version:COMPARISON_VERSION,modo:"comparacion",tipo:"explicita",
   preguntaBase:questionBase+" hoy",actual:left,anterior:right,

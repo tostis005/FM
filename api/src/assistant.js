@@ -1,7 +1,7 @@
 // Servicio de IA: proveedor sustituible y herramientas de consulta cerradas.
 // No hay SQL arbitrario, escrituras, almacenamiento de audio ni exposición de DB credentials.
 import express from "express";
-import { validateAssistantBody,rateCheck } from "./assistantPolicy.js";
+import { validateAssistantBody } from "./assistantPolicy.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -157,9 +157,9 @@ export function setupAssistant(app,pool,{requireTenant}) {
   let ids;
   try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:undefined);}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
-  const key=req.context.client.slug+":"+req.user.email;
+  // Piloto privado: sin límite de consultas por usuario ni ventana temporal.
+  // Mantener el control de concurrencia para proteger Ollama local.
   if(active>=1)return res.status(429).json({error:"El asistente está ocupado. Prueba de nuevo en unos momentos"});
-  if(!rateCheck(key))return res.status(429).json({error:"Se ha alcanzado el límite temporal de consultas de esta sesión. Inténtalo más tarde."});
   active+=1;
   let stopHeartbeat=()=>{};
   try{
@@ -210,9 +210,9 @@ export function setupAssistant(app,pool,{requireTenant}) {
   let ids;
   try{ids=authorizedIds(req.context,body.pharmacyIds.length?body.pharmacyIds:undefined);}
   catch{return res.status(403).json({error:"Farmacia no autorizada"});}
-  const key=req.context.client.slug+":"+req.user.email;
+  // Piloto privado: sin límite de consultas por usuario ni ventana temporal.
+  // Mantener el control de concurrencia para proteger Ollama local.
   if(active>=1)return res.status(429).json({error:"El asistente está ocupado. Prueba de nuevo en unos momentos"});
-  if(!rateCheck(key))return res.status(429).json({error:"Se ha alcanzado el límite temporal de consultas de esta sesión. Inténtalo más tarde."});
   active+=1;
   const controller=new AbortController();
   const abort=()=>controller.abort();
@@ -284,8 +284,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   if(active>=1)return res.status(429).json({error:"La IA está ocupada. Repite el dictado más tarde"});
   if(!Buffer.isBuffer(req.body)||req.body.length<512||req.body.length>6*1024*1024)
    return res.status(400).json({error:"Archivo de audio inválido"});
-  if(!rateCheck(req.context.client.slug+":"+req.user.email+":voz",Date.now(),8))
-   return res.status(429).json({error:"Demasiadas transcripciones seguidas"});
+  // El dictado tampoco tiene cuota de frecuencia durante las pruebas.
   let directory;active+=1;
   try{
    directory=await mkdtemp(join(tmpdir(),"fm-asr-"));

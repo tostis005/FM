@@ -78,7 +78,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   {role:"system",content:SHORT_SUMMARY_SYSTEM},
   {role:"user",content:"Pregunta: "+question+
    "\nEvidencia verificada: "+JSON.stringify(shortSummaryContext(summaryPresentation))+
-   "\nEscribe solo el breve resumen en prosa, sin tabla ni cantidades."}
+   "\nRedacta solo uno o dos enunciados basados en los hechos, usando exclusivamente cifras y nombres verificados. Sin tabla."}
  ]:[
   {role:"system",content:settings.system||(presentation?naturalSystem:system)+" "+facts},
   ...history.map(x=>({role:x.role,content:x.content})),

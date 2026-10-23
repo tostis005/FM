@@ -24,18 +24,20 @@ Se incorporan doce ejemplos de promociones reales, con un subconjunto de CNs del
 - regalo por compra;
 - sin clasificar cuando no existe una interpretación única.
 
-Se conserva siempre el texto original para revisión. No se simulan descuentos sobre los tickets originales.
+Se conserva siempre el texto original para revisión. Los tickets originales y los importes de Farmatic nunca se modifican: cualquier aplicación comercial es una simulación independiente para el Excel del laboratorio.
 
 ## Seguimiento real y exportación de laboratorio
 Nueva tabla **Detalle de ventas para laboratorio** debajo del seguimiento de las promociones seleccionadas, con selector de promoción, farmacia, CN, desde/hasta y búsqueda de ticket. Endpoint `POST /api/ventas/detalle` protegido para administradores, con `offset/limit` y 500 líneas máximas por petición. Los datos proceden de `farmatic.lineaventa`, cruzada con `public.farmacias.codigo_origen` mediante `farmacia_origen`.
 
 Campos originales: `idventa`, `idnlinea`, `fechahora`, `numerodoc`, `xvend_idvendedor`, `codigo`, `descripcion`, `pvp`, `cantidad`, `importebruto`, `descuentolinea`, `importeneto`.
 
-**Exportar formato laboratorio** genera un archivo `.xlsx` con las hojas `Export` y `Hoja1`. En `Export` las columnas y orden reproducen el ejemplo Vichy: NOMBRE FARMACIA, VENDEDOR, IdVenta, NumeroDoc, FECHA, HORA, Codigo, Descripcion, Pvp, Cantidad, ImporteBruto, DescuentoLinea, ImporteNeto, %DTO LINEA. Los valores son los originales del ticket; %DTO LINEA se calcula como valor absoluto del cociente DescuentoLinea / ImporteBruto. La segunda hoja incluye CN, descripción y PVP.
+**Exportar real** y **Exportar con promociones aplicadas** generan archivos `.xlsx` con las hojas `Export` y `Hoja1`. Solo se incluyen las farmacias seleccionadas y participantes en cada campaña. Ambos modos se limitan a tickets que cumplen el lote comercial (por ejemplo, no cuenta una unidad suelta para un 2×1); el segundo recalcula descuentos de forma teórica sin tocar los importes originales. La casilla «Incluir vendedor» agrega su columna al principio del Excel; desmarcada, mantiene las columnas y orden anteriores. Una fórmula de regalo/escalonado no interpretable bloquea la exportación para no inventar descuentos.
+
+El Excel En `Export` las columnas y orden reproducen el ejemplo Vichy: NOMBRE FARMACIA, VENDEDOR, IdVenta, NumeroDoc, FECHA, HORA, Codigo, Descripcion, Pvp, Cantidad, ImporteBruto, DescuentoLinea, ImporteNeto, %DTO LINEA. Los valores son los originales del ticket; %DTO LINEA se calcula como valor absoluto del cociente DescuentoLinea / ImporteBruto. La segunda hoja incluye CN, descripción y PVP.
 
 La tabla de ventas dispone del **ID de vendedor**, pero aún no del nombre: Excel coloca `ID N` para no inventarlo. Conectar el maestro de vendedores de Farmatic permitirá sustituirlo.
 
-**Privacidad y auditoría:** los tickets no se almacenan en el navegador; la API exige rol administrador y usa parámetros SQL. No se exponen datos de clientes. No se alteran importes/descuentos de Farmatic ni se representan ajustes teóricos como descuentos efectivamente aplicados. Si se implementan liquidaciones de laboratorio con descuentos simulados, deberán usar un cálculo explícito y auditado separado.
+**Privacidad y auditoría:** los tickets no se almacenan en el navegador; la API exige rol administrador y usa parámetros SQL. No se exponen datos de clientes. No se alteran importes/descuentos de Farmatic ni se representan ajustes teóricos como descuentos efectivamente aplicados. La exportación con promociones aplicadas es solo una simulación comercial separada. Conviene revisar la liquidación del laboratorio para ofertas de regalo sin regla inequívoca y promociones simultáneas.
 
 ## Bloqueador para datos reales
 La infraestructura existente de Contabo **todavía no tiene configurado `GOOGLE_CLIENT_ID`**, según la última comprobación automatizada. El workflow omite desplegar API si falta configuración. Hasta completar Google OAuth, secreto de sesión, correo de administrador y activar la API, el seguimiento NO podrá leer tickets de PostgreSQL. No se publicará una ruta anónima a los tickets.

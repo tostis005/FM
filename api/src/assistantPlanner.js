@@ -27,6 +27,7 @@ export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Dat
  if(sources.length>1||sources.length===1&&proposal.fuente!==sources[0])return null;
  if(sources.length===0&&previous?.consulta&&proposal.fuente!==previous.consulta.fuente)return null;
  const plan={...proposal};
+ if(/\bfamilias?\b/.test(q)&&!plan.agrupar?.includes("familia"))return null;
  const previousPeriod=periodOf(previous?.consulta);
  if(!TIME.test(q)){
   if(previous?.consulta?.fuente===plan.fuente&&Object.keys(previousPeriod).length){
@@ -40,6 +41,7 @@ export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Dat
    Object.assign(plan,periodOf(canonical.consulta));
   }
  }
+ if(!previous?.consulta?.farmacias&&!/\bfarmacia\b/.test(q))delete plan.farmacias;
  if(previous?.consulta?.farmacias&&!/\btodas las farmacias\b/.test(q))
   plan.farmacias=previous.consulta.farmacias;
  // Fechas, nombres y métricas deberán además superar el validador real.
@@ -49,9 +51,15 @@ export function parseProposedPlan(raw,ctx,{question="",previous=null,now=new Dat
 export function shouldTryAssistantPlanner(question,resolution){
  const q=norm(question);
  if(BLOCKED.test(q))return false;
- if(resolution?.estado==="ok")return /\bprecios?\b/.test(q)&&
-  resolution.consulta?.fuente==="ventas"&&
-  !resolution.consulta?.metricas?.includes("precio_medio");
+ if(resolution?.estado==="ok"){
+  const plan=resolution.consulta;
+  if(/\bprecios?\b/.test(q)&&plan?.fuente==="ventas"&&
+   !plan?.metricas?.includes("precio_medio"))return true;
+  if(/\bfamilias?\b/.test(q)&&!plan?.agrupar?.includes("familia"))return true;
+  if(/\b(?:importe|ventas|euros)\b/.test(q)&&/\bunidades?\b/.test(q)&&
+   !["importe","unidades"].every(m=>plan?.metricas?.includes(m)))return true;
+  return false;
+ }
  if(!["general","aclaracion","no_disponible"].includes(resolution?.estado))return false;
  if(/\bbeneficio|rentabilidad|stock historico\b/.test(q))return false;
  if(resolution.estado==="aclaracion"&&!TIME.test(q)&&!/\bstock\b/.test(q))return false;

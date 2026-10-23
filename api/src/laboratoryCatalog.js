@@ -20,6 +20,8 @@ const laboratoryKey=(code,name)=>`CASE WHEN nullif(btrim(${code}), '') IS NOT NU
 const commercialKey=laboratoryKey("n.laboratorio_comercializador_codigo","n.laboratorio_comercializador");
 const titularKey=laboratoryKey("coalesce(n.laboratorio_titular_codigo,n.laboratorio_codigo)",
  "coalesce(n.laboratorio_titular,n.laboratorio)");
+const medCommercialKey=commercialKey.replaceAll("n.","med.");
+const medTitularKey=titularKey.replaceAll("n.","med.");
 const normalizeSupplierSql=expr=>`CASE WHEN btrim(${expr}::text) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
  ELSE upper(btrim(${expr}::text)) END`;
@@ -84,7 +86,7 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
     -- Un proveedor asignado no puede atribuir a su laboratorio un
     -- medicamento cuyo titular/comercializador AEMPS sea otro.
     AND (med.cn IS NULL OR
-     ${commercialKey}=$1 OR ${titularKey}=$1)
+     ${medCommercialKey}=$1 OR ${medTitularKey}=$1)
   ),
   combined AS (
    SELECT * FROM official

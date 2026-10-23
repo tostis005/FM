@@ -100,3 +100,4 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
    <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las recepciones se asocian únicamente mediante correspondencias ERP configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
   </>}
  </section>;
+}

@@ -411,6 +411,8 @@ export function compileSemanticQuery(input,context){
  const q=validateSemanticQuery(input,context);
  const schema=quoteSchema(context.client.schema);
  const params=[q.dates.desde,q.dates.hasta,q.ids,context.client.slug];
+ const seller=compileSellerSales(q,schema,params);
+ if(seller)return seller;
  let where=["f.id=ANY($3::int[])"];
  if(q.producto!==undefined){
   params.push("%"+q.producto.trim()+"%");

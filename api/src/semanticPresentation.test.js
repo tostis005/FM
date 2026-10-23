@@ -74,8 +74,10 @@ test("el modelo solo redacta una frase y la tabla queda idéntica a la verificad
    {farmaciaId:2,farmacia:"Europa",importe:6851.53}
   ],advertencias:[]});
  const evidence=shortSummaryContext(p);
- assert.deepEqual(evidence.nombres,["Abadía","Europa"]);
- assert.doesNotMatch(JSON.stringify(evidence),/farmaciaId|7392|6851/);
+ assert.equal(evidence.hechos[0].tipo,"maximo");
+ assert.match(evidence.hechos[0].texto,/Abadía.*7392,15 €/);
+ assert.doesNotMatch(JSON.stringify(evidence),/farmaciaId|estado":"completo/);
+ assert.match(JSON.stringify(evidence),/7392,15/);
  const summary="Se presentan las ventas de Abadía y Europa correspondientes al período consultado.";
  assert.equal(validateShortSummary(summary,p),summary);
  const answer=composeOfficialSemanticAnswer(p,summary);
@@ -113,6 +115,51 @@ test("se mantiene la advertencia de proveedor desconocido y de selección incomp
   metricas:["importe"],filas:Array.from({length:30},(_,i)=>({
    farmaciaId:1,farmacia:"Abadía",vendedor:i,vendedorNombre:"Vendedor "+String.fromCharCode(65+i),importe:i
   }))},{maxRows:10});
- assert.equal(validateShortSummary("Se presentan los vendedores con sus importes respectivos.",partial),null);
+ assert.notEqual(validateShortSummary("Se presentan los vendedores con sus importes respectivos.",partial),null);
+ assert.equal(validateShortSummary("Abadía es la farmacia con mayores ventas.",partial),null);
  assert.ok(composeOfficialSemanticAnswer(partial,"").includes("solo 10 de 30 filas"));
+});
+
+test("hechos auditados: líder por vendedor, cambios por farmacia, importes y límites",()=>{
+ const sale=presentSemanticResult({estado:"ok",fuente:"ventas",
+  dimensiones:["farmacia","vendedor"],metricas:["importe"],filas:[
+   {farmaciaId:1,farmacia:"Abadía",vendedor:"6",vendedorNombre:"SILVIA RODRIGUEZ",importe:270713.7},
+   {farmaciaId:2,farmacia:"Europa",vendedor:"5",vendedorNombre:"BEATRIZ DELGADO",importe:212600.9}
+  ]});
+ assert.equal(sale.hechos[0].tipo,"maximo");
+ assert.match(sale.hechos[0].texto,/270.713,70 €/);
+ assert.doesNotMatch(JSON.stringify(sale.hechos),/farmaciaId|vendedorNombre/);
+ assert.equal(validateShortSummary("SILVIA RODRIGUEZ lidera las ventas con 270.713,70 €.",sale),
+  "SILVIA RODRIGUEZ lidera las ventas con 270.713,70 €.");
+ for(const invalid of [
+  "BEATRIZ DELGADO lidera las ventas con 270.713,70 €.",
+  "SILVIA RODRIGUEZ lidera las ventas con 275.713,70 €.",
+  "SILVIA RODRIGUEZ lidera las ventas con 270.713,70 € por una campaña especial.",
+  "Las ventas de SILVIA RODRIGUEZ superan un millón de euros."
+ ])assert.equal(validateShortSummary(invalid,sale),null,invalid);
+ const comp=presentSemanticResult({estado:"ok",consulta:{fuente:"ventas"},
+  comparacion:{dimensiones:["farmacia"],unidad:"EUR",
+   anterior:{desde:"2026-09-01",hasta:"2026-09-15"},
+   actual:{desde:"2026-10-01",hasta:"2026-10-15"}},
+  filas:[
+   {farmaciaId:5,farmacia:"Valdemarías",estado:"completo",anterior:68359.42,
+    actual:74376.75,diferencia:6017.33,variacion_pct:8.8},
+   {farmaciaId:1,farmacia:"Abadía",estado:"completo",anterior:121135.95,
+    actual:110565.47,diferencia:-10570.48,variacion_pct:-8.73}
+  ]});
+ assert.deepEqual(comp.hechos.map(x=>x.tipo),["aumento","descenso"]);
+ assert.notEqual(validateShortSummary(
+  "Valdemarías registra un aumento de 6.017,33 €. Abadía una disminución de -10.570,48 €.",comp),null);
+ assert.equal(validateShortSummary(
+  "Abadía registra un aumento de 8,80 % y Valdemarías una disminución de -10.570,48 €.",comp),null);
+ assert.equal(validateShortSummary("Abadía registra un aumento del 8,80 %.",comp),null);
+ assert.equal(validateShortSummary("Europa aumentó sus ventas durante octubre.",comp),null);
+ assert.equal(validateShortSummary("Valdemarías aumentó un 10 %.",comp),null);
+ const purchases=presentSemanticResult({estado:"ok",fuente:"compras",
+  dimensiones:["proveedor"],metricas:["importe"],filas:[{proveedor:null,importe:670860.289839}]});
+ assert.match(purchases.hechos[0].texto,/670.860,29 €/);
+ assert.notEqual(validateShortSummary(
+  "El proveedor no identificado registra 670.860,29 € de compras.",purchases),null);
+ assert.equal(validateShortSummary("El proveedor Acme recibe 670.860,29 €.",purchases),null,
+  "proveedores inexistentes no pueden ser atribuidos");
 });

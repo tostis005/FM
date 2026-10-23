@@ -14,7 +14,7 @@ import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
 const voiceEnabled=()=>enabled()&&process.env.AI_VOICE_ENABLED==="true";
-const model=()=>process.env.AI_MODEL||"qwen3:1.7b";
+const model=()=>process.env.AI_MODEL||"qwen3:0.6b";
 const ollama=()=>process.env.AI_OLLAMA_URL||"http://ollama:11434";
 const whisper=()=>process.env.AI_WHISPER_URL||"http://whisper:8080";
 // Margen temporal para la demo en VPS sin GPU. Puede ajustarse sin tocar código.

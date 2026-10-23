@@ -105,3 +105,40 @@ test("el Excel utiliza el CN real y el artículo, no el identificador interno de
  assert.match(sheet,/<c r="E3" t="inlineStr">.*?Crema facial de catálogo/);
  assert.doesNotMatch(sheet,/ERP-9999/);
 });
+
+test("el Excel solo consulta farmacias seleccionadas y rechaza datos fuera del ámbito",async()=>{
+ const promo=promotion("A","GUM");
+ const rows=await readFullLabSales(promo,async filters=>{
+   assert.deepEqual(filters.columnFilters,{pharmacy:["1"]});
+   return {total:1,rows:[{...ticket(1),pharmacyId:"1"}]};
+ },()=>{},{pharmacyIds:["1"]});
+ assert.equal(rows.length,1);
+ await assert.rejects(readFullLabSales(promo,async()=>({
+   total:1,rows:[{...ticket(2),pharmacyId:"2"}]
+ }),()=>{},{pharmacyIds:["1"]}),/no seleccionadas/);
+ await assert.rejects(readFullLabSales(promo,async()=>({rows:[],total:0}),()=>{},{
+   pharmacyIds:[]
+ }),/Selecciona farmacias/);
+});
+
+test("vendedor opcional: no altera el formato anterior si está desmarcado",async()=>{
+ const {blob,name}=await buildLabSalesExcel(promotion("P1","GUM"),[
+   {...ticket(1),sellerName:"María",sellerId:"34"}
+ ],{includeSeller:true});
+ assert.equal(name,"GUM_P1_laboratorio.xlsx");
+ const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+ const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
+ assert.match(sheet,/<c r="A2" t="inlineStr" s="1">.*?VENDEDOR/);
+ assert.match(sheet,/<c r="B2" t="inlineStr" s="1">.*?NumeroDoc/);
+ assert.match(sheet,/<c r="A3" t="inlineStr">.*?María/);
+ assert.match(sheet,/<c r="B3" t="inlineStr">.*?T1/);
+ assert.match(sheet,/<c r="L3" s="4"><v>0\.2<\/v><\/c>/);
+});
+
+test("la simulación se distingue en el nombre del Excel y ZIP",async()=>{
+ const promo=promotion("X9","VICHY");
+ const excel=await buildLabSalesExcel(promo,[ticket(1)],{mode:"simulated"});
+ assert.match(excel.name,/promociones_aplicadas_laboratorio\.xlsx$/);
+ const zip=await buildLabSalesZip([{promo,lines:[ticket(1)]}],{mode:"simulated"});
+ assert.match(zip.name,/promociones_aplicadas\.zip$/);
+});

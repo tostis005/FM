@@ -7,6 +7,7 @@ import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
 import "./purchasePlanner.css";
+import LaboratoryCatalogPanel from "./LaboratoryCatalogPanel.jsx";
 
 const today=()=>resolveSalesPeriod("today").from;
 const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
@@ -390,6 +391,7 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
      onChange={e=>{setSearch(e.target.value);setPage(1);clearSelection()}}
      placeholder="Nombre o código nacional…"/></label>
   </ReportFilterBar>
+  <LaboratoryCatalogPanel clientSlug={clientSlug} pharmacyIds={queriedPharmacyIds}/>
   <section className="card fm-planner">
   {error&&<p role="alert" className="fm-op-message fm-op-error"><AlertTriangle size={15}/>{error}</p>}
   {labError&&<p role="status" className="fm-op-message fm-op-warning">

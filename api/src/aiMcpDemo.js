@@ -2,6 +2,7 @@
 // Reutiliza el motor de indicadores del MCP principal. No acepta SQL arbitrario.
 import {readAnalytics} from "./aiMcp.js";
 import {resolveAndExecuteQuestion} from "./semanticResolver.js";
+import {presentSemanticResult,renderSemanticMarkdown} from "./semanticPresentation.js";
 import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 import {authorizedIds,normalizedPeriod,periodFromQuestion,pharmacyIdsFromQuestion,
   selectTools,TOOL_CATALOG} from "./assistantAnalytics.js";
@@ -14,7 +15,7 @@ const rpcResult=(id,data)=>({jsonrpc:"2.0",id,result:{
   content:[{type:"text",text:JSON.stringify(data)}],structuredContent:data}});
 const metadata={modo:"DEMO_REAL",ficticio:false,origen:"PostgreSQL",soloLectura:true};
 export const DEMO_MCP_TOOLS=[
-   {name:"resolver_pregunta",description:"MÉTODO PREFERIDO para lenguaje natural: interpreta en el servidor con reglas únicas, ejecuta consulta segura y entrega filas reales o explica ambigüedad. Independiente de ChatGPT/Claude/Qwen.",annotations:{readOnlyHint:true,openWorldHint:false},
+   {name:"resolver_pregunta",description:"MÉTODO PREFERIDO para preguntas en español: Farmétrica calcula y devuelve nombres comerciales, euros y advertencias, sin IDs ERP ni estados técnicos. La IA debe presentarlos en lenguaje natural o Markdown; nunca copiar JSON ni inventar totales.",annotations:{readOnlyHint:true,openWorldHint:false},
      inputSchema:{type:"object",properties:{pregunta:{type:"string",minLength:2,maxLength:1000}},required:["pregunta"],additionalProperties:false}},
   {name:"listar_contexto",description:"Consulta las farmacias del cliente autorizado mediante OAuth.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
   {name:"catalogo_analitico",description:"Catálogo de indicadores clásicos con datos reales.",annotations:{readOnlyHint:true,openWorldHint:false},inputSchema:{type:"object",properties:{},additionalProperties:false}},
@@ -98,7 +99,7 @@ export async function handlePublicDemoMcp(input,pool,slug,authenticatedContext=n
       farmacias:ctx.pharmacies.map(p=>({id:Number(p.id),nombre:p.name}))};
     else if(name==="resolver_pregunta"){
        const resolved=await resolveAndExecuteQuestion(pool,ctx,args.pregunta);
-       data={...metadata,...resolved,cliente:ctx.client.name};
+       data=presentSemanticResult(resolved);
      }
      else if(name==="consultar_semantica")data={...metadata,...await runSemanticQuery(pool,ctx,args),
       cliente:ctx.client.name};
@@ -117,6 +118,9 @@ export async function handlePublicDemoMcp(input,pool,slug,authenticatedContext=n
         consultas:await Promise.all(names.map(n=>readAnalytics(pool,ctx,n,period,ids))),
         ...(names.length?{}:{aviso:"No se ha identificado un indicador para esta pregunta."})};
     }
+    if(name==="resolver_pregunta")
+     return {http:200,body:{jsonrpc:"2.0",id,result:{
+      structuredContent:data,content:[{type:"text",text:renderSemanticMarkdown(data)}]}}};
     return {http:200,body:rpcResult(id,data)};
   }catch(e){
     if(e instanceof TypeError||/autorizadas|inválid|desconocid|Período|Farmacias/.test(e.message||""))

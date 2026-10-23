@@ -114,3 +114,38 @@ test("MCP: catálogo de relaciones y planes con SQL arbitrario rechazado",()=>{
  assert.throws(()=>compileSemanticQuery({fuente:"ventas",metricas:["importe"],
   sql:"SELECT * FROM pacientes"},ctx),/no autorizados/);
 });
+
+
+test("nombre de proveedor consulta maestro local con código y farmacia solo si hay clave compuesta",()=>{
+ const input={fuente:"compras",agrupar:["farmacia","proveedor"],metricas:["importe"],
+  proveedor:"Cofares",desde:"2026-10-01",hasta:"2026-10-22"};
+ const a=compileSemanticQuery(input,{...ctx,localSupplierCatalogAvailable:true});
+ assert.match(a.sql,/EXISTS \(SELECT 1 FROM "ampedia"\.proveedores local_p/);
+ assert.match(a.sql,/upper\(btrim\(local_p\.farmacia_codigo::text\)\)=upper\(btrim\(t\.farmacia_codigo::text\)\)/);
+ assert.match(a.sql,/upper\(btrim\(local_p\.origen_id::text\)\)=upper\(btrim\(t\.proveedor_id::text\)\)/);
+ assert.match(a.sql,/local_p\.nombre ILIKE \$5/);
+ assert.equal(a.params[4],"%Cofares%");
+ const b=compileSemanticQuery(input,ctx);
+ assert.doesNotMatch(b.sql,/local_p/,"no usar una estructura local aún no verificada");
+});
+test("una consulta por nombre activa JOIN local tras comprobar columnas del tenant",async()=>{
+ const seen=[];
+ const pool={
+  query:async(sql,args)=>{
+   seen.push({sql,args});
+   if(sql.includes("information_schema.columns")&&sql.includes("count(DISTINCT"))
+    return {rows:[{n:3}]};
+   return {rows:[]};
+  },
+  connect:async()=>({query:async(sql,args)=>{
+   seen.push({sql,args});
+   return {rows:[]};
+  },release(){} })
+ };
+ await runSemanticQuery(pool,ctx,{fuente:"compras",agrupar:["farmacia","proveedor"],
+  metricas:["importe"],proveedor:"Cofares",desde:"2026-10-01",hasta:"2026-10-22"});
+ assert.ok(seen.some(x=>x.sql.includes('FROM "ampedia".fm_recepciones_analitica')&&
+  x.sql.includes('FROM "ampedia".proveedores local_p')));
+ assert.ok(seen.some(x=>x.sql.includes("information_schema.columns")&&x.args[0]==="ampedia"));
+ assert.ok(seen.some(x=>x.sql==="BEGIN TRANSACTION READ ONLY"));
+});

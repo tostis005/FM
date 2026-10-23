@@ -381,7 +381,12 @@ export function compileSemanticQuery(input,context){
    " OR coalesce(t.proveedor_nombre,'') ILIKE "+key+
    " OR EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm"+
    " WHERE pm.cliente_slug=$4 AND upper(btrim(pm.codigo_origen))=upper(btrim(t.proveedor_id::text))"+
-   " AND pm.nombre ILIKE "+key+"))");
+   " AND pm.nombre ILIKE "+key+")"+
+   (context.localSupplierCatalogAvailable?
+    " OR EXISTS (SELECT 1 FROM "+schema+".proveedores local_p"+
+    " WHERE upper(btrim(local_p.farmacia_codigo::text))=upper(btrim(t.farmacia_codigo::text))"+
+    " AND upper(btrim(local_p.origen_id::text))=upper(btrim(t.proveedor_id::text))"+
+    " AND local_p.nombre ILIKE "+key+")":"")+")");
  }
  // Rows are always scoped by client and authorized IDs before aggregation.
  const needsArticle=q.source==="stock"||q.producto!==undefined||
@@ -420,7 +425,19 @@ export function compileSemanticQuery(input,context){
  return result;
 }
 export async function runSemanticQuery(pool,context,input){
- const {sql,params,q}=compileSemanticQuery(input,context);
+ let effectiveContext=context;
+ if(input?.fuente==="compras"&&input.proveedor!==undefined){
+  // Activar el maestro local solo si existe y usa clave compuesta por farmacia.
+  // Las tablas legacy proveedores(id,nombre) no permiten cruces multi-farmacia.
+  validateSemanticQuery(input,context);
+  const {rows:[availability]}=await pool.query(
+   "SELECT count(DISTINCT column_name)::int AS n FROM information_schema.columns"+
+   " WHERE table_schema=$1 AND table_name='proveedores'"+
+   " AND column_name=ANY($2::text[])",
+   [context.client.schema,["farmacia_codigo","origen_id","nombre"]]);
+  effectiveContext={...context,localSupplierCatalogAvailable:Number(availability?.n)===3};
+ }
+ const {sql,params,q}=compileSemanticQuery(input,effectiveContext);
  if(!q.ids.length)return {fuente:q.source,periodo:q.dates,filas:[],advertencias:WARNINGS[q.source]};
  const result=await readOnly(pool,async db=>{
   await db.query(q.source==="ventas"&&q.dims.includes("vendedor")&&

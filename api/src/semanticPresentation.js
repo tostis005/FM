@@ -316,6 +316,21 @@ export function validateShortSummary(draft,p){
  const allowCompare=facts.filter(f=>["aumento","descenso","maximo"].includes(f.tipo));
  for(const sentence of sentences){
   const normalized=normFact(sentence);
+  // Una cifra solo puede atribuirse a la entidad con la que Farmétrica la
+  // vinculó. Nunca aceptar la cifra del líder atribuida a otra farmacia.
+  const stated=quantities(sentence);
+  if(stated.length){
+   const recognizedNames=[...new Set(p.filas.flatMap(row=>[
+    row.Farmacia,row.Vendedor,row.Proveedor,row.Producto
+   ].filter(Boolean)))].filter(name=>normalized.includes(normFact(name)));
+   for(const amount of stated){
+    const related=facts.filter(f=>f.valores.some(value=>quantities(value).some(v=>comparable(v,amount))));
+    if(!related.length||!related.some(f=>f.nombres.some(name=>normalized.includes(normFact(name)))))
+     return null;
+    if(recognizedNames.some(name=>!related.some(f=>f.nombres.some(n=>normFact(n)===normFact(name)))))
+     return null;
+   }
+  }
   let kind=null;
   if(trendUp.test(normalized))kind="aumento";
   if(trendDown.test(normalized))kind=kind?"incompatible":"descenso";

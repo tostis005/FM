@@ -121,8 +121,10 @@ export function presentSemanticResult(data,{maxRows=100}={}){
   ...(data.comparacion.dias_actual!==undefined?{
     dias_actual:data.comparacion.dias_actual,dias_anterior:data.comparacion.dias_anterior}:{})
  }:undefined;
+ const dateRange=data.periodo&&typeof data.periodo.desde==="string"&&
+  typeof data.periodo.hasta==="string"?data.periodo:undefined;
  const result={estado:"ok",titulo:titleFor(data,dims),
-  periodo:data.periodo??null,...(comparacion?{comparacion}:{}),
+  ...(dateRange?{periodo:dateRange}:{}),...(comparacion?{comparacion}:{}),
   columnas:columns,filas:rows,advertencias:[...notes]};
  return result;
 }

@@ -273,6 +273,22 @@ export function setupTemporaryAnalyticsLinks(app,pool,{requireSuperadmin}){
    const result=await handlePublicDemoMcp({jsonrpc:"2.0",id:1,method:"tools/call",params:{name,arguments:args}},pool,ctx.client.slug,ctx);
    const data=result.body?.result?.structuredContent;
    if(!data)return res.status(result.http===503?503:400).send(result.body?.result?.content?.[0]?.text||"Consulta no disponible");
+   if(name==="resolver_pregunta"){
+    if(req.query.formato==="json")return res.json(data);
+    const cols=Array.isArray(data.columnas)?data.columnas:[];
+    const rows=Array.isArray(data.filas)?data.filas:[];
+    const head=cols.map(c=>"<th>"+html(c)+"</th>").join("");
+    const body=rows.map(row=>"<tr>"+cols.map(c=>"<td>"+html(row[c]??"")+"</td>").join("")+"</tr>").join("");
+    const notes=(data.advertencias||[]).map(n=>"<li>"+html(n)+"</li>").join("");
+    const result=data.estado==="ok"?
+     "<table><thead><tr>"+head+"</tr></thead><tbody>"+body+"</tbody></table>"+(notes?"<ul>"+notes+"</ul>":""):
+     "<p>"+html(data.mensaje||"Sin resultados")+"</p>";
+    return res.type("html").send('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+     '<meta name="viewport" content="width=device-width, initial-scale=1">'+
+     '<title>Farmétrica · resultados</title><style>body{font:16px system-ui;max-width:1000px;margin:25px auto;padding:16px}table{border-collapse:collapse;width:100%}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}th{background:#f4f4f4}</style></head>'+
+     '<body><h1>'+html(data.titulo||"Resultado de Farmétrica")+'</h1>'+result+
+     '<p><a href="'+html(PREFIX+token)+'">Volver al catálogo</a></p></body></html>');
+   }
    const output={...data,cliente:ctx.client.name,origen:data.estado&&data.estado!=="ok"?"Farmétrica":"PostgreSQL",ficticio:false};
    if(req.query.formato==="json")return res.json(output);
    return res.type("html").send('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Farmétrica · consulta</title></head><body><h1>Resultado real de Farmétrica</h1><pre>'+html(JSON.stringify(output,null,2))+'</pre><a href="'+html(PREFIX+token)+'">Volver al catálogo</a></body></html>');

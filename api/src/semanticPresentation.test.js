@@ -149,7 +149,9 @@ test("hechos auditados: líder por vendedor, cambios por farmacia, importes y l�
   ]});
  assert.deepEqual(comp.hechos.map(x=>x.tipo),["aumento","descenso"]);
  assert.notEqual(validateShortSummary(
-  "Valdemarías registra un aumento de 6.017,33 € y Abadía una disminución de -10.570,48 €.",comp),null);
+  "Valdemarías registra un aumento de 6.017,33 €. Abadía una disminución de -10.570,48 €.",comp),null);
+ assert.equal(validateShortSummary(
+  "Abadía registra un aumento de 8,80 % y Valdemarías una disminución de -10.570,48 €.",comp),null);
  assert.equal(validateShortSummary("Abadía registra un aumento del 8,80 %.",comp),null);
  assert.equal(validateShortSummary("Europa aumentó sus ventas durante octubre.",comp),null);
  assert.equal(validateShortSummary("Valdemarías aumentó un 10 %.",comp),null);

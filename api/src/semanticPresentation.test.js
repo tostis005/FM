@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {presentSemanticResult,renderSemanticMarkdown,safeAssistantMarkdown} from "./semanticPresentation.js";
+import {presentSemanticResult,renderSemanticMarkdown,safeAssistantMarkdown,shortSummaryContext,validateShortSummary,composeOfficialSemanticAnswer} from "./semanticPresentation.js";
 
 test("ventas: muestra nombres e importes en EUR pero no IDs ni estados técnicos",()=>{
  const input={estado:"ok",fuente:"ventas",periodo:{desde:"2026-10-22",hasta:"2026-10-22"},
@@ -65,4 +65,54 @@ test("respuesta ambigua se mantiene sin SQL ni datos técnicos",()=>{
  const p=presentSemanticResult({estado:"aclaracion",mensaje:"Indica un período"});
  assert.deepEqual(p,{estado:"aclaracion",mensaje:"Indica un período"});
  assert.equal(renderSemanticMarkdown(p),"Indica un período");
+});
+
+test("el modelo solo redacta una frase y la tabla queda idéntica a la verificada",()=>{
+ const p=presentSemanticResult({estado:"ok",fuente:"ventas",periodo:{desde:"2026-10-22",hasta:"2026-10-22"},
+  dimensiones:["farmacia"],metricas:["importe"],filas:[
+   {farmaciaId:1,farmacia:"Abadía",importe:7392.15},
+   {farmaciaId:2,farmacia:"Europa",importe:6851.53}
+  ],advertencias:[]});
+ const evidence=shortSummaryContext(p);
+ assert.deepEqual(evidence.nombres,["Abadía","Europa"]);
+ assert.doesNotMatch(JSON.stringify(evidence),/farmaciaId|7392|6851/);
+ const summary="Se presentan las ventas de Abadía y Europa correspondientes al período consultado.";
+ assert.equal(validateShortSummary(summary,p),summary);
+ const answer=composeOfficialSemanticAnswer(p,summary);
+ assert.equal(answer,"**Resumen:** "+summary+"\n\n"+renderSemanticMarkdown(p));
+ assert.match(answer,/\| Abadía \| 7392,15 € \|/);
+ assert.match(answer,/\| Europa \| 6851,53 € \|/);
+});
+test("un resumen falso o excesivo NO puede alterar el desglose oficial",()=>{
+ const p=presentSemanticResult({estado:"ok",fuente:"ventas",dimensiones:["farmacia"],
+  metricas:["importe"],filas:[{farmaciaId:1,farmacia:"Abadía",importe:7392.15}]});
+ for(const bad of [
+  "Las ventas totales ascendieron a 2.577.334,78 €.",
+  "Europa lidera el ranking de ventas.",
+  "Las ventas aumentaron significativamente gracias a una campaña.",
+  "No hay datos de ventas.",
+  "### Resultado\n| Farmacia | Ventas |",
+  "{ \"resumen\": \"todo bien\" }"
+ ]){
+  assert.equal(validateShortSummary(bad,p),null,bad);
+  const content=composeOfficialSemanticAnswer(p,bad);
+  assert.match(content,/7392,15 €/);
+  assert.doesNotMatch(content,/Europa lidera|2\.577\.334|campaña/);
+  assert.ok(content.endsWith(renderSemanticMarkdown(p)));
+ }
+});
+test("se mantiene la advertencia de proveedor desconocido y de selección incompleta",()=>{
+ const purchases=presentSemanticResult({estado:"ok",fuente:"compras",dimensiones:["proveedor"],
+  metricas:["importe"],filas:[{proveedor:null,importe:"670860.289839"}]});
+ assert.equal(validateShortSummary("El proveedor no está identificado y el detalle no permite atribuirlo a un proveedor concreto.",purchases)!==null,true);
+ assert.equal(validateShortSummary("Las compras corresponden al proveedor Acme.",purchases),null);
+ const answer=composeOfficialSemanticAnswer(purchases,"Las compras corresponden al proveedor Acme.");
+ assert.ok(answer.includes("Proveedor no identificado"));
+ assert.ok(answer.includes("670.860,29 €"));
+ const partial=presentSemanticResult({estado:"ok",fuente:"ventas",dimensiones:["farmacia","vendedor"],
+  metricas:["importe"],filas:Array.from({length:30},(_,i)=>({
+   farmaciaId:1,farmacia:"Abadía",vendedor:i,vendedorNombre:"Vendedor "+String.fromCharCode(65+i),importe:i
+  }))},{maxRows:10});
+ assert.equal(validateShortSummary("Se presentan los vendedores con sus importes respectivos.",partial),null);
+ assert.ok(composeOfficialSemanticAnswer(partial,"").includes("solo 10 de 30 filas"));
 });

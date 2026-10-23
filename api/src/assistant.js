@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 import {interpretSemanticQuestion} from "./semanticInterpreter.js";
 import {executeResolvedQuestion} from "./semanticResolver.js";
-import {presentSemanticResult,renderSemanticMarkdown,safeAssistantMarkdown} from "./semanticPresentation.js";
+import {presentSemanticResult,SHORT_SUMMARY_SYSTEM,shortSummaryContext,composeOfficialSemanticAnswer} from "./semanticPresentation.js";
 import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
 
 const enabled=()=>process.env.AI_ENABLED==="true";
@@ -70,10 +70,16 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   "Proveedor no identificado no es un proveedor concreto; señala las advertencias.",
   "Si se indica muestra parcial, no la llames total. Máximo 180 palabras."
  ].join(" ");
+ const summaryPresentation=settings.shortSummaryPresentation;
  const facts=presentation?"DATOS_LIMPIOS="+JSON.stringify(presentation).slice(0,12000):
   "CONTEXTO: sección "+String(context.section||"General").slice(0,70)+
   ". DATOS_VERIFICADOS="+JSON.stringify(compactFacts(results)).slice(0,14000);
- const messages=[
+ const messages=summaryPresentation?[
+  {role:"system",content:SHORT_SUMMARY_SYSTEM},
+  {role:"user",content:"Pregunta: "+question+
+   "\nEvidencia verificada: "+JSON.stringify(shortSummaryContext(summaryPresentation))+
+   "\nEscribe solo el breve resumen en prosa, sin tabla ni cantidades."}
+ ]:[
   {role:"system",content:settings.system||(presentation?naturalSystem:system)+" "+facts},
   ...history.map(x=>({role:x.role,content:x.content})),
   {role:"user",content:question}
@@ -90,7 +96,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
    body:JSON.stringify({
     model:chosenModel,stream:Boolean(settings.onDelta),think:false,messages,
     ...(settings.format?{format:settings.format}:{}),
-    options:{temperature:0.1,num_ctx:2048,num_predict:settings.numPredict??370,num_thread:2},
+    options:{temperature:0.1,num_ctx:summaryPresentation?1024:2048,num_predict:settings.numPredict??370,num_thread:2},
     keep_alive:"2m"
    })
   });
@@ -174,15 +180,15 @@ export function setupAssistant(app,pool,{requireTenant}) {
    const presentation=data.estado==="ok"?presentSemanticResult(data,{maxRows:10}):null;
    let answer;
    if(presentation){
+    let summary="";
     try{
-     const draft=await callOllama(body.question,body.history,{
-      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
-     },[],ollama(),model(),{numPredict:450,presentation});
-     answer=safeAssistantMarkdown(draft,presentation);
+     summary=await callOllama(body.question,[],{section:"Farmétrica"},[],
+      ollama(),model(),{numPredict:90,shortSummaryPresentation:presentation});
     }catch(error){
-     console.warn("Asistente: fallback Markdown verificado",error?.name||"error");
-     answer=renderSemanticMarkdown(presentation);
+     console.warn("Asistente: resumen opcional no disponible",error?.name||"error");
     }
+    // El modelo nunca construye la tabla ni altera filas originales.
+    answer=composeOfficialSemanticAnswer(presentation,summary);
    }else{
     answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
@@ -251,22 +257,22 @@ export function setupAssistant(app,pool,{requireTenant}) {
    }
    const results=resolvedFacts(data);
    const presentation=data.estado==="ok"?presentSemanticResult(data,{maxRows:10}):null;
-   progress("writing","Redactando y comprobando las cifras de Farmétrica…");
+   progress("writing","Generando un resumen breve; la tabla ya está verificada por Farmétrica…");
    let answer;
    if(presentation){
+    let summary="";
     try{
-     // Buffer de tokens para no mostrar cifras erróneas antes de validarlas.
-     const draft=await callOllama(body.question,body.history,{
-      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"
-     },[],ollama(),model(),{
-      numPredict:450,signal:controller.signal,presentation,onDelta:()=>{}
-     });
-     answer=safeAssistantMarkdown(draft,presentation);
+     summary=await callOllama(body.question,[],{section:"Farmétrica"},[],
+      ollama(),model(),{
+       numPredict:90,signal:controller.signal,
+       shortSummaryPresentation:presentation,onDelta:()=>{}
+      });
     }catch(error){
      if(controller.signal.aborted)return;
-     console.warn("Asistente stream: fallback Markdown",error?.name||"error");
-     answer=renderSemanticMarkdown(presentation);
+     console.warn("Asistente stream: resumen opcional no disponible",error?.name||"error");
     }
+    if(controller.signal.aborted)return;
+    answer=composeOfficialSemanticAnswer(presentation,summary);
    }else{
     answer=await callOllama(body.question,body.history,{
      section:typeof req.body.section==="string"?req.body.section:"Farmétrica"

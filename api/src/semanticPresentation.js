@@ -222,7 +222,7 @@ export function validateShortSummary(draft,presentation){
  if(/\b(por(?:\s+el|\s+la)?\s+motivo|debido|causad[oa]|provocad[oa]|gracias a)\b/i.test(summary))return null;
  if(presentation.filas.length&&/\b(no hay datos|no existen datos|sin datos|no se dispone de datos)\b/i.test(summary))return null;
  const unknownSupplier=presentation.filas.some(x=>x.Proveedor==="Proveedor no identificado");
- if(unknownSupplier&&!/proveedor(?:es)?\s+(?:no\s+identificad|sin\s+identificar)/i.test(summary))return null;
+ if(unknownSupplier&&!/proveedor(?:es)?\s+(?:no\s+(?:est[aá]\s+)?identificad|sin\s+identificar)/i.test(summary))return null;
  const partial=presentation.advertencias.some(x=>/se muestran solo|l[ií]mite.*filas|desglose completo/i.test(x));
  if(partial&&!/\b(muestra|parcial|selecci[oó]n|mostrad[oa]s?|disponibles)\b/i.test(summary))return null;
  return summary.replace(/\s+/g," ");

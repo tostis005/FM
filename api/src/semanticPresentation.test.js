@@ -163,3 +163,28 @@ test("hechos auditados: líder por vendedor, cambios por farmacia, importes y l�
  assert.equal(validateShortSummary("El proveedor Acme recibe 670.860,29 €.",purchases),null,
   "proveedores inexistentes no pueden ser atribuidos");
 });
+
+
+test("hechos verificables para ventas por día y márgenes estimados",()=>{
+ const days=presentSemanticResult({estado:"ok",fuente:"ventas",dimensiones:["dia"],
+  metricas:["importe"],filas:[
+   {dia:"2026-10-21",importe:350},
+   {dia:"2026-10-22",importe:400}
+  ]});
+ assert.equal(days.hechos[0]?.tipo,"maximo");
+ assert.match(days.hechos[0].texto,/2026-10-22/);
+ assert.match(days.hechos[0].texto,/400,00 €/);
+ assert.notEqual(validateShortSummary(
+  "El día 2026-10-22 registra la mayor cifra de ventas con 400,00 €.",days),null);
+
+ const margin=presentSemanticResult({estado:"ok",fuente:"ventas",
+  dimensiones:["farmacia"],metricas:["margen_estimado_pct"],
+  filas:[{farmacia:"Abadía",margen_estimado_pct:20.12},
+   {farmacia:"Europa",margen_estimado_pct:18.03}]});
+ assert.equal(margin.hechos[0]?.tipo,"maximo");
+ assert.match(margin.hechos[0].texto,/Abadía/);
+ assert.match(margin.hechos[0].texto,/20,12 %/);
+ assert.notEqual(validateShortSummary(
+  "Abadía registra la mayor cifra de margen estimado con 20,12 %.",margin),null);
+ assert.equal(validateShortSummary("Abadía registra un margen de 45 %.",margin),null);
+});

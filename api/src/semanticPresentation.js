@@ -189,7 +189,7 @@ const monetaryNumber=s=>{
  return Number.isFinite(n)?n:null;
 };
 const namedSubject=(p,row)=>{
- const labels=["Vendedor","Farmacia","Proveedor","Producto"];
+ const labels=["Vendedor","Farmacia","Proveedor","Producto","Día","Mes","Año"];
  const named=labels.filter(k=>p.columnas.includes(k)&&row[k]&&
   !/no identificad/i.test(row[k])).map(k=>String(row[k]));
  return named.length?named.join(" · "):null;
@@ -239,7 +239,7 @@ export function verifiedBusinessFacts(p){
    "No existen aumentos o descensos verificables en los grupos comparados."));
  }else{
   const metric=p.columnas.find(c=>["Ventas","Compras","Importe","Unidades","Movimientos",
-   "Stock actual","Capital estimado"].includes(c));
+   "Stock actual","Capital estimado","Margen estimado","Margen estimado (%)"].includes(c));
   if(metric){
    const relevant=rows.map(row=>({row,n:monetaryNumber(row[metric]),nombre:namedSubject(p,row)}))
     .filter(x=>x.n!==null&&x.nombre);
@@ -291,7 +291,7 @@ const quantities=s=>[...String(s).matchAll(quantityPattern)]
  .map(m=>normalizedQty(m[1],m[2])).filter(Boolean);
 const strictNumbers=s=>[...String(s).matchAll(numeralsPattern)].map(m=>m[0]);
 const comparable=(a,b)=>a.unit===b.unit&&Math.abs(a.n-b.n)<=0.011;
-const forbidden=/\b(total(?:es)?|suma|promedio|media|beneficio|rentabilidad|estimaci[oó]n|estimad[oa]|previsi[oó]n)\b/i;
+const forbidden=/\b(total(?:es)?|suma|promedio|media|beneficio|rentabilidad|estimaci[oó]n|previsi[oó]n)\b/i;
 const causal=/\b(debido\s+a|gracias\s+a|provocad[oa]|causad[oa]|por\s+el\s+motivo|por\s+una?\s+campa[nñ]a|por\s+una?\s+promoci[oó]n)\b/i;
 const trendUp=/\b(aument\w*|creci\w*|subi\w*|increment\w*)\b/i;
 const trendDown=/\b(descend\w*|disminu\w*|baj\w*|cay\w*|descens\w*)\b/i;
@@ -304,6 +304,10 @@ export function validateShortSummary(draft,p){
  if(/\b(farmaciaId|vendedorNombre|variacion_pct|SQL|JSON|NULL)\b/i.test(summary))return null;
  if(p.filas.length&&/\b(no hay datos|no se proporcionan datos|no hay cifras|no se dispone de datos|no tengo acceso)\b/i.test(summary))
   return null;
+ // "Margen estimado" es la etiqueta certificada de Farmétrica: no
+ // prohibirla cuando se ha consultado realmente esa métrica.
+ if(/\bestimad[oa]s?\b/i.test(summary)&&
+  !p.columnas.some(c=>/\bestimad[oa]s?\b/i.test(c)))return null;
  if(forbidden.test(summary)||causal.test(summary)||
   /\b(mill[oó]n(?:es)?|mil(?:es)?|cientos?|decenas?)\b/i.test(summary))return null;
  const facts=p.hechos??verifiedBusinessFacts(p),text=facts.map(f=>f.texto).join(" ");

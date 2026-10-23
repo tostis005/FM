@@ -149,3 +149,31 @@ test("una consulta por nombre activa JOIN local tras comprobar columnas del tena
  assert.ok(seen.some(x=>x.sql.includes("information_schema.columns")&&x.args[0]==="ampedia"));
  assert.ok(seen.some(x=>x.sql==="BEGIN TRANSACTION READ ONLY"));
 });
+
+
+test("regresión stock: parámetros SQL sin huecos de tipos; stock por farmacia se puede compilar",()=>{
+ const q=compileSemanticQuery({fuente:"stock",agrupar:["farmacia"],metricas:["stock_actual"]},ctx);
+ assert.match(q.sql,/\$1::date IS NULL/);
+ assert.match(q.sql,/\$2::date IS NULL/);
+ assert.match(q.sql,/WITH sold AS/);
+ assert.match(q.sql,/SUM|sum\(b\.stock_actual\)/);
+ assert.deepEqual(q.params.slice(0,2),[null,null]);
+ assert.equal(q.params.length,5);
+ assert.deepEqual(q.params[2],[1,2]);
+});
+
+test("regresión solares: filtrado temprano en JOIN artículos y no por LATERAL en cada venta",()=>{
+ const input={fuente:"ventas",agrupar:["farmacia"],metricas:["importe"],
+  desde:"2025-01-01",hasta:"2025-12-31",producto:"categoria:solares"};
+ const q=compileSemanticQuery(input,ctx);
+ assert.match(q.sql,/JOIN "ampedia"\.articulos a/);
+ assert.match(q.sql,/a\.origen_id=t\.articulo_id/);
+ assert.match(q.sql,/coalesce\(a\.nombre,''\) ILIKE \$5/);
+ assert.match(q.sql,/ILIKE '%fotoprotect%'/);
+ assert.doesNotMatch(q.sql,/LEFT JOIN LATERAL/);
+ assert.equal(q.params[4],"%solar%");
+ assert.equal(q.params.length,6);
+ const ordinary=compileSemanticQuery({...input,producto:"gel"},ctx);
+ assert.match(ordinary.sql,/LEFT JOIN LATERAL/);
+ assert.doesNotMatch(ordinary.sql,/ILIKE '%fotoprotect%'/);
+});

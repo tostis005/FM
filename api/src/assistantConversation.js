@@ -42,8 +42,9 @@ function continueFrom(previous,question,ctx,now){
   fuente:source,
   agrupar:hasDimension?candidate.agrupar:switched?
    prior.agrupar.filter(d=>!["vendedor","proveedor"].includes(d)):prior.agrupar,
-  metricas:switched||/\b(?:unidades?|cantidad|movimientos?|tickets?|margen estimado|porcentaje)\b/.test(fragment)?
-   candidate.metricas:prior.metricas};
+  metricas:switched||/\b(?:unidades?|cantidad|movimientos?|tickets?|margen estimado|porcentaje|precios?|costes?)\b/.test(fragment)?
+   (/\bprecios?\b/.test(fragment)&&source==="ventas"?
+    [...new Set(["importe","unidades","precio_medio"])]:candidate.metricas):prior.metricas};
  if(hasPeriod){delete merged.periodo;delete merged.desde;delete merged.hasta;}
  Object.assign(merged,changedPeriod);
  if(candidate.farmacias)merged.farmacias=candidate.farmacias;

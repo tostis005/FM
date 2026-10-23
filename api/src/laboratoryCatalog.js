@@ -59,8 +59,7 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    WHERE a.laboratorio_clave=$1
   ),
   receipts AS (
-   SELECT coalesce(nullif(btrim(a.codigo_nacional),''),
-      CASE WHEN r.articulo_id::text ~ '^[0-9]{6,7}$' THEN r.articulo_id::text END) AS codigo,
+   SELECT nullif(btrim(a.codigo_nacional),'') AS codigo,
     coalesce(nullif(btrim(a.nombre),''),r.articulo_id::text) AS nombre,
     CASE WHEN med.cn IS NOT NULL THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
     false AS del_maestro,true AS de_recepcion,
@@ -80,8 +79,7 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
     ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
    ) a ON true
    LEFT JOIN farmetrica.nomenclator_presentaciones med
-    ON med.cn=coalesce(nullif(btrim(a.codigo_nacional),''),
-     CASE WHEN r.articulo_id::text ~ '^[0-9]{6,7}$' THEN r.articulo_id::text END)
+    ON med.cn=nullif(btrim(a.codigo_nacional),'')
    WHERE nullif(btrim(r.articulo_id::text),'') IS NOT NULL
   ),
   combined AS (
@@ -125,7 +123,8 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  const access=(req,res)=>req.context.role==="superadministrador"||
   req.context.modules?.compras===true;
  app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
-  if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});
+  if(!access(req,res)&&req.context.modules?.proveedores!==true)
+   return res.status(403).json({error:"Catálogo no habilitado"});
   try{res.json({laboratories:await listLaboratoryOptions(pool)});}catch(e){next(e);}
  });
  app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{

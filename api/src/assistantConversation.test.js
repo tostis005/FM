@@ -75,7 +75,7 @@ test("los seguimientos sobre solares conservan el período y los vendedores",()=
  const second=should(ask("¿Y el precio medio?","Top 10 productos más vendidos este mes","¿Y de solares?"));
  assert.equal(second.producto,"categoria:solares");
  assert.deepEqual(second.metricas,["importe","unidades","precio_medio"]);
- assert.deepEqual(second.agrupar,["farmacia","producto"]);
+ assert.deepEqual(second.agrupar,["producto"],"mantiene las dimensiones de la consulta original");
  assert.equal(second.limite,10);
 });
 test("compras: seguimiento de coste medio respeta el proveedor seleccionado",()=>{

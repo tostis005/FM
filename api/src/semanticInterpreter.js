@@ -202,6 +202,9 @@ export function interpretSemanticQuestion(question,ctx,{now=new Date(),single=fa
  }else if(/\bmargen(?:es)?\s+estimad[oa]s?\b/.test(q)){
   if(fuente!=="ventas")return response("no_disponible","El margen estimado solo está definido en ventas.");
   metricas=/\b(porcentaje|porcentual|%|pct)\b/.test(q)?["margen_estimado_pct"]:["margen_estimado"];
+ }else if(fuente==="compras"&&/\b(?:coste|precio)(?:s)?\s+(?:(?:unitario|de compra)\s+)?(?:medio|promedio)\b|\bcoste unitario\b|\bprecio de compra\b/.test(q)){
+  // Recepciones: coste medio ponderado entre unidades reales, no PVP.
+  metricas=["importe","unidades","coste_unitario_medio"];
  }else if(/\b(tickets?|movimientos?|operaciones?|transacciones?|lineas?)\b/.test(q)){
   metricas=["movimientos"];
  }else if(/\b(unidades?|cantidad|volumen)\b/.test(q)&&!/\b(importe|euros|facturacion)\b/.test(q)){

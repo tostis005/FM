@@ -267,8 +267,17 @@ const measures={
   referencias_sin_coste:"count(*) FILTER(WHERE b.coste IS NULL)::int"
  }
 };
-function baseSql(source,schema,params,where,needsArticle){
- const articleJoin=source==="stock"||!needsArticle?"":`
+function baseSql(source,schema,params,where,needsArticle,{solar=false}={}){
+ // Los solares cubren períodos largos: evitar un LATERAL por cada línea
+ // histórica; el maestro artículos tiene una clave por farmacia + origen.
+ const articleJoin=source==="stock"||!needsArticle?"":solar?`
+ JOIN ${schema}.articulos a
+  ON upper(btrim(a.farmacia_codigo))=upper(btrim(t.farmacia_codigo))
+  AND a.origen_id=t.articulo_id
+  AND (coalesce(a.nombre,'') ILIKE $5
+    OR coalesce(a.nombre,'') ILIKE '%fotoprotect%'
+    OR coalesce(a.nombre,'') ILIKE '%spf %'
+    OR coalesce(a.nombre,'') ILIKE '%sun protect%')`:`
  LEFT JOIN LATERAL (
   SELECT a.nombre,a.codigo_nacional,a.familia,a.pmc,a.puc
   FROM ${schema}.articulos a WHERE upper(btrim(a.farmacia_codigo))=upper(btrim(t.farmacia_codigo))
@@ -304,6 +313,10 @@ function baseSql(source,schema,params,where,needsArticle){
    AND upper(btrim(v.farmacia_codigo))=${code}
   WHERE f.id=ANY($3::int[]) AND v.fecha>=current_date-interval '89 days'
   GROUP BY upper(btrim(v.farmacia_codigo)),btrim(v.articulo_id)`;
+ // En stock no se filtra por fechas; aun así la sentencia utiliza los
+ // parámetros $3, $4, $5. Dar tipo explícito a $1 y $2 evita el error
+ // de PostgreSQL "could not determine data type of parameter $1".
+ where.push("$1::date IS NULL","$2::date IS NULL");
  const base=`SELECT f.id AS farmacia_id,f.nombre AS farmacia,a.origen_id AS articulo_id,
    coalesce(nullif(a.nombre,''),a.origen_id) AS producto,a.codigo_nacional,a.familia,
    a.stock_actual::numeric AS stock_actual,
@@ -365,10 +378,7 @@ export function compileSemanticQuery(input,context){
   if(q.producto==="categoria:solares"){
    // Clasificación aproximada por nombre; no se asegura familia farmacéutica.
    params[params.length-1]="%solar%";
-   where.push("(coalesce(a.nombre,'') ILIKE $"+params.length+
-    " OR coalesce(a.nombre,'') ILIKE '%fotoprotect%'"+
-    " OR coalesce(a.nombre,'') ILIKE '%spf %'"+
-    " OR coalesce(a.nombre,'') ILIKE '%sun protect%')");
+   // El filtro solar se aplica en el JOIN de artículos, antes del agregado.
   }else where.push(`(coalesce(${productName},'') ILIKE $${params.length} OR coalesce(${productID},'') ILIKE $${params.length})`);
  }
  if(q.vendedor!==undefined){
@@ -392,7 +402,9 @@ export function compileSemanticQuery(input,context){
  const needsArticle=q.source==="stock"||q.producto!==undefined||
   q.dims.some(d=>["producto","codigo_nacional","familia"].includes(d))||
   q.metrics.some(k=>["margen_estimado","margen_estimado_pct","lineas_con_coste"].includes(k));
- let base=baseSql(q.source,schema,params,where,needsArticle);
+ let base=baseSql(q.source,schema,params,where,needsArticle,{
+  solar:q.source==="ventas"&&q.producto==="categoria:solares"
+ });
  if(q.source==="stock"){
   let state="";
   if(q.estadoStock==="agotado")state="b.stock_actual<=0";

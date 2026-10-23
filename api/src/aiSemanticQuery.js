@@ -49,7 +49,15 @@ const examples=[
   metricas:["stock_actual","venta_90d","dias_cobertura"],estado_stock:"bajo",
   ordenar:{campo:"dias_cobertura",direccion:"asc"},limite:40}},
  {titulo:"Ventas históricas por año",consulta:{fuente:"ventas",agrupar:["anio"],
-  metricas:["importe","unidades"],periodo:"historico",ordenar:{campo:"anio",direccion:"asc"}}}
+  metricas:["importe","unidades"],periodo:"historico",ordenar:{campo:"anio",direccion:"asc"}}},
+ {titulo:"Compras por proveedor y farmacia este mes",consulta:{fuente:"compras",agrupar:["farmacia","proveedor"],
+  metricas:["importe"],periodo:"este_mes",ordenar:{campo:"importe",direccion:"desc"}}},
+ {titulo:"Importe recibido de un proveedor concreto",consulta:{fuente:"compras",agrupar:["farmacia","proveedor"],
+  metricas:["importe"],periodo:"ultimos_90_dias",proveedor:"Nombre o código del proveedor"}},
+ {titulo:"Ventas de productos solares el año pasado (clasificación aproximada)",consulta:{fuente:"ventas",
+  agrupar:["farmacia"],metricas:["importe"],periodo:"ultimos_365_dias",producto:"categoria:solares"}},
+ {titulo:"Margen estimado en porcentaje por farmacia",consulta:{fuente:"ventas",agrupar:["farmacia"],
+  metricas:["margen_estimado_pct","lineas_con_coste"],periodo:"este_mes"}}
 ];
 // Esquema compartido por ambos servidores MCP; los nombres reales del catálogo
 // son las únicas dimensiones y métricas que pueden incluirse en SQL.
@@ -95,7 +103,20 @@ export function semanticCatalogForContext(ctx){
 export function semanticCatalog(){
  return {
   version:1,modo:"consulta_estructurada",soloLectura:true,
-  descripcion:"La IA elige fuente, dimensiones, métricas y filtros; el servidor genera SQL parametrizado y aislado por cliente. No se ejecuta SQL libre.",
+  descripcion:"La IA elige fuente, dimensiones, métricas y filtros del catálogo. Farmétrica genera SQL parametrizado y limitado al cliente/farmacias permitidas. No se ejecuta SQL libre.",
+  mapa_relaciones:{
+   ventas:"fm_ventas_analitica: fecha, farmacia_codigo, articulo_id, vendedor_id, unidades, importe. Farmacia + vendedor_id identifica al vendedor; artículo + farmacia resuelve catálogo/coste PMC actual.",
+   compras:"fm_recepciones_analitica: fecha, farmacia_codigo, articulo_id, proveedor_id, unidades, importe. proveedor_nombre puede ser NULL permanente; agrupar por farmacia y proveedor_id, resolver el nombre en (farmacia_codigo, origen_id) del maestro proveedores o en proveedores_maestro del mismo tenant.",
+   stock:"articulos: farmacia_codigo, origen_id, nombre, familia, codigo_nacional, stock_actual, pmc, puc; stock actual no admite fecha histórica."
+  },
+  interpretacion:{
+   fechas:"Períodos relativos según Europe/Madrid o fechas ISO desde/hasta. Para los últimos N días use fechas explícitas calculadas por la IA.",
+   solares:"producto=categoria:solares busca solar/fotoprotector/SPF en nombre de artículo; resultado aproximado, no clasificación garantizada por familia.",
+   gasto:"Compras equivale a importes documentados de recepciones; no es gasto contable fiscal.",
+   margen:"margen_estimado y margen_estimado_pct usan coste PMC ACTUAL por línea con coste disponible, NO ventas menos compras del período ni beneficio neto.",
+   privacidad:"No se devuelve un esquema privado ni se permite SQL arbitrario, DDL, DML, funciones o columnas no catalogadas.",
+   avanzado:"Si resolver_pregunta devuelve aclaracion o no_disponible, una IA avanzada puede usar consultar_semantica con un plan de consulta admitido. Nunca redactar SQL libre."
+  },
   fuentes:Object.fromEntries(Object.keys(DIMENSIONS).map(k=>[k,{
    descripcion:k==="ventas"?"Ventas por farmacia, producto, vendedor y período":
     k==="compras"?"Recepciones por farmacia, proveedor, artículo y período":
@@ -105,15 +126,15 @@ export function semanticCatalog(){
   }])),
   parametros:{
    fuente:"ventas | compras | stock",
-   agrupar:"Array de 0 a 3 dimensiones permitidas para la fuente. Si se agrupa por vendedor en varias farmacias, el servidor añade farmacia automáticamente (máximo tres dimensiones).",
+   agrupar:"Array de 0 a 3 dimensiones permitidas por fuente. Para vendedor o proveedor en varias farmacias se añade farmacia automáticamente para no mezclar IDs ERP.",
    metricas:"Array de 1 a 5 métricas permitidas para la fuente.",
    periodo:"hoy | ayer | esta_semana | semana_pasada | este_mes | mes_pasado | este_anio | historico | ultimos_7_dias | ultimos_30_dias | ultimos_90_dias | ultimos_365_dias",
    desde:"AAAA-MM-DD; con hasta; puede ser cualquier año disponible.",
    hasta:"AAAA-MM-DD; con desde; puede ser cualquier año disponible.",
    farmacias:"IDs autorizados; omitir para todas las farmacias del enlace.",
-   producto:"Cadena de texto con parte del nombre, CN o identificador ERP (máximo 80 caracteres).",
+   producto:"Parte del nombre, CN o ID de artículo. categoria:solares activa sinónimos comerciales aproximados (máximo 80 caracteres).",
    vendedor:"Identificador del vendedor (máximo 80 caracteres).",
-   proveedor:"Texto de proveedor (máximo 80 caracteres).",
+   proveedor:"Nombre o código del proveedor, siempre aislado por farmacia y cliente (máximo 80 caracteres).",
    estado_stock:"agotado | bajo | sin_ventas; solo fuente stock.",
    dias_max:"Umbral entre 1 y 180 días usado con estado_stock=bajo (por defecto 15).",
    ordenar:"{campo: dimensión o métrica seleccionada, direccion: asc | desc}.",
@@ -201,6 +222,12 @@ export function validateSemanticQuery(input,ctx){
   if(dims.length===3)throw err("Para comparar vendedores de varias farmacias, incluye farmacia entre las tres dimensiones");
   dims=["farmacia",...dims];
  }
+ // Los códigos ERP de proveedor pueden repetirse entre farmacias:
+ // en un desglose por proveedor, separar además por farmacia.
+ if(source==="compras"&&dims.includes("proveedor")&&!dims.includes("farmacia")&&ids.length>1){
+  if(dims.length===3)throw err("Incluye farmacia para proveedores de varias farmacias");
+  dims=["farmacia",...dims];
+ }
  const dates=resolveDates(input);
  if(source==="stock"&&(input.desde!==undefined||input.hasta!==undefined||input.periodo!==undefined))
   throw err("El stock es actual; su ritmo de venta se calcula sobre los últimos 90 días");
@@ -255,7 +282,8 @@ function baseSql(source,schema,params,where,needsArticle){
    "NULL::numeric";
   const extra=source==="ventas"?
    "nullif(btrim(t.vendedor_id::text),'') AS vendedor,NULL::text AS proveedor, "+estimated+" AS margen_estimado,":
-   "NULL::text AS vendedor,t.proveedor_nombre AS proveedor,NULL::numeric AS margen_estimado,";
+   "NULL::text AS vendedor,coalesce(nullif(btrim(t.proveedor_id::text),''),"+
+    "nullif(btrim(t.proveedor_nombre::text),'')) AS proveedor,NULL::numeric AS margen_estimado,";
   const product=needsArticle?"coalesce(nullif(a.nombre,''),t.articulo_id,'Sin referencia')":"t.articulo_id";
   const cn=needsArticle?"a.codigo_nacional":"NULL::text";
   const family=needsArticle?"a.familia":"NULL::text";
@@ -334,13 +362,26 @@ export function compileSemanticQuery(input,context){
   const alias=q.source==="stock"?"a":"t";
   const productName=q.source==="stock"?"a.nombre":"a.nombre";
   const productID=q.source==="stock"?"a.origen_id":"t.articulo_id";
-  where.push(`(coalesce(${productName},'') ILIKE $${params.length} OR coalesce(${productID},'') ILIKE $${params.length})`);
+  if(q.producto==="categoria:solares"){
+   // Clasificación aproximada por nombre; no se asegura familia farmacéutica.
+   params[params.length-1]="%solar%";
+   where.push("(coalesce(a.nombre,'') ILIKE $"+params.length+
+    " OR coalesce(a.nombre,'') ILIKE '%fotoprotect%'"+
+    " OR coalesce(a.nombre,'') ILIKE '%spf %'"+
+    " OR coalesce(a.nombre,'') ILIKE '%sun protect%')");
+  }else where.push(`(coalesce(${productName},'') ILIKE $${params.length} OR coalesce(${productID},'') ILIKE $${params.length})`);
  }
  if(q.vendedor!==undefined){
   params.push(q.vendedor.trim());where.push(`t.vendedor_id::text=$${params.length}`);
  }
  if(q.proveedor!==undefined){
-  params.push("%"+q.proveedor.trim()+"%");where.push(`t.proveedor_nombre ILIKE $${params.length}`);
+  params.push("%"+q.proveedor.trim()+"%");
+  const key="$"+params.length;
+  where.push("(t.proveedor_id::text ILIKE "+key+
+   " OR coalesce(t.proveedor_nombre,'') ILIKE "+key+
+   " OR EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm"+
+   " WHERE pm.cliente_slug=$4 AND upper(btrim(pm.codigo_origen))=upper(btrim(t.proveedor_id::text))"+
+   " AND pm.nombre ILIKE "+key+"))");
  }
  // Rows are always scoped by client and authorized IDs before aggregation.
  const needsArticle=q.source==="stock"||q.producto!==undefined||
@@ -362,12 +403,12 @@ export function compileSemanticQuery(input,context){
  const projections=[
   // El nombre de farmacia no es una clave única: exponer su ID evita
   // fusionar vendedores de dos farmacias que casualmente se llamen igual.
-  ...(q.dims.includes("farmacia")?['b.farmacia_id AS "farmaciaId"']:[]),
+  ...((q.dims.includes("farmacia")||q.dims.includes("proveedor"))?['b.farmacia_id AS "farmaciaId"']:[]),
   ...q.dims.map(d=>`${DIM_SQL[d]} AS "${d}"`),
   ...q.metrics.map(m=>`${measures[q.source][m]} AS "${m}"`)
  ];
  const group=q.dims.length?" GROUP BY "+[
-  ...(q.dims.includes("farmacia")?["b.farmacia_id"]:[]),
+  ...((q.dims.includes("farmacia")||q.dims.includes("proveedor"))?["b.farmacia_id"]:[]),
   ...q.dims.map(d=>DIM_SQL[d])
  ].join(","):"";
  const order=` ORDER BY "${q.order.campo}" ${q.order.direccion.toUpperCase()} NULLS LAST`;
@@ -389,6 +430,23 @@ export async function runSemanticQuery(pool,context,input){
   return db.query(sql,params);
  });
  let rows=result.rows;
+ if(q.source==="compras"&&q.dims.includes("proveedor")&&rows.length){
+  const entries=rows.map(row=>({
+   pharmacyId:q.ids.length===1?q.ids[0]:Number(row.farmaciaId),
+   supplierCode:row.proveedor
+  })).filter(x=>Number.isSafeInteger(x.pharmacyId)&&q.ids.includes(x.pharmacyId)&&x.supplierCode);
+  if(entries.length){
+   const names=await loadCommercialNames(pool,context,entries);
+   rows=rows.map(row=>{
+    const pharmacyId=q.ids.length===1?q.ids[0]:Number(row.farmaciaId);
+    const known=Number.isSafeInteger(pharmacyId)&&q.ids.includes(pharmacyId)&&row.proveedor&&
+     names.supplierKnown(pharmacyId,row.proveedor);
+    return {...row,proveedorCodigo:row.proveedor,proveedor:known?names.supplier(pharmacyId,row.proveedor):
+     (row.proveedor&&/[^0-9]/.test(row.proveedor)&&!/^\d+[a-z0-9_-]*$/i.test(row.proveedor)?
+      row.proveedor:null)};
+   });
+  }
+ }
  if(q.source==="ventas"&&q.dims.includes("vendedor")&&rows.length){
   const entries=rows.map(row=>({
    pharmacyId:q.ids.length===1?q.ids[0]:Number(row.farmaciaId),
@@ -406,5 +464,11 @@ export async function runSemanticQuery(pool,context,input){
  return {modo:"consulta_semantica",origen:"PostgreSQL",ficticio:false,
   fuente:q.source,periodo:q.dates,dimensiones:q.dims,metricas:q.metrics,
   farmacias_autorizadas:q.ids.length,filas:rows,
-  limite:q.limit,advertencias:WARNINGS[q.source]};
+  limite:q.limit,advertencias:[
+   ...WARNINGS[q.source],
+   ...(q.source==="ventas"&&q.producto==="categoria:solares"?
+    ["La categoría «solares» se aproxima por la denominación comercial; no es una clasificación validada de familias ni garantiza cobertura completa."]:[]),
+   ...(q.source==="compras"&&q.dims.includes("proveedor")&&rows.some(row=>row.proveedor===null)?
+    ["Hay proveedores sin nombre en el maestro; no se atribuyen sus importes a otra empresa."]:[])
+  ]};
 }

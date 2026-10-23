@@ -33,14 +33,18 @@ const STRUCTURE={
   columnas:[
    {nombre:"fecha",tipo:"fecha",rol:"filtro temporal"},
    {nombre:"farmacia_codigo",tipo:"texto",rol:"farmacia de origen"},
-   {nombre:"proveedor_nombre",tipo:"texto",rol:"proveedor"},
+   {nombre:"proveedor_id",tipo:"texto",rol:"código ERP del proveedor; puede repetirse entre farmacias"},
+   {nombre:"proveedor_nombre",tipo:"texto",rol:"puede ser NULL de forma permanente en la vista documental; NO usarlo como clave de agrupación"},
    {nombre:"articulo_id",tipo:"texto",rol:"identificador ERP de artículo"},
    {nombre:"importe",tipo:"importe",rol:"importe de recepciones"},
    {nombre:"unidades",tipo:"número",rol:"unidades recibidas"},
    {nombre:"coste_unitario",tipo:"importe",rol:"coste unitario observado"}],
   relaciones:[
    "t.farmacia_codigo → farmetrica.farmacias.codigo_origen con normalización por cliente",
-   "t.articulo_id + t.farmacia_codigo → articulos.origen_id + articulos.farmacia_codigo, solo para descripción"
+   "t.articulo_id + t.farmacia_codigo → articulos.origen_id + articulos.farmacia_codigo, solo para descripción",
+   "t.proveedor_id + t.farmacia_codigo → proveedores.origen_id + proveedores.farmacia_codigo, nombre descriptivo local",
+   "Alternativa por cliente: t.proveedor_id + cliente_slug → farmetrica.proveedores_maestro.codigo_origen + cliente_slug; usar solo cuando el maestro local no resuelva",
+   "NUNCA agrupar por proveedor_nombre; en esta vista puede ser siempre NULL. Agrupar por farmacia y proveedor_id."
   ],
   calculos:{
    importe:"SUM(t.importe). Recepciones registradas, no gasto contable.",
@@ -125,6 +129,11 @@ export function makeTemporaryModel(ctx,root){
    "Utiliza periodo=hoy para la fecha actual de Europe/Madrid; para julio de 2025 utiliza desde=2025-07-01 y hasta=2025-07-31.",
    "Para totales de ventas solicita importe; para ranking de vendedores utiliza agrupar=farmacia,vendedor.",
    "Para productos más vendidos usa metricas=unidades,importe y agrupar=farmacia,producto.",
+   "Para compras por proveedor utiliza fuente=compras, agrupar=farmacia,proveedor, metricas=importe, periodo o fechas. Farmétrica resuelve el nombre, nunca agrupa por proveedor_nombre nulo.",
+   "Para proveedores concretos utiliza proveedor=nombre o código, validado por tenant y farmacia. Las recepciones no son gasto contable.",
+   "Para solares, Farmétrica permite producto=categoria:solares como aproximación a nombres con solar/fotoprotector/SPF; advierte que las familias ERP no están verificadas.",
+   "Para márgenes usa margen_estimado o margen_estimado_pct de ventas, coste PMC actual; NUNCA beneficio contable ni ventas menos compras agregadas.",
+   "No inventes SELECT ni JOIN: usa el plan semántico estructurado con las métricas/dimensiones permitidas. Si no puede expresarse, explica la limitación.",
    "El stock es actual, nunca histórico. El margen estimado usa PMC actual, no margen contable.",
    "Nunca inventes datos ni interpretes NULL como cero. Explica advertencias, período y límites de filas.",
    "Si una fuente o métrica no está en este modelo, comunica que aún no es consultable.",

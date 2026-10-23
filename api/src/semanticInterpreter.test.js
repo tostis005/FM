@@ -70,3 +70,19 @@ test("Cada plan aceptado supera la misma validación del MCP",()=>{
   "¿Cuánto stock tenemos por farmacia?"
  ])assert.doesNotThrow(()=>validateSemanticQuery(ok(question),ctx));
 });
+
+
+test("coste de compras ponderado por proveedor, sin confundirlo con PVP",()=>{
+ for(const question of [
+  "Compras por proveedor y coste unitario medio este mes",
+  "Precio medio de compra por proveedor este mes",
+  "Compras por proveedor coste medio este mes"
+ ]){
+  const resolution=resolve(question);
+  assert.equal(resolution.estado,"ok",JSON.stringify(resolution));
+  assert.equal(resolution.consulta.fuente,"compras");
+  assert.deepEqual(resolution.consulta.metricas,["importe","unidades","coste_unitario_medio"]);
+ }
+ assert.equal(resolve("Precio medio de venta actual de cada producto").estado!=="ok",true,
+  "no presentar precios de catálogo actuales como precio histórico");
+});

@@ -420,7 +420,7 @@ export async function runSemanticQuery(pool,context,input){
     const pharmacyId=q.ids.length===1?q.ids[0]:Number(row.farmaciaId);
     const known=Number.isSafeInteger(pharmacyId)&&q.ids.includes(pharmacyId)&&row.proveedor&&
      names.supplierKnown(pharmacyId,row.proveedor);
-    return {...row,proveedor:known?names.supplier(pharmacyId,row.proveedor):
+    return {...row,proveedorCodigo:row.proveedor,proveedor:known?names.supplier(pharmacyId,row.proveedor):
      (row.proveedor&&/[^0-9]/.test(row.proveedor)&&!/^\d+[a-z0-9_-]*$/i.test(row.proveedor)?
       row.proveedor:null)};
    });

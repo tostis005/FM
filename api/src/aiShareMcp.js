@@ -5,12 +5,13 @@ import {loadDemoMcpContext} from "./aiMcpDemo.js";
 import {semanticCatalogForContext,runSemanticQuery,SEMANTIC_MCP_QUERY_SCHEMA} from "./aiSemanticQuery.js";
 import {makeTemporaryModel} from "./aiShareContract.js";
 import {resolveAndExecuteQuestion} from "./semanticResolver.js";
+import {presentSemanticResult,renderSemanticMarkdown} from "./semanticPresentation.js";
 
 const ROOT="https://farmetrica.com/api/consulta-temporal/";
 const RE=/^fm_share_[A-Za-z0-9_-]{43}$/;
 const SCHEMA_URL={type:"string",description:"URL temporal de Farmétrica copiada por el usuario; nunca otra URL."};
 const tools=[
- {name:"resolver_pregunta_temporal",description:"MÉTODO RECOMENDADO: envía la pregunta en español literalmente. Farmétrica interpreta fuente, métricas, dimensiones y fechas con reglas únicas independientes de la IA; ejecuta SQL seguro y devuelve el resultado. Si hay ambigüedad devuelve aclaración, no datos inventados.",annotations:{readOnlyHint:true,openWorldHint:false},
+ {name:"resolver_pregunta_temporal",description:"MÉTODO RECOMENDADO para preguntas en español. Devuelve datos listos para presentar: nombres comerciales, importes en euros y advertencias; sin IDs internos ni estados técnicos. Redacta tu respuesta al usuario en lenguaje natural o Markdown, NO pegues JSON ni inventes totales.",annotations:{readOnlyHint:true,openWorldHint:false},
   inputSchema:{type:"object",properties:{url:SCHEMA_URL,pregunta:{type:"string",minLength:2,maxLength:1000}},required:["url","pregunta"],additionalProperties:false}},
  {name:"leer_modelo_temporal",description:"Consulta el catálogo único y las definiciones auditadas. Para preguntas en español utiliza resolver_pregunta_temporal, que evita planes distintos entre modelos.",annotations:{readOnlyHint:true,openWorldHint:false},
   inputSchema:{type:"object",properties:{url:SCHEMA_URL},required:["url"],additionalProperties:false}},
@@ -77,9 +78,11 @@ export function setupShareMcp(app,pool,{resolveLink}){
     return res.json(textResult(id,makeTemporaryModel(ctx,ROOT+token)));
    if(name==="resolver_pregunta_temporal"){
     const result=await resolveAndExecuteQuestion(pool,ctx,args.pregunta);
-    return res.json(textResult(id,{...result,
-      cliente:ctx.client.name,soloLectura:true,
-      origen:result.estado==="ok"?"PostgreSQL":"Farmétrica"}));
+    const publicResult=presentSemanticResult(result);
+    return res.json({jsonrpc:"2.0",id,result:{
+     structuredContent:publicResult,
+     content:[{type:"text",text:renderSemanticMarkdown(publicResult)}]
+    }});
    }
    if(!args.consulta||typeof args.consulta!=="object"||Array.isArray(args.consulta)||
      JSON.stringify(args.consulta).length>6000)

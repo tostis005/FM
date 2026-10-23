@@ -14,7 +14,7 @@ test("consulta anual de vendedores compila SQL ligero e idénticos totales",()=>
  assert.match(compiled.sql,/f\.cliente_slug=\$4/);
  assert.match(compiled.sql,/t\.fecha >= \$1::date/);
  assert.match(compiled.sql,/t\.fecha < \(\$2::date \+ interval '1 day'\)/);
- assert.match(compiled.sql,/GROUP BY f\.id,f\.nombre,t\.vendedor_id/);
+ assert.match(compiled.sql,/GROUP BY f\.id,f\.nombre,nullif\(btrim\(t\.vendedor_id::text\)/);
  assert.doesNotMatch(compiled.sql,/to_char|LEFT JOIN LATERAL|OR t\.fecha|OR t\.vendedor_id/);
  assert.deepEqual(compiled.params,["2026-01-01","2026-10-22",[1,2],"ampedia",30]);
  assert.deepEqual(compiled.q.metrics,["importe"]);

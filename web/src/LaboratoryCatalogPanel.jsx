@@ -1,0 +1,102 @@
+import React,{useEffect,useMemo,useState} from "react";
+import {LoadingStatus} from "./LoadingState.jsx";
+import "./laboratoryCatalog.css";
+
+async function getJson(path,clientSlug,signal){
+ const response=await fetch(path,{credentials:"same-origin",cache:"no-store",
+  headers:{"X-Farmetrica-Cliente":clientSlug},signal});
+ const payload=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(payload.error||"No se pudo consultar el catálogo");
+ return payload;
+}
+export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
+ const [laboratories,setLaboratories]=useState([]);
+ const [labSearch,setLabSearch]=useState("");
+ const [selected,setSelected]=useState("");
+ const [tab,setTab]=useState("parafarmacia");
+ const [search,setSearch]=useState("");
+ const [page,setPage]=useState(1);
+ const [result,setResult]=useState({rows:[],total:0,page:1,size:50});
+ const [loading,setLoading]=useState(false),[loadingLabs,setLoadingLabs]=useState(true);
+ const [error,setError]=useState("");
+ const pharmacyCodes=pharmacyIds.map(String).join(",");
+ useEffect(()=>{
+  const ac=new AbortController();
+  setLoadingLabs(true);
+  getJson("/api/analytics/pedidos/catalogo-laboratorios",clientSlug,ac.signal)
+   .then(data=>{if(!ac.signal.aborted)setLaboratories(data.laboratories||[])})
+   .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
+   .finally(()=>{if(!ac.signal.aborted)setLoadingLabs(false)});
+  return ()=>ac.abort();
+ },[clientSlug]);
+ useEffect(()=>{
+  if(!selected){setResult({rows:[],total:0,page:1,size:50});return}
+  const ac=new AbortController();
+  const timer=setTimeout(()=>{
+   setLoading(true);setError("");
+   const query=new URLSearchParams({laboratorio:selected,tipo:tab,buscar:search,
+    farmacias:pharmacyCodes,pagina:String(page),tamano:"50"});
+   getJson("/api/analytics/pedidos/articulos-laboratorio?"+query,clientSlug,ac.signal)
+    .then(data=>{if(!ac.signal.aborted)setResult(data)})
+    .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
+    .finally(()=>{if(!ac.signal.aborted)setLoading(false)});
+  },200);
+  return ()=>{clearTimeout(timer);ac.abort()};
+ },[clientSlug,selected,tab,search,page,pharmacyCodes]);
+ const choices=useMemo(()=>laboratories.filter(r=>
+  (r.name+" "+r.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es"))),[laboratories,labSearch]);
+ const maxPage=Math.max(1,Math.ceil((result.total||0)/50));
+ return <section className="card fm-laboratory-catalog" aria-label="Catálogo por laboratorio">
+  <div className="fm-laboratory-heading">
+   <div><h2>Artículos por laboratorio</h2>
+    <p>Medicamentos del maestro AEMPS y artículos identificados en las recepciones de las farmacias seleccionadas.</p>
+   </div>
+   {loadingLabs&&<LoadingStatus compact label="Cargando laboratorios…"/>}
+  </div>
+  <div className="fm-laboratory-filters">
+   <label><span>Buscar laboratorio</span><input type="search" value={labSearch}
+    onChange={e=>setLabSearch(e.target.value)} placeholder="Filtrar laboratorios…"/></label>
+   <label><span>Laboratorio</span><select aria-label="Seleccionar laboratorio" value={selected}
+    onChange={e=>{setSelected(e.target.value);setPage(1);setSearch("");setTab("parafarmacia")}}>
+    <option value="">Selecciona un laboratorio…</option>
+    {choices.map(l=><option value={l.key} key={l.key}>{l.name}</option>)}
+    {selected&&!choices.some(l=>l.key===selected)&&laboratories.filter(l=>l.key===selected).map(l=>
+     <option value={l.key} key={l.key}>{l.name}</option>)}
+   </select></label>
+  </div>
+  {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}
+  {!selected?<p className="fm-laboratory-empty">Elige un laboratorio para consultar todas sus referencias, aunque no hayan tenido ventas.</p>:<>
+   <div className="fm-laboratory-tabs" role="tablist" aria-label="Tipo de producto">
+    {["parafarmacia","medicacion"].map(type=>
+     <button type="button" role="tab" aria-selected={tab===type} key={type}
+      className={tab===type?"active":""} onClick={()=>{setTab(type);setPage(1)}}>
+      {type==="medicacion"?"Medicación":"Parafarmacia"}</button>)}
+   </div>
+   <div className="fm-laboratory-toolbar">
+    <label><span>Buscar artículo o CN/EAN</span><input type="search" value={search}
+     onChange={e=>{setSearch(e.target.value);setPage(1)}}
+     placeholder="Artículo, código nacional o ERP…"/></label>
+    <span>{loading?"Consultando…":result.total+" artículos"}</span>
+   </div>
+   <div className="fm-laboratory-scroll" role="tabpanel">
+    <table><thead><tr><th>Código nacional / ERP</th><th>Artículo</th><th>Origen</th><th>Farmacias con recepción</th></tr></thead>
+     <tbody>{(result.rows||[]).map(r=><tr key={r.referencia}>
+      <td><strong>{r.cn||r.referencia}</strong></td>
+      <td>{r.nombre}{r.provisional&&<small className="fm-laboratory-provisional"> · Clasificación provisional (no figura en el maestro)</small>}</td>
+      <td>{r.inMaster&&r.inReceipts?"Maestro + recepciones":r.inMaster?"Maestro":"Recepciones ERP"}</td>
+      <td>{r.pharmacyIds||"—"}</td>
+     </tr>)}
+     {!loading&&!(result.rows||[]).length&&<tr><td colSpan={4}>No se han encontrado artículos en esta categoría para el laboratorio seleccionado.</td></tr>}
+     </tbody>
+    </table>
+   </div>
+   <div className="fm-laboratory-pagination">
+    <span>Página {page} de {maxPage} · {result.total} referencias</span>
+    <div><button type="button" className="btn btn-secondary" disabled={page<=1||loading}
+      onClick={()=>setPage(p=>p-1)}>Anterior</button>
+     <button type="button" className="btn btn-secondary" disabled={page>=maxPage||loading}
+      onClick={()=>setPage(p=>p+1)}>Siguiente</button></div>
+   </div>
+   <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las recepciones se asocian únicamente mediante correspondencias ERP configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
+  </>}
+ </section>;

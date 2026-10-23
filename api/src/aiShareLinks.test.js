@@ -177,9 +177,9 @@ test("24-hour link: real PostgreSQL, expiry, revocation, tenant and admin protec
    encodeURIComponent("¿Cuánto vendió cada farmacia el 22 de octubre de 2026?")+
    "&formato=json")).json();
   assert.equal(natural.estado,"ok");
-  assert.equal(natural.consulta.fuente,"ventas");
-  assert.deepEqual(natural.consulta.agrupar,["farmacia"]);
-  assert.equal(natural.origen,"PostgreSQL");
+  assert.deepEqual(natural.columnas,["Farmacia","Ventas"]);
+  assert.equal(natural.consulta,undefined);
+  assert.deepEqual(natural.filas[0],{Farmacia:"Farmacia Real Uno",Ventas:"210,00 €"});
   assert.equal((await fetch(base+path+"?pregunta=Ventas%20hoy&desde=2026-10-22&formato=json")).status,400);
 
   const semanticPlan={fuente:"ventas",agrupar:["farmacia","vendedor"],metricas:["importe"],

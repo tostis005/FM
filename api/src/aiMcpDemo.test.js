@@ -52,9 +52,9 @@ test("el MCP OAuth interpreta preguntas con reglas de Farmétrica, nunca con un 
   pregunta:"¿Cuánto vendió cada farmacia el 22 de octubre de 2026?"
  }});
  assert.equal(result.body.result.structuredContent.estado,"ok");
- assert.equal(result.body.result.structuredContent.consulta.fuente,"ventas");
- assert.deepEqual(result.body.result.structuredContent.consulta.agrupar,["farmacia"]);
- assert.equal(result.body.result.structuredContent.origen,"PostgreSQL");
+ assert.deepEqual(result.body.result.structuredContent.columnas,["Farmacia","Ventas"]);
+ assert.equal(result.body.result.structuredContent.consulta,undefined);
+ assert.match(result.body.result.content[0].text,/\\| Farmacia \\| Ventas \\|/);
  const analyticsBefore=calls.filter(c=>c.sql==="BEGIN TRANSACTION READ ONLY").length;
  const unclear=await call("tools/call",{name:"resolver_pregunta",arguments:{
   pregunta:"Ventas por farmacia"

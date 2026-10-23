@@ -51,6 +51,10 @@ test("Metricas, stock actual, fechas y rankings están canonizados",()=>{
  assert.deepEqual(ok("¿Cuánto stock tenemos por farmacia?"),
   {fuente:"stock",agrupar:["farmacia"],metricas:["stock_actual"]});
  assert.deepEqual(ok("Top 10 vendedores con más ventas este año").limite,10);
+ assert.deepEqual(ok("Top 10 productos más vendidos este mes").metricas,
+  ["unidades","importe","precio_medio"]);
+ assert.deepEqual(ok("Precio medio de venta por producto este mes").metricas,
+  ["importe","unidades","precio_medio"]);
  assert.equal(ok("Ventas por farmacia en octubre de 2026").desde,"2026-10-01");
  assert.equal(ok("Ventas por farmacia en octubre de 2026").hasta,"2026-10-31");
  assert.equal(resolve("¿Cuál era el stock el 22 de octubre de 2026?").estado,"no_disponible");

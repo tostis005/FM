@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import {authorizedIds,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 import {resolveConversationQuestion} from "./assistantConversation.js";
+import {plannerPrompt,parseProposedPlan,previousResolvedQuestion,shouldTryAssistantPlanner} from "./assistantPlanner.js";
 import {executeResolvedQuestion} from "./semanticResolver.js";
 import {presentSemanticResult,SHORT_SUMMARY_SYSTEM,shortSummaryContext,composeOfficialSemanticAnswer} from "./semanticPresentation.js";
 import {collectOllamaStream,writeAssistantEvent} from "./assistantStream.js";
@@ -74,7 +75,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
  const facts=presentation?"DATOS_LIMPIOS="+JSON.stringify(presentation).slice(0,12000):
   "CONTEXTO: sección "+String(context.section||"General").slice(0,70)+
   ". DATOS_VERIFICADOS="+JSON.stringify(compactFacts(results)).slice(0,14000);
- const messages=summaryPresentation?[
+ const messages=settings.planMessages|| (summaryPresentation?[
   {role:"system",content:SHORT_SUMMARY_SYSTEM},
   {role:"user",content:"Pregunta: "+question+
    "\nEvidencia verificada: "+JSON.stringify(shortSummaryContext(summaryPresentation))+
@@ -83,7 +84,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
   {role:"system",content:settings.system||(presentation?naturalSystem:system)+" "+facts},
   ...history.map(x=>({role:x.role,content:x.content})),
   {role:"user",content:question}
- ];
+ ]);
  const controller=new AbortController();
  const onExternalAbort=()=>controller.abort();
  if(settings.signal?.aborted)controller.abort();
@@ -96,7 +97,7 @@ export async function callOllama(question,history,context,results,endpoint=ollam
    body:JSON.stringify({
     model:chosenModel,stream:Boolean(settings.onDelta),think:false,messages,
     ...(settings.format?{format:settings.format}:{}),
-    options:{temperature:0.1,num_ctx:summaryPresentation?1024:2048,num_predict:settings.numPredict??370,num_thread:2},
+    options:{temperature:0.1,num_ctx:settings.planMessages?3072:summaryPresentation?1024:2048,num_predict:settings.numPredict??370,num_thread:2},
     keep_alive:"2m"
    })
   });
@@ -109,6 +110,33 @@ export async function callOllama(question,history,context,results,endpoint=ollam
  }finally{
   clearTimeout(timeout);
   settings.signal?.removeEventListener("abort",onExternalAbort);
+ }
+}
+
+
+// Ollama propone planes tipados; Farmétrica valida SQL, tenant y farmacia.
+// Si Qwen falla, nunca sustituir la interpretación semántica segura actual.
+export async function adaptiveAssistantResolution(question,history,context,{
+ now=new Date(),generate=callOllama,signal
+}={}){
+ const baseline=resolveConversationQuestion(question,history,context,{now});
+ if(!shouldTryAssistantPlanner(question,baseline))return baseline;
+ try{
+  const draft=await generate(question,[],{section:"Farmétrica"},[],
+   ollama(),model(),{numPredict:230,format:"json",
+    planMessages:plannerPrompt(question,history,context,{now}),signal});
+  const query=parseProposedPlan(draft,context,{
+   question,previous:previousResolvedQuestion(history,context,{now}),now});
+  if(!query)return baseline;
+  return {version:"farmetrica.nl.plan.v1",estado:"ok",
+   mensaje:"Consulta planificada con el catálogo de Farmétrica.",
+   consulta:query,interpretacion:{fuente:query.fuente,
+    dimensiones:query.agrupar||[],metricas:query.metricas},
+   planificacion:"modelo_validado"};
+ }catch(error){
+  if(signal?.aborted)throw error;
+  console.warn("Planificador: interpretación clásica conservada",error?.name||"error");
+  return baseline;
  }
 }
 
@@ -168,7 +196,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
    const context={...req.context,allowedPharmacyIds:ids,
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
    stopHeartbeat=startJsonHeartbeat(res);
-   const resolution=resolveConversationQuestion(body.question,body.history,context);
+   const resolution=await adaptiveAssistantResolution(body.question,body.history,context);
    if(!["ok","general"].includes(resolution.estado)){
     return res.end(JSON.stringify({answer:resolution.mensaje,
      model:"farmetrica-semantica",sources:[],interpretacion:resolution}));
@@ -233,7 +261,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
    const context={...req.context,allowedPharmacyIds:ids,
     pharmacies:(req.context.pharmacies||[]).filter(p=>ids.includes(Number(p.id)))};
    progress("planning","Entendiendo tu pregunta…");
-   const resolution=resolveConversationQuestion(body.question,body.history,context);
+   const resolution=await adaptiveAssistantResolution(body.question,body.history,context,{signal:controller.signal});
    if(controller.signal.aborted)return;
    if(!["ok","general"].includes(resolution.estado)){
     writeAssistantEvent(res,"done",{answer:resolution.mensaje,

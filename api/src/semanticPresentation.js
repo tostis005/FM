@@ -6,7 +6,7 @@ const DIM_LABELS={
  codigo_nacional:"Código nacional",familia:"Familia",dia:"Día",mes:"Mes",anio:"Año"
 };
 const METRIC_LABELS={
- importe:"Importe",unidades:"Unidades",movimientos:"Movimientos",
+ importe:"Importe",unidades:"Unidades",precio_medio:"Precio medio",movimientos:"Movimientos",
  margen_estimado:"Margen estimado",margen_estimado_pct:"Margen estimado (%)",
  lineas_con_coste:"Líneas con coste",coste_unitario_medio:"Coste unitario medio",
  stock_actual:"Stock actual",capital_estimado:"Capital estimado",
@@ -15,7 +15,7 @@ const METRIC_LABELS={
  anterior:"Período anterior",actual:"Período actual",
  diferencia:"Diferencia",variacion_pct:"Variación"
 };
-const CURRENCY=new Set(["importe","margen_estimado","capital_estimado","coste_unitario_medio"]);
+const CURRENCY=new Set(["importe","margen_estimado","capital_estimado","coste_unitario_medio","precio_medio"]);
 const PERCENT=new Set(["margen_estimado_pct","variacion_pct"]);
 const nf=new Intl.NumberFormat("es-ES",{maximumFractionDigits:2,minimumFractionDigits:2});
 const count=new Intl.NumberFormat("es-ES",{maximumFractionDigits:2});
@@ -147,6 +147,8 @@ export function chatWarnings(p){
   output.push("Algunos productos no tienen coste disponible.");
  if(p.columnas?.some(c=>/^Margen estimado/.test(c)))
   output.push("El margen es orientativo: utiliza el coste de compra actual.");
+ if(p.columnas?.includes("Precio medio"))
+  output.push("Precio medio calculado a partir de las ventas y unidades del período, no del PVP actual.");
  return output;
 }
 export function renderSemanticMarkdown(data,{chatMode=false}={}){
@@ -259,7 +261,7 @@ export function verifiedBusinessFacts(p){
    "No existen aumentos o descensos verificables en los grupos comparados."));
  }else{
   const metric=p.columnas.find(c=>["Ventas","Compras","Importe","Unidades","Movimientos",
-   "Stock actual","Capital estimado","Margen estimado","Margen estimado (%)"].includes(c));
+   "Stock actual","Capital estimado","Margen estimado","Margen estimado (%)","Precio medio"].includes(c));
   if(metric){
    const relevant=rows.map(row=>({row,n:monetaryNumber(row[metric]),nombre:namedSubject(p,row)}))
     .filter(x=>x.n!==null&&x.nombre);

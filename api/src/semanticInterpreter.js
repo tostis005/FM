@@ -207,7 +207,10 @@ export function interpretSemanticQuestion(question,ctx,{now=new Date(),single=fa
  }else if(/\b(unidades?|cantidad|volumen)\b/.test(q)&&!/\b(importe|euros|facturacion)\b/.test(q)){
   metricas=["unidades"];
  }else if(rank&&fuente==="ventas"&&agrupar.includes("producto")){
-  metricas=["unidades"];
+  // Ranking por unidades; también responder importe y precio medio realizado.
+  metricas=["unidades","importe","precio_medio"];
+ }else if(fuente==="ventas"&&/\b(precio(?:s)?\s+(?:medio|promedio|de\s+venta)|precio\s+por\s+unidad)\b/.test(q)){
+  metricas=["importe","unidades","precio_medio"];
  }else metricas=["importe"];
  if(metricas.some(m=>!Object.hasOwn(meta.metricas,m)))
   return response("no_disponible","Esa métrica no está disponible para la fuente indicada.");

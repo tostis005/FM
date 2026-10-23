@@ -88,6 +88,8 @@ test("compras: seguimiento de coste medio respeta el proveedor seleccionado",()=
 test("una farmacia ajena no puede inferirse de una repregunta",()=>{
  const c=ask("¿Y en Atlantis?","¿Cuánto vendimos en Abadía este mes?");
  assert.notEqual(c.estado,"ok");
+ const price=ask("¿Y en Atlantis con el precio medio?","¿Cuánto vendimos en Abadía este mes?");
+ assert.notEqual(price.estado,"ok","no confundir una farmacia desconocida con una métrica comercial");
  const allowed=should(ask("¿Y en Europa?","Ventas en Abadía este mes"));
  assert.deepEqual(allowed.farmacias,[2]);
 });

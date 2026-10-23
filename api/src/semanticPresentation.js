@@ -130,7 +130,26 @@ export function presentSemanticResult(data,{maxRows=100}={}){
  result.hechos=verifiedBusinessFacts(result);
  return result;
 }
-export function renderSemanticMarkdown(data){
+// La documentación del contrato sigue disponible para el MCP y otras IA,
+// pero el chat muestra únicamente avisos que cambian la interpretación.
+export function chatWarnings(p){
+ const notes=p.advertencias||[];
+ const output=[];
+ if(notes.some(x=>/proveedor.+(?:no identificado|sin nombre)|sin proveedor identificado|sin nombre en el maestro|sin proveedor identificado/i.test(x)))
+  output.push("Hay compras cuyo proveedor no está identificado.");
+ if(notes.some(x=>/se muestran solo|se muestran \d+ de|se alcanz[oó] el l[ií]mite|pueden faltar resultados|no es un desglose completo|muestra parcial/i.test(x)))
+  output.push("Se muestra una parte de los resultados. Puedes acotar la consulta para ver más.");
+ if(notes.some(x=>/categor[ií]a.+solares|familias ERP|no garantiza cobertura completa/i.test(x)))
+  output.push("Los solares se identifican de forma aproximada por el nombre comercial.");
+ if(notes.some(x=>/per[ií]odos de distinta duraci[oó]n|no normalizados por d[ií]a/i.test(x)))
+  output.push("Los períodos comparados tienen distinta duración.");
+ if(notes.some(x=>/sin coste|faltan costes|coste no disponible/i.test(x)))
+  output.push("Algunos productos no tienen coste disponible.");
+ if(p.columnas?.some(c=>/^Margen estimado/.test(c)))
+  output.push("El margen es orientativo: utiliza el coste de compra actual.");
+ return output;
+}
+export function renderSemanticMarkdown(data,{chatMode=false}={}){
  const p=data?.columnas?data:presentSemanticResult(data);
  if(p.estado!=="ok")return p.mensaje;
  let content="### "+safeMarkdown(p.titulo);
@@ -146,7 +165,8 @@ export function renderSemanticMarkdown(data){
    "| "+cols.map(()=>"---").join(" | ")+" |\n"+
    p.filas.map(r=>"| "+cols.map(c=>safeMarkdown(r[c])).join(" | ")+" |").join("\n");
  }
- if(p.advertencias.length)content+="\n\n"+p.advertencias.map(x=>"> "+safeMarkdown(x)).join("\n");
+ const warnings=chatMode?chatWarnings(p):p.advertencias;
+ if(warnings.length)content+="\n\n"+warnings.map(x=>"> "+safeMarkdown(x)).join("\n");
  return content;
 }
 function monetaryTokens(s){
@@ -356,10 +376,23 @@ export function validateShortSummary(draft,p){
   !/\b(muestra|parcial|mostrad[oa]s?|presentad[oa]s?|entre)\b/i.test(normFact(summary)))return null;
  return summary.replace(/\s+/g," ");
 }
-export function composeOfficialSemanticAnswer(p,draft){
- const table=renderSemanticMarkdown(p);
- const verified=validateShortSummary(draft,p);
+export function composeOfficialSemanticAnswer(p,draft,{chatMode=false}={}){
+ const table=renderSemanticMarkdown(p,{chatMode});
  const facts=p.hechos??verifiedBusinessFacts(p);
+ if(chatMode){
+  // El modelo pequeño no redacta afirmaciones financieras abiertas:
+  // evita frases incoherentes y conserva exactamente las cifras del servidor.
+  const main=facts.filter(f=>!["muestra_parcial","sin_filas"].includes(f.tipo));
+  let summary=main.slice(0,2).map(f=>f.texto).join(" ");
+  if(!p.filas.length)summary="No se encontraron resultados para esta consulta.";
+  if(!summary&&p.filas.length===1&&p.columnas.length===1){
+   const key=p.columnas[0],metric=p.filas[0][key];
+   summary="El resultado de "+key.toLowerCase()+" es "+metric+".";
+  }
+  if(!summary&&p.filas.length)summary="Aquí tienes los resultados del período consultado.";
+  return (summary?summary+"\n\n":"")+table;
+ }
+ const verified=validateShortSummary(draft,p);
  const fallback=facts.length?facts.map(f=>f.texto).slice(0,2).join(" "):
   "Estos son los datos verificados por Farmétrica.";
  return "**Resumen:** "+(verified||fallback)+"\n\n"+table;

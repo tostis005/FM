@@ -33,7 +33,7 @@ jobs:
           node --check scripts/benchmark-resumen-mcp.mjs
           node --check scripts/benchmark-cobertura-mcp.mjs
           node --test api/src/assistantStream.test.js
-          node --test api/src/semanticInterpreter.test.js
+          node --test api/src/semanticInterpreter.test.js api/src/assistantConversation.test.js
           node --test api/src/semanticResolver.test.js api/src/semanticPresentation.test.js api/src/semanticPeriodComparison.test.js api/src/semanticSellerSql.test.js api/src/semanticSupplierSql.test.js
           node --check api/src/aiMcpDemo.js
           node --check api/src/aiShareMcp.js

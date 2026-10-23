@@ -188,3 +188,27 @@ test("hechos verificables para ventas por día y márgenes estimados",()=>{
   "Abadía registra la mayor cifra de margen estimado con 20,12 %.",margin),null);
  assert.equal(validateShortSummary("Abadía registra un margen de 45 %.",margin),null);
 });
+
+test("chat comercial: el resumen financiero depende solo del servidor",()=>{
+ const p=presentSemanticResult({estado:"ok",fuente:"ventas",
+  periodo:{desde:"2026-10-01",hasta:"2026-10-23"},dimensiones:["farmacia"],
+  metricas:["importe"],filas:[
+   {farmacia:"Abadía",farmaciaId:1,importe:7392.15},
+   {farmacia:"Europa",farmaciaId:2,importe:6851.53}],
+  advertencias:["margen_estimado usa PMC ACTUAL; la venta histórica puede haber tenido otro coste."]});
+ const text=composeOfficialSemanticAnswer(p,"La abadia lleva abadia este año.",{chatMode:true});
+ assert.match(text,/Abadía registra la mayor cifra de ventas/);
+ assert.match(text,/\| Abadía \| 7392,15 € \|/);
+ assert.doesNotMatch(text,/lleva abadia|Resumen:|PMC ACTUAL/);
+ assert.match(renderSemanticMarkdown(p),/PMC ACTUAL/);
+});
+test("chat comercial: explicación de margen simplificada",()=>{
+ const p=presentSemanticResult({estado:"ok",fuente:"ventas",
+  dimensiones:["farmacia"],metricas:["margen_estimado_pct"],
+  filas:[{farmacia:"Abadía",margen_estimado_pct:20.12}],
+  advertencias:["margen_estimado usa PMC ACTUAL; la venta histórica puede haber tenido otro coste."]});
+ const answer=composeOfficialSemanticAnswer(p,"",{chatMode:true});
+ assert.match(answer,/20,12 %/);
+ assert.match(answer,/El margen es orientativo: utiliza el coste de compra actual/);
+ assert.doesNotMatch(answer,/PMC ACTUAL/);
+});

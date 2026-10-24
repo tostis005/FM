@@ -166,6 +166,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/027_pedidos_laboratorio_borradores.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
+          psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
@@ -245,6 +246,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlannerSuppliers.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCatalog.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierCatalog.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/masterSources.integration.test.js
 
 
@@ -275,6 +277,7 @@ jobs:
           node check-master-sources.mjs
           node check-user-modules.mjs
           node check-laboratory-orders.mjs
+          node check-supplier-laboratory-map.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs
           node check-responsive.mjs

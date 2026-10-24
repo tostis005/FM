@@ -170,7 +170,7 @@ try{
  assert.equal(pageTwoData.groups[0].patron,"concentrada",
   "La detección de demanda se conserva en API aunque no se muestre la columna");
  assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0);
- await page.getByRole("button",{name:"Anterior"}).click();
+ await page.locator(".fm-planner").getByRole("button",{name:"Anterior"}).first().click();
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
  await page.getByRole("button",{name:/Crema de manos/}).first().click();
  await page.locator(".fm-planner-details").first().waitFor();

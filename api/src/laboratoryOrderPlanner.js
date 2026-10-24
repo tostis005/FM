@@ -20,21 +20,19 @@ export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).j
 
 export async function readLaboratoryOrderMatrix(pool,ctx,options){
  let base,warning=null;
- // Never hide AEMPS/master products because receipts/sales join is faulty.
- try{
+ // El catálogo directo aplica primero la fuente importada y añade referencias
+ // del proveedor en Farmatic que aún no estén en el vademécum.
+ try{base=await readDirectLaboratoryCatalog(pool,ctx,options)}
+ catch(err){
   base=await readLaboratoryArticles(pool,ctx,options);
- }catch(err){
-  base=await readDirectLaboratoryCatalog(pool,ctx,options);
-  warning="La consulta completa no está disponible: se muestran las referencias del maestro y del ERP. "+(err.code||"");
+  warning="Se usa temporalmente el catálogo histórico: "+(err.code||"consulta");
  }
- // The direct sources are the authoritative minimum coverage.
+ // Compatibilidad con correspondencias C: de versiones anteriores.
  if(!base.total){
   try{
-   const direct=await readDirectLaboratoryCatalog(pool,ctx,options);
-   if(direct.total>0){base=direct;warning="Referencias recuperadas directamente del maestro; revisa las correspondencias de recepciones.";}
-  }catch(e){
-   if(!warning)warning="No se pudo comprobar el catálogo directo: "+(e.code||"consulta");
-  }
+   const legacy=await readLaboratoryArticles(pool,ctx,options);
+   if(legacy.total>0){base=legacy;warning="Referencias recuperadas mediante correspondencias antiguas."}
+  }catch(e){if(!warning)warning="No se pudo consultar el catálogo histórico: "+(e.code||"consulta")}
  }
  const fallback={...base,from:options.from,to:options.to,
   rows:base.rows.map(r=>({...r,byPharmacy:{},totalSold:null,totalSuggested:null})),metricsUnavailable:true};

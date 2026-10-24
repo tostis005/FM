@@ -50,3 +50,37 @@ jobs:
           SELECT 'nomen_versions_active',count(*) FROM farmetrica.nomenclator_versiones WHERE activo;
           COMMIT;
           SQL
+
+      - name: Ejecutar consulta real del preparador sin modificar datos
+        run: |
+          set -euo pipefail
+          cat <<'NODE' | ssh -i ~/.ssh/fm_diag -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+          import pg from "pg";
+          import {listLaboratoryOptions,readLaboratoryArticles} from "./src/laboratoryCatalog.js";
+          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000});
+          try{
+            const {rows}=await pool.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id");
+            const ids=rows.map(r=>Number(r.id));
+            const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:rows};
+            const t=Date.now();
+            const labs=await listLaboratoryOptions(pool,ctx);
+            console.log("OPCIONES_CINFA",JSON.stringify(labs.filter(x=>x.key.includes("CINFA")||x.name.toUpperCase().includes("CINFA")).slice(0,8)));
+            console.log("LISTAR_LABS_MS",Date.now()-t);
+            const key=labs.find(x=>x.key==="N:CINFA")?.key;
+            if(!key)throw Error("N:CINFA NO EXISTE EN SELECTOR");
+            const now="2026-10-24";
+            for(const type of ["medicacion","parafarmacia"]){
+              const a=Date.now();
+              try{
+                const result=await readLaboratoryArticles(pool,ctx,{key,pharmacies:ids,type,page:1,size:10});
+                console.log("CATALOGO_RESULTADO",type,JSON.stringify({total:result.total,returned:result.rows.length,durationMs:Date.now()-a}));
+              }catch(e){console.log("CATALOGO_ERROR",type,e.code||"NOCODE",String(e.message).slice(0,260),"durationMs",Date.now()-a)}
+              const b=Date.now();
+              try{
+                const result=await readLaboratoryOrderMatrix(pool,ctx,{key,pharmacies:ids,type,page:1,size:10,from:"2026-10-01",to:now});
+                console.log("MATRIZ_RESULTADO",type,JSON.stringify({total:result.total,returned:result.rows.length,durationMs:Date.now()-b}));
+              }catch(e){console.log("MATRIZ_ERROR",type,e.code||"NOCODE",String(e.message).slice(0,260),"durationMs",Date.now()-b)}
+            }
+          }finally{await pool.end();}
+          NODE

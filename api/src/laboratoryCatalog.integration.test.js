@@ -8,11 +8,10 @@ test("PostgreSQL real: Zimfa del ERP sin recepciones manuales se presenta una ve
  const db=new pg.Client({connectionString:process.env.TEST_DB_URL});await db.connect();
  try{
   await db.query("BEGIN");
+  await db.query("DELETE FROM ampedia.articulos WHERE farmacia_codigo='ABA' AND origen_id='CI-ARTICLE-ZIMFA'");
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual)
-   VALUES('ABA','CI-ARTICLE-ZIMFA','Crema de ensayo Zimfa','000123','Zimfa S.L.',14)
-   ON CONFLICT(farmacia_codigo,origen_id) DO UPDATE SET
-    laboratorio=EXCLUDED.laboratorio,nombre=EXCLUDED.nombre,codigo_nacional=EXCLUDED.codigo_nacional`);
+   VALUES('ABA','CI-ARTICLE-ZIMFA','Crema de ensayo Zimfa','000123','Zimfa S.L.',14)`);
   const context={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:"1"}]};
   const options=await listLaboratoryOptions(db,context);
   assert.equal(options.filter(o=>o.key==="N:ZIMFA").length,1);

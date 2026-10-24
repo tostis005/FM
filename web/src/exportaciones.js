@@ -264,3 +264,11 @@ export async function exportLabSalesZip(items,options={}) {
   const {blob,name}=await buildLabSalesZip(items,options);
   downloadBlob(blob,name);
 }
+
+// Excel real (.xlsx) reutilizando el generador existente. Los encabezados
+// de farmacia conservan sus cinco columnas, sin colapsar los CN en números.
+export async function exportLaboratoryOrderWorkbook(rows,filename){
+ const widths=rows[0]?.map((_,i)=>i===0?19:i===1?52:14)||[];
+ const blob=await workbook([{name:"Pedido laboratorio",rows,widths}]);
+ downloadBlob(blob,filename);
+}

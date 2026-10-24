@@ -72,19 +72,19 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  ),
  source AS (
   SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,
-   'medicacion'::text AS tipo,true AS from_master,false AS from_erp,NULL::text AS pharmacy_id
+   'medicacion'::text AS tipo,true AS from_master,false AS from_erp,NULL::text AS pharmacy_id,2 AS preference
   FROM farmetrica.nomenclator_presentaciones n
   WHERE ('N:'||${commercial}=$1 OR 'N:'||${titular}=$1 OR 'N:'||${nname}=$1)
   UNION ALL
   SELECT m.codigo::text,m.codigo::text,m.nombre::text,m.tipo::text,
-    true,false,NULL::text
+    true,false,NULL::text,CASE WHEN m.fuente='vademecum' THEN 1 ELSE 2 END
   FROM farmetrica.articulos_laboratorio_maestro m
   WHERE ('N:'||${manual}=$1 OR
     (m.laboratorio_clave LIKE 'N:%' AND 'N:'||${mkey}=$1) OR m.laboratorio_clave=$1)
   UNION ALL
   SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
    ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
-   ${eType},false,true,f.id::text
+   ${eType},false,true,f.id::text,3
   FROM ${schema}.articulos a
   JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=ANY($2::int[])
    AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
@@ -92,7 +92,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  UNION ALL
  SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
   ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
-  ${eType},false,true,f.id::text
+  ${eType},false,true,f.id::text,3
  FROM mapped_suppliers link
  JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
  JOIN ${schema}.fm_recepciones_analitica r
@@ -105,7 +105,8 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  ),
  reduced AS (
   SELECT referencia, max(cn) AS cn,
-    coalesce(max(nombre) FILTER(WHERE from_master),max(nombre)) AS nombre,
+    coalesce(min(nombre) FILTER(WHERE preference=1),
+      min(nombre) FILTER(WHERE preference=2),min(nombre)) AS nombre,
     CASE WHEN max(cn) ~ '^[0-9]{6,7}$'
      THEN CASE WHEN left(max(cn),6)::int<400000 THEN 'parafarmacia' ELSE 'medicacion' END
      WHEN max(cn) ~ '^[0-9]{13}$' THEN 'parafarmacia'

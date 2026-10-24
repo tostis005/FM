@@ -49,3 +49,8 @@
 
 .fm-preparador-switch{display:flex;align-items:center;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin:8px 0}
 .fm-preparador-switch .btn{font-size:12px;min-height:34px}
+
+.fm-lab-order-noresults{display:flex;flex-direction:column;align-items:center;gap:9px;min-width:360px;padding:18px 8px;white-space:normal;text-align:center}
+.fm-lab-order-noresults strong{font-size:13px;color:#355342}
+.fm-lab-order-noresults span{max-width:670px;font-size:11px;line-height:1.5;color:#63786b}
+.fm-lab-order-noresults button{font-size:11px}

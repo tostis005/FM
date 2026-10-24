@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
 import {readLaboratoryArticles,listLaboratoryOptions} from "./laboratoryCatalog.js";
+import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
 test("PostgreSQL real: Zimfa del ERP sin recepciones manuales se presenta una vez",{
  skip:!process.env.TEST_DB_URL
 },async()=>{
@@ -56,5 +57,17 @@ test("Cinfa: un único laboratorio AEMPS con titulares/comercializadores y artí
    type:"parafarmacia",search:"ensayo",page:1,size:20});
   assert.equal(para.total,1);
   assert.equal(para.rows[0].cn,"000231");
+  const medMatrix=await readLaboratoryOrderMatrix(db,ctx,{
+   key:"N:CINFA",pharmacies:[1],type:"medicacion",
+   from:"2026-10-01",to:"2026-10-24",page:1,size:20,search:"Cinfa"
+  });
+  assert.equal(medMatrix.rows.length,2);
+  assert.ok(medMatrix.rows.every(r=>r.byPharmacy["1"]));
+  const paraMatrix=await readLaboratoryOrderMatrix(db,ctx,{
+   key:"N:CINFA",pharmacies:[1],type:"parafarmacia",
+   from:"2026-10-01",to:"2026-10-24",page:1,size:20,search:"ensayo"
+  });
+  assert.equal(paraMatrix.rows.length,1);
+  assert.equal(paraMatrix.rows[0].byPharmacy["1"].stock,8);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });

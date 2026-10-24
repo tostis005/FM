@@ -69,7 +69,27 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
    api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,{signal:controller.signal})
     .then(d=>{if(!controller.signal.aborted){setData(d);setUpdatedAt(new Date())}})
-    .catch(e=>{if(!controller.signal.aborted){setData(empty);setError(e.message)}})
+    .catch(async e=>{
+     if(controller.signal.aborted)return;
+     // Recuperar las referencias sin métricas. Un fallo de ventas o stock no
+     // implica que el laboratorio carezca de artículos.
+     try{
+      const catalog=new URLSearchParams({laboratorio:laboratory,tipo:tab,
+       farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
+      const articles=await api(clientSlug,
+       "/api/analytics/pedidos/articulos-laboratorio?"+catalog,{signal:controller.signal});
+      if(!controller.signal.aborted){
+       setData({...articles,metricsUnavailable:true,
+        metricsWarning:"No se pudieron calcular existencias y ventas: "+e.message});
+       setUpdatedAt(new Date());
+      }
+     }catch(catalogError){
+      if(!controller.signal.aborted){
+       setData(empty);
+       setError("Error al consultar el catálogo del laboratorio: "+catalogError.message);
+      }
+     }
+    })
     .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
@@ -79,8 +99,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
  const currentRows=data.rows||[];
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
- const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
- const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
+ const pageTotalSold=data.metricsUnavailable?null:currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
+ const pageTotalSuggested=data.metricsUnavailable?null:currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
  const pageTotalOrder=currentRows.reduce((sum,row)=>{
   const line=showLine(row);
   return sum+(tab==="parafarmacia"?Number(line.units||0):
@@ -182,6 +202,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        onChange={e=>{setSearch(e.target.value);setPage(1)}}/></label>
     </ReportFilterBar>
     {!range.valid&&<p role="alert" className="fm-op-message fm-op-error">Selecciona un período válido y comprueba las fechas desde/hasta.</p>}
+    {(data.metricsWarning||data.catalogWarning)&&<p className="fm-op-message" role="status">
+     <AlertTriangle size={15}/>{data.metricsWarning||data.catalogWarning}
+    </p>}
     <div className="fm-lab-order-summary">
      <span><strong>{data.total||0}</strong> referencias del laboratorio</span>
      <span><strong>{fmt(pageTotalSold)}</strong> vendidas en esta página</span>
@@ -212,7 +235,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          <small>{row.inMaster?"Maestro":row.inReceipts?"ERP / recepciones":"Referencia"}</small></td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
-         return [m.units3??0,m.units12??0,m.stock??null,m.unitsPeriod??0,
+         return [m.units3??(data.metricsUnavailable?null:0),m.units12??(data.metricsUnavailable?null:0),m.stock??null,m.unitsPeriod??(data.metricsUnavailable?null:0),
           tab==="medicacion"?"edit":m.suggested??null].map((value,k)=>
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"

@@ -265,6 +265,7 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
+          node check-user-modules.mjs
           node check-laboratory-orders.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs

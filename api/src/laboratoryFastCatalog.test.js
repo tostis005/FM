@@ -9,7 +9,7 @@ const opts={key:"N:CINFA",type:"medicacion",pharmacies:[1],
 const catalogRow={referencia:"790321",cn:"790321",nombre:"Cinfa medicamento",
   tipo:"medicacion",inMaster:true,inReceipts:false,total:1};
 
-test("catálogo directo no depende de ventas ni recepciones",async()=>{
+test("catálogo directo aporta AEMPS, vademécum y recepciones asociadas sin ventas",async()=>{
  const calls=[];
  const pool={async query(q){
   calls.push(q);
@@ -21,7 +21,9 @@ test("catálogo directo no depende de ventas ni recepciones",async()=>{
  assert.match(calls[0].text,/nomenclator_presentaciones/);
  assert.match(calls[0].text,/articulos_laboratorio_maestro/);
  assert.match(calls[0].text,/ampedia.*articulos/);
- assert.doesNotMatch(calls[0].text,/fm_recepciones_analitica/);
+ assert.match(calls[0].text,/fm_recepciones_analitica/);
+ assert.match(calls[0].text,/proveedores_maestro/);
+ assert.match(calls[0].text,/proveedores_laboratorios/);
  assert.doesNotMatch(calls[0].text,/fm_ventas_analitica/);
  assert.deepEqual(calls[0].values,["N:CINFA",[1],"ampedia","medicacion","",40,0]);
 });
@@ -51,17 +53,17 @@ test("la ausencia de farmacias no impide mostrar el catálogo de AEMPS",async()=
  assert.match(result.warning,/No hay farmacias/);
  assert.equal(result.metricsUnavailable,true);
 });
-test("catálogo directo rescata referencias cuando el join de recepciones devuelve vacío",async()=>{
+test("correspondencias antiguas aún pueden rescatar una referencia ausente del catálogo directo",async()=>{
  const pool={async query(q){
-  if(q.text.includes("fm_recepciones_analitica"))return {rows:[]};
-  if(q.text.includes("WITH source AS"))return {rows:[catalogRow]};
   if(q.text.includes("fm_ventas_analitica"))return {rows:[]};
-  throw Error("unexpected");
+  if(q.text.includes("mapped_suppliers AS"))return {rows:[]};
+  if(q.text.includes("WITH aliases AS"))return {rows:[catalogRow]};
+  throw Error("unexpected SQL");
  }};
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);
  assert.equal(result.total,1);
  assert.equal(result.rows[0].cn,"790321");
- assert.match(result.warning,/recuperadas directamente/);
+ assert.match(result.warning,/correspondencias antiguas/);
 });
 test("diagnóstico diferencia pestañas y evita inventar cifras ante fallo",async()=>{
  const pool={async query(q){

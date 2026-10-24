@@ -88,3 +88,27 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  assert.equal((await call("GET","/api/analytics/pedidos/matriz-laboratorio",
   {laboratorio:"C:LAB",farmacias:"1",tipo:"medicacion",desde:"2026-10-26",hasta:"2026-10-24"})).status,400);
 });
+
+test("mantiene los CN aunque la consulta de ventas y existencias falle",async()=>{
+ let count=0;
+ const pool={async query(q){
+  count++;
+  if(count===1)return {rows:[{referencia:"790321",cn:"790321",
+   nombre:"Medicamento Cinfa",tipo:"medicacion",total:1,inMaster:true}]};
+  const error=Error("Consulta de métricas agotada");error.code="57014";throw error;
+ }};
+ const ctx={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:1}]};
+ const original=console.error;console.error=()=>{};
+ try{
+  const data=await readLaboratoryOrderMatrix(pool,ctx,{
+   key:"N:CINFA",pharmacies:[1],type:"medicacion",
+   from:"2026-10-01",to:"2026-10-24",page:1,size:40});
+  assert.equal(data.total,1);
+  assert.equal(data.rows[0].cn,"790321");
+  assert.equal(data.rows[0].nombre,"Medicamento Cinfa");
+  assert.equal(data.metricsUnavailable,true);
+  assert.equal(data.rows[0].byPharmacy["1"].stock,null);
+  assert.equal(data.rows[0].byPharmacy["1"].units3,null);
+  assert.equal(data.rows[0].totalSuggested,null);
+ }finally{console.error=original}
+});

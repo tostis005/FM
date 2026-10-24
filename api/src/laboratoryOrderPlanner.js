@@ -1,6 +1,7 @@
 import {readFile} from "node:fs/promises";
 import {readLaboratoryArticles,normalizeLaboratoryKey,selectedPharmacies} from "./laboratoryCatalog.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -18,15 +19,41 @@ export function validPlannerDate(date){
 export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).join(",");
 
 export async function readLaboratoryOrderMatrix(pool,ctx,options){
- const base=await readLaboratoryArticles(pool,ctx,options);
+ let base,warning=null;
+ // Never hide AEMPS/master products because receipts/sales join is faulty.
+ try{
+  base=await readLaboratoryArticles(pool,ctx,options);
+ }catch(err){
+  base=await readDirectLaboratoryCatalog(pool,ctx,options);
+  warning="La consulta completa no está disponible: se muestran las referencias del maestro y del ERP. "+(err.code||"");
+ }
+ // The direct sources are the authoritative minimum coverage.
+ if(!base.total){
+  try{
+   const direct=await readDirectLaboratoryCatalog(pool,ctx,options);
+   if(direct.total>0){base=direct;warning="Referencias recuperadas directamente del maestro; revisa las correspondencias de recepciones.";}
+  }catch(e){
+   if(!warning)warning="No se pudo comprobar el catálogo directo: "+(e.code||"consulta");
+  }
+ }
+ const fallback={...base,from:options.from,to:options.to,
+  rows:base.rows.map(r=>({...r,byPharmacy:{},totalSold:0,totalSuggested:null}))};
  const selected=base.rows.map(row=>({reference:row.referencia,cn:row.cn}));
- if(!selected.length)return {...base,from:options.from,to:options.to};
+ if(!selected.length)return {...fallback,warning};
+ if(!options.pharmacies.length)
+  return {...fallback,warning:"No hay farmacias asignadas o seleccionadas. Se muestran referencias, pero no stock ni ventas."};
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema no autorizado");
  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
- const {rows}=await pool.query({text:sql,
-  values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
-  query_timeout:30000});
+ let rows;
+ try{
+  const result=await pool.query({text:sql,
+   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
+   query_timeout:30000});
+  rows=result.rows;
+ }catch(e){
+  return {...fallback,warning:"Se han recuperado los artículos, pero no sus métricas de stock y ventas. "+(e.code||"Error de datos")};
+ }
  const byRef=new Map();
  for(const row of rows){
   if(!byRef.has(row.reference))byRef.set(row.reference,{});
@@ -37,7 +64,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    ordered:Number(row.ordered||0),suggested:row.suggested===null?null:Number(row.suggested)
   };
  }
- return {...base,from:options.from,to:options.to,
+ return {...base,from:options.from,to:options.to,warning,
   rows:base.rows.map(row=>{
    const byPharmacy=byRef.get(row.referencia)||{};
    return {...row,byPharmacy,
@@ -96,7 +123,7 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
   const raw=data?.farmacias;
   const pharmacies=Array.isArray(raw)?raw.map(Number):selectedPharmacies(req.context,raw);
   const allowed=new Set((req.context.pharmacies||[]).map(p=>Number(p.id)));
-  if(!laboratory||!pharmacies||!pharmacies.length||pharmacies.length>100||
+  if(!laboratory||!pharmacies||pharmacies.length>100||
    pharmacies.some(id=>!Number.isSafeInteger(id)||!allowed.has(id)))return null;
   return {laboratory,pharmacies:[...new Set(pharmacies)]};
  };
@@ -139,7 +166,7 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
   const common=parse(req),type=String(req.body?.tipo||""),
    from=String(req.body?.desde||""),to=String(req.body?.hasta||"");
   const items=normalizeDraftItems(req.body?.lineas,type,common?.pharmacies||[]);
-  if(!common||!["medicacion","parafarmacia"].includes(type)||
+  if(!common||!common.pharmacies.length||!["medicacion","parafarmacia"].includes(type)||
    !validPlannerDate(from)||!validPlannerDate(to)||from>to||items===null)
    return res.status(400).json({error:"No se pueden guardar cantidades o fechas inválidas"});
   try{

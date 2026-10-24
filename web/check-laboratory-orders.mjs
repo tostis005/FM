@@ -20,13 +20,24 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/operativa")body={scope:{canEdit:true,canApprove:true},items:[]};
  else if(path==="/api/analytics/pedidos/catalogo-laboratorios")
   body={laboratories:[{key:"C:LAB",name:"Laboratorio Ejemplo"},
-    {key:"N:CINFA",name:"Laboratorios Cinfa S.A.",hasMedication:true,hasParapharmacy:false}]};
+    {key:"N:CINFA",name:"Laboratorios Cinfa S.A.",hasMedication:true,hasParapharmacy:false},
+    {key:"N:ERROR",name:"Laboratorio con ventas inaccesibles",hasMedication:true,hasParapharmacy:false}]};
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
    const data=request.postDataJSON();saved.push(data);
    body={saved:true,count:data.lineas.length,updatedAt:"2026-10-24T07:00:00Z"};
   }else body={lineas:[]};
+ }else if(path==="/api/analytics/pedidos/catalogo-directo"){
+  body={rows:[{referencia:"790321",cn:"790321",nombre:"Producto recuperado del maestro",
+   tipo:"medicacion",inMaster:true,inReceipts:false}],total:1,page:1,size:40};
+ }else if(path==="/api/analytics/pedidos/diagnostico-laboratorio"){
+  body={pharmacyCount:2,sources:[{type:"medicacion",status:"ok",total:1},
+   {type:"parafarmacia",status:"ok",total:0}]};
  }else if(path==="/api/analytics/pedidos/matriz-laboratorio"){
+  if(url.searchParams.get("laboratorio")==="N:ERROR"){
+   await route.fulfill({status:503,contentType:"application/json",
+    body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
+  }
   const type=url.searchParams.get("tipo");
   matrices.push(Object.fromEntries(url.searchParams));
   const med=type==="medicacion";
@@ -79,6 +90,11 @@ try{
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
+  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("N:ERROR");
+ await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
+ await page.getByText(/La consulta de métricas ha fallado/).waitFor();
+ assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
+   "No se deben guardar propuestas sin stock y ventas verificadas");
   assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK preparador por laboratorio: matriz, para conjunta, medicación individual, borradores y XLSX");
 }finally{await browser.close();}

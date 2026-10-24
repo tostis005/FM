@@ -165,6 +165,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/027_pedidos_laboratorio_borradores.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
+          psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql

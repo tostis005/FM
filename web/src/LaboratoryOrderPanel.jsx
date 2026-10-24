@@ -62,35 +62,41 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   return()=>controller.abort();
  },[clientSlug,laboratory,tab,scope]);
  useEffect(()=>{
-  if(!laboratory||!scope||!range.valid){setData(empty);return}
-  const controller=new AbortController();const timer=setTimeout(()=>{
-   setLoading(true);setError("");
-   const query=new URLSearchParams({laboratorio:laboratory,tipo:tab,desde:range.from,hasta:range.to,
-    farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
-   api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,{signal:controller.signal})
-    .then(d=>{if(!controller.signal.aborted){setData(d);setUpdatedAt(new Date())}})
-    .catch(async e=>{
-     if(controller.signal.aborted)return;
-     // Recuperar las referencias sin métricas. Un fallo de ventas o stock no
-     // implica que el laboratorio carezca de artículos.
-     try{
-      const catalog=new URLSearchParams({laboratorio:laboratory,tipo:tab,
-       farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
-      const articles=await api(clientSlug,
-       "/api/analytics/pedidos/articulos-laboratorio?"+catalog,{signal:controller.signal});
-      if(!controller.signal.aborted){
-       setData({...articles,metricsUnavailable:true,
-        metricsWarning:"No se pudieron calcular existencias y ventas: "+e.message});
-       setUpdatedAt(new Date());
-      }
-     }catch(catalogError){
-      if(!controller.signal.aborted){
-       setData(empty);
-       setError("Error al consultar el catálogo del laboratorio: "+catalogError.message);
-      }
-     }
-    })
-    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
+  if(!laboratory||!scope||!range.valid){setData(empty);setLoading(false);return}
+  const controller=new AbortController();
+  setLoading(true);setError("");setData(empty);
+  const timer=setTimeout(async()=>{
+   const common={laboratorio:laboratory,tipo:tab,farmacias:scope,
+    buscar:search,pagina:String(page),tamano:"40"};
+   let catalog=null;
+   try{
+    catalog=await api(clientSlug,
+     "/api/analytics/pedidos/articulos-laboratorio?"+new URLSearchParams(common),
+     {signal:controller.signal});
+    if(controller.signal.aborted)return;
+    setData({...catalog,metricsUnavailable:true,metricsLoading:true});
+    setUpdatedAt(new Date());
+   }catch(e){
+    if(!controller.signal.aborted){
+     setData(empty);
+     setError("No se pudieron obtener los artículos del laboratorio: "+e.message);
+     setLoading(false);
+    }
+    return;
+   }
+   try{
+    const query=new URLSearchParams({...common,desde:range.from,hasta:range.to});
+    const enriched=await api(clientSlug,
+     "/api/analytics/pedidos/matriz-laboratorio?"+query,{signal:controller.signal});
+    if(!controller.signal.aborted){setData(enriched);setUpdatedAt(new Date())}
+   }catch(e){
+    if(!controller.signal.aborted){
+     setData({...catalog,metricsUnavailable:true,
+      metricsWarning:"Los artículos están disponibles, pero no se pudieron calcular ventas y stock: "+e.message});
+    }
+   }finally{
+    if(!controller.signal.aborted)setLoading(false);
+   }
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
  },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,page,reload]);
@@ -210,7 +216,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span><strong>{fmt(pageTotalSold)}</strong> vendidas en esta página</span>
      <span><strong>{fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
      <span><strong>{fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
-     {loading&&<span role="status">Actualizando datos…</span>}
+     {loading&&<span role="status">{data.metricsLoading?
+      "Artículos cargados · calculando ventas y stock…":"Consultando artículos…"}</span>}
     </div>
     <div className="fm-lab-order-scroll" role="region" tabIndex={0}
      aria-label="Tabla horizontal de artículos y métricas por farmacia">

@@ -33,22 +33,25 @@ export async function listLaboratoryOptions(pool,context){
  const schema='"'+context.client.schema+'"';
  const {rows}=await pool.query(`
   WITH labs AS (
-   SELECT ${normalizedLabSQL("n.laboratorio_comercializador")} AS canonical,
+   SELECT `+normalizedLabSQL("n.laboratorio_comercializador")+` AS canonical,
      n.laboratorio_comercializador AS name,true AS medication,false AS parapharmacy
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT ${normalizedLabSQL("n.laboratorio_titular")},n.laboratorio_titular,true,false
+   SELECT `+normalizedLabSQL("n.laboratorio_titular")+`,n.laboratorio_titular,true,false
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT ${normalizedLabSQL("a.laboratorio_nombre")},a.laboratorio_nombre,
+   SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre,
      a.tipo='medicacion',a.tipo='parafarmacia'
    FROM farmetrica.articulos_laboratorio_maestro a
    UNION ALL
-   SELECT ${normalizedLabSQL("a.laboratorio")},a.laboratorio,
-     CASE WHEN btrim(a.codigo_nacional) ~ '^[0-9]{6,7}
-   FROM ${schema}.articulos a
+   SELECT `+normalizedLabSQL("a.laboratorio")+`,a.laboratorio,
+     CASE WHEN btrim(a.codigo_nacional) ~ '^[0-9]{6,7}$'
+       THEN left(btrim(a.codigo_nacional),6)::integer>=400000 ELSE false END,
+     CASE WHEN btrim(a.codigo_nacional) ~ '^[0-9]{6,7}$'
+       THEN left(btrim(a.codigo_nacional),6)::integer<400000 ELSE true END
+   FROM `+schema+`.articulos a
    JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
-    AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    AND upper(btrim(a.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
    WHERE nullif(btrim(a.laboratorio),'') IS NOT NULL
   )
   SELECT 'N:'||canonical AS key,min(name) AS name,

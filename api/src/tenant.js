@@ -520,11 +520,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         [req.context.client.slug,email]);
       selectedModules=existingModules.length?existingModules[0].modulos:[];
     }else{
-      const delegation=req.context.role==="gestor"?
-        Object.keys(req.context.modules).filter(m=>req.context.modules[m]===true):null;
-      selectedModules=validateModuleGrants(req.body.modules,availableModules,delegation);
+      selectedModules=validateModuleGrants(req.body.modules,availableModules);
       if(selectedModules===null)
-        return res.status(400).json({error:"Selecciona únicamente módulos habilitados y autorizados para asignar"});
+        return res.status(400).json({error:"Selecciona únicamente módulos habilitados para el cliente"});
     }
         // Las contraseñas están vinculadas al correo global: no permitir que
     // dos clientes independientes roten las credenciales de la misma cuenta.
@@ -558,6 +556,24 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       }
       if(req.body?.modules===undefined)
         selectedModules=previous.length?previous[0].modulos:[];
+      else if(!isSuper(req.user)){
+        // Administradores y gestores solo pueden otorgar módulos de los que
+        // disponen. Conservan sin modificar permisos anteriores ajenos a
+        // su ámbito, para no revocarlos al editar otros datos del usuario.
+        const grantable=new Set(Object.keys(req.context.modules)
+          .filter(m=>req.context.modules[m]===true));
+        const before=previous.length?
+          (previous[0].modulos===null?
+            availableModules.filter(m=>m.enabled).map(m=>m.id):previous[0].modulos||[]):[];
+        if(selectedModules.some(id=>!grantable.has(id)&&!before.includes(id))){
+          await db.query("ROLLBACK");
+          return res.status(403).json({error:"No puedes conceder módulos a los que tú no tienes acceso"});
+        }
+        selectedModules=[...new Set([
+          ...selectedModules,
+          ...before.filter(id=>!grantable.has(id))
+        ])];
+      }
       await db.query(
         "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES ($1,$2,$3,'{}',TRUE) ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre",
         [email,name,role]);

@@ -365,3 +365,11 @@
 .fm-user-module-empty{font-size:12px;color:#60756b;margin:0}
 @media(max-width:1000px){.fm-user-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.fm-user-module-grid{grid-template-columns:1fr}}
+
+
+/* La tabla de usuarios puede tener numerosos módulos, pero su anchura no
+   debe ensanchar toda la página: se desplaza dentro del contenedor. */
+.fm-management,.fm-management .fm-manage-client{min-width:0;max-width:100%}
+.fm-management .fm-preview-scroll{display:block;min-width:0;max-width:100%;overflow-x:auto}
+.fm-management .fm-preview-scroll table{min-width:920px}
+.fm-user-permission-summary{display:block;max-width:240px;white-space:normal;overflow-wrap:anywhere;line-height:1.45;font-size:11px}

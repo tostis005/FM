@@ -73,6 +73,7 @@ jobs:
           node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/internalPassword.test.js
           node --test api/src/accessPolicy.test.js
+          node --test api/src/userModuleAccess.test.js
           node --test api/src/operativaRules.test.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
@@ -150,6 +151,8 @@ jobs:
           for sql in api/src/migrations/001_farmacias.sql api/src/migrations/002_accesos.sql api/src/migrations/003_multitenant.sql; do
             psql_test --single-transaction < "$sql"
           done
+          psql_test --single-transaction < api/src/migrations/028_modulos_usuario.sql
+          psql_test --single-transaction < api/src/migrations/028_modulos_usuario.sql
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
@@ -227,6 +230,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationPasswordReset.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationTenantDomains.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/userModuleAccess.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationOperativa.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierReporting.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/outgoingTransfers.test.js
@@ -261,6 +265,7 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
+          node check-user-modules.mjs
           node check-laboratory-orders.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs

@@ -57,7 +57,7 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
       `SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
-         uc.activo AS active,uc.metodo_acceso AS login_method,
+         uc.activo AS active,uc.modulos AS module_grants,uc.metodo_acceso AS login_method,
          uc.google_invitado AS individually_invited,
          EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
            d.cliente_slug=uc.cliente_slug AND d.activo=true
@@ -357,8 +357,8 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
          [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
         await pool.query(`
          INSERT INTO farmetrica.usuario_clientes
-         (email,cliente_slug,rol,farmacias,activo,metodo_acceso)
-         VALUES($1,$2,'colaborador',$3,true,'google')
+         (email,cliente_slug,rol,farmacias,activo,metodo_acceso,modulos)
+         VALUES($1,$2,'colaborador',$3,true,'google','{}'::text[])
          ON CONFLICT(email,cliente_slug) DO NOTHING`,
          [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
        }

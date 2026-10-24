@@ -12,6 +12,7 @@ import {hashInternalPassword} from "./internalPassword.js";
 import {randomBytes} from "node:crypto";
 import {normalizeDomain,emailDomain,validClientDomain} from "./accessPolicy.js";
 import {sourceSupplierRows} from "./supplierReporting.js";
+import {effectiveUserModules,validateModuleGrants,requestModules} from "./userModuleAccess.js";
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
@@ -37,7 +38,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug)},
-      role, modules:Object.fromEntries(modules.map(m=>[m.id,m.enabled])),
+      role, modules:effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
       pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))).map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})), allowedPharmacyIds:ids};
   }
   function middleware(predicate=()=>true) {
@@ -45,6 +46,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       try{
         const ctx=await resolve(req);
         if(!ctx)return res.status(403).json({error:"No tienes acceso al cliente seleccionado"});
+        const required=requestModules(req);
+        if(!isSuper(req.user)&&required.length&&!required.some(module=>ctx.modules[module]===true))
+          return res.status(403).json({error:"No tienes acceso a este módulo"});
         if(!predicate(ctx,req.user))return res.status(403).json({error:"No tienes permiso para esta funcionalidad"});
         req.context=ctx;
         next();
@@ -445,12 +449,26 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
        [req.context.client.slug]);res.json(rows);
     }catch(e){next(e)}
   });
+  // Solo módulos habilitados para el cliente. Los cambios de plan
+  // prevalecen sobre cualquier asignación individual existente.
+  app.get("/api/tenant/usuarios/modulos",...requireTenantManager(),async(req,res,next)=>{
+    try{
+      const {rows}=await pool.query(
+        `SELECT cm.modulo_clave AS id,m.nombre AS name
+         FROM farmetrica.cliente_modulos cm
+         JOIN farmetrica.modulos m ON m.clave=cm.modulo_clave
+         WHERE cm.cliente_slug=$1 AND cm.habilitado=true ORDER BY m.nombre`,
+        [req.context.client.slug]);
+      res.json({modules:rows,grantable:req.context.role==="superadministrador"?rows.map(m=>m.id):
+        rows.filter(m=>req.context.modules[m.id]===true).map(m=>m.id)});
+    }catch(e){next(e);}
+  });
   app.get("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
     try{
       const scoped=req.context.role==="gestor";
       const {rows}=await pool.query(
         `SELECT uc.email,coalesce(a.nombre,'') AS name,uc.rol AS role,
-          uc.farmacias::text[] AS pharmacies,uc.activo AS active,
+          uc.farmacias::text[] AS pharmacies,uc.modulos AS modules,uc.activo AS active,
           uc.metodo_acceso AS "authType",
           (cr.email IS NOT NULL) AS "hasPassword"
          FROM farmetrica.usuario_clientes uc
@@ -489,7 +507,23 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
         return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
     }
-    // Las contraseñas están vinculadas al correo global: no permitir que
+    const {rows:availableModules}=await pool.query(
+      "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
+      [req.context.client.slug]);
+    // Peticiones de versiones anteriores conservan la asignación previa.
+    // Una alta nueva sin campo explícito empieza sin módulos (mínimo privilegio).
+    let selectedModules;
+    if(req.body?.modules===undefined){
+      const {rows:existingModules}=await pool.query(
+        "SELECT modulos FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
+        [req.context.client.slug,email]);
+      selectedModules=existingModules.length?existingModules[0].modulos:[];
+    }else{
+      selectedModules=validateModuleGrants(req.body.modules,availableModules);
+      if(selectedModules===null)
+        return res.status(400).json({error:"Selecciona únicamente módulos habilitados para el cliente"});
+    }
+        // Las contraseñas están vinculadas al correo global: no permitir que
     // dos clientes independientes roten las credenciales de la misma cuenta.
     if(authType==="local"){
       const {rows:others}=await pool.query(
@@ -504,7 +538,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     try{
       await db.query("BEGIN");
       const {rows:previous}=await db.query(
-        "SELECT metodo_acceso,activo FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2 FOR UPDATE",
+        "SELECT metodo_acceso,activo,modulos FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2 FOR UPDATE",
         [email,req.context.client.slug]);
       if(authType==="local"){
         const {rows:credential}=await db.query(
@@ -519,12 +553,32 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
           });
         }
       }
+      if(req.body?.modules===undefined)
+        selectedModules=previous.length?previous[0].modulos:[];
+      else if(!isSuper(req.user)){
+        // Administradores y gestores solo pueden otorgar módulos de los que
+        // disponen. Conservan sin modificar permisos anteriores ajenos a
+        // su ámbito, para no revocarlos al editar otros datos del usuario.
+        const grantable=new Set(Object.keys(req.context.modules)
+          .filter(m=>req.context.modules[m]===true));
+        const before=previous.length?
+          (previous[0].modulos===null?
+            availableModules.filter(m=>m.enabled).map(m=>m.id):previous[0].modulos||[]):[];
+        if(selectedModules.some(id=>!grantable.has(id)&&!before.includes(id))){
+          await db.query("ROLLBACK");
+          return res.status(403).json({error:"No puedes conceder módulos a los que tú no tienes acceso"});
+        }
+        selectedModules=[...new Set([
+          ...selectedModules,
+          ...before.filter(id=>!grantable.has(id))
+        ])];
+      }
       await db.query(
         "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES ($1,$2,$3,'{}',TRUE) ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre",
         [email,name,role]);
       await db.query(
-        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso,google_invitado) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso,google_invitado=EXCLUDED.google_invitado",
-        [email,req.context.client.slug,role,ids,active,authType,authType==="google"]);
+        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso,google_invitado,modulos) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso,google_invitado=EXCLUDED.google_invitado,modulos=EXCLUDED.modulos",
+        [email,req.context.client.slug,role,ids,active,authType,authType==="google",selectedModules]);
       if(authType==="local"&&invite){
         // Contraseña aleatoria desconocida incluso para el administrador.
         // Sólo el enlace de activación permite establecer la definitiva.
@@ -539,7 +593,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(!committed)await db.query("ROLLBACK");
       return next(e);
     }finally{db.release();}
-    const response={email,name,role,pharmacies:ids.map(String),active,authType,
+    const response={email,name,role,pharmacies:ids.map(String),active,authType,modules:selectedModules,
       invitationRequired:invite&&active,invitationSent:false};
     if(invite&&active){
       try{

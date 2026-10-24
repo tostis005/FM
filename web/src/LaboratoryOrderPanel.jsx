@@ -4,7 +4,7 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
-import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryExportName,qty} from "./laboratoryOrderSheet.js";
+import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
 
@@ -185,7 +185,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0));
    if(!matrix.length){setError("El borrador no contiene cantidades positivas para exportar.");return}
    const rows=laboratoryExcelRows(matrix,chosen,tab);
-   await exportLaboratoryOrderWorkbook(rows,laboratoryExportName(labName,tab));
+   const orderRows=laboratoryOrderListRows(matrix,chosen,tab);
+   await exportLaboratoryOrderWorkbook(rows,laboratoryExportName(labName,tab),orderRows,tab);
    setNotice("Excel generado desde el último borrador guardado. No se ha enviado ningún pedido.");
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
@@ -264,7 +265,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
        <th>Vendido</th><th>Propuesta</th>
-       {tab==="parafarmacia"&&<th className="fm-lab-order-editcol">Pedir</th>}
+       {tab==="parafarmacia"&&<th className="fm-lab-order-editcol">Pedir · Pedia</th>}
       </tr></thead>
       <tbody>{currentRows.map(row=>{
        const line=showLine(row);
@@ -318,7 +319,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        onClick={()=>setPage(n=>n+1)}>Siguiente</button></div>
     </div>
     <div className="fm-lab-order-actions">
-     <div><strong>{tab==="parafarmacia"?"Pedido conjunto para el laboratorio":"Pedido independiente por farmacia"}</strong>
+     <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido independiente por farmacia"}</strong>
       <small>El borrador incorpora las referencias revisadas al navegar por las páginas. El stock es actual; las ventas de 3 y 12 meses se calculan hasta la fecha «Hasta».</small>
       {savedDate&&(savedDate.from!==range.from||savedDate.to!==range.to)&&
        <small className="fm-lab-order-notice">El borrador anterior tenía otro período. Al guardar se actualizará.</small>}
@@ -330,6 +331,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
     </div>
+    <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, cada farmacia pide sus propias unidades.</p>
     <p className="fm-op-fine">Las referencias sin CN verificado aparecen identificadas por ERP y deben revisarse antes del envío. La exportación no envía ni aprueba ningún pedido.</p>
    </>}
   </section>

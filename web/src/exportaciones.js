@@ -267,8 +267,13 @@ export async function exportLabSalesZip(items,options={}) {
 
 // Excel real (.xlsx) reutilizando el generador existente. Los encabezados
 // de farmacia conservan sus cinco columnas, sin colapsar los CN en números.
-export async function exportLaboratoryOrderWorkbook(rows,filename){
+export async function exportLaboratoryOrderWorkbook(rows,filename,orderRows=null,type="parafarmacia"){
  const widths=rows[0]?.map((_,i)=>i===0?19:i===1?52:14)||[];
- const blob=await workbook([{name:"Pedido laboratorio",rows,widths}]);
+ const sheets=orderRows?[
+  {name:type==="parafarmacia"?"Pedido central Pedia":"Pedidos por farmacia",
+   rows:orderRows,widths:orderRows[0]?.map((_,i)=>i===0?24:i===1?35:18)||[]},
+  {name:"Detalle por farmacia",rows,widths}
+ ]:[{name:"Pedido laboratorio",rows,widths}];
+ const blob=await workbook(sheets);
  downloadBlob(blob,filename);
 }

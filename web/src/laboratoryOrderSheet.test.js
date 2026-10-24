@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {defaultLaboratoryLine,mergeVisibleOrderLines,orderLineFor,
- laboratoryExcelRows,laboratoryExportName} from "./laboratoryOrderSheet.js";
+ laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName} from "./laboratoryOrderSheet.js";
 const pharmacies=[{id:"1",name:"Central"},{id:"2",name:"Norte"}];
 const row={referencia:"000123",cn:"000123",nombre:"Crema solar",
  byPharmacy:{"1":{stock:4,units3:33,units12:110,unitsPeriod:8,suggested:10},
@@ -12,7 +12,7 @@ test("parafarmacia suma la propuesta en un único campo editable",()=>{
  assert.equal(line.metrics["1"].stock,4);
  const data=laboratoryExcelRows([{row,line}],pharmacies,"parafarmacia");
  assert.equal(data[0].length,2+5*2+3);
- assert.equal(data[1].at(-1),"Pedir total");
+ assert.equal(data[1].at(-1),"Pedir Pedia");
  assert.deepEqual(data[2].slice(-3),[14,17,17]);
  assert.equal(data[2][0],"000123");
 });
@@ -34,4 +34,19 @@ test("borrador conserva ediciones previas al cambiar de página",()=>{
  assert.equal(merged["000124"].units,17);
  assert.equal(orderLineFor(row,"parafarmacia",["1","2"],merged).units,12);
  assert.match(laboratoryExportName("Laboratorio Álvarez / SL","medicacion"),/pedido-Laboratorio-Alvarez-SL-medicacion\.xlsx/);
+});
+
+test("Pedia recibe un solo pedido con cantidades conjuntas de parafarmacia",()=>{
+ const line=defaultLaboratoryLine(row,"parafarmacia",["1","2"]);
+ line.units=18;
+ const sheet=laboratoryOrderListRows([{row,line}],pharmacies,"parafarmacia");
+ assert.deepEqual(sheet[0],["Cliente","Código nacional / EAN","Artículo","Unidades"]);
+ assert.deepEqual(sheet[1],["Pedia","000123","Crema solar",18]);
+});
+test("Medicación exporta unidades por cada farmacia, sin confundirlas con propuesta",()=>{
+ const line=defaultLaboratoryLine({...row,cn:"400123"},"medicacion",["1","2"]);
+ line.unitsByPharmacy={"1":3,"2":6};
+ const sheet=laboratoryOrderListRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
+ assert.deepEqual(sheet[0],["Código nacional / EAN","Artículo","Pedir Central","Pedir Norte"]);
+ assert.deepEqual(sheet[1],["400123","Crema solar",3,6]);
 });

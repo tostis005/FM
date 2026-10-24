@@ -11,6 +11,9 @@ export default function ProveedoresMaestro({clientSlug}){
  const [rows,setRows]=useState([]),[search,setSearch]=useState(""),[form,setForm]=useState(null),
   [error,setError]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[savingFlags,setSavingFlags]=useState({});
  const [updatedAt,setUpdatedAt]=useState(null);
+ const [laboratories,setLaboratories]=useState([]),[mappingSupplier,setMappingSupplier]=useState(null);
+ const [labSearch,setLabSearch]=useState(""),[selectedLab,setSelectedLab]=useState("");
+ const [linking,setLinking]=useState(false),[mappingNotice,setMappingNotice]=useState("");
  async function api(path,options={}){
   const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
    headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug,...options.headers}});
@@ -19,7 +22,12 @@ export default function ProveedoresMaestro({clientSlug}){
   return data;
  }
  async function refresh(){setLoading(true);try{setRows(await api("/api/tenant/proveedores"));setUpdatedAt(new Date())}finally{setLoading(false)}}
- useEffect(()=>{refresh().catch(e=>setError(e.message))},[clientSlug]);
+ useEffect(()=>{
+  refresh().catch(e=>setError(e.message));
+  api("/api/analytics/pedidos/catalogo-laboratorios")
+   .then(d=>setLaboratories(d.laboratories||[]))
+   .catch(e=>setError(e.message));
+ },[clientSlug]);
  async function save(e){
   e.preventDefault();setBusy(true);setError("");
   try{
@@ -44,6 +52,30 @@ export default function ProveedoresMaestro({clientSlug}){
    setError(e.message);
   }finally{setSavingFlags(state=>{const next={...state};delete next[key];return next})}
  }
+ async function saveLaboratory(){
+  if(!mappingSupplier||linking)return;
+  setLinking(true);setError("");setMappingNotice("");
+  try{
+   const saved=await api("/api/tenant/proveedores/laboratorio",{
+    method:"PUT",body:JSON.stringify({sourceCode:mappingSupplier.sourceCode,
+     name:mappingSupplier.name,laboratoryKey:selectedLab||null})
+   });
+   setRows(current=>current.map(row=>row.sourceCode===saved.sourceCode?
+    {...row,...saved}:row));
+   setMappingNotice(saved.laboratoryKey?"Laboratorio vinculado al proveedor.":"Asignación eliminada.");
+   setMappingSupplier(null);
+  }catch(e){setError(e.message)}
+  finally{setLinking(false)}
+ }
+ const availableLabs=useMemo(()=>laboratories.filter(l=>
+  (l.name+" "+l.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es")))
+  .sort((a,b)=>Number(Boolean(b.fromVademecum))-Number(Boolean(a.fromVademecum))||
+    a.name.localeCompare(b.name,"es")),[laboratories,labSearch]);
+ const labName=key=>laboratories.find(l=>l.key===key)?.name||key||"Sin asignar";
+ function openLaboratory(row){
+  setMappingSupplier(row);setSelectedLab(row.laboratoryKey||"");
+  setLabSearch("");setMappingNotice("");
+ }
  const visible=useMemo(()=>rows.filter(r=>(r.name+" "+r.sourceCode).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
  return <div className="fm-management fm-production-panel">
    <ReportPageHeader title="Maestro de proveedores" updatedAt={updatedAt}
@@ -55,6 +87,7 @@ export default function ProveedoresMaestro({clientSlug}){
       placeholder="Nombre o código…" onChange={e=>setSearch(e.target.value)}/></label>
    </ReportFilterBar>
    {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
+   {mappingNotice&&<p className="fm-manage-feedback" role="status">{mappingNotice}</p>}
    <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:id==="total"?rows.length:rows.filter(r=>r[id]===true).length}</strong></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     
@@ -62,6 +95,14 @@ export default function ProveedoresMaestro({clientSlug}){
      onRowClick={row=>setForm({...row})} columns={[
       {key:"sourceCode",label:"Código",value:r=>r.sourceCode},
       {key:"name",label:"Proveedor",value:r=>r.name,render:r=><strong>{r.name}</strong>},
+      {key:"laboratoryKey",label:"Laboratorio del catálogo",sortable:true,searchable:false,
+       value:r=>labName(r.laboratoryKey),
+       render:r=><button className="btn btn-secondary btn-sm fm-supplier-lab-link" type="button"
+        title={r.cooperative?"Una cooperativa no es un laboratorio":labName(r.laboratoryKey)}
+        disabled={Boolean(r.cooperative)}
+        onClick={e=>{e.stopPropagation();openLaboratory(r)}}>
+        {r.cooperative?"No asignable":r.laboratoryKey?labName(r.laboratoryKey):"Asignar laboratorio"}
+       </button>},
       {key:"cooperative",label:"Cooperativa",sortable:true,searchable:false,
        value:r=>r.cooperative?"Sí":"No",
        render:r=><input type="checkbox" aria-label={"Cooperativa: "+r.name}
@@ -78,8 +119,52 @@ export default function ProveedoresMaestro({clientSlug}){
         onChange={e=>{e.stopPropagation();void changeFlag(r,"ignoreReports",e.target.checked)}}/>},
      ]}/>
    </section>
-   <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
+   <details className="card fm-supplier-mapping-details">
+    <summary>Excepciones de laboratorio por farmacia (configuración avanzada)</summary>
+    <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
+   </details>
    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
+   {mappingSupplier&&<div className="fm-demo-overlay"
+    onMouseDown={e=>{if(e.target===e.currentTarget)setMappingSupplier(null)}}>
+    <div className="fm-demo-detail fm-provider-dialog fm-supplier-lab-dialog" role="dialog"
+     aria-modal="true" aria-label="Asignar laboratorio a proveedor">
+     <div className="fm-provider-dialog-heading">
+      <h2>Vincular proveedor a laboratorio</h2>
+      <button className="icon-btn" type="button" aria-label="Cerrar"
+       onClick={()=>setMappingSupplier(null)}><X size={19}/></button>
+     </div>
+     <p><strong>{mappingSupplier.name}</strong> · código ERP {mappingSupplier.sourceCode}</p>
+     {!laboratories.some(l=>l.fromVademecum)&&<p className="fm-op-message" role="status">
+      No hay referencias de Vademécum identificadas en el maestro. El superadministrador
+      puede cargar su CSV en Fuentes de datos. Mientras tanto, están disponibles los
+      laboratorios que sí figuran en AEMPS o Farmatic.
+     </p>}
+     <p>Se aplicará a todas las farmacias del cliente, salvo donde exista una excepción específica. 
+      El catálogo importado aporta los CN y Farmatic completa las referencias que falten.</p>
+     <label className="fm-provider-lab-field">Buscar laboratorio del catálogo
+      <input type="search" value={labSearch} onChange={e=>setLabSearch(e.target.value)}
+       placeholder="Buscar por nombre…" aria-label="Buscar laboratorio del catálogo"/>
+     </label>
+     <label className="fm-provider-lab-field">Laboratorio asociado
+      <select value={selectedLab} onChange={e=>setSelectedLab(e.target.value)}
+       aria-label="Laboratorio asociado">
+       <option value="">Sin laboratorio asignado</option>
+       {availableLabs.map(l=><option key={l.key} value={l.key}>
+        {l.name}{l.fromVademecum?" · Vademécum":" · AEMPS / ERP"}
+       </option>)}
+       {selectedLab&&!availableLabs.some(l=>l.key===selectedLab)&&
+        laboratories.filter(l=>l.key===selectedLab).map(l=>
+         <option key={l.key} value={l.key}>{l.name}</option>)}
+      </select>
+     </label>
+     <div className="fm-provider-actions">
+      <button type="button" className="btn btn-secondary" disabled={linking}
+       onClick={()=>setMappingSupplier(null)}>Cancelar</button>
+      <button type="button" className="btn btn-primary" disabled={linking}
+       onClick={saveLaboratory}>{linking?"Guardando…":"Guardar asignación"}</button>
+     </div>
+    </div>
+   </div>}
    {form&&<div className="fm-demo-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)setForm(null)}}>
     <div className="fm-demo-detail fm-provider-dialog" role="dialog" aria-modal="true" aria-label={form.id?"Editar proveedor":"Nuevo proveedor"}>
      <div className="fm-provider-dialog-heading">

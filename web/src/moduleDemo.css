@@ -373,3 +373,14 @@
 .fm-management .fm-preview-scroll{display:block;min-width:0;max-width:100%;overflow-x:auto}
 .fm-management .fm-preview-scroll table{min-width:920px}
 .fm-user-permission-summary{display:block;max-width:240px;white-space:normal;overflow-wrap:anywhere;line-height:1.45;font-size:11px}
+
+
+.fm-supplier-lab-link{max-width:200px;min-width:125px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.fm-supplier-lab-dialog{display:grid;gap:13px;max-width:550px}
+.fm-supplier-lab-dialog p{font-size:12px;color:#536f5e;margin:0;line-height:1.5}
+.fm-provider-lab-field{display:grid;gap:6px;font-size:12px;font-weight:600}
+.fm-provider-lab-field input,.fm-provider-lab-field select{width:100%;min-width:0;
+ padding:10px;border:1px solid #cbd9d0;border-radius:8px;background:#fff;color:#254f38}
+.fm-supplier-mapping-details{padding:14px 17px;margin:12px 0}
+.fm-supplier-mapping-details>summary{cursor:pointer;font-weight:700;color:#2d5940;font-size:12px}
+.fm-supplier-mapping-details .fm-supplier-mapping{margin-top:14px;box-shadow:none}

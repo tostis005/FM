@@ -23,10 +23,10 @@ export function laboratoryExcelRows(lines,pharmacies,type){
  const isMedication=type==="medicacion";
  const ids=pharmacies.map(p=>String(p.id));
  const grouping=["CN / ERP","Artículo",...pharmacies.flatMap(p=>
-  [p.name,"","","",""]), "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir total"])];
+  [p.name,"","","",""]), "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir Pedia"])];
  const headings=["CN / ERP","Artículo",...pharmacies.flatMap(()=>
   ["Ventas 3m","Ventas 12m","Stock","Vendido período",isMedication?"Pedir":"Propuesta"]),
-  "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir total"])];
+  "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir Pedia"])];
  const rows=lines.map(({row,line})=>{
   const measures=ids.map(id=>row.byPharmacy?.[id]||{});
   const sold=measures.reduce((n,v)=>n+Number(v.unitsPeriod||0),0);
@@ -38,6 +38,21 @@ export function laboratoryExcelRows(lines,pharmacies,type){
   ]),sold,proposals,...(isMedication?[]:[line.units])];
  });
  return [grouping,headings,...rows];
+}
+// Hoja real de pedido: un único cliente Pedia para parafarmacia y
+// cantidades independientes por farmacia para medicación.
+export function laboratoryOrderListRows(lines,pharmacies,type){
+ if(type==="parafarmacia")return [
+  ["Cliente", "Código nacional / EAN", "Artículo", "Unidades"],
+  ...lines.map(({row,line})=>["Pedia",row.cn||row.referencia,row.nombre,line.units])
+ ];
+ return [
+  ["Código nacional / EAN","Artículo",...pharmacies.map(p=>"Pedir "+p.name)],
+  ...lines.map(({row,line})=>[
+   row.cn||row.referencia,row.nombre,
+   ...pharmacies.map(p=>line.unitsByPharmacy?.[String(p.id)]??0)
+  ])
+ ];
 }
 export function laboratoryExportName(laboratory,type){
  const slug=String(laboratory||"laboratorio").normalize("NFD")

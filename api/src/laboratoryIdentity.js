@@ -8,6 +8,6 @@ export function laboratoryGroupKey(name){
  return normalized?"N:"+normalized:null;
 }
 export function normalizedLabSQL(expr){
- return "trim(regexp_replace(regexp_replace(upper(translate(coalesce("+expr+
-  ",'')::text,'ÁÉÍÓÚÜÑ','AEIOUUN')), '[^A-Z0-9]+',' ','g'), '( S L U| S L| S A| SLU| SL| SA)$','','g'))";
+ return "trim(regexp_replace(btrim(regexp_replace(upper(translate(coalesce("+expr+
+  ",'')::text,'ÁÉÍÓÚÜÑ','AEIOUUN')), '[^A-Z0-9]+',' ','g')), '( S L U| S L| S A| SLU| SL| SA)$','','g'))";
 }

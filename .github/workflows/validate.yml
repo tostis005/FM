@@ -45,6 +45,8 @@ jobs:
           node --test api/src/purchasePlannerSuppliers.test.js
           node --check api/src/laboratoryCatalog.js
           node --test api/src/laboratoryCatalog.test.js
+          node --check api/src/laboratoryOrderPlanner.js
+          node --test api/src/laboratoryOrderPlanner.test.js
           node --test api/src/stockTargetDays.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
@@ -106,7 +108,7 @@ jobs:
           node --test src/asyncBatches.test.js
           node --test src/localeES.test.js
           node --test src/promotionMetrics.test.js
-          node --test src/laboratoryExport.test.js
+          node --test src/laboratoryExport.test.js src/laboratoryOrderSheet.test.js
           node --test src/dictadoVoz.test.js src/assistantStreamClient.test.js
           node check-login.mjs
           node generate-seo.mjs
@@ -156,6 +158,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/009_promociones_cliente.sql
           psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
+          psql_test --single-transaction < api/src/migrations/027_pedidos_laboratorio_borradores.sql
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
           psql_test --single-transaction < api/src/migrations/012_analisis_ventas_cliente.sql
@@ -231,6 +234,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentScreens.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlannerSuppliers.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
 
 
   validar_responsive:
@@ -257,6 +261,7 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
+          node check-laboratory-orders.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs
           node check-responsive.mjs

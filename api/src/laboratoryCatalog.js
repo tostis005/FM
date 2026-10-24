@@ -103,7 +103,9 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    SELECT referencia,
     coalesce(max(nombre) FILTER(WHERE del_maestro),max(nombre)) AS nombre,
     max(codigo) AS cn,
-    CASE WHEN bool_or(tipo='medicacion') THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
+    CASE WHEN length(max(codigo)) IN (6,7) AND max(codigo) !~ '[^0-9]' THEN
+     CASE WHEN left(max(codigo),6)::int < 400000 THEN 'parafarmacia' ELSE 'medicacion' END
+    WHEN bool_or(tipo='medicacion') THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
     bool_or(del_maestro) AS "inMaster",
     bool_or(de_recepcion) AS "inReceipts",
     string_agg(DISTINCT farmacia_id,',' ORDER BY farmacia_id) FILTER(WHERE farmacia_id IS NOT NULL) AS "pharmacyIds",
@@ -112,7 +114,7 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
   ),
   filtered AS (
    SELECT *,
-    (tipo='parafarmacia' AND NOT "inMaster") AS provisional
+    (tipo='parafarmacia' AND NOT "inMaster" AND cn IS NULL) AS provisional
    FROM aggregate
    WHERE tipo=$4 AND ($5::text='' OR upper(nombre) LIKE '%'||upper($5)||'%'
       OR upper(referencia) LIKE '%'||upper($5)||'%')

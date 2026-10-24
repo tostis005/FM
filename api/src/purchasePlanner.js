@@ -1,6 +1,7 @@
 import {readPurchasePlannerPaged} from "./purchasePlannerPaged.js";
 import {readPlannerLaboratories} from "./purchasePlannerSuppliers.js";
 import {setupLaboratoryCatalog} from "./laboratoryCatalog.js";
+import {setupLaboratoryOrderPlanner} from "./laboratoryOrderPlanner.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const VALID_DATE=/^\d{4}-\d{2}-\d{2}$/;
 const DAY=86400000;
@@ -74,6 +75,7 @@ export function groupPurchaseRows(rows){
 }
 export function setupPurchasePlanner(app,pool,{requireTenant}){
  setupLaboratoryCatalog(app,pool,{requireTenant});
+ setupLaboratoryOrderPlanner(app,pool,{requireTenant});
  if(typeof app.post==="function")app.post("/api/analytics/pedidos/laboratorios",...requireTenant(),async(req,res,next)=>{
   const ctx=req.context;
   if(ctx.role!=="superadministrador"&&ctx.modules?.compras!==true)

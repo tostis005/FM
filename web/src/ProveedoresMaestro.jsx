@@ -68,8 +68,9 @@ export default function ProveedoresMaestro({clientSlug}){
   finally{setLinking(false)}
  }
  const availableLabs=useMemo(()=>laboratories.filter(l=>
-  (l.name+" "+l.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es"))),
-  [laboratories,labSearch]);
+  (l.name+" "+l.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es")))
+  .sort((a,b)=>Number(Boolean(b.fromVademecum))-Number(Boolean(a.fromVademecum))||
+    a.name.localeCompare(b.name,"es")),[laboratories,labSearch]);
  const labName=key=>laboratories.find(l=>l.key===key)?.name||key||"Sin asignar";
  function openLaboratory(row){
   setMappingSupplier(row);setSelectedLab(row.laboratoryKey||"");
@@ -133,6 +134,11 @@ export default function ProveedoresMaestro({clientSlug}){
        onClick={()=>setMappingSupplier(null)}><X size={19}/></button>
      </div>
      <p><strong>{mappingSupplier.name}</strong> · código ERP {mappingSupplier.sourceCode}</p>
+     {!laboratories.some(l=>l.fromVademecum)&&<p className="fm-op-message" role="status">
+      No hay referencias de Vademécum identificadas en el maestro. El superadministrador
+      puede cargar su CSV en Fuentes de datos. Mientras tanto, están disponibles los
+      laboratorios que sí figuran en AEMPS o Farmatic.
+     </p>}
      <p>Se aplicará a todas las farmacias del cliente, salvo donde exista una excepción específica. 
       El catálogo importado aporta los CN y Farmatic completa las referencias que falten.</p>
      <label className="fm-provider-lab-field">Buscar laboratorio del catálogo
@@ -143,7 +149,9 @@ export default function ProveedoresMaestro({clientSlug}){
       <select value={selectedLab} onChange={e=>setSelectedLab(e.target.value)}
        aria-label="Laboratorio asociado">
        <option value="">Sin laboratorio asignado</option>
-       {availableLabs.map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
+       {availableLabs.map(l=><option key={l.key} value={l.key}>
+        {l.name}{l.fromVademecum?" · Vademécum":" · AEMPS / ERP"}
+       </option>)}
        {selectedLab&&!availableLabs.some(l=>l.key===selectedLab)&&
         laboratories.filter(l=>l.key===selectedLab).map(l=>
          <option key={l.key} value={l.key}>{l.name}</option>)}

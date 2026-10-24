@@ -78,34 +78,49 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   if(!laboratory){setData(empty);return}
   const controller=new AbortController();
   const timer=setTimeout(async()=>{
-   setLoading(true);setError("");
-   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,
+   setLoading(true);setError("");setData(empty);
+   const basic=new URLSearchParams({laboratorio:laboratory,tipo:tab,
     farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
-   const path=useMetrics?"/api/analytics/pedidos/matriz-laboratorio":
-    "/api/analytics/pedidos/catalogo-directo";
-   if(useMetrics){base.set("desde",range.from);base.set("hasta",range.to);}
-   try{
-    let d=await api(clientSlug,path+"?"+base,{signal:controller.signal});
-    if(!useMetrics)d={...d,metricsUnavailable:true,
-     warning:!scope?"No hay farmacias seleccionadas: se muestran los artículos sin stock ni ventas.":
-      !range.valid?"El período no es válido. Se muestran los artículos sin métricas.":
-      "El período supera el límite de 5 años para métricas. Se muestran los artículos; elige un período más corto."};
-    if(!controller.signal.aborted){setData(d);setUpdatedAt(new Date())}
-   }catch(e){
-    if(controller.signal.aborted)return;
-    if(useMetrics)try{
-     const basic=new URLSearchParams({laboratorio:laboratory,tipo:tab,
-      farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
-     const fallback=await api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,{signal:controller.signal});
-     if(!controller.signal.aborted){setData({...fallback,metricsUnavailable:true,
-      warning:"La consulta de métricas ha fallado: "+e.message+". Se muestran las referencias del catálogo."});
+   let matrixFinished=false;
+   // Show source records first: the inventory join can take longer or fail.
+   const sourcePromise=api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,
+    {signal:controller.signal}).then(d=>{
+     if(!controller.signal.aborted&&!matrixFinished&&useMetrics)
+      setData({...d,metricsUnavailable:true,warning:"Artículos encontrados. Cargando ventas y stock…"});
+     return d;
+    }).catch(e=>({error:e.message}));
+   if(!useMetrics){
+    const source=await sourcePromise;
+    if(!controller.signal.aborted){
+     if(source.error){setError("No se puede consultar el catálogo: "+source.error);setData(empty)}
+     else{setData({...source,metricsUnavailable:true,
+      warning:!scope?"No hay farmacias seleccionadas: se muestran artículos sin stock ni ventas.":
+       !range.valid?"El período no es válido. Se muestran los artículos sin métricas.":
+       "El período supera el límite de 5 años. Selecciona uno más corto para calcular las ventas."});
       setUpdatedAt(new Date());}
-    }catch(fallbackError){
-     if(!controller.signal.aborted){setData(empty);
-      setError("No se han podido cargar ni la matriz ni el catálogo: "+fallbackError.message)}
-    }else{setData(empty);setError("No se puede cargar el catálogo: "+e.message)}
+     setLoading(false);
+    }
+    return;
+   }
+   const query=new URLSearchParams(basic);
+   query.set("desde",range.from);query.set("hasta",range.to);
+   try{
+    const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
+     {signal:controller.signal});
+    matrixFinished=true;
+    if(!controller.signal.aborted){setData(result);setUpdatedAt(new Date())}
+   }catch(e){
+    matrixFinished=true;
+    if(controller.signal.aborted)return;
+    const source=await sourcePromise;
+    if(controller.signal.aborted)return;
+    if(source.error){setData(empty);setError("No se pudieron consultar los artículos: "+source.error+
+     ". Error de la matriz: "+e.message)}
+    else{setData({...source,metricsUnavailable:true,
+     warning:"No se pudieron calcular ventas/stock ("+e.message+"). Se muestran las referencias del catálogo."});
+     setUpdatedAt(new Date());}
    }finally{if(!controller.signal.aborted)setLoading(false)}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};

@@ -1,6 +1,7 @@
 import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
+import {readFastLaboratoryArticles} from "./laboratoryFallback.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
@@ -173,9 +174,20 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
   )
   SELECT *,count(*) OVER()::int AS total
    FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
- const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
-  query_timeout:30000});
+ let rows;
+ try{
+  ({rows}=await pool.query({text:sql,
+   values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
+   query_timeout:15000}));
+ }catch(error){
+  console.error("laboratory-catalog-complex-query",{
+   tenant:context.client.slug,code:error.code||"UNKNOWN",
+   type,pharmacies:pharmacies.length
+  });
+  // Solo si falla la consulta compleja. Una respuesta realmente vacía no
+  // se falsifica con productos de otro laboratorio.
+  return readFastLaboratoryArticles(pool,context,{key,pharmacies,type,search,page,size});
+ }
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }
 

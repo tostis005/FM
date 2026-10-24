@@ -450,6 +450,7 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
 export default function PurchasePlanner(props){
  const [view,setView]=useState(()=>{
   try{
+   if(new URLSearchParams(window.location.search).get("vista")==="anterior")return "legacy";
    if(sessionStorage.getItem(STAGING_PREFIX+props.clientSlug))return "legacy";
    return sessionStorage.getItem("fm_preparador_vista:"+props.clientSlug)==="legacy"?"legacy":"laboratory";
   }catch{return "laboratory"}

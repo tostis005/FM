@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useState,useRef} from "react";
 import {Database,Upload,ExternalLink,RefreshCcw,FileDown} from "lucide-react";
 import "./sourceAdmin.css";
 
@@ -18,6 +18,7 @@ const SOURCE_INFO=[
 ];
 function SourceCard({item,data,refresh}){
  const [file,setFile]=useState(null),[version,setVersion]=useState(()=>new Date().toISOString().slice(0,7));
+ const fileInputRef=useRef(null);
  const [origin,setOrigin]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
  async function upload(event){
   event.preventDefault();
@@ -32,7 +33,7 @@ function SourceCard({item,data,refresh}){
    const json=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(json.error||"No se pudo validar el fichero");
    setMessage("Nueva fuente cargada: "+count(json.total)+" referencias. Versión "+json.version+".");
-   setFile(null);await refresh();
+   setFile(null);if(fileInputRef.current)fileInputRef.current.value="";await refresh();
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
@@ -72,7 +73,7 @@ function SourceCard({item,data,refresh}){
      <input type="url" value={origin} onChange={e=>setOrigin(e.target.value)}
       placeholder="https://proveedor.ejemplo/catalogo" /></label>}
     <label>Fichero {item.extension}
-     <input key={file?.name||"empty"} type="file" accept={item.mimes} required
+     <input ref={fileInputRef} type="file" accept={item.mimes} required
       onChange={e=>setFile(e.target.files?.[0]||null)} />
     </label>
     <button className="btn btn-primary" type="submit" disabled={!file||busy}>

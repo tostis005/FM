@@ -33,23 +33,32 @@ export async function listLaboratoryOptions(pool,context){
  const schema='"'+context.client.schema+'"';
  const {rows}=await pool.query(`
   WITH labs AS (
-   SELECT `+normalizedLabSQL("n.laboratorio_comercializador")+` AS canonical,
-     n.laboratorio_comercializador AS name
+   SELECT ${normalizedLabSQL("n.laboratorio_comercializador")} AS canonical,
+     n.laboratorio_comercializador AS name,true AS medication,false AS parapharmacy
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT `+normalizedLabSQL("n.laboratorio_titular")+`,n.laboratorio_titular
+   SELECT ${normalizedLabSQL("n.laboratorio_titular")},n.laboratorio_titular,true,false
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre
+   SELECT ${normalizedLabSQL("a.laboratorio_nombre")},a.laboratorio_nombre,
+     a.tipo='medicacion',a.tipo='parafarmacia'
    FROM farmetrica.articulos_laboratorio_maestro a
    UNION ALL
-   SELECT ${normalizedLabSQL("a.laboratorio")},a.laboratorio
+   SELECT ${normalizedLabSQL("a.laboratorio")},a.laboratorio,
+     length(nullif(btrim(a.codigo_nacional),'')) IN (6,7)
+      AND btrim(a.codigo_nacional) ~ '^[0-9]{6,7}$'
+      AND left(btrim(a.codigo_nacional),6)::integer>=400000,
+     coalesce(length(nullif(btrim(a.codigo_nacional),'')) NOT IN (6,7)
+      OR btrim(a.codigo_nacional) !~ '^[0-9]{6,7}$'
+      OR left(btrim(a.codigo_nacional),6)::integer<400000,true)
    FROM ${schema}.articulos a
    JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
     AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
    WHERE nullif(btrim(a.laboratorio),'') IS NOT NULL
   )
-  SELECT 'N:'||canonical AS key,min(name) AS name
+  SELECT 'N:'||canonical AS key,min(name) AS name,
+    bool_or(medication) AS "hasMedication",
+    bool_or(parapharmacy) AS "hasParapharmacy"
   FROM labs WHERE canonical<>'' GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
   [context.client.slug,(context.pharmacies||[]).map(p=>Number(p.id))]);
  return rows;

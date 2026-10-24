@@ -103,7 +103,117 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    SELECT referencia,
     coalesce(max(nombre) FILTER(WHERE del_maestro),max(nombre)) AS nombre,
     max(codigo) AS cn,
-    CASE WHEN bool_or(tipo='medicacion') THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
+    CASE WHEN max(codigo) ~ '^[0-9]{6,7}
+    bool_or(del_maestro) AS "inMaster",
+    bool_or(de_recepcion) AS "inReceipts",
+    string_agg(DISTINCT farmacia_id,',' ORDER BY farmacia_id) FILTER(WHERE farmacia_id IS NOT NULL) AS "pharmacyIds",
+    string_agg(DISTINCT proveedor_id,',' ORDER BY proveedor_id) FILTER(WHERE proveedor_id IS NOT NULL) AS "supplierCodes"
+   FROM identity GROUP BY referencia
+  ),
+  filtered AS (
+   SELECT *,
+    (tipo='parafarmacia' AND NOT "inMaster" AND cn IS NULL) AS provisional
+   FROM aggregate
+   WHERE tipo=$4 AND ($5::text='' OR upper(nombre) LIKE '%'||upper($5)||'%'
+      OR upper(referencia) LIKE '%'||upper($5)||'%')
+  )
+  SELECT *,count(*) OVER()::int AS total
+   FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
+ const {rows}=await pool.query({text:sql,
+  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
+  query_timeout:20000});
+ return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
+}
+export function setupLaboratoryCatalog(app,pool,{requireTenant}){
+ const auth=requireTenant();
+ const access=(req,res)=>req.context.role==="superadministrador"||
+  req.context.modules?.compras===true;
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
+  if(!access(req,res)&&req.context.modules?.proveedores!==true)
+   return res.status(403).json({error:"Catálogo no habilitado"});
+  try{res.json({laboratories:await listLaboratoryOptions(pool)});}catch(e){next(e);}
+ });
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{
+  if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});
+  const key=normalizeLaboratoryKey(req.query.laboratorio);
+  const pharmacies=selectedPharmacies(req.context,req.query.farmacias);
+  const type=String(req.query.tipo||"");
+  const search=String(req.query.buscar||"").trim();
+  const page=Number(req.query.pagina||1),size=Number(req.query.tamano||50);
+  if(!key||!pharmacies||!["medicacion","parafarmacia"].includes(type)||
+   search.length>100||!Number.isSafeInteger(page)||page<1||page>100000||
+   !Number.isSafeInteger(size)||size<1||size>100)
+   return res.status(400).json({error:"Filtros de laboratorio inválidos"});
+  try{res.json(await readLaboratoryArticles(pool,req.context,
+   {key,pharmacies,type,search,page,size}));}
+  catch(e){
+   if(["57014","53300"].includes(e.code))return res.status(504)
+    .json({error:"La consulta del catálogo ha superado el tiempo. Acota las farmacias."});
+   next(e);
+  }
+ });
+ if(typeof app.get==="function")app.get("/api/tenant/proveedores/correspondencias",...auth,async(req,res,next)=>{
+  if(!["administrador","superadministrador"].includes(req.context.role))
+   return res.status(403).json({error:"Requiere administración"});
+  try{
+   const pharmacies=(req.context.pharmacies||[]).map(p=>Number(p.id));
+   const {rows}=await pool.query(`SELECT farmacia_id::text AS "pharmacyId",
+    codigo_proveedor AS "sourceCode",laboratorio_clave AS "laboratoryKey"
+    FROM farmetrica.proveedores_laboratorios
+    WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])
+    ORDER BY farmacia_id,codigo_proveedor`,[req.context.client.slug,pharmacies]);
+   res.json(rows);
+  }catch(e){next(e);}
+ });
+ if(typeof app.put==="function")app.put("/api/tenant/proveedores/correspondencias",...auth,async(req,res,next)=>{
+  if(!["administrador","superadministrador"].includes(req.context.role))
+   return res.status(403).json({error:"Requiere administración"});
+  const pharmacyId=Number(req.body?.pharmacyId);
+  const sourceCode=canonicalSupplierCode(req.body?.sourceCode);
+  const rawLab=String(req.body?.laboratoryKey??"").trim();
+  const laboratoryKey=rawLab?normalizeLaboratoryKey(rawLab):null;
+  const allowed=new Set((req.context.pharmacies||[]).map(p=>Number(p.id)));
+  if(!allowed.has(pharmacyId)||!sourceCode||sourceCode.length>60||
+    (rawLab&&!laboratoryKey))
+   return res.status(400).json({error:"Correspondencia de proveedor inválida"});
+  try{
+   if(!laboratoryKey){
+    await pool.query(`DELETE FROM farmetrica.proveedores_laboratorios
+     WHERE cliente_slug=$1 AND farmacia_id=$2 AND codigo_proveedor=$3`,
+     [req.context.client.slug,pharmacyId,sourceCode]);
+    return res.json({pharmacyId:String(pharmacyId),sourceCode,laboratoryKey:null});
+   }
+   const {rows:known}=await pool.query(`
+    SELECT EXISTS(
+     SELECT 1 FROM farmetrica.nomenclator_presentaciones n
+      WHERE ${commercialKey}=$1 OR ${titularKey}=$1
+     UNION ALL
+     SELECT 1 FROM farmetrica.articulos_laboratorio_maestro
+      WHERE laboratorio_clave=$1
+    ) AS found`,[laboratoryKey]);
+   if(!known[0]?.found)return res.status(400).json({error:"Selecciona un laboratorio del maestro"});
+   const {rows:coop}=await pool.query(`
+    SELECT cooperativa FROM farmetrica.proveedores_maestro
+    WHERE cliente_slug=$1 AND ${normalizeSupplierSql("codigo_origen")}=$2 LIMIT 1`,
+    [req.context.client.slug,sourceCode]);
+   if(coop[0]?.cooperativa===true)
+    return res.status(400).json({error:"Una cooperativa distribuye varios laboratorios: no se puede asignar uno a todas sus recepciones"});
+   const {rows}=await pool.query(`
+    INSERT INTO farmetrica.proveedores_laboratorios
+     (cliente_slug,farmacia_id,codigo_proveedor,laboratorio_clave)
+    VALUES($1,$2,$3,$4)
+    ON CONFLICT(cliente_slug,farmacia_id,codigo_proveedor) DO UPDATE
+    SET laboratorio_clave=EXCLUDED.laboratorio_clave,actualizado_en=now()
+    RETURNING farmacia_id::text AS "pharmacyId",codigo_proveedor AS "sourceCode",
+     laboratorio_clave AS "laboratoryKey"`,
+    [req.context.client.slug,pharmacyId,sourceCode,laboratoryKey]);
+   res.json(rows[0]);
+  }catch(e){next(e);}
+ });
+}
+ THEN
+      CASE WHEN left(max(codigo),6)::int < 400000 THEN 'parafarmacia' ELSE 'medicacion' END
+     WHEN bool_or(tipo='medicacion') THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
     bool_or(del_maestro) AS "inMaster",
     bool_or(de_recepcion) AS "inReceipts",
     string_agg(DISTINCT farmacia_id,',' ORDER BY farmacia_id) FILTER(WHERE farmacia_id IS NOT NULL) AS "pharmacyIds",

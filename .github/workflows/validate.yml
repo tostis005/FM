@@ -73,6 +73,7 @@ jobs:
           node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/internalPassword.test.js
           node --test api/src/accessPolicy.test.js
+          node --test api/src/userModuleAccess.test.js
           node --test api/src/operativaRules.test.js
           node --test api/src/pharmacyCodes.test.js
           node --check api/src/pricePolicy.js
@@ -150,6 +151,8 @@ jobs:
           for sql in api/src/migrations/001_farmacias.sql api/src/migrations/002_accesos.sql api/src/migrations/003_multitenant.sql; do
             psql_test --single-transaction < "$sql"
           done
+          psql_test --single-transaction < api/src/migrations/028_modulos_usuario.sql
+          psql_test --single-transaction < api/src/migrations/028_modulos_usuario.sql
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql

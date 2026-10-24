@@ -1,0 +1,52 @@
+name: Diagnóstico lectura fuentes Cinfa
+on:
+  push:
+    branches: ["fix/preparador-evitar-vacio-por-metricas-20261024"]
+    paths: [".github/workflows/diagnostico-cinfa.yml"]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar autenticación remota
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/fm_diag
+          chmod 600 ~/.ssh/fm_diag
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Conteos agregados de catálogo en PostgreSQL (solo SELECT)
+        run: |
+          set -euo pipefail
+          cat <<'SQL' | ssh -i ~/.ssh/fm_diag -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='15s';
+          SELECT 'aemps_total',count(*) FROM farmetrica.nomenclator_presentaciones;
+          SELECT 'aemps_laboratorio_cinfa',count(*) FROM farmetrica.nomenclator_presentaciones
+            WHERE laboratorio_comercializador ILIKE '%cinfa%' OR laboratorio_titular ILIKE '%cinfa%' OR laboratorio ILIKE '%cinfa%';
+          SELECT 'aemps_titular_nombre',count(*) FROM farmetrica.nomenclator_presentaciones WHERE laboratorio_titular ILIKE '%cinfa%';
+          SELECT 'aemps_comercializador_nombre',count(*) FROM farmetrica.nomenclator_presentaciones WHERE laboratorio_comercializador ILIKE '%cinfa%';
+          SELECT 'aemps_titular_codigo',count(*) FROM farmetrica.nomenclator_presentaciones WHERE laboratorio_titular_codigo IS NOT NULL AND btrim(laboratorio_titular_codigo)<>'';
+          SELECT 'erp_laboratorio_cinfa',count(*) FROM ampedia.articulos WHERE laboratorio ILIKE '%cinfa%';
+          SELECT 'erp_cinfa_cn_parafarmacia',count(*) FROM ampedia.articulos
+            WHERE laboratorio ILIKE '%cinfa%' AND btrim(coalesce(codigo_nacional,'')) ~ '^[0-9]{6,7}$'
+            AND left(btrim(codigo_nacional),6)::int<400000;
+          SELECT 'erp_cinfa_cn_medicacion',count(*) FROM ampedia.articulos
+            WHERE laboratorio ILIKE '%cinfa%' AND btrim(coalesce(codigo_nacional,'')) ~ '^[0-9]{6,7}$'
+            AND left(btrim(codigo_nacional),6)::int>=400000;
+          SELECT 'maestro_cinfa',count(*) FROM farmetrica.articulos_laboratorio_maestro
+            WHERE laboratorio_nombre ILIKE '%cinfa%' OR laboratorio_clave ILIKE '%cinfa%';
+          SELECT 'mapeos_proveedor_cinfa',count(*) FROM farmetrica.proveedores_laboratorios
+            WHERE cliente_slug='ampedia' AND laboratorio_clave ILIKE '%cinfa%';
+          SELECT 'nomen_versions_active',count(*) FROM farmetrica.nomenclator_versiones WHERE activo;
+          COMMIT;
+          SQL

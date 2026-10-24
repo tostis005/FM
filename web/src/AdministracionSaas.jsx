@@ -175,11 +175,12 @@ export function ClientesPanel({onUpdated}){
   {!clients.length&&!loading&&!error&&<section className="card fm-manage-client">No hay clientes configurados.</section>}
  </div>;
 }
-const initial={email:"",name:"",role:"farmacia",pharmacies:[],active:true,authType:"google"};
+const initial={email:"",name:"",role:"farmacia",pharmacies:[],modules:[],active:true,authType:"google"};
 const ROLES=[["administrador","Administrador del cliente"],["gestor","Gestor"],
  ["farmacia","Personal de farmacia"],["colaborador","Colaborador"]];
 export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}){
- const [users,setUsers]=useState([]),[form,setForm]=useState({...initial}),
+ const [users,setUsers]=useState([]),[availableModules,setAvailableModules]=useState([]),
+  [grantableModules,setGrantableModules]=useState([]),[form,setForm]=useState({...initial}),
   [editingEmail,setEditingEmail]=useState(""),[busy,setBusy]=useState(false),
   [sendingInvite,setSendingInvite]=useState(""),
   [feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
@@ -193,12 +194,24 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
  }
  useEffect(()=>{
   setForm({...initial});setEditingEmail("");setFeedback("");
-  refresh().catch(error=>setFeedback(error.message));
+  let valid=true;
+  Promise.all([
+   api("/api/tenant/usuarios/modulos",{headers}),
+   refresh()
+  ]).then(([info])=>{
+    if(!valid)return;
+    setAvailableModules(Array.isArray(info.modules)?info.modules:[]);
+    setGrantableModules(Array.isArray(info.grantable)?info.grantable:[]);
+  }).catch(error=>{if(valid)setFeedback(error.message)});
+  return ()=>{valid=false};
  },[client]);
  function resetForm(){setForm({...initial});setEditingEmail("");}
  function editUser(u){
   setForm({email:u.email,name:u.name||"",role:u.role,
-   pharmacies:(u.pharmacies||[]).map(String),active:Boolean(u.active),
+   pharmacies:(u.pharmacies||[]).map(String),
+   modules:Array.isArray(u.modules)?u.modules.filter(id=>availableModules.some(m=>m.id===id)):
+    availableModules.map(m=>m.id),
+   active:Boolean(u.active),
    authType:u.authType==="interno"?"local":u.authType});
   setEditingEmail(u.email);setFeedback("");
  }
@@ -284,6 +297,33 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
       </label>)}
      </div>
     </div>
+    <div className="fm-manage-wide fm-user-module-section">
+     <div className="fm-user-module-heading">
+      <div><strong>Funcionalidades autorizadas</strong>
+       <small>Solo aparecen los módulos habilitados para este cliente por superadministración.
+       Marcar un módulo concede acceso a esa funcionalidad exclusivamente a este usuario.</small></div>
+      <div className="fm-user-module-actions">
+       <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
+        onClick={()=>setForm(v=>({...v,modules:availableModules.filter(m=>grantableModules.includes(m.id)).map(m=>m.id)}))}>
+        Seleccionar todos
+       </button>
+       <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
+        onClick={()=>setForm(v=>({...v,modules:[]}))}>Quitar todos</button>
+      </div>
+     </div>
+     {availableModules.length?
+      <div className="fm-user-module-grid">
+       {availableModules.map(m=><label className="fm-user-module-choice" key={m.id}>
+        <span>{m.name}</span>
+        <input type="checkbox" checked={form.modules.includes(m.id)}
+         disabled={busy||!grantableModules.includes(m.id)}
+         onChange={e=>setForm(v=>({...v,modules:e.target.checked?
+          [...v.modules,m.id]:v.modules.filter(id=>id!==m.id)}))}/>
+       </label>)}
+      </div>:
+      <p className="fm-user-module-empty">Este cliente todavía no tiene módulos habilitados.
+       Actívalos desde Administración → Clientes.</p>}
+    </div>
     <div className="fm-manage-wide" style={{display:"flex",gap:10,flexWrap:"wrap"}}>
      <button className="btn btn-primary" disabled={busy} type="submit">
       <CheckCircle2 size={16}/>{busy?"Guardando…":editingEmail?"Guardar cambios":"Crear usuario"}
@@ -300,7 +340,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
    </div>
    {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:
     <SortableDataTable label="usuarios"
-     headers={["Correo","Método de acceso","Rol","Farmacias","Estado","Acciones"]}
+     headers={["Correo","Método de acceso","Rol","Farmacias","Módulos","Estado","Acciones"]}
      rows={users.map(u=>[
       <div key={u.email}><strong>{u.name||u.email}</strong>
        <div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></div>,
@@ -308,6 +348,9 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
       ROLES.find(([id])=>id===u.role)?.[1]||u.role,
       u.role==="administrador"?"Todas":
        (u.pharmacies||[]).map(id=>pharmacies.find(p=>String(p.id)===String(id))?.name||id).join(", ")||"—",
+      (Array.isArray(u.modules)?u.modules:availableModules.map(m=>m.id))
+       .filter(id=>availableModules.some(m=>m.id===id))
+       .map(id=>availableModules.find(m=>m.id===id)?.name||id).join(", ")||"Sin acceso a módulos",
       u.active?"Activo":"Bloqueado",
       <div key={u.email+"actions"} style={{display:"flex",flexWrap:"wrap",gap:7}}>
        <button className="btn btn-secondary btn-sm" type="button"

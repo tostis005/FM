@@ -71,7 +71,10 @@ const supplierAliases=`SELECT $1::text AS key
  WHERE 'N:'||`+normalizedLabSQL("n.laboratorio_comercializador")+`=$1
  UNION
  SELECT `+titularKey+` AS key FROM farmetrica.nomenclator_presentaciones n
- WHERE 'N:'||`+normalizedLabSQL("coalesce(n.laboratorio_titular,n.laboratorio)")+`=$1`;
+ WHERE 'N:'||`+normalizedLabSQL("coalesce(n.laboratorio_titular,n.laboratorio)")+`=$1
+ UNION
+ SELECT a.laboratorio_clave FROM farmetrica.articulos_laboratorio_maestro a
+ WHERE 'N:'||`+normalizedLabSQL("a.laboratorio_nombre")+`=$1`;
 
 export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,search="",page=1,size=50}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema de cliente inválido");
@@ -115,7 +118,8 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
     AND upper(btrim(r.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
    JOIN farmetrica.proveedores_laboratorios m
     ON m.cliente_slug=$3 AND m.farmacia_id=f.id
-    AND m.laboratorio_clave IN (SELECT key FROM aliases)
+    AND (m.laboratorio_clave IN (SELECT key FROM aliases) OR
+     (left(m.laboratorio_clave,2)='N:' AND 'N:'||${normalizedLabSQL("substring(m.laboratorio_clave from 3)")}=$1))
     AND m.codigo_proveedor=`+normalizeSupplierSql("r.proveedor_id")+`
    LEFT JOIN LATERAL (
     SELECT a.nombre,a.codigo_nacional FROM `+q+`.articulos a
@@ -230,10 +234,10 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
    const {rows:known}=await pool.query(`
     SELECT EXISTS(
      SELECT 1 FROM farmetrica.nomenclator_presentaciones n
-      WHERE ${commercialKey}=$1 OR ${titularKey}=$1
+      WHERE ${matchCommercial('n')} OR ${matchTitular('n')}
      UNION ALL
-     SELECT 1 FROM farmetrica.articulos_laboratorio_maestro
-      WHERE laboratorio_clave=$1
+     SELECT 1 FROM farmetrica.articulos_laboratorio_maestro a
+      WHERE a.laboratorio_clave=$1 OR 'N:'||${normalizedLabSQL('a.laboratorio_nombre')}=$1
     ) AS found`,[laboratoryKey]);
    if(!known[0]?.found)return res.status(400).json({error:"Selecciona un laboratorio del maestro"});
    const {rows:coop}=await pool.query(`

@@ -54,3 +54,12 @@
 .fm-lab-order-noresults strong{font-size:13px;color:#355342}
 .fm-lab-order-noresults span{max-width:670px;font-size:11px;line-height:1.5;color:#63786b}
 .fm-lab-order-noresults button{font-size:11px}
+
+.fm-lab-order-warning{display:flex;align-items:flex-start;gap:8px;margin:0;padding:11px 12px;
+  color:#845f13;background:#fcf6e8;border:1px solid #e8d8a8;border-radius:7px;font-size:12px;line-height:1.5}
+.fm-lab-order-warning svg{flex-shrink:0;margin-top:1px}
+.fm-lab-order-diagnostics{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:9px 11px;
+  font-size:12px;background:#f1f6f3;border:1px solid #d9e8de;border-radius:7px}
+.fm-lab-order-diagnostics strong{font-size:12px;color:#315a45}
+.fm-lab-order-diagnostics span{font-size:12px;color:#4d6557;padding-left:10px;border-left:1px solid #c8d6cc}
+.fm-lab-order-diagnostics b{color:#255c42;font-size:13px}

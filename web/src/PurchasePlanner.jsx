@@ -8,6 +8,7 @@ import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportF
 import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
 import "./purchasePlanner.css";
 import LaboratoryCatalogPanel from "./LaboratoryCatalogPanel.jsx";
+import LaboratoryOrderPanel from "./LaboratoryOrderPanel.jsx";
 
 const today=()=>resolveSalesPeriod("today").from;
 const whole=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(n||0));
@@ -34,7 +35,7 @@ function downloadCSV(filename,lines){
 }
 // En cada farmacia el ERP tiene sus códigos propios. Los borradores se guardan
 // bajo farmacia y proveedor; la exportación puede consolidar varias farmacias.
-export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated=()=>{}}){
+function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated=()=>{}}){
  const [period,setPeriod]=useState(()=>readSharedReportFilters(clientSlug).period||"this_month");
  const [customFrom,setCustomFrom]=useState(()=>readSharedReportFilters(clientSlug).customFrom||"");
  const [customTo,setCustomTo]=useState(()=>readSharedReportFilters(clientSlug).customTo||"");
@@ -444,4 +445,26 @@ export default function PurchasePlanner({clientSlug,pharmacies=[],canEdit=false,
   {!result&&busy&&<LoadingPanel kind="table" label="Calculando ventas, stock y recomendaciones…" rows={5}/>}
   {!result&&!busy&&!error&&<p role="status" className="fm-op-message">No hay resultados disponibles todavía.</p>}
  </section></>;
+}
+
+export default function PurchasePlanner(props){
+ const [view,setView]=useState(()=>{
+  try{
+   if(sessionStorage.getItem(STAGING_PREFIX+props.clientSlug))return "legacy";
+   return sessionStorage.getItem("fm_preparador_vista:"+props.clientSlug)==="legacy"?"legacy":"laboratory";
+  }catch{return "laboratory"}
+ });
+ function changeView(next){
+  setView(next);
+  try{sessionStorage.setItem("fm_preparador_vista:"+props.clientSlug,next)}catch{}
+ }
+ return <>
+  <div className="fm-preparador-switch" role="group" aria-label="Vista del preparador">
+   <button type="button" aria-pressed={view==="laboratory"} className={"btn "+(view==="laboratory"?"btn-primary":"btn-secondary")}
+    onClick={()=>changeView("laboratory")}>Pedido por laboratorio</button>
+   <button type="button" aria-pressed={view==="legacy"} className={"btn "+(view==="legacy"?"btn-primary":"btn-secondary")}
+    onClick={()=>changeView("legacy")}>Vista anterior</button>
+  </div>
+  {view==="laboratory"?<LaboratoryOrderPanel {...props}/>:<LegacyPurchasePlanner {...props}/>}
+ </>;
 }

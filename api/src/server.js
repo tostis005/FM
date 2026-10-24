@@ -512,6 +512,8 @@ try {
   await pool.query(laboratoryDraftMigration);
   const sourcesMigration=await readFile(new URL("./migrations/029_fuentes_catalogo.sql",import.meta.url),"utf8");
   await pool.query(sourcesMigration);
+  const supplierLaboratoryMigration=await readFile(new URL("./migrations/030_proveedor_laboratorio.sql",import.meta.url),"utf8");
+  await pool.query(supplierLaboratoryMigration);
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
   await pool.query(leadsMigration);
   const privacyMigration=await readFile(new URL("./migrations/007_solicitudes_privacidad.sql",import.meta.url),"utf8");

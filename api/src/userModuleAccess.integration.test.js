@@ -55,6 +55,7 @@ test("PostgreSQL: intersección de módulos por cliente/usuario y restricciones 
   let {rows}=await pool.query("SELECT modulos FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2",[email,slug]);
   assert.deepEqual(rows[0].modulos,["ventas"]);
   assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["promociones"]}})).statusCode,400);
+  assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["compras"]}})).statusCode,403);
   assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["compras"]},role:"gestor"})).statusCode,403);
   await pool.query("UPDATE farmetrica.cliente_modulos SET habilitado=false WHERE cliente_slug=$1 AND modulo_clave='ventas'",[slug]);
   response=await call("GET","/api/tenant/context");

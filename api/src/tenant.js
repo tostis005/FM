@@ -1,3 +1,4 @@
+import {normalizedLabSQL} from "./laboratoryIdentity.js";
 // Núcleo de selección de cliente, permisos y activación de módulos.
 // Todo el contexto del tenant se obtiene en el servidor, nunca de un esquema
 // arbitrario aportado por el navegador.
@@ -247,7 +248,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       res.json(rows[0]);
     }catch(e){next(e);}
   });
-  const supplierSelect='id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active,cooperativa AS cooperative,ignorar_informes AS "ignoreReports"';
+  const supplierSelect='id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active,cooperativa AS cooperative,ignorar_informes AS "ignoreReports",laboratorio_clave AS "laboratoryKey"';
   app.get("/api/tenant/proveedores",...requireTenantAdmin(),async(req,res,next)=>{
     try{
       const slug=req.context.client.slug,schema=req.context.client.schema;
@@ -298,6 +299,44 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   });
   // Un solo clic guarda el indicador. Un proveedor importado sin ficha manual
   // crea únicamente su ficha de configuración, sin tocar los datos del ERP.
+  // Asignación global: un código de proveedor del ERP corresponde a un
+  // laboratorio del vademécum/AEMPS. Las excepciones por farmacia se conservan.
+  app.put("/api/tenant/proveedores/laboratorio",...requireTenantAdmin(),async(req,res,next)=>{
+    const sourceCode=String(req.body?.sourceCode||"").trim().toUpperCase();
+    const name=String(req.body?.name||"").trim();
+    const key=req.body?.laboratoryKey===null||req.body?.laboratoryKey===""?
+      null:String(req.body?.laboratoryKey||"").trim().toUpperCase();
+    if(!/^[A-Z0-9_.-]{1,60}$/.test(sourceCode)||!name||name.length>200||
+      (key!==null&&!/^N:[A-Z0-9 ]{1,210}$/.test(key)))
+      return res.status(400).json({error:"Proveedor o laboratorio no válido"});
+    try{
+      if(key){
+        const {rows}=await pool.query(`
+          SELECT EXISTS(
+           SELECT 1 FROM farmetrica.articulos_laboratorio_maestro a
+           WHERE 'N:'||${normalizedLabSQL("a.laboratorio_nombre")}=$1
+             OR a.laboratorio_clave=$1
+           UNION ALL
+           SELECT 1 FROM farmetrica.nomenclator_presentaciones n
+           WHERE 'N:'||${normalizedLabSQL("n.laboratorio_titular")}=$1
+             OR 'N:'||${normalizedLabSQL("n.laboratorio_comercializador")}=$1
+          ) AS found`,[key]);
+        if(!rows[0]?.found)return res.status(400).json({error:"Este laboratorio no existe en las fuentes importadas"});
+      }
+      const {rows}=await pool.query(`
+       INSERT INTO farmetrica.proveedores_maestro
+         (cliente_slug,codigo_origen,nombre,laboratorio_clave)
+       VALUES($1,$2,$3,$4)
+       ON CONFLICT(cliente_slug,codigo_origen) DO UPDATE SET
+        laboratorio_clave=EXCLUDED.laboratorio_clave,actualizado_en=now()
+       WHERE NOT farmetrica.proveedores_maestro.cooperativa
+       RETURNING ${supplierSelect}`,
+       [req.context.client.slug,sourceCode,name,key]);
+      if(!rows.length)
+       return res.status(409).json({error:"Las cooperativas no pueden asignarse a un único laboratorio"});
+      res.json(rows[0]);
+    }catch(e){next(e)}
+  });
   app.patch("/api/tenant/proveedores/indicadores",...requireTenantAdmin(),async(req,res,next)=>{
     try{
       const sourceCode=String(req.body?.sourceCode||"").trim().toUpperCase();

@@ -19,7 +19,8 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/farmacias")body=pharmacies;
  else if(path==="/api/operativa")body={scope:{canEdit:true,canApprove:true},items:[]};
  else if(path==="/api/analytics/pedidos/catalogo-laboratorios")
-  body={laboratories:[{key:"C:LAB",name:"Laboratorio Ejemplo"}]};
+  body={laboratories:[{key:"C:LAB",name:"Laboratorio Ejemplo"},
+    {key:"N:CINFA",name:"Laboratorios Cinfa S.A.",hasMedication:true,hasParapharmacy:false}]};
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
    const data=request.postDataJSON();saved.push(data);
@@ -74,6 +75,10 @@ try{
  const file2=page.waitForEvent("download");
  await page.getByRole("button",{name:"Generar Excel"}).click();
  assert.match((await file2).suggestedFilename(),/medicacion\.xlsx$/);
- assert.equal(errors.length,0,errors.join("\n"));
+ await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("N:CINFA");
+ const medicineTab=page.getByRole("tab",{name:/Medicación/});
+ assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
+ await page.getByText("Medicamento").first().waitFor({timeout:15000});
+  assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK preparador por laboratorio: matriz, para conjunta, medicación individual, borradores y XLSX");
 }finally{await browser.close();}

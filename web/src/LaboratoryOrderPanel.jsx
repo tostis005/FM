@@ -150,7 +150,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <input type="search" aria-label="Buscar laboratorio" placeholder="Buscar laboratorio…"
       value={labSearch} onChange={e=>setLabSearch(e.target.value)}/>
      <select aria-label="Seleccionar laboratorio" value={laboratory}
-      onChange={e=>{setLaboratory(e.target.value);setTab("parafarmacia");setPage(1);setSearch("");setError("");setNotice("")}}>
+      onChange={e=>{
+       const next=labs.find(l=>l.key===e.target.value);
+       setLaboratory(e.target.value);
+       setTab(next?.hasMedication===true&&next?.hasParapharmacy===false?"medicacion":"parafarmacia");
+       setPage(1);setSearch("");setError("");setNotice("");
+      }}>
       <option value="">{labsLoading?"Cargando laboratorios…":"Elige un laboratorio"}</option>
       {options.map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
       {laboratory&&!options.some(l=>l.key===laboratory)&&labs.filter(l=>l.key===laboratory)
@@ -225,7 +230,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        </tr>;
       })}
       {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}>
-       No hay referencias para esta selección. Comprueba la relación de proveedores ERP y el catálogo AEMPS.
+       <div className="fm-lab-order-noresults">
+        <strong>{tab==="parafarmacia"?
+         "Sin referencias de parafarmacia en este laboratorio":
+         "Sin medicamentos asociados a este laboratorio"}</strong>
+        <span>{tab==="parafarmacia"?
+         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita artículos del ERP o del catálogo externo con su laboratorio asociado.":
+         "Comprueba que el nomenclátor AEMPS esté cargado y que el laboratorio aparezca asociado a sus presentaciones."}</span>
+        <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setPage(1);setError("")}}>
+         Ver {tab==="parafarmacia"?"Medicación":"Parafarmacia"}
+        </button>
+       </div>
       </td></tr>}
       </tbody>
      </table>

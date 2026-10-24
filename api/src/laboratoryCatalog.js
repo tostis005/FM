@@ -34,22 +34,29 @@ export async function listLaboratoryOptions(pool,context){
  const {rows}=await pool.query(`
   WITH labs AS (
    SELECT `+normalizedLabSQL("n.laboratorio_comercializador")+` AS canonical,
-     n.laboratorio_comercializador AS name
+     n.laboratorio_comercializador AS name,true AS medication,false AS parapharmacy
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT `+normalizedLabSQL("n.laboratorio_titular")+`,n.laboratorio_titular
+   SELECT `+normalizedLabSQL("n.laboratorio_titular")+`,n.laboratorio_titular,true,false
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre
+   SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre,
+     a.tipo='medicacion',a.tipo='parafarmacia'
    FROM farmetrica.articulos_laboratorio_maestro a
    UNION ALL
-   SELECT ${normalizedLabSQL("a.laboratorio")},a.laboratorio
-   FROM ${schema}.articulos a
+   SELECT `+normalizedLabSQL("a.laboratorio")+`,a.laboratorio,
+     CASE WHEN btrim(a.codigo_nacional) ~ '^[0-9]{6,7}$'
+       THEN left(btrim(a.codigo_nacional),6)::integer>=400000 ELSE false END,
+     CASE WHEN btrim(a.codigo_nacional) ~ '^[0-9]{6,7}$'
+       THEN left(btrim(a.codigo_nacional),6)::integer<400000 ELSE true END
+   FROM `+schema+`.articulos a
    JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
-    AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+    AND upper(btrim(a.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
    WHERE nullif(btrim(a.laboratorio),'') IS NOT NULL
   )
-  SELECT 'N:'||canonical AS key,min(name) AS name
+  SELECT 'N:'||canonical AS key,min(name) AS name,
+    bool_or(medication) AS "hasMedication",
+    bool_or(parapharmacy) AS "hasParapharmacy"
   FROM labs WHERE canonical<>'' GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
   [context.client.slug,(context.pharmacies||[]).map(p=>Number(p.id))]);
  return rows;
@@ -71,7 +78,10 @@ const supplierAliases=`SELECT $1::text AS key
  WHERE 'N:'||`+normalizedLabSQL("n.laboratorio_comercializador")+`=$1
  UNION
  SELECT `+titularKey+` AS key FROM farmetrica.nomenclator_presentaciones n
- WHERE 'N:'||`+normalizedLabSQL("coalesce(n.laboratorio_titular,n.laboratorio)")+`=$1`;
+ WHERE 'N:'||`+normalizedLabSQL("coalesce(n.laboratorio_titular,n.laboratorio)")+`=$1
+ UNION
+ SELECT a.laboratorio_clave FROM farmetrica.articulos_laboratorio_maestro a
+ WHERE 'N:'||`+normalizedLabSQL("a.laboratorio_nombre")+`=$1`;
 
 export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,search="",page=1,size=50}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema de cliente inválido");
@@ -115,7 +125,8 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
     AND upper(btrim(r.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
    JOIN farmetrica.proveedores_laboratorios m
     ON m.cliente_slug=$3 AND m.farmacia_id=f.id
-    AND m.laboratorio_clave IN (SELECT key FROM aliases)
+    AND (m.laboratorio_clave IN (SELECT key FROM aliases) OR
+     (left(m.laboratorio_clave,2)='N:' AND 'N:'||${normalizedLabSQL("substring(m.laboratorio_clave from 3)")}=$1))
     AND m.codigo_proveedor=`+normalizeSupplierSql("r.proveedor_id")+`
    LEFT JOIN LATERAL (
     SELECT a.nombre,a.codigo_nacional FROM `+q+`.articulos a
@@ -230,10 +241,10 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
    const {rows:known}=await pool.query(`
     SELECT EXISTS(
      SELECT 1 FROM farmetrica.nomenclator_presentaciones n
-      WHERE ${commercialKey}=$1 OR ${titularKey}=$1
+      WHERE ${matchCommercial('n')} OR ${matchTitular('n')}
      UNION ALL
-     SELECT 1 FROM farmetrica.articulos_laboratorio_maestro
-      WHERE laboratorio_clave=$1
+     SELECT 1 FROM farmetrica.articulos_laboratorio_maestro a
+      WHERE a.laboratorio_clave=$1 OR 'N:'||${normalizedLabSQL('a.laboratorio_nombre')}=$1
     ) AS found`,[laboratoryKey]);
    if(!known[0]?.found)return res.status(400).json({error:"Selecciona un laboratorio del maestro"});
    const {rows:coop}=await pool.query(`

@@ -8,7 +8,10 @@ test("nombres de laboratorio equivalentes no generan entradas duplicadas",()=>{
  assert.equal(laboratoryGroupKey("Zimfa"),"N:ZIMFA");
  assert.equal(laboratoryGroupKey("ZIMFA, S.L."),"N:ZIMFA");
  assert.equal(laboratoryGroupKey("Zimfa SA"),"N:ZIMFA");
- assert.equal(normalizeLabName("LABORATORIO Ñandú"),"LABORATORIO NANDU");
+ assert.equal(normalizeLabName("LABORATORIO Ñandú"),"NANDU");
+ assert.equal(laboratoryGroupKey("LABORATORIOS CINFA S.A."),"N:CINFA");
+ assert.equal(laboratoryGroupKey("CINFA SAU"),"N:CINFA");
+ assert.equal(laboratoryGroupKey("LABORATORIOS CINFA, S.A.U."),"N:CINFA");
  assert.match(normalizedLabSQL("a.laboratorio"),/translate/);
 });
 test("CSV de artículos y laboratorios conserva ceros y detecta 000000-399999",()=>{

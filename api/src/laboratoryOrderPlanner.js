@@ -54,10 +54,10 @@ export function normalizeDraftItems(items,type,pharmacies){
  const output=[];
  for(const row of items){
   if(!row||typeof row.reference!=="string"||row.reference.length>120||
-   !(/^[0-9]{6,7}$/.test(row.reference)||/^ERP:\d+:[A-Za-z0-9._:-]{1,90}$/.test(row.reference))||
+   !(/^(?:[0-9]{6,7}|[0-9]{13})$/.test(row.reference)||/^ERP:\d+:[A-Za-z0-9._:-]{1,90}$/.test(row.reference))||
    typeof row.name!=="string"||row.name.length>240||
    (row.cn!==null&&row.cn!==undefined&&!/^\d{6,7}$/.test(row.cn))||
-   (row.cn&&cnCategory(row.cn)!==type)||seen.has(row.reference))return null;
+   (row.cn&&cnCategory(row.cn)!==null&&cnCategory(row.cn)!==type)||seen.has(row.reference))return null;
   seen.add(row.reference);
   const metrics={};
   if(row.metrics!==undefined){

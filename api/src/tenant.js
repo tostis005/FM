@@ -459,9 +459,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
          JOIN farmetrica.modulos m ON m.clave=cm.modulo_clave
          WHERE cm.cliente_slug=$1 AND cm.habilitado=true ORDER BY m.nombre`,
         [req.context.client.slug]);
-      res.json({modules:rows,grantable:req.context.role==="gestor"?
-        rows.filter(m=>req.context.modules[m.id]===true).map(m=>m.id):
-        rows.map(m=>m.id)});
+      res.json({modules:rows,grantable:req.context.role==="superadministrador"?rows.map(m=>m.id):
+        rows.filter(m=>req.context.modules[m.id]===true).map(m=>m.id)});
     }catch(e){next(e);}
   });
   app.get("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{

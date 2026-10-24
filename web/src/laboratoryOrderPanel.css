@@ -46,3 +46,6 @@
 .fm-lab-order-actions .btn{display:flex;align-items:center;gap:6px}
 .fm-lab-order .fm-op-fine{margin:0}
 @media(max-width:720px){.fm-lab-order{padding:10px}.fm-lab-order-chooser{grid-template-columns:1fr;width:100%}.fm-lab-order-table .fm-lab-order-cn{width:88px;max-width:88px;min-width:88px}.fm-lab-order-table .fm-lab-order-name{left:88px;width:166px;max-width:166px;min-width:166px}.fm-lab-order-table th,.fm-lab-order-table td{min-width:48px}.fm-lab-order-actions{justify-content:stretch}.fm-lab-order-actions>div{width:100%}}
+
+.fm-preparador-switch{display:flex;align-items:center;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin:8px 0}
+.fm-preparador-switch .btn{font-size:12px;min-height:34px}

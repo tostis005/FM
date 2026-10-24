@@ -1,6 +1,6 @@
 export const qty=value=>Number.isSafeInteger(Number(value))&&Number(value)>=0&&Number(value)<=999999?Number(value):null;
 export function defaultLaboratoryLine(row,type,pharmacyIds){
- const common={reference:row.referencia,cn:row.cn||null,name:row.nombre};
+ const common={reference:row.referencia,cn:row.cn||null,name:row.nombre,metrics:row.byPharmacy||{}};
  const pharmacies=pharmacyIds.map(String);
  if(type==="parafarmacia"){
   const values=pharmacies.map(id=>row.byPharmacy?.[id]?.suggested);

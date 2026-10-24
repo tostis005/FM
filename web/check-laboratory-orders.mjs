@@ -21,12 +21,19 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/analytics/pedidos/catalogo-laboratorios")
   body={laboratories:[{key:"C:LAB",name:"Laboratorio Ejemplo"},
     {key:"N:CINFA",name:"Laboratorios Cinfa S.A.",hasMedication:true,hasParapharmacy:false}]};
+ else if(path==="/api/analytics/pedidos/articulos-laboratorio"){
+   const cinfa=url.searchParams.get("laboratorio")==="N:CINFA";
+   body=cinfa?{rows:[{referencia:"400123",cn:"400123",nombre:"Medicamento Cinfa",
+    inMaster:true,inReceipts:false}],total:1,page:1,size:40}:{rows:[],total:0,page:1,size:40};
+  }
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
    const data=request.postDataJSON();saved.push(data);
    body={saved:true,count:data.lineas.length,updatedAt:"2026-10-24T07:00:00Z"};
   }else body={lineas:[]};
  }else if(path==="/api/analytics/pedidos/matriz-laboratorio"){
+   if(url.searchParams.get("laboratorio")==="N:CINFA")
+    await new Promise(resolve=>setTimeout(resolve,2300));
   const type=url.searchParams.get("tipo");
   matrices.push(Object.fromEntries(url.searchParams));
   const med=type==="medicacion";
@@ -78,6 +85,8 @@ try{
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("N:CINFA");
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
+ await page.getByText("Medicamento Cinfa").first().waitFor({timeout:1800});
+ await page.getByText(/Artículos cargados · calculando ventas y stock/).waitFor({timeout:1800});
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
   assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK preparador por laboratorio: matriz, para conjunta, medicación individual, borradores y XLSX");

@@ -1,7 +1,7 @@
 FROM node:22-alpine
 WORKDIR /app
 COPY package*.json ./
-RUN apk add --no-cache ffmpeg && npm install --omit=dev --no-audit --no-fund
+RUN apk add --no-cache ffmpeg python3 postgresql-client && npm install --omit=dev --no-audit --no-fund
 COPY src ./src
 USER node
 EXPOSE 8000

@@ -1,5 +1,6 @@
 import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {normalizedLabSQL} from "./laboratoryIdentity.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
@@ -26,39 +27,81 @@ const normalizeSupplierSql=expr=>`CASE WHEN btrim(${expr}::text) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
  ELSE upper(btrim(${expr}::text)) END`;
 
-export async function listLaboratoryOptions(pool){
+const nameMatch=(column)=>`'N:'||`+normalizedLabSQL(column);
+export async function listLaboratoryOptions(pool,context){
+ if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
+ const schema='"'+context.client.schema+'"';
  const {rows}=await pool.query(`
   WITH labs AS (
-   SELECT ${commercialKey} AS clave,n.laboratorio_comercializador AS nombre
-    FROM farmetrica.nomenclator_presentaciones n
+   SELECT `+normalizedLabSQL("n.laboratorio_comercializador")+` AS canonical,
+     n.laboratorio_comercializador AS name
+   FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT ${titularKey},coalesce(n.laboratorio_titular,n.laboratorio)
-    FROM farmetrica.nomenclator_presentaciones n
+   SELECT `+normalizedLabSQL("n.laboratorio_titular")+`,n.laboratorio_titular
+   FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT laboratorio_clave,laboratorio_nombre
-    FROM farmetrica.articulos_laboratorio_maestro
+   SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre
+   FROM farmetrica.articulos_laboratorio_maestro a
+   UNION ALL
+   SELECT ${normalizedLabSQL("a.laboratorio")},a.laboratorio
+   FROM ${schema}.articulos a
+   JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
+    AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+   WHERE nullif(btrim(a.laboratorio),'') IS NOT NULL
   )
-  SELECT clave AS "key",min(nombre) AS name
-   FROM labs WHERE clave IS NOT NULL AND nullif(btrim(nombre),'') IS NOT NULL
-   GROUP BY clave ORDER BY min(nombre),clave LIMIT 3000`);
+  SELECT 'N:'||canonical AS key,min(name) AS name
+  FROM labs WHERE canonical<>'' GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
+  [context.client.slug,(context.pharmacies||[]).map(p=>Number(p.id))]);
  return rows;
 }
+const matchCommercial=(alias)=>{
+ const name=alias+".laboratorio_comercializador";
+ const code=alias+".laboratorio_comercializador_codigo";
+ return "('N:'||"+normalizedLabSQL(name)+"=$1 OR "+
+  laboratoryKey(code,name)+"=$1)";
+};
+const matchTitular=(alias)=>{
+ const name="coalesce("+alias+".laboratorio_titular,"+alias+".laboratorio)";
+ const code="coalesce("+alias+".laboratorio_titular_codigo,"+alias+".laboratorio_codigo)";
+ return "('N:'||"+normalizedLabSQL(name)+"=$1 OR "+laboratoryKey(code,name)+"=$1)";
+};
+const supplierAliases=`SELECT $1::text AS key
+ UNION
+ SELECT `+commercialKey+` AS key FROM farmetrica.nomenclator_presentaciones n
+ WHERE 'N:'||`+normalizedLabSQL("n.laboratorio_comercializador")+`=$1
+ UNION
+ SELECT `+titularKey+` AS key FROM farmetrica.nomenclator_presentaciones n
+ WHERE 'N:'||`+normalizedLabSQL("coalesce(n.laboratorio_titular,n.laboratorio)")+`=$1`;
 
 export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,search="",page=1,size=50}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema de cliente inválido");
  const q='"'+context.client.schema+'"';
  const sql=`
-  WITH official AS (
+  WITH aliases AS ( `+supplierAliases+` ),
+  official AS (
    SELECT n.cn::text AS codigo,n.nombre::text AS nombre,'medicacion'::text AS tipo,
     true AS del_maestro,false AS de_recepcion,
     NULL::text AS farmacia_id,NULL::text AS articulo_id,NULL::text AS proveedor_id
    FROM farmetrica.nomenclator_presentaciones n
-   WHERE ${commercialKey}=$1 OR ${titularKey}=$1
+   WHERE `+matchCommercial("n")+` OR `+matchTitular("n")+`
   ),
   extra AS (
    SELECT a.codigo,a.nombre,a.tipo,true,false,NULL::text,NULL::text,NULL::text
    FROM farmetrica.articulos_laboratorio_maestro a
-   WHERE a.laboratorio_clave=$1
+   WHERE a.laboratorio_clave IN (SELECT key FROM aliases)
+    OR 'N:'||`+normalizedLabSQL("a.laboratorio_nombre")+`=$1
+  ),
+  -- Una referencia con laboratorio explícito en Farmatic/ERP aparece
+  -- aunque no haya recepciones recientes ni correspondencia de proveedor.
+  erp_articles AS (
+   SELECT nullif(btrim(a.codigo_nacional),'') AS codigo,a.nombre,
+    'parafarmacia'::text AS tipo,false,true,
+    f.id::text AS farmacia_id,a.origen_id::text AS articulo_id,NULL::text AS proveedor_id
+   FROM `+q+`.articulos a
+   JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=ANY($2::int[])
+    AND upper(btrim(a.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
+   WHERE 'N:'||`+normalizedLabSQL("a.laboratorio")+`=$1
+     AND nullif(btrim(a.origen_id::text),'') IS NOT NULL
   ),
   receipts AS (
    SELECT nullif(btrim(a.codigo_nacional),'') AS codigo,
@@ -72,7 +115,7 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
     AND upper(btrim(r.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
    JOIN farmetrica.proveedores_laboratorios m
     ON m.cliente_slug=$3 AND m.farmacia_id=f.id
-    AND m.laboratorio_clave=$1
+    AND m.laboratorio_clave IN (SELECT key FROM aliases)
     AND m.codigo_proveedor=`+normalizeSupplierSql("r.proveedor_id")+`
    LEFT JOIN LATERAL (
     SELECT a.nombre,a.codigo_nacional FROM `+q+`.articulos a
@@ -83,14 +126,13 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    LEFT JOIN farmetrica.nomenclator_presentaciones med
     ON med.cn=nullif(btrim(a.codigo_nacional),'')
    WHERE nullif(btrim(r.articulo_id::text),'') IS NOT NULL
-    -- Un proveedor asignado no puede atribuir a su laboratorio un
-    -- medicamento cuyo titular/comercializador AEMPS sea otro.
     AND (med.cn IS NULL OR
-     ${medCommercialKey}=$1 OR ${medTitularKey}=$1)
+     `+matchCommercial("med")+` OR `+matchTitular("med")+`)
   ),
   combined AS (
    SELECT * FROM official
    UNION ALL SELECT * FROM extra
+   UNION ALL SELECT * FROM erp_articles
    UNION ALL SELECT * FROM receipts
   ),
   identity AS (
@@ -113,8 +155,7 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    FROM identity GROUP BY referencia
   ),
   filtered AS (
-   SELECT *,
-    (tipo='parafarmacia' AND NOT "inMaster" AND cn IS NULL) AS provisional
+   SELECT *, (tipo='parafarmacia' AND NOT "inMaster" AND cn IS NULL) AS provisional
    FROM aggregate
    WHERE tipo=$4 AND ($5::text='' OR upper(nombre) LIKE '%'||upper($5)||'%'
       OR upper(referencia) LIKE '%'||upper($5)||'%')
@@ -123,9 +164,10 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
  const {rows}=await pool.query({text:sql,
   values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
-  query_timeout:20000});
+  query_timeout:30000});
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }
+
 export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  const auth=requireTenant();
  const access=(req,res)=>req.context.role==="superadministrador"||
@@ -133,7 +175,7 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
   if(!access(req,res)&&req.context.modules?.proveedores!==true)
    return res.status(403).json({error:"Catálogo no habilitado"});
-  try{res.json({laboratories:await listLaboratoryOptions(pool)});}catch(e){next(e);}
+  try{res.json({laboratories:await listLaboratoryOptions(pool,req.context)});}catch(e){next(e);}
  });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{
   if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});

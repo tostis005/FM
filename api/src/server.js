@@ -34,6 +34,7 @@ import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 import {setupOperativa} from "./operativa.js";
 import {setupDocumentScreens} from "./documentScreens.js";
+import {setupMasterSources} from "./masterSources.js";
 import {nameCommercialRows} from "./commercialNames.js";
 import {nameTicketArticleRows} from "./articleNames.js";
 
@@ -107,6 +108,7 @@ const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins,
 const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = setupTenant(app, pool, {
   requireUser,requireSuperadmin,sendLocalInvitation,localInvitationsReady,
 });
+setupMasterSources(app,pool,{requireSuperadmin});
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
 const {authenticateDemo}=setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
@@ -508,6 +510,8 @@ try {
   await pool.query(laboratoryCatalogMigration);
   const laboratoryDraftMigration=await readFile(new URL("./migrations/027_pedidos_laboratorio_borradores.sql",import.meta.url),"utf8");
   await pool.query(laboratoryDraftMigration);
+  const sourcesMigration=await readFile(new URL("./migrations/029_fuentes_catalogo.sql",import.meta.url),"utf8");
+  await pool.query(sourcesMigration);
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
   await pool.query(leadsMigration);
   const privacyMigration=await readFile(new URL("./migrations/007_solicitudes_privacidad.sql",import.meta.url),"utf8");

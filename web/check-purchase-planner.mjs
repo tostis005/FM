@@ -171,9 +171,10 @@ try{
   "La detección de demanda se conserva en API aunque no se muestre la columna");
  assert.equal(await page.getByRole("columnheader",{name:"Demanda"}).count(),0);
  const pageOne=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/analytics/pedidos/propuesta"
-  &&new URL(r.url()).searchParams.get("pagina")==="1");
+  &&new URL(r.url()).searchParams.get("pagina")==="1").catch(()=>null);
  await page.getByRole("button",{name:"Anterior"}).click();
  const pageOneRes=await pageOne;
+ assert.ok(pageOneRes,"El preparador anterior debe consultar la primera página");
  assert.equal((await pageOneRes.json()).groups[0].patron,"recurrente");
  await page.getByText("Crema de manos").first().waitFor();
  await page.getByRole("button",{name:/Crema de manos/}).first().click();

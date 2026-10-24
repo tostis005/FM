@@ -28,7 +28,9 @@ const normalizeSupplierSql=expr=>`CASE WHEN btrim(${expr}::text) ~ '^[0-9]+$'
  ELSE upper(btrim(${expr}::text)) END`;
 
 const nameMatch=(column)=>`'N:'||`+normalizedLabSQL(column);
-export async function listLaboratoryOptions(pool){
+export async function listLaboratoryOptions(pool,context){
+ if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
+ const schema='"'+context.client.schema+'"';
  const {rows}=await pool.query(`
   WITH labs AS (
    SELECT `+normalizedLabSQL("n.laboratorio_comercializador")+` AS canonical,
@@ -40,9 +42,16 @@ export async function listLaboratoryOptions(pool){
    UNION ALL
    SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre
    FROM farmetrica.articulos_laboratorio_maestro a
+   UNION ALL
+   SELECT ${normalizedLabSQL("a.laboratorio")},a.laboratorio
+   FROM ${schema}.articulos a
+   JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
+    AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+   WHERE nullif(btrim(a.laboratorio),'') IS NOT NULL
   )
   SELECT 'N:'||canonical AS key,min(name) AS name
-  FROM labs WHERE canonical<>'' GROUP BY canonical ORDER BY min(name) LIMIT 5000`);
+  FROM labs WHERE canonical<>'' GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
+  [context.client.slug,(context.pharmacies||[]).map(p=>Number(p.id))]);
  return rows;
 }
 const matchCommercial=(alias)=>{
@@ -166,7 +175,7 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
   if(!access(req,res)&&req.context.modules?.proveedores!==true)
    return res.status(403).json({error:"Catálogo no habilitado"});
-  try{res.json({laboratories:await listLaboratoryOptions(pool)});}catch(e){next(e);}
+  try{res.json({laboratories:await listLaboratoryOptions(pool,req.context)});}catch(e){next(e);}
  });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{
   if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});

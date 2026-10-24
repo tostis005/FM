@@ -30,6 +30,7 @@ try{
  await page.goto("http://127.0.0.1:4175/fuentes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Fuentes de datos"}).waitFor({timeout:15000});
  const source=page.locator(".fm-source-card").filter({has:page.getByRole("heading",{name:"Catálogo de artículos y laboratorios"})});
+ await source.waitFor({timeout:15000});
  assert.equal(await source.count(),1);
  await source.getByRole("heading",{name:"Actualizar fichero"}).waitFor();
  await source.locator('input[type="file"]').setInputFiles({

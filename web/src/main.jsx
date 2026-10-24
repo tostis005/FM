@@ -19,6 +19,7 @@ import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresMaestro.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
+const FuentesMaestras=React.lazy(()=>import("./FuentesMaestras.jsx"));
 const EquipoCliente=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.EquipoCliente})));
 const DetalleVentas=React.lazy(()=>import("./DetalleVentas.jsx"));
 const SolicitudesDemo=React.lazy(()=>import("./SolicitudesDemo.jsx"));
@@ -172,10 +173,11 @@ const NAV=[
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
+ {id:"fuentes",label:"Fuentes de datos",icon:Database,super:true},
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
 ];
-const ADMIN_IDS=new Set(["clientes","solicitudes","accesos"]);
+const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
 const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
@@ -1137,6 +1139,7 @@ function App(){
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
+    {page==="fuentes"&&<FuentesMaestras/>}
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}/>}

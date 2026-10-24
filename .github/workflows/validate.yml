@@ -48,6 +48,7 @@ jobs:
           node --test api/src/masterSources.test.js
           node --check api/src/laboratoryOrderPlanner.js
           node --test api/src/laboratoryOrderPlanner.test.js
+          node --test api/src/laboratoryFastCatalog.test.js
           node --test api/src/stockTargetDays.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js

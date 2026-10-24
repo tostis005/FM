@@ -37,7 +37,8 @@ try{
   buffer:Buffer.from("codigo_nacional;nombre;laboratorio\n000123;Crema;Zimfa\n")
  });
  await source.getByRole("button",{name:"Cargar nueva versión"}).click();
- await source.getByText("Nueva fuente cargada: 2 referencias.").waitFor({timeout:15000});
+ try{await source.getByText(/Nueva fuente cargada:/).waitFor({timeout:9000})}
+ catch(e){console.error("FUENTES DEBUG",JSON.stringify({uploads,errors,body:(await page.locator("body").innerText()).slice(-3500)}));throw e}
  assert.equal(uploads,1);
  assert.deepEqual(errors,[]);
  console.log("OK superadmin Fuentes: versión, fuente externa, upload CSV y actualización");

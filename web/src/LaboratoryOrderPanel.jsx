@@ -65,7 +65,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   if(!laboratory||!scope||!range.valid){setData(empty);return}
   const controller=new AbortController();const timer=setTimeout(()=>{
    setLoading(true);setError("");
-   const query=new URLSearchParams({laboratorio,tipo:tab,desde:range.from,hasta:range.to,
+   const query=new URLSearchParams({laboratorio:laboratory,tipo:tab,desde:range.from,hasta:range.to,
     farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
    api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,{signal:controller.signal})
     .then(d=>{if(!controller.signal.aborted){setData(d);setUpdatedAt(new Date())}})
@@ -116,7 +116,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setBusy(true);setError("");setNotice("");
   try{
    const result=await api(clientSlug,"/api/analytics/pedidos/borrador-laboratorio",{
-    method:"PUT",body:{laboratorio,tipo:tab,farmacias:ids.map(Number),
+    method:"PUT",body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
      desde:range.from,hasta:range.to,lineas:lines}});
    setDrafts(combined);setSavedLines(lines);setPersisted(true);
    setDirty(false);setSavedDate({from:range.from,to:range.to});

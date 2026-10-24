@@ -92,7 +92,7 @@ try{
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("N:ERROR");
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
- await page.getByText(/La consulta de métricas ha fallado/).waitFor();
+ await page.getByText(/No se pudieron calcular ventas\/stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");
   assert.equal(errors.length,0,errors.join("\n"));

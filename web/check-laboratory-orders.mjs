@@ -43,7 +43,11 @@ try{
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("C:LAB");
  await page.getByRole("tab",{name:/Parafarmacia/}).waitFor();
- await page.getByText("Crema solar").first().waitFor();
+ try{await page.getByText("Crema solar").first().waitFor({timeout:9000})}
+ catch(e){
+  console.error("LAB ORDER DEBUG",JSON.stringify({matrices,errors,body:(await page.locator("body").innerText()).slice(0,2800)}));
+  throw e;
+ }
  assert.equal(await page.locator(".fm-lab-order-group").count(),2);
  assert.equal(await page.locator(".fm-lab-order-sub").count(),10);
  const joint=page.getByRole("spinbutton",{name:"Pedir Crema solar para el laboratorio"});

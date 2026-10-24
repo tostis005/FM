@@ -136,6 +136,7 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto(BASE+"/compras-preparador",{waitUntil:"domcontentloaded"});
+ await page.getByRole("button",{name:"Vista anterior"}).click();
  await page.getByRole("heading",{name:"Preparador de pedidos"}).waitFor({timeout:15000});
  await page.getByText("Crema de manos").first().waitFor({timeout:15000});
  assert.equal(await page.getByText(/Nueva propuesta por laboratorio/).count(),0);

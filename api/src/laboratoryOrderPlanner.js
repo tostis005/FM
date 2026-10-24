@@ -24,9 +24,28 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema no autorizado");
  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
- const {rows}=await pool.query({text:sql,
-  values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
-  query_timeout:30000});
+ let rows;
+ try{
+  ({rows}=await pool.query({text:sql,
+   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
+   query_timeout:20000}));
+ }catch(error){
+  // El catálogo y los CN son independientes del cálculo de stock/ventas.
+  // Nunca devolver una tabla vacía por un fallo de métricas de alguna farmacia.
+  console.error("laboratory-order-metrics",{
+   tenant:ctx.client.slug,code:error.code||"UNKNOWN",
+   selected:selected.length,pharmacies:options.pharmacies.length
+  });
+  return {...base,from:options.from,to:options.to,
+   metricsUnavailable:true,
+   metricsWarning:"Los artículos están disponibles, pero no se pudieron calcular las ventas y existencias. Puedes consultar el catálogo; las cantidades propuestas están desactivadas temporalmente.",
+   rows:base.rows.map(row=>({...row,
+    byPharmacy:Object.fromEntries(options.pharmacies.map(id=>[
+     String(id),{pharmacyId:String(id),stock:null,stockAt:null,unitsPeriod:null,
+      units3:null,units12:null,ordered:null,suggested:null}
+    ])),
+    totalSold:null,totalSuggested:null}))};
+ }
  const byRef=new Map();
  for(const row of rows){
   if(!byRef.has(row.reference))byRef.set(row.reference,{});

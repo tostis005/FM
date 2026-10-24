@@ -17,7 +17,7 @@ const SOURCE_INFO=[
   cadence:"La periodicidad depende del proveedor del catálogo; no hay un vademécum completo gratuito precargado."}
 ];
 function SourceCard({item,data,refresh}){
- const [file,setFile]=useState(null),[version,setVersion]=useState("2026-10");
+ const [file,setFile]=useState(null),[version,setVersion]=useState(()=>new Date().toISOString().slice(0,7));
  const [origin,setOrigin]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[error,setError]=useState("");
  async function upload(event){
   event.preventDefault();

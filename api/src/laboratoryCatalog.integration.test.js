@@ -71,3 +71,33 @@ test("Cinfa: un único laboratorio AEMPS con titulares/comercializadores y artí
   assert.equal(paraMatrix.rows[0].byPharmacy["1"].stock,8);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });
+
+test("PostgreSQL: si falla el cruce complejo, recupera medicamentos de Cinfa desde AEMPS",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const db=new pg.Client({connectionString:process.env.TEST_DB_URL});await db.connect();
+ try{
+  await db.query("BEGIN");
+  await db.query("UPDATE farmetrica.nomenclator_presentaciones SET laboratorio_titular='Laboratorios Cinfa SA' WHERE cn='654321'");
+  const original=db.query.bind(db);
+  let injected=false;
+  const recovering={
+   query(arg,...rest){
+    if(!injected&&typeof arg==="object"&&arg.text?.includes("WITH aliases AS")){
+     injected=true;const error=Error("timeout");error.code="57014";throw error;
+    }
+    return original(arg,...rest);
+   }
+  };
+  const context={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:1}]};
+  const log=console.error;console.error=()=>{};
+  try{
+   const data=await readLaboratoryArticles(recovering,context,{
+    key:"N:CINFA",pharmacies:[1],type:"medicacion",search:"Omeprazol",page:1,size:15
+   });
+   assert.equal(injected,true);
+   assert.equal(data.catalogPartial,true);
+   assert.ok(data.rows.some(row=>row.cn==="654321"),"CN del nomenclátor disponible a pesar de timeout");
+  }finally{console.error=log}
+ }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
+});

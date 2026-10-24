@@ -37,7 +37,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
   }
  }
  const fallback={...base,from:options.from,to:options.to,
-  rows:base.rows.map(r=>({...r,byPharmacy:{},totalSold:0,totalSuggested:null}))};
+  rows:base.rows.map(r=>({...r,byPharmacy:{},totalSold:null,totalSuggested:null})),metricsUnavailable:true};
  const selected=base.rows.map(row=>({reference:row.referencia,cn:row.cn}));
  if(!selected.length)return {...fallback,warning};
  if(!options.pharmacies.length)
@@ -64,7 +64,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    ordered:Number(row.ordered||0),suggested:row.suggested===null?null:Number(row.suggested)
   };
  }
- return {...base,from:options.from,to:options.to,warning,
+ return {...base,from:options.from,to:options.to,warning,metricsUnavailable:false,
   rows:base.rows.map(row=>{
    const byPharmacy=byRef.get(row.referencia)||{};
    return {...row,byPharmacy,

@@ -59,9 +59,21 @@ export function normalizeDraftItems(items,type,pharmacies){
    (row.cn!==null&&row.cn!==undefined&&!/^\d{6,7}$/.test(row.cn))||
    (row.cn&&cnCategory(row.cn)!==type)||seen.has(row.reference))return null;
   seen.add(row.reference);
+  const metrics={};
+  if(row.metrics!==undefined){
+   if(!row.metrics||typeof row.metrics!=="object"||Array.isArray(row.metrics)||
+    Object.keys(row.metrics).some(id=>!allowed.has(id)))return null;
+   for(const [id,m] of Object.entries(row.metrics)){
+    if(!m||typeof m!=="object"||Array.isArray(m)||
+      ["stock","units3","units12","unitsPeriod","suggested"].some(k=>
+       m[k]!=null&&(!Number.isFinite(m[k])||Math.abs(m[k])>1e9)))return null;
+    metrics[id]={stock:m.stock??null,units3:m.units3??0,units12:m.units12??0,
+     unitsPeriod:m.unitsPeriod??0,suggested:m.suggested??null};
+   }
+  }
   if(type==="parafarmacia"){
    if(!isOrderQuantity(row.units))return null;
-   output.push({reference:row.reference,cn:row.cn||null,name:row.name,units:row.units});
+   output.push({reference:row.reference,cn:row.cn||null,name:row.name,units:row.units,metrics});
   }else{
    if(!row.unitsByPharmacy||typeof row.unitsByPharmacy!=="object"||
     Array.isArray(row.unitsByPharmacy))return null;
@@ -70,7 +82,7 @@ export function normalizeDraftItems(items,type,pharmacies){
     if(!allowed.has(String(id))||!isOrderQuantity(count))return null;
     units[String(id)]=count;
    }
-   output.push({reference:row.reference,cn:row.cn||null,name:row.name,unitsByPharmacy:units});
+   output.push({reference:row.reference,cn:row.cn||null,name:row.name,unitsByPharmacy:units,metrics});
   }
  }
  return output;

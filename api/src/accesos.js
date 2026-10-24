@@ -357,8 +357,8 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
          [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
         await pool.query(`
          INSERT INTO farmetrica.usuario_clientes
-         (email,cliente_slug,rol,farmacias,activo,metodo_acceso)
-         VALUES($1,$2,'colaborador',$3,true,'google')
+         (email,cliente_slug,rol,farmacias,activo,metodo_acceso,modulos)
+         VALUES($1,$2,'colaborador',$3,true,'google','{}'::text[])
          ON CONFLICT(email,cliente_slug) DO NOTHING`,
          [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
        }

@@ -492,6 +492,8 @@ try {
   await pool.query(accessMigration);
   const tenantMigration = await readFile(new URL("./migrations/003_multitenant.sql", import.meta.url), "utf8");
   await pool.query(tenantMigration);
+  const userModuleMigration=await readFile(new URL("./migrations/028_modulos_usuario.sql",import.meta.url),"utf8");
+  await pool.query(userModuleMigration);
   const analysisMigration=await readFile(new URL("./migrations/012_analisis_ventas_cliente.sql",import.meta.url),"utf8");
   await pool.query(analysisMigration);
   for(const filename of ["013_accesos_locales.sql","014_clientes_demo.sql","018_metodos_acceso_usuarios.sql","019_activacion_usuarios.sql","020_google_invitaciones.sql"]){

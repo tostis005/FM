@@ -348,9 +348,11 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
       ROLES.find(([id])=>id===u.role)?.[1]||u.role,
       u.role==="administrador"?"Todas":
        (u.pharmacies||[]).map(id=>pharmacies.find(p=>String(p.id)===String(id))?.name||id).join(", ")||"—",
-      (Array.isArray(u.modules)?u.modules:availableModules.map(m=>m.id))
-       .filter(id=>availableModules.some(m=>m.id===id))
-       .map(id=>availableModules.find(m=>m.id===id)?.name||id).join(", ")||"Sin acceso a módulos",
+      <span className="fm-user-permission-summary" key={u.email+"modules"}>
+       {(Array.isArray(u.modules)?u.modules:availableModules.map(m=>m.id))
+        .filter(id=>availableModules.some(m=>m.id===id))
+        .map(id=>availableModules.find(m=>m.id===id)?.name||id).join(", ")||"Sin acceso a módulos"}
+      </span>,
       u.active?"Activo":"Bloqueado",
       <div key={u.email+"actions"} style={{display:"flex",flexWrap:"wrap",gap:7}}>
        <button className="btn btn-secondary btn-sm" type="button"

@@ -35,6 +35,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
  const [page,setPage]=useState(1),[data,setData]=useState(empty);
  const [loading,setLoading]=useState(false),[labsLoading,setLabsLoading]=useState(true);
+ const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
  const [savedDate,setSavedDate]=useState(null),[dirty,setDirty]=useState(false),[persisted,setPersisted]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -62,15 +63,50 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   return()=>controller.abort();
  },[clientSlug,laboratory,tab,scope]);
  useEffect(()=>{
-  if(!laboratory||!scope||!range.valid){setData(empty);return}
-  const controller=new AbortController();const timer=setTimeout(()=>{
+  setDiagnostic(null);
+  if(!laboratory)return;
+  const controller=new AbortController();
+  setDiagnosticBusy(true);
+  const query=new URLSearchParams({laboratorio:laboratory,farmacias:scope});
+  api(clientSlug,"/api/analytics/pedidos/diagnostico-laboratorio?"+query,{signal:controller.signal})
+   .then(d=>{if(!controller.signal.aborted)setDiagnostic(d)})
+   .catch(e=>{if(!controller.signal.aborted)setDiagnostic({error:e.message})})
+   .finally(()=>{if(!controller.signal.aborted)setDiagnosticBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,laboratory,scope,reload]);
+ useEffect(()=>{
+  if(!laboratory){setData(empty);return}
+  const controller=new AbortController();
+  const timer=setTimeout(async()=>{
    setLoading(true);setError("");
-   const query=new URLSearchParams({laboratorio:laboratory,tipo:tab,desde:range.from,hasta:range.to,
+   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,
     farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
-   api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,{signal:controller.signal})
-    .then(d=>{if(!controller.signal.aborted){setData(d);setUpdatedAt(new Date())}})
-    .catch(e=>{if(!controller.signal.aborted){setData(empty);setError(e.message)}})
-    .finally(()=>{if(!controller.signal.aborted)setLoading(false)});
+   const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
+   const useMetrics=range.valid&&!tooLong&&Boolean(scope);
+   const path=useMetrics?"/api/analytics/pedidos/matriz-laboratorio":
+    "/api/analytics/pedidos/catalogo-directo";
+   if(useMetrics){base.set("desde",range.from);base.set("hasta",range.to);}
+   try{
+    let d=await api(clientSlug,path+"?"+base,{signal:controller.signal});
+    if(!useMetrics)d={...d,metricsUnavailable:true,
+     warning:!scope?"No hay farmacias seleccionadas: se muestran los artículos sin stock ni ventas.":
+      !range.valid?"El período no es válido. Se muestran los artículos sin métricas.":
+      "El período supera el límite de 5 años para métricas. Se muestran los artículos; elige un período más corto."};
+    if(!controller.signal.aborted){setData(d);setUpdatedAt(new Date())}
+   }catch(e){
+    if(controller.signal.aborted)return;
+    if(useMetrics)try{
+     const basic=new URLSearchParams({laboratorio:laboratory,tipo:tab,
+      farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
+     const fallback=await api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,{signal:controller.signal});
+     if(!controller.signal.aborted){setData({...fallback,metricsUnavailable:true,
+      warning:"La consulta de métricas ha fallado: "+e.message+". Se muestran las referencias del catálogo."});
+      setUpdatedAt(new Date());}
+    }catch(fallbackError){
+     if(!controller.signal.aborted){setData(empty);
+      setError("No se han podido cargar ni la matriz ni el catálogo: "+fallbackError.message)}
+    }else{setData(empty);setError("No se puede cargar el catálogo: "+e.message)}
+   }finally{if(!controller.signal.aborted)setLoading(false)}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
  },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,page,reload]);
@@ -182,11 +218,23 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        onChange={e=>{setSearch(e.target.value);setPage(1)}}/></label>
     </ReportFilterBar>
     {!range.valid&&<p role="alert" className="fm-op-message fm-op-error">Selecciona un período válido y comprueba las fechas desde/hasta.</p>}
+    {data.warning&&<p role="status" className="fm-lab-order-warning">
+     <AlertTriangle size={15}/> {data.warning}
+    </p>}
+    {diagnostic&&<div className="fm-lab-order-diagnostics" role="status">
+     <strong>Referencias disponibles en las fuentes</strong>
+     {diagnostic.sources?.map(src=><span key={src.type}>
+      {src.type==="medicacion"?"Medicación":"Parafarmacia"}: <b>{src.status==="ok"?src.total:"Error al consultar"}</b>
+     </span>)}
+     {diagnostic.pharmacyCount===0&&<span>Sin farmacias asignadas</span>}
+     {diagnostic.error&&<span>{diagnostic.error}</span>}
+    </div>}
+    {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando referencias del maestro…</p>}
     <div className="fm-lab-order-summary">
      <span><strong>{data.total||0}</strong> referencias del laboratorio</span>
-     <span><strong>{fmt(pageTotalSold)}</strong> vendidas en esta página</span>
-     <span><strong>{fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
-     <span><strong>{fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
+     <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSold)}</strong> vendidas en esta página</span>
+     <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
+     <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
      {loading&&<span role="status">Actualizando datos…</span>}
     </div>
     <div className="fm-lab-order-scroll" role="region" tabIndex={0}
@@ -212,7 +260,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          <small>{row.inMaster?"Maestro":row.inReceipts?"ERP / recepciones":"Referencia"}</small></td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
-         return [m.units3??0,m.units12??0,m.stock??null,m.unitsPeriod??0,
+         return [data.metricsUnavailable?null:m.units3??0,data.metricsUnavailable?null:m.units12??0,m.stock??null,data.metricsUnavailable?null:m.unitsPeriod??0,
           tab==="medicacion"?"edit":m.suggested??null].map((value,k)=>
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
@@ -221,8 +269,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
-        <td className="fm-lab-order-total">{fmt(row.totalSold)}</td>
-        <td className="fm-lab-order-total">{fmt(row.totalSuggested)}</td>
+        <td className="fm-lab-order-total">{data.metricsUnavailable?"—":fmt(row.totalSold)}</td>
+        <td className="fm-lab-order-total">{data.metricsUnavailable?"—":fmt(row.totalSuggested)}</td>
         {tab==="parafarmacia"&&<td className="fm-lab-order-editcol">
          <input type="number" min="0" max="999999" step="1" disabled={!canEdit}
           aria-label={"Pedir "+row.nombre+" para el laboratorio"}
@@ -261,7 +309,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        <small className="fm-lab-order-notice">El borrador anterior tenía otro período. Al guardar se actualizará.</small>}
      </div>
      <button className="btn btn-secondary" type="button" onClick={save}
-      disabled={!canEdit||busy||loading||!range.valid||hasInvalid}>
+      disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>
      <button className="btn btn-primary" type="button" onClick={exportExcel}
       disabled={busy||!persisted||dirty||!savedLines.length}>

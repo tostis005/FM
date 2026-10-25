@@ -42,7 +42,37 @@ async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,h
  const {rows}=await pool.query({text:sql,
   values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns],
   query_timeout:15000});
- return {rows:rows.map(({total,...rest})=>rest),total:rows[0]?.total||0,page,size};
+ const output=rows.map(({total,...rest})=>rest);
+ if(output.length){
+  // Para los CN de ESTA página, comprobar movimientos por identificador ERP.
+  // No consultar el histórico completo del laboratorio.
+  try{
+   const cnList=output.map(r=>r.cn);
+   const {rows:movements}=await pool.query({text:`
+    WITH p AS (
+     SELECT ${pharmacyDataCodeSQL("f")} AS code
+     FROM farmetrica.farmacias f WHERE f.cliente_slug=$2 AND f.id=ANY($3::int[])
+    )
+    SELECT DISTINCT v.articulo_id AS cn,'sales'::text AS source
+    FROM ${schema}.fm_ventas_analitica v JOIN p ON p.code=v.farmacia_codigo
+    WHERE v.articulo_id=ANY($1::text[])
+    UNION
+    SELECT DISTINCT r.articulo_id AS cn,'receipts'::text AS source
+    FROM ${schema}.fm_recepciones_analitica r JOIN p ON p.code=r.farmacia_codigo
+    WHERE r.articulo_id=ANY($1::text[])`,
+    values:[cnList,ctx.client.slug,pharmacies],query_timeout:7000});
+   const sold=new Set(movements.filter(m=>m.source==="sales").map(m=>m.cn));
+   const purchased=new Set(movements.filter(m=>m.source==="receipts").map(m=>m.cn));
+   for(const row of output){
+    row.inSales=sold.has(row.cn);
+    row.inPurchases=purchased.has(row.cn);
+    row.inReceipts=row.inSales||row.inPurchases;
+   }
+  }catch{
+   // La lista oficial NO se bloquea si las métricas o los movimientos fallan.
+  }
+ }
+ return {rows:output,total:rows[0]?.total||0,page,size};
 }
 
 async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN}){

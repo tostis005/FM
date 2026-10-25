@@ -61,7 +61,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  const grouped=useMemo(()=>{
   const groups=new Map();
   for(const s of localSuppliers){
-   const key=s.laboratoryKey||"SIN VINCULAR";
+   const key=s.laboratoryKey||s.inferredLaboratoryKey||"SIN VINCULAR";
    if(!groups.has(key))groups.set(key,[]);
    groups.get(key).push(s);
   }
@@ -117,10 +117,12 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    {grouped.map(([key,entries])=><div key={key} style={{display:"block"}}>
     <strong>{key==="SIN VINCULAR"?"Sin unificar":labName(key)}</strong>
     {entries.map((s,i)=><div key={i}>
-     <span>{pharmacyName(s.pharmacyId)} · {s.name||s.sourceCode} · código {s.sourceCode}</span>
+     <span>{pharmacyName(s.pharmacyId)} · {s.name||s.sourceCode} · código {s.sourceCode}
+      {!s.laboratoryKey&&s.inferredLaboratoryKey&&
+       <small> · Coincidencia exacta con el Nomenclátor (sin guardar)</small>}</span>
      <button type="button" onClick={()=>{
       setPharmacyId(String(s.pharmacyId));setSourceCode(s.sourceCode);
-      setLaboratoryKey(s.laboratoryKey||"");
+      setLaboratoryKey(s.laboratoryKey||s.inferredLaboratoryKey||"");
      }}>Vincular / editar</button>
     </div>)}
    </div>)}

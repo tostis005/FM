@@ -1,6 +1,6 @@
 // Se mantiene una única tabla visible. La API conserva lotes de 100
 // para no saturar PostgreSQL, pero se pueden leer 3 páginas en paralelo.
-export const LAB_CATALOG_BATCH=100;
+export const LAB_CATALOG_BATCH=250;
 export const LAB_METRICS_BATCH=40;
 export const LAB_CATALOG_CONCURRENCY=3;
 

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
+import {readLocalSuppliers} from "./laboratoryOrderSettings.js";
 
 test("PG: solo recepciones de proveedor vinculado, sin Vademecum extra, y excepción por farmacia",{
  skip:!process.env.TEST_DB_URL
@@ -77,6 +78,15 @@ test("PG: compras directas a Cinfa sin enlace manual incorporan parafarmacia, st
  try{
   await db.query("BEGIN");
   const supplier="CI-PROV-CINFA-REAL",article="CI-ART-CINFA-COMPRA",doc="CI-ALB-CINFA-SIN-MAPA";
+  await db.query(`INSERT INTO farmetrica.nomenclator_presentaciones
+   (cn,nombre,dcpf,generico,laboratorio_titular_codigo,laboratorio_titular,
+    laboratorio_comercializador_codigo,laboratorio_comercializador)
+   VALUES('791295','Presentación AEMPS para coincidencia de Cinfa','QA-CI-DCPF',false,
+    'QA-CI-CODE','LABORATORIOS CINFA S.A.','QA-COM-CI','CINFA')
+   ON CONFLICT(cn) DO UPDATE SET laboratorio_titular=EXCLUDED.laboratorio_titular,
+    laboratorio_comercializador=EXCLUDED.laboratorio_comercializador,
+    laboratorio_titular_codigo=EXCLUDED.laboratorio_titular_codigo,
+    laboratorio_comercializador_codigo=EXCLUDED.laboratorio_comercializador_codigo`);
   await db.query(`INSERT INTO ampedia.proveedores (farmacia_codigo,origen_id,nombre)
    VALUES ('ABA',$1,'LABORATORIOS CINFA, S.A.')`,[supplier]);
   await db.query(`INSERT INTO ampedia.articulos
@@ -97,6 +107,11 @@ test("PG: compras directas a Cinfa sin enlace manual incorporan parafarmacia, st
    VALUES('ABA','farmatic','CI-VENTA-CINFA-SIN-MAPA','1',$1,4,40)`,[article]);
   const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
   const opts={key:"N:CINFA",pharmacies:[1],type:"parafarmacia",search:"Parafarmacia CI compra",page:1,size:40};
+  const local=await readLocalSuppliers(db,ctx);
+  const detected=local.find(p=>p.pharmacyId==="1"&&p.sourceCode===supplier);
+  assert.equal(detected?.laboratoryKey,null,"No se fabrica una correspondencia guardada");
+  assert.equal(detected?.inferredLaboratoryKey,"N:CINFA",
+   "El maestro refleja la coincidencia exacta con Cinfa, sin persistirla");
   const direct=await readDirectLaboratoryCatalog(db,ctx,opts);
   assert.equal(direct.total,1,"El nombre local exacto CINFA enlaza recepciones sin configuración previa");
   assert.equal(direct.rows[0].cn,"009994");
@@ -111,6 +126,10 @@ test("PG: compras directas a Cinfa sin enlace manual incorporan parafarmacia, st
   await db.query(`INSERT INTO farmetrica.proveedores_laboratorios
    (cliente_slug,farmacia_id,codigo_proveedor,laboratorio_clave)
    VALUES('ampedia',1,$1,'N:ZIMFA')`,[supplier]);
+  const mapped=await readLocalSuppliers(db,ctx);
+  const overriddenSupplier=mapped.find(p=>p.pharmacyId==="1"&&p.sourceCode===supplier);
+  assert.equal(overriddenSupplier?.laboratoryKey,"N:ZIMFA");
+  assert.equal(overriddenSupplier?.inferredLaboratoryKey,null);
   const cinfaOverridden=await readDirectLaboratoryCatalog(db,ctx,opts);
   assert.equal(cinfaOverridden.total,0,"No mezclar Cinfa si el administrador ha reasignado el proveedor");
   const zimfa=await readDirectLaboratoryCatalog(db,ctx,{...opts,key:"N:ZIMFA"});

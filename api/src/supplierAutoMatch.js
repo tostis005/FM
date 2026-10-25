@@ -2,7 +2,7 @@ import {normalizeLabName} from "./laboratoryIdentity.js";
 
 // Señales evidentes de distribuidor o cooperativa: no basta con que
 // falte la marca manual para inferir un laboratorio único.
-const looksLikeDistributor=name=>/\\b(?:COOPERATIVA|COOP|MAYORISTA|DISTRIBUIDOR|DISTRIBUIDORA|DISTRIBUIDORES)\\b/i
+const looksLikeDistributor=name=>/\b(?:COOPERATIVA|COOP|MAYORISTA|DISTRIBUIDOR|DISTRIBUIDORA|DISTRIBUIDORES)\b/i
  .test(normalizeLabName(name));
 
 // Autovinculación conservadora: coincidencia exacta de nombre normalizado.

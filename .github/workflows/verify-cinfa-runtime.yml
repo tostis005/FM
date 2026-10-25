@@ -36,6 +36,8 @@ jobs:
           try{
            const {rows:pharmacies}=await p.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id");
            const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies},ids=pharmacies.map(x=>x.id);
+           const col=await p.query("SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='articulos' AND column_name='proveedor_habitual_id'",["ampedia"]);
+           console.log("VERIFY_NATIVE_HABITUAL_COLUMN",col.rows.length);
            for(const type of ["medicacion","parafarmacia"]){
             const start=t();
             try{
@@ -43,27 +45,6 @@ jobs:
              console.log("VERIFY_CANDIDATE",type,JSON.stringify({total:x.total,rows:x.rows.length,ms:t()-start}));
             }catch(e){console.log("VERIFY_CANDIDATE_ERROR",type,JSON.stringify({code:e.code||"",message:e.message.slice(0,100),ms:t()-start}))}
            }
-           const explanatory={
-            query:async arg=>{
-             const planned=await p.query({text:"EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) "+arg.text,
-              values:arg.values,query_timeout:45000});
-             const root=planned.rows[0]["QUERY PLAN"][0].Plan;
-             const all=[];
-             function walk(node,depth=0){
-              all.push({node:node["Node Type"],join:node["Join Type"],
-               relation:node["Relation Name"],alias:node.Alias,
-               ms:Math.round((node["Actual Total Time"]||0)*(node["Actual Loops"]||1)),
-               rows:node["Actual Rows"],loops:node["Actual Loops"],
-               filtered:node["Rows Removed by Filter"],
-               index:node["Index Name"],depth});
-              for(const child of node.Plans||[])walk(child,depth+1);
-             }
-             walk(root);
-             console.log("VERIFY_EXPLAIN_SLOW",JSON.stringify(all.sort((a,b)=>b.ms-a.ms).slice(0,18)));
-             return {rows:[]};
-            }
-           };
-           await readDirectLaboratoryCatalog(explanatory,ctx,{key:"N:CINFA",pharmacies:ids,type:"parafarmacia",page:1,size:10,search:""});
           }finally{await p.end()}
           NODE
           } | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'

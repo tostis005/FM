@@ -37,8 +37,8 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  const cn= `coalesce(${validCN("a.codigo_nacional")},
    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
    CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_presentaciones verified
-    WHERE verified.cn=btrim(coalesce(a.origen_id::text,m.article_id)))
-    THEN ${validCN("coalesce(a.origen_id::text,m.article_id)")} ELSE NULL::text END)`;
+    WHERE verified.cn=btrim(coalesce(a.origen_id::text,c.article_id)))
+    THEN ${validCN("coalesce(a.origen_id::text,c.article_id)")} ELSE NULL::text END)`;
  const blockedCN=`coalesce(${validCN("a.codigo_nacional")},
    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
    ${validCN("a.origen_id::text")})`;

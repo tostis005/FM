@@ -15,11 +15,15 @@ export function readCachedLaboratoryOptions(pool,tenant,pharmacies,loader){
  cache.set(key,{pending,expires:0});
  return pending.then(rows=>{
   if(!Array.isArray(rows))throw Error("Catálogo de laboratorios inválido");
-  cache.set(key,{rows,expires:Date.now()+TTL});
-  if(cache.size>150)cache.delete(cache.keys().next().value);
+  // Una edición del maestro puede invalidar la caché mientras la consulta
+  // todavía está en curso: nunca memorizar ese resultado anterior.
+  if(cache.get(key)?.pending===pending){
+   cache.set(key,{rows,expires:Date.now()+TTL});
+   if(cache.size>150)cache.delete(cache.keys().next().value);
+  }
   return rows;
  }).catch(error=>{
-  cache.delete(key);
+  if(cache.get(key)?.pending===pending)cache.delete(key);
   throw error;
  });
 }

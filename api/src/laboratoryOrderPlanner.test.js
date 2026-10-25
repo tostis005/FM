@@ -33,6 +33,8 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const pool={async query(query){
   const text=typeof query==="string"?query:query.text;
   queries.push({text,values:query.values});
+  if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
+  if(text.includes("SELECT intervalo_dias AS days"))return {rows:[{days:3}]};
   if(text.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(text.includes("FROM filtered ORDER BY"))
    return {rows:[{referencia:"400001",cn:"400001",nombre:"Med 1",
@@ -50,12 +52,13 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const d=await readLaboratoryOrderMatrix(pool,context,
   {key:"C:LAB",pharmacies:[1,2],type:"medicacion",
    from:"2026-09-01",to:"2026-10-24",page:1,size:40});
- assert.equal(queries.length,4);
+ assert.equal(queries.length,6);
  assert.equal(d.rows.length,1);
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);
  assert.equal(d.rows[0].byPharmacy["1"].suggested,4);
- assert.deepEqual(queries[3].values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
+ assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24",3]);
+ assert.equal(d.frequencyDays,3);
 });
 test("API matriz y guardado solo dentro del tenant",async()=>{
  const routes={};

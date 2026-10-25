@@ -189,6 +189,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
           psql_test --single-transaction < api/src/migrations/016_operativa_manual.sql
           psql_test --single-transaction < api/src/migrations/032_laboratory_order_frequency.sql
+          psql_test --single-transaction < api/src/migrations/033_laboratorios_personalizados.sql
           psql_test --single-transaction < api/src/migrations/016_operativa_manual.sql
           psql_test --single-transaction < api/src/migrations/032_laboratory_order_frequency.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql

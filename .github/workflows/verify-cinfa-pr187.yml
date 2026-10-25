@@ -21,31 +21,30 @@ jobs:
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/ci
           chmod 600 ~/.ssh/ci
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-      - name: Medir consulta de ventas por identificador indexado
+      - name: Verificar consulta final de matriz tras optimización desplegada
         run: |
           set -euo pipefail
           cat <<'NODE' | ssh -i ~/.ssh/ci -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
           import pg from "pg";
-          import {readFile} from "node:fs/promises";
-          import {pharmacyDataCodeSQL} from "./src/pharmacyCodes.js";
+          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
           const db=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:6000});
           try{
-           const {rows}=await db.query(`SELECT f.id,n.cn
-             FROM ampedia.articulos a JOIN farmetrica.farmacias f
-               ON f.cliente_slug='ampedia' AND upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
-             JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text)
-             WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%')
-              AND coalesce(a.stock_actual,0)<>0 LIMIT 1`);
-           const {id,cn}=rows[0];
-           let sql=await readFile("./src/laboratoryOrderMetrics.sql","utf8");
-           sql=sql.replaceAll("__SCHEMA__",'"ampedia"').replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
-           const newer=sql.replace("upper(btrim(v.farmacia_codigo))=(", "v.farmacia_codigo=(")
-             .replace("v.articulo_id::text=a.article_id","v.articulo_id=a.article_id");
-           const args=[JSON.stringify([{reference:cn,cn}]),[id],"ampedia","2026-10-01","2026-10-24"];
+           const {rows}=await db.query(`SELECT f.id,n.cn FROM ampedia.articulos a
+            JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+              AND upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+            JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text)
+            WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%')
+            AND coalesce(a.stock_actual,0)<>0 LIMIT 1`);
+           const {id,cn}=rows[0], ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id}]};
            let started=Date.now();
-           const q=await db.query({text:newer,values:args,query_timeout:30000});
-           console.log("CINFA_INDEXED_METRICS",JSON.stringify({durationMs:Date.now()-started,
-            count:q.rows.length,stock:q.rows[0]?.stock,units3:q.rows[0]?.units3,
-            units12:q.rows[0]?.units12,unitsPeriod:q.rows[0]?.unitsPeriod}));
+           const data=await readLaboratoryOrderMatrix(db,ctx,{
+            key:"N:CINFA",pharmacies:[id],type:"medicacion",search:cn,page:1,size:10,
+            from:"2026-10-01",to:"2026-10-24"});
+           const match=data.rows.find(x=>x.cn===cn);
+           const m=match?.byPharmacy?.[String(id)];
+           console.log("CINFA_DEPLOYED_MATRIX",JSON.stringify({durationMs:Date.now()-started,
+            found:!!match,metricsUnavailable:data.metricsUnavailable,stock:m?.stock??null,
+            units3:m?.units3??null,units12:m?.units12??null}));
+           if(!match||data.metricsUnavailable||!(m?.stock>0))throw Error("No verified stock");
           }finally{await db.end()}
           NODE

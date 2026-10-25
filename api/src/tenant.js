@@ -327,9 +327,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       name===code)continue;
      const lab=labKeys.get(normalizeLabName(name));
      if(!lab)continue;
-     if(supplierMap.has(code)&&supplierMap.get(code).laboratoryKey!==lab){
-      supplierMap.set(code,null);
-     }else if(!supplierMap.has(code))supplierMap.set(code,{sourceCode:code,name,laboratoryKey:lab});
+     if(supplierMap.has(code)){
+      const previous=supplierMap.get(code);
+      if(previous&&previous.laboratoryKey!==lab)supplierMap.set(code,null);
+     }else supplierMap.set(code,{sourceCode:code,name,laboratoryKey:lab});
     }
     const suggestions=[...supplierMap.values()].filter(Boolean);
     if(!apply)return res.json({suggestions,count:suggestions.length,applied:0});

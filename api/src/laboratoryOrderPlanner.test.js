@@ -61,10 +61,34 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24",3]);
  assert.equal(d.frequencyDays,3);
 });
+test("matriz directa sobre CN suministrados evita releer catálogo del laboratorio",async()=>{
+ const statements=[];
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;statements.push(sql);
+  if(sql.includes("SELECT intervalo_dias"))return {rows:[{days:7}]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {reference:"400321",pharmacyId:"1",stock:3,units3:20,units12:50,unitsPeriod:4,
+    ordered:0,suggested:5}
+  ]};
+  throw Error("No se debe consultar el catálogo ni sus recepciones");
+ }};
+ const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
+ const result=await readLaboratoryOrderMatrix(pool,ctx,{
+  key:"N:CINFA",pharmacies:[1],type:"medicacion",
+  from:"2026-10-01",to:"2026-10-24",
+  prefetchedRows:[{referencia:"400321",cn:"400321",nombre:"Medicamento"}]
+ });
+ assert.equal(result.metricsUnavailable,false);
+ assert.equal(result.rows[0].byPharmacy["1"].suggested,5);
+ assert.equal(statements.length,3);
+ assert.ok(statements.every(q=>!q.includes("preparador_exclusiones")));
+});
 test("API matriz y guardado solo dentro del tenant",async()=>{
  const routes={};
  const app={get(name,...args){routes["GET "+name]=args.at(-1)},
-  put(name,...args){routes["PUT "+name]=args.at(-1)}};
+  put(name,...args){routes["PUT "+name]=args.at(-1)},
+  post(name,...args){routes["POST "+name]=args.at(-1)}};
  const pool={async query(q){
   return {rows:[{updatedAt:"2026-10-24T06:00Z"}]};
  }};
@@ -76,7 +100,7 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
   const res={status(code){status=code;return this},json(payload){body=payload;return this}};
   await routes[method+" "+path]({
    context,method,query:method==="GET"?data:{},
-   body:method==="PUT"?data:{}
+   body:["PUT","POST"].includes(method)?data:{}
   },res,e=>{error=e});
   if(error)throw error;
   return {status,body};
@@ -90,6 +114,12 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:2.5}]})).status,400);
  assert.equal((await call("PUT",path,{...base,tipo:"medicacion"})).status,400);
  assert.equal((await call("GET",path,{laboratorio:"C:LAB",farmacias:"99",tipo:"medicacion"})).status,400);
+ assert.equal((await call("POST","/api/analytics/pedidos/matriz-referencias",
+  {...base,tipo:"medicacion",referencias:[]})).status,400);
+ assert.equal((await call("POST","/api/analytics/pedidos/matriz-referencias",
+  {...base,tipo:"medicacion",referencias:[{referencia:"ERP:1:ABC",cn:null}]})).status,400);
+ assert.equal((await call("POST","/api/analytics/pedidos/matriz-referencias",
+  {...base,tipo:"medicacion",farmacias:[99],referencias:[{referencia:"400321",cn:"400321"}]})).status,400);
  assert.equal((await call("GET","/api/analytics/pedidos/matriz-laboratorio",
   {laboratorio:"C:LAB",farmacias:"1",tipo:"medicacion",desde:"2026-10-26",hasta:"2026-10-24"})).status,400);
 });

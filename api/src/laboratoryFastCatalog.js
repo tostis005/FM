@@ -26,7 +26,19 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  const manual=normalizedLabSQL("m.laboratorio_nombre");
  const mkey=normalizedLabSQL("substring(m.laboratorio_clave from 3)");
  const artLab=normalizedLabSQL("a.laboratorio");
- const ecode=safeReference("a.codigo_nacional");
+ // Muchos Farmatic no rellenan codigo_nacional pero conservan el CN en
+ // origen_id. Reconocerlo SOLO si figura en AEMPS o en el maestro importado.
+ // Farmatic puede guardar el CN en cn_normalizado o en su identificador;
+ // usar origen_id solo tras confirmar que existe en AEMPS o Vademecum.
+ const ecode=`coalesce(${safeReference("a.codigo_nacional")},
+  ${safeReference("to_jsonb(a)->>'cn_normalizado'")},
+  CASE WHEN char_length(btrim(a.origen_id::text)) BETWEEN 6 AND 7
+   AND translate(btrim(a.origen_id::text),'0123456789','')=''
+   AND (EXISTS (SELECT 1 FROM farmetrica.nomenclator_presentaciones nn
+     WHERE nn.cn=btrim(a.origen_id::text))
+    OR EXISTS (SELECT 1 FROM farmetrica.articulos_laboratorio_maestro ma
+     WHERE ma.codigo=btrim(a.origen_id::text)))
+   THEN btrim(a.origen_id::text) ELSE NULL::text END)`;
  const eType=referenceKind(ecode);
  const sql=`
  WITH aliases AS (
@@ -101,6 +113,17 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  JOIN ${schema}.articulos a
   ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
    AND a.origen_id::text=r.articulo_id::text
+ WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
+ UNION ALL
+ -- El proveedor habitual enlaza artículos sin recepción reciente.
+ SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
+  ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
+  ${eType},false,true,f.id::text,3
+ FROM mapped_suppliers link
+ JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
+ JOIN ${schema}.articulos a
+  ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+  AND ${supplierCodeSQL("to_jsonb(a)->>'proveedor_habitual_id'")}=link.supplier_code
  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
  ),
  reduced AS (

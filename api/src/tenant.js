@@ -1,4 +1,5 @@
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
+import {buildAutomaticSupplierMatches} from "./supplierAutoMatch.js";
 // Núcleo de selección de cliente, permisos y activación de módulos.
 // Todo el contexto del tenant se obtiene en el servidor, nunca de un esquema
 // arbitrario aportado por el navegador.
@@ -296,6 +297,38 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       }
       res.json(sourceSupplierRows(master,external));
     }catch(e){next(e)}
+  });
+  // Solo vincula automáticamente coincidencias de nombres inequívocas.
+  // No inferir proveedores desde sus códigos ni reescribir asignaciones manuales.
+  app.post("/api/tenant/proveedores/autovincular",...requireTenantAdmin(),async(req,res,next)=>{
+   const incoming=req.body?.suppliers,apply=req.body?.apply===true;
+   if(!Array.isArray(incoming)||incoming.length>2000)
+    return res.status(400).json({error:"Selección de proveedores inválida"});
+   try{
+    const {rows:sourceLabs}=await pool.query(`
+     SELECT laboratorio_nombre AS name FROM farmetrica.articulos_laboratorio_maestro
+     WHERE fuente='vademecum'
+     UNION ALL SELECT laboratorio_titular FROM farmetrica.nomenclator_presentaciones
+     UNION ALL SELECT laboratorio_comercializador FROM farmetrica.nomenclator_presentaciones`);
+    const suggestions=buildAutomaticSupplierMatches(incoming,sourceLabs.map(row=>row.name));
+    if(!apply)return res.json({suggestions,count:suggestions.length,applied:0});
+    if(!suggestions.length)return res.json({suggestions:[],count:0,applied:0});
+    const {rows}=await pool.query(`
+     INSERT INTO farmetrica.proveedores_maestro
+      (cliente_slug,codigo_origen,nombre,laboratorio_clave)
+     SELECT $1,items.source_code,items.name,items.lab_key
+     FROM jsonb_to_recordset($2::jsonb)
+       AS items(source_code text,name text,lab_key text)
+     ON CONFLICT(cliente_slug,codigo_origen)
+     DO UPDATE SET laboratorio_clave=EXCLUDED.laboratorio_clave,actualizado_en=now()
+     WHERE farmetrica.proveedores_maestro.laboratorio_clave IS NULL
+       AND farmetrica.proveedores_maestro.cooperativa IS NOT TRUE
+     RETURNING codigo_origen AS "sourceCode",laboratorio_clave AS "laboratoryKey"`,
+     [req.context.client.slug,JSON.stringify(suggestions.map(item=>({
+      source_code:item.sourceCode,name:item.name,lab_key:item.laboratoryKey
+     })))]);
+    res.json({suggestions,count:suggestions.length,applied:rows.length,updated:rows});
+   }catch(e){next(e)}
   });
   // Un solo clic guarda el indicador. Un proveedor importado sin ficha manual
   // crea únicamente su ficha de configuración, sin tocar los datos del ERP.

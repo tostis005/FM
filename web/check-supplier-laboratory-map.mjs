@@ -12,7 +12,8 @@ let suppliers=[
  {id:null,sourceCode:"PR1",name:"Proveedor Farmatic",type:"sin_clasificar",
   cooperative:false,ignoreReports:false,laboratoryKey:null},
  {id:"9",sourceCode:"COOP",name:"Cooperativa CI",type:"cooperativa",
-  cooperative:true,ignoreReports:false,laboratoryKey:null}
+  cooperative:true,ignoreReports:false,laboratoryKey:null},
+ {id:null,sourceCode:"ZI1",name:"Zimfa",type:"sin_clasificar",cooperative:false,ignoreReports:false,laboratoryKey:null}
 ];
 let saved=null;const errors=[];
 page.on("pageerror",e=>errors.push(e.message));
@@ -26,6 +27,15 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/analytics/pedidos/catalogo-laboratorios")
   body={laboratories:[{key:"N:CINFA",name:"Laboratorios Cinfa"},{key:"N:ZIMFA",name:"Zimfa"}]};
  else if(path==="/api/tenant/proveedores/correspondencias")body=[];
+ else if(path==="/api/tenant/proveedores/autovincular"&&req.method()==="POST"){
+  const args=req.postDataJSON();
+  const suggestion={sourceCode:"ZI1",name:"Zimfa",laboratoryKey:"N:ZIMFA"};
+  if(args.apply){
+   suppliers=suppliers.map(x=>x.sourceCode==="ZI1"?{...x,laboratoryKey:"N:ZIMFA"}:x);
+   body={suggestions:[suggestion],count:1,applied:1,
+    updated:[{sourceCode:"ZI1",laboratoryKey:"N:ZIMFA"}]};
+  }else body={suggestions:[suggestion],count:1,applied:0};
+ }
  else if(path==="/api/tenant/proveedores/laboratorio"&&req.method()==="PUT"){
   saved=req.postDataJSON();assert.equal(saved.sourceCode,"PR1");
   assert.equal(saved.laboratoryKey,"N:CINFA");
@@ -46,6 +56,9 @@ try{
  await dlg.getByRole("button",{name:"Guardar asignación"}).click();
  await page.getByRole("button",{name:"Laboratorios Cinfa"}).waitFor({timeout:9000});
  assert.equal(saved.laboratoryKey,"N:CINFA");
+ await page.getByRole("button",{name:/Vincular laboratorios automáticamente/}).click();
+ await page.getByRole("button",{name:/Aplicar 1 vinculaciones seguras/}).click();
+ await page.getByRole("button",{name:"Zimfa"}).waitFor({timeout:9000});
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK maestro proveedores: asignación de laboratorio importado al proveedor ERP");
 }finally{await browser.close()}

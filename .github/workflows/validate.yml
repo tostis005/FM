@@ -49,6 +49,7 @@ jobs:
           node --check api/src/laboratoryOrderPlanner.js
           node --test api/src/laboratoryOrderPlanner.test.js
           node --test api/src/laboratoryFastCatalog.test.js
+          node --test api/src/supplierAutoMatch.test.js
           node --test api/src/stockTargetDays.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
@@ -246,6 +247,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlannerSuppliers.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCatalog.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCnRecovery.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierCatalog.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/masterSources.integration.test.js
 

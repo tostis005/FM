@@ -60,7 +60,10 @@ export async function listLaboratoryOptions(pool,context){
     bool_or(medication) AS "hasMedication",
     bool_or(parapharmacy) AS "hasParapharmacy",
     bool_or(vademecum) AS "fromVademecum"
-  FROM labs WHERE canonical<>'' GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
+  FROM labs
+  WHERE canonical<>'' AND name ~ '[[:alpha:]]{2}'
+    AND name !~* '^[[:space:]]*[a-z]{0,4}[[:space:]-]*[0-9]{2,}'
+  GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
   [context.client.slug,(context.pharmacies||[]).map(p=>Number(p.id))]);
  return rows;
 }

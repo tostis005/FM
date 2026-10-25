@@ -14,7 +14,7 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_titula
  OR 'C:'||upper(btrim(coalesce(${alias}.laboratorio_comercializador_codigo,'')))=$1
  OR 'C:'||upper(btrim(coalesce(${alias}.laboratorio_codigo,'')))=$1)`;
 
-async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN}){
+async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN,skipMovementCheck=false}){
  const schema='"'+ctx.client.schema+'"';
  const blockedCN=`coalesce(${validCN("a.codigo_nacional")},
   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
@@ -43,7 +43,7 @@ async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,h
   values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns],
   query_timeout:15000});
  const output=rows.map(({total,...rest})=>rest);
- if(output.length){
+ if(output.length&&!skipMovementCheck){
   // Para los CN de ESTA página, comprobar movimientos por identificador ERP.
   // No consultar el histórico completo del laboratorio.
   try{

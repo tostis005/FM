@@ -23,7 +23,7 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_comerc
  * NUNCA para aportar artículos que no tengan movimientos.
  * Tampoco se incorpora el catálogo externo/Vademécum.
  */
-export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,type,search="",page=1,size=40}){
+export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,type,search="",page=1,size=40,skipMovementCheck=false}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
  const schema='"'+context.client.schema+'"';
  const patterns=await readRetirementPatterns(pool,context.client.slug);
@@ -36,7 +36,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   hasNativeCN=rows[0]?.available===true;
  }catch{}
  const quick=await readQuickLaboratoryCatalog(pool,context,{
-  key,pharmacies,type,search,page,size,patterns,hasNativeCN
+  key,pharmacies,type,search,page,size,patterns,hasNativeCN,skipMovementCheck
  });
  if(quick?.total>0)return quick;
  const cn= `coalesce(${validCN("a.codigo_nacional")},

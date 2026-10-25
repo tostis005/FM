@@ -3,6 +3,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
 import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
+import {readCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
@@ -212,7 +213,8 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
    const scope=onlyWithActivity?selectedPharmacies(req.context,req.query.farmacias):null;
    if(onlyWithActivity&&!scope)return res.status(400).json({error:"Farmacias no autorizadas"});
    res.json({laboratories:onlyWithActivity?
-    await listOperationalLaboratoryOptions(pool,req.context,scope):
+    await readCachedLaboratoryOptions(pool,req.context.client.slug,scope,()=>
+     listOperationalLaboratoryOptions(pool,req.context,scope)):
     await listLaboratoryOptions(pool,req.context)});
   }catch(e){next(e);}
  });
@@ -233,10 +235,10 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
   const search=String(req.query.buscar||"").trim();
   const page=Number(req.query.pagina||1),size=Number(req.query.tamano||40);
   if(!key||!pharmacies||!["medicacion","parafarmacia"].includes(type)||
-   !Number.isSafeInteger(page)||page<1||!Number.isSafeInteger(size)||size<1||size>100||search.length>100)
+   !Number.isSafeInteger(page)||page<1||!Number.isSafeInteger(size)||size<1||size>250||search.length>100)
    return res.status(400).json({error:"Consulta de catálogo incorrecta"});
   try{res.json(await readDirectLaboratoryCatalog(pool,req.context,{
-   key,pharmacies,type,search,page,size}));
+   key,pharmacies,type,search,page,size,skipMovementCheck:req.query.ligero==="1"}));
   }catch(e){next(e)}
  });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{

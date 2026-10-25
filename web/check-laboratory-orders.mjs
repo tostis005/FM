@@ -12,7 +12,19 @@ assert.equal(list.rows.length,205);
 assert.deepEqual(batchProgress,[100,200,205]);
 await assert.rejects(()=>collectLaboratoryCatalog(async page=>({
  total:120,rows:page===1?Array.from({length:100},(_,i)=>({referencia:String(i)})):[]
-})),/página vacía/);
+}),{batchSize:100}),/página vacía/);
+let inFlight=0,maxInFlight=0;
+const parallelList=await collectLaboratoryCatalog(async(page,size)=>{
+ inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);
+ await new Promise(resolve=>setTimeout(resolve,page===2?45:10));
+ inFlight--;
+ return {total:305,rows:Array.from({length:305},(_,i)=>({
+  referencia:"BATCH-"+(i+1)})).slice((page-1)*size,page*size)};
+},{batchSize:100,concurrency:3});
+assert.equal(parallelList.rows.length,305);
+assert.ok(maxInFlight>=2,"las tandas del catálogo se consultan en paralelo");
+assert.deepEqual(parallelList.rows.map(x=>x.referencia).slice(99,102),
+ ["BATCH-100","BATCH-101","BATCH-102"],"la tabla conserva el orden");
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1366,height:900},acceptDownloads:true});
 const pharmacies=[{id:"1",name:"Abadía",sourceCode:"ABA",databaseCode:"ABA"},
@@ -66,26 +78,29 @@ await page.route("**/api/**",async route=>{
  }else if(path==="/api/analytics/pedidos/diagnostico-laboratorio"){
   body={pharmacyCount:2,sources:[{type:"medicacion",status:"ok",total:1},
    {type:"parafarmacia",status:"ok",total:0}]};
- }else if(path==="/api/analytics/pedidos/matriz-laboratorio"){
-  const lab=url.searchParams.get("laboratorio");
-  if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,750));
+ }else if(path==="/api/analytics/pedidos/matriz-laboratorio"||
+  path==="/api/analytics/pedidos/matriz-referencias"){
+  const incoming=request.method()==="POST"?request.postDataJSON():null;
+  const lab=incoming?.laboratorio||url.searchParams.get("laboratorio");
+  if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
   if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
     body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
   }
-  const type=url.searchParams.get("tipo");
-  matrices.push(Object.fromEntries(url.searchParams));
+  const type=incoming?.tipo||url.searchParams.get("tipo");
+  matrices.push(incoming||Object.fromEntries(url.searchParams));
   const med=type==="medicacion",pageNumber=Number(url.searchParams.get("pagina")||1);
   const limit=Number(url.searchParams.get("tamano")||40);
-  const refs=lab==="N:MULTI"?
+  const refs=incoming?.referencias||(lab==="N:MULTI"?
    Array.from({length:125},(_,i)=>({
     referencia:String(1000+i).padStart(6,"0"),
     cn:String(1000+i).padStart(6,"0"),
     nombre:"Referencia lote "+String(i+1).padStart(3,"0")
    })):
    [{referencia:med?"400123":"000123",cn:med?"400123":"000123",
-    nombre:med?"Medicamento":"Crema solar"}];
-  body={rows:refs.slice((pageNumber-1)*limit,pageNumber*limit).map(r=>({...r,
+    nombre:med?"Medicamento":"Crema solar"}]);
+  const selected=incoming?refs:refs.slice((pageNumber-1)*limit,pageNumber*limit);
+  body={rows:selected.map(r=>({...r,
    inMaster:lab!=="N:MULTI",inReceipts:true,provisional:false,
    byPharmacy:{
     "1":{stock:4,units3:30,units12:120,unitsPeriod:8,suggested:3,ordered:0},

@@ -51,6 +51,20 @@ test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=
  assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);
  assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"]]);
 });
+test("catálogo ligero de medicación evita la segunda consulta de movimientos",async()=>{
+ const statements=[];
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;statements.push(sql);
+  if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH p AS ("))return {rows:[{...catalogRow,total:1}]};
+  throw Error("Consulta extra de catálogo no esperada");
+ }};
+ const result=await readDirectLaboratoryCatalog(pool,ctx,{...opts,skipMovementCheck:true});
+ assert.equal(result.total,1);
+ assert.equal(statements.length,3,"Exclusiones, esquema y catálogo; sin lectura de todo el histórico");
+ assert.ok(!statements.some(q=>q.includes("SELECT DISTINCT v.articulo_id")));
+});
 test("un fallo al calcular stock no oculta las presentaciones verificadas",async()=>{
  const {pool}=fixture({metricsError:true});
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);

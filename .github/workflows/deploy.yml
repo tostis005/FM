@@ -286,6 +286,15 @@ jobs:
             exit 1
           '
 
+      - name: Medir velocidad del preparador con datos reales (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'acelerar preparador')
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorPerformance.mjs
+          '
+
       - name: Verificar laboratorios con actividad para el preparador (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'laboratorios con actividad')
         continue-on-error: true

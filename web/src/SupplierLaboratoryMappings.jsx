@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useState,useRef} from "react";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import "./laboratoryCatalog.css";
 async function request(path,clientSlug,options={}){
@@ -15,6 +15,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  const [customName,setCustomName]=useState("");
  const [search,setSearch]=useState(""),[view,setView]=useState("all");
  const [visibleGroups,setVisibleGroups]=useState(30);
+ const controlsRef=useRef(null);
  const [pharmacyId,setPharmacyId]=useState(""),[sourceCode,setSourceCode]=useState("");
  const [laboratoryKey,setLaboratoryKey]=useState("");
  const [error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -40,8 +41,9 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
   localSuppliers.filter(s=>String(s.pharmacyId)===pharmacyId&&!s.cooperative&&s.sourceCode):
   suppliers.filter(s=>!s.cooperative&&s.sourceCode),[suppliers,localSuppliers,pharmacyId]);
  const pharmacyName=id=>pharmacies.find(p=>String(p.id)===String(id))?.name||String(id);
- const supplierName=code=>suppliers.find(s=>String(s.sourceCode).replace(/^0+(?=\d)/,"")===
-  String(code).replace(/^0+(?=\d)/,""))?.name||code;
+ const supplierName=(code,pid)=>localSuppliers.find(s=>
+  String(s.pharmacyId)===String(pid)&&
+  String(s.sourceCode).replace(/^0+(?=\d)/,"")===String(code).replace(/^0+(?=\d)/,""))?.name||code;
  const labName=key=>laboratories.find(l=>l.key===key)?.name||key;
  async function saveMapping(nextKey=laboratoryKey,pid=pharmacyId,code=sourceCode){
   if(!pid||!code||(!nextKey&&nextKey!==null))return;
@@ -63,17 +65,29 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  const linked=localSuppliers.filter(s=>Boolean(s.laboratoryKey||s.inferredLaboratoryKey)).length;
  const grouped=useMemo(()=>{
   const groups=new Map();
+  const assignedKeys=new Set(localSuppliers.map(s=>s.laboratoryKey||s.inferredLaboratoryKey).filter(Boolean));
   for(const s of localSuppliers){
-   const text=[s.name,s.sourceCode,pharmacyName(s.pharmacyId),
+   if(view==="catalog-only")break;
+   const label=[s.name,s.sourceCode,s.erpSourceCode,pharmacyName(s.pharmacyId),
     labName(s.laboratoryKey||s.inferredLaboratoryKey)].join(" ").toLocaleLowerCase("es");
-   if(search&&!text.includes(search.toLocaleLowerCase("es")))continue;
+   if(search&&!label.includes(search.toLocaleLowerCase("es")))continue;
    const assigned=Boolean(s.laboratoryKey||s.inferredLaboratoryKey);
    if((view==="linked"&&!assigned)||(view==="unlinked"&&assigned))continue;
    const key=s.laboratoryKey||s.inferredLaboratoryKey||"SIN VINCULAR";
    if(!groups.has(key))groups.set(key,[]);
    groups.get(key).push(s);
   }
-  return [...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],"es"));
+  if(view==="all"||view==="catalog-only"){
+   for(const l of laboratories){
+    if(groups.has(l.key))continue;
+    if(view==="catalog-only"&&assignedKeys.has(l.key))continue;
+    if(search&&!l.name.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es")))continue;
+    groups.set(l.key,[]);
+   }
+  }
+  return [...groups.entries()].sort((a,b)=>
+   Number(b[1].length>0)-Number(a[1].length>0)||
+   labName(a[0]).localeCompare(labName(b[0]),"es"));
  },[localSuppliers,search,view,laboratories,pharmacies]);
  async function autoLink(apply=false){
   setBusy(true);setError("");setNotice("");
@@ -82,7 +96,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
     method:"POST",body:JSON.stringify({apply,
      ...(apply?{expected:autoPreview||[]}:{})})});
    if(!apply){setAutoPreview(result.suggestions||[]);setNotice(result.count+
-     " correspondencias seguras encontradas entre Farmatic y el Nomenclátor.");}
+     " correspondencias propuestas entre laboratorios oficiales y proveedores ERP, incluidas identidades nuevas.");}
    else{
     setAutoPreview(null);setNotice(result.applied+" relaciones por farmacia guardadas.");
     const [m,local,official]=await Promise.all([
@@ -120,8 +134,9 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
     onClick={()=>autoLink(false)}>Detectar coincidencias en todas las farmacias</button>
    {autoPreview!==null&&<div className="fm-auto-labs">
     <p>{autoPreview.length} coincidencias seguras propuestas.</p>
-    {autoPreview.slice(0,30).map((x,i)=><p key={i}>{pharmacyName(x.pharmacyId)} · {x.name} ({x.sourceCode}) → {x.source==="farmatic"?x.customName:labName(x.laboratoryKey)} · {x.source==="farmatic"?"Identidad propia nueva":"Laboratorio reconocido"}</p>)}
-    {autoPreview.length>30&&<p>Y {autoPreview.length-30} más. No se aplicará ninguna relación hasta confirmarlo.</p>}
+    <div className="fm-auto-labs-full-list" aria-label="Todas las sugerencias automáticas">
+     {autoPreview.map((x,i)=><p key={i}>{pharmacyName(x.pharmacyId)} · {x.name} ({x.sourceCode}) → {x.source==="farmatic"?x.customName:labName(x.laboratoryKey)} · {x.source==="farmatic"?"Identidad propia nueva":"Laboratorio reconocido"}</p>)}
+    </div>
     {!!autoPreview.length&&<button type="button" className="btn btn-primary" disabled={busy}
       onClick={()=>autoLink(true)}>Aplicar {autoPreview.length} relaciones</button>}
     <button type="button" className="btn btn-secondary" onClick={()=>setAutoPreview(null)}>Cancelar</button>
@@ -136,7 +151,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    </label>
    <button type="submit" className="btn btn-secondary" disabled={busy||loading||customName.trim().length<3}>Crear identidad</button>
   </form>
-  <div className="fm-supplier-mapping-controls">
+  <div className="fm-supplier-mapping-controls" ref={controlsRef}>
    <label>Farmacia<select value={pharmacyId} onChange={e=>{setPharmacyId(e.target.value);setSourceCode("");setLaboratoryKey("")}}>
     {pharmacies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
    <label>Proveedor ERP<select value={sourceCode} onChange={e=>{const next=e.target.value;setSourceCode(next);
@@ -161,20 +176,23 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
     <select value={view} onChange={e=>{setView(e.target.value);setVisibleGroups(30)}}>
      <option value="all">Todos</option><option value="linked">Relacionados</option>
      <option value="unlinked">Pendientes</option>
+     <option value="catalog-only">Sin proveedores ERP</option>
     </select></label>
    <span>{grouped.length} grupos · {grouped.reduce((n,[,entries])=>n+entries.length,0)} proveedores</span>
   </div>
   <div className="fm-supplier-mapping-list" aria-label="Maestro unificado por laboratorio">
    {filteredGroups.map(([key,entries])=><div key={key} className="fm-supplier-group">
     <strong>{key==="SIN VINCULAR"?"Sin unificar":labName(key)}</strong>
+    {!entries.length&&<small>Identidad disponible, sin proveedores Farmatic vinculados.</small>}
     {entries.map((s,i)=><div key={i}>
-     <span><strong>{pharmacyName(s.pharmacyId)}</strong> · {s.name||s.sourceCode} · código {s.sourceCode}
+     <span><strong>{pharmacyName(s.pharmacyId)}</strong> · {s.name||s.sourceCode} · código {s.erpSourceCode||s.sourceCode}
       {!s.laboratoryKey&&s.inferredLaboratoryKey&&
        <small> · Coincidencia por nombre (aún sin guardar)</small>}
       {s.localLaboratoryKey&&<small> · Enlace específico de farmacia</small>}</span>
      <button type="button" onClick={()=>{
       setPharmacyId(String(s.pharmacyId));setSourceCode(s.sourceCode);
       setLaboratoryKey(s.laboratoryKey||s.inferredLaboratoryKey||"");
+      controlsRef.current?.scrollIntoView({behavior:"smooth",block:"center"});
      }}>Vincular / editar</button>
     </div>)}
    </div>)}
@@ -185,10 +203,10 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
   <h3>Excepciones guardadas por farmacia</h3>
   <div className="fm-supplier-mapping-list" aria-label="Relaciones configuradas">
    {mappings.map(m=><div key={m.pharmacyId+"|"+m.sourceCode}>
-    <span><strong>{pharmacyName(m.pharmacyId)}</strong> · {supplierName(m.sourceCode)} ({m.sourceCode}) → {labName(m.laboratoryKey)}</span>
+    <span><strong>{pharmacyName(m.pharmacyId)}</strong> · {supplierName(m.sourceCode,m.pharmacyId)} ({m.sourceCode}) → {labName(m.laboratoryKey)}</span>
     <button type="button" disabled={busy} onClick={()=>saveMapping(null,m.pharmacyId,m.sourceCode)}>Quitar</button>
    </div>)}
-   {!mappings.length&&!loading&&<p>Sin correspondencias todavía. Hasta que asignes proveedores, solo aparecerán los medicamentos del maestro AEMPS.</p>}
+   {!mappings.length&&!loading&&<p>Sin correspondencias manuales todavía. Puedes asignar un laboratorio oficial o una identidad propia.</p>}
   </div>
  </section>;
 }

@@ -1,4 +1,5 @@
-import {normalizedLabSQL,normalizeLabName} from "./laboratoryIdentity.js";
+import {normalizedLabSQL} from "./laboratoryIdentity.js";
+import {buildAutomaticSupplierMatches} from "./supplierAutoMatch.js";
 // Núcleo de selección de cliente, permisos y activación de módulos.
 // Todo el contexto del tenant se obtiene en el servidor, nunca de un esquema
 // arbitrario aportado por el navegador.
@@ -309,30 +310,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
      WHERE fuente='vademecum'
      UNION ALL SELECT laboratorio_titular FROM farmetrica.nomenclator_presentaciones
      UNION ALL SELECT laboratorio_comercializador FROM farmetrica.nomenclator_presentaciones`);
-    const labKeys=new Map();
-    for(const row of sourceLabs){
-     const normalized=normalizeLabName(row.name);
-     if(!normalized||normalized.length<3||!/[A-Z]{2}/.test(normalized)||
-      /^(?:[A-Z]{0,3}[0-9]{2,})$/.test(normalized))continue;
-     const key="N:"+normalized;
-     labKeys.set(normalized,key);
-    }
-    const supplierMap=new Map();
-    for(const supplier of incoming){
-     const code=String(supplier?.sourceCode||"").trim().toUpperCase();
-     const name=String(supplier?.name||"").trim();
-     if(!/^[A-Z0-9_.-]{1,60}$/.test(code)||!name||name.length>200)continue;
-     if(supplier.cooperative||supplier.laboratoryKey||supplier.ignoreReports)continue;
-     if(/^(?:PROVEEDOR|COOPERATIVA|MAYORISTA)\s*(?:[0-9]+|\(.*\))?$/i.test(name)||
-      name===code)continue;
-     const lab=labKeys.get(normalizeLabName(name));
-     if(!lab)continue;
-     if(supplierMap.has(code)){
-      const previous=supplierMap.get(code);
-      if(previous&&previous.laboratoryKey!==lab)supplierMap.set(code,null);
-     }else supplierMap.set(code,{sourceCode:code,name,laboratoryKey:lab});
-    }
-    const suggestions=[...supplierMap.values()].filter(Boolean);
+    const suggestions=buildAutomaticSupplierMatches(incoming,sourceLabs.map(row=>row.name));
     if(!apply)return res.json({suggestions,count:suggestions.length,applied:0});
     if(!suggestions.length)return res.json({suggestions:[],count:0,applied:0});
     const {rows}=await pool.query(`

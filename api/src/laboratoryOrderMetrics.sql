@@ -83,7 +83,7 @@ SELECT x.reference,f.id::text AS "pharmacyId",
  CASE WHEN i.stock IS NULL THEN NULL::int
  ELSE greatest(0,least(999999,ceil(
   greatest(coalesce(m.v3,0)/90.0,coalesce(m.v12,0)/365.0)*
-   greatest(coalesce(policy.cobertura_saludable,90),coalesce(policy.intervalo_pedidos,7))
+   (coalesce(policy.cobertura_saludable,20) + $6::int + coalesce(policy.plazo_entrega,2))
    -i.stock-coalesce(pending.qty,0)-1e-9)))::int END AS suggested
 FROM refs x CROSS JOIN pharmacies f
 LEFT JOIN inventory i ON i.pharmacy_id=f.id AND i.reference=x.reference

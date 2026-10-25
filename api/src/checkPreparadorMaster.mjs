@@ -23,6 +23,8 @@ try{
  out.pharmacies=ids.length;out.rawCount=raw.length;out.groupedCount=grouped.length;
  out.cinfaRaw=raw.filter(r=>match.test(r.name+" "+r.key)).map(r=>r.key).slice(0,15);
  out.cinfaGrouped=grouped.filter(r=>match.test(r.name+" "+r.key)).map(r=>r.key).slice(0,15);
+ out.cinfaUnified=grouped.filter(r=>match.test(r.name+" "+r.key)).length===1;
+ out.cinfaRawNames=raw.filter(r=>match.test(r.name+" "+r.key)).map(r=>r.name).slice(0,15);
  out.cinfaMaster=master.filter(r=>match.test(r.name+" "+r.laboratoryKey))
   .map(r=>({name:r.name,to:r.laboratoryKey,hidden:r.ignoreReports,coop:r.cooperative})).slice(0,15);
  out.suppliersFlagged=master.filter(r=>r.ignoreReports||r.cooperative).length;

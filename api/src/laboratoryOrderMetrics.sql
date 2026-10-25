@@ -4,20 +4,45 @@ WITH refs AS MATERIALIZED (
  SELECT f.id,__FARMACIA_CODE__ AS source_code
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
+), article_matches AS (
+ -- Cada vía de identificación se resuelve por separado. El OR anterior
+ -- impedía usar los índices de Farmatic y multiplicaba los escaneos.
+ SELECT f.id AS pharmacy_id,x.reference,a.origen_id::text AS article_id,
+   a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
+ FROM refs x CROSS JOIN pharmacies f
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=f.source_code
+   AND a.origen_id::text=x.cn
+ WHERE x.cn IS NOT NULL
+ UNION ALL
+ SELECT f.id,x.reference,a.origen_id::text,
+   a.stock_actual::float8,a.sincronizado_en
+ FROM refs x CROSS JOIN pharmacies f
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=f.source_code
+   AND btrim(a.codigo_nacional)=x.cn
+ WHERE x.cn IS NOT NULL AND nullif(btrim(a.codigo_nacional),'') IS NOT NULL
+ UNION ALL
+ SELECT f.id,x.reference,a.origen_id::text,
+   a.stock_actual::float8,a.sincronizado_en
+ FROM refs x CROSS JOIN pharmacies f
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=f.source_code
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
+ WHERE x.cn IS NOT NULL
+ UNION ALL
+ SELECT f.id,x.reference,a.origen_id::text,
+   a.stock_actual::float8,a.sincronizado_en
+ FROM refs x CROSS JOIN pharmacies f
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=f.source_code
+   AND a.origen_id::text=split_part(x.reference,':',3)
+ WHERE x.cn IS NULL AND x.reference='ERP:'||f.id::text||':'||a.origen_id::text
 ), articles AS MATERIALIZED (
- SELECT DISTINCT ON (f.id,a.origen_id::text,x.reference)
-  f.id AS pharmacy_id,x.reference,a.origen_id::text AS article_id,
-  a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
- FROM __SCHEMA__.articulos a
- JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=ANY($2::int[])
-  AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
- JOIN refs x ON (x.cn IS NOT NULL AND
-   (nullif(btrim(a.codigo_nacional),'')=x.cn
-    OR nullif(btrim(to_jsonb(a)->>'cn_normalizado'),'')=x.cn
-    OR (nullif(btrim(a.codigo_nacional),'') IS NULL
-     AND btrim(a.origen_id::text)=x.cn)))
-  OR (x.cn IS NULL AND x.reference='ERP:'||f.id::text||':'||a.origen_id::text)
- ORDER BY f.id,a.origen_id::text,x.reference,a.sincronizado_en DESC NULLS LAST
+ SELECT DISTINCT ON (pharmacy_id,article_id,reference)
+  pharmacy_id,reference,article_id,stock,stock_at
+ FROM article_matches
+ ORDER BY pharmacy_id,article_id,reference,stock_at DESC NULLS LAST
 ), inventory AS (
  SELECT pharmacy_id,reference,
   CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,

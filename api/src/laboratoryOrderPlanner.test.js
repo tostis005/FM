@@ -33,6 +33,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const pool={async query(query){
   const text=typeof query==="string"?query:query.text;
   queries.push({text,values:query.values});
+  if(text.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(text.includes("FROM filtered ORDER BY"))
    return {rows:[{referencia:"400001",cn:"400001",nombre:"Med 1",
     tipo:"medicacion",total:1,inMaster:true,inReceipts:false}]};
@@ -49,12 +50,12 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const d=await readLaboratoryOrderMatrix(pool,context,
   {key:"C:LAB",pharmacies:[1,2],type:"medicacion",
    from:"2026-09-01",to:"2026-10-24",page:1,size:40});
- assert.equal(queries.length,2);
+ assert.equal(queries.length,4);
  assert.equal(d.rows.length,1);
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);
  assert.equal(d.rows[0].byPharmacy["1"].suggested,4);
- assert.deepEqual(queries[1].values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
+ assert.deepEqual(queries[3].values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
 });
 test("API matriz y guardado solo dentro del tenant",async()=>{
  const routes={};
@@ -93,6 +94,10 @@ test("el preparador consulta ventas con identificadores indexados del documento 
  const {readFile}=await import("node:fs/promises");
  const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
  assert.match(sql,/ON v\.articulo_id=a\.article_id/);
+ assert.match(sql,/article_matches AS/);
+ assert.match(sql,/a\.origen_id::text=x\.cn/);
+ assert.match(sql,/__CN_NORMALIZED__/);
+ assert.doesNotMatch(sql,/JOIN refs x ON \(x\.cn/);
  assert.match(sql,/AND v\.farmacia_codigo=\(/);
  assert.doesNotMatch(sql,/upper\(btrim\(v\.farmacia_codigo\)\)/i);
 });

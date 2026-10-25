@@ -13,30 +13,34 @@ test("catálogo directo aporta AEMPS, vademécum y recepciones asociadas sin ven
  const calls=[];
  const pool={async query(q){
   calls.push(q);
+  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
   return {rows:[catalogRow]};
  }};
  const result=await readDirectLaboratoryCatalog(pool,ctx,opts);
+ const query=calls.find(q=>q.text.includes("WITH aliases AS"));
  assert.equal(result.total,1);
  assert.equal(result.rows[0].cn,"790321");
- assert.match(calls[0].text,/nomenclator_presentaciones/);
- assert.match(calls[0].text,/articulos_laboratorio_maestro/);
- assert.match(calls[0].text,/ampedia.*articulos/);
- assert.match(calls[0].text,/fm_recepciones_analitica/);
- assert.match(calls[0].text,/proveedores_maestro/);
- assert.match(calls[0].text,/proveedores_laboratorios/);
- assert.doesNotMatch(calls[0].text,/fm_ventas_analitica/);
- assert.deepEqual(calls[0].values,["N:CINFA",[1],"ampedia","medicacion","",40,0]);
+ assert.match(query.text,/nomenclator_presentaciones/);
+ assert.match(query.text,/articulos_laboratorio_maestro/);
+ assert.match(query.text,/ampedia.*articulos/);
+ assert.match(query.text,/fm_recepciones_analitica/);
+ assert.match(query.text,/proveedores_maestro/);
+ assert.match(query.text,/proveedores_laboratorios/);
+ assert.doesNotMatch(query.text,/fm_ventas_analitica/);
+ assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0]);
 });
 test("error de ventas/stock nunca oculta productos AEMPS",async()=>{
  let calls=0;
  const pool={async query(q){
   calls++;
+  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(q.text.includes("fm_recepciones_analitica"))return {rows:[catalogRow]};
   if(q.text.includes("fm_ventas_analitica"))throw Object.assign(Error("Stock unavailable"),{code:"42703"});
   throw Error("unexpected SQL");
  }};
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);
- assert.equal(calls,2);
+ assert.equal(calls,4);
  assert.equal(result.total,1);
  assert.equal(result.rows[0].cn,"790321");
  assert.equal(result.metricsUnavailable,true);
@@ -55,6 +59,7 @@ test("la ausencia de farmacias no impide mostrar el catálogo de AEMPS",async()=
 });
 test("correspondencias antiguas aún pueden rescatar una referencia ausente del catálogo directo",async()=>{
  const pool={async query(q){
+  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(q.text.includes("fm_ventas_analitica"))return {rows:[]};
   if(q.text.includes("mapped_suppliers AS"))return {rows:[]};
   if(q.text.includes("WITH aliases AS"))return {rows:[catalogRow]};
@@ -67,6 +72,7 @@ test("correspondencias antiguas aún pueden rescatar una referencia ausente del 
 });
 test("diagnóstico diferencia pestañas y evita inventar cifras ante fallo",async()=>{
  const pool={async query(q){
+  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
   if(q.values[3]==="medicacion")return {rows:[catalogRow]};
   return {rows:[]};
  }};

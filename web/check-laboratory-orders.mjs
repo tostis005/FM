@@ -28,12 +28,16 @@ await page.route("**/api/**",async route=>{
    body={saved:true,count:data.lineas.length,updatedAt:"2026-10-24T07:00:00Z"};
   }else body={lineas:[]};
  }else if(path==="/api/analytics/pedidos/catalogo-directo"){
+  if(url.searchParams.get("laboratorio")==="N:CINFA")
+   await new Promise(resolve=>setTimeout(resolve,600));
   body={rows:[{referencia:"790321",cn:"790321",nombre:"Producto recuperado del maestro",
    tipo:"medicacion",inMaster:true,inReceipts:false}],total:1,page:1,size:40};
  }else if(path==="/api/analytics/pedidos/diagnostico-laboratorio"){
   body={pharmacyCount:2,sources:[{type:"medicacion",status:"ok",total:1},
    {type:"parafarmacia",status:"ok",total:0}]};
  }else if(path==="/api/analytics/pedidos/matriz-laboratorio"){
+  if(url.searchParams.get("laboratorio")==="N:CINFA")
+   await new Promise(resolve=>setTimeout(resolve,1600));
   if(url.searchParams.get("laboratorio")==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
     body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
@@ -87,8 +91,13 @@ try{
  const file2=page.waitForEvent("download");
  await page.getByRole("button",{name:"Generar Excel"}).click();
  assert.match((await file2).suggestedFilename(),/medicacion\.xlsx$/);
- await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Cinfa");
+ const labSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});
+ assert.equal(await labSelector.count(),1,"un único campo integrado para buscar y seleccionar");
+ await labSelector.fill("Cinfa");
+ assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
+ await page.getByText(/Consultando artículos y códigos nacionales/).waitFor({timeout:1200});
+ await page.getByText(/Calculando ventas y stock por farmacia/).waitFor({timeout:3000});
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});

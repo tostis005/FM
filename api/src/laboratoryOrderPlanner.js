@@ -41,8 +41,20 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  if(!options.pharmacies.length)
   return {...fallback,warning:"No hay farmacias asignadas o seleccionadas. Se muestran referencias, pero no stock ni ventas."};
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema no autorizado");
+ // La columna nativa cn_normalizado existe en Farmatic recientes y evita
+ // transformar cada fila a JSON en las búsquedas de stock y ventas.
+ let nativeCN=false;
+ try{
+  const {rows:columns}=await pool.query({text:`
+   SELECT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema=$1 AND table_name='articulos'
+     AND column_name='cn_normalizado') AS available`,
+   values:[ctx.client.schema],query_timeout:1500});
+  nativeCN=columns[0]?.available===true;
+ }catch{}
  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
-  .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
+  .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
+  .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
  let rows;
  try{
   const result=await pool.query({text:sql,

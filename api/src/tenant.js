@@ -82,13 +82,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   app.get("/api/tenant/stock-objetivo",...requireTenantAdmin(),async(req,res,next)=>{
     try{
       const ids=req.context.pharmacies.map(p=>Number(p.id));
-      if(!ids.length)return res.json({defaultDays:90,items:[]});
+      if(!ids.length)return res.json({defaultDays:20,items:[]});
       const {rows}=await pool.query(
         'SELECT farmacia_id AS "pharmacyId",cobertura_saludable AS days FROM farmetrica.op_politicas_reposicion WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])',
         [req.context.client.slug,ids]);
       const map=new Map(rows.map(r=>[Number(r.pharmacyId),Number(r.days)]));
-      res.json({defaultDays:90,items:ids.map(id=>({
-        pharmacyId:id,days:map.get(id)??90,configured:map.has(id)
+      res.json({defaultDays:20,items:ids.map(id=>({
+        pharmacyId:id,days:map.get(id)??20,configured:map.has(id)
       }))});
     }catch(e){next(e)}
   });

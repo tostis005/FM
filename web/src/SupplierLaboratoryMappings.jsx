@@ -198,7 +198,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    {!grouped.length&&!loading&&<p>No hay proveedores para estos filtros.</p>}
   </div>
   {grouped.length>visibleGroups&&<button type="button" className="btn btn-secondary"
-   onClick={()=>setVisibleGroups(n=>n+30)}>Ver más grupos ({grouped.length-visibleGroups} restantes)</button>
+   onClick={()=>setVisibleGroups(n=>n+30)}>Ver más grupos ({grouped.length-visibleGroups} restantes)</button>}
   <h3>Excepciones guardadas por farmacia</h3>
   <div className="fm-supplier-mapping-list" aria-label="Relaciones configuradas">
    {mappings.map(m=><div key={m.pharmacyId+"|"+m.sourceCode}>

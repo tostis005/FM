@@ -79,11 +79,13 @@ export async function listOperationalLaboratoryOptions(pool,context,pharmacies){
  const catalog=await listLaboratoryOptions(pool,scoped);
  const evidence=await readOperationalLaboratoryEvidence(pool,context,pharmacies);
  const byKey=new Map(evidence.map(e=>[e.key,e]));
- return catalog.filter(item=>byKey.has(item.key)).map(item=>{
-  const match=byKey.get(item.key);
-  return {...item,hasMedication:match.hasMedication===true,
-   hasParapharmacy:match.hasParapharmacy===true};
+ const named=new Map(catalog.map(item=>[item.key,item]));
+ const choices=evidence.map(e=>{
+  const item=named.get(e.key)||{key:e.key,name:e.name,fromVademecum:false};
+  return {...item,hasMedication:e.hasMedication===true,
+   hasParapharmacy:e.hasParapharmacy===true};
  });
+ return choices.sort((a,b)=>a.name.localeCompare(b.name,"es")).slice(0,5000);
 }
 const matchCommercial=(alias)=>{
  const name=alias+".laboratorio_comercializador";

@@ -28,7 +28,7 @@ WITH refs AS MATERIALIZED (
  FROM refs x CROSS JOIN pharmacies f
  JOIN __SCHEMA__.articulos a
   ON upper(btrim(a.farmacia_codigo))=f.source_code
-   AND nullif(btrim(to_jsonb(a)->>'cn_normalizado'),'')=x.cn
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
  WHERE x.cn IS NOT NULL
  UNION ALL
  SELECT f.id,x.reference,a.origen_id::text,

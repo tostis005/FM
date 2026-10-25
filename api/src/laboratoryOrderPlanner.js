@@ -21,7 +21,10 @@ export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).j
 
 export async function readLaboratoryOrderMatrix(pool,ctx,options){
  const [base,frequencyDays]=await Promise.all([
-  readDirectLaboratoryCatalog(pool,ctx,options),
+  options.prefetchedRows?
+   Promise.resolve({rows:options.prefetchedRows,total:options.prefetchedRows.length,
+    page:1,size:options.prefetchedRows.length}):
+   readDirectLaboratoryCatalog(pool,ctx,options),
   readLaboratoryOrderFrequency(pool,ctx.client.slug,options.key)
  ]);
  const warning=null;
@@ -148,6 +151,43 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
      return res.status(504).json({error:"La consulta ha tardado demasiado. Reduce el período o las farmacias."});
     next(e);
    }
+ });
+ // La interfaz ya recibió las referencias del catálogo. Calcular métricas
+ // sobre esos CN exactos evita reconstruir otra vez el catálogo 25 veces.
+ // El acceso sigue limitado al tenant y a las farmacias autorizadas.
+ if(typeof app.post==="function")app.post("/api/analytics/pedidos/matriz-referencias",...guard,async(req,res,next)=>{
+  if(!enabled(req))return res.status(403).json({error:"Compras no habilitado"});
+  const common=parse(req),type=String(req.body?.tipo||"");
+  const from=String(req.body?.desde||""),to=String(req.body?.hasta||"");
+  const provided=req.body?.referencias;
+  if(!common||!["medicacion","parafarmacia"].includes(type)||
+   !validPlannerDate(from)||!validPlannerDate(to)||from>to||
+   Date.parse(to)-Date.parse(from)>5*366*86400000||
+   !Array.isArray(provided)||!provided.length||provided.length>40||
+   !SCHEMA.test(req.context.client.schema))
+   return res.status(400).json({error:"Referencias, farmacias o período inválidos"});
+  const seen=new Set(),rows=[];
+  for(const entry of provided){
+   const reference=entry?.referencia,cn=entry?.cn;
+   if(typeof reference!=="string"||reference.length>120||
+    !(/^[0-9]{6,7}$/.test(reference)||
+      (type==="parafarmacia"&&/^ERP:\\d+:[A-Za-z0-9._:-]{1,90}$/.test(reference)))||
+    !(cn===null||cn===undefined||/^[0-9]{6,7}$/.test(cn))||
+    (cn&&cnCategory(cn)!==type)||seen.has(reference))
+    return res.status(400).json({error:"Hay referencias duplicadas o no válidas"});
+   seen.add(reference);
+   rows.push({referencia:reference,cn:cn||null,nombre:typeof entry.nombre==="string"?
+    entry.nombre.slice(0,240):reference});
+  }
+  try{
+   res.json(await readLaboratoryOrderMatrix(pool,req.context,{
+    key:common.laboratory,pharmacies:common.pharmacies,type,from,to,prefetchedRows:rows
+   }));
+  }catch(e){
+   if(["57014","53300"].includes(e.code))
+    return res.status(504).json({error:"El cálculo de ventas y stock ha tardado demasiado."});
+   next(e);
+  }
  });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/borrador-laboratorio",...guard,async(req,res,next)=>{
   if(!enabled(req))return res.status(403).json({error:"Compras no habilitado"});

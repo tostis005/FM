@@ -11,7 +11,7 @@ async function request(path,clientSlug,options={}){
 export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  const [pharmacies,setPharmacies]=useState([]),[laboratories,setLaboratories]=useState([]);
  const [mappings,setMappings]=useState([]),[localSuppliers,setLocalSuppliers]=useState([]);
- const [autoPreview,setAutoPreview]=useState(null);
+ const [autoPreview,setAutoPreview]=useState(null),[approvalToken,setApprovalToken]=useState("");
  const [customName,setCustomName]=useState("");
  const [search,setSearch]=useState(""),[view,setView]=useState("all");
  const [visibleGroups,setVisibleGroups]=useState(30);
@@ -93,12 +93,11 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
   setBusy(true);setError("");setNotice("");
   try{
    const result=await request("/api/tenant/proveedores/autovincular-farmacias",clientSlug,{
-    method:"POST",body:JSON.stringify({apply,
-     ...(apply?{expected:autoPreview||[]}:{})})});
-   if(!apply){setAutoPreview(result.suggestions||[]);setNotice(result.count+
+    method:"POST",body:JSON.stringify({apply,approvalToken:apply?approvalToken:undefined})});
+   if(!apply){setAutoPreview(result.suggestions||[]);setApprovalToken(result.approvalToken||"");setNotice(result.count+
      " correspondencias propuestas entre laboratorios oficiales y proveedores ERP, incluidas identidades nuevas.");}
    else{
-    setAutoPreview(null);setNotice(result.applied+" relaciones por farmacia guardadas.");
+    setAutoPreview(null);setApprovalToken("");setNotice(result.applied+" relaciones por farmacia guardadas.");
     const [m,local,official]=await Promise.all([
      request("/api/tenant/proveedores/correspondencias",clientSlug),
      request("/api/tenant/proveedores/por-farmacia",clientSlug),
@@ -139,7 +138,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
     </div>
     {!!autoPreview.length&&<button type="button" className="btn btn-primary" disabled={busy}
       onClick={()=>autoLink(true)}>Aplicar {autoPreview.length} relaciones</button>}
-    <button type="button" className="btn btn-secondary" onClick={()=>setAutoPreview(null)}>Cancelar</button>
+    <button type="button" className="btn btn-secondary" onClick={()=>{setAutoPreview(null);setApprovalToken("")}}>Cancelar</button>
    </div>}</div>
   {loading&&<p>Cargando proveedores y laboratorios…</p>}
   {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}

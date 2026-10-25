@@ -21,17 +21,31 @@ jobs:
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/ci
           chmod 600 ~/.ssh/ci
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-      - name: Identificar tablas e índices de ventas y artículos
+      - name: Medir consulta de ventas por identificador indexado
         run: |
           set -euo pipefail
-          cat <<'SQL' | ssh -i ~/.ssh/ci -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao'
-          BEGIN READ ONLY;
-          SET LOCAL statement_timeout='20000';
-          SELECT 'REL',relname,relkind FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='ampedia' AND c.relname IN ('articulos','fm_ventas_analitica','fm_ventas_lineas','fm_ventas_cabeceras');
-          SELECT 'IDX',tablename,indexname,left(indexdef,400) FROM pg_indexes WHERE schemaname='ampedia' AND tablename IN ('articulos','fm_ventas_analitica','fm_ventas_lineas','fm_ventas_cabeceras') ORDER BY tablename,indexname LIMIT 45;
-          SELECT 'ROWS',relname,reltuples::bigint FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='ampedia' AND c.relname IN ('articulos','fm_ventas_analitica','fm_ventas_lineas','fm_ventas_cabeceras');
-          SELECT 'VENTAS_VIEW',pg_get_viewdef('ampedia.fm_ventas_analitica'::regclass,true);
-          SELECT 'VENTAS_LINEAS_COLS',string_agg(column_name,',') FROM information_schema.columns WHERE table_schema='ampedia' AND table_name='fm_ventas_lineas';
-          SELECT 'VENTAS_CAB_COLS',string_agg(column_name,',') FROM information_schema.columns WHERE table_schema='ampedia' AND table_name='fm_ventas_cabeceras';
-          COMMIT;
-          SQL
+          cat <<'NODE' | ssh -i ~/.ssh/ci -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+          import pg from "pg";
+          import {readFile} from "node:fs/promises";
+          import {pharmacyDataCodeSQL} from "./src/pharmacyCodes.js";
+          const db=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:6000});
+          try{
+           const {rows}=await db.query(`SELECT f.id,n.cn
+             FROM ampedia.articulos a JOIN farmetrica.farmacias f
+               ON f.cliente_slug='ampedia' AND upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+             JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text)
+             WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%')
+              AND coalesce(a.stock_actual,0)<>0 LIMIT 1`);
+           const {id,cn}=rows[0];
+           let sql=await readFile("./src/laboratoryOrderMetrics.sql","utf8");
+           sql=sql.replaceAll("__SCHEMA__",'"ampedia"').replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
+           const newer=sql.replace("upper(btrim(v.farmacia_codigo))=(", "v.farmacia_codigo=(")
+             .replace("v.articulo_id::text=a.article_id","v.articulo_id=a.article_id");
+           const args=[JSON.stringify([{reference:cn,cn}]),[id],"ampedia","2026-10-01","2026-10-24"];
+           let started=Date.now();
+           const q=await db.query({text:newer,values:args,query_timeout:30000});
+           console.log("CINFA_INDEXED_METRICS",JSON.stringify({durationMs:Date.now()-started,
+            count:q.rows.length,stock:q.rows[0]?.stock,units3:q.rows[0]?.units3,
+            units12:q.rows[0]?.units12,unitsPeriod:q.rows[0]?.unitsPeriod}));
+          }finally{await db.end()}
+          NODE

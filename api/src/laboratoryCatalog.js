@@ -2,6 +2,7 @@ import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
+import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
@@ -68,6 +69,21 @@ export async function listLaboratoryOptions(pool,context){
   GROUP BY canonical ORDER BY min(name) LIMIT 5000`,
   [context.client.slug,(context.pharmacies||[]).map(p=>Number(p.id))]);
  return rows;
+}
+// El preparador oculta laboratorios exclusivos del Nomenclátor; el maestro
+// mantiene todas las opciones necesarias para configurar correspondencias.
+export async function listOperationalLaboratoryOptions(pool,context,pharmacies){
+ if(!Array.isArray(pharmacies)||!pharmacies.length)return [];
+ const scoped={...context,pharmacies:(context.pharmacies||[]).filter(
+  p=>pharmacies.some(id=>Number(p.id)===Number(id)))};
+ const catalog=await listLaboratoryOptions(pool,scoped);
+ const evidence=await readOperationalLaboratoryEvidence(pool,context,pharmacies);
+ const byKey=new Map(evidence.map(e=>[e.key,e]));
+ return catalog.filter(item=>byKey.has(item.key)).map(item=>{
+  const match=byKey.get(item.key);
+  return {...item,hasMedication:match.hasMedication===true,
+   hasParapharmacy:match.hasParapharmacy===true};
+ });
 }
 const matchCommercial=(alias)=>{
  const name=alias+".laboratorio_comercializador";
@@ -194,7 +210,14 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
   if(!access(req,res)&&req.context.modules?.proveedores!==true)
    return res.status(403).json({error:"Catálogo no habilitado"});
-  try{res.json({laboratories:await listLaboratoryOptions(pool,req.context)});}catch(e){next(e);}
+  try{
+   const onlyWithActivity=req.query.uso==="preparador";
+   const scope=onlyWithActivity?selectedPharmacies(req.context,req.query.farmacias):null;
+   if(onlyWithActivity&&!scope)return res.status(400).json({error:"Farmacias no autorizadas"});
+   res.json({laboratories:onlyWithActivity?
+    await listOperationalLaboratoryOptions(pool,req.context,scope):
+    await listLaboratoryOptions(pool,req.context)});
+  }catch(e){next(e);}
  });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/diagnostico-laboratorio",...auth,async(req,res,next)=>{
   if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});

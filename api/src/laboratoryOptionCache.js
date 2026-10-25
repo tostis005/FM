@@ -23,3 +23,11 @@ export function readCachedLaboratoryOptions(pool,tenant,pharmacies,loader){
   throw error;
  });
 }
+
+/** La edición del maestro debe reflejarse inmediatamente en el preparador,
+ * sin esperar a los dos minutos de caducidad de la caché. */
+export function invalidateCachedLaboratoryOptions(pool,tenant){
+ const cache=pools.get(pool);
+ if(!cache)return;
+ for(const key of cache.keys())if(key.startsWith(tenant+"|"))cache.delete(key);
+}

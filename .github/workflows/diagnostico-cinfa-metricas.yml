@@ -93,7 +93,7 @@ jobs:
            FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n
             ON btrim(a.origen_id::text)=n.cn;
           SELECT 'ERP_ID_LENGTHS',char_length(btrim(origen_id::text)),count(*)
-           FROM ampedia.articulos GROUP BY 1 ORDER BY 2 DESC LIMIT 12;
+           FROM ampedia.articulos GROUP BY 2 ORDER BY 3 DESC LIMIT 12;
           SELECT 'ARTICLE_SCHEMA_COLUMNS',string_agg(column_name,',')
            FROM information_schema.columns
            WHERE table_schema='ampedia' AND table_name='articulos';

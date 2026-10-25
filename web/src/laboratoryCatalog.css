@@ -34,3 +34,31 @@
 .fm-laboratory-filters.fm-laboratory-single-filter{display:grid;grid-template-columns:minmax(0,1fr);max-width:580px;width:100%}
 .fm-laboratory-single-filter .fm-supplier-laboratory-picker{display:grid;gap:6px;min-width:0}
 .fm-laboratory-single-filter .fm-lab-combobox{min-width:0;width:100%}
+
+/* Maestro unificado: identidad central y alias originales por farmacia. */
+.fm-supplier-identity-stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.fm-supplier-identity-stats span{background:var(--surface-alt,#f5f8f6);
+ border:1px solid var(--border,#e1e9e3);border-radius:8px;padding:9px 12px;font-size:.85rem}
+.fm-supplier-identity-stats strong{font-size:1rem;margin-right:5px}
+.fm-supplier-create-identity{display:flex;flex-wrap:wrap;align-items:end;gap:10px;
+ background:var(--surface-alt,#f5f8f6);padding:12px;border-radius:10px}
+.fm-supplier-create-identity label{display:grid;gap:6px;flex:1 1 250px;font-size:.85rem;font-weight:600}
+.fm-supplier-create-identity input,.fm-supplier-identity-filters input,
+.fm-supplier-identity-filters select{width:100%;min-width:0;padding:10px;border-radius:8px;
+ border:1px solid var(--border,#d7dedb);background:var(--surface,#fff);color:inherit}
+.fm-supplier-identity-filters{display:flex;align-items:end;flex-wrap:wrap;gap:10px}
+.fm-supplier-identity-filters label{display:grid;gap:5px;font-size:.83rem;font-weight:600;flex:1 1 200px}
+.fm-supplier-identity-filters>span{font-size:.83rem;color:var(--muted,#64748b)}
+.fm-supplier-mapping-list>.fm-supplier-group{display:grid;gap:5px;padding:10px 12px;
+ border:1px solid var(--border,#e1e9e3);border-radius:9px;margin-bottom:4px}
+.fm-supplier-group>strong{font-size:.92rem}
+.fm-supplier-group>div{display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:10px;padding:8px 0;border-top:1px solid var(--border,#e7eeea)}
+.fm-supplier-group small{font-size:.8rem;color:var(--muted,#64748b)}
+.fm-supplier-create-identity button{min-height:40px}
+.fm-supplier-mapping-list button{cursor:pointer}
+.fm-supplier-mapping-controls .fm-supplier-laboratory-picker{min-width:0}
+@media(max-width:720px){
+ .fm-supplier-identity-filters{align-items:stretch}
+ .fm-supplier-mapping-list>.fm-supplier-group{min-width:0}
+}

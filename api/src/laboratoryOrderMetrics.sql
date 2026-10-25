@@ -11,7 +11,10 @@ WITH refs AS MATERIALIZED (
  FROM __SCHEMA__.articulos a
  JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=ANY($2::int[])
   AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
- JOIN refs x ON (x.cn IS NOT NULL AND nullif(btrim(a.codigo_nacional),'')=x.cn)
+ JOIN refs x ON (x.cn IS NOT NULL AND
+   (nullif(btrim(a.codigo_nacional),'')=x.cn
+    OR (nullif(btrim(a.codigo_nacional),'') IS NULL
+     AND btrim(a.origen_id::text)=x.cn)))
   OR (x.cn IS NULL AND x.reference='ERP:'||f.id::text||':'||a.origen_id::text)
  ORDER BY f.id,a.origen_id::text,x.reference,a.sincronizado_en DESC NULLS LAST
 ), inventory AS (

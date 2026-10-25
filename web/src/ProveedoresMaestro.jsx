@@ -3,6 +3,7 @@ import {Plus,X,WandSparkles} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
 import SupplierLaboratoryMappings from "./SupplierLaboratoryMappings.jsx";
+import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
@@ -12,7 +13,7 @@ export default function ProveedoresMaestro({clientSlug}){
   [error,setError]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[savingFlags,setSavingFlags]=useState({});
  const [updatedAt,setUpdatedAt]=useState(null);
  const [laboratories,setLaboratories]=useState([]),[mappingSupplier,setMappingSupplier]=useState(null);
- const [labSearch,setLabSearch]=useState(""),[selectedLab,setSelectedLab]=useState("");
+ const [selectedLab,setSelectedLab]=useState("");
  const [linking,setLinking]=useState(false),[mappingNotice,setMappingNotice]=useState("");
  const [autoBusy,setAutoBusy]=useState(false),[suggestions,setSuggestions]=useState(null);
  async function api(path,options={}){
@@ -88,14 +89,10 @@ export default function ProveedoresMaestro({clientSlug}){
    }
   }catch(e){setError(e.message)}finally{setAutoBusy(false)}
  }
- const availableLabs=useMemo(()=>laboratories.filter(l=>
-  (l.name+" "+l.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es")))
-  .sort((a,b)=>Number(Boolean(b.fromVademecum))-Number(Boolean(a.fromVademecum))||
-    a.name.localeCompare(b.name,"es")),[laboratories,labSearch]);
  const labName=key=>laboratories.find(l=>l.key===key)?.name||key||"Sin asignar";
  function openLaboratory(row){
   setMappingSupplier(row);setSelectedLab(row.laboratoryKey||"");
-  setLabSearch("");setMappingNotice("");
+  setMappingNotice("");
  }
  const visible=useMemo(()=>rows.filter(r=>(r.name+" "+r.sourceCode).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
  return <div className="fm-management fm-production-panel">
@@ -174,29 +171,15 @@ export default function ProveedoresMaestro({clientSlug}){
        onClick={()=>setMappingSupplier(null)}><X size={19}/></button>
      </div>
      <p><strong>{mappingSupplier.name}</strong> · código ERP {mappingSupplier.sourceCode}</p>
-     {!laboratories.some(l=>l.fromVademecum)&&<p className="fm-op-message" role="status">
-      No hay referencias de Vademécum identificadas en el maestro. El superadministrador
-      puede cargar su CSV en Fuentes de datos. Mientras tanto, están disponibles los
-      laboratorios que sí figuran en AEMPS o Farmatic.
-     </p>}
-     <p>Se aplicará a todas las farmacias del cliente, salvo donde exista una excepción específica. 
-      El catálogo importado aporta los CN y Farmatic completa las referencias que falten.</p>
-     <label className="fm-provider-lab-field">Buscar laboratorio del catálogo
-      <input type="search" value={labSearch} onChange={e=>setLabSearch(e.target.value)}
-       placeholder="Buscar por nombre…" aria-label="Buscar laboratorio del catálogo"/>
-     </label>
-     <label className="fm-provider-lab-field">Laboratorio asociado
-      <select value={selectedLab} onChange={e=>setSelectedLab(e.target.value)}
-       aria-label="Laboratorio asociado">
-       <option value="">Sin laboratorio asignado</option>
-       {availableLabs.map(l=><option key={l.key} value={l.key}>
-        {l.name}{l.fromVademecum?" · Vademécum":" · AEMPS / ERP"}
-       </option>)}
-       {selectedLab&&!availableLabs.some(l=>l.key===selectedLab)&&
-        laboratories.filter(l=>l.key===selectedLab).map(l=>
-         <option key={l.key} value={l.key}>{l.name}</option>)}
-      </select>
-     </label>
+     <p>La correspondencia se aplicará a las farmacias que utilicen este proveedor.
+      Puedes definir excepciones por farmacia en la configuración avanzada.</p>
+     <div className="fm-provider-lab-field">
+      <span>Buscar y seleccionar laboratorio</span>
+      <LaboratoryPicker laboratories={laboratories} selected={selectedLab}
+       onSelect={setSelectedLab} ariaLabel="Seleccionar laboratorio asociado"/>
+      {selectedLab&&<button type="button" className="btn btn-secondary btn-sm"
+       onClick={()=>setSelectedLab("")}>Quitar asignación</button>}
+     </div>
      <div className="fm-provider-actions">
       <button type="button" className="btn btn-secondary" disabled={linking}
        onClick={()=>setMappingSupplier(null)}>Cancelar</button>

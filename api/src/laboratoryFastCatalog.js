@@ -47,24 +47,20 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
  ), lab_aliases AS MATERIALIZED (
-  -- El selector usa N:nombre, pero una relación ERP puede usar C:código AEMPS.
-  -- Unificar ambas identidades sin confundir laboratorios diferentes.
+  -- Convertir la identidad de la opción visible a los nombres y códigos de
+  -- titular/comercializador AEMPS con una única lectura del Nomenclátor.
   SELECT $1::text AS key
-  UNION SELECT 'N:'||${normalizedLabSQL("n.laboratorio_titular")}
-   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
-  UNION SELECT 'N:'||${normalizedLabSQL("n.laboratorio_comercializador")}
-   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
-  UNION SELECT 'N:'||${normalizedLabSQL("n.laboratorio")}
-   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
-  UNION SELECT 'C:'||upper(btrim(n.laboratorio_titular_codigo))
-   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
-    AND nullif(btrim(n.laboratorio_titular_codigo),'') IS NOT NULL
-  UNION SELECT 'C:'||upper(btrim(n.laboratorio_comercializador_codigo))
-   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
-    AND nullif(btrim(n.laboratorio_comercializador_codigo),'') IS NOT NULL
-  UNION SELECT 'C:'||upper(btrim(n.laboratorio_codigo))
-   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
-    AND nullif(btrim(n.laboratorio_codigo),'') IS NOT NULL
+  UNION
+  SELECT DISTINCT alias.key FROM farmetrica.nomenclator_presentaciones n
+  CROSS JOIN LATERAL (VALUES
+   ('N:'||${normalizedLabSQL("n.laboratorio_titular")}),
+   ('N:'||${normalizedLabSQL("n.laboratorio_comercializador")}),
+   ('N:'||${normalizedLabSQL("n.laboratorio")}),
+   ('C:'||upper(btrim(coalesce(n.laboratorio_titular_codigo,'')))),
+   ('C:'||upper(btrim(coalesce(n.laboratorio_comercializador_codigo,'')))),
+   ('C:'||upper(btrim(coalesce(n.laboratorio_codigo,''))))
+  ) AS alias(key)
+  WHERE ${officialMatch("n")} AND alias.key !~ '^[NC]:$'
  ), supplier_links AS (
   SELECT m.farmacia_id,${supplierCode("m.codigo_proveedor")} AS supplier_code,
    m.laboratorio_clave AS laboratory_key
@@ -178,7 +174,8 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
     WHEN ${cn} ~ '^[0-9]{6,7}$' AND left(${cn},6)::int>=400000
      THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
    ${retiredProductSQL("a.nombre")} AS inactive,
-   CASE WHEN 'N:'||${normalizedLabSQL("a.laboratorio")}=$1
+   CASE WHEN n.cn IS NOT NULL AND NOT ${officialMatch("n")} THEN false
+    WHEN 'N:'||${normalizedLabSQL("a.laboratorio")}=$1
       OR ${officialMatch("n")}
       OR EXISTS (SELECT 1 FROM supplier_links map
        WHERE map.farmacia_id=m.pharmacy_id AND map.supplier_code=m.supplier_code

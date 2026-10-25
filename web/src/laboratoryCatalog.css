@@ -62,3 +62,8 @@
  .fm-supplier-identity-filters{align-items:stretch}
  .fm-supplier-mapping-list>.fm-supplier-group{min-width:0}
 }
+
+.fm-auto-labs-full-list{max-height:300px;overflow-y:auto;display:grid;gap:5px;
+ border:1px solid var(--border,#d7dedb);border-radius:8px;padding:10px;margin:8px 0}
+.fm-auto-labs-full-list p{font-size:.85rem;padding:4px 0;
+ border-bottom:1px solid var(--border,#e7eeea)}

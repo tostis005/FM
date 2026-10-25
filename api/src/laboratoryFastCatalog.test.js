@@ -38,6 +38,11 @@ test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=
  assert.match(query.sql,/fm_recepciones_analitica/);
  assert.match(query.sql,/proveedores_maestro/);
  assert.match(query.sql,/proveedores_laboratorios/);
+ assert.match(query.sql,/lab_aliases AS MATERIALIZED/);
+ assert.match(query.sql,/proveedores sp/);
+ assert.match(query.sql,/r\.proveedor_nombre/);
+ assert.match(query.sql,/relevant_receipts rr/);
+ assert.match(query.sql,/map\.laboratory_key IN \(SELECT key FROM lab_aliases\)/);
  assert.match(query.sql,/preparador_exclusiones|unnest\(\$8::text\[\]\)/);
  assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);
  assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"]]);

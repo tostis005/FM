@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Plus,X} from "lucide-react";
+import {Plus,X,WandSparkles} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
 import SupplierLaboratoryMappings from "./SupplierLaboratoryMappings.jsx";
@@ -14,6 +14,7 @@ export default function ProveedoresMaestro({clientSlug}){
  const [laboratories,setLaboratories]=useState([]),[mappingSupplier,setMappingSupplier]=useState(null);
  const [labSearch,setLabSearch]=useState(""),[selectedLab,setSelectedLab]=useState("");
  const [linking,setLinking]=useState(false),[mappingNotice,setMappingNotice]=useState("");
+ const [autoBusy,setAutoBusy]=useState(false),[suggestions,setSuggestions]=useState(null);
  async function api(path,options={}){
   const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
    headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug,...options.headers}});
@@ -67,6 +68,26 @@ export default function ProveedoresMaestro({clientSlug}){
   }catch(e){setError(e.message)}
   finally{setLinking(false)}
  }
+ async function matchLaboratories(apply=false){
+  if(autoBusy)return;
+  setAutoBusy(true);setError("");setMappingNotice("");
+  try{
+   const result=await api("/api/tenant/proveedores/autovincular",{
+    method:"POST",body:JSON.stringify({apply,
+     suppliers:rows.map(r=>({sourceCode:r.sourceCode,name:r.name,
+      cooperative:r.cooperative,ignoreReports:r.ignoreReports,laboratoryKey:r.laboratoryKey}))})
+   });
+   if(!apply){setSuggestions(result.suggestions||[]);
+    setMappingNotice(result.count?"He encontrado "+result.count+
+     " coincidencias exactas para revisar. Confírmalas antes de guardarlas.":
+     "No hay nuevas coincidencias inequívocas. Puedes asignar manualmente los casos dudosos.");
+   }else{
+    setSuggestions(null);
+    await refresh();
+    setMappingNotice("Vinculados "+result.applied+" proveedores con coincidencia exacta. Se han conservado las asignaciones anteriores.");
+   }
+  }catch(e){setError(e.message)}finally{setAutoBusy(false)}
+ }
  const availableLabs=useMemo(()=>laboratories.filter(l=>
   (l.name+" "+l.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es")))
   .sort((a,b)=>Number(Boolean(b.fromVademecum))-Number(Boolean(a.fromVademecum))||
@@ -80,7 +101,13 @@ export default function ProveedoresMaestro({clientSlug}){
  return <div className="fm-management fm-production-panel">
    <ReportPageHeader title="Maestro de proveedores" updatedAt={updatedAt}
     refreshing={loading} onRefresh={()=>void refresh().catch(e=>setError(e.message))}
-    actions={<button className="btn btn-primary" disabled={loading} onClick={()=>setForm({...EMPTY})}><Plus size={16}/> Añadir proveedor</button>}/>
+    actions={<div className="fm-provider-actions">
+     <button className="btn btn-secondary" type="button" disabled={loading||autoBusy}
+      onClick={()=>void matchLaboratories(false)}><WandSparkles size={16}/>
+      {autoBusy?"Buscando coincidencias…":"Vincular laboratorios automáticamente"}
+     </button>
+     <button className="btn btn-primary" disabled={loading} onClick={()=>setForm({...EMPTY})}><Plus size={16}/> Añadir proveedor</button>
+    </div>}/>
    <ReportFilterBar showPeriod={false} showPharmacies={false}>
     <label className="fm-unified-filter"><span>Buscar proveedor o código</span>
      <input type="search" aria-label="Buscar proveedor" value={search}
@@ -88,6 +115,19 @@ export default function ProveedoresMaestro({clientSlug}){
    </ReportFilterBar>
    {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
    {mappingNotice&&<p className="fm-manage-feedback" role="status">{mappingNotice}</p>}
+   {suggestions!==null&&suggestions.length>0&&<section className="card fm-auto-labs" aria-label="Coincidencias automáticas de laboratorios">
+    <strong>Coincidencias de nombres verificadas ({suggestions.length})</strong>
+    <p>Solo nombres normalizados idénticos y sin asignación previa. No se asociarán códigos de proveedor ni nombres dudosos.</p>
+    <div className="fm-auto-labs-list">{suggestions.slice(0,15).map(x=><span key={x.sourceCode}>
+     {x.name} → {labName(x.laboratoryKey)}</span>)}
+     {suggestions.length>15&&<span>Y {suggestions.length-15} coincidencias más…</span>}
+    </div>
+    <div className="fm-provider-actions">
+     <button type="button" className="btn btn-secondary" onClick={()=>setSuggestions(null)}>Cancelar</button>
+     <button type="button" className="btn btn-primary" disabled={autoBusy}
+      onClick={()=>void matchLaboratories(true)}>Aplicar {suggestions.length} vinculaciones seguras</button>
+    </div>
+   </section>}
    <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:id==="total"?rows.length:rows.filter(r=>r[id]===true).length}</strong></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     

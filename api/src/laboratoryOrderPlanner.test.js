@@ -84,6 +84,34 @@ test("matriz directa sobre CN suministrados evita releer catálogo del laborator
  assert.equal(statements.length,3);
  assert.ok(statements.every(q=>!q.includes("preparador_exclusiones")));
 });
+test("consulta masiva agrupa 250 CN con un único SQL de ventas 3m, 12m y período",async()=>{
+ const statements=[];
+ const refs=Array.from({length:250},(_,i)=>({referencia:String(400000+i),
+  cn:String(400000+i),nombre:"Medicamento "+i}));
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;statements.push({sql,values:q.values});
+  if(sql.includes("SELECT intervalo_dias"))return {rows:[{days:7}]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {reference:"400000",pharmacyId:"1",stock:4,unitsPeriod:9,units3:90,
+    units12:360,suggested:20,ordered:0}
+  ]};
+  throw Error("Solo una consulta agregada para todas las referencias");
+ }};
+ const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
+ const res=await readLaboratoryOrderMatrix(pool,ctx,{
+  key:"N:CINFA",pharmacies:[1],type:"medicacion",
+  from:"2026-10-01",to:"2026-10-24",prefetchedRows:refs
+ });
+ assert.equal(statements.filter(q=>q.sql.includes("WITH refs AS MATERIALIZED")).length,1);
+ assert.equal(JSON.parse(statements.at(-1).values[0]).length,250);
+ assert.equal(res.rows.length,250);
+ assert.equal(res.rows[0].byPharmacy["1"].units3,90);
+ assert.equal(res.rows[0].byPharmacy["1"].units12,360);
+ assert.equal(res.rows[0].byPharmacy["1"].unitsPeriod,9);
+ assert.equal(res.rows[0].byPharmacy["1"].suggested,20);
+ assert.equal(res.rows[249].totalSold,0);
+});
 test("API matriz y guardado solo dentro del tenant",async()=>{
  const routes={};
  const app={get(name,...args){routes["GET "+name]=args.at(-1)},
@@ -114,6 +142,16 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:2.5}]})).status,400);
  assert.equal((await call("PUT",path,{...base,tipo:"medicacion"})).status,400);
  assert.equal((await call("GET",path,{laboratorio:"C:LAB",farmacias:"99",tipo:"medicacion"})).status,400);
+ assert.equal((await call("GET","/api/analytics/pedidos/catalogo-unificado",
+  {laboratorio:"N:CINFA",farmacias:"99",tipo:"medicacion"})).status,400);
+ assert.equal((await call("POST","/api/analytics/pedidos/matriz-conjunta",
+  {...base,tipo:"medicacion",referencias:[]})).status,400);
+ assert.equal((await call("POST","/api/analytics/pedidos/matriz-conjunta",
+  {...base,tipo:"medicacion",farmacias:[99],
+   referencias:[{referencia:"400123",cn:"400123"}]})).status,400);
+ assert.equal((await call("POST","/api/analytics/pedidos/matriz-conjunta",
+  {...base,tipo:"medicacion",
+   referencias:[{referencia:"ERP:1:ABC",cn:null}]})).status,400);
  assert.equal((await call("POST","/api/analytics/pedidos/matriz-referencias",
   {...base,tipo:"medicacion",referencias:[]})).status,400);
  assert.equal((await call("POST","/api/analytics/pedidos/matriz-referencias",

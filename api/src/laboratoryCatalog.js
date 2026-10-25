@@ -74,18 +74,13 @@ export async function listLaboratoryOptions(pool,context){
 // mantiene todas las opciones necesarias para configurar correspondencias.
 export async function listOperationalLaboratoryOptions(pool,context,pharmacies){
  if(!Array.isArray(pharmacies)||!pharmacies.length)return [];
- const scoped={...context,pharmacies:(context.pharmacies||[]).filter(
-  p=>pharmacies.some(id=>Number(p.id)===Number(id)))};
- const catalog=await listLaboratoryOptions(pool,scoped);
+ // No cargar primero TODOS los laboratorios AEMPS; el conjunto operacional
+ // ya trae sus propios nombres, tipos y pruebas de actividad.
  const evidence=await readOperationalLaboratoryEvidence(pool,context,pharmacies);
- const byKey=new Map(evidence.map(e=>[e.key,e]));
- const named=new Map(catalog.map(item=>[item.key,item]));
- const choices=evidence.map(e=>{
-  const item=named.get(e.key)||{key:e.key,name:e.name,fromVademecum:false};
-  return {...item,hasMedication:e.hasMedication===true,
-   hasParapharmacy:e.hasParapharmacy===true};
- });
- return choices.sort((a,b)=>a.name.localeCompare(b.name,"es")).slice(0,5000);
+ return evidence.map(item=>({
+  key:item.key,name:item.name,hasMedication:item.hasMedication===true,
+  hasParapharmacy:item.hasParapharmacy===true,fromVademecum:false
+ })).sort((a,b)=>a.name.localeCompare(b.name,"es")).slice(0,5000);
 }
 const matchCommercial=(alias)=>{
  const name=alias+".laboratorio_comercializador";

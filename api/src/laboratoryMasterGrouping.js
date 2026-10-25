@@ -24,11 +24,26 @@ export function groupLaboratoriesByMaster(evidence,master){
   }
   byAlias.set(alias,item);
  }
+ // Algunos nombres de Farmatic añaden al proveedor un segundo nombre del
+ // laboratorio al final: "CINFA LABORATORIOS S.A. CINFA". Es una variante
+ // de la misma relación *explícita* del maestro, no una coincidencia parcial.
+ // Generar solo esas formas legales concretas; nunca usar includes/startsWith.
+ const extended=new Map();
+ const legalSuffixes=[""," S A"," S L"," S A U"," S L U"," SA"," SL"," SAU"," SLU"];
+ for(const [alias,data] of byAlias){
+  if(data.targets.size!==1)continue;
+  const target=[...data.targets][0].slice(2);
+  for(const suffix of legalSuffixes){
+   const variant=alias+suffix+" "+target;
+   if(!extended.has(variant))extended.set(variant,data);
+   else if(extended.get(variant)!==data)extended.set(variant,null);
+  }
+ }
  const resolved=new Map();
  for(const entry of evidence){
   if(!entry?.key||!entry.name)continue;
   const alias=normalizeLabName(entry.name);
-  const data=byAlias.get(alias);
+  const data=byAlias.get(alias)||extended.get(alias);
   // Si solo tenemos registros de este nombre marcados como cooperativa/
   // ignorar en informes, no presentarlo por existir en AEMPS o Farmatic.
   if(data?.blocked&&!data.visible)continue;

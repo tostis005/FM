@@ -21,10 +21,10 @@ test("medicación nunca mezcla cantidades entre farmacias",()=>{
  assert.deepEqual(line.unitsByPharmacy,{"1":10,"2":7});
  line.unitsByPharmacy["1"]=4;
  const data=laboratoryExcelRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
- assert.equal(data[0].length,2+5*2+2);
+ assert.equal(data[0].length,2+5*2+3);
  assert.equal(data[2][6],4);
  assert.equal(data[2][11],7);
- assert.deepEqual(data[2].slice(-2),[14,17]);
+ assert.deepEqual(data[2].slice(-3),[14,17,11]);
 });
 test("borrador conserva ediciones previas al cambiar de página",()=>{
  const edited={"000123":{...defaultLaboratoryLine(row,"parafarmacia",["1","2"]),units:12}};
@@ -47,6 +47,6 @@ test("Medicación exporta unidades por cada farmacia, sin confundirlas con propu
  const line=defaultLaboratoryLine({...row,cn:"400123"},"medicacion",["1","2"]);
  line.unitsByPharmacy={"1":3,"2":6};
  const sheet=laboratoryOrderListRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
- assert.deepEqual(sheet[0],["Código nacional / EAN","Artículo","Pedir Central","Pedir Norte"]);
- assert.deepEqual(sheet[1],["400123","Crema solar",3,6]);
+ assert.deepEqual(sheet[0],["Código nacional / EAN","Artículo","Pedir Central","Pedir Norte","Total pedir"]);
+ assert.deepEqual(sheet[1],["400123","Crema solar",3,6,9]);
 });

@@ -5,6 +5,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
+import {setupLaboratoryRetirements} from "./laboratoryRetirements.js";
+import {setupLaboratoryOrderSettings} from "./laboratoryOrderSettings.js";
 import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
@@ -109,6 +111,8 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
   requireUser,requireSuperadmin,sendLocalInvitation,localInvitationsReady,
 });
 setupMasterSources(app,pool,{requireSuperadmin});
+setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantAdmin});
+setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin});
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
 const {authenticateDemo}=setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
@@ -514,6 +518,8 @@ try {
   await pool.query(sourcesMigration);
   const supplierLaboratoryMigration=await readFile(new URL("./migrations/030_proveedor_laboratorio.sql",import.meta.url),"utf8");
   await pool.query(supplierLaboratoryMigration);
+   for(const file of ["031_preparador_bajas.sql","032_laboratory_order_frequency.sql"])
+    await pool.query(await readFile(new URL("./migrations/"+file,import.meta.url),"utf8"));
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
   await pool.query(leadsMigration);
   const privacyMigration=await readFile(new URL("./migrations/007_solicitudes_privacidad.sql",import.meta.url),"utf8");

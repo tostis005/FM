@@ -44,12 +44,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [reload,setReload]=useState(0),[updatedAt,setUpdatedAt]=useState(null);
  useEffect(()=>{
   const controller=new AbortController();setLabsLoading(true);
-  api(clientSlug,"/api/analytics/pedidos/catalogo-laboratorios",{signal:controller.signal})
-   .then(d=>{if(!controller.signal.aborted)setLabs(d.laboratories||[])})
+  const q=new URLSearchParams({uso:"preparador",farmacias:scope});
+  api(clientSlug,"/api/analytics/pedidos/catalogo-laboratorios?"+q,{signal:controller.signal})
+   .then(d=>{if(!controller.signal.aborted){
+    const available=d.laboratories||[];
+    setLabs(available);
+    setLaboratory(current=>current&& !available.some(l=>l.key===current)?"":current);
+   }})
    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
    .finally(()=>{if(!controller.signal.aborted)setLabsLoading(false)});
   return()=>controller.abort();
- },[clientSlug]);
+ },[clientSlug,scope]);
  useEffect(()=>{
   setDrafts({});setSavedLines([]);setPersisted(false);setDirty(false);setSavedDate(null);
   if(!laboratory||!scope)return;
@@ -225,7 +230,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <section className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Productos con ventas o recepciones y presentaciones del Nomenclátor, excluyendo los dados de baja.</p></div>
+     <p>Solo laboratorios con recepciones registradas o artículos con CN en las farmacias seleccionadas. El Nomenclátor por sí solo no incorpora laboratorios.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>{

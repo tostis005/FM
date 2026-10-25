@@ -29,3 +29,8 @@
 .fm-supplier-mapping-list>div{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid var(--border,#e7eeea);font-size:.86rem}
 .fm-supplier-mapping-list button{border:1px solid var(--border,#d7dedb);background:transparent;border-radius:6px;padding:5px 10px}
 @media(max-width:720px){.fm-laboratory-filters{grid-template-columns:1fr}.fm-supplier-mapping-controls{grid-template-columns:1fr}.fm-laboratory-toolbar{align-items:start;flex-direction:column}}
+
+/* Un solo control permite escribir, filtrar y elegir en el catálogo histórico. */
+.fm-laboratory-filters.fm-laboratory-single-filter{display:grid;grid-template-columns:minmax(0,1fr);max-width:580px;width:100%}
+.fm-laboratory-single-filter .fm-supplier-laboratory-picker{display:grid;gap:6px;min-width:0}
+.fm-laboratory-single-filter .fm-lab-combobox{min-width:0;width:100%}

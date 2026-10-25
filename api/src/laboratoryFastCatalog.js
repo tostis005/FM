@@ -199,6 +199,13 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
        AND ('N:'||${normalizedLabSQL("substring(map.laboratory_key from 3)")}
           IN (SELECT key FROM lab_aliases)
          OR map.laboratory_key IN (SELECT key FROM lab_aliases)))
+      OR EXISTS (SELECT 1 FROM supplier_links usual
+       WHERE usual.farmacia_id=m.pharmacy_id
+        AND usual.supplier_code=${supplierCode("to_jsonb(a)->>'proveedor_habitual_id'")}
+        AND (usual.laboratory_key IN (SELECT key FROM lab_aliases)
+         OR (usual.laboratory_key LIKE 'N:%'
+          AND 'N:'||${normalizedLabSQL("substring(usual.laboratory_key from 3)")}
+           IN (SELECT key FROM lab_aliases))))
       OR EXISTS (SELECT 1 FROM relevant_receipts rr
        WHERE rr.pharmacy_id=m.pharmacy_id AND rr.article_id=m.article_id)
        THEN true ELSE false END AS belongs,

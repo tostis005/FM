@@ -1,3 +1,4 @@
+import {createHash} from "node:crypto";
 import {normalizedLabSQL,laboratoryGroupKey} from "./laboratoryIdentity.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizeLaboratoryKey} from "./laboratoryCatalog.js";
@@ -133,15 +134,12 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
       laboratoryKey:s.inferredLaboratoryKey,source:"catalogo"}));
    const localGroups=buildLocalSupplierGroupSuggestions(local);
    const suggestions=[...official,...localGroups];
-   if(!apply||!suggestions.length)return res.json({
-    suggestions,count:suggestions.length,applied:0
-   });
-   if(apply&&Array.isArray(req.body?.expected)){
-    const ids=suggestions.map(s=>[s.pharmacyId,s.sourceCode,s.laboratoryKey].join("|")).sort();
-    const approved=req.body.expected.map(x=>[x.pharmacyId,x.sourceCode,x.laboratoryKey].join("|")).sort();
-    if(JSON.stringify(ids)!==JSON.stringify(approved))
-     return res.status(409).json({error:"Las coincidencias han cambiado. Revísalas de nuevo antes de aplicar."});
-   }
+   const identities=suggestions.map(s=>[s.pharmacyId,s.sourceCode,s.laboratoryKey].join("|")).sort();
+   const approvalToken=createHash("sha256").update(JSON.stringify(identities)).digest("hex");
+   if(!apply)return res.json({suggestions,count:suggestions.length,applied:0,approvalToken});
+   if(req.body?.approvalToken!==approvalToken)
+    return res.status(409).json({error:"Las coincidencias han cambiado o no fueron aprobadas. Vuelve a detectarlas."});
+   if(!suggestions.length)return res.json({suggestions:[],count:0,applied:0});
 
    // Transacción: el alta de identidades y sus alias debe ser atómica.
    const db=await pool.connect();

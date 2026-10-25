@@ -65,15 +65,17 @@ jobs:
             JOIN ampedia.articulos a ON a.origen_id::text=n.cn
             WHERE n.laboratorio_titular ILIKE '%cinfa%'
              OR n.laboratorio_comercializador ILIKE '%cinfa%'
-            LIMIT 8`,query_timeout:20000});
+            LIMIT 40`,query_timeout:20000});
            console.log("VERIFY_METRIC_CN_SAMPLES",matched.length);
            if(!matched.length)throw Error("No se han localizado CN de Cinfa comprados para la prueba");
            const values=[JSON.stringify(matched.map(r=>({reference:r.cn,cn:r.cn}))),
             ph.map(x=>x.id),"ampedia","2026-10-01","2026-10-25"];
-           const old=await readFile("./src/laboratoryOrderMetrics.sql","utf8");
-           for(const [label,source] of [["ORIGINAL",old],["CANDIDATE",candidate]]){
+           const cols=await p.query("SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='articulos' AND column_name='cn_normalizado'",["ampedia"]);
+           console.log("VERIFY_NATIVE_CN_COLUMN",cols.rows.length);
+           for(const [label,source] of [["CANDIDATE",candidate]]){
             const sql=source.replaceAll("__SCHEMA__",'"ampedia"')
-             .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
+             .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
+             .replaceAll("__CN_NORMALIZED__",cols.rows.length?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
             const start=Date.now();
             try{
              const {rows}=await p.query({text:sql,values,query_timeout:32000});

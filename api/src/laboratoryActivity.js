@@ -27,7 +27,9 @@ export async function readOperationalLaboratoryEvidence(pool,context,pharmacies)
   FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
  ), erp_cn AS MATERIALIZED (
   SELECT p.id AS pharmacy_id,p.code,
-   ${c} AS cn,a.laboratorio AS local_lab
+   ${c} AS cn,a.laboratorio AS local_lab,
+   (${cn("a.codigo_nacional")} IS NOT NULL OR
+    ${cn("to_jsonb(a)->>'cn_normalizado'")} IS NOT NULL) AS declared_cn
   FROM ${schema}.articulos a JOIN selected p
    ON upper(btrim(a.farmacia_codigo))=p.code
   WHERE ${c} IS NOT NULL
@@ -46,8 +48,7 @@ export async function readOperationalLaboratoryEvidence(pool,context,pharmacies)
   WHERE lab.name<>'' AND
    -- El ID de artículo puede ser un código local, NO un CN. Solo es válido
    -- si el Nomenclátor confirma ese ID o Farmatic declara un CN.
-   (n.cn IS NOT NULL OR
-     ${cn("erp.cn")} IS NOT NULL)
+   (n.cn IS NOT NULL OR erp.declared_cn)
   GROUP BY lab.name
  ), received_suppliers AS MATERIALIZED (
   -- Leer cabeceras de albaranes (no todas las líneas históricas).

@@ -69,16 +69,47 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
     SELECT 1 FROM farmetrica.proveedores_laboratorios m
     WHERE m.cliente_slug=$3 AND m.farmacia_id=p.id
      AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("pm.codigo_origen")})
- ), movements AS MATERIALIZED (
-  SELECT DISTINCT p.id AS pharmacy_id,p.code,v.articulo_id::text AS article_id,
-    NULL::text AS supplier_code,true AS from_sales,false AS from_receipts
-  FROM pharmacies p JOIN ${schema}.fm_ventas_analitica v ON v.farmacia_codigo=p.code
-  WHERE v.articulo_id IS NOT NULL
-  UNION ALL
-  SELECT DISTINCT p.id,p.code,r.articulo_id::text,
-    ${supplierCode("r.proveedor_id")},false,true
-  FROM pharmacies p JOIN ${schema}.fm_recepciones_analitica r ON r.farmacia_codigo=p.code
+ ), relevant_articles AS MATERIALIZED (
+  -- Primero identifica artículos del laboratorio. No recorre el histórico entero.
+  SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
+  FROM pharmacies p JOIN ${schema}.articulos a
+   ON upper(btrim(a.farmacia_codigo))=p.code
+  LEFT JOIN farmetrica.nomenclator_presentaciones n
+   ON n.cn=coalesce(${validCN("a.codigo_nacional")},
+    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
+    ${validCN("a.origen_id::text")})
+  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
+   AND ('N:'||${normalizedLabSQL("a.laboratorio")}=$1 OR ${officialMatch("n")})
+ ), relevant_receipts AS MATERIALIZED (
+  -- Un proveedor vinculado recupera su histórico de recepciones aunque el
+  -- laboratorio no estuviera cumplimentado en la ficha de Farmatic.
+  SELECT DISTINCT p.id AS pharmacy_id,p.code,r.articulo_id::text AS article_id
+  FROM pharmacies p JOIN ${schema}.fm_recepciones_analitica r
+   ON r.farmacia_codigo=p.code
+  JOIN supplier_links link ON link.farmacia_id=p.id
+   AND link.supplier_code=${supplierCode("r.proveedor_id")}
   WHERE r.articulo_id IS NOT NULL
+   AND (link.laboratory_key=$1
+    OR (link.laboratory_key LIKE 'N:%'
+     AND 'N:'||${normalizedLabSQL("substring(link.laboratory_key from 3)")}=$1))
+ ), candidates AS MATERIALIZED (
+  SELECT pharmacy_id,code,article_id FROM relevant_articles
+  UNION SELECT pharmacy_id,code,article_id FROM relevant_receipts
+  UNION
+  -- Artículo sin ficha ERP, pero vendido o recibido con CN oficial.
+  SELECT p.id,p.code,n.cn FROM pharmacies p
+  CROSS JOIN farmetrica.nomenclator_presentaciones n
+  WHERE ${officialMatch("n")}
+ ), movements AS MATERIALIZED (
+  SELECT DISTINCT c.pharmacy_id,c.code,c.article_id,
+   NULL::text AS supplier_code,true AS from_sales,false AS from_receipts
+  FROM candidates c JOIN ${schema}.fm_ventas_analitica v
+   ON v.farmacia_codigo=c.code AND v.articulo_id=c.article_id
+  UNION ALL
+  SELECT DISTINCT c.pharmacy_id,c.code,c.article_id,
+   ${supplierCode("r.proveedor_id")},false,true
+  FROM candidates c JOIN ${schema}.fm_recepciones_analitica r
+   ON r.farmacia_codigo=c.code AND r.articulo_id=c.article_id
  ), activity AS MATERIALIZED (
   SELECT m.pharmacy_id,m.code,m.article_id,m.supplier_code,
    m.from_sales,m.from_receipts,

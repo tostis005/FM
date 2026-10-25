@@ -196,7 +196,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <section className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Catálogo AEMPS y artículos identificados por código ERP y recepciones.</p></div>
+     <p>Catálogo AEMPS y referencias de Farmatic relacionadas con el laboratorio.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>{

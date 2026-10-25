@@ -135,6 +135,13 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
    if(!apply||!suggestions.length)return res.json({
     suggestions,count:suggestions.length,applied:0
    });
+   if(apply&&Array.isArray(req.body?.expected)){
+    const ids=suggestions.map(s=>[s.pharmacyId,s.sourceCode,s.laboratoryKey].join("|")).sort();
+    const approved=req.body.expected.map(x=>[x.pharmacyId,x.sourceCode,x.laboratoryKey].join("|")).sort();
+    if(JSON.stringify(ids)!==JSON.stringify(approved))
+     return res.status(409).json({error:"Las coincidencias han cambiado. Revísalas de nuevo antes de aplicar."});
+   }
+
    // Transacción: el alta de identidades y sus alias debe ser atómica.
    const db=await pool.connect();
    try{
@@ -144,6 +151,7 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
       (cliente_slug,laboratorio_clave,nombre)
       SELECT DISTINCT ON (item.key) $1,item.key,item.name
       FROM jsonb_to_recordset($2::jsonb) AS item(key text,name text)
+      WHERE true
       ON CONFLICT(cliente_slug,laboratorio_clave) DO NOTHING`,
       [req.context.client.slug,JSON.stringify(localGroups.map(s=>({
        key:s.laboratoryKey,name:s.customName})))]);

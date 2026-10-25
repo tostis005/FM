@@ -3,6 +3,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
 import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
+import {groupLaboratoriesByMaster,readMasterLaboratoryRules} from "./laboratoryMasterGrouping.js";
 import {readCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -75,13 +76,13 @@ export async function listLaboratoryOptions(pool,context){
 // mantiene todas las opciones necesarias para configurar correspondencias.
 export async function listOperationalLaboratoryOptions(pool,context,pharmacies){
  if(!Array.isArray(pharmacies)||!pharmacies.length)return [];
- // No cargar primero TODOS los laboratorios AEMPS; el conjunto operacional
- // ya trae sus propios nombres, tipos y pruebas de actividad.
- const evidence=await readOperationalLaboratoryEvidence(pool,context,pharmacies);
- return evidence.map(item=>({
-  key:item.key,name:item.name,hasMedication:item.hasMedication===true,
-  hasParapharmacy:item.hasParapharmacy===true,fromVademecum:false
- })).sort((a,b)=>a.name.localeCompare(b.name,"es")).slice(0,5000);
+ const [evidence,master]=await Promise.all([
+  readOperationalLaboratoryEvidence(pool,context,pharmacies),
+  readMasterLaboratoryRules(pool,context.client.slug)
+ ]);
+ // Los nombres de fabricante/comercializador y de proveedores locales
+ // convergen a la clave asignada manualmente en el maestro.
+ return groupLaboratoriesByMaster(evidence,master);
 }
 const matchCommercial=(alias)=>{
  const name=alias+".laboratorio_comercializador";

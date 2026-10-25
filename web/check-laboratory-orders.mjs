@@ -53,7 +53,8 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
- await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("C:LAB");
+ await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Laboratorio Ejemplo");
+ await page.getByRole("option",{name:"Laboratorio Ejemplo"}).click();
  await page.getByRole("tab",{name:/Parafarmacia/}).waitFor();
  try{await page.getByText("Crema solar").first().waitFor({timeout:9000})}
  catch(e){
@@ -86,11 +87,13 @@ try{
  const file2=page.waitForEvent("download");
  await page.getByRole("button",{name:"Generar Excel"}).click();
  assert.match((await file2).suggestedFilename(),/medicacion\.xlsx$/);
- await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("N:CINFA");
+ await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Cinfa");
+ await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
-  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).selectOption("N:ERROR");
+  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
+ await page.getByRole("option",{name:"Laboratorio con ventas inaccesibles"}).click();
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
  await page.getByText(/No se pudieron calcular ventas\/stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,

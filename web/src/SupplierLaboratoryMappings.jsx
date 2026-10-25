@@ -108,13 +108,20 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  }
  const filteredGroups=grouped.slice(0,visibleGroups);
  return <section className="card fm-supplier-mapping" aria-label="Correspondencias de proveedores y laboratorios">
-  <div><h2>Correspondencias ERP ↔ laboratorio</h2>
-   <p>Maestro unificado: un laboratorio común con los distintos nombres y códigos que utiliza cada farmacia. Cada correspondencia se guarda por farmacia para evitar mezclar códigos iguales de proveedores diferentes. Las cooperativas no se asignan automáticamente.</p>
+  <div><h2>Identidades unificadas de proveedores y laboratorios</h2>
+   <p>El Nomenclátor aporta laboratorios oficiales y Farmatic los proveedores originales de cada farmacia. También puedes agrupar proveedores sin laboratorio AEMPS bajo una identidad propia. Los códigos originales se conservan; las cooperativas no se vinculan automáticamente.</p>
+   <div className="fm-supplier-identity-stats" aria-label="Resumen de unificación">
+    <span><strong>{localSuppliers.length}</strong> proveedores ERP</span>
+    <span><strong>{linked}</strong> relacionados o identificados</span>
+    <span><strong>{localSuppliers.length-linked}</strong> pendientes</span>
+    <span><strong>{laboratories.length}</strong> identidades disponibles</span>
+   </div>
    <button type="button" className="btn btn-secondary" disabled={loading||busy}
     onClick={()=>autoLink(false)}>Detectar coincidencias en todas las farmacias</button>
    {autoPreview!==null&&<div className="fm-auto-labs">
     <p>{autoPreview.length} coincidencias seguras propuestas.</p>
-    {autoPreview.slice(0,15).map((x,i)=><p key={i}>{pharmacyName(x.pharmacyId)} · {x.name} ({x.sourceCode}) → {labName(x.laboratoryKey)}</p>)}
+    {autoPreview.slice(0,30).map((x,i)=><p key={i}>{pharmacyName(x.pharmacyId)} · {x.name} ({x.sourceCode}) → {x.source==="farmatic"?x.customName:labName(x.laboratoryKey)} · {x.source==="farmatic"?"Identidad propia nueva":"Laboratorio reconocido"}</p>)}
+    {autoPreview.length>30&&<p>Y {autoPreview.length-30} más. No se aplicará ninguna relación hasta confirmarlo.</p>}
     {!!autoPreview.length&&<button type="button" className="btn btn-primary" disabled={busy}
       onClick={()=>autoLink(true)}>Aplicar {autoPreview.length} relaciones</button>}
     <button type="button" className="btn btn-secondary" onClick={()=>setAutoPreview(null)}>Cancelar</button>
@@ -122,10 +129,19 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
   {loading&&<p>Cargando proveedores y laboratorios…</p>}
   {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}
   {notice&&<p role="status" className="fm-op-message">{notice}</p>}
+  <form className="fm-supplier-create-identity" onSubmit={createCustom}>
+   <label>Crear identidad para proveedores sin laboratorio en AEMPS
+    <input value={customName} maxLength={200} onChange={e=>setCustomName(e.target.value)}
+     placeholder="Nombre del laboratorio o grupo de proveedores…" />
+   </label>
+   <button type="submit" className="btn btn-secondary" disabled={busy||loading||customName.trim().length<3}>Crear identidad</button>
+  </form>
   <div className="fm-supplier-mapping-controls">
-   <label>Farmacia<select value={pharmacyId} onChange={e=>{setPharmacyId(e.target.value);setSourceCode("")}}>
+   <label>Farmacia<select value={pharmacyId} onChange={e=>{setPharmacyId(e.target.value);setSourceCode("");setLaboratoryKey("")}}>
     {pharmacies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-   <label>Proveedor ERP<select value={sourceCode} onChange={e=>setSourceCode(e.target.value)}>
+   <label>Proveedor ERP<select value={sourceCode} onChange={e=>{const next=e.target.value;setSourceCode(next);
+     const current=supplierChoices.find(s=>s.sourceCode===next);
+     setLaboratoryKey(current?.laboratoryKey||current?.inferredLaboratoryKey||"");}}>
     <option value="">Selecciona proveedor de esta farmacia…</option>
     {supplierChoices.map(s=><option key={(s.pharmacyId||"")+":"+s.sourceCode} value={s.sourceCode}>{s.name||s.sourceCode} · {s.sourceCode}</option>)}</select></label>
    <div className="fm-supplier-laboratory-picker">
@@ -136,22 +152,36 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    <button className="btn btn-primary" type="button" disabled={busy||loading||!pharmacyId||!sourceCode||!laboratoryKey}
     onClick={()=>saveMapping()}>Guardar relación</button>
   </div>
-  <h3>Proveedores de todas las farmacias agrupados por laboratorio</h3>
+  <h3>Proveedores de todas las farmacias agrupados por identidad</h3>
+  <div className="fm-supplier-identity-filters">
+   <label>Buscar por proveedor, farmacia o laboratorio
+    <input type="search" value={search} onChange={e=>{setSearch(e.target.value);setVisibleGroups(30)}}
+     placeholder="Nombre, código, farmacia o laboratorio…" /></label>
+   <label>Estado
+    <select value={view} onChange={e=>{setView(e.target.value);setVisibleGroups(30)}}>
+     <option value="all">Todos</option><option value="linked">Relacionados</option>
+     <option value="unlinked">Pendientes</option>
+    </select></label>
+   <span>{grouped.length} grupos · {grouped.reduce((n,[,entries])=>n+entries.length,0)} proveedores</span>
+  </div>
   <div className="fm-supplier-mapping-list" aria-label="Maestro unificado por laboratorio">
-   {grouped.map(([key,entries])=><div key={key} style={{display:"block"}}>
+   {filteredGroups.map(([key,entries])=><div key={key} className="fm-supplier-group">
     <strong>{key==="SIN VINCULAR"?"Sin unificar":labName(key)}</strong>
     {entries.map((s,i)=><div key={i}>
-     <span>{pharmacyName(s.pharmacyId)} · {s.name||s.sourceCode} · código {s.sourceCode}
+     <span><strong>{pharmacyName(s.pharmacyId)}</strong> · {s.name||s.sourceCode} · código {s.sourceCode}
       {!s.laboratoryKey&&s.inferredLaboratoryKey&&
-       <small> · Coincidencia exacta con el Nomenclátor (sin guardar)</small>}</span>
+       <small> · Coincidencia por nombre (aún sin guardar)</small>}
+      {s.localLaboratoryKey&&<small> · Enlace específico de farmacia</small>}</span>
      <button type="button" onClick={()=>{
       setPharmacyId(String(s.pharmacyId));setSourceCode(s.sourceCode);
       setLaboratoryKey(s.laboratoryKey||s.inferredLaboratoryKey||"");
      }}>Vincular / editar</button>
     </div>)}
    </div>)}
-   {!grouped.length&&!loading&&<p>No hay proveedores de las farmacias en el maestro de Farmatic.</p>}
+   {!grouped.length&&!loading&&<p>No hay proveedores para estos filtros.</p>}
   </div>
+  {grouped.length>visibleGroups&&<button type="button" className="btn btn-secondary"
+   onClick={()=>setVisibleGroups(n=>n+30)}>Ver más grupos ({grouped.length-visibleGroups} restantes)</button>
   <h3>Excepciones guardadas por farmacia</h3>
   <div className="fm-supplier-mapping-list" aria-label="Relaciones configuradas">
    {mappings.map(m=><div key={m.pharmacyId+"|"+m.sourceCode}>

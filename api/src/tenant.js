@@ -353,7 +353,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
            SELECT 1 FROM farmetrica.nomenclator_presentaciones n
            WHERE 'N:'||${normalizedLabSQL("n.laboratorio_titular")}=$1
              OR 'N:'||${normalizedLabSQL("n.laboratorio_comercializador")}=$1
-          ) AS found`,[key]);
+           UNION ALL
+           SELECT 1 FROM farmetrica.laboratorios_personalizados custom
+           WHERE custom.cliente_slug=$2 AND custom.laboratorio_clave=$1
+          ) AS found`,[key,req.context.client.slug]);
         if(!rows[0]?.found)return res.status(400).json({error:"Este laboratorio no existe en las fuentes importadas"});
       }
       const {rows}=await pool.query(`

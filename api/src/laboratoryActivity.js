@@ -34,17 +34,17 @@ export async function readOperationalLaboratoryEvidence(pool,context,pharmacies)
    ON upper(btrim(a.farmacia_codigo))=p.code
   WHERE ${c} IS NOT NULL
  ), erp_evidence AS (
-  SELECT 'N:'||lab.name AS key,
+  SELECT 'N:'||lab.name AS key,min(lab.display_name) AS name,
    bool_or(n.cn IS NOT NULL OR left(erp.cn,6)::integer>=400000) AS medication,
    bool_or(n.cn IS NULL AND left(erp.cn,6)::integer<400000) AS parapharmacy
   FROM erp_cn erp
   LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=erp.cn
   CROSS JOIN LATERAL (VALUES
-   (${normalizedLabSQL("erp.local_lab")}),
-   (${normalizedLabSQL("n.laboratorio_titular")}),
-   (${normalizedLabSQL("n.laboratorio_comercializador")}),
-   (${normalizedLabSQL("n.laboratorio")})
-  ) AS lab(name)
+   (${normalizedLabSQL("erp.local_lab")},erp.local_lab),
+   (${normalizedLabSQL("n.laboratorio_titular")},n.laboratorio_titular),
+   (${normalizedLabSQL("n.laboratorio_comercializador")},n.laboratorio_comercializador),
+   (${normalizedLabSQL("n.laboratorio")},n.laboratorio)
+  ) AS lab(name,display_name)
   WHERE lab.name<>'' AND
    -- El ID de artículo puede ser un código local, NO un CN. Solo es válido
    -- si el Nomenclátor confirma ese ID o Farmatic declara un CN.
@@ -83,29 +83,30 @@ export async function readOperationalLaboratoryEvidence(pool,context,pharmacies)
     AND coalesce(pm.cooperativa,false) IS NOT TRUE
  ), receipt_evidence AS (
   SELECT 'N:'||${normalizedLabSQL("substring(lab_key from 3)")} AS key,
-   false AS medication,true AS parapharmacy
+   substring(lab_key from 3) AS name,false AS medication,true AS parapharmacy
   FROM receipt_mappings WHERE lab_key LIKE 'N:%'
   UNION
   SELECT 'N:'||${normalizedLabSQL("n.laboratorio_titular")} AS key,
-   true,true
+   n.laboratorio_titular AS name,true,true
   FROM receipt_mappings r
   JOIN farmetrica.nomenclator_presentaciones n
    ON r.lab_key='C:'||upper(btrim(coalesce(n.laboratorio_titular_codigo,'')))
   WHERE r.lab_key LIKE 'C:%'
   UNION
   SELECT 'N:'||${normalizedLabSQL("n.laboratorio_comercializador")},
-   true,true
+   n.laboratorio_comercializador,true,true
   FROM receipt_mappings r
   JOIN farmetrica.nomenclator_presentaciones n
    ON r.lab_key='C:'||upper(btrim(coalesce(n.laboratorio_comercializador_codigo,'')))
   WHERE r.lab_key LIKE 'C:%'
  ), all_evidence AS (
-  SELECT key,medication,parapharmacy FROM erp_evidence
-  UNION ALL SELECT key,medication,parapharmacy FROM receipt_evidence
+  SELECT key,name,medication,parapharmacy FROM erp_evidence
+  UNION ALL SELECT key,name,medication,parapharmacy FROM receipt_evidence
  )
- SELECT key,bool_or(medication) AS "hasMedication",
+ SELECT key,min(name) AS name,bool_or(medication) AS "hasMedication",
   bool_or(parapharmacy) AS "hasParapharmacy"
  FROM all_evidence WHERE key IS NOT NULL AND key<>'N:'
+  AND name ~ '[[:alpha:]]{2}' AND name !~* '^[[:space:]]*[a-z]{0,4}[[:space:]-]*[0-9]{2,}'
  GROUP BY key`;
  const {rows}=await pool.query({text:sql,
   values:[context.client.slug,pharmacies],query_timeout:25000});

@@ -452,7 +452,8 @@ export default function PurchasePlanner(props){
   try{
    if(new URLSearchParams(window.location.search).get("vista")==="anterior")return "legacy";
    if(sessionStorage.getItem(STAGING_PREFIX+props.clientSlug))return "legacy";
-   return sessionStorage.getItem("fm_preparador_vista:"+props.clientSlug)==="legacy"?"legacy":"laboratory";
+   // Una preferencia antigua guardada no debe reabrir el preparador anterior.
+   return "laboratory";
   }catch{return "laboratory"}
  });
  function changeView(next){

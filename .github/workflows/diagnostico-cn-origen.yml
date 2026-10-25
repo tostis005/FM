@@ -1,0 +1,35 @@
+name: Diagnóstico CN de origen Cinfa
+on:
+  push:
+    branches: ["fix/preparador-cinfa-catalogo-proveedores-carga-20261025"]
+    paths: [".github/workflows/diagnostico-cn-origen.yml"]
+permissions: {contents: read}
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/diag
+          chmod 600 ~/.ssh/diag
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Consultar cruces agregados read-only
+        run: |
+          set -euo pipefail
+          cat <<'SQL' | ssh -i ~/.ssh/diag -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='25000';
+          SELECT 'ARTICULOS_COLUMNS',string_agg(column_name,',') FROM information_schema.columns WHERE table_schema='ampedia' AND table_name='articulos';
+          SELECT 'ORIGIN_LEN',char_length(btrim(origen_id::text)),count(*) FROM ampedia.articulos GROUP BY 1 ORDER BY 2 DESC LIMIT 10;
+          SELECT 'CINFA_ORIGIN_ID_MATCH',count(*),count(DISTINCT n.cn) FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.origen_id::text)=n.cn WHERE n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%';
+          SELECT 'CINFA_ORIGIN_WITH_STOCK',count(*) FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.origen_id::text)=n.cn WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%') AND coalesce(a.stock_actual,0)<>0;
+          SELECT 'CINFA_ORIGIN_SALES_365',count(*) FROM ampedia.fm_ventas_analitica v JOIN ampedia.articulos a ON a.origen_id::text=v.articulo_id::text AND upper(btrim(a.farmacia_codigo))=upper(btrim(v.farmacia_codigo)) JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text) WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%') AND v.fecha >= current_date-interval '365 days';
+          COMMIT;
+          SQL

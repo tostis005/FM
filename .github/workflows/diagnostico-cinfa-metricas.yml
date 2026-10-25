@@ -56,38 +56,31 @@ jobs:
            WHERE cliente_slug='ampedia' AND nombre ILIKE '%cinfa%';
           SELECT 'ERP_ARTICLES_TOTAL',count(*),
             count(*) FILTER (WHERE nullif(btrim(codigo_nacional),'') IS NOT NULL),
-            count(*) FILTER (WHERE btrim(coalesce(codigo_nacional,'')) ~ '^[0-9]{6,7}
-),
-            count(*) FILTER (WHERE btrim(coalesce(codigo_nacional,'')) ~ '^[0-9]{13}
-)
+            count(*) FILTER (WHERE char_length(btrim(codigo_nacional)) BETWEEN 6 AND 7),
+            count(*) FILTER (WHERE char_length(btrim(codigo_nacional))=13)
            FROM ampedia.articulos;
           SELECT 'ERP_6DIGIT_TO_AEMPS',count(*)
            FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n
             ON left(btrim(a.codigo_nacional),6)=left(n.cn,6)
-           WHERE btrim(a.codigo_nacional) ~ '^[0-9]{6,7}
-;
+           WHERE char_length(btrim(a.codigo_nacional)) BETWEEN 6 AND 7;
           SELECT 'CINFA_RECEIPTS_GLOBAL_SUPPLIER',count(DISTINCT r.articulo_id),count(*)
            FROM ampedia.fm_recepciones_analitica r
            JOIN farmetrica.proveedores_maestro pm
             ON pm.cliente_slug='ampedia' AND pm.laboratorio_clave='N:CINFA'
-            AND (CASE WHEN btrim(pm.codigo_origen) ~ '^[0-9]+
-
+            AND (CASE WHEN translate(btrim(pm.codigo_origen),'0123456789','')=''
               THEN coalesce(nullif(ltrim(btrim(pm.codigo_origen),'0'),''),'0')
               ELSE upper(btrim(pm.codigo_origen)) END)
-            =(CASE WHEN btrim(r.proveedor_id) ~ '^[0-9]+
-
+            =(CASE WHEN translate(btrim(r.proveedor_id),'0123456789','')=''
               THEN coalesce(nullif(ltrim(btrim(r.proveedor_id),'0'),''),'0')
               ELSE upper(btrim(r.proveedor_id)) END);
           SELECT 'CINFA_RECEIPTS_TO_ERP',count(DISTINCT a.codigo_nacional),count(*)
            FROM ampedia.fm_recepciones_analitica r
            JOIN farmetrica.proveedores_maestro pm
             ON pm.cliente_slug='ampedia' AND pm.laboratorio_clave='N:CINFA'
-            AND (CASE WHEN btrim(pm.codigo_origen) ~ '^[0-9]+
-
+            AND (CASE WHEN translate(btrim(pm.codigo_origen),'0123456789','')=''
               THEN coalesce(nullif(ltrim(btrim(pm.codigo_origen),'0'),''),'0')
               ELSE upper(btrim(pm.codigo_origen)) END)
-            =(CASE WHEN btrim(r.proveedor_id) ~ '^[0-9]+
-
+            =(CASE WHEN translate(btrim(r.proveedor_id),'0123456789','')=''
               THEN coalesce(nullif(ltrim(btrim(r.proveedor_id),'0'),''),'0')
               ELSE upper(btrim(r.proveedor_id)) END)
            JOIN ampedia.articulos a ON a.origen_id::text=r.articulo_id::text

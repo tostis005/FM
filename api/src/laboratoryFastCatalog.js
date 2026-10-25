@@ -119,7 +119,17 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
     ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
     ${validCN("a.origen_id::text")})
   WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
-   AND ('N:'||${normalizedLabSQL("a.laboratorio")}=$1 OR ${officialMatch("n")})
+   AND ('N:'||${normalizedLabSQL("a.laboratorio")}=$1 OR ${officialMatch("n")}
+    -- Algunos Farmatic no rellenan laboratorio ni CN en la ficha.
+    -- El proveedor habitual solo aporta el candidato si también consta
+    -- una venta/recepción real; su nombre procede del maestro local.
+    OR EXISTS (SELECT 1 FROM supplier_links link
+       WHERE link.farmacia_id=p.id
+        AND link.supplier_code=${supplierCode("to_jsonb(a)->>'proveedor_habitual_id'")}
+        AND (link.laboratory_key IN (SELECT key FROM lab_aliases)
+         OR (link.laboratory_key LIKE 'N:%'
+          AND 'N:'||${normalizedLabSQL("substring(link.laboratory_key from 3)")}
+           IN (SELECT key FROM lab_aliases)))))
  ), relevant_receipts AS MATERIALIZED (
   -- Un proveedor vinculado recupera su histórico de recepciones aunque el
   -- laboratorio no estuviera cumplimentado en la ficha de Farmatic.
@@ -139,8 +149,13 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   SELECT DISTINCT p.id,p.code,r.articulo_id::text
   FROM pharmacies p JOIN ${schema}.fm_recepciones_analitica r
    ON r.farmacia_codigo=p.code
+  LEFT JOIN ${schema}.proveedores sp
+   ON upper(btrim(sp.farmacia_codigo))=p.code
+   AND ${supplierCode("sp.origen_id")}=${supplierCode("r.proveedor_id")}
   WHERE r.articulo_id IS NOT NULL
-   AND 'N:'||${normalizedLabSQL("r.proveedor_nombre")}
+   -- En la vista documental 018 proveedor_nombre es NULL: obtener el nombre
+   -- local de Farmatic en lugar de confiar en ese campo inexistente.
+   AND 'N:'||${normalizedLabSQL("coalesce(nullif(btrim(r.proveedor_nombre),''),sp.nombre)")}
        IN (SELECT key FROM lab_aliases WHERE key LIKE 'N:%')
    AND NOT EXISTS (SELECT 1 FROM supplier_links link
     WHERE link.farmacia_id=p.id
@@ -239,11 +254,51 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   query_timeout:30000});
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }
+/** Desglose solo de lectura para distinguir un catálogo vacío de un enlace ERP roto. */
+export async function laboratoryLinkEvidence(pool,context,{key,pharmacies}){
+ if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
+ const schema='"'+context.client.schema+'"';
+ const sql=`
+ WITH pharmacies AS (
+  SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
+  FROM farmetrica.farmacias f WHERE f.cliente_slug=$2 AND f.id=ANY($3::int[])
+ )
+ SELECT
+  (SELECT count(*)::int FROM farmetrica.nomenclator_presentaciones n
+   WHERE ${officialMatch("n")}) AS "official",
+  (SELECT count(*)::int FROM ${schema}.articulos a JOIN pharmacies p
+   ON upper(btrim(a.farmacia_codigo))=p.code
+   WHERE 'N:'||${normalizedLabSQL("a.laboratorio")}=$1) AS "erpArticles",
+  (SELECT count(*)::int FROM ${schema}.proveedores sp JOIN pharmacies p
+   ON upper(btrim(sp.farmacia_codigo))=p.code
+   WHERE 'N:'||${normalizedLabSQL("sp.nombre")}=$1) AS "erpSuppliers",
+  (SELECT count(DISTINCT r.origen_id)::int FROM ${schema}.fm_recepciones_analitica r
+   JOIN pharmacies p ON r.farmacia_codigo=p.code
+   JOIN ${schema}.proveedores sp
+    ON upper(btrim(sp.farmacia_codigo))=p.code
+     AND ${supplierCode("sp.origen_id")}=${supplierCode("r.proveedor_id")}
+   WHERE 'N:'||${normalizedLabSQL("sp.nombre")}=$1) AS "purchasesWithNamedSupplier",
+  (SELECT count(DISTINCT r.origen_id)::int FROM ${schema}.fm_recepciones_analitica r
+   JOIN pharmacies p ON r.farmacia_codigo=p.code
+   JOIN farmetrica.proveedores_laboratorios m
+    ON m.cliente_slug=$2 AND m.farmacia_id=p.id
+     AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("r.proveedor_id")}
+   WHERE m.laboratorio_clave=$1) AS "purchasesWithManualLink"
+ `;
+ const {rows}=await pool.query({text:sql,values:[key,context.client.slug,pharmacies],query_timeout:15000});
+ return rows[0]||null;
+}
 export async function diagnosticLaboratorySources(pool,context,opts){
  const results=await Promise.allSettled(["medicacion","parafarmacia"].map(type=>
   readDirectLaboratoryCatalog(pool,context,{...opts,type,page:1,size:1,search:""})));
- return {sources:results.map((r,i)=>({type:i===0?"medicacion":"parafarmacia",
-  status:r.status==="fulfilled"?"ok":"error",
-  total:r.status==="fulfilled"?r.value.total:null})),
+ let evidence=null,evidenceError=null;
+ try{evidence=await laboratoryLinkEvidence(pool,context,opts)}
+ catch(e){evidenceError=e.code||"Consulta de origen no disponible";}
+ return {sources:results.map((r,i)=>({
+   type:i===0?"medicacion":"parafarmacia",
+   status:r.status==="fulfilled"?"ok":"error",
+   total:r.status==="fulfilled"?r.value.total:null,
+   errorCode:r.status==="rejected"?r.reason?.code||"ERROR":null
+  })),evidence,evidenceError,
   pharmacyCount:opts.pharmacies.length};
 }

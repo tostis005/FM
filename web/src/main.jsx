@@ -14,6 +14,7 @@ const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
 const Genericos=React.lazy(()=>import("./Genericos.jsx"));
 const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
 const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
+const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.jsx"));
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
 import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
@@ -1163,6 +1164,7 @@ function App(){
        onSaved={()=>loadContext(tenantContext.client.slug)}/>
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
       <ConfiguracionDiasStock clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
+       <ConfiguracionPreparador clientSlug={tenantContext.client.slug}/>
      </div>}
    </React.Suspense>
    </main>

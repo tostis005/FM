@@ -8,7 +8,7 @@ import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
-import {collectLaboratoryCatalog,LAB_CATALOG_BATCH,LAB_METRICS_BATCH} from "./laboratoryLoadAll.js";
+import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -92,6 +92,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     catalog=await collectLaboratoryCatalog((number,size)=>{
      const query=new URLSearchParams(base);
      query.set("pagina",String(number));query.set("tamano",String(size));
+     query.set("ligero","1");
      return api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+query,{signal:controller.signal});
     },{
      batchSize:LAB_CATALOG_BATCH,signal:controller.signal,
@@ -120,41 +121,28 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     return;
    }
    setLoadStage("metrics");
-   // Se reúnen TODAS las filas y se calculan métricas por grupos de 40.
-   // Los resultados parciales no sustituyen las cantidades ya editadas.
-   let rows=[...catalog.rows],done=0,frequencyDays=7;
-   for(let number=1;number<=Math.ceil(catalog.total/LAB_METRICS_BATCH);number++){
+   // Métricas directas: el catálogo ya está cargado. La API recibe
+   // los CN de cada lote y SOLO consulta stock y ventas, dos lotes a la vez.
+   try{
+    await collectLaboratoryMetrics(catalog.rows,items=>api(
+     clientSlug,"/api/analytics/pedidos/matriz-referencias",{
+      method:"POST",signal:controller.signal,
+      body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
+       desde:range.from,hasta:range.to,
+       referencias:items.map(item=>({
+        referencia:item.referencia,cn:item.cn||null,nombre:item.nombre
+       }))}
+     }),{signal:controller.signal,onBatch:({rows,loaded,frequencyDays})=>{
+      if(!controller.signal.aborted)setData({rows,total:catalog.total,loaded:catalog.total,
+       metricsLoaded:loaded,frequencyDays,metricsUnavailable:loaded<catalog.total});
+     }});
+   }catch(e){
     if(controller.signal.aborted)return;
-    const query=new URLSearchParams(base);
-    query.set("pagina",String(number));
-    query.set("tamano",String(LAB_METRICS_BATCH));
-    query.set("desde",range.from);query.set("hasta",range.to);
-    try{
-     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
-      {signal:controller.signal});
-     if(controller.signal.aborted)return;
-     if(result.metricsUnavailable||!Array.isArray(result.rows))
-      throw Error(result.warning||"No están disponibles las ventas o el stock");
-     const start=(number-1)*LAB_METRICS_BATCH;
-     const end=Math.min(start+LAB_METRICS_BATCH,rows.length);
-     const byReference=new Map(result.rows.map(r=>[r.referencia,r]));
-     for(let i=start;i<end;i++){
-      const details=byReference.get(rows[i].referencia);
-      if(!details)throw Error("Las referencias cambiaron durante el cálculo de métricas");
-      rows[i]={...rows[i],...details,metricsReady:true};
-     }
-     done=end;frequencyDays=result.frequencyDays??frequencyDays;
-     setData({rows:[...rows],total:catalog.total,loaded:catalog.total,
-      metricsLoaded:done,frequencyDays,metricsUnavailable:done<catalog.total});
-    }catch(e){
-     if(controller.signal.aborted)return;
-     setData({rows:[...rows],total:catalog.total,loaded:catalog.total,metricsLoaded:done,
-      frequencyDays,metricsUnavailable:true,
-      warning:"Se muestran todas las referencias, pero no se pudieron completar las ventas y el stock ("+
-       e.message+"). Actualiza para volver a calcularlos."});
-     setLoading(false);setLoadStage("idle");
-     return;
-    }
+    setData(current=>({...current,metricsUnavailable:true,
+     warning:"Se muestran todas las referencias, pero no se pudieron completar las ventas y el stock ("+
+      e.message+"). Actualiza para volver a calcularlos."}));
+    setLoading(false);setLoadStage("idle");
+    return;
    }
    if(!controller.signal.aborted){setLoading(false);setLoadStage("idle");setUpdatedAt(new Date())}
   },250);

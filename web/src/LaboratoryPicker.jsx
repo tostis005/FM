@@ -1,10 +1,14 @@
-import React,{useMemo,useState,useEffect,useRef} from "react";
+import React,{useMemo,useState,useEffect,useRef,useId} from "react";
+import "./LaboratoryPicker.css";
 
 // Una sola entrada accesible para buscar y seleccionar laboratorios.
-export default function LaboratoryPicker({laboratories=[],selected="",onSelect,loading=false}){
+export default function LaboratoryPicker({laboratories=[],selected="",onSelect,loading=false,ariaLabel="Seleccionar laboratorio"}){
  const [query,setQuery]=useState("");
  const [open,setOpen]=useState(false),[active,setActive]=useState(0);
  const root=useRef(null),search=useRef(null);
+ const reactId=useId().replaceAll(":","");
+ const listId="fm-laboratorios-opciones-"+reactId;
+ const optionId=i=>"fm-lab-opt-"+reactId+"-"+i;
  const chosen=laboratories.find(item=>item.key===selected);
  useEffect(()=>{if(!open)setQuery(chosen?.name||"")},[selected,chosen?.name,open]);
  const options=useMemo(()=>{
@@ -24,18 +28,18 @@ export default function LaboratoryPicker({laboratories=[],selected="",onSelect,l
  return <div className="fm-lab-combobox" ref={root}
   onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget)){setOpen(false);
     setQuery(chosen?.name||"")}}}>
-  <input ref={search} type="search" role="combobox" aria-label="Seleccionar laboratorio"
-   aria-autocomplete="list" aria-controls="fm-laboratorios-opciones" aria-expanded={open}
-   aria-activedescendant={open&&options[active]?"fm-lab-opt-"+active:undefined}
+  <input ref={search} type="search" role="combobox" aria-label={ariaLabel}
+   aria-autocomplete="list" aria-controls={listId} aria-expanded={open}
+   aria-activedescendant={open&&options[active]?optionId(active):undefined}
    autoComplete="off" placeholder={loading?"Cargando laboratorios…":"Escribe el laboratorio y selecciónalo…"}
    value={query} onFocus={()=>{setOpen(true);setActive(0)}}
    onChange={e=>{setQuery(e.target.value);setOpen(true);setActive(0)}}
    onKeyDown={handleKey}/>
-  {open&&<div className="fm-lab-dropdown" id="fm-laboratorios-opciones" role="listbox"
+  {open&&<div className="fm-lab-dropdown" id={listId} role="listbox"
    aria-label="Laboratorios encontrados">
    {loading?<div className="fm-lab-dropdown-status" role="status">Cargando laboratorios…</div>:
     options.length===0?<div className="fm-lab-dropdown-status">No se han encontrado laboratorios.</div>:
-    options.map((item,i)=><button type="button" role="option" id={"fm-lab-opt-"+i}
+    options.map((item,i)=><button type="button" role="option" id={optionId(i)}
      aria-selected={i===active} key={item.key}
      className={"fm-lab-option"+(i===active?" active":"")}
      onMouseDown={e=>e.preventDefault()} onMouseEnter={()=>setActive(i)}

@@ -2,6 +2,7 @@ import {readFile} from "node:fs/promises";
 import {readLaboratoryArticles,normalizeLaboratoryKey,selectedPharmacies} from "./laboratoryCatalog.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
+import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -19,22 +20,12 @@ export function validPlannerDate(date){
 export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).join(",");
 
 export async function readLaboratoryOrderMatrix(pool,ctx,options){
- let base,warning=null;
- // El catálogo directo aplica primero la fuente importada y añade referencias
- // del proveedor en Farmatic que aún no estén en el vademécum.
- try{base=await readDirectLaboratoryCatalog(pool,ctx,options)}
- catch(err){
-  base=await readLaboratoryArticles(pool,ctx,options);
-  warning="Se usa temporalmente el catálogo histórico: "+(err.code||"consulta");
- }
- // Compatibilidad con correspondencias C: de versiones anteriores.
- if(!base.total){
-  try{
-   const legacy=await readLaboratoryArticles(pool,ctx,options);
-   if(legacy.total>0){base=legacy;warning="Referencias recuperadas mediante correspondencias antiguas."}
-  }catch(e){if(!warning)warning="No se pudo consultar el catálogo histórico: "+(e.code||"consulta")}
- }
- const fallback={...base,from:options.from,to:options.to,
+ const [base,frequencyDays]=await Promise.all([
+  readDirectLaboratoryCatalog(pool,ctx,options),
+  readLaboratoryOrderFrequency(pool,ctx.client.slug,options.key)
+ ]);
+ const warning=null;
+ const fallback={...base,from:options.from,to:options.to,frequencyDays,
   rows:base.rows.map(r=>({...r,byPharmacy:{},totalSold:null,totalSuggested:null})),metricsUnavailable:true};
  const selected=base.rows.map(row=>({reference:row.referencia,cn:row.cn}));
  if(!selected.length)return {...fallback,warning};
@@ -58,7 +49,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  let rows;
  try{
   const result=await pool.query({text:sql,
-   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
+   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to,frequencyDays],
    query_timeout:30000});
   rows=result.rows;
  }catch(e){
@@ -74,7 +65,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    ordered:Number(row.ordered||0),suggested:row.suggested===null?null:Number(row.suggested)
   };
  }
- return {...base,from:options.from,to:options.to,warning,metricsUnavailable:false,
+ return {...base,from:options.from,to:options.to,frequencyDays,warning,metricsUnavailable:false,
   rows:base.rows.map(row=>{
    const byPharmacy=byRef.get(row.referencia)||{};
    return {...row,byPharmacy,

@@ -4,7 +4,7 @@ import pg from "pg";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
 
-test("PG: Vademecum completo + Farmatic faltante, con proveedor global y excepción de farmacia",{
+test("PG: solo recepciones de proveedor vinculado, sin Vademecum extra, y excepción por farmacia",{
  skip:!process.env.TEST_DB_URL
 },async()=>{
  const db=new pg.Client({connectionString:process.env.TEST_DB_URL});
@@ -20,6 +20,10 @@ test("PG: Vademecum completo + Farmatic faltante, con proveedor global y excepci
    VALUES('ampedia','PR1','Distribuidor laboratorio QA','N:ZIMFA')
    ON CONFLICT(cliente_slug,codigo_origen) DO UPDATE SET
     laboratorio_clave='N:ZIMFA',cooperativa=false`);
+  await db.query("DELETE FROM ampedia.proveedores WHERE farmacia_codigo='ABA' AND origen_id='PR1'");
+  await db.query(`INSERT INTO ampedia.proveedores
+   (farmacia_codigo,origen_id,nombre)
+   VALUES('ABA','PR1','Distribuidor laboratorio QA')`);
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual)
    VALUES('ABA','QA-MAPPED-01','Nombre ERP distinto','000987',NULL,3),
@@ -38,11 +42,11 @@ test("PG: Vademecum completo + Farmatic faltante, con proveedor global y excepci
   const a=result.rows.find(r=>r.cn==="000986");
   const b=result.rows.find(r=>r.cn==="000987");
   const c=result.rows.find(r=>r.cn==="000988");
-  assert.ok(a,"Vademecum sin stock/recepción se incluye");
-  assert.ok(b,"El CN repetido Vademecum+ERP aparece");
-  assert.equal(b.nombre,"Crema Zimfa maestra","Prevalece descripción del Vademecum");
+  assert.equal(a,undefined,"Vademecum sin ventas o recepciones queda fuera");
+  assert.ok(b,"El CN con recepción de Farmatic aparece");
+  assert.equal(b.nombre,"Nombre ERP distinto","Se usa la descripción del artículo vendido o recibido");
   assert.equal(result.rows.filter(r=>r.cn==="000987").length,1,"Sin duplicados CN");
-  assert.equal(b.inMaster,true);
+  assert.equal(b.inMaster,false);
   assert.equal(b.inReceipts,true);
   assert.equal(c.nombre,"Crema faltante Farmatic","Farmatic añade CN que falta");
   assert.equal(c.inMaster,false);

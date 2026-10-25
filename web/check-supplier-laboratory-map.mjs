@@ -52,7 +52,12 @@ try{
  await page.getByRole("button",{name:"Asignar laboratorio"}).first().click();
  await page.getByRole("dialog",{name:"Asignar laboratorio a proveedor"}).waitFor();
  const dlg=page.getByRole("dialog",{name:"Asignar laboratorio a proveedor"});
- await dlg.getByRole("combobox",{name:"Laboratorio asociado"}).selectOption("N:CINFA");
+ const picker=dlg.getByRole("combobox",{name:"Seleccionar laboratorio asociado"});
+ assert.equal(await picker.count(),1,"Buscador y selector unificados en un único campo");
+ assert.equal(await dlg.locator("select").count(),0,"Sin segundo desplegable nativo");
+ await picker.fill("Cinfa");
+ assert.equal(await dlg.getByRole("option",{name:"Laboratorios Cinfa"}).count(),1);
+ await dlg.getByRole("option",{name:"Laboratorios Cinfa"}).click();
  await dlg.getByRole("button",{name:"Guardar asignación"}).click();
  await page.getByRole("button",{name:"Laboratorios Cinfa"}).waitFor({timeout:9000});
  assert.equal(saved.laboratoryKey,"N:CINFA");

@@ -1,0 +1,9 @@
+/* Selector único reutilizado en pedidos, maestro y correspondencias. */
+.fm-lab-combobox{position:relative;width:100%;min-width:0}
+.fm-lab-combobox input{width:100%;min-width:0;background:var(--surface,#fff);color:inherit;border:1px solid #cdd8d2;border-radius:8px;padding:10px}
+.fm-lab-dropdown{position:absolute;z-index:10030;top:calc(100% + 3px);left:0;right:0;max-height:260px;overflow:auto;background:var(--surface,#fff);border:1px solid #c4d4c9;border-radius:8px;box-shadow:0 12px 28px rgba(13,60,34,.17)}
+.fm-lab-option{display:block;width:100%;padding:10px 12px;background:transparent;color:inherit;border:0;text-align:left;font-size:13px;cursor:pointer}
+.fm-lab-option:hover,.fm-lab-option.active{background:#e9f5ee;color:#174b31}
+.fm-lab-dropdown-status{padding:12px;color:#657a6b;font-size:12px}
+.fm-supplier-laboratory-picker{display:grid;gap:5px;font-size:.83rem;min-width:0}
+.fm-provider-lab-field .fm-lab-combobox input{width:100%}

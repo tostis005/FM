@@ -14,6 +14,12 @@ test("PostgreSQL real: Zimfa del ERP sin recepciones manuales se presenta una ve
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual)
    VALUES('ABA','CI-ARTICLE-ZIMFA','Crema de ensayo Zimfa','000123','Zimfa S.L.',14)`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+   VALUES('ABA','farmatic','CI-ZIMFA-VENTA','2026-10-21',true) ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+   VALUES('ABA','farmatic','CI-ZIMFA-VENTA','1','CI-ARTICLE-ZIMFA',1,11) ON CONFLICT DO NOTHING`);
   const context={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:"1"}]};
   const options=await listLaboratoryOptions(db,context);
   assert.equal(options.filter(o=>o.key==="N:ZIMFA").length,1);
@@ -47,6 +53,12 @@ test("Cinfa: un único laboratorio AEMPS con titulares/comercializadores y artí
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual)
    VALUES('ABA','CI-ARTICLE-CINFA','Crema Cinfa de ensayo','000231','LABORATORIOS CINFA S.A.',8)`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+   VALUES('ABA','farmatic','CI-CINFA-CREMA-VENTA','2026-10-21',true) ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+   VALUES('ABA','farmatic','CI-CINFA-CREMA-VENTA','1','CI-ARTICLE-CINFA',1,15) ON CONFLICT DO NOTHING`);
   const ctx={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:1}]};
   const opts=await listLaboratoryOptions(db,ctx);
   assert.equal(opts.filter(o=>o.key==="N:CINFA").length,1);

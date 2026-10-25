@@ -1,175 +1,180 @@
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
-const supplierCodeSQL=expr=>`CASE WHEN btrim(${expr}::text) ~ '^[0-9]+$'
+const validCN=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
+ THEN btrim(${expr}::text) ELSE NULL::text END`;
+const supplierCode=expr=>`CASE WHEN btrim(${expr}::text) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
  ELSE upper(btrim(${expr}::text)) END`;
-
-const safeReference=expr=>`CASE WHEN btrim(${expr}) ~ '^[0-9]{6,7}$' THEN btrim(${expr})
- WHEN btrim(${expr}) ~ '^[0-9]{13}$' THEN btrim(${expr}) ELSE NULL END`;
-const referenceKind=expr=>`CASE WHEN ${expr} ~ '^[0-9]{6,7}$'
- THEN CASE WHEN left(${expr},6)::int < 400000 THEN 'parafarmacia' ELSE 'medicacion' END
- WHEN ${expr} ~ '^[0-9]{13}$' THEN 'parafarmacia'
- ELSE 'parafarmacia' END`;
+const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_comercializador")}=$1
+ OR 'N:'||${normalizedLabSQL(alias+".laboratorio_titular")}=$1
+ OR 'N:'||${normalizedLabSQL(alias+".laboratorio")}=$1
+ OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_comercializador_codigo,'')))=$1)
+ OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_titular_codigo,'')))=$1)
+ OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_codigo,'')))=$1))`;
 
 /**
- * Independent from sales, receipts, pending orders and inventory tables.
- * Source-only catalog stays visible if metric calculations are unavailable.
+ * ÚNICO universo: presentaciones del Nomenclátor + artículos que figuran en
+ * alguna venta o recepción de una farmacia seleccionada.
+ * Farmatic se usa para interpretar identificador, nombre, laboratorio y stock,
+ * NUNCA para aportar artículos que no tengan movimientos.
+ * Tampoco se incorpora el catálogo externo/Vademécum.
  */
 export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,type,search="",page=1,size=40}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
  const schema='"'+context.client.schema+'"';
- const nname=normalizedLabSQL("n.laboratorio");
- const titular=normalizedLabSQL("n.laboratorio_titular");
- const commercial=normalizedLabSQL("n.laboratorio_comercializador");
- const manual=normalizedLabSQL("m.laboratorio_nombre");
- const mkey=normalizedLabSQL("substring(m.laboratorio_clave from 3)");
- const artLab=normalizedLabSQL("a.laboratorio");
- // Muchos Farmatic no rellenan codigo_nacional pero conservan el CN en
- // origen_id. Reconocerlo SOLO si figura en AEMPS o en el maestro importado.
- // Farmatic puede guardar el CN en cn_normalizado o en su identificador;
- // usar origen_id solo tras confirmar que existe en AEMPS o Vademecum.
- const ecode=`coalesce(${safeReference("a.codigo_nacional")},
-  ${safeReference("to_jsonb(a)->>'cn_normalizado'")},
-  CASE WHEN char_length(btrim(a.origen_id::text)) BETWEEN 6 AND 7
-   AND translate(btrim(a.origen_id::text),'0123456789','')=''
-   AND (EXISTS (SELECT 1 FROM farmetrica.nomenclator_presentaciones nn
-     WHERE nn.cn=btrim(a.origen_id::text))
-    OR EXISTS (SELECT 1 FROM farmetrica.articulos_laboratorio_maestro ma
-     WHERE ma.codigo=btrim(a.origen_id::text)))
-   THEN btrim(a.origen_id::text) ELSE NULL::text END)`;
- const eType=referenceKind(ecode);
- // En las importaciones nuevas existe proveedor_habitual_id: acceder a su
- // columna nativa evita serializar 200.000 registros ERP con to_jsonb.
- // Conservar compatibilidad con tablas antiguas que aún no la incorporan.
- let habitualColumn=false;
+ const patterns=await readRetirementPatterns(pool,context.client.slug);
+ let hasNativeCN=false;
  try{
-  const check=await pool.query({text:`
-   SELECT EXISTS (SELECT 1 FROM information_schema.columns
-    WHERE table_schema=$1 AND table_name='articulos'
-     AND column_name='proveedor_habitual_id') AS available`,
+  const {rows}=await pool.query({text:`SELECT EXISTS(
+   SELECT 1 FROM information_schema.columns WHERE table_schema=$1
+   AND table_name='articulos' AND column_name='cn_normalizado') AS available`,
    values:[context.client.schema],query_timeout:1500});
-  habitualColumn=check.rows[0]?.available===true;
+  hasNativeCN=rows[0]?.available===true;
  }catch{}
- const habitual=habitualColumn?"a.proveedor_habitual_id":"to_jsonb(a)->>'proveedor_habitual_id'";
+ const cn= `coalesce(${validCN("a.codigo_nacional")},
+   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
+   CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_presentaciones verified
+    WHERE verified.cn=btrim(coalesce(a.origen_id::text,m.article_id)))
+    THEN ${validCN("coalesce(a.origen_id::text,m.article_id)")} ELSE NULL::text END)`;
+ const blockedCN=`coalesce(${validCN("a.codigo_nacional")},
+   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
+   ${validCN("a.origen_id::text")})`;
  const sql=`
- WITH aliases AS (
-  SELECT $1::text AS key
-  UNION SELECT 'C:'||upper(btrim(n.laboratorio_titular_codigo))
-  FROM farmetrica.nomenclator_presentaciones n
-  WHERE 'N:'||${titular}=$1 AND nullif(btrim(n.laboratorio_titular_codigo),'') IS NOT NULL
-  UNION SELECT 'C:'||upper(btrim(n.laboratorio_comercializador_codigo))
-  FROM farmetrica.nomenclator_presentaciones n
-  WHERE 'N:'||${commercial}=$1 AND nullif(btrim(n.laboratorio_comercializador_codigo),'') IS NOT NULL
- ),
- scoped_pharmacies AS (
-  SELECT f.id,${pharmacyDataCodeSQL("f")} AS code FROM farmetrica.farmacias f
-  WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
- ),
- supplier_links AS (
-  SELECT m.farmacia_id,${supplierCodeSQL("m.codigo_proveedor")} AS supplier_code,
+ WITH pharmacies AS (
+  SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
+  FROM farmetrica.farmacias f WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
+ ), supplier_links AS (
+  SELECT m.farmacia_id,${supplierCode("m.codigo_proveedor")} AS supplier_code,
    m.laboratorio_clave AS laboratory_key
   FROM farmetrica.proveedores_laboratorios m
-  JOIN scoped_pharmacies p ON p.id=m.farmacia_id
+  JOIN pharmacies p ON p.id=m.farmacia_id
   WHERE m.cliente_slug=$3 AND NOT EXISTS (
    SELECT 1 FROM farmetrica.proveedores_maestro pm
    WHERE pm.cliente_slug=$3 AND pm.cooperativa=true
-    AND ${supplierCodeSQL("pm.codigo_origen")}=${supplierCodeSQL("m.codigo_proveedor")}
-  )
+    AND ${supplierCode("pm.codigo_origen")}=${supplierCode("m.codigo_proveedor")})
   UNION ALL
-  SELECT p.id,${supplierCodeSQL("pm.codigo_origen")},pm.laboratorio_clave
-  FROM farmetrica.proveedores_maestro pm
-  CROSS JOIN scoped_pharmacies p
+  SELECT p.id,${supplierCode("pm.codigo_origen")},pm.laboratorio_clave
+  FROM farmetrica.proveedores_maestro pm CROSS JOIN pharmacies p
   WHERE pm.cliente_slug=$3 AND pm.laboratorio_clave IS NOT NULL
    AND pm.cooperativa IS NOT TRUE
+   -- Nunca extrapolar un código global de Farmatic a otra farmacia con otro proveedor.
+   AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
+    WHERE upper(btrim(sp.farmacia_codigo))=p.code
+     AND ${supplierCode("sp.origen_id")}=${supplierCode("pm.codigo_origen")}
+     AND ${normalizedLabSQL("sp.nombre")}=${normalizedLabSQL("pm.nombre")})
    AND NOT EXISTS (
     SELECT 1 FROM farmetrica.proveedores_laboratorios m
     WHERE m.cliente_slug=$3 AND m.farmacia_id=p.id
-     AND ${supplierCodeSQL("m.codigo_proveedor")}=${supplierCodeSQL("pm.codigo_origen")}
-   )
- ),
- mapped_suppliers AS (
-  SELECT DISTINCT s.farmacia_id,s.supplier_code FROM supplier_links s
-  WHERE s.laboratory_key IN (SELECT key FROM aliases)
-   OR (s.laboratory_key LIKE 'N:%'
-    AND 'N:'||${normalizedLabSQL("substring(s.laboratory_key from 3)")}=$1)
- ),
- -- Filtrar y deduplicar las recepciones ANTES de consultar las fichas ERP.
- -- El mismo artículo puede aparecer miles de veces en albaranes históricos.
- received_article_ids AS MATERIALIZED (
-  SELECT DISTINCT link.farmacia_id,r.articulo_id::text AS article_id
-  FROM mapped_suppliers link
-  JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
-  JOIN ${schema}.fm_recepciones_analitica r
-   ON r.farmacia_codigo=${pharmacyDataCodeSQL("f")}
-    AND ${supplierCodeSQL("r.proveedor_id")}=link.supplier_code
+     AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("pm.codigo_origen")})
+ ), relevant_articles AS MATERIALIZED (
+  -- Primero identifica artículos del laboratorio. No recorre el histórico entero.
+  SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
+  FROM pharmacies p JOIN ${schema}.articulos a
+   ON upper(btrim(a.farmacia_codigo))=p.code
+  LEFT JOIN farmetrica.nomenclator_presentaciones n
+   ON n.cn=coalesce(${validCN("a.codigo_nacional")},
+    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
+    ${validCN("a.origen_id::text")})
+  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
+   AND ('N:'||${normalizedLabSQL("a.laboratorio")}=$1 OR ${officialMatch("n")})
+ ), relevant_receipts AS MATERIALIZED (
+  -- Un proveedor vinculado recupera su histórico de recepciones aunque el
+  -- laboratorio no estuviera cumplimentado en la ficha de Farmatic.
+  SELECT DISTINCT p.id AS pharmacy_id,p.code,r.articulo_id::text AS article_id
+  FROM pharmacies p JOIN ${schema}.fm_recepciones_analitica r
+   ON r.farmacia_codigo=p.code
+  JOIN supplier_links link ON link.farmacia_id=p.id
+   AND link.supplier_code=${supplierCode("r.proveedor_id")}
   WHERE r.articulo_id IS NOT NULL
- ),
- source AS (
+   AND (link.laboratory_key=$1
+    OR (link.laboratory_key LIKE 'N:%'
+     AND 'N:'||${normalizedLabSQL("substring(link.laboratory_key from 3)")}=$1))
+ ), candidates AS MATERIALIZED (
+  SELECT pharmacy_id,code,article_id FROM relevant_articles
+  UNION SELECT pharmacy_id,code,article_id FROM relevant_receipts
+  UNION
+  -- Artículo sin ficha ERP, pero vendido o recibido con CN oficial.
+  SELECT p.id,p.code,n.cn FROM pharmacies p
+  CROSS JOIN farmetrica.nomenclator_presentaciones n
+  WHERE ${officialMatch("n")}
+ ), movements AS MATERIALIZED (
+  SELECT DISTINCT c.pharmacy_id,c.code,c.article_id,
+   NULL::text AS supplier_code,true AS from_sales,false AS from_receipts
+  FROM candidates c JOIN ${schema}.fm_ventas_analitica v
+   ON v.farmacia_codigo=c.code AND v.articulo_id=c.article_id
+  UNION ALL
+  SELECT DISTINCT c.pharmacy_id,c.code,c.article_id,
+   ${supplierCode("r.proveedor_id")},false,true
+  FROM candidates c JOIN ${schema}.fm_recepciones_analitica r
+   ON r.farmacia_codigo=c.code AND r.articulo_id=c.article_id
+ ), activity AS MATERIALIZED (
+  SELECT m.pharmacy_id,m.code,m.article_id,m.supplier_code,
+   m.from_sales,m.from_receipts,
+   coalesce(nullif(btrim(a.nombre),''),n.nombre,m.article_id) AS nombre,
+   ${cn} AS cn,
+   CASE WHEN n.cn IS NOT NULL THEN 'medicacion'
+    WHEN ${cn} ~ '^[0-9]{6,7}$' AND left(${cn},6)::int>=400000
+     THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
+   ${retiredProductSQL("a.nombre")} AS inactive,
+   CASE WHEN 'N:'||${normalizedLabSQL("a.laboratorio")}=$1
+      OR ${officialMatch("n")}
+      OR EXISTS (SELECT 1 FROM supplier_links map
+       WHERE map.farmacia_id=m.pharmacy_id AND map.supplier_code=m.supplier_code
+       AND ('N:'||${normalizedLabSQL("substring(map.laboratory_key from 3)")}=$1
+         OR map.laboratory_key=$1)) THEN true ELSE false END AS belongs,
+   n.dcpf,n.generico
+  FROM movements m
+  LEFT JOIN ${schema}.articulos a
+   ON upper(btrim(a.farmacia_codigo))=m.code AND a.origen_id::text=m.article_id
+  LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=${cn}
+ ), blocked_refs AS MATERIALIZED (
+  -- Incluso un medicamento oficial se oculta si Farmatic lo marca de baja.
+  -- Las etiquetas se leen de las farmacias seleccionadas, no de otro cliente.
+  SELECT DISTINCT ${blockedCN} AS reference
+  FROM ${schema}.articulos a JOIN pharmacies p ON upper(btrim(a.farmacia_codigo))=p.code
+  WHERE ${retiredProductSQL("a.nombre")} AND ${blockedCN} IS NOT NULL
+  UNION
+  SELECT DISTINCT coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id)
+  FROM activity WHERE inactive AND belongs
+ ), union_catalog AS (
   SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,
-   'medicacion'::text AS tipo,true AS from_master,false AS from_erp,NULL::text AS pharmacy_id,2 AS preference
+    'medicacion'::text AS tipo,true AS from_master,false AS from_sales,false AS from_receipts,
+    NULL::text AS pharmacy_id,n.dcpf,n.generico
   FROM farmetrica.nomenclator_presentaciones n
-  WHERE ('N:'||${commercial}=$1 OR 'N:'||${titular}=$1 OR 'N:'||${nname}=$1)
+  WHERE ${officialMatch("n")} AND NOT ${retiredProductSQL("n.nombre")}
   UNION ALL
-  SELECT m.codigo::text,m.codigo::text,m.nombre::text,m.tipo::text,
-    true,false,NULL::text,CASE WHEN m.fuente='vademecum' THEN 1 ELSE 2 END
-  FROM farmetrica.articulos_laboratorio_maestro m
-  WHERE ('N:'||${manual}=$1 OR
-    (m.laboratorio_clave LIKE 'N:%' AND 'N:'||${mkey}=$1) OR m.laboratorio_clave=$1)
-  UNION ALL
-  SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
-   ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
-   ${eType},false,true,f.id::text,3
-  FROM ${schema}.articulos a
-  JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=ANY($2::int[])
-   AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-  WHERE 'N:'||${artLab}=$1 AND nullif(btrim(a.origen_id::text),'') IS NOT NULL
- UNION ALL
- SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
-  ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
-  ${eType},false,true,f.id::text,3
- FROM received_article_ids received
- JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=received.farmacia_id
- JOIN ${schema}.articulos a
-  ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-   AND a.origen_id::text=received.article_id
- WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
- UNION ALL
- -- El proveedor habitual enlaza artículos sin recepción reciente.
- SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
-  ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
-  ${eType},false,true,f.id::text,3
- FROM mapped_suppliers link
- JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
- JOIN ${schema}.articulos a
-  ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-  AND ${supplierCodeSQL(habitual)}=link.supplier_code
- WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
- ),
- reduced AS (
-  SELECT referencia, max(cn) AS cn,
-    coalesce(min(nombre) FILTER(WHERE preference=1),
-      min(nombre) FILTER(WHERE preference=2),min(nombre)) AS nombre,
-    CASE WHEN max(cn) ~ '^[0-9]{6,7}$'
-     THEN CASE WHEN left(max(cn),6)::int<400000 THEN 'parafarmacia' ELSE 'medicacion' END
-     WHEN max(cn) ~ '^[0-9]{13}$' THEN 'parafarmacia'
-     WHEN bool_or(tipo='medicacion') THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
-    bool_or(from_master) AS "inMaster",
-    bool_or(from_erp) AS "inReceipts",
-    string_agg(DISTINCT pharmacy_id,',' ORDER BY pharmacy_id) FILTER(WHERE pharmacy_id IS NOT NULL) AS "pharmacyIds"
-  FROM source WHERE referencia IS NOT NULL GROUP BY referencia
- ),
- filtered AS (
-  SELECT *,("inReceipts"=true AND "inMaster"=false AND cn IS NULL) AS provisional
-  FROM reduced WHERE tipo=$4 AND
+  SELECT coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id),
+   cn,nombre,tipo,false,from_sales,from_receipts,pharmacy_id::text,dcpf,generico
+  FROM activity WHERE belongs AND NOT inactive
+ ), summarized AS (
+  SELECT referencia,max(cn) AS cn,
+   coalesce(min(nombre) FILTER(WHERE from_sales OR from_receipts),
+    min(nombre) FILTER(WHERE from_master),min(nombre)) AS nombre,
+   CASE WHEN bool_or(tipo='medicacion') THEN 'medicacion' ELSE 'parafarmacia' END AS tipo,
+   bool_or(from_master) AS "inMaster",
+   bool_or(from_sales OR from_receipts) AS "inReceipts",
+   bool_or(from_sales) AS "inSales",
+   bool_or(from_receipts) AS "inPurchases",
+   string_agg(DISTINCT pharmacy_id,',' ORDER BY pharmacy_id)
+     FILTER (WHERE pharmacy_id IS NOT NULL) AS "pharmacyIds",
+   max(dcpf) AS dcpf,bool_or(coalesce(generico,false)) AS generic
+  FROM union_catalog
+  WHERE referencia IS NOT NULL
+    AND NOT EXISTS(SELECT 1 FROM blocked_refs b WHERE b.reference=union_catalog.referencia)
+  GROUP BY referencia
+ ), filtered AS (
+  SELECT *,("inReceipts" AND NOT "inMaster" AND cn IS NULL) AS provisional
+  FROM summarized WHERE tipo=$4 AND
    ($5::text='' OR nombre ILIKE '%'||$5||'%' OR referencia ILIKE '%'||$5||'%')
  )
  SELECT *,count(*) OVER()::int AS total
  FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
-  query_timeout:20000});
+  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size,patterns],
+  query_timeout:30000});
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }
 export async function diagnosticLaboratorySources(pool,context,opts){

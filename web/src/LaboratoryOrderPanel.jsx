@@ -198,7 +198,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <section className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Catálogo AEMPS y referencias de Farmatic relacionadas con el laboratorio.</p></div>
+     <p>Productos con ventas o recepciones y presentaciones del Nomenclátor, excluyendo los dados de baja.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>{
@@ -232,17 +232,18 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <AlertTriangle size={15}/> {data.warning}
     </p>}
     {diagnostic&&<div className="fm-lab-order-diagnostics" role="status">
-     <strong>Referencias disponibles en las fuentes</strong>
+     <strong>Referencias de movimientos y Nomenclátor</strong>
      {diagnostic.sources?.map(src=><span key={src.type}>
       {src.type==="medicacion"?"Medicación":"Parafarmacia"}: <b>{src.status==="ok"?src.total:"Error al consultar"}</b>
      </span>)}
      {diagnostic.pharmacyCount===0&&<span>Sin farmacias asignadas</span>}
      {diagnostic.error&&<span>{diagnostic.error}</span>}
     </div>}
-    {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando referencias del maestro…</p>}
+    {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando productos de ventas, recepciones y Nomenclátor…</p>}
     <div className="fm-lab-order-summary">
      <span><strong>{loading&&loadStage==="catalog"?"…":data.total??0}</strong> referencias del laboratorio</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSold)}</strong> vendidas en esta página</span>
+      <span><strong>{data.frequencyDays??7}</strong> días entre pedidos</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
      {loading&&<span role="status" className="fm-lab-loading-label"><LoaderCircle size={15} className="fm-lab-spinner"/>{loadStage==="catalog"?"Consultando artículos del laboratorio…":"Calculando ventas y stock por farmacia…"}</span>}
@@ -253,13 +254,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       <th colSpan={tab==="parafarmacia"?3:2} className="fm-lab-order-total-group">Totales</th>
+       <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
       </tr><tr>
        {chosen.flatMap((p,i)=>["V. 3m","V. 12m","Stock","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
        <th>Vendido</th><th>Propuesta</th>
-       {tab==="parafarmacia"&&<th className="fm-lab-order-editcol">Pedir · Pedia</th>}
+       <th className="fm-lab-order-editcol">{tab==="parafarmacia"?"Pedir · Pedia":"Pedir total"}</th>
       </tr></thead>
       <tbody>{currentRows.map(row=>{
        const line=showLine(row);
@@ -287,14 +288,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           value={line.units??0} onChange={e=>updateLine(row,e.target.value)}/></td>}
        </tr>;
       })}
-      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
-      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}>
+      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+5}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
+      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+5}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":
          "Sin medicamentos asociados a este laboratorio"}</strong>
         <span>{tab==="parafarmacia"?
-         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita artículos del ERP o del catálogo externo con su laboratorio asociado.":
+         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita ventas o recepciones de artículos asociados al laboratorio.":
          "Comprueba que el nomenclátor AEMPS esté cargado y que el laboratorio aparezca asociado a sus presentaciones."}</span>
         <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setPage(1);setError("")}}>
          Ver {tab==="parafarmacia"?"Medicación":"Parafarmacia"}
@@ -314,7 +315,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        onClick={()=>setPage(n=>n+1)}>Siguiente</button></div>
     </div>
     <div className="fm-lab-order-actions">
-     <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido independiente por farmacia"}</strong>
+     <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido conjunto de medicación · desglose por farmacia"}</strong>
       <small>El borrador incorpora las referencias revisadas al navegar por las páginas. El stock es actual; las ventas de 3 y 12 meses se calculan hasta la fecha «Hasta».</small>
       {savedDate&&(savedDate.from!==range.from||savedDate.to!==range.to)&&
        <small className="fm-lab-order-notice">El borrador anterior tenía otro período. Al guardar se actualizará.</small>}
@@ -326,7 +327,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
     </div>
-    <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, cada farmacia pide sus propias unidades.</p>
+    <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, el pedido se prepara de forma conjunta para el laboratorio y conserva las cantidades de cada farmacia.</p>
     <p className="fm-op-fine">Las referencias sin CN verificado se señalan como pendientes y deben revisarse antes del envío. La exportación no envía ni aprueba ningún pedido.</p>
    </>}
   </section>

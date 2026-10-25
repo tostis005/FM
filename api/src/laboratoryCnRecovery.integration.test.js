@@ -27,6 +27,12 @@ test("Cinfa: Farmatic sin codigo_nacional pero origen_id verificado recupera CN,
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual,proveedor_habitual_id)
    VALUES('ABA','790326','Medicamento Cinfa desde Farmatic',NULL,NULL,13,'PR1')`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+   VALUES('ABA','farmatic','CI-CN-VENTA-790326','2026-10-21',true) ON CONFLICT DO NOTHING`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+   VALUES('ABA','farmatic','CI-CN-VENTA-790326','1','790326',2,12) ON CONFLICT DO NOTHING`);
   const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
   const labs=await listLaboratoryOptions(db,ctx);
   assert.equal(labs.filter(l=>l.key==="N:CINFA").length,1);

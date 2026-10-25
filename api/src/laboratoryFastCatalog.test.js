@@ -7,79 +7,69 @@ const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
 const opts={key:"N:CINFA",type:"medicacion",pharmacies:[1],
  from:"2026-10-01",to:"2026-10-24",page:1,size:40,search:""};
 const catalogRow={referencia:"790321",cn:"790321",nombre:"Cinfa medicamento",
-  tipo:"medicacion",inMaster:true,inReceipts:false,total:1};
+ tipo:"medicacion",inMaster:true,inReceipts:false,generic:false,total:1};
 
-test("catálogo directo aporta AEMPS, vademécum y recepciones asociadas sin ventas",async()=>{
+function fixture({metricsError=false,empty=false}={}){
  const calls=[];
  const pool={async query(q){
-  calls.push(q);
-  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
-  return {rows:[catalogRow]};
+  const sql=typeof q==="string"?q:q.text;
+  calls.push({sql,values:q.values||[]});
+  if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"DESCATALOGADO"}]};
+  if(sql.includes("SELECT intervalo_dias AS days"))return {rows:[{days:4}]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH pharmacies AS"))return {rows:empty?[]:[catalogRow]};
+  if(sql.includes("WITH refs AS")){
+   if(metricsError)throw Object.assign(Error("Stock unavailable"),{code:"42703"});
+   return {rows:[{reference:"790321",pharmacyId:"1",stock:8,
+    units3:30,units12:100,unitsPeriod:3,ordered:0,suggested:11}]};
+  }
+  throw Error("Unexpected SQL: "+sql.slice(0,200));
  }};
+ return {pool,calls};
+}
+test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=>{
+ const {pool,calls}=fixture();
  const result=await readDirectLaboratoryCatalog(pool,ctx,opts);
- const query=calls.find(q=>q.text.includes("WITH aliases AS"));
+ const query=calls.find(q=>q.sql.includes("WITH pharmacies AS"));
  assert.equal(result.total,1);
  assert.equal(result.rows[0].cn,"790321");
- assert.match(query.text,/nomenclator_presentaciones/);
- assert.match(query.text,/articulos_laboratorio_maestro/);
- assert.match(query.text,/ampedia.*articulos/);
- assert.match(query.text,/fm_recepciones_analitica/);
- assert.match(query.text,/proveedores_maestro/);
- assert.match(query.text,/proveedores_laboratorios/);
- assert.doesNotMatch(query.text,/fm_ventas_analitica/);
- assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0]);
+ assert.match(query.sql,/nomenclator_presentaciones/);
+ assert.match(query.sql,/fm_ventas_analitica/);
+ assert.match(query.sql,/fm_recepciones_analitica/);
+ assert.match(query.sql,/proveedores_maestro/);
+ assert.match(query.sql,/proveedores_laboratorios/);
+ assert.match(query.sql,/preparador_exclusiones|unnest\(\$8::text\[\]\)/);
+ assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);
+ assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"]]);
 });
-test("error de ventas/stock nunca oculta productos AEMPS",async()=>{
- let calls=0;
- const pool={async query(q){
-  calls++;
-  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
-  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
-  if(q.text.includes("fm_recepciones_analitica"))return {rows:[catalogRow]};
-  if(q.text.includes("fm_ventas_analitica"))throw Object.assign(Error("Stock unavailable"),{code:"42703"});
-  throw Error("unexpected SQL");
- }};
+test("un fallo al calcular stock no oculta las presentaciones verificadas",async()=>{
+ const {pool}=fixture({metricsError:true});
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);
- assert.equal(calls,4);
  assert.equal(result.total,1);
  assert.equal(result.rows[0].cn,"790321");
  assert.equal(result.metricsUnavailable,true);
  assert.match(result.warning,/Se han recuperado los artículos/);
  assert.equal(result.rows[0].totalSold,null);
+ assert.equal(result.frequencyDays,4);
 });
-test("la ausencia de farmacias no impide mostrar el catálogo de AEMPS",async()=>{
- const pool={async query(q){
-  if(q.text.includes("fm_recepciones_analitica"))return {rows:[catalogRow]};
-  throw Error("Should not query metrics");
- }};
+test("sin farmacias siguen visibles las presentaciones oficiales",async()=>{
+ const {pool}=fixture();
  const result=await readLaboratoryOrderMatrix(pool,ctx,{...opts,pharmacies:[]});
  assert.equal(result.total,1);
- assert.match(result.warning,/No hay farmacias/);
  assert.equal(result.metricsUnavailable,true);
+ assert.match(result.warning,/No hay farmacias/);
 });
-test("correspondencias antiguas aún pueden rescatar una referencia ausente del catálogo directo",async()=>{
- const pool={async query(q){
-  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
-  if(q.text.includes("fm_ventas_analitica"))return {rows:[]};
-  if(q.text.includes("mapped_suppliers AS"))return {rows:[]};
-  if(q.text.includes("WITH aliases AS"))return {rows:[catalogRow]};
-  throw Error("unexpected SQL");
- }};
+test("ningún catálogo histórico rellena un catálogo vacío del preparador",async()=>{
+ const {pool,calls}=fixture({empty:true});
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);
- assert.equal(result.total,1);
- assert.equal(result.rows[0].cn,"790321");
- assert.match(result.warning,/correspondencias antiguas/);
+ assert.equal(result.total,0);
+ assert.equal(result.rows.length,0);
+ assert.ok(!calls.some(q=>q.sql.includes("WITH aliases AS")));
 });
-test("diagnóstico diferencia pestañas y evita inventar cifras ante fallo",async()=>{
- const pool={async query(q){
-  if(q.text?.includes("information_schema.columns"))return {rows:[{available:true}]};
-  if(q.values[3]==="medicacion")return {rows:[catalogRow]};
-  return {rows:[]};
- }};
- const data=await diagnosticLaboratorySources(pool,ctx,opts);
- assert.equal(data.pharmacyCount,1);
- assert.deepEqual(data.sources,[
-  {type:"medicacion",status:"ok",total:1},
-  {type:"parafarmacia",status:"ok",total:0}
- ]);
+test("diagnóstico separa tipos sin inventar productos",async()=>{
+ const {pool}=fixture();
+ const result=await diagnosticLaboratorySources(pool,ctx,opts);
+ assert.equal(result.pharmacyCount,1);
+ assert.equal(result.sources[0].status,"ok");
+ assert.equal(result.sources[0].total,1);
 });

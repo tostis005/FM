@@ -50,12 +50,12 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const d=await readLaboratoryOrderMatrix(pool,context,
   {key:"C:LAB",pharmacies:[1,2],type:"medicacion",
    from:"2026-09-01",to:"2026-10-24",page:1,size:40});
- assert.equal(queries.length,3);
+ assert.equal(queries.length,4);
  assert.equal(d.rows.length,1);
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);
  assert.equal(d.rows[0].byPharmacy["1"].suggested,4);
- assert.deepEqual(queries[2].values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
+ assert.deepEqual(queries[3].values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
 });
 test("API matriz y guardado solo dentro del tenant",async()=>{
  const routes={};
@@ -96,6 +96,7 @@ test("el preparador consulta ventas con identificadores indexados del documento 
  assert.match(sql,/ON v\.articulo_id=a\.article_id/);
  assert.match(sql,/article_matches AS/);
  assert.match(sql,/a\.origen_id::text=x\.cn/);
+ assert.match(sql,/__CN_NORMALIZED__/);
  assert.doesNotMatch(sql,/JOIN refs x ON \(x\.cn/);
  assert.match(sql,/AND v\.farmacia_codigo=\(/);
  assert.doesNotMatch(sql,/upper\(btrim\(v\.farmacia_codigo\)\)/i);

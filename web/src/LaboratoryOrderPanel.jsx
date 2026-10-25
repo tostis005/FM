@@ -198,7 +198,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <section className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Catálogo AEMPS y referencias de Farmatic relacionadas con el laboratorio.</p></div>
+     <p>Productos con ventas o recepciones y presentaciones del Nomenclátor, excluyendo los dados de baja.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>{
@@ -232,17 +232,18 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <AlertTriangle size={15}/> {data.warning}
     </p>}
     {diagnostic&&<div className="fm-lab-order-diagnostics" role="status">
-     <strong>Referencias disponibles en las fuentes</strong>
+     <strong>Referencias de movimientos y Nomenclátor</strong>
      {diagnostic.sources?.map(src=><span key={src.type}>
       {src.type==="medicacion"?"Medicación":"Parafarmacia"}: <b>{src.status==="ok"?src.total:"Error al consultar"}</b>
      </span>)}
      {diagnostic.pharmacyCount===0&&<span>Sin farmacias asignadas</span>}
      {diagnostic.error&&<span>{diagnostic.error}</span>}
     </div>}
-    {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando referencias del maestro…</p>}
+    {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando productos de ventas, recepciones y Nomenclátor…</p>}
     <div className="fm-lab-order-summary">
      <span><strong>{loading&&loadStage==="catalog"?"…":data.total??0}</strong> referencias del laboratorio</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSold)}</strong> vendidas en esta página</span>
+      <span><strong>{data.frequencyDays??7}</strong> días entre pedidos</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
      {loading&&<span role="status" className="fm-lab-loading-label"><LoaderCircle size={15} className="fm-lab-spinner"/>{loadStage==="catalog"?"Consultando artículos del laboratorio…":"Calculando ventas y stock por farmacia…"}</span>}
@@ -314,7 +315,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        onClick={()=>setPage(n=>n+1)}>Siguiente</button></div>
     </div>
     <div className="fm-lab-order-actions">
-     <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido independiente por farmacia"}</strong>
+     <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido conjunto de medicación · desglose por farmacia"}</strong>
       <small>El borrador incorpora las referencias revisadas al navegar por las páginas. El stock es actual; las ventas de 3 y 12 meses se calculan hasta la fecha «Hasta».</small>
       {savedDate&&(savedDate.from!==range.from||savedDate.to!==range.to)&&
        <small className="fm-lab-order-notice">El borrador anterior tenía otro período. Al guardar se actualizará.</small>}
@@ -326,7 +327,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
     </div>
-    <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, cada farmacia pide sus propias unidades.</p>
+    <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, el pedido se prepara de forma conjunta para el laboratorio y conserva las cantidades de cada farmacia.</p>
     <p className="fm-op-fine">Las referencias sin CN verificado se señalan como pendientes y deben revisarse antes del envío. La exportación no envía ni aprueba ningún pedido.</p>
    </>}
   </section>

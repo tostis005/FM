@@ -82,6 +82,17 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
    OR (s.laboratory_key LIKE 'N:%'
     AND 'N:'||${normalizedLabSQL("substring(s.laboratory_key from 3)")}=$1)
  ),
+ -- Filtrar y deduplicar las recepciones ANTES de consultar las fichas ERP.
+ -- El mismo artículo puede aparecer miles de veces en albaranes históricos.
+ received_article_ids AS MATERIALIZED (
+  SELECT DISTINCT link.farmacia_id,r.articulo_id::text AS article_id
+  FROM mapped_suppliers link
+  JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
+  JOIN ${schema}.fm_recepciones_analitica r
+   ON r.farmacia_codigo=${pharmacyDataCodeSQL("f")}
+    AND ${supplierCodeSQL("r.proveedor_id")}=link.supplier_code
+  WHERE r.articulo_id IS NOT NULL
+ ),
  source AS (
   SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,
    'medicacion'::text AS tipo,true AS from_master,false AS from_erp,NULL::text AS pharmacy_id,2 AS preference
@@ -105,14 +116,11 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
   ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
   ${eType},false,true,f.id::text,3
- FROM mapped_suppliers link
- JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
- JOIN ${schema}.fm_recepciones_analitica r
-  ON upper(btrim(r.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-   AND ${supplierCodeSQL("r.proveedor_id")}=link.supplier_code
+ FROM received_article_ids received
+ JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=received.farmacia_id
  JOIN ${schema}.articulos a
   ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-   AND a.origen_id::text=r.articulo_id::text
+   AND a.origen_id::text=received.article_id
  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
  UNION ALL
  -- El proveedor habitual enlaza artículos sin recepción reciente.

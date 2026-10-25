@@ -65,3 +65,44 @@ export async function collectLaboratoryCatalog(fetchPage,{
  if(rows.length!==total)throw Error("El catálogo no ha devuelto todas las referencias");
  return {rows,total};
 }
+
+export const LAB_METRICS_CONCURRENCY=2;
+// Actualizar cada bloque por su referencia, no por la posición de llegada.
+// El usuario puede editar cantidades mientras llegan otras métricas.
+export async function collectLaboratoryMetrics(catalogRows,fetchBatch,{
+ batchSize=LAB_METRICS_BATCH,concurrency=LAB_METRICS_CONCURRENCY,signal,onBatch
+}={}){
+ const rows=catalogRows.map(row=>({...row}));
+ const count=Math.ceil(rows.length/batchSize);
+ let next=0,done=0,frequencyDays=7,failure=null;
+ const cancelled=()=>Object.assign(new Error("Consulta cancelada"),{name:"AbortError"});
+ async function worker(){
+  while(next<count&&!failure&&!signal?.aborted){
+   const index=next++,start=index*batchSize;
+   const originals=rows.slice(start,start+batchSize);
+   try{
+    const result=await fetchBatch(originals,index);
+    if(signal?.aborted||failure)return;
+    if(result?.metricsUnavailable||!Array.isArray(result?.rows))
+     throw Error(result?.warning||"No se pueden calcular las ventas y el stock");
+    const byReference=new Map(result.rows.map(r=>[r.referencia,r]));
+    for(let i=start;i<Math.min(start+batchSize,rows.length);i++){
+     const details=byReference.get(rows[i].referencia);
+     if(!details)throw Error("Faltan referencias del cálculo de stock y ventas");
+     rows[i]={...rows[i],...details,metricsReady:true};
+    }
+    frequencyDays=result.frequencyDays??frequencyDays;
+    done+=originals.length;
+    onBatch?.({rows:[...rows],loaded:done,total:rows.length,frequencyDays});
+   }catch(e){failure=e;throw e}
+  }
+ }
+ if(signal?.aborted)throw cancelled();
+ const outcomes=await Promise.allSettled(Array.from({length:Math.min(Math.max(1,concurrency),count)},
+  ()=>worker()));
+ if(signal?.aborted)throw cancelled();
+ const error=outcomes.find(x=>x.status==="rejected");
+ if(error)throw error.reason;
+ if(failure)throw failure;
+ return {rows,total:rows.length,frequencyDays};
+}

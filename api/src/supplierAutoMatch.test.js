@@ -45,3 +45,13 @@ test("no deducir identidad propia por cÃ³digo ni sobrescribir asignaciones explÃ
  ];
  assert.deepEqual(buildLocalSupplierGroupSuggestions(suppliers),[]);
 });
+
+test("una cooperativa no declarada como tal no se propone como laboratorio",()=>{
+ const same=[
+  {pharmacyId:"1",sourceCode:"10",name:"Cooperativa de Farmacias SA"},
+  {pharmacyId:"2",sourceCode:"11",name:"COOPERATIVA DE FARMACIAS"},
+ ];
+ assert.deepEqual(buildLocalSupplierGroupSuggestions(same),[]);
+ assert.deepEqual(buildAutomaticSupplierMatches(same,
+  ["Cooperativa de Farmacias SA"]),[]);
+});

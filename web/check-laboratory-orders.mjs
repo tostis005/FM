@@ -94,7 +94,7 @@ try{
  const labSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});
  assert.equal(await labSelector.count(),1,"un único campo integrado para buscar y seleccionar");
  await labSelector.fill("Cinfa");
- assert.equal(await page.getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
+ assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
  await page.getByText(/Consultando artículos y códigos nacionales/).waitFor({timeout:1200});
  await page.getByText(/Calculando ventas y stock por farmacia/).waitFor({timeout:3000});

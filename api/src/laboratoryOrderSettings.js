@@ -21,6 +21,7 @@ export async function readLocalSuppliers(pool,ctx){
  const {rows}=await pool.query({text:`
   SELECT f.id::text AS "pharmacyId",
    ${supplierCode("s.origen_id")} AS "sourceCode",
+   min(btrim(s.origen_id::text)) AS "erpSourceCode",
    min(nullif(btrim(s.nombre),'')) AS name,
    max(m.laboratorio_clave) AS "localLaboratoryKey",
    max(pm.laboratorio_clave) FILTER(WHERE pm.cooperativa IS NOT TRUE) AS "globalLaboratoryKey",
@@ -162,6 +163,7 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
      SELECT $1,t.farmacia_id::int,t.codigo_proveedor,t.laboratorio_clave
      FROM jsonb_to_recordset($2::jsonb) AS t(
       farmacia_id text,codigo_proveedor text,laboratorio_clave text)
+     WHERE true
      ON CONFLICT(cliente_slug,farmacia_id,codigo_proveedor) DO NOTHING
      RETURNING farmacia_id::text AS "pharmacyId",codigo_proveedor AS "sourceCode"`,
      [req.context.client.slug,JSON.stringify(suggestions.map(s=>({

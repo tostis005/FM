@@ -26,7 +26,7 @@ export function laboratoryExcelRows(lines,pharmacies,type){
   [p.name,"","","",""]), "Total vendido", "Propuesta total",isMedication?"Pedir total":"Pedir Pedia"];
  const headings=["CN","Artículo",...pharmacies.flatMap(()=>
   ["Ventas 3m","Ventas 12m","Stock","Vendido período",isMedication?"Pedir":"Propuesta"]),
-  "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir Pedia"])];
+  "Total vendido", "Propuesta total",isMedication?"Pedir total":"Pedir Pedia"];
  const rows=lines.map(({row,line})=>{
   const measures=ids.map(id=>row.byPharmacy?.[id]||{});
   const sold=measures.reduce((n,v)=>n+Number(v.unitsPeriod||0),0);

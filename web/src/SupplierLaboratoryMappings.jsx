@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
+import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import "./laboratoryCatalog.css";
 async function request(path,clientSlug,options={}){
  const res=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
@@ -13,7 +14,6 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  const [autoPreview,setAutoPreview]=useState(null);
  const [pharmacyId,setPharmacyId]=useState(""),[sourceCode,setSourceCode]=useState("");
  const [laboratoryKey,setLaboratoryKey]=useState("");
- const [labSearch,setLabSearch]=useState("");
  const [error,setError]=useState(""),[notice,setNotice]=useState("");
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
  useEffect(()=>{
@@ -33,8 +33,6 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[clientSlug]);
- const choices=useMemo(()=>laboratories.filter(l=>
-  (l.name+" "+l.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es"))),[laboratories,labSearch]);
  const supplierChoices=useMemo(()=>localSuppliers.length?
   localSuppliers.filter(s=>String(s.pharmacyId)===pharmacyId&&!s.cooperative&&s.sourceCode):
   suppliers.filter(s=>!s.cooperative&&s.sourceCode),[suppliers,localSuppliers,pharmacyId]);
@@ -106,15 +104,11 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    <label>Proveedor ERP<select value={sourceCode} onChange={e=>setSourceCode(e.target.value)}>
     <option value="">Selecciona proveedor de esta farmacia…</option>
     {supplierChoices.map(s=><option key={(s.pharmacyId||"")+":"+s.sourceCode} value={s.sourceCode}>{s.name||s.sourceCode} · {s.sourceCode}</option>)}</select></label>
-   <label>Laboratorio
-    <input type="search" value={labSearch} onChange={e=>setLabSearch(e.target.value)}
-     placeholder="Filtrar laboratorios…" aria-label="Buscar laboratorio para correspondencia"/>
-    <select value={laboratoryKey} onChange={e=>setLaboratoryKey(e.target.value)}>
-     <option value="">Selecciona laboratorio…</option>
-     {choices.map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
-     {laboratoryKey&&!choices.some(l=>l.key===laboratoryKey)&&
-      laboratories.filter(l=>l.key===laboratoryKey).map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
-    </select></label>
+   <div className="fm-supplier-laboratory-picker">
+    <span>Laboratorio</span>
+    <LaboratoryPicker laboratories={laboratories} selected={laboratoryKey}
+     onSelect={setLaboratoryKey} loading={loading} ariaLabel="Seleccionar laboratorio por farmacia"/>
+   </div>
    <button className="btn btn-primary" type="button" disabled={busy||loading||!pharmacyId||!sourceCode||!laboratoryKey}
     onClick={()=>saveMapping()}>Guardar relación</button>
   </div>

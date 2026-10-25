@@ -1,6 +1,18 @@
 // Prueba de navegador del preparador por laboratorio, sin datos de producción.
 import {chromium} from "playwright";
 import assert from "node:assert/strict";
+import {collectLaboratoryCatalog} from "./src/laboratoryLoadAll.js";
+// Prueba de varias tandas sin paginado ni omisiones de referencias.
+const batchProgress=[];
+const list=await collectLaboratoryCatalog(async(page,size)=>({
+ total:205,rows:Array.from({length:205},(_,i)=>({
+  referencia:"REF-"+(i+1)})).slice((page-1)*size,page*size)
+}),{batchSize:100,onBatch:p=>batchProgress.push(p.loaded)});
+assert.equal(list.rows.length,205);
+assert.deepEqual(batchProgress,[100,200,205]);
+await assert.rejects(()=>collectLaboratoryCatalog(async page=>({
+ total:120,rows:page===1?Array.from({length:100},(_,i)=>({referencia:String(i)})):[]
+})),/página vacía/);
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1366,height:900},acceptDownloads:true});
 const pharmacies=[{id:"1",name:"Abadía",sourceCode:"ABA",databaseCode:"ABA"},
@@ -135,14 +147,13 @@ try{
   "Todas las 125 referencias se ven a la vez, también las de otros lotes");
  assert.equal(await page.locator(".fm-lab-order-pager").count(),0);
  assert.equal(await page.getByRole("button",{name:"Siguiente",exact:true}).count(),0);
- assert.ok(matrices.filter(m=>m.laboratorio==="N:MULTI").length>=4,
-  "Se calculan métricas para todos los lotes");
  const last=page.getByRole("spinbutton",{name:"Pedir Referencia lote 125 para el laboratorio"});
  await last.fill("9");
  const saveMulti=page.getByRole("button",{name:"Guardar borrador"});
  await saveMulti.waitFor({state:"visible"});
- await page.getByText(/Calculando ventas y stock 125 de 125/).waitFor({timeout:25000}).catch(()=>{});
  await page.waitForFunction(()=>!document.querySelector(".fm-lab-order-actions button").disabled,{timeout:25000});
+ assert.ok(matrices.filter(m=>m.laboratorio==="N:MULTI").length>=4,
+  "Se calculan métricas para todos los lotes");
  await saveMulti.click();
  await page.getByText(/Borrador guardado/).waitFor();
  assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
@@ -150,7 +161,7 @@ try{
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
  await page.getByRole("option",{name:"Laboratorio con ventas inaccesibles"}).click();
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
- await page.getByText(/No se pudieron calcular ventas\/stock/).waitFor();
+ await page.getByText(/no se pudieron completar las ventas y el stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");
   // Reproducción del defecto real: la vista antigua tenía dos cajas.

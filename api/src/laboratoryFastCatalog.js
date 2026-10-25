@@ -47,20 +47,22 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
  ), lab_aliases AS MATERIALIZED (
-  -- Convertir la identidad de la opción visible a los nombres y códigos de
-  -- titular/comercializador AEMPS con una única lectura del Nomenclátor.
+  -- El titular y el comercializador pueden ser empresas distintas.
+  -- Enlazar nombres y códigos SOLO del mismo lado AEMPS, no los otros
+  -- laboratorios asociados al mismo medicamento.
   SELECT $1::text AS key
   UNION
   SELECT DISTINCT alias.key FROM farmetrica.nomenclator_presentaciones n
   CROSS JOIN LATERAL (VALUES
-   ('N:'||${normalizedLabSQL("n.laboratorio_titular")}),
-   ('N:'||${normalizedLabSQL("n.laboratorio_comercializador")}),
-   ('N:'||${normalizedLabSQL("n.laboratorio")}),
-   ('C:'||upper(btrim(coalesce(n.laboratorio_titular_codigo,'')))),
-   ('C:'||upper(btrim(coalesce(n.laboratorio_comercializador_codigo,'')))),
-   ('C:'||upper(btrim(coalesce(n.laboratorio_codigo,''))))
+   (${normalizedLabSQL("n.laboratorio_titular")},n.laboratorio_titular_codigo),
+   (${normalizedLabSQL("n.laboratorio_comercializador")},n.laboratorio_comercializador_codigo),
+   (${normalizedLabSQL("n.laboratorio")},n.laboratorio_codigo)
+  ) AS side(name,code)
+  CROSS JOIN LATERAL (VALUES
+   ('N:'||side.name),('C:'||upper(btrim(coalesce(side.code,''))))
   ) AS alias(key)
-  WHERE ${officialMatch("n")} AND alias.key !~ '^[NC]:$'
+  WHERE ('N:'||side.name=$1 OR 'C:'||upper(btrim(coalesce(side.code,'')))=$1)
+   AND alias.key !~ '^[NC]:$'
  ), supplier_links AS (
   SELECT m.farmacia_id,${supplierCode("m.codigo_proveedor")} AS supplier_code,
    m.laboratorio_clave AS laboratory_key

@@ -22,9 +22,9 @@ export function mergeVisibleOrderLines(rows,type,ids,drafts={}){
 export function laboratoryExcelRows(lines,pharmacies,type){
  const isMedication=type==="medicacion";
  const ids=pharmacies.map(p=>String(p.id));
- const grouping=["CN / ERP","Artículo",...pharmacies.flatMap(p=>
+ const grouping=["CN","Artículo",...pharmacies.flatMap(p=>
   [p.name,"","","",""]), "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir Pedia"])];
- const headings=["CN / ERP","Artículo",...pharmacies.flatMap(()=>
+ const headings=["CN","Artículo",...pharmacies.flatMap(()=>
   ["Ventas 3m","Ventas 12m","Stock","Vendido período",isMedication?"Pedir":"Propuesta"]),
   "Total vendido", "Propuesta total",...(isMedication?[]:["Pedir Pedia"])];
  const rows=lines.map(({row,line})=>{
@@ -32,7 +32,7 @@ export function laboratoryExcelRows(lines,pharmacies,type){
   const sold=measures.reduce((n,v)=>n+Number(v.unitsPeriod||0),0);
   const proposals=measures.some(v=>v.suggested===null||v.suggested===undefined)?null:
    measures.reduce((n,v)=>n+Number(v.suggested),0);
-  return [row.cn||row.referencia,row.nombre,...measures.flatMap((m,i)=>[
+  return [row.cn||"",row.nombre,...measures.flatMap((m,i)=>[
    Number(m.units3||0),Number(m.units12||0),m.stock,
    Number(m.unitsPeriod||0),isMedication?line.unitsByPharmacy?.[ids[i]]??0:m.suggested
   ]),sold,proposals,...(isMedication?[]:[line.units])];
@@ -44,12 +44,12 @@ export function laboratoryExcelRows(lines,pharmacies,type){
 export function laboratoryOrderListRows(lines,pharmacies,type){
  if(type==="parafarmacia")return [
   ["Cliente", "Código nacional / EAN", "Artículo", "Unidades"],
-  ...lines.map(({row,line})=>["Pedia",row.cn||row.referencia,row.nombre,line.units])
+  ...lines.map(({row,line})=>["Pedia",row.cn||"",row.nombre,line.units])
  ];
  return [
   ["Código nacional / EAN","Artículo",...pharmacies.map(p=>"Pedir "+p.name)],
   ...lines.map(({row,line})=>[
-   row.cn||row.referencia,row.nombre,
+   row.cn||"",row.nombre,
    ...pharmacies.map(p=>line.unitsByPharmacy?.[String(p.id)]??0)
   ])
  ];

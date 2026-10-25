@@ -76,10 +76,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   return()=>controller.abort();
  },[clientSlug,laboratory,scope,reload]);
  useEffect(()=>{
-  if(!laboratory){setData(empty);return}
+  if(!laboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
   const controller=new AbortController();
+  setLoading(true);setLoadStage("catalog");setError("");setData(empty);
   const timer=setTimeout(async()=>{
-   setLoading(true);setError("");setData(empty);
    const basic=new URLSearchParams({laboratorio:laboratory,tipo:tab,
     farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
@@ -88,8 +88,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    // Show source records first: the inventory join can take longer or fail.
    const sourcePromise=api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,
     {signal:controller.signal}).then(d=>{
-     if(!controller.signal.aborted&&!matrixFinished&&useMetrics)
-      setData({...d,metricsUnavailable:true,warning:"Artículos encontrados. Cargando ventas y stock…"});
+     if(!controller.signal.aborted&&!matrixFinished&&useMetrics){
+      setLoadStage("metrics");
+      setData({...d,metricsUnavailable:true,warning:"Artículos encontrados. Calculando ventas y stock…"});
+     }
      return d;
     }).catch(e=>({error:e.message}));
    if(!useMetrics){

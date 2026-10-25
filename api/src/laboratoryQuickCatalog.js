@@ -156,11 +156,15 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
   SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
   FROM pharmacies p JOIN ${schema}.articulos a
    ON upper(btrim(a.farmacia_codigo))=p.code
-  WHERE ('N:'||${normalizedLabSQL("a.laboratorio")}=$1
-   OR EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm
-    WHERE pm.cliente_slug=$3 AND pm.laboratorio_clave=$1
-     AND pm.cooperativa IS NOT TRUE AND pm.ignorar_informes IS NOT TRUE
-     AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("a.laboratorio")}))
+  WHERE 'N:'||${normalizedLabSQL("a.laboratorio")} IN (
+   -- Resolver los alias UNA vez por consulta, sin una búsqueda correlacionada
+   -- al maestro por cada artículo de Farmatic.
+   SELECT key FROM lab_aliases WHERE key LIKE 'N:%'
+   UNION SELECT 'N:'||${normalizedLabSQL("pm.nombre")}
+   FROM farmetrica.proveedores_maestro pm
+   WHERE pm.cliente_slug=$3
+    AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
+    AND pm.cooperativa IS NOT TRUE AND pm.ignorar_informes IS NOT TRUE)
    AND EXISTS(SELECT 1 FROM ${schema}.fm_ventas_analitica v
     WHERE v.farmacia_codigo=p.code AND v.articulo_id=a.origen_id::text)
  ), candidates AS MATERIALIZED (

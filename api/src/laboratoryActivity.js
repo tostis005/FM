@@ -18,21 +18,32 @@ export async function readOperationalLaboratoryEvidence(pool,context,pharmacies)
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
  if(!pharmacies.length)return [];
  const schema='"'+context.client.schema+'"';
- const c=`coalesce(${cn("a.codigo_nacional")},
-   ${cn("to_jsonb(a)->>'cn_normalizado'")},
-   ${cn("a.origen_id::text")})`;
+ let nativeCN=false;
+ try{
+  const info=await pool.query({text:`
+   SELECT EXISTS(SELECT 1 FROM information_schema.columns
+    WHERE table_schema=$1 AND table_name='articulos'
+     AND column_name='cn_normalizado') AS available`,
+   values:[context.client.schema],query_timeout:1500});
+  nativeCN=info.rows[0]?.available===true;
+ }catch{}
+ const declared=`coalesce(${cn("a.codigo_nacional")},
+   ${cn(nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")})`;
+ const originalId=cn("a.origen_id::text");
  const sql=`
  WITH selected AS (
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
  ), erp_cn AS MATERIALIZED (
   SELECT p.id AS pharmacy_id,p.code,
-   ${c} AS cn,a.laboratorio AS local_lab,
-   (${cn("a.codigo_nacional")} IS NOT NULL OR
-    ${cn("to_jsonb(a)->>'cn_normalizado'")} IS NOT NULL) AS declared_cn
+   coalesce(${declared},origin.cn) AS cn,
+   a.laboratorio AS local_lab,
+   (${declared} IS NOT NULL) AS declared_cn
   FROM ${schema}.articulos a JOIN selected p
    ON upper(btrim(a.farmacia_codigo))=p.code
-  WHERE ${c} IS NOT NULL
+  LEFT JOIN farmetrica.nomenclator_presentaciones origin
+   ON origin.cn=${originalId}
+  WHERE ${declared} IS NOT NULL OR origin.cn IS NOT NULL
  ), erp_evidence AS (
   SELECT 'N:'||lab.name AS key,min(lab.display_name) AS name,
    bool_or(n.cn IS NOT NULL OR left(erp.cn,6)::integer>=400000) AS medication,

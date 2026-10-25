@@ -27,7 +27,9 @@ jobs:
           BEGIN READ ONLY;
           SET LOCAL statement_timeout='25000';
           SELECT 'ARTICULOS_COLUMNS',string_agg(column_name,',') FROM information_schema.columns WHERE table_schema='ampedia' AND table_name='articulos';
-          SELECT 'ORIGIN_LEN',char_length(btrim(origen_id::text)),count(*) FROM ampedia.articulos GROUP BY 1 ORDER BY 2 DESC LIMIT 10;
+          SELECT 'ORIGIN_LEN',char_length(btrim(origen_id::text)),count(*) FROM ampedia.articulos GROUP BY 2 ORDER BY 3 DESC LIMIT 10;
+          SELECT 'CN_NORMALIZADO_COVERAGE',count(*) FILTER (WHERE nullif(btrim(cn_normalizado),'') IS NOT NULL),count(*) FROM ampedia.articulos;
+          SELECT 'CINFA_CN_NORMALIZADO_MATCH',count(*),count(DISTINCT n.cn) FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.cn_normalizado)=n.cn WHERE n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%';
           SELECT 'CINFA_ORIGIN_ID_MATCH',count(*),count(DISTINCT n.cn) FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.origen_id::text)=n.cn WHERE n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%';
           SELECT 'CINFA_ORIGIN_WITH_STOCK',count(*) FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.origen_id::text)=n.cn WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%') AND coalesce(a.stock_actual,0)<>0;
           SELECT 'CINFA_ORIGIN_SALES_365',count(*) FROM ampedia.fm_ventas_analitica v JOIN ampedia.articulos a ON a.origen_id::text=v.articulo_id::text AND upper(btrim(a.farmacia_codigo))=upper(btrim(v.farmacia_codigo)) JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text) WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%') AND v.fecha >= current_date-interval '365 days';

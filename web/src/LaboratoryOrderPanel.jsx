@@ -63,18 +63,15 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    }).catch(e=>{if(!controller.signal.aborted)setError(e.message)});
   return()=>controller.abort();
  },[clientSlug,laboratory,tab,scope]);
- useEffect(()=>{
-  setDiagnostic(null);
-  if(!laboratory)return;
-  const controller=new AbortController();
-  setDiagnosticBusy(true);
+ useEffect(()=>{setDiagnostic(null);setDiagnosticBusy(false)},[clientSlug,laboratory,scope]);
+ async function runDiagnostic(){
+  if(!laboratory||diagnosticBusy)return;
+  setDiagnosticBusy(true);setDiagnostic(null);
   const query=new URLSearchParams({laboratorio:laboratory,farmacias:scope});
-  api(clientSlug,"/api/analytics/pedidos/diagnostico-laboratorio?"+query,{signal:controller.signal})
-   .then(d=>{if(!controller.signal.aborted)setDiagnostic(d)})
-   .catch(e=>{if(!controller.signal.aborted)setDiagnostic({error:e.message})})
-   .finally(()=>{if(!controller.signal.aborted)setDiagnosticBusy(false)});
-  return()=>controller.abort();
- },[clientSlug,laboratory,scope,reload]);
+  try{setDiagnostic(await api(clientSlug,"/api/analytics/pedidos/diagnostico-laboratorio?"+query))}
+  catch(e){setDiagnostic({error:e.message})}
+  finally{setDiagnosticBusy(false)}
+ }
  useEffect(()=>{
   if(!laboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
   const controller=new AbortController();
@@ -84,46 +81,42 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
-   let matrixFinished=false;
-   // Show source records first: the inventory join can take longer or fail.
-   const sourcePromise=api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,
-    {signal:controller.signal}).then(d=>{
-     if(!controller.signal.aborted&&!matrixFinished&&useMetrics){
-      setLoadStage("metrics");
-      setData({...d,metricsUnavailable:true,warning:"Artículos encontrados. Calculando ventas y stock…"});
-     }
-     return d;
-    }).catch(e=>({error:e.message}));
-   if(!useMetrics){
-    const source=await sourcePromise;
+   // Antes se lanzaban DOS catálogos completos en paralelo y además el
+   // diagnóstico automático; podían saturar la BD y provocar falsos vacíos.
+   let source;
+   try{source=await api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,
+     {signal:controller.signal})}
+   catch(e){
     if(!controller.signal.aborted){
-     if(source.error){setError("No se puede consultar el catálogo: "+source.error);setData(empty)}
-     else{setData({...source,metricsUnavailable:true,
-      warning:!scope?"No hay farmacias seleccionadas: se muestran artículos sin stock ni ventas.":
-       !range.valid?"El período no es válido. Se muestran los artículos sin métricas.":
-       "El período supera el límite de 5 años. Selecciona uno más corto para calcular las ventas."});
-      setUpdatedAt(new Date());}
+     setData(empty);setError("No se pudo leer el catálogo de "+labName+
+      ": "+e.message+". Usa «Diagnosticar enlace» para comprobar la causa.");
      setLoading(false);setLoadStage("idle");
     }
     return;
    }
-   const query=new URLSearchParams(basic);
-   query.set("desde",range.from);query.set("hasta",range.to);
+   if(controller.signal.aborted)return;
+   setData({...source,metricsUnavailable:true,
+    warning:source.total>0&&useMetrics?"Artículos encontrados. Calculando ventas y stock…":null});
+   setUpdatedAt(new Date());
+   if(!source.rows?.length||!useMetrics){
+    if(!useMetrics&&source.rows?.length)setData({...source,metricsUnavailable:true,
+     warning:!scope?"No hay farmacias seleccionadas: faltan ventas y stock.":
+      !range.valid?"El período no es válido. Se muestran referencias sin métricas.":
+       "El período supera 5 años. Acótalo para obtener ventas y stock."});
+    setLoading(false);setLoadStage("idle");
+    return;
+   }
+   setLoadStage("metrics");
+   const query=new URLSearchParams(basic);query.set("desde",range.from);query.set("hasta",range.to);
    try{
     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
      {signal:controller.signal});
-    matrixFinished=true;
     if(!controller.signal.aborted){setData(result);setUpdatedAt(new Date())}
    }catch(e){
-    matrixFinished=true;
     if(controller.signal.aborted)return;
-    const source=await sourcePromise;
-    if(controller.signal.aborted)return;
-    if(source.error){setData(empty);setError("No se pudieron consultar los artículos: "+source.error+
-     ". Error de la matriz: "+e.message)}
-    else{setData({...source,metricsUnavailable:true,
-     warning:"No se pudieron calcular ventas/stock ("+e.message+"). Se muestran las referencias del catálogo."});
-     setUpdatedAt(new Date());}
+    setData({...source,metricsUnavailable:true,
+     warning:"Artículos encontrados, pero falló el cálculo de ventas/stock: "+e.message});
+    setUpdatedAt(new Date());
    }finally{if(!controller.signal.aborted){setLoading(false);setLoadStage("idle")}}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
@@ -231,15 +224,35 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     {data.warning&&<p role="status" className="fm-lab-order-warning">
      <AlertTriangle size={15}/> {data.warning}
     </p>}
-    {diagnostic&&<div className="fm-lab-order-diagnostics" role="status">
-     <strong>Referencias de movimientos y Nomenclátor</strong>
-     {diagnostic.sources?.map(src=><span key={src.type}>
-      {src.type==="medicacion"?"Medicación":"Parafarmacia"}: <b>{src.status==="ok"?src.total:"Error al consultar"}</b>
-     </span>)}
-     {diagnostic.pharmacyCount===0&&<span>Sin farmacias asignadas</span>}
-     {diagnostic.error&&<span>{diagnostic.error}</span>}
-    </div>}
-    {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando productos de ventas, recepciones y Nomenclátor…</p>}
+    {(!loading&&data.total===0||Boolean(error)||diagnostic)&&
+     <div className="fm-lab-order-diagnostic-area">
+      <button type="button" className="btn btn-secondary" disabled={diagnosticBusy}
+       onClick={runDiagnostic}>{diagnosticBusy?"Analizando enlaces…":"Diagnosticar enlace con Farmatic"}</button>
+      {diagnostic&&<div className="fm-lab-order-diagnostics" role="status">
+       <strong>Comprobación de {labName} · {chosen.length} farmacias seleccionadas</strong>
+       {diagnostic.sources?.map(src=><span key={src.type}>
+        {src.type==="medicacion"?"Medicación":"Parafarmacia"}: <b>{
+         src.status==="ok"?src.total:"Error "+(src.errorCode||"desconocido")}</b>
+       </span>)}
+       {diagnostic.evidence&&<>
+        <span>Nomenclátor: <b>{diagnostic.evidence.official}</b></span>
+        <span>Fichas ERP con laboratorio: <b>{diagnostic.evidence.erpArticles}</b></span>
+        <span>Proveedores ERP con ese nombre: <b>{diagnostic.evidence.erpSuppliers}</b></span>
+        <span>Líneas de compra vinculadas por nombre: <b>{diagnostic.evidence.purchasesWithNamedSupplier}</b></span>
+        <span>Compras con enlace manual: <b>{diagnostic.evidence.purchasesWithManualLink}</b></span>
+       </>}
+       {diagnostic.pharmacyCount===0&&<span>Sin farmacias asignadas</span>}
+       {diagnostic.evidenceError&&<span>Error de diagnóstico: {diagnostic.evidenceError}</span>}
+       {diagnostic.error&&<span>{diagnostic.error}</span>}
+       {diagnostic.evidence?.official===0&&diagnostic.evidence?.erpArticles===0&&
+        diagnostic.evidence?.erpSuppliers===0&&
+        <p>No hay asociación reconocible con este laboratorio. Comprueba el Nomenclátor,
+         el código del proveedor en Farmatic y su correspondencia en el Maestro de proveedores.</p>}
+       {diagnostic.sources?.some(src=>src.status==="error")&&
+        <p>La consulta ha fallado: no significa que el laboratorio no tenga productos.
+         Comprueba el código del error y las migraciones y sincronizaciones.</p>}
+      </div>}
+     </div>}
     <div className="fm-lab-order-summary">
      <span><strong>{loading&&loadStage==="catalog"?"…":data.total??0}</strong> referencias del laboratorio</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSold)}</strong> vendidas en esta página</span>

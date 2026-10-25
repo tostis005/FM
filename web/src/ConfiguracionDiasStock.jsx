@@ -59,7 +59,7 @@ export default function ConfiguracionDiasStock({clientSlug,pharmacies=[]}){
  }
  return <section className="card fm-price-settings fm-stock-days-settings">
   <h2>Días de stock objetivo</h2>
-  <p>Define para cuántos días de venta quieres mantener existencias. El preparador de pedidos multiplica la venta diaria estimada por estos días y descuenta el stock actual y los pedidos pendientes. No modifica las existencias reales.</p>
+  <p>El valor inicial es 20 días. Define para cuántos días de venta quieres mantener existencias. El preparador de pedidos considera estos días más la frecuencia de compra de cada laboratorio y el plazo de entrega. Después descuenta el stock actual y los pedidos pendientes. No modifica las existencias reales.</p>
   {loading?<p role="status">Cargando días de stock…</p>:
    !items.length?<p role="alert">{error||"No hay farmacias configurables."}</p>:
    <form onSubmit={save}>
@@ -73,7 +73,7 @@ export default function ConfiguracionDiasStock({clientSlug,pharmacies=[]}){
      <label>Días de stock deseados
       <input aria-label="Días de stock objetivo" type="number" min="1" max="3650" step="1"
        required value={days} onChange={e=>setDays(e.target.value)}
-       placeholder={scope==="0"?"Distintos valores por farmacia":"90"}/>
+       placeholder={scope==="0"?"Distintos valores por farmacia":"20"}/>
      </label>
     </div>
     {scope==="0"&&<p className="fm-planner-summary-note">Guardar con «Todas las farmacias» aplica el mismo objetivo a {items.length} farmacias. Para mantener valores distintos, selecciona cada farmacia.</p>}

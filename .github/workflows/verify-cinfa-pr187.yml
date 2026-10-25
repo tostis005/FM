@@ -1,0 +1,55 @@
+name: Comprobación final Cinfa en producción
+on:
+  push:
+    branches: ["diag/verify-cinfa-pr187-20261025"]
+    paths: [".github/workflows/verify-cinfa-pr187.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar conexión temporal
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/ci
+          chmod 600 ~/.ssh/ci
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Validar catálogo y stock para CN real de Cinfa en API desplegada
+        run: |
+          set -euo pipefail
+          cat <<'NODE' | ssh -i ~/.ssh/ci -o BatchMode=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+          import pg from "pg";
+          import {readDirectLaboratoryCatalog} from "./src/laboratoryFastCatalog.js";
+          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
+          const db=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:6000});
+          try{
+            const q=await db.query(`SELECT f.id,n.cn FROM ampedia.articulos a
+             JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+              AND upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+             JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text)
+             WHERE (n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%')
+              AND coalesce(a.stock_actual,0)<>0
+             LIMIT 1`);
+            if(!q.rows.length)throw Error("No stock-backed CN found for Cinfa");
+            const {id,cn}=q.rows[0],ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id}]};
+            const opts={key:"N:CINFA",pharmacies:[id],type:"medicacion",search:cn,page:1,size:10};
+            let started=Date.now();
+            const cat=await readDirectLaboratoryCatalog(db,ctx,opts);
+            console.log("CINFA_CATALOG",JSON.stringify({total:cat.total,rows:cat.rows.length,found:cat.rows.some(x=>x.cn===cn),durationMs:Date.now()-started}));
+            if(!cat.rows.some(x=>x.cn===cn))throw Error("Cinfa CN missing in catalog");
+            started=Date.now();
+            const matrix=await readLaboratoryOrderMatrix(db,ctx,{...opts,from:"2026-10-01",to:"2026-10-24"});
+            const matched=matrix.rows.find(x=>x.cn===cn);
+            const stock=matched?.byPharmacy?.[String(id)]?.stock;
+            console.log("CINFA_MATRIX",JSON.stringify({total:matrix.total,hasArticle:!!matched,metricsUnavailable:matrix.metricsUnavailable,stock:stock??null,units3:matched?.byPharmacy?.[String(id)]?.units3??null,durationMs:Date.now()-started}));
+            if(!matched||matrix.metricsUnavailable||!(stock!==null&&Number(stock)!==0))
+              throw Error("Cinfa matrix did not retrieve real stock");
+          }finally{await db.end()}
+          NODE

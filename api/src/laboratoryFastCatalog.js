@@ -46,6 +46,25 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  WITH pharmacies AS (
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
+ ), lab_aliases AS MATERIALIZED (
+  -- El selector usa N:nombre, pero una relación ERP puede usar C:código AEMPS.
+  -- Unificar ambas identidades sin confundir laboratorios diferentes.
+  SELECT $1::text AS key
+  UNION SELECT 'N:'||${normalizedLabSQL("n.laboratorio_titular")}
+   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
+  UNION SELECT 'N:'||${normalizedLabSQL("n.laboratorio_comercializador")}
+   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
+  UNION SELECT 'N:'||${normalizedLabSQL("n.laboratorio")}
+   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
+  UNION SELECT 'C:'||upper(btrim(n.laboratorio_titular_codigo))
+   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
+    AND nullif(btrim(n.laboratorio_titular_codigo),'') IS NOT NULL
+  UNION SELECT 'C:'||upper(btrim(n.laboratorio_comercializador_codigo))
+   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
+    AND nullif(btrim(n.laboratorio_comercializador_codigo),'') IS NOT NULL
+  UNION SELECT 'C:'||upper(btrim(n.laboratorio_codigo))
+   FROM farmetrica.nomenclator_presentaciones n WHERE ${officialMatch("n")}
+    AND nullif(btrim(n.laboratorio_codigo),'') IS NOT NULL
  ), supplier_links AS (
   SELECT m.farmacia_id,${supplierCode("m.codigo_proveedor")} AS supplier_code,
    m.laboratorio_clave AS laboratory_key
@@ -54,7 +73,11 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   WHERE m.cliente_slug=$3 AND NOT EXISTS (
    SELECT 1 FROM farmetrica.proveedores_maestro pm
    WHERE pm.cliente_slug=$3 AND pm.cooperativa=true
-    AND ${supplierCode("pm.codigo_origen")}=${supplierCode("m.codigo_proveedor")})
+    AND ${supplierCode("pm.codigo_origen")}=${supplierCode("m.codigo_proveedor")}
+    AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
+     WHERE upper(btrim(sp.farmacia_codigo))=p.code
+      AND ${supplierCode("sp.origen_id")}=${supplierCode("m.codigo_proveedor")}
+      AND ${normalizedLabSQL("sp.nombre")}=${normalizedLabSQL("pm.nombre")}))
   UNION ALL
   SELECT p.id,${supplierCode("pm.codigo_origen")},pm.laboratorio_clave
   FROM farmetrica.proveedores_maestro pm CROSS JOIN pharmacies p
@@ -69,6 +92,25 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
     SELECT 1 FROM farmetrica.proveedores_laboratorios m
     WHERE m.cliente_slug=$3 AND m.farmacia_id=p.id
      AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("pm.codigo_origen")})
+  UNION ALL
+  -- El proveedor de Farmatic ya puede llamarse CINFA sin asignación manual:
+  -- aplicar solo coincidencia EXACTA con el laboratorio normalizado.
+  SELECT p.id,${supplierCode("sp.origen_id")},
+   'N:'||${normalizedLabSQL("sp.nombre")}
+  FROM pharmacies p JOIN ${schema}.proveedores sp
+   ON upper(btrim(sp.farmacia_codigo))=p.code
+  WHERE 'N:'||${normalizedLabSQL("sp.nombre")}
+    IN (SELECT key FROM lab_aliases WHERE key LIKE 'N:%')
+   AND NOT EXISTS (
+    SELECT 1 FROM farmetrica.proveedores_laboratorios m
+    WHERE m.cliente_slug=$3 AND m.farmacia_id=p.id
+     AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("sp.origen_id")})
+   AND NOT EXISTS (
+    SELECT 1 FROM farmetrica.proveedores_maestro pm
+    WHERE pm.cliente_slug=$3
+     AND ${supplierCode("pm.codigo_origen")}=${supplierCode("sp.origen_id")}
+     AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")}
+     AND (pm.cooperativa IS TRUE OR pm.laboratorio_clave IS NOT NULL))
  ), relevant_articles AS MATERIALIZED (
   -- Primero identifica artículos del laboratorio. No recorre el histórico entero.
   SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
@@ -89,9 +131,26 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   JOIN supplier_links link ON link.farmacia_id=p.id
    AND link.supplier_code=${supplierCode("r.proveedor_id")}
   WHERE r.articulo_id IS NOT NULL
-   AND (link.laboratory_key=$1
+   AND (link.laboratory_key IN (SELECT key FROM lab_aliases)
     OR (link.laboratory_key LIKE 'N:%'
-     AND 'N:'||${normalizedLabSQL("substring(link.laboratory_key from 3)")}=$1))
+     AND 'N:'||${normalizedLabSQL("substring(link.laboratory_key from 3)")}
+       IN (SELECT key FROM lab_aliases)))
+  UNION
+  -- Si la ficha de proveedores no se sincronizó, usar el nombre REAL del
+  -- proveedor en el albarán, siempre que no exista una asignación distinta.
+  SELECT DISTINCT p.id,p.code,r.articulo_id::text
+  FROM pharmacies p JOIN ${schema}.fm_recepciones_analitica r
+   ON r.farmacia_codigo=p.code
+  WHERE r.articulo_id IS NOT NULL
+   AND 'N:'||${normalizedLabSQL("r.proveedor_nombre")}
+       IN (SELECT key FROM lab_aliases WHERE key LIKE 'N:%')
+   AND NOT EXISTS (SELECT 1 FROM supplier_links link
+    WHERE link.farmacia_id=p.id
+     AND link.supplier_code=${supplierCode("r.proveedor_id")})
+   AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm
+    WHERE pm.cliente_slug=$3 AND pm.cooperativa IS TRUE
+     AND ${supplierCode("pm.codigo_origen")}=${supplierCode("r.proveedor_id")}
+     AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("r.proveedor_nombre")})
  ), candidates AS MATERIALIZED (
   SELECT pharmacy_id,code,article_id FROM relevant_articles
   UNION SELECT pharmacy_id,code,article_id FROM relevant_receipts
@@ -123,8 +182,12 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
       OR ${officialMatch("n")}
       OR EXISTS (SELECT 1 FROM supplier_links map
        WHERE map.farmacia_id=m.pharmacy_id AND map.supplier_code=m.supplier_code
-       AND ('N:'||${normalizedLabSQL("substring(map.laboratory_key from 3)")}=$1
-         OR map.laboratory_key=$1)) THEN true ELSE false END AS belongs,
+       AND ('N:'||${normalizedLabSQL("substring(map.laboratory_key from 3)")}
+          IN (SELECT key FROM lab_aliases)
+         OR map.laboratory_key IN (SELECT key FROM lab_aliases)))
+      OR EXISTS (SELECT 1 FROM relevant_receipts rr
+       WHERE rr.pharmacy_id=m.pharmacy_id AND rr.article_id=m.article_id)
+       THEN true ELSE false END AS belongs,
    n.dcpf,n.generico
   FROM movements m
   LEFT JOIN ${schema}.articulos a

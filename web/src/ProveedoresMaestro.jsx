@@ -164,7 +164,7 @@ export default function ProveedoresMaestro({clientSlug}){
     <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
    </details>
    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
-   {mappingSupplier&&<div className="fm-demo-overlay"
+   {mappingSupplier&&<div className="fm-demo-overlay fm-supplier-lab-overlay"
     onMouseDown={e=>{if(e.target===e.currentTarget)setMappingSupplier(null)}}>
     <div className="fm-demo-detail fm-provider-dialog fm-supplier-lab-dialog" role="dialog"
      aria-modal="true" aria-label="Asignar laboratorio a proveedor">

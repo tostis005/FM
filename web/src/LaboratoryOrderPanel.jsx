@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Download,Save,AlertTriangle} from "lucide-react";
+import {Download,Save,AlertTriangle,LoaderCircle} from "lucide-react";
+import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -30,11 +31,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const scope=ids.map(String).join(",");
  const chosen=pharmacies.filter(p=>ids.some(id=>String(id)===String(p.id)));
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
- const [labs,setLabs]=useState([]),[labSearch,setLabSearch]=useState("");
+ const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
  const [page,setPage]=useState(1),[data,setData]=useState(empty);
- const [loading,setLoading]=useState(false),[labsLoading,setLabsLoading]=useState(true);
+ const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
  const [savedDate,setSavedDate]=useState(null),[dirty,setDirty]=useState(false),[persisted,setPersisted]=useState(false);
@@ -100,7 +101,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        !range.valid?"El período no es válido. Se muestran los artículos sin métricas.":
        "El período supera el límite de 5 años. Selecciona uno más corto para calcular las ventas."});
       setUpdatedAt(new Date());}
-     setLoading(false);
+     setLoading(false);setLoadStage("idle");
     }
     return;
    }
@@ -121,12 +122,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     else{setData({...source,metricsUnavailable:true,
      warning:"No se pudieron calcular ventas/stock ("+e.message+"). Se muestran las referencias del catálogo."});
      setUpdatedAt(new Date());}
-   }finally{if(!controller.signal.aborted)setLoading(false)}
+   }finally{if(!controller.signal.aborted){setLoading(false);setLoadStage("idle")}}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
  },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,page,reload]);
- const options=useMemo(()=>labs.filter(l=>(l.name+" "+l.key)
-  .toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es"))),[labs,labSearch]);
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
  const currentRows=data.rows||[];
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
@@ -199,20 +198,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <div><h2>1. Selecciona el laboratorio</h2>
      <p>Catálogo AEMPS y artículos identificados por código ERP y recepciones.</p></div>
     <div className="fm-lab-order-chooser">
-     <input type="search" aria-label="Buscar laboratorio" placeholder="Buscar laboratorio…"
-      value={labSearch} onChange={e=>setLabSearch(e.target.value)}/>
-     <select aria-label="Seleccionar laboratorio" value={laboratory}
-      onChange={e=>{
-       const next=labs.find(l=>l.key===e.target.value);
-       setLaboratory(e.target.value);
-       setTab(next?.hasMedication===true&&next?.hasParapharmacy===false?"medicacion":"parafarmacia");
+     <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
+      onSelect={key=>{
+       const next=labs.find(l=>l.key===key);
+       setLaboratory(key);
+       setTab(next?.hasMedication===true&&!next?.hasParapharmacy?"medicacion":"parafarmacia");
        setPage(1);setSearch("");setError("");setNotice("");
-      }}>
-      <option value="">{labsLoading?"Cargando laboratorios…":"Elige un laboratorio"}</option>
-      {options.map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
-      {laboratory&&!options.some(l=>l.key===laboratory)&&labs.filter(l=>l.key===laboratory)
-       .map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
-     </select>
+      }}/>
     </div>
    </div>
    {error&&<p className="fm-op-message fm-op-error" role="alert"><AlertTriangle size={15}/>{error}</p>}
@@ -247,16 +239,16 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     </div>}
     {diagnosticBusy&&<p role="status" className="fm-op-fine">Comprobando referencias del maestro…</p>}
     <div className="fm-lab-order-summary">
-     <span><strong>{data.total||0}</strong> referencias del laboratorio</span>
+     <span><strong>{loading&&loadStage==="catalog"?"…":data.total??0}</strong> referencias del laboratorio</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSold)}</strong> vendidas en esta página</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
      <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
-     {loading&&<span role="status">Actualizando datos…</span>}
+     {loading&&<span role="status" className="fm-lab-loading-label"><LoaderCircle size={15} className="fm-lab-spinner"/>{loadStage==="catalog"?"Consultando artículos del laboratorio…":"Calculando ventas y stock por farmacia…"}</span>}
     </div>
     <div className="fm-lab-order-scroll" role="region" tabIndex={0}
      aria-label="Tabla horizontal de artículos y métricas por farmacia">
      <table className="fm-lab-order-table">
-      <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN / ERP</th>
+      <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        <th colSpan={tab==="parafarmacia"?3:2} className="fm-lab-order-total-group">Totales</th>
@@ -270,10 +262,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <tbody>{currentRows.map(row=>{
        const line=showLine(row);
        return <tr key={row.referencia}>
-        <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.referencia}>{row.cn||row.referencia}
+        <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
          {row.provisional&&<small>CN pendiente</small>}</td>
         <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>{row.nombre}
-         <small>{row.inMaster?"Maestro":row.inReceipts?"ERP / recepciones":"Referencia"}</small></td>
+         <small>{row.inMaster?"Maestro":row.inReceipts?"Farmatic":"Referencia"}</small></td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [data.metricsUnavailable?null:m.units3??0,data.metricsUnavailable?null:m.units12??0,m.stock??null,data.metricsUnavailable?null:m.unitsPeriod??0,
@@ -293,6 +285,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           value={line.units??0} onChange={e=>updateLine(row,e.target.value)}/></td>}
        </tr>;
       })}
+      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
       {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
@@ -332,7 +325,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <Download size={16}/> Generar Excel</button>
     </div>
     <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, cada farmacia pide sus propias unidades.</p>
-    <p className="fm-op-fine">Las referencias sin CN verificado aparecen identificadas por ERP y deben revisarse antes del envío. La exportación no envía ni aprueba ningún pedido.</p>
+    <p className="fm-op-fine">Las referencias sin CN verificado se señalan como pendientes y deben revisarse antes del envío. La exportación no envía ni aprueba ningún pedido.</p>
    </>}
   </section>
  </>;

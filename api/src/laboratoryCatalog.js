@@ -57,6 +57,11 @@ export async function listLaboratoryOptions(pool,context){
     OR EXISTS (SELECT 1 FROM `+schema+`.fm_recepciones_analitica r
      WHERE r.farmacia_codigo=`+pharmacyDataCodeSQL("f")+`
        AND r.articulo_id=a.origen_id::text))
+  UNION ALL
+  SELECT `+normalizedLabSQL("custom.nombre")+` AS canonical,
+   custom.nombre AS name,false AS medication,true AS parapharmacy,false AS vademecum
+  FROM farmetrica.laboratorios_personalizados custom
+  WHERE custom.cliente_slug=$1
   )
   SELECT 'N:'||canonical AS key,min(name) AS name,
     bool_or(medication) AS "hasMedication",

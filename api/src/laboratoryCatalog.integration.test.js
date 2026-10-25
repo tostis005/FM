@@ -84,3 +84,28 @@ test("Cinfa: un único laboratorio AEMPS con titulares/comercializadores y artí
   assert.ok(diagnostic.sources[1].total>=1);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });
+
+test("PostgreSQL: Cinfa recupera stock y ventas usando origen_id cuando codigo_nacional está vacío",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const db=new pg.Client({connectionString:process.env.TEST_DB_URL});await db.connect();
+ try{
+  await db.query("BEGIN");
+  await db.query("INSERT INTO farmetrica.nomenclator_presentaciones (cn,nombre,dcpf,generico,laboratorio_titular,laboratorio_comercializador) VALUES ('791234','Cinfa presentación de prueba','QA-CI',false,'Laboratorios Cinfa SA','CINFA') ON CONFLICT(cn) DO UPDATE SET laboratorio_titular='Laboratorios Cinfa SA',laboratorio_comercializador='CINFA'");
+  await db.query("DELETE FROM ampedia.articulos WHERE farmacia_codigo='ABA' AND origen_id='791234'");
+  await db.query("INSERT INTO ampedia.articulos (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual,sincronizado_en) VALUES ('ABA','791234','Medicamento Cinfa de Farmatic',NULL,NULL,17,now())");
+  await db.query("INSERT INTO ampedia.fm_ventas_cabeceras (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas) VALUES ('ABA','farmatic','CI-CINFA-VENTA-791234','2026-10-21',true) ON CONFLICT DO NOTHING");
+  await db.query("INSERT INTO ampedia.fm_ventas_lineas (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto) VALUES ('ABA','farmatic','CI-CINFA-VENTA-791234','1','791234',4,32) ON CONFLICT DO NOTHING");
+  const ctx={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:1}]};
+  const opts={key:"N:CINFA",pharmacies:[1],type:"medicacion",search:"791234",page:1,size:20};
+  const catalog=await readDirectLaboratoryCatalog(db,ctx,opts);
+  assert.equal(catalog.total,1);
+  assert.equal(catalog.rows[0].cn,"791234");
+  const matrix=await readLaboratoryOrderMatrix(db,ctx,{...opts,from:"2026-10-01",to:"2026-10-24"});
+  assert.equal(matrix.total,1);
+  assert.equal(matrix.metricsUnavailable,false,"La matriz no debe ocultar métricas verificadas");
+  assert.equal(matrix.rows[0].byPharmacy["1"].stock,17);
+  assert.equal(matrix.rows[0].byPharmacy["1"].unitsPeriod,4);
+  assert.ok(matrix.rows[0].byPharmacy["1"].units12>=4);
+ }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
+});

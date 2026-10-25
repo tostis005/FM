@@ -102,5 +102,21 @@ jobs:
              ON v.articulo_id::text=a.origen_id::text
               AND upper(btrim(v.farmacia_codigo))=upper(btrim(a.farmacia_codigo))
            WHERE v.fecha>=current_date-interval '365 days';
+          SELECT 'CN_NORMALIZADO_COVERAGE',count(*) FILTER (WHERE nullif(btrim(cn_normalizado),'') IS NOT NULL),
+           count(*) FILTER (WHERE nullif(btrim(ean),'') IS NOT NULL),
+           count(*) FILTER (WHERE nullif(btrim(proveedor_habitual_id),'') IS NOT NULL)
+           FROM ampedia.articulos;
+          SELECT 'CN_NORMALIZADO_AEMPS_MATCH',count(*) FROM ampedia.articulos a
+           JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.cn_normalizado)=n.cn;
+          SELECT 'CINFA_CN_NORMALIZADO_MATCH',count(*) FROM ampedia.articulos a
+           JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.cn_normalizado)=n.cn
+           WHERE n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%';
+          SELECT 'CINFA_ORIGEN_ID_MATCH',count(*) FROM ampedia.articulos a
+           JOIN farmetrica.nomenclator_presentaciones n ON btrim(a.origen_id::text)=n.cn
+           WHERE n.laboratorio_titular ILIKE '%cinfa%' OR n.laboratorio_comercializador ILIKE '%cinfa%';
+          SELECT 'CINFA_SUPPLIER_HABITUAL',count(*) FROM ampedia.articulos a
+           JOIN farmetrica.proveedores_maestro pm ON pm.cliente_slug='ampedia'
+            AND pm.laboratorio_clave='N:CINFA'
+            AND ltrim(btrim(a.proveedor_habitual_id),'0')=ltrim(btrim(pm.codigo_origen),'0');
           COMMIT;
           SQL

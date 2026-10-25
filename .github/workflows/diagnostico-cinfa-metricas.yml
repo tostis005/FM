@@ -89,5 +89,18 @@ jobs:
            FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND laboratorio_clave='N:CINFA';
           SELECT 'CINFA_SPECIFIC_MAPPINGS',count(*)
            FROM farmetrica.proveedores_laboratorios WHERE cliente_slug='ampedia' AND laboratorio_clave='N:CINFA';
+          SELECT 'ERP_ID_TO_AEMPS_CN',count(*)
+           FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n
+            ON btrim(a.origen_id::text)=n.cn;
+          SELECT 'ERP_ID_LENGTHS',char_length(btrim(origen_id::text)),count(*)
+           FROM ampedia.articulos GROUP BY 1 ORDER BY 2 DESC LIMIT 12;
+          SELECT 'ARTICLE_SCHEMA_COLUMNS',string_agg(column_name,',')
+           FROM information_schema.columns
+           WHERE table_schema='ampedia' AND table_name='articulos';
+          SELECT 'SALES_TO_ERP',count(*)
+           FROM ampedia.fm_ventas_analitica v JOIN ampedia.articulos a
+             ON v.articulo_id::text=a.origen_id::text
+              AND upper(btrim(v.farmacia_codigo))=upper(btrim(a.farmacia_codigo))
+           WHERE v.fecha>=current_date-interval '365 days';
           COMMIT;
           SQL

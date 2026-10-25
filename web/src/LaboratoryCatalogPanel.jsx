@@ -1,4 +1,5 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useState} from "react";
+import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./laboratoryCatalog.css";
 
@@ -11,7 +12,6 @@ async function getJson(path,clientSlug,signal){
 }
 export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
  const [laboratories,setLaboratories]=useState([]);
- const [labSearch,setLabSearch]=useState("");
  const [selected,setSelected]=useState("");
  const [tab,setTab]=useState("parafarmacia");
  const [search,setSearch]=useState("");
@@ -36,36 +36,32 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
    setLoading(true);setError("");
    const query=new URLSearchParams({laboratorio:selected,tipo:tab,buscar:search,
     farmacias:pharmacyCodes,pagina:String(page),tamano:"50"});
-   getJson("/api/analytics/pedidos/articulos-laboratorio?"+query,clientSlug,ac.signal)
+   getJson("/api/analytics/pedidos/catalogo-directo?"+query,clientSlug,ac.signal)
     .then(data=>{if(!ac.signal.aborted)setResult(data)})
     .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
     .finally(()=>{if(!ac.signal.aborted)setLoading(false)});
   },200);
   return ()=>{clearTimeout(timer);ac.abort()};
  },[clientSlug,selected,tab,search,page,pharmacyCodes]);
- const choices=useMemo(()=>laboratories.filter(r=>
-  (r.name+" "+r.key).toLocaleLowerCase("es").includes(labSearch.toLocaleLowerCase("es"))),[laboratories,labSearch]);
  const maxPage=Math.max(1,Math.ceil((result.total||0)/50));
  return <section className="card fm-laboratory-catalog" aria-label="Catálogo por laboratorio">
   <div className="fm-laboratory-heading">
    <div><h2>Artículos por laboratorio</h2>
-    <p>Medicamentos del maestro AEMPS y artículos identificados en las recepciones de las farmacias seleccionadas.</p>
+    <p>Presentaciones del Nomenclátor y artículos con ventas o recepciones de las farmacias seleccionadas, excluyendo los dados de baja.</p>
    </div>
    {loadingLabs&&<LoadingStatus compact label="Cargando laboratorios…"/>}
   </div>
-  <div className="fm-laboratory-filters">
-   <label><span>Buscar laboratorio</span><input type="search" value={labSearch}
-    onChange={e=>setLabSearch(e.target.value)} placeholder="Filtrar laboratorios…"/></label>
-   <label><span>Laboratorio</span><select aria-label="Seleccionar laboratorio" value={selected}
-    onChange={e=>{setSelected(e.target.value);setPage(1);setSearch("");setTab("parafarmacia")}}>
-    <option value="">Selecciona un laboratorio…</option>
-    {choices.map(l=><option value={l.key} key={l.key}>{l.name}</option>)}
-    {selected&&!choices.some(l=>l.key===selected)&&laboratories.filter(l=>l.key===selected).map(l=>
-     <option value={l.key} key={l.key}>{l.name}</option>)}
-   </select></label>
+  <div className="fm-laboratory-filters fm-laboratory-single-filter">
+   <div className="fm-supplier-laboratory-picker">
+    <span>Buscar y seleccionar laboratorio</span>
+    <LaboratoryPicker laboratories={laboratories} selected={selected}
+     loading={loadingLabs} onSelect={key=>{
+      setSelected(key);setPage(1);setSearch("");setTab("parafarmacia");
+     }} ariaLabel="Seleccionar laboratorio del catálogo"/>
+   </div>
   </div>
   {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}
-  {!selected?<p className="fm-laboratory-empty">Elige un laboratorio para consultar todas sus referencias, aunque no hayan tenido ventas.</p>:<>
+  {!selected?<p className="fm-laboratory-empty">Escribe y selecciona un laboratorio en el mismo campo para consultar sus referencias.</p>:<>
    <div className="fm-laboratory-tabs" role="tablist" aria-label="Tipo de producto">
     {["parafarmacia","medicacion"].map(type=>
      <button type="button" role="tab" aria-selected={tab===type} key={type}
@@ -79,11 +75,11 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
     <span>{loading?"Consultando…":result.total+" artículos"}</span>
    </div>
    <div className="fm-laboratory-scroll" role="tabpanel">
-    <table><thead><tr><th>Código nacional / ERP</th><th>Artículo</th><th>Origen</th><th>Farmacias con recepción</th></tr></thead>
+    <table><thead><tr><th>Código nacional / ERP</th><th>Artículo</th><th>Origen</th><th>Farmacias con movimientos</th></tr></thead>
      <tbody>{(result.rows||[]).map(r=><tr key={r.referencia}>
       <td><strong>{r.cn||r.referencia}</strong></td>
       <td>{r.nombre}{r.provisional&&<small className="fm-laboratory-provisional"> · Clasificación provisional (no figura en el maestro)</small>}</td>
-      <td>{r.inMaster&&r.inReceipts?"Maestro + recepciones":r.inMaster?"Maestro":"Recepciones ERP"}</td>
+      <td>{r.inMaster&&r.inReceipts?"Nomenclátor + movimientos":r.inMaster?"Nomenclátor":"Ventas o recepciones ERP"}</td>
       <td>{r.pharmacyIds||"—"}</td>
      </tr>)}
      {!loading&&!(result.rows||[]).length&&<tr><td colSpan={4}>No se han encontrado artículos en esta categoría para el laboratorio seleccionado.</td></tr>}
@@ -97,7 +93,7 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
      <button type="button" className="btn btn-secondary" disabled={page>=maxPage||loading}
       onClick={()=>setPage(p=>p+1)}>Siguiente</button></div>
    </div>
-   <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las recepciones se asocian únicamente mediante correspondencias ERP configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
+   <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las ventas y recepciones se asocian mediante sus códigos nacionales y las correspondencias ERP configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
   </>}
  </section>;
 }

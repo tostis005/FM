@@ -107,6 +107,23 @@ try{
  await page.getByText(/No se pudieron calcular ventas\/stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");
+  // Reproducción del defecto real: la vista antigua tenía dos cajas.
+  await page.evaluate(()=>sessionStorage.setItem("fm_preparador_vista:ampedia","legacy"));
+  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
+  assert.equal(await page.getByRole("button",{name:"Pedido por laboratorio"}).getAttribute("aria-pressed"),"true",
+   "Una preferencia guardada de la vista vieja no debe reabrirla");
+  await page.goto("http://127.0.0.1:4175/compras-preparador?vista=anterior",{waitUntil:"domcontentloaded"});
+  const catalog=page.locator(".fm-laboratory-catalog");
+  await catalog.waitFor();
+  const catalogPicker=catalog.getByRole("combobox",{name:"Seleccionar laboratorio del catálogo"});
+  assert.equal(await catalogPicker.count(),1,"El catálogo antiguo también usa una sola caja");
+  assert.equal(await catalog.locator("select").count(),0,"No hay un desplegable separado");
+  await catalogPicker.fill("Cinfa");
+  assert.equal(await catalog.getByRole("option",{name:"Laboratorios Cinfa S.A."}).count(),1,
+   "Se filtran los laboratorios en el mismo desplegable");
+  await catalog.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
+  assert.equal(await catalogPicker.inputValue(),"Laboratorios Cinfa S.A.");
+  assert.equal(await catalogPicker.getAttribute("aria-expanded"),"false");
   assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK preparador por laboratorio: matriz, para conjunta, medicación individual, borradores y XLSX");
 }finally{await browser.close();}

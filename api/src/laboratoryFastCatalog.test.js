@@ -42,8 +42,8 @@ test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=
  assert.match(query.sql,/proveedores sp/);
  assert.match(query.sql,/r\.proveedor_nombre/);
  assert.match(query.sql,/relevant_receipts rr/);
- assert.match(query.sql,/link\\.laboratory_key IN \\(SELECT key FROM lab_aliases\\)/);
- assert.match(query.sql,/EXISTS \\(SELECT 1 FROM/);
+ assert.ok(query.sql.includes("link.laboratory_key IN (SELECT key FROM lab_aliases)"));
+ assert.ok(query.sql.includes("EXISTS (SELECT 1 FROM"));
  assert.doesNotMatch(query.sql,/movements AS MATERIALIZED/);
  assert.match(query.sql,/preparador_exclusiones|unnest\(\$8::text\[\]\)/);
  assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);

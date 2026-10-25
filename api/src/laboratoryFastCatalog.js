@@ -1,6 +1,7 @@
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
+import {readQuickLaboratoryCatalog} from "./laboratoryQuickCatalog.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const validCN=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
@@ -34,6 +35,10 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
    values:[context.client.schema],query_timeout:1500});
   hasNativeCN=rows[0]?.available===true;
  }catch{}
+ const quick=await readQuickLaboratoryCatalog(pool,context,{
+  key,pharmacies,type,search,page,size,patterns,hasNativeCN
+ });
+ if(quick?.total>0)return quick;
  const cn= `coalesce(${validCN("a.codigo_nacional")},
    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
    CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_presentaciones verified

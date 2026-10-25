@@ -41,10 +41,6 @@ export async function listLaboratoryOptions(pool,context){
    SELECT `+normalizedLabSQL("n.laboratorio_titular")+`,n.laboratorio_titular,true,false,false
    FROM farmetrica.nomenclator_presentaciones n
    UNION ALL
-   SELECT `+normalizedLabSQL("a.laboratorio_nombre")+`,a.laboratorio_nombre,
-     a.tipo='medicacion',a.tipo='parafarmacia',a.fuente='vademecum'
-   FROM farmetrica.articulos_laboratorio_maestro a
-   UNION ALL
    SELECT `+normalizedLabSQL("a.laboratorio")+`,a.laboratorio,
      CASE WHEN btrim(a.codigo_nacional) ~ '^[0-9]{6,7}$'
        THEN left(btrim(a.codigo_nacional),6)::integer>=400000 ELSE false END,
@@ -55,6 +51,12 @@ export async function listLaboratoryOptions(pool,context){
    JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
     AND upper(btrim(a.farmacia_codigo))=`+pharmacyDataCodeSQL("f")+`
    WHERE nullif(btrim(a.laboratorio),'') IS NOT NULL
+    AND (EXISTS (SELECT 1 FROM `+schema+`.fm_ventas_analitica v
+     WHERE v.farmacia_codigo=`+pharmacyDataCodeSQL("f")+`
+       AND v.articulo_id=a.origen_id::text)
+    OR EXISTS (SELECT 1 FROM `+schema+`.fm_recepciones_analitica r
+     WHERE r.farmacia_codigo=`+pharmacyDataCodeSQL("f")+`
+       AND r.articulo_id=a.origen_id::text))
   )
   SELECT 'N:'||canonical AS key,min(name) AS name,
     bool_or(medication) AS "hasMedication",

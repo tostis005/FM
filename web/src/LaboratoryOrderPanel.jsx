@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Download,Save,AlertTriangle,LoaderCircle} from "lucide-react";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
@@ -36,6 +36,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
  const [data,setData]=useState(empty);
+ const catalogueCache=useRef(new Map());
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
@@ -88,19 +89,41 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
    let catalog;
+   const cacheKey=[clientSlug,laboratory,tab,scope,search,reload].join("|");
    try{
-    catalog=await collectLaboratoryCatalog((number,size)=>{
-     const query=new URLSearchParams(base);
-     query.set("pagina",String(number));query.set("tamano",String(size));
-     query.set("ligero","1");
-     return api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+query,{signal:controller.signal});
-    },{
-     batchSize:LAB_CATALOG_BATCH,signal:controller.signal,
-     onBatch:({rows,total})=>{
-      if(!controller.signal.aborted)setData({rows,total,loaded:rows.length,metricsLoaded:0,
-       metricsUnavailable:true,frequencyDays:7});
+    catalog=catalogueCache.current.get(cacheKey);
+    if(!catalog){
+     try{
+      // Unión AEMPS + recepciones de todos los proveedores equivalentes.
+      // Se consulta una vez por laboratorio, sin 10-20 páginas intermedias.
+      catalog=await api(clientSlug,
+       "/api/analytics/pedidos/catalogo-unificado?"+base,{signal:controller.signal});
+      if(!Array.isArray(catalog.rows)||catalog.rows.length!==catalog.total)
+       throw Error("Catálogo incompleto");
+     }catch(error){
+      if(controller.signal.aborted)return;
+      // Retrocompatibilidad: si un laboratorio tiene demasiadas referencias
+      // o la nueva consulta tarda demasiado, cargar páginas en paralelo.
+      catalog=await collectLaboratoryCatalog((number,size)=>{
+       const query=new URLSearchParams(base);
+       query.set("pagina",String(number));query.set("tamano",String(size));
+       query.set("ligero","1");
+       return api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+query,{
+        signal:controller.signal});
+      },{
+       batchSize:LAB_CATALOG_BATCH,signal:controller.signal,
+       onBatch:({rows,total})=>{
+        if(!controller.signal.aborted)setData({rows,total,loaded:rows.length,
+         metricsLoaded:0,metricsUnavailable:true,frequencyDays:7});
+       }
+      });
      }
-    });
+     catalogueCache.current.set(cacheKey,catalog);
+     if(catalogueCache.current.size>6)
+      catalogueCache.current.delete(catalogueCache.current.keys().next().value);
+    }
+    if(!controller.signal.aborted)setData({rows:catalog.rows,total:catalog.total,
+     loaded:catalog.total,metricsLoaded:0,metricsUnavailable:true,frequencyDays:7});
    }catch(e){
     if(!controller.signal.aborted){
      setError("No se pudieron cargar todas las referencias: "+e.message);
@@ -121,8 +144,39 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     return;
    }
    setLoadStage("metrics");
-   // Métricas directas: el catálogo ya está cargado. La API recibe
-   // los CN de cada lote y SOLO consulta stock y ventas, dos lotes a la vez.
+   // Un solo conjunto de CN para agrupar las ventas de 3m, 12m y período;
+   // el servidor también devuelve stock y sugerencias de todas las farmacias.
+   let bulkComplete=false;
+   try{
+    const result=await api(clientSlug,"/api/analytics/pedidos/matriz-conjunta",{
+     method:"POST",signal:controller.signal,
+     body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
+      desde:range.from,hasta:range.to,
+      referencias:catalog.rows.map(row=>({
+       referencia:row.referencia,cn:row.cn||null,nombre:row.nombre
+      }))}
+    });
+    if(controller.signal.aborted)return;
+    if(result.metricsUnavailable||result.rows?.length!==catalog.rows.length)
+     throw Error(result.warning||"Métricas conjuntas incompletas");
+    const byReference=new Map(result.rows.map(row=>[row.referencia,row]));
+    const completed=catalog.rows.map(row=>{
+     const metrics=byReference.get(row.referencia);
+     if(!metrics)throw Error("Referencia sin métricas");
+     return {...row,...metrics,metricsReady:true};
+    });
+    setData({rows:completed,total:catalog.total,loaded:catalog.total,
+     metricsLoaded:catalog.total,frequencyDays:result.frequencyDays||7,
+     metricsUnavailable:false});
+    bulkComplete=true;
+   }catch(e){
+    if(controller.signal.aborted)return;
+   }
+   if(bulkComplete){
+    setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());return;
+   }
+   // Respaldo: bloques indexados de 40 referencias si la agregación conjunta
+   // supera el plazo. No se reconstruye el catálogo ni se pierden artículos.
    try{
     await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{

@@ -54,7 +54,8 @@ await page.route("**/api/**",async route=>{
    const data=request.postDataJSON();saved.push(data);
    body={saved:true,count:data.lineas.length,updatedAt:"2026-10-24T07:00:00Z"};
   }else body={lineas:[]};
- }else if(path==="/api/analytics/pedidos/catalogo-directo"){
+ }else if(path==="/api/analytics/pedidos/catalogo-directo"||
+  path==="/api/analytics/pedidos/catalogo-unificado"){
   const lab=url.searchParams.get("laboratorio"),type=url.searchParams.get("tipo");
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
   const pageNumber=Number(url.searchParams.get("pagina")||1);
@@ -79,7 +80,8 @@ await page.route("**/api/**",async route=>{
   body={pharmacyCount:2,sources:[{type:"medicacion",status:"ok",total:1},
    {type:"parafarmacia",status:"ok",total:0}]};
  }else if(path==="/api/analytics/pedidos/matriz-laboratorio"||
-  path==="/api/analytics/pedidos/matriz-referencias"){
+  path==="/api/analytics/pedidos/matriz-referencias"||
+  path==="/api/analytics/pedidos/matriz-conjunta"){
   const incoming=request.method()==="POST"?request.postDataJSON():null;
   const lab=incoming?.laboratorio||url.searchParams.get("laboratorio");
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
@@ -172,10 +174,11 @@ try{
  const saveMulti=page.getByRole("button",{name:"Guardar borrador"});
  await saveMulti.waitFor({state:"visible"});
  await page.waitForFunction(()=>!document.querySelector(".fm-lab-order-actions button").disabled,{timeout:25000});
- assert.ok(matrices.filter(m=>m.laboratorio==="N:MULTI").length>=4,
-  "Se calculan métricas para todos los lotes");
+ assert.ok(matrices.some(m=>m.laboratorio==="N:MULTI"&&m.referencias?.length===125),
+  "Todas las referencias se calculan en una sola agregación");
  await saveMulti.click();
  await page.getByText(/Borrador guardado/).waitFor();
+ assert.ok(matrices.some(m=>m.laboratorio==="N:MULTI"&&m.referencias?.length===125));
  assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
  assert.equal(saved.at(-1).lineas.find(l=>l.name==="Referencia lote 125")?.units,9);
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");

@@ -75,7 +75,7 @@ async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,h
  return {rows:output,total:rows[0]?.total||0,page,size};
 }
 
-async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN}){
+export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN,type="parafarmacia"}){
  const schema='"'+ctx.client.schema+'"';
  const cn=`coalesce(${validCN("a.codigo_nacional")},
   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
@@ -188,12 +188,12 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
   LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=${cn}
  ), summarized AS (
   SELECT coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id) AS referencia,
-   max(cn) AS cn,min(nombre) AS nombre,'parafarmacia'::text AS tipo,
+   max(cn) AS cn,min(nombre) AS nombre,$8::text AS tipo,
    false AS "inMaster",bool_or(bought OR sold) AS "inReceipts",
    bool_or(sold) AS "inSales",bool_or(bought) AS "inPurchases",
    string_agg(DISTINCT pharmacy_id::text,',' ORDER BY pharmacy_id::text) AS "pharmacyIds",
    NULL::text AS dcpf,false AS generic,bool_and(cn IS NULL) AS provisional
-  FROM activity WHERE tipo='parafarmacia' AND NOT inactive AND valid_lab
+  FROM activity WHERE tipo=$8 AND NOT inactive AND valid_lab
   GROUP BY coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id)
  ), filtered AS (
   SELECT * FROM summarized
@@ -202,12 +202,12 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
  SELECT *,count(*) OVER()::int AS total FROM filtered
  ORDER BY nombre,referencia LIMIT $5 OFFSET $6`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns],
+  values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns,type],
   query_timeout:20000});
  return {rows:rows.map(({total,...rest})=>rest),total:rows[0]?.total||0,page,size};
 }
 export async function readQuickLaboratoryCatalog(pool,ctx,opts){
  if(opts.type==="medicacion")return readOfficial(pool,ctx,opts);
- if(opts.type==="parafarmacia")return readPurchases(pool,ctx,opts);
+ if(opts.type==="parafarmacia")return readPurchasedLaboratoryCatalog(pool,ctx,opts);
  return null;
 }

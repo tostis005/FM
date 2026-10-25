@@ -2,6 +2,7 @@ import {readFile} from "node:fs/promises";
 import {readLaboratoryArticles,normalizeLaboratoryKey,selectedPharmacies} from "./laboratoryCatalog.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
+import {readUnifiedLaboratoryCatalog} from "./laboratoryUnionCatalog.js";
 import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -131,6 +132,63 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
    pharmacies.some(id=>!Number.isSafeInteger(id)||!allowed.has(id)))return null;
   return {laboratory,pharmacies:[...new Set(pharmacies)]};
  };
+ // Catálogo completo: unión de CN oficiales con compras de todos los
+ // proveedores de Farmatic vinculados al mismo laboratorio en el maestro.
+ // Sin paginación intermedia ni ventas históricas en esta primera fase.
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-unificado",...guard,async(req,res,next)=>{
+  if(!enabled(req))return res.status(403).json({error:"Compras no habilitado"});
+  const common=parse(req),type=String(req.query.tipo||"");
+  const search=String(req.query.buscar||"").trim();
+  if(!common||!["medicacion","parafarmacia"].includes(type)||
+   search.length>100||!SCHEMA.test(req.context.client.schema))
+   return res.status(400).json({error:"Laboratorio o farmacias no válidos"});
+  try{
+   res.json(await readUnifiedLaboratoryCatalog(pool,req.context,{
+    key:common.laboratory,pharmacies:common.pharmacies,type,search
+   }));
+  }catch(e){
+   if(["57014","53300","TOO_MANY"].includes(e.code)||/timeout/i.test(e.message||""))
+    return res.status(504).json({error:"El catálogo unificado tardó demasiado. Se utilizará la carga progresiva."});
+   next(e);
+  }
+ });
+ // El IN de productos se materializa UNA VEZ como tabla refs y todas las
+ // ventas de 3/12 meses y del período se agregan en una única sentencia SQL.
+ if(typeof app.post==="function")app.post("/api/analytics/pedidos/matriz-conjunta",...guard,async(req,res,next)=>{
+  if(!enabled(req))return res.status(403).json({error:"Compras no habilitado"});
+  const common=parse(req),type=String(req.body?.tipo||""),
+   from=String(req.body?.desde||""),to=String(req.body?.hasta||"");
+  const provided=req.body?.referencias;
+  if(!common||!["medicacion","parafarmacia"].includes(type)||
+   !validPlannerDate(from)||!validPlannerDate(to)||from>to||
+   Date.parse(to)-Date.parse(from)>5*366*86400000||
+   !Array.isArray(provided)||!provided.length||provided.length>5000||
+   !SCHEMA.test(req.context.client.schema))
+   return res.status(400).json({error:"Período o referencias no válidos"});
+  const seen=new Set(),rows=[];
+  for(const r of provided){
+   const reference=r?.referencia,cn=r?.cn;
+   if(typeof reference!=="string"||reference.length>120||
+    !(/^[0-9]{6,7}$/.test(reference)||
+     (type==="parafarmacia"&&/^ERP:\d+:[A-Za-z0-9._:-]{1,90}$/.test(reference)))||
+    !(cn===null||cn===undefined||/^[0-9]{6,7}$/.test(cn))||
+    (cn&&cnCategory(cn)!==type)||seen.has(reference))
+    return res.status(400).json({error:"Hay códigos duplicados o inválidos"});
+   seen.add(reference);
+   rows.push({referencia:reference,cn:cn||null,
+    nombre:typeof r.nombre==="string"?r.nombre.slice(0,240):reference});
+  }
+  try{
+   res.json(await readLaboratoryOrderMatrix(pool,req.context,{
+    key:common.laboratory,pharmacies:common.pharmacies,type,from,to,
+    prefetchedRows:rows
+   }));
+  }catch(e){
+   if(["57014","53300"].includes(e.code)||/timeout/i.test(e.message||""))
+    return res.status(504).json({error:"Las métricas agregadas han tardado demasiado. Se utilizarán lotes pequeños."});
+   next(e);
+  }
+ });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/matriz-laboratorio",...guard,async(req,res,next)=>{
   if(!enabled(req))return res.status(403).json({error:"Compras no habilitado"});
   const common=parse(req),type=String(req.query.tipo||"");

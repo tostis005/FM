@@ -3,6 +3,7 @@
 import pg from "pg";
 import {listOperationalLaboratoryOptions} from "./laboratoryCatalog.js";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
+import {readUnifiedLaboratoryCatalog} from "./laboratoryUnionCatalog.js";
 import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,
  connectionTimeoutMillis:5000,query_timeout:40000,statement_timeout:40000});
@@ -42,5 +43,23 @@ try{
   }));
   if(matrix)result.metricsAvailable=!matrix.metricsUnavailable;
  }
+ const official=await measure("cinfaUnifiedMedication",()=>readUnifiedLaboratoryCatalog(
+  pool,ctx,{key:"N:CINFA",pharmacies:ids,type:"medicacion"}));
+ if(official){
+  result.unifiedMedicationTotal=official.total;
+  const to=new Date().toISOString().slice(0,10);
+  const from=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const matrix=await measure("cinfaFullMedicationMatrix",()=>readLaboratoryOrderMatrix(
+   pool,ctx,{key:"N:CINFA",pharmacies:ids,type:"medicacion",from,to,
+    prefetchedRows:official.rows}));
+  if(matrix){
+   result.fullMedicationMetricsAvailable=!matrix.metricsUnavailable;
+   result.fullMedicationCount=matrix.rows.length;
+   result.fullMedicationWarning=Boolean(matrix.warning);
+  }
+ }
+ const para=await measure("cinfaUnifiedParapharmacy",()=>readUnifiedLaboratoryCatalog(
+  pool,ctx,{key:"N:CINFA",pharmacies:ids,type:"parafarmacia"}));
+ if(para)result.unifiedParapharmacyTotal=para.total;
 }catch(e){result.error=e.code||e.name||"Error"}
 finally{console.log("PREPARADOR_PERF_BENCH",JSON.stringify(result));await pool.end()}

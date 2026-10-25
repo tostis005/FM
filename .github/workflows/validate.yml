@@ -49,6 +49,7 @@ jobs:
           node --check api/src/laboratoryOrderPlanner.js
           node --test api/src/laboratoryOrderPlanner.test.js
           node --test api/src/laboratoryFastCatalog.test.js
+          node --test api/src/laboratoryRetirements.test.js
           node --test api/src/supplierAutoMatch.test.js
           node --test api/src/stockTargetDays.test.js
           node --test api/src/outgoingTransfersRules.test.js
@@ -167,7 +168,9 @@ jobs:
           psql_test --single-transaction < api/src/migrations/027_pedidos_laboratorio_borradores.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
+          psql_test --single-transaction < api/src/migrations/031_preparador_bajas.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
+          psql_test --single-transaction < api/src/migrations/031_preparador_bajas.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
@@ -185,7 +188,9 @@ jobs:
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
           psql_test --single-transaction < api/src/migrations/016_operativa_manual.sql
+          psql_test --single-transaction < api/src/migrations/032_laboratory_order_frequency.sql
           psql_test --single-transaction < api/src/migrations/016_operativa_manual.sql
+          psql_test --single-transaction < api/src/migrations/032_laboratory_order_frequency.sql
           psql_test --single-transaction < api/src/migrations/011_configuracion_precios.sql
           psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
           test "$(psql_test -At -c "SELECT CASE WHEN to_regclass('farmetrica.nomenclator_presentaciones') IS NOT NULL AND EXISTS(SELECT 1 FROM farmetrica.cliente_modulos WHERE cliente_slug='ampedia' AND modulo_clave='genericos' AND habilitado) THEN 1 ELSE 0 END;")" = 1

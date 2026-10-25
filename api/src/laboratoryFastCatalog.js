@@ -28,8 +28,17 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  const artLab=normalizedLabSQL("a.laboratorio");
  // Muchos Farmatic no rellenan codigo_nacional pero conservan el CN en
  // origen_id. Reconocerlo SOLO si figura en AEMPS o en el maestro importado.
+ // Farmatic puede guardar el CN en cn_normalizado o en su identificador;
+ // usar origen_id solo tras confirmar que existe en AEMPS o Vademecum.
  const ecode=`coalesce(${safeReference("a.codigo_nacional")},
-  CASE WHEN btrim(a.origen_id::text) ~ '^[0-9]{6,7}
+  ${safeReference("to_jsonb(a)->>'cn_normalizado'")},
+  CASE WHEN char_length(btrim(a.origen_id::text)) BETWEEN 6 AND 7
+   AND translate(btrim(a.origen_id::text),'0123456789','')=''
+   AND (EXISTS (SELECT 1 FROM farmetrica.nomenclator_presentaciones nn
+     WHERE nn.cn=btrim(a.origen_id::text))
+    OR EXISTS (SELECT 1 FROM farmetrica.articulos_laboratorio_maestro ma
+     WHERE ma.codigo=btrim(a.origen_id::text)))
+   THEN btrim(a.origen_id::text) ELSE NULL::text END)`;
  const eType=referenceKind(ecode);
  const sql=`
  WITH aliases AS (

@@ -1,4 +1,4 @@
-import {normalizedLabSQL,normalizeLabName} from "./laboratoryIdentity.js";
+import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizeLaboratoryKey} from "./laboratoryCatalog.js";
 import {buildAutomaticSupplierMatches} from "./supplierAutoMatch.js";
@@ -40,7 +40,21 @@ export async function readLocalSuppliers(pool,ctx){
   GROUP BY f.id,s.origen_id
   ORDER BY name,f.id LIMIT 5000`,
   values:[ctx.client.slug,pharmacyIds],query_timeout:16000});
- return rows.map(r=>({...r,laboratoryKey:r.localLaboratoryKey||r.globalLaboratoryKey}));
+ const {rows:official}=await pool.query({text:`
+  SELECT laboratorio_titular AS name FROM farmetrica.nomenclator_presentaciones
+   WHERE nullif(btrim(laboratorio_titular),'') IS NOT NULL
+  UNION SELECT laboratorio_comercializador FROM farmetrica.nomenclator_presentaciones
+   WHERE nullif(btrim(laboratorio_comercializador),'') IS NOT NULL
+  UNION SELECT laboratorio FROM farmetrica.nomenclator_presentaciones
+   WHERE nullif(btrim(laboratorio),'') IS NOT NULL`,query_timeout:12000});
+ const names=official.map(r=>r.name);
+ return rows.map(r=>{
+  const laboratoryKey=r.localLaboratoryKey||r.globalLaboratoryKey||null;
+  const inferredLaboratoryKey=!laboratoryKey&&!r.cooperative?
+   buildAutomaticSupplierMatches([{sourceCode:r.sourceCode,name:r.name,
+    cooperative:false}],names)[0]?.laboratoryKey||null:null;
+  return {...r,laboratoryKey,inferredLaboratoryKey};
+ });
 }
 export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin}){
  const auth=requireTenant(),admin=requireTenantAdmin();
@@ -85,21 +99,12 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
  app.post("/api/tenant/proveedores/autovincular-farmacias",...admin,async(req,res,next)=>{
   const apply=req.body?.apply===true;
   try{
-   const [local,labsResult]=await Promise.all([
-    readLocalSuppliers(pool,req.context),
-    pool.query(`SELECT laboratorio_titular AS name FROM farmetrica.nomenclator_presentaciones
-     WHERE nullif(btrim(laboratorio_titular),'') IS NOT NULL
-     UNION SELECT laboratorio_comercializador FROM farmetrica.nomenclator_presentaciones
-     WHERE nullif(btrim(laboratorio_comercializador),'') IS NOT NULL`)
-   ]);
-   const labs=labsResult.rows.map(x=>x.name);
+   const local=await readLocalSuppliers(pool,req.context);
    const suggestions=[];
    for(const s of local){
-    if(s.laboratoryKey||s.cooperative||!s.name||!normalizeLabName(s.name))continue;
-    const match=buildAutomaticSupplierMatches([{
-     sourceCode:s.sourceCode,name:s.name,cooperative:false
-    }],labs)[0];
-    if(match)suggestions.push({pharmacyId:s.pharmacyId,...match});
+    if(s.laboratoryKey||s.cooperative||!s.inferredLaboratoryKey)continue;
+    suggestions.push({pharmacyId:s.pharmacyId,sourceCode:s.sourceCode,
+     name:s.name,laboratoryKey:s.inferredLaboratoryKey});
    }
    if(!apply||!suggestions.length)return res.json({
     suggestions,count:suggestions.length,applied:0

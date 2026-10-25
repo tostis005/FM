@@ -136,3 +136,35 @@ test("PG: compras directas a Cinfa sin enlace manual incorporan parafarmacia, st
   assert.equal(zimfa.total,1,"La farmacia conserva su enlace manual preferente");
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });
+
+test("PG: proveedor habitual Cinfa enlaza un artículo con ventas aunque no tenga recepciones ni laboratorio ERP",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const db=new pg.Client({connectionString:process.env.TEST_DB_URL});await db.connect();
+ try{
+  await db.query("BEGIN");
+  await db.query("ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS proveedor_habitual_id text");
+  const supplier="CI-CINFA-HABITUAL",art="CI-ART-HABITUAL-2026";
+  await db.query(`INSERT INTO ampedia.proveedores(farmacia_codigo,origen_id,nombre)
+   VALUES('ABA',$1,'LABORATORIOS CINFA, S.A.')`,[supplier]);
+  await db.query(`INSERT INTO ampedia.articulos
+    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual,proveedor_habitual_id)
+   VALUES('ABA',$1,'Producto Cinfa por proveedor habitual','001992',NULL,9,$2)`,[art,supplier]);
+  await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+   VALUES('ABA','farmatic','CI-HAB-CINFA-VENTAS','2026-10-24',true)`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+   VALUES('ABA','farmatic','CI-HAB-CINFA-VENTAS','1',$1,2,25)`,[art]);
+  const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
+  const opts={key:"N:CINFA",pharmacies:[1],type:"parafarmacia",search:"Producto Cinfa por proveedor habitual",page:1,size:40};
+  const result=await readDirectLaboratoryCatalog(db,ctx,opts);
+  assert.equal(result.total,1);
+  assert.equal(result.rows[0].inSales,true);
+  assert.equal(result.rows[0].inPurchases,false);
+  const matrix=await readLaboratoryOrderMatrix(db,ctx,{
+   ...opts,from:"2026-10-01",to:"2026-10-24"});
+  assert.equal(matrix.rows[0].byPharmacy["1"].stock,9);
+  assert.equal(matrix.rows[0].byPharmacy["1"].unitsPeriod,2);
+ }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
+});

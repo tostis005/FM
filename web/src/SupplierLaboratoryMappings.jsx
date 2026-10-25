@@ -12,6 +12,9 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
  const [pharmacies,setPharmacies]=useState([]),[laboratories,setLaboratories]=useState([]);
  const [mappings,setMappings]=useState([]),[localSuppliers,setLocalSuppliers]=useState([]);
  const [autoPreview,setAutoPreview]=useState(null);
+ const [customName,setCustomName]=useState("");
+ const [search,setSearch]=useState(""),[view,setView]=useState("all");
+ const [visibleGroups,setVisibleGroups]=useState(30);
  const [pharmacyId,setPharmacyId]=useState(""),[sourceCode,setSourceCode]=useState("");
  const [laboratoryKey,setLaboratoryKey]=useState("");
  const [error,setError]=useState(""),[notice,setNotice]=useState("");
@@ -52,37 +55,58 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
     return result.laboratoryKey?[...kept,result]:kept;
    });
    setNotice(result.laboratoryKey?"Correspondencia guardada.":"Correspondencia eliminada.");
-   setLocalSuppliers(prev=>prev.map(s=>String(s.pharmacyId)===String(pid)&&
-    String(s.sourceCode).replace(/^0+(?=\d)/,"")===String(code).replace(/^0+(?=\d)/,"")?
-     {...s,localLaboratoryKey:result.laboratoryKey,laboratoryKey:result.laboratoryKey||s.globalLaboratoryKey}:s));
+   const local=await request("/api/tenant/proveedores/por-farmacia",clientSlug);
+   setLocalSuppliers(local.suppliers||[]);
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
+ const linked=localSuppliers.filter(s=>Boolean(s.laboratoryKey||s.inferredLaboratoryKey)).length;
  const grouped=useMemo(()=>{
   const groups=new Map();
   for(const s of localSuppliers){
+   const text=[s.name,s.sourceCode,pharmacyName(s.pharmacyId),
+    labName(s.laboratoryKey||s.inferredLaboratoryKey)].join(" ").toLocaleLowerCase("es");
+   if(search&&!text.includes(search.toLocaleLowerCase("es")))continue;
+   const assigned=Boolean(s.laboratoryKey||s.inferredLaboratoryKey);
+   if((view==="linked"&&!assigned)||(view==="unlinked"&&assigned))continue;
    const key=s.laboratoryKey||s.inferredLaboratoryKey||"SIN VINCULAR";
    if(!groups.has(key))groups.set(key,[]);
    groups.get(key).push(s);
   }
   return [...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],"es"));
- },[localSuppliers]);
+ },[localSuppliers,search,view,laboratories,pharmacies]);
  async function autoLink(apply=false){
   setBusy(true);setError("");setNotice("");
   try{
    const result=await request("/api/tenant/proveedores/autovincular-farmacias",clientSlug,{
-    method:"POST",body:JSON.stringify({apply})});
+    method:"POST",body:JSON.stringify({apply,
+     ...(apply?{expected:autoPreview||[]}:{})})});
    if(!apply){setAutoPreview(result.suggestions||[]);setNotice(result.count+
-     " coincidencias exactas encontradas entre Farmatic y el Nomenclátor.");}
+     " correspondencias seguras encontradas entre Farmatic y el Nomenclátor.");}
    else{
     setAutoPreview(null);setNotice(result.applied+" relaciones por farmacia guardadas.");
-    const [m,local]=await Promise.all([
+    const [m,local,official]=await Promise.all([
      request("/api/tenant/proveedores/correspondencias",clientSlug),
-     request("/api/tenant/proveedores/por-farmacia",clientSlug)]);
+     request("/api/tenant/proveedores/por-farmacia",clientSlug),
+     request("/api/analytics/pedidos/catalogo-laboratorios",clientSlug)]);
     setMappings(m);setLocalSuppliers(local.suppliers||[]);
+    setLaboratories(official.laboratories||[]);
    }
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
+ async function createCustom(e){
+  e.preventDefault();if(!customName.trim()||busy)return;
+  setBusy(true);setError("");setNotice("");
+  try{
+   const created=await request("/api/tenant/proveedores/laboratorios-propios",clientSlug,{
+    method:"POST",body:JSON.stringify({name:customName.trim()})});
+   const data=await request("/api/analytics/pedidos/catalogo-laboratorios",clientSlug);
+   setLaboratories(data.laboratories||[]);
+   setLaboratoryKey(created.key);setCustomName("");
+   setNotice("Identidad "+created.name+" disponible. Vincula a ella los proveedores de las farmacias.");
+  }catch(e){setError(e.message)}finally{setBusy(false)}
+ }
+ const filteredGroups=grouped.slice(0,visibleGroups);
  return <section className="card fm-supplier-mapping" aria-label="Correspondencias de proveedores y laboratorios">
   <div><h2>Correspondencias ERP ↔ laboratorio</h2>
    <p>Maestro unificado: un laboratorio común con los distintos nombres y códigos que utiliza cada farmacia. Cada correspondencia se guarda por farmacia para evitar mezclar códigos iguales de proveedores diferentes. Las cooperativas no se asignan automáticamente.</p>

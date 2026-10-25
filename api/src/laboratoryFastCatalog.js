@@ -114,6 +114,17 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
    AND a.origen_id::text=r.articulo_id::text
  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
+ UNION ALL
+ -- El proveedor habitual enlaza artículos sin recepción reciente.
+ SELECT coalesce(${ecode},'ERP:'||f.id::text||':'||a.origen_id::text),
+  ${ecode},coalesce(nullif(btrim(a.nombre),''),a.origen_id::text),
+  ${eType},false,true,f.id::text,3
+ FROM mapped_suppliers link
+ JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
+ JOIN ${schema}.articulos a
+  ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+  AND ${supplierCodeSQL("to_jsonb(a)->>'proveedor_habitual_id'")}=link.supplier_code
+ WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
  ),
  reduced AS (
   SELECT referencia, max(cn) AS cn,

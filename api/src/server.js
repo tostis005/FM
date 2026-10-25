@@ -518,7 +518,7 @@ try {
   await pool.query(sourcesMigration);
   const supplierLaboratoryMigration=await readFile(new URL("./migrations/030_proveedor_laboratorio.sql",import.meta.url),"utf8");
   await pool.query(supplierLaboratoryMigration);
-   for(const file of ["031_preparador_bajas.sql","032_laboratory_order_frequency.sql"])
+   for(const file of ["031_preparador_bajas.sql"])
     await pool.query(await readFile(new URL("./migrations/"+file,import.meta.url),"utf8"));
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
   await pool.query(leadsMigration);

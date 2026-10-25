@@ -23,12 +23,16 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
  useEffect(()=>{
   const ac=new AbortController();
   setLoadingLabs(true);
-  getJson("/api/analytics/pedidos/catalogo-laboratorios",clientSlug,ac.signal)
-   .then(data=>{if(!ac.signal.aborted)setLaboratories(data.laboratories||[])})
+  const q=new URLSearchParams({uso:"preparador",farmacias:pharmacyCodes});
+  getJson("/api/analytics/pedidos/catalogo-laboratorios?"+q,clientSlug,ac.signal)
+   .then(data=>{if(!ac.signal.aborted){
+    const available=data.laboratories||[];setLaboratories(available);
+    setSelected(current=>current&&!available.some(l=>l.key===current)?"":current);
+   }})
    .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
    .finally(()=>{if(!ac.signal.aborted)setLoadingLabs(false)});
   return ()=>ac.abort();
- },[clientSlug]);
+ },[clientSlug,pharmacyCodes]);
  useEffect(()=>{
   if(!selected){setResult({rows:[],total:0});setLoading(false);return}
   const ac=new AbortController();
@@ -49,7 +53,7 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
  return <section className="card fm-laboratory-catalog" aria-label="Catálogo por laboratorio">
   <div className="fm-laboratory-heading">
    <div><h2>Artículos por laboratorio</h2>
-    <p>Presentaciones del Nomenclátor y artículos con ventas o recepciones de las farmacias seleccionadas, excluyendo los dados de baja.</p>
+    <p>Solo laboratorios con compras o artículos con código nacional en las farmacias seleccionadas. El Nomenclátor por sí solo no añade laboratorios.</p>
    </div>
    {loadingLabs&&<LoadingStatus compact label="Cargando laboratorios…"/>}
   </div>

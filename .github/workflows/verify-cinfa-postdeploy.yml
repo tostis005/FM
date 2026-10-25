@@ -1,0 +1,65 @@
+name: Verificar preparador Cinfa publicado
+on:
+  push:
+    branches: ["verify/cinfa-postdeploy-real-20261025"]
+    paths: [".github/workflows/verify-cinfa-postdeploy.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Conectar
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/verify
+          chmod 600 ~/.ssh/verify
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Consultar Cinfa sobre API y PostgreSQL YA PUBLICADOS (solo lectura)
+        run: |
+          set -euo pipefail
+          cat <<'NODE' | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+          import pg from "pg";
+          import {listLaboratoryOptions} from "./src/laboratoryCatalog.js";
+          import {readDirectLaboratoryCatalog} from "./src/laboratoryFastCatalog.js";
+          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
+          const p=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,connectionTimeoutMillis:5000});
+          const ms=()=>Date.now();
+          try{
+           const {rows:pharmacies}=await p.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id");
+           const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies};
+           const ids=pharmacies.map(x=>x.id);
+           const options=await listLaboratoryOptions(p,ctx);
+           const cinfa=options.filter(x=>x.key==="N:CINFA");
+           if(cinfa.length!==1)throw Error("El selector no contiene una única entrada Cinfa");
+           console.log("PUBLISHED_LAB_SELECTOR",JSON.stringify({cinfaEntries:cinfa.length,pharmacies:ids.length}));
+           for(const type of ["medicacion","parafarmacia"]){
+            const args={key:"N:CINFA",pharmacies:ids,type,page:1,size:40,search:""};
+            let t=ms();
+            const c=await readDirectLaboratoryCatalog(p,ctx,args);
+            const catalogMs=ms()-t;
+            t=ms();
+            const m=await readLaboratoryOrderMatrix(p,ctx,{...args,from:"2026-10-01",to:"2026-10-25"});
+            const matrixMs=ms()-t;
+            const metrics=m.rows.flatMap(x=>Object.values(x.byPharmacy||{}));
+            const output={type,catalogTotal:c.total,orderTotal:m.total,rows:m.rows.length,
+             catalogMs,matrixMs,metricsUnavailable:m.metricsUnavailable,
+             stockAvailable:metrics.filter(x=>x.stock!==null).length,
+             sales12NonZero:metrics.filter(x=>Number(x.units12)>0).length,
+             salesMonthNonZero:metrics.filter(x=>Number(x.unitsPeriod)>0).length,
+             warning:m.warning||null};
+            console.log("PUBLISHED_CINFA_CHECK",JSON.stringify(output));
+            if(c.total<1||m.total<1||m.metricsUnavailable===true||
+               !m.rows.length||catalogMs>18000||matrixMs>28000)
+              throw Error("No cumple criterios: "+type);
+           }
+           console.log("PUBLISHED_CINFA_OK");
+          }finally{await p.end()}
+          NODE

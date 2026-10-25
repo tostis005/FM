@@ -1,0 +1,56 @@
+name: Verificación puntual Cinfa preparador
+on:
+  push:
+    branches: ["fix/cinfa-runtime-fast-matrix-20261025"]
+    paths: [".github/workflows/verify-cinfa-runtime.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: SSH
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/verify
+          chmod 600 ~/.ssh/verify
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Ejecutar funciones reales de catálogo y matriz, solo lectura
+        run: |
+          set -euo pipefail
+          cat <<'NODE' | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+          import pg from "pg";
+          import {listLaboratoryOptions} from "./src/laboratoryCatalog.js";
+          import {readDirectLaboratoryCatalog} from "./src/laboratoryFastCatalog.js";
+          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
+          const p=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000});
+          const clock=()=>Date.now(), log=(label,data)=>console.log("VERIFY",label,JSON.stringify(data));
+          try{
+           const {rows:pharmacies}=await p.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id");
+           const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies};
+           const ids=pharmacies.map(x=>x.id);
+           let t=clock();
+           const labs=await listLaboratoryOptions(p,ctx);
+           log("SELECTOR",{count:labs.length,cinfa:labs.filter(x=>x.key==="N:CINFA").map(x=>({name:x.name})),ms:clock()-t});
+           for(const type of ["medicacion","parafarmacia"]){
+            t=clock();
+            try{
+             const catalog=await readDirectLaboratoryCatalog(p,ctx,{key:"N:CINFA",pharmacies:ids,type,page:1,size:10,search:""});
+             log("CATALOG_"+type,{total:catalog.total,rows:catalog.rows.length,cns:catalog.rows.filter(x=>!!x.cn).length,ms:clock()-t});
+            }catch(e){log("CATALOG_ERROR_"+type,{code:e.code||"",message:e.message.slice(0,150),ms:clock()-t})}
+            t=clock();
+            try{
+             const matrix=await readLaboratoryOrderMatrix(p,ctx,{key:"N:CINFA",pharmacies:ids,type,page:1,size:10,search:"",from:"2026-10-01",to:"2026-10-25"});
+             const enriched=matrix.rows.map(x=>Object.values(x.byPharmacy||{})).flat();
+             log("MATRIX_"+type,{total:matrix.total,rows:matrix.rows.length,metricsUnavailable:matrix.metricsUnavailable,nonNullStock:enriched.filter(x=>x.stock!==null).length,nonZeroSales:enriched.filter(x=>x.units12>0).length,warning:matrix.warning?.slice(0,180),ms:clock()-t});
+            }catch(e){log("MATRIX_ERROR_"+type,{code:e.code||"",message:e.message.slice(0,150),ms:clock()-t})}
+           }
+          }finally{await p.end()}
+          NODE

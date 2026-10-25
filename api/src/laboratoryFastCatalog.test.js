@@ -40,7 +40,7 @@ test("error de ventas/stock nunca oculta productos AEMPS",async()=>{
   throw Error("unexpected SQL");
  }};
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);
- assert.equal(calls,3);
+ assert.equal(calls,4);
  assert.equal(result.total,1);
  assert.equal(result.rows[0].cn,"790321");
  assert.equal(result.metricsUnavailable,true);

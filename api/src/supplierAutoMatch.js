@@ -1,5 +1,10 @@
 import {normalizeLabName} from "./laboratoryIdentity.js";
 
+// Señales evidentes de distribuidor o cooperativa: no basta con que
+// falte la marca manual para inferir un laboratorio único.
+const looksLikeDistributor=name=>/\\b(?:COOPERATIVA|COOP|MAYORISTA|DISTRIBUIDOR|DISTRIBUIDORA|DISTRIBUIDORES)\\b/i
+ .test(normalizeLabName(name));
+
 // Autovinculación conservadora: coincidencia exacta de nombre normalizado.
 // Sin coincidencias por subcadenas, códigos, ni deducción desde movimientos.
 export function buildAutomaticSupplierMatches(suppliers,sourceLabs){
@@ -14,7 +19,7 @@ export function buildAutomaticSupplierMatches(suppliers,sourceLabs){
   const code=String(s?.sourceCode||"").trim().toUpperCase();
   const name=String(s?.name||"").trim();
   if(!/^[A-Z0-9_.-]{1,60}$/.test(code)||!name||name.length>200||
-   s?.cooperative||s?.laboratoryKey||s?.ignoreReports||name.toUpperCase()===code||
+   s?.cooperative||s?.laboratoryKey||s?.ignoreReports||looksLikeDistributor(name)||name.toUpperCase()===code||
    /^(?:PROVEEDOR|MAYORISTA|COOPERATIVA) [0-9]+$/i.test(name))continue;
   const key=labs.get(normalizeLabName(name));
   if(!key)continue;
@@ -38,7 +43,7 @@ export function buildLocalSupplierGroupSuggestions(suppliers){
   const code=String(row?.sourceCode||"").trim().toUpperCase();
   const name=String(row?.name||"").trim();
   const normalized=normalizeLabName(name);
-  if(!code||!name||name.length>200||row.cooperative||row.ignoreReports||
+  if(!code||!name||name.length>200||row.cooperative||row.ignoreReports||looksLikeDistributor(name)||
    row.laboratoryKey||row.inferredLaboratoryKey||
    protectedNames.has(normalized)||normalized.length<3||!/[A-Z]{2}/.test(normalized)||
    normalizeLabName(code)===normalized||

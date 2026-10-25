@@ -15,6 +15,38 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_comerc
  OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_titular_codigo,'')))=$1)
  OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_codigo,'')))=$1))`;
 
+// Los medicamentos oficiales se pueden servir directamente de AEMPS.
+// Nunca deben bloquearse por un JOIN con millones de tickets/albaranes.
+async function readOfficialMedicationFast(pool,context,{key,pharmacies,search,page,size,patterns,hasNativeCN}){
+ const schema='"'+context.client.schema+'"';
+ const blockedCN=`coalesce(${validCN("a.codigo_nacional")},
+   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
+   ${validCN("a.origen_id::text")})`;
+ const sql=`
+ WITH selected_pharmacies AS (
+  SELECT ${pharmacyDataCodeSQL("f")} AS code FROM farmetrica.farmacias f
+  WHERE f.cliente_slug=$3 AND f.id=ANY($2::int[])
+ ), retired_codes AS MATERIALIZED (
+  SELECT DISTINCT ${blockedCN} AS cn FROM ${schema}.articulos a
+  JOIN selected_pharmacies p ON upper(btrim(a.farmacia_codigo))=p.code
+  WHERE ${retiredProductSQL("a.nombre","$7")}
+ ), oficial AS (
+  SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,
+   'medicacion'::text AS tipo,true AS "inMaster",
+   false AS "inReceipts",false AS "inSales",false AS "inPurchases",
+   NULL::text AS "pharmacyIds",n.dcpf,n.generico AS generic,false AS provisional
+  FROM farmetrica.nomenclator_presentaciones n
+  WHERE ${officialMatch("n")} AND NOT ${retiredProductSQL("n.nombre","$7")}
+   AND ($4::text='' OR n.nombre ILIKE '%'||$4||'%' OR n.cn ILIKE '%'||$4||'%')
+   AND NOT EXISTS(SELECT 1 FROM retired_codes r WHERE r.cn=n.cn)
+ )
+ SELECT *,count(*) OVER()::int AS total FROM oficial
+ ORDER BY nombre,referencia LIMIT $5 OFFSET $6`;
+ const {rows}=await pool.query({text:sql,values:[key,pharmacies,context.client.slug,search,
+  size,(page-1)*size,patterns],query_timeout:15000});
+ return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
+}
+
 /**
  * ÚNICO universo: presentaciones del Nomenclátor + artículos que figuran en
  * alguna venta o recepción de una farmacia seleccionada.
@@ -34,6 +66,14 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
    values:[context.client.schema],query_timeout:1500});
   hasNativeCN=rows[0]?.available===true;
  }catch{}
+ if(type==="medicacion"){
+  // Nomenclátor es fuente oficial suficiente para mostrar las presentaciones
+  // de forma inmediata, sin depender de las recepciones históricas.
+  const fast=await readOfficialMedicationFast(pool,context,{
+   key,pharmacies,search,page,size,patterns,hasNativeCN
+  });
+  if(fast.total>0)return fast;
+ }
  const cn= `coalesce(${validCN("a.codigo_nacional")},
    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
    CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_presentaciones verified

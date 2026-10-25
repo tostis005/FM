@@ -22,35 +22,27 @@ jobs:
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/verify
           chmod 600 ~/.ssh/verify
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
-      - name: Ejecutar funciones reales de catálogo y matriz, solo lectura
+      - uses: actions/checkout@v4
+      - name: Comparar nueva consulta directa desde la rama, sin tocar el servidor
         run: |
           set -euo pipefail
-          cat <<'NODE' | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+          {
+            sed -e 's|"./laboratoryIdentity.js"|"./src/laboratoryIdentity.js"|' \
+                -e 's|"./pharmacyCodes.js"|"./src/pharmacyCodes.js"|' api/src/laboratoryFastCatalog.js
+            cat <<'NODE'
           import pg from "pg";
-          import {listLaboratoryOptions} from "./src/laboratoryCatalog.js";
-          import {readDirectLaboratoryCatalog} from "./src/laboratoryFastCatalog.js";
-          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
           const p=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000});
-          const clock=()=>Date.now(), log=(label,data)=>console.log("VERIFY",label,JSON.stringify(data));
+          const t=()=>Date.now();
           try{
            const {rows:pharmacies}=await p.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' ORDER BY id");
-           const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies};
-           const ids=pharmacies.map(x=>x.id);
-           let t=clock();
-           const labs=await listLaboratoryOptions(p,ctx);
-           log("SELECTOR",{count:labs.length,cinfa:labs.filter(x=>x.key==="N:CINFA").map(x=>({name:x.name})),ms:clock()-t});
+           const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies},ids=pharmacies.map(x=>x.id);
            for(const type of ["medicacion","parafarmacia"]){
-            t=clock();
+            const start=t();
             try{
-             const catalog=await readDirectLaboratoryCatalog(p,ctx,{key:"N:CINFA",pharmacies:ids,type,page:1,size:10,search:""});
-             log("CATALOG_"+type,{total:catalog.total,rows:catalog.rows.length,cns:catalog.rows.filter(x=>!!x.cn).length,ms:clock()-t});
-            }catch(e){log("CATALOG_ERROR_"+type,{code:e.code||"",message:e.message.slice(0,150),ms:clock()-t})}
-            t=clock();
-            try{
-             const matrix=await readLaboratoryOrderMatrix(p,ctx,{key:"N:CINFA",pharmacies:ids,type,page:1,size:10,search:"",from:"2026-10-01",to:"2026-10-25"});
-             const enriched=matrix.rows.map(x=>Object.values(x.byPharmacy||{})).flat();
-             log("MATRIX_"+type,{total:matrix.total,rows:matrix.rows.length,metricsUnavailable:matrix.metricsUnavailable,nonNullStock:enriched.filter(x=>x.stock!==null).length,nonZeroSales:enriched.filter(x=>x.units12>0).length,warning:matrix.warning?.slice(0,180),ms:clock()-t});
-            }catch(e){log("MATRIX_ERROR_"+type,{code:e.code||"",message:e.message.slice(0,150),ms:clock()-t})}
+             const x=await readDirectLaboratoryCatalog(p,ctx,{key:"N:CINFA",pharmacies:ids,type,page:1,size:10,search:""});
+             console.log("VERIFY_CANDIDATE",type,JSON.stringify({total:x.total,rows:x.rows.length,ms:t()-start}));
+            }catch(e){console.log("VERIFY_CANDIDATE_ERROR",type,JSON.stringify({code:e.code||"",message:e.message.slice(0,100),ms:t()-start}))}
            }
           }finally{await p.end()}
           NODE
+          } | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'

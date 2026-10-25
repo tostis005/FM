@@ -3,6 +3,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
 import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
+import {readCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
@@ -212,7 +213,8 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
    const scope=onlyWithActivity?selectedPharmacies(req.context,req.query.farmacias):null;
    if(onlyWithActivity&&!scope)return res.status(400).json({error:"Farmacias no autorizadas"});
    res.json({laboratories:onlyWithActivity?
-    await listOperationalLaboratoryOptions(pool,req.context,scope):
+    await readCachedLaboratoryOptions(pool,req.context.client.slug,scope,()=>
+     listOperationalLaboratoryOptions(pool,req.context,scope)):
     await listLaboratoryOptions(pool,req.context)});
   }catch(e){next(e);}
  });

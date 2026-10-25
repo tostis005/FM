@@ -156,7 +156,8 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
   SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
   FROM pharmacies p JOIN ${schema}.articulos a
    ON upper(btrim(a.farmacia_codigo))=p.code
-  WHERE 'N:'||${normalizedLabSQL("a.laboratorio")} IN (
+  WHERE $8::text='parafarmacia'
+   AND 'N:'||${normalizedLabSQL("a.laboratorio")} IN (
    -- Resolver los alias UNA vez por consulta, sin una búsqueda correlacionada
    -- al maestro por cada artículo de Farmatic.
    SELECT key FROM lab_aliases WHERE key LIKE 'N:%'

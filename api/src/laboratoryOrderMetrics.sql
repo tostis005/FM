@@ -56,22 +56,30 @@ WITH refs AS MATERIALIZED (
  -- Coincidencias exactas con los identificadores normalizados de Farmatic.
  -- Evitar upper/btrim sobre columnas de la vista: impide aprovechar sus
  -- índices base (farmacia_codigo, articulo_origen_id) y multiplica el coste.
- FROM articles a JOIN __SCHEMA__.fm_ventas_analitica v
-  ON v.articulo_id=a.article_id
-  AND v.farmacia_codigo=(
-   SELECT source_code FROM pharmacies p WHERE p.id=a.pharmacy_id)
+ FROM articles a JOIN pharmacies scope ON scope.id=a.pharmacy_id
+ JOIN __SCHEMA__.fm_ventas_analitica v
+  ON v.articulo_id=a.article_id AND v.farmacia_codigo=scope.source_code
  WHERE v.fecha >= LEAST($4::date,$5::date-interval '364 days')
    AND v.fecha < $5::date+interval '1 day'
  GROUP BY a.pharmacy_id,a.reference
+), pending_orders AS MATERIALIZED (
+ -- Expandir el JSON de cada pedido UNA VEZ, no una vez por artículo/CN.
+ SELECT p.farmacia_id,order_line.elem->>'articulo' AS article_id,
+  sum(coalesce((assignment.elem->>'unidades')::float8,0))::float8 AS qty
+ FROM farmetrica.op_pedidos p
+ JOIN pharmacies f ON f.id=p.farmacia_id
+ CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.lineas,'[]'::jsonb)) AS order_line(elem)
+ CROSS JOIN LATERAL jsonb_array_elements(
+  coalesce(order_line.elem->'asignaciones','[]'::jsonb)) AS assignment(elem)
+ WHERE p.cliente_slug=$3
+  AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
+ GROUP BY p.farmacia_id,order_line.elem->>'articulo'
 ), pending AS (
  SELECT a.pharmacy_id,a.reference,
-  sum(coalesce((assignment.elem->>'unidades')::float8,0))::float8 AS qty
+  sum(p.qty)::float8 AS qty
  FROM articles a
- JOIN farmetrica.op_pedidos p ON p.cliente_slug=$3 AND p.farmacia_id=a.pharmacy_id
-  AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
- CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.lineas,'[]'::jsonb)) AS line(elem)
- CROSS JOIN LATERAL jsonb_array_elements(coalesce(line.elem->'asignaciones','[]'::jsonb)) AS assignment(elem)
- WHERE line.elem->>'articulo'=a.article_id
+ JOIN pending_orders p ON p.farmacia_id=a.pharmacy_id
+  AND p.article_id=a.article_id
  GROUP BY a.pharmacy_id,a.reference
 )
 SELECT x.reference,f.id::text AS "pharmacyId",

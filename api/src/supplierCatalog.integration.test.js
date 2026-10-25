@@ -20,10 +20,10 @@ test("PG: solo recepciones de proveedor vinculado, sin Vademecum extra, y excepc
    VALUES('ampedia','PR1','Distribuidor laboratorio QA','N:ZIMFA')
    ON CONFLICT(cliente_slug,codigo_origen) DO UPDATE SET
     laboratorio_clave='N:ZIMFA',cooperativa=false`);
+  await db.query("DELETE FROM ampedia.proveedores WHERE farmacia_codigo='ABA' AND origen_id='PR1'");
   await db.query(`INSERT INTO ampedia.proveedores
    (farmacia_codigo,origen_id,nombre)
-   VALUES('ABA','PR1','Distribuidor laboratorio QA')
-   ON CONFLICT (farmacia_codigo,origen_id) DO UPDATE SET nombre=EXCLUDED.nombre`);
+   VALUES('ABA','PR1','Distribuidor laboratorio QA')`);
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual)
    VALUES('ABA','QA-MAPPED-01','Nombre ERP distinto','000987',NULL,3),

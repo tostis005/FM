@@ -67,3 +67,45 @@ jobs:
           }finally{await p.end()}
           NODE
           } | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'
+      - name: Comparar el SQL de métricas actual y el nuevo sobre CN reales de Cinfa
+        run: |
+          set -euo pipefail
+          {
+            printf "import pg from 'pg';\n"
+            printf 'const candidate = Buffer.from("%s","base64").toString("utf8");\n' "$(base64 -w0 api/src/laboratoryOrderMetrics.sql)"
+            cat <<'NODE'
+          import {readFile} from "node:fs/promises";
+          import {pharmacyDataCodeSQL} from "./src/pharmacyCodes.js";
+          const p=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000});
+          try{
+           const {rows:ph}=await p.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia'");
+           const {rows:matched}=await p.query({text:`
+            SELECT DISTINCT n.cn FROM farmetrica.nomenclator_presentaciones n
+            JOIN ampedia.articulos a ON a.origen_id::text=n.cn
+            WHERE n.laboratorio_titular ILIKE '%cinfa%'
+             OR n.laboratorio_comercializador ILIKE '%cinfa%'
+            LIMIT 8`,query_timeout:20000});
+           console.log("VERIFY_METRIC_CN_SAMPLES",matched.length);
+           if(!matched.length)throw Error("No se han localizado CN de Cinfa comprados para la prueba");
+           const values=[JSON.stringify(matched.map(r=>({reference:r.cn,cn:r.cn}))),
+            ph.map(x=>x.id),"ampedia","2026-10-01","2026-10-25"];
+           const old=await readFile("./src/laboratoryOrderMetrics.sql","utf8");
+           for(const [label,source] of [["ORIGINAL",old],["CANDIDATE",candidate]]){
+            const sql=source.replaceAll("__SCHEMA__",'"ampedia"')
+             .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"));
+            const start=Date.now();
+            try{
+             const {rows}=await p.query({text:sql,values,query_timeout:32000});
+             console.log("VERIFY_METRICS_"+label,JSON.stringify({
+              ms:Date.now()-start,rows:rows.length,
+              stock:rows.filter(x=>x.stock!==null).length,
+              sales12:rows.filter(x=>Number(x.units12)>0).length,
+              salesPeriod:rows.filter(x=>Number(x.unitsPeriod)>0).length
+             }));
+            }catch(e){console.log("VERIFY_METRICS_ERROR_"+label,JSON.stringify({
+              ms:Date.now()-start,code:e.code||"",message:e.message.slice(0,150)
+             }))}
+           }
+          }finally{await p.end()}
+          NODE
+          } | ssh -i ~/.ssh/verify -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'

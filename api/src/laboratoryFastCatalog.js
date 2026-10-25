@@ -59,7 +59,13 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   SELECT p.id,${supplierCode("pm.codigo_origen")},pm.laboratorio_clave
   FROM farmetrica.proveedores_maestro pm CROSS JOIN pharmacies p
   WHERE pm.cliente_slug=$3 AND pm.laboratorio_clave IS NOT NULL
-   AND pm.cooperativa IS NOT TRUE AND NOT EXISTS (
+   AND pm.cooperativa IS NOT TRUE
+   -- Nunca extrapolar un código global de Farmatic a otra farmacia con otro proveedor.
+   AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
+    WHERE upper(btrim(sp.farmacia_codigo))=p.code
+     AND ${supplierCode("sp.origen_id")}=${supplierCode("pm.codigo_origen")}
+     AND ${normalizedLabSQL("sp.nombre")}=${normalizedLabSQL("pm.nombre")})
+   AND NOT EXISTS (
     SELECT 1 FROM farmetrica.proveedores_laboratorios m
     WHERE m.cliente_slug=$3 AND m.farmacia_id=p.id
      AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("pm.codigo_origen")})

@@ -170,6 +170,9 @@ test("el preparador consulta ventas con identificadores indexados del documento 
  assert.match(sql,/a\.origen_id::text=x\.cn/);
  assert.match(sql,/__CN_NORMALIZED__/);
  assert.doesNotMatch(sql,/JOIN refs x ON \(x\.cn/);
- assert.match(sql,/AND v\.farmacia_codigo=\(/);
+ assert.match(sql,/JOIN pharmacies scope ON scope\.id=a\.pharmacy_id/);
+ assert.match(sql,/AND v\.farmacia_codigo=scope\.source_code/);
+ assert.match(sql,/pending_orders AS MATERIALIZED/);
+ assert.doesNotMatch(sql,/FROM articles a\s+JOIN farmetrica\.op_pedidos p/);
  assert.doesNotMatch(sql,/upper\(btrim\(v\.farmacia_codigo\)\)/i);
 });

@@ -8,6 +8,7 @@ import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
+import {collectLaboratoryCatalog,LAB_CATALOG_BATCH,LAB_METRICS_BATCH} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -34,7 +35,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
- const [page,setPage]=useState(1),[data,setData]=useState(empty);
+ const [data,setData]=useState(empty);
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
@@ -75,52 +76,85 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  useEffect(()=>{
   if(!laboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
   const controller=new AbortController();
-  setLoading(true);setLoadStage("catalog");setError("");setData(empty);
+  setLoading(true);setLoadStage("catalog");setError("");
+  setData({...empty,metricsUnavailable:true,loaded:0,metricsLoaded:0});
   const timer=setTimeout(async()=>{
-   const basic=new URLSearchParams({laboratorio:laboratory,tipo:tab,
-    farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
+   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope,buscar:search});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
-   // Antes se lanzaban DOS catálogos completos en paralelo y además el
-   // diagnóstico automático; podían saturar la BD y provocar falsos vacíos.
-   let source;
-   try{source=await api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,
-     {signal:controller.signal})}
-   catch(e){
+   let catalog;
+   try{
+    catalog=await collectLaboratoryCatalog((number,size)=>{
+     const query=new URLSearchParams(base);
+     query.set("pagina",String(number));query.set("tamano",String(size));
+     return api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+query,{signal:controller.signal});
+    },{
+     batchSize:LAB_CATALOG_BATCH,signal:controller.signal,
+     onBatch:({rows,total})=>{
+      if(!controller.signal.aborted)setData({rows,total,loaded:rows.length,metricsLoaded:0,
+       metricsUnavailable:true,frequencyDays:7});
+     }
+    });
+   }catch(e){
     if(!controller.signal.aborted){
-     setData(empty);setError("No se pudo leer el catálogo de "+labName+
-      ": "+e.message+". Usa «Diagnosticar enlace» para comprobar la causa.");
+     setError("No se pudieron cargar todas las referencias: "+e.message);
+     setData(current=>({...current,metricsUnavailable:true,
+      warning:"La tabla está incompleta. Actualiza para volver a intentarlo."}));
      setLoading(false);setLoadStage("idle");
     }
     return;
    }
    if(controller.signal.aborted)return;
-   setData({...source,metricsUnavailable:true,
-    warning:source.total>0&&useMetrics?"Artículos encontrados. Calculando ventas y stock…":null});
    setUpdatedAt(new Date());
-   if(!source.rows?.length||!useMetrics){
-    if(!useMetrics&&source.rows?.length)setData({...source,metricsUnavailable:true,
+   if(!catalog.rows.length||!useMetrics){
+    if(!useMetrics&&catalog.rows.length)setData(current=>({...current,
      warning:!scope?"No hay farmacias seleccionadas: faltan ventas y stock.":
       !range.valid?"El período no es válido. Se muestran referencias sin métricas.":
-       "El período supera 5 años. Acótalo para obtener ventas y stock."});
+       "El período supera cinco años. Acótalo para consultar ventas y stock."}));
     setLoading(false);setLoadStage("idle");
     return;
    }
    setLoadStage("metrics");
-   const query=new URLSearchParams(basic);query.set("desde",range.from);query.set("hasta",range.to);
-   try{
-    const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
-     {signal:controller.signal});
-    if(!controller.signal.aborted){setData(result);setUpdatedAt(new Date())}
-   }catch(e){
+   // Se reúnen TODAS las filas y se calculan métricas por grupos de 40.
+   // Los resultados parciales no sustituyen las cantidades ya editadas.
+   let rows=[...catalog.rows],done=0,frequencyDays=7;
+   for(let number=1;number<=Math.ceil(catalog.total/LAB_METRICS_BATCH);number++){
     if(controller.signal.aborted)return;
-    setData({...source,metricsUnavailable:true,
-     warning:"Artículos encontrados, pero falló el cálculo de ventas/stock: "+e.message});
-    setUpdatedAt(new Date());
-   }finally{if(!controller.signal.aborted){setLoading(false);setLoadStage("idle")}}
+    const query=new URLSearchParams(base);
+    query.set("pagina",String(number));
+    query.set("tamano",String(LAB_METRICS_BATCH));
+    query.set("desde",range.from);query.set("hasta",range.to);
+    try{
+     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
+      {signal:controller.signal});
+     if(controller.signal.aborted)return;
+     if(result.metricsUnavailable||!Array.isArray(result.rows))
+      throw Error(result.warning||"No están disponibles las ventas o el stock");
+     const start=(number-1)*LAB_METRICS_BATCH;
+     const end=Math.min(start+LAB_METRICS_BATCH,rows.length);
+     const byReference=new Map(result.rows.map(r=>[r.referencia,r]));
+     for(let i=start;i<end;i++){
+      const details=byReference.get(rows[i].referencia);
+      if(!details)throw Error("Las referencias cambiaron durante el cálculo de métricas");
+      rows[i]={...rows[i],...details,metricsReady:true};
+     }
+     done=end;frequencyDays=result.frequencyDays??frequencyDays;
+     setData({rows:[...rows],total:catalog.total,loaded:catalog.total,
+      metricsLoaded:done,frequencyDays,metricsUnavailable:done<catalog.total});
+    }catch(e){
+     if(controller.signal.aborted)return;
+     setData({rows:[...rows],total:catalog.total,loaded:catalog.total,metricsLoaded:done,
+      frequencyDays,metricsUnavailable:true,
+      warning:"Se muestran todas las referencias, pero no se pudieron completar las ventas y el stock ("+
+       e.message+"). Actualiza para volver a calcularlos."});
+     setLoading(false);setLoadStage("idle");
+     return;
+    }
+   }
+   if(!controller.signal.aborted){setLoading(false);setLoadStage("idle");setUpdatedAt(new Date())}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
- },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,page,reload]);
+ },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,reload]);
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
  const currentRows=data.rows||[];
  const showLine=row=>orderLineFor(row,tab,ids,drafts);

@@ -40,6 +40,19 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
      WHERE ma.codigo=btrim(a.origen_id::text)))
    THEN btrim(a.origen_id::text) ELSE NULL::text END)`;
  const eType=referenceKind(ecode);
+ // En las importaciones nuevas existe proveedor_habitual_id: acceder a su
+ // columna nativa evita serializar 200.000 registros ERP con to_jsonb.
+ // Conservar compatibilidad con tablas antiguas que aún no la incorporan.
+ let habitualColumn=false;
+ try{
+  const check=await pool.query({text:`
+   SELECT EXISTS (SELECT 1 FROM information_schema.columns
+    WHERE table_schema=$1 AND table_name='articulos'
+     AND column_name='proveedor_habitual_id') AS available`,
+   values:[context.client.schema],query_timeout:1500});
+  habitualColumn=check.rows[0]?.available===true;
+ }catch{}
+ const habitual=habitualColumn?"a.proveedor_habitual_id":"to_jsonb(a)->>'proveedor_habitual_id'";
  const sql=`
  WITH aliases AS (
   SELECT $1::text AS key
@@ -131,7 +144,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  JOIN farmetrica.farmacias f ON f.cliente_slug=$3 AND f.id=link.farmacia_id
  JOIN ${schema}.articulos a
   ON upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-  AND ${supplierCodeSQL("to_jsonb(a)->>'proveedor_habitual_id'")}=link.supplier_code
+  AND ${supplierCodeSQL(habitual)}=link.supplier_code
  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
  ),
  reduced AS (

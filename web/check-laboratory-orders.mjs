@@ -104,7 +104,7 @@ try{
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
  await page.getByRole("option",{name:"Laboratorio con ventas inaccesibles"}).click();
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
- await page.getByText(/No se pudieron calcular ventas\/stock/).waitFor();
+ await page.getByText(/Artículos encontrados, pero falló el cálculo de ventas\/stock|No se pudieron calcular ventas\/stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");
   // Reproducción del defecto real: la vista antigua tenía dos cajas.

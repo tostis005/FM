@@ -125,7 +125,8 @@ export default function ProveedoresMaestro({clientSlug}){
       onClick={()=>void matchLaboratories(true)}>Aplicar {suggestions.length} vinculaciones seguras</button>
     </div>
    </section>}
-   <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:id==="total"?rows.length:rows.filter(r=>r[id]===true).length}</strong></div>)}</div>   <section className="card fm-demo-table">
+   <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:id==="total"?rows.length:rows.filter(r=>r[id]===true).length}</strong></div>)}</div>   <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
+   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     
     <ListTable rows={visible} rowKey={r=>r.id||r.sourceCode} label="proveedores" defaultSort={{key:"name",direction:"asc"}} loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
@@ -156,10 +157,6 @@ export default function ProveedoresMaestro({clientSlug}){
         onChange={e=>{e.stopPropagation();void changeFlag(r,"ignoreReports",e.target.checked)}}/>},
      ]}/>
    </section>
-   <details className="card fm-supplier-mapping-details">
-    <summary>Excepciones de laboratorio por farmacia (configuración avanzada)</summary>
-    <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
-   </details>
    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
    {mappingSupplier&&<div className="fm-demo-overlay fm-supplier-lab-overlay"
     onMouseDown={e=>{if(e.target===e.currentTarget)setMappingSupplier(null)}}>

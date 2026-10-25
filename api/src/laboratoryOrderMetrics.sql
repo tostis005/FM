@@ -13,6 +13,7 @@ WITH refs AS MATERIALIZED (
   AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
  JOIN refs x ON (x.cn IS NOT NULL AND
    (nullif(btrim(a.codigo_nacional),'')=x.cn
+    OR nullif(btrim(to_jsonb(a)->>'cn_normalizado'),'')=x.cn
     OR (nullif(btrim(a.codigo_nacional),'') IS NULL
      AND btrim(a.origen_id::text)=x.cn)))
   OR (x.cn IS NULL AND x.reference='ERP:'||f.id::text||':'||a.origen_id::text)

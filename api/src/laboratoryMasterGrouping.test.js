@@ -57,3 +57,20 @@ test("nombres iguales con destinos manuales contradictorios no se fusionan arbit
  const result=groupLaboratoriesByMaster(source,master);
  assert.deepEqual(result.map(x=>x.key),["N:NOMBRE ERP"]);
 });
+
+test("denominación real de Farmatic CINFA LABORATORIOS S A CINFA se integra con CINFA",()=>{
+ const evidence=[
+  {key:"N:CINFA",name:"CINFA",hasMedication:true},
+  {key:"N:CINFA LABORATORIOS S A CINFA",
+   name:"CINFA LABORATORIOS, S.A. CINFA",hasParapharmacy:true}
+ ];
+ const master=[
+  {name:"CINFA",laboratoryKey:"N:CINFA"},
+  {name:"CINFA LABORATORIOS, S.A.",laboratoryKey:"N:CINFA"}
+ ];
+ const rows=groupLaboratoriesByMaster(evidence,master);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].key,"N:CINFA");
+ assert.equal(rows[0].hasMedication,true);
+ assert.equal(rows[0].hasParapharmacy,true);
+});

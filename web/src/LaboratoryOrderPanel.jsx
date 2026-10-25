@@ -254,13 +254,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       <th colSpan={tab==="parafarmacia"?3:2} className="fm-lab-order-total-group">Totales</th>
+       <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
       </tr><tr>
        {chosen.flatMap((p,i)=>["V. 3m","V. 12m","Stock","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
        <th>Vendido</th><th>Propuesta</th>
-       {tab==="parafarmacia"&&<th className="fm-lab-order-editcol">Pedir · Pedia</th>}
+       <th className="fm-lab-order-editcol">{tab==="parafarmacia"?"Pedir · Pedia":"Pedir total"}</th>
       </tr></thead>
       <tbody>{currentRows.map(row=>{
        const line=showLine(row);
@@ -288,14 +288,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           value={line.units??0} onChange={e=>updateLine(row,e.target.value)}/></td>}
        </tr>;
       })}
-      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
-      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+(tab==="parafarmacia"?5:4)}>
+      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+5}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
+      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+5}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":
          "Sin medicamentos asociados a este laboratorio"}</strong>
         <span>{tab==="parafarmacia"?
-         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita artículos del ERP o del catálogo externo con su laboratorio asociado.":
+         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita ventas o recepciones de artículos asociados al laboratorio.":
          "Comprueba que el nomenclátor AEMPS esté cargado y que el laboratorio aparezca asociado a sus presentaciones."}</span>
         <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setPage(1);setError("")}}>
          Ver {tab==="parafarmacia"?"Medicación":"Parafarmacia"}

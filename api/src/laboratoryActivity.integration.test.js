@@ -49,3 +49,46 @@ test("PostgreSQL: el preparador omite Nomenclátor sin actividad, pero admite CN
   assert.deepEqual(await listOperationalLaboratoryOptions(db,ctx,[]),[]);
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });
+
+test("PostgreSQL: dos proveedores equivalentes se fusionan y los ocultos/cooperativas desaparecen",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const db=new pg.Client({connectionString:process.env.TEST_DB_URL});await db.connect();
+ try{
+  await db.query("BEGIN");
+  const labels=[
+   ["CI-ACT-MERGE-1","LABORATORIO QA UNIFICADO","001201"],
+   ["CI-ACT-MERGE-2","QA ALTERNO, S.A.","001202"],
+   ["CI-ACT-HIDDEN","QA NO MOSTRAR S.L.","001203"],
+   ["CI-ACT-COOP","QA DISTRIBUIDOR S.A.","001204"]
+  ];
+  for(const [id,lab,cn] of labels){
+   await db.query(`INSERT INTO ampedia.articulos
+    (farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,stock_actual)
+    VALUES('ABA',$1,$2,$3,$4,1)`,[id,"CI prueba "+id,cn,lab]);
+  }
+  for(const [code,name,key,cooperative,ignoreReports] of [
+   ["CI-PR-UNIFICADO","LABORATORIO QA UNIFICADO","N:QA UNIFICADO",false,false],
+   ["CI-PR-ALTERNO","QA ALTERNO, S.A.","N:QA UNIFICADO",false,false],
+   ["CI-PR-HIDDEN","QA NO MOSTRAR S.L.",null,false,true],
+   ["CI-PR-COOP","QA DISTRIBUIDOR S.A.",null,true,false]
+  ]){
+   await db.query(`INSERT INTO farmetrica.proveedores_maestro
+    (cliente_slug,codigo_origen,nombre,laboratorio_clave,cooperativa,ignorar_informes)
+    VALUES('ampedia',$1,$2,$3,$4,$5)
+    ON CONFLICT(cliente_slug,codigo_origen) DO UPDATE SET
+     nombre=EXCLUDED.nombre,laboratorio_clave=EXCLUDED.laboratorio_clave,
+     cooperativa=EXCLUDED.cooperativa,ignorar_informes=EXCLUDED.ignorar_informes`,
+    [code,name,key,cooperative,ignoreReports]);
+  }
+  const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}]};
+  const grouped=await listOperationalLaboratoryOptions(db,ctx,[1]);
+  const matches=grouped.filter(l=>l.key==="N:QA UNIFICADO");
+  assert.equal(matches.length,1,"Los dos laboratorios agrupados aparecen una sola vez");
+  assert.equal(matches[0].hasParapharmacy,true);
+  assert.ok(!grouped.some(l=>l.key==="N:QA ALTERNO"),
+   "No mostrar el nombre antiguo del proveedor enlazado");
+  assert.ok(!grouped.some(l=>["N:QA NO MOSTRAR","N:QA DISTRIBUIDOR"].includes(l.key)),
+   "Los marcados como ocultos o cooperativas no pueden aparecer por CN");
+ }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
+});

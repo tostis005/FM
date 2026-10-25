@@ -1,5 +1,6 @@
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {buildAutomaticSupplierMatches} from "./supplierAutoMatch.js";
+import {invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 // Núcleo de selección de cliente, permisos y activación de módulos.
 // Todo el contexto del tenant se obtiene en el servidor, nunca de un esquema
 // arbitrario aportado por el navegador.
@@ -327,6 +328,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
      [req.context.client.slug,JSON.stringify(suggestions.map(item=>({
       source_code:item.sourceCode,name:item.name,lab_key:item.laboratoryKey
      })))]);
+    invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
     res.json({suggestions,count:suggestions.length,applied:rows.length,updated:rows});
    }catch(e){next(e)}
   });
@@ -367,6 +369,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
        [req.context.client.slug,sourceCode,name,key]);
       if(!rows.length)
        return res.status(409).json({error:"Las cooperativas no pueden asignarse a un único laboratorio"});
+      invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
       res.json(rows[0]);
     }catch(e){next(e)}
   });
@@ -391,6 +394,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       // histórico que alimenta ABCD y rentabilidad. La recarga lo reconstruye.
       await pool.query("UPDATE farmetrica.ventas_analitica_estado SET calculado_en=to_timestamp(0) WHERE cliente_slug=$1",
         [req.context.client.slug]);
+      invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
       res.json(rows[0]);
     }catch(e){next(e)}
   });
@@ -409,6 +413,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       const {rows}=await pool.query(
         'INSERT INTO farmetrica.proveedores_maestro(cliente_slug,codigo_origen,nombre,tipo,activo,cooperativa,ignorar_informes) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING '+supplierSelect,
         [req.context.client.slug,code,name,type,active,coop,ignored]);
+      invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
       res.status(201).json(rows[0]);
     }catch(e){next(e)}
   });
@@ -430,6 +435,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         [req.params.id,req.context.client.slug,code,name,type,active,coop,ignored]);
       if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
       await pool.query("UPDATE farmetrica.ventas_analitica_estado SET calculado_en=to_timestamp(0) WHERE cliente_slug=$1",[req.context.client.slug]);
+      invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
       res.json(rows[0]);
     }catch(e){next(e)}
   });

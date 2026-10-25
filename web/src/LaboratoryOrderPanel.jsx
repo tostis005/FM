@@ -204,7 +204,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       onSelect={key=>{
        const next=labs.find(l=>l.key===key);
        setLaboratory(key);
-       setTab(next?.hasMedication===true&&!next?.hasParapharmacy?"medicacion":"parafarmacia");
+       setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
        setPage(1);setSearch("");setError("");setNotice("");
       }}/>
     </div>

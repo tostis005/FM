@@ -36,6 +36,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
   if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
   if(text.includes("SELECT intervalo_dias AS days"))return {rows:[{days:3}]};
   if(text.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(text.includes("WITH p AS ("))return {rows:[]};
   if(text.includes("FROM filtered ORDER BY"))
    return {rows:[{referencia:"400001",cn:"400001",nombre:"Med 1",
     tipo:"medicacion",total:1,inMaster:true,inReceipts:false}]};
@@ -52,7 +53,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const d=await readLaboratoryOrderMatrix(pool,context,
   {key:"C:LAB",pharmacies:[1,2],type:"medicacion",
    from:"2026-09-01",to:"2026-10-24",page:1,size:40});
- assert.equal(queries.length,6);
+ assert.equal(queries.length,7);
  assert.equal(d.rows.length,1);
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);

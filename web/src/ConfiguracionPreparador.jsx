@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Plus,Trash2,Save} from "lucide-react";
+import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import "./moduleDemo.css";
 
 async function request(clientSlug,path,options={}){
@@ -74,12 +75,11 @@ export default function ConfiguracionPreparador({clientSlug}){
    {loading?<p role="status">Cargando laboratorios y frecuencias…</p>:
    <form onSubmit={saveFrequency}>
     <div className="fm-price-settings-grid">
-     <label>Laboratorio
-      <select value={chosenLab} required onChange={e=>pickLab(e.target.value)}>
-       <option value="">Seleccionar laboratorio…</option>
-       {labs.map(l=><option key={l.key} value={l.key}>{l.name}</option>)}
-      </select>
-     </label>
+     <div className="fm-supplier-laboratory-picker">
+      <span>Laboratorio</span>
+      <LaboratoryPicker laboratories={labs} selected={chosenLab}
+       onSelect={pickLab} loading={loading} ariaLabel="Seleccionar laboratorio para frecuencia"/>
+     </div>
      <label>Días entre pedidos
       <input type="number" min="1" max="365" step="1" required value={days}
        onChange={e=>setDays(e.target.value)} aria-label="Días entre pedidos del laboratorio"/>

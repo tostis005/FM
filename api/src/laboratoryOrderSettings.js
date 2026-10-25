@@ -34,6 +34,7 @@ export async function readLocalSuppliers(pool,ctx){
   LEFT JOIN farmetrica.proveedores_maestro pm
    ON pm.cliente_slug=$1
     AND ${supplierCode("pm.codigo_origen")}=${supplierCode("s.origen_id")}
+   AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("s.nombre")}
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
    AND nullif(btrim(s.origen_id::text),'') IS NOT NULL
   GROUP BY f.id,s.origen_id

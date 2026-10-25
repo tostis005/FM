@@ -65,6 +65,27 @@ test("catálogo ligero de medicación evita la segunda consulta de movimientos",
  assert.equal(statements.length,3,"Exclusiones, esquema y catálogo; sin lectura de todo el histórico");
  assert.ok(!statements.some(q=>q.includes("SELECT DISTINCT v.articulo_id")));
 });
+test("parafarmacia agrupa alias manuales sin correlacionar el maestro con cada artículo ERP",async()=>{
+ let quickSql="";
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;
+  if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("links AS MATERIALIZED")){
+   quickSql=sql;return {rows:[{
+    referencia:"001245",cn:"001245",nombre:"Producto Cinfa",tipo:"parafarmacia",
+    inMaster:false,inReceipts:true,inSales:true,inPurchases:true,provisional:false,total:1
+   }]};
+  }
+  throw Error("SQL extra inesperado");
+ }};
+ const result=await readDirectLaboratoryCatalog(pool,ctx,{...opts,
+  type:"parafarmacia",skipMovementCheck:true});
+ assert.equal(result.total,1);
+ assert.match(quickSql,/SELECT key FROM lab_aliases WHERE key LIKE 'N:%'/);
+ assert.match(quickSql,/pm\.laboratorio_clave IN \(SELECT key FROM lab_aliases\)/);
+ assert.doesNotMatch(quickSql,/AND pm\.laboratorio_clave=\$1[\s\S]*AND.*pm\.nombre/);
+});
 test("un fallo al calcular stock no oculta las presentaciones verificadas",async()=>{
  const {pool}=fixture({metricsError:true});
  const result=await readLaboratoryOrderMatrix(pool,ctx,opts);

@@ -16,8 +16,6 @@
 .fm-laboratory-scroll th,.fm-laboratory-scroll td{padding:11px;text-align:left;border-bottom:1px solid var(--border,#e7eeea);vertical-align:top}
 .fm-laboratory-scroll th{font-weight:650}
 .fm-laboratory-provisional{display:block;color:#a76b09;font-size:.8rem}
-.fm-laboratory-pagination{display:flex;gap:12px;justify-content:space-between;align-items:center;font-size:.85rem}
-.fm-laboratory-pagination>div{display:flex;gap:8px}
 .fm-laboratory-empty{padding:14px;background:var(--surface-alt,#f7faf8);border-radius:8px;margin:0}
 .fm-supplier-mapping{display:grid;gap:14px;margin:18px 0;padding:18px}
 .fm-supplier-mapping h2{margin:0 0 4px;font-size:1.15rem}

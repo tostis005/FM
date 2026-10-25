@@ -8,6 +8,7 @@ import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
+import {collectLaboratoryCatalog,LAB_CATALOG_BATCH,LAB_METRICS_BATCH} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -34,7 +35,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
- const [page,setPage]=useState(1),[data,setData]=useState(empty);
+ const [data,setData]=useState(empty);
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
@@ -75,52 +76,85 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  useEffect(()=>{
   if(!laboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
   const controller=new AbortController();
-  setLoading(true);setLoadStage("catalog");setError("");setData(empty);
+  setLoading(true);setLoadStage("catalog");setError("");
+  setData({...empty,metricsUnavailable:true,loaded:0,metricsLoaded:0});
   const timer=setTimeout(async()=>{
-   const basic=new URLSearchParams({laboratorio:laboratory,tipo:tab,
-    farmacias:scope,buscar:search,pagina:String(page),tamano:"40"});
+   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope,buscar:search});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
-   // Antes se lanzaban DOS catálogos completos en paralelo y además el
-   // diagnóstico automático; podían saturar la BD y provocar falsos vacíos.
-   let source;
-   try{source=await api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+basic,
-     {signal:controller.signal})}
-   catch(e){
+   let catalog;
+   try{
+    catalog=await collectLaboratoryCatalog((number,size)=>{
+     const query=new URLSearchParams(base);
+     query.set("pagina",String(number));query.set("tamano",String(size));
+     return api(clientSlug,"/api/analytics/pedidos/catalogo-directo?"+query,{signal:controller.signal});
+    },{
+     batchSize:LAB_CATALOG_BATCH,signal:controller.signal,
+     onBatch:({rows,total})=>{
+      if(!controller.signal.aborted)setData({rows,total,loaded:rows.length,metricsLoaded:0,
+       metricsUnavailable:true,frequencyDays:7});
+     }
+    });
+   }catch(e){
     if(!controller.signal.aborted){
-     setData(empty);setError("No se pudo leer el catálogo de "+labName+
-      ": "+e.message+". Usa «Diagnosticar enlace» para comprobar la causa.");
+     setError("No se pudieron cargar todas las referencias: "+e.message);
+     setData(current=>({...current,metricsUnavailable:true,
+      warning:"La tabla está incompleta. Actualiza para volver a intentarlo."}));
      setLoading(false);setLoadStage("idle");
     }
     return;
    }
    if(controller.signal.aborted)return;
-   setData({...source,metricsUnavailable:true,
-    warning:source.total>0&&useMetrics?"Artículos encontrados. Calculando ventas y stock…":null});
    setUpdatedAt(new Date());
-   if(!source.rows?.length||!useMetrics){
-    if(!useMetrics&&source.rows?.length)setData({...source,metricsUnavailable:true,
+   if(!catalog.rows.length||!useMetrics){
+    if(!useMetrics&&catalog.rows.length)setData(current=>({...current,
      warning:!scope?"No hay farmacias seleccionadas: faltan ventas y stock.":
       !range.valid?"El período no es válido. Se muestran referencias sin métricas.":
-       "El período supera 5 años. Acótalo para obtener ventas y stock."});
+       "El período supera cinco años. Acótalo para consultar ventas y stock."}));
     setLoading(false);setLoadStage("idle");
     return;
    }
    setLoadStage("metrics");
-   const query=new URLSearchParams(basic);query.set("desde",range.from);query.set("hasta",range.to);
-   try{
-    const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
-     {signal:controller.signal});
-    if(!controller.signal.aborted){setData(result);setUpdatedAt(new Date())}
-   }catch(e){
+   // Se reúnen TODAS las filas y se calculan métricas por grupos de 40.
+   // Los resultados parciales no sustituyen las cantidades ya editadas.
+   let rows=[...catalog.rows],done=0,frequencyDays=7;
+   for(let number=1;number<=Math.ceil(catalog.total/LAB_METRICS_BATCH);number++){
     if(controller.signal.aborted)return;
-    setData({...source,metricsUnavailable:true,
-     warning:"Artículos encontrados, pero falló el cálculo de ventas/stock: "+e.message});
-    setUpdatedAt(new Date());
-   }finally{if(!controller.signal.aborted){setLoading(false);setLoadStage("idle")}}
+    const query=new URLSearchParams(base);
+    query.set("pagina",String(number));
+    query.set("tamano",String(LAB_METRICS_BATCH));
+    query.set("desde",range.from);query.set("hasta",range.to);
+    try{
+     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-laboratorio?"+query,
+      {signal:controller.signal});
+     if(controller.signal.aborted)return;
+     if(result.metricsUnavailable||!Array.isArray(result.rows))
+      throw Error(result.warning||"No están disponibles las ventas o el stock");
+     const start=(number-1)*LAB_METRICS_BATCH;
+     const end=Math.min(start+LAB_METRICS_BATCH,rows.length);
+     const byReference=new Map(result.rows.map(r=>[r.referencia,r]));
+     for(let i=start;i<end;i++){
+      const details=byReference.get(rows[i].referencia);
+      if(!details)throw Error("Las referencias cambiaron durante el cálculo de métricas");
+      rows[i]={...rows[i],...details,metricsReady:true};
+     }
+     done=end;frequencyDays=result.frequencyDays??frequencyDays;
+     setData({rows:[...rows],total:catalog.total,loaded:catalog.total,
+      metricsLoaded:done,frequencyDays,metricsUnavailable:done<catalog.total});
+    }catch(e){
+     if(controller.signal.aborted)return;
+     setData({rows:[...rows],total:catalog.total,loaded:catalog.total,metricsLoaded:done,
+      frequencyDays,metricsUnavailable:true,
+      warning:"Se muestran todas las referencias, pero no se pudieron completar las ventas y el stock ("+
+       e.message+"). Actualiza para volver a calcularlos."});
+     setLoading(false);setLoadStage("idle");
+     return;
+    }
+   }
+   if(!controller.signal.aborted){setLoading(false);setLoadStage("idle");setUpdatedAt(new Date())}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
- },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,page,reload]);
+ },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,reload]);
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
  const currentRows=data.rows||[];
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
@@ -133,12 +167,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  },0);
  const hasInvalid=Object.values(drafts).some(line=>tab==="parafarmacia"?qty(line.units)===null:
   Object.values(line.unitsByPharmacy||{}).some(value=>qty(value)===null));
- function choosePeriod(value){setPeriod(value);setPage(1);
+ function choosePeriod(value){setPeriod(value);
   updateSharedReportFilters(clientSlug,{period:value})}
  function changeDate(field,value){if(field==="from")setCustomFrom(value);else setCustomTo(value);
-  setPage(1);updateSharedReportFilters(clientSlug,{[field==="from"?"customFrom":"customTo"]:value})}
+  updateSharedReportFilters(clientSlug,{[field==="from"?"customFrom":"customTo"]:value})}
  function changePharmacies(next){const normalized=reconcilePharmacyIds(next,pharmacies);
-  setSelectedPharmacies(normalized);setPage(1);updateSharedReportFilters(clientSlug,{pharmacyIds:normalized})}
+  setSelectedPharmacies(normalized);updateSharedReportFilters(clientSlug,{pharmacyIds:normalized})}
  function updateLine(row,newQty,pharmacyId=null){
   const amount=newQty===""?0:Number(newQty);
   setDrafts(current=>{
@@ -198,7 +232,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        const next=labs.find(l=>l.key===key);
        setLaboratory(key);
        setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
-       setPage(1);setSearch("");setError("");setNotice("");
+       setSearch("");setError("");setNotice("");
       }}/>
     </div>
    </div>
@@ -210,7 +244,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        ["medicacion","Medicación · CN desde 400000"]].map(([value,label])=>
       <button key={value} type="button" role="tab" aria-selected={tab===value}
        className={tab===value?"active":""}
-       onClick={()=>{setTab(value);setPage(1);setNotice("");setError("")}}>{label}</button>)}
+       onClick={()=>{setTab(value);setNotice("");setError("")}}>{label}</button>)}
     </div>
     <ReportFilterBar periodKey={period} onPeriodChange={choosePeriod}
      pharmacies={pharmacies} pharmacyIds={selectedPharmacies} onPharmacyChange={changePharmacies}
@@ -218,7 +252,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      onCustomToChange={v=>changeDate("to",v)}>
      <label className="fm-unified-filter"><span>Buscar artículo o CN</span>
       <input type="search" placeholder="Artículo o CN…" value={search}
-       onChange={e=>{setSearch(e.target.value);setPage(1)}}/></label>
+       onChange={e=>{setSearch(e.target.value)}}/></label>
     </ReportFilterBar>
     {!range.valid&&<p role="alert" className="fm-op-message fm-op-error">Selecciona un período válido y comprueba las fechas desde/hasta.</p>}
     {data.warning&&<p role="status" className="fm-lab-order-warning">
@@ -254,12 +288,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </div>}
      </div>}
     <div className="fm-lab-order-summary">
-     <span><strong>{loading&&loadStage==="catalog"?"…":data.total??0}</strong> referencias del laboratorio</span>
-     <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSold)}</strong> vendidas en esta página</span>
-      <span><strong>{data.frequencyDays??7}</strong> días entre pedidos</span>
-     <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalSuggested)}</strong> propuestas en esta página</span>
-     <span><strong>{data.metricsUnavailable?"—":fmt(pageTotalOrder)}</strong> uds. a pedir en esta página</span>
-     {loading&&<span role="status" className="fm-lab-loading-label"><LoaderCircle size={15} className="fm-lab-spinner"/>{loadStage==="catalog"?"Consultando artículos del laboratorio…":"Calculando ventas y stock por farmacia…"}</span>}
+     <span><strong>{data.loaded??0} / {data.total??0}</strong> referencias en una sola tabla</span>
+     <span><strong>{fmt(pageTotalSold)}</strong> vendidas {data.metricsUnavailable?"(parcial)":""}</span>
+     <span><strong>{data.frequencyDays??7}</strong> días entre pedidos</span>
+     <span><strong>{fmt(pageTotalSuggested)}</strong> propuestas {data.metricsUnavailable?"(parcial)":""}</span>
+     <span><strong>{fmt(pageTotalOrder)}</strong> uds. a pedir</span>
+     {loading&&<span role="status" className="fm-lab-loading-label">
+      <LoaderCircle size={15} className="fm-lab-spinner"/>
+      {loadStage==="catalog"?
+       "Cargando referencias "+(data.loaded??0)+" de "+(data.total||"…")+"…":
+       "Calculando ventas y stock "+(data.metricsLoaded??0)+" de "+(data.total??0)+"…"}
+     </span>}
     </div>
     <div className="fm-lab-order-scroll" role="region" tabIndex={0}
      aria-label="Tabla horizontal de artículos y métricas por farmacia">
@@ -284,8 +323,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          <small>{row.inMaster?"Maestro":row.inReceipts?"Farmatic":"Referencia"}</small></td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
-         return [data.metricsUnavailable?null:m.units3??0,data.metricsUnavailable?null:m.units12??0,m.stock??null,data.metricsUnavailable?null:m.unitsPeriod??0,
-          tab==="medicacion"?"edit":m.suggested??null].map((value,k)=>
+         return [row.metricsReady?m.units3??0:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.stock??null:null,row.metricsReady?m.unitsPeriod??0:null,
+          tab==="medicacion"?"edit":row.metricsReady?m.suggested??null:null].map((value,k)=>
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
@@ -293,8 +332,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
-        <td className="fm-lab-order-total">{data.metricsUnavailable?"—":fmt(row.totalSold)}</td>
-        <td className="fm-lab-order-total">{data.metricsUnavailable?"—":fmt(row.totalSuggested)}</td>
+        <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSold):"—"}</td>
+        <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
         {tab==="parafarmacia"&&<td className="fm-lab-order-editcol">
          <input type="number" min="0" max="999999" step="1" disabled={!canEdit}
           aria-label={"Pedir "+row.nombre+" para el laboratorio"}
@@ -310,7 +349,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         <span>{tab==="parafarmacia"?
          "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita ventas o recepciones de artículos asociados al laboratorio.":
          "Comprueba que el nomenclátor AEMPS esté cargado y que el laboratorio aparezca asociado a sus presentaciones."}</span>
-        <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setPage(1);setError("")}}>
+        <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setError("")}}>
          Ver {tab==="parafarmacia"?"Medicación":"Parafarmacia"}
         </button>
        </div>
@@ -318,18 +357,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </div>
-    <div className="fm-lab-order-pager">
-     <span>Página {page} de {Math.max(1,Math.ceil((data.total||0)/40))}
-      {currentRows.length>0?" · "+currentRows.length+" visibles":""}</span>
-     <div><button className="btn btn-secondary" type="button" disabled={page<=1||loading}
-       onClick={()=>setPage(n=>n-1)}>Anterior</button>
-      <button className="btn btn-secondary" type="button"
-       disabled={page>=Math.ceil((data.total||0)/40)||loading}
-       onClick={()=>setPage(n=>n+1)}>Siguiente</button></div>
-    </div>
     <div className="fm-lab-order-actions">
      <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido conjunto de medicación · desglose por farmacia"}</strong>
-      <small>El borrador incorpora las referencias revisadas al navegar por las páginas. El stock es actual; las ventas de 3 y 12 meses se calculan hasta la fecha «Hasta».</small>
+      <small>Todas las referencias aparecen juntas y se incluyen en el borrador al guardar. El stock es actual; las ventas de 3 y 12 meses se calculan hasta la fecha «Hasta».</small>
       {savedDate&&(savedDate.from!==range.from||savedDate.to!==range.to)&&
        <small className="fm-lab-order-notice">El borrador anterior tenía otro período. Al guardar se actualizará.</small>}
      </div>

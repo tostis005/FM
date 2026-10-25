@@ -1,6 +1,18 @@
 // Prueba de navegador del preparador por laboratorio, sin datos de producción.
 import {chromium} from "playwright";
 import assert from "node:assert/strict";
+import {collectLaboratoryCatalog} from "./src/laboratoryLoadAll.js";
+// Prueba de varias tandas sin paginado ni omisiones de referencias.
+const batchProgress=[];
+const list=await collectLaboratoryCatalog(async(page,size)=>({
+ total:205,rows:Array.from({length:205},(_,i)=>({
+  referencia:"REF-"+(i+1)})).slice((page-1)*size,page*size)
+}),{batchSize:100,onBatch:p=>batchProgress.push(p.loaded)});
+assert.equal(list.rows.length,205);
+assert.deepEqual(batchProgress,[100,200,205]);
+await assert.rejects(()=>collectLaboratoryCatalog(async page=>({
+ total:120,rows:page===1?Array.from({length:100},(_,i)=>({referencia:String(i)})):[]
+})),/página vacía/);
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1366,height:900},acceptDownloads:true});
 const pharmacies=[{id:"1",name:"Abadía",sourceCode:"ABA",databaseCode:"ABA"},
@@ -21,6 +33,7 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/analytics/pedidos/catalogo-laboratorios")
   body={laboratories:[{key:"C:LAB",name:"Laboratorio Ejemplo"},
     {key:"N:CINFA",name:"Laboratorios Cinfa S.A.",hasMedication:true,hasParapharmacy:false},
+    {key:"N:MULTI",name:"Laboratorio con 125 referencias",hasMedication:false,hasParapharmacy:true},
     {key:"N:ERROR",name:"Laboratorio con ventas inaccesibles",hasMedication:true,hasParapharmacy:false}]};
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
@@ -28,30 +41,55 @@ await page.route("**/api/**",async route=>{
    body={saved:true,count:data.lineas.length,updatedAt:"2026-10-24T07:00:00Z"};
   }else body={lineas:[]};
  }else if(path==="/api/analytics/pedidos/catalogo-directo"){
-  if(url.searchParams.get("laboratorio")==="N:CINFA")
-   await new Promise(resolve=>setTimeout(resolve,600));
-  body={rows:[{referencia:"790321",cn:"790321",nombre:"Producto recuperado del maestro",
-   tipo:"medicacion",inMaster:true,inReceipts:false}],total:1,page:1,size:40};
+  const lab=url.searchParams.get("laboratorio"),type=url.searchParams.get("tipo");
+  if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
+  const pageNumber=Number(url.searchParams.get("pagina")||1);
+  const limit=Number(url.searchParams.get("tamano")||40);
+  let rows;
+  if(lab==="N:MULTI")
+   rows=Array.from({length:125},(_,i)=>({referencia:String(1000+i).padStart(6,"0"),
+    cn:String(1000+i).padStart(6,"0"),nombre:"Referencia lote "+String(i+1).padStart(3,"0"),
+    tipo:"parafarmacia",inMaster:false,inReceipts:true}));
+  else if(lab==="N:ERROR")
+   rows=[{referencia:"790321",cn:"790321",nombre:"Producto recuperado del maestro",
+    tipo:"medicacion",inMaster:true,inReceipts:false}];
+  else{
+   const med=type==="medicacion";
+   rows=[{referencia:med?"400123":"000123",cn:med?"400123":"000123",
+    nombre:med?"Medicamento":"Crema solar",tipo:med?"medicacion":"parafarmacia",
+    inMaster:true,inReceipts:true}];
+  }
+  body={rows:rows.slice((pageNumber-1)*limit,pageNumber*limit),total:rows.length,
+   page:pageNumber,size:limit};
  }else if(path==="/api/analytics/pedidos/diagnostico-laboratorio"){
   body={pharmacyCount:2,sources:[{type:"medicacion",status:"ok",total:1},
    {type:"parafarmacia",status:"ok",total:0}]};
  }else if(path==="/api/analytics/pedidos/matriz-laboratorio"){
-  if(url.searchParams.get("laboratorio")==="N:CINFA")
-   await new Promise(resolve=>setTimeout(resolve,1600));
-  if(url.searchParams.get("laboratorio")==="N:ERROR"){
+  const lab=url.searchParams.get("laboratorio");
+  if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,750));
+  if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
     body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
   }
   const type=url.searchParams.get("tipo");
   matrices.push(Object.fromEntries(url.searchParams));
-  const med=type==="medicacion";
-  const cn=med?"400123":"000123";
-  body={rows:[{referencia:cn,cn,nombre:med?"Medicamento":"Crema solar",
-   inMaster:true,inReceipts:true,provisional:false,
+  const med=type==="medicacion",pageNumber=Number(url.searchParams.get("pagina")||1);
+  const limit=Number(url.searchParams.get("tamano")||40);
+  const refs=lab==="N:MULTI"?
+   Array.from({length:125},(_,i)=>({
+    referencia:String(1000+i).padStart(6,"0"),
+    cn:String(1000+i).padStart(6,"0"),
+    nombre:"Referencia lote "+String(i+1).padStart(3,"0")
+   })):
+   [{referencia:med?"400123":"000123",cn:med?"400123":"000123",
+    nombre:med?"Medicamento":"Crema solar"}];
+  body={rows:refs.slice((pageNumber-1)*limit,pageNumber*limit).map(r=>({...r,
+   inMaster:lab!=="N:MULTI",inReceipts:true,provisional:false,
    byPharmacy:{
     "1":{stock:4,units3:30,units12:120,unitsPeriod:8,suggested:3,ordered:0},
     "2":{stock:6,units3:40,units12:160,unitsPeriod:5,suggested:7,ordered:0}
-   },totalSold:13,totalSuggested:10}],total:1,page:1,size:40};
+   },totalSold:13,totalSuggested:10
+  })),total:refs.length,page:pageNumber,size:limit,frequencyDays:7};
  }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -96,15 +134,34 @@ try{
  await labSelector.fill("Cinfa");
  assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
- await page.getByText(/Consultando artículos y códigos nacionales/).waitFor({timeout:1200});
- await page.getByText(/Calculando ventas y stock por farmacia/).waitFor({timeout:3000});
+ await page.getByText(/Cargando referencias/).waitFor({timeout:1200});
+ await page.getByText(/Calculando ventas y stock/).waitFor({timeout:3000});
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
+ const multiSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});
+ await multiSelector.fill("125 referencias");
+ await page.getByRole("option",{name:"Laboratorio con 125 referencias"}).click();
+ await page.getByText("Referencia lote 125").waitFor({timeout:25000});
+ assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),125,
+  "Todas las 125 referencias se ven a la vez, también las de otros lotes");
+ assert.equal(await page.locator(".fm-lab-order-pager").count(),0);
+ assert.equal(await page.getByRole("button",{name:"Siguiente",exact:true}).count(),0);
+ const last=page.getByRole("spinbutton",{name:"Pedir Referencia lote 125 para el laboratorio"});
+ await last.fill("9");
+ const saveMulti=page.getByRole("button",{name:"Guardar borrador"});
+ await saveMulti.waitFor({state:"visible"});
+ await page.waitForFunction(()=>!document.querySelector(".fm-lab-order-actions button").disabled,{timeout:25000});
+ assert.ok(matrices.filter(m=>m.laboratorio==="N:MULTI").length>=4,
+  "Se calculan métricas para todos los lotes");
+ await saveMulti.click();
+ await page.getByText(/Borrador guardado/).waitFor();
+ assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
+ assert.equal(saved.at(-1).lineas.find(l=>l.name==="Referencia lote 125")?.units,9);
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
  await page.getByRole("option",{name:"Laboratorio con ventas inaccesibles"}).click();
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
- await page.getByText(/No se pudieron calcular ventas\/stock/).waitFor();
+ await page.getByText(/no se pudieron completar las ventas y el stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");
   // Reproducción del defecto real: la vista antigua tenía dos cajas.

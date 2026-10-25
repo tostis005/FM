@@ -88,3 +88,11 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  assert.equal((await call("GET","/api/analytics/pedidos/matriz-laboratorio",
   {laboratorio:"C:LAB",farmacias:"1",tipo:"medicacion",desde:"2026-10-26",hasta:"2026-10-24"})).status,400);
 });
+
+test("el preparador consulta ventas con identificadores indexados del documento Farmatic",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ assert.match(sql,/ON v\.articulo_id=a\.article_id/);
+ assert.match(sql,/AND v\.farmacia_codigo=\(/);
+ assert.doesNotMatch(sql,/upper\(btrim\(v\.farmacia_codigo\)\)/i);
+});

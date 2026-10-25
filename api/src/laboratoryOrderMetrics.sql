@@ -28,9 +28,12 @@ WITH refs AS MATERIALIZED (
   coalesce(sum(v.unidades) FILTER(WHERE v.fecha >= $4::date AND v.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
   coalesce(sum(v.unidades) FILTER(WHERE v.fecha >= $5::date-interval '89 days' AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v3,
   coalesce(sum(v.unidades) FILTER(WHERE v.fecha >= $5::date-interval '364 days' AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v12
+ -- Coincidencias exactas con los identificadores normalizados de Farmatic.
+ -- Evitar upper/btrim sobre columnas de la vista: impide aprovechar sus
+ -- índices base (farmacia_codigo, articulo_origen_id) y multiplica el coste.
  FROM articles a JOIN __SCHEMA__.fm_ventas_analitica v
-  ON v.articulo_id::text=a.article_id
-  AND upper(btrim(v.farmacia_codigo))=(
+  ON v.articulo_id=a.article_id
+  AND v.farmacia_codigo=(
    SELECT source_code FROM pharmacies p WHERE p.id=a.pharmacy_id)
  WHERE v.fecha >= LEAST($4::date,$5::date-interval '364 days')
    AND v.fecha < $5::date+interval '1 day'

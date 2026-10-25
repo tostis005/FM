@@ -12,7 +12,7 @@ assert.equal(list.rows.length,205);
 assert.deepEqual(batchProgress,[100,200,205]);
 await assert.rejects(()=>collectLaboratoryCatalog(async page=>({
  total:120,rows:page===1?Array.from({length:100},(_,i)=>({referencia:String(i)})):[]
-})),/página vacía/);
+}),{batchSize:100}),/página vacía/);
 let inFlight=0,maxInFlight=0;
 const parallelList=await collectLaboratoryCatalog(async(page,size)=>{
  inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);

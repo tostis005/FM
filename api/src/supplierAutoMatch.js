@@ -34,7 +34,7 @@ export function buildLocalSupplierGroupSuggestions(suppliers){
   const code=String(row?.sourceCode||"").trim().toUpperCase();
   const name=String(row?.name||"").trim();
   const normalized=normalizeLabName(name);
-  if(!code||!name||row.cooperative||row.ignoreReports||
+  if(!code||!name||name.length>200||row.cooperative||row.ignoreReports||
    row.laboratoryKey||row.inferredLaboratoryKey||
    normalized.length<3||!/[A-Z]{2}/.test(normalized)||
    normalizeLabName(code)===normalized||

@@ -12,7 +12,8 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_comerc
  OR 'N:'||${normalizedLabSQL(alias+".laboratorio_titular")}=$1
  OR 'N:'||${normalizedLabSQL(alias+".laboratorio")}=$1
  OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_comercializador_codigo,'')))=$1)
- OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_titular_codigo,'')))=$1))`;
+ OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_titular_codigo,'')))=$1)
+ OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_codigo,'')))=$1))`;
 
 /**
  * ÚNICO universo: presentaciones del Nomenclátor + artículos que figuran en

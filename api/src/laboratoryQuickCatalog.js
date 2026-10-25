@@ -109,7 +109,8 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
      AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("sp.origen_id")}
      AND m.laboratorio_clave NOT IN (SELECT key FROM lab_aliases))
    AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm
-    WHERE pm.cliente_slug=$3 AND pm.cooperativa IS TRUE
+    WHERE pm.cliente_slug=$3
+     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE)
      AND ${supplierCode("pm.codigo_origen")}=${supplierCode("sp.origen_id")}
      AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")})
   UNION
@@ -117,6 +118,13 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
   FROM farmetrica.proveedores_laboratorios m
   JOIN pharmacies p ON p.id=m.farmacia_id
   WHERE m.cliente_slug=$3 AND m.laboratorio_clave IN (SELECT key FROM lab_aliases)
+   AND NOT EXISTS (SELECT 1 FROM ${schema}.proveedores sp
+    JOIN farmetrica.proveedores_maestro pm
+     ON pm.cliente_slug=$3 AND ${supplierCode("pm.codigo_origen")}=${supplierCode("sp.origen_id")}
+      AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")}
+    WHERE upper(btrim(sp.farmacia_codigo))=p.code
+     AND ${supplierCode("sp.origen_id")}=${supplierCode("m.codigo_proveedor")}
+     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE))
   UNION
   SELECT p.id,${supplierCode("pm.codigo_origen")}
   FROM farmetrica.proveedores_maestro pm
@@ -126,6 +134,7 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
     AND ${supplierCode("sp.origen_id")}=${supplierCode("pm.codigo_origen")}
     AND ${normalizedLabSQL("sp.nombre")}=${normalizedLabSQL("pm.nombre")}
   WHERE pm.cliente_slug=$3 AND pm.cooperativa IS NOT TRUE
+   AND pm.ignorar_informes IS NOT TRUE
    AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
    AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_laboratorios m
     WHERE m.cliente_slug=$3 AND m.farmacia_id=p.id
@@ -147,7 +156,11 @@ async function readPurchases(pool,ctx,{key,pharmacies,search,page,size,patterns,
   SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
   FROM pharmacies p JOIN ${schema}.articulos a
    ON upper(btrim(a.farmacia_codigo))=p.code
-  WHERE 'N:'||${normalizedLabSQL("a.laboratorio")}=$1
+  WHERE ('N:'||${normalizedLabSQL("a.laboratorio")}=$1
+   OR EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm
+    WHERE pm.cliente_slug=$3 AND pm.laboratorio_clave=$1
+     AND pm.cooperativa IS NOT TRUE AND pm.ignorar_informes IS NOT TRUE
+     AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("a.laboratorio")}))
    AND EXISTS(SELECT 1 FROM ${schema}.fm_ventas_analitica v
     WHERE v.farmacia_codigo=p.code AND v.articulo_id=a.origen_id::text)
  ), candidates AS MATERIALIZED (

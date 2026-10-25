@@ -170,7 +170,7 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
    const reference=r?.referencia,cn=r?.cn;
    if(typeof reference!=="string"||reference.length>120||
     !(/^[0-9]{6,7}$/.test(reference)||
-     (type==="parafarmacia"&&/^ERP:\\d+:[A-Za-z0-9._:-]{1,90}$/.test(reference)))||
+     (type==="parafarmacia"&&/^ERP:\d+:[A-Za-z0-9._:-]{1,90}$/.test(reference)))||
     !(cn===null||cn===undefined||/^[0-9]{6,7}$/.test(cn))||
     (cn&&cnCategory(cn)!==type)||seen.has(reference))
     return res.status(400).json({error:"Hay códigos duplicados o inválidos"});

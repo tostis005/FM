@@ -4,7 +4,7 @@ import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
 import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
 import {groupLaboratoriesByMaster,readMasterLaboratoryRules} from "./laboratoryMasterGrouping.js";
-import {readCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
+import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
@@ -290,6 +290,7 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
     await pool.query(`DELETE FROM farmetrica.proveedores_laboratorios
      WHERE cliente_slug=$1 AND farmacia_id=$2 AND codigo_proveedor=$3`,
      [req.context.client.slug,pharmacyId,sourceCode]);
+    invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
     return res.json({pharmacyId:String(pharmacyId),sourceCode,laboratoryKey:null});
    }
    const {rows:known}=await pool.query(`
@@ -316,6 +317,7 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
     RETURNING farmacia_id::text AS "pharmacyId",codigo_proveedor AS "sourceCode",
      laboratorio_clave AS "laboratoryKey"`,
     [req.context.client.slug,pharmacyId,sourceCode,laboratoryKey]);
+   invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
    res.json(rows[0]);
   }catch(e){next(e);}
  });

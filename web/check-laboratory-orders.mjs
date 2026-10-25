@@ -21,7 +21,7 @@ const user={email:"lab-order-ci@example.invalid",role:"superadministrador",name:
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",schema:"ampedia",name:"Ampedia"},
  role:"superadministrador",pharmacies,modules:{compras:true,dashboard:true,proveedores:true}};
-const saved=[],matrices=[],errors=[];
+const saved=[],matrices=[],labQueries=[],errors=[];
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname;
@@ -30,11 +30,13 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/context")body=context;
  else if(path==="/api/tenant/farmacias")body=pharmacies;
  else if(path==="/api/operativa")body={scope:{canEdit:true,canApprove:true},items:[]};
- else if(path==="/api/analytics/pedidos/catalogo-laboratorios")
+ else if(path==="/api/analytics/pedidos/catalogo-laboratorios"){
+  labQueries.push(Object.fromEntries(url.searchParams));
   body={laboratories:[{key:"C:LAB",name:"Laboratorio Ejemplo"},
     {key:"N:CINFA",name:"Laboratorios Cinfa S.A.",hasMedication:true,hasParapharmacy:false},
     {key:"N:MULTI",name:"Laboratorio con 125 referencias",hasMedication:false,hasParapharmacy:true},
     {key:"N:ERROR",name:"Laboratorio con ventas inaccesibles",hasMedication:true,hasParapharmacy:false}]};
+ }
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
    const data=request.postDataJSON();saved.push(data);
@@ -95,6 +97,9 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
+ await page.waitForFunction(()=>document.querySelector(".fm-lab-order-chooser input")?.placeholder?.includes("Escribe"));
+ assert.ok(labQueries.some(q=>q.uso==="preparador"&&q.farmacias==="1,2"),
+  "El selector usa solo actividad operativa de las farmacias incluidas");
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Laboratorio Ejemplo");
  await page.getByRole("option",{name:"Laboratorio Ejemplo"}).click();
  await page.getByRole("tab",{name:/Parafarmacia/}).waitFor();
@@ -170,6 +175,8 @@ try{
   assert.equal(await page.getByRole("button",{name:"Pedido por laboratorio"}).getAttribute("aria-pressed"),"true",
    "Una preferencia guardada de la vista vieja no debe reabrirla");
   await page.goto("http://127.0.0.1:4175/compras-preparador?vista=anterior",{waitUntil:"domcontentloaded"});
+  assert.ok(labQueries.every(q=>q.uso==="preparador"),
+   "Ambos preparadores exigen laboratorios con datos de Farmatic");
   const catalog=page.locator(".fm-laboratory-catalog");
   await catalog.waitFor();
   const catalogPicker=catalog.getByRole("combobox",{name:"Seleccionar laboratorio del catálogo"});

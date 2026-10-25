@@ -17,7 +17,7 @@ export function isRetiredProductName(name,patterns=[]){
 // expr es una expresión SQL del servidor, nunca de un parámetro externo.
 // placeholder es un array de cadenas literal, no una expresión LIKE ni regex.
 export function retiredProductSQL(expr,placeholder="$8"){
- return `(upper(coalesce(${expr},'')) ~ '^[[:space:]]*(ZZZ|\\*+[[:space:]]*BAJA)'
+ return `(upper(coalesce(${expr},'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
    OR EXISTS (SELECT 1 FROM unnest(${placeholder}::text[]) AS exclude(cadena)
      WHERE position(upper(exclude.cadena) in upper(coalesce(${expr},'')))>0))`;
 }
@@ -66,7 +66,7 @@ export function setupLaboratoryRetirements(app,pool,{requireTenant,requireTenant
   try{
    const {rows}=await pool.query({text:`
     SELECT a.nombre AS name,count(*)::int AS occurrences,
-     CASE WHEN upper(btrim(a.nombre)) ~ '^(ZZZ|\\*+[[:space:]]*BAJA)'
+     CASE WHEN upper(btrim(a.nombre)) ~ '^(ZZZ|[*]+[[:space:]]*BAJA)'
        THEN 'prefijo' ELSE 'revisar' END AS category
     FROM "${schema}".articulos a
     JOIN farmetrica.farmacias f ON f.cliente_slug=$1

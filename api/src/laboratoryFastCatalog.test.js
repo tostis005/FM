@@ -17,6 +17,8 @@ function fixture({metricsError=false,empty=false}={}){
   if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"DESCATALOGADO"}]};
   if(sql.includes("SELECT intervalo_dias AS days"))return {rows:[{days:4}]};
   if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH selected_pharmacies AS"))return {rows:[]};
+  if(sql.includes("supplier_links AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH pharmacies AS"))return {rows:empty?[]:[catalogRow]};
   if(sql.includes("WITH refs AS")){
    if(metricsError)throw Object.assign(Error("Stock unavailable"),{code:"42703"});

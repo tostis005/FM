@@ -281,7 +281,10 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
      UNION ALL
      SELECT 1 FROM farmetrica.articulos_laboratorio_maestro a
       WHERE a.laboratorio_clave=$1 OR 'N:'||${normalizedLabSQL('a.laboratorio_nombre')}=$1
-    ) AS found`,[laboratoryKey]);
+     UNION ALL
+     SELECT 1 FROM farmetrica.laboratorios_personalizados own
+      WHERE own.cliente_slug=$2 AND own.laboratorio_clave=$1
+    ) AS found`,[laboratoryKey,req.context.client.slug]);
    if(!known[0]?.found)return res.status(400).json({error:"Selecciona un laboratorio del maestro"});
    const {rows:coop}=await pool.query(`
     SELECT cooperativa FROM farmetrica.proveedores_maestro

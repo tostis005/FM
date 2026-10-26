@@ -22,7 +22,7 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  JOIN farmetrica.proveedores_unificados_alias a
    ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
  JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
-  AND upper(btrim(f.codigo_origen))=upper(btrim(a.farmacia_codigo))
+  AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
   AND f.id=ANY($2::int[])
  WHERE p.cliente_slug=$1 AND p.activo
   ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO')":""}
@@ -53,7 +53,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  ), bought AS MATERIALIZED (
   SELECT DISTINCT r.farmacia_codigo,r.articulo_id::text AS article_id
   FROM ${q}.fm_recepciones_analitica r
-  JOIN aliases a ON a.code=upper(btrim(r.farmacia_codigo))
+  JOIN aliases a ON a.code=r.farmacia_codigo
     AND a.supplier=${normalizeCode("r.proveedor_id")}
   WHERE nullif(btrim(r.articulo_id::text),'') IS NOT NULL
    AND r.unidades>0
@@ -65,7 +65,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
     THEN btrim(a.origen_id::text) END) AS cn,
    coalesce(nullif(btrim(a.nombre),''),b.article_id) AS nombre
   FROM bought b JOIN ${q}.articulos a
-   ON upper(btrim(a.farmacia_codigo))=upper(btrim(b.farmacia_codigo))
+   ON a.farmacia_codigo=b.farmacia_codigo
     AND a.origen_id::text=b.article_id
  )
  SELECT cn AS referencia,cn, min(nombre) AS nombre,$4::text AS tipo,

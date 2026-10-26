@@ -176,3 +176,14 @@ test("el preparador consulta ventas con identificadores indexados del documento 
  assert.doesNotMatch(sql,/FROM articles a\s+JOIN farmetrica\.op_pedidos p/);
  assert.doesNotMatch(sql,/upper\(btrim\(l\.farmacia_codigo\)\)/i);
 });
+
+test("ventas fijas de 90/365 días hasta hoy; fechas históricas solo para V. período",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ assert.match(sql,/now\(\) AT TIME ZONE 'Europe\/Madrid'/);
+ assert.match(sql,/FILTER \(WHERE h\.fecha >= d\.today-interval '89 days'/);
+ assert.match(sql,/FILTER \(WHERE h\.fecha >= d\.today-interval '364 days'/);
+ assert.match(sql,/FILTER \(WHERE h\.fecha >= \$4::date AND h\.fecha < \$5::date/);
+ assert.match(sql,/OR \(h\.fecha >= d\.today-interval '364 days'/);
+ assert.doesNotMatch(sql,/h\.fecha >= \$5::date-interval '89 days'/);
+});

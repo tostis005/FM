@@ -52,7 +52,7 @@ export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(
      "INSERT INTO farmetrica.dashboard_consolidados_diarios"+
      " (cliente_slug,farmacia_id,dia,fuente,importe,unidades,filas,filas_importe,"+
      " filas_unidades,filas_producto,documentos,filas_coste,ventas_con_coste,margen_coste,actualizado_en)"+
-     " SELECT $5::text,x.farmacia_id,x.dia,x.fuente,x.importe,x.unidades,x.filas,"+
+     " SELECT $4::text,x.farmacia_id,x.dia,x.fuente,x.importe,x.unidades,x.filas,"+
      " x.filas_importe,x.filas_unidades,x.filas_producto,x.documentos,x.filas_coste,"+
      " x.ventas_con_coste,x.margen_coste,now() FROM ("+
      buildDashboardMonthSQL(schema,source,{daily:true})+") x"+
@@ -62,7 +62,7 @@ export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(
      " filas_producto=EXCLUDED.filas_producto,documentos=EXCLUDED.documentos,"+
      " filas_coste=EXCLUDED.filas_coste,ventas_con_coste=EXCLUDED.ventas_con_coste,"+
      " margen_coste=EXCLUDED.margen_coste,actualizado_en=now()",
-     [JSON.stringify(farms),month,end,month,slug]);
+     [JSON.stringify(farms),month,end,slug]);
    }
    await conn.query("COMMIT");
    return true;

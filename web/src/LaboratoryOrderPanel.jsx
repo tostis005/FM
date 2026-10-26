@@ -377,7 +377,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         "Calculando ventas y stock de "+(data.total??0)+" referencias en una consulta…"}
      </span>}
     </div>
-    <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia">
+    <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
+     <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
+      aria-busy={metricsLoading}>
      <table className="fm-lab-order-table">
       <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
@@ -388,7 +390,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
        <th>Vendido</th><th>Propuesta</th>
-       <th className="fm-lab-order-editcol">{tab==="parafarmacia"?"Pedir · Pedia":"Pedir total"}</th>
+       <th className="fm-lab-order-editcol">Pedir total</th>
       </tr></thead>
       <tbody>{currentRows.map(row=>{
        const line=showLine(row);
@@ -403,16 +405,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
-             disabled={!canEdit} value={line.unitsByPharmacy?.[String(p.id)]??0}
+             disabled={!canEdit||loading||!row.metricsReady} value={line.unitsByPharmacy?.[String(p.id)]??0}
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSold):"—"}</td>
         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
-        {tab==="parafarmacia"&&<td className="fm-lab-order-editcol">
-         <input type="number" min="0" max="999999" step="1" disabled={!canEdit}
-          aria-label={"Pedir "+row.nombre+" para el laboratorio"}
-          value={line.units??0} onChange={e=>updateLine(row,e.target.value)}/></td>}
+        <td className="fm-lab-order-editcol">
+         <input type="number" min="0" max="999999" step="1"
+          disabled={!canEdit||loading||!row.metricsReady}
+          title={tab==="medicacion"?"Reparte el total proporcionalmente entre las farmacias; después puedes ajustar cada una.":"Unidades totales a pedir"}
+          aria-label={tab==="medicacion"?"Pedir total de "+row.nombre:"Pedir "+row.nombre+" para el laboratorio"}
+          value={tab==="medicacion"?medicationOrderTotal(line,ids):line.units??0}
+          onChange={e=>updateLine(row,e.target.value,tab==="medicacion"?"total":null)}/></td>
        </tr>;
       })}
       {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+5}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
@@ -432,7 +437,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </HorizontalTableScroll>
-    <div className="fm-lab-order-actions">
+    {metricsLoading&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
+     <div className="fm-lab-matrix-loading">
+      <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
+      <strong>Calculando ventas y stock por farmacia…</strong>
+      <span>{loadStage==="fallback"?
+       "Procesando "+(data.metricsLoaded??0)+" de "+(data.total??0)+" referencias":
+       "Completando las métricas y los totales de los artículos"}</span>
+     </div>
+    </div>}
+   </div>
+   <div className="fm-lab-order-actions">
      <button className="btn btn-secondary" type="button" onClick={save}
       disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>

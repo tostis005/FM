@@ -312,22 +312,22 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         if(has("fm_recepciones_analitica","proveedor_id")&&
             (has("fm_recepciones_analitica","farmacia_codigo")||
              has("fm_recepciones_analitica","farmacia_id"))){
-          const known=new Set(external.filter(r=>r.name).map(r=>r.pharmacyId+"|"+r.sourceCode));
-          const missing=received.filter(r=>!r.name&&!known.has(r.pharmacyId+"|"+r.sourceCode));
+          // La vista documental Farmatic puede exponer proveedor_nombre
+          // como NULL para todas las recepciones. No escanearla si ya
+          // contamos con cabeceras: no aportaría nombres y arriesga timeout.
           const needAll=!has("fm_recepciones_cabeceras","farmacia_codigo","proveedor_origen_id");
-          if(needAll||missing.length){
+          if(needAll){
             const analyticsJoin=has("fm_recepciones_analitica","farmacia_codigo")?
               pharmacyJoin("r"):
               "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND f.id=r.farmacia_id";
             const name=has("fm_recepciones_analitica","proveedor_nombre")?
               "min(nullif(btrim(r.proveedor_nombre::text),''))":"NULL::text";
-            const restrict=needAll?"":"AND upper(btrim(r.proveedor_id::text))=ANY($3::text[])";
-            const values=needAll?[slug,ids]:[slug,ids,[...new Set(missing.map(r=>r.sourceCode))]];
+            const values=[slug,ids];
             const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
               upper(btrim(r.proveedor_id::text)) AS "sourceCode",
               ${name} AS name,'recepciones' AS source
               FROM "${schema}".fm_recepciones_analitica r ${analyticsJoin}
-              WHERE nullif(btrim(r.proveedor_id::text),'') IS NOT NULL ${restrict}
+              WHERE nullif(btrim(r.proveedor_id::text),'') IS NOT NULL
               GROUP BY f.id,upper(btrim(r.proveedor_id::text))`,
               values,query_timeout:16000});
             received.push(...rows);

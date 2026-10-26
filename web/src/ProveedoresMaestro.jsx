@@ -9,7 +9,7 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
 const EMPTY={sourceCode:"",name:"",type:"sin_clasificar",active:true,cooperative:false,ignoreReports:false};
 export default function ProveedoresMaestro({clientSlug}){
- const [rows,setRows]=useState([]),[search,setSearch]=useState(""),[form,setForm]=useState(null),
+ const [rows,setRows]=useState([]),[pharmacies,setPharmacies]=useState([]),[search,setSearch]=useState(""),[form,setForm]=useState(null),
   [error,setError]=useState(""),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[savingFlags,setSavingFlags]=useState({});
  const [updatedAt,setUpdatedAt]=useState(null);
  const [laboratories,setLaboratories]=useState([]),[mappingSupplier,setMappingSupplier]=useState(null);
@@ -23,7 +23,15 @@ export default function ProveedoresMaestro({clientSlug}){
   if(!r.ok)throw Error(data.error||"No se pudo completar la operación");
   return data;
  }
- async function refresh(){setLoading(true);try{setRows(await api("/api/tenant/proveedores"));setUpdatedAt(new Date())}finally{setLoading(false)}}
+ async function refresh(){
+  setLoading(true);
+  try{
+   const [suppliers,shops]=await Promise.all([
+    api("/api/tenant/proveedores"),api("/api/tenant/farmacias")
+   ]);
+   setRows(suppliers);setPharmacies(shops);setUpdatedAt(new Date());
+  }finally{setLoading(false)}
+ }
  useEffect(()=>{
   refresh().catch(e=>setError(e.message));
   api("/api/analytics/pedidos/catalogo-laboratorios")
@@ -38,6 +46,7 @@ export default function ProveedoresMaestro({clientSlug}){
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  async function changeFlag(row,field,value){
+  if(row.nameConflict){setError("Este código identifica proveedores diferentes en varias farmacias. Es necesario resolver la identidad por farmacia antes de aplicar un indicador global.");return;}
   const key=row.sourceCode+":"+field;
   if(savingFlags[key])return;
   setSavingFlags(state=>({...state,[key]:true}));
@@ -55,7 +64,7 @@ export default function ProveedoresMaestro({clientSlug}){
   }finally{setSavingFlags(state=>{const next={...state};delete next[key];return next})}
  }
  async function saveLaboratory(){
-  if(!mappingSupplier||linking)return;
+  if(!mappingSupplier||linking||mappingSupplier.nameConflict)return;
   setLinking(true);setError("");setMappingNotice("");
   try{
    const saved=await api("/api/tenant/proveedores/laboratorio",{
@@ -75,7 +84,7 @@ export default function ProveedoresMaestro({clientSlug}){
   try{
    const result=await api("/api/tenant/proveedores/autovincular",{
     method:"POST",body:JSON.stringify({apply,
-     suppliers:rows.map(r=>({sourceCode:r.sourceCode,name:r.name,
+     suppliers:rows.filter(r=>!r.nameConflict).map(r=>({sourceCode:r.sourceCode,name:r.name,
       cooperative:r.cooperative,ignoreReports:r.ignoreReports,laboratoryKey:r.laboratoryKey}))})
    });
    if(!apply){setSuggestions(result.suggestions||[]);
@@ -90,7 +99,10 @@ export default function ProveedoresMaestro({clientSlug}){
   }catch(e){setError(e.message)}finally{setAutoBusy(false)}
  }
  const labName=key=>laboratories.find(l=>l.key===key)?.name||key||"Sin asignar";
+ const pharmacyName=id=>pharmacies.find(p=>String(p.id)===String(id))?.name||("Farmacia "+id);
+ const collisions=rows.filter(r=>r.nameConflict).length;
  function openLaboratory(row){
+  if(row.nameConflict){setError("Este código está compartido por proveedores diferentes. No se puede asignar un laboratorio global sin identificar primero la farmacia.");return;}
   setMappingSupplier(row);setSelectedLab(row.laboratoryKey||"");
   setMappingNotice("");
  }
@@ -112,6 +124,11 @@ export default function ProveedoresMaestro({clientSlug}){
    </ReportFilterBar>
    {error&&<p className="fm-manage-feedback" role="alert">{error}</p>}
    {mappingNotice&&<p className="fm-manage-feedback" role="status">{mappingNotice}</p>}
+   {collisions>0&&<p className="fm-manage-feedback" role="alert">
+    Se han detectado {collisions} códigos de proveedor utilizados con nombres diferentes en varias farmacias.
+    Aparecen en el maestro, pero no se pueden modificar sus indicadores globales hasta resolver
+    su identidad por farmacia. Comprueba los nombres de origen en la tabla antes de unificarlos.
+   </p>}
    {suggestions!==null&&suggestions.length>0&&<section className="card fm-auto-labs" aria-label="Coincidencias automáticas de laboratorios">
     <strong>Coincidencias de nombres verificadas ({suggestions.length})</strong>
     <p>Solo nombres normalizados idénticos y sin asignación previa. No se asociarán códigos de proveedor ni nombres dudosos.</p>
@@ -129,28 +146,40 @@ export default function ProveedoresMaestro({clientSlug}){
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     
     <ListTable rows={visible} rowKey={r=>r.id||r.sourceCode} label="proveedores" defaultSort={{key:"name",direction:"asc"}} loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
-     onRowClick={row=>setForm({...row})} columns={[
+     onRowClick={row=>{if(row.nameConflict){setError("No se puede editar globalmente este código porque identifica proveedores distintos según la farmacia.");return;}setForm({...row})}} columns={[
       {key:"sourceCode",label:"Código",value:r=>r.sourceCode},
       {key:"name",label:"Proveedor",value:r=>r.name,render:r=><strong>{r.name}</strong>},
+      {key:"origins",label:"Farmacias / nombres en Farmatic",sortable:false,searchable:false,
+       value:r=>(r.origins||[]).map(o=>o.name).join(" "),
+       render:r=><div>
+        {(r.origins||[]).length? [...new Map(r.origins.map(o=>[
+          String(o.pharmacyId)+"|"+o.name,
+          <span key={String(o.pharmacyId)+"|"+o.name} style={{display:"block"}}>
+           {o.pharmacyId?pharmacyName(o.pharmacyId):"Origen sin farmacia"}: {o.name}
+          </span>
+         ])).values()].slice(0,8):<span>Alta manual</span>}
+        {(r.origins||[]).length>8&&<small>Y más entradas de origen…</small>}
+        {r.nameConflict&&<strong style={{display:"block"}}>Código compartido entre proveedores diferentes</strong>}
+       </div>},
       {key:"laboratoryKey",label:"Laboratorio del catálogo",sortable:true,searchable:false,
        value:r=>labName(r.laboratoryKey),
        render:r=><button className="btn btn-secondary btn-sm fm-supplier-lab-link" type="button"
-        title={r.cooperative?"Una cooperativa no es un laboratorio":labName(r.laboratoryKey)}
-        disabled={Boolean(r.cooperative)}
+        title={r.nameConflict?"Identidad de proveedor ambigua entre farmacias":r.cooperative?"Una cooperativa no es un laboratorio":labName(r.laboratoryKey)}
+        disabled={Boolean(r.cooperative||r.nameConflict)}
         onClick={e=>{e.stopPropagation();openLaboratory(r)}}>
-        {r.cooperative?"No asignable":r.laboratoryKey?labName(r.laboratoryKey):"Asignar laboratorio"}
+        {r.nameConflict?"Resolver por farmacia":r.cooperative?"No asignable":r.laboratoryKey?labName(r.laboratoryKey):"Asignar laboratorio"}
        </button>},
       {key:"cooperative",label:"Cooperativa",sortable:true,searchable:false,
        value:r=>r.cooperative?"Sí":"No",
        render:r=><input type="checkbox" aria-label={"Cooperativa: "+r.name}
-        checked={Boolean(r.cooperative)} disabled={Boolean(savingFlags[r.sourceCode+":cooperative"])}
+        checked={Boolean(r.cooperative)} disabled={Boolean(r.nameConflict||savingFlags[r.sourceCode+":cooperative"])}
         onClick={e=>e.stopPropagation()}
         onKeyDown={e=>e.stopPropagation()}
         onChange={e=>{e.stopPropagation();void changeFlag(r,"cooperative",e.target.checked)}}/>},
       {key:"ignoreReports",label:"Ignorar proveedor en informes",sortable:true,searchable:false,
        value:r=>r.ignoreReports?"Sí":"No",
        render:r=><input type="checkbox" aria-label={"Ignorar proveedor en informes: "+r.name}
-        checked={Boolean(r.ignoreReports)} disabled={Boolean(savingFlags[r.sourceCode+":ignoreReports"])}
+        checked={Boolean(r.ignoreReports)} disabled={Boolean(r.nameConflict||savingFlags[r.sourceCode+":ignoreReports"])}
         onClick={e=>e.stopPropagation()}
         onKeyDown={e=>e.stopPropagation()}
         onChange={e=>{e.stopPropagation();void changeFlag(r,"ignoreReports",e.target.checked)}}/>},

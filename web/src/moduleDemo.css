@@ -392,3 +392,6 @@
 .fm-auto-labs-list span{background:#f2f7f3;padding:6px 8px;border-radius:5px;overflow-wrap:anywhere}
 
 .fm-supplier-lab-overlay{z-index:10020}
+
+/* La resta de documentos no representa el beneficio económico. */
+.fm-dashboard-reconciliation-note{margin:0 0 13px;padding:10px 13px;font-size:12px;line-height:1.5;color:#456452;background:#f4faf6;border-left:3px solid #30a577;border-radius:4px}

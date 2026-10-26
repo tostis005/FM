@@ -49,6 +49,13 @@ await page.route("**/api/**",async route=>{
     {key:"N:MULTI",name:"Laboratorio con 125 referencias",hasMedication:false,hasParapharmacy:true},
     {key:"N:ERROR",name:"Laboratorio con ventas inaccesibles",hasMedication:true,hasParapharmacy:false}]};
  }
+ else if(path==="/api/analytics/pedidos/proveedores-unificados"){
+  labQueries.push(Object.fromEntries(url.searchParams));
+  body={laboratories:[{key:"P:10",name:"Laboratorio Ejemplo",class:"DIRECTO"},
+   {key:"P:11",name:"Laboratorios Cinfa S.A.",class:"DIRECTO",hasMedication:true,hasParapharmacy:false},
+   {key:"P:12",name:"Laboratorio con 125 referencias",class:"DIRECTO"},
+   {key:"P:13",name:"Laboratorio con ventas inaccesibles",class:"DIRECTO",hasMedication:true,hasParapharmacy:false}]};
+ }
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
    const data=request.postDataJSON();saved.push(data);
@@ -56,7 +63,8 @@ await page.route("**/api/**",async route=>{
   }else body={lineas:[]};
  }else if(path==="/api/analytics/pedidos/catalogo-directo"||
   path==="/api/analytics/pedidos/catalogo-unificado"){
-  const lab=url.searchParams.get("laboratorio"),type=url.searchParams.get("tipo");
+  const requestedLab=url.searchParams.get("laboratorio"),type=url.searchParams.get("tipo");
+  const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR"}[requestedLab]||requestedLab;
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
   const pageNumber=Number(url.searchParams.get("pagina")||1);
   const limit=Number(url.searchParams.get("tamano")||40);
@@ -83,7 +91,8 @@ await page.route("**/api/**",async route=>{
   path==="/api/analytics/pedidos/matriz-referencias"||
   path==="/api/analytics/pedidos/matriz-conjunta"){
   const incoming=request.method()==="POST"?request.postDataJSON():null;
-  const lab=incoming?.laboratorio||url.searchParams.get("laboratorio");
+  const requestedLab=incoming?.laboratorio||url.searchParams.get("laboratorio");
+  const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR"}[requestedLab]||requestedLab;
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
   if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
@@ -116,7 +125,7 @@ try{
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.waitForFunction(()=>document.querySelector(".fm-lab-order-chooser input")?.placeholder?.includes("Escribe"));
  assert.ok(labQueries.some(q=>q.uso==="preparador"&&q.farmacias==="1,2"),
-  "El selector usa solo actividad operativa de las farmacias incluidas");
+  "El selector consulta el maestro unificado por farmacia");
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Laboratorio Ejemplo");
  await page.getByRole("option",{name:"Laboratorio Ejemplo"}).click();
  await page.getByRole("tab",{name:/Parafarmacia/}).waitFor();
@@ -174,11 +183,11 @@ try{
  const saveMulti=page.getByRole("button",{name:"Guardar borrador"});
  await saveMulti.waitFor({state:"visible"});
  await page.waitForFunction(()=>!document.querySelector(".fm-lab-order-actions button").disabled,{timeout:25000});
- assert.ok(matrices.some(m=>m.laboratorio==="N:MULTI"&&m.referencias?.length===125),
+ assert.ok(matrices.some(m=>m.laboratorio==="P:12"&&m.referencias?.length===125),
   "Todas las referencias se calculan en una sola agregación");
  await saveMulti.click();
  await page.getByText(/Borrador guardado/).waitFor();
- assert.ok(matrices.some(m=>m.laboratorio==="N:MULTI"&&m.referencias?.length===125));
+ assert.ok(matrices.some(m=>m.laboratorio==="P:12"&&m.referencias?.length===125));
  assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
  assert.equal(saved.at(-1).lineas.find(l=>l.name==="Referencia lote 125")?.units,9);
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
@@ -194,7 +203,7 @@ try{
    "Una preferencia guardada de la vista vieja no debe reabrirla");
   await page.goto("http://127.0.0.1:4175/compras-preparador?vista=anterior",{waitUntil:"domcontentloaded"});
   assert.ok(labQueries.every(q=>q.uso==="preparador"),
-   "Ambos preparadores exigen laboratorios con datos de Farmatic");
+   "El selector por farmacia exige proveedores del maestro");
   const catalog=page.locator(".fm-laboratory-catalog");
   await catalog.waitFor();
   const catalogPicker=catalog.getByRole("combobox",{name:"Seleccionar laboratorio del catálogo"});

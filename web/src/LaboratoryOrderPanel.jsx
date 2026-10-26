@@ -171,12 +171,16 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     bulkComplete=true;
    }catch(e){
     if(controller.signal.aborted)return;
+    // Si el SQL conjunto no termina, indicar el cambio de estrategia.
+    // El usuario sigue viendo sus artículos mientras progresan los lotes.
+    setLoadStage("fallback");
    }
    if(bulkComplete){
     setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());return;
    }
-   // Respaldo: bloques indexados de 40 referencias si la agregación conjunta
-   // supera el plazo. No se reconstruye el catálogo ni se pierden artículos.
+   // Solo si falla el cálculo conjunto: lotes de 200 CN en paralelo.
+   // Con 2.000 artículos son 10 lotes, no las 50 consultas anteriores.
+   // No se reconstruye el catálogo ni se pierden artículos.
    try{
     await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{
@@ -344,7 +348,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <LoaderCircle size={15} className="fm-lab-spinner"/>
       {loadStage==="catalog"?
        "Cargando referencias "+(data.loaded??0)+" de "+(data.total||"…")+"…":
-       "Calculando ventas y stock "+(data.metricsLoaded??0)+" de "+(data.total??0)+"…"}
+       loadStage==="fallback"?
+        "Calculando ventas y stock por lotes "+(data.metricsLoaded??0)+" de "+(data.total??0)+"…":
+        "Calculando ventas y stock de "+(data.total??0)+" referencias en una consulta…"}
      </span>}
     </div>
     <div className="fm-lab-order-scroll" role="region" tabIndex={0}

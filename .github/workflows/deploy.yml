@@ -46,7 +46,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -93,7 +93,7 @@ jobs:
           node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js
           node --test src/salesPeriods.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
-          node --test src/asyncBatches.test.js
+          node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js
           node --test src/tableExport.test.js
           node check-login.mjs
@@ -228,6 +228,13 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' < api/src/migrations/011_configuracion_precios.sql
 
+      - name: Crear índices concurrentes del preparador de pedidos
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+            < ops/indices-preparador-masivo.sql
+
       - name: Actualizar API y web en el VPS
         run: |
           set -euo pipefail
@@ -301,6 +308,15 @@ jobs:
             echo "::error::Falló el chequeo HTTP: API=$api web=$web login=$login privada=$panel soluciones=$solutions ficha=$solution ERP=$integration blog=$blog sitemap=$sitemap demo=$demo rechazado=$rejected"
             echo "Falló la comprobación posterior del despliegue"
             exit 1
+          '
+
+      - name: Medir el preparador de proveedores unificados (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'acelerar preparador')
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorBulkPerformance.mjs
           '
 
       - name: Verificar unificación y exclusiones del maestro en el preparador (solo lectura)

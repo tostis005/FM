@@ -51,13 +51,26 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
   .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
  let rows;
+ const started=Date.now();
  try{
   const result=await pool.query({text:sql,
    values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to,frequencyDays],
    query_timeout:30000});
   rows=result.rows;
+  if(selected.length>=100)console.info("PREPARADOR_METRICAS",JSON.stringify({
+   references:selected.length,pharmacies:options.pharmacies.length,
+   elapsedMs:Date.now()-started,status:"ok"
+  }));
  }catch(e){
-  return {...fallback,warning:"Se han recuperado los artículos, pero no sus métricas de stock y ventas. "+(e.code||"Error de datos")};
+  // El motivo concreto de pasar a lotes se registra para diagnosticar
+  // índices y timeouts; nunca se registran CN, ventas ni identificadores.
+  console.warn("PREPARADOR_METRICAS",JSON.stringify({
+   references:selected.length,pharmacies:options.pharmacies.length,
+   elapsedMs:Date.now()-started,status:"fallback",
+   code:e.code||e.name||"QUERY_ERROR"
+  }));
+  return {...fallback,metricsErrorCode:e.code||"QUERY_ERROR",
+   warning:"Se han recuperado los artículos, pero no sus métricas de stock y ventas. "+(e.code||"Error de consulta")};
  }
  const byRef=new Map();
  for(const row of rows){
@@ -221,7 +234,7 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
   if(!common||!["medicacion","parafarmacia"].includes(type)||
    !validPlannerDate(from)||!validPlannerDate(to)||from>to||
    Date.parse(to)-Date.parse(from)>5*366*86400000||
-   !Array.isArray(provided)||!provided.length||provided.length>40||
+   !Array.isArray(provided)||!provided.length||provided.length>250||
    !SCHEMA.test(req.context.client.schema))
    return res.status(400).json({error:"Referencias, farmacias o período inválidos"});
   const seen=new Set(),rows=[];

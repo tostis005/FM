@@ -854,7 +854,7 @@ html,body{overflow-x:clip}
    limitada a la pantalla, de manera que la cabecera y la barra SUPERIOR
    siguen visibles mientras se recorren cientos de referencias.
    El scroll inferior sigue siendo el del propio contenedor. */
-.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top){
+.fm-dual-scroll > :not(.fm-dual-scroll-top){
  max-height:min(74vh,760px);
  overflow-x:auto;
  overflow-y:auto;
@@ -862,7 +862,7 @@ html,body{overflow-x:clip}
  scrollbar-width:auto;
  scrollbar-color:#a6bcb0 #edf3ef;
 }
-.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top) > table thead{
+.fm-dual-scroll > :not(.fm-dual-scroll-top) > table thead{
  position:sticky;
  top:0;
  z-index:8;
@@ -872,7 +872,7 @@ html,body{overflow-x:clip}
  background-color:#f3f8f5;
  background-clip:padding-box;
 }
-.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top) > table thead .fm-lab-order-sticky{
+.fm-dual-scroll > :not(.fm-dual-scroll-top) > table thead .fm-lab-order-sticky{
  z-index:11;
 }
 .fm-dual-scroll .fm-dual-scroll-top{
@@ -881,5 +881,5 @@ html,body{overflow-x:clip}
 }
 .fm-dual-scroll .fm-dual-scroll-top[data-overflow="false"]{display:none}
 @media(max-width:700px){
- .fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top){max-height:min(66vh,650px)}
+ .fm-dual-scroll > :not(.fm-dual-scroll-top){max-height:min(66vh,650px)}
 }

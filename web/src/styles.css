@@ -848,3 +848,38 @@ html,body{overflow-x:clip}
  font-size:12px;font-weight:700;color:#334e45;cursor:pointer}
 .fm-lab-seller-option input{width:16px;height:16px;accent-color:#128867;cursor:pointer}
 .fm-lab-seller-option input:disabled{cursor:not-allowed}
+
+
+/* Scroll de tabla unificado. Las filas se desplazan dentro de un área
+   limitada a la pantalla, de manera que la cabecera y la barra SUPERIOR
+   siguen visibles mientras se recorren cientos de referencias.
+   El scroll inferior sigue siendo el del propio contenedor. */
+.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top){
+ max-height:min(74vh,760px);
+ overflow-x:auto;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+ scrollbar-width:auto;
+ scrollbar-color:#a6bcb0 #edf3ef;
+}
+.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top) > table thead{
+ position:sticky;
+ top:0;
+ z-index:8;
+ filter:drop-shadow(0 2px 1px #1d423015);
+}
+.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top) > table thead th{
+ background-color:#f3f8f5;
+ background-clip:padding-box;
+}
+.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top) > table thead .fm-lab-order-sticky{
+ z-index:11;
+}
+.fm-dual-scroll .fm-dual-scroll-top{
+ position:relative;
+ flex-shrink:0;
+}
+.fm-dual-scroll .fm-dual-scroll-top[data-overflow="false"]{display:none}
+@media(max-width:700px){
+ .fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top){max-height:min(66vh,650px)}
+}

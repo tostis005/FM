@@ -348,7 +348,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <LoaderCircle size={15} className="fm-lab-spinner"/>
       {loadStage==="catalog"?
        "Cargando referencias "+(data.loaded??0)+" de "+(data.total||"…")+"…":
-       "Calculando ventas y stock "+(data.metricsLoaded??0)+" de "+(data.total??0)+"…"}
+       loadStage==="fallback"?
+        "Calculando ventas y stock por lotes "+(data.metricsLoaded??0)+" de "+(data.total??0)+"…":
+        "Calculando ventas y stock de "+(data.total??0)+" referencias en una consulta…"}
      </span>}
     </div>
     <div className="fm-lab-order-scroll" role="region" tabIndex={0}

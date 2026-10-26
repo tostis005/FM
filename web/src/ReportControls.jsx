@@ -34,9 +34,9 @@ export function ReportPageHeader({title,description,period,updatedAt,onRefresh,r
 // El alcance por farmacia y el período comparten orden, etiquetas y aspecto en todos los informes.
 export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacyIds=[],onPharmacyChange,
  showPeriod=true,showPharmacies=true,customFrom="",customTo="",onCustomFromChange,onCustomToChange,
- quickPeriodKey, onQuickPeriodChange,children}){
+ quickPeriodKey, onQuickPeriodChange,alwaysShowDates=false,showQuickPeriods=true,periodLabel="Período",children}){
  return <div className="card fm-unified-filters">
-  {showPeriod&&<label className="fm-unified-filter"><span>Período</span>
+  {showPeriod&&<label className="fm-unified-filter"><span>{periodLabel}</span>
    <select value={periodKey} onChange={e=>onPeriodChange?.(e.target.value)}>
     {SALES_PERIODS.map(([id,label])=><option key={id} value={id}>{label}</option>)}
    </select></label>}
@@ -45,13 +45,13 @@ export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacy
     options={pharmacies.map(f=>({value:String(f.id),label:f.name}))}
     value={pharmacyIds} onChange={onPharmacyChange}/></div>}
   {children}
-  {showPeriod&&periodKey==="custom"&&<>
+  {showPeriod&&(periodKey==="custom"||alwaysShowDates)&&<>
    <label className="fm-unified-filter"><span>Desde</span><input type="date" value={customFrom}
     onChange={e=>onCustomFromChange?.(e.target.value)}/></label>
    <label className="fm-unified-filter"><span>Hasta</span><input type="date" value={customTo}
     onChange={e=>onCustomToChange?.(e.target.value)}/></label>
   </>}
-  {(showPeriod||onQuickPeriodChange)&&<div className="fm-period-shortcuts"
+  {showQuickPeriods&&(showPeriod||onQuickPeriodChange)&&<div className="fm-period-shortcuts"
    role="group" aria-label="Períodos rápidos">
    {QUICK_PERIODS.map(([key,label])=><button key={key} type="button"
     className={"fm-period-shortcut "+((quickPeriodKey===undefined?periodKey:quickPeriodKey)===key?"is-selected":"")}

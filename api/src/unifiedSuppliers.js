@@ -46,17 +46,26 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
  ), aliases AS MATERIALIZED (
-  SELECT c.code,${normalizeCode("a.codigo_origen")} AS supplier
+  SELECT DISTINCT c.code,${normalizeCode("a.codigo_origen")} AS supplier
   FROM farmetrica.proveedores_unificados_alias a
   JOIN chosen c ON c.code=upper(btrim(a.farmacia_codigo))
   WHERE a.cliente_slug=$1 AND a.proveedor_id=$3
  ), bought AS MATERIALIZED (
-  SELECT DISTINCT r.farmacia_codigo,r.articulo_id::text AS article_id
-  FROM ${q}.fm_recepciones_analitica r
-  JOIN aliases a ON a.code=r.farmacia_codigo
-    AND a.supplier=${normalizeCode("r.proveedor_id")}
-  WHERE nullif(btrim(r.articulo_id::text),'') IS NOT NULL
-   AND r.unidades>0
+  -- Buscar primero las cabeceras del proveedor con índice compuesto,
+  -- después únicamente las líneas de esos documentos por su PK.
+  -- Equivalente a fm_recepciones_analitica (sólo entregas positivas válidas).
+  SELECT DISTINCT h.farmacia_codigo,l.articulo_origen_id AS article_id
+  FROM aliases a
+  JOIN ${q}.fm_recepciones_cabeceras h
+    ON h.farmacia_codigo=a.code
+     AND ${normalizeCode("h.proveedor_origen_id")}=a.supplier
+     AND h.lineas_completas AND NOT h.eliminada_logicamente
+     AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+  JOIN ${q}.fm_recepciones_lineas l
+    ON l.farmacia_codigo=h.farmacia_codigo
+     AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+  WHERE NOT l.eliminada_logicamente AND l.cantidad>0 AND l.devuelta IS NOT TRUE
+    AND nullif(btrim(l.articulo_origen_id),'') IS NOT NULL
  ), products AS (
   SELECT DISTINCT coalesce(
    CASE WHEN btrim(a.codigo_nacional)~'^[0-9]{6,7}$'

@@ -85,11 +85,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setLoading(true);setLoadStage("catalog");setError("");
   setData({...empty,metricsUnavailable:true,loaded:0,metricsLoaded:0});
   const timer=setTimeout(async()=>{
-   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope,buscar:search});
+   const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
    const useMetrics=range.valid&&!tooLong&&Boolean(scope);
    let catalog;
-   const cacheKey=[clientSlug,laboratory,tab,scope,search,reload].join("|");
+   const cacheKey=[clientSlug,laboratory,tab,scope,reload].join("|");
    try{
     catalog=catalogueCache.current.get(cacheKey);
     if(!catalog){
@@ -205,9 +205,16 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    if(!controller.signal.aborted){setLoading(false);setLoadStage("idle");setUpdatedAt(new Date())}
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
- },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,search,reload]);
+ },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,reload]);
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
- const currentRows=data.rows||[];
+ // Buscar por CN no reejecuta el histórico: filtrar solo la tabla cargada.
+ const currentRows=useMemo(()=>{
+  const term=search.trim().toLocaleLowerCase("es");
+  if(!term)return data.rows||[];
+  return (data.rows||[]).filter(row=>
+   String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(term)||
+   String(row.nombre||"").toLocaleLowerCase("es").includes(term));
+ },[data.rows,search]);
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
  const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
@@ -220,8 +227,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   Object.values(line.unitsByPharmacy||{}).some(value=>qty(value)===null));
  function choosePeriod(value){setPeriod(value);
   updateSharedReportFilters(clientSlug,{period:value})}
- function changeDate(field,value){if(field==="from")setCustomFrom(value);else setCustomTo(value);
-  updateSharedReportFilters(clientSlug,{[field==="from"?"customFrom":"customTo"]:value})}
+ function changeDate(field,value){
+  // Editar un campo activa el período personalizado preservando la otra fecha.
+  const from=field==="from"?value:(period==="custom"?customFrom:range.from||"");
+  const to=field==="to"?value:(period==="custom"?customTo:range.to||"");
+  setCustomFrom(from);setCustomTo(to);setPeriod("custom");
+  updateSharedReportFilters(clientSlug,{period:"custom",customFrom:from,customTo:to});
+ }
  function changePharmacies(next){const normalized=reconcilePharmacyIds(next,pharmacies);
   setSelectedPharmacies(normalized);updateSharedReportFilters(clientSlug,{pharmacyIds:normalized})}
  function updateLine(row,newQty,pharmacyId=null){
@@ -291,15 +303,18 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    {notice&&<p className="fm-op-message" role="status">{notice}</p>}
    {!laboratory?<p className="fm-lab-order-placeholder">Selecciona un laboratorio para consultar y preparar su pedido.</p>:<>
     <div className="fm-lab-order-tabs" role="tablist" aria-label="Tipo de artículos">
-     {[["parafarmacia","Parafarmacia · CN 000000–399999"],
-       ["medicacion","Medicación · CN desde 400000"]].map(([value,label])=>
+     {[["parafarmacia","Parafarmacia"],["medicacion","Medicación"]].map(([value,label])=>
       <button key={value} type="button" role="tab" aria-selected={tab===value}
-       className={tab===value?"active":""}
+       className={"btn "+(tab===value?"btn-primary":"btn-secondary")}
        onClick={()=>{setTab(value);setNotice("");setError("")}}>{label}</button>)}
     </div>
+    <p className="fm-lab-order-period-help">V. 3m y V. 12m: siempre los últimos 90 y 365 días. V. período: las fechas que selecciones, por ejemplo el verano anterior.</p>
     <ReportFilterBar periodKey={period} onPeriodChange={choosePeriod}
+     alwaysShowDates showQuickPeriods={false} periodLabel="Ventas · período seleccionado"
      pharmacies={pharmacies} pharmacyIds={selectedPharmacies} onPharmacyChange={changePharmacies}
-     customFrom={customFrom} customTo={customTo} onCustomFromChange={v=>changeDate("from",v)}
+     customFrom={period==="custom"?customFrom:range.from||""}
+     customTo={period==="custom"?customTo:range.to||""}
+     onCustomFromChange={v=>changeDate("from",v)}
      onCustomToChange={v=>changeDate("to",v)}>
      <label className="fm-unified-filter"><span>Buscar artículo o CN</span>
       <input type="search" placeholder="Artículo o CN…" value={search}
@@ -339,7 +354,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </div>}
      </div>}
     <div className="fm-lab-order-summary">
-     <span><strong>{data.loaded??0} / {data.total??0}</strong> referencias en una sola tabla</span>
+     <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias {search?"filtradas":"en una sola tabla"}</span>
      <span><strong>{fmt(pageTotalSold)}</strong> vendidas {data.metricsUnavailable?"(parcial)":""}</span>
      <span><strong>{data.frequencyDays??7}</strong> días entre pedidos</span>
      <span><strong>{fmt(pageTotalSuggested)}</strong> propuestas {data.metricsUnavailable?"(parcial)":""}</span>

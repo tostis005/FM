@@ -59,7 +59,7 @@ export default function ProveedoresUnificados({clientSlug}){
   }).filter(Boolean)).filter(o=>!linked.has(o.pharmacyCode+"|"+normalize(o.sourceCode))),
   [sources,suppliers,pharmacies]);
  const uniquePending=[...new Map(pending.map(x=>[x.pharmacyCode+"|"+normalize(x.sourceCode),x])).values()];
- const visible=suppliers.filter(p=>[p.name,p.key,p.class,...(p.origins||[]).map(o=>o.sourceName)]
+ const visible=suppliers.filter(p=>[p.name,p.key,p.class,...(p.origins||[]).flatMap(o=>[o.sourceName,o.sourceCode,o.pharmacyCode])]
    .join(" ").toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es")));
  async function save(){
   if(!editing)return;
@@ -116,7 +116,7 @@ export default function ProveedoresUnificados({clientSlug}){
    </tr></thead><tbody>
     {visible.map(p=><tr key={p.id}><td><strong>{p.name}</strong></td>
      <td>{p.class}</td><td>{(p.origins||[]).map((a,i)=><div key={i}>
-      {a.pharmacyCode}: {a.sourceCode} — {a.sourceName}</div>)}</td>
+      {a.pharmacyCode}: {a.sourceCode} — {a.sourceName} {" "}<button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setLinking({pharmacyCode:a.pharmacyCode,sourceCode:a.sourceCode,name:a.sourceName});setChosen("")}}>Cambiar grupo</button></div>)}</td>
      <td><button className="btn btn-secondary btn-sm" onClick={()=>setEditing({...p})}>Editar</button></td></tr>)}
    </tbody></table></div>
   </section>

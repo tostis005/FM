@@ -46,7 +46,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -93,7 +93,7 @@ jobs:
           node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js
           node --test src/salesPeriods.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
-          node --test src/asyncBatches.test.js
+          node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js
           node --test src/tableExport.test.js
           node check-login.mjs

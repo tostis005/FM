@@ -79,6 +79,8 @@
 /* La carga de artículos es rápida; mantener una señal clara sobre la matriz
    hasta que el cálculo de ventas, stock y propuestas esté completo. */
 .fm-lab-matrix-frame{position:relative;min-width:0;width:100%}
+/* Los resultados parciales del fallback no deben parecer definitivos. */
+.fm-lab-matrix-frame[data-metrics-loading="true"] .fm-lab-order-table tbody td:not(.fm-lab-order-sticky){visibility:hidden}
 .fm-lab-matrix-overlay{
  position:absolute;inset:16px 0 0;z-index:20;
  display:flex;justify-content:center;align-items:center;

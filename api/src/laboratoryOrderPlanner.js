@@ -221,7 +221,7 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
   if(!common||!["medicacion","parafarmacia"].includes(type)||
    !validPlannerDate(from)||!validPlannerDate(to)||from>to||
    Date.parse(to)-Date.parse(from)>5*366*86400000||
-   !Array.isArray(provided)||!provided.length||provided.length>40||
+   !Array.isArray(provided)||!provided.length||provided.length>250||
    !SCHEMA.test(req.context.client.schema))
    return res.status(400).json({error:"Referencias, farmacias o período inválidos"});
   const seen=new Set(),rows=[];

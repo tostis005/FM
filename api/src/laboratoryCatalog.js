@@ -61,7 +61,7 @@ export async function listLaboratoryOptions(pool,context){
      WHERE r.farmacia_codigo=`+pharmacyDataCodeSQL("f")+`
        AND r.articulo_id=a.origen_id::text))
    UNION ALL
-   SELECT ${normalizedLabSQL("custom.nombre") AS canonical,
+   SELECT `+normalizedLabSQL("custom.nombre")+` AS canonical,
      custom.nombre AS name,false AS medication,true AS parapharmacy,false AS vademecum
    FROM farmetrica.laboratorios_personalizados custom
    WHERE custom.cliente_slug=$1

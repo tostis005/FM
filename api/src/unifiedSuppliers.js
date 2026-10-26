@@ -157,7 +157,12 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
      r.nombre_origen,'excel',r.vigencia
     FROM ranked r JOIN farmetrica.proveedores_unificados p
      ON p.cliente_slug=$1 AND p.clave_unificada='EXCEL:'||r.clave_unificada
-    WHERE r.rn=1
+    WHERE r.rn=1 AND NOT EXISTS (
+     SELECT 1 FROM fm_proveedor_import collision
+     WHERE upper(btrim(collision.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
+      AND btrim(collision.codigo_origen)=btrim(r.codigo_origen)
+      AND collision.clave_unificada<>r.clave_unificada
+    )
     ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO NOTHING
     RETURNING id`,[req.context.client.slug]);
    const collision=await client.query(`SELECT count(*)::int AS n FROM (

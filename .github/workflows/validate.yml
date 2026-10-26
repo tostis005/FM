@@ -310,8 +310,8 @@ jobs:
           node check-supplier-laboratory-map.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs
-          node check-responsive.mjs
           node check-dashboard-audit.mjs
+          node check-responsive.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

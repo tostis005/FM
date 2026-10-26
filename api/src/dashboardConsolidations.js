@@ -59,7 +59,7 @@ export function buildDashboardMonthSQL(schema,source){
   " count(*)::bigint AS filas,count("+amount+")::bigint AS filas_importe,",
   " count(l.cantidad)::bigint AS filas_unidades,",
   " count(*) FILTER(WHERE "+product+")::bigint AS filas_producto,",
-  sales?" 0::bigint AS documentos":
+  sales?" 0::bigint AS documentos,":
    " count(DISTINCT (h.sistema_origen,h.documento_id))::bigint AS documentos,",
   " count(*) FILTER(WHERE "+costed+")::bigint AS filas_coste,",
   sales?" sum("+net(amount)+") FILTER(WHERE "+costed+") AS ventas_con_coste,":

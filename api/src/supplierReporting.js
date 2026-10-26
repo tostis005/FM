@@ -8,7 +8,7 @@ export function includedPurchaseSupplier({tenant,code,name=null}){
  const normalized=col=>`upper(btrim(coalesce(${col}::text,'')))`;
  // Visibilidad del preparador y cálculo de totales son conceptos diferentes.
  // No eliminar movimientos de compras por etiquetas de proveedor.
- return "TRUE";
+ return `(${tenant}::text IS NOT NULL)`;
 }
 // La clasificación de compras depende exclusivamente del check cooperativa.
  // Los proveedores no marcados, incluidos los sin ficha, son laboratorios.

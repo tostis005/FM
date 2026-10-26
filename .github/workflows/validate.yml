@@ -89,6 +89,9 @@ jobs:
           node --test api/src/reportTableFilters.test.js
           node --test api/src/salesSummary.test.js
           node --test api/src/salesTotals.test.js
+          node --check api/src/dashboardConsolidations.js
+          node --check api/src/dashboardConsolidationService.js
+          node --test api/src/dashboardConsolidations.test.js
           node --test api/src/salesInsights.test.js
           node --test api/src/salesDetail.test.js
           node --test api/src/articleNames.test.js
@@ -186,6 +189,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/020_dominios_cliente_reset.sql
           psql_test --single-transaction < api/src/migrations/014_clientes_demo.sql
           psql_test --single-transaction < api/src/migrations/015_cache_analitica_ventas.sql
+          psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql
+          psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql
           psql_test --single-transaction < api/src/migrations/016_modelo_documental.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql

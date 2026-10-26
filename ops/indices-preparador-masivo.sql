@@ -21,7 +21,7 @@ SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_preparador_articulo_cn_idx
  WHERE nullif(btrim(codigo_nacional),'''') IS NOT NULL;'
 WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind IN ('r','p'))
+ WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind='r')
  AND EXISTS (
  SELECT 1 FROM information_schema.columns
  WHERE table_schema='ampedia' AND table_name='articulos' AND column_name='codigo_nacional')
@@ -31,7 +31,7 @@ SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_preparador_articulo_origen_id
  ON ampedia.articulos ((upper(btrim(farmacia_codigo))),(origen_id::text));'
 WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind IN ('r','p'))
+ WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind='r')
 \gexec
 
 SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_preparador_articulo_normalizado_idx
@@ -39,7 +39,7 @@ SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_preparador_articulo_normaliza
  WHERE nullif(btrim(cn_normalizado),'''') IS NOT NULL;'
 WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind IN ('r','p'))
+ WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind='r')
  AND EXISTS (
  SELECT 1 FROM information_schema.columns
  WHERE table_schema='ampedia' AND table_name='articulos' AND column_name='cn_normalizado')
@@ -53,17 +53,17 @@ SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_preparador_ventas_linea_idx
  WHERE NOT eliminada_logicamente AND coalesce(anulada,false)=false;'
 WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind IN ('r','p'))
+ WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind='r')
 \gexec
 
 -- Estadísticas para estimar correctamente cardinalidades tras crear índices.
 SELECT 'ANALYZE ampedia.articulos;' WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind IN ('r','p'))
+ WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind='r')
 \gexec
 SELECT 'ANALYZE ampedia.fm_ventas_lineas;' WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind IN ('r','p'))
+ WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind='r')
 \gexec
 
 SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready

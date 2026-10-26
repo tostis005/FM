@@ -51,7 +51,7 @@ export default function ProveedoresUnificados({clientSlug}){
  const linked=new Set(suppliers.flatMap(p=>(p.origins||[]).map(a=>
    a.pharmacyCode.toUpperCase()+"|"+normalize(a.sourceCode))));
  const pending=useMemo(()=>sources.flatMap(p=>(p.origins||[])
-  .filter(o=>o.pharmacyId&&o.source==="farmatic")
+  .filter(o=>o.pharmacyId&&(o.source==="farmatic"||o.source==="recepciones"))
   .map(o=>{
    const pharmacy=pharmacies.find(f=>String(f.id)===String(o.pharmacyId));
    return pharmacy?{pharmacyCode:String(pharmacy.databaseCode||pharmacy.sourceCode).toUpperCase(),

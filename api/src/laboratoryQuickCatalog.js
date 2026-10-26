@@ -110,7 +110,7 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
      AND m.laboratorio_clave NOT IN (SELECT key FROM lab_aliases))
    AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm
     WHERE pm.cliente_slug=$3
-     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE)
+     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE OR pm.tipo='cooperativa')
      AND ${supplierCode("pm.codigo_origen")}=${supplierCode("sp.origen_id")}
      AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")})
   UNION
@@ -124,7 +124,7 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
       AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")}
     WHERE upper(btrim(sp.farmacia_codigo))=p.code
      AND ${supplierCode("sp.origen_id")}=${supplierCode("m.codigo_proveedor")}
-     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE))
+     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE OR pm.tipo='cooperativa'))
   UNION
   SELECT p.id,${supplierCode("pm.codigo_origen")}
   FROM farmetrica.proveedores_maestro pm
@@ -133,7 +133,7 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
    ON upper(btrim(sp.farmacia_codigo))=p.code
     AND ${supplierCode("sp.origen_id")}=${supplierCode("pm.codigo_origen")}
     AND ${normalizedLabSQL("sp.nombre")}=${normalizedLabSQL("pm.nombre")}
-  WHERE pm.cliente_slug=$3 AND pm.cooperativa IS NOT TRUE
+  WHERE pm.cliente_slug=$3 AND pm.cooperativa IS NOT TRUE AND pm.tipo<>'cooperativa'
    AND pm.ignorar_informes IS NOT TRUE
    AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
    AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_laboratorios m
@@ -165,7 +165,7 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
    FROM farmetrica.proveedores_maestro pm
    WHERE pm.cliente_slug=$3
     AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
-    AND pm.cooperativa IS NOT TRUE AND pm.ignorar_informes IS NOT TRUE)
+    AND pm.cooperativa IS NOT TRUE AND pm.tipo<>'cooperativa' AND pm.ignorar_informes IS NOT TRUE)
    AND EXISTS(SELECT 1 FROM ${schema}.fm_ventas_analitica v
     WHERE v.farmacia_codigo=p.code AND v.articulo_id=a.origen_id::text)
  ), candidates AS MATERIALIZED (

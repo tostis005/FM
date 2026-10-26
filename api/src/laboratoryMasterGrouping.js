@@ -58,6 +58,9 @@ export function exactMasterAliases(source){
 }
 const excluded=s=>s.cooperative===true||s.ignoreReports===true||
  String(s.type||"").toLowerCase()==="cooperativa";
+// Cooperativas/distribuidores inequívocos nunca son laboratorios elegibles,
+// incluso si aún no se ha creado su ficha de clasificación en el maestro.
+const obviousNonLaboratory=name=>/\b(?:COOPERATIVA|COOP(?:ERATIVA)?|MAYORISTA|DISTRIBUIDOR(?:A|ES|AS)?)\b/.test(normalizeLabName(name));
 
 /**
  * Solo laboratorios utilizables en el preparador.
@@ -82,7 +85,7 @@ export function groupLaboratoriesByMaster(evidence,master){
  }
  const resolved=new Map();
  for(const entry of evidence){
-  if(!entry?.key||!entry.name)continue;
+  if(!entry?.key||!entry.name||obviousNonLaboratory(entry.name))continue;
   const alias=normalizeLabName(entry.name);
   const data=aliases.get(alias);
   // Prioridad estricta: no reintroducir este proveedor por AEMPS,

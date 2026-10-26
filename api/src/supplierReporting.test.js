@@ -23,6 +23,40 @@ test("los proveedores sincronizados reciben indicadores guardables y overrides",
  assert.equal(b.id,null);assert.equal(b.ignoreReports,false);
 });
 
+test("maestro conserva a la vez proveedores del ERP y proveedores observados solo en albaranes",()=>{
+ const rows=sourceSupplierRows(
+  [{id:"15",sourceCode:"LAB1",name:"Nombre unificado",laboratoryKey:"N:CINFA",
+    cooperative:false,ignoreReports:false}],
+  [{pharmacyId:"1",sourceCode:"LAB1",name:"Laboratorio origen",source:"farmatic"},
+   {pharmacyId:"1",sourceCode:"COOP2",name:"COOPERATIVA FUERA DEL ERP",source:"recepciones"}]);
+ assert.equal(rows.length,2,"una recepción debe incorporarse aunque existan filas ERP");
+ const received=rows.find(r=>r.sourceCode==="COOP2");
+ assert.ok(received.fromReceipts);
+ assert.deepEqual(received.pharmacies,["1"]);
+ assert.equal(received.name,"COOPERATIVA FUERA DEL ERP");
+ const mapped=rows.find(r=>r.sourceCode==="LAB1");
+ assert.equal(mapped.name,"Nombre unificado");
+ assert.equal(mapped.laboratoryKey,"N:CINFA");
+ assert.equal(mapped.origins[0].name,"Laboratorio origen");
+});
+
+test("códigos repetidos entre farmacias muestran ambas identidades y detectan el conflicto",()=>{
+ const rows=sourceSupplierRows([],[
+  {pharmacyId:"1",sourceCode:"0001",name:"Cooperativa Norte",source:"farmatic"},
+  {pharmacyId:"2",sourceCode:"0001",name:"Laboratorio Sur",source:"farmatic"},
+  {pharmacyId:"2",sourceCode:"0001",name:"Laboratorio Sur",source:"recepciones"}
+ ]);
+ assert.equal(rows.length,1,"un código global no es una identidad fiable");
+ assert.equal(rows[0].nameConflict,true);
+ assert.deepEqual(rows[0].pharmacies,["1","2"]);
+ assert.ok(rows[0].origins.some(x=>x.pharmacyId==="1"&&x.name==="Cooperativa Norte"));
+ assert.ok(rows[0].origins.some(x=>x.pharmacyId==="2"&&x.name==="Laboratorio Sur"));
+ assert.equal(sourceSupplierRows([],[
+  {pharmacyId:"1",sourceCode:"008",name:"Laboratorio, S.A.",source:"farmatic"},
+  {pharmacyId:"2",sourceCode:"008",name:"LABORATORIO S A",source:"farmatic"}
+ ])[0].nameConflict,false,"solo diferencias de signos no son otra identidad");
+});
+
 test("Dashboard clasifica compras exclusivamente por el check de cooperativa",()=>{
  const sql=purchaseSupplierChannelSQL("pm");
  assert.equal(sql,"CASE WHEN pm.cooperativa IS TRUE THEN 'cooperativa' ELSE 'laboratorio' END");

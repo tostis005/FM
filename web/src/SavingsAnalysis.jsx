@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from "react";
 import {Download,RefreshCw} from "lucide-react";
 import {downloadTableCSV} from "./tableExport.js";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 
 const euro=n=>n==null?"No verificable":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(n));
 const integer=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(n||0));
@@ -66,14 +67,14 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
    <h3>Comparación de costes realmente pagados</h3>
    <p>{integer(prices.totals?.verified)} referencias con al menos dos compras en cada canal. Diferencial histórico observado: <strong>{euro(priced)}</strong>. Importe indicativo incluyendo referencias con menos evidencia: {euro(prices.totals?.indicative)}.</p>
    <p className="fm-insight-foot">No supone que el precio pueda repetirse ni incluye descuentos posteriores, rappels, portes o mínimos de pedido. «No cooperativa» no equivale necesariamente a laboratorio.</p>
-   {prices.rows?.length>0&&<div style={{overflowX:"auto"}}>
+   {prices.rows?.length>0&&<HorizontalTableScroll className="table-scroll" label="comparación de costes">
     <table><thead><tr><th>Farmacia</th><th>Artículo ERP</th><th>PUC coop.</th><th>PUC otro</th><th>Unid. coop.</th><th>Compras por canal</th><th>Diferencial €</th></tr></thead>
     <tbody>{prices.rows.map(p=><tr key={p.fid+"-"+p.article}>
      <td>{p.fid}</td><td>{p.article}</td><td>{euro(p.coop_puc)}</td><td>{euro(p.other_puc)}</td>
      <td>{integer(p.coop_units)}</td><td>{integer(p.coop_lines)} / {integer(p.other_lines)}</td>
      <td><strong>{euro(p.diff_eur)}</strong></td>
     </tr>)}</tbody></table>
-    </div>}
+    </HorizontalTableScroll>}
    <button type="button" className="btn btn-secondary" onClick={exportCsv} disabled={!prices.rows?.length}>
     <Download size={15}/> CSV de las principales referencias
    </button>

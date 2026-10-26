@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Download,Save,AlertTriangle,LoaderCircle} from "lucide-react";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -288,7 +289,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <section className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Solo laboratorios con recepciones registradas o artículos con CN en las farmacias seleccionadas. El Nomenclátor por sí solo no incorpora laboratorios.</p></div>
+     <p>Solo laboratorios con recepciones registradas o artículos con CN en las farmacias seleccionadas.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>{
@@ -308,7 +309,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        className={"btn "+(tab===value?"btn-primary":"btn-secondary")}
        onClick={()=>{setTab(value);setNotice("");setError("")}}>{label}</button>)}
     </div>
-    <p className="fm-lab-order-period-help">V. 3m y V. 12m: siempre los últimos 90 y 365 días. V. período: las fechas que selecciones, por ejemplo el verano anterior.</p>
     <ReportFilterBar periodKey={period} onPeriodChange={choosePeriod}
      alwaysShowDates showQuickPeriods={false} periodLabel="Ventas · período seleccionado"
      pharmacies={pharmacies} pharmacyIds={selectedPharmacies} onPharmacyChange={changePharmacies}
@@ -354,7 +354,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </div>}
      </div>}
     <div className="fm-lab-order-summary">
-     <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias {search?"filtradas":"en una sola tabla"}</span>
+     <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias</span>
      <span><strong>{fmt(pageTotalSold)}</strong> vendidas {data.metricsUnavailable?"(parcial)":""}</span>
      <span><strong>{data.frequencyDays??7}</strong> días entre pedidos</span>
      <span><strong>{fmt(pageTotalSuggested)}</strong> propuestas {data.metricsUnavailable?"(parcial)":""}</span>
@@ -368,8 +368,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         "Calculando ventas y stock de "+(data.total??0)+" referencias en una consulta…"}
      </span>}
     </div>
-    <div className="fm-lab-order-scroll" role="region" tabIndex={0}
-     aria-label="Tabla horizontal de artículos y métricas por farmacia">
+    <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia">
      <table className="fm-lab-order-table">
       <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
@@ -387,8 +386,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        return <tr key={row.referencia}>
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
          {row.provisional&&<small>CN pendiente</small>}</td>
-        <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>{row.nombre}
-         <small>{row.inMaster?"Maestro":row.inReceipts?"Farmatic":"Referencia"}</small></td>
+        <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>{row.nombre}</td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [row.metricsReady?m.units3??0:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.stock??null:null,row.metricsReady?m.unitsPeriod??0:null,
@@ -424,13 +422,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </td></tr>}
       </tbody>
      </table>
-    </div>
+    </HorizontalTableScroll>
     <div className="fm-lab-order-actions">
-     <div><strong>{tab==="parafarmacia"?"Pedido conjunto de parafarmacia · central Pedia":"Pedido conjunto de medicación · desglose por farmacia"}</strong>
-      <small>Todas las referencias aparecen juntas y se incluyen en el borrador al guardar. El stock es actual; las ventas de 3 y 12 meses se calculan hasta la fecha «Hasta».</small>
-      {savedDate&&(savedDate.from!==range.from||savedDate.to!==range.to)&&
-       <small className="fm-lab-order-notice">El borrador anterior tenía otro período. Al guardar se actualizará.</small>}
-     </div>
      <button className="btn btn-secondary" type="button" onClick={save}
       disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>
@@ -438,8 +431,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
     </div>
-    <p className="fm-op-fine">En parafarmacia, Pedia emite un único pedido conjunto; la información de cada farmacia permanece diferenciada. En medicación, el pedido se prepara de forma conjunta para el laboratorio y conserva las cantidades de cada farmacia.</p>
-    <p className="fm-op-fine">Las referencias sin CN verificado se señalan como pendientes y deben revisarse antes del envío. La exportación no envía ni aprueba ningún pedido.</p>
    </>}
   </section>
  </>;

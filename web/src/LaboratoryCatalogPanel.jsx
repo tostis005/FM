@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from "react";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./laboratoryCatalog.css";
 import {collectLaboratoryCatalog,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";
@@ -80,7 +81,7 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
      placeholder="Artículo, código nacional o ERP…"/></label>
     <span>{(result.rows||[]).length+" de "+result.total+" artículos"+(loading?" · cargando…":"")}</span>
    </div>
-   <div className="fm-laboratory-scroll" role="tabpanel">
+   <HorizontalTableScroll className="fm-laboratory-scroll" label="catálogo de laboratorio" role="tabpanel">
     <table><thead><tr><th>Código nacional / ERP</th><th>Artículo</th><th>Origen</th><th>Farmacias con movimientos</th></tr></thead>
      <tbody>{(result.rows||[]).map(r=><tr key={r.referencia}>
       <td><strong>{r.cn||r.referencia}</strong></td>
@@ -91,7 +92,7 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
      {!loading&&!(result.rows||[]).length&&<tr><td colSpan={4}>No se han encontrado artículos en esta categoría para el laboratorio seleccionado.</td></tr>}
      </tbody>
     </table>
-   </div>
+   </HorizontalTableScroll>
    <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las ventas y recepciones se asocian mediante sus códigos nacionales y las correspondencias ERP configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
   </>}
  </section>;

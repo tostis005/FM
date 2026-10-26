@@ -4,21 +4,29 @@ import React,{useEffect,useRef,useState} from "react";
 // No duplica la tabla ni sus filas y funciona con filtros y columnas dinámicas.
 export default function HorizontalTableScroll({children,className="table-scroll",label="tabla",...rest}){
  const content=useRef(null),top=useRef(null);
- const [width,setWidth]=useState(0);
+ const [{width,overflow},setMetrics]=useState({width:1,overflow:false});
  useEffect(()=>{
   const root=content.current;
   if(!root)return;
-  const measure=()=>setWidth(root.scrollWidth);
+  const measure=()=>{
+   // Igualar la distancia desplazable incluso si la tabla tiene bordes o scrollbar vertical.
+   const extra=Math.max(0,root.scrollWidth-root.clientWidth);
+   const viewport=top.current?.clientWidth||root.clientWidth;
+   const next={width:Math.max(1,viewport+extra),overflow:extra>2};
+   setMetrics(old=>old.width===next.width&&old.overflow===next.overflow?old:next);
+  };
   measure();
   const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(measure):null;
-  if(observer){observer.observe(root);if(root.firstElementChild)observer.observe(root.firstElementChild);}
+  if(observer){observer.observe(root);if(root.firstElementChild)observer.observe(root.firstElementChild);
+   if(top.current)observer.observe(top.current);}
   window.addEventListener("resize",measure);
   return()=>{observer?.disconnect();window.removeEventListener("resize",measure)};
  },[children]);
  const syncTop=()=>{if(content.current&&top.current)content.current.scrollLeft=top.current.scrollLeft};
  const syncBottom=()=>{if(content.current&&top.current)top.current.scrollLeft=content.current.scrollLeft};
  return <div className="fm-dual-scroll">
-  <div ref={top} className="fm-dual-scroll-top" role="region" tabIndex={0}
+  <div ref={top} className="fm-dual-scroll-top" data-overflow={overflow?"true":"false"}
+   role="region" tabIndex={overflow?0:-1} aria-hidden={!overflow}
    aria-label={"Desplazamiento superior de "+label} onScroll={syncTop}>
    <div style={{width:Math.max(1,width),height:1}}/>
   </div>

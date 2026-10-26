@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {LoadingStatus} from "./LoadingState.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 const CLASSES=["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"];
 async function call(slug,path,options={}){
  const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
@@ -111,24 +112,24 @@ export default function ProveedoresUnificados({clientSlug}){
   <section className="card"><label>Buscar proveedor o código
    <input type="search" placeholder="Nombre, código o farmacia…" value={search}
     onChange={e=>setSearch(e.target.value)}/></label>
-   <div style={{overflowX:"auto"}}><table className="fm-table"><thead><tr>
+   <HorizontalTableScroll className="fm-preview-scroll" label="maestro de proveedores"><table className="fm-table"><thead><tr>
     <th>Proveedor unificado</th><th>Clasificación</th><th>Farmacias y códigos Farmatic</th><th>Acciones</th>
    </tr></thead><tbody>
     {visible.map(p=><tr key={p.id}><td><strong>{p.name}</strong></td>
      <td>{p.class}</td><td>{(p.origins||[]).map((a,i)=><div key={i}>
       {a.pharmacyCode}: {a.sourceCode} — {a.sourceName} {" "}<button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setLinking({pharmacyCode:a.pharmacyCode,sourceCode:a.sourceCode,name:a.sourceName});setChosen("")}}>Cambiar grupo</button></div>)}</td>
      <td><button className="btn btn-secondary btn-sm" onClick={()=>setEditing({...p})}>Editar</button></td></tr>)}
-   </tbody></table></div>
+   </tbody></table></HorizontalTableScroll>
   </section>
   <section className="card"><h2>Proveedores de Farmatic pendientes de relacionar ({uniquePending.length})</h2>
    <p>Estos códigos están presentes en el ERP pero todavía no tienen equivalencia en el maestro.
     No se unificarán automáticamente por compartir un código con otra farmacia.</p>
-   <div style={{maxHeight:400,overflow:"auto"}}><table className="fm-table"><thead><tr>
+   <HorizontalTableScroll className="fm-preview-scroll" label="proveedores pendientes"><table className="fm-table"><thead><tr>
     <th>Farmacia</th><th>Código</th><th>Nombre de origen</th><th></th>
    </tr></thead><tbody>{uniquePending.slice(0,300).map((p,i)=><tr key={i}>
     <td>{p.pharmacyName}</td><td>{p.sourceCode}</td><td>{p.name}</td>
     <td><button className="btn btn-secondary btn-sm" onClick={()=>{setLinking(p);setChosen("")}}>Relacionar</button></td></tr>)}
-   </tbody></table>{uniquePending.length>300&&<p>Mostrando los primeros 300 pendientes.</p>}</div>
+   </tbody></table></HorizontalTableScroll>{uniquePending.length>300&&<p>Mostrando los primeros 300 pendientes.</p>}
   </section>
   {editing&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar proveedor">
    <div className="fm-demo-detail fm-provider-dialog"><h2>{editing.id?"Editar proveedor":"Nuevo proveedor"}</h2>

@@ -305,14 +305,37 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
      UNION ALL
      SELECT 1 FROM farmetrica.articulos_laboratorio_maestro a
       WHERE a.laboratorio_clave=$1 OR 'N:'||${normalizedLabSQL('a.laboratorio_nombre')}=$1
-    ) AS found`,[laboratoryKey]);
+     UNION ALL
+     SELECT 1 FROM farmetrica.laboratorios_personalizados own
+      WHERE own.cliente_slug=$2 AND own.laboratorio_clave=$1
+    ) AS found`,[laboratoryKey,req.context.client.slug]);
    if(!known[0]?.found)return res.status(400).json({error:"Selecciona un laboratorio del maestro"});
-   const {rows:coop}=await pool.query(`
-    SELECT cooperativa FROM farmetrica.proveedores_maestro
-    WHERE cliente_slug=$1 AND ${normalizeSupplierSql("codigo_origen")}=$2 LIMIT 1`,
-    [req.context.client.slug,sourceCode]);
-   if(coop[0]?.cooperativa===true)
-    return res.status(400).json({error:"Una cooperativa distribuye varios laboratorios: no se puede asignar uno a todas sus recepciones"});
+   if(!SCHEMA.test(req.context.client.schema))
+    return res.status(400).json({error:"Esquema no autorizado"});
+   const schema='"'+req.context.client.schema+'"';
+   // Los códigos ERP no son globales: comprobar el proveedor de la farmacia
+   // seleccionada. También admitir proveedores existentes solo en albaranes.
+   const {rows:local}=await pool.query(`
+    SELECT EXISTS(SELECT 1 FROM ${schema}.proveedores sp
+     WHERE upper(btrim(sp.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+      AND ${normalizeSupplierSql("sp.origen_id")}=$3) AS in_erp,
+     EXISTS(SELECT 1 FROM ${schema}.fm_recepciones_cabeceras h
+     WHERE h.farmacia_codigo=${pharmacyDataCodeSQL("f")}
+      AND ${normalizeSupplierSql("h.proveedor_origen_id")}=$3
+      AND h.lineas_completas AND NOT h.eliminada_logicamente) AS in_receipts,
+     EXISTS(SELECT 1 FROM ${schema}.proveedores sp
+      JOIN farmetrica.proveedores_maestro pm
+       ON pm.cliente_slug=$1 AND ${normalizeSupplierSql("pm.codigo_origen")}=$3
+        AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")}
+      WHERE upper(btrim(sp.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+       AND ${normalizeSupplierSql("sp.origen_id")}=$3
+       AND (pm.cooperativa OR pm.ignorar_informes OR pm.tipo='cooperativa')) AS blocked
+    FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 AND f.id=$2`,
+    [req.context.client.slug,pharmacyId,sourceCode]);
+   if(!local[0]?.in_erp&&!local[0]?.in_receipts)
+    return res.status(404).json({error:"No se encuentra ese proveedor en esta farmacia"});
+   if(local[0]?.blocked)
+    return res.status(400).json({error:"Una cooperativa o proveedor excluido no puede asignarse a un laboratorio"});
    const {rows}=await pool.query(`
     INSERT INTO farmetrica.proveedores_laboratorios
      (cliente_slug,farmacia_id,codigo_proveedor,laboratorio_clave)

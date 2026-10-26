@@ -175,8 +175,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    if(bulkComplete){
     setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());return;
    }
-   // Respaldo: bloques indexados de 40 referencias si la agregación conjunta
-   // supera el plazo. No se reconstruye el catálogo ni se pierden artículos.
+   // Solo si falla el cálculo conjunto: lotes de 200 CN en paralelo.
+   // Con 2.000 artículos son 10 lotes, no las 50 consultas anteriores.
+   // No se reconstruye el catálogo ni se pierden artículos.
    try{
     await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{

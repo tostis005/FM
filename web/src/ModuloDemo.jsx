@@ -291,7 +291,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const effectiveAnalysisMonths=[3,6,12,24,36].includes(Number(analysisMonths))?Number(analysisMonths):12;
  const fastScope=[clientSlug,period.from,period.to,period.granularity,filters.pharmacyIds.join(","),reloadKey].join("|");
  const dashboardCacheEligible=module==="dashboard"&&period.valid&&
-  period.granularity==="month"&&period.from?.endsWith("-01");
+  (period.granularity==="day"||(period.granularity==="month"&&period.from?.endsWith("-01")));
  const purchaseSummaryScope=[clientSlug,period.from,period.to,
    filters.pharmacyIds.join(","),reloadKey].join("|");
  const [dashboardCache,setDashboardCache]=useState(null);
@@ -301,7 +301,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  useEffect(()=>{
   if(!dashboardCacheEligible)return;
   const controller=new AbortController();
-  const params=new URLSearchParams({desde:period.from,hasta:period.to});
+  const params=new URLSearchParams({desde:period.from,hasta:period.to,
+   granularidad:period.granularity});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   fetch("/api/analytics/dashboard/consolidados?"+params,{
    credentials:"same-origin",cache:"no-store",

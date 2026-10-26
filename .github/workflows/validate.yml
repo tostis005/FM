@@ -91,7 +91,9 @@ jobs:
           node --test api/src/salesTotals.test.js
           node --check api/src/dashboardConsolidations.js
           node --check api/src/dashboardConsolidationService.js
+          node --check api/src/dashboardDailyService.js
           node --test api/src/dashboardConsolidations.test.js
+          node --test api/src/dashboardDailyService.test.js
           node --test api/src/salesInsights.test.js
           node --test api/src/salesDetail.test.js
           node --test api/src/articleNames.test.js
@@ -191,6 +193,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/015_cache_analitica_ventas.sql
           psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql
           psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql
+          psql_test --single-transaction < api/src/migrations/039_dashboard_consolidados_diarios.sql
+          psql_test --single-transaction < api/src/migrations/039_dashboard_consolidados_diarios.sql
           psql_test --single-transaction < api/src/migrations/016_modelo_documental.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
@@ -259,6 +263,7 @@ jobs:
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardConsolidations.pg.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardDailyService.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationPasswordReset.test.js

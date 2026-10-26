@@ -192,6 +192,22 @@ try{
   cards=>cards.slice(0,6).map(card=>card.querySelector("strong")?.textContent));
  assert.ok(values.every(v=>v&&v!=="—"),
   "Los importes y unidades principales deben estar disponibles: "+JSON.stringify(values));
+
+ // Mes cerrado con evolución diaria: una petición al consolidado reciente.
+ const dayCountBefore=by("/api/analytics/dashboard/consolidados").length;
+ const yearlyCallsBefore=by("/api/analytics/ventas/totales").length;
+ await page.locator(".fm-unified-filters select").first().selectOption("last_month");
+ await page.waitForFunction(()=>{
+  const label=document.querySelector(".fm-unified-filters select")?.value;
+  const cards=[...document.querySelectorAll(".fm-demo-kpi")];
+  return label==="last_month"&&cards.length===8&&cards.every(x=>x.getAttribute("aria-busy")==="false");
+ },null,{timeout:13000});
+ await page.waitForTimeout(120);
+ const dailyCalls=by("/api/analytics/dashboard/consolidados").slice(dayCountBefore);
+ assert.ok(dailyCalls.some(x=>x.query.granularidad==="day"),
+  "Mes pasado debe consultar los consolidados diarios");
+ assert.equal(by("/api/analytics/ventas/totales").length,yearlyCallsBefore,
+  "Mes pasado no necesita recalcular el historial de ventas");
  await page.goto(BASE+"/estado",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Estado de las farmacias"}).waitFor({timeout:12000});
  await page.getByRole("heading",{name:"Seguimiento por farmacia"}).waitFor({timeout:12000});

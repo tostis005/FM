@@ -2,6 +2,7 @@ import pg from "pg";
 import {buildDashboardMonthSQL,compatibleConsolidatedRange,
  summarizeConsolidations,madridDay} from "./dashboardConsolidations.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {createDashboardDailyService} from "./dashboardDailyService.js";
 
 const IDENT=/^[a-z][a-z0-9_]{1,62}$/;
 const prevMonth=iso=>{
@@ -95,6 +96,7 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
   }
   return {...status,elapsedMs:Date.now()-started};
  }
+ const daily=createDashboardDailyService(pool,{sourceScopes,now,logger});
  let lastNight="";
  async function runNightly(){
   const local=localToday(),hour=Number(new Intl.DateTimeFormat("en-GB",{
@@ -107,6 +109,8 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
     // Corregir recepciones tardías y retroactivas recientes.
     await refreshMonth({...scope,month:previous},true);
     await refreshMonth({...scope,month:prevMonth(previous)},true);
+    await daily.refreshDays({...scope,month:local.slice(0,7)+"-01"},true);
+    await daily.refreshDays({...scope,month:previous},true);
    }
    // Si el servidor estuvo apagado, completar los huecos sin otro escaneo masivo.
    await backfill({months:48,maxMs:210000});
@@ -116,8 +120,9 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
   const timer=setInterval(()=>{void runNightly()},15*60*1000);
   timer.unref?.();void runNightly();
  }
- async function read({slug,schema,ids,farms,from,to}){
+ async function read({slug,schema,ids,farms,from,to,granularity="month"}){
   if(!IDENT.test(slug)||!IDENT.test(schema)||!ids.length)return {available:false,reason:"scope"};
+  if(granularity==="day")return daily.readDays({slug,schema,ids,farms,from,to});
   const range=compatibleConsolidatedRange(from,to,localToday());
   if(!range)return {available:false,reason:"range"};
   const rows=[];
@@ -156,7 +161,8 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
   return {available:true,cachedMonths:range.months.length,
    liveCurrentMonth:range.active,...summarizeConsolidations(rows,from,to)};
  }
- return {read,refreshMonth,backfill,runNightly,start,sourceScopes};
+ return {read,refreshMonth,backfill,backfillDays:daily.backfillDays,
+  refreshDays:daily.refreshDays,runNightly,start,sourceScopes};
 }
 export function setupDashboardConsolidations(app,pool,{requireTenant}){
  const service=createDashboardConsolidationService(pool);
@@ -165,9 +171,9 @@ export function setupDashboardConsolidations(app,pool,{requireTenant}){
   if(context.role!=="superadministrador"&&!context.modules?.dashboard)
    return res.status(403).json({error:"Inicio no habilitado"});
   const from=String(req.query.desde||""),to=String(req.query.hasta||""),
-   raw=String(req.query.farmacias||"");
+   raw=String(req.query.farmacias||""),granularity=String(req.query.granularidad||"month");
   if(!/^\d{4}-\d{2}-\d{2}$/.test(from)||!/^\d{4}-\d{2}-\d{2}$/.test(to)||
-   from>to||raw.length>1000||
+   from>to||raw.length>1000||!["month","day"].includes(granularity)||
    (raw&&raw.split(",").some(x=>!/^[1-9]\d{0,8}$/.test(x))))
    return res.status(400).json({error:"Filtros incorrectos"});
   const allowed=new Set(context.allowedPharmacyIds.map(Number));
@@ -182,7 +188,7 @@ export function setupDashboardConsolidations(app,pool,{requireTenant}){
   if(farms.some(f=>!f.code))return res.status(503).json({error:"Falta código ERP de farmacia"});
   try{
    res.json(await service.read({slug:context.client.slug,schema:context.client.schema,
-    ids:unique,farms,from,to}));
+    ids:unique,farms,from,to,granularity}));
   }catch(e){next(e)}
  });
  return service;

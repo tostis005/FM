@@ -447,26 +447,9 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
  </section></>;
 }
 
+// El preparador por laboratorio es la única interfaz activa.
+ // La versión anterior permanece en el módulo como código de compatibilidad,
+ // pero no se expone una segunda pantalla ni botones para cambiar de vista.
 export default function PurchasePlanner(props){
- const [view,setView]=useState(()=>{
-  try{
-   if(new URLSearchParams(window.location.search).get("vista")==="anterior")return "legacy";
-   if(sessionStorage.getItem(STAGING_PREFIX+props.clientSlug))return "legacy";
-   // Una preferencia antigua guardada no debe reabrir el preparador anterior.
-   return "laboratory";
-  }catch{return "laboratory"}
- });
- function changeView(next){
-  setView(next);
-  try{sessionStorage.setItem("fm_preparador_vista:"+props.clientSlug,next)}catch{}
- }
- return <>
-  <div className="fm-preparador-switch" role="group" aria-label="Vista del preparador">
-   <button type="button" aria-pressed={view==="laboratory"} className={"btn "+(view==="laboratory"?"btn-primary":"btn-secondary")}
-    onClick={()=>changeView("laboratory")}>Pedido por laboratorio</button>
-   <button type="button" aria-pressed={view==="legacy"} className={"btn "+(view==="legacy"?"btn-primary":"btn-secondary")}
-    onClick={()=>changeView("legacy")}>Vista anterior</button>
-  </div>
-  {view==="laboratory"?<LaboratoryOrderPanel {...props}/>:<LegacyPurchasePlanner {...props}/>}
- </>;
+ return <LaboratoryOrderPanel {...props}/>;
 }

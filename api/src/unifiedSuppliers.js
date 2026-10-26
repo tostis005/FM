@@ -25,7 +25,7 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
   AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
   AND f.id=ANY($2::int[])
  WHERE p.cliente_slug=$1 AND p.activo
-  ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO')":""}
+  ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
  values:[ctx.client.slug,pharmacies],query_timeout:10000});
  return rows;

@@ -18,7 +18,7 @@ const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.j
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
 import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
-const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresMaestro.jsx"));
+const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
 const FuentesMaestras=React.lazy(()=>import("./FuentesMaestras.jsx"));
 const EquipoCliente=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.EquipoCliente})));

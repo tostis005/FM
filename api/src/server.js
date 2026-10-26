@@ -535,6 +535,7 @@ try {
   const cacheMigration=await readFile(new URL("./migrations/015_cache_analitica_ventas.sql",import.meta.url),"utf8");
   await pool.query(cacheMigration);
   await pool.query(await readFile(new URL("./migrations/038_dashboard_consolidados_mensuales.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL("./migrations/039_dashboard_consolidados_diarios.sql",import.meta.url),"utf8"));
   const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
   await pool.query(operationalMigration);
   const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");

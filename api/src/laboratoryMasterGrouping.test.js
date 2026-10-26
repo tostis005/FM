@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {groupLaboratoriesByMaster} from "./laboratoryMasterGrouping.js";
+import {groupLaboratoriesByMaster,exactMasterAliases} from "./laboratoryMasterGrouping.js";
 
 test("un laboratorio configurado con dos nombres aparece una sola vez con ambas fuentes",()=>{
  const evidence=[
@@ -111,4 +111,34 @@ test("un proveedor oculto no debe ocultar otro origen válido del mismo laborato
  ]);
  assert.equal(result.length,1);
  assert.equal(result[0].key,"N:CINFA");
+});
+
+test("prefijos Farmatic 0.-, 01, 3- y notas al final no reintroducen ignorados/cooperativas",()=>{
+ const master=[
+  {name:"0.-AMPEDIA MERCANTIL SL",ignoreReports:true},
+  {name:"01 ALLIANCE HEALTHCARE",ignoreReports:true},
+  {name:"3- BIDAFARMA S.COOP.",type:"cooperativa"},
+  {name:"02 BIDA FARMA S COOP AND (CECOFAR)",cooperative:true},
+  {name:"001- AMPEDIA MERCANTIL SL (ALMACEN)",ignoreReports:true},
+  {name:"PROVEEDOR ADMITIDO",laboratoryKey:"N:PROVEEDOR ADMITIDO"}
+ ];
+ const flagged=["AMPEDIA MERCANTIL","ALLIANCE HEALTHCARE",
+  "BIDAFARMA","BIDA FARMA"];
+ for(const [supplier,expected] of [
+  [master[0],"AMPEDIA MERCANTIL"],
+  [master[1],"ALLIANCE HEALTHCARE"],
+  [master[2],"BIDAFARMA"],
+  [master[3],"BIDA FARMA"]
+ ])assert.ok(exactMasterAliases(supplier).includes(expected),
+  supplier.name+" no se normaliza a "+expected);
+ const result=groupLaboratoriesByMaster([
+  ...flagged.map(name=>({key:"N:"+name,name,hasMedication:true})),
+  {key:"N:PROVEEDOR ADMITIDO",name:"Proveedor Admitido",hasParapharmacy:true}
+ ],master);
+ assert.deepEqual(result.map(l=>l.key),["N:PROVEEDOR ADMITIDO"]);
+});
+
+test("nombres comerciales que empiezan por números sin separador no pierden esos dígitos",()=>{
+ assert.ok(exactMasterAliases({name:"3M MEDICAL",ignoreReports:true}).includes("3M MEDICAL"));
+ assert.ok(!exactMasterAliases({name:"3M MEDICAL",ignoreReports:true}).includes("M MEDICAL"));
 });

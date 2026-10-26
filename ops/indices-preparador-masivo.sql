@@ -57,38 +57,17 @@ WHERE EXISTS (
  WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind='r')
 \gexec
 
--- La selección de CN por laboratorio empieza en recepciones: filtro por
--- farmacia+proveedor normalizado, antes de unir las líneas del albarán.
--- El CASE debe coincidir exactamente con readUnifiedSupplierCN.
+-- Búsqueda por proveedor: índice sobre código normalizado y farmacia.
+-- Las cabeceras se filtran ANTES de expandir las líneas de recepción.
+-- El índice usa exactamente la expresión de normalización de la API.
 SELECT $build$
 CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_preparador_recepciones_proveedor_idx
  ON ampedia.fm_recepciones_cabeceras (
   farmacia_codigo,
-  (CASE WHEN btrim(coalesce(proveedor_origen_id::text,'')) ~ '^[0-9]+
-SELECT 'ANALYZE ampedia.articulos;' WHERE EXISTS (
- SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='articulos' AND c.relkind='r')
-\gexec
-SELECT 'ANALYZE ampedia.fm_recepciones_cabeceras;' WHERE EXISTS (
- SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='fm_recepciones_cabeceras' AND c.relkind='r')
-\gexec
-SELECT 'ANALYZE ampedia.fm_ventas_lineas;' WHERE EXISTS (
- SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
- WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind='r')
-\gexec
-
-SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
-FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
-JOIN pg_namespace n ON n.oid=c.relnamespace
-WHERE n.nspname='ampedia' AND c.relname IN (
- 'fm_preparador_articulo_cn_idx','fm_preparador_articulo_origen_idx',
- 'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx')
-ORDER BY c.relname;
-
+  (CASE WHEN btrim(coalesce(proveedor_origen_id::text,'')) ~ '^[0-9]+$'
     THEN coalesce(nullif(ltrim(btrim(proveedor_origen_id::text),'0'),''),'0')
     ELSE upper(btrim(coalesce(proveedor_origen_id::text,''))) END),
-  sistema_origen,documento_id)
+  sistema_origen, documento_id)
  WHERE lineas_completas AND NOT eliminada_logicamente;
 $build$
 WHERE EXISTS (
@@ -107,10 +86,16 @@ SELECT 'ANALYZE ampedia.fm_ventas_lineas;' WHERE EXISTS (
  WHERE n.nspname='ampedia' AND c.relname='fm_ventas_lineas' AND c.relkind='r')
 \gexec
 
+
+SELECT 'ANALYZE ampedia.fm_recepciones_cabeceras;' WHERE EXISTS (
+ SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname='ampedia' AND c.relname='fm_recepciones_cabeceras' AND c.relkind='r')
+\gexec
 SELECT c.relname AS index_name, i.indisvalid AS valid, i.indisready AS ready
 FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid
 JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='ampedia' AND c.relname IN (
  'fm_preparador_articulo_cn_idx','fm_preparador_articulo_origen_idx',
- 'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx')
+ 'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx',
+ 'fm_preparador_recepciones_proveedor_idx')
 ORDER BY c.relname;

@@ -75,3 +75,31 @@
 .fm-lab-spinner{animation:fm-lab-spin 1s linear infinite;flex-shrink:0}
 @keyframes fm-lab-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.fm-lab-spinner{animation:none}}
+
+/* La carga de artículos es rápida; mantener una señal clara sobre la matriz
+   hasta que el cálculo de ventas, stock y propuestas esté completo. */
+.fm-lab-matrix-frame{position:relative;min-width:0;width:100%}
+/* Los resultados parciales del fallback no deben parecer definitivos. */
+.fm-lab-matrix-frame[data-metrics-loading="true"] .fm-lab-order-table tbody td:not(.fm-lab-order-sticky){visibility:hidden}
+.fm-lab-matrix-overlay{
+ position:absolute;inset:16px 0 0;z-index:20;
+ display:flex;justify-content:center;align-items:center;
+ padding:12px;border-radius:8px;
+ background:rgba(245,249,247,.77);backdrop-filter:blur(1px);
+ pointer-events:auto;
+}
+.fm-lab-matrix-loading{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:9px;text-align:center;max-width:min(92%,400px);
+ padding:18px 24px;border:1px solid #cfe3d6;border-radius:11px;
+ color:#254a36;background:#fff;box-shadow:0 10px 30px #183c2424;
+ font-size:12px;line-height:1.45;
+}
+.fm-lab-matrix-loading>strong{font-size:14px;font-weight:750}
+.fm-lab-matrix-loading>span{color:#647b6a}
+.fm-lab-matrix-loading .fm-lab-spinner{color:#168255}
+@media(max-width:600px){
+ .fm-lab-matrix-loading{padding:13px 15px;gap:6px}
+ .fm-lab-matrix-loading>strong{font-size:12px}
+ .fm-lab-matrix-loading .fm-lab-spinner{width:24px;height:24px}
+}

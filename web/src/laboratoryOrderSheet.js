@@ -1,4 +1,26 @@
 export const qty=value=>Number.isSafeInteger(Number(value))&&Number(value)>=0&&Number(value)<=999999?Number(value):null;
+// Medicación conserva el desglose por farmacia incluso al editar el total.
+export function medicationOrderTotal(line,pharmacyIds){
+ return pharmacyIds.reduce((sum,id)=>sum+Number(line?.unitsByPharmacy?.[String(id)]||0),0);
+}
+export function distributeMedicationOrderTotal(row,line,pharmacyIds,value){
+ const total=qty(value),ids=pharmacyIds.map(String);
+ if(total===null||!ids.length)return null;
+ let weights=ids.map(id=>qty(line?.unitsByPharmacy?.[id])??0);
+ if(!weights.some(n=>n>0))
+  weights=ids.map(id=>Math.max(0,Number(row?.byPharmacy?.[id]?.suggested)||0));
+ if(!weights.some(n=>n>0))weights=ids.map(()=>1);
+ const weightTotal=weights.reduce((sum,n)=>sum+n,0);
+ const shares=weights.map(w=>total*w/weightTotal);
+ const amounts=shares.map(v=>Math.floor(v));
+ const missing=total-amounts.reduce((sum,n)=>sum+n,0);
+ const remainders=shares.map((v,i)=>({i,fraction:v-amounts[i]}))
+  .sort((a,b)=>b.fraction-a.fraction||a.i-b.i);
+ for(let i=0;i<missing;i++)amounts[remainders[i].i]++;
+ return {...line,unitsByPharmacy:{...line.unitsByPharmacy,
+  ...Object.fromEntries(ids.map((id,i)=>[id,amounts[i]]))}};
+}
+
 export function defaultLaboratoryLine(row,type,pharmacyIds){
  const common={reference:row.referencia,cn:row.cn||null,name:row.nombre,metrics:row.byPharmacy||{}};
  const pharmacies=pharmacyIds.map(String);
@@ -23,10 +45,10 @@ export function laboratoryExcelRows(lines,pharmacies,type){
  const isMedication=type==="medicacion";
  const ids=pharmacies.map(p=>String(p.id));
  const grouping=["CN","Artículo",...pharmacies.flatMap(p=>
-  [p.name,"","","",""]), "Total vendido", "Propuesta total",isMedication?"Pedir total":"Pedir Pedia"];
+  [p.name,"","","",""]), "Total vendido", "Propuesta total","Pedir total"];
  const headings=["CN","Artículo",...pharmacies.flatMap(()=>
   ["Ventas 3m","Ventas 12m","Stock","Vendido período",isMedication?"Pedir":"Propuesta"]),
-  "Total vendido", "Propuesta total",isMedication?"Pedir total":"Pedir Pedia"];
+  "Total vendido", "Propuesta total","Pedir total"];
  const rows=lines.map(({row,line})=>{
   const measures=ids.map(id=>row.byPharmacy?.[id]||{});
   const sold=measures.reduce((n,v)=>n+Number(v.unitsPeriod||0),0);

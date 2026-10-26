@@ -1,0 +1,13 @@
+.fm-stale-stock .fm-stale-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 5px}
+.fm-stale-stock .fm-stale-presets>span{font-size:.85rem;opacity:.78;margin-right:5px}
+.fm-stale-stock .fm-stale-info{font-size:.86rem;line-height:1.55;opacity:.8;margin:10px 0 19px}
+.fm-stale-stock .fm-stale-code{display:block;margin-top:3px;font-weight:400;opacity:.68}
+.fm-stale-stock .fm-stale-numeric{text-align:right;white-space:nowrap}
+.fm-stale-stock .fm-stale-empty{text-align:center;padding:30px 12px}
+.fm-stale-stock .fm-stale-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:18px}
+.fm-stale-stock .fm-stale-pagination label{display:flex;align-items:center;gap:9px;font-size:.87rem}
+.fm-stale-stock .fm-stale-pagination select{max-width:94px}
+.fm-stale-stock .fm-stale-pagination>div{display:flex;align-items:center;gap:12px}
+.fm-stale-stock .fm-stale-pagination>div>span{white-space:nowrap;font-size:.88rem}
+.fm-stale-stock .fm-real-screen-table tbody td{vertical-align:middle}
+@media(max-width:640px){.fm-stale-stock .fm-stale-pagination{align-items:stretch;flex-direction:column}.fm-stale-stock .fm-stale-pagination>div{justify-content:space-between}}

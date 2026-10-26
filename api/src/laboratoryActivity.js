@@ -89,11 +89,13 @@ export async function readOperationalLaboratoryEvidence(pool,context,pharmacies)
   WHERE NOT EXISTS (
    SELECT 1 FROM farmetrica.proveedores_maestro excluded
    WHERE excluded.cliente_slug=$1
-    AND (excluded.cooperativa IS TRUE OR excluded.ignorar_informes IS TRUE)
+    AND (excluded.cooperativa IS TRUE OR excluded.ignorar_informes IS TRUE
+      OR excluded.tipo='cooperativa')
     AND ${supplierCode("excluded.codigo_origen")}=r.supplier
     AND ${normalizedLabSQL("excluded.nombre")}=${normalizedLabSQL("sp.nombre")})
     AND coalesce(pm.cooperativa,false) IS NOT TRUE
     AND coalesce(pm.ignorar_informes,false) IS NOT TRUE
+    AND coalesce(pm.tipo,'')<>'cooperativa'
  ), receipt_evidence AS (
   SELECT 'N:'||${normalizedLabSQL("substring(lab_key from 3)")} AS key,
    substring(lab_key from 3) AS name,false AS medication,true AS parapharmacy

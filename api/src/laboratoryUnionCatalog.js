@@ -1,6 +1,7 @@
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readPurchasedLaboratoryCatalog} from "./laboratoryQuickCatalog.js";
 import {readRetirementPatterns} from "./laboratoryRetirements.js";
+import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 
 const MAX_REFERENCES=5000;
 
@@ -35,6 +36,8 @@ export function unionLaboratoryReferences(official,received,search="",type="medi
 }
 export async function readUnifiedLaboratoryCatalog(pool,ctx,{key,pharmacies,type,search=""}){
  if(!["medicacion","parafarmacia"].includes(type))throw Error("Tipo no válido");
+ if(/^P:[1-9][0-9]{0,17}$/.test(key))
+  return readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search});
  let nativeCN=false;
  try{
   const {rows}=await pool.query({text:`SELECT EXISTS(

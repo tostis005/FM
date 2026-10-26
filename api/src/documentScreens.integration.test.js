@@ -9,14 +9,14 @@ test("consulta documental sólo acepta esquemas y apartados permitidos",()=>{
  assert.throws(()=>buildDocumentScreenSQL("ventas-tickets","ampedia",new Set(),"injection"),/Orden incorrecto/);
  assert.ok(buildDocumentScreenSQL("ventas-tickets","ampedia").includes("fm_ventas_analitica"));
  assert.ok(buildDocumentScreenSQL("compras-recepciones","ampedia").includes("fm_recepciones_analitica"));
- assert.match(buildDocumentScreenSQL("compras-recepciones","ampedia"),/ignorar_informes=true/);
+ assert.doesNotMatch(buildDocumentScreenSQL("compras-recepciones","ampedia"),/ignorar_informes=true/);
  assert.throws(()=>buildDocumentScreenSQL("compras-recepciones","ampedia",new Set(),"DROP"),/Orden incorrecto/);
  assert.ok(buildDocumentScreenSQL("compras-devoluciones","ampedia").includes("fm_recepciones_analitica"));
  assert.ok(!buildDocumentScreenSQL("productos","ampedia",new Set(["farmacia_codigo","origen_id","nombre"])).includes(".ventas "));
  assert.ok(Object.hasOwn(DOCUMENT_SORT["productos"],"sourceId"));
  assert.ok(buildDocumentScreenSQL("stock-historico","ampedia").includes("fm_ventas_analitica"));
  assert.ok(buildDocumentScreenSQL("stock-historico","ampedia").includes("fm_recepciones_analitica"));
- assert.match(buildDocumentScreenSQL("stock-historico","ampedia"),/ignorar_informes=true/);
+ assert.doesNotMatch(buildDocumentScreenSQL("stock-historico","ampedia"),/ignorar_informes=true/);
  assert.throws(()=>buildDocumentScreenSQL("stock-historico","ampedia",new Set(),"unknown"),/Orden incorrecto/);
 });
 
@@ -232,16 +232,16 @@ test("PostgreSQL: evolución de movimientos documentados sin inventar saldos his
   const byDay=new Map(res.body.rows.map(x=>[new Date(x.at).toISOString().slice(0,10),x]));
   const first=byDay.get("2026-10-17"),second=byDay.get("2026-10-18");
   assert.equal(Number(first.soldUnits),3,"La devolución de venta reduce las unidades vendidas");
-  assert.equal(Number(first.receivedUnits),10,"Ignorar proveedores excluye traspasos internos");
-  assert.equal(Number(first.documentedNetUnits),7);
+  assert.equal(Number(first.receivedUnits),60,"Los totales incluyen recepciones internas");
+  assert.equal(Number(first.documentedNetUnits),57);
   assert.equal(first.tickets,2);
-  assert.equal(first.receipts,1);
+  assert.equal(first.receipts,2);
   assert.equal(Number(second.soldUnits),2);
   assert.equal(Number(second.receivedUnits),0);
   assert.equal(Number(second.documentedNetUnits),-2);
   assert.equal(Number(res.body.summary.value),5);
-  assert.equal(Number(res.body.summary.units),10);
-  assert.equal(Number(res.body.summary.other),5);
+  assert.equal(Number(res.body.summary.units),60);
+  assert.equal(Number(res.body.summary.other),55);
   const search=await fetchScreen({buscar:"2026-10-17"});
   assert.equal(search.body.total,1,"El texto filtra sobre todos los días antes de paginar");
   const sorted=await fetchScreen({orden:"net",direccion:"asc"});

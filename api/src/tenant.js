@@ -15,6 +15,7 @@ import {hashInternalPassword} from "./internalPassword.js";
 import {randomBytes} from "node:crypto";
 import {normalizeDomain,emailDomain,validClientDomain} from "./accessPolicy.js";
 import {sourceSupplierRows} from "./supplierReporting.js";
+import {setupUnifiedSuppliers} from "./unifiedSuppliers.js";
 import {effectiveUserModules,validateModuleGrants,requestModules} from "./userModuleAccess.js";
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
@@ -63,6 +64,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
    const requireTenantManager=()=>middleware(ctx=>["gestor","administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
   setupOutgoingTransfers(app,pool,{requireTenantAdmin});
+  setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin});
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
   app.put("/api/tenant/configuracion-ventas",...requireTenantAdmin(),async(req,res,next)=>{

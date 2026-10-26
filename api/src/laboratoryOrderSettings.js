@@ -113,6 +113,10 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
     ) OR EXISTS (
      SELECT 1 FROM farmetrica.laboratorios_personalizados
      WHERE cliente_slug=$2 AND laboratorio_clave=$1
+    ) OR EXISTS (
+     SELECT 1 FROM farmetrica.proveedores_unificados p
+     WHERE p.cliente_slug=$2 AND 'P:'||p.id::text=$1
+      AND p.activo=true AND p.clase NOT IN ('MAYORISTA','INTERNO')
     )) AS found`,[key,req.context.client.slug]);
    if(!known[0]?.found)
     return res.status(400).json({error:"Laboratorio no reconocido en el maestro unificado"});

@@ -40,7 +40,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
           node --check api/src/laboratoryCatalog.js
@@ -170,6 +170,10 @@ jobs:
           psql_test --single-transaction < api/src/migrations/027_pedidos_laboratorio_borradores.sql
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
+          psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql
+          psql_test -v cliente_slug=ampedia < api/src/migrations/036_proveedores_unificados_seed.psql
+          test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedores_unificados_alias')" -ge 2000
+          psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql
           psql_test --single-transaction < api/src/migrations/031_preparador_bajas.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
           psql_test --single-transaction < api/src/migrations/031_preparador_bajas.sql
@@ -226,6 +230,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           test "$(psql_test -At -c "SELECT cooperativa=false AND ignorar_informes=true FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND codigo_origen='COOP01'")" = t
           psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
+          psql_test < api/src/migrations/037_proveedores_farmatic_faltantes.sql
           # CONCURRENTLY debe ejecutarse fuera de transacción; probar dos veces
           # para detectar índices duplicados, inválidos o migraciones no idempotentes.
           psql_test < ops/indices-documentales-concurrentes.sql

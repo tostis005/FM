@@ -46,7 +46,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  useEffect(()=>{
   const controller=new AbortController();setLabsLoading(true);
   const q=new URLSearchParams({uso:"preparador",farmacias:scope});
-  api(clientSlug,"/api/analytics/pedidos/catalogo-laboratorios?"+q,{signal:controller.signal})
+  api(clientSlug,"/api/analytics/pedidos/proveedores-unificados?"+q,{signal:controller.signal})
    .then(d=>{if(!controller.signal.aborted){
     const available=d.laboratories||[];
     setLabs(available);
@@ -72,7 +72,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  },[clientSlug,laboratory,tab,scope]);
  useEffect(()=>{setDiagnostic(null);setDiagnosticBusy(false)},[clientSlug,laboratory,scope]);
  async function runDiagnostic(){
-  if(!laboratory||diagnosticBusy)return;
+  if(!laboratory||laboratory.startsWith("P:")||diagnosticBusy)return;
   setDiagnosticBusy(true);setDiagnostic(null);
   const query=new URLSearchParams({laboratorio:laboratory,farmacias:scope});
   try{setDiagnostic(await api(clientSlug,"/api/analytics/pedidos/diagnostico-laboratorio?"+query))}
@@ -94,7 +94,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     catalog=catalogueCache.current.get(cacheKey);
     if(!catalog){
      try{
-      // Unión AEMPS + recepciones de todos los proveedores equivalentes.
+      // Solo CN comprados históricamente al proveedor unificado en Farmatic.
       // Se consulta una vez por laboratorio, sin 10-20 páginas intermedias.
       catalog=await api(clientSlug,
        "/api/analytics/pedidos/catalogo-unificado?"+base,{signal:controller.signal});
@@ -305,7 +305,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     {data.warning&&<p role="status" className="fm-lab-order-warning">
      <AlertTriangle size={15}/> {data.warning}
     </p>}
-    {(!loading&&data.total===0||Boolean(error)||diagnostic)&&
+    {!laboratory.startsWith("P:")&&(!loading&&data.total===0||Boolean(error)||diagnostic)&&
      <div className="fm-lab-order-diagnostic-area">
       <button type="button" className="btn btn-secondary" disabled={diagnosticBusy}
        onClick={runDiagnostic}>{diagnosticBusy?"Analizando enlaces…":"Diagnosticar enlace con Farmatic"}</button>

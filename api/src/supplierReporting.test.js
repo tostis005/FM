@@ -4,12 +4,9 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import {includedPurchaseSupplier,sourceSupplierRows,purchaseSupplierChannelSQL} from "./supplierReporting.js";
 import {setupDashboardInsights} from "./dashboardInsights.js";
-test("exclusión por código y nombre, vinculada al cliente SQL",()=>{
+test("las compras conservan los proveedores internos en totales",()=>{
  const text=includedPurchaseSupplier({tenant:"$6",code:"t.proveedor_id",name:"t.proveedor_nombre"});
- assert.match(text,/pm.cliente_slug=\$6/);
- assert.match(text,/pm.codigo_origen/);
- assert.match(text,/pm.nombre/);
- assert.match(text,/pm.ignorar_informes=true/);
+ assert.equal(text,"($6::text IS NOT NULL)");
 });
 test("rechaza expresiones SQL externas",()=>{
  assert.throws(()=>includedPurchaseSupplier({tenant:"$1",code:"t.id);DROP TABLE x;--"}));
@@ -101,6 +98,6 @@ test("Inicio permite comparar PUC del mismo artículo entre cooperativa y labora
  const sql=queries.find(({sql})=>sql.includes("HAVING count(DISTINCT channel)=2")).sql;
  assert.match(sql,/CASE WHEN pm\.cooperativa IS TRUE THEN 'cooperativa' ELSE 'laboratorio' END/);
  assert.doesNotMatch(sql,/pm\.tipo/,"no debe depender del tipo histórico del proveedor");
- assert.match(sql,/pm\.ignorar_informes=true/,"respetar proveedores excluidos");
+ assert.doesNotMatch(sql,/pm\.ignorar_informes=true/,"los totales incluyen proveedores internos");
  assert.match(sql,/f\.id=ANY\(\$3::int\[\]\)/,"respetar farmacias autorizadas");
 });

@@ -2,7 +2,7 @@ import {test} from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
-test("filtro SQL de compras aísla clientes y excluye código o nombre",async()=>{
+test("los proveedores internos no se eliminan de los totales reales",async()=>{
  if(!process.env.TEST_DB_URL)throw Error("Falta TEST_DB_URL");
  const db=new pg.Client({connectionString:process.env.TEST_DB_URL});
  await db.connect();
@@ -19,9 +19,9 @@ test("filtro SQL de compras aísla clientes y excluye código o nombre",async()=
    (VALUES ($1::text,$2::text)) AS t(proveedor_id,proveedor_nombre)
    WHERE ${includedPurchaseSupplier({tenant:"$3",code:"t.proveedor_id",name:"t.proveedor_nombre"})}`;
   const ignoredByCode=await db.query(sql,[code,"Distinto",one.slug]);
-  assert.equal(ignoredByCode.rowCount,0);
+  assert.equal(ignoredByCode.rowCount,1);
   const ignoredByName=await db.query(sql,["otro"," "+name.toLowerCase()+" ",one.slug]);
-  assert.equal(ignoredByName.rowCount,0);
+  assert.equal(ignoredByName.rowCount,1);
   const allowed=await db.query(sql,["externo","Proveedor limpio",one.slug]);
   assert.equal(allowed.rowCount,1);
   const {rows:[other]}=await db.query("SELECT slug FROM farmetrica.clientes WHERE slug<>$1 ORDER BY slug LIMIT 1",[one.slug]);

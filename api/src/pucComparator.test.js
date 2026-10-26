@@ -46,7 +46,7 @@ test("el comparador pagina el universo completo y solo empareja ambos canales",a
  const {text,params}=queries.find(q=>q.text.includes("WITH classified AS"));
  assert.match(text,/HAVING count\(DISTINCT channel\)=2/);
  assert.match(text,/CASE WHEN pm\.cooperativa IS TRUE THEN 'cooperativa' ELSE 'laboratorio' END/);
- assert.match(text,/pm\.ignorar_informes=true/);
+ assert.doesNotMatch(text,/pm\.ignorar_informes=true/);
  assert.match(text,/t\.unidades>0 AND t\.coste_unitario>0/);
  assert.match(text,/ORDER BY "labPuc" ASC/);
  assert.match(text,/LIMIT \$\d+::int OFFSET \$\d+::int/);

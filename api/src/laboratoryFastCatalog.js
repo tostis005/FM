@@ -75,7 +75,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   JOIN pharmacies p ON p.id=m.farmacia_id
   WHERE m.cliente_slug=$3 AND NOT EXISTS (
    SELECT 1 FROM farmetrica.proveedores_maestro pm
-   WHERE pm.cliente_slug=$3 AND pm.cooperativa=true
+   WHERE pm.cliente_slug=$3 AND (pm.cooperativa=true OR pm.ignorar_informes=true OR pm.tipo='cooperativa')
     AND ${supplierCode("pm.codigo_origen")}=${supplierCode("m.codigo_proveedor")}
     AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
      WHERE upper(btrim(sp.farmacia_codigo))=p.code
@@ -85,7 +85,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   SELECT p.id,${supplierCode("pm.codigo_origen")},pm.laboratorio_clave
   FROM farmetrica.proveedores_maestro pm CROSS JOIN pharmacies p
   WHERE pm.cliente_slug=$3 AND pm.laboratorio_clave IS NOT NULL
-   AND pm.cooperativa IS NOT TRUE
+   AND pm.cooperativa IS NOT TRUE AND pm.ignorar_informes IS NOT TRUE AND pm.tipo<>'cooperativa'
    -- Nunca extrapolar un código global de Farmatic a otra farmacia con otro proveedor.
    AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
     WHERE upper(btrim(sp.farmacia_codigo))=p.code
@@ -113,7 +113,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
     WHERE pm.cliente_slug=$3
      AND ${supplierCode("pm.codigo_origen")}=${supplierCode("sp.origen_id")}
      AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")}
-     AND (pm.cooperativa IS TRUE OR pm.laboratorio_clave IS NOT NULL))
+     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE OR pm.tipo='cooperativa' OR pm.laboratorio_clave IS NOT NULL))
  ), relevant_receipts AS MATERIALIZED (
   -- Filtrar primero por proveedor y farmacia, NO cruzar todos los productos
   -- con todos los movimientos históricos antes de paginar.

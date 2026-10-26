@@ -43,7 +43,7 @@ export function buildLocalSupplierGroupSuggestions(suppliers){
   const code=String(row?.sourceCode||"").trim().toUpperCase();
   const name=String(row?.name||"").trim();
   const normalized=normalizeLabName(name);
-  if(!code||!name||name.length>200||row.cooperative||row.ignoreReports||looksLikeDistributor(name)||
+  if(!code||!name||name.length>200||row.fromReceipts||/\(nombre pendiente\)/i.test(name)||row.cooperative||row.ignoreReports||looksLikeDistributor(name)||
    row.laboratoryKey||row.inferredLaboratoryKey||
    protectedNames.has(normalized)||normalized.length<3||!/[A-Z]{2}/.test(normalized)||
    normalizeLabName(code)===normalized||

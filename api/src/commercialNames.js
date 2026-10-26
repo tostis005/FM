@@ -2,11 +2,14 @@
 // Los códigos de vendedor/proveedor se repiten entre farmacias; nunca unir
 // solo por ID ni por nombre. Aceptar catálogo aún no sincronizado sin fallar.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {normalizeLabName} from "./laboratoryIdentity.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalize=value=>String(value??"").trim().toUpperCase();
 const label=value=>String(value??"").trim();
 const composite=(id,code)=>String(id)+"|"+normalize(code);
+const canonicalCode=value=>{const code=normalize(value);return /^\d+$/.test(code)?code.replace(/^0+(?=\d)/,""):code};
+const mappingKey=(id,code)=>String(id)+"|"+canonicalCode(code);
 const keysOf=items=>[...new Set(items.map(normalize).filter(Boolean))].slice(0,2000);
 
 export async function loadCommercialNames(pool,context,entries=[]){
@@ -14,7 +17,7 @@ export async function loadCommercialNames(pool,context,entries=[]){
  if(!client||!SCHEMA.test(client.schema)||!SCHEMA.test(client.slug))
   throw Error("Contexto de cliente no autorizado");
  const allowed=new Set((allowedPharmacyIds||[]).map(Number));
- const suppliers=new Map(),sellers=new Map(),master=new Map();
+ const suppliers=new Map(),sellers=new Map(),master=new Map(),mapped=new Map(),globalMapped=new Map();
  const supplierCodes=keysOf(entries.filter(x=>allowed.has(Number(x.pharmacyId))).map(x=>x.supplierCode));
  const sellerCodes=keysOf(entries.filter(x=>allowed.has(Number(x.pharmacyId))).map(x=>x.sellerId));
  const pharmacyIds=[...new Set(entries.filter(x=>allowed.has(Number(x.pharmacyId)))
@@ -66,16 +69,46 @@ export async function loadCommercialNames(pool,context,entries=[]){
   fill("proveedores",supplierCodes,suppliers),
   fill("vendedores",sellerCodes,sellers),
   supplierCodes.length?pool.query(`
-    SELECT upper(btrim(codigo_origen)) AS code,btrim(nombre) AS name
+    SELECT upper(btrim(codigo_origen)) AS code,btrim(nombre) AS name,
+      laboratorio_clave AS key,cooperativa,ignorar_informes
     FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1
       AND upper(btrim(codigo_origen))=ANY($2::text[])
       AND nullif(btrim(nombre),'') IS NOT NULL`,[client.slug,supplierCodes]
-  ).then(({rows})=>{for(const row of rows)master.set(normalize(row.code),label(row.name))}):Promise.resolve()
+  ).then(({rows})=>{for(const row of rows){
+   master.set(normalize(row.code),label(row.name));
+   if(row.key&&!row.cooperativa&&!row.ignorar_informes)
+    globalMapped.set(canonicalCode(row.code),{name:row.name,key:row.key});
+  }}):Promise.resolve(),
+  supplierCodes.length?pool.query(`
+   SELECT m.farmacia_id::text AS "pharmacyId",m.codigo_proveedor AS code,
+    m.laboratorio_clave AS key,own.nombre AS custom_name
+   FROM farmetrica.proveedores_laboratorios m
+   LEFT JOIN farmetrica.laboratorios_personalizados own
+     ON own.cliente_slug=m.cliente_slug AND own.laboratorio_clave=m.laboratorio_clave
+   WHERE m.cliente_slug=$1 AND m.farmacia_id=ANY($2::int[])`,
+   [client.slug,pharmacyIds]).then(({rows})=>{
+    for(const row of rows){
+     const name=row.custom_name|| (row.key?.startsWith("N:")?row.key.slice(2):null);
+     if(name)mapped.set(mappingKey(row.pharmacyId,row.code),name);
+    }
+   }):Promise.resolve()
  ]);
- const supplierKnown=(id,code)=>suppliers.has(composite(id,code))||master.has(normalize(code));
+ const standardizedSupplier=(id,code)=>{
+  const localName=suppliers.get(composite(id,code));
+  const exact=mapped.get(mappingKey(id,code));
+  if(exact)return exact;
+  const global=globalMapped.get(canonicalCode(code));
+  // Una equivalencia global solo aplica si también coincide el nombre
+  // del proveedor real en ESTA farmacia.
+  if(global&&localName&&normalizeLabName(global.name)===normalizeLabName(localName)
+   &&global.key.startsWith("N:"))return global.key.slice(2);
+  return localName||master.get(normalize(code))||fallback(code);
+ };
+ const supplierKnown=(id,code)=>Boolean(mapped.has(mappingKey(id,code))||
+   suppliers.has(composite(id,code))||master.has(normalize(code)));
  const sellerKnown=(id,code)=>sellers.has(composite(id,code));
  return {
-  supplier:(id,code)=>suppliers.get(composite(id,code))||master.get(normalize(code))||fallback(code),
+  supplier:standardizedSupplier,
   seller:(id,code)=>sellers.get(composite(id,code))||fallback(code),
   supplierKnown,sellerKnown
  };

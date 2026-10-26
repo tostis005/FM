@@ -21,9 +21,11 @@ test("el CN elegible tiene recepción del proveedor exacto y farmacia selecciona
   key:"P:88",pharmacies:[1],type:"medicacion"});
  assert.equal(result.total,1);
  assert.equal(queries[0].values[2],"88");
- assert.match(queries[0].text,/fm_recepciones_analitica/);
+ assert.match(queries[0].text,/JOIN "ampedia"\.fm_recepciones_cabeceras h/);
+ assert.match(queries[0].text,/JOIN "ampedia"\.fm_recepciones_lineas l/);
  assert.match(queries[0].text,/proveedores_unificados_alias/);
- assert.match(queries[0].text,/r\.unidades>0/);
+ assert.match(queries[0].text,/l\.cantidad>0 AND l\.devuelta IS NOT TRUE/);
+ assert.match(queries[0].text,/normalizeCode|h\.proveedor_origen_id/);
  assert.doesNotMatch(queries[0].text,/nomenclator/i);
 });
 test("no acepta identificadores arbitrarios ni tipos de datos ilegales",async()=>{

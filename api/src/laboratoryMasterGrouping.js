@@ -9,24 +9,48 @@ const keyOf=value=>{
 // Solo variaciones ESTRUCTURALES de una razón social; no se admiten
 // coincidencias parciales ni por similitud que unan dos laboratorios distintos.
 const LEGAL=[""," S A"," S L"," S A U"," S L U"," SA"," SL"," SAU"," SLU"];
+// Farmatic antepone códigos de proveedor al nombre ("01 ALLIANCE", 
+// "0.-AMPEDIA", "3-BIDAFARMA"). Esos números NO son parte del laboratorio.
+const SUPPLIER_PREFIX=/^\s*\d{1,4}(?:(?:\s*[.\-/]+\s*)|\s+)/;
+function supplierNameForms(source){
+ const raw=String(source||"").trim();
+ const clean=raw.replace(SUPPLIER_PREFIX,"").trim();
+ const forms=new Set([raw,clean]);
+ if(clean!==raw)forms.add(raw.replace(SUPPLIER_PREFIX,"").trim());
+ // Quitar una nota entre paréntesis únicamente cuando está AL FINAL.
+ for(const form of [...forms]){
+  const noNote=form.replace(/\s*\([^)]{2,100}\)\s*$/,"").trim();
+  if(noNote)forms.add(noNote);
+ }
+ // Denominaciones jurídicas de cooperativas, igual que S.A. y S.L.
+ for(const form of [...forms]){
+  const norm=normalizeLabName(form);
+  const noCoop=norm.replace(/\s+S\s+COOP(?:ERATIVA)?(?:\s+AND)?$/,"").trim();
+  if(noCoop&&noCoop!==norm)forms.add(noCoop);
+ }
+ return [...forms].filter(Boolean);
+}
 export function exactMasterAliases(source){
- const name=normalizeLabName(source.name);
- if(!name)return [];
- const raw=String(source.name||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
-  .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim();
- const target=keyOf(source.laboratoryKey)?.slice(2)||name;
- const variants=new Set([name,normalizeLabName(raw)]);
- // Farmatic puede registrar "RAZÓN SOCIAL S.A. NOMBRE LABORATORIO".
- // También aplicar la regla a ocultos/cooperativas SIN clave asignada.
- // Antes solo se aplicaba a nombres visibles con clave N:.
- for(const base of new Set([name,raw])){
-  if(!base)continue;
-  for(const legal of LEGAL){
-   variants.add(normalizeLabName(base+legal+" "+target));
-   variants.add(normalizeLabName(base+legal+" "+name));
-   if(/^(?:LABORATORIOS?|LABS?)\s/.test(raw)){
-    variants.add(normalizeLabName(base+legal+" LABORATORIO "+target));
-    variants.add(normalizeLabName(base+legal+" LABORATORIOS "+target));
+ const baseForms=supplierNameForms(source.name);
+ const names=new Set(baseForms.map(normalizeLabName).filter(Boolean));
+ if(!names.size)return [];
+ const target=keyOf(source.laboratoryKey)?.slice(2)||
+  normalizeLabName(baseForms.at(-1));
+ const variants=new Set(names);
+ const LAB_PREFIX=/^(?:LABORATORIOS?|LABS?)\s/;
+ for(const form of baseForms){
+  const name=normalizeLabName(form);
+  const raw=String(form).normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+   .toUpperCase().replace(/[^A-Z0-9]+/g," ").trim();
+  for(const base of new Set([name,raw])){
+   if(!base)continue;
+   for(const legal of LEGAL){
+    variants.add(normalizeLabName(base+legal+" "+target));
+    variants.add(normalizeLabName(base+legal+" "+name));
+    if(LAB_PREFIX.test(raw)){
+     variants.add(normalizeLabName(base+legal+" LABORATORIO "+target));
+     variants.add(normalizeLabName(base+legal+" LABORATORIOS "+target));
+    }
    }
   }
  }

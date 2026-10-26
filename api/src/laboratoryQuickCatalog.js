@@ -133,7 +133,7 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
    ON upper(btrim(sp.farmacia_codigo))=p.code
     AND ${supplierCode("sp.origen_id")}=${supplierCode("pm.codigo_origen")}
     AND ${normalizedLabSQL("sp.nombre")}=${normalizedLabSQL("pm.nombre")}
-  WHERE pm.cliente_slug=$3 AND pm.cooperativa IS NOT TRUE AND pm.tipo<>'cooperativa'
+  WHERE pm.cliente_slug=$3 AND pm.cooperativa IS NOT TRUE AND coalesce(pm.tipo,'')<>'cooperativa'
    AND pm.ignorar_informes IS NOT TRUE
    AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
    AND NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_laboratorios m
@@ -165,7 +165,7 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
    FROM farmetrica.proveedores_maestro pm
    WHERE pm.cliente_slug=$3
     AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
-    AND pm.cooperativa IS NOT TRUE AND pm.tipo<>'cooperativa' AND pm.ignorar_informes IS NOT TRUE)
+    AND pm.cooperativa IS NOT TRUE AND coalesce(pm.tipo,'')<>'cooperativa' AND pm.ignorar_informes IS NOT TRUE)
    AND EXISTS(SELECT 1 FROM ${schema}.fm_ventas_analitica v
     WHERE v.farmacia_codigo=p.code AND v.articulo_id=a.origen_id::text)
  ), candidates AS MATERIALIZED (

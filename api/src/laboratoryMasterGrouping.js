@@ -24,6 +24,10 @@ function exactMasterAliases(source){
   for(const legal of LEGAL){
    variants.add(normalizeLabName(base+legal+" "+target));
    variants.add(normalizeLabName(base+legal+" "+name));
+   if(/^(?:LABORATORIOS?|LABS?)\s/.test(raw)){
+    variants.add(normalizeLabName(base+legal+" LABORATORIO "+target));
+    variants.add(normalizeLabName(base+legal+" LABORATORIOS "+target));
+   }
   }
  }
  return [...variants].filter(Boolean);

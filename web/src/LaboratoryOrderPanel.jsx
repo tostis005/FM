@@ -171,6 +171,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     bulkComplete=true;
    }catch(e){
     if(controller.signal.aborted)return;
+    // Si el SQL conjunto no termina, indicar el cambio de estrategia.
+    // El usuario sigue viendo sus artículos mientras progresan los lotes.
+    setLoadStage("fallback");
    }
    if(bulkComplete){
     setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());return;

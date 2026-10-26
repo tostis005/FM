@@ -10,7 +10,7 @@ const ROLES = new Set(["administrador","gestor","farmacia","colaborador"]);
 const isSuper = user => user?.role === "superadministrador";
 const asEmail = value => String(value || "").trim().toLowerCase();
 
-import {decoratePharmacy} from "./pharmacyCodes.js";
+import {decoratePharmacy,pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {hashInternalPassword} from "./internalPassword.js";
 import {randomBytes} from "node:crypto";
 import {normalizeDomain,emailDomain,validClientDomain} from "./accessPolicy.js";
@@ -257,44 +257,81 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(!SLUG.test(schema))return res.status(400).json({error:"Esquema inválido"});
       const {rows:master}=await pool.query(
         'SELECT '+supplierSelect+' FROM farmetrica.proveedores_maestro WHERE cliente_slug=$1 ORDER BY nombre,codigo_origen',[slug]);
-      const codes=[...new Set(req.context.pharmacies.map(p=>String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()).filter(Boolean))];
+      const ids=req.context.pharmacies.map(p=>Number(p.id)).filter(Number.isInteger);
       let external=[];
-      if(codes.length){
-        const {rows:fields}=await pool.query(
-          "SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name IN ('proveedores','fm_recepciones_analitica')",
-          [schema]);
+      if(ids.length){
+        const {rows:fields}=await pool.query({
+          text:"SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name IN ('proveedores','fm_recepciones_cabeceras','fm_recepciones_analitica')",
+          values:[schema],query_timeout:4000
+        });
         const has=(table,...cols)=>cols.every(col=>fields.some(f=>f.table_name===table&&f.column_name===col));
+        const pharmacyJoin=table=>`JOIN farmetrica.farmacias f ON f.cliente_slug=$1
+           AND f.id=ANY($2::int[]) AND upper(btrim(${table}.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
         if(has("proveedores","farmacia_codigo","origen_id","nombre")){
-          const result=await pool.query(`SELECT upper(btrim(origen_id::text)) AS "sourceCode",
-            min(nullif(btrim(nombre::text),'')) AS name
-            FROM "${schema}".proveedores WHERE upper(btrim(farmacia_codigo))=ANY($1::text[])
-            AND nullif(btrim(origen_id::text),'') IS NOT NULL
-            GROUP BY 1`,[codes]);
-          external=result.rows;
-        }
-        if(!external.length&&has("proveedores","id","nombre")){
-          const result=await pool.query(`SELECT upper(btrim(id::text)) AS "sourceCode",
-            min(nullif(btrim(nombre::text),'')) AS name
+          const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
+            upper(btrim(p.origen_id::text)) AS "sourceCode",
+            min(nullif(btrim(p.nombre::text),'')) AS name,
+            'farmatic' AS source
+            FROM "${schema}".proveedores p ${pharmacyJoin("p")}
+            WHERE nullif(btrim(p.origen_id::text),'') IS NOT NULL
+            GROUP BY f.id,upper(btrim(p.origen_id::text))`,
+           values:[slug,ids],query_timeout:10000});
+          external.push(...rows);
+        }else if(ids.length===1&&has("proveedores","id","nombre")){
+          // Un catálogo sin farmacia_codigo nunca puede asignarse a
+          // varias farmacias: el código local no es globalmente único.
+          const {rows}=await pool.query({text:`SELECT $1::text AS "pharmacyId",
+            upper(btrim(id::text)) AS "sourceCode",
+            min(nullif(btrim(nombre::text),'')) AS name,'farmatic' AS source
             FROM "${schema}".proveedores WHERE nullif(btrim(id::text),'') IS NOT NULL
-            GROUP BY 1`);
-          external=result.rows;
+            GROUP BY upper(btrim(id::text))`,
+            values:[String(ids[0])],query_timeout:10000});
+          external.push(...rows);
         }
-        // Si el origen todavía no envía el maestro, identificar proveedores
-        // de sus recepciones, sin fabricar registros ni alterar las compras.
-        if(!external.length&&has("fm_recepciones_analitica","proveedor_id")&&
-           (has("fm_recepciones_analitica","farmacia_codigo")||has("fm_recepciones_analitica","farmacia_id"))){
-          const supplierName=has("fm_recepciones_analitica","proveedor_nombre")?
-            "min(nullif(btrim(proveedor_nombre::text),''))":"NULL::text";
-          const localIds=req.context.pharmacies.map(p=>Number(p.id)).filter(Number.isInteger);
-          const legacySource=has("fm_recepciones_analitica","farmacia_codigo")? "upper(btrim(farmacia_codigo))=ANY($1::text[])":
-            "farmacia_id=ANY($1::int[])";
-          const result=await pool.query(`SELECT upper(btrim(proveedor_id::text)) AS "sourceCode",
-            ${supplierName} AS name
-            FROM "${schema}".fm_recepciones_analitica WHERE ${legacySource}
-             AND nullif(btrim(proveedor_id::text),'') IS NOT NULL
-            GROUP BY 1`,[has("fm_recepciones_analitica","farmacia_codigo")?codes:localIds]);
-          external=result.rows;
+
+        // Combinar SIEMPRE el ERP con los proveedores de albaranes completos.
+        // Antes solo se consultaban las recepciones si TODO el catálogo ERP
+        // estaba vacío: un único proveedor sincronizado ocultaba al resto.
+        let received=[];
+        if(has("fm_recepciones_cabeceras","farmacia_codigo","proveedor_origen_id")){
+          const name=has("fm_recepciones_cabeceras","proveedor_nombre")?
+            "min(nullif(btrim(h.proveedor_nombre::text),''))":"NULL::text";
+          const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
+            upper(btrim(h.proveedor_origen_id::text)) AS "sourceCode",
+            ${name} AS name,'recepciones' AS source
+            FROM "${schema}".fm_recepciones_cabeceras h ${pharmacyJoin("h")}
+            WHERE nullif(btrim(h.proveedor_origen_id::text),'') IS NOT NULL
+              AND h.lineas_completas IS TRUE AND h.eliminada_logicamente IS NOT TRUE
+            GROUP BY f.id,upper(btrim(h.proveedor_origen_id::text))`,
+           values:[slug,ids],query_timeout:14000});
+          received=rows;
         }
+
+        if(has("fm_recepciones_analitica","proveedor_id")&&
+            (has("fm_recepciones_analitica","farmacia_codigo")||
+             has("fm_recepciones_analitica","farmacia_id"))){
+          const known=new Set(external.filter(r=>r.name).map(r=>r.pharmacyId+"|"+r.sourceCode));
+          const missing=received.filter(r=>!r.name&&!known.has(r.pharmacyId+"|"+r.sourceCode));
+          const needAll=!has("fm_recepciones_cabeceras","farmacia_codigo","proveedor_origen_id");
+          if(needAll||missing.length){
+            const analyticsJoin=has("fm_recepciones_analitica","farmacia_codigo")?
+              pharmacyJoin("r"):
+              "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND f.id=r.farmacia_id";
+            const name=has("fm_recepciones_analitica","proveedor_nombre")?
+              "min(nullif(btrim(r.proveedor_nombre::text),''))":"NULL::text";
+            const restrict=needAll?"":"AND upper(btrim(r.proveedor_id::text))=ANY($3::text[])";
+            const values=needAll?[slug,ids]:[slug,ids,[...new Set(missing.map(r=>r.sourceCode))]];
+            const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
+              upper(btrim(r.proveedor_id::text)) AS "sourceCode",
+              ${name} AS name,'recepciones' AS source
+              FROM "${schema}".fm_recepciones_analitica r ${analyticsJoin}
+              WHERE nullif(btrim(r.proveedor_id::text),'') IS NOT NULL ${restrict}
+              GROUP BY f.id,upper(btrim(r.proveedor_id::text))`,
+              values,query_timeout:16000});
+            received.push(...rows);
+          }
+        }
+        external.push(...received);
       }
       res.json(sourceSupplierRows(master,external));
     }catch(e){next(e)}

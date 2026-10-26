@@ -200,6 +200,52 @@ try{
  await page.getByText("Referencia lote 125").waitFor({timeout:25000});
  assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),125,
   "Todas las 125 referencias se ven a la vez, también las de otros lotes");
+ // Los textos explicativos han desaparecido sin quitar funcionalidades.
+ assert.equal(await page.locator(".fm-lab-order-period-help").count(),0);
+ assert.equal(await page.locator(".fm-lab-order-top").getByText(/Nomenclátor por sí solo/i).count(),0);
+ assert.equal(await page.locator(".fm-lab-order-summary").getByText(/en una sola tabla/i).count(),0);
+ assert.match(await page.locator(".fm-lab-order-summary > span").first().innerText(),/referencias/);
+ assert.equal(await page.locator(".fm-lab-order-table td.fm-lab-order-name small").count(),0);
+ assert.equal((await page.locator(".fm-lab-order-actions").innerText()).trim()
+  .replace(/\s+/g," "),"Guardar borrador Generar Excel");
+ assert.equal(await page.locator(".fm-lab-order > .fm-op-fine").count(),0);
+ // Cabecera fija durante scroll vertical de 125 artículos; CN y Artículo a la izquierda.
+ const sticky=await page.locator(".fm-lab-order .fm-dual-scroll").evaluate(root=>{
+  const top=root.querySelector(".fm-dual-scroll-top");
+  const pane=root.querySelector(".fm-lab-order-scroll");
+  const table=pane?.querySelector("table"),thead=table?.querySelector("thead");
+  if(!top||!pane||!thead)return {ok:false,reason:"faltan contenedores"};
+  const vertical=pane.scrollHeight>pane.clientHeight+80;
+  const horizontal=pane.scrollWidth>pane.clientWidth+80;
+  pane.scrollTop=600;pane.scrollLeft=200;
+  pane.dispatchEvent(new Event("scroll",{bubbles:true}));
+  const first=pane.querySelector("tbody tr td.fm-lab-order-cn")?.getBoundingClientRect();
+  const second=pane.querySelector("tbody tr td.fm-lab-order-name")?.getBoundingClientRect();
+  return {vertical,horizontal,scrollTop:pane.scrollTop,
+   headerDelta:thead.getBoundingClientRect().top-pane.getBoundingClientRect().top,
+   stickyPosition:getComputedStyle(thead).position,
+   cnDelta:first?first.left-pane.getBoundingClientRect().left:null,
+   nameDelta:second&&first?second.left-first.right:null,
+   scrollLeft:pane.scrollLeft,topScrollLeft:top.scrollLeft,
+   topVisible:top.getBoundingClientRect().height>0};
+ });
+ assert.ok(sticky.vertical&&sticky.horizontal&&sticky.scrollTop>100,
+  "La matriz larga debe desplazarse vertical y horizontalmente: "+JSON.stringify(sticky));
+ assert.equal(sticky.stickyPosition,"sticky");
+ assert.ok(Math.abs(sticky.headerDelta)<=4,
+  "La cabecera debe seguir visible: "+JSON.stringify(sticky));
+ assert.ok(Math.abs(sticky.cnDelta)<=4&&Math.abs(sticky.nameDelta)<=5,
+  "CN y artículo deben quedar fijos a la izquierda: "+JSON.stringify(sticky));
+ assert.ok(sticky.topVisible&&Math.abs(sticky.scrollLeft-sticky.topScrollLeft)<=2,
+  "Scroll superior debe seguir al inferior: "+JSON.stringify(sticky));
+ const reverse=await page.locator(".fm-lab-order .fm-dual-scroll").evaluate(root=>{
+  const top=root.querySelector(".fm-dual-scroll-top");
+  const pane=root.querySelector(".fm-lab-order-scroll");
+  top.scrollLeft=80;top.dispatchEvent(new Event("scroll",{bubbles:true}));
+  return [top.scrollLeft,pane.scrollLeft];
+ });
+ assert.ok(Math.abs(reverse[0]-reverse[1])<=2,
+  "Mover barra superior mueve las mismas columnas que el pie");
  assert.equal(await page.locator(".fm-lab-order-pager").count(),0);
  assert.equal(await page.getByRole("button",{name:"Siguiente",exact:true}).count(),0);
  const last=page.getByRole("spinbutton",{name:"Pedir Referencia lote 125 para el laboratorio"});

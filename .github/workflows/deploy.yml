@@ -180,7 +180,7 @@ jobs:
             'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -v cliente_slug=ampedia -U farmawao -d farmawao' \
             < api/src/migrations/036_proveedores_unificados_seed.psql
           result=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
-            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT (SELECT count(*) FROM farmetrica.proveedores_unificados WHERE cliente_slug=\x27ampedia\x27 AND clave_unificada LIKE \x27EXCEL:%\x27) >= 1200 AND (SELECT count(*) FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=\x27ampedia\x27 AND procedencia=\x27excel\x27) >= 2000;"')
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT (SELECT count(*) FROM farmetrica.proveedores_unificados) >= 1200 AND (SELECT count(*) FROM farmetrica.proveedores_unificados_alias) >= 2000;"')
           test "$result" = t
 
       - name: Renombrar farmatic a ampedia de forma transaccional

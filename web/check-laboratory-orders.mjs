@@ -160,6 +160,10 @@ try{
  await page.waitForTimeout(600);
  assert.equal(await page.locator(".fm-lab-order-group").count(),2);
  assert.equal(await page.locator(".fm-lab-order-sub").count(),10);
+ assert.equal((await page.locator(".fm-lab-order-table thead th.fm-lab-order-editcol").textContent()).trim(),
+  "Pedir total");
+ assert.doesNotMatch(await page.locator(".fm-lab-order").innerText(),/Pedia|Ampedia/i,
+  "El preparador no debe mostrar nombres del operador en títulos de pedido");
  const joint=page.getByRole("spinbutton",{name:"Pedir Crema solar para el laboratorio"});
  assert.equal(await joint.inputValue(),"10");
  await joint.fill("13");
@@ -176,11 +180,21 @@ try{
  const input2=page.getByRole("spinbutton",{name:"Pedir Medicamento en Europa"});
  assert.equal(await input1.inputValue(),"3");
  assert.equal(await input2.inputValue(),"7");
+ const medicineTotal=page.getByRole("spinbutton",{name:"Pedir total de Medicamento"});
+ assert.equal(await medicineTotal.inputValue(),"10");
  await input1.fill("4");
+ assert.equal(await medicineTotal.inputValue(),"11","El total refleja cambios por farmacia");
  await page.getByRole("button",{name:"Guardar borrador"}).click();
  await page.getByText(/Borrador guardado/).waitFor();
  assert.equal(saved.at(-1).tipo,"medicacion");
  assert.deepEqual(saved.at(-1).lineas[0].unitsByPharmacy,{"1":4,"2":7});
+ await medicineTotal.fill("22");
+ assert.equal(await input1.inputValue(),"8","La edición del total reparte proporcionalmente");
+ assert.equal(await input2.inputValue(),"14");
+ await page.getByRole("button",{name:"Guardar borrador"}).click();
+ await page.getByText(/Borrador guardado/).waitFor();
+ assert.deepEqual(saved.at(-1).lineas[0].unitsByPharmacy,{"1":8,"2":14},
+  "El total editable se guarda como desglose de medicación por farmacia");
  const file2=page.waitForEvent("download");
  await page.getByRole("button",{name:"Generar Excel"}).click();
  assert.match((await file2).suggestedFilename(),/medicacion\.xlsx$/);
@@ -190,7 +204,15 @@ try{
  assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
  await page.getByText(/Cargando referencias/).waitFor({timeout:1200});
- await page.getByText(/Calculando ventas y stock/).waitFor({timeout:3000});
+ await page.getByText(/Calculando ventas y stock/).first().waitFor({timeout:3000});
+ const overlay=page.locator(".fm-lab-matrix-overlay");
+ await overlay.waitFor({state:"visible",timeout:4000});
+ assert.match(await overlay.innerText(),/Calculando ventas y stock por farmacia/);
+ assert.equal(await page.locator(".fm-lab-order-scroll").getAttribute("aria-busy"),"true");
+ assert.equal(await page.getByRole("spinbutton",{name:"Pedir total de Medicamento"}).isDisabled(),true,
+  "Las cantidades no se modifican hasta que terminen las métricas");
+ await overlay.waitFor({state:"hidden",timeout:15000});
+ assert.equal(await page.locator(".fm-lab-order-scroll").getAttribute("aria-busy"),"false");
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});

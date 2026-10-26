@@ -89,6 +89,9 @@ jobs:
           node --test api/src/reportTableFilters.test.js
           node --test api/src/salesSummary.test.js
           node --test api/src/salesTotals.test.js
+          node --check api/src/dashboardConsolidations.js
+          node --check api/src/dashboardConsolidationService.js
+          node --test api/src/dashboardConsolidations.test.js
           node --test api/src/salesInsights.test.js
           node --test api/src/salesDetail.test.js
           node --test api/src/articleNames.test.js
@@ -186,6 +189,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/020_dominios_cliente_reset.sql
           psql_test --single-transaction < api/src/migrations/014_clientes_demo.sql
           psql_test --single-transaction < api/src/migrations/015_cache_analitica_ventas.sql
+          psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql
+          psql_test --single-transaction < api/src/migrations/038_dashboard_consolidados_mensuales.sql
           psql_test --single-transaction < api/src/migrations/016_modelo_documental.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
@@ -253,6 +258,7 @@ jobs:
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace JOIN pg_index x ON x.indexrelid=i.oid WHERE n.nspname='ampedia' AND i.relname=ANY(ARRAY['fm_ventas_codigo_fecha_idx','fm_articulos_codigo_id_sync_idx','fm_compras_codigo_fecha_idx','fm_proveedores_codigo_id_sync_idx','fm_ventas_codigo_articulo_fecha_idx','fm_compras_codigo_articulo_fecha_idx']) AND x.indisvalid;")" = 6
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardConsolidations.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationAuthLocal.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationPasswordReset.test.js
@@ -304,8 +310,8 @@ jobs:
           node check-supplier-laboratory-map.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs
-          node check-responsive.mjs
           node check-dashboard-audit.mjs
+          node check-responsive.mjs
           node check-sales-loading.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs

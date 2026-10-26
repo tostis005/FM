@@ -26,6 +26,19 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/context")body=context;
  else if(p==="/api/tenant/promociones")body={promotions:[]};
  else if(p==="/api/tenant/farmacias")body=pharmacies;
+ else if(p==="/api/analytics/dashboard/consolidados")body={
+  available:true,cachedMonths:36,liveCurrentMonth:true,
+  sales:{granularity:"month",
+   monthly:[{month:"2026-10",ventas:4046412.26,unidades:1543*count}],
+   series:[{bucket:"2026-10",ventas:4046412.26,unidades:1543*count}],
+   kpis:{ventas:4046412.26,unidades:1543*count},
+   costBasis:{products:100,priced:100,coveredSales:4046412.26,margin:825000}},
+  purchases:{available:true,hasAmounts:true,hasArticleLines:true,
+   sourceRows:1304,amountRows:1304,amountCoveragePct:100,
+   kpis:{compras:2696250.36,unidadesCompradas:9823*count,
+    recepciones:120,lineasCompra:1304,proveedores:null},
+   monthly:[{month:"2026-10",compras:2696250.36,recepciones:120}]}
+ };
  else if(p==="/api/analytics/ventas/totales")body={
   granularity:url.searchParams.get("granularidad")||"month",
   monthly:[{month:"2026-10",ventas:4046412.26/count*count,unidades:1543*count}],
@@ -94,11 +107,11 @@ try{
   .slice(0,2).every(el=>el.textContent?.includes("€")),{timeout:12000});
  assert.equal(by("/api/analytics/reportes").length,0,"Inicio no debe lanzar el informe completo");
  assert.equal(by("/api/analytics/ventas").length,0,"Inicio no debe repetir el detalle pesado");
- assert.ok(by("/api/analytics/ventas/totales").length>0,"Inicio usa ventas documentales reales");
- assert.ok(by("/api/analytics/dashboard/compras").length>0,"Inicio usa recepciones documentales reales");
+ assert.equal(by("/api/analytics/ventas/totales").length,0,"Inicio consolidado no reconsulta ventas completas");
+ assert.equal(by("/api/analytics/dashboard/compras").length,0,"Inicio consolidado no reconsulta recepciones completas");
  assert.equal(await page.locator(".fm-demo-kpi").count(),8);
  const dashboardLabels=await page.locator(".fm-demo-kpi>span").allTextContents();
- assert.deepEqual(dashboardLabels.slice(0,6),["Ventas","Compras","Resultado comercial estimado","Resultado comercial (%)","Unidades vendidas","Unidades compradas"]);
+ assert.deepEqual(dashboardLabels.slice(0,6),["Ventas","Compras","Diferencia ventas − compras","Diferencia sobre ventas","Unidades vendidas","Unidades compradas"]);
  const moneyMetrics=await page.locator(".fm-demo-kpi strong").evaluateAll(els=>els.slice(0,2).map(el=>{
   const css=getComputedStyle(el);return {size:parseFloat(css.fontSize),whiteSpace:css.whiteSpace,
    width:el.clientWidth,scroll:el.scrollWidth,value:el.textContent};
@@ -108,11 +121,11 @@ try{
   assert.equal(m.whiteSpace,"nowrap","No partir importes");
   assert.ok(m.scroll<=m.width+3,"Importe desborda la tarjeta: "+JSON.stringify(m));
  }
- const resultCard=page.locator(".fm-demo-kpi").filter({hasText:"Resultado comercial estimado"});
+ const resultCard=page.locator(".fm-demo-kpi").filter({hasText:"Diferencia ventas − compras"});
  await resultCard.locator("strong").waitFor({state:"visible",timeout:12000});
  const resultText=await resultCard.locator("strong").textContent();
  assert.ok(resultText.includes("1.350.161,90"),"Resultado comercial incorrecto: "+resultText);
- const pctCard=page.locator(".fm-demo-kpi").filter({hasText:"Resultado comercial (%)"});
+ const pctCard=page.locator(".fm-demo-kpi").filter({hasText:"Diferencia sobre ventas"});
  const pctText=await pctCard.locator("strong").textContent();
  assert.ok(pctText.includes("33,37"),"Porcentaje comercial incorrecto: "+pctText);
  const shortcuts=page.getByRole("group",{name:"Períodos rápidos"});
@@ -123,7 +136,7 @@ try{
  assert.equal(await shortcuts.getByRole("button",{name:"Este año",exact:true})
   .getAttribute("aria-pressed"),"true","El atajo seleccionado debe quedar destacado");
  await page.waitForTimeout(200);
- const dashboardYear=by("/api/analytics/ventas/totales").at(-1)?.query.desde;
+ const dashboardYear=by("/api/analytics/dashboard/consolidados").at(-1)?.query.desde;
  assert.ok(/^\d{4}-01-01$/.test(dashboardYear||""),"Este año debe empezar en enero");
  await page.getByRole("button",{name:/Ventas: abrir Ventas/}).first().click();
  await page.getByRole("heading",{name:"Ventas",exact:true}).waitFor({timeout:12000});
@@ -162,12 +175,12 @@ try{
   {timeout:18000});
  const salesWindows=by("/api/analytics/ventas/totales").slice(beforeSales);
  const purchaseWindows=by("/api/analytics/dashboard/compras").slice(beforePurchases);
- assert.ok(salesWindows.length>=5&&purchaseWindows.length>=5,
-  "El histórico debe dividirse por años para ventas y compras");
- for(const req of [...salesWindows,...purchaseWindows]){
-  const days=(Date.parse(req.query.hasta)-Date.parse(req.query.desde))/86400000;
-  assert.ok(days<=366,"El cliente no debe lanzar agregaciones completas de cinco años");
- }
+ assert.equal(salesWindows.length,0,
+  "El dashboard consolidado evita lanzar agregaciones anuales de ventas");
+ assert.equal(purchaseWindows.length,0,
+  "El dashboard consolidado evita lanzar agregaciones anuales de compras");
+ assert.ok(by("/api/analytics/dashboard/consolidados").some(r=>r.query.desde?.startsWith("2021")),
+  "El histórico de cinco años se resuelve en una sola petición consolidada");
  await page.waitForFunction(()=>{
   const cards=[...document.querySelectorAll(".fm-demo-kpi")];
   return cards.length===8&&cards.slice(0,6).every(card=>

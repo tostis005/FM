@@ -42,7 +42,7 @@ test("12 meses: un SUM mensual y total SQL sin consulta de artículos ni compras
  assert.equal(status,200);
  assert.equal(calls.length,1);
  assert.deepEqual(calls[0].params,["2025-11-01","2026-10-18",["VAL"]]);
- assert.match(calls[0].sql,/upper\(btrim\(v.farmacia_codigo\)\)=ANY\(\$3::text\[\]\)/);
+ assert.match(calls[0].sql,/v\.farmacia_codigo=ANY\(\$3::text\[\]\)/);
  assert.doesNotMatch(calls[0].sql,/JOIN farmetrica\.farmacias/);
  assert.match(calls[0].sql,/GROUP BY date_trunc\(\x27month\x27,v.fecha\)/);
  assert.match(calls[0].sql,/sum\(sum\(v.importe\)\) OVER\(\)/);

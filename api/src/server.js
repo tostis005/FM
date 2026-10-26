@@ -19,6 +19,7 @@ import {setupPurchasePlanner} from "./purchasePlanner.js";
 import {setupPharmacyState} from "./pharmacyState.js";
 import {setupSalesSummary} from "./salesSummary.js";
 import {setupSalesTotals} from "./salesTotals.js";
+import {setupDashboardConsolidations} from "./dashboardConsolidationService.js";
 import {setupSalesInsights} from "./salesInsights.js";
 import {setupHistoryCoverage} from "./historyCoverage.js";
 import { setupAssistant } from "./assistant.js";
@@ -155,6 +156,7 @@ setupDocumentScreens(app,pool,{requireTenant});
 setupStockSinRecepciones(app,pool,{requireTenantModule});
 setupSalesSummary(app,pool,{requireTenant});
 setupSalesTotals(app,pool,{requireTenant});
+const dashboardCache=setupDashboardConsolidations(app,pool,{requireTenant});
 setupSalesInsights(app,pool,{requireTenant});
 setupHistoryCoverage(app,pool,{requireTenant});
 const salesCache=createSalesCache(pool);
@@ -532,6 +534,7 @@ try {
   await pool.query(promosMigration);
   const cacheMigration=await readFile(new URL("./migrations/015_cache_analitica_ventas.sql",import.meta.url),"utf8");
   await pool.query(cacheMigration);
+  await pool.query(await readFile(new URL("./migrations/038_dashboard_consolidados_mensuales.sql",import.meta.url),"utf8"));
   const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
   await pool.query(operationalMigration);
   const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");
@@ -554,6 +557,7 @@ try {
   setInterval(purgeExpiredPublicRequests,24*60*60*1000).unref();
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
   salesCache.start();
+  dashboardCache.start();
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);
   await pool.end();

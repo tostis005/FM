@@ -45,7 +45,7 @@ export function setupPurchaseTotals(app,pool,{requireTenant}){
    const col=(key,cast="text")=>names.has(key)?`t."${key}"::${cast}`:`NULL::${cast}`;
    const id=col("origen_id"),code=legacy?
     "f.id=t.farmacia_id AND f.cliente_slug=$4":
-    `f.cliente_slug=$4 AND upper(btrim(t.farmacia_codigo))=${pharmacyDataCodeSQL("f")}`;
+    `f.cliente_slug=$4 AND t.farmacia_codigo=${pharmacyDataCodeSQL("f")}`;
    const join=`JOIN farmetrica.farmacias f ON ${code}`;
    const supplier=`coalesce(nullif(btrim(${col("proveedor_nombre")}),''),nullif(btrim(${col("proveedor_id")}),''))`;
    const reference=`coalesce(nullif(btrim(${col("albaran_id")}),''),nullif(btrim(${col("numero_pedido")}),''),nullif(btrim(${id}),''))`;

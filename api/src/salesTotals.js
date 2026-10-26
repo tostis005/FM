@@ -30,7 +30,7 @@ export function buildSalesTotalsSql(schema,granularity,hasHistoricalCost=true){
    sum(${pricedExpr}) OVER()::bigint AS total_lineas_con_coste,
    sum(${productCountExpr}) OVER()::bigint AS total_lineas_producto
  FROM ${table}.fm_ventas_analitica v
- WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
+ WHERE v.farmacia_codigo=ANY($3::text[])
    AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
  GROUP BY date_trunc('month',v.fecha)
  ORDER BY month`;
@@ -56,7 +56,7 @@ export function buildSalesTotalsSql(schema,granularity,hasHistoricalCost=true){
      CASE WHEN ${costed} THEN 1 ELSE 0 END AS costed_count,
      CASE WHEN ${product} THEN 1 ELSE 0 END AS product_count
    FROM ${table}.fm_ventas_analitica v
-   WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
+   WHERE v.farmacia_codigo=ANY($3::text[])
      AND v.fecha >= $1::date
      AND v.fecha < ($2::date + interval '1 day')
  ) movimientos

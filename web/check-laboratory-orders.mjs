@@ -94,7 +94,7 @@ await page.route("**/api/**",async route=>{
   const incoming=request.method()==="POST"?request.postDataJSON():null;
   const requestedLab=incoming?.laboratorio||url.searchParams.get("laboratorio");
   const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR"}[requestedLab]||requestedLab;
-  if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
+  if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,850));
   if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
     body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
@@ -207,10 +207,15 @@ try{
  await page.getByText(/Calculando ventas y stock/).first().waitFor({timeout:3000});
  const overlay=page.locator(".fm-lab-matrix-overlay");
  await overlay.waitFor({state:"visible",timeout:4000});
- assert.match(await overlay.innerText(),/Calculando ventas y stock por farmacia/);
- assert.equal(await page.locator(".fm-lab-order-scroll").getAttribute("aria-busy"),"true");
- assert.equal(await page.getByRole("spinbutton",{name:"Pedir total de Medicamento"}).isDisabled(),true,
-  "Las cantidades no se modifican hasta que terminen las métricas");
+ const loadingState=await overlay.evaluate(node=>({
+  message:node.innerText,
+  busy:node.parentElement.querySelector(".fm-lab-order-scroll")?.getAttribute("aria-busy"),
+  disabled:node.parentElement.querySelector("input[aria-label='Pedir total de Medicamento']")?.disabled
+ }));
+ assert.match(loadingState.message,/Calculando ventas y stock por farmacia/);
+ assert.equal(loadingState.busy,"true");
+ assert.equal(loadingState.disabled,true,
+  "Las cantidades no se modifican mientras se muestran cálculos pendientes");
  await overlay.waitFor({state:"hidden",timeout:15000});
  assert.equal(await page.locator(".fm-lab-order-scroll").getAttribute("aria-busy"),"false");
  const medicineTab=page.getByRole("tab",{name:/Medicación/});

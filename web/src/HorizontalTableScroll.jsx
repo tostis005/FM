@@ -9,12 +9,16 @@ export default function HorizontalTableScroll({children,className="table-scroll"
   const root=content.current;
   if(!root)return;
   const measure=()=>{
-   const next={width:Math.max(1,root.scrollWidth),overflow:root.scrollWidth>root.clientWidth+2};
+   // Igualar la distancia desplazable incluso si la tabla tiene bordes o scrollbar vertical.
+   const extra=Math.max(0,root.scrollWidth-root.clientWidth);
+   const viewport=top.current?.clientWidth||root.clientWidth;
+   const next={width:Math.max(1,viewport+extra),overflow:extra>2};
    setMetrics(old=>old.width===next.width&&old.overflow===next.overflow?old:next);
   };
   measure();
   const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(measure):null;
-  if(observer){observer.observe(root);if(root.firstElementChild)observer.observe(root.firstElementChild);}
+  if(observer){observer.observe(root);if(root.firstElementChild)observer.observe(root.firstElementChild);
+   if(top.current)observer.observe(top.current);}
   window.addEventListener("resize",measure);
   return()=>{observer?.disconnect();window.removeEventListener("resize",measure)};
  },[children]);

@@ -6,12 +6,9 @@ export function includedPurchaseSupplier({tenant,code,name=null}){
  if(!/^[a-z][\w.]*\.[a-z][\w]*$/.test(code))throw Error("Columna de proveedor inválida");
  if(name!==null&&!/^[a-z][\w.]*\.[a-z][\w]*$/.test(name))throw Error("Nombre de proveedor inválido");
  const normalized=col=>`upper(btrim(coalesce(${col}::text,'')))`;
- return `NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_maestro pm
-  WHERE pm.cliente_slug=${tenant} AND pm.ignorar_informes=true
-   AND ((nullif(${normalized(code)},'') IS NOT NULL
-        AND upper(btrim(pm.codigo_origen))=${normalized(code)})${name?
-   ` OR (nullif(${normalized(name)},'') IS NOT NULL
-        AND upper(btrim(pm.nombre))=${normalized(name)})`:""}))`;
+ // Visibilidad del preparador y cálculo de totales son conceptos diferentes.
+ // No eliminar movimientos de compras por etiquetas de proveedor.
+ return "TRUE";
 }
 // La clasificación de compras depende exclusivamente del check cooperativa.
  // Los proveedores no marcados, incluidos los sin ficha, son laboratorios.

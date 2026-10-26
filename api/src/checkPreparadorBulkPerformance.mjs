@@ -1,6 +1,8 @@
 // Diagnóstico sin lecturas de datos sensibles en logs. Se ejecuta solo bajo
 // despliegue solicitado: CI no recibe credenciales de PostgreSQL de producción.
 import pg from "pg";
+import {readFile} from "node:fs/promises";
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
 
@@ -34,6 +36,31 @@ try{
   if(best?.rows.length){
    const date=new Date(),to=date.toISOString().slice(0,10);
    const from=new Date(date.getTime()-30*86400000).toISOString().slice(0,10);
+   // EXPLAIN no ejecuta ventas: diagnóstico del plan elegido con 200 CN.
+   await timed("explain200",async()=>{
+    const {rows:columns}=await pool.query(`SELECT EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_schema=$1 AND table_name='articulos'
+      AND column_name='cn_normalizado') AS native`,[ctx.client.schema]);
+    const raw=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+    const sql=raw.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
+     .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
+     .replaceAll("__CN_NORMALIZED__",columns[0]?.native?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
+    const selected=best.rows.slice(0,200).map(x=>({reference:x.referencia,cn:x.cn||null}));
+    const {rows:explain}=await pool.query({text:"EXPLAIN (FORMAT JSON) "+sql,
+     values:[JSON.stringify(selected),pharmacies,ctx.client.slug,from,to,7],query_timeout:10000});
+    const plan=explain[0]?.["QUERY PLAN"]?.[0]?.Plan;
+    if(!plan)return null;
+    output.estimatedCost=Math.round(Number(plan["Total Cost"]||0));
+    const scans=[];
+    const visit=p=>{if(/Scan/.test(p["Node Type"]||""))
+     scans.push({node:p["Node Type"],table:p["Relation Name"]||"",
+      index:p["Index Name"]||"",cost:Math.round(Number(p["Total Cost"]||0))});
+     for(const child of p.Plans||[])visit(child)};
+    visit(plan);
+    output.planScans=scans.slice(0,15);
+    return true;
+   });
    for(const count of [Math.min(200,best.rows.length),best.rows.length].filter((x,i,a)=>a.indexOf(x)===i)){
     const res=await timed("matrix"+count,()=>readLaboratoryOrderMatrix(pool,ctx,{
      key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows.slice(0,count)

@@ -40,7 +40,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
   if(text.includes("FROM filtered ORDER BY"))
    return {rows:[{referencia:"400001",cn:"400001",nombre:"Med 1",
     tipo:"medicacion",total:1,inMaster:true,inReceipts:false}]};
-  assert.match(text,/fm_ventas_analitica/);
+  assert.match(text,/fm_ventas_lineas/);
   assert.match(text,/stock_actual/);
   assert.match(text,/farmetrica.op_pedidos/);
   assert.ok(!text.includes("__SCHEMA__"));
@@ -165,14 +165,14 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
 test("el preparador consulta ventas con identificadores indexados del documento Farmatic",async()=>{
  const {readFile}=await import("node:fs/promises");
  const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
- assert.match(sql,/ON v\.articulo_id=a\.article_id/);
+ assert.match(sql,/l\.articulo_origen_id=a\.article_id/);
  assert.match(sql,/article_matches AS/);
  assert.match(sql,/a\.origen_id::text=x\.cn/);
  assert.match(sql,/__CN_NORMALIZED__/);
  assert.doesNotMatch(sql,/JOIN refs x ON \(x\.cn/);
  assert.match(sql,/JOIN pharmacies scope ON scope\.id=a\.pharmacy_id/);
- assert.match(sql,/AND v\.farmacia_codigo=scope\.source_code/);
+ assert.match(sql,/l\.farmacia_codigo=scope\.source_code/);
  assert.match(sql,/pending_orders AS MATERIALIZED/);
  assert.doesNotMatch(sql,/FROM articles a\s+JOIN farmetrica\.op_pedidos p/);
- assert.doesNotMatch(sql,/upper\(btrim\(v\.farmacia_codigo\)\)/i);
+ assert.doesNotMatch(sql,/upper\(btrim\(l\.farmacia_codigo\)\)/i);
 });

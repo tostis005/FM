@@ -53,24 +53,31 @@ WITH refs AS MATERIALIZED (
  -- cada pareja farmacia+artículo una sola vez antes de leer sus ventas.
  SELECT DISTINCT pharmacy_id,article_id FROM articles
 ), sales_per_article AS MATERIALIZED (
- -- UNA agregación de los tres períodos, filtrando solo los artículos del
- -- laboratorio. Evita multiplicar ventas en caso de CN duplicados y deja
- -- al planificador explotar el índice documental por farmacia/artículo.
+ -- Leer primero solo las líneas de los artículos seleccionados usando
+ -- fm_preparador_ventas_linea_idx (farmacia, articulo, sistema, documento).
+ -- Unir después las cabeceras por PK y fecha. Evita expandir toda la vista
+ -- fm_ventas_analitica por cada CN del laboratorio.
  SELECT a.pharmacy_id,a.article_id,
-  coalesce(sum(v.unidades) FILTER (
-    WHERE v.fecha >= $4::date AND v.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
-  coalesce(sum(v.unidades) FILTER (
-    WHERE v.fecha >= $5::date-interval '89 days'
-      AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v3,
-  coalesce(sum(v.unidades) FILTER (
-    WHERE v.fecha >= $5::date-interval '364 days'
-      AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v12
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+    FILTER (WHERE h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+    FILTER (WHERE h.fecha >= $5::date-interval '89 days'
+       AND h.fecha < $5::date+interval '1 day'),0)::float8 AS v3,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+    FILTER (WHERE h.fecha >= $5::date-interval '364 days'
+       AND h.fecha < $5::date+interval '1 day'),0)::float8 AS v12
  FROM eligible_articles a
  JOIN pharmacies scope ON scope.id=a.pharmacy_id
- JOIN __SCHEMA__.fm_ventas_analitica v
-  ON v.articulo_id=a.article_id AND v.farmacia_codigo=scope.source_code
- WHERE v.fecha >= least($4::date,$5::date-interval '364 days')
-   AND v.fecha < $5::date+interval '1 day'
+ JOIN __SCHEMA__.fm_ventas_lineas l
+  ON l.farmacia_codigo=scope.source_code AND l.articulo_origen_id=a.article_id
+   AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
+ JOIN __SCHEMA__.fm_ventas_cabeceras h
+  ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen
+   AND h.documento_id=l.documento_id
+   AND h.lineas_completas AND NOT h.eliminado_logicamente
+   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   AND h.fecha >= least($4::date,$5::date-interval '364 days')
+   AND h.fecha < $5::date+interval '1 day'
  GROUP BY a.pharmacy_id,a.article_id
 ), movements AS (
  SELECT a.pharmacy_id,a.reference,

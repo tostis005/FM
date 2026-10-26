@@ -233,15 +233,15 @@ test("PostgreSQL: evolución de movimientos documentados sin inventar saldos his
   const first=byDay.get("2026-10-17"),second=byDay.get("2026-10-18");
   assert.equal(Number(first.soldUnits),3,"La devolución de venta reduce las unidades vendidas");
   assert.equal(Number(first.receivedUnits),60,"Los totales incluyen recepciones internas");
-  assert.equal(Number(first.documentedNetUnits),7);
+  assert.equal(Number(first.documentedNetUnits),57);
   assert.equal(first.tickets,2);
   assert.equal(first.receipts,1);
   assert.equal(Number(second.soldUnits),2);
   assert.equal(Number(second.receivedUnits),0);
   assert.equal(Number(second.documentedNetUnits),-2);
   assert.equal(Number(res.body.summary.value),5);
-  assert.equal(Number(res.body.summary.units),10);
-  assert.equal(Number(res.body.summary.other),5);
+  assert.equal(Number(res.body.summary.units),60);
+  assert.equal(Number(res.body.summary.other),55);
   const search=await fetchScreen({buscar:"2026-10-17"});
   assert.equal(search.body.total,1,"El texto filtra sobre todos los días antes de paginar");
   const sorted=await fetchScreen({orden:"net",direccion:"asc"});

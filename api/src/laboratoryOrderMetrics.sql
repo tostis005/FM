@@ -48,19 +48,37 @@ WITH refs AS MATERIALIZED (
   CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
   min(stock_at) AS stock_at
  FROM articles GROUP BY pharmacy_id,reference
-), movements AS (
- SELECT a.pharmacy_id,a.reference,
-  coalesce(sum(v.unidades) FILTER(WHERE v.fecha >= $4::date AND v.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
-  coalesce(sum(v.unidades) FILTER(WHERE v.fecha >= $5::date-interval '89 days' AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v3,
-  coalesce(sum(v.unidades) FILTER(WHERE v.fecha >= $5::date-interval '364 days' AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v12
- -- Coincidencias exactas con los identificadores normalizados de Farmatic.
- -- Evitar upper/btrim sobre columnas de la vista: impide aprovechar sus
- -- índices base (farmacia_codigo, articulo_origen_id) y multiplica el coste.
- FROM articles a JOIN pharmacies scope ON scope.id=a.pharmacy_id
+), eligible_articles AS MATERIALIZED (
+ -- La misma referencia/CN puede tener varios registros ERP. Identificar
+ -- cada pareja farmacia+artículo una sola vez antes de leer sus ventas.
+ SELECT DISTINCT pharmacy_id,article_id FROM articles
+), sales_per_article AS MATERIALIZED (
+ -- UNA agregación de los tres períodos, filtrando solo los artículos del
+ -- laboratorio. Evita multiplicar ventas en caso de CN duplicados y deja
+ -- al planificador explotar el índice documental por farmacia/artículo.
+ SELECT a.pharmacy_id,a.article_id,
+  coalesce(sum(v.unidades) FILTER (
+    WHERE v.fecha >= $4::date AND v.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
+  coalesce(sum(v.unidades) FILTER (
+    WHERE v.fecha >= $5::date-interval '89 days'
+      AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v3,
+  coalesce(sum(v.unidades) FILTER (
+    WHERE v.fecha >= $5::date-interval '364 days'
+      AND v.fecha < $5::date+interval '1 day'),0)::float8 AS v12
+ FROM eligible_articles a
+ JOIN pharmacies scope ON scope.id=a.pharmacy_id
  JOIN __SCHEMA__.fm_ventas_analitica v
   ON v.articulo_id=a.article_id AND v.farmacia_codigo=scope.source_code
- WHERE v.fecha >= LEAST($4::date,$5::date-interval '364 days')
+ WHERE v.fecha >= least($4::date,$5::date-interval '364 days')
    AND v.fecha < $5::date+interval '1 day'
+ GROUP BY a.pharmacy_id,a.article_id
+), movements AS (
+ SELECT a.pharmacy_id,a.reference,
+  sum(s.sold)::float8 AS sold,
+  sum(s.v3)::float8 AS v3,
+  sum(s.v12)::float8 AS v12
+ FROM articles a JOIN sales_per_article s
+  ON s.pharmacy_id=a.pharmacy_id AND s.article_id=a.article_id
  GROUP BY a.pharmacy_id,a.reference
 ), pending_orders AS MATERIALIZED (
  -- Expandir el JSON de cada pedido UNA VEZ, no una vez por artículo/CN.

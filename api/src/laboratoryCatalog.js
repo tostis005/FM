@@ -9,7 +9,7 @@ import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./l
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 export function normalizeLaboratoryKey(value){
  const key=String(value??"").trim().toLocaleUpperCase("es-ES");
- return /^[CN]:[^\u0000-\u001f]{1,210}$/.test(key)?key:null;
+ return /^(?:[CN]:[^\u0000-\u001f]{1,210}|P:[1-9][0-9]{0,17})$/.test(key)?key:null;
 }
 export function selectedPharmacies(context,raw){
  const allowed=new Set((context.pharmacies||[]).map(p=>Number(p.id)));

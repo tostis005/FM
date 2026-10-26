@@ -100,6 +100,20 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   try{res.json({laboratories:await listUnifiedSuppliers(pool,req.context,ph,true)})}
   catch(e){next(e)}
  });
+ app.post("/api/tenant/proveedores-unificados",...requireTenantAdmin(),async(req,res,next)=>{
+  const name=String(req.body?.name||"").trim(),className=req.body?.class||"SIN_CLASIFICAR";
+  if(name.length<2||name.length>200||
+   !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
+   return res.status(400).json({error:"Nombre o clasificación inválidos"});
+  try{
+   const {rows}=await pool.query(`INSERT INTO farmetrica.proveedores_unificados
+    (cliente_slug,clave_unificada,nombre,clase)
+    VALUES($1,'MANUAL:'||md5(random()::text||clock_timestamp()::text),$2,$3)
+    RETURNING id::text,nombre`,
+    [req.context.client.slug,name,className]);
+   res.status(201).json({id:String(rows[0].id),name});
+  }catch(e){next(e)}
+ });
  app.put("/api/tenant/proveedores-unificados/:id",...requireTenantAdmin(),async(req,res,next)=>{
   if(!validId(req.params.id))return res.status(400).json({error:"ID incorrecto"});
   const name=String(req.body?.name||"").trim(),className=req.body?.class;

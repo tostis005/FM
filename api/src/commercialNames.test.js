@@ -21,6 +21,9 @@ function fakePool({missingVendors=false,missingSuppliers=false}={}){
    return {rows:[{pharmacyId:"1",code:"3",name:"Marga Abadía"},
     {pharmacyId:"2",code:"3",name:"Clara Abadía"}]};
   }
+  if(sql.includes("farmetrica.proveedores_laboratorios")){
+   return {rows:[]};
+  }
   if(sql.includes("farmetrica.proveedores_maestro")){
    assert.equal(params[0],"test_tenant");
    return {rows:[{code:"99",name:"Proveedor manual"}]};

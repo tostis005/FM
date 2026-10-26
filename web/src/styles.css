@@ -868,7 +868,7 @@ html,body{overflow-x:clip}
  z-index:8;
  filter:drop-shadow(0 2px 1px #1d423015);
 }
-.fm-dual-scroll > [role="region"]:not(.fm-dual-scroll-top) > table thead th{
+.fm-dual-scroll :where(table thead th){
  background-color:#f3f8f5;
  background-clip:padding-box;
 }

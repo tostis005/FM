@@ -106,7 +106,7 @@ export default function ProveedoresMaestro({clientSlug}){
   setMappingSupplier(row);setSelectedLab(row.laboratoryKey||"");
   setMappingNotice("");
  }
- const visible=useMemo(()=>rows.filter(r=>(r.name+" "+r.sourceCode).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
+ const visible=useMemo(()=>rows.filter(r=>([r.name,r.sourceCode,...(r.origins||[]).map(o=>o.name)].join(" ")).toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[rows,search]);
  return <div className="fm-management fm-production-panel">
    <ReportPageHeader title="Maestro de proveedores" updatedAt={updatedAt}
     refreshing={loading} onRefresh={()=>void refresh().catch(e=>setError(e.message))}
@@ -149,7 +149,7 @@ export default function ProveedoresMaestro({clientSlug}){
      onRowClick={row=>{if(row.nameConflict){setError("No se puede editar globalmente este código porque identifica proveedores distintos según la farmacia.");return;}setForm({...row})}} columns={[
       {key:"sourceCode",label:"Código",value:r=>r.sourceCode},
       {key:"name",label:"Proveedor",value:r=>r.name,render:r=><strong>{r.name}</strong>},
-      {key:"origins",label:"Farmacias / nombres en Farmatic",sortable:false,searchable:false,
+      {key:"origins",label:"Farmacias / nombres de origen",sortable:false,searchable:false,
        value:r=>(r.origins||[]).map(o=>o.name).join(" "),
        render:r=><div>
         {(r.origins||[]).length? [...new Map(r.origins.map(o=>[

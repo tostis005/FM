@@ -8,6 +8,27 @@ async function call(slug,path,options={}){
  if(!r.ok)throw Error(data.error||"Error al consultar proveedores");
  return data;
 }
+function parseCsv(text){
+ const records=[];let row=[],cell="",quoted=false;
+ text=String(text).replace(/^\uFEFF/,"");
+ for(let i=0;i<text.length;i++){
+  const c=text[i];if(c==='"'){
+   if(quoted&&text[i+1]==='"'){cell+='"';i++}else quoted=!quoted;
+  }else if(!quoted&&(c===","||c==="\n")){
+   row.push(cell.trim());cell="";if(c==="\n"){records.push(row);row=[]}
+  }else if(c!=="\r"||quoted)cell+=c;
+ }
+ if(quoted)throw Error("Comillas incorrectas en el CSV");
+ if(cell||row.length){row.push(cell.trim());records.push(row)}
+ const keys=records.shift()||[];const col=name=>keys.indexOf(name);
+ const cols=["ID_UN","ID PROV","NOMBRE PROV","ID PROV NUEVO","NOMBRE PROV NUEVO","TIPO","FECHA"];
+ if(cols.some(k=>col(k)<0))throw Error("El CSV no contiene las columnas de unificación esperadas");
+ return records.filter(r=>r.some(Boolean)).map(r=>({
+  pharmacyCode:r[col("ID_UN")],sourceCode:r[col("ID PROV")],
+  sourceName:r[col("NOMBRE PROV")],targetCode:r[col("ID PROV NUEVO")],
+  targetName:r[col("NOMBRE PROV NUEVO")],class:r[col("TIPO")],validity:r[col("FECHA")]
+ }));
+}
 export default function ProveedoresUnificados({clientSlug}){
  const [suppliers,setSuppliers]=useState([]),[sources,setSources]=useState([]),
   [pharmacies,setPharmacies]=useState([]),[search,setSearch]=useState(""),
@@ -44,9 +65,19 @@ export default function ProveedoresUnificados({clientSlug}){
   if(!editing)return;
   setBusy(true);setError("");
   try{
-   await call(clientSlug,"/api/tenant/proveedores-unificados/"+editing.id,{
-    method:"PUT",body:JSON.stringify({name:editing.name,class:editing.class})});
+   await call(clientSlug,editing.id?"/api/tenant/proveedores-unificados/"+editing.id:"/api/tenant/proveedores-unificados",{
+    method:editing.id?"PUT":"POST",body:JSON.stringify({name:editing.name,class:editing.class})});
    setEditing(null);await refresh();setNotice("Proveedor actualizado");
+  }catch(e){setError(e.message)}finally{setBusy(false)}
+ }
+ async function importFile(file){
+  if(!file)return;
+  setBusy(true);setError("");setNotice("");
+  try{
+   const rows=parseCsv(await file.text());
+   const data=await call(clientSlug,"/api/tenant/proveedores-unificados/importar",{
+    method:"POST",body:JSON.stringify({rows})});
+   await refresh();setNotice(`Importadas ${data.newAliases} equivalencias y ${data.newSuppliers} proveedores nuevos. Conflictos de origen: ${data.sourceConflicts}.`);
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  async function link(){
@@ -62,7 +93,12 @@ export default function ProveedoresUnificados({clientSlug}){
  return <div className="fm-management fm-production-panel">
   <header className="section-heading"><div><h1>Maestro único de proveedores</h1>
    <p>Identidades unificadas de Farmatic con equivalencias independientes por farmacia.</p></div>
-   <button className="btn btn-secondary" disabled={loading} onClick={()=>void refresh()}>Actualizar</button></header>
+   <div><button className="btn btn-secondary" disabled={loading} onClick={()=>void refresh()}>Actualizar</button> {" "}
+    <button className="btn btn-primary" onClick={()=>setEditing({name:"",class:"SIN_CLASIFICAR"})}>Nuevo proveedor</button>
+   </div></header>
+  <label>Importar equivalencias desde CSV (se conservan las relaciones manuales)
+   <input type="file" accept=".csv,text/csv" disabled={busy} onChange={e=>{void importFile(e.target.files?.[0]);e.target.value=""}}/>
+  </label>
   {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
   {notice&&<p role="status" className="fm-manage-feedback">{notice}</p>}
   {loading&&<LoadingStatus label="Comprobando proveedores y correspondencias…"/>}
@@ -95,7 +131,7 @@ export default function ProveedoresUnificados({clientSlug}){
    </tbody></table>{uniquePending.length>300&&<p>Mostrando los primeros 300 pendientes.</p>}</div>
   </section>
   {editing&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar proveedor">
-   <div className="fm-demo-detail fm-provider-dialog"><h2>Editar proveedor</h2>
+   <div className="fm-demo-detail fm-provider-dialog"><h2>{editing.id?"Editar proveedor":"Nuevo proveedor"}</h2>
     <label>Nombre unificado<input value={editing.name} onChange={e=>setEditing({...editing,name:e.target.value})}/></label>
     <label>Clasificación<select value={editing.class} onChange={e=>setEditing({...editing,class:e.target.value})}>
      {CLASSES.map(c=><option key={c} value={c}>{c}</option>)}</select></label>

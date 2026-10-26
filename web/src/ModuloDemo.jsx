@@ -83,8 +83,8 @@ function metricCards(module,k,analysisMonths=12){
  ];
  const map={
   dashboard:[shared[0],shared[1],
-   CARD("Resultado comercial estimado","resultadoComercial","€"),
-   CARD("Resultado comercial (%)","resultadoComercialPct","%"),
+   CARD("Diferencia ventas − compras","resultadoComercial","€"),
+   CARD("Diferencia sobre ventas","resultadoComercialPct","%"),
    CARD("Unidades vendidas","unidades","n","ventas"),
    CARD("Unidades compradas","unidadesCompradas","n","compras"),
    CARD("Recepciones registradas","recepciones","n","compras"),
@@ -290,11 +290,48 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastEligible=["ventas","dashboard"].includes(module)&&period.valid;
  const effectiveAnalysisMonths=[3,6,12,24,36].includes(Number(analysisMonths))?Number(analysisMonths):12;
  const fastScope=[clientSlug,period.from,period.to,period.granularity,filters.pharmacyIds.join(","),reloadKey].join("|");
+ const dashboardCacheEligible=module==="dashboard"&&period.valid&&
+  period.granularity==="month"&&period.from?.endsWith("-01");
+ const purchaseSummaryScope=[clientSlug,period.from,period.to,
+   filters.pharmacyIds.join(","),reloadKey].join("|");
+ const [dashboardCache,setDashboardCache]=useState(null);
+ const dashboardCacheScope=fastScope+"|dashboard-mensual";
+ const dashboardCacheStatus=dashboardCache?.scope===dashboardCacheScope?
+  dashboardCache.status:"loading";
+ useEffect(()=>{
+  if(!dashboardCacheEligible)return;
+  const controller=new AbortController();
+  const params=new URLSearchParams({desde:period.from,hasta:period.to});
+  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
+  fetch("/api/analytics/dashboard/consolidados?"+params,{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)
+  }).then(async response=>{
+   const payload=await response.json().catch(()=>({}));
+   return response.ok?payload:null;
+  }).then(payload=>{
+   if(controller.signal.aborted)return;
+   if(payload?.available&&Array.isArray(payload.sales?.monthly)&&
+     Array.isArray(payload.purchases?.monthly)){
+    setFastResult({scope:fastScope,data:payload.sales});
+    setPurchaseSummaryResult({scope:purchaseSummaryScope,data:payload.purchases});
+    setFastProgress({scope:fastScope,done:1,total:1});
+    setPurchaseProgress({scope:purchaseSummaryScope,done:1,total:1});
+    setLastUpdated(new Date());
+    setDashboardCache({scope:dashboardCacheScope,status:"ready"});
+   }else setDashboardCache({scope:dashboardCacheScope,status:"miss"});
+  }).catch(()=>{
+   if(!controller.signal.aborted)
+    setDashboardCache({scope:dashboardCacheScope,status:"miss"});
+  });
+  return()=>controller.abort();
+ },[dashboardCacheEligible,dashboardCacheScope]);
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
  const fastLoading=fastEligible&&!fastSales&&!fastFailed;
  useEffect(()=>{
   if(!fastEligible)return;
+  if(dashboardCacheEligible&&dashboardCacheStatus!=="miss")return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,granularidad:period.granularity});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
@@ -334,7 +371,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     "La consulta tarda demasiado. Prueba un período más corto.":e.message
   })});
   return ()=>controller.abort();
- },[fastEligible,fastScope]);
+ },[fastEligible,fastScope,dashboardCacheEligible,dashboardCacheStatus]);
  const insightScope=[clientSlug,period.from,period.to,filters.pharmacyIds.join(","),ids,reloadKey].join("|");
  const insightData=insightResult?.scope===insightScope?insightResult.data:null;
  const insightFailureMessage=insightFailure?.scope===insightScope?insightFailure.message:null;
@@ -423,8 +460,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters]);
 
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
- const purchaseSummaryScope=[clientSlug,period.from,period.to,
-   filters.pharmacyIds.join(","),reloadKey].join("|");
  const fastPurchase=["compras","dashboard"].includes(module)&&
    purchaseSummaryResult?.scope===purchaseSummaryScope?purchaseSummaryResult.data:null;
  const purchaseSummaryError=purchaseSummaryFailure?.scope===purchaseSummaryScope?
@@ -469,6 +504,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
 
  useEffect(()=>{
   if(!shouldLoadPurchaseSummary)return;
+  if(dashboardCacheEligible&&dashboardCacheStatus!=="miss")return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
@@ -509,7 +545,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     "La consulta tarda demasiado. Prueba un período más corto.":e.message
   })});
   return()=>controller.abort();
- },[shouldLoadPurchaseSummary,purchaseSummaryScope]);
+ },[shouldLoadPurchaseSummary,purchaseSummaryScope,dashboardCacheEligible,dashboardCacheStatus]);
 
  // Verificación de origen/periodo rápida y separada del detalle agregado.
  // Si el detalle tarda, el usuario ya sabe si existen compras reales.
@@ -615,7 +651,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const realKpis={...realReport?.kpis,...(insightData?{
    productosFarmacia:insightData.totalProducts,articulosVendidos:insightData.totalArticles
   }:{}),...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
- if(!realReport?.kpis&&hasSales){realKpis.ventas=realRevenue;realKpis.unidades=realUnits;}
+ if(!realReport?.kpis&&hasSales&&(!fastSales?.kpis||!Object.hasOwn(fastSales.kpis,"ventas"))){
+  realKpis.ventas=realRevenue;realKpis.unidades=realUnits;
+ }
  // Resultado comercial aproximado: no equivale a margen bruto ni beneficio neto.
  const commercialReady=module==="dashboard"&&fastSales?.kpis?.ventas!=null&&
   Number.isFinite(Number(fastSales.kpis.ventas))&&fastPurchase?.kpis?.compras!=null&&
@@ -728,6 +766,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     <div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
   </ReportFilterBar>
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
+  {module==="dashboard"&&<p className="fm-dashboard-reconciliation-note">
+   Ventas y compras son importes documentales del período, no una cuenta de resultados.
+   La diferencia no es beneficio: las compras incluyen reposición de existencias y
+   posibles movimientos internos; la comparabilidad fiscal necesita verificarse.
+  </p>}
 
   {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{

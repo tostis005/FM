@@ -216,7 +216,7 @@ try{
   const table=pane?.querySelector("table"),thead=table?.querySelector("thead");
   if(!top||!pane||!thead)return {ok:false,reason:"faltan contenedores"};
   const vertical=pane.scrollHeight>pane.clientHeight+80;
-  const horizontal=pane.scrollWidth>pane.clientWidth+80;
+  const horizontal=pane.scrollWidth>pane.clientWidth+4;
   pane.scrollTop=600;pane.scrollLeft=200;
   pane.dispatchEvent(new Event("scroll",{bubbles:true}));
   const first=pane.querySelector("tbody tr td.fm-lab-order-cn")?.getBoundingClientRect();

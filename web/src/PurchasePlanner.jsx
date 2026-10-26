@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ShoppingCart,Download,Save,ChevronDown,AlertTriangle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportFilterBar,ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
@@ -262,7 +263,7 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
        <strong>Reparto de necesidad entre farmacias</strong>
        <span>Propuesta del grupo: <b>{g.suggested==null?"Sin cálculo":whole(g.suggested)+" uds."}</b></span>
       </div>
-      <div className="fm-planner-table-scroll">
+      <HorizontalTableScroll className="fm-planner-table-scroll" label="detalle del preparador">
        <table className="fm-planner-breakdown">
         <thead><tr><th>Farmacia</th><th>Ventas período</th><th>3 meses</th>
          <th>12 meses</th><th>Stock</th><th>Recomendado</th>
@@ -322,10 +323,10 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
           "Sin precio PUC válido para recomendar proveedor"}</td>
         </tr></tfoot>
        </table>
-      </div>
+      </HorizontalTableScroll>
       {g.kind==="generico"&&<details className="fm-planner-presentations">
        <summary>CN y laboratorios del conjunto genérico ({(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).length} presentaciones oficiales)</summary>
-       <div className="fm-planner-table-scroll">
+       <HorizontalTableScroll className="fm-planner-table-scroll" label="detalle del preparador">
         <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación AEMPS</th>
          <th>Titular de autorización (AEMPS)</th><th>Laboratorio comercializador (AEMPS)</th>
          <th>Proveedor / PUC observado</th></tr></thead>
@@ -340,7 +341,7 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
            .join("; ")||"Sin compras con precio en los últimos 12 meses"}</td>
          </tr>)}</tbody>
         </table>
-       </div>
+       </HorizontalTableScroll>
        <small>El titular de autorización y el comercializador constan en el nomenclátor AEMPS por CN. No equivalen necesariamente al fabricante físico ni al proveedor de la farmacia; los PUC proceden de compras históricas verificadas.</small>
       </details>}
      </div>;

@@ -1,5 +1,6 @@
 import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
 import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
@@ -243,8 +244,13 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
   if(!key||!pharmacies||!["medicacion","parafarmacia"].includes(type)||
    !Number.isSafeInteger(page)||page<1||!Number.isSafeInteger(size)||size<1||size>250||search.length>100)
    return res.status(400).json({error:"Consulta de catálogo incorrecta"});
-  try{res.json(await readDirectLaboratoryCatalog(pool,req.context,{
-   key,pharmacies,type,search,page,size,skipMovementCheck:req.query.ligero==="1"}));
+  try{
+   if(key.startsWith("P:")){
+    const result=await readUnifiedSupplierCN(pool,req.context,{key,pharmacies,type,search});
+    return res.json({...result,rows:result.rows.slice((page-1)*size,page*size)});
+   }
+   res.json(await readDirectLaboratoryCatalog(pool,req.context,{
+    key,pharmacies,type,search,page,size,skipMovementCheck:req.query.ligero==="1"}));
   }catch(e){next(e)}
  });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/articulos-laboratorio",...auth,async(req,res,next)=>{

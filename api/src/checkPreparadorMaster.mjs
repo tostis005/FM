@@ -1,7 +1,8 @@
 // Solo diagnóstico; no modifica datos ni exporta códigos de proveedor.
 import pg from "pg";
 import {readOperationalLaboratoryEvidence} from "./laboratoryActivity.js";
-import {readMasterLaboratoryRules,groupLaboratoriesByMaster} from "./laboratoryMasterGrouping.js";
+import {readMasterLaboratoryRules,groupLaboratoriesByMaster,exactMasterAliases} from "./laboratoryMasterGrouping.js";
+import {normalizeLabName} from "./laboratoryIdentity.js";
 const db=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,
  connectionTimeoutMillis:4500,query_timeout:35000,statement_timeout:35000});
 const out={};
@@ -27,7 +28,18 @@ try{
  out.cinfaRawNames=raw.filter(r=>match.test(r.name+" "+r.key)).map(r=>r.name).slice(0,15);
  out.cinfaMaster=master.filter(r=>match.test(r.name+" "+r.laboratoryKey))
   .map(r=>({name:r.name,to:r.laboratoryKey,hidden:r.ignoreReports,coop:r.cooperative})).slice(0,15);
- out.suppliersFlagged=master.filter(r=>r.ignoreReports||r.cooperative).length;
+ out.suppliersFlagged=master.filter(r=>r.ignoreReports||r.cooperative||r.type==="cooperativa").length;
+ const flagged=master.filter(r=>r.ignoreReports||r.cooperative||r.type==="cooperativa");
+ const forbidden=new Set(flagged.flatMap(exactMasterAliases));
+ const visibleFlagged=grouped.filter(x=>forbidden.has(normalizeLabName(x.name))
+  ||forbidden.has(normalizeLabName(x.key?.slice(2))));
+ out.flaggedStillVisible=visibleFlagged.length;
+ out.flaggedStillVisibleNames=visibleFlagged.slice(0,10).map(x=>x.name);
+ out.masterFlagTypes={ignored:master.filter(x=>x.ignoreReports).length,
+  cooperatives:master.filter(x=>x.cooperative||x.type==="cooperativa").length};
+ out.unmatchedFlaggedExamples=flagged.filter(x=>!raw.some(r=>
+  exactMasterAliases(x).includes(normalizeLabName(r.name))))
+   .slice(0,12).map(x=>x.name);
  const normalized=s=>String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
  const blockedNames=new Set(master.filter(m=>m.cooperative||m.ignoreReports).map(m=>normalized(m.name)));
  const visibleNames=new Set(master.filter(m=>!m.cooperative&&!m.ignoreReports).map(m=>normalized(m.name)));

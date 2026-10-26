@@ -75,7 +75,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   JOIN pharmacies p ON p.id=m.farmacia_id
   WHERE m.cliente_slug=$3 AND NOT EXISTS (
    SELECT 1 FROM farmetrica.proveedores_maestro pm
-   WHERE pm.cliente_slug=$3 AND pm.cooperativa=true
+   WHERE pm.cliente_slug=$3 AND (pm.cooperativa=true OR pm.ignorar_informes=true OR pm.tipo='cooperativa')
     AND ${supplierCode("pm.codigo_origen")}=${supplierCode("m.codigo_proveedor")}
     AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
      WHERE upper(btrim(sp.farmacia_codigo))=p.code
@@ -85,7 +85,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   SELECT p.id,${supplierCode("pm.codigo_origen")},pm.laboratorio_clave
   FROM farmetrica.proveedores_maestro pm CROSS JOIN pharmacies p
   WHERE pm.cliente_slug=$3 AND pm.laboratorio_clave IS NOT NULL
-   AND pm.cooperativa IS NOT TRUE
+   AND pm.cooperativa IS NOT TRUE AND pm.ignorar_informes IS NOT TRUE AND coalesce(pm.tipo,'')<>'cooperativa'
    -- Nunca extrapolar un código global de Farmatic a otra farmacia con otro proveedor.
    AND EXISTS (SELECT 1 FROM ${schema}.proveedores sp
     WHERE upper(btrim(sp.farmacia_codigo))=p.code
@@ -113,7 +113,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
     WHERE pm.cliente_slug=$3
      AND ${supplierCode("pm.codigo_origen")}=${supplierCode("sp.origen_id")}
      AND ${normalizedLabSQL("pm.nombre")}=${normalizedLabSQL("sp.nombre")}
-     AND (pm.cooperativa IS TRUE OR pm.laboratorio_clave IS NOT NULL))
+     AND (pm.cooperativa IS TRUE OR pm.ignorar_informes IS TRUE OR pm.tipo='cooperativa' OR pm.laboratorio_clave IS NOT NULL))
  ), relevant_receipts AS MATERIALIZED (
   -- Filtrar primero por proveedor y farmacia, NO cruzar todos los productos
   -- con todos los movimientos históricos antes de paginar.
@@ -142,6 +142,14 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
    AND NOT EXISTS (SELECT 1 FROM supplier_links link
     WHERE link.farmacia_id=p.id
      AND link.supplier_code=${supplierCode("r.proveedor_id")})
+   AND NOT EXISTS (
+    SELECT 1 FROM farmetrica.proveedores_maestro excluded
+    WHERE excluded.cliente_slug=$3
+     AND (excluded.cooperativa IS TRUE OR excluded.ignorar_informes IS TRUE
+       OR excluded.tipo='cooperativa')
+     AND ${supplierCode("excluded.codigo_origen")}=${supplierCode("r.proveedor_id")}
+     AND ${normalizedLabSQL("excluded.nombre")}=
+       ${normalizedLabSQL("coalesce(nullif(btrim(r.proveedor_nombre),''),sp.nombre)")})
  ), relevant_articles AS MATERIALIZED (
   -- Desde Farmatic obtener solo artículos del laboratorio que han tenido
   -- al menos una venta o recepción. EXISTS usa el índice ERP por producto.

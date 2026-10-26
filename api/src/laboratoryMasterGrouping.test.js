@@ -74,3 +74,41 @@ test("denominación real de Farmatic CINFA LABORATORIOS S A CINFA se integra con
  assert.equal(rows[0].hasMedication,true);
  assert.equal(rows[0].hasParapharmacy,true);
 });
+
+test("un proveedor ignorado sigue oculto aunque otra ficha del maestro tenga el mismo nombre",()=>{
+ const list=groupLaboratoriesByMaster([
+  {key:"N:DISTRIBUIDOR Z",name:"Distribuidor Z, S.A.",hasParapharmacy:true},
+  {key:"N:LABORATORIO REAL",name:"Laboratorio Real",hasMedication:true}
+ ],[
+  {name:"Distribuidor Z S.A.",cooperative:false,ignoreReports:true},
+  {name:"Distribuidor Z S.A.",laboratoryKey:"N:DISTRIBUIDOR Z",ignoreReports:false},
+  {name:"Laboratorio Real",laboratoryKey:"N:LABORATORIO REAL"}
+ ]);
+ assert.deepEqual(list.map(x=>x.key),["N:REAL"]);
+});
+test("ignorar en informes y cooperativa sin mapeo excluye razones sociales repetidas de Farmatic",()=>{
+ const results=groupLaboratoriesByMaster([
+  {key:"N:COOPERATIVA XYZ S A COOPERATIVA XYZ",
+   name:"COOPERATIVA XYZ S.A. COOPERATIVA XYZ",hasParapharmacy:true},
+  {key:"N:LABORATORIO INVISIBLE S L LABORATORIO INVISIBLE",
+   name:"LABORATORIO INVISIBLE S.L. LABORATORIO INVISIBLE",hasMedication:true},
+  {key:"N:PROVEEDOR REAL",name:"Proveedor Real",hasParapharmacy:true}
+ ],[
+  {name:"COOPERATIVA XYZ S.A.",type:"cooperativa",cooperative:false},
+  {name:"Laboratorio Invisible S.L.",ignoreReports:true},
+  {name:"Proveedor Real",laboratoryKey:"N:PROVEEDOR REAL"}
+ ]);
+ assert.deepEqual(results.map(x=>x.key),["N:PROVEEDOR REAL"]);
+});
+test("un proveedor oculto no debe ocultar otro origen válido del mismo laboratorio",()=>{
+ const result=groupLaboratoriesByMaster([
+  {key:"N:CINFA LABORATORIOS S A CINFA",name:"CINFA LABORATORIOS S.A. CINFA",
+   hasMedication:true},
+  {key:"N:CINFA",name:"Cinfa",hasMedication:true}
+ ],[
+  {name:"Cinfa Laboratorios S.A.",laboratoryKey:"N:CINFA",ignoreReports:true},
+  {name:"Cinfa",laboratoryKey:"N:CINFA",ignoreReports:false}
+ ]);
+ assert.equal(result.length,1);
+ assert.equal(result[0].key,"N:CINFA");
+});

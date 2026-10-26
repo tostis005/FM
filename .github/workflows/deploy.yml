@@ -310,6 +310,15 @@ jobs:
             exit 1
           '
 
+      - name: Medir el preparador de proveedores unificados (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'acelerar preparador')
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorBulkPerformance.mjs
+          '
+
       - name: Verificar unificación y exclusiones del maestro en el preparador (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'maestro')
         continue-on-error: true

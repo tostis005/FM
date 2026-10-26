@@ -33,7 +33,7 @@ const user={email:"lab-order-ci@example.invalid",role:"superadministrador",name:
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",schema:"ampedia",name:"Ampedia"},
  role:"superadministrador",pharmacies,modules:{compras:true,dashboard:true,proveedores:true}};
-const saved=[],matrices=[],labQueries=[],errors=[];
+const saved=[],matrices=[],labQueries=[],catalogCalls=[],errors=[];
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname;
@@ -64,6 +64,7 @@ await page.route("**/api/**",async route=>{
  }else if(path==="/api/analytics/pedidos/catalogo-directo"||
   path==="/api/analytics/pedidos/catalogo-unificado"){
   const requestedLab=url.searchParams.get("laboratorio"),type=url.searchParams.get("tipo");
+  catalogCalls.push({lab:requestedLab,type});
   const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR"}[requestedLab]||requestedLab;
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
   const pageNumber=Number(url.searchParams.get("pagina")||1);
@@ -134,6 +135,29 @@ try{
   console.error("LAB ORDER DEBUG",JSON.stringify({matrices,errors,body:(await page.locator("body").innerText()).slice(0,2800)}));
   throw e;
  }
+ assert.equal(await page.getByRole("button",{name:"Vista anterior"}).count(),0,
+  "Ya no se ofrece el preparador antiguo");
+ assert.equal(await page.locator(".fm-lab-order-tabs .btn").count(),2,
+  "Parafarmacia y Medicación son botones con el diseño principal");
+ assert.equal(await page.locator(".fm-lab-order-tabs .btn-primary").count(),1);
+ assert.equal(await page.getByLabel("Desde",{exact:true}).count(),1);
+ assert.equal(await page.getByLabel("Hasta",{exact:true}).count(),1);
+ assert.equal(await page.getByRole("group",{name:"Períodos rápidos"}).count(),0);
+ // Filtrar referencias nunca debe provocar nueva consulta de catálogo ni ventas.
+ const beforeSearch=catalogCalls.length,beforeSales=matrices.length;
+ await page.getByRole("searchbox",{name:"Buscar artículo o CN"}).fill("crema");
+ await page.waitForTimeout(450);
+ assert.equal(catalogCalls.length,beforeSearch);
+ assert.equal(matrices.length,beforeSales);
+ await page.getByRole("searchbox",{name:"Buscar artículo o CN"}).fill("");
+ // Rango elegido para V. período incluso cuando el preset era "Este mes".
+ await page.getByLabel("Desde",{exact:true}).fill("2025-06-01");
+ await page.getByLabel("Hasta",{exact:true}).fill("2025-08-31");
+ await page.waitForTimeout(650);
+ assert.ok(matrices.some(m=>m.desde==="2025-06-01"&&m.hasta==="2025-08-31"),
+  "El preparador envía el período de verano pasado a la matriz");
+ await page.getByRole("combobox",{name:"Ventas · período seleccionado"}).selectOption("this_month");
+ await page.waitForTimeout(600);
  assert.equal(await page.locator(".fm-lab-order-group").count(),2);
  assert.equal(await page.locator(".fm-lab-order-sub").count(),10);
  const joint=page.getByRole("spinbutton",{name:"Pedir Crema solar para el laboratorio"});
@@ -196,25 +220,15 @@ try{
  await page.getByText(/no se pudieron completar las ventas y el stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");
-  // Reproducción del defecto real: la vista antigua tenía dos cajas.
+  // Ni una preferencia antigua ni ?vista=anterior reactivan la versión obsoleta.
   await page.evaluate(()=>sessionStorage.setItem("fm_preparador_vista:ampedia","legacy"));
-  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
-  assert.equal(await page.getByRole("button",{name:"Pedido por laboratorio"}).getAttribute("aria-pressed"),"true",
-   "Una preferencia guardada de la vista vieja no debe reabrirla");
-  await page.goto("http://127.0.0.1:4175/compras-preparador?vista=anterior",{waitUntil:"domcontentloaded"});
+  await page.goto("http://127.0.0.1:4175/compras-preparador?vista=anterior",
+   {waitUntil:"domcontentloaded"});
+  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).waitFor();
+  assert.equal(await page.getByRole("button",{name:"Vista anterior"}).count(),0);
+  assert.equal(await page.locator(".fm-laboratory-catalog").count(),0);
   assert.ok(labQueries.every(q=>q.uso==="preparador"),
-   "El selector por farmacia exige proveedores del maestro");
-  const catalog=page.locator(".fm-laboratory-catalog");
-  await catalog.waitFor();
-  const catalogPicker=catalog.getByRole("combobox",{name:"Seleccionar laboratorio del catálogo"});
-  assert.equal(await catalogPicker.count(),1,"El catálogo antiguo también usa una sola caja");
-  assert.equal(await catalog.locator("select").count(),0,"No hay un desplegable separado");
-  await catalogPicker.fill("Cinfa");
-  assert.equal(await catalog.getByRole("option",{name:"Laboratorios Cinfa S.A."}).count(),1,
-   "Se filtran los laboratorios en el mismo desplegable");
-  await catalog.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
-  assert.equal(await catalogPicker.inputValue(),"Laboratorios Cinfa S.A.");
-  assert.equal(await catalogPicker.getAttribute("aria-expanded"),"false");
+   "El selector por farmacia exige proveedores unificados");
   assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK preparador por laboratorio: matriz, para conjunta, medicación individual, borradores y XLSX");
 }finally{await browser.close();}

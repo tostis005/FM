@@ -299,7 +299,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
           const {rows}=await pool.query({text:`SELECT f.id::text AS "pharmacyId",
             upper(btrim(h.proveedor_origen_id::text)) AS "sourceCode",
             ${name} AS name,'recepciones' AS source
-            FROM "${schema}".fm_recepciones_cabeceras h ${pharmacyJoin("h")}
+            FROM "${schema}".fm_recepciones_cabeceras h JOIN farmetrica.farmacias f
+             ON f.cliente_slug=$1 AND f.id=ANY($2::int[])
+             AND h.farmacia_codigo=${pharmacyDataCodeSQL("f")}
             WHERE nullif(btrim(h.proveedor_origen_id::text),'') IS NOT NULL
               AND h.lineas_completas IS TRUE AND h.eliminada_logicamente IS NOT TRUE
             GROUP BY f.id,upper(btrim(h.proveedor_origen_id::text))`,

@@ -9,7 +9,7 @@ const keyOf=value=>{
 // Solo variaciones ESTRUCTURALES de una razón social; no se admiten
 // coincidencias parciales ni por similitud que unan dos laboratorios distintos.
 const LEGAL=[""," S A"," S L"," S A U"," S L U"," SA"," SL"," SAU"," SLU"];
-function exactMasterAliases(source){
+export function exactMasterAliases(source){
  const name=normalizeLabName(source.name);
  if(!name)return [];
  const raw=String(source.name||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"")

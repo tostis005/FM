@@ -154,6 +154,24 @@ try{
          table:([...document.querySelectorAll(".table-scroll")].map(e=>({
            viewport:e.clientWidth,content:e.scrollWidth}))),
        }));
+       // Contrato único para todas las tablas montadas, incluidas las que
+       // tienen cabecera doble con filtros y ordenación.
+       const layouts=await page.locator(".fm-dual-scroll").evaluateAll(roots=>
+         roots.map(root=>{
+          const pane=[...root.children].find(el=>!el.classList.contains("fm-dual-scroll-top"));
+          const head=pane?.querySelector("table > thead");
+          return head?{
+           sticky:getComputedStyle(head).position,
+           vertical:getComputedStyle(pane).overflowY,
+           maxHeight:getComputedStyle(pane).maxHeight,
+           hasTop:!!root.querySelector(".fm-dual-scroll-top")
+          }:null;
+         }).filter(Boolean));
+       for(const layout of layouts){
+         if(layout.sticky!=="sticky"||!["auto","scroll"].includes(layout.vertical)||
+            !layout.hasTop||layout.maxHeight==="none")
+           throw Error("Cabecera o scroll uniforme no disponible en "+path+": "+JSON.stringify(layout));
+       }
        const excess=Math.max(result.htmlWidth,result.bodyWidth)-result.viewport;
        if(excess>2||result.topbarRight>result.viewport+2){
          throw Error("Desbordamiento de "+excess+"px; "+JSON.stringify(result));

@@ -142,3 +142,13 @@ test("nombres comerciales que empiezan por números sin separador no pierden eso
  assert.ok(exactMasterAliases({name:"3M MEDICAL",ignoreReports:true}).includes("3M MEDICAL"));
  assert.ok(!exactMasterAliases({name:"3M MEDICAL",ignoreReports:true}).includes("M MEDICAL"));
 });
+
+test("cooperativas y mayoristas inequívocos sin ficha tampoco entran en el selector",()=>{
+ const result=groupLaboratoriesByMaster([
+  {key:"N:COOPERATIVA XYZ",name:"Cooperativa XYZ",hasParapharmacy:true},
+  {key:"N:DISTRIBUIDORA FARMA",name:"Distribuidora Farma",hasParapharmacy:true},
+  {key:"N:MAYORISTA FARMACIA",name:"Mayorista Farmacia",hasMedication:true},
+  {key:"N:CINFA",name:"CINFA",hasMedication:true}
+ ],[]);
+ assert.deepEqual(result.map(x=>x.key),["N:CINFA"]);
+});

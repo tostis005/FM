@@ -70,7 +70,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    code:e.code||e.name||"QUERY_ERROR"
   }));
   return {...fallback,metricsErrorCode:e.code||"QUERY_ERROR",
-   warning:"No se pudo completar la agregación de ventas y stock: "+(e.code||"Error de consulta")};
+   warning:"Se han recuperado los artículos, pero no sus métricas de stock y ventas. "+(e.code||"Error de consulta")};
  }
  const byRef=new Map();
  for(const row of rows){

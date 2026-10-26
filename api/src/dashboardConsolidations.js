@@ -36,7 +36,7 @@ export function compatibleConsolidatedRange(from,to,today=madridDay()){
  }
  return {from,to,months,active,activeMonth:active?to.slice(0,7)+"-01":null};
 }
-export function buildDashboardMonthSQL(schema,source){
+export function buildDashboardMonthSQL(schema,source,{daily=false}={}){
  if(!IDENT.test(schema)||!["ventas","compras"].includes(source))
   throw Error("Origen inválido");
  const sales=source==="ventas",root='"'+schema+'"';
@@ -47,12 +47,13 @@ export function buildDashboardMonthSQL(schema,source){
  const product="nullif(btrim(l.articulo_origen_id),'') IS NOT NULL";
  const costed=sales?product+" AND l.coste_historico>=0 AND l.importe_neto IS NOT NULL":"false";
  return [
-  "SELECT f.id AS farmacia_id,$4::date AS mes,'"+source+"'::text AS fuente,",
+  "SELECT f.id AS farmacia_id,"+(daily?"day.dia::date AS dia":"$4::date AS mes")+",'"+source+"'::text AS fuente,",
   " coalesce(m.importe,0)::numeric AS importe,coalesce(m.unidades,0)::numeric AS unidades,",
   " m.filas,m.filas_importe,m.filas_unidades,m.filas_producto,m.documentos,",
   " m.filas_coste,coalesce(m.ventas_con_coste,0)::numeric AS ventas_con_coste,",
   " coalesce(m.margen_coste,0)::numeric AS margen_coste",
   "FROM jsonb_to_recordset($1::jsonb) AS f(id integer,code text)",
+  ...(daily?["CROSS JOIN generate_series($2::date,$3::date-interval '1 day',interval '1 day') AS day(dia)"]:[]),
   "CROSS JOIN LATERAL (SELECT",
   " sum("+net(amount)+") AS importe,",
   " sum("+net("l.cantidad")+")"+(sales?" FILTER(WHERE "+product+")":"")+" AS unidades,",
@@ -68,14 +69,26 @@ export function buildDashboardMonthSQL(schema,source){
    " FILTER(WHERE "+costed+") AS margen_coste":" 0::numeric AS margen_coste",
   "FROM "+h+" h JOIN "+l+" l ON l.farmacia_codigo=h.farmacia_codigo",
   " AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id",
-  "WHERE h.farmacia_codigo=f.code AND h.fecha >= $2::date",
-  " AND h.fecha < $3::date AND h.lineas_completas",
+  "WHERE h.farmacia_codigo=f.code AND h.fecha >= "+(daily?"day.dia":"$2::date"),
+  " AND h.fecha < "+(daily?"day.dia + interval '1 day'":"$3::date")+" AND h.lineas_completas",
   " AND NOT "+(sales?"h.eliminado_logicamente":"h.eliminada_logicamente"),
   " AND NOT l.eliminada_logicamente"+(sales?" AND coalesce(l.anulada,false)=false":""),
   " AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')",
   ") m"
  ].join("\n");
 }
+
+export function compatibleDailyRange(from,to,today=madridDay()){
+ if(!valid(from)||!valid(to)||from>to||to>today)return null;
+ const ago=Date.parse(today+"T00:00:00Z")-90*86400000;
+ const start=Date.parse(from+"T00:00:00Z");
+ if(start<ago||(Date.parse(to+"T00:00:00Z")-start)>90*86400000)return null;
+ const live=to===today,closedTo=live?new Date(Date.parse(today+"T00:00:00Z")-86400000).toISOString().slice(0,10):to;
+ const days=closedTo>=from?
+  Math.round((Date.parse(closedTo+"T00:00:00Z")-start)/86400000)+1:0;
+ return {from,to,live,closedTo,days};
+}
+
 export function summarizeConsolidations(rows,from,to){
  const months=new Map(),src={salesRows:0,salesAmountRows:0,salesProducts:0,
   salesCosted:0,buyRows:0,buyAmountRows:0,buyUnitRows:0};

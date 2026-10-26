@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/auditar-postgresql.yml"
       - "ops/auditoria-esquema-postgresql.sql"
+      - "ops/diagnostico-compras-ventas.sql"
   workflow_dispatch:
 
 permissions:
@@ -43,6 +44,23 @@ jobs:
           test -s "$RUNNER_TEMP/farmetrica-audit.txt"
           grep -q '^INDEX|' "$RUNNER_TEMP/farmetrica-audit.txt"
           grep -q '^TABLE|' "$RUNNER_TEMP/farmetrica-audit.txt"
+      - name: Comparar cobertura e importes de documentos (solo agregados)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
+            < ops/diagnostico-compras-ventas.sql | tee "$RUNNER_TEMP/comparativa-compras-ventas.txt"
+          grep -q '^COMPARE|' "$RUNNER_TEMP/comparativa-compras-ventas.txt"
+          grep -q '^DOCUMENT_STATUS|' "$RUNNER_TEMP/comparativa-compras-ventas.txt"
+      - name: Adjuntar comparativa de importes agregados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparativa-compras-ventas-2026
+          path: ${{ runner.temp }}/comparativa-compras-ventas.txt
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Adjuntar inventario sin datos comerciales
         if: always()
         uses: actions/upload-artifact@v4

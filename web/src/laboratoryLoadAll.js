@@ -1,7 +1,7 @@
 // Se mantiene una única tabla visible. La API conserva lotes de 100
 // para no saturar PostgreSQL, pero se pueden leer 3 páginas en paralelo.
 export const LAB_CATALOG_BATCH=250;
-export const LAB_METRICS_BATCH=40;
+export const LAB_METRICS_BATCH=200;
 export const LAB_CATALOG_CONCURRENCY=3;
 
 export async function collectLaboratoryCatalog(fetchPage,{
@@ -66,7 +66,7 @@ export async function collectLaboratoryCatalog(fetchPage,{
  return {rows,total};
 }
 
-export const LAB_METRICS_CONCURRENCY=2;
+export const LAB_METRICS_CONCURRENCY=3;
 // Actualizar cada bloque por su referencia, no por la posición de llegada.
 // El usuario puede editar cantidades mientras llegan otras métricas.
 export async function collectLaboratoryMetrics(catalogRows,fetchBatch,{

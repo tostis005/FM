@@ -100,6 +100,75 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   try{res.json({laboratories:await listUnifiedSuppliers(pool,req.context,ph,true)})}
   catch(e){next(e)}
  });
+ // Importación del Excel inicial. Solo crea correspondencias no existentes:
+ // los cambios manuales posteriores siempre prevalecen.
+ app.post("/api/tenant/proveedores-unificados/importar",...requireTenantAdmin(),async(req,res,next)=>{
+  const items=req.body?.rows;
+  if(!Array.isArray(items)||!items.length||items.length>5000||
+   items.some(x=>!x||!/^.{1,40}$/.test(String(x.pharmacyCode||""))||
+    !/^.{1,60}$/.test(String(x.sourceCode||""))||
+    !/^.{1,100}$/.test(String(x.targetCode||""))||
+    !/^.{1,200}$/.test(String(x.targetName||""))||
+    !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS"].includes(x.class)||
+    !["ACTUAL","ANTIGUO"].includes(x.validity)))
+   return res.status(400).json({error:"El fichero tiene columnas o valores inválidos"});
+  const client=await pool.connect();
+  try{
+   await client.query("BEGIN");
+   await client.query(`CREATE TEMP TABLE fm_proveedor_import (
+    farmacia_codigo text,codigo_origen text,nombre_origen text,
+    clave_unificada text,nombre_unificado text,clase text,vigencia text
+    ) ON COMMIT DROP`);
+   const prepared=items.map(x=>({
+    pharmacy:String(x.pharmacyCode).trim().toUpperCase(),
+    code:String(x.sourceCode).trim(),source:String(x.sourceName||"").trim(),
+    target:String(x.targetCode).trim(),name:String(x.targetName).trim(),
+    type:String(x.class),validity:String(x.validity)}));
+   await client.query(`INSERT INTO fm_proveedor_import
+    SELECT pharmacy,code,source,target,name,type,validity
+    FROM jsonb_to_recordset($1::jsonb) AS j(
+     pharmacy text,code text,source text,target text,name text,type text,validity text)`,
+    [JSON.stringify(prepared)]);
+   const groups=await client.query(`
+    WITH variants AS (
+     SELECT clave_unificada,nombre_unificado,clase,
+      count(*) FILTER(WHERE vigencia='ACTUAL') AS recent,count(*) AS total
+     FROM fm_proveedor_import GROUP BY 1,2,3
+    ), ranked AS (
+     SELECT *,row_number() OVER (PARTITION BY clave_unificada
+      ORDER BY recent DESC,total DESC,nombre_unificado,clase) AS rn
+     FROM variants
+    )
+    INSERT INTO farmetrica.proveedores_unificados
+     (cliente_slug,clave_unificada,nombre,clase)
+    SELECT $1,'EXCEL:'||clave_unificada,nombre_unificado,clase
+    FROM ranked WHERE rn=1 ON CONFLICT(cliente_slug,clave_unificada) DO NOTHING
+    RETURNING id`,[req.context.client.slug]);
+   const aliases=await client.query(`
+    WITH ranked AS (
+     SELECT *,row_number() OVER (
+      PARTITION BY upper(btrim(farmacia_codigo)),btrim(codigo_origen)
+      ORDER BY (vigencia='ACTUAL') DESC,clave_unificada) AS rn
+     FROM fm_proveedor_import
+    )
+    INSERT INTO farmetrica.proveedores_unificados_alias
+     (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen,procedencia,vigencia)
+    SELECT $1,p.id,upper(btrim(r.farmacia_codigo)),btrim(r.codigo_origen),
+     r.nombre_origen,'excel',r.vigencia
+    FROM ranked r JOIN farmetrica.proveedores_unificados p
+     ON p.cliente_slug=$1 AND p.clave_unificada='EXCEL:'||r.clave_unificada
+    WHERE r.rn=1
+    ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO NOTHING
+    RETURNING id`,[req.context.client.slug]);
+   const collision=await client.query(`SELECT count(*)::int AS n FROM (
+     SELECT farmacia_codigo,codigo_origen FROM fm_proveedor_import GROUP BY 1,2
+     HAVING count(DISTINCT clave_unificada)>1) x`);
+   await client.query("COMMIT");
+   res.json({imported:items.length,newSuppliers:groups.rowCount,
+    newAliases:aliases.rowCount,sourceConflicts:collision.rows[0].n});
+  }catch(e){await client.query("ROLLBACK").catch(()=>{});next(e)}
+  finally{client.release()}
+ });
  app.post("/api/tenant/proveedores-unificados",...requireTenantAdmin(),async(req,res,next)=>{
   const name=String(req.body?.name||"").trim(),className=req.body?.class||"SIN_CLASIFICAR";
   if(name.length<2||name.length>200||

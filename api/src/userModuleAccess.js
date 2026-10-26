@@ -30,7 +30,8 @@ export function requestModules(req){
  }
  if(path==="/api/analytics/reportes"||path==="/api/analytics/reportes/opciones")
   return [String(req.query?.modulo||"dashboard")];
- if(path.startsWith("/api/analytics/politica-precios"))return ["genericos"];
+ if(path.startsWith("/api/analytics/stock/"))return ["stock"];
+  if(path.startsWith("/api/analytics/politica-precios"))return ["genericos"];
  if(path==="/api/tenant/configuracion-ventas")return ["ventas"];
  if(path.startsWith("/api/analytics/ventas/")||path==="/api/analytics/ventas")
   return ["ventas","dashboard"];

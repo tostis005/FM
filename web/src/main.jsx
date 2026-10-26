@@ -29,6 +29,7 @@ const PharmacyState=React.lazy(()=>import("./PharmacyState.jsx"));
 const PoliticaReposicionFarmacia=React.lazy(()=>import("./PoliticaReposicionFarmacia.jsx"));
 const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
+const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
@@ -154,6 +155,7 @@ const NAV=[
  {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras"},
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
+  {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
@@ -1153,7 +1155,8 @@ function App(){
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
       tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}/>}
-    {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
+    {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+     {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<div className="fm-production-settings">

@@ -52,6 +52,8 @@ jobs:
           node --test api/src/laboratoryRetirements.test.js
           node --test api/src/supplierAutoMatch.test.js
           node --test api/src/stockTargetDays.test.js
+          node --check api/src/stockSinRecepciones.js
+          node --test api/src/stockSinRecepciones.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js

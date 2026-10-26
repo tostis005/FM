@@ -206,8 +206,11 @@ try{
        }
        if(["dashboard","ventas","compras","proveedores","stock","reposicion",
          "genericos","rentabilidad","acciones","informes"].includes(path)&&viewport.width===375){
-         if(await page.getByRole("group",{name:"Períodos rápidos"}).getByRole("button").count()!==5)
-           throw Error("Faltan accesos rápidos en "+path);
+         // El shell aparece antes del módulo lazy: 100 ms no garantizan los filtros.
+         const quick=page.getByRole("group",{name:"Períodos rápidos"});
+         await quick.getByRole("button").first().waitFor({state:"visible",timeout:10000});
+         const count=await quick.getByRole("button").count();
+         if(count!==5)throw Error("Faltan accesos rápidos en "+path+": "+count);
        }
        if(path==="dashboard"&&viewport.width===375){
          const firstMetric=page.locator(".fm-demo-kpi").first().locator("strong");

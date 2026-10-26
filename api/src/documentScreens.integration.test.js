@@ -235,7 +235,7 @@ test("PostgreSQL: evolución de movimientos documentados sin inventar saldos his
   assert.equal(Number(first.receivedUnits),60,"Los totales incluyen recepciones internas");
   assert.equal(Number(first.documentedNetUnits),57);
   assert.equal(first.tickets,2);
-  assert.equal(first.receipts,1);
+  assert.equal(first.receipts,2);
   assert.equal(Number(second.soldUnits),2);
   assert.equal(Number(second.receivedUnits),0);
   assert.equal(Number(second.documentedNetUnits),-2);

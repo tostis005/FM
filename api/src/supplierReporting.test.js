@@ -6,7 +6,7 @@ import {includedPurchaseSupplier,sourceSupplierRows,purchaseSupplierChannelSQL} 
 import {setupDashboardInsights} from "./dashboardInsights.js";
 test("las compras conservan los proveedores internos en totales",()=>{
  const text=includedPurchaseSupplier({tenant:"$6",code:"t.proveedor_id",name:"t.proveedor_nombre"});
- assert.equal(text,"TRUE");
+ assert.equal(text,"($6::text IS NOT NULL)");
 });
 test("rechaza expresiones SQL externas",()=>{
  assert.throws(()=>includedPurchaseSupplier({tenant:"$1",code:"t.id);DROP TABLE x;--"}));

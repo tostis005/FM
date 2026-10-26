@@ -216,7 +216,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     const {rows:valid}=await db.query(`SELECT p.id
      FROM farmetrica.proveedores_unificados p JOIN farmetrica.farmacias f
       ON f.cliente_slug=p.cliente_slug
-     WHERE p.cliente_slug=$1 AND p.id=$2 AND upper(btrim(f.codigo_origen))=$3
+     WHERE p.cliente_slug=$1 AND p.id=$2 AND ${pharmacyDataCodeSQL("f")}=$3
       AND f.id=ANY($4::int[])`,
      [req.context.client.slug,req.params.id,pharmacy,req.context.pharmacies.map(f=>Number(f.id))]);
     if(!valid.length){await db.query("ROLLBACK");return res.status(404).json({error:"Proveedor o farmacia no autorizado"})}

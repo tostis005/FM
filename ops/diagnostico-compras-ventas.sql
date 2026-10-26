@@ -3,11 +3,13 @@
 \pset format unaligned
 BEGIN READ ONLY;
 SET LOCAL statement_timeout = '150s';
-SET LOCAL work_mem = '24MB';
+SET LOCAL work_mem = '8MB';
+SET LOCAL max_parallel_workers_per_gather = 0;
+SET LOCAL enable_partitionwise_aggregate = off;
 -- Solo agregados mensuales, nunca líneas individuales o datos personales.
 WITH sales AS (
  SELECT h.farmacia_codigo, date_trunc('month',h.fecha)::date AS mes,
-  count(DISTINCT (h.sistema_origen,h.documento_id))::bigint AS tickets,
+  count(*)::bigint AS tickets,
   count(*)::bigint AS lineas,
   count(*) FILTER (WHERE l.importe_neto IS NULL)::bigint AS sin_importe,
   round(sum(CASE WHEN l.devuelta THEN -abs(l.importe_neto) ELSE l.importe_neto END)::numeric,2) AS importe_neto,
@@ -22,7 +24,7 @@ WITH sales AS (
  GROUP BY 1,2
 ), buy AS (
  SELECT h.farmacia_codigo,date_trunc('month',h.fecha)::date AS mes,
-  count(DISTINCT (h.sistema_origen,h.documento_id))::bigint AS recepciones,
+  count(*)::bigint AS recepciones,
   count(*)::bigint AS lineas,
   count(*) FILTER (WHERE l.coste_neto IS NULL)::bigint AS sin_importe,
   round(sum(CASE WHEN l.devuelta THEN -abs(l.coste_neto) ELSE l.coste_neto END)::numeric,2) AS importe_neto,

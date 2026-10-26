@@ -46,7 +46,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js

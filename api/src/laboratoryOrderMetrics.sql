@@ -52,6 +52,10 @@ WITH refs AS MATERIALIZED (
  -- La misma referencia/CN puede tener varios registros ERP. Identificar
  -- cada pareja farmacia+artículo una sola vez antes de leer sus ventas.
  SELECT DISTINCT pharmacy_id,article_id FROM articles
+), calculation_day AS MATERIALIZED (
+ -- Ventas 3m y 12m siempre respecto a HOY en España.
+ -- El rango $4/$5 se reserva para "V. período" (ej.: verano anterior).
+ SELECT (now() AT TIME ZONE 'Europe/Madrid')::date AS today
 ), sales_per_article AS MATERIALIZED (
  -- Leer primero solo las líneas de los artículos seleccionados usando
  -- fm_preparador_ventas_linea_idx (farmacia, articulo, sistema, documento).
@@ -61,12 +65,13 @@ WITH refs AS MATERIALIZED (
   coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
     FILTER (WHERE h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
   coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
-    FILTER (WHERE h.fecha >= $5::date-interval '89 days'
-       AND h.fecha < $5::date+interval '1 day'),0)::float8 AS v3,
+    FILTER (WHERE h.fecha >= d.today-interval '89 days'
+       AND h.fecha < d.today+interval '1 day'),0)::float8 AS v3,
   coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
-    FILTER (WHERE h.fecha >= $5::date-interval '364 days'
-       AND h.fecha < $5::date+interval '1 day'),0)::float8 AS v12
+    FILTER (WHERE h.fecha >= d.today-interval '364 days'
+       AND h.fecha < d.today+interval '1 day'),0)::float8 AS v12
  FROM eligible_articles a
+ CROSS JOIN calculation_day d
  JOIN pharmacies scope ON scope.id=a.pharmacy_id
  JOIN __SCHEMA__.fm_ventas_lineas l
   ON l.farmacia_codigo=scope.source_code AND l.articulo_origen_id=a.article_id
@@ -76,8 +81,11 @@ WITH refs AS MATERIALIZED (
    AND h.documento_id=l.documento_id
    AND h.lineas_completas AND NOT h.eliminado_logicamente
    AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
-   AND h.fecha >= least($4::date,$5::date-interval '364 days')
-   AND h.fecha < $5::date+interval '1 day'
+   AND (
+     (h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day')
+     OR (h.fecha >= d.today-interval '364 days'
+         AND h.fecha < d.today+interval '1 day')
+   )
  GROUP BY a.pharmacy_id,a.article_id
 ), movements AS (
  SELECT a.pharmacy_id,a.reference,

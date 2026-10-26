@@ -52,7 +52,33 @@ export async function readLocalSuppliers(pool,ctx){
   UNION SELECT nombre FROM farmetrica.laboratorios_personalizados
    WHERE cliente_slug=$1`,values:[ctx.client.slug],query_timeout:12000});
  const names=official.map(r=>r.name);
- return rows.map(r=>{
+ // Algunos proveedores existen en albaranes aunque el ERP no sincronice
+ // su ficha. Deben poderse vincular por farmacia, sin inventar su nombre
+ // ni asignarles el del mismo código en otra farmacia.
+ const {rows:receiptSuppliers}=await pool.query({text:`
+  SELECT f.id::text AS "pharmacyId",
+    ${supplierCode("h.proveedor_origen_id")} AS "sourceCode",
+    min(btrim(h.proveedor_origen_id::text)) AS "erpSourceCode",
+    max(m.laboratorio_clave) AS "localLaboratoryKey"
+  FROM farmetrica.farmacias f
+  JOIN ${schema}.fm_recepciones_cabeceras h
+   ON h.farmacia_codigo=${pharmacyDataCodeSQL("f")}
+  LEFT JOIN farmetrica.proveedores_laboratorios m
+   ON m.cliente_slug=$1 AND m.farmacia_id=f.id
+    AND ${supplierCode("m.codigo_proveedor")}=${supplierCode("h.proveedor_origen_id")}
+  WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
+   AND h.lineas_completas AND NOT h.eliminada_logicamente
+   AND nullif(btrim(h.proveedor_origen_id::text),'') IS NOT NULL
+  GROUP BY f.id,${supplierCode("h.proveedor_origen_id")}`,
+  values:[ctx.client.slug,pharmacyIds],query_timeout:14000});
+ const identities=new Map(rows.map(r=>[r.pharmacyId+"|"+r.sourceCode,r]));
+ for(const receipt of receiptSuppliers){
+  const id=receipt.pharmacyId+"|"+receipt.sourceCode;
+  if(!identities.has(id))identities.set(id,{...receipt,
+   name:"Proveedor "+receipt.erpSourceCode+" (nombre pendiente)",
+   globalLaboratoryKey:null,cooperative:false,fromReceipts:true});
+ }
+ return [...identities.values()].map(r=>{
   const laboratoryKey=r.localLaboratoryKey||r.globalLaboratoryKey||null;
   const inferredLaboratoryKey=!laboratoryKey&&!r.cooperative?
    buildAutomaticSupplierMatches([{sourceCode:r.sourceCode,name:r.name,

@@ -725,7 +725,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
           .filter(id=>req.context.sections[id]===true));
         const before=previous.length?
           (previous[0].secciones===null?
-            USER_SECTIONS.filter(s=>req.context.modules[s.module]).map(s=>s.id):previous[0].secciones||[]):[];
+            USER_SECTIONS.filter(s=>availableModules.some(m=>m.id===s.module&&m.enabled)&&
+              (previous[0].modulos===null||previous[0].modulos?.includes(s.module)))
+              .map(s=>s.id):previous[0].secciones||[]):[];
         if(selectedSections.some(id=>!grantable.has(id)&&!before.includes(id))){
           await db.query("ROLLBACK");
           return res.status(403).json({error:"No puedes otorgar subsecciones fuera de tus permisos"});

@@ -67,3 +67,10 @@ last_received AS (
  SELECT cn,lab,rank() OVER(PARTITION BY cn ORDER BY latest DESC) AS rank_order
  FROM cn_by_lab WHERE allowed
 )
+SELECT count(*)::int AS laboratories,
+ count(*) FILTER(WHERE lines=0)::int AS no_receipt_lines,
+ count(*) FILTER(WHERE included_lines=0)::int AS no_unblocked_receipt_lines,
+ count(*) FILTER(WHERE cn=0)::int AS no_cn,
+ count(*) FILTER(WHERE included_cn=0)::int AS no_eligible_cn,
+ count(*) FILTER(WHERE cn>0 AND included_cn=0)::int AS excluded_labs,
+ count(*) FILTER(WHERE included_cn>0)::int AS labs_with_cn,

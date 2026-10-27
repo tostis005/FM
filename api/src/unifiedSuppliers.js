@@ -24,11 +24,13 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
    ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
  JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
   AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
-  AND f.id=ANY($2::int[])
+  AND ($2::int[] IS NULL OR f.id=ANY($2::int[]))
  WHERE p.cliente_slug=$1 AND p.activo
   ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
- values:[ctx.client.slug,pharmacies],query_timeout:10000});
+ // En modo última recepción el ganador puede proceder de otra farmacia.
+ // No ocultar el laboratorio ganador si el CN se recibió en la farmacia elegida.
+ values:[ctx.client.slug,forOrders&&lastReceiptMode()?null:pharmacies],query_timeout:10000});
  if(forOrders&&lastReceiptMode()){
   const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
   return rows.filter(row=>latest.byLab.has(String(row.id)));

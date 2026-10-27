@@ -77,3 +77,6 @@ SELECT count(*)::int AS laboratories,
  (SELECT count(*)::int FROM duplicate_cn) AS cn_multiple_labs,
  (SELECT coalesce(sum(laboratories-1),0)::int FROM duplicate_cn) AS extra_assignments,
  (SELECT count(DISTINCT cn)::int FROM cn_by_lab WHERE allowed) AS unique_cn,
+ (SELECT count(*)::int FROM last_received WHERE rank_order=1) AS last_owner_candidates,
+ (SELECT count(DISTINCT cn)::int FROM last_received WHERE rank_order=1) AS last_owner_cn
+FROM labs;

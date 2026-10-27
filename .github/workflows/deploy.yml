@@ -95,7 +95,7 @@ jobs:
           npm install --no-audit --no-fund
           node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
           node --test src/businessAnalytics.test.js
-          node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js
+          node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js src/promotionMonthFilter.test.js
           node --test src/salesPeriods.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js

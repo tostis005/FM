@@ -36,6 +36,9 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
+ // Por defecto el listado muestra el mes actual. Para comprobar que se
+ // mantienen campañas archivadas de otros meses, abrir el histórico.
+ await page.getByRole("button",{name:"Ver todos los meses"}).click();
  const del=page.getByRole("button",{name:"Eliminar Oferta con objetivos"});
  await del.waitFor({state:"visible",timeout:14000});
  await page.locator(".pill-finalizada").first().waitFor({state:"visible",timeout:10000});
@@ -57,6 +60,7 @@ try{
  // Al recargar no reaparece ni la copia anterior.
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Promociones",exact:true}).waitFor();
+ await page.getByRole("button",{name:"Ver todos los meses"}).click();
  await page.getByText("Campaña archivada").first().waitFor();
  assert.equal(await page.getByRole("button",{name:"Eliminar Oferta con objetivos"}).count(),0);
  assert.deepEqual(errors,[]);

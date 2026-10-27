@@ -298,7 +298,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <section className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
-     <p>Solo laboratorios con recepciones registradas o artículos con CN en las farmacias seleccionadas.</p></div>
+     <p>Solo laboratorios con códigos nacionales de recepciones válidas, asignados según la última recepción. Se excluyen cooperativas, mayoristas y proveedores ignorados.</p></div>
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>{

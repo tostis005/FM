@@ -59,3 +59,7 @@ lab_count AS (
  LEFT JOIN receipt_count r ON r.lab=v.lab
  LEFT JOIN lab_count c ON c.lab=v.lab
 ),
+duplicate_cn AS (
+ SELECT cn,count(*)::int AS laboratories
+ FROM cn_by_lab WHERE allowed GROUP BY cn HAVING count(*)>1
+),

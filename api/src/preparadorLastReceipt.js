@@ -22,8 +22,14 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
  if(current?.value&&current.expires>Date.now())return current.value;
  if(current?.pending)return current.pending;
  const pending=(async()=>{
+  // SQL estable: ignorar prefijos numéricos de Farmatic al casar nombres.
+  const normalized=expr=>"upper(btrim(regexp_replace(coalesce("+expr+",''), '^[0-9]{1,4}[. /-]+', '')))";
   const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
-   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
+   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"))
+   .replaceAll("__MASTER_NORM__",normalized("pm.nombre"))
+   .replaceAll("__ALIAS_NORM__",normalized("c.nombre_origen"))
+   .replaceAll("__LAB_NORM__",normalized("c.lab_name"))
+   .replaceAll("__ERP_NORM__",normalized("sp.nombre"));
   const {rows}=await pool.query({text:sql,values:[ctx.client.slug,ids],query_timeout:90000});
   const byLab=new Map();
   for(const r of rows){

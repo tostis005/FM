@@ -20,7 +20,8 @@ await page.route("**/api/**",async route=>{
  if(path==="/api/auth/me")result={user};
  else if(path==="/api/tenant/context")
   result={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
-    clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,role,modules};
+    clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,role,modules,
+    sections:{promociones:true,"seguimiento-global":true}};
  else if(path==="/api/tenant/promociones"){
   // Mantener sin resolver la recuperación de campañas para destapar el fallo
   // anterior: tenantContext se ponía antes que sessionUser.

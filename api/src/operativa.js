@@ -12,7 +12,7 @@ const colFor={oportunidades:"farmacia_id",pedidos:"farmacia_id",trabajo:"farmaci
 const RESOURCE_SECTIONS={
  oportunidades:["acciones","oportunidades-seguimiento"],
  pedidos:["compras-preparador","compras-pendientes","compras-pedidos"],
- trabajo:["mi-trabajo"],
+ trabajo:["mi-trabajo","alertas"],
  traspasos:["stock-traspasos"],
  politicas:["reposicion"],resultados:["rentabilidad-retorno"]
 };

@@ -1,6 +1,8 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
+// Comprobar que el modo clásico sigue intacto y puede restaurarse de inmediato.
+process.env.FM_PREPARADOR_ULTIMA_RECEPCION="0";
 const ctx={client:{slug:"ampedia",schema:"ampedia"}};
 test("el preparador excluye cooperativas e internos por clasificación, no por nomenclátor",async()=>{
  const queries=[];

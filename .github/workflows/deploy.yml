@@ -48,7 +48,7 @@ jobs:
           node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -369,4 +369,13 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkCinfaCoverage.mjs
+          '
+
+      - name: Auditar CN únicos y laboratorios visibles tras el despliegue
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'última recepción')
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorLastReceipt.mjs
           '

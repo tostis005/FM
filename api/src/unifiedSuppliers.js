@@ -1,4 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {latestLaboratoryCN,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
@@ -17,17 +18,23 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
   'pharmacyCode',a.farmacia_codigo,'sourceCode',a.codigo_origen,
   'sourceName',a.nombre_origen,'origin',a.procedencia,
   'validity',a.vigencia) ORDER BY a.farmacia_codigo,a.codigo_origen)
-  FILTER(WHERE a.id IS NOT NULL),'[]'::json) AS origins
+  FILTER(WHERE a.id IS NOT NULL AND f.id=ANY($2::int[])),'[]'::json) AS origins
  FROM farmetrica.proveedores_unificados p
  JOIN farmetrica.proveedores_unificados_alias a
    ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
  JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
   AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
-  AND f.id=ANY($2::int[])
+  AND ($2::int[] IS NULL OR f.id=ANY($2::int[]))
  WHERE p.cliente_slug=$1 AND p.activo
   ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
- values:[ctx.client.slug,pharmacies],query_timeout:10000});
+ // En modo última recepción el ganador puede proceder de otra farmacia.
+ // No ocultar el laboratorio ganador si el CN se recibió en la farmacia elegida.
+ values:[ctx.client.slug,forOrders&&lastReceiptMode()?null:pharmacies],query_timeout:10000});
+ if(forOrders&&lastReceiptMode()){
+  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
+  return rows.filter(row=>latest.byLab.has(String(row.id)));
+ }
  return rows;
 }
 
@@ -40,6 +47,15 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  if(!/^P:[1-9][0-9]{0,17}$/.test(key)||!pharmacies.length||
   !["medicacion","parafarmacia"].includes(type))throw Error("Proveedor o categoría inválidos");
  const q='"'+ctx.client.schema+'"',id=key.slice(2);
+ if(lastReceiptMode()){
+  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
+  const term=String(search||"").trim().toLocaleLowerCase("es");
+  const rows=(latest.byLab.get(id)||[]).filter(r=>r.tipo===type&&
+   (!term||r.cn.includes(term)||r.nombre.toLocaleLowerCase("es").includes(term)));
+  if(rows.length>5000)
+   throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
+  return {rows,total:rows.length,metricsUnavailable:true};
+ }
  const sql=`
  WITH chosen AS MATERIALIZED (
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
@@ -178,6 +194,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
      SELECT farmacia_codigo,codigo_origen FROM fm_proveedor_import GROUP BY 1,2
      HAVING count(DISTINCT clave_unificada)>1) x`);
    await client.query("COMMIT");
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.json({imported:items.length,newSuppliers:groups.rowCount,
     newAliases:aliases.rowCount,sourceConflicts:collision.rows[0].n});
   }catch(e){await client.query("ROLLBACK").catch(()=>{});next(e)}
@@ -194,6 +211,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     VALUES($1,'MANUAL:'||md5(random()::text||clock_timestamp()::text),$2,$3)
     RETURNING id::text,nombre`,
     [req.context.client.slug,name,className]);
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.status(201).json({id:String(rows[0].id),name});
   }catch(e){next(e)}
  });
@@ -209,6 +227,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     WHERE cliente_slug=$1 AND id=$2 RETURNING id,nombre,clase`,
     [req.context.client.slug,req.params.id,name,className]);
    if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.json(rows[0]);
   }catch(e){next(e)}
  });
@@ -236,7 +255,8 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
       SET proveedor_id=EXCLUDED.proveedor_id,nombre_origen=EXCLUDED.nombre_origen,
        procedencia='manual',vigencia='ACTUAL',actualizado_en=now()`,
      [req.context.client.slug,req.params.id,pharmacy,code,name]);
-    await db.query("COMMIT");res.json({saved:true});
+    await db.query("COMMIT");invalidateLastReceiptCache(pool,req.context.client.slug);
+    res.json({saved:true});
    }catch(e){await db.query("ROLLBACK").catch(()=>{});throw e}finally{db.release()}
   }catch(e){next(e)}
  });

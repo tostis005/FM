@@ -40,7 +40,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
           node --check api/src/laboratoryCatalog.js
@@ -278,7 +278,8 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentScreens.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/purchasePlannerSuppliers.integration.test.js
-          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/preparadorLastReceipt.integration.test.js
+           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCatalog.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCnRecovery.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierCatalog.integration.test.js

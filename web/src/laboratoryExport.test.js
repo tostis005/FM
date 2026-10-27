@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import JSZip from "jszip";
-import {readFullLabSales,validateLabPromotion,LAB_EXPORT_MAX_LINES} from "./laboratoryExport.js";
+import {readFullLabSales,validateLabPromotion,LAB_EXPORT_MAX_LINES,preparePromotionLabExport} from "./laboratoryExport.js";
 import {buildLabSalesExcel,buildLabSalesZip} from "./exportaciones.js";
 
 const promotion=(id,name)=>({id,name,start:"2026-10-01",end:"2026-10-31",cns:["001474"]});
@@ -141,4 +141,34 @@ test("la simulación se distingue en el nombre del Excel y ZIP",async()=>{
  assert.match(excel.name,/promociones_aplicadas_laboratorio\.xlsx$/);
  const zip=await buildLabSalesZip([{promo,lines:[ticket(1)]}],{mode:"simulated"});
  assert.match(zip.name,/promociones_aplicadas\.zip$/);
+});
+
+test("los dos botones incluyen solo lotes completos de las farmacias filtradas",async()=>{
+ const promo={...promotion("FIL","Campaña 3x2"),type:"tres_por_dos",
+  targets:{"1":10,"2":10}};
+ const line=(saleId,pharmacyId,ticketId,qty)=>({
+  ...ticket(saleId),pharmacyId,ticket:ticketId,
+  quantity:qty,gross:qty*10,net:qty*10,lineDiscount:0
+ });
+ const records=[
+  line(11,"1","T-OK",1),line(12,"1","T-OK",2),
+  line(13,"1","T-INCOMPLETO",2),
+  line(14,"2","T-OTRA-FARMACIA",3)
+ ];
+ const loader=async filters=>{
+  assert.deepEqual(filters.columnFilters,{pharmacy:["1"]});
+  const selected=records.filter(row=>filters.columnFilters.pharmacy.includes(row.pharmacyId));
+  return {total:selected.length,rows:selected.slice(filters.offset,filters.offset+filters.limit)};
+ };
+ for(const mode of ["real","simulated"]){
+  const eligible=await preparePromotionLabExport(promo,loader,{pharmacyIds:["1"],mode});
+  assert.deepEqual(new Set(eligible.map(row=>row.ticket)),new Set(["T-OK"]));
+  assert.equal(eligible.reduce((sum,row)=>sum+row.quantity,0),3);
+  assert.equal(eligible.reduce((sum,row)=>sum+row.net,0),mode==="real"?30:20);
+  const {blob}=await buildLabSalesExcel(promo,eligible,{mode});
+  const zip=await JSZip.loadAsync(await blob.arrayBuffer());
+  const sheet=await zip.file("xl/worksheets/sheet1.xml").async("string");
+  assert.match(sheet,/T-OK/);
+  assert.doesNotMatch(sheet,/T-INCOMPLETO|T-OTRA-FARMACIA/);
+ }
 });

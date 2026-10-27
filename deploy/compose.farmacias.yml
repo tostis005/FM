@@ -4,7 +4,7 @@ services:
   api:
     environment:
       # Rollback inmediato: FM_PREPARADOR_ULTIMA_RECEPCION=0 y recrear api.
-      FM_PREPARADOR_ULTIMA_RECEPCION: ${FM_PREPARADOR_ULTIMA_RECEPCION:-0}
+      FM_PREPARADOR_ULTIMA_RECEPCION: ${FM_PREPARADOR_ULTIMA_RECEPCION:-1}
       AI_ENABLED: 'true'
       # Piloto privado, habilitado únicamente con OAuth y herramientas de solo lectura.
       # El usuario de despliegue no necesita modificar el .env protegido de Contabo.

@@ -30,7 +30,11 @@ export const USER_SECTIONS=[
  ["oportunidades-seguimiento","Seguimiento de oportunidades","acciones"],
  ["alertas","Alertas","acciones"],
  ["mi-trabajo","Mi trabajo","acciones"]
-].map(([id,name,module])=>({id,name,module}));
+].map(([id,name,module])=>({id,name,module,
+ // Estas rutas todavía utilizan ModuloDemo en la SPA.
+ demo:new Set(["dashboard","ventas","compras","stock","proveedores","reposicion",
+   "rentabilidad","acciones","informes"]).has(id)
+}));
 const byId=new Map(USER_SECTIONS.map(s=>[s.id,s]));
 export function effectiveUserSections(modules,selected,superadmin=false){
  const grants=Array.isArray(selected)?new Set(selected):null;

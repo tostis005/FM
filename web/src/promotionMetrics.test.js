@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
+import {promotionMetrics,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
 test("cuenta promociones importadas en borrador, CN y objetivos",()=>{
  const data=[{id:"X1",status:"Borrador",cns:["001474","164432"],targets:{"1":20,"2":15},sales:{"1":5,"2":3}},
   {id:"X2",status:"Finalizada",cns:["001474","195598"],targets:{"1":10},sales:{"1":4}}];
@@ -43,4 +43,15 @@ test("avisa de duplicidad posible solo si coinciden CN, farmacia y fechas",()=>{
  assert.equal(hasOverlappingPromotions([base,{...base,id:"otra",targets:{"2":10}}]),false);
  assert.equal(hasOverlappingPromotions([base,{...base,id:"otra",start:"2026-11-01",end:"2026-11-30"}]),false);
  assert.equal(hasOverlappingPromotions([base]),false);
+});
+
+test("las ventas ajenas a las farmacias participantes no inflan el seguimiento",()=>{
+ const one={id:"P1",cns:["001474"],targets:{"1":10}};
+ const two={id:"P2",cns:["001474"],targets:{"2":10}};
+ const sales={"1":5,"2":7,"3":9};
+ const campaigns=[{...one,sales:participatingPromotionSales(one,sales)},
+  {...two,sales:participatingPromotionSales(two,sales)}];
+ assert.deepEqual(campaigns[0].sales,{"1":5});
+ assert.deepEqual(campaigns[1].sales,{"2":7});
+ assert.equal(promotionMetrics(campaigns,true).units,12);
 });

@@ -43,7 +43,7 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto("http://127.0.0.1:4175/usuarios",{waitUntil:"domcontentloaded"});
  await page.getByText("Usuarios y permisos del cliente").first().waitFor({timeout:15000});
- await page.getByText("Empleado").first().waitFor({timeout:15000});
+ await page.getByRole("button",{name:"Editar"}).first().waitFor({timeout:15000});
  await page.getByRole("button",{name:"Editar"}).first().click();
  await page.getByText("Secciones y subsecciones autorizadas").waitFor();
  const area=page.locator(".fm-user-module-section");

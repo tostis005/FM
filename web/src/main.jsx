@@ -571,7 +571,8 @@ function App(){
  const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
-  if(!canOpenSection(intended)){
+  const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
+  if(!(isAdministrative?visibleNav.some(item=>item.id===intended):canOpenSection(intended))){
    const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||
     (intended==="promociones"&&canOpenSection("seguimiento-global")?"seguimiento-global":null);
    if(next)return nav(next);

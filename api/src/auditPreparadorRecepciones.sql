@@ -63,3 +63,7 @@ duplicate_cn AS (
  SELECT cn,count(*)::int AS laboratories
  FROM cn_by_lab WHERE allowed GROUP BY cn HAVING count(*)>1
 ),
+last_received AS (
+ SELECT cn,lab,rank() OVER(PARTITION BY cn ORDER BY latest DESC) AS rank_order
+ FROM cn_by_lab WHERE allowed
+)

@@ -92,28 +92,3 @@ received_with_cn AS MATERIALIZED (
 SELECT l.lab_id::text AS lab_id,l.cn,l.nombre
 FROM latest l JOIN scoped_cn s USING(cn)
 ORDER BY l.lab_id,l.cn;
-
-    THEN coalesce(nullif(ltrim(btrim(h.proveedor_origen_id::text),'0'),''),'0')
-    ELSE upper(btrim(coalesce(h.proveedor_origen_id::text,''))) END)=k.supplier_code
-  AND h.lineas_completas AND NOT h.eliminada_logicamente
-  AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
- JOIN __SCHEMA__.fm_recepciones_lineas l
-  ON l.farmacia_codigo=h.farmacia_codigo
-   AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
-  AND NOT l.eliminada_logicamente AND l.cantidad>0 AND l.devuelta IS NOT TRUE
- LEFT JOIN __SCHEMA__.articulos ar
-  ON upper(btrim(ar.farmacia_codigo))=k.pharmacy_code
-   AND ar.origen_id::text=l.articulo_origen_id::text
-),
-received_with_cn AS MATERIALIZED (
- SELECT * FROM received WHERE cn IS NOT NULL
-), scoped_cn AS MATERIALIZED (
- SELECT DISTINCT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
-), latest AS MATERIALIZED (
- SELECT DISTINCT ON (cn) cn,lab_id,nombre
- FROM received_with_cn
- ORDER BY cn,fecha DESC,pharmacy_code,sistema_origen,documento_id,linea_id
-)
-SELECT l.lab_id::text AS lab_id,l.cn,l.nombre
-FROM latest l JOIN scoped_cn s USING(cn)
-ORDER BY l.lab_id,l.cn;

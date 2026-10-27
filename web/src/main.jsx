@@ -37,6 +37,7 @@ import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
+import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod} from "./promotionMonthFilter.js";
 import {mapLimited} from "./asyncBatches.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -61,7 +62,7 @@ const PROMOTION_TYPES = [
   {id:"sin_clasificar",name:"Sin clasificar"},
   {id:"dos_por_uno",name:"2×1"},
   {id:"tres_por_dos",name:"3×2"},
-  {id:"segunda_porcentaje",name:"Segunda unidad al X %",needsPercent:true},
+  {id:"segunda_porcentaje",name:"Segunda unidad con X % de descuento",needsPercent:true},
   {id:"descuento_porcentaje",name:"Descuento del X %",needsPercent:true},
   {id:"precio_especial",name:"Precio especial"},
   {id:"otras_unidades",name:"Unidades extra (4+1 / 3+1)"},
@@ -230,8 +231,8 @@ function App(){
  });
  const [search,setSearch]=useState("");
  const [statusFilter,setStatusFilter]=useState("Todos");
- const [from,setFrom]=useState("");
- const [to,setTo]=useState("");
+ const [from,setFrom]=useState(()=>promotionMonthRange(currentPromotionMonth())?.from||"");
+ const [to,setTo]=useState(()=>promotionMonthRange(currentPromotionMonth())?.to||"");
  const [editingPromo,setEditingPromo]=useState(null);
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
@@ -397,13 +398,15 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
        try{
          const segments=[];
          for(const p of data.promos){
+           if(page==="promociones"&&!promotionOverlapsPeriod(p,from,to))continue;
+           if(page==="seguimiento-global"&&!reportSelectedIds.includes(p.id))continue;
            if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(p.end||""))continue;
            if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
            if((p.cns||[]).length)segments.push(p);
@@ -430,7 +433,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email]);
+   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,reportSelectedIds]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -498,20 +501,27 @@ function App(){
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
- const promotionQuickPeriod=QUICK_PERIODS.find(([key])=>{
-  const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
-  return range.valid&&range.from===from&&range.to===to;
- })?.[0]||"";
+ const promotionSelectedMonth=promotionMonthFromRange(from,to);
+ const promotionQuickPeriod=promotionSelectedMonth===currentPromotionMonth(new Date(),reportTimeZone)
+   ?"this_month":QUICK_PERIODS.filter(([key])=>key!=="this_month").find(([key])=>{
+     const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
+     return range.valid&&range.from===from&&range.to===to;
+   })?.[0]||"";
+ function selectPromotionMonth(month){
+   const range=promotionMonthRange(month);
+   if(!range)return;
+   setFrom(range.from);setTo(range.to);setSelectedPromotionIds([]);
+ }
  function selectPromotionQuickPeriod(key){
-  const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
-  if(!range.valid)return;
-  setFrom(range.from);setTo(range.to);
-  updateSharedReportFilters(tenantContext?.client?.slug,{period:key});
+   if(key==="this_month"){selectPromotionMonth(currentPromotionMonth(new Date(),reportTimeZone));return;}
+   const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
+   if(!range.valid)return;
+   setFrom(range.from);setTo(range.to);setSelectedPromotionIds([]);
  }
  const filterText=search.toLocaleLowerCase("es");
  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
-  &&(!from||p.end>=from)&&(!to||p.start<=to)
+  &&promotionOverlapsPeriod(p,from,to)
   &&(!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
  const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
@@ -991,10 +1001,15 @@ function App(){
     <option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option>
     <option value="Finalizada">Archivada</option>
    </select></label>
+  <label className="fm-unified-filter">Mes y año
+   <input type="month" value={promotionSelectedMonth} onChange={e=>selectPromotionMonth(e.target.value)}
+    aria-label="Seleccionar mes y año de promociones"/></label>
   <label className="fm-unified-filter">Desde
-   <input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label>
+   <input type="date" value={from} onChange={e=>{setFrom(e.target.value);setSelectedPromotionIds([])}}/></label>
   <label className="fm-unified-filter">Hasta
-   <input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
+   <input type="date" value={to} onChange={e=>{setTo(e.target.value);setSelectedPromotionIds([])}}/></label>
+  <button type="button" className="fm-promotion-all-periods" aria-pressed={!from&&!to}
+   onClick={()=>{setFrom("");setTo("");setSelectedPromotionIds([])}}>Ver todos los meses</button>
  </ReportFilterBar>
   {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
@@ -1221,7 +1236,10 @@ function App(){
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&<Field label="Importe de descuento (€)"><input type="number" min="0.01" step="0.01" value={promoForm.discountAmount||""} onChange={e=>setPromoForm({...promoForm,discountAmount:e.target.value})}/></Field>}
     {promoForm.type==="precio_especial"&&<Field label="Precio especial por unidad (€)"><input type="number" min="0" step="0.01" value={promoForm.specialPrice??""} onChange={e=>setPromoForm({...promoForm,specialPrice:e.target.value})}/></Field>}
     {promoForm.importWarnings?.length>0&&<div className="note data-note"><CircleHelp size={16}/> Pendiente de revisar: {promoForm.importWarnings.join(" · ")}</div>}
-    {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent&&<Field label="Porcentaje de descuento (%)"><input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
+    {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsPercent&&<Field
+     label={promoForm.type==="segunda_porcentaje"?"Descuento aplicado a la segunda unidad (%)":"Porcentaje de descuento (%)"}
+     hint={promoForm.type==="segunda_porcentaje"?"Ej.: 50 = 50 % de descuento. Por cada pareja del ticket, el descuento se aplica a la unidad de menor precio.":null}>
+     <input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
    <div className="form-divider"/><div className="field-heading"><div><strong>CNs (6 dígitos)</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
    {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos importados del Excel</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>

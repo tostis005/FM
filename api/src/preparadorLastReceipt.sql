@@ -41,3 +41,39 @@ WITH eligible_labs AS MATERIALIZED (
    )
  )
 ),
+supplier_links AS MATERIALIZED (
+ -- En Farmatic un código de proveedor solo tiene significado dentro de su farmacia.
+ -- Ante un alias duplicado tras quitar ceros se utiliza una elección estable.
+ SELECT DISTINCT ON (pharmacy_id,supplier_code)
+  pharmacy_id,pharmacy_code,supplier_code,lab_id
+ FROM eligible_aliases
+ ORDER BY pharmacy_id,supplier_code,
+  (vigencia='ACTUAL') DESC,(procedencia='manual') DESC,
+  actualizado_en DESC,lab_id
+), received AS MATERIALIZED (
+ SELECT k.lab_id,k.pharmacy_id,k.pharmacy_code,h.fecha,
+  h.sistema_origen,h.documento_id,l.linea_id,
+  coalesce(
+   CASE WHEN btrim(ar.codigo_nacional) ~ '^[0-9]{6,7}$'
+    THEN btrim(ar.codigo_nacional) END,
+   CASE WHEN btrim(to_jsonb(ar)->>'cn_normalizado') ~ '^[0-9]{6,7}$'
+    THEN btrim(to_jsonb(ar)->>'cn_normalizado') END,
+   CASE WHEN btrim(ar.origen_id::text) ~ '^[0-9]{6,7}$'
+    THEN btrim(ar.origen_id::text) END
+  ) AS cn,coalesce(nullif(btrim(ar.nombre),''),l.articulo_origen_id) AS nombre
+ FROM supplier_links k
+ JOIN __SCHEMA__.fm_recepciones_cabeceras h
+  ON h.farmacia_codigo=k.pharmacy_code
+   AND (CASE WHEN btrim(h.proveedor_origen_id)~'^[0-9]+$'
+    THEN coalesce(nullif(ltrim(btrim(h.proveedor_origen_id),'0'),''),'0')
+    ELSE upper(btrim(h.proveedor_origen_id)) END)=k.supplier_code
+  AND h.lineas_completas AND NOT h.eliminada_logicamente
+  AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+ JOIN __SCHEMA__.fm_recepciones_lineas l
+  ON l.farmacia_codigo=h.farmacia_codigo
+   AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+  AND NOT l.eliminada_logicamente AND l.cantidad>0 AND l.devuelta IS NOT TRUE
+ LEFT JOIN __SCHEMA__.articulos ar
+  ON upper(btrim(ar.farmacia_codigo))=k.pharmacy_code
+   AND ar.origen_id::text=l.articulo_origen_id::text
+),

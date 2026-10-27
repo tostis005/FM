@@ -309,6 +309,12 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
         Puedes dejar sin marcar las subsecciones de demostración mientras mantienes las ya operativas.</small></div>
       <div className="fm-user-module-actions">
        <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
+        onClick={()=>setForm(v=>{
+         const sections=availableSections.filter(s=>!s.demo&&grantableSections.includes(s.id));
+         return {...v,modules:[...new Set(sections.map(s=>s.module))],
+          sections:sections.map(s=>s.id)};
+        })}>Solo pantallas operativas</button>
+       <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
         onClick={()=>setForm(v=>({
          ...v,modules:availableModules.filter(m=>grantableModules.includes(m.id)).map(m=>m.id),
          sections:availableSections.filter(s=>grantableSections.includes(s.id)).map(s=>s.id)
@@ -338,7 +344,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
          </label>
          {children.length>0&&<div className="fm-user-subsection-grid">
           {children.map(child=><label key={child.id} className="fm-user-subsection-choice">
-           <span>{child.name}</span>
+           <span>{child.name} {child.demo&&<small className="fm-user-demo-label">Demo</small>}</span>
            <input type="checkbox" checked={active&&form.sections.includes(child.id)}
             disabled={busy||!active||!grantableSections.includes(child.id)}
             onChange={e=>setForm(v=>({...v,

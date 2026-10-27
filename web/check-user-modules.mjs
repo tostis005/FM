@@ -89,7 +89,6 @@ try{
  assert.deepEqual(copied.sections,["compras-preparador"]);
  // Alta nueva: la misma plantilla no debe copiar identidad ni método de acceso.
  await page.locator('input[type=email]').fill("nuevo@example.invalid");
- await page.locator('.fm-manage-form input').filter({hasNot:page.locator('input[type=email]')}).count();
  await page.locator('input[placeholder="Nombre y apellidos"]').fill("Usuario nuevo");
  await sourcePicker.selectOption("plantilla@example.invalid");
  assert.equal(await page.locator('input[type=email]').inputValue(),"nuevo@example.invalid");

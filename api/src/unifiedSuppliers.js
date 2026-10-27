@@ -1,4 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {latestLaboratoryCN,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')

@@ -179,6 +179,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
      SELECT farmacia_codigo,codigo_origen FROM fm_proveedor_import GROUP BY 1,2
      HAVING count(DISTINCT clave_unificada)>1) x`);
    await client.query("COMMIT");
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.json({imported:items.length,newSuppliers:groups.rowCount,
     newAliases:aliases.rowCount,sourceConflicts:collision.rows[0].n});
   }catch(e){await client.query("ROLLBACK").catch(()=>{});next(e)}
@@ -195,6 +196,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     VALUES($1,'MANUAL:'||md5(random()::text||clock_timestamp()::text),$2,$3)
     RETURNING id::text,nombre`,
     [req.context.client.slug,name,className]);
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.status(201).json({id:String(rows[0].id),name});
   }catch(e){next(e)}
  });
@@ -210,6 +212,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     WHERE cliente_slug=$1 AND id=$2 RETURNING id,nombre,clase`,
     [req.context.client.slug,req.params.id,name,className]);
    if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.json(rows[0]);
   }catch(e){next(e)}
  });
@@ -237,7 +240,8 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
       SET proveedor_id=EXCLUDED.proveedor_id,nombre_origen=EXCLUDED.nombre_origen,
        procedencia='manual',vigencia='ACTUAL',actualizado_en=now()`,
      [req.context.client.slug,req.params.id,pharmacy,code,name]);
-    await db.query("COMMIT");res.json({saved:true});
+    await db.query("COMMIT");invalidateLastReceiptCache(pool,req.context.client.slug);
+    res.json({saved:true});
    }catch(e){await db.query("ROLLBACK").catch(()=>{});throw e}finally{db.release()}
   }catch(e){next(e)}
  });

@@ -124,3 +124,20 @@
  .fm-table-toolbar{padding:10px 12px}
  .fm-table-toolbar .btn{width:auto}
 }
+
+/* Selector de histórico de promociones, alineado con el resto de filtros. */
+.fm-unified-filters .fm-promotion-all-periods{
+ align-self:flex-end;min-height:40px;padding:8px 14px;border:1px solid #dfe9e3;
+ border-radius:8px;background:#f8fbf9;color:#436b57;font:inherit;font-size:12px;
+ font-weight:700;cursor:pointer;white-space:nowrap;
+}
+.fm-unified-filters .fm-promotion-all-periods:hover{border-color:#50ac83;background:#eaf8f1}
+.fm-unified-filters .fm-promotion-all-periods[aria-pressed="true"]{
+ background:#137c59;color:#fff;border-color:#137c59;
+}
+.fm-unified-filters .fm-promotion-all-periods:focus-visible{
+ outline:2px solid #128c65;outline-offset:3px;
+}
+@media(max-width:520px){
+ .fm-unified-filters .fm-promotion-all-periods{width:100%;justify-content:center}
+}

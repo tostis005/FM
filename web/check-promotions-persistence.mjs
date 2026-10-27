@@ -24,6 +24,7 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/context")body={
   user:userForRole,role,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
   clients:[{slug:"ampedia",name:"Ampedia"}],modules:{promociones:true,dashboard:true},
+   sections:{promociones:true,"seguimiento-global":true},
   pharmacies:[pharmacy],allowedPharmacyIds:[1]
  };
  else if(path==="/api/tenant/farmacias")body=[pharmacy];

@@ -57,5 +57,7 @@ export function requestSections(req){
  if(screen&&byId.has(screen))return [screen];
  if(path.startsWith("/api/analytics/stock/sin-recepciones"))return ["stock-sin-recepciones"];
  if(path.startsWith("/api/analytics/stock/traspasos"))return ["stock-traspasos"];
+ if(path.startsWith("/api/tenant/proveedores/traspasos-salidas"))return ["stock-traspasos"];
+ if(path.startsWith("/api/analytics/pedidos/"))return ["compras-preparador","compras-pendientes","compras-pedidos"];
  return [];
 }

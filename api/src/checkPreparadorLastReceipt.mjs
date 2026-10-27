@@ -5,7 +5,8 @@ import {latestLaboratoryCN} from "./preparadorLastReceipt.js";
 import {listUnifiedSuppliers} from "./unifiedSuppliers.js";
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,
  connectionTimeoutMillis:5000,query_timeout:95000,statement_timeout:95000});
-const out={mode:"last_valid_receipt",tenant:"ampedia"};
+const out={mode:"last_valid_receipt",tenant:"ampedia",
+ enabledInRunningAPI:process.env.FM_PREPARADOR_ULTIMA_RECEPCION==="1"};
 const old=process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
 try{
  const {rows:tenants}=await pool.query("SELECT esquema_datos FROM farmetrica.clientes WHERE slug=$1",["ampedia"]);

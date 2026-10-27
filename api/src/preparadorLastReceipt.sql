@@ -77,3 +77,15 @@ supplier_links AS MATERIALIZED (
   ON upper(btrim(ar.farmacia_codigo))=k.pharmacy_code
    AND ar.origen_id::text=l.articulo_origen_id::text
 ),
+received_with_cn AS MATERIALIZED (
+ SELECT * FROM received WHERE cn IS NOT NULL
+), scoped_cn AS MATERIALIZED (
+ SELECT DISTINCT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
+), latest AS MATERIALIZED (
+ SELECT DISTINCT ON (cn) cn,lab_id,nombre
+ FROM received_with_cn
+ ORDER BY cn,fecha DESC,pharmacy_code,sistema_origen,documento_id,linea_id
+)
+SELECT l.lab_id::text AS lab_id,l.cn,l.nombre
+FROM latest l JOIN scoped_cn s USING(cn)
+ORDER BY l.lab_id,l.cn;

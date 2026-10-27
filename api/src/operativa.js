@@ -9,12 +9,22 @@ const long=(s,max)=>clean(s,max);
 const asId=x=>/^[1-9]\d{0,8}$/.test(String(x||""))?Number(x):0;
 const colFor={oportunidades:"farmacia_id",pedidos:"farmacia_id",trabajo:"farmacia_id",
  traspasos:"origen_farmacia_id",politicas:"farmacia_id",resultados:"farmacia_id"};
+const RESOURCE_SECTIONS={
+ oportunidades:["acciones","oportunidades-seguimiento"],
+ pedidos:["compras-preparador","compras-pendientes","compras-pedidos"],
+ trabajo:["mi-trabajo"],
+ traspasos:["stock-traspasos"],
+ politicas:["reposicion"],resultados:["rentabilidad-retorno"]
+};
 function context(req,recurso,farmacia){
  const ctx=req.context;
  if(!Object.hasOwn(RESOURCES,recurso))throw ERR("Recurso desconocido.");
  if(req.user?.role!=="superadministrador" && ctx.modules?.[MODULE[recurso]]!==true
    &&!(recurso==="politicas"&&ctx.modules?.compras===true))
    throw ERR("Módulo no habilitado para este cliente.",403);
+ if(req.user?.role!=="superadministrador"&&
+  !RESOURCE_SECTIONS[recurso]?.some(id=>ctx.sections?.[id]===true))
+  throw ERR("No tienes acceso a esta subsección.",403);
  const id=asId(farmacia);
  if(!id||!ctx.pharmacies.some(p=>Number(p.id)===id))throw ERR("Farmacia no autorizada.",403);
  return {cliente:ctx.client.slug,farmacia:id,role:ctx.role,actor:req.user.email,

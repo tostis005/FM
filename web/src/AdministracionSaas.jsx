@@ -1,9 +1,10 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useRef,useState} from "react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
 import AIShareLinks from "./AIShareLinks.jsx";
-import {Building2,CheckCircle2,Users} from "lucide-react";
+import {Building2,CheckCircle2,Copy,Users} from "lucide-react";
 import "./moduleDemo.css";
+import {copyUserPermissions} from "./userPermissionCopy.js";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 const MODULES=[
  ["dashboard","Dashboard"],["promociones","Promociones"],["ventas","Ventas"],
@@ -184,7 +185,9 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
   [grantableModules,setGrantableModules]=useState([]),[form,setForm]=useState({...initial}),
   [editingEmail,setEditingEmail]=useState(""),[busy,setBusy]=useState(false),
   [sendingInvite,setSendingInvite]=useState(""),
+  [copySourceEmail,setCopySourceEmail]=useState(""),[copyNotice,setCopyNotice]=useState(""),
   [feedback,setFeedback]=useState(""),[loading,setLoading]=useState(true);
+ const copyPanelRef=useRef(null);
  const headers={"X-Farmetrica-Cliente":client};
  async function refresh(){
   setLoading(true);
@@ -194,7 +197,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
   }finally{setLoading(false);}
  }
  useEffect(()=>{
-  setForm({...initial});setEditingEmail("");setFeedback("");
+  setForm({...initial});setEditingEmail("");setFeedback("");setCopySourceEmail("");setCopyNotice("");
   let valid=true;
   Promise.all([
    api("/api/tenant/usuarios/modulos",{headers}),
@@ -208,7 +211,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
   }).catch(error=>{if(valid)setFeedback(error.message)});
   return ()=>{valid=false};
  },[client]);
- function resetForm(){setForm({...initial});setEditingEmail("");}
+ function resetForm(){setForm({...initial});setEditingEmail("");setCopySourceEmail("");setCopyNotice("");}
  function editUser(u){
   setForm({email:u.email,name:u.name||"",role:u.role,
    pharmacies:(u.pharmacies||[]).map(String),
@@ -218,7 +221,32 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
     availableSections.filter(s=>!Array.isArray(u.modules)||u.modules.includes(s.module)).map(s=>s.id),
    active:Boolean(u.active),
    authType:u.authType==="interno"?"local":u.authType});
-  setEditingEmail(u.email);setFeedback("");
+  setEditingEmail(u.email);setFeedback("");setCopySourceEmail("");setCopyNotice("");
+ }
+ function preparePermissionCopy(recipient){
+  editUser(recipient);
+  copyPanelRef.current?.scrollIntoView({behavior:"smooth",block:"center"});
+  copyPanelRef.current?.querySelector("select")?.focus();
+ }
+ function selectPermissionSource(email){
+  if(!email){setCopySourceEmail("");setCopyNotice("");return;}
+  const source=users.find(user=>user.email===email);
+  try{
+   const next=copyUserPermissions(source,form,{
+    modules:availableModules,sections:availableSections,
+    grantableModules,grantableSections,pharmacies,
+    allowedRoles:ROLES.filter(([id])=>managerRole!=="gestor"||
+     ["farmacia","colaborador"].includes(id)).map(([id])=>id)
+   });
+   setForm(next);
+   setCopySourceEmail(email);
+   setCopyNotice("Permisos de "+(source.name||source.email)+
+    " cargados. Revisa el rol, las farmacias y las subsecciones; se guardarán únicamente al pulsar "+
+    (editingEmail?"Guardar cambios.":"Crear usuario."));
+   setFeedback("");
+  }catch(error){
+   setCopySourceEmail("");setCopyNotice("");setFeedback(error.message);
+  }
  }
  async function save(e){
   e.preventDefault();setBusy(true);setFeedback("");
@@ -278,6 +306,24 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
        <span>Correo y contraseña</span>
       </label>
      </div>
+    </div>
+    <div className="fm-manage-wide fm-user-copy-permissions" ref={copyPanelRef}>
+     <div className="fm-user-copy-heading"><strong>Copiar permisos de otro usuario</strong>
+      <small>Elige una cuenta del mismo cliente para copiar automáticamente su rol, farmacias,
+       módulos y subsecciones. No se copian el nombre, correo, contraseña,
+       método de acceso ni estado del usuario de destino.</small></div>
+     <label htmlFor="fm-copy-permissions-source">Usuario del que copiar permisos</label>
+     <select id="fm-copy-permissions-source" value={copySourceEmail} disabled={busy||loading}
+      onChange={e=>selectPermissionSource(e.target.value)}>
+      <option value="">Seleccionar usuario de origen…</option>
+      {users.filter(u=>u.email!==form.email&&(managerRole!=="gestor"||
+       ["farmacia","colaborador"].includes(u.role)))
+       .map(u=><option key={u.email} value={u.email}>
+        {(u.name||u.email)+" · "+u.email}
+       </option>)}
+     </select>
+     {copyNotice&&<p className="fm-user-copy-notice" role="status">{copyNotice}</p>}
+     {!users.some(u=>u.email!==form.email)&&<small>No hay otro usuario del que copiar permisos.</small>}
     </div>
     <label>Rol
      <select value={form.role} onChange={e=>setForm(v=>({...v,role:e.target.value}))}>
@@ -396,7 +442,12 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
       u.active?"Activo":"Bloqueado",
       <div key={u.email+"actions"} style={{display:"flex",flexWrap:"wrap",gap:7}}>
        <button className="btn btn-secondary btn-sm" type="button"
-        onClick={()=>editUser(u)}>Editar</button>
+        disabled={busy} onClick={()=>editUser(u)}>Editar</button>
+       <button className="btn btn-secondary btn-sm" type="button"
+        disabled={busy} onClick={()=>preparePermissionCopy(u)}
+        aria-label={"Copiar permisos a "+(u.name||u.email)}>
+        <Copy size={14}/> Copiar permisos
+       </button>
        {u.authType!=="google"&&u.active&&
         <button className="btn btn-secondary btn-sm" type="button"
          disabled={Boolean(sendingInvite)}

@@ -119,7 +119,7 @@ jobs:
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js
-          node --test src/promotionMetrics.test.js
+          node --test src/promotionMetrics.test.js src/promotionMonthFilter.test.js
           node --test src/laboratoryExport.test.js src/laboratoryOrderSheet.test.js
           node --test src/dictadoVoz.test.js src/assistantStreamClient.test.js
           node check-login.mjs

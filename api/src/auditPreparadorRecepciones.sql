@@ -47,3 +47,15 @@ receipt_count AS (
  max(fecha) FILTER(WHERE NOT blocked) AS latest
  FROM received WHERE cn IS NOT NULL GROUP BY lab,cn
 ),
+lab_count AS (
+ SELECT lab,count(*)::int AS cn,
+ count(*) FILTER(WHERE allowed)::int AS included_cn
+ FROM cn_by_lab GROUP BY lab
+), labs AS MATERIALIZED (
+ SELECT v.lab,coalesce(r.lines,0) AS lines,
+ coalesce(r.included_lines,0) AS included_lines,
+ coalesce(c.cn,0) AS cn,coalesce(c.included_cn,0) AS included_cn
+ FROM unnest($1::bigint[]) v(lab)
+ LEFT JOIN receipt_count r ON r.lab=v.lab
+ LEFT JOIN lab_count c ON c.lab=v.lab
+),

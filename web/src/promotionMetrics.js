@@ -37,3 +37,9 @@ export function hasOverlappingPromotions(campaigns){
  }
  return false;
 }
+
+// Nunca atribuir a una campaña ventas de farmacias que no participan en ella.
+export function participatingPromotionSales(promo,rawSales){
+ const targets=promo?.targets||{};
+ return Object.fromEntries(Object.entries(rawSales||{}).filter(([id])=>Object.hasOwn(targets,String(id))));
+}

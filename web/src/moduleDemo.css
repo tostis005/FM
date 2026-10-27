@@ -418,3 +418,16 @@
 
 .fm-user-demo-label{display:inline-block;margin-left:6px;padding:3px 6px;
  border-radius:5px;background:#fff3dc;color:#906b22;font-size:10px;font-weight:750}
+
+
+/* Copia de permisos: selección del origen en altas y ediciones. */
+.fm-user-copy-permissions{display:grid;gap:9px;align-items:start;
+ padding:15px 16px;border:1px solid #dce9e1;border-radius:12px;background:#f7fbf9}
+.fm-user-copy-heading{display:grid;gap:5px}
+.fm-user-copy-heading strong{color:#214e39;font-size:13px}
+.fm-user-copy-heading small{font-size:12px;line-height:1.55;color:#607d70}
+.fm-manage-form .fm-user-copy-permissions>label{
+ font-size:12px;font-weight:700;color:#3b5d4a}
+.fm-manage-form .fm-user-copy-permissions>select{
+ width:100%;max-width:520px;min-width:0;font-size:13px}
+.fm-user-copy-notice{margin:0;color:#176544;font-size:12px;line-height:1.6;font-weight:600}

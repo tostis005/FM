@@ -38,3 +38,12 @@ received AS MATERIALIZED (
  LEFT JOIN ampedia.articulos ar ON ar.farmacia_codigo=l.farmacia_codigo
   AND ar.origen_id::text=l.articulo_origen_id::text
 ),
+receipt_count AS (
+ SELECT lab,count(*)::int AS lines,
+ count(*) FILTER(WHERE NOT blocked)::int AS included_lines
+ FROM received GROUP BY lab
+), cn_by_lab AS MATERIALIZED (
+ SELECT lab,cn,bool_or(NOT blocked) AS allowed,
+ max(fecha) FILTER(WHERE NOT blocked) AS latest
+ FROM received WHERE cn IS NOT NULL GROUP BY lab,cn
+),

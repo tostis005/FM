@@ -299,18 +299,13 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
       // juntos: dos líneas de una unidad pueden formar un 2x1.
       const bundle=promotionBundle(p);
       if(!bundle){summary[p.id]={};continue;}
-      const legacy=!p.type;
-      const query=legacy
-        ? "SELECT f.id::text AS farmacia_id, coalesce(sum(v.unidades),0)::float8 AS unidades "+
-          salesJoin(req)+" WHERE "+salesPeriod+
-          " AND btrim(v.articulo_id::text)=ANY($3::text[]) GROUP BY f.id"
-        : `WITH ticket_units AS (
+      const query=`WITH ticket_units AS (
             SELECT f.id::text AS farmacia_id,
               NULLIF(btrim(v.numero_ticket::text),'') AS ticket,
               v.fecha::date AS dia, sum(v.unidades)::float8 AS units
             ${salesJoin(req)} WHERE ${salesPeriod}
               AND btrim(v.articulo_id::text)=ANY($3::text[])
-            GROUP BY f.id,v.numero_ticket::text,v.fecha::date
+            GROUP BY f.id,NULLIF(btrim(v.numero_ticket::text),''),v.fecha::date
           )
           SELECT farmacia_id,
             coalesce(sum(CASE
@@ -319,9 +314,8 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
             END),0)::float8 AS unidades
           FROM ticket_units WHERE ticket IS NOT NULL AND units>0
           GROUP BY farmacia_id`;
-      const {rows}=await pool.query(query,legacy
-        ?[p.start,p.end,p.cns]
-        :[p.start,p.end,p.cns,bundle,p.type==="escalonado"]);
+      const {rows}=await pool.query(query,
+        [p.start,p.end,p.cns,bundle,p.type==="escalonado"]);
       summary[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
     }
     res.json({ sales: summary, origin: req.context.client.schema+".fm_ventas_analitica", updatedAt: new Date().toISOString() });

@@ -5,7 +5,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 const SQL=await readFile(new URL("./preparadorLastReceipt.sql",import.meta.url),"utf8");
 const CACHE_MS=120_000;
 const caches=new WeakMap();
-export const lastReceiptMode=()=>process.env.FM_PREPARADOR_ULTIMA_RECEPCION!=="0";
+export const lastReceiptMode=()=>process.env.FM_PREPARADOR_ULTIMA_RECEPCION==="1";
 export function invalidateLastReceiptCache(pool,slug){
  const cache=caches.get(pool);
  if(!cache)return;

@@ -29,6 +29,10 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
   ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
  values:[ctx.client.slug,pharmacies],query_timeout:10000});
+ if(forOrders&&lastReceiptMode()){
+  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
+  return rows.filter(row=>latest.byLab.has(String(row.id)));
+ }
  return rows;
 }
 
@@ -41,6 +45,15 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  if(!/^P:[1-9][0-9]{0,17}$/.test(key)||!pharmacies.length||
   !["medicacion","parafarmacia"].includes(type))throw Error("Proveedor o categoría inválidos");
  const q='"'+ctx.client.schema+'"',id=key.slice(2);
+ if(lastReceiptMode()){
+  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
+  const term=String(search||"").trim().toLocaleLowerCase("es");
+  const rows=(latest.byLab.get(id)||[]).filter(r=>r.tipo===type&&
+   (!term||r.cn.includes(term)||r.nombre.toLocaleLowerCase("es").includes(term)));
+  if(rows.length>5000)
+   throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
+  return {rows,total:rows.length,metricsUnavailable:true};
+ }
  const sql=`
  WITH chosen AS MATERIALIZED (
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code

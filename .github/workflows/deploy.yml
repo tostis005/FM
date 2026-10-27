@@ -370,3 +370,11 @@ jobs:
             cd /opt/farmawao
             docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkCinfaCoverage.mjs
           '
+
+      - name: Recontar laboratorios y CN del preparador (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditoria recuentos preparador')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 200 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditPreparadorRecepciones.mjs
+          '

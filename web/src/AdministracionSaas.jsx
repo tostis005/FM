@@ -175,11 +175,12 @@ export function ClientesPanel({onUpdated}){
   {!clients.length&&!loading&&!error&&<section className="card fm-manage-client">No hay clientes configurados.</section>}
  </div>;
 }
-const initial={email:"",name:"",role:"farmacia",pharmacies:[],modules:[],active:true,authType:"google"};
+const initial={email:"",name:"",role:"farmacia",pharmacies:[],modules:[],sections:[],active:true,authType:"google"};
 const ROLES=[["administrador","Administrador del cliente"],["gestor","Gestor"],
  ["farmacia","Personal de farmacia"],["colaborador","Colaborador"]];
 export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}){
  const [users,setUsers]=useState([]),[availableModules,setAvailableModules]=useState([]),
+  [availableSections,setAvailableSections]=useState([]),[grantableSections,setGrantableSections]=useState([]),
   [grantableModules,setGrantableModules]=useState([]),[form,setForm]=useState({...initial}),
   [editingEmail,setEditingEmail]=useState(""),[busy,setBusy]=useState(false),
   [sendingInvite,setSendingInvite]=useState(""),
@@ -202,6 +203,8 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
     if(!valid)return;
     setAvailableModules(Array.isArray(info.modules)?info.modules:[]);
     setGrantableModules(Array.isArray(info.grantable)?info.grantable:[]);
+     setAvailableSections(Array.isArray(info.sections)?info.sections:[]);
+     setGrantableSections(Array.isArray(info.grantableSections)?info.grantableSections:[]);
   }).catch(error=>{if(valid)setFeedback(error.message)});
   return ()=>{valid=false};
  },[client]);
@@ -211,6 +214,8 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
    pharmacies:(u.pharmacies||[]).map(String),
    modules:Array.isArray(u.modules)?u.modules.filter(id=>availableModules.some(m=>m.id===id)):
     availableModules.map(m=>m.id),
+   sections:Array.isArray(u.sections)?u.sections.filter(id=>availableSections.some(s=>s.id===id)):
+    availableSections.filter(s=>!Array.isArray(u.modules)||u.modules.includes(s.module)).map(s=>s.id),
    active:Boolean(u.active),
    authType:u.authType==="interno"?"local":u.authType});
   setEditingEmail(u.email);setFeedback("");
@@ -299,27 +304,56 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
     </div>
     <div className="fm-manage-wide fm-user-module-section">
      <div className="fm-user-module-heading">
-      <div><strong>Funcionalidades autorizadas</strong>
-       <small>Solo aparecen los módulos habilitados para este cliente por superadministración.
-       Marcar un módulo concede acceso a esa funcionalidad exclusivamente a este usuario.</small></div>
+      <div><strong>Secciones y subsecciones autorizadas</strong>
+       <small>Marca cada módulo y las pantallas concretas que podrá visualizar el usuario.
+        Puedes dejar sin marcar las subsecciones de demostración mientras mantienes las ya operativas.</small></div>
       <div className="fm-user-module-actions">
        <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
-        onClick={()=>setForm(v=>({...v,modules:availableModules.filter(m=>grantableModules.includes(m.id)).map(m=>m.id)}))}>
-        Seleccionar todos
-       </button>
+        onClick={()=>setForm(v=>{
+         const sections=availableSections.filter(s=>!s.demo&&grantableSections.includes(s.id));
+         return {...v,modules:[...new Set(sections.map(s=>s.module))],
+          sections:sections.map(s=>s.id)};
+        })}>Solo pantallas operativas</button>
        <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
-        onClick={()=>setForm(v=>({...v,modules:[]}))}>Quitar todos</button>
+        onClick={()=>setForm(v=>({
+         ...v,modules:availableModules.filter(m=>grantableModules.includes(m.id)).map(m=>m.id),
+         sections:availableSections.filter(s=>grantableSections.includes(s.id)).map(s=>s.id)
+        }))}>Seleccionar todos</button>
+       <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
+        onClick={()=>setForm(v=>({...v,modules:[],sections:[]}))}>Quitar todos</button>
       </div>
      </div>
      {availableModules.length?
-      <div className="fm-user-module-grid">
-       {availableModules.map(m=><label className="fm-user-module-choice" key={m.id}>
-        <span>{m.name}</span>
-        <input type="checkbox" checked={form.modules.includes(m.id)}
-         disabled={busy||!grantableModules.includes(m.id)}
-         onChange={e=>setForm(v=>({...v,modules:e.target.checked?
-          [...v.modules,m.id]:v.modules.filter(id=>id!==m.id)}))}/>
-       </label>)}
+      <div className="fm-user-module-groups">
+       {availableModules.map(m=>{
+        const children=availableSections.filter(s=>s.module===m.id);
+        const active=form.modules.includes(m.id);
+        return <div className="fm-user-module-group" key={m.id}>
+         <label className="fm-user-module-choice fm-user-module-parent">
+          <span><strong>{m.name}</strong><small>{children.length?
+           form.sections.filter(id=>children.some(s=>s.id===id)).length+" de "+children.length+" pantallas":
+           "Módulo independiente"}</small></span>
+          <input type="checkbox" checked={active}
+           disabled={busy||!grantableModules.includes(m.id)}
+           onChange={e=>setForm(v=>({
+            ...v,modules:e.target.checked?[...v.modules,m.id]:v.modules.filter(id=>id!==m.id),
+            sections:e.target.checked?
+             [...new Set([...v.sections,...children.filter(s=>grantableSections.includes(s.id)).map(s=>s.id)])]:
+             v.sections.filter(id=>!children.some(s=>s.id===id))
+           }))}/>
+         </label>
+         {children.length>0&&<div className="fm-user-subsection-grid">
+          {children.map(child=><label key={child.id} className="fm-user-subsection-choice">
+           <span>{child.name} {child.demo&&<small className="fm-user-demo-label">Demo</small>}</span>
+           <input type="checkbox" checked={active&&form.sections.includes(child.id)}
+            disabled={busy||!active||!grantableSections.includes(child.id)}
+            onChange={e=>setForm(v=>({...v,
+             sections:e.target.checked?[...new Set([...v.sections,child.id])]:
+              v.sections.filter(id=>id!==child.id)}))}/>
+          </label>)}
+         </div>}
+        </div>;
+       })}
       </div>:
       <p className="fm-user-module-empty">Este cliente todavía no tiene módulos habilitados.
        Actívalos desde Administración → Clientes.</p>}
@@ -340,7 +374,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
    </div>
    {loading&&!users.length?<LoadingPanel kind="table" label="Consultando usuarios y permisos…"/>:
     <SortableDataTable label="usuarios"
-     headers={["Correo","Método de acceso","Rol","Farmacias","Módulos","Estado","Acciones"]}
+     headers={["Correo","Método de acceso","Rol","Farmacias","Secciones autorizadas","Estado","Acciones"]}
      rows={users.map(u=>[
       <div key={u.email}><strong>{u.name||u.email}</strong>
        <div style={{fontSize:12,color:"#748b7c"}}>{u.email}</div></div>,
@@ -351,7 +385,13 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
       <span className="fm-user-permission-summary" key={u.email+"modules"}>
        {(Array.isArray(u.modules)?u.modules:availableModules.map(m=>m.id))
         .filter(id=>availableModules.some(m=>m.id===id))
-        .map(id=>availableModules.find(m=>m.id===id)?.name||id).join(", ")||"Sin acceso a módulos"}
+        .map(id=>{
+         const m=availableModules.find(item=>item.id===id);
+         const children=availableSections.filter(sec=>sec.module===id);
+         const selected=children.filter(sec=>u.sections===null||u.sections===undefined||
+          u.sections.includes(sec.id));
+         return (m?.name||id)+(children.length?" ("+selected.length+"/"+children.length+")":"");
+        }).join(", ")||"Sin módulos habilitados"}
       </span>,
       u.active?"Activo":"Bloqueado",
       <div key={u.email+"actions"} style={{display:"flex",flexWrap:"wrap",gap:7}}>

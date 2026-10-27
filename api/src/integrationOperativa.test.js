@@ -18,12 +18,15 @@ test("operativa PostgreSQL: aislamiento, aprobación, auditoría y ahorro no inf
   const first=pharmacies[0].id,second=pharmacies[1].id;
   const app=express();app.use(express.json());
   const mods={acciones:true,compras:true,stock:true,reposicion:true,rentabilidad:true};
+  const sections={acciones:true,"oportunidades-seguimiento":true,"compras-preparador":true,
+   "compras-pendientes":true,"compras-pedidos":true,"mi-trabajo":true,"stock-traspasos":true,
+   reposicion:true,"rentabilidad-retorno":true};
   const tenant=(req,res,next)=>{
    const mode=req.header("x-mode")||"admin";
    const role=mode==="reader"?"colaborador":mode==="editor"?"gestor":"administrador";
    const visible=(req.header("x-both")==="true"?pharmacies:[pharmacies[0]]);
    req.user={email:"ci-actor@example.invalid",role};
-   req.context={client:{slug},role,modules:mods,pharmacies:visible};
+   req.context={client:{slug},role,modules:mods,sections,pharmacies:visible};
    next();
   };
   setupOperativa(app,pool,{requireTenant:()=>[tenant]});

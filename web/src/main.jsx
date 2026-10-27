@@ -322,8 +322,9 @@ function App(){
       const ctx=await loadContext(slug);
       setData(await tenantState(ctx,sessionUser?.email));
       setSalesStatus("sin_conexion");setSalesByPromotion({});
-      const initial=ctx.modules.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
-        NAV.find(item=>item.module&&ctx.modules[item.module])?.id||"farmacias";
+      const initial=ctx.sections?.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
+        NAV.find(item=>item.module&&ctx.sections?.[item.id])?.id||
+        (ctx.sections?.["seguimiento-global"]?"seguimiento-global":"farmacias");
       window.history.pushState({page:initial},"","/"+initial);
       setPage(initial);setMobileMenu(false);setAuthError("");
     }catch(e){setAuthError(e.message)}
@@ -569,6 +570,14 @@ function App(){
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId){
+  const intended=id==="seguimiento-campana"?"seguimiento-global":id;
+  const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
+  if(!(isAdministrative?visibleNav.some(item=>item.id===intended):canOpenSection(intended))){
+   const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||
+    (intended==="promociones"&&canOpenSection("seguimiento-global")?"seguimiento-global":null);
+   if(next)return nav(next);
+   return;
+  }
   if(id==="seguimiento-campana"||id==="seguimiento-global"){
    const p=promoId?promos.find(item=>item.id===promoId):null;
    const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
@@ -869,29 +878,33 @@ function App(){
  },[page]);
  const role=tenantContext?.role;
  const canManagePromotions=["administrador","superadministrador"].includes(role);
+ const canOpenSection=id=>sessionUser?.role==="superadministrador"||
+   tenantContext?.sections?.[id]===true;
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
-   if(item.module)return sessionUser?.role==="superadministrador"||tenantContext?.modules?.[item.module]===true;
+   if(item.module)return canOpenSection(item.id)||
+     NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||
+     (item.id==="promociones"&&canOpenSection("seguimiento-global"));
    return true;
  });
- const allowed=page==="seguimiento-global"
-   ? (sessionUser?.role==="superadministrador"||tenantContext?.modules?.promociones)
-   : visibleNav.some(item=>item.id===page);
+ const allowed=CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
+   visibleNav.some(item=>item.id===page):canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.
  // No redirigir de /ventas a /promociones mientras el rol aún no está resuelto.
  useEffect(()=>{
    if(tenantContext && sessionUser && !allowed)
-     nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard");
+     nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||
+       (canOpenSection("seguimiento-global")?"seguimiento-global":visibleNav[0]?.id)||"dashboard");
  },[tenantContext,sessionUser,page,allowed]);
  if(!tenantContext||!sessionUser||!allowed)return <StartupScreen error={authError}/>;
  return <div className="app-shell">
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
-   <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module)?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
+   <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
    <nav className="side-nav" aria-label="Módulos">
     {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)).map(item=>{
      const children=visibleNav.filter(child=>child.childOf===item.id);
-     const hasChildren=children.length>0||item.id==="promociones";
+     const hasChildren=children.length>0||(item.id==="promociones"&&canOpenSection("seguimiento-global"));
      const expanded=hasChildren&&expandedNavIds.includes(item.id);
      const submenuId="fm-submenu-"+item.id;
      return <React.Fragment key={item.id}>
@@ -917,7 +930,7 @@ function App(){
         <child.icon size={16}/><span>{child.label}</span>
         {child.preview&&<small className="side-preview-badge">Demo</small>}
         {page===child.id&&<span className="active-dot"/>}</button>)}
-       {item.id==="promociones"&&<button
+       {item.id==="promociones"&&canOpenSection("seguimiento-global")&&<button
         className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")}
         type="button" onClick={()=>nav("seguimiento-global")}
         aria-current={page==="seguimiento-global"?"page":undefined}>

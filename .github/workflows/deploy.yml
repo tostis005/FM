@@ -44,6 +44,8 @@ jobs:
           node --test api/src/operativaRules.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js
+          node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js
@@ -155,7 +157,7 @@ jobs:
       - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 035_stock_sin_recepciones_indices.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 035_stock_sin_recepciones_indices.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
             for attempt in 1 2 3 4 5; do
               if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
                   'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \

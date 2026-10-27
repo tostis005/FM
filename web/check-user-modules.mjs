@@ -19,7 +19,13 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/farmacias")body=pharmacies;
  else if(path==="/api/tenant/usuarios/modulos")
   body={modules:[{id:"ventas",name:"Ventas"},{id:"compras",name:"Compras"}],
-   grantable:["ventas","compras"]};
+   grantable:["ventas","compras"],
+   sections:[
+    {id:"ventas",module:"ventas",name:"Ventas (resumen)",demo:true},
+    {id:"ventas-tickets",module:"ventas",name:"Tickets",demo:false},
+    {id:"compras",module:"compras",name:"Compras (resumen)",demo:true},
+    {id:"compras-preparador",module:"compras",name:"Preparador de pedidos",demo:false}
+   ],grantableSections:["ventas","ventas-tickets","compras","compras-preparador"]};
  else if(path==="/api/tenant/usuarios"){
   if(req.method()==="PUT"){
    const next=req.postDataJSON();writes.push(next);
@@ -34,18 +40,26 @@ try{
  await page.getByText("Usuarios y permisos del cliente").first().waitFor({timeout:15000});
  await page.getByText("Empleado").first().waitFor({timeout:15000});
  await page.getByRole("button",{name:"Editar"}).first().click();
- await page.getByText("Funcionalidades autorizadas").waitFor();
+ await page.getByText("Secciones y subsecciones autorizadas").waitFor();
  const area=page.locator(".fm-user-module-section");
- assert.equal(await area.locator("input[type=checkbox]").count(),2);
+ assert.equal(await area.locator("input[type=checkbox]").count(),6);
  assert.equal(await area.getByText("Promociones").count(),0);
- const sales=area.getByRole("checkbox",{name:"Ventas"});
- const purchases=area.getByRole("checkbox",{name:"Compras"});
+ assert.equal(await area.getByText("Demo",{exact:true}).count(),2);
+ const sales=area.locator(".fm-user-module-parent input[type=checkbox]").nth(0);
+ const purchases=area.locator(".fm-user-module-parent input[type=checkbox]").nth(1);
  assert.equal(await sales.isChecked(),true);
  assert.equal(await purchases.isChecked(),false);
- await purchases.check();
+ await area.getByRole("button",{name:"Solo pantallas operativas"}).click();
+ assert.equal(await sales.isChecked(),true);
+ assert.equal(await purchases.isChecked(),true);
+ assert.equal(await area.getByRole("checkbox",{name:/Ventas \(resumen\)/}).isChecked(),false);
+ assert.equal(await area.getByRole("checkbox",{name:/Compras \(resumen\)/}).isChecked(),false);
+ assert.equal(await area.getByRole("checkbox",{name:"Tickets"}).isChecked(),true);
+ assert.equal(await area.getByRole("checkbox",{name:"Preparador de pedidos"}).isChecked(),true);
  await page.getByRole("button",{name:"Guardar cambios"}).click();
  await page.getByText("Usuario y permisos guardados correctamente.").waitFor();
  assert.deepEqual(writes.at(-1).modules.sort(),["compras","ventas"]);
+ assert.deepEqual(writes.at(-1).sections.sort(),["compras-preparador","ventas-tickets"]);
  assert.equal(errors.length,0,errors.join("\n"));
- console.log("OK módulos por usuario: catálogo del cliente, edición y guardado de la selección");
+ console.log("OK permisos de usuario: módulos, subsecciones, filtro operativas y persistencia");
 }finally{await browser.close()}

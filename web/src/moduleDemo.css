@@ -395,3 +395,26 @@
 
 /* La resta de documentos no representa el beneficio económico. */
 .fm-dashboard-reconciliation-note{margin:0 0 13px;padding:10px 13px;font-size:12px;line-height:1.5;color:#456452;background:#f4faf6;border-left:3px solid #30a577;border-radius:4px}
+
+
+/* Edición granular de módulos y subsecciones por usuario. */
+.fm-user-module-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.fm-user-module-group{min-width:0;border:1px solid #dfe9e3;border-radius:12px;overflow:hidden;background:#fff}
+.fm-manage-form .fm-user-module-parent{margin:0;border:0;border-radius:0;background:#eef7f2;
+ padding:13px 15px}
+.fm-user-module-parent span{display:grid;gap:5px}
+.fm-user-module-parent strong{font-size:13px;color:#284e3d}
+.fm-user-module-parent small{font-size:11px;color:#688579;font-weight:400}
+.fm-user-subsection-grid{display:grid;gap:0;padding:6px 14px}
+.fm-manage-form .fm-user-subsection-choice{display:flex;flex-direction:row;
+ align-items:center;justify-content:space-between;gap:12px;min-height:39px;
+ padding:7px 1px;border-bottom:1px solid #edf2ee;color:#4a6557;
+ font-size:12px;font-weight:500}
+.fm-manage-form .fm-user-subsection-choice:last-child{border-bottom:0}
+.fm-user-subsection-choice span{min-width:0;overflow-wrap:anywhere}
+.fm-user-subsection-choice input[type=checkbox]{height:18px;width:18px;flex:0 0 18px;padding:0;accent-color:#128558}
+.fm-user-subsection-choice:has(input:disabled){opacity:.65}
+@media(max-width:840px){.fm-user-module-groups{grid-template-columns:1fr}}
+
+.fm-user-demo-label{display:inline-block;margin-left:6px;padding:3px 6px;
+ border-radius:5px;background:#fff3dc;color:#906b22;font-size:10px;font-weight:750}

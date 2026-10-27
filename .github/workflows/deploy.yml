@@ -102,7 +102,7 @@ jobs:
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js
-          node --test src/tableExport.test.js
+          node --test src/tableExport.test.js src/userPermissionCopy.test.js
           node check-login.mjs
           node generate-seo.mjs
           node check-seo.mjs

@@ -33,5 +33,7 @@ test("todas las rutas tienen claves únicas y se exige la ruta documental exacta
  assert.deepEqual(mock("/api/analytics/pantallas/ventas-tickets/lineas"),["ventas-tickets"]);
  assert.deepEqual(mock("/api/analytics/pantallas/compras-recepciones"),["compras-recepciones"]);
  assert.deepEqual(mock("/api/analytics/stock/sin-recepciones"),["stock-sin-recepciones"]);
+ assert.deepEqual(mock("/api/tenant/proveedores/traspasos-salidas"),["stock-traspasos"]);
+ assert.deepEqual(mock("/api/analytics/pedidos/propuesta"),["compras-preparador","compras-pendientes","compras-pedidos"]);
  assert.deepEqual(mock("/api/analytics/ventas/resumen"),[]);
 });

@@ -1,6 +1,7 @@
 // Modo reversible del preparador: sólo el laboratorio de la última
 // recepción positiva válida de cada CN. No modifica datos de Farmatic.
 import {readFile} from "node:fs/promises";
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 const SQL=await readFile(new URL("./preparadorLastReceipt.sql",import.meta.url),"utf8");
 const CACHE_MS=120_000;
 const caches=new WeakMap();
@@ -21,7 +22,8 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
  if(current?.value&&current.expires>Date.now())return current.value;
  if(current?.pending)return current.pending;
  const pending=(async()=>{
-  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"');
+  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
+   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
   const {rows}=await pool.query({text:sql,values:[ctx.client.slug,ids],query_timeout:90000});
   const byLab=new Map();
   for(const r of rows){

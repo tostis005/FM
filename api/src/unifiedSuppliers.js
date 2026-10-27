@@ -18,7 +18,7 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
   'pharmacyCode',a.farmacia_codigo,'sourceCode',a.codigo_origen,
   'sourceName',a.nombre_origen,'origin',a.procedencia,
   'validity',a.vigencia) ORDER BY a.farmacia_codigo,a.codigo_origen)
-  FILTER(WHERE a.id IS NOT NULL),'[]'::json) AS origins
+  FILTER(WHERE a.id IS NOT NULL AND f.id=ANY($2::int[])),'[]'::json) AS origins
  FROM farmetrica.proveedores_unificados p
  JOIN farmetrica.proveedores_unificados_alias a
    ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id

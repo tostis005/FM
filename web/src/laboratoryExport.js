@@ -1,4 +1,5 @@
 import {isValidCN} from "./cns.js";
+import {eligiblePromotionLines} from "./promotionTicketRules.js";
 
 export const LAB_EXPORT_PAGE_SIZE=500;
 export const LAB_EXPORT_MAX_LINES=50000;
@@ -47,4 +48,11 @@ export async function readFullLabSales(promo,loadTicketLines,onProgress=()=>{},{
     if(!response.rows.length)throw new Error("Faltan registros al exportar "+promo.name);
   }
   throw new Error("No se pudo descargar la totalidad de ventas de "+promo.name);
+}
+
+// Mismo ámbito de farmacias y validación de tickets para ambas exportaciones.
+export async function preparePromotionLabExport(promo,loadTicketLines,{pharmacyIds,mode="real",onProgress=()=>{}}={}){
+ if(!["real","simulated"].includes(mode))throw new Error("Modo de exportación no válido");
+ const original=await readFullLabSales(promo,loadTicketLines,onProgress,{pharmacyIds});
+ return eligiblePromotionLines(promo,original,{simulate:mode==="simulated"});
 }

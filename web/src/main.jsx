@@ -16,7 +16,7 @@ const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
 const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
 const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.jsx"));
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
-import {promotionMetrics,hasOverlappingPromotions} from "./promotionMetrics.js";
+import {promotionMetrics,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
@@ -45,8 +45,8 @@ import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
-import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import {eligiblePromotionLines,promotionTicketPolicy} from "./promotionTicketRules.js";
+import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
+import {promotionTicketPolicy} from "./promotionTicketRules.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
@@ -493,7 +493,7 @@ function App(){
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]
     : storedUsers;
-  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?(salesByPromotion[p.id]||{}):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
@@ -775,8 +775,8 @@ function App(){
       const selectedIds=effectivePharmacyIds.filter(id=>Object.hasOwn(promo.targets||{},id));
       if(!selectedIds.length)continue;
       setToast("Preparando laboratorio "+(i+1)+"/"+campaigns.length+": "+promo.name);
-      const original=await readFullLabSales(promo,loadTicketLines,()=>{},{pharmacyIds:selectedIds});
-      const lines=eligiblePromotionLines(promo,original,{simulate:mode==="simulated"});
+      const lines=await preparePromotionLabExport(promo,loadTicketLines,
+        {pharmacyIds:selectedIds,mode});
       items.push({promo,lines});
     }
     if(!items.length)throw Error("No hay farmacias participantes en la selección.");

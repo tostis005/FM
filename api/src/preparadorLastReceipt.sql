@@ -69,7 +69,7 @@ supplier_links AS MATERIALIZED (
    -- las cabeceras completas del histórico para cada consulta del preparador.
    AND (CASE WHEN btrim(coalesce(h.proveedor_origen_id::text,'')) ~ '^[0-9]+$'
     THEN coalesce(nullif(ltrim(btrim(h.proveedor_origen_id::text),'0'),''),'0')
-    ELSE upper(btrim(coalesce(h.proveedor_origen_id::text,''))) END=k.supplier_code
+    ELSE upper(btrim(coalesce(h.proveedor_origen_id::text,''))) END)=k.supplier_code
   AND h.lineas_completas AND NOT h.eliminada_logicamente
   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
  JOIN __SCHEMA__.fm_recepciones_lineas l

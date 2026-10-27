@@ -45,8 +45,8 @@ import { OCTOBER_2026_OBJECTIVE_ROWS, OCTOBER_2026_OBJECTIVES_VERSION } from "./
 import { REAL_OCTOBER_EXAMPLES } from "./promocionesRealesOctubre.js";
 import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
-import {validateLabPromotion,readFullLabSales} from "./laboratoryExport.js";
-import {eligiblePromotionLines,promotionTicketPolicy} from "./promotionTicketRules.js";
+import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
+import {promotionTicketPolicy} from "./promotionTicketRules.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
@@ -775,8 +775,8 @@ function App(){
       const selectedIds=effectivePharmacyIds.filter(id=>Object.hasOwn(promo.targets||{},id));
       if(!selectedIds.length)continue;
       setToast("Preparando laboratorio "+(i+1)+"/"+campaigns.length+": "+promo.name);
-      const original=await readFullLabSales(promo,loadTicketLines,()=>{},{pharmacyIds:selectedIds});
-      const lines=eligiblePromotionLines(promo,original,{simulate:mode==="simulated"});
+      const lines=await preparePromotionLabExport(promo,loadTicketLines,
+        {pharmacyIds:selectedIds,mode});
       items.push({promo,lines});
     }
     if(!items.length)throw Error("No hay farmacias participantes en la selección.");

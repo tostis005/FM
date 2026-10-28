@@ -99,7 +99,7 @@ export default function ConfiguracionPreparador({clientSlug}){
   </section>
   <section className="card fm-price-settings">
    <h2>Artículos excluidos de nuevos pedidos</h2>
-   <p>Se excluyen automáticamente los nombres que empiezan por ZZZ, *BAJA, **BAJA o variantes con espacios. Puedes añadir cadenas propias: si aparecen en cualquier posición del nombre de un artículo, no se incluirá en el pedido. No se borran productos, ventas ni recepciones.</p>
+   <p>Se excluyen automáticamente los nombres que empiezan por ZZZ, *BAJA, **BAJA o variantes con espacios. Las reglas personalizadas son texto literal, incluidos los asteriscos: *BAJA* solo coincide si aparecen los dos asteriscos en el nombre, sin distinguir mayúsculas. No se borran productos, ventas ni recepciones.</p>
    <p><strong>Prefijos automáticos:</strong> {automatic.join(", ")}</p>
    <form onSubmit={add}>
     <div className="fm-price-settings-grid">

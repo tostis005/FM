@@ -1,5 +1,6 @@
 import { isValidCN } from "./cns.js";
 import { applyObjectiveRows } from "./objetivosImportacion.js";
+import { effectivePromotionStatus } from "./promotionLifecycle.js";
 
 const MONTHS={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12,ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
 export const PROMOTION_YEAR=2026;
@@ -18,10 +19,13 @@ export function excelDate(value,year=PROMOTION_YEAR){
     return iso(date.getUTCFullYear(),date.getUTCMonth()+1,date.getUTCDate());
   }
   const s=fold(value).replace(/OOCTUBRE/g,"OCTUBRE").replace(/[.]/g,"").replace(/\s+/g," ");
+  // Cualquier contenido no interpretable como fecha queda sin fecha de fin.
   if(/FIN EXISTENCIAS|HASTA FIN|AGOTAR STOCK|SIN FECHA/.test(s))return "";
   const normalized=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(normalized)return iso(+normalized[1],+normalized[2],+normalized[3]);
-  const match=s.match(/^(\d{1,2})[\s/-]+([A-Z]+)(?:[\s/-]+(\d{2,4}))?$/);
+  const digits=s.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/);
+  if(digits){let y=digits[3]?Number(digits[3]):year;if(y<100)y+=2000;return iso(y,+digits[2],+digits[1]);}
+  const match=s.match(/^(\d{1,2})[\s/-]+(?:DE\s+)?([A-Z]+)(?:[\s/-]+(?:DE\s+)?(\d{2,4}))?$/);
   if(!match)return "";
   let y=match[3]?Number(match[3]):year;
   if(y<100)y+=2000;
@@ -106,20 +110,21 @@ function makeId(fingerprint){
   return "X"+(h>>>0).toString(16).toUpperCase().padStart(8,"0");
 }
 function cnOf(value){if(value===null||value===undefined)return "";return String(value).trim().replace(/\.0$/,"").padStart(6,"0");}
-function createCampaign(laboratory,range,offer,start,end,description,cns,source,cnDescriptions={}){
+function createCampaign(laboratory,range,offer,start,end,description,cns,source,cnDescriptions={},endRaw=""){
   const classification=typeInfo(offer,description);
   const promo={
     id:null,name:clean(range)+" · "+(typeof offer==="number" ? (offer>0&&offer<=1?Math.round(offer*100)+"% DTO":offer+"€ DTO") : clean(offer||"Promoción")),
     subtitle:clean(laboratory),laboratory:clean(laboratory),range:clean(range),
     description:clean(description||offer),originalOffer:clean(offer),
-    start,end,status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),cnDescriptions,
+    start,end,endRaw:!end?clean(endRaw):"",status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),cnDescriptions,
     targets:{},sales:{},...classification,
     source:"Excel octubre 2026",sourceSheet:source,
   };
   promo.fingerprint=makeFingerprint(promo);
   promo.id=makeId(promo.fingerprint);
   promo.importWarnings=[];
-  if(!start||!end)promo.importWarnings.push("Fechas sin determinar: revisar antes de activar");
+  if(!start)promo.importWarnings.push("Fecha de inicio no reconocida: revisar");
+   if(!end)promo.importWarnings.push("Sin fecha final interpretable: revisar vigencia a los 30 días");
   if(!promo.cns.length)promo.importWarnings.push("Sin CNs asociados: revisar antes de activar");
   if(promo.type==="sin_clasificar")promo.importWarnings.push("Tipo de promoción pendiente de clasificación");
   return promo;
@@ -208,13 +213,26 @@ function matchingCNs(row,group){
   // Premiar coincidencias explícitas y no mezclar gamas parcialmente relacionadas.
   return {score:score+offerWeight,entries};
 }
-export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR){
+export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,referenceDate=null){
   const groups=cnListGroups(cnRows);
   const campaigns=[];
   const assignedByGroup=new Map();
   for(const {row,rowNumber} of summaryRowsUntilBlank(summaryRows)){
     const [lab,brand,offer,from,to,description]=row;
-    const start=excelDate(from,year),end=excelDate(to,year);
+    // Sin año en el archivo, los Excel mensuales pueden cruzar diciembre/enero.
+     // Resolver respecto al mes de importación, nunca mezclando campañas de otros años.
+     const provisional=excelDate(from,year);
+     let startYear=year;
+     if(referenceDate&&provisional&&!/\b\d{4}\b/.test(String(from||""))){
+       const month=Number(provisional.slice(5,7)),current=referenceDate.getMonth()+1;
+       if(current>=10&&month<=3)startYear++;
+       else if(current<=3&&month>=10)startYear--;
+     }
+     const start=excelDate(from,startYear);
+     let end=excelDate(to,startYear);
+     if(end&&start&&end<start&&!/\b\d{4}\b/.test(String(to||""))){
+       end=excelDate(to,startYear+1);
+     }
     const candidates=groups.map((group,index)=>{
       const result=matchingCNs(row,group);
       return result?{index,group,...result}:null;
@@ -248,7 +266,7 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR){
     }
     const cnDescriptions=Object.fromEntries(entries.filter(e=>e.description).map(e=>[e.cn,e.description]));
     const promo=createCampaign(lab,brand,offer,start,end,description,entries.map(e=>e.cn),
-      "RESUMEN",cnDescriptions);
+      "RESUMEN",cnDescriptions,to);
     // Una fila del RESUMEN siempre es una promoción, aunque otra comparta
     // laboratorio/marca/oferta: el número de fila estabiliza su identidad.
     promo.sourceRow=rowNumber;
@@ -268,7 +286,7 @@ export async function readPromotionExcel(file){
   if(!sheets["RESUMEN"] || !sheets["LISTADO CN PROMOCIONES"])
     throw Error("Excel no compatible: se necesitan las hojas RESUMEN y LISTADO CN PROMOCIONES");
   const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):new Date().getFullYear();
-  let promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year).map(p=>({...p,source:"Excel: "+file.name}));
+  let promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year,match?null:new Date()).map(p=>({...p,source:"Excel: "+file.name}));
   if(sheets["OBJETIVOS OCTUBRE 2026"]) {
     promos=applyObjectiveRows(promos,sheets["OBJETIVOS OCTUBRE 2026"],year).promotions;
   }
@@ -277,22 +295,7 @@ export async function readPromotionExcel(file){
 }
 // Las fechas del Excel son días civiles del cliente, no UTC del navegador.
 export function importedPromotionStatus(p,now=new Date(),timeZone="Europe/Madrid"){
-  const targets=Object.values(p.targets||{});
-  const completeObjectives=targets.some(value=>
-    value!==""&&value!==null&&value!==undefined&&
-    Number.isSafeInteger(Number(value))&&Number(value)>0);
-  if(!completeObjectives)return "Borrador";
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(p.start||"")||
-     p.end&&(!/^\d{4}-\d{2}-\d{2}$/.test(p.end)||p.start>p.end))return "Borrador";
-  const dayParts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{
-    timeZone,year:"numeric",month:"2-digit",day:"2-digit"
-  }).formatToParts(now).filter(x=>x.type!=="literal").map(x=>[x.type,x.value]));
-  const today=[dayParts.year,dayParts.month,dayParts.day].join("-");
-  // El nombre almacenado sigue siendo Finalizada para compatibilidad histórica.
-  // En la interfaz se presenta como Archivada.
-  if(p.end&&p.end<today)return "Finalizada";
-  if(p.start>today)return "Borrador";
-  return "Activa";
+ return effectivePromotionStatus({...p,statusSource:"automatic"},now,timeZone);
 }
 export function mergeImportedPromos(existing,incoming){
   const normalize=p=>p.fingerprint||makeFingerprint({

@@ -30,7 +30,8 @@ test("SQL: aislamiento tenant/farmacia, stock real y anti-join de recepciones",(
  assert.match(sql,/AND NOT EXISTS \(/);
  assert.match(sql,/rh\.fecha >= \$1::date/);
  assert.match(sql,/rl\.cantidad>0 AND coalesce\(rl\.devuelta,false\)=false/);
- assert.match(sql,/rh\.lineas_completas AND NOT rh\.eliminado_logicamente/);
+ assert.match(sql,/rh\.lineas_completas AND NOT rh\.eliminada_logicamente/);
+ assert.doesNotMatch(sql,/rh\.eliminado_logicamente/);
  assert.match(sql,/sl\.cantidad>0 AND coalesce\(sl\.devuelta,false\)=false/);
  assert.ok(sql.indexOf("LIMIT $5::int OFFSET $6::int")<sql.indexOf("LEFT JOIN LATERAL"));
  assert.doesNotMatch(sql,/count\(\*\) OVER/i);
@@ -47,7 +48,7 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
   fm_recepciones_lineas:["farmacia_codigo","sistema_origen","documento_id",
    "articulo_origen_id","eliminada_logicamente","cantidad","devuelta"],
   fm_recepciones_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
-   "fecha","proveedor_origen_id","lineas_completas","eliminado_logicamente","estado"],
+   "fecha","proveedor_origen_id","lineas_completas","eliminada_logicamente","estado"],
   fm_ventas_lineas:["farmacia_codigo","sistema_origen","documento_id",
    "articulo_origen_id","eliminada_logicamente","anulada","cantidad","devuelta"],
   fm_ventas_cabeceras:["farmacia_codigo","sistema_origen","documento_id",

@@ -4,7 +4,7 @@
 .fm-planner-head p{font-size:12px;color:#6b8074;line-height:1.6;margin:5px 0 0}
 .fm-planner-filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
 .fm-planner-filters label{display:grid;gap:5px;font-size:12px;font-weight:600;color:#516c60}
-.fm-planner-filters input,.fm-planner-edit input{padding:8px 9px;border:1px solid #cadcd0;border-radius:8px;max-width:210px;width:100%;font-size:12px;background:#fff}
+.fm-planner-filters input,.fm-planner-edit input{padding:8px 9px;border:1px solid #cadcd0;border-radius:var(--fm-control-radius,10px);max-width:210px;width:100%;font-size:12px;background:#fff}
 .fm-planner-pharmacies{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#486859}
 .fm-planner-pharmacies label{display:flex;gap:5px;align-items:center}
 .fm-planner-summary{display:flex;gap:17px;align-items:center;flex-wrap:wrap;background:#f5f9f7;padding:10px 12px;border-radius:9px;color:#4e6b5a;font-size:12px}

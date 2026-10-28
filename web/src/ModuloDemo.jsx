@@ -290,8 +290,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastEligible=["ventas","dashboard"].includes(module)&&period.valid;
  const effectiveAnalysisMonths=[3,6,12,24,36].includes(Number(analysisMonths))?Number(analysisMonths):12;
  const fastScope=[clientSlug,period.from,period.to,period.granularity,filters.pharmacyIds.join(","),reloadKey].join("|");
+ // También aprovechar meses cerrados completos cuando el filtro empieza o
+ // termina a mitad de mes: el servidor calcula solo los extremos en vivo.
  const dashboardCacheEligible=module==="dashboard"&&period.valid&&
-  (period.granularity==="day"||(period.granularity==="month"&&period.from?.endsWith("-01")));
+  ["day","month"].includes(period.granularity);
  const purchaseSummaryScope=[clientSlug,period.from,period.to,
    filters.pharmacyIds.join(","),reloadKey].join("|");
  const [dashboardCache,setDashboardCache]=useState(null);

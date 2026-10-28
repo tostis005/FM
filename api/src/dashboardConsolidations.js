@@ -25,16 +25,22 @@ export const madridDay=(now=new Date())=>{
 const valid=s=>ISO.test(s)&&Number.isFinite(Date.parse(s+"T00:00:00Z"))&&
  new Date(s+"T00:00:00Z").toISOString().slice(0,10)===s;
 export function compatibleConsolidatedRange(from,to,today=madridDay()){
- if(!valid(from)||!valid(to)||from>to||to>today||from<"2010-01-01"||
-  !from.endsWith("-01"))return null;
- const active=to===today&&to.slice(0,7)===today.slice(0,7);
- if(!active&&nextDay(to)!==nextMonth(to))return null;
- const end=active?to.slice(0,7)+"-01":nextMonth(to),months=[];
- for(let month=from;month<end;month=nextMonth(month)){
-  months.push(month);
-  if(months.length>120)return null;
+ if(!valid(from)||!valid(to)||from>to||to>today||from<"2010-01-01")return null;
+ const currentMonth=today.slice(0,7)+"-01";
+ const months=[],liveRanges=[];
+ // Reutilizar únicamente meses naturales COMPLETOS y cerrados. Los dos
+ // extremos parciales (y el mes actual, aún abierto) se leen en vivo.
+ // Así un filtro 17/09/2025–17/10/2026 no vuelve a sumar doce meses de líneas.
+ for(let month=from.slice(0,7)+"-01";month<=to.slice(0,7)+"-01";month=nextMonth(month)){
+  const following=nextMonth(month);
+  const lastDay=new Date(Date.parse(following+"T00:00:00Z")-86400000).toISOString().slice(0,10);
+  const start=from>month?from:month,end=to<lastDay?to:lastDay;
+  if(month<currentMonth&&start===month&&end===lastDay)months.push(month);
+  else liveRanges.push({from:start,to:end,month});
+  if(months.length+liveRanges.length>120)return null;
  }
- return {from,to,months,active,activeMonth:active?to.slice(0,7)+"-01":null};
+ const active=liveRanges.some(range=>range.month===currentMonth);
+ return {from,to,months,liveRanges,active,activeMonth:active?currentMonth:null};
 }
 export function buildDashboardMonthSQL(schema,source,{daily=false}={}){
  if(!IDENT.test(schema)||!["ventas","compras"].includes(source))

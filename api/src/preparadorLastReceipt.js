@@ -23,20 +23,36 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
  if(current?.value&&current.expires>Date.now())return current.value;
  if(current?.pending)return current.pending;
  const pending=(async()=>{
-  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
-  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
-   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
-  const {rows}=await pool.query({text:sql,values:[ctx.client.slug,ids,patterns],query_timeout:90000});
-  const byLab=new Map();
-  for(const r of rows){
-   const id=String(r.lab_id),cn=String(r.cn);
-   if(!byLab.has(id))byLab.set(id,[]);
-   byLab.get(id).push({referencia:cn,cn,nombre:r.nombre||cn,
-    tipo:Number(cn.slice(0,6))>=400000?"medicacion":"parafarmacia",
-    inMaster:false,inReceipts:true,inPurchases:true,inSales:false,
-    generic:false,provisional:false,pharmacyIds:null});
+  // Instrumentar únicamente los fallos de caché. Pocos usuarios significa que
+  // la primera consulta, no solo los aciertos posteriores, debe ser rápida.
+  // No registrar CN, nombres de artículos, farmacia ni datos de ventas.
+  const started=Date.now();
+  try{
+   const patterns=await readRetirementPatterns(pool,ctx.client.slug);
+   const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
+    .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
+   const {rows}=await pool.query({text:sql,values:[ctx.client.slug,ids,patterns],query_timeout:90000});
+   const byLab=new Map();
+   for(const r of rows){
+    const id=String(r.lab_id),cn=String(r.cn);
+    if(!byLab.has(id))byLab.set(id,[]);
+    byLab.get(id).push({referencia:cn,cn,nombre:r.nombre||cn,
+     tipo:Number(cn.slice(0,6))>=400000?"medicacion":"parafarmacia",
+     inMaster:false,inReceipts:true,inPurchases:true,inSales:false,
+     generic:false,provisional:false,pharmacyIds:null});
+   }
+   console.info("PREPARADOR_ULTIMA_RECEPCION",JSON.stringify({
+    status:"ok",elapsedMs:Date.now()-started,
+    pharmacies:ids.length,references:rows.length
+   }));
+   return {byLab,total:rows.length};
+  }catch(error){
+   console.warn("PREPARADOR_ULTIMA_RECEPCION",JSON.stringify({
+    status:"error",elapsedMs:Date.now()-started,
+    pharmacies:ids.length,code:error.code||error.name||"QUERY_ERROR"
+   }));
+   throw error;
   }
-  return {byLab,total:rows.length};
  })();
  cache.set(scope,{pending});
  try{

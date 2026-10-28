@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
+import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 
 test("el selector comparte consultas simultáneas y reutiliza el resultado con el mismo tenant y farmacias",async()=>{
  const pool={},calls=[];
@@ -29,4 +29,19 @@ test("un fallo del selector no se memoriza como catálogo vacío",async()=>{
  });
  assert.equal(times,2);
  assert.equal(labs.length,1);
+});
+
+test("el maestro unificado usa caché separada y las ediciones invalidan ambos listados",async()=>{
+ const pool={},loads=[];
+ const loader=label=>async()=>{loads.push(label);return [{key:label,name:label}]};
+ const operational=await readCachedLaboratoryOptions(pool,"ampedia",[2,1],loader("operational"));
+ const unified=await readCachedLaboratoryOptions(pool,"ampedia",[1,2],loader("unified"),"unified");
+ assert.equal(operational[0].key,"operational");
+ assert.equal(unified[0].key,"unified");
+ await readCachedLaboratoryOptions(pool,"ampedia",[1,2],loader("reload-ignored"),"unified");
+ assert.deepEqual(loads,["operational","unified"]);
+ invalidateCachedLaboratoryOptions(pool,"ampedia");
+ const refresh=await readCachedLaboratoryOptions(pool,"ampedia",[1,2],loader("updated"),"unified");
+ assert.equal(refresh[0].key,"updated");
+ assert.deepEqual(loads,["operational","unified","updated"]);
 });

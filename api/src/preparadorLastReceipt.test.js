@@ -58,3 +58,38 @@ test("rollback por variable de entorno restaura el catálogo anterior sin migrac
  if(before===undefined)delete process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
  else process.env.FM_PREPARADOR_ULTIMA_RECEPCION=before;
 });
+
+test("selector arranca consulta de últimas recepciones sin esperar a listado de proveedores",async()=>{
+ const original=process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
+ process.env.FM_PREPARADOR_ULTIMA_RECEPCION="1";
+ let releaseSuppliers,signalLatest;
+ const latestStarted=new Promise(resolve=>{signalLatest=resolve});
+ const suppliersPending=new Promise(resolve=>{releaseSuppliers=resolve});
+ const pool={query:async q=>{
+  const sql=typeof q==="string"?q:q.text;
+  if(sql.includes("json_agg(json_build_object"))return suppliersPending;
+  if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
+  if(sql.includes("DISTINCT ON (cn)")){
+   signalLatest();
+   return {rows:[{lab_id:"5",cn:"450123",nombre:"Artículo válido"}]};
+  }
+  throw Error("SQL inesperado");
+ }};
+ let timer;
+ try{
+  const pending=listUnifiedSuppliers(pool,ctx,[1],true);
+  // Si las consultas se hacen en serie, la última recepción no comenzaría
+  // hasta que libere el listado de proveedores.
+  await Promise.race([latestStarted,new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(Error("Última recepción bloqueada por proveedores")),2500);
+  })]);
+  releaseSuppliers({rows:[{id:"5",key:"P:5",name:"Fabricante"}]});
+  const rows=await pending;
+  assert.deepEqual(rows.map(r=>r.key),["P:5"]);
+ }finally{
+  if(timer)clearTimeout(timer);
+  releaseSuppliers({rows:[{id:"5",key:"P:5",name:"Fabricante"}]});
+  if(original===undefined)delete process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
+  else process.env.FM_PREPARADOR_ULTIMA_RECEPCION=original;
+ }
+});

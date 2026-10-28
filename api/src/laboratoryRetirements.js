@@ -1,8 +1,13 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 // Importación diferida: preparadorLastReceipt carga este módulo y usa top-level await.
 async function invalidateOrders(pool,slug){
- const {invalidateLastReceiptCache}=await import("./preparadorLastReceipt.js");
+ const [{invalidateLastReceiptCache},{invalidateCachedLaboratoryOptions}]=await Promise.all([
+  import("./preparadorLastReceipt.js"),import("./laboratoryOptionCache.js")
+ ]);
+ // Editar exclusiones afecta a los CN de última recepción Y a los
+ // laboratorios visibles en el selector: no dejar los nombres antiguos en caché.
  invalidateLastReceiptCache(pool,slug);
+ invalidateCachedLaboratoryOptions(pool,slug);
 }
 
 // Solo prefijos inequívocos. "BAJA" a secas podría aparecer en

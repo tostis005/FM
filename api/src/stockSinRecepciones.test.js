@@ -41,8 +41,20 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
   sourceId:String(1000+i),cn:String(900000+i),name:"Artículo "+i,
   laboratory:"Lab",stock:10+i,lastReceiptAt:null,lastSaleAt:null,supplierCode:null
  }));
- const columns=["farmacia_codigo","origen_id","codigo_nacional","nombre",
- "laboratorio","stock_actual","sincronizado_en"];
+ const columnsByTable={
+  articulos:["farmacia_codigo","origen_id","codigo_nacional","nombre",
+   "laboratorio","stock_actual","sincronizado_en"],
+  fm_recepciones_lineas:["farmacia_codigo","sistema_origen","documento_id",
+   "articulo_origen_id","eliminada_logicamente","cantidad","devuelta"],
+  fm_recepciones_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
+   "fecha","proveedor_origen_id","lineas_completas","eliminado_logicamente","estado"],
+  fm_ventas_lineas:["farmacia_codigo","sistema_origen","documento_id",
+   "articulo_origen_id","eliminada_logicamente","anulada","cantidad","devuelta"],
+  fm_ventas_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
+   "fecha","lineas_completas","eliminado_logicamente","estado"]
+ };
+ const columns=Object.entries(columnsByTable).flatMap(([table_name,names])=>
+  names.map(column_name=>({table_name,column_name})));
  const db={async query(sql,values){
   queries.push({sql,values});
   if(typeof sql==="string"&&sql.includes("to_regclass"))
@@ -50,7 +62,7 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
     cab_recepciones:"ampedia.fm_recepciones_cabeceras",ventas:"ampedia.fm_ventas_lineas",
     cab_ventas:"ampedia.fm_ventas_cabeceras"}]};
   if(typeof sql==="string"&&sql.includes("information_schema.columns"))
-   return {rows:columns.map(column_name=>({column_name}))};
+   return {rows:columns};
   if(typeof sql==="object"&&sql.text.includes("WITH candidatos"))return {rows};
   throw Error("Consulta inesperada");
  }};
@@ -68,4 +80,38 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
  assert.equal(response.body.rows.length,25);
  assert.equal(response.body.hasMore,true);
  assert.deepEqual(queries.at(-1).sql.values,["2024-10-26",[1],"ampedia","",26,0]);
+});
+
+test("API informa si las líneas de documentos no tienen los campos necesarios",async()=>{
+ let handler;
+ const db={async query(sql){
+  if(typeof sql==="string"&&sql.includes("to_regclass"))return {rows:[{
+   articulos:"ampedia.articulos",recepciones:"ampedia.fm_recepciones_lineas",
+   cab_recepciones:"ampedia.fm_recepciones_cabeceras",
+   ventas:"ampedia.fm_ventas_lineas",cab_ventas:"ampedia.fm_ventas_cabeceras"
+  }]};
+  if(typeof sql==="string"&&sql.includes("information_schema.columns"))
+   return {rows:[{table_name:"articulos",column_name:"farmacia_codigo"}]};
+  throw Error("No se debe ejecutar SQL documental sin verificar las columnas");
+ }};
+ setupStockSinRecepciones({get(_path,...handlers){handler=handlers.at(-1);}},
+  db,{requireTenantModule:()=>[]});
+ const response={statusCode:200,status(n){this.statusCode=n;return this;},
+  json(body){this.body=body;return this;}};
+ await handler(request(),response,e=>{throw e;});
+ assert.equal(response.statusCode,200);
+ assert.equal(response.body.available,false);
+ assert.match(response.body.message,/sincronización/i);
+});
+
+test("API traduce timeout de PostgreSQL a un error explicativo",async()=>{
+ let handler;
+ const db={async query(){throw Object.assign(new Error("canceling statement"),{code:"57014"});}};
+ setupStockSinRecepciones({get(_path,...handlers){handler=handlers.at(-1);}},
+  db,{requireTenantModule:()=>[]});
+ const response={statusCode:200,status(n){this.statusCode=n;return this;},
+  json(body){this.body=body;return this;}};
+ await handler(request(),response,e=>{throw e;});
+ assert.equal(response.statusCode,503);
+ assert.match(response.body.error,/tardando demasiado/i);
 });

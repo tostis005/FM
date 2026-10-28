@@ -27,7 +27,13 @@ test("SQL: aislamiento tenant/farmacia, stock real y anti-join de recepciones",(
  assert.match(sql,/f\.cliente_slug=\$3/);
  assert.match(sql,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.match(sql,/a\.stock_actual>0/);
- assert.match(sql,/AND NOT EXISTS \(/);
+ assert.match(sql,/WITH recent AS MATERIALIZED/);
+ assert.match(sql,/SELECT DISTINCT rl\.farmacia_codigo,rl\.articulo_origen_id/);
+ assert.match(sql,/LEFT JOIN recent r ON r\.farmacia_codigo=a\.farmacia_codigo/);
+ assert.match(sql,/AND r\.farmacia_codigo IS NULL/);
+ assert.doesNotMatch(sql,/AND NOT EXISTS \(/);
+ assert.match(sql,/rf\.cliente_slug=\$3/);
+ assert.match(sql,/rf\.id=ANY\(\$2::int\[\]\)/);
  assert.match(sql,/rh\.fecha >= \$1::date/);
  assert.match(sql,/rl\.cantidad>0 AND coalesce\(rl\.devuelta,false\)=false/);
  assert.match(sql,/rh\.lineas_completas AND NOT rh\.eliminada_logicamente/);
@@ -64,7 +70,7 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
     cab_ventas:"ampedia.fm_ventas_cabeceras"}]};
   if(typeof sql==="string"&&sql.includes("information_schema.columns"))
    return {rows:columns};
-  if(typeof sql==="object"&&sql.text.includes("WITH candidatos"))return {rows};
+  if(typeof sql==="object"&&sql.text.includes("candidatos AS MATERIALIZED"))return {rows};
   throw Error("Consulta inesperada");
  }};
  let handler;

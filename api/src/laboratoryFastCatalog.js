@@ -2,6 +2,7 @@ import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 import {readQuickLaboratoryCatalog} from "./laboratoryQuickCatalog.js";
+import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const validCN=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
@@ -26,15 +27,12 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_comerc
 export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,type,search="",page=1,size=40,skipMovementCheck=false}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema no autorizado");
  const schema='"'+context.client.schema+'"';
- const patterns=await readRetirementPatterns(pool,context.client.slug);
- let hasNativeCN=false;
- try{
-  const {rows}=await pool.query({text:`SELECT EXISTS(
-   SELECT 1 FROM information_schema.columns WHERE table_schema=$1
-   AND table_name='articulos' AND column_name='cn_normalizado') AS available`,
-   values:[context.client.schema],query_timeout:1500});
-  hasNativeCN=rows[0]?.available===true;
- }catch{}
+ // Metadatos ERP y exclusiones son independientes: resolver en paralelo.
+ // Un fallo transitorio de metadatos conserva el fallback compatible actual.
+ const [patterns,hasNativeCN]=await Promise.all([
+  readRetirementPatterns(pool,context.client.slug),
+  hasNativeNormalizedCN(pool,context.client.schema).catch(()=>false)
+ ]);
  const quick=await readQuickLaboratoryCatalog(pool,context,{
   key,pharmacies,type,search,page,size,patterns,hasNativeCN,skipMovementCheck
  });

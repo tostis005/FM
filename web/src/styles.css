@@ -514,7 +514,7 @@ html,body{overflow-x:clip}
 .topbar-title{flex:1 1 auto}
 .topbar-title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topbar-right{flex:0 1 auto}
-.fm-client-selector{flex:0 1 165px;min-width:0;max-width:165px;width:165px;text-overflow:ellipsis}
+.fm-client-selector{flex:0 1 165px;min-width:0;max-width:165px;width:165px;height:37px;border:1px solid #dce9e2;border-radius:9px;background:#fff;color:#1f573e;padding:0 10px;font-weight:650;font-size:12px;text-overflow:ellipsis}
 @media(max-width:1150px){
   .sidebar{padding-inline:9px}
   .side-link{padding-inline:12px}

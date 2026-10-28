@@ -84,6 +84,22 @@ supplier_links AS MATERIALIZED (
 ),
 received_with_cn AS MATERIALIZED (
  SELECT * FROM received WHERE cn IS NOT NULL
+), excluded_cn AS MATERIALIZED (
+ -- Las reglas guardadas son SUBCADENAS LITERALES: '*BAJA*' exige ambos asteriscos.
+ SELECT DISTINCT coalesce(
+   CASE WHEN btrim(ar.codigo_nacional) ~ '^[0-9]{6,7}$'
+     THEN btrim(ar.codigo_nacional) END,
+   CASE WHEN btrim(to_jsonb(ar)->>'cn_normalizado') ~ '^[0-9]{6,7}$'
+     THEN btrim(to_jsonb(ar)->>'cn_normalizado') END,
+   CASE WHEN btrim(ar.origen_id::text) ~ '^[0-9]{6,7}$'
+     THEN btrim(ar.origen_id::text) END
+ ) AS cn
+ FROM __SCHEMA__.articulos ar
+ JOIN pharmacies p ON upper(btrim(ar.farmacia_codigo))=p.pharmacy_code
+ WHERE p.pharmacy_id=ANY($2::int[])
+  AND (upper(coalesce(ar.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
+    OR EXISTS (SELECT 1 FROM unnest($3::text[]) AS exclude(cadena)
+      WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0))
 ), scoped_cn AS MATERIALIZED (
  SELECT DISTINCT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
 ), latest AS MATERIALIZED (
@@ -93,4 +109,8 @@ received_with_cn AS MATERIALIZED (
 )
 SELECT l.lab_id::text AS lab_id,l.cn,l.nombre
 FROM latest l JOIN scoped_cn s USING(cn)
+WHERE NOT EXISTS (SELECT 1 FROM excluded_cn b WHERE b.cn=l.cn)
+ AND NOT (upper(coalesce(l.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
+   OR EXISTS (SELECT 1 FROM unnest($3::text[]) AS exclude(cadena)
+     WHERE position(upper(exclude.cadena) in upper(coalesce(l.nombre,'')))>0))
 ORDER BY l.lab_id,l.cn;

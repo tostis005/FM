@@ -98,14 +98,14 @@ export default function ConfiguracionPreparador({clientSlug}){
    </div>}
   </section>
   <section className="card fm-price-settings">
-   <h2>Productos dados de baja en el preparador</h2>
-   <p>Se excluyen automáticamente los nombres que empiezan por ZZZ, *BAJA, **BAJA o variantes con espacios. Puedes añadir cadenas propias: si aparecen en cualquier posición del nombre de un artículo, no se incluirá en el pedido. No se borran productos, ventas ni recepciones.</p>
+   <h2>Artículos excluidos de nuevos pedidos</h2>
+   <p>Se excluyen automáticamente los nombres que empiezan por ZZZ, *BAJA, **BAJA o variantes con espacios. Las reglas personalizadas son texto literal, incluidos los asteriscos: *BAJA* solo coincide si aparecen los dos asteriscos en el nombre, sin distinguir mayúsculas. No se borran productos, ventas ni recepciones.</p>
    <p><strong>Prefijos automáticos:</strong> {automatic.join(", ")}</p>
    <form onSubmit={add}>
     <div className="fm-price-settings-grid">
      <label>Nueva cadena para excluir
       <input type="text" minLength={3} maxLength={80} required value={newRule}
-       onChange={e=>setNewRule(e.target.value)} placeholder="Ej. DESCATALOGADO"/>
+       onChange={e=>setNewRule(e.target.value)} placeholder="Ej. *BAJA* o DESCATALOGADO"/>
      </label>
     </div>
     <button className="btn btn-primary" type="submit" disabled={saving||newRule.trim().length<3}>

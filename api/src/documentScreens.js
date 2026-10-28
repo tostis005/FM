@@ -4,6 +4,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {nameCommercialRows,listCommercialSuppliers} from "./commercialNames.js";
 import {nameArticleRows} from "./articleNames.js";
+import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -238,6 +239,7 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
    AND f.id=ANY($3::int[])
   WHERE nullif(btrim(a.origen_id),'') IS NOT NULL
     AND $1::date <= $2::date
+    AND NOT ${retiredProductSQL("a.nombre","$8")}
   ORDER BY f.id,a.origen_id,${stamp}
  )
  SELECT *,count(*) OVER()::int AS total,
@@ -343,7 +345,9 @@ export function setupDocumentScreens(app,pool,{requireTenant}){
    }
    const sql=buildDocumentScreenSQL(section,f.schema,columns,
     String(req.query.orden||"default"),String(req.query.direccion||"desc"));
-   const {rows}=await pool.query({text:sql,values:[f.from,f.to,f.ids,f.slug,f.search,f.size,(f.page-1)*f.size]});
+   const values=[f.from,f.to,f.ids,f.slug,f.search,f.size,(f.page-1)*f.size];
+   if(section==="productos")values.push(await readRetirementPatterns(pool,f.slug));
+   const {rows}=await pool.query({text:sql,values});
    const named=["ventas-tickets","compras-recepciones","compras-devoluciones",
     "proveedores-condiciones"].includes(section)?
     await nameCommercialRows(pool,req.context,rows):rows;

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
+import "./settingsLayout.css";
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));

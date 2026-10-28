@@ -16,19 +16,25 @@ test("el preparador excluye cooperativas e internos por clasificación, no por n
 });
 test("el CN elegible tiene recepción del proveedor exacto y farmacia seleccionada",async()=>{
  const queries=[];
- const pool={query:async q=>{queries.push(q);return {rows:[{
-  referencia:"700001",cn:"700001",nombre:"Artículo A",tipo:"medicacion"
- }]}}};
+ const pool={query:async q=>{
+  queries.push(q);
+  if(typeof q==="string"&&q.includes("preparador_exclusiones"))
+   return {rows:[{cadena:"*BAJA*"}]};
+  return {rows:[{referencia:"700001",cn:"700001",
+   nombre:"Artículo A",tipo:"medicacion"}]};
+ }};
  const result=await readUnifiedSupplierCN(pool,ctx,{
   key:"P:88",pharmacies:[1],type:"medicacion"});
  assert.equal(result.total,1);
- assert.equal(queries[0].values[2],"88");
- assert.match(queries[0].text,/JOIN "ampedia"\.fm_recepciones_cabeceras h/);
- assert.match(queries[0].text,/JOIN "ampedia"\.fm_recepciones_lineas l/);
- assert.match(queries[0].text,/proveedores_unificados_alias/);
- assert.match(queries[0].text,/l\.cantidad>0 AND l\.devuelta IS NOT TRUE/);
- assert.match(queries[0].text,/normalizeCode|h\.proveedor_origen_id/);
- assert.doesNotMatch(queries[0].text,/nomenclator/i);
+ assert.equal(queries[1].values[2],"88");
+ assert.deepEqual(queries[1].values[5],["*BAJA*"]);
+ assert.match(queries[1].text,/JOIN "ampedia"\.fm_recepciones_cabeceras h/);
+ assert.match(queries[1].text,/JOIN "ampedia"\.fm_recepciones_lineas l/);
+ assert.match(queries[1].text,/proveedores_unificados_alias/);
+ assert.match(queries[1].text,/l\.cantidad>0 AND l\.devuelta IS NOT TRUE/);
+ assert.match(queries[1].text,/normalizeCode|h\.proveedor_origen_id/);
+ assert.match(queries[1].text,/position\(upper\(exclude.cadena\)/);
+ assert.doesNotMatch(queries[1].text,/nomenclator/i);
 });
 test("no acepta identificadores arbitrarios ni tipos de datos ilegales",async()=>{
  const pool={query:async()=>{throw Error("No debe consultar")}};

@@ -1,0 +1,102 @@
+/* Ajustes y cabeceras: estilos disponibles desde la carga inicial.
+   Antes estaban solo en el CSS lazy de Genéricos y Ajustes quedaba sin maquetar. */
+.main-content>.fm-production-settings{
+ width:100%;max-width:100%;min-width:0;display:grid;gap:18px;
+}
+.fm-production-settings>.page-header{width:100%;min-width:0;margin:0 0 4px}
+.fm-production-settings>.fm-price-settings{
+ width:100%;min-width:0;max-width:100%;margin:0!important;
+ padding:clamp(16px,2vw,24px)!important;
+ display:grid;gap:14px;overflow-wrap:anywhere;
+}
+.fm-production-settings .fm-price-settings h2{
+ margin:0;font-size:clamp(16px,1.5vw,19px);line-height:1.35;color:#194e38;
+}
+.fm-production-settings .fm-price-settings h3{
+ margin:9px 0 0;font-size:14px;line-height:1.4;color:#284e3b;
+}
+.fm-production-settings .fm-price-settings p{
+ min-width:0;margin:0;font-size:13px;line-height:1.65;color:#61796a;
+}
+.fm-production-settings .fm-price-settings form{
+ display:grid;gap:13px;min-width:0;max-width:100%;
+}
+.fm-production-settings .fm-price-settings-grid{
+ display:grid;grid-template-columns:repeat(auto-fit,minmax(min(225px,100%),1fr));
+ gap:14px;min-width:0;max-width:100%;
+}
+.fm-production-settings .fm-price-settings-grid>*{min-width:0;max-width:100%}
+.fm-production-settings .fm-price-settings-grid label,
+.fm-production-settings .fm-supplier-laboratory-picker{
+ display:flex;flex-direction:column;gap:8px;min-width:0;
+ font-size:12px;font-weight:700;color:#507360;
+}
+.fm-production-settings .fm-price-settings-grid input,
+.fm-production-settings .fm-price-settings-grid select,
+.fm-production-settings .fm-price-settings-grid .fm-lab-combobox{
+ width:100%;max-width:100%;min-width:0;min-height:42px;
+ padding:9px 11px;border:1px solid #d6e7dc;border-radius:10px;
+ background:#fff;color:#224833;font:inherit;
+}
+.fm-production-settings .fm-price-settings-grid input:focus-visible,
+.fm-production-settings .fm-price-settings-grid select:focus-visible{
+ outline:2px solid #128c65;outline-offset:1px;
+}
+.fm-production-settings .fm-price-settings .btn{
+ max-width:100%;min-width:0;white-space:normal;text-align:center;
+}
+.fm-production-settings .fm-price-settings-actions{
+ display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+}
+.fm-production-settings .fm-supplier-mapping-list{
+ display:grid;gap:7px;max-width:100%;min-width:0;
+}
+.fm-production-settings .fm-supplier-mapping-list>div{
+ display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:10px;min-width:0;padding:11px 12px;
+ border:1px solid #e3eee7;border-radius:9px;background:#fafcfb;
+}
+.fm-production-settings .fm-supplier-mapping-list>div>span,
+.fm-production-settings .fm-supplier-mapping-list>div>small{
+ flex:1 1 190px;min-width:0;overflow-wrap:anywhere;line-height:1.45;
+}
+.fm-production-settings .fm-supplier-mapping-list button{
+ min-height:36px;border:1px solid #d6e7dc;border-radius:9px;
+ padding:7px 11px;background:#fff;color:#315d49;
+}
+.fm-production-settings .fm-supplier-mapping-list button:hover{
+ border-color:#16956c;background:#f3fbf6;
+}
+.fm-production-settings .fm-settings-success{color:#18764e;font-size:12px}
+@media(max-width:790px){
+ .main-content>.fm-production-settings{gap:14px}
+ .fm-production-settings>.fm-price-settings{padding:17px!important}
+ .fm-production-settings .fm-supplier-mapping-list>div{align-items:flex-start}
+}
+@media(max-width:560px){
+ .main-content>.fm-production-settings{width:100%;min-width:0;padding:0}
+ .fm-production-settings>.page-header{margin:0 0 3px;min-height:0}
+ .fm-production-settings>.fm-price-settings{padding:15px!important}
+ .fm-production-settings .fm-price-settings-grid{grid-template-columns:minmax(0,1fr)}
+ .fm-production-settings .fm-price-settings form>.btn,
+ .fm-production-settings .fm-price-settings-actions>.btn{
+  width:100%;justify-content:center;
+ }
+ .fm-production-settings .fm-supplier-mapping-list>div>button{
+  flex:0 0 auto;max-width:100%;
+ }
+}
+/* Mantener márgenes del área principal para todas las cabeceras, también en móvil. */
+.main-content>.fm-stale-stock,
+.main-content>.fm-operativa-preview{
+ width:100%;max-width:100%;min-width:0;margin-inline:0;
+}
+@media(max-width:560px){
+ .main-content>.fm-stale-stock{padding-inline:0}
+ .main-content>.fm-stale-stock>.page-header{
+  min-width:0;width:100%;margin-inline:0;
+ }
+ .main-content>.fm-stale-stock>.fm-unified-filters{
+  width:100%;min-width:0;margin-inline:0;
+ }
+}

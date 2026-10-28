@@ -48,7 +48,7 @@ jobs:
           node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -378,4 +378,13 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorLastReceipt.mjs
+          '
+
+      - name: Auditar duplicados del maestro completo y preparador (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditar equivalencias laboratorios')
+        continue-on-error: false
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 130 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditLaboratoryMerges.mjs
           '

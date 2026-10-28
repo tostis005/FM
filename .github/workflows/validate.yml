@@ -40,7 +40,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
           node --check api/src/laboratoryCatalog.js

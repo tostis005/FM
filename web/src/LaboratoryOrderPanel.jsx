@@ -9,7 +9,7 @@ import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
-import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";
+import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_VISIBLE_INITIAL,visibleLaboratoryRows,nextLaboratoryVisibleCount} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -36,6 +36,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
+ const [visibleCount,setVisibleCount]=useState(LAB_VISIBLE_INITIAL);
  const [data,setData]=useState(empty);
  const catalogueCache=useRef(new Map());
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
@@ -216,6 +217,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(term)||
    String(row.nombre||"").toLocaleLowerCase("es").includes(term));
  },[data.rows,search]);
+ // El universo de referencias y los totales siguen completos: solo cambia
+ // cuántas filas dibuja React inicialmente en la tabla.
+ const tableRows=useMemo(()=>visibleLaboratoryRows(currentRows,visibleCount),
+  [currentRows,visibleCount]);
+ useEffect(()=>setVisibleCount(LAB_VISIBLE_INITIAL),
+  [clientSlug,laboratory,tab,scope,search]);
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&(loadStage==="metrics"||loadStage==="fallback")&&Boolean(data.rows?.length);
  const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
@@ -392,7 +399,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        <th>Vendido</th><th>Propuesta</th>
        <th className="fm-lab-order-editcol">Pedir total</th>
       </tr></thead>
-      <tbody>{currentRows.map(row=>{
+      <tbody>{tableRows.map(row=>{
        const line=showLine(row);
        return <tr key={row.referencia}>
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
@@ -437,6 +444,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </HorizontalTableScroll>
+    {tableRows.length<currentRows.length&&<div className="fm-lab-order-more" role="status">
+     <span>Mostrando {tableRows.length} de {currentRows.length} referencias. Los totales y el borrador incluyen todas.</span>
+     <button className="btn btn-secondary btn-sm" type="button"
+      onClick={()=>setVisibleCount(n=>nextLaboratoryVisibleCount(n,currentRows.length))}>
+      Mostrar {Math.min(150,currentRows.length-tableRows.length)} más
+     </button>
+    </div>}
     {metricsLoading&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
      <div className="fm-lab-matrix-loading">
       <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>

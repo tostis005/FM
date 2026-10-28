@@ -57,7 +57,7 @@ jobs:
            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
           BEGIN READ ONLY;
           SET LOCAL statement_timeout='15s';
-          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, SUMMARY ON)
+          EXPLAIN (COSTS ON)
           WITH candidatos AS MATERIALIZED (
            SELECT f.id::text AS pharmacy_id,a.farmacia_codigo,a.origen_id,a.stock_actual
            FROM ampedia.articulos a
@@ -94,7 +94,7 @@ jobs:
           BEGIN READ ONLY;
           SET LOCAL statement_timeout='15s';
           SET LOCAL work_mem='32MB';
-          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, SUMMARY ON)
+          EXPLAIN (COSTS ON)
           WITH recent AS MATERIALIZED (
            SELECT DISTINCT rl.farmacia_codigo,rl.articulo_origen_id
            FROM ampedia.fm_recepciones_cabeceras rh
@@ -121,4 +121,75 @@ jobs:
           SQL
           rc=$?
           echo "STOCK_RECENT_HASH_EXIT=$rc"
+          exit 0
+      - name: Probar informe completo con agregación reciente (hasta 24 segundos)
+        shell: bash
+        run: |
+          set +e
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+           'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='24s';
+          SET LOCAL work_mem='32MB';
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, SUMMARY ON)
+          WITH recent AS MATERIALIZED (
+           SELECT DISTINCT rl.farmacia_codigo,rl.articulo_origen_id
+           FROM ampedia.fm_recepciones_cabeceras rh
+           JOIN ampedia.fm_recepciones_lineas rl
+            ON rh.farmacia_codigo=rl.farmacia_codigo
+              AND rh.sistema_origen=rl.sistema_origen AND rh.documento_id=rl.documento_id
+           WHERE rh.fecha>='2024-10-28'::date AND rh.lineas_completas
+             AND NOT rh.eliminada_logicamente
+             AND lower(btrim(rh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+             AND NOT rl.eliminada_logicamente
+             AND rl.cantidad>0 AND coalesce(rl.devuelta,false)=false
+          ), candidatos AS MATERIALIZED (
+          SELECT f.id::text AS "pharmacyId", f.nombre AS "pharmacyName",
+            a.farmacia_codigo AS "pharmacyCode",a.origen_id AS "sourceId",
+            nullif(btrim(a.codigo_nacional),'') AS cn,a.nombre AS name,
+            nullif(btrim(a.laboratorio),'') AS laboratory,
+            a.stock_actual::float8 AS stock,a.sincronizado_en AS "stockUpdatedAt"
+          FROM ampedia.articulos a
+          JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+            AND upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+            AND f.id=ANY(ARRAY(SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia')::int[])
+          LEFT JOIN recent r ON r.farmacia_codigo=a.farmacia_codigo
+            AND r.articulo_origen_id=a.origen_id
+          WHERE a.stock_actual>0 AND nullif(btrim(a.origen_id),'') IS NOT NULL
+            AND r.farmacia_codigo IS NULL
+          ORDER BY a.stock_actual DESC,f.id,a.origen_id LIMIT 51
+          )
+          SELECT c.*,last_receipt.fecha AS "lastReceiptAt",
+            last_receipt.proveedor_origen_id AS "supplierCode",
+            last_sale.fecha AS "lastSaleAt"
+          FROM candidatos c
+          LEFT JOIN LATERAL (
+           SELECT rh.fecha,rh.proveedor_origen_id FROM ampedia.fm_recepciones_lineas rl
+           JOIN ampedia.fm_recepciones_cabeceras rh
+             ON rh.farmacia_codigo=rl.farmacia_codigo
+             AND rh.sistema_origen=rl.sistema_origen AND rh.documento_id=rl.documento_id
+           WHERE rl.farmacia_codigo=c."pharmacyCode" AND rl.articulo_origen_id=c."sourceId"
+             AND NOT rl.eliminada_logicamente AND rl.cantidad>0
+             AND coalesce(rl.devuelta,false)=false
+             AND rh.lineas_completas AND NOT rh.eliminada_logicamente
+             AND lower(btrim(rh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+           ORDER BY rh.fecha DESC,rh.documento_id DESC LIMIT 1
+          ) last_receipt ON true
+          LEFT JOIN LATERAL (
+           SELECT sh.fecha FROM ampedia.fm_ventas_lineas sl
+           JOIN ampedia.fm_ventas_cabeceras sh
+             ON sh.farmacia_codigo=sl.farmacia_codigo
+             AND sh.sistema_origen=sl.sistema_origen AND sh.documento_id=sl.documento_id
+           WHERE sl.farmacia_codigo=c."pharmacyCode" AND sl.articulo_origen_id=c."sourceId"
+             AND NOT sl.eliminada_logicamente AND coalesce(sl.anulada,false)=false
+             AND sl.cantidad>0 AND coalesce(sl.devuelta,false)=false
+             AND sh.lineas_completas AND NOT sh.eliminado_logicamente
+             AND lower(btrim(sh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+           ORDER BY sh.fecha DESC,sh.documento_id DESC LIMIT 1
+          ) last_sale ON true
+          ORDER BY c.stock DESC,c."pharmacyId",c."sourceId";
+          COMMIT;
+          SQL
+          rc=$?
+          echo "STOCK_FULL_RECENT_EXIT=$rc"
           exit 0

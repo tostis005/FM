@@ -32,7 +32,8 @@ export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madri
  if(p.closedAt||p.closedOn||p.status==="Finalizada"&&p.statusSource!=="automatic")
   return "Finalizada";
  const automaticallyManaged=p.statusSource==="automatic"||
-  (!p.statusSource&&String(p.source||"").startsWith("Excel"));
+  (!p.statusSource&&String(p.source||"").startsWith("Excel"))||
+  (!p.end&&["Activa","Pendiente de revisión"].includes(p.status));
  if(!automaticallyManaged)return p.status||"Borrador";
  if(!DAY.test(p.start||"")||!validTargets(p))return "Borrador";
  const today=civilToday(now,timeZone);

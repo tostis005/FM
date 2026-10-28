@@ -122,7 +122,7 @@ jobs:
           rc=$?
           echo "STOCK_RECENT_HASH_EXIT=$rc"
           exit 0
-      - name: Probar informe completo con agregación reciente (hasta 24 segundos)
+      - name: Probar informe completo con farmacias autorizadas y work_mem por defecto
         shell: bash
         run: |
           set +e
@@ -130,11 +130,14 @@ jobs:
            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
           BEGIN READ ONLY;
           SET LOCAL statement_timeout='24s';
-          SET LOCAL work_mem='32MB';
           EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, SUMMARY ON)
           WITH recent AS MATERIALIZED (
            SELECT DISTINCT rl.farmacia_codigo,rl.articulo_origen_id
            FROM ampedia.fm_recepciones_cabeceras rh
+           JOIN farmetrica.farmacias rf ON rf.cliente_slug='ampedia'
+            AND rf.id=ANY(ARRAY(SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia')::int[])
+            AND upper(btrim(rh.farmacia_codigo))=(CASE WHEN rf.id=5 AND upper(btrim(rf.codigo_origen)) IN ('POL','VAL') THEN 'VAL'
+              ELSE upper(btrim(rf.codigo_origen)) END)
            JOIN ampedia.fm_recepciones_lineas rl
             ON rh.farmacia_codigo=rl.farmacia_codigo
               AND rh.sistema_origen=rl.sistema_origen AND rh.documento_id=rl.documento_id

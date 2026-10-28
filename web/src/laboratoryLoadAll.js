@@ -1,15 +1,3 @@
-// La matriz puede tener miles de filas y más de 20 columnas. Cargar todas
-// las referencias y métricas, pero dibujar inicialmente solo un tramo evita
-// bloquear React al teclear o cambiar una cantidad. No limita guardados ni totales.
-export const LAB_VISIBLE_INITIAL=150;
-export const LAB_VISIBLE_STEP=150;
-export function visibleLaboratoryRows(rows,count=LAB_VISIBLE_INITIAL){
- return rows.slice(0,Math.max(0,Math.floor(Number(count)||0)));
-}
-export function nextLaboratoryVisibleCount(current,total){
- return Math.min(total,Math.max(LAB_VISIBLE_INITIAL,Number(current)||0)+LAB_VISIBLE_STEP);
-}
-
 // Se mantiene una única tabla visible. La API conserva lotes de 100
 // para no saturar PostgreSQL, pero se pueden leer 3 páginas en paralelo.
 export const LAB_CATALOG_BATCH=250;

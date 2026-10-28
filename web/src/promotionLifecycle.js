@@ -46,10 +46,10 @@ export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madri
 }
 // Límite técnico para consultas SQL. No se escribe en el campo fin original.
 export function promotionReportingEnd(p,now=new Date(),timeZone="Europe/Madrid"){
- if(DAY.test(p.end||""))return p.end;
  if(!DAY.test(p.start||""))return "";
  const today=civilToday(now,timeZone);
  if(DAY.test(p.closedOn||""))return p.closedOn<today?p.closedOn:today;
+ if(DAY.test(p.end||""))return p.end;
  const due=promotionReviewDue(p);
  if(due&&today>=due&&effectivePromotionStatus(p,now,timeZone)==="Pendiente de revisión")
   return addCivilDays(due,-1);

@@ -48,5 +48,12 @@ Inspección estática del frontend React/Vite, rutas analíticas y servicios Pos
 - Registrar latencia de red, servidor y SQL; capturar waterfall y CLS en carga en frío y navegación entre módulos.
 - El cambio de este PR está aislado en rama. Si se detecta diferencia, se revierte sin migrar ni alterar datos.
 
+### Optimización del acceso frío (sin dependencia de usuarios frecuentes)
+En el selector del preparador, la carga de proveedores unificados y la consulta de `última recepción por CN` se ejecutan ahora en paralelo. Son operaciones independientes; solo se aplica el filtro final tras disponer de ambos resultados, manteniendo la prioridad de la recepción histórica más reciente en el conjunto de farmacias del cliente.
+
+El servicio de última recepción registra en servidor tiempo real de misses de caché (estado, milisegundos, cantidad de farmacias y referencias, sin CN ni nombres), para que se pueda distinguir un atasco de SQL de la representación de la tabla. La duración de la caché se mantiene en 120 segundos: no se prolonga sin una política completa de invalidación tras las sincronizaciones.
+
+Al editar exclusiones de artículos se invalidan tanto el resultado de últimas recepciones como la caché del selector, además de la invalidación por cambios en el maestro unificado. No se introducen consultas nuevas en producción ni migraciones SQL en este PR.
+
 ### Decisión de interfaz: tabla completa
 El preparador conserva **todas las referencias del laboratorio visibles en una sola tabla**, sin tope de 150 filas, carga incremental ni botón «mostrar más», para mantener el modo de revisión equivalente al Excel utilizado por las farmacias. La optimización de metadatos y selector permanece independiente de esta decisión. Una mejora futura de renderizado deberá preservar esta vista completa.

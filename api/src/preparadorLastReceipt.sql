@@ -7,6 +7,8 @@ WITH eligible_labs AS MATERIALIZED (
  WHERE p.cliente_slug=$1 AND p.activo
   AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')
   AND upper(p.nombre) !~ '(COOPERATIVA|COOP\\.?|MAYORISTA|DISTRIBUIDOR)'
+  -- Los proveedores con nombre de farmacia no son laboratorios del pedido.
+  AND upper(p.nombre) !~ '(^|[^A-Z])FARMACIAS?([^A-Z]|$)'
 ), pharmacies AS MATERIALIZED (
  SELECT f.id AS pharmacy_id,__PHARMACY_CODE__ AS pharmacy_code
  FROM farmetrica.farmacias f WHERE f.cliente_slug=$1

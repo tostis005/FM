@@ -182,7 +182,8 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
     if(["42P01","42703"].includes(e.code))
      return res.status(503).json({error:
       "Faltan tablas o campos de la sincronización necesarios para consultar el stock. Revisa la carga documental."});
-    next(e);
+    return res.status(500).json({error:
+     "No se pudo consultar el stock sin recepciones. El error ha quedado registrado en la API para su diagnóstico."});
    }
   });
 }

@@ -7,8 +7,8 @@ import {
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail
 } from "lucide-react";
 import "./styles.css";
-import "./settingsLayout.css";
 import "./loginTheme.css";
+import "./settingsLayout.css";
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));

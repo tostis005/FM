@@ -14,11 +14,11 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
  try{
   await db.query("BEGIN");
   const groups=[];
-  for(const [suffix,cls] of [["A","DIRECTO"],["B","DIRECTO"],["C","MAYORISTA"]]){
+  for(const [suffix,cls] of [["A","DIRECTO"],["B","DIRECTO"],["C","MAYORISTA"],["D","DIRECTO"]]){
    const {rows}=await db.query(`INSERT INTO farmetrica.proveedores_unificados
     (cliente_slug,clave_unificada,nombre,clase)
     VALUES('ampedia',$1,$2,$3) RETURNING id::text`,
-    ["CI-ULTIMA-"+suffix,"Prueba Última "+suffix,cls]);
+    ["CI-ULTIMA-"+suffix,suffix==="D"?"FARMACIA PRUEBA":("Prueba Última "+suffix),cls]);
    groups.push(rows[0].id);
    await db.query(`INSERT INTO farmetrica.proveedores_unificados_alias
     (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen)
@@ -28,7 +28,7 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,stock_actual)
    VALUES('ABA','CI-ULTIMA-ART','Prueba ultima compra','794321',3)`);
-  for(const [suffix,date] of [["A","2026-10-01"],["B","2026-10-21"],["C","2026-10-26"]]){
+  for(const [suffix,date] of [["A","2026-10-01"],["B","2026-10-21"],["C","2026-10-26"],["D","2026-10-28"]]){
    await db.query(`INSERT INTO ampedia.fm_recepciones_cabeceras
     (farmacia_codigo,sistema_origen,documento_id,fecha,proveedor_origen_id,lineas_completas)
     VALUES('ABA','farmatic',$1,$2,$3,true)`,
@@ -48,6 +48,7 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
   assert.deepEqual((await catalog(groups[1])).rows.map(r=>r.cn),["794321"]);
   assert.equal((await catalog(groups[0])).total,0);
   assert.equal((await catalog(groups[2])).total,0,"Mayorista excluido aun siendo la recepción más reciente");
+  assert.equal((await catalog(groups[3])).total,0,"Farmacia excluida aunque haya recibido después el CN");
   // Una recepción posterior devuelve el CN al laboratorio A.
   await db.query(`UPDATE ampedia.fm_recepciones_cabeceras SET fecha='2026-10-27'
    WHERE documento_id='CI-ULTIMA-REC-A' AND farmacia_codigo='ABA'`);

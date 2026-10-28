@@ -668,10 +668,13 @@ function App(){
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
   const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   if(result.status==="Finalizada"){
-    if(result.closedOn&&result.closedOn<result.start)return setToast("El cierre no puede ser anterior al inicio");
-    result.closedOn=result.closedOn||today;
-    result.closedAt=result.closedAt||now.toISOString();
-    result.statusSource="manual";
+    const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
+    if(manualClose){
+      if(result.closedOn&&result.closedOn<result.start)return setToast("El cierre no puede ser anterior al inicio");
+      result.closedOn=result.closedOn||today;
+      result.closedAt=result.closedAt||now.toISOString();
+      result.statusSource="manual";
+    }else result.statusSource=original?.statusSource||"manual";
   }else{
     delete result.closedAt;delete result.closedOn;delete result.closedReason;
     const wasAutomatic=original&&(original.statusSource==="automatic"||!original.statusSource&&String(original.source||"").startsWith("Excel"));
@@ -1105,7 +1108,7 @@ function App(){
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
       {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
-      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.status==="Pendiente de revisión"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();void confirmPromotion(p)}}>Confirmar vigencia</button>}{canManagePromotions&&p.status!=="Finalizada"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();startPromo({...p,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.status==="Pendiente de revisión"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();void confirmPromotion(p)}}>Confirmar vigencia</button>}{canManagePromotions&&p.status!=="Finalizada"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();startPromo({...p,status:"Finalizada",closedOn:p.start>civilToday(new Date(),reportTimeZone)?p.start:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
     ]}/>
  </section>
 

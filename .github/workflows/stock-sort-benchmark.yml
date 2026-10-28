@@ -1,0 +1,55 @@
+name: Diagnóstico temporal ordenación stock sin recepciones
+on:
+  push:
+    branches: [diagnostic/stock-sort-perf-20261028]
+    paths: [".github/workflows/stock-sort-benchmark.yml"]
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/stock-sin-recepciones-tabla-unificada-20261028
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Generar EXPLAIN sin datos comerciales
+        shell: bash
+        run: |
+          node --input-type=module > "$RUNNER_TEMP/stock-sort-benchmark.sql" <<'JS'
+          import {buildStockSinRecepcionesSQL} from "./api/src/stockSinRecepciones.js";
+          for(const [key,dir] of [
+            ["stock","desc"],["pvp","desc"],["name","asc"],
+            ["supplier","asc"],["lastReceiptAt","desc"],["lastSaleAt","desc"]
+          ]){
+            console.log("BEGIN READ ONLY;");
+            console.log("SET LOCAL statement_timeout='12000ms';");
+            console.log("SELECT 'BENCH_BEGIN_"+key+"';");
+            console.log("PREPARE stock(date,int[],text,text,int,int,text,text,text,text,text) AS "+
+              buildStockSinRecepcionesSQL("ampedia",key,dir)+";");
+            console.log("EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, SUMMARY ON) EXECUTE stock("+
+              "'2024-10-28',ARRAY[1,2,3,4,5],'ampedia','',11,0,'','','','','');");
+            console.log("DEALLOCATE stock;");
+            console.log("ROLLBACK;");
+          }
+          JS
+      - name: Ejecutar mediciones limitadas READ ONLY en VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm && chmod 600 ~/.ssh/id_fm
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=15 "$VPS_USER@$VPS_HOST" \
+           'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=0 -U farmawao -d farmawao' \
+           < "$RUNNER_TEMP/stock-sort-benchmark.sql" \
+           | grep -E 'BENCH_BEGIN_|Execution Time:|ERROR:|^ROLLBACK$|^PREPARE$' || true

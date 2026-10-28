@@ -46,3 +46,21 @@ test("fecha final distinta distingue una campaña abierta de una cerrada",()=>{
  const opened={...promo,end:""};
  assert.notEqual(promotionImportIdentity(opened),promotionImportIdentity(promo));
 });
+
+
+test("cada importación de un Excel es independiente aunque los datos coincidan",()=>{
+ const october={...promo,id:"X1",importBatchId:"octubre-2026",sourceRow:2};
+ const november={...promo,id:"X1",importBatchId:"noviembre-2026",sourceRow:2};
+ const r=planPromotionImport([october],[november]);
+ assert.equal(r.skipped,0);
+ assert.equal(r.additions.length,1);
+ assert.equal(r.additions[0].id,"X1-1");
+ assert.equal(r.additions[0].targets["1"],7);
+});
+test("dos filas iguales del mismo lote son promociones distintas, sin mezclar objetivos",()=>{
+ const a={...promo,id:"X1",importBatchId:"noviembre-2026",sourceRow:2};
+ const b={...promo,id:"X2",importBatchId:"noviembre-2026",sourceRow:3};
+ const r=planPromotionImport([],[a,b]);
+ assert.equal(r.additions.length,2);
+ assert.equal(planPromotionImport(r.additions,[a]).skipped,1);
+});

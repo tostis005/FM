@@ -1,4 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 
 // Solo prefijos inequívocos. "BAJA" a secas podría aparecer en
 // nombres válidos como "baja concentración" y NO debe excluirse.
@@ -44,6 +45,7 @@ export function setupLaboratoryRetirements(app,pool,{requireTenant,requireTenant
     VALUES($1,$2) ON CONFLICT(cliente_slug,cadena) DO UPDATE SET cadena=EXCLUDED.cadena
     RETURNING id::text,cadena AS text,creado_en AS "createdAt"`,
     [req.context.client.slug,value]);
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.status(201).json(rows[0]);
   }catch(error){next(error);}
  });
@@ -54,6 +56,7 @@ export function setupLaboratoryRetirements(app,pool,{requireTenant,requireTenant
    const {rowCount}=await pool.query(`DELETE FROM farmetrica.preparador_exclusiones
     WHERE cliente_slug=$1 AND id=$2::bigint`,[req.context.client.slug,req.params.id]);
    if(!rowCount)return res.status(404).json({error:"Regla no encontrada"});
+   invalidateLastReceiptCache(pool,req.context.client.slug);
    res.json({deleted:true});
   }catch(error){next(error);}
  });

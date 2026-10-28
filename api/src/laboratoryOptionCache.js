@@ -1,13 +1,13 @@
-// Caché de lectura por instancia de conexión y ámbito autorizado.
+// Caché de lectura por instancia de conexión, familia de catálogo y ámbito autorizado.
 // Evita reconstruir el selector en cada visita, sin mezclar clientes o farmacias.
 // El máximo tiempo con datos almacenados es de 2 minutos.
 const TTL=120_000;
 const pools=new WeakMap();
-export function readCachedLaboratoryOptions(pool,tenant,pharmacies,loader){
+export function readCachedLaboratoryOptions(pool,tenant,pharmacies,loader,namespace="operational"){
  let cache=pools.get(pool);
  if(!cache){cache=new Map();pools.set(pool,cache)}
  const scope=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b).join(",");
- const key=tenant+"|"+scope,now=Date.now();
+ const key=tenant+"|"+namespace+"|"+scope,now=Date.now();
  const existing=cache.get(key);
  if(existing?.rows&&existing.expires>now)return Promise.resolve(existing.rows);
  if(existing?.pending)return existing.pending;

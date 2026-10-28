@@ -1,3 +1,4 @@
+import { civilToday } from "./promotionLifecycle.js";
 // Períodos mensuales de promociones: días completos, incluidos ambos extremos.
 const dayPattern=/^\d{4}-\d{2}-\d{2}$/;
 const monthPattern=/^(19|20)\d{2}-(0[1-9]|1[0-2])$/;
@@ -26,7 +27,7 @@ export function promotionMonthFromRange(from,to){
 // Solape inclusivo: comienza, acaba o atraviesa el período seleccionado.
 export function promotionOverlapsPeriod(promo,from="",to=""){
  if((!from&&!to))return true;
- const start=promo?.start,end=promo?.end;
+ const start=promo?.start,end=promo?.closedOn||promo?.end||civilToday();
  if(!dayPattern.test(start||"")||!dayPattern.test(end||"")||start>end)return false;
  return (!from||end>=from)&&(!to||start<=to);
 }

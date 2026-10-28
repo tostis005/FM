@@ -78,7 +78,8 @@ try{
  assert.equal(saveCalls,2);
  await page.reload({waitUntil:"domcontentloaded"});
  try{
-  await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:12000});
+  await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
+   await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:12000});
  }catch(err){
   console.log("Auditoría tras recarga:",JSON.stringify({
    serverPromotions:saved.map(p=>({id:p.id,name:p.name,status:p.status,start:p.start,end:p.end})),
@@ -93,7 +94,8 @@ try{
 
  role="farmacia";
  await page.reload({waitUntil:"domcontentloaded"});
- await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:15000});
+ await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
+  await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:15000});
  assert.equal(await page.getByRole("button",{name:"Nueva promoción"}).count(),0);
  assert.equal(await page.getByRole("button",{name:"Importar Excel"}).count(),0);
  assert.equal(await page.getByRole("button",{name:"Editar Campaña de verificación"}).count(),0);

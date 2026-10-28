@@ -39,6 +39,7 @@ try{
  // Por defecto el listado muestra el mes actual. Para comprobar que se
  // mantienen campañas archivadas de otros meses, abrir el histórico.
  await page.getByRole("button",{name:"Ver todos los meses"}).click();
+  await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
  const del=page.getByRole("button",{name:"Eliminar Oferta con objetivos"});
  await del.waitFor({state:"visible",timeout:14000});
  await page.locator(".pill-finalizada").first().waitFor({state:"visible",timeout:10000});
@@ -61,6 +62,7 @@ try{
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Promociones",exact:true}).waitFor();
  await page.getByRole("button",{name:"Ver todos los meses"}).click();
+  await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
  await page.getByText("Campaña archivada").first().waitFor();
  assert.equal(await page.getByRole("button",{name:"Eliminar Oferta con objetivos"}).count(),0);
  assert.deepEqual(errors,[]);

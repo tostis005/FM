@@ -1,5 +1,6 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {latestLaboratoryCN,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
+import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
@@ -56,6 +57,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
    throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
   return {rows,total:rows.length,metricsUnavailable:true};
  }
+ const patterns=await readRetirementPatterns(pool,ctx.client.slug);
  const sql=`
  WITH chosen AS MATERIALIZED (
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
@@ -92,6 +94,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   FROM bought b JOIN ${q}.articulos a
    ON a.farmacia_codigo=b.farmacia_codigo
     AND a.origen_id::text=b.article_id
+  WHERE NOT ${retiredProductSQL("a.nombre","$6")}
  )
  SELECT cn AS referencia,cn, min(nombre) AS nombre,$4::text AS tipo,
   false AS "inMaster",true AS "inReceipts",true AS "inPurchases",
@@ -102,7 +105,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   AND (coalesce($5::text,'')='' OR cn ILIKE '%'||$5||'%'
      OR nombre ILIKE '%'||$5||'%')
  GROUP BY cn ORDER BY min(nombre),cn LIMIT 5001`;
- const {rows}=await pool.query({text:sql,values:[ctx.client.slug,pharmacies,id,type,search],
+ const {rows}=await pool.query({text:sql,values:[ctx.client.slug,pharmacies,id,type,search,patterns],
   query_timeout:25000});
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
  return {rows,total:rows.length,metricsUnavailable:true};

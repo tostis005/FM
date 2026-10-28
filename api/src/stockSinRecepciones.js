@@ -5,6 +5,7 @@ import {nameCommercialRows} from "./commercialNames.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^20\d{2}-\d{2}-\d{2}$/;
+const SORT_KEYS=new Set(["stock","pvp","cn","name","pharmacy","supplier","lastReceiptAt","lastSaleAt"]);
 export function validCutoff(value,today=new Date()){
  const s=String(value||"");
  if(!DATE.test(s))return false;
@@ -29,19 +30,64 @@ export function stockSinRecepcionesFilters(req){
  const buscar=String(req.query?.buscar||"").trim();
  if(buscar.length>100)
   throw Object.assign(Error("La búsqueda es demasiado larga"),{status:400});
+ const orden=String(req.query?.orden||"stock");
+ const direccion=String(req.query?.direccion||"desc");
+ if(!SORT_KEYS.has(orden)||!["asc","desc"].includes(direccion))
+  throw Object.assign(Error("Orden de tabla incorrecto"),{status:400});
+ const filtros={};
+ for(const key of ["pharmacy","cn","name","stock","pvp"]){
+  const value=String(req.query?.["f_"+key]||"").trim();
+  if(value.length>100)throw Object.assign(Error("Filtro de columna demasiado largo"),{status:400});
+  filtros[key]=value;
+ }
  const pagina=Number(req.query?.pagina||1),tamano=Number(req.query?.tamano||50);
  if(!Number.isSafeInteger(pagina)||pagina<1||pagina>1000||
-    ![25,50,100].includes(tamano))
+    ![10,25,50,100].includes(tamano))
   throw Object.assign(Error("Página o tamaño incorrecto"),{status:400});
- return {desde,ids:[...new Set(ids)],buscar,pagina,tamano,schema,slug};
+ return {desde,ids:[...new Set(ids)],buscar,pagina,tamano,schema,slug,orden,direccion,filtros};
 }
 
-// Se recorre solamente el catálogo CON stock positivo; NOT EXISTS rechaza
-// cualquier recepción positiva desde el corte, incluso de proveedores ignorados.
-// La última venta/recepción se busca SOLO para las 25–100 filas paginadas.
-export function buildStockSinRecepcionesSQL(schema){
+// Se recorre el catálogo con stock positivo y se excluyen todas las recepciones
+// recientes válidas, independientemente de la clasificación del proveedor.
+// Las fechas se consultan en la página, salvo al ordenar globalmente por ellas.
+export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc"){
  if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
  const q='"'+schema+'"';
+ if(!SORT_KEYS.has(orden)||!["asc","desc"].includes(direccion))throw Error("Orden inválido");
+ const basic={stock:"a.stock_actual",pvp:"a.pvp",cn:"coalesce(nullif(btrim(a.codigo_nacional),''),a.origen_id)",
+  name:"a.nombre",pharmacy:"f.nombre"};
+ // Ordenación global ANTES de LIMIT/OFFSET; las fechas y el proveedor se
+ // consultan sólo si se solicita ordenar expresamente por esos campos.
+ const receiptSort=`(SELECT rh.fecha FROM ${q}.fm_recepciones_lineas rl
+   JOIN ${q}.fm_recepciones_cabeceras rh ON rh.farmacia_codigo=rl.farmacia_codigo
+    AND rh.sistema_origen=rl.sistema_origen AND rh.documento_id=rl.documento_id
+   WHERE rl.farmacia_codigo=a.farmacia_codigo AND rl.articulo_origen_id=a.origen_id
+    AND NOT rl.eliminada_logicamente AND rl.cantidad>0
+    AND coalesce(rl.devuelta,false)=false AND rh.lineas_completas
+    AND NOT rh.eliminada_logicamente
+    AND lower(btrim(rh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   ORDER BY rh.fecha DESC,rh.documento_id DESC LIMIT 1)`;
+ const saleSort=`(SELECT sh.fecha FROM ${q}.fm_ventas_lineas sl
+   JOIN ${q}.fm_ventas_cabeceras sh ON sh.farmacia_codigo=sl.farmacia_codigo
+    AND sh.sistema_origen=sl.sistema_origen AND sh.documento_id=sl.documento_id
+   WHERE sl.farmacia_codigo=a.farmacia_codigo AND sl.articulo_origen_id=a.origen_id
+    AND NOT sl.eliminada_logicamente AND coalesce(sl.anulada,false)=false
+    AND sl.cantidad>0 AND coalesce(sl.devuelta,false)=false
+    AND sh.lineas_completas AND NOT sh.eliminado_logicamente
+    AND lower(btrim(sh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   ORDER BY sh.fecha DESC,sh.documento_id DESC LIMIT 1)`;
+ const supplierSort=receiptSort.replace("SELECT rh.fecha","SELECT rh.proveedor_origen_id");
+ const expression=basic[orden]||(orden==="lastReceiptAt"?receiptSort:
+  orden==="lastSaleAt"?saleSort:supplierSort);
+ const sorting=`${expression} ${direccion.toUpperCase()} NULLS LAST, a.stock_actual DESC,f.id,a.origen_id`;
+ const outputColumns={
+  stock:"c.stock",pvp:"c.pvp",cn:'coalesce(c.cn,c."sourceId")',
+  name:"c.name",pharmacy:'c."pharmacyName"',
+  supplier:"last_receipt.proveedor_origen_id",
+  lastReceiptAt:"last_receipt.fecha",lastSaleAt:"last_sale.fecha"
+ };
+ const outputSort=`${outputColumns[orden]} ${direccion.toUpperCase()} NULLS LAST, c.stock DESC,c."pharmacyId"::int,c."sourceId"`;
+
  return `
  -- Una sola pasada de documentos recientes evita buscar cabeceras históricas
  -- cientos de miles de veces por artículo con stock.
@@ -67,7 +113,9 @@ export function buildStockSinRecepcionesSQL(schema){
    a.farmacia_codigo AS "pharmacyCode",a.origen_id AS "sourceId",
    nullif(btrim(a.codigo_nacional),'') AS cn,a.nombre AS name,
    nullif(btrim(a.laboratorio),'') AS laboratory,
-   a.stock_actual::float8 AS stock,a.sincronizado_en AS "stockUpdatedAt"
+   a.stock_actual::float8 AS stock,a.pvp::float8 AS pvp,
+   a.sincronizado_en AS "stockUpdatedAt",
+   count(*) OVER()::int AS "totalCount"
   FROM ${q}.articulos a
   JOIN farmetrica.farmacias f ON f.cliente_slug=$3
     AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
@@ -80,7 +128,12 @@ export function buildStockSinRecepcionesSQL(schema){
       OR a.nombre ILIKE '%'||$4||'%'
       OR a.origen_id ILIKE '%'||$4||'%')
    AND r.farmacia_codigo IS NULL
-  ORDER BY a.stock_actual DESC,f.id,a.origen_id
+   AND ($7::text='' OR f.nombre ILIKE '%'||$7||'%')
+   AND ($8::text='' OR coalesce(nullif(btrim(a.codigo_nacional),''),a.origen_id) ILIKE '%'||$8||'%')
+   AND ($9::text='' OR a.nombre ILIKE '%'||$9||'%')
+   AND ($10::text='' OR a.stock_actual::text ILIKE '%'||$10||'%')
+   AND ($11::text='' OR a.pvp::text ILIKE '%'||$11||'%')
+  ORDER BY ${sorting}
   LIMIT $5::int OFFSET $6::int
  )
  SELECT c.*,last_receipt.fecha AS "lastReceiptAt",
@@ -120,7 +173,7 @@ export function buildStockSinRecepcionesSQL(schema){
        ('anulado','anulada','cancelado','cancelada','void')
    ORDER BY sh.fecha DESC,sh.documento_id DESC LIMIT 1
  ) last_sale ON true
- ORDER BY c.stock DESC,c."pharmacyId",c."sourceId"
+ ORDER BY ${outputSort}
  `;
 }
 
@@ -130,7 +183,7 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
    try{
     const f=stockSinRecepcionesFilters(req);
     if(!f.ids.length)return res.json({available:true,rows:[],hasMore:false,
-     page:f.pagina,pageSize:f.tamano,desde:f.desde});
+     page:f.pagina,pageSize:f.tamano,total:0,desde:f.desde});
     const {rows:tables}=await pool.query(
      "SELECT to_regclass($1)::text AS articulos,"+
      "to_regclass($2)::text AS recepciones,"+
@@ -147,7 +200,7 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
     // todas sus columnas. Comprobar también documentos evita un 500 genérico.
     const required={
      articulos:["farmacia_codigo","origen_id","codigo_nacional","nombre",
-      "laboratorio","stock_actual","sincronizado_en"],
+      "laboratorio","stock_actual","pvp","sincronizado_en"],
      fm_recepciones_lineas:["farmacia_codigo","sistema_origen","documento_id",
       "articulo_origen_id","eliminada_logicamente","cantidad","devuelta"],
      fm_recepciones_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
@@ -166,8 +219,9 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
       fields.some(field=>!present.has(table+"."+field))))
      return res.json({available:false,rows:[],
       message:"La sincronización aún no incluye todos los campos del catálogo, las recepciones o las ventas necesarios para este informe."});
-    const {rows}=await pool.query({text:buildStockSinRecepcionesSQL(f.schema),
-     values:[f.desde,f.ids,f.slug,f.buscar,f.tamano+1,(f.pagina-1)*f.tamano]});
+    const {rows}=await pool.query({text:buildStockSinRecepcionesSQL(f.schema,f.orden,f.direccion),
+     values:[f.desde,f.ids,f.slug,f.buscar,f.tamano+1,(f.pagina-1)*f.tamano,
+      f.filtros.pharmacy,f.filtros.cn,f.filtros.name,f.filtros.stock,f.filtros.pvp]});
     const pageRows=rows.slice(0,f.tamano);
     // Los nombres comerciales son información complementaria: si el maestro
     // no está listo, mostrar el código del proveedor sin perder los resultados.
@@ -179,7 +233,8 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
     }
     res.json({available:true,desde:f.desde,rows:named.map(r=>({
       ...r,supplierName:r.supplierCode?r.supplierName||r.supplierCode:null
-    })),hasMore:rows.length>f.tamano,page:f.pagina,pageSize:f.tamano});
+    })),hasMore:rows.length>f.tamano,page:f.pagina,pageSize:f.tamano,
+     total:Number(rows[0]?.totalCount||0)});
    }catch(e){
     if(e.status)return res.status(e.status).json({error:e.message});
     console.error("Error consultando stock sin recepciones",e.code||e.name);

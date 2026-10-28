@@ -19,6 +19,11 @@ test("valida fecha real, hasta hoy y farmacias autorizadas",()=>{
  assert.throws(()=>stockSinRecepcionesFilters(request({farmacias:"1,foo"})),e=>e.status===400);
  assert.throws(()=>stockSinRecepcionesFilters(request({pagina:"0"})),e=>e.status===400);
  assert.throws(()=>stockSinRecepcionesFilters(request({tamano:"500"})),e=>e.status===400);
+ assert.equal(stockSinRecepcionesFilters(request({tamano:"10"})).tamano,10);
+ assert.throws(()=>stockSinRecepcionesFilters(request({orden:"1;DROP"})),e=>e.status===400);
+ assert.throws(()=>stockSinRecepcionesFilters(request({direccion:"sideways"})),e=>e.status===400);
+ assert.throws(()=>stockSinRecepcionesFilters(request({f_name:"x".repeat(101)})),e=>e.status===400);
+ assert.equal(stockSinRecepcionesFilters(request({orden:"pvp",direccion:"asc",f_name:"paracetamol"})).filtros.name,"paracetamol");
 });
 test("SQL: aislamiento tenant/farmacia, stock real y anti-join de recepciones",()=>{
  assert.throws(()=>buildStockSinRecepcionesSQL('ampedia";DROP TABLE x;--'),/inválido/);
@@ -27,6 +32,12 @@ test("SQL: aislamiento tenant/farmacia, stock real y anti-join de recepciones",(
  assert.match(sql,/f\.cliente_slug=\$3/);
  assert.match(sql,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.match(sql,/a\.stock_actual>0/);
+ assert.match(sql,/a\.pvp::float8 AS pvp/);
+ assert.match(sql,/ORDER BY a\.stock_actual DESC NULLS LAST/);
+ assert.match(buildStockSinRecepcionesSQL("ampedia","pvp","asc"),/ORDER BY a\.pvp ASC NULLS LAST/);
+ assert.match(buildStockSinRecepcionesSQL("ampedia","name","asc"),/ORDER BY a\.nombre ASC NULLS LAST/);
+ assert.match(buildStockSinRecepcionesSQL("ampedia","lastSaleAt","desc"),/ORDER BY \(SELECT sh\.fecha/);
+ assert.throws(()=>buildStockSinRecepcionesSQL("ampedia","bad","asc"),/inválido/);
  assert.match(sql,/WITH recent AS MATERIALIZED/);
  assert.match(sql,/SELECT DISTINCT rl\.farmacia_codigo,rl\.articulo_origen_id/);
  assert.match(sql,/LEFT JOIN recent r ON r\.farmacia_codigo=a\.farmacia_codigo/);
@@ -40,17 +51,18 @@ test("SQL: aislamiento tenant/farmacia, stock real y anti-join de recepciones",(
  assert.doesNotMatch(sql,/rh\.eliminado_logicamente/);
  assert.match(sql,/sl\.cantidad>0 AND coalesce\(sl\.devuelta,false\)=false/);
  assert.ok(sql.indexOf("LIMIT $5::int OFFSET $6::int")<sql.indexOf("LEFT JOIN LATERAL"));
- assert.doesNotMatch(sql,/count\(\*\) OVER/i);
+ assert.match(sql,/count\(\*\) OVER\(\)::int AS "totalCount"/);
 });
 test("API limita la página sin recuento global y no consulta nombres de otras farmacias",async()=>{
  const queries=[],rows=Array.from({length:26},(_,i)=>({
   pharmacyId:"1",pharmacyName:"Abadía",pharmacyCode:"ABA",
   sourceId:String(1000+i),cn:String(900000+i),name:"Artículo "+i,
-  laboratory:"Lab",stock:10+i,lastReceiptAt:null,lastSaleAt:null,supplierCode:null
+  laboratory:"Lab",stock:10+i,pvp:9.95,totalCount:42,
+  lastReceiptAt:null,lastSaleAt:null,supplierCode:null
  }));
  const columnsByTable={
   articulos:["farmacia_codigo","origen_id","codigo_nacional","nombre",
-   "laboratorio","stock_actual","sincronizado_en"],
+   "laboratorio","stock_actual","pvp","sincronizado_en"],
   fm_recepciones_lineas:["farmacia_codigo","sistema_origen","documento_id",
    "articulo_origen_id","eliminada_logicamente","cantidad","devuelta"],
   fm_recepciones_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
@@ -86,7 +98,9 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
  assert.equal(response.statusCode,200);
  assert.equal(response.body.rows.length,25);
  assert.equal(response.body.hasMore,true);
- assert.deepEqual(queries.at(-1).sql.values,["2024-10-26",[1],"ampedia","",26,0]);
+ assert.equal(response.body.total,42);
+ assert.equal(response.body.rows[0].pvp,9.95);
+ assert.deepEqual(queries.at(-1).sql.values,["2024-10-26",[1],"ampedia","",26,0,"","","","",""]);
 });
 
 test("API informa si las líneas de documentos no tienen los campos necesarios",async()=>{

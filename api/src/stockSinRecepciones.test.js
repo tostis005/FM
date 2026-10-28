@@ -51,13 +51,14 @@ test("SQL: aislamiento tenant/farmacia, stock real y anti-join de recepciones",(
  assert.doesNotMatch(sql,/rh\.eliminado_logicamente/);
  assert.match(sql,/sl\.cantidad>0 AND coalesce\(sl\.devuelta,false\)=false/);
  assert.ok(sql.indexOf("LIMIT $5::int OFFSET $6::int")<sql.indexOf("LEFT JOIN LATERAL"));
- assert.doesNotMatch(sql,/count\(\*\) OVER/i);
+ assert.match(sql,/count\(\*\) OVER\(\)::int AS "totalCount"/);
 });
 test("API limita la página sin recuento global y no consulta nombres de otras farmacias",async()=>{
  const queries=[],rows=Array.from({length:26},(_,i)=>({
   pharmacyId:"1",pharmacyName:"Abadía",pharmacyCode:"ABA",
   sourceId:String(1000+i),cn:String(900000+i),name:"Artículo "+i,
-  laboratory:"Lab",stock:10+i,lastReceiptAt:null,lastSaleAt:null,supplierCode:null
+  laboratory:"Lab",stock:10+i,pvp:9.95,totalCount:42,
+  lastReceiptAt:null,lastSaleAt:null,supplierCode:null
  }));
  const columnsByTable={
   articulos:["farmacia_codigo","origen_id","codigo_nacional","nombre",
@@ -97,6 +98,8 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
  assert.equal(response.statusCode,200);
  assert.equal(response.body.rows.length,25);
  assert.equal(response.body.hasMore,true);
+ assert.equal(response.body.total,42);
+ assert.equal(response.body.rows[0].pvp,9.95);
  assert.deepEqual(queries.at(-1).sql.values,["2024-10-26",[1],"ampedia","",26,0,"","","","",""]);
 });
 

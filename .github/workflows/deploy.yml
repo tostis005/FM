@@ -372,7 +372,7 @@ jobs:
           '
 
       - name: Auditar CN únicos y laboratorios visibles tras el despliegue
-        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'última recepción')
+        if: github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, 'última recepción') || contains(github.event.head_commit.message, 'fichas de farmacia'))
         continue-on-error: true
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
@@ -381,7 +381,7 @@ jobs:
           '
 
       - name: Auditar duplicados del maestro completo y preparador (solo lectura)
-        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditar equivalencias laboratorios')
+        if: github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, 'auditar equivalencias laboratorios') || contains(github.event.head_commit.message, 'fichas de farmacia'))
         continue-on-error: false
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '

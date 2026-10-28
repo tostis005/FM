@@ -33,6 +33,7 @@ const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
+import {civilToday,effectivePromotionStatus,promotionReportingEnd} from "./promotionLifecycle.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
@@ -121,7 +122,7 @@ function downloadCSV(name, rows) {
   const csv="\ufeff"+rows.map(row=>row.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));a.download=name+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
 }
-function Pill({status}){return <span className={"pill pill-"+status.toLowerCase()}><span className="pill-dot"/>{status==="Finalizada"?"Archivada":status}</span>;}
+function Pill({status}){return <span className={"pill pill-"+status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g,"-")}><span className="pill-dot"/>{status==="Finalizada"?"Archivada":status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
 function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div className="kpi-content"><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div><div className="kpi-caption">{caption||"\u00a0"}</div></div></div>}
 function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=false}){
@@ -200,7 +201,7 @@ function selectedIdsFromUrl(){
 function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
  const status=params.get("estado")||"Todos";
- return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
+ return {status:["Activa","Pendiente de revisión","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
   year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
 }
@@ -230,7 +231,9 @@ function App(){
   return [parent];
  });
  const [search,setSearch]=useState("");
- const [statusFilter,setStatusFilter]=useState("Todos");
+ const [statusFilter,setStatusFilter]=useState("Activa");
+  const [promotionClock,setPromotionClock]=useState(()=>new Date());
+  useEffect(()=>{const id=setInterval(()=>setPromotionClock(new Date()),15*60*1000);return()=>clearInterval(id);},[]);
  const [from,setFrom]=useState(()=>promotionMonthRange(currentPromotionMonth())?.from||"");
  const [to,setTo]=useState(()=>promotionMonthRange(currentPromotionMonth())?.to||"");
  const [editingPromo,setEditingPromo]=useState(null);
@@ -408,9 +411,10 @@ function App(){
          for(const p of data.promos){
            if(page==="promociones"&&!promotionOverlapsPeriod(p,from,to))continue;
            if(page==="seguimiento-global"&&!reportSelectedIds.includes(p.id))continue;
-           if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(p.end||""))continue;
+           const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
+            if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
            if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
-           if((p.cns||[]).length)segments.push(p);
+           if((p.cns||[]).length)segments.push({...p,end:reportEnd});
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
@@ -497,11 +501,12 @@ function App(){
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
        ...storedUsers.filter(user=>user.role!=="superadmin")]
     : storedUsers;
-  const promos=storedPromos.map(p=>({...p,sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
- 
- const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+ 
+ const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
+
  const promotionSelectedMonth=promotionMonthFromRange(from,to);
  const promotionQuickPeriod=promotionSelectedMonth===currentPromotionMonth(new Date(),reportTimeZone)
    ?"this_month":QUICK_PERIODS.filter(([key])=>key!=="this_month").find(([key])=>{
@@ -520,7 +525,8 @@ function App(){
    setFrom(range.from);setTo(range.to);setSelectedPromotionIds([]);
  }
  const filterText=search.toLocaleLowerCase("es");
- const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
+ const pendingPromotionCount=promos.filter(p=>p.status==="Pendiente de revisión").length;
+  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&promotionOverlapsPeriod(p,from,to)
   &&(!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
@@ -736,8 +742,10 @@ function App(){
     const timeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
       Intl.DateTimeFormat().resolvedOptions().timeZone;
     const now=new Date();
-    const newPromos=campaigns.map(p=>({...p,
-      status:importedPromotionStatus(p,now,timeZone)}));
+    const batchId="IMPORT-"+(globalThis.crypto?.randomUUID?.()||now.getTime()+"-"+Math.random().toString(36).slice(2));
+     const newPromos=campaigns.map(p=>({...p,
+      importBatchId:batchId,importedAt:now.toISOString(),importedOn:civilToday(now,timeZone),
+      statusSource:"automatic",status:importedPromotionStatus(p,now,timeZone)}));
     const result=await importStoredPromotions(newPromos);
     if(!Array.isArray(result.promotions))throw Error("El servidor no devolvió el catálogo actualizado");
     setData(prev=>({...prev,promos:result.promotions}));
@@ -781,7 +789,7 @@ function App(){
     return;
   }
   try{
-    campaigns.forEach(p=>{validateLabPromotion(p);promotionTicketPolicy(p);});
+    campaigns.forEach(p=>{validateLabPromotion({...p,end:promotionReportingEnd(p,new Date(),reportTimeZone)});promotionTicketPolicy(p);});
     if(!effectivePharmacyIds.length)throw Error("Selecciona al menos una farmacia");
   }catch(error){setToast(error.message);return;}
   if(campaigns.length>10&&!window.confirm(
@@ -790,7 +798,8 @@ function App(){
   try{
     const items=[];
     for(let i=0;i<campaigns.length;i++){
-      const promo=campaigns[i];
+      const original=campaigns[i];
+       const promo={...original,end:promotionReportingEnd(original,new Date(),reportTimeZone)};
       const selectedIds=effectivePharmacyIds.filter(id=>Object.hasOwn(promo.targets||{},id));
       if(!selectedIds.length)continue;
       setToast("Preparando laboratorio "+(i+1)+"/"+campaigns.length+": "+promo.name);

@@ -127,21 +127,22 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
   if(!range)return {available:false,reason:"range"};
   const rows=[];
   if(range.months.length){
-   const end=range.active?range.activeMonth:nextMonth(to);
+   const start=range.months[0],end=nextMonth(range.months.at(-1));
    const result=await pool.query(
     "SELECT farmacia_id,mes,fuente,importe,unidades,filas,filas_importe,"+
     " filas_unidades,filas_producto,documentos,filas_coste,ventas_con_coste,margen_coste"+
     " FROM farmetrica.dashboard_consolidados_mensuales"+
     " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])"+
     " AND mes>=$3::date AND mes<$4::date",
-    [slug,ids,from,end]);
+    [slug,ids,start,end]);
    const expected=range.months.length*ids.length*2;
    if(result.rows.length!==expected)
     return {available:false,reason:"pending",readyRows:result.rows.length,expectedRows:expected};
    rows.push(...result.rows);
   }
-  if(range.active){
-   // El mes actual sigue dinámico: el botón Actualizar lee datos recientes.
+  if(range.liveRanges.length){
+   // Los fragmentos parciales se calculan sobre la fuente original una sola vez.
+   // El mes actual nunca se conserva como consolidado definitivo.
    let conn;
    try{
     conn=await pool.connect();
@@ -149,17 +150,20 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
     await conn.query("SET LOCAL statement_timeout='45000ms'");
     await conn.query("SET LOCAL max_parallel_workers_per_gather=0");
     await conn.query("SET LOCAL work_mem='8MB'");
-    for(const source of ["ventas","compras"]){
-     const result=await conn.query(buildDashboardMonthSQL(schema,source),[
-      JSON.stringify(farms),range.activeMonth,dayAfter(to),range.activeMonth]);
-     rows.push(...result.rows);
+    for(const segment of range.liveRanges){
+     for(const source of ["ventas","compras"]){
+      const result=await conn.query(buildDashboardMonthSQL(schema,source),[
+       JSON.stringify(farms),segment.from,dayAfter(segment.to),segment.month]);
+      rows.push(...result.rows);
+     }
     }
     await conn.query("ROLLBACK");
    }catch(e){if(conn)await conn.query("ROLLBACK").catch(()=>{});throw e}
    finally{conn?.release()}
   }
   return {available:true,cachedMonths:range.months.length,
-   liveCurrentMonth:range.active,...summarizeConsolidations(rows,from,to)};
+   liveRanges:range.liveRanges.length,liveCurrentMonth:range.active,
+   ...summarizeConsolidations(rows,from,to)};
  }
  return {read,refreshMonth,backfill,backfillDays:daily.backfillDays,
   refreshDays:daily.refreshDays,runNightly,start,sourceScopes};

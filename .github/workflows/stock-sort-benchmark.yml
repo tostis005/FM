@@ -26,7 +26,7 @@ jobs:
           node --input-type=module > "$RUNNER_TEMP/stock-sort-benchmark.sql" <<'JS'
           import {buildStockSinRecepcionesSQL} from "./api/src/stockSinRecepciones.js";
           for(const [key,dir] of [
-            ["lastSaleAt","desc"]
+            ["stock","desc"],["lastSaleAt","desc"]
           ]){
             console.log("BEGIN READ ONLY;");
             console.log("SET LOCAL statement_timeout='26000ms';");

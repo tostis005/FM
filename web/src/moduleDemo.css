@@ -431,3 +431,8 @@
 .fm-manage-form .fm-user-copy-permissions>select{
  width:100%;max-width:520px;min-width:0;font-size:13px}
 .fm-user-copy-notice{margin:0;color:#176544;font-size:12px;line-height:1.6;font-weight:600}
+
+/* Caducidad de confirmación de promociones con fin abierto. */
+.pill-pendiente-de-revision{background:#fff1d6;color:#976116}
+.fm-promotion-review-notice{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;margin:14px 0;padding:12px 16px;border:1px solid #f1dfb3;border-radius:10px;background:#fffbf2;color:#785b21}
+.fm-promotion-review-notice .btn{flex-shrink:0}

@@ -644,7 +644,7 @@ function App(){
   if(!codes.length&&promoForm.status!=="Borrador")return setToast("Añade al menos un CN antes de activar");
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
-  if(promoForm.status==="Activa"&&(!promoForm.start||!promoForm.end))return setToast("Ambas fechas son obligatorias para activar");
+  if(promoForm.status==="Activa"&&!promoForm.start)return setToast("La fecha de inicio es obligatoria para activar");
   if(promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
@@ -663,7 +663,24 @@ function App(){
       return setToast("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
+  const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
+  const now=new Date(),today=civilToday(now,reportTimeZone);
+  const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
   const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
+  if(result.status==="Finalizada"){
+    if(result.closedOn&&result.closedOn<result.start)return setToast("El cierre no puede ser anterior al inicio");
+    result.closedOn=result.closedOn||today;
+    result.closedAt=result.closedAt||now.toISOString();
+    result.statusSource="manual";
+  }else{
+    delete result.closedAt;delete result.closedOn;delete result.closedReason;
+    const wasAutomatic=original&&(original.statusSource==="automatic"||!original.statusSource&&String(original.source||"").startsWith("Excel"));
+    if(wasAutomatic&&(result.status===oldStatus||result.status==="Activa"&&oldStatus==="Borrador")){
+      result.statusSource="automatic";
+    }else if(wasAutomatic&&result.status==="Activa"&&oldStatus==="Pendiente de revisión"){
+      result.statusSource="automatic";result.lastConfirmedAt=now.toISOString();result.lastConfirmedOn=today;
+    }else result.statusSource="manual";
+  }
   setSavingPromo(true);
   try{
    await saveStoredPromotion(result);
@@ -676,6 +693,18 @@ function App(){
    setPromoSaveError(message);setToast(message);
   }finally{setSavingPromo(false)}
 
+ }
+ async function confirmPromotion(p){
+  if(!canManagePromotions||!p||p.end)return;
+  const stored=data.promos.find(x=>String(x.id)===String(p.id));
+  if(!stored)return;
+  const now=new Date(),updated={...stored,status:"Activa",statusSource:"automatic",
+    lastConfirmedAt:now.toISOString(),lastConfirmedOn:civilToday(now,reportTimeZone)};
+  try{
+    await saveStoredPromotion(updated);
+    setData(prev=>({...prev,promos:prev.promos.map(x=>x.id===updated.id?updated:x)}));
+    setToast("Vigencia confirmada durante otros 30 días");
+  }catch(error){setToast("No se pudo confirmar la promoción: "+error.message);}
  }
  async function removePromotion(p){
   if(!["administrador","superadministrador"].includes(tenantContext?.role))return;

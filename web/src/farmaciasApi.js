@@ -1,4 +1,5 @@
-import { PublicClientApplication, InteractionRequiredAuthError } from "@azure/msal-browser";
+// Microsoft Entra se descarga únicamente al abrir su flujo de acceso.
+// La sesión habitual usa la cookie propia de Farmetrica.
 
 const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID;
 const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
@@ -6,11 +7,14 @@ const apiScope = import.meta.env.VITE_ENTRA_API_SCOPE;
 const entraConfigured = Boolean(tenantId && clientId && apiScope);
 export const pharmacyBackendConfigured = true; // SPA protegida por sesión HTTP del backend.
 let appPromise;
+let entraModulePromise;
+const entraModule=()=>entraModulePromise ||= import("@azure/msal-browser");
 
 async function msal() {
   if (!entraConfigured) throw new Error("Microsoft 365 no está configurado en el despliegue");
   if (!appPromise) {
     appPromise = (async () => {
+      const {PublicClientApplication}=await entraModule();
       const app = new PublicClientApplication({
         auth: { clientId, authority: `https://login.microsoftonline.com/${tenantId}`, redirectUri: window.location.origin },
         cache: { cacheLocation: "sessionStorage" },
@@ -52,6 +56,7 @@ async function token() {
     const response = await app.acquireTokenSilent({ scopes: [apiScope], account });
     return response.accessToken;
   } catch (err) {
+    const {InteractionRequiredAuthError}=await entraModule();
     if (err instanceof InteractionRequiredAuthError) throw Error("La sesión ha caducado. Vuelve a conectar Microsoft 365");
     throw err;
   }

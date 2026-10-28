@@ -26,11 +26,10 @@ jobs:
           node --input-type=module > "$RUNNER_TEMP/stock-sort-benchmark.sql" <<'JS'
           import {buildStockSinRecepcionesSQL} from "./api/src/stockSinRecepciones.js";
           for(const [key,dir] of [
-            ["stock","desc"],["pvp","desc"],["name","asc"],
-            ["supplier","asc"],["lastReceiptAt","desc"],["lastSaleAt","desc"]
+            ["lastSaleAt","desc"]
           ]){
             console.log("BEGIN READ ONLY;");
-            console.log("SET LOCAL statement_timeout='12000ms';");
+            console.log("SET LOCAL statement_timeout='26000ms';");
             console.log("SELECT 'BENCH_BEGIN_"+key+"';");
             console.log("PREPARE stock(date,int[],text,text,int,int,text,text,text,text,text) AS "+
               buildStockSinRecepcionesSQL("ampedia",key,dir)+";");

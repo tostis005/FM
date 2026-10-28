@@ -35,11 +35,10 @@ Inspección estática del frontend React/Vite, rutas analíticas y servicios Pos
 
 ## Mejoras adicionales preparadas en la rama
 
-- **Preparador, experiencia de tabla:** se reciben y conservan todas las referencias, métricas y borradores, pero inicialmente se dibujan 150 filas; se pueden mostrar más en bloques de 150. Los totales, búsqueda y guardado siguen operando sobre el catálogo completo. Para un catálogo de 2.000 referencias, las filas iniciales del DOM se reducen de 2.000 a 150 (una reducción de aproximadamente el 92,5 % de filas dibujadas al principio; **no equivale a una medición de reducción de latencia**).
 - **Preparador, selector real:** se confirma que la pantalla usa `pedidos/proveedores-unificados`; ahora ese endpoint reutiliza una caché de opciones independiente por cliente y farmacias (TTL 120 s). Se invalida inmediatamente al importar, crear, editar o vincular proveedores, sin interferir con el catálogo legado. El precálculo de últimas recepciones ya tenía otra caché propia.
 - **Preparador, consultas de metadatos:** la comprobación de la columna ERP `cn_normalizado` pasa a compartirse entre catálogo y matriz en una caché por conexión/esquema, con vencimiento de 5 minutos, consultas simultáneas deduplicadas y reintento tras un error. En el catálogo se resuelve en paralelo con las exclusiones de artículos.
 - **Consistencia visual:** se incorpora `--fm-control-radius` en el tema que ya se carga con el arranque y se reutiliza en controles de Documentos, Genéricos, Compras/Reposición, Operativa y Preparador. No se altera la geometría de gráficos, tarjetas ni las fórmulas de informes.
-- **Regresión de CI:** se añaden pruebas del caché de metadatos y de la ventana visible de filas. Al reducir una consulta redundante, se ha actualizado el recuento esperado en la prueba de matriz.
+- **Regresión de CI:** se añaden pruebas del caché de metadatos . Al reducir una consulta redundante, se ha actualizado el recuento esperado en la prueba de matriz.
 
 ## Validación y despliegue
 
@@ -48,3 +47,6 @@ Inspección estática del frontend React/Vite, rutas analíticas y servicios Pos
 - Verificar que el backfill mensual existente ha cubierto toda la historia consultada; una rama de código no rellena por sí sola los consolidados.
 - Registrar latencia de red, servidor y SQL; capturar waterfall y CLS en carga en frío y navegación entre módulos.
 - El cambio de este PR está aislado en rama. Si se detecta diferencia, se revierte sin migrar ni alterar datos.
+
+### Decisión de interfaz: tabla completa
+El preparador conserva **todas las referencias del laboratorio visibles en una sola tabla**, sin tope de 150 filas, carga incremental ni botón «mostrar más», para mantener el modo de revisión equivalente al Excel utilizado por las farmacias. La optimización de metadatos y selector permanece independiente de esta decisión. Una mejora futura de renderizado deberá preservar esta vista completa.

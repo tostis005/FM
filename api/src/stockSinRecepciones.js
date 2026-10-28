@@ -136,23 +136,52 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
     const available=Object.values(tables[0]||{}).every(Boolean);
     if(!available)return res.json({available:false,rows:[],
      message:"Es necesario sincronizar el catálogo y los documentos completos de compras y ventas."});
+    // Una tabla puede existir aunque la sincronización todavía no haya añadido
+    // todas sus columnas. Comprobar también documentos evita un 500 genérico.
+    const required={
+     articulos:["farmacia_codigo","origen_id","codigo_nacional","nombre",
+      "laboratorio","stock_actual","sincronizado_en"],
+     fm_recepciones_lineas:["farmacia_codigo","sistema_origen","documento_id",
+      "articulo_origen_id","eliminada_logicamente","cantidad","devuelta"],
+     fm_recepciones_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
+      "fecha","proveedor_origen_id","lineas_completas","eliminado_logicamente","estado"],
+     fm_ventas_lineas:["farmacia_codigo","sistema_origen","documento_id",
+      "articulo_origen_id","eliminada_logicamente","anulada","cantidad","devuelta"],
+     fm_ventas_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
+      "fecha","lineas_completas","eliminado_logicamente","estado"]
+    };
     const {rows:columns}=await pool.query(
-     "SELECT column_name FROM information_schema.columns "+
-     "WHERE table_schema=$1 AND table_name='articulos'",[f.schema]);
-    const names=new Set(columns.map(x=>x.column_name));
-    if(!["farmacia_codigo","origen_id","codigo_nacional","nombre",
-      "laboratorio","stock_actual","sincronizado_en"].every(x=>names.has(x)))
+     "SELECT table_name,column_name FROM information_schema.columns "+
+     "WHERE table_schema=$1 AND table_name=ANY($2::text[])",
+     [f.schema,Object.keys(required)]);
+    const present=new Set(columns.map(x=>x.table_name+"."+x.column_name));
+    if(Object.entries(required).some(([table,fields])=>
+      fields.some(field=>!present.has(table+"."+field))))
      return res.json({available:false,rows:[],
-      message:"El catálogo de artículos aún no tiene los campos de stock necesarios."});
+      message:"La sincronización aún no incluye todos los campos del catálogo, las recepciones o las ventas necesarios para este informe."});
     const {rows}=await pool.query({text:buildStockSinRecepcionesSQL(f.schema),
      values:[f.desde,f.ids,f.slug,f.buscar,f.tamano+1,(f.pagina-1)*f.tamano]});
     const pageRows=rows.slice(0,f.tamano);
-    const named=await nameCommercialRows(pool,req.context,pageRows);
+    // Los nombres comerciales son información complementaria: si el maestro
+    // no está listo, mostrar el código del proveedor sin perder los resultados.
+    let named=pageRows;
+    try{named=await nameCommercialRows(pool,req.context,pageRows);}
+    catch(nameError){
+     console.error("No se pudieron resolver proveedores de stock",
+      nameError.code||nameError.name);
+    }
     res.json({available:true,desde:f.desde,rows:named.map(r=>({
       ...r,supplierName:r.supplierCode?r.supplierName||r.supplierCode:null
     })),hasMore:rows.length>f.tamano,page:f.pagina,pageSize:f.tamano});
    }catch(e){
     if(e.status)return res.status(e.status).json({error:e.message});
+    console.error("Error consultando stock sin recepciones",e.code||e.name);
+    if(["57014","55P03"].includes(e.code)||e.message==="Query read timeout")
+     return res.status(503).json({error:
+      "La consulta de stock está tardando demasiado. Prueba seleccionando una farmacia o acotando la búsqueda."});
+    if(["42P01","42703"].includes(e.code))
+     return res.status(503).json({error:
+      "Faltan tablas o campos de la sincronización necesarios para consultar el stock. Revisa la carga documental."});
     next(e);
    }
   });

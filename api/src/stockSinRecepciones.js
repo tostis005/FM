@@ -47,9 +47,9 @@ export function stockSinRecepcionesFilters(req){
  return {desde,ids:[...new Set(ids)],buscar,pagina,tamano,schema,slug,orden,direccion,filtros};
 }
 
-// Se recorre solamente el catálogo CON stock positivo; NOT EXISTS rechaza
-// cualquier recepción positiva desde el corte, incluso de proveedores ignorados.
-// La última venta/recepción se busca SOLO para las 25–100 filas paginadas.
+// Se recorre el catálogo con stock positivo y se excluyen todas las recepciones
+// recientes válidas, independientemente de la clasificación del proveedor.
+// Las fechas se consultan en la página, salvo al ordenar globalmente por ellas.
 export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc"){
  if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
  const q='"'+schema+'"';
@@ -86,7 +86,7 @@ export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc
   supplier:"last_receipt.proveedor_origen_id",
   lastReceiptAt:"last_receipt.fecha",lastSaleAt:"last_sale.fecha"
  };
- const outputSort=`${outputColumns[orden]} ${direccion.toUpperCase()} NULLS LAST, c.stock DESC,c."pharmacyId",c."sourceId"`;
+ const outputSort=`${outputColumns[orden]} ${direccion.toUpperCase()} NULLS LAST, c.stock DESC,c."pharmacyId"::int,c."sourceId"`;
 
  return `
  -- Una sola pasada de documentos recientes evita buscar cabeceras históricas

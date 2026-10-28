@@ -777,7 +777,7 @@ function App(){
     const batchId="IMPORT-"+(globalThis.crypto?.randomUUID?.()||now.getTime()+"-"+Math.random().toString(36).slice(2));
      const newPromos=campaigns.map(p=>({...p,
       importBatchId:batchId,importedAt:now.toISOString(),importedOn:civilToday(now,timeZone),
-      statusSource:"automatic",status:importedPromotionStatus(p,now,timeZone)}));
+      statusSource:"automatic",status:importedPromotionStatus({...p,importedOn:civilToday(now,timeZone)},now,timeZone)}));
     const result=await importStoredPromotions(newPromos);
     if(!Array.isArray(result.promotions))throw Error("El servidor no devolvió el catálogo actualizado");
     setData(prev=>({...prev,promos:result.promotions}));

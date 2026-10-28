@@ -11,8 +11,7 @@ test("el preparador excluye cooperativas e internos por clasificación, no por n
  assert.equal(result[0].key,"P:10");
  assert.match(queries[0].text,/MAYORISTA/);
  assert.match(queries[0].text,/INTERNO/);
- assert.match(queries[1].text,/position\(upper\(exclude.cadena\)/);
- assert.doesNotMatch(queries[1].text,/nomenclator/i);
+ assert.doesNotMatch(queries[0].text,/nomenclator/i);
  assert.deepEqual(queries[0].values,["ampedia",[1,2]]);
 });
 test("el CN elegible tiene recepción del proveedor exacto y farmacia seleccionada",async()=>{
@@ -34,6 +33,7 @@ test("el CN elegible tiene recepción del proveedor exacto y farmacia selecciona
  assert.match(queries[1].text,/proveedores_unificados_alias/);
  assert.match(queries[1].text,/l\.cantidad>0 AND l\.devuelta IS NOT TRUE/);
  assert.match(queries[1].text,/normalizeCode|h\.proveedor_origen_id/);
+ assert.match(queries[1].text,/position\(upper\(exclude.cadena\)/);
  assert.doesNotMatch(queries[1].text,/nomenclator/i);
 });
 test("no acepta identificadores arbitrarios ni tipos de datos ilegales",async()=>{

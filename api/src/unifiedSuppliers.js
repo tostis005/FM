@@ -1,5 +1,6 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {latestLaboratoryCN,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
+import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]+$'
@@ -125,7 +126,9 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
  app.get("/api/analytics/pedidos/proveedores-unificados",...requireTenant(),async(req,res,next)=>{
   if(!permitted(req))return res.status(403).json({error:"Compras no habilitado"});
   const ph=ids(req);if(!ph)return res.status(400).json({error:"Farmacias no autorizadas"});
-  try{res.json({laboratories:await listUnifiedSuppliers(pool,req.context,ph,true)})}
+  try{res.json({laboratories:await readCachedLaboratoryOptions(
+   pool,req.context.client.slug,ph,
+   ()=>listUnifiedSuppliers(pool,req.context,ph,true),"unified")})}
   catch(e){next(e)}
  });
  // Importación del Excel inicial. Solo crea correspondencias no existentes:
@@ -197,7 +200,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
      SELECT farmacia_codigo,codigo_origen FROM fm_proveedor_import GROUP BY 1,2
      HAVING count(DISTINCT clave_unificada)>1) x`);
    await client.query("COMMIT");
-   invalidateLastReceiptCache(pool,req.context.client.slug);
+   invalidateLastReceiptCache(pool,req.context.client.slug);invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
    res.json({imported:items.length,newSuppliers:groups.rowCount,
     newAliases:aliases.rowCount,sourceConflicts:collision.rows[0].n});
   }catch(e){await client.query("ROLLBACK").catch(()=>{});next(e)}
@@ -214,7 +217,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     VALUES($1,'MANUAL:'||md5(random()::text||clock_timestamp()::text),$2,$3)
     RETURNING id::text,nombre`,
     [req.context.client.slug,name,className]);
-   invalidateLastReceiptCache(pool,req.context.client.slug);
+   invalidateLastReceiptCache(pool,req.context.client.slug);invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
    res.status(201).json({id:String(rows[0].id),name});
   }catch(e){next(e)}
  });
@@ -230,7 +233,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     WHERE cliente_slug=$1 AND id=$2 RETURNING id,nombre,clase`,
     [req.context.client.slug,req.params.id,name,className]);
    if(!rows.length)return res.status(404).json({error:"Proveedor no encontrado"});
-   invalidateLastReceiptCache(pool,req.context.client.slug);
+   invalidateLastReceiptCache(pool,req.context.client.slug);invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
    res.json(rows[0]);
   }catch(e){next(e)}
  });
@@ -258,7 +261,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
       SET proveedor_id=EXCLUDED.proveedor_id,nombre_origen=EXCLUDED.nombre_origen,
        procedencia='manual',vigencia='ACTUAL',actualizado_en=now()`,
      [req.context.client.slug,req.params.id,pharmacy,code,name]);
-    await db.query("COMMIT");invalidateLastReceiptCache(pool,req.context.client.slug);
+    await db.query("COMMIT");invalidateLastReceiptCache(pool,req.context.client.slug);invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
     res.json({saved:true});
    }catch(e){await db.query("ROLLBACK").catch(()=>{});throw e}finally{db.release()}
   }catch(e){next(e)}

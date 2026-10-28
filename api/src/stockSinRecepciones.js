@@ -114,7 +114,8 @@ export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc
    nullif(btrim(a.codigo_nacional),'') AS cn,a.nombre AS name,
    nullif(btrim(a.laboratorio),'') AS laboratory,
    a.stock_actual::float8 AS stock,a.pvp::float8 AS pvp,
-   a.sincronizado_en AS "stockUpdatedAt"
+   a.sincronizado_en AS "stockUpdatedAt",
+   count(*) OVER()::int AS "totalCount"
   FROM ${q}.articulos a
   JOIN farmetrica.farmacias f ON f.cliente_slug=$3
     AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
@@ -182,7 +183,7 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
    try{
     const f=stockSinRecepcionesFilters(req);
     if(!f.ids.length)return res.json({available:true,rows:[],hasMore:false,
-     page:f.pagina,pageSize:f.tamano,desde:f.desde});
+     page:f.pagina,pageSize:f.tamano,total:0,desde:f.desde});
     const {rows:tables}=await pool.query(
      "SELECT to_regclass($1)::text AS articulos,"+
      "to_regclass($2)::text AS recepciones,"+
@@ -232,7 +233,8 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
     }
     res.json({available:true,desde:f.desde,rows:named.map(r=>({
       ...r,supplierName:r.supplierCode?r.supplierName||r.supplierCode:null
-    })),hasMore:rows.length>f.tamano,page:f.pagina,pageSize:f.tamano});
+    })),hasMore:rows.length>f.tamano,page:f.pagina,pageSize:f.tamano,
+     total:Number(rows[0]?.totalCount||0)});
    }catch(e){
     if(e.status)return res.status(e.status).json({error:e.message});
     console.error("Error consultando stock sin recepciones",e.code||e.name);

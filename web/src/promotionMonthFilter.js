@@ -27,7 +27,7 @@ export function promotionMonthFromRange(from,to){
 // Solape inclusivo: comienza, acaba o atraviesa el período seleccionado.
 export function promotionOverlapsPeriod(promo,from="",to=""){
  if((!from&&!to))return true;
- const start=promo?.start,end=promo?.end||promo?.closedOn||civilToday();
+ const start=promo?.start,end=promo?.closedOn||promo?.end||civilToday();
  if(!dayPattern.test(start||"")||!dayPattern.test(end||"")||start>end)return false;
  return (!from||end>=from)&&(!to||start<=to);
 }

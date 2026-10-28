@@ -68,7 +68,7 @@ export function buildStockSinRecepcionesSQL(schema){
       AND rl.articulo_origen_id=a.origen_id
       AND NOT rl.eliminada_logicamente
       AND rl.cantidad>0 AND coalesce(rl.devuelta,false)=false
-      AND rh.lineas_completas AND NOT rh.eliminado_logicamente
+      AND rh.lineas_completas AND NOT rh.eliminada_logicamente
       AND lower(btrim(rh.estado)) NOT IN
        ('anulado','anulada','cancelado','cancelada','void')
       AND rh.fecha >= $1::date
@@ -91,7 +91,7 @@ export function buildStockSinRecepcionesSQL(schema){
      AND rl.articulo_origen_id=c."sourceId"
      AND NOT rl.eliminada_logicamente
      AND rl.cantidad>0 AND coalesce(rl.devuelta,false)=false
-     AND rh.lineas_completas AND NOT rh.eliminado_logicamente
+     AND rh.lineas_completas AND NOT rh.eliminada_logicamente
      AND lower(btrim(rh.estado)) NOT IN
        ('anulado','anulada','cancelado','cancelada','void')
    ORDER BY rh.fecha DESC,rh.documento_id DESC LIMIT 1
@@ -144,7 +144,7 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
      fm_recepciones_lineas:["farmacia_codigo","sistema_origen","documento_id",
       "articulo_origen_id","eliminada_logicamente","cantidad","devuelta"],
      fm_recepciones_cabeceras:["farmacia_codigo","sistema_origen","documento_id",
-      "fecha","proveedor_origen_id","lineas_completas","eliminado_logicamente","estado"],
+      "fecha","proveedor_origen_id","lineas_completas","eliminada_logicamente","estado"],
      fm_ventas_lineas:["farmacia_codigo","sistema_origen","documento_id",
       "articulo_origen_id","eliminada_logicamente","anulada","cantidad","devuelta"],
      fm_ventas_cabeceras:["farmacia_codigo","sistema_origen","documento_id",

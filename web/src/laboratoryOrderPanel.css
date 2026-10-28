@@ -103,12 +103,3 @@
  .fm-lab-matrix-loading>strong{font-size:12px}
  .fm-lab-matrix-loading .fm-lab-spinner{width:24px;height:24px}
 }
-
-
-/* Solo la presentación se pagina: la consulta y el borrador conservan el
-   universo completo de referencias y los cálculos de todas las farmacias. */
-.fm-lab-order-more{display:flex;align-items:center;justify-content:center;gap:12px;
- padding:14px 12px;border-top:1px solid #deebe2;color:#526b5c;
- background:#f8fbf9;font-size:12px;text-align:center;flex-wrap:wrap}
-.fm-lab-order-more .btn{flex-shrink:0}
-@media(max-width:600px){.fm-lab-order-more{flex-direction:column;gap:8px}}

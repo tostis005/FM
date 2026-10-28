@@ -13,7 +13,11 @@ export const unifiedSupplierKey=id=>"P:"+id;
 export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema inválido");
  if(!pharmacies.length)return [];
- const {rows}=await pool.query({text:`
+ const useLastReceipt=forOrders&&lastReceiptMode();
+ // La lista de proveedores y la última recepción se calculan sobre fuentes
+ // independientes. En un acceso frío, lanzarlas simultáneamente evita sumar
+ // sus latencias; la asignación CN->laboratorio y el filtro son idénticos.
+ const supplierQuery=pool.query({text:`
  SELECT p.id::text AS id,('P:'||p.id::text) AS key,p.nombre AS name,
  p.clase AS class,p.activo AS active,
  coalesce(json_agg(json_build_object(
@@ -32,12 +36,12 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
  // En modo última recepción el ganador puede proceder de otra farmacia.
  // No ocultar el laboratorio ganador si el CN se recibió en la farmacia elegida.
- values:[ctx.client.slug,forOrders&&lastReceiptMode()?null:pharmacies],query_timeout:10000});
- if(forOrders&&lastReceiptMode()){
-  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
-  return rows.filter(row=>latest.byLab.has(String(row.id)));
- }
- return rows;
+ values:[ctx.client.slug,useLastReceipt?null:pharmacies],query_timeout:10000});
+ if(!useLastReceipt)return (await supplierQuery).rows;
+ const [suppliers,latest]=await Promise.all([
+  supplierQuery,latestLaboratoryCN(pool,ctx,pharmacies)
+ ]);
+ return suppliers.rows.filter(row=>latest.byLab.has(String(row.id)));
 }
 
 /** Source = only received CN from the chosen laboratory, ever.

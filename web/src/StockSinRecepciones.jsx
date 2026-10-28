@@ -1,9 +1,9 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Download,Search} from "lucide-react";
+import {Search} from "lucide-react";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
-import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
-import {dateES,quantity} from "./localeES.js";
+import ListTable from "./ListTable.jsx";
+import {dateES,quantity,euro} from "./localeES.js";
 import {downloadTableCSV} from "./tableExport.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -16,13 +16,16 @@ const isoLocal=date=>{
 };
 const yearsAgo=years=>{
  const today=new Date(),year=today.getFullYear()-years,month=today.getMonth();
- // 29 de febrero -> 28 de febrero cuando el año destino no es bisiesto.
  const lastDay=new Date(year,month+1,0).getDate();
  return isoLocal(new Date(year,month,Math.min(today.getDate(),lastDay)));
 };
 const dateOrEmpty=value=>value?dateES(value):"Sin registros";
 const supplierLabel=row=>row.supplierCode?
  row.supplierName||row.supplierCode:row.laboratory?"Laboratorio: "+row.laboratory:"—";
+// Farmatic puede dejar el CN vacío mientras el identificador RPS ya es el CN.
+// Evitar mostrar el mismo código bajo el nombre del artículo.
+export const stockNationalCode=row=>row.cn||row.sourceId||"—";
+const stockSupplier=row=>supplierLabel(row);
 
 export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
  const [cutoff,setCutoff]=useState(()=>yearsAgo(2));
@@ -30,6 +33,8 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
   readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
  const [search,setSearch]=useState(""),[readySearch,setReadySearch]=useState("");
  const [page,setPage]=useState(1),[size,setSize]=useState(50);
+ const [sort,setSort]=useState({key:"stock",direction:"desc"});
+ const [columnFilters,setColumnFilters]=useState({});
  const [reload,setReload]=useState(0);
  const [loading,setLoading]=useState(true),[error,setError]=useState("");
  const [data,setData]=useState(null),[updatedAt,setUpdatedAt]=useState(null);
@@ -46,9 +51,12 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
   let disposed=false,timedOut=false;
   const timeout=setTimeout(()=>{timedOut=true;controller.abort()},28000);
   const params=new URLSearchParams({
-   desde:cutoff,buscar:readySearch,pagina:String(page),tamano:String(size)
+   desde:cutoff,buscar:readySearch,pagina:String(page),tamano:String(size),
+   orden:sort.key,direccion:sort.direction
   });
   if(ids.length)params.set("farmacias",pharmacyKey);
+  for(const [key,value] of Object.entries(columnFilters))
+   if(typeof value==="string"&&value.trim())params.set("f_"+key,value.trim());
   setLoading(true);setError("");setData(null);
   fetch("/api/analytics/stock/sin-recepciones?"+params,{
    credentials:"same-origin",cache:"no-store",signal:controller.signal,
@@ -68,9 +76,30 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
    if(!disposed)setLoading(false);
   });
   return()=>{disposed=true;clearTimeout(timeout);controller.abort();};
- },[clientSlug,cutoff,valid,pharmacyKey,readySearch,page,size,reload]);
+ },[clientSlug,cutoff,valid,pharmacyKey,readySearch,page,size,
+    sort.key,sort.direction,columnFilters,reload]);
  const rows=data?.rows||[];
  const stockOnPage=useMemo(()=>rows.reduce((a,r)=>a+Number(r.stock||0),0),[rows]);
+ const columns=useMemo(()=>[
+  {key:"pharmacy",label:"Farmacia",value:r=>r.pharmacyName||"—"},
+  {key:"cn",label:"Código nacional",value:stockNationalCode,
+   render:r=><strong className="fm-article-cn">{stockNationalCode(r)}</strong>},
+  {key:"name",label:"Artículo",value:r=>r.name||"—",
+   render:r=><strong className="fm-article-name">{r.name||"—"}</strong>},
+  {key:"supplier",label:"Proveedor",value:stockSupplier,
+   searchable:false},
+  {key:"pvp",label:"PVP",value:r=>r.pvp,searchable:true,
+   render:r=><span className="fm-stale-numeric">{euro(r.pvp)}</span>,
+   exportValue:r=>r.pvp??""},
+  {key:"stock",label:"Stock",value:r=>r.stock,
+   render:r=><strong className="fm-stale-numeric">{quantity(r.stock)}</strong>},
+  {key:"lastReceiptAt",label:"Última recepción",value:r=>r.lastReceiptAt||"",
+   searchable:false,render:r=>dateOrEmpty(r.lastReceiptAt),
+   exportValue:r=>r.lastReceiptAt?dateES(r.lastReceiptAt):""},
+  {key:"lastSaleAt",label:"Última venta",value:r=>r.lastSaleAt||"",
+   searchable:false,render:r=>dateOrEmpty(r.lastSaleAt),
+   exportValue:r=>r.lastSaleAt?dateES(r.lastSaleAt):""}
+ ],[]);
  function changeDate(next){setCutoff(next);setPage(1);}
  function changePharmacies(next){
   const chosen=reconcilePharmacyIds(next,pharmacies);
@@ -79,11 +108,11 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
  }
  function exportPage(){
   downloadTableCSV("stock-sin-recepciones-"+cutoff+"-pagina-"+page,
-   ["Farmacia","Código nacional","Artículo","ID ERP","Proveedor / laboratorio",
-    "Stock (uds.)","Última recepción","Última venta"],
+   ["Farmacia","Código nacional","Artículo","Proveedor","PVP","Stock (uds.)",
+    "Última recepción","Última venta"],
    rows.map(row=>[
-    row.pharmacyName,row.cn||"",row.name,row.sourceId||"",
-    supplierLabel(row),row.stock??"",
+    row.pharmacyName,stockNationalCode(row),row.name,supplierLabel(row),
+    row.pvp??"",row.stock??"",
     row.lastReceiptAt?dateES(row.lastReceiptAt):"",
     row.lastSaleAt?dateES(row.lastSaleAt):""
    ]));
@@ -91,10 +120,7 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
  return <div className="fm-operativa-preview fm-operativa-real fm-real-screen fm-stale-stock">
   <ReportPageHeader title="Stock sin recepciones"
    description="Artículos con existencias actuales que no han tenido entradas desde la fecha indicada."
-   updatedAt={updatedAt} onRefresh={()=>setReload(r=>r+1)} refreshing={loading}
-   actions={<button className="btn btn-secondary" type="button"
-    disabled={loading||!rows.length} onClick={exportPage}>
-    <Download size={16}/> Exportar página CSV</button>}/>
+   updatedAt={updatedAt} onRefresh={()=>setReload(r=>r+1)} refreshing={loading}/>
   <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={ids}
    onPharmacyChange={changePharmacies}>
    <label className="fm-unified-filter"><span>Sin recepciones desde</span>
@@ -102,7 +128,7 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
      max={allowedDate} onChange={e=>changeDate(e.target.value)}/></label>
    <label className="fm-unified-filter fm-real-search"><span>Buscar artículo o CN</span>
     <div><Search size={16}/><input type="search" value={search}
-     placeholder="Nombre, CN o código ERP…" onChange={e=>{setSearch(e.target.value);setPage(1);}}/></div>
+     placeholder="Nombre o código nacional…" onChange={e=>{setSearch(e.target.value);setPage(1);}}/></div>
    </label>
   </ReportFilterBar>
   <div className="fm-stale-presets" role="group" aria-label="Antigüedad sin recepciones">
@@ -124,47 +150,21 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
    <LoadingPanel label="Buscando artículos con stock y sin recepciones recientes…" rows={7}/>
   </section>:valid&&!error&&data?.available===false?
    <p className="fm-op-message" role="status">{data.message||"No hay datos suficientes para este informe."}</p>:
-   valid&&!error&&data&&<>
+   valid&&!error&&data&&
     <section className="card fm-preview-panel">
      <div className="fm-preview-panel-head">
       <h2>Artículos encontrados</h2>
       <span className="fm-real-count">{quantity(rows.length)} en esta página · {quantity(stockOnPage)} uds. de stock en esta página</span>
      </div>
-     <HorizontalTableScroll className="fm-preview-scroll" label="stock sin recepciones">
-      <table className="fm-real-screen-table">
-       <thead><tr>
-        <th>Farmacia</th><th>Código nacional</th><th>Artículo</th><th>Proveedor</th>
-        <th className="fm-stale-numeric">Stock</th><th>Última recepción</th><th>Última venta</th>
-       </tr></thead>
-       <tbody>{rows.map(row=><tr key={row.pharmacyId+"|"+row.sourceId}>
-        <td>{row.pharmacyName||"—"}</td>
-        <td>{row.cn||"—"}</td>
-        <td><strong>{row.name||"—"}</strong>
-         {!row.cn&&row.sourceId&&<small className="fm-stale-code">ERP: {row.sourceId}</small>}
-        </td>
-        <td>{supplierLabel(row)}</td>
-        <td className="fm-stale-numeric"><strong>{quantity(row.stock)}</strong></td>
-        <td>{dateOrEmpty(row.lastReceiptAt)}</td>
-        <td>{dateOrEmpty(row.lastSaleAt)}</td>
-       </tr>)}
-       {!rows.length&&<tr><td colSpan="7" className="fm-stale-empty">
-        No se encontraron artículos con stock que cumplan el filtro.</td></tr>}
-       </tbody>
-      </table>
-     </HorizontalTableScroll>
-     <div className="fm-stale-pagination">
-      <label>Filas por página <select value={size}
-       onChange={e=>{setSize(Number(e.target.value));setPage(1);}}>
-       {[25,50,100].map(value=><option key={value} value={value}>{value}</option>)}
-      </select></label>
-      <div><button type="button" className="btn btn-secondary btn-sm" disabled={page===1}
-       onClick={()=>setPage(n=>n-1)}>Anterior</button>
-       <span>Página {page}</span>
-       <button type="button" className="btn btn-secondary btn-sm"
-        disabled={!data.hasMore} onClick={()=>setPage(n=>n+1)}>Siguiente</button>
-      </div>
-     </div>
-    </section>
-   </>}
+     <ListTable rows={rows} columns={columns} rowKey={r=>r.pharmacyId+"|"+r.sourceId}
+      label="artículos" tableClass="fm-real-screen-table fm-stale-stock-table"
+      emptyText="No se encontraron artículos con stock que cumplan el filtro."
+      sort={sort} onSortChange={next=>{setSort(next);setPage(1)}}
+      serverFilters={columnFilters}
+      onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
+      serverPagination={{page,pageSize:size,total:null,hasMore:Boolean(data.hasMore),
+       onPageChange:setPage,onPageSizeChange:n=>{setSize(n);setPage(1)}}}
+      onExport={exportPage}/>
+    </section>}
  </div>;
 }

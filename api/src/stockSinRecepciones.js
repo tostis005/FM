@@ -43,7 +43,26 @@ export function buildStockSinRecepcionesSQL(schema){
  if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
  const q='"'+schema+'"';
  return `
- WITH candidatos AS MATERIALIZED (
+ -- Una sola pasada de documentos recientes evita buscar cabeceras históricas
+ -- cientos de miles de veces por artículo con stock.
+ WITH recent AS MATERIALIZED (
+  SELECT DISTINCT rl.farmacia_codigo,rl.articulo_origen_id
+  FROM ${q}.fm_recepciones_cabeceras rh
+  JOIN farmetrica.farmacias rf ON rf.cliente_slug=$3
+    AND rf.id=ANY($2::int[])
+    AND upper(btrim(rh.farmacia_codigo))=${pharmacyDataCodeSQL("rf")}
+  JOIN ${q}.fm_recepciones_lineas rl
+    ON rl.farmacia_codigo=rh.farmacia_codigo
+   AND rl.sistema_origen=rh.sistema_origen
+   AND rl.documento_id=rh.documento_id
+  WHERE rh.fecha >= $1::date
+    AND rh.lineas_completas AND NOT rh.eliminada_logicamente
+    AND lower(btrim(rh.estado)) NOT IN
+     ('anulado','anulada','cancelado','cancelada','void')
+    AND NOT rl.eliminada_logicamente
+    AND rl.cantidad>0 AND coalesce(rl.devuelta,false)=false
+ ),
+ candidatos AS MATERIALIZED (
   SELECT f.id::text AS "pharmacyId",f.nombre AS "pharmacyName",
    a.farmacia_codigo AS "pharmacyCode",a.origen_id AS "sourceId",
    nullif(btrim(a.codigo_nacional),'') AS cn,a.nombre AS name,
@@ -53,26 +72,14 @@ export function buildStockSinRecepcionesSQL(schema){
   JOIN farmetrica.farmacias f ON f.cliente_slug=$3
     AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
     AND f.id=ANY($2::int[])
+  LEFT JOIN recent r ON r.farmacia_codigo=a.farmacia_codigo
+    AND r.articulo_origen_id=a.origen_id
   WHERE a.stock_actual>0
    AND nullif(btrim(a.origen_id),'') IS NOT NULL
    AND ($4::text='' OR a.codigo_nacional ILIKE '%'||$4||'%'
       OR a.nombre ILIKE '%'||$4||'%'
       OR a.origen_id ILIKE '%'||$4||'%')
-   AND NOT EXISTS (
-    SELECT 1 FROM ${q}.fm_recepciones_lineas rl
-    JOIN ${q}.fm_recepciones_cabeceras rh
-      ON rh.farmacia_codigo=rl.farmacia_codigo
-     AND rh.sistema_origen=rl.sistema_origen
-     AND rh.documento_id=rl.documento_id
-    WHERE rl.farmacia_codigo=a.farmacia_codigo
-      AND rl.articulo_origen_id=a.origen_id
-      AND NOT rl.eliminada_logicamente
-      AND rl.cantidad>0 AND coalesce(rl.devuelta,false)=false
-      AND rh.lineas_completas AND NOT rh.eliminada_logicamente
-      AND lower(btrim(rh.estado)) NOT IN
-       ('anulado','anulada','cancelado','cancelada','void')
-      AND rh.fecha >= $1::date
-   )
+   AND r.farmacia_codigo IS NULL
   ORDER BY a.stock_actual DESC,f.id,a.origen_id
   LIMIT $5::int OFFSET $6::int
  )

@@ -6,8 +6,12 @@ const normalize=value=>String(value??"").trim().normalize("NFD")
 export function promotionImportIdentity(p){
  if(!p||!p.start||!(p.laboratory||p.subtitle)||
    !p.range||p.originalOffer==null)return null;
- return [p.start,p.end||"",p.laboratory||p.subtitle,p.range,
-  p.originalOffer,p.description||""].map(normalize).join("\u001F");
+ // Los Excel de meses sucesivos no actualizan promociones previas.
+ // El lote y la fila distinguen importaciones, incluso con fechas idénticas.
+ // Los documentos antiguos mantienen su clave semántica.
+ return [p.importBatchId||"",p.importBatchId?p.sourceRow||"":"",
+   p.start,p.end||"",p.laboratory||p.subtitle,p.range,
+   p.originalOffer,p.description||""].map(normalize).join("\u001F");
 }
 export function planPromotionImport(existing,incoming){
  const identities=new Set(existing.map(promotionImportIdentity).filter(Boolean));

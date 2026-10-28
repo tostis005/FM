@@ -6,6 +6,10 @@ const login=read("./login.html");
 const theme=read("./src/loginTheme.css");
 const app=read("./src/main.jsx");
 const index=read("./index.html");
+const styles=read("./src/styles.css");
+const dashboardStyles=read("./src/moduleDemo.css");
+const pharmacyApi=read("./src/farmaciasApi.js");
+
 assert.match(app,/import "\.\/styles\.css";\s*import "\.\/loginTheme\.css";/,
   "El tema debe importarse después de los estilos existentes");
 assert.match(app,/className="brand-mark" aria-hidden="true"><img className="fm-emblem"/,
@@ -27,4 +31,17 @@ assert.match(theme,/prefers-reduced-motion/);
 assert.match(theme,/\.topbar \.icon-btn\[aria-label="Cerrar sesión"\]/);
 assert.match(index,/name="theme-color" content="#102f28"/);
 assert.doesNotMatch(theme,/FARMAWAO|Farmétrica|FarmaWow/);
+// La tipografía y el selector del topbar no pueden depender de fuentes externas
+// ni de una hoja de estilos que se descarga cuando entra el Dashboard.
+assert.doesNotMatch(styles,/fonts\.googleapis\.com|@import\s+url\(/);
+assert.doesNotMatch(theme,/fonts\.googleapis\.com|@import\s+url\(/);
+assert.match(styles,/\.fm-client-selector\{[^}]*height:37px[^}]*border:/);
+assert.doesNotMatch(dashboardStyles,/\.fm-client-selector\{/);
+assert.match(index,/font-family:system-ui,-apple-system,BlinkMacSystemFont/);
+assert.match(index,/rel="preload" href="\/brand-logo\.webp\?v=4" as="image"/);
+assert.match(pharmacyApi,/import\("@azure\/msal-browser"\)/);
+assert.doesNotMatch(pharmacyApi,/^import\s+\{[^}]*PublicClientApplication[^}]*\}\s+from/m);
+assert.doesNotMatch(pharmacyApi,/const googleSession = await hasGoogleAdminSession\(\)/);
+assert.match(app,/Promise\.all\(\[userRequest,contextRequest\]\)/);
+
 console.log("Identidad visual Farmetrica: paleta, navegación, diseño móvil y accesibilidad correctos.");

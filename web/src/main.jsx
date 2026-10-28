@@ -287,11 +287,15 @@ function App(){
   useEffect(()=>{
     let live=true;
     const selected=localStorage.getItem("fm_active_tenant")||"";
-    fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"})
-      .then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")))
-      .then(async body=>{
+    // La comprobación de cookie y el contexto de farmacia son independientes.
+    // Lanzarlas a la vez elimina un viaje de red serial en cada arranque.
+    // Ninguna vista privada se muestra hasta validar AMBAS respuestas.
+    const userRequest=fetch("/api/auth/me",{credentials:"same-origin",cache:"no-store"})
+      .then(r=>r.ok?r.json():Promise.reject(Error("Sin sesión")));
+    const contextRequest=loadContext(selected).catch(()=>loadContext(""));
+    Promise.all([userRequest,contextRequest])
+      .then(async ([body,ctx])=>{
         if(!body.user){window.location.replace("/login");return;}
-        const ctx=await loadContext(selected).catch(()=>loadContext(""));
         // La navegación analítica no depende de descargar todas las promociones.
         // Mostrar la sesión y el cliente autorizado en cuanto responde /context;
         // reconciliar las campañas en segundo plano sin bloquear Inicio.

@@ -1,4 +1,5 @@
-import { PublicClientApplication, InteractionRequiredAuthError } from "@azure/msal-browser";
+// Microsoft Entra se descarga únicamente al abrir su flujo de acceso.
+// La sesión habitual usa la cookie propia de Farmetrica.
 
 const tenantId = import.meta.env.VITE_ENTRA_TENANT_ID;
 const clientId = import.meta.env.VITE_ENTRA_CLIENT_ID;
@@ -6,11 +7,14 @@ const apiScope = import.meta.env.VITE_ENTRA_API_SCOPE;
 const entraConfigured = Boolean(tenantId && clientId && apiScope);
 export const pharmacyBackendConfigured = true; // SPA protegida por sesión HTTP del backend.
 let appPromise;
+let entraModulePromise;
+const entraModule=()=>entraModulePromise ||= import("@azure/msal-browser");
 
 async function msal() {
   if (!entraConfigured) throw new Error("Microsoft 365 no está configurado en el despliegue");
   if (!appPromise) {
     appPromise = (async () => {
+      const {PublicClientApplication}=await entraModule();
       const app = new PublicClientApplication({
         auth: { clientId, authority: `https://login.microsoftonline.com/${tenantId}`, redirectUri: window.location.origin },
         cache: { cacheLocation: "sessionStorage" },
@@ -52,21 +56,28 @@ async function token() {
     const response = await app.acquireTokenSilent({ scopes: [apiScope], account });
     return response.accessToken;
   } catch (err) {
+    const {InteractionRequiredAuthError}=await entraModule();
     if (err instanceof InteractionRequiredAuthError) throw Error("La sesión ha caducado. Vuelve a conectar Microsoft 365");
     throw err;
   }
 }
 
 async function request(path, options = {}) {
-  const googleSession = await hasGoogleAdminSession();
-  const accessToken = googleSession ? null : entraConfigured ? await token() : null;
-  if (!googleSession && !accessToken) throw Error("Inicia sesión con una cuenta autorizada");
-  const response = await fetch(path, {
-    ...options,
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", "X-Farmetrica-Cliente": localStorage.getItem("fm_active_tenant") || "ampedia", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
-  });
+  // No consultar /api/auth/me antes de cada operación: el servidor comprueba
+  // la cookie y los permisos en la propia petición. Entra usa fallback 401.
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Farmetrica-Cliente": localStorage.getItem("fm_active_tenant") || "ampedia",
+    ...options.headers,
+  };
+  const init = { ...options, credentials: "same-origin", cache: "no-store", headers };
+  let response = await fetch(path, init);
+  if (response.status === 401 && entraConfigured) {
+    const accessToken = await token();
+    response = await fetch(path, {
+      ...init, headers: { ...headers, Authorization: `Bearer ${accessToken}` },
+    });
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.error || `Error del servidor (${response.status})`);
   return data;

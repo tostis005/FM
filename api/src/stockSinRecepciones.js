@@ -5,6 +5,7 @@ import {nameCommercialRows} from "./commercialNames.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^20\d{2}-\d{2}-\d{2}$/;
+const SORT_KEYS=new Set(["stock","pvp","cn","name","pharmacy","supplier","lastReceiptAt","lastSaleAt"]);
 export function validCutoff(value,today=new Date()){
  const s=String(value||"");
  if(!DATE.test(s))return false;

@@ -162,7 +162,7 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
       sort={sort} onSortChange={next=>{setSort(next);setPage(1)}}
       serverFilters={columnFilters}
       onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
-      serverPagination={{page,pageSize:size,total:null,hasMore:Boolean(data.hasMore),
+      serverPagination={{page,pageSize:size,total:Number(data.total??0),
        onPageChange:setPage,onPageSizeChange:n=>{setSize(n);setPage(1)}}}
       onExport={exportPage}/>
     </section>}

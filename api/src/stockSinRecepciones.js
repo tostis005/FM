@@ -80,6 +80,13 @@ export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc
  const expression=basic[orden]||(orden==="lastReceiptAt"?receiptSort:
   orden==="lastSaleAt"?saleSort:supplierSort);
  const sorting=`${expression} ${direccion.toUpperCase()} NULLS LAST, a.stock_actual DESC,f.id,a.origen_id`;
+ const outputColumns={
+  stock:"c.stock",pvp:"c.pvp",cn:'coalesce(c.cn,c."sourceId")',
+  name:"c.name",pharmacy:'c."pharmacyName"',
+  supplier:"last_receipt.proveedor_origen_id",
+  lastReceiptAt:"last_receipt.fecha",lastSaleAt:"last_sale.fecha"
+ };
+ const outputSort=`${outputColumns[orden]} ${direccion.toUpperCase()} NULLS LAST, c.stock DESC,c."pharmacyId",c."sourceId"`;
 
  return `
  -- Una sola pasada de documentos recientes evita buscar cabeceras históricas
@@ -165,7 +172,7 @@ export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc
        ('anulado','anulada','cancelado','cancelada','void')
    ORDER BY sh.fecha DESC,sh.documento_id DESC LIMIT 1
  ) last_sale ON true
- ORDER BY c.stock DESC,c."pharmacyId",c."sourceId"
+ ORDER BY ${outputSort}
  `;
 }
 

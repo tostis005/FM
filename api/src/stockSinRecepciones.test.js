@@ -70,7 +70,7 @@ test("API limita la página sin recuento global y no consulta nombres de otras f
     cab_ventas:"ampedia.fm_ventas_cabeceras"}]};
   if(typeof sql==="string"&&sql.includes("information_schema.columns"))
    return {rows:columns};
-  if(typeof sql==="object"&&sql.text.includes("WITH candidatos"))return {rows};
+  if(typeof sql==="object"&&sql.text.includes("candidatos AS MATERIALIZED"))return {rows};
   throw Error("Consulta inesperada");
  }};
  let handler;

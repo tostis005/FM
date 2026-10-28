@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#102f28"/>
   <meta name="description" content="Farmetrica · Inteligencia de negocio y análisis para farmacias"/>
   <link rel="icon" type="image/webp" href="/brand-logo.webp?v=4">
+  <link rel="preload" href="/brand-logo.webp?v=4" as="image" fetchpriority="high">
   <title>Farmetrica · Plataforma de análisis</title>
   <!-- La pantalla inicial se pinta incluso antes de descargar React, sin destellos blancos. -->
   <style>
@@ -18,7 +19,7 @@
       box-sizing:border-box;background:
        radial-gradient(ellipse 88% 65% at 85% 12%,#23745477 0%,transparent 72%),
        linear-gradient(152deg,#102f28 0%,#124332 53%,#186447 100%);
-      color:#f7fff9;text-align:center;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+      color:#f7fff9;text-align:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     }
     .fm-startup-body{position:relative;z-index:1;width:min(100%,390px);display:flex;
       flex-direction:column;align-items:center;gap:0}

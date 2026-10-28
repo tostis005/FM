@@ -11,16 +11,11 @@ import {integer} from "./localeES.js";
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
 // registros de la tabla, no sobre la página visible.
 export const PAGE_SIZES=[10,25,50,100];
-export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChange,label="registros",loading=false,pageSizes=PAGE_SIZES,hasMore=false,pageCount=0}){
-  const unknownTotal=total==null;
-  const pages=unknownTotal?null:Math.max(1,Math.ceil(total/pageSize));
-  const current=unknownTotal?Math.max(0,page):Math.max(0,Math.min(page,pages-1));
+export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChange,label="registros",loading=false,pageSizes=PAGE_SIZES}){
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  const current=Math.max(0,Math.min(page,pages-1));
   return <div className="list-pagination" aria-label={"Paginación de "+label}>
-    <span className="list-page-count">{unknownTotal?
-      (pageCount?integer(current*pageSize+1)+"–"+integer(current*pageSize+pageCount)+" "+label:
-       "Sin "+label+" en esta página") :
-      integer(total?current*pageSize+1:0)+"–"+integer(Math.min((current+1)*pageSize,total))+
-      " de "+integer(total)+" "+label}</span>
+    <span className="list-page-count">{integer(total?current*pageSize+1:0)}–{integer(Math.min((current+1)*pageSize,total))} de {integer(total)} {label}</span>
     <label className="list-page-size">Por página
       <select value={pageSize} onChange={e=>onPageSizeChange(Number(e.target.value))} aria-label={"Registros por página de "+label}>
         {pageSizes.map(n=><option value={n} key={n}>{n}</option>)}
@@ -29,9 +24,9 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     <div className="list-page-buttons">
       <button type="button" disabled={current===0||loading} onClick={()=>onPageChange(0)} aria-label="Primera página">«</button>
       <button type="button" disabled={current===0||loading} onClick={()=>onPageChange(current-1)}>Anterior</button>
-      <span>Página {integer(current+1)}{unknownTotal?"":" de "+integer(pages)}</span>
-      <button type="button" disabled={(unknownTotal?!hasMore:current>=pages-1)||loading} onClick={()=>onPageChange(current+1)}>Siguiente</button>
-      {!unknownTotal&&<button type="button" disabled={current>=pages-1||loading} onClick={()=>onPageChange(pages-1)} aria-label="Última página">»</button>}
+      <span>Página {integer(current+1)} de {integer(pages)}</span>
+      <button type="button" disabled={current>=pages-1||loading} onClick={()=>onPageChange(current+1)}>Siguiente</button>
+      <button type="button" disabled={current>=pages-1||loading} onClick={()=>onPageChange(pages-1)} aria-label="Última página">»</button>
     </div>
   </div>;
 }
@@ -154,8 +149,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
     <ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
-      onPageSizeChange={changePageSize} label={label} loading={loading}
-      hasMore={externalPage&&Boolean(serverPagination.hasMore)} pageCount={filtered.length}/>
+      onPageSizeChange={changePageSize} label={label} loading={loading}/>
     </LoadingFrame>
   </>;
 }

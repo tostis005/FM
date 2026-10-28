@@ -84,3 +84,41 @@ jobs:
           rc=$?
           echo "STOCK_CANDIDATE_ANALYZE_EXIT=$rc"
           exit 0
+      - name: EXPLAIN ANALYZE alternativa por recepciones recientes agrupadas (máximo 15s)
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+           'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='15s';
+          SET LOCAL work_mem='32MB';
+          EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, SUMMARY ON)
+          WITH recent AS MATERIALIZED (
+           SELECT DISTINCT rl.farmacia_codigo,rl.articulo_origen_id
+           FROM ampedia.fm_recepciones_cabeceras rh
+           JOIN ampedia.fm_recepciones_lineas rl
+            ON rh.farmacia_codigo=rl.farmacia_codigo
+              AND rh.sistema_origen=rl.sistema_origen AND rh.documento_id=rl.documento_id
+           WHERE rh.fecha>='2024-10-28'::date AND rh.lineas_completas
+             AND NOT rh.eliminada_logicamente
+             AND lower(btrim(rh.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+             AND NOT rl.eliminada_logicamente
+             AND rl.cantidad>0 AND coalesce(rl.devuelta,false)=false
+          )
+          SELECT f.id,a.farmacia_codigo,a.origen_id,a.stock_actual
+          FROM ampedia.articulos a
+          JOIN farmetrica.farmacias f ON f.cliente_slug='ampedia'
+            AND upper(btrim(a.farmacia_codigo))=upper(btrim(f.codigo_origen))
+            AND f.id=ANY(ARRAY(SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia')::int[])
+          LEFT JOIN recent r ON r.farmacia_codigo=a.farmacia_codigo
+             AND r.articulo_origen_id=a.origen_id
+          WHERE a.stock_actual>0 AND nullif(btrim(a.origen_id),'') IS NOT NULL
+            AND r.farmacia_codigo IS NULL
+          ORDER BY a.stock_actual DESC,f.id,a.origen_id LIMIT 51;
+          COMMIT;
+          SQL
+          rc=$?
+          echo "STOCK_RECENT_HASH_EXIT=$rc"
+          exit 0

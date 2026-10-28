@@ -147,3 +147,32 @@ test("el segundo intento nunca se ejecuta si ya hay CN por laboratorio y marca",
  assert.deepEqual(out[0].cns,["123456"]);
  assert.ok(!out[0].importWarnings.some(w=>w.includes("MARCA y GAMA")));
 });
+
+
+test("fecha española con de y fin no interpretable preservan el texto original",()=>{
+ assert.equal(excelDate("1 de octubre"),"2026-10-01");
+ assert.equal(excelDate("31 de diciembre"),"2026-12-31");
+ assert.equal(excelDate("31/12"),"2026-12-31");
+ for(const raw of ["Hasta agotar existencias","Hasta fin de existencias","Hasta nuevo aviso",""]){
+  const promos=importCampaignRows(
+   [["LAB","MARCA","OFERTA","INICIO","FIN"],["LAB","GAMA","20% DTO","1 de octubre",raw]],
+   [["LAB","GAMA","CN","DESC","OFERTA"],["LAB","GAMA","123456","Crema","20% DTO"]]);
+  assert.equal(promos[0].end,"");
+  assert.equal(promos[0].endRaw,raw);
+  assert.ok(promos[0].importWarnings.some(w=>w.includes("30 días")));
+ }
+});
+test("cambio de año sin año explícito: diciembre a enero",()=>{
+ const promos=importCampaignRows(
+  [["LAB","MARCA","OFERTA","INICIO","FIN"],["LAB","GAMA","20% DTO","1 enero","31 enero"]],
+  [["LAB","GAMA","CN","DESC","OFERTA"],["LAB","GAMA","123456","Crema","20% DTO"]],
+  2026,new Date("2026-12-15T12:00:00Z"));
+ assert.equal(promos[0].start,"2027-01-01");
+ assert.equal(promos[0].end,"2027-01-31");
+ const across=importCampaignRows(
+  [["LAB","MARCA","OFERTA","INICIO","FIN"],["LAB","GAMA","20% DTO","15 diciembre","15 enero"]],
+  [["LAB","GAMA","CN","DESC","OFERTA"],["LAB","GAMA","123456","Crema","20% DTO"]],
+  2026,new Date("2026-12-15T12:00:00Z"));
+ assert.equal(across[0].start,"2026-12-15");
+ assert.equal(across[0].end,"2027-01-15");
+});

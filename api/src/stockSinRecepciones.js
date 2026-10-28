@@ -42,7 +42,7 @@ export function stockSinRecepcionesFilters(req){
  }
  const pagina=Number(req.query?.pagina||1),tamano=Number(req.query?.tamano||50);
  if(!Number.isSafeInteger(pagina)||pagina<1||pagina>1000||
-    ![25,50,100].includes(tamano))
+    ![10,25,50,100].includes(tamano))
   throw Object.assign(Error("Página o tamaño incorrecto"),{status:400});
  return {desde,ids:[...new Set(ids)],buscar,pagina,tamano,schema,slug,orden,direccion,filtros};
 }

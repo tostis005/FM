@@ -84,6 +84,7 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
+ await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
  await page.getByText("Promoción antigua").first().waitFor({state:"visible",timeout:12000});
  const file={name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await excel()};
@@ -109,19 +110,20 @@ try{
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
  await secondImport;
  assert.equal(postCount,2);
- assert.equal(stored.length,3);
- assert.equal(stored[1].targets["1"],77,"La reimportación no sobreescribe cambios existentes");
+ assert.equal(stored.length,5,"Cada subida crea dos promociones independientes");
+ assert.equal(stored[1].targets["1"],77,"La nueva importación no altera la campaña anterior");
  // Selección de varias filas, no hay que eliminar una por una.
  await page.getByRole("checkbox",{name:"Seleccionar Promoción antigua"}).check();
- await page.getByRole("checkbox",{name:"Seleccionar "+gum.name}).check();
+ await page.getByRole("checkbox",{name:"Seleccionar "+gum.name}).first().check();
  await page.getByRole("button",{name:"Eliminar seleccionadas"}).click();
  await page.waitForFunction(()=>document.body.textContent.includes("2 promociones eliminadas"),null,{timeout:9000});
  assert.equal(removedCount,2);
- assert.equal(stored.length,1);
- assert.equal(stored[0].id,eucerin.id);
+ assert.equal(stored.length,3);
+ assert.ok(stored.some(p=>p.id===eucerin.id),"La primera importación se conserva");
  await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
  await page.getByText(eucerin.name).first().waitFor({timeout:10000});
  assert.equal(await page.getByText("Promoción antigua").count(),0);
  assert.deepEqual(errors,[]);
- console.log("OK: importación acumulativa sin confirmaciones, deduplicación, selección y borrado múltiple");
+ console.log("OK: importaciones mensuales independientes, selección y borrado múltiple");
 }finally{await browser.close();}

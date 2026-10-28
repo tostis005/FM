@@ -63,15 +63,21 @@ async function token() {
 }
 
 async function request(path, options = {}) {
-  const googleSession = await hasGoogleAdminSession();
-  const accessToken = googleSession ? null : entraConfigured ? await token() : null;
-  if (!googleSession && !accessToken) throw Error("Inicia sesión con una cuenta autorizada");
-  const response = await fetch(path, {
-    ...options,
-    credentials: "same-origin",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", "X-Farmetrica-Cliente": localStorage.getItem("fm_active_tenant") || "ampedia", ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...options.headers },
-  });
+  // No consultar /api/auth/me antes de cada operación: el servidor comprueba
+  // la cookie y los permisos en la propia petición. Entra usa fallback 401.
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Farmetrica-Cliente": localStorage.getItem("fm_active_tenant") || "ampedia",
+    ...options.headers,
+  };
+  const init = { ...options, credentials: "same-origin", cache: "no-store", headers };
+  let response = await fetch(path, init);
+  if (response.status === 401 && entraConfigured) {
+    const accessToken = await token();
+    response = await fetch(path, {
+      ...init, headers: { ...headers, Authorization: `Bearer ${accessToken}` },
+    });
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(data.error || `Error del servidor (${response.status})`);
   return data;

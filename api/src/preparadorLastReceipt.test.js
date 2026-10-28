@@ -8,8 +8,10 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
  process.env.FM_PREPARADOR_ULTIMA_RECEPCION="1";
  try{
   const calls=[],pool={query:async q=>{
+   const text=typeof q==="string"?q:q.text;
    calls.push(q);
-   if(q.text.includes("json_agg(json_build_object"))return {rows:[
+   if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"*BAJA*"}]};
+   if(text.includes("json_agg(json_build_object"))return {rows:[
     {id:"1",key:"P:1",name:"Lab antiguo"},
     {id:"2",key:"P:2",name:"Lab último"},
     {id:"3",key:"P:3",name:"Sin CN"}
@@ -25,8 +27,8 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
    type:"medicacion"})).total,0);
   assert.equal((await readUnifiedSupplierCN(pool,ctx,{key:"P:2",pharmacies:[1,2],
    type:"parafarmacia"})).rows[0].cn,"000123");
-  assert.equal(calls.filter(q=>q.text.includes("DISTINCT ON (cn)")).length,1);
-  const sql=calls.find(q=>q.text.includes("DISTINCT ON (cn)")).text;
+  assert.equal(calls.filter(q=>(q.text||"").includes("DISTINCT ON (cn)")).length,1);
+  const sql=calls.find(q=>(q.text||"").includes("DISTINCT ON (cn)")).text;
   assert.match(sql,/pm.ignorar_informes IS TRUE/);
   assert.match(sql,/pm.cooperativa IS TRUE/);
   assert.match(sql,/h.fecha/);
@@ -34,9 +36,14 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
   assert.match(sql,/ORDER BY cn,fecha DESC/);
   assert.match(sql,/l.cantidad>0 AND l.devuelta IS NOT TRUE/);
   assert.match(sql,/FROM latest l JOIN scoped_cn s USING\(cn\)/);
+  assert.match(sql,/excluded_cn AS MATERIALIZED/);
+  assert.match(sql,/position\(upper\(exclude.cadena\) in upper\(coalesce\(ar.nombre/);
+  assert.match(sql,/unnest\(\$3::text\[\]\)/);
+  assert.deepEqual(calls.find(q=>(q.text||"").includes("DISTINCT ON (cn)")).values,
+   ["ampedia",[1,2],["*BAJA*"]]);
   invalidateLastReceiptCache(pool,"ampedia");
   await latestLaboratoryCN(pool,ctx,[1,2]);
-  assert.equal(calls.filter(q=>q.text.includes("DISTINCT ON (cn)")).length,2);
+  assert.equal(calls.filter(q=>(q.text||"").includes("DISTINCT ON (cn)")).length,2);
  }finally{
   if(old===undefined)delete process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
   else process.env.FM_PREPARADOR_ULTIMA_RECEPCION=old;

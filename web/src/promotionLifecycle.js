@@ -35,15 +35,16 @@ export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madri
   (!p.statusSource&&String(p.source||"").startsWith("Excel"))||
   (!p.end&&["Activa","Pendiente de revisión"].includes(p.status));
  if(!automaticallyManaged)return p.status||"Borrador";
- if(!DAY.test(p.start||"")||!validTargets(p))return "Borrador";
+ if(!DAY.test(p.start||""))return "Borrador";
  const today=civilToday(now,timeZone);
  if(p.end){
-  if(!DAY.test(p.end)||p.start>p.end)return "Borrador";
+  if(!DAY.test(p.end)||p.start>p.end||!validTargets(p))return "Borrador";
   return p.end<today?"Finalizada":p.start>today?"Borrador":"Activa";
  }
  if(p.start>today)return "Borrador";
  const due=promotionReviewDue(p);
- return due&&today>=due?"Pendiente de revisión":"Activa";
+ if(due&&today>=due)return "Pendiente de revisión";
+ return validTargets(p)?"Activa":"Borrador";
 }
 // Límite técnico para consultas SQL. No se escribe en el campo fin original.
 export function promotionReportingEnd(p,now=new Date(),timeZone="Europe/Madrid"){

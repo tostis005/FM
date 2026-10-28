@@ -44,7 +44,7 @@ jobs:
           JOIN pg_namespace n ON n.oid=t.relnamespace
           WHERE n.nspname='ampedia' AND t.relname IN ('articulos','fm_recepciones_cabeceras','fm_recepciones_lineas','fm_ventas_cabeceras','fm_ventas_lineas')
           ORDER BY t.relname,i.relname;
-          SELECT 'SELECTIVITY|'||attrelid::regclass||'|'||attname||'|nullfrac='||round(null_frac::numeric,3)||'|n_distinct='||n_distinct
+          SELECT 'SELECTIVITY|'||tablename||'|'||attname||'|nullfrac='||round(null_frac::numeric,3)||'|n_distinct='||n_distinct
           FROM pg_stats WHERE schemaname='ampedia' AND tablename IN ('articulos','fm_recepciones_lineas','fm_recepciones_cabeceras') AND attname IN ('farmacia_codigo','articulo_origen_id','stock_actual');
           COMMIT;
           SQL

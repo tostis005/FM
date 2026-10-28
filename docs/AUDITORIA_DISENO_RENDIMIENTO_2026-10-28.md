@@ -33,6 +33,13 @@ Inspección estática del frontend React/Vite, rutas analíticas y servicios Pos
 4. No crear índices adicionales por intuición. Obtener `EXPLAIN (ANALYZE, BUFFERS)`, cardinalidades, latencia p50/p95 y estadísticas de uso antes de intervenir. Mantener un rollback y comparar resultados antes/después.
 5. No precalcular tablas de detalle de artículos si solo se requieren totales de Inicio; conservar la opción de ver la fuente original para informes filtrados por producto/proveedor.
 
+## Mejoras adicionales preparadas en la rama
+
+- **Preparador, experiencia de tabla:** se reciben y conservan todas las referencias, métricas y borradores, pero inicialmente se dibujan 150 filas; se pueden mostrar más en bloques de 150. Los totales, búsqueda y guardado siguen operando sobre el catálogo completo. Para un catálogo de 2.000 referencias, las filas iniciales del DOM se reducen de 2.000 a 150 (una reducción de aproximadamente el 92,5 % de filas dibujadas al principio; **no equivale a una medición de reducción de latencia**).
+- **Preparador, consultas de metadatos:** la comprobación de la columna ERP `cn_normalizado` pasa a compartirse entre catálogo y matriz en una caché por conexión/esquema, con vencimiento de 5 minutos, consultas simultáneas deduplicadas y reintento tras un error. En el catálogo se resuelve en paralelo con las exclusiones de artículos.
+- **Consistencia visual:** se incorpora `--fm-control-radius` en el tema que ya se carga con el arranque y se reutiliza en controles de Documentos, Genéricos, Compras/Reposición, Operativa y Preparador. No se altera la geometría de gráficos, tarjetas ni las fórmulas de informes.
+- **Regresión de CI:** se añaden pruebas del caché de metadatos y de la ventana visible de filas. Al reducir una consulta redundante, se ha actualizado el recuento esperado en la prueba de matriz.
+
 ## Validación y despliegue
 
 - Ejecutar en CI tests `dashboardConsolidations.test.js`, `dashboardDailyService.test.js`, `dashboardConsolidations.pg.test.js`, compilación del frontend y las comprobaciones de navegación existentes.

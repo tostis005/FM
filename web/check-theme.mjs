@@ -33,15 +33,15 @@ assert.match(index,/name="theme-color" content="#102f28"/);
 assert.doesNotMatch(theme,/FARMAWAO|Farmétrica|FarmaWow/);
 // La tipografía y el selector del topbar no pueden depender de fuentes externas
 // ni de una hoja de estilos que se descarga cuando entra el Dashboard.
-assert.doesNotMatch(styles,/fonts\\.googleapis\\.com|@import\\s+url\\(/);
-assert.doesNotMatch(theme,/fonts\\.googleapis\\.com|@import\\s+url\\(/);
-assert.match(styles,/\\.fm-client-selector\\{[^}]*height:37px[^}]*border:/);
-assert.doesNotMatch(dashboardStyles,/\\.fm-client-selector\\{/);
+assert.doesNotMatch(styles,/fonts\.googleapis\.com|@import\s+url\(/);
+assert.doesNotMatch(theme,/fonts\.googleapis\.com|@import\s+url\(/);
+assert.match(styles,/\.fm-client-selector\{[^}]*height:37px[^}]*border:/);
+assert.doesNotMatch(dashboardStyles,/\.fm-client-selector\{/);
 assert.match(index,/font-family:system-ui,-apple-system,BlinkMacSystemFont/);
-assert.match(index,/rel="preload" href="\\/brand-logo\\.webp\\?v=4" as="image"/);
-assert.match(pharmacyApi,/import\\("@azure\\/msal-browser"\\)/);
-assert.doesNotMatch(pharmacyApi,/^import\\s+\\{[^}]*PublicClientApplication[^}]*\\}\\s+from/m);
-assert.doesNotMatch(pharmacyApi,/const googleSession = await hasGoogleAdminSession\\(\\)/);
-assert.match(app,/Promise\\.all\\(\\[userRequest,contextRequest\\]\\)/);
+assert.match(index,/rel="preload" href="\/brand-logo\.webp\?v=4" as="image"/);
+assert.match(pharmacyApi,/import\("@azure\/msal-browser"\)/);
+assert.doesNotMatch(pharmacyApi,/^import\s+\{[^}]*PublicClientApplication[^}]*\}\s+from/m);
+assert.doesNotMatch(pharmacyApi,/const googleSession = await hasGoogleAdminSession\(\)/);
+assert.match(app,/Promise\.all\(\[userRequest,contextRequest\]\)/);
 
 console.log("Identidad visual Farmetrica: paleta, navegación, diseño móvil y accesibilidad correctos.");

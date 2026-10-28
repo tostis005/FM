@@ -10,6 +10,8 @@
   --fm-ink:#183229;
   --fm-muted:#698076;
   --fm-line:#dce8df;
+  --fm-control-radius:10px;
+  --fm-control-border:#dce8df;
   font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   color:var(--fm-ink);
   background:var(--fm-paper);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {collectLaboratoryMetrics,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY} from "./laboratoryLoadAll.js";
+import {collectLaboratoryMetrics,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY,LAB_VISIBLE_INITIAL,visibleLaboratoryRows,nextLaboratoryVisibleCount} from "./laboratoryLoadAll.js";
 
 test("dos mil CN se calculan en diez lotes, máximo tres consultas simultáneas",async()=>{
  const initial=Array.from({length:2000},(_,i)=>({
@@ -44,4 +44,19 @@ test("al abortar no se publican resultados de cálculos antiguos",async()=>{
  ],async()=>{controller.abort();return {rows:[]}},{
   signal:controller.signal,onBatch:()=>assert.fail("No publicar tras abortar")
  }),{name:"AbortError"});
+});
+
+test("dibujar 150 filas no trunca 2.000 referencias ni modifica los cálculos",()=>{
+ const rows=Array.from({length:2000},(_,i)=>({referencia:String(400000+i),totalSold:1,totalSuggested:2}));
+ const first=visibleLaboratoryRows(rows);
+ assert.equal(LAB_VISIBLE_INITIAL,150);
+ assert.equal(first.length,150);
+ assert.equal(rows.length,2000);
+ assert.equal(rows.reduce((total,row)=>total+row.totalSold,0),2000);
+ assert.equal(rows.reduce((total,row)=>total+row.totalSuggested,0),4000);
+ assert.equal(nextLaboratoryVisibleCount(150,2000),300);
+ assert.equal(visibleLaboratoryRows(rows,nextLaboratoryVisibleCount(150,2000)).length,300);
+ assert.equal(nextLaboratoryVisibleCount(1950,2000),2000);
+ assert.equal(visibleLaboratoryRows(rows,2000).length,rows.length);
+ assert.equal(visibleLaboratoryRows(rows,0).length,0);
 });

@@ -16,6 +16,13 @@ test("prefijos conocidos de baja sin falsos positivos para descripciones normale
 });
 test("reglas personalizadas son subcadenas literales; no regex",()=>{
  assert.equal(normalizedRetirementPattern("  descatalogado "), "DESCATALOGADO");
+ assert.equal(normalizedRetirementPattern(" *baja* "), "*BAJA*");
+ for(const name of ["Jarabe *BAJA* 10 ml","Jarabe *baja* 10 ml",
+   "En desuso *BAJA*"].filter(Boolean))
+  assert.equal(isRetiredProductName(name,["*BAJA*"]),true,name);
+ for(const name of ["Jarabe baja 10 ml","Jarabe BAJA 10 ml","Jarabe *BAJA 10 ml",
+   "Jarabe BAJA* 10 ml","Comprimidos baja concentración"])
+  assert.equal(isRetiredProductName(name,["*BAJA*"]),false,name);
  assert.equal(normalizedRetirementPattern("**"),null);
  assert.equal(normalizedRetirementPattern("abc\nmal"),null);
  assert.equal(normalizedRetirementPattern(""),null);

@@ -641,7 +641,7 @@ function App(){
    return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
   const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
-  if(!codes.length&&promoForm.status!=="Borrador")return setToast("Añade al menos un CN antes de activar");
+  if(!codes.length&&promoForm.status==="Activa")return setToast("Añade al menos un CN antes de activar");
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if(promoForm.status==="Activa"&&!promoForm.start)return setToast("La fecha de inicio es obligatoria para activar");

@@ -1,6 +1,5 @@
 /* Farmetrica — visual language shared with the secure login.
    Overrides only presentation; existing data, routes and behaviour stay intact. */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root{
   --fm-forest:#102f28;
@@ -11,7 +10,7 @@
   --fm-ink:#183229;
   --fm-muted:#698076;
   --fm-line:#dce8df;
-  font-family:Inter,"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   color:var(--fm-ink);
   background:var(--fm-paper);
 }
@@ -50,7 +49,7 @@ button,input,select,textarea{font-family:inherit}
 .sidebar:after{width:258px;height:258px;bottom:-145px;left:-146px;background:rgba(133,199,154,.035)}
 .sidebar .brand{
   position:relative;color:#fff;letter-spacing:-.65px;
-  font-family:Inter,"DM Sans",sans-serif;font-size:21px;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:21px;
   padding-top:3px;padding-bottom:32px;
 }
 .sidebar .brand:hover{color:#e2ffec}
@@ -96,7 +95,7 @@ button,input,select,textarea{font-family:inherit}
   min-width:0;
 }
 .topbar-title{min-width:0}
-.topbar-title strong{color:#193c2d;font-family:Inter,"DM Sans",sans-serif;font-weight:750}
+.topbar-title strong{color:#193c2d;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-weight:750}
 .topbar .bread{color:#56816c;font-weight:650}
 .topbar .bread svg{color:#96b5a3}
 .topbar .top-user{color:var(--fm-ink)}
@@ -126,7 +125,7 @@ button,input,select,textarea{font-family:inherit}
 .page-header:after{width:225px;height:225px;right:55px;bottom:-200px;background:rgba(183,236,201,.025)}
 .page-header>*{position:relative;z-index:1;min-width:0}
 .page-header h1{
-  color:#fff;font-family:Inter,"DM Sans",sans-serif;
+  color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   letter-spacing:-.95px;font-size:clamp(25px,2.2vw,31px);
   line-height:1.22;margin:0;
 }
@@ -151,7 +150,7 @@ button,input,select,textarea{font-family:inherit}
 }
 .section-heading h2,.spotlight-head h2,.info-card h2,.role-card h2,
 .settings-card h2,.reset-card h2{
-  font-family:Inter,"DM Sans",sans-serif;color:#1d3a2f;letter-spacing:-.35px;
+  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1d3a2f;letter-spacing:-.35px;
 }
 .section-heading{border-bottom-color:#eaf0eb}
 .section-heading p{color:var(--fm-muted)}
@@ -179,7 +178,7 @@ button,input,select,textarea{font-family:inherit}
 .kpi-mint,.promotion-icon,.store-mini{background:#e3f5e9;color:#197b53}
 .kpi-blue{background:#eaf3f3;color:#36817a}
 .kpi-amber{background:#faf1df;color:#b4863e}
-.kpi-value{color:#17392d;font-family:Inter,"DM Sans",sans-serif;letter-spacing:-.65px}
+.kpi-value{color:#17392d;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.65px}
 .kpi-label{color:#657f70}.kpi-caption{color:#2b9464}
 .progress{background:#e7f0e9}
 .progress>div{background:linear-gradient(90deg,#79cba0,#176a4b)}

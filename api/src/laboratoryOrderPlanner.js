@@ -4,6 +4,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readUnifiedLaboratoryCatalog} from "./laboratoryUnionCatalog.js";
 import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
+import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -38,15 +39,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema no autorizado");
  // La columna nativa cn_normalizado existe en Farmatic recientes y evita
  // transformar cada fila a JSON en las búsquedas de stock y ventas.
- let nativeCN=false;
- try{
-  const {rows:columns}=await pool.query({text:`
-   SELECT EXISTS (SELECT 1 FROM information_schema.columns
-    WHERE table_schema=$1 AND table_name='articulos'
-     AND column_name='cn_normalizado') AS available`,
-   values:[ctx.client.schema],query_timeout:1500});
-  nativeCN=columns[0]?.available===true;
- }catch{}
+ const nativeCN=await hasNativeNormalizedCN(pool,ctx.client.schema).catch(()=>false);
  const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
   .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");

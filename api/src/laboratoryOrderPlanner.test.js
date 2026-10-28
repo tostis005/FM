@@ -53,7 +53,9 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  const d=await readLaboratoryOrderMatrix(pool,context,
   {key:"C:LAB",pharmacies:[1,2],type:"medicacion",
    from:"2026-09-01",to:"2026-10-24",page:1,size:40});
- assert.equal(queries.length,7);
+ // La consulta de columnas del ERP se comparte entre catálogo y matriz.
+ assert.equal(queries.length,6);
+ assert.equal(queries.filter(q=>q.text.includes("information_schema.columns")).length,1);
  assert.equal(d.rows.length,1);
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);

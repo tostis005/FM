@@ -20,7 +20,7 @@ function validTargets(p){
   Number.isSafeInteger(Number(v))&&Number(v)>0);
 }
 export function lastPromotionConfirmation(p){
- const recorded=[p.start,p.importedAt?.slice(0,10),p.lastConfirmedAt?.slice(0,10)]
+ const recorded=[p.start,p.importedOn||p.importedAt?.slice(0,10),p.lastConfirmedOn||p.lastConfirmedAt?.slice(0,10)]
   .filter(value=>DAY.test(value||""));
  return recorded.sort().at(-1)||"";
 }

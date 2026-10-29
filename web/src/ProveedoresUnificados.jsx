@@ -210,7 +210,7 @@ export default function ProveedoresUnificados({clientSlug}){
        nPending?"Códigos de Farmatic que todavía no tienen un proveedor definitivo asignado.":
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>
-    <span className="fm-master-count">{nPending?matches.length:visible.length} resultados</span>
+    <span className="fm-master-count">{nPending?matches.length:visible.length+(tab==="todos"?matches.length:0)} resultados</span>
    </div>
    <div className="fm-master-toolbar">
     <label className="fm-master-search"><span><Search size={15}/> Buscar proveedor o código</span>
@@ -274,7 +274,8 @@ export default function ProveedoresUnificados({clientSlug}){
       <td className="fm-master-name"><strong>{p.name}</strong><small>Proveedor #{p.id}</small></td>
       <td><select aria-label={"Tipo de "+p.name} className="fm-master-type"
        value={p.class} disabled={busy} onChange={e=>void setType(p,e.target.value)}>
-       {TYPES.map(t=><option value={t} key={t}>{LABELS[t]}</option>)}</select></td>
+       {TYPES.map(t=><option value={t} key={t}>{LABELS[t]}</option>)}</select>
+       <small className="fm-master-type-caption">{LABELS[p.class]}</small></td>
       <td><details className="fm-master-origins">
        <summary><Link2 size={14}/> {p.origins?.length||0} {p.origins?.length===1?"código":"códigos"}</summary>
        <div className="fm-supplier-alias-list">{(p.origins||[]).map((o,i)=>
@@ -291,7 +292,18 @@ export default function ProveedoresUnificados({clientSlug}){
       <td><button className="btn btn-secondary btn-sm" onClick={()=>editSupplier(p)}>Editar</button></td>
      </tr>)}</tbody></table>
     </HorizontalTableScroll>}
-   {!loading&&!(nPending?matches:visible).length&&<p className="fm-master-empty">No hay proveedores para esta búsqueda.</p>}
+   {!loading&&tab==="todos"&&matches.length>0&&<div className="fm-master-pending-inline">
+    <div className="fm-master-pending-inline-head"><div><h3>Orígenes todavía sin vincular</h3>
+     <p>También forman parte del listado total. Clasifícalos sin necesidad de unir cooperativas o internos.</p></div>
+     <button className="btn btn-secondary btn-sm" onClick={()=>changeTab("pendientes")}>
+      Ver todos ({matches.length}) <ChevronRight size={14}/></button></div>
+    <div className="fm-master-pending-items">{matches.slice(0,20).map((p,i)=><div key={i}>
+     <div><strong>{p.name}</strong><small>{p.pharmacyName} · {p.sourceCode}</small></div>
+     <button type="button" className="btn btn-secondary btn-sm"
+      onClick={()=>{setLinking(p);setChosen("");setNewOriginType("DIRECTO")}}>Clasificar / vincular</button>
+    </div>)}</div>
+   </div>}
+   {!loading&&!(nPending?matches:visible).length&&!(tab==="todos"&&matches.length)&&<p className="fm-master-empty">No hay proveedores para esta búsqueda.</p>}
    {(nPending?matches:visible).length>limit&&<div className="fm-master-loadmore">
     <span>Mostrando {limit} de {(nPending?matches:visible).length}</span>
     <button type="button" className="btn btn-secondary" onClick={()=>setLimit(x=>x+60)}>Mostrar 60 más</button>

@@ -87,3 +87,4 @@ try{
  out.visibleExactNameDuplicates=[...rawMap.values()].filter(x=>x.length>1).slice(0,40);
 }catch(e){out.error=e.code||e.name||"Error";out.detail=String(e.message||"").slice(0,220)}
 finally{console.log("FM_AUDITORIA_LAB_UNIFICADOS",JSON.stringify(out));await db.end()}
+if(out.error)process.exitCode=1;

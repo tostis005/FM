@@ -49,6 +49,9 @@ export function refreshLastReceiptSnapshot(pool,ctx){
    const text=SNAPSHOT_SQL.replaceAll("__SCHEMA__",'"'+schema+'"')
     .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
    await client.query("BEGIN");transaction=true;
+   // El pool HTTP tiene statement_timeout=30s. Este trabajo se ejecuta
+   // fuera de la petición y necesita su propio límite, solo en esta transacción.
+   await client.query("SET LOCAL statement_timeout = '360s'");
    await client.query(
     "DELETE FROM farmetrica.preparador_ultima_recepcion_cache WHERE cliente_slug=$1",[slug]);
    const result=await client.query({text:`

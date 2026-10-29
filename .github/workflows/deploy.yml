@@ -440,6 +440,14 @@ jobs:
             timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditAdvancedLaboratoryNames.mjs
           '
 
+      - name: Auditar volumen de CN y frecuencias de laboratorios (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditar frecuencia laboratorios')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 60 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditLaboratoryOrderFrequency.mjs
+          '
+
       - name: Garantizar asociaciones ERP depuradas de laboratorios (idempotente)
         if: github.ref == 'refs/heads/main'
         run: |

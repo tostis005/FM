@@ -13,12 +13,44 @@ test("agenda global: un único vencimiento por laboratorio, sin dividir farmacia
  assert.equal(result[0].nextDue,"2026-10-24");
  assert.equal(result[0].cn,2705);
  assert.equal(result[0].overdue,1);
- assert.equal(result[1].withoutDate,1);
- assert.equal(result[1].status,"sin_fecha");
- assert.equal(result[1].nextDue,null);
+ assert.equal(result[1].demo,true);
+ assert.equal(result[1].lastOrder,null);
+ assert.equal(result[1].withoutDate,0);
+ assert.ok(["hoy","manana","proximo"].includes(result[1].status));
+ assert.ok(result[1].daysUntil>=0&&result[1].daysUntil<14);
  assert.equal(civilDays("2026-10-29","2026-10-31"),2);
  assert.equal(validOrderDate("2026-02-29"),false);
  assert.equal(validOrderDate("2024-02-29"),true);
+});
+
+test("demo equilibrada por CN globales: hoy, mañana y próximos 7 días",()=>{
+ const rows=Array.from({length:22},(_,i)=>({
+  id:String(i+500),name:"Laboratorio "+i,days:14,lastOrder:null,cn:150+i
+ }));
+ const today="2026-10-29";
+ const result=buildAgenda(rows,today);
+ assert.equal(result.length,22);
+ assert.ok(result.some(l=>l.status==="hoy"));
+ assert.ok(result.some(l=>l.status==="manana"));
+ assert.ok(result.some(l=>l.daysUntil>=2&&l.daysUntil<=7));
+ assert.ok(result.every(l=>l.demo&&l.lastOrder===null&&l.daysUntil>=0&&l.daysUntil<14));
+ // Cuando pasa un día, nunca aparece un vencido de demostración:
+ // los turnos solo sirven de previsión, no crean pedidos ficticios.
+ for(const date of ["2026-10-30","2026-11-01","2026-11-15","2026-12-15"]){
+  const later=buildAgenda(rows,date);
+  assert.ok(later.every(l=>l.status!=="vencido"&&l.lastOrder===null));
+  assert.ok(later.some(l=>l.status==="hoy"));
+  assert.ok(later.some(l=>l.status==="manana"));
+ }
+});
+test("primer pedido real sustituye previsión y permite vencidos auténticos",()=>{
+ const preview=buildAgenda([{id:"7",name:"Cinfa",days:4,lastOrder:null,cn:982}],"2026-10-29")[0];
+ assert.equal(preview.demo,true);
+ const real=buildAgenda([{id:"7",name:"Cinfa",days:4,lastOrder:"2026-10-20",cn:982}],"2026-10-29")[0];
+ assert.equal(real.demo,false);
+ assert.equal(real.lastOrder,"2026-10-20");
+ assert.equal(real.nextDue,"2026-10-24");
+ assert.equal(real.status,"vencido");
 });
 
 function mock(){

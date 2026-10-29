@@ -13,7 +13,6 @@ const STATUS={vencido:"Vencido",hoy:"Hoy",manana:"Mañana",proximo:"Próximo",si
 const dateLabel=date=>date?date.split("-").reverse().join("/"):"—";
 export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories=[],canEdit=false,
  refreshToken=0,onSelect,onInitial}){
- const scope=pharmacyIds.map(String).join(",");
  const [agenda,setAgenda]=useState({items:[],today:null}),[loading,setLoading]=useState(true);
  const [error,setError]=useState(""),[filter,setFilter]=useState("pendientes"),
   [search,setSearch]=useState(""),[limit,setLimit]=useState(12);
@@ -23,17 +22,16 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
  const eligible=new Set(laboratories.map(l=>l.key));
  useEffect(()=>{
   const ac=new AbortController();setLoading(true);setError("");
-  request(clientSlug,"/api/analytics/pedidos/agenda?"+
-   new URLSearchParams({farmacias:scope}),{signal:ac.signal})
+  request(clientSlug,"/api/analytics/pedidos/agenda",{signal:ac.signal})
    .then(data=>{if(!ac.signal.aborted)setAgenda(data)})
    .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
    .finally(()=>{if(!ac.signal.aborted)setLoading(false)});
   return()=>ac.abort();
- },[clientSlug,scope,refreshToken,localVersion]);
+ },[clientSlug,refreshToken,localVersion]);
  const items=agenda.items||[];
  const matched=useMemo(()=>items.filter(l=>l.name.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[items,search]);
- const status=l=>l.overdue>0?"vencido":l.today>0?"hoy":l.tomorrow>0?"manana":l.withoutDate===l.pharmacies.length?"sin_fecha":"proximo";
- const withinWeek=l=>l.pharmacies.some(p=>p.daysUntil!==null&&p.daysUntil>=2&&p.daysUntil<=7);
+ const status=l=>l.status;
+ const withinWeek=l=>l.daysUntil!==null&&l.daysUntil>=2&&l.daysUntil<=7;
  const counts={vencido:items.filter(l=>status(l)==="vencido").length,
   hoy:items.filter(l=>status(l)==="hoy").length,manana:items.filter(l=>status(l)==="manana").length,
   proximo:items.filter(l=>status(l)==="proximo"&&withinWeek(l)).length,
@@ -41,17 +39,12 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
  const visible=matched.filter(l=>filter==="todos"||filter==="pendientes"?
    (filter==="todos"||["vencido","hoy"].includes(status(l))):
    status(l)===filter&&(filter!=="proximo"||withinWeek(l)));
- const candidates=l=>{
-  const due=l.pharmacies.filter(p=>p.daysUntil!==null&&p.daysUntil<=0);
-  return (due.length?due:l.pharmacies).map(p=>p.id);
- };
- const initial=l=>l.pharmacies.filter(p=>p.status==="sin_fecha").map(p=>p.id);
  async function showHistory(key){
   if(historyFor===key){setHistoryFor("");return}
   setHistoryFor(key);setHistoryBusy(true);setError("");
   try{
    const data=await request(clientSlug,"/api/analytics/pedidos/agenda/historial?"+
-    new URLSearchParams({laboratorio:key,farmacias:scope}));
+    new URLSearchParams({laboratorio:key}));
    setHistory(data.items||[]);
   }catch(e){setError(e.message)}finally{setHistoryBusy(false)}
  }
@@ -61,7 +54,7 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
   try{
    await request(clientSlug,"/api/analytics/pedidos/agenda/realizados/"+encodeURIComponent(group),{method:"DELETE"});
    const data=await request(clientSlug,"/api/analytics/pedidos/agenda/historial?"+
-    new URLSearchParams({laboratorio:historyFor,farmacias:scope}));
+    new URLSearchParams({laboratorio:historyFor}));
    setHistory(data.items||[]);setLocalVersion(v=>v+1);
   }catch(e){setError(e.message)}finally{setHistoryBusy(false)}
  }
@@ -99,21 +92,18 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
      return <div className="fm-order-agenda-entry" key={l.key}>
       <div className="fm-order-agenda-entry-main">
        <div className="fm-order-agenda-entry-text"><strong>{l.name}</strong>
-        <small>{l.pharmacies.length} {l.pharmacies.length===1?"farmacia":"farmacias"} · Cada {l.days} días</small>
-        <small>{l.overdue?l.overdue+" vencidas · ":""}{l.today?l.today+" para hoy · ":""}
-         {l.withoutDate?l.withoutDate+" sin fecha inicial · ":""}
-         {l.nextDue?"Próximo vencimiento: "+dateLabel(l.nextDue):"Indica la última fecha de pedido para empezar"}</small>
-        <small>{l.pharmacies.filter(p=>p.daysUntil!==null&&p.daysUntil<=0).length?
-         "Farmacias pendientes: "+l.pharmacies.filter(p=>p.daysUntil!==null&&p.daysUntil<=0).map(p=>p.name).join(", "):
-         l.withoutDate?"Sin fecha registrada: "+l.pharmacies.filter(p=>p.status==="sin_fecha").map(p=>p.name).join(", "):""}</small>
+        <small>{l.cn} códigos nacionales únicos · Cada {l.days} días</small>
+        <small>{l.lastOrder?"Último pedido global: "+dateLabel(l.lastOrder)+" · ":""}
+         {l.nextDue?"Próximo vencimiento: "+dateLabel(l.nextDue):
+          "Indica la fecha del último pedido conjunto para empezar"}</small>
        </div>
        <span className={"fm-order-agenda-status fm-order-agenda-status-"+current}>{STATUS[current]}</span>
        <div className="fm-order-agenda-actions">
         <button className="btn btn-primary btn-sm" disabled={!valid}
          title={!valid?"Sin artículos elegibles en el selector actual":""}
-         onClick={()=>onSelect(l.key,candidates(l))}>Preparar</button>
+         onClick={()=>onSelect(l.key)}>Preparar</button>
         {canEdit&&l.withoutDate>0&&<button className="btn btn-secondary btn-sm"
-         onClick={()=>onInitial(l.key,initial(l))}>Fecha inicial</button>}
+         onClick={()=>onInitial(l.key)}>Fecha inicial</button>}
         <button className="btn btn-secondary btn-sm" onClick={()=>void showHistory(l.key)}>
          <History size={14}/> Historial {historyFor===l.key?<ChevronUp size={13}/>:<ChevronDown size={13}/>}</button>
        </div>
@@ -122,7 +112,7 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
        {historyBusy?<small>Cargando historial…</small>:
         !history.length?<small>Todavía no se han registrado pedidos.</small>:
         history.map(h=><div key={h.groupId} className="fm-order-agenda-history-row">
-         <span>{dateLabel(h.date)} · {h.type==="fecha_inicial"?"Fecha inicial":"Pedido realizado"} · {h.pharmacyIds.length} farmacia(s)
+         <span>{dateLabel(h.date)} · {h.type==="fecha_inicial"?"Fecha inicial":"Pedido realizado"} · {h.scope==="anterior"?"Registro anterior":"Pedido global"}
           {h.cancelledAt?" · Anulado":""}</span>
          {canEdit&&!h.cancelledAt&&<button className="btn btn-secondary btn-sm" disabled={historyBusy}
           onClick={()=>void cancelGroup(h.groupId)}>Anular</button>}
@@ -133,6 +123,6 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
    </div>}
   {visible.length>limit&&<button className="btn btn-secondary" onClick={()=>setLimit(n=>n+12)}>
    Mostrar más laboratorios ({visible.length-limit} restantes)</button>}
-  {items.length>0&&<p className="fm-order-agenda-footnote"><Clock3 size={14}/> Los vencimientos se calculan por farmacia. Confirmar un pedido solo reinicia las farmacias incluidas; exportar Excel no lo confirma.</p>}
+  {items.length>0&&<p className="fm-order-agenda-footnote"><Clock3 size={14}/> La planificación y confirmación son globales por laboratorio. El stock sigue disponible por farmacia para calcular cantidades; exportar Excel no confirma un pedido.</p>}
  </section>;
 }

@@ -234,7 +234,7 @@ try{
  assert.match(await page.locator(".fm-lab-order-summary > span").first().innerText(),/referencias/);
  assert.equal(await page.locator(".fm-lab-order-table td.fm-lab-order-name small").count(),0);
  assert.equal((await page.locator(".fm-lab-order-actions").innerText()).trim()
-  .replace(/\s+/g," "),"Guardar borrador Generar Excel");
+  .replace(/\s+/g," "),"Guardar borrador Generar Excel Marcar pedido realizado");
  assert.equal(await page.locator(".fm-lab-order > .fm-op-fine").count(),0);
  // Cabecera fija durante scroll vertical de 125 artículos; CN y Artículo a la izquierda.
  const sticky=await page.locator(".fm-lab-order .fm-dual-scroll").evaluate(root=>{

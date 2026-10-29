@@ -85,7 +85,9 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
   </div>
   {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}
   {loading?<p role="status">Cargando fechas de pedido…</p>:
-   !visible.length?<p className="fm-muted">No hay laboratorios en esta vista.</p>:
+   !visible.length?<p className="fm-muted">{filter==="pendientes"&&counts.sin_fecha>0?
+    "No hay pedidos vencidos ni para hoy. Hay "+counts.sin_fecha+" laboratorios sin fecha inicial: entra en «Sin fecha inicial» para empezar su calendario global.":
+    "No hay laboratorios en esta vista."}</p>:
    <div className="fm-order-agenda-list">
     {visible.slice(0,limit).map(l=>{
      const current=status(l),valid=eligible.has(l.key);

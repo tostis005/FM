@@ -49,19 +49,25 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [recordLab,setRecordLab]=useState(""),[recordType,setRecordType]=useState("pedido");
  const [recordDate,setRecordDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
  const [recordIds,setRecordIds]=useState([]),[recordCandidates,setRecordCandidates]=useState([]);
+ const [agendaDueIds,setAgendaDueIds]=useState([]);
  const [recordBusy,setRecordBusy]=useState(false),[recordError,setRecordError]=useState("");
  function chooseLaboratory(key,focusIds=null){
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
-  setSearch("");setError("");setNotice("");
-  if(focusIds?.length)setSelectedPharmacies(focusIds.map(String));
+  setSearch("");setError("");
+  setAgendaDueIds(focusIds||[]);
+  setNotice(focusIds?.length?"Farmacias pendientes según la agenda: "+
+   pharmacies.filter(p=>focusIds.map(String).includes(String(p.id))).map(p=>p.name).join(", "):"");
   document.getElementById("fm-preparador-laboratorio")?.scrollIntoView({behavior:"smooth",block:"start"});
  }
  function beginRecord(key,candidates,type="pedido"){
   setRecordLab(key);setRecordType(type);setRecordError("");
   setRecordDate(new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
-  setRecordCandidates(candidates.map(String));setRecordIds(candidates.map(String));
+  setRecordCandidates(candidates.map(String));
+  const matching=type==="pedido"&&key===laboratory?
+   agendaDueIds.filter(id=>candidates.map(String).includes(String(id))):[];
+  setRecordIds((matching.length?matching:candidates).map(String));
  }
  async function confirmRecord(){
   if(!recordLab||!recordIds.length)return;

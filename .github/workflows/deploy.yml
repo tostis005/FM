@@ -50,7 +50,7 @@ jobs:
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/articleSchemaCache.test.js
           node --test api/src/laboratoryOptionCache.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -433,6 +433,46 @@ jobs:
 
       - name: Auditar el maestro después de las asociaciones revisadas
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'aplicar asociaciones revisadas')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditAdvancedLaboratoryNames.mjs
+          '
+
+      - name: Revertir íntegramente lote ERP anterior con garantía de rollback
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'corregir lote proveedores')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_LAB_MERGE_ACTION=rollback FM_LAB_MERGE_BATCH_ID=fc96dd55-80a4-4c3b-a578-5499440c36e7 node src/applyLaboratoryMerges.mjs
+          '
+
+      - name: Recalcular CN y laboratorios después del rollback verificado
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'corregir lote proveedores')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 390 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/refreshPreparadorLastReceipt.mjs
+          '
+
+      - name: Reaplicar solo laboratorios con exclusiones comerciales y rollback propio
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'corregir lote proveedores')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 180 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_LAB_MERGE_ACTION=apply FM_LAB_MERGE_MODE=unclassified_v5 node src/applyLaboratoryMerges.mjs
+          '
+
+      - name: Recargar último laboratorio CN de los proveedores depurados
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'corregir lote proveedores')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 390 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/refreshPreparadorLastReceipt.mjs
+          '
+
+      - name: Auditar resultado depurado de unificación de laboratorios
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'corregir lote proveedores')
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao

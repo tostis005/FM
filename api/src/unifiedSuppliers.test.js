@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
+import {listUnifiedSuppliers,readUnifiedSupplierCN,setupUnifiedSuppliers} from "./unifiedSuppliers.js";
 // Comprobar que el modo clásico sigue intacto y puede restaurarse de inmediato.
 process.env.FM_PREPARADOR_ULTIMA_RECEPCION="0";
 const ctx={client:{slug:"ampedia",schema:"ampedia"}};
@@ -42,4 +42,29 @@ test("no acepta identificadores arbitrarios ni tipos de datos ilegales",async()=
   key:"N:OTRO",pharmacies:[1],type:"medicacion"}));
  await assert.rejects(()=>readUnifiedSupplierCN(pool,ctx,{
   key:"P:2;DELETE",pharmacies:[1],type:"medicacion"}));
+});
+
+test("no es posible fusionar cooperativas ni proveedores internos desde la API",async()=>{
+ const handlers={},statements=[];
+ const app={get:(path,...h)=>{handlers["GET "+path]=h.at(-1)},
+  post:(path,...h)=>{handlers["POST "+path]=h.at(-1)},
+  put:(path,...h)=>{handlers["PUT "+path]=h.at(-1)}};
+ const pool={async connect(){return {
+  async query(sql){
+   statements.push(sql);
+   if(String(sql).includes("FOR UPDATE"))return {rows:[
+    {id:"1",nombre:"Cooperativa A",clase:"MAYORISTA",activo:true},
+    {id:"2",nombre:"Cooperativa B",clase:"MAYORISTA",activo:true}]};
+   return {rows:[]};
+  },release(){}
+ }}};
+ setupUnifiedSuppliers(app,pool,{requireTenant:()=>[],requireTenantAdmin:()=>[]});
+ let status=200,response;
+ await handlers["POST /api/tenant/proveedores-unificados/fusionar"]({
+  body:{destino:"1",origenes:["2"]},context:{client:{slug:"ampedia"}}},
+  {status(code){status=code;return this},json(value){response=value;return this}},
+  e=>{throw e});
+ assert.equal(status,400);
+ assert.match(response.error,/Solo se pueden unificar laboratorios/);
+ assert.ok(!statements.some(sql=>String(sql).startsWith("UPDATE farmetrica.proveedores_unificados_alias")));
 });

@@ -4,8 +4,10 @@
 import pg from "pg";
 import {randomUUID} from "node:crypto";
 import {proposeLaboratoryMerges} from "./laboratoryMergeCandidates.js";
+import {proposeEvidenceLaboratoryMerges} from "./laboratoryMergeEvidence.js";
 const clientSlug="ampedia";
-const criterion="structural-laboratory-name-v1-20261028";
+const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
+const criterion=evidenceMode?"name-and-shared-erp-code-v2-20261029":"structural-laboratory-name-v1-20261028";
 const applying=process.env.FM_LAB_MERGE_ACTION==="apply";
 const rollingBack=process.env.FM_LAB_MERGE_ACTION==="rollback";
 if(!applying&&!rollingBack)throw Error("Definir FM_LAB_MERGE_ACTION=apply o rollback");
@@ -49,7 +51,27 @@ try{
     sizes.set(a.supplier,(sizes.get(a.supplier)||0)+1);
     if(a.procedencia==="manual")manual.add(a.supplier);
    }
-   const {operations,review}=proposeLaboratoryMerges(master,sizes,manual);
+   const blocked=new Set();
+   let evidence=[];
+   if(evidenceMode){
+    // No fusionar automáticamente laboratorios con agenda, borrador o pedido real:
+    // requieren elegir qué frecuencia/historial conservar.
+    const {rows:used}=await db.query(`
+     SELECT laboratorio_clave AS key FROM farmetrica.preparador_frecuencia_laboratorio
+     WHERE cliente_slug=$1 AND laboratorio_clave LIKE 'P:%'
+     UNION ALL SELECT laboratorio_clave FROM farmetrica.pedidos_laboratorio_borradores
+     WHERE cliente_slug=$1 AND laboratorio_clave LIKE 'P:%'
+     UNION ALL SELECT 'P:'||laboratorio_id::text FROM farmetrica.preparador_pedidos_realizados
+     WHERE cliente_slug=$1`,[clientSlug]);
+    for(const u of used)if(/^P:[1-9]\d*$/.test(u.key))blocked.add(u.key.slice(2));
+    const {rows:origin}=await db.query(`SELECT proveedor_id::text AS supplier,
+     farmacia_codigo AS "pharmacyCode",codigo_origen AS "sourceCode"
+     FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=$1`,[clientSlug]);
+    evidence=origin;
+   }
+   const {operations,review}=evidenceMode?
+    proposeEvidenceLaboratoryMerges(master,evidence,manual,blocked):
+    proposeLaboratoryMerges(master,sizes,manual);
    const batch=randomUUID();
    await db.query(`INSERT INTO farmetrica.laboratorios_unificacion_lotes
     (lote,cliente_slug,criterio) VALUES($1,$2,$3)`,[batch,clientSlug,criterion]);
@@ -81,7 +103,7 @@ try{
      WHERE a.cliente_slug=$1 AND a.proveedor_id=m.source_id RETURNING a.id`,[clientSlug]);
     if(upd.rowCount!==moved.rowCount)throw Error("Alias modificados durante la transacción");
     const groups=await db.query(`UPDATE farmetrica.proveedores_unificados p
-     SET activo=false,actualizado_en=now() FROM fm_lab_merge_pairs m
+     SET activo=false,fusionado_a=m.target_id,actualizado_en=now() FROM fm_lab_merge_pairs m
      WHERE p.cliente_slug=$1 AND p.id=m.source_id AND p.activo=true
      RETURNING p.id`,[clientSlug]);
     if(groups.rowCount!==operations.length)throw Error("No se desactivaron todos los grupos duplicados");
@@ -89,6 +111,9 @@ try{
     log.mergedGroups=groups.rowCount;
    }else{log.movedAliases=0;log.mergedGroups=0}
    log.reviewGroups=review.length;
+   log.evidenceMode=evidenceMode;
+   log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
+   log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;
   }
  }else{
@@ -111,7 +136,7 @@ try{
    WHERE s.lote=$1 AND s.alias_id=a.id AND a.cliente_slug=$2 AND a.proveedor_id=s.destino_id
    RETURNING a.id`,[wanted,clientSlug]);
   const groups=await db.query(`UPDATE farmetrica.proveedores_unificados p
-   SET activo=s.activo_anterior,actualizado_en=now()
+   SET activo=s.activo_anterior,fusionado_a=NULL,actualizado_en=now()
    FROM farmetrica.laboratorios_unificacion_origenes s
    WHERE s.lote=$1 AND s.origen_id=p.id AND p.cliente_slug=$2
    RETURNING p.id`,[wanted,clientSlug]);

@@ -50,7 +50,7 @@ jobs:
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/articleSchemaCache.test.js
           node --test api/src/laboratoryOptionCache.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -405,7 +405,15 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
-            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_LAB_MERGE_ACTION=apply node src/applyLaboratoryMerges.mjs
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_LAB_MERGE_ACTION=apply FM_LAB_MERGE_MODE=evidence_v2 node src/applyLaboratoryMerges.mjs
+          '
+
+      - name: Recalcular CN y último laboratorio después de unir proveedores
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'aplicar equivalencias verificadas')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 390 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/refreshPreparadorLastReceipt.mjs
           '
 
       - name: Auditar el maestro y el preparador después de unificar

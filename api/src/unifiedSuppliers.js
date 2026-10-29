@@ -49,12 +49,12 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
   'validity',a.vigencia) ORDER BY a.farmacia_codigo,a.codigo_origen)
   FILTER(WHERE a.id IS NOT NULL AND f.id=ANY($2::int[])),'[]'::json) AS origins
  FROM farmetrica.proveedores_unificados p
- JOIN farmetrica.proveedores_unificados_alias a
+ LEFT JOIN farmetrica.proveedores_unificados_alias a
    ON a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
- JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
+ LEFT JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
   AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
   AND ($2::int[] IS NULL OR f.id=ANY($2::int[]))
- WHERE p.cliente_slug=$1 AND p.activo
+ WHERE p.cliente_slug=$1 AND p.activo AND (a.id IS NULL OR f.id IS NOT NULL)
   ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
  values:[ctx.client.slug,pharmacies],query_timeout:10000});
@@ -257,6 +257,57 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    invalidateLastReceiptCache(pool,req.context.client.slug);invalidateCachedLaboratoryOptions(pool,req.context.client.slug);
    res.json(rows[0]);
   }catch(e){next(e)}
+ });
+ // Fusiona identidades canónicas: la clasificación pertenece solo al destino.
+ // Conserva los proveedores origen como inactivos para trazabilidad y rollback.
+ app.post("/api/tenant/proveedores-unificados/fusionar",...requireTenantAdmin(),async(req,res,next)=>{
+  const destination=String(req.body?.destino||"");
+  const sources=Array.isArray(req.body?.origenes)?[...new Set(req.body.origenes.map(String))]:[];
+  if(!validId(destination)||!sources.length||sources.length>100||
+   sources.some(id=>!validId(id)||id===destination))
+   return res.status(400).json({error:"Selecciona un proveedor destino y otros proveedores distintos"});
+  const db=await pool.connect(),slug=req.context.client.slug;
+  try{
+   await db.query("BEGIN");
+   const {rows}=await db.query(`SELECT id::text,activo,clase,nombre FROM farmetrica.proveedores_unificados
+    WHERE cliente_slug=$1 AND id=ANY($2::bigint[]) FOR UPDATE`,
+    [slug,[destination,...sources]]);
+   if(rows.length!==sources.length+1||rows.some(p=>!p.activo)){
+    await db.query("ROLLBACK");
+    return res.status(400).json({error:"Hay identidades no encontradas o previamente fusionadas"});
+   }
+   const target=rows.find(p=>p.id===destination);
+   if(!target){
+    await db.query("ROLLBACK");return res.status(404).json({error:"Proveedor destino no encontrado"});
+   }
+   const aliases=await db.query(`UPDATE farmetrica.proveedores_unificados_alias
+    SET proveedor_id=$2,procedencia='manual',actualizado_en=now()
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[]) RETURNING id`,
+    [slug,destination,sources]);
+   // La frecuencia del destino prevalece; si no tiene una, se conserva una de origen.
+   await db.query(`INSERT INTO farmetrica.preparador_frecuencia_laboratorio
+    (cliente_slug,laboratorio_clave,intervalo_dias)
+    SELECT $1,'P:'||$2::text,intervalo_dias
+    FROM farmetrica.preparador_frecuencia_laboratorio
+    WHERE cliente_slug=$1 AND laboratorio_clave=ANY($3::text[])
+    ORDER BY actualizado_en DESC LIMIT 1
+    ON CONFLICT(cliente_slug,laboratorio_clave) DO NOTHING`,
+    [slug,destination,sources.map(id=>"P:"+id)]);
+   await db.query(`DELETE FROM farmetrica.preparador_frecuencia_laboratorio
+    WHERE cliente_slug=$1 AND laboratorio_clave=ANY($2::text[])`,
+    [slug,sources.map(id=>"P:"+id)]);
+   await db.query(`UPDATE farmetrica.preparador_pedidos_realizados SET laboratorio_id=$2
+    WHERE cliente_slug=$1 AND laboratorio_id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query(`UPDATE farmetrica.proveedores_unificados
+    SET activo=false,fusionado_a=$2,actualizado_en=now()
+    WHERE cliente_slug=$1 AND id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query("COMMIT");
+   invalidateLastReceiptCache(pool,slug);invalidateCachedLaboratoryOptions(pool,slug);
+   res.json({merged:sources.length,aliases:aliases.rowCount,target:{id:destination,name:target.nombre,class:target.clase}});
+  }catch(e){await db.query("ROLLBACK").catch(()=>{});next(e)}
+  finally{db.release()}
  });
  app.put("/api/tenant/proveedores-unificados/:id/origen",...requireTenantAdmin(),async(req,res,next)=>{
   if(!validId(req.params.id))return res.status(400).json({error:"ID incorrecto"});

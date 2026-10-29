@@ -28,7 +28,7 @@ const origins=[
  {sourceCode:"105",name:"Movimiento interno",origins:[{pharmacyId:"1",name:"Movimiento interno",source:"farmatic"}]},
  {sourceCode:"200",name:"Sin clasificar B",origins:[{pharmacyId:"2",name:"Sin clasificar B",source:"farmatic"}]}
 ];
-let frequency=[],writes=[],errors=[];
+let frequency=[],writes=[],errors=[],catalogRequests=0;
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),path=u.pathname;
@@ -56,8 +56,13 @@ await page.route("**/api/**",async route=>{
   body={laboratories:suppliers.filter(p=>p.class==="DIRECTO").map(p=>({key:p.key,name:p.name}))};
  else if(path==="/api/analytics/pedidos/agenda")
   body={today:"2026-10-29",items:[{
-   key:"P:1",name:"Laboratorios Alfa SA",days:4,cn:240,overdue:1,today:0,tomorrow:0,withoutDate:0,
-   nextDue:"2026-10-27",lastOrder:"2026-10-23",daysUntil:-2,status:"vencido"}]};
+   key:"P:1",name:"Laboratorios Alfa SA",days:4,cn:240,overdue:0,today:1,tomorrow:0,withoutDate:1,
+   nextDue:"2026-10-29",lastOrder:null,daysUntil:0,status:"hoy",provisional:true},{
+   key:"P:2",name:"Alfa SA",days:7,cn:140,overdue:0,today:0,tomorrow:1,withoutDate:1,
+   nextDue:"2026-10-30",lastOrder:null,daysUntil:1,status:"manana",provisional:true}]};
+ else if(path==="/api/analytics/pedidos/catalogo-unificado"){
+  catalogRequests++;body={rows:[],total:0,from:"2026-10-01",to:"2026-10-29"};
+ }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
@@ -99,6 +104,17 @@ try{
  await page.getByRole("heading",{name:/Planificación de pedidos/}).waitFor({timeout:15000});
  await page.getByText("Laboratorios Alfa SA").first().waitFor();
  await page.getByText("240 códigos nacionales únicos").waitFor();
+ const agenda=page.locator(".fm-order-agenda");
+ assert.equal(await agenda.locator("select,input[type=search]").count(),0);
+ assert.equal(await agenda.getByRole("button",{name:/Hoy\s*1|1\s*Hoy/}).count(),1);
+ assert.equal(await agenda.getByText(/Previsión de demostración/).count(),1);
+ const requestCatalog=page.waitForResponse(r=>r.url().includes("/api/analytics/pedidos/catalogo-unificado"));
+ await agenda.getByRole("button",{name:/Laboratorios Alfa SA/}).click();
+ await requestCatalog;
+ assert.ok(catalogRequests>=1,"Pulsar laboratorio debe consultar automáticamente CN");
+ await agenda.getByRole("button",{name:/Mañana/}).click();
+ await agenda.getByText("Alfa SA",{exact:true}).first().waitFor();
+
  assert.equal(await page.getByText("Farmacias pendientes:").count(),0);
  for(const width of [1240,768,375]){
   await page.setViewportSize({width,height:830});

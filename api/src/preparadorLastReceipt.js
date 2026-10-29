@@ -6,7 +6,7 @@ import {readRetirementPatterns} from "./laboratoryRetirements.js";
 import {invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 const SQL=await readFile(new URL("./preparadorLastReceipt.sql",import.meta.url),"utf8");
 const SNAPSHOT_SQL=(await readFile(new URL("./preparadorLastReceiptSnapshot.sql",import.meta.url),"utf8"))
- .trim().replace(/;\\s*$/,"");
+ .trim().replace(/;\s*$/,"");
 const STALE_MS=15*60*1000;
 const refreshes=new WeakMap();
 const CACHE_MS=120_000;
@@ -17,7 +17,7 @@ export function invalidateLastReceiptCache(pool,slug){
  if(cache)for(const key of cache.keys())if(key.startsWith(slug+"|"))cache.delete(key);
  // Los cambios de clasificación/manuales recalculan fuera de la petición
  // que guarda el maestro; nunca hacen esperar al usuario que edita.
- if(typeof pool.connect!=="function")return;
+ if(typeof pool.connect!=="function"||typeof pool.totalCount!=="number")return;
  void pool.query("SELECT esquema_datos FROM farmetrica.clientes WHERE slug=$1",[slug])
   .then(({rows})=>{
    const schema=rows[0]?.esquema_datos;

@@ -50,7 +50,7 @@ jobs:
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/articleSchemaCache.test.js
           node --test api/src/laboratoryOptionCache.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js

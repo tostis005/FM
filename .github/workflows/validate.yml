@@ -42,6 +42,8 @@ jobs:
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/articleSchemaCache.test.js
           node --test api/src/laboratoryOptionCache.test.js
+          node --check api/src/preparadorLastReceipt.js
+          node --check api/src/refreshPreparadorLastReceipt.mjs
           node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
@@ -180,6 +182,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
           psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql
+          psql_test --single-transaction < api/src/migrations/041_preparador_ultima_recepcion_cache.sql
           psql_test -v cliente_slug=ampedia < api/src/migrations/036_proveedores_unificados_seed.psql
           test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedores_unificados_alias')" -ge 2000
           psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql

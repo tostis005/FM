@@ -13,9 +13,7 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
    if(text.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))return {rows:[]};
    if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"*BAJA*"}]};
    if(text.includes("p.id::text=ANY($2::text[])"))return {rows:[
-    {id:"1",key:"P:1",name:"Lab antiguo"},
-    {id:"2",key:"P:2",name:"Lab último"},
-    {id:"3",key:"P:3",name:"Sin CN"}
+    {id:"2",key:"P:2",name:"Lab último"}
    ]};
    return {rows:[{lab_id:"2",cn:"750001",nombre:"Medicamento"},
     {lab_id:"2",cn:"000123",nombre:"Parafarmacia"}]};

@@ -1,5 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {latestLaboratoryCN,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
+import {latestLaboratoryCN,laboratoryIdsFromSnapshot,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -14,6 +14,29 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema inválido");
  if(!pharmacies.length)return [];
  const useLastReceipt=forOrders&&lastReceiptMode();
+ if(useLastReceipt){
+  // El cálculo de CN vencedores ya conoce los IDs de los laboratorios.
+  // No agrupar miles de alias ni escanear el maestro para montar el selector.
+  let keys;
+  try{keys=await laboratoryIdsFromSnapshot(pool,ctx,pharmacies)}
+  catch(error){console.warn("PREPARADOR_SELECTOR_SNAPSHOT",error.code||error.name)}
+  if(keys===null||keys===undefined){
+   const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
+   keys=[...latest.byLab.keys()];
+  }
+  if(!keys.length)return [];
+  const {rows}=await pool.query({text:`
+   SELECT p.id::text AS id,('P:'||p.id::text) AS key,p.nombre AS name,
+    p.clase AS class,p.activo AS active,'[]'::json AS origins
+   FROM farmetrica.proveedores_unificados p
+   WHERE p.cliente_slug=$1 AND p.id=ANY($2::bigint[])
+    AND p.activo AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')
+    AND upper(p.nombre) !~ '(COOPERATIVA|COOP\\.?|MAYORISTA|DISTRIBUIDOR)'
+    AND upper(p.nombre) !~ '(^|[^A-Z])FARMACIAS?([^A-Z]|$)'
+   ORDER BY p.nombre`,
+   values:[ctx.client.slug,keys],query_timeout:6000});
+  return rows;
+ }
  // La lista de proveedores y la última recepción se calculan sobre fuentes
  // independientes. En un acceso frío, lanzarlas simultáneamente evita sumar
  // sus latencias; la asignación CN->laboratorio y el filtro son idénticos.
@@ -34,14 +57,8 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  WHERE p.cliente_slug=$1 AND p.activo
   ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
- // En modo última recepción el ganador puede proceder de otra farmacia.
- // No ocultar el laboratorio ganador si el CN se recibió en la farmacia elegida.
- values:[ctx.client.slug,useLastReceipt?null:pharmacies],query_timeout:10000});
- if(!useLastReceipt)return (await supplierQuery).rows;
- const [suppliers,latest]=await Promise.all([
-  supplierQuery,latestLaboratoryCN(pool,ctx,pharmacies)
- ]);
- return suppliers.rows.filter(row=>latest.byLab.has(String(row.id)));
+ values:[ctx.client.slug,pharmacies],query_timeout:10000});
+ return (await supplierQuery).rows;
 }
 
 /** Source = only received CN from the chosen laboratory, ever.

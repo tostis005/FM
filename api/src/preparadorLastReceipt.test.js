@@ -10,11 +10,10 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
   const calls=[],pool={query:async q=>{
    const text=typeof q==="string"?q:q.text;
    calls.push(q);
+   if(text.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))return {rows:[]};
    if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"*BAJA*"}]};
-   if(text.includes("json_agg(json_build_object"))return {rows:[
-    {id:"1",key:"P:1",name:"Lab antiguo"},
-    {id:"2",key:"P:2",name:"Lab último"},
-    {id:"3",key:"P:3",name:"Sin CN"}
+   if(text.includes("p.id=ANY($2::bigint[])"))return {rows:[
+    {id:"2",key:"P:2",name:"Lab último"}
    ]};
    return {rows:[{lab_id:"2",cn:"750001",nombre:"Medicamento"},
     {lab_id:"2",cn:"000123",nombre:"Parafarmacia"}]};
@@ -59,37 +58,61 @@ test("rollback por variable de entorno restaura el catálogo anterior sin migrac
  else process.env.FM_PREPARADOR_ULTIMA_RECEPCION=before;
 });
 
-test("selector arranca consulta de últimas recepciones sin esperar a listado de proveedores",async()=>{
+test("selector evita agrupar todos los alias después de resolver CN",async()=>{
  const original=process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
  process.env.FM_PREPARADOR_ULTIMA_RECEPCION="1";
- let releaseSuppliers,signalLatest;
- const latestStarted=new Promise(resolve=>{signalLatest=resolve});
- const suppliersPending=new Promise(resolve=>{releaseSuppliers=resolve});
- const pool={query:async q=>{
+ const queries=[],pool={query:async q=>{
   const sql=typeof q==="string"?q:q.text;
-  if(sql.includes("json_agg(json_build_object"))return suppliersPending;
-  if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
-  if(sql.includes("DISTINCT ON (cn)")){
-   signalLatest();
+  queries.push(sql);
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))
+   return {rows:[{actualizado_en:new Date()}]};
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))
    return {rows:[{lab_id:"5",cn:"450123",nombre:"Artículo válido"}]};
-  }
+  if(sql.includes("p.id=ANY($2::bigint[])"))
+   return {rows:[{id:"5",key:"P:5",name:"Fabricante"}]};
   throw Error("SQL inesperado");
  }};
- let timer;
  try{
-  const pending=listUnifiedSuppliers(pool,ctx,[1],true);
-  // Si las consultas se hacen en serie, la última recepción no comenzaría
-  // hasta que libere el listado de proveedores.
-  await Promise.race([latestStarted,new Promise((_,reject)=>{
-   timer=setTimeout(()=>reject(Error("Última recepción bloqueada por proveedores")),2500);
-  })]);
-  releaseSuppliers({rows:[{id:"5",key:"P:5",name:"Fabricante"}]});
-  const rows=await pending;
+  const rows=await listUnifiedSuppliers(pool,ctx,[1],true);
   assert.deepEqual(rows.map(r=>r.key),["P:5"]);
+  assert.equal(queries.length,3);
+  assert.ok(queries.every(sql=>!sql.includes("json_agg(json_build_object")));
+  assert.ok(queries.every(sql=>!sql.includes("DISTINCT ON (cn)")));
  }finally{
-  if(timer)clearTimeout(timer);
-  releaseSuppliers({rows:[{id:"5",key:"P:5",name:"Fabricante"}]});
   if(original===undefined)delete process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
   else process.env.FM_PREPARADOR_ULTIMA_RECEPCION=original;
  }
+});
+
+test("snapshot persistente filtra por farmacia sin escanear el histórico",async()=>{
+ const queries=[],pool={query:async q=>{
+  queries.push(q);
+  const sql=typeof q==="string"?q:q.text;
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))
+   return {rows:[{actualizado_en:new Date()}]};
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))
+   return {rows:[{lab_id:"21",cn:"700111",nombre:"Artículo reciente"}]};
+  throw Error("El histórico no debe ejecutarse con snapshot preparado");
+ }};
+ const first=await latestLaboratoryCN(pool,ctx,[2,1]);
+ assert.equal(first.total,1);
+ assert.deepEqual([...first.byLab.keys()],["21"]);
+ const sql=queries.find(q=>q.text?.includes("FROM farmetrica.preparador_ultima_recepcion_cache"));
+ assert.match(sql.text,/pharmacy_ids && \$2::int\[\]/);
+ assert.match(sql.text,/NOT \(blocked_pharmacy_ids && \$2::int\[\]\)/);
+ assert.deepEqual(sql.values,["ampedia",[1,2]]);
+ await latestLaboratoryCN(pool,ctx,[1,2]);
+ assert.equal(queries.length,2,"La misma selección usa caché en memoria");
+});
+test("snapshot SQL mantiene última recepción global y exclusiones por farmacia",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const snapshot=await readFile(new URL("./preparadorLastReceiptSnapshot.sql",import.meta.url),"utf8");
+ assert.match(snapshot,/SELECT DISTINCT ON \(cn\)/);
+ assert.match(snapshot,/ORDER BY cn,fecha DESC/);
+ assert.match(snapshot,/pm\.ignorar_informes IS TRUE/);
+ assert.match(snapshot,/pm\.cooperativa IS TRUE/);
+ assert.match(snapshot,/array_agg\(DISTINCT pharmacy_id\)::int\[\]/);
+ assert.match(snapshot,/array_agg\(DISTINCT p\.pharmacy_id\)::int\[\]/);
+ assert.match(snapshot,/position\(upper\(exclude\.cadena\) in upper\(coalesce\(ar\.nombre/);
+ assert.doesNotMatch(snapshot,/WHERE\s+AND/);
 });

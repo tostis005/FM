@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
+import {readFile} from "node:fs/promises";
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {readRetirementPatterns} from "./laboratoryRetirements.js";
 import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 
@@ -13,6 +16,9 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
  await db.connect();
  try{
   await db.query("BEGIN");
+  // La prueba modifica recepciones dentro de una transacción aislada: no
+  // consultar el snapshot global, que representa el estado ya confirmado.
+  await db.query("DELETE FROM farmetrica.preparador_ultima_recepcion_estado WHERE cliente_slug='ampedia'");
   const groups=[];
   for(const [suffix,cls] of [["A","DIRECTO"],["B","DIRECTO"],["C","MAYORISTA"],["D","DIRECTO"]]){
    const {rows}=await db.query(`INSERT INTO farmetrica.proveedores_unificados
@@ -45,6 +51,19 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
   const menu=()=>listUnifiedSuppliers(db,ctx,[1],true);
   const chosen=await menu();
   assert.deepEqual(chosen.filter(x=>groups.includes(x.id)).map(x=>x.id),[groups[1]]);
+  // Ejecutar el SQL real de precálculo contra PostgreSQL, no solo comprobar
+  // su texto: su ganador debe coincidir con el algoritmo original.
+  const patterns=await readRetirementPatterns(db,"ampedia");
+  const snapshotSql=(await readFile(new URL("./preparadorLastReceiptSnapshot.sql",
+   import.meta.url),"utf8")).trim().replace(/;\s*$/,"")
+    .replaceAll("__SCHEMA__",'"ampedia"')
+    .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
+  const snapshot=await db.query({text:snapshotSql,values:["ampedia",patterns]});
+  const match=snapshot.rows.filter(r=>r.cn==="794321");
+  assert.equal(match.length,1);
+  assert.equal(match[0].lab_id,groups[1]);
+  assert.ok(match[0].pharmacy_ids.includes(1));
+
   assert.deepEqual((await catalog(groups[1])).rows.map(r=>r.cn),["794321"]);
   assert.equal((await catalog(groups[0])).total,0);
   assert.equal((await catalog(groups[2])).total,0,"Mayorista excluido aun siendo la recepción más reciente");

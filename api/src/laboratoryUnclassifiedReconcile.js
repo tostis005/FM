@@ -10,7 +10,7 @@ const norm=x=>String(x??"").trim().toUpperCase().replace(/^0+(?=\d)/,"");
  * identidad solo por el código local ni por pertenecer al mismo grupo.
  */
 export function planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds=new Set(),
- manualIds=new Set(),blockedIds=new Set()){
+ manualIds=new Set(),blockedIds=new Set(),excludedIds=new Set()){
  const active=master.filter(p=>p.active!==false),byId=new Map(active.map(p=>[String(p.id),p]));
  const bySupplier=new Map();
  for(const a of aliases){
@@ -21,9 +21,10 @@ export function planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds=ne
  const targets=active.filter(p=>LAB_TYPES.has(p.class)&&activeLabIds.has(String(p.id)));
  const sources=active.filter(p=>p.class==="SIN_CLASIFICAR");
  const operations=[],review=[],status={sources:sources.length,targets:targets.length,
-  noExactMatch:0,manualOrHistory:0,sourceWithoutAlias:0,ambiguous:0,pharmacyConflict:0,merged:0};
+  noExactMatch:0,manualOrHistory:0,sourceWithoutAlias:0,ambiguous:0,pharmacyConflict:0,excluded:0,merged:0};
  for(const source of sources){
   const id=String(source.id),sa=bySupplier.get(id)||[];
+  if(excludedIds.has(id)){status.excluded++;continue}
   if(!sa.length){status.sourceWithoutAlias++;continue}
   const matches=targets.map(target=>{
    const score=nameAffinity(source.name,target.name);

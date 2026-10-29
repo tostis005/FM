@@ -156,7 +156,10 @@ try{
   if(!/^[a-f0-9-]{36}$/i.test(wanted||""))throw Error("FM_LAB_MERGE_BATCH_ID requerido");
   const {rows:b}=await db.query(`SELECT lote,revertido_en FROM farmetrica.laboratorios_unificacion_lotes
    WHERE lote=$1 AND cliente_slug=$2 FOR UPDATE`,[wanted,clientSlug]);
-  if(b.length!==1||b[0].revertido_en)throw Error("Lote inexistente o ya revertido");
+  if(b.length!==1)throw Error("Lote inexistente");
+  if(b[0].revertido_en){
+   log.batch=wanted;log.alreadyRolledBack=true;
+  }else{
   const {rows:entries}=await db.query(`SELECT alias_id,origen_id,destino_id FROM
    farmetrica.laboratorios_unificacion_alias WHERE lote=$1`,[wanted]);
   const changed=await db.query(`SELECT count(*)::int AS count
@@ -178,6 +181,7 @@ try{
   await db.query(`UPDATE farmetrica.laboratorios_unificacion_lotes
    SET revertido_en=now() WHERE lote=$1`,[wanted]);
   log.batch=wanted;log.restoredAliases=reverted.rowCount;log.restoredGroups=groups.rowCount;
+  }
  }
  await db.query("COMMIT");
  log.success=true;

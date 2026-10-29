@@ -26,7 +26,7 @@ function mock(){
  const app={get(path,...handlers){routes["GET "+path]=handlers.at(-1)},
   post(path,...handlers){routes["POST "+path]=handlers.at(-1)},
   delete(path,...handlers){routes["DELETE "+path]=handlers.at(-1)}};
- const pool={query:async(q)=>{queries.push(q);return {rows:[]}},
+ const pool={query:async(q)=>{queries.push({q});if(String(q).includes("RETURNING grupo_id::text"))return {rows:[{groupId:"ok"}]};return {rows:[]}},
   connect:async()=>({query:async(q,values)=>{queries.push({q,values});
    if(String(q).includes('RETURNING grupo_id::text AS "groupId"'))return {rows:[{groupId:"generated"}]};
    return {rows:[]}},release(){}})};

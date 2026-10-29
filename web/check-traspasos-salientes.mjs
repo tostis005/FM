@@ -44,17 +44,17 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto(BASE+"/proveedores-maestro",{waitUntil:"domcontentloaded"});
- await page.getByRole("heading",{name:"Maestro único de proveedores"}).waitFor({timeout:15000});
+ await page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
  await page.getByRole("table").first().getByText("Farmacia receptora",{exact:true}).waitFor();
- assert.equal(await page.getByText("INTERNO",{exact:true}).count(),1);
+ assert.equal(await page.getByText("Interno",{exact:true}).count(),1);
  assert.equal(await page.getByRole("heading",{name:"Traspasos salientes entre farmacias"}).count(),0,
   "No reintroducir la interfaz de exclusión histórica obsoleta");
  await page.getByRole("button",{name:"Editar"}).first().click();
  const dialog=page.getByRole("dialog",{name:"Editar proveedor"});
  await dialog.getByRole("combobox",{name:"Clasificación"}).selectOption("MAYORISTA");
- await dialog.getByText(/Los movimientos históricos siguen contando en los totales/).waitFor();
+ await dialog.getByText(/Los movimientos históricos permanecen intactos/).waitFor();
  await dialog.getByRole("button",{name:"Guardar"}).click();
- await page.getByText("MAYORISTA",{exact:true}).first().waitFor();
+ await page.getByText("Cooperativa \/ mayorista",{exact:true}).first().waitFor();
  assert.equal(saved.length,1);
  assert.deepEqual(errors,[]);
  console.log("OK: maestro unificado; internos y mayoristas solo afectan al preparador, no a totales");

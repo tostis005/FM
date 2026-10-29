@@ -2,7 +2,7 @@
 // Se muestra el código por farmacia para comprobar que el mismo número no
 // identifique a varias empresas distintas.
 import pg from "pg";
-import {advancedLaboratoryCandidates} from "./laboratoryNameMatching.js";
+import {advancedLaboratoryCandidates,nameAffinity} from "./laboratoryNameMatching.js";
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,connectionTimeoutMillis:5000,query_timeout:90000,statement_timeout:90000});
 const slug="ampedia",out={tenant:slug,readonly:true};
 try{
@@ -27,6 +27,34 @@ try{
  out.candidatePairs=candidates.length;
  out.reasonCounts=Object.fromEntries([...new Set(candidates.map(p=>p.reason))].map(reason=>[reason,candidates.filter(c=>c.reason===reason).length]));
  out.top=candidates.slice(0,155);
+ const classes=new Set(["DIRECTO","VACUNAS","FÓRMULAS"]);
+ const targets=all.filter(x=>x.active&&classes.has(x.class));
+ const unclassified=all.filter(x=>x.active&&x.class==="SIN_CLASIFICAR");
+ const byId=new Map();
+ for(const a of aliases){
+  if(!byId.has(a.supplier))byId.set(a.supplier,[]);
+  byId.get(a.supplier).push(a);
+ }
+ const cross=[];
+ for(const p of unclassified){
+  for(const t of targets){
+   const match=nameAffinity(p.name,t.name);
+   if(!match||match.confidence<80)continue;
+   cross.push({from:p.id,fromName:p.name,to:t.id,toName:t.name,
+    reason:match.reason,confidence:match.confidence,
+    fromAliases:(byId.get(p.id)||[]).map(a=>a.pharmacyCode+":"+a.sourceCode),
+    toAliases:(byId.get(t.id)||[]).map(a=>a.pharmacyCode+":"+a.sourceCode),
+    targetClass:t.class,fromOrigin:p.origin,toOrigin:t.origin,
+    manual:protectedIds.has(p.id)||protectedIds.has(t.id),
+    history:blocked.has(p.id)||blocked.has(t.id)});
+  }
+ }
+ cross.sort((a,b)=>b.confidence-a.confidence||a.fromName.localeCompare(b.fromName,"es"));
+ out.unclassifiedWithAliases=unclassified.filter(p=>(byId.get(p.id)||[]).length>0).length;
+ out.unclassifiedNoAliases=unclassified.length-out.unclassifiedWithAliases;
+ out.crossClassCandidatePairs=cross.length;
+ out.crossClassExamples=cross.slice(0,120);
+
  // Códigos ERP sin asociación al maestro (no se pueden buscar aquí sin examinar ERP).
  // Los alias presentes sí están asociados, aunque la identidad final pueda ser distinta.
  out.unlinkedERP="requiere_comparacion_con_tablas_operativas";

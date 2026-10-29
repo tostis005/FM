@@ -7,11 +7,14 @@ import {proposeLaboratoryMerges} from "./laboratoryMergeCandidates.js";
 import {proposeEvidenceLaboratoryMerges} from "./laboratoryMergeEvidence.js";
 import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
 import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconcile.js";
+import {verifiedNonLabExclusions} from "./laboratoryNonLabExclusions.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
 const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
-const unclassifiedMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const criterion=unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
+const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
+const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
+const criterion=filteredMode?"unclassified-filtered-laboratories-v5-20261029":
+ unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
  evidenceMode?"name-and-shared-erp-code-v2-20261029":"structural-laboratory-name-v1-20261028";
 const applying=process.env.FM_LAB_MERGE_ACTION==="apply";
@@ -78,12 +81,21 @@ try{
    }
    let activeLabIds=new Set(),unclassifiedReport=null;
    if(unclassifiedMode){
+    if(filteredMode){
+     const {rows:previous}=await db.query(`SELECT revertido_en
+      FROM farmetrica.laboratorios_unificacion_lotes
+      WHERE cliente_slug=$1 AND criterio='unclassified-verified-laboratory-aliases-v4-20261029'`,
+      [clientSlug]);
+     if(previous.length!==1||!previous[0].revertido_en)
+      throw Error("El lote anterior aún no se ha revertido. No iniciar la conciliación filtrada.");
+    }
     const {rows:lab}=await db.query(`SELECT DISTINCT lab_id::text AS id
      FROM farmetrica.preparador_ultima_recepcion_cache WHERE cliente_slug=$1`,
      [clientSlug]);
     activeLabIds=new Set(lab.map(r=>r.id));
     if(!activeLabIds.size)throw Error("No existe snapshot de laboratorios para verificar los orígenes");
-    unclassifiedReport=planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds,manual,blocked);
+    const excludes=filteredMode?verifiedNonLabExclusions(master):new Set();
+    unclassifiedReport=planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds,manual,blocked,excludes);
    }
    const {operations,review}=unclassifiedMode?unclassifiedReport:
     reviewedMode?reviewedLaboratoryMerges(master,evidence,manual,blocked):
@@ -133,6 +145,7 @@ try{
    log.evidenceMode=evidenceMode;
    log.reviewedMode=reviewedMode;
    log.unclassifiedMode=unclassifiedMode;
+   log.filteredMode=filteredMode;
    if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
    log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));

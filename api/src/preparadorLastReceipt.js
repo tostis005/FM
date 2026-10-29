@@ -87,6 +87,33 @@ export function refreshLastReceiptSnapshot(pool,ctx){
  void pending.finally(()=>{if(byTenant.get(slug)===pending)byTenant.delete(slug)}).catch(()=>{});
  return pending;
 }
+/** Devuelve solo los laboratorios activos, sin traer todos los CN al proceso Node.
+ * null indica que todavía no existe snapshot y el selector debe usar el legado.
+ */
+export async function laboratoryIdsFromSnapshot(pool,ctx,pharmacies){
+ if(!/^[a-z][a-z0-9_]{1,62}$/.test(ctx.client.schema))throw Error("Esquema inválido");
+ const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);
+ if(!ids.length)return [];
+ let state;
+ try{
+  ({rows:state}=await pool.query({text:`
+   SELECT actualizado_en FROM farmetrica.preparador_ultima_recepcion_estado
+   WHERE cliente_slug=$1`,values:[ctx.client.slug],query_timeout:3000}));
+ }catch(error){
+  if(error.code==="42P01")return null;
+  throw error;
+ }
+ if(!state.length)return null;
+ const {rows}=await pool.query({text:`
+  SELECT DISTINCT lab_id::text AS lab_id
+  FROM farmetrica.preparador_ultima_recepcion_cache
+  WHERE cliente_slug=$1 AND pharmacy_ids && $2::int[]
+   AND NOT (blocked_pharmacy_ids && $2::int[])`,
+  values:[ctx.client.slug,ids],query_timeout:6000});
+ if(Date.now()-new Date(state[0].actualizado_en).getTime()>STALE_MS)
+  void refreshLastReceiptSnapshot(pool,ctx).catch(()=>{});
+ return rows.map(row=>String(row.lab_id));
+}
 export async function latestLaboratoryCN(pool,ctx,pharmacies){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(ctx.client.schema))throw Error("Esquema inválido");
  const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);

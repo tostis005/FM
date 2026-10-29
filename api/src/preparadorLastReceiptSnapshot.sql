@@ -114,8 +114,7 @@ SELECT l.lab_id::text AS lab_id,l.cn,l.nombre,s.pharmacy_ids,
  coalesce(b.blocked_pharmacy_ids,'{}'::int[]) AS blocked_pharmacy_ids
 FROM latest l JOIN scoped_cn s USING(cn)
 LEFT JOIN excluded_cn b ON b.cn=l.cn
-WHERE
- AND NOT (upper(coalesce(l.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
+WHERE NOT (upper(coalesce(l.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
    OR EXISTS (SELECT 1 FROM unnest($2::text[]) AS exclude(cadena)
      WHERE position(upper(exclude.cadena) in upper(coalesce(l.nombre,'')))>0))
 ORDER BY l.lab_id,l.cn;

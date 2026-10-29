@@ -47,7 +47,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  const started=Date.now();
  try{
   const result=await pool.query({text:sql,
-   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to,frequencyDays],
+   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
    query_timeout:30000});
   rows=result.rows;
   if(selected.length>=100)console.info("PREPARADOR_METRICAS",JSON.stringify({

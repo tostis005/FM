@@ -1,0 +1,41 @@
+.fm-supplier-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}
+.fm-supplier-tabs button{border:1px solid var(--border, #d8dee4);border-radius:10px;padding:11px 15px;background:transparent;color:inherit;cursor:pointer;font-weight:600}
+.fm-supplier-tabs button.active{background:var(--primary-soft,#eaf3f5);border-color:var(--primary,#008d91)}
+.fm-supplier-merge-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0;padding:14px;border:1px solid var(--border,#d8dee4);border-radius:12px}
+.fm-supplier-merge-bar select{min-width:210px;max-width:340px}
+.fm-unified-master .fm-table td{vertical-align:middle}
+.fm-unified-master .fm-table select{min-width:140px;max-width:260px}
+.fm-supplier-alias-list{max-height:210px;overflow:auto;padding-top:8px;min-width:230px}
+.fm-supplier-alias-list>div{margin-bottom:8px;font-size:12px}
+.fm-muted{color:var(--text-muted,#6f7981)}
+.fm-order-agenda{display:flex;flex-direction:column;gap:15px;margin-bottom:18px}
+.fm-order-agenda-header{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.fm-order-agenda-header h2{display:flex;gap:9px;align-items:center;margin:0}
+.fm-order-agenda-header p{margin:6px 0 0;color:var(--text-muted,#66737d);font-size:13px}
+.fm-order-agenda-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.fm-order-agenda-kpi{display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;border:1px solid var(--border,#dde5e8);border-radius:12px;background:var(--surface-muted,#f7fafb);color:inherit;padding:12px 4px;cursor:pointer}
+.fm-order-agenda-kpi strong{font-size:25px;line-height:1.1;font-variant-numeric:tabular-nums}
+.fm-order-agenda-kpi span{font-size:12px}
+.fm-order-agenda-kpi.active{border-color:var(--primary,#0c7a83);box-shadow:inset 0 0 0 1px var(--primary,#0c7a83)}
+.fm-order-agenda-filters{display:flex;gap:12px;flex-wrap:wrap}
+.fm-order-agenda-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;flex:1;min-width:200px}
+.fm-order-agenda-filters select,.fm-order-agenda-filters input{width:100%}
+.fm-order-agenda-list{display:flex;flex-direction:column;gap:6px}
+.fm-order-agenda-entry{border:1px solid var(--border,#e0e7ec);border-radius:11px;padding:12px}
+.fm-order-agenda-entry-main{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.fm-order-agenda-entry-text{display:flex;flex-direction:column;gap:4px;flex:1;min-width:190px}
+.fm-order-agenda-entry-text small{color:var(--text-muted,#66737d)}
+.fm-order-agenda-status{padding:5px 8px;border-radius:8px;font-size:12px;background:var(--surface-muted,#f3f5f6);white-space:nowrap}
+.fm-order-agenda-status-vencido{color:#a8302e;background:#fcebea;font-weight:700}
+.fm-order-agenda-status-hoy{color:#8c5604;background:#fff3da;font-weight:700}
+.fm-order-agenda-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fm-order-agenda-history{display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--border,#e1e5e8);padding-top:10px;margin-top:10px}
+.fm-order-agenda-history-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+.fm-order-agenda-footnote{display:flex;gap:6px;align-items:center;color:var(--text-muted,#66737d);font-size:12px;margin:0}
+.fm-order-confirm-overlay{position:fixed;inset:0;background:rgba(15,32,40,.53);z-index:1100;display:flex;align-items:center;justify-content:center;padding:18px}
+.fm-order-confirm{background:var(--surface,#fff);color:var(--text,#152d36);padding:24px;border-radius:16px;max-width:480px;width:100%;box-shadow:0 12px 45px rgba(0,0,0,.2);max-height:90vh;overflow:auto}
+.fm-order-confirm label{display:flex;flex-direction:column;gap:5px;margin:10px 0}
+.fm-order-confirm-pharmacies{display:flex;flex-wrap:wrap;gap:10px}
+.fm-order-confirm-pharmacies label{display:flex;flex-direction:row;align-items:center}
+.fm-order-confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+@media(max-width:750px){.fm-order-agenda-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.fm-order-agenda-entry-main{align-items:start}.fm-order-agenda-actions{width:100%}.fm-order-agenda-header{flex-wrap:wrap}}

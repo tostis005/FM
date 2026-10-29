@@ -13,7 +13,7 @@ export async function readLaboratoryOrderFrequency(pool,slug,key){
  const {rows}=await pool.query(`SELECT intervalo_dias AS days
   FROM farmetrica.preparador_frecuencia_laboratorio
   WHERE cliente_slug=$1 AND laboratorio_clave=$2`,[slug,key]);
- return rows[0]?.days??7;
+ return rows[0]?.days??0;
 }
 export async function readLocalSuppliers(pool,ctx){
  if(!SCHEMA.test(ctx.client.schema))throw Error("Esquema inválido");
@@ -89,20 +89,20 @@ export async function readLocalSuppliers(pool,ctx){
 export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin}){
  const auth=requireTenant(),admin=requireTenantAdmin();
  app.get("/api/tenant/pedidos/frecuencias",...auth,async(req,res,next)=>{
-  if(req.context.role!=="superadministrador"&&req.context.modules?.compras!==true)
+  if(!["superadministrador","administrador"].includes(req.context.role)&&req.context.modules?.compras!==true)
    return res.status(403).json({error:"Compras no habilitado"});
   try{
    const {rows}=await pool.query(`SELECT laboratorio_clave AS key, intervalo_dias AS days
     FROM farmetrica.preparador_frecuencia_laboratorio
     WHERE cliente_slug=$1 ORDER BY laboratorio_clave`,[req.context.client.slug]);
-   res.json({defaultDays:7,items:rows});
+   res.json({defaultDays:null,items:rows});
   }catch(error){next(error)}
  });
  app.put("/api/tenant/pedidos/frecuencias",...admin,async(req,res,next)=>{
   const key=normalizeLaboratoryKey(req.body?.key);
   const days=req.body?.days;
-  if(!key||!Number.isSafeInteger(days)||days<1||days>365)
-   return res.status(400).json({error:"Elige laboratorio y una frecuencia de 1 a 365 días."});
+  if(!/^P:[1-9][0-9]{0,17}$/.test(key)||!(days===null||(Number.isSafeInteger(days)&&days>=1&&days<=30)))
+   return res.status(400).json({error:"Elige un proveedor unificado y Bajo demanda o una frecuencia de 1 a 30 días."});
   try{
    const {rows:known}=await pool.query(`SELECT (EXISTS (
      SELECT 1 FROM farmetrica.nomenclator_presentaciones n
@@ -116,10 +116,15 @@ export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTena
     ) OR EXISTS (
      SELECT 1 FROM farmetrica.proveedores_unificados p
      WHERE p.cliente_slug=$2 AND 'P:'||p.id::text=$1
-      AND p.activo=true AND p.clase NOT IN ('MAYORISTA','INTERNO')
+      AND p.activo=true AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')
     )) AS found`,[key,req.context.client.slug]);
    if(!known[0]?.found)
     return res.status(400).json({error:"Laboratorio no reconocido en el maestro unificado"});
+   if(days===null){
+    await pool.query(`DELETE FROM farmetrica.preparador_frecuencia_laboratorio
+     WHERE cliente_slug=$1 AND laboratorio_clave=$2`,[req.context.client.slug,key]);
+    return res.json({key,days:null});
+   }
    const {rows}=await pool.query(`INSERT INTO farmetrica.preparador_frecuencia_laboratorio
     (cliente_slug,laboratorio_clave,intervalo_dias) VALUES($1,$2,$3)
     ON CONFLICT(cliente_slug,laboratorio_clave) DO UPDATE

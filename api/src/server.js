@@ -7,6 +7,7 @@ import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import {setupLaboratoryRetirements} from "./laboratoryRetirements.js";
 import {setupLaboratoryOrderSettings} from "./laboratoryOrderSettings.js";
+import {setupPreparadorAgenda} from "./preparadorAgenda.js";
 import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
@@ -115,6 +116,7 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
 setupMasterSources(app,pool,{requireSuperadmin});
 setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantAdmin});
 setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin});
+setupPreparadorAgenda(app,pool,{requireTenant});
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
 const {authenticateDemo}=setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});
@@ -521,6 +523,8 @@ try {
   await pool.query(unifiedSuppliersMigration);
   await pool.query(await readFile(new URL(
    "./migrations/041_preparador_ultima_recepcion_cache.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL(
+   "./migrations/042_preparador_agenda_y_cobertura.sql",import.meta.url),"utf8"));
    for(const file of ["031_preparador_bajas.sql"])
     await pool.query(await readFile(new URL("./migrations/"+file,import.meta.url),"utf8"));
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");
@@ -535,6 +539,7 @@ try {
   await pool.query(await readFile(new URL("./migrations/039_dashboard_consolidados_diarios.sql",import.meta.url),"utf8"));
   const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
   await pool.query(operationalMigration);
+  await pool.query(await readFile(new URL("./migrations/032_laboratory_order_frequency.sql",import.meta.url),"utf8"));
   const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");
   await pool.query(mcpMigration);
   const oauthClientsMigration=await readFile(new URL("./migrations/023_oauth_clients.sql",import.meta.url),"utf8");

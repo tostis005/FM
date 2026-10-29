@@ -44,7 +44,7 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto("http://127.0.0.1:4175/proveedores-maestro",{waitUntil:"domcontentloaded"});
- await page.getByRole("heading",{name:"Maestro único de proveedores"}).waitFor({timeout:15000});
+ await page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
  await page.getByText("Laboratorio Uno").first().waitFor();
  assert.equal(await page.getByText("Cooperativa Dos").first().count(),1);
  await page.getByRole("button",{name:"Editar"}).first().click();
@@ -53,11 +53,12 @@ try{
  await dlg.getByRole("button",{name:"Guardar"}).click();
  await page.getByText("Proveedor actualizado").waitFor();
  assert.equal(updates[0].class,"INTERNO");
+ await page.getByRole("tab",{name:/Pendientes de unificar/}).click();
  await page.getByRole("button",{name:"Relacionar"}).first().click();
- const linkDialog=page.getByRole("dialog",{name:"Relacionar código ERP"});
- await linkDialog.getByLabel("Proveedor de destino").selectOption("1");
+ const linkDialog=page.getByRole("dialog",{name:"Relacionar código de Farmatic"});
+ await linkDialog.getByLabel("Proveedor unificado de destino").selectOption("1");
  await linkDialog.getByRole("button",{name:"Guardar equivalencia"}).click();
- await page.getByText("Código ERP vinculado").waitFor();
+ await page.getByText("Código de Farmatic vinculado").waitFor();
  assert.equal(links[0].sourceCode,"0320");
  assert.equal(links[0].pharmacyCode,"ABA");
  assert.equal(links[0].id,"1");

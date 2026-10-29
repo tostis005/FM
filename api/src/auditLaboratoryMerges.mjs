@@ -47,7 +47,7 @@ try{
  const byCode=new Map(),nameById=new Map(master.map(x=>[x.id,canonicalLabName(x.name)]));
  for(const a of evidence){
   if(!nameById.has(a.supplier))continue;
-  const k=String(a.sourceCode).trim().toUpperCase().replace(/^0+(?=\\d)/,"");
+  const k=String(a.sourceCode).trim().toUpperCase().replace(/^0+(?=\d)/,"");
   if(!k)continue;
   if(!byCode.has(k))byCode.set(k,new Map());
   byCode.get(k).set(a.supplier,nameById.get(a.supplier));

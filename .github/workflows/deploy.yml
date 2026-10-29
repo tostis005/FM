@@ -50,7 +50,7 @@ jobs:
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/articleSchemaCache.test.js
           node --test api/src/laboratoryOptionCache.test.js
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js api/src/laboratoryAdditionalVerified.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
@@ -477,6 +477,22 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditAdvancedLaboratoryNames.mjs
+          '
+
+      - name: Aplicar 17 asociaciones de fabricantes identificados con rollback
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'aplicar fabricantes verificados')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 160 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_LAB_MERGE_ACTION=apply FM_LAB_MERGE_MODE=additional_v6 node src/applyLaboratoryMerges.mjs
+          '
+
+      - name: Recalcular catálogo de pedidos tras fabricantes adicionales
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'aplicar fabricantes verificados')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 390 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/refreshPreparadorLastReceipt.mjs
           '
 
       - name: Revisar lote ERP aplicado y excluir servicios no laboratorios

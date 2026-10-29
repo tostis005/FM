@@ -53,7 +53,7 @@ try{
  out.unclassifiedWithAliases=unclassified.filter(p=>(byId.get(p.id)||[]).length>0).length;
  out.unclassifiedNoAliases=unclassified.length-out.unclassifiedWithAliases;
  out.crossClassCandidatePairs=cross.length;
- out.crossClassExamples=cross.slice(0,120);
+ out.crossClassExamples=cross.slice(0,500);
 
  // Códigos ERP sin asociación al maestro (no se pueden buscar aquí sin examinar ERP).
  // Los alias presentes sí están asociados, aunque la identidad final pueda ser distinta.

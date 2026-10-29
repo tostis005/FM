@@ -5,9 +5,12 @@ import pg from "pg";
 import {randomUUID} from "node:crypto";
 import {proposeLaboratoryMerges} from "./laboratoryMergeCandidates.js";
 import {proposeEvidenceLaboratoryMerges} from "./laboratoryMergeEvidence.js";
+import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
-const criterion=evidenceMode?"name-and-shared-erp-code-v2-20261029":"structural-laboratory-name-v1-20261028";
+const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
+const criterion=reviewedMode?"reviewed-laboratories-v3-20261029":
+ evidenceMode?"name-and-shared-erp-code-v2-20261029":"structural-laboratory-name-v1-20261028";
 const applying=process.env.FM_LAB_MERGE_ACTION==="apply";
 const rollingBack=process.env.FM_LAB_MERGE_ACTION==="rollback";
 if(!applying&&!rollingBack)throw Error("Definir FM_LAB_MERGE_ACTION=apply o rollback");
@@ -53,7 +56,7 @@ try{
    }
    const blocked=new Set();
    let evidence=[];
-   if(evidenceMode){
+   if(evidenceMode||reviewedMode){
     // No fusionar automáticamente laboratorios con agenda, borrador o pedido real:
     // requieren elegir qué frecuencia/historial conservar.
     const {rows:used}=await db.query(`
@@ -69,8 +72,9 @@ try{
      FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=$1`,[clientSlug]);
     evidence=origin;
    }
-   const {operations,review}=evidenceMode?
-    proposeEvidenceLaboratoryMerges(master,evidence,manual,blocked):
+   const {operations,review}=reviewedMode?
+    reviewedLaboratoryMerges(master,evidence,manual,blocked):
+    evidenceMode?proposeEvidenceLaboratoryMerges(master,evidence,manual,blocked):
     proposeLaboratoryMerges(master,sizes,manual);
    const batch=randomUUID();
    await db.query(`INSERT INTO farmetrica.laboratorios_unificacion_lotes
@@ -112,6 +116,7 @@ try{
    }else{log.movedAliases=0;log.mergedGroups=0}
    log.reviewGroups=review.length;
    log.evidenceMode=evidenceMode;
+   log.reviewedMode=reviewedMode;
    log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;

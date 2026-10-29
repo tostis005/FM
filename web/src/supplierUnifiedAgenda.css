@@ -219,3 +219,24 @@
 .fm-unified-master .fm-master-pending-items .btn{white-space:nowrap;font-size:11px}
 @media(max-width:760px){.fm-unified-master .fm-master-pending-items{grid-template-columns:1fr}}
 @media(max-width:460px){.fm-unified-master .fm-master-pending-items>div{flex-wrap:wrap}.fm-unified-master .fm-master-pending-items .btn{width:100%}}
+
+/* Agenda simplificada: las cuatro cifras son las únicas pestañas. */
+.fm-order-agenda-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.fm-order-agenda-entry{padding:10px 12px}
+.fm-order-agenda-entry-open{display:flex;align-items:center;gap:15px;flex:1 1 390px;
+ min-width:0;min-height:64px;border:0;background:transparent;text-align:left;color:inherit;
+ font:inherit;cursor:pointer;padding:4px 6px;border-radius:8px}
+.fm-order-agenda-entry-open:hover:not(:disabled){background:var(--primary-soft,#ecf7f0)}
+.fm-order-agenda-entry-open:focus-visible{outline:2px solid var(--primary,#138966);outline-offset:2px}
+.fm-order-agenda-entry-open:disabled{cursor:not-allowed;opacity:.6}
+.fm-order-agenda-entry-open .fm-order-agenda-entry-text{min-width:150px}
+.fm-order-agenda-open-label{font-size:12px;font-weight:700;color:var(--primary,#14895f);
+ white-space:nowrap;flex-shrink:0}
+.fm-order-agenda-entry-main .fm-order-agenda-actions{flex-shrink:0}
+.fm-order-agenda-entry-open strong{font-size:14px}
+@media(max-width:750px){
+ .fm-order-agenda-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-order-agenda-entry-open{flex:1 1 100%;flex-wrap:wrap;gap:6px 12px}
+ .fm-order-agenda-open-label{margin-left:auto}
+ .fm-order-agenda-entry-main .fm-order-agenda-actions{width:100%;justify-content:flex-start}
+}

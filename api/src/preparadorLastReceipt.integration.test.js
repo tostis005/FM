@@ -13,6 +13,9 @@ test("PostgreSQL: el CN pasa al laboratorio de la última recepción no excluida
  await db.connect();
  try{
   await db.query("BEGIN");
+  // La prueba modifica recepciones dentro de una transacción aislada: no
+  // consultar el snapshot global, que representa el estado ya confirmado.
+  await db.query("DELETE FROM farmetrica.preparador_ultima_recepcion_estado WHERE cliente_slug='ampedia'");
   const groups=[];
   for(const [suffix,cls] of [["A","DIRECTO"],["B","DIRECTO"],["C","MAYORISTA"],["D","DIRECTO"]]){
    const {rows}=await db.query(`INSERT INTO farmetrica.proveedores_unificados

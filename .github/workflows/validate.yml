@@ -25,6 +25,8 @@ jobs:
       - name: Comprobar API
         run: |
           node --check api/src/server.js
+          node --check api/src/classifyUnclassifiedSuppliers.mjs
+          node --check api/src/auditUnclassifiedSuppliers.mjs
           node --test api/src/oauthClients.test.js api/src/oauthFlow.test.js
           node --check api/src/assistant.js
           node --check scripts/benchmark-resumen-mcp.mjs

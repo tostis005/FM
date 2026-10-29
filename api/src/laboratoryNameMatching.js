@@ -30,7 +30,7 @@ export function nameAffinity(a,b){
  if(!n1||!n2||digits(n1)||digits(n2))return null;
  if(DIFFERENT_BUSINESS.test(rawA)||DIFFERENT_BUSINESS.test(rawB))return null;
  const flat1=n1.replace(/\s/g,""),flat2=n2.replace(/\s/g,"");
- if(flat1===flat2&&flat1.length>=6)return {reason:"mismo_nombre_normalizado",confidence:99};
+ if(flat1===flat2&&flat1.length>=5)return {reason:"mismo_nombre_normalizado",confidence:99};
  const l=Math.max(flat1.length,flat2.length),d=levenshteinBounded(flat1,flat2,2);
  // Una letra claramente errónea (ALMIRAL / ALMIRALL) se revisa.
  if(l>=8&&d===1)return {reason:"diferencia_una_letra",confidence:94};

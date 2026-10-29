@@ -73,7 +73,7 @@ test("las lecturas de agenda no hacen join ni filtro por farmacia",async()=>{
  const {call,queries}=mock();
  const r=await call("GET","/api/analytics/pedidos/agenda");
  assert.equal(r.status,200);
- const sql=queries.filter(q=>q?.text).map(q=>q.text).join("\n");
+ const sql=queries.map(x=>x.q?.text||x.q||"").join("\n");
  assert.ok(sql.includes("preparador_pedidos_globales"));
  assert.ok(!sql.includes("f.id=ANY"));
 });

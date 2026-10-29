@@ -38,11 +38,10 @@ await page.route("**/api/**",async route=>{
    },totalSold:24,totalSuggested:8
   }))};
  }else if(path==="/api/tenant/stock-objetivo"&&request.method()==="GET")
-  body={defaultDays:90,items:[{pharmacyId:1,days:90,configured:false},
-   {pharmacyId:2,days:90,configured:false}]};
+  body={defaultDays:20,days:20};
  else if(path==="/api/tenant/stock-objetivo"&&request.method()==="PUT"){
   stockWrites.push(request.postDataJSON());
-  body={days:stockWrites.at(-1).days,updatedPharmacies:[1,2]};
+  body={days:stockWrites.at(-1).days};
  }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -83,11 +82,11 @@ try{
  assert.equal(saved.at(-1).tipo,"parafarmacia");
  assert.equal(saved.at(-1).lineas[0].units,10);
  await page.goto(BASE+"/ajustes",{waitUntil:"domcontentloaded"});
- await page.getByRole("heading",{name:"Días de stock objetivo"}).waitFor({timeout:15000});
+ await page.getByRole("heading",{name:"Cobertura de stock global"}).waitFor({timeout:15000});
  await page.getByRole("spinbutton",{name:"Días de stock objetivo"}).fill("28");
- await page.getByRole("button",{name:"Guardar días de stock"}).click();
- await page.getByText("Objetivo aplicado a todas las farmacias.").waitFor();
- assert.deepEqual(stockWrites,[{pharmacyId:0,days:28}]);
+ await page.getByRole("button",{name:"Guardar cobertura global"}).click();
+ await page.getByText("Cobertura global actualizada para todas las farmacias.").waitFor();
+ assert.deepEqual(stockWrites,[{days:28}]);
  assert.deepEqual(errors,[]);
  console.log("OK: preparador único, dos fechas, tabla móvil y ajustes stock");
 }finally{await browser.close()}

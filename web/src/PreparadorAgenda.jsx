@@ -1,5 +1,5 @@
-import React,{useEffect,useMemo,useState} from "react";
-import {CalendarDays,Clock3,ChevronDown,ChevronUp,History,RefreshCcw} from "lucide-react";
+import React,{useEffect,useState} from "react";
+import {CalendarDays,Clock3,ChevronDown,ChevronUp,ChevronRight,History,RefreshCcw} from "lucide-react";
 import "./supplierUnifiedAgenda.css";
 async function request(slug,path,{method="GET",body,signal}={}){
  const res=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -11,11 +11,10 @@ async function request(slug,path,{method="GET",body,signal}={}){
 }
 const STATUS={vencido:"Vencido",hoy:"Hoy",manana:"Mañana",proximo:"Próximo",sin_fecha:"Sin fecha inicial"};
 const dateLabel=date=>date?date.split("-").reverse().join("/"):"—";
-export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories=[],canEdit=false,
+export default function PreparadorAgenda({clientSlug,laboratories=[],selectedLaboratory="",canEdit=false,
  refreshToken=0,onSelect,onInitial}){
  const [agenda,setAgenda]=useState({items:[],today:null}),[loading,setLoading]=useState(true);
- const [error,setError]=useState(""),[filter,setFilter]=useState("pendientes"),
-  [search,setSearch]=useState(""),[limit,setLimit]=useState(12);
+ const [error,setError]=useState(""),[filter,setFilter]=useState("hoy");
  const [historyFor,setHistoryFor]=useState(""),[history,setHistory]=useState([]),
   [historyBusy,setHistoryBusy]=useState(false);
  const [localVersion,setLocalVersion]=useState(0);
@@ -29,16 +28,14 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
   return()=>ac.abort();
  },[clientSlug,refreshToken,localVersion]);
  const items=agenda.items||[];
- const matched=useMemo(()=>items.filter(l=>l.name.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[items,search]);
  const status=l=>l.status;
  const withinWeek=l=>l.daysUntil!==null&&l.daysUntil>=2&&l.daysUntil<=7;
  const counts={vencido:items.filter(l=>status(l)==="vencido").length,
-  hoy:items.filter(l=>status(l)==="hoy").length,manana:items.filter(l=>status(l)==="manana").length,
-  proximo:items.filter(l=>status(l)==="proximo"&&withinWeek(l)).length,
-  sin_fecha:items.filter(l=>status(l)==="sin_fecha").length};
- const visible=matched.filter(l=>filter==="todos"||filter==="pendientes"?
-   (filter==="todos"||["vencido","hoy"].includes(status(l))):
-   status(l)===filter&&(filter!=="proximo"||withinWeek(l)));
+  hoy:items.filter(l=>status(l)==="hoy").length,
+  manana:items.filter(l=>status(l)==="manana").length,
+  proximo:items.filter(l=>status(l)==="proximo"&&withinWeek(l)).length};
+ const visible=items.filter(l=>status(l)===filter&&(filter!=="proximo"||withinWeek(l)));
+ const demoCount=items.filter(l=>l.demo).length;
  async function showHistory(key){
   if(historyFor===key){setHistoryFor("");return}
   setHistoryFor(key);setHistoryBusy(true);setError("");
@@ -61,50 +58,48 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
  return <section className="card fm-order-agenda" aria-label="Agenda de pedidos">
   <header className="fm-order-agenda-header">
    <div><h2><CalendarDays size={20}/> Planificación de pedidos</h2>
-    <p>Solo laboratorios con pedido periódico. Los que están bajo demanda siguen disponibles en el selector inferior.</p></div>
+    <p>Selecciona un día y pulsa un laboratorio para preparar el pedido conjunto con todos sus códigos nacionales.</p></div>
    <button className="btn btn-secondary btn-sm" disabled={loading}
     onClick={()=>setLocalVersion(v=>v+1)} aria-label="Actualizar agenda"><RefreshCcw size={15}/> Actualizar</button>
   </header>
   <div className="fm-order-agenda-kpis">
-   {[[ "vencido","Vencidos"],["hoy","Hoy"],["manana","Mañana"],["proximo","Próx. 7 días"],["sin_fecha","Sin fecha inicial"]].map(([key,label])=>
+   {[[ "vencido","Vencidos"],["hoy","Hoy"],["manana","Mañana"],["proximo","Próx. 7 días"]].map(([key,label])=>
     <button key={key} className={"fm-order-agenda-kpi "+(filter===key?"active":"")}
-     onClick={()=>{setFilter(key);setLimit(12)}} aria-pressed={filter===key}>
+     onClick={()=>setFilter(key)} aria-pressed={filter===key}>
      <strong>{counts[key]}</strong><span>{label}</span>
     </button>)}
   </div>
-  <div className="fm-order-agenda-filters">
-   <label>Vista <select value={filter} onChange={e=>{setFilter(e.target.value);setLimit(12)}}>
-    <option value="pendientes">Pendientes hoy o vencidos</option>
-    <option value="todos">Todos los programados</option>
-    <option value="vencido">Vencidos</option><option value="hoy">Hoy</option>
-    <option value="manana">Mañana</option><option value="proximo">Próximos 7 días</option>
-    <option value="sin_fecha">Sin fecha inicial</option>
-   </select></label>
-   <label>Buscar laboratorio <input type="search" value={search}
-    onChange={e=>{setSearch(e.target.value);setLimit(12)}} placeholder="Buscar por nombre…"/></label>
-  </div>
+  {demoCount>0&&<p className="fm-order-agenda-demo-note">
+   <strong>Vista de demostración.</strong> Las fechas orientativas se distribuyen y renuevan
+   automáticamente; no corresponden a pedidos realizados ni generan vencidos ficticios.
+   Cada laboratorio pasa al calendario real al registrar su primer pedido o fecha inicial.
+  </p>}
   {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}
   {loading?<p role="status">Cargando fechas de pedido…</p>:
-   !visible.length?<p className="fm-muted">{filter==="pendientes"&&counts.sin_fecha>0?
-    "No hay pedidos vencidos ni para hoy. Hay "+counts.sin_fecha+" laboratorios sin fecha inicial: entra en «Sin fecha inicial» para empezar su calendario global.":
-    "No hay laboratorios en esta vista."}</p>:
+   !visible.length?<p className="fm-muted">No hay laboratorios {filter==="vencido"?
+    "vencidos":filter==="hoy"?"para hoy":filter==="manana"?"para mañana":"para los próximos siete días"}.</p>:
    <div className="fm-order-agenda-list">
-    {visible.slice(0,limit).map(l=>{
+    {visible.map(l=>{
      const current=status(l),valid=eligible.has(l.key);
-     return <div className="fm-order-agenda-entry" key={l.key}>
+     return <div className={"fm-order-agenda-entry"+(selectedLaboratory===l.key?" is-selected":"")} key={l.key}>
       <div className="fm-order-agenda-entry-main">
-       <div className="fm-order-agenda-entry-text"><strong>{l.name}</strong>
-        <small>{l.cn} códigos nacionales únicos · Cada {l.days} días</small>
-        <small>{l.lastOrder?"Último pedido global: "+dateLabel(l.lastOrder)+" · ":""}
-         {l.nextDue?"Próximo vencimiento: "+dateLabel(l.nextDue):
-          "Indica la fecha del último pedido conjunto para empezar"}</small>
-       </div>
-       <span className={"fm-order-agenda-status fm-order-agenda-status-"+current}>{STATUS[current]}</span>
+       <button type="button" className="fm-order-agenda-open" disabled={!valid}
+        aria-label={"Preparar pedido de "+l.name}
+        aria-pressed={selectedLaboratory===l.key}
+        title={!valid?"Sin artículos elegibles en el preparador":"Seleccionar laboratorio y cargar sus códigos nacionales"}
+        onClick={()=>onSelect(l.key)}>
+        <span className="fm-order-agenda-entry-text">
+         <strong>{l.name}</strong>
+         <small>{l.cn} códigos nacionales únicos · Cada {l.days} días</small>
+         <small>{l.demo?"Fecha orientativa de demostración: "+dateLabel(l.nextDue):
+          "Último pedido: "+dateLabel(l.lastOrder)+" · Próximo: "+dateLabel(l.nextDue)}</small>
+         {l.demo&&<small className="fm-order-agenda-demo-label">Demostración · sin pedido real registrado</small>}
+        </span>
+        <span className={"fm-order-agenda-status fm-order-agenda-status-"+current}>{STATUS[current]}</span>
+        <ChevronRight size={19} aria-hidden="true" className="fm-order-agenda-open-arrow"/>
+       </button>
        <div className="fm-order-agenda-actions">
-        <button className="btn btn-primary btn-sm" disabled={!valid}
-         title={!valid?"Sin artículos elegibles en el selector actual":""}
-         onClick={()=>onSelect(l.key)}>Preparar</button>
-        {canEdit&&l.withoutDate>0&&<button className="btn btn-secondary btn-sm"
+        {canEdit&&l.demo&&<button className="btn btn-secondary btn-sm"
          onClick={()=>onInitial(l.key)}>Fecha inicial</button>}
         <button className="btn btn-secondary btn-sm" onClick={()=>void showHistory(l.key)}>
          <History size={14}/> Historial {historyFor===l.key?<ChevronUp size={13}/>:<ChevronDown size={13}/>}</button>
@@ -123,8 +118,6 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
      </div>
     })}
    </div>}
-  {visible.length>limit&&<button className="btn btn-secondary" onClick={()=>setLimit(n=>n+12)}>
-   Mostrar más laboratorios ({visible.length-limit} restantes)</button>}
-  {items.length>0&&<p className="fm-order-agenda-footnote"><Clock3 size={14}/> La planificación y confirmación son globales por laboratorio. El stock sigue disponible por farmacia para calcular cantidades; exportar Excel no confirma un pedido.</p>}
+  {items.length>0&&<p className="fm-order-agenda-footnote"><Clock3 size={14}/> El pedido es global por laboratorio. El detalle de stock por farmacia solo ayuda a repartir cantidades; exportar Excel no confirma un pedido.</p>}
  </section>;
 }

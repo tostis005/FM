@@ -47,12 +47,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [recordLab,setRecordLab]=useState(""),[recordType,setRecordType]=useState("pedido");
  const [recordDate,setRecordDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
  const [recordBusy,setRecordBusy]=useState(false),[recordError,setRecordError]=useState("");
- function chooseLaboratory(key){
+ function chooseLaboratory(key,{fromAgenda=false}={}){
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
   setSearch("");setError("");
   setNotice("");
+  // Pulsar de nuevo la misma ficha en la agenda solicita una recarga real.
+  if(fromAgenda&&laboratory===key)setReload(n=>n+1);
   document.getElementById("fm-preparador-laboratorio")?.scrollIntoView({behavior:"smooth",block:"start"});
  }
  function beginRecord(key,type="pedido"){
@@ -319,8 +321,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    period={range} updatedAt={updatedAt} refreshing={loading}
    onRefresh={()=>setReload(n=>n+1)}/>
   <PreparadorAgenda clientSlug={clientSlug} laboratories={labs}
-   canEdit={canEdit} refreshToken={agendaRefresh}
-   onSelect={key=>chooseLaboratory(key)}
+   selectedLaboratory={laboratory} canEdit={canEdit} refreshToken={agendaRefresh}
+   onSelect={key=>chooseLaboratory(key,{fromAgenda:true})}
    onInitial={key=>beginRecord(key,"fecha_inicial")}/>
   <section id="fm-preparador-laboratorio" className="card fm-lab-order">
    <div className="fm-lab-order-top">

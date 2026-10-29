@@ -83,7 +83,7 @@ try{
  assert.equal(saved.at(-1).lineas[0].units,10);
  await page.goto(BASE+"/ajustes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Cobertura de stock global"}).waitFor({timeout:15000});
- await page.getByRole("spinbutton",{name:"Días de stock objetivo"}).fill("28");
+ await page.getByRole("spinbutton",{name:"Cobertura global de stock"}).fill("28");
  await page.getByRole("button",{name:"Guardar cobertura global"}).click();
  await page.getByText("Cobertura global actualizada para todas las farmacias.").waitFor();
  assert.deepEqual(stockWrites,[{days:28}]);

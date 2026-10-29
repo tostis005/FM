@@ -89,7 +89,7 @@ export async function readLocalSuppliers(pool,ctx){
 export function setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin}){
  const auth=requireTenant(),admin=requireTenantAdmin();
  app.get("/api/tenant/pedidos/frecuencias",...auth,async(req,res,next)=>{
-  if(req.context.role!=="superadministrador"&&req.context.modules?.compras!==true)
+  if(!["superadministrador","administrador"].includes(req.context.role)&&req.context.modules?.compras!==true)
    return res.status(403).json({error:"Compras no habilitado"});
   try{
    const {rows}=await pool.query(`SELECT laboratorio_clave AS key, intervalo_dias AS days

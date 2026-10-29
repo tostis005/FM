@@ -6,7 +6,6 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
@@ -28,9 +27,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [period,setPeriod]=useState(()=>shared().period||"this_month");
  const [customFrom,setCustomFrom]=useState(()=>shared().customFrom||"");
  const [customTo,setCustomTo]=useState(()=>shared().customTo||"");
- const [selectedPharmacies,setSelectedPharmacies]=useState(()=>
-  reconcilePharmacyIds(shared().pharmacyIds||[],pharmacies));
- const ids=effectivePharmacyIds(selectedPharmacies,pharmacies);
+ // Los pedidos son conjuntos: se contemplan siempre todas las farmacias autorizadas.
+ const ids=pharmacies.map(p=>Number(p.id)).filter(Number.isSafeInteger).sort((a,b)=>a-b);
  const scope=ids.map(String).join(",");
  const chosen=pharmacies.filter(p=>ids.some(id=>String(id)===String(p.id)));
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
@@ -165,7 +163,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    setUpdatedAt(new Date());
    if(!catalog.rows.length||!useMetrics){
     if(!useMetrics&&catalog.rows.length)setData(current=>({...current,
-     warning:!scope?"No hay farmacias seleccionadas: faltan ventas y stock.":
+     warning:!scope?"No hay farmacias autorizadas: faltan ventas y stock.":
       !range.valid?"El período no es válido. Se muestran referencias sin métricas.":
        "El período supera cinco años. Acótalo para consultar ventas y stock."}));
     setLoading(false);setLoadStage("idle");
@@ -263,8 +261,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setCustomFrom(from);setCustomTo(to);setPeriod("custom");
   updateSharedReportFilters(clientSlug,{period:"custom",customFrom:from,customTo:to});
  }
- function changePharmacies(next){const normalized=reconcilePharmacyIds(next,pharmacies);
-  setSelectedPharmacies(normalized);updateSharedReportFilters(clientSlug,{pharmacyIds:normalized})}
  function updateLine(row,newQty,pharmacyId=null){
   const amount=newQty===""?0:Number(newQty);
   setDrafts(current=>{
@@ -346,7 +342,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     </div>
     <ReportFilterBar periodKey={period} onPeriodChange={choosePeriod}
      alwaysShowDates showQuickPeriods={false} periodLabel="Ventas · período seleccionado"
-     pharmacies={pharmacies} pharmacyIds={selectedPharmacies} onPharmacyChange={changePharmacies}
      customFrom={period==="custom"?customFrom:range.from||""}
      customTo={period==="custom"?customTo:range.to||""}
      onCustomFromChange={v=>changeDate("from",v)}

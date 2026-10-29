@@ -4,11 +4,11 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {isLaboratory,supplierMergeSuggestions} from "./laboratoryUnificationSuggestions.js";
 import "./supplierUnifiedAgenda.css";
 
-const TYPES=["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"];
-const LABELS={DIRECTO:"Laboratorio",MAYORISTA:"Mayorista / cooperativa",INTERNO:"Interno",
+const TYPES=["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"];
+const LABELS={DIRECTO:"Laboratorio",MAYORISTA:"Mayorista / cooperativa",INTERNO:"Interno",OTROS:"Otros / servicios",
  VACUNAS:"Vacunas",FÓRMULAS:"Fórmulas",SIN_CLASIFICAR:"Sin clasificar"};
 const cleanCode=x=>String(x??"").trim().toUpperCase().replace(/^0+(?=\d)/,"");
-const TABS=[["todos","Todos"],["laboratorios","Laboratorios"],["mayoristas","Mayoristas"],["internos","Internos"],["sin_clasificar","Sin clasificar"],["pendientes","Sin vincular"]];
+const TABS=[["todos","Todos"],["laboratorios","Laboratorios"],["mayoristas","Mayoristas"],["internos","Internos"],["otros","Otros / servicios"],["sin_clasificar","Sin clasificar"],["pendientes","Sin vincular"]];
 async function api(slug,path,options={}){
  const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
   headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":slug,...options.headers}});
@@ -85,12 +85,14 @@ export default function ProveedoresUnificados({clientSlug}){
  const counts={todos:suppliers.length,laboratorios:suppliers.filter(isLaboratory).length,
   mayoristas:suppliers.filter(x=>x.class==="MAYORISTA").length,
   internos:suppliers.filter(x=>x.class==="INTERNO").length,
+  otros:suppliers.filter(x=>x.class==="OTROS").length,
   sin_clasificar:suppliers.filter(x=>x.class==="SIN_CLASIFICAR").length,
   pendientes:pending.length};
  const visible=useMemo(()=>suppliers.filter(p=>{
   const inTab=tab==="todos"||tab==="laboratorios"&&isLaboratory(p)||
    tab==="mayoristas"&&p.class==="MAYORISTA"||
    tab==="internos"&&p.class==="INTERNO"||
+   tab==="otros"&&p.class==="OTROS"||
    tab==="sin_clasificar"&&p.class==="SIN_CLASIFICAR";
   if(!inTab)return false;
   const haystack=[p.name,p.key,LABELS[p.class],...(p.origins||[]).flatMap(x=>[x.sourceName,x.sourceCode,x.pharmacyCode])].join(" ").toLocaleLowerCase("es");
@@ -188,7 +190,7 @@ export default function ProveedoresUnificados({clientSlug}){
   {error&&<div className="fm-master-alert" role="alert">{error}</div>}
   {notice&&<div className="fm-master-notice" role="status"><Check size={15}/>{notice}</div>}
   <div className="fm-supplier-summary">
-   {[[ "todos","Todos",Users],["laboratorios","Laboratorios",FlaskConical],["mayoristas","Mayoristas",Truck],["internos","Internos",Building2]].map(([key,title,Icon])=>
+   {[[ "todos","Todos",Users],["laboratorios","Laboratorios",FlaskConical],["mayoristas","Mayoristas",Truck],["internos","Internos",Building2],["otros","Otros / servicios",Link2]].map(([key,title,Icon])=>
     <button key={key} type="button" onClick={()=>changeTab(key)}
      className={"fm-supplier-summary-item"+(tab===key?" is-selected":"")} aria-pressed={tab===key}>
      <span><Icon size={16}/>{title}</span><strong>{counts[key]}</strong>
@@ -207,6 +209,7 @@ export default function ProveedoresUnificados({clientSlug}){
      <p>{tab==="laboratorios"?"Asocia códigos de varias farmacias al mismo laboratorio. Solo aquí se configuran pedidos periódicos y se fusionan identidades.":
        tab==="mayoristas"?"Cooperativas y mayoristas, clasificados sin necesidad de fusionarlos.":
        tab==="internos"?"Movimientos y proveedores internos. No participan en compras conjuntas.":
+       tab==="otros"?"Servicios, seguros y suministros externos. No aparecen en el preparador de pedidos.":
        nPending?"Códigos de Farmatic que todavía no tienen un proveedor definitivo asignado.":
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>

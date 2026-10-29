@@ -219,3 +219,28 @@
 .fm-unified-master .fm-master-pending-items .btn{white-space:nowrap;font-size:11px}
 @media(max-width:760px){.fm-unified-master .fm-master-pending-items{grid-template-columns:1fr}}
 @media(max-width:460px){.fm-unified-master .fm-master-pending-items>div{flex-wrap:wrap}.fm-unified-master .fm-master-pending-items .btn{width:100%}}
+
+/* Agenda compacta: los indicadores son el único filtro; tocar un laboratorio
+   abre directamente su catálogo sin otro botón ni selector. */
+.fm-order-agenda-open{appearance:none;box-sizing:border-box;border:1px solid transparent;
+ background:transparent;color:inherit;min-width:0;flex:1 1 260px;min-height:64px;
+ display:flex;align-items:center;justify-content:space-between;gap:14px;
+ text-align:left;font:inherit;padding:9px 11px;border-radius:10px;cursor:pointer;
+ transition:background .14s ease,border-color .14s ease}
+.fm-order-agenda-open:hover:not(:disabled){background:#f2faf5;border-color:#c8e3d0}
+.fm-order-agenda-open:focus-visible{outline:2px solid var(--primary,#0c7a83);outline-offset:2px}
+.fm-order-agenda-open:disabled{opacity:.56;cursor:not-allowed}
+.fm-order-agenda-open .fm-order-agenda-entry-text strong{text-decoration:underline;text-decoration-color:transparent;text-underline-offset:3px}
+.fm-order-agenda-open:hover:not(:disabled) .fm-order-agenda-entry-text strong{text-decoration-color:currentColor}
+.fm-order-agenda-kpi.active{background:#e9f6ed;border-color:#61ad82;box-shadow:inset 0 0 0 1px #61ad82}
+.fm-order-agenda-kpi:focus-visible{outline:2px solid var(--primary,#0c7a83);outline-offset:2px}
+.fm-order-agenda-list{margin-top:0}
+.fm-order-agenda-entry{padding:7px 10px}
+.fm-order-agenda-entry-main{flex-wrap:wrap}
+.fm-order-agenda-entry-text{min-width:0}
+.fm-order-agenda-actions{flex:0 1 auto}
+@media(max-width:600px){
+ .fm-order-agenda-open{flex:1 1 100%;padding:10px;gap:8px;align-items:flex-start}
+ .fm-order-agenda-open .fm-order-agenda-status{max-width:120px;white-space:normal;text-align:center}
+ .fm-order-agenda-actions{width:100%;padding:0 10px 7px}
+}

@@ -51,12 +51,12 @@ try{
  const dlg=page.getByRole("dialog",{name:"Editar proveedor"});
  await dlg.getByLabel("Clasificación").selectOption("INTERNO");
  await dlg.getByRole("button",{name:"Guardar"}).click();
- await page.getByText("Proveedor actualizado").waitFor();
+ await page.getByText("Proveedor guardado").waitFor();
  assert.equal(updates[0].class,"INTERNO");
- await page.getByRole("tab",{name:/Pendientes de unificar/}).click();
- await page.getByRole("button",{name:"Relacionar"}).first().click();
+ await page.getByRole("tab",{name:/Sin vincular/}).click();
+ await page.getByRole("button",{name:/Clasificar \/ vincular/}).first().click();
  const linkDialog=page.getByRole("dialog",{name:"Relacionar código de Farmatic"});
- await linkDialog.getByLabel("Proveedor unificado de destino").selectOption("1");
+ await linkDialog.getByLabel("Vincular a un proveedor existente").selectOption("1");
  await linkDialog.getByRole("button",{name:"Guardar equivalencia"}).click();
  await page.getByText("Código de Farmatic vinculado").waitFor();
  assert.equal(links[0].sourceCode,"0320");

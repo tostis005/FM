@@ -6,7 +6,6 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {reconcilePharmacyIds,effectivePharmacyIds} from "./reportFilterScopes.js";
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
@@ -28,9 +27,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [period,setPeriod]=useState(()=>shared().period||"this_month");
  const [customFrom,setCustomFrom]=useState(()=>shared().customFrom||"");
  const [customTo,setCustomTo]=useState(()=>shared().customTo||"");
- const [selectedPharmacies,setSelectedPharmacies]=useState(()=>
-  reconcilePharmacyIds(shared().pharmacyIds||[],pharmacies));
- const ids=effectivePharmacyIds(selectedPharmacies,pharmacies);
+ // Los pedidos son conjuntos: se contemplan siempre todas las farmacias autorizadas.
+ const ids=pharmacies.map(p=>Number(p.id)).filter(Number.isSafeInteger).sort((a,b)=>a-b);
  const scope=ids.map(String).join(",");
  const chosen=pharmacies.filter(p=>ids.some(id=>String(id)===String(p.id)));
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
@@ -48,35 +46,26 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [agendaRefresh,setAgendaRefresh]=useState(0);
  const [recordLab,setRecordLab]=useState(""),[recordType,setRecordType]=useState("pedido");
  const [recordDate,setRecordDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
- const [recordIds,setRecordIds]=useState([]),[recordCandidates,setRecordCandidates]=useState([]);
- const [agendaDueIds,setAgendaDueIds]=useState([]);
  const [recordBusy,setRecordBusy]=useState(false),[recordError,setRecordError]=useState("");
- function chooseLaboratory(key,focusIds=null){
+ function chooseLaboratory(key){
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
   setSearch("");setError("");
-  setAgendaDueIds(focusIds||[]);
-  setNotice(focusIds?.length?"Farmacias pendientes según la agenda: "+
-   pharmacies.filter(p=>focusIds.map(String).includes(String(p.id))).map(p=>p.name).join(", "):"");
+  setNotice("");
   document.getElementById("fm-preparador-laboratorio")?.scrollIntoView({behavior:"smooth",block:"start"});
  }
- function beginRecord(key,candidates,type="pedido"){
+ function beginRecord(key,type="pedido"){
   setRecordLab(key);setRecordType(type);setRecordError("");
   setRecordDate(new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
-  setRecordCandidates(candidates.map(String));
-  const matching=type==="pedido"&&key===laboratory?
-   agendaDueIds.filter(id=>candidates.map(String).includes(String(id))):[];
-  setRecordIds((matching.length?matching:candidates).map(String));
  }
  async function confirmRecord(){
-  if(!recordLab||!recordIds.length)return;
+  if(!recordLab)return;
   setRecordBusy(true);setRecordError("");
   try{
-   const result=await api(clientSlug,"/api/analytics/pedidos/agenda/realizados",{
-    method:"POST",body:{laboratorio:recordLab,farmacias:recordIds.map(Number),
-     fecha:recordDate,tipo:recordType}});
-   setNotice("Fecha registrada para "+result.pharmacyIds.length+" farmacia(s). Se ha recalculado el próximo vencimiento.");
+   await api(clientSlug,"/api/analytics/pedidos/agenda/realizados",{
+    method:"POST",body:{laboratorio:recordLab,fecha:recordDate,tipo:recordType}});
+   setNotice("Fecha global registrada. Se ha recalculado el próximo vencimiento del laboratorio.");
    setRecordLab("");setAgendaRefresh(n=>n+1);
   }catch(e){setRecordError(e.message)}finally{setRecordBusy(false)}
  }
@@ -174,7 +163,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    setUpdatedAt(new Date());
    if(!catalog.rows.length||!useMetrics){
     if(!useMetrics&&catalog.rows.length)setData(current=>({...current,
-     warning:!scope?"No hay farmacias seleccionadas: faltan ventas y stock.":
+     warning:!scope?"No hay farmacias autorizadas: faltan ventas y stock.":
       !range.valid?"El período no es válido. Se muestran referencias sin métricas.":
        "El período supera cinco años. Acótalo para consultar ventas y stock."}));
     setLoading(false);setLoadStage("idle");
@@ -272,8 +261,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setCustomFrom(from);setCustomTo(to);setPeriod("custom");
   updateSharedReportFilters(clientSlug,{period:"custom",customFrom:from,customTo:to});
  }
- function changePharmacies(next){const normalized=reconcilePharmacyIds(next,pharmacies);
-  setSelectedPharmacies(normalized);updateSharedReportFilters(clientSlug,{pharmacyIds:normalized})}
  function updateLine(row,newQty,pharmacyId=null){
   const amount=newQty===""?0:Number(newQty);
   setDrafts(current=>{
@@ -331,10 +318,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <ReportPageHeader title="Preparador de pedidos" description="Pedido por laboratorio · visión conjunta de todas las farmacias"
    period={range} updatedAt={updatedAt} refreshing={loading}
    onRefresh={()=>setReload(n=>n+1)}/>
-  <PreparadorAgenda clientSlug={clientSlug} pharmacyIds={ids.map(Number)} laboratories={labs}
+  <PreparadorAgenda clientSlug={clientSlug} laboratories={labs}
    canEdit={canEdit} refreshToken={agendaRefresh}
-   onSelect={(key,pharmacyIds)=>chooseLaboratory(key,pharmacyIds)}
-   onInitial={(key,pharmacyIds)=>beginRecord(key,pharmacyIds,"fecha_inicial")}/>
+   onSelect={key=>chooseLaboratory(key)}
+   onInitial={key=>beginRecord(key,"fecha_inicial")}/>
   <section id="fm-preparador-laboratorio" className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
@@ -355,7 +342,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     </div>
     <ReportFilterBar periodKey={period} onPeriodChange={choosePeriod}
      alwaysShowDates showQuickPeriods={false} periodLabel="Ventas · período seleccionado"
-     pharmacies={pharmacies} pharmacyIds={selectedPharmacies} onPharmacyChange={changePharmacies}
      customFrom={period==="custom"?customFrom:range.from||""}
      customTo={period==="custom"?customTo:range.to||""}
      onCustomFromChange={v=>changeDate("from",v)}
@@ -490,7 +476,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
      {canEdit&&<button className="btn btn-secondary" type="button"
-      onClick={()=>beginRecord(laboratory,ids.map(Number))} disabled={busy||!laboratory||!ids.length}>
+      onClick={()=>beginRecord(laboratory)} disabled={busy||!laboratory||!ids.length}>
       Marcar pedido realizado</button>}
     </div>
     <p className="fm-muted">Generar Excel no confirma ni envía un pedido. Marca «Pedido realizado» solo después de haberlo cursado.</p>
@@ -502,25 +488,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <p><strong>{labs.find(l=>l.key===recordLab)?.name||recordLab}</strong></p>
     <p>{recordType==="fecha_inicial"?
       "Registra la fecha del último pedido conocido para iniciar la planificación. No se enviará ningún pedido.":
-      "Confirma únicamente si ya has hecho el pedido fuera de Farmétrica. Esta acción reinicia el calendario solo en las farmacias indicadas."}</p>
+      "Confirma únicamente si ya has hecho el pedido conjunto fuera de Farmétrica. Esta acción reinicia el calendario global del laboratorio."}</p>
     <label>Fecha del pedido
      <input type="date" value={recordDate}
       max={new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"})}
       onChange={e=>setRecordDate(e.target.value)}/>
     </label>
-    <fieldset><legend>Farmacias incluidas</legend>
-     <div className="fm-order-confirm-pharmacies">
-      {pharmacies.filter(p=>recordCandidates.includes(String(p.id))).map(p=><label key={p.id}>
-       <input type="checkbox" checked={recordIds.includes(String(p.id))}
-        onChange={e=>setRecordIds(old=>e.target.checked?[...old,String(p.id)]:old.filter(id=>id!==String(p.id)))}/>
-       {p.name}
-      </label>)}
-     </div>
-    </fieldset>
+    <p className="fm-muted">La fecha se aplica a la planificación conjunta del laboratorio, independientemente de la farmacia.</p>
     {recordError&&<p role="alert" className="fm-op-message fm-op-error">{recordError}</p>}
     <div className="fm-order-confirm-actions">
      <button className="btn btn-secondary" disabled={recordBusy} onClick={()=>setRecordLab("")}>Cancelar</button>
-     <button className="btn btn-primary" disabled={recordBusy||!recordIds.length||!recordDate}
+     <button className="btn btn-primary" disabled={recordBusy||!recordDate}
       onClick={()=>void confirmRecord()}>{recordBusy?"Guardando…":"Confirmar fecha"}</button>
     </div>
    </div>

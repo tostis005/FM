@@ -56,9 +56,8 @@ await page.route("**/api/**",async route=>{
   body={laboratories:suppliers.filter(p=>p.class==="DIRECTO").map(p=>({key:p.key,name:p.name}))};
  else if(path==="/api/analytics/pedidos/agenda")
   body={today:"2026-10-29",items:[{
-   key:"P:1",name:"Laboratorios Alfa SA",days:3,overdue:1,today:0,tomorrow:0,withoutDate:0,
-   nextDue:"2026-10-27",pharmacies:[{id:1,name:"Centro",lastOrder:"2026-10-24",
-    nextDue:"2026-10-27",daysUntil:-2,status:"vencido"}]}]};
+   key:"P:1",name:"Laboratorios Alfa SA",days:4,cn:240,overdue:1,today:0,tomorrow:0,withoutDate:0,
+   nextDue:"2026-10-27",lastOrder:"2026-10-23",daysUntil:-2,status:"vencido"}]};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
@@ -99,6 +98,8 @@ try{
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:/Planificación de pedidos/}).waitFor({timeout:15000});
  await page.getByText("Laboratorios Alfa SA").first().waitFor();
+ await page.getByText("240 códigos nacionales únicos").waitFor();
+ assert.equal(await page.getByText("Farmacias pendientes:").count(),0);
  for(const width of [1240,768,375]){
   await page.setViewportSize({width,height:830});
   const sizes=await page.evaluate(()=>({

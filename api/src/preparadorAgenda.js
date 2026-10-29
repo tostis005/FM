@@ -34,7 +34,7 @@ export function buildAgenda(raw,today){
   return {key:"P:"+r.id,name:r.name,days,lastOrder:last,nextDue:next,
    daysUntil:until,status,cn:Number(r.cn||0),provisional,
    overdue:Number(status==="vencido"),today:Number(status==="hoy"),
-   tomorrow:Number(status==="manana"),withoutDate:0,
+   tomorrow:Number(status==="manana"),withoutDate:Number(provisional),
    priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:3};
  }).sort((a,b)=>a.priority-b.priority||a.daysUntil-b.daysUntil||
   b.cn-a.cn||a.name.localeCompare(b.name,"es"));

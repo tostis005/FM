@@ -6,10 +6,13 @@ import {randomUUID} from "node:crypto";
 import {proposeLaboratoryMerges} from "./laboratoryMergeCandidates.js";
 import {proposeEvidenceLaboratoryMerges} from "./laboratoryMergeEvidence.js";
 import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
+import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconcile.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
 const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
-const criterion=reviewedMode?"reviewed-laboratories-v3-20261029":
+const unclassifiedMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
+const criterion=unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
+ reviewedMode?"reviewed-laboratories-v3-20261029":
  evidenceMode?"name-and-shared-erp-code-v2-20261029":"structural-laboratory-name-v1-20261028";
 const applying=process.env.FM_LAB_MERGE_ACTION==="apply";
 const rollingBack=process.env.FM_LAB_MERGE_ACTION==="rollback";
@@ -47,7 +50,8 @@ try{
     clase AS class,activo AS active
     FROM farmetrica.proveedores_unificados WHERE cliente_slug=$1 FOR UPDATE`,[clientSlug]);
    const {rows:aliases}=await db.query(`SELECT id,proveedor_id::text AS supplier,
-    procedencia FROM farmetrica.proveedores_unificados_alias
+    procedencia,farmacia_codigo AS "pharmacyCode",codigo_origen AS "sourceCode"
+    FROM farmetrica.proveedores_unificados_alias
     WHERE cliente_slug=$1 FOR UPDATE`,[clientSlug]);
    const sizes=new Map(),manual=new Set();
    for(const a of aliases){
@@ -56,7 +60,7 @@ try{
    }
    const blocked=new Set();
    let evidence=[];
-   if(evidenceMode||reviewedMode){
+   if(evidenceMode||reviewedMode||unclassifiedMode){
     // No fusionar automáticamente laboratorios con agenda, borrador o pedido real:
     // requieren elegir qué frecuencia/historial conservar.
     const {rows:used}=await db.query(`
@@ -72,8 +76,17 @@ try{
      FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=$1`,[clientSlug]);
     evidence=origin;
    }
-   const {operations,review}=reviewedMode?
-    reviewedLaboratoryMerges(master,evidence,manual,blocked):
+   let activeLabIds=new Set(),unclassifiedReport=null;
+   if(unclassifiedMode){
+    const {rows:lab}=await db.query(`SELECT DISTINCT lab_id::text AS id
+     FROM farmetrica.preparador_ultima_recepcion_cache WHERE cliente_slug=$1`,
+     [clientSlug]);
+    activeLabIds=new Set(lab.map(r=>r.id));
+    if(!activeLabIds.size)throw Error("No existe snapshot de laboratorios para verificar los orígenes");
+    unclassifiedReport=planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds,manual,blocked);
+   }
+   const {operations,review}=unclassifiedMode?unclassifiedReport:
+    reviewedMode?reviewedLaboratoryMerges(master,evidence,manual,blocked):
     evidenceMode?proposeEvidenceLaboratoryMerges(master,evidence,manual,blocked):
     proposeLaboratoryMerges(master,sizes,manual);
    const batch=randomUUID();
@@ -92,8 +105,10 @@ try{
      FROM fm_lab_merge_pairs m
      JOIN farmetrica.proveedores_unificados s ON s.id=m.source_id AND s.cliente_slug=$2
      JOIN farmetrica.proveedores_unificados t ON t.id=m.target_id AND t.cliente_slug=$2
-     WHERE s.clase=t.clase AND s.activo=true AND t.activo=true
-     RETURNING origen_id`,[batch,clientSlug]);
+     WHERE s.activo=true AND t.activo=true
+      AND (s.clase=t.clase OR ($3::boolean AND s.clase='SIN_CLASIFICAR'
+       AND t.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')))
+     RETURNING origen_id`,[batch,clientSlug,unclassifiedMode]);
     if(sourceCount.rowCount!==operations.length)throw Error("Cambió el maestro: no se permite aplicar asociaciones incompletas");
     const moved=await db.query(`INSERT INTO farmetrica.laboratorios_unificacion_alias
      (lote,alias_id,origen_id,destino_id)
@@ -117,6 +132,8 @@ try{
    log.reviewGroups=review.length;
    log.evidenceMode=evidenceMode;
    log.reviewedMode=reviewedMode;
+   log.unclassifiedMode=unclassifiedMode;
+   if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
    log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));
    log.batch=batch;

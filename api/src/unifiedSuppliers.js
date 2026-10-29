@@ -296,6 +296,16 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    await db.query(`DELETE FROM farmetrica.preparador_frecuencia_laboratorio
     WHERE cliente_slug=$1 AND laboratorio_clave=ANY($2::text[])`,
     [slug,sources.map(id=>"P:"+id)]);
+   // Conservar borradores existentes. El destino prevalece ante coincidencia;
+   // los borradores origen permanecen archivados para recuperarlos si hiciera falta.
+   await db.query(`INSERT INTO farmetrica.pedidos_laboratorio_borradores
+    (cliente_slug,laboratorio_clave,tipo,farmacias_clave,desde,hasta,lineas)
+    SELECT cliente_slug,'P:'||$2::text,tipo,farmacias_clave,desde,hasta,lineas
+    FROM farmetrica.pedidos_laboratorio_borradores
+    WHERE cliente_slug=$1 AND laboratorio_clave=ANY($3::text[])
+    ORDER BY actualizado_en DESC
+    ON CONFLICT(cliente_slug,laboratorio_clave,tipo,farmacias_clave) DO NOTHING`,
+    [slug,destination,sources.map(id=>"P:"+id)]);
    await db.query(`UPDATE farmetrica.preparador_pedidos_realizados SET laboratorio_id=$2
     WHERE cliente_slug=$1 AND laboratorio_id=ANY($3::bigint[])`,
     [slug,destination,sources]);

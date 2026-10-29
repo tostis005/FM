@@ -54,7 +54,7 @@ try{
  await dialog.getByRole("combobox",{name:"Clasificación"}).selectOption("MAYORISTA");
  await dialog.getByText(/Los movimientos históricos permanecen intactos/).waitFor();
  await dialog.getByRole("button",{name:"Guardar"}).click();
- await page.getByText("Cooperativa \/ mayorista",{exact:true}).first().waitFor();
+ await page.getByText("Mayorista / cooperativa",{exact:true}).first().waitFor();
  assert.equal(saved.length,1);
  assert.deepEqual(errors,[]);
  console.log("OK: maestro unificado; internos y mayoristas solo afectan al preparador, no a totales");

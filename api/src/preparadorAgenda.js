@@ -8,22 +8,36 @@ export const civilDays=(from,to)=>Math.round((Date.parse(to+"T00:00:00Z")-Date.p
 export const validOrderDate=date=>VALID_DATE.test(date)&&
  !Number.isNaN(Date.parse(date+"T00:00:00Z"))&&
  new Date(date+"T00:00:00Z").toISOString().slice(0,10)===date;
-// Un pedido tiene un solo vencimiento por laboratorio y por cliente, no
-// una fecha distinta para cada farmacia. Los CN se cuentan una sola vez.
+// La agenda es GLOBAL para todas las farmacias. Hasta registrar la primera
+// fecha real, distribuir laboratorios en una VISTA PREVIA, sin grabar pedidos,
+// sin fechas iniciales inventadas y sin generar vencidos ficticios.
+// Los puestos son deterministas por CN (no aleatorios en cada render), y las
+// fechas de la vista previa se desplazan con el día para no acumular retrasos.
+const calendarDate=(date,offset)=>new Date(Date.parse(date+"T00:00:00Z")+
+ offset*86400000).toISOString().slice(0,10);
 export function buildAgenda(raw,today){
+ const pending=raw.filter(r=>!r.lastOrder).sort((a,b)=>
+  Number(b.cn||0)-Number(a.cn||0)||String(a.id).localeCompare(String(b.id)));
+ const demoSlots=new Map(pending.map((r,i)=>{
+  const group=i%9;
+  // 1/9 hoy, 1/9 mañana y 7/9 en los siguientes 2-7 días.
+  return [String(r.id),group===0?0:group===1?1:2+(group-2)%6];
+ }));
  return raw.map(r=>{
   const days=Number(r.days),last=r.lastOrder||null;
-  const next=last?new Date(Date.parse(last+"T00:00:00Z")+days*86400000).toISOString().slice(0,10):null;
-  const until=next?civilDays(today,next):null;
-  const status=until===null?"sin_fecha":until<0?"vencido":until===0?"hoy":until===1?"manana":"proximo";
+  const provisional=!last;
+  const next=provisional?calendarDate(today,demoSlots.get(String(r.id))??2):
+   calendarDate(last,days);
+  const until=civilDays(today,next);
+  // Solo un pedido real o una fecha real inicial pueden quedar vencidos.
+  const status=until<0?"vencido":until===0?"hoy":until===1?"manana":"proximo";
   return {key:"P:"+r.id,name:r.name,days,lastOrder:last,nextDue:next,
-   daysUntil:until,status,cn:Number(r.cn||0),
+   daysUntil:until,status,cn:Number(r.cn||0),provisional,
    overdue:Number(status==="vencido"),today:Number(status==="hoy"),
-   tomorrow:Number(status==="manana"),withoutDate:Number(status==="sin_fecha"),
-   priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:
-    status==="sin_fecha"?4:3};
- }).sort((a,b)=>a.priority-b.priority||(a.nextDue||"9999").localeCompare(b.nextDue||"9999")||
-  a.name.localeCompare(b.name,"es"));
+   tomorrow:Number(status==="manana"),withoutDate:0,
+   priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:3};
+ }).sort((a,b)=>a.priority-b.priority||a.daysUntil-b.daysUntil||
+  b.cn-a.cn||a.name.localeCompare(b.name,"es"));
 }
 
 export function setupPreparadorAgenda(app,pool,{requireTenant}){

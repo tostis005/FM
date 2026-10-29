@@ -45,7 +45,7 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/proveedores-maestro",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
- await page.getByRole("table").first().getByText("Farmacia receptora",{exact:true}).waitFor();
+ await page.getByRole("table").first().getByText("Farmacia receptora",{exact:true}).first().waitFor();
  assert.equal(await page.getByText("Interno",{exact:true}).count(),1);
  assert.equal(await page.getByRole("heading",{name:"Traspasos salientes entre farmacias"}).count(),0,
   "No reintroducir la interfaz de exclusión histórica obsoleta");

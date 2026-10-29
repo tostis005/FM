@@ -6,7 +6,7 @@ const GENERIC=/\b(?:LABORATORIOS|LABORATORIO|LABS|LAB|FARMACEUTICA|FARMACEUTICAS
 const DIFFERENT_BUSINESS=/\b(?:COOPERATIVA|MAYORISTA|DISTRIBUIDOR|DISTRIBUIDORA|DISTRIBUCION|LOGISTICA|FARMACIA|INTERNO)\b/;
 export const nameRoot=value=>{
  let v=canonicalLabName(value);
- v=v.replace(GENERIC," ").replace(/\bPH/g,"F")
+ v=v.replace(GENERIC," ").replace(/PH/g,"F")
   .replace(/\bESPANA\b$/," ").replace(/\bIBERICA\b$/," ")
   .replace(/\s+/g," ").trim();
  // Los espacios no modifican la identidad de la marca.

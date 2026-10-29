@@ -29,6 +29,8 @@ jobs:
         run: |
           npm install --prefix api --no-audit --no-fund
           node --check api/src/server.js
+          node --check api/src/classifyUnclassifiedSuppliers.mjs
+          node --check api/src/auditUnclassifiedSuppliers.mjs
           node --check api/src/ensureLaboratoryReconciliation.mjs
           node --check api/src/applyGlobalLaboratoryFrequencies.mjs
           node --test api/src/stockSinRecepciones.test.js

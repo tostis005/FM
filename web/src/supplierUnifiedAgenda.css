@@ -38,7 +38,7 @@
 .fm-order-confirm-pharmacies{display:flex;flex-wrap:wrap;gap:10px}
 .fm-order-confirm-pharmacies label{display:flex;flex-direction:row;align-items:center}
 .fm-order-confirm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
-@media(max-width:750px){.fm-order-agenda-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.fm-order-agenda-entry-main{align-items:start}.fm-order-agenda-actions{width:100%}.fm-order-agenda-header{flex-wrap:wrap}}
+@media(max-width:750px){.fm-order-agenda-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-order-agenda-entry-main{align-items:start}.fm-order-agenda-actions{width:100%}.fm-order-agenda-header{flex-wrap:wrap}}
 
 
 /* Maestro: controles y jerarquía visual, aislados del resto de la aplicación. */
@@ -193,7 +193,7 @@
 .fm-lab-order .fm-lab-order-actions .btn{display:inline-flex;gap:7px;align-items:center;justify-content:center}
 @media(max-width:950px){
  .fm-unified-master .fm-supplier-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
- .fm-order-agenda-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .fm-order-agenda-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
  .fm-order-agenda-actions{width:100%;justify-content:flex-start}
 }
 @media(max-width:640px){

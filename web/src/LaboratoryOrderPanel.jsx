@@ -151,7 +151,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        batchSize:LAB_CATALOG_BATCH,signal:controller.signal,
        onBatch:({rows,total})=>{
         if(!controller.signal.aborted)setData({rows,total,loaded:rows.length,
-         metricsLoaded:0,metricsUnavailable:true,frequencyDays:7});
+         metricsLoaded:0,metricsUnavailable:true,frequencyDays:0});
        }
       });
      }
@@ -160,7 +160,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       catalogueCache.current.delete(catalogueCache.current.keys().next().value);
     }
     if(!controller.signal.aborted)setData({rows:catalog.rows,total:catalog.total,
-     loaded:catalog.total,metricsLoaded:0,metricsUnavailable:true,frequencyDays:7});
+     loaded:catalog.total,metricsLoaded:0,metricsUnavailable:true,frequencyDays:0});
    }catch(e){
     if(!controller.signal.aborted){
      setError("No se pudieron cargar todas las referencias: "+e.message);
@@ -203,7 +203,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      return {...row,...metrics,metricsReady:true};
     });
     setData({rows:completed,total:catalog.total,loaded:catalog.total,
-     metricsLoaded:catalog.total,frequencyDays:result.frequencyDays||7,
+     metricsLoaded:catalog.total,frequencyDays:result.frequencyDays??0,
      metricsUnavailable:false});
     bulkComplete=true;
    }catch(e){

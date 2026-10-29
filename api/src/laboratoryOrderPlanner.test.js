@@ -60,7 +60,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);
  assert.equal(d.rows[0].byPharmacy["1"].suggested,4);
- assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24",3]);
+ assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
  assert.equal(d.frequencyDays,3);
 });
 test("matriz directa sobre CN suministrados evita releer catálogo del laboratorio",async()=>{

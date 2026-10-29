@@ -280,6 +280,11 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    if(!target){
     await db.query("ROLLBACK");return res.status(404).json({error:"Proveedor destino no encontrado"});
    }
+   if(!["DIRECTO","VACUNAS","FÓRMULAS"].includes(target.clase)||
+    rows.some(p=>p.clase!==target.clase)){
+    await db.query("ROLLBACK");
+    return res.status(400).json({error:"Solo se pueden unificar laboratorios de la misma categoría. Mayoristas e internos no requieren unificación."});
+   }
    const aliases=await db.query(`UPDATE farmetrica.proveedores_unificados_alias
     SET proveedor_id=$2,procedencia='manual',actualizado_en=now()
     WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[]) RETURNING id`,
@@ -316,6 +321,52 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    await db.query("COMMIT");
    invalidateLastReceiptCache(pool,slug);invalidateCachedLaboratoryOptions(pool,slug);
    res.json({merged:sources.length,aliases:aliases.rowCount,target:{id:destination,name:target.nombre,class:target.clase}});
+  }catch(e){await db.query("ROLLBACK").catch(()=>{});next(e)}
+  finally{db.release()}
+ });
+ // Clasificar un código local sin obligar a fusionarlo con otra farmacia.
+ // La creación del proveedor y su asociación son atómicas.
+ app.post("/api/tenant/proveedores-unificados/clasificar-origen",...requireTenantAdmin(),async(req,res,next)=>{
+  const name=String(req.body?.name||"").trim();
+  const className=String(req.body?.class||"SIN_CLASIFICAR");
+  const pharmacy=String(req.body?.pharmacyCode||"").trim().toUpperCase();
+  const code=String(req.body?.sourceCode||"").trim();
+  const originName=String(req.body?.sourceName||name).trim();
+  if(name.length<2||name.length>200||originName.length>200||!code||code.length>60||
+   !/^[A-Z0-9_-]{1,40}$/.test(pharmacy)||
+   !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
+   return res.status(400).json({error:"Revisa los datos del proveedor de Farmatic"});
+  const slug=req.context.client.slug,db=await pool.connect();
+  try{
+   await db.query("BEGIN");
+   const ids=req.context.pharmacies.map(f=>Number(f.id));
+   const {rows:permitted}=await db.query(`SELECT id FROM farmetrica.farmacias f
+    WHERE f.cliente_slug=$1 AND ${pharmacyDataCodeSQL("f")}=$2 AND f.id=ANY($3::int[])`,
+    [slug,pharmacy,ids]);
+   if(!permitted.length){
+    await db.query("ROLLBACK");return res.status(403).json({error:"Farmacia no autorizada"});
+   }
+   const {rows:existing}=await db.query(`SELECT id FROM farmetrica.proveedores_unificados_alias
+    WHERE cliente_slug=$1 AND farmacia_codigo=$2 AND codigo_origen=$3 FOR UPDATE`,
+    [slug,pharmacy,code]);
+   if(existing.length){
+    await db.query("ROLLBACK");return res.status(409).json({error:"Este código ya pertenece a un proveedor. Actualiza el maestro para verlo."});
+   }
+   const {rows:[created]}=await db.query(`INSERT INTO farmetrica.proveedores_unificados
+    (cliente_slug,clave_unificada,nombre,clase)
+    VALUES($1,'MANUAL:'||md5(random()::text||clock_timestamp()::text),$2,$3)
+    RETURNING id::text`,[slug,name,className]);
+   const inserted=await db.query(`INSERT INTO farmetrica.proveedores_unificados_alias
+    (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen,procedencia)
+    VALUES($1,$2,$3,$4,$5,'manual')
+    ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO NOTHING RETURNING id`,
+    [slug,created.id,pharmacy,code,originName]);
+   if(inserted.rowCount!==1){
+    await db.query("ROLLBACK");return res.status(409).json({error:"El origen se vinculó durante la operación. Actualiza la lista."});
+   }
+   await db.query("COMMIT");
+   invalidateLastReceiptCache(pool,slug);invalidateCachedLaboratoryOptions(pool,slug);
+   res.status(201).json({id:created.id,name,class:className,saved:true});
   }catch(e){await db.query("ROLLBACK").catch(()=>{});next(e)}
   finally{db.release()}
  });

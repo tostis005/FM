@@ -9,8 +9,8 @@ test("el preparador excluye cooperativas e internos por clasificación, no por n
  const pool={query:async q=>{queries.push(q);return {rows:[{key:"P:10",name:"Laboratorio",class:"DIRECTO"}]}}};
  const result=await listUnifiedSuppliers(pool,ctx,[1,2],true);
  assert.equal(result[0].key,"P:10");
- assert.match(queries[0].text,/MAYORISTA/);
- assert.match(queries[0].text,/INTERNO/);
+ assert.match(queries[0].text,/p\.clase IN \(\x27DIRECTO\x27,\x27VACUNAS\x27,\x27FÓRMULAS\x27\)/);
+ assert.doesNotMatch(queries[0].text,/p\.clase NOT IN/);
  assert.doesNotMatch(queries[0].text,/nomenclator/i);
  assert.deepEqual(queries[0].values,["ampedia",[1,2]]);
 });

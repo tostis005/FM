@@ -18,6 +18,7 @@ let suppliers=[
   origins:[{pharmacyCode:"NOR",sourceCode:"25",sourceName:"Alfa"}]},
  {id:"3",key:"P:3",name:"Cooperativa Central",class:"MAYORISTA",
   origins:[{pharmacyCode:"ABA",sourceCode:"100",sourceName:"Cooperativa Central"}]},
+ {id:"6",key:"P:6",name:"Seguro de prueba",class:"OTROS",origins:[]},
  {id:"4",key:"P:4",name:"Movimiento interno",class:"INTERNO",
   origins:[{pharmacyCode:"ABA",sourceCode:"105",sourceName:"Movimiento interno"}]}
 ];
@@ -81,6 +82,9 @@ try{
  assert.equal(await page.locator(".fm-master-lab-tools").count(),0);
  await page.getByText("Cooperativa Central").first().waitFor();
  await page.getByRole("tab",{name:/Internos/}).click();
+ assert.equal(await page.locator(".fm-master-lab-tools").count(),0);
+ await page.getByRole("tab",{name:/Otros \/ servicios/}).click();
+ await page.getByText("Seguro de prueba").first().waitFor();
  assert.equal(await page.locator(".fm-master-lab-tools").count(),0);
  await page.getByRole("tab",{name:/Todos/}).click();
  await page.getByText("Sin clasificar B").first().waitFor();

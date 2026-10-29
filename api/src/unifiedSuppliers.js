@@ -55,7 +55,7 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
   AND ${pharmacyDataCodeSQL("f")}=upper(btrim(a.farmacia_codigo))
   AND ($2::int[] IS NULL OR f.id=ANY($2::int[]))
  WHERE p.cliente_slug=$1 AND p.activo AND (a.id IS NULL OR f.id IS NOT NULL)
-  ${forOrders?"AND p.clase NOT IN ('MAYORISTA','INTERNO','SIN_CLASIFICAR')":""}
+  ${forOrders?"AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')":""}
  GROUP BY p.id,p.nombre,p.clase,p.activo ORDER BY p.nombre`,
  values:[ctx.client.slug,pharmacies],query_timeout:10000});
  return (await supplierQuery).rows;
@@ -230,7 +230,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
  app.post("/api/tenant/proveedores-unificados",...requireTenantAdmin(),async(req,res,next)=>{
   const name=String(req.body?.name||"").trim(),className=req.body?.class||"SIN_CLASIFICAR";
   if(name.length<2||name.length>200||
-   !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
+   !["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
    return res.status(400).json({error:"Nombre o clasificación inválidos"});
   try{
    const {rows}=await pool.query(`INSERT INTO farmetrica.proveedores_unificados
@@ -246,7 +246,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   if(!validId(req.params.id))return res.status(400).json({error:"ID incorrecto"});
   const name=String(req.body?.name||"").trim(),className=req.body?.class;
   if(name.length<2||name.length>200||
-   !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
+   !["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
    return res.status(400).json({error:"Nombre o clasificación inválidos"});
   try{
    const {rows}=await pool.query(`UPDATE farmetrica.proveedores_unificados
@@ -334,7 +334,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   const originName=String(req.body?.sourceName||name).trim();
   if(name.length<2||name.length>200||originName.length>200||!code||code.length>60||
    !/^[A-Z0-9_-]{1,40}$/.test(pharmacy)||
-   !["DIRECTO","MAYORISTA","INTERNO","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
+   !["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
    return res.status(400).json({error:"Revisa los datos del proveedor de Farmatic"});
   const slug=req.context.client.slug,db=await pool.connect();
   try{

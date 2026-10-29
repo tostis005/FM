@@ -8,21 +8,34 @@ export const civilDays=(from,to)=>Math.round((Date.parse(to+"T00:00:00Z")-Date.p
 export const validOrderDate=date=>VALID_DATE.test(date)&&
  !Number.isNaN(Date.parse(date+"T00:00:00Z"))&&
  new Date(date+"T00:00:00Z").toISOString().slice(0,10)===date;
-// Un pedido tiene un solo vencimiento por laboratorio y por cliente, no
-// una fecha distinta para cada farmacia. Los CN se cuentan una sola vez.
+// El calendario de demostración no persiste fechas ni simula pedidos reales.
+// Cada día rota de forma reproducible los laboratorios todavía sin historial.
+// Se muestran algunos hoy, mañana, durante la semana y posteriormente, pero
+// ninguno se convierte en vencido por no haber preparado un pedido ficticio.
+export function demoDueOffset(index,today){
+ const day=Math.floor(Date.parse(today+"T00:00:00Z")/86400000);
+ if(!Number.isSafeInteger(day)||!Number.isSafeInteger(index)||index<0)
+  throw Error("Fecha o posición del calendario demo inválidas");
+ return (index+day)%12; // 0=hoy, 1=mañana, 2..7=esta semana, 8..11=más adelante.
+}
+const addDays=(day,count)=>new Date(Date.parse(day+"T00:00:00Z")+
+ count*86400000).toISOString().slice(0,10);
+
+// Un pedido tiene un solo vencimiento por laboratorio y cliente.
+// Las fechas provisionales nunca entran en la tabla de confirmaciones.
 export function buildAgenda(raw,today){
- return raw.map(r=>{
-  const days=Number(r.days),last=r.lastOrder||null;
-  const next=last?new Date(Date.parse(last+"T00:00:00Z")+days*86400000).toISOString().slice(0,10):null;
-  const until=next?civilDays(today,next):null;
-  const status=until===null?"sin_fecha":until<0?"vencido":until===0?"hoy":until===1?"manana":"proximo";
+ return raw.map((r,index)=>{
+  const days=Number(r.days),last=r.lastOrder||null,demo=!last;
+  const next=demo?addDays(today,demoDueOffset(index,today)):addDays(last,days);
+  const until=civilDays(today,next);
+  const status=until<0?"vencido":until===0?"hoy":until===1?"manana":"proximo";
   return {key:"P:"+r.id,name:r.name,days,lastOrder:last,nextDue:next,
-   daysUntil:until,status,cn:Number(r.cn||0),
+   daysUntil:until,status,cn:Number(r.cn||0),demo,
    overdue:Number(status==="vencido"),today:Number(status==="hoy"),
-   tomorrow:Number(status==="manana"),withoutDate:Number(status==="sin_fecha"),
-   priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:
-    status==="sin_fecha"?4:3};
- }).sort((a,b)=>a.priority-b.priority||(a.nextDue||"9999").localeCompare(b.nextDue||"9999")||
+   tomorrow:Number(status==="manana"),withoutDate:Number(demo),
+   priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:3};
+ }).sort((a,b)=>a.priority-b.priority||
+  (a.nextDue||"9999").localeCompare(b.nextDue||"9999")||
   a.name.localeCompare(b.name,"es"));
 }
 

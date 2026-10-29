@@ -1,5 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {latestLaboratoryCN,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
+import {latestLaboratoryCN,laboratoryIdsFromSnapshot,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -17,8 +17,13 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  if(useLastReceipt){
   // El cálculo de CN vencedores ya conoce los IDs de los laboratorios.
   // No agrupar miles de alias ni escanear el maestro para montar el selector.
-  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
-  const keys=[...latest.byLab.keys()];
+  let keys;
+  try{keys=await laboratoryIdsFromSnapshot(pool,ctx,pharmacies)}
+  catch(error){console.warn("PREPARADOR_SELECTOR_SNAPSHOT",error.code||error.name)}
+  if(keys===null||keys===undefined){
+   const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
+   keys=[...latest.byLab.keys()];
+  }
   if(!keys.length)return [];
   const {rows}=await pool.query({text:`
    SELECT p.id::text AS id,('P:'||p.id::text) AS key,p.nombre AS name,

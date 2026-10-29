@@ -521,7 +521,6 @@ try {
   await pool.query(supplierLaboratoryMigration);
   const unifiedSuppliersMigration=await readFile(new URL("./migrations/036_proveedores_unificados.sql",import.meta.url),"utf8");
   await pool.query(unifiedSuppliersMigration);
-  await pool.query(await readFile(new URL("./migrations/032_laboratory_order_frequency.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
    "./migrations/041_preparador_ultima_recepcion_cache.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
@@ -540,6 +539,7 @@ try {
   await pool.query(await readFile(new URL("./migrations/039_dashboard_consolidados_diarios.sql",import.meta.url),"utf8"));
   const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
   await pool.query(operationalMigration);
+  await pool.query(await readFile(new URL("./migrations/032_laboratory_order_frequency.sql",import.meta.url),"utf8"));
   const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");
   await pool.query(mcpMigration);
   const oauthClientsMigration=await readFile(new URL("./migrations/023_oauth_clients.sql",import.meta.url),"utf8");

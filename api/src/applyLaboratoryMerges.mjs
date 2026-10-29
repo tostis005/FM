@@ -8,12 +8,15 @@ import {proposeEvidenceLaboratoryMerges} from "./laboratoryMergeEvidence.js";
 import {reviewedLaboratoryMerges} from "./laboratoryReviewedMerges.js";
 import {planUnclassifiedLaboratoryAliases} from "./laboratoryUnclassifiedReconcile.js";
 import {verifiedNonLabExclusions} from "./laboratoryNonLabExclusions.js";
+import {planAdditionalVerifiedLaboratoryAliases} from "./laboratoryAdditionalVerified.js";
 const clientSlug="ampedia";
 const evidenceMode=process.env.FM_LAB_MERGE_MODE==="evidence_v2";
 const reviewedMode=process.env.FM_LAB_MERGE_MODE==="reviewed_v3";
+const additionalMode=process.env.FM_LAB_MERGE_MODE==="additional_v6";
 const filteredMode=process.env.FM_LAB_MERGE_MODE==="unclassified_v5";
 const unclassifiedMode=filteredMode||process.env.FM_LAB_MERGE_MODE==="unclassified_v4";
-const criterion=filteredMode?"unclassified-filtered-laboratories-v5-20261029":
+const criterion=additionalMode?"additional-reviewed-manufacturers-v6-20261029":
+ filteredMode?"unclassified-filtered-laboratories-v5-20261029":
  unclassifiedMode?"unclassified-verified-laboratory-aliases-v4-20261029":
  reviewedMode?"reviewed-laboratories-v3-20261029":
  evidenceMode?"name-and-shared-erp-code-v2-20261029":"structural-laboratory-name-v1-20261028";
@@ -63,7 +66,7 @@ try{
    }
    const blocked=new Set();
    let evidence=[];
-   if(evidenceMode||reviewedMode||unclassifiedMode){
+   if(evidenceMode||reviewedMode||unclassifiedMode||additionalMode){
     // No fusionar automáticamente laboratorios con agenda, borrador o pedido real:
     // requieren elegir qué frecuencia/historial conservar.
     const {rows:used}=await db.query(`
@@ -97,7 +100,9 @@ try{
     const excludes=filteredMode?verifiedNonLabExclusions(master):new Set();
     unclassifiedReport=planUnclassifiedLaboratoryAliases(master,aliases,activeLabIds,manual,blocked,excludes);
    }
-   const {operations,review}=unclassifiedMode?unclassifiedReport:
+   const {operations,review}=additionalMode?
+    planAdditionalVerifiedLaboratoryAliases(master,aliases,manual,blocked):
+    unclassifiedMode?unclassifiedReport:
     reviewedMode?reviewedLaboratoryMerges(master,evidence,manual,blocked):
     evidenceMode?proposeEvidenceLaboratoryMerges(master,evidence,manual,blocked):
     proposeLaboratoryMerges(master,sizes,manual);
@@ -120,7 +125,7 @@ try{
      WHERE s.activo=true AND t.activo=true
       AND (s.clase=t.clase OR ($3::boolean AND s.clase='SIN_CLASIFICAR'
        AND t.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')))
-     RETURNING origen_id`,[batch,clientSlug,unclassifiedMode]);
+     RETURNING origen_id`,[batch,clientSlug,unclassifiedMode||additionalMode]);
     if(sourceCount.rowCount!==operations.length)throw Error("Cambió el maestro: no se permite aplicar asociaciones incompletas");
     const moved=await db.query(`INSERT INTO farmetrica.laboratorios_unificacion_alias
      (lote,alias_id,origen_id,destino_id)
@@ -146,6 +151,7 @@ try{
    log.reviewedMode=reviewedMode;
    log.unclassifiedMode=unclassifiedMode;
    log.filteredMode=filteredMode;
+   log.additionalMode=additionalMode;
    if(unclassifiedReport)log.unclassifiedStatus=unclassifiedReport.status;
    log.examples=operations.slice(0,25).map(x=>({from:x.fromName,to:x.toName,codes:x.matchingCodes||[]}));
    log.reviewReasons=Object.fromEntries([...new Set(review.map(x=>x.reason))].map(reason=>[reason,review.filter(x=>x.reason===reason).length]));

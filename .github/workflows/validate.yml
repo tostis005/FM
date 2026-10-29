@@ -44,7 +44,7 @@ jobs:
           node --test api/src/laboratoryOptionCache.test.js
           node --check api/src/preparadorLastReceipt.js
           node --check api/src/refreshPreparadorLastReceipt.mjs
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js api/src/laboratoryAdditionalVerified.test.js api/src/preparadorAgenda.test.js api/src/laboratoryFrequencyPolicy.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js api/src/laboratoryAdditionalVerified.test.js api/src/preparadorAgenda.test.js api/src/laboratoryFrequencyPolicy.test.js api/src/supplierClassificationPolicy.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
           node --check api/src/laboratoryCatalog.js
@@ -187,6 +187,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/041_preparador_ultima_recepcion_cache.sql
           psql_test --single-transaction < api/src/migrations/042_preparador_agenda_y_cobertura.sql
           psql_test --single-transaction < api/src/migrations/043_preparador_agenda_global.sql
+          psql_test --single-transaction < api/src/migrations/044_proveedores_otros_servicios.sql
           psql_test -v cliente_slug=ampedia < api/src/migrations/036_proveedores_unificados_seed.psql
           test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedores_unificados_alias')" -ge 2000
           psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql

@@ -48,3 +48,17 @@ test("coincidencia exacta de un fabricante existente, sin inferir por código ER
  assert.equal(protectedAlias.operations.length,0);
  assert.equal(protectedAlias.skipped.length,1);
 });
+
+test("revisión nominal adicional: fabricante, distribuidor, servicio y fórmulas",()=>{
+ const p=rules([
+  [1,"GEDEON RITCHER"],[2,"DHU IBERICA, S.A."],[3,"PHERGAL"],
+  [4,"LOGILENIA DISTRIB. FCA. S.L"],[5,"FARMAORTOPEDIA NATURA SL"],
+  [6,"NUEVAS TECNOLOGIAS CONTRA INCENDIOS"],
+  [7,"FARMACIA FERNANDO EZQUERRA FORMULAS"],
+  [8,"ACACIA SOLUCIONES S.L."],[9,"TOYOTA COMAUTO SUR, S.A."],
+  [10,"B.G.P.PRODUCTS OPERATIONS, S.L.(UNI"]
+ ]);
+ assert.deepEqual(p.operations.map(x=>x.to),
+  ["DIRECTO","DIRECTO","DIRECTO","MAYORISTA","OTROS","OTROS",
+   "FÓRMULAS","OTROS","OTROS","DIRECTO"]);
+});

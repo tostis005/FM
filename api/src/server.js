@@ -521,6 +521,7 @@ try {
   await pool.query(supplierLaboratoryMigration);
   const unifiedSuppliersMigration=await readFile(new URL("./migrations/036_proveedores_unificados.sql",import.meta.url),"utf8");
   await pool.query(unifiedSuppliersMigration);
+  await pool.query(await readFile(new URL("./migrations/032_laboratory_order_frequency.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
    "./migrations/041_preparador_ultima_recepcion_cache.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(

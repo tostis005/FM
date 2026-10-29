@@ -110,8 +110,8 @@ try{
  await page.getByText("240 códigos nacionales únicos").waitFor();
  await page.getByText(/Vista de demostración/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Preparar pedido de Laboratorios Alfa SA"}).count(),1);
- const opened=page.waitForRequest(request=>request.url().includes("/api/analytics/pedidos/catalogo-unificado?")&&
-  new URL(request.url()).searchParams.get("laboratorio")==="P:1",{timeout:15000});
+ const opened=page.waitForResponse(response=>response.url().includes("/api/analytics/pedidos/catalogo-unificado?")&&
+  new URL(response.url()).searchParams.get("laboratorio")==="P:1"&&response.ok(),{timeout:15000});
  await page.getByRole("button",{name:"Preparar pedido de Laboratorios Alfa SA"}).click();
  await opened;
  assert.ok(catalogCalls.some(x=>x.laboratorio==="P:1"));

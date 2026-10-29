@@ -48,35 +48,26 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [agendaRefresh,setAgendaRefresh]=useState(0);
  const [recordLab,setRecordLab]=useState(""),[recordType,setRecordType]=useState("pedido");
  const [recordDate,setRecordDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
- const [recordIds,setRecordIds]=useState([]),[recordCandidates,setRecordCandidates]=useState([]);
- const [agendaDueIds,setAgendaDueIds]=useState([]);
  const [recordBusy,setRecordBusy]=useState(false),[recordError,setRecordError]=useState("");
- function chooseLaboratory(key,focusIds=null){
+ function chooseLaboratory(key){
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
   setSearch("");setError("");
-  setAgendaDueIds(focusIds||[]);
-  setNotice(focusIds?.length?"Farmacias pendientes según la agenda: "+
-   pharmacies.filter(p=>focusIds.map(String).includes(String(p.id))).map(p=>p.name).join(", "):"");
+  setNotice("");
   document.getElementById("fm-preparador-laboratorio")?.scrollIntoView({behavior:"smooth",block:"start"});
  }
- function beginRecord(key,candidates,type="pedido"){
+ function beginRecord(key,type="pedido"){
   setRecordLab(key);setRecordType(type);setRecordError("");
   setRecordDate(new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
-  setRecordCandidates(candidates.map(String));
-  const matching=type==="pedido"&&key===laboratory?
-   agendaDueIds.filter(id=>candidates.map(String).includes(String(id))):[];
-  setRecordIds((matching.length?matching:candidates).map(String));
  }
  async function confirmRecord(){
-  if(!recordLab||!recordIds.length)return;
+  if(!recordLab)return;
   setRecordBusy(true);setRecordError("");
   try{
-   const result=await api(clientSlug,"/api/analytics/pedidos/agenda/realizados",{
-    method:"POST",body:{laboratorio:recordLab,farmacias:recordIds.map(Number),
-     fecha:recordDate,tipo:recordType}});
-   setNotice("Fecha registrada para "+result.pharmacyIds.length+" farmacia(s). Se ha recalculado el próximo vencimiento.");
+   await api(clientSlug,"/api/analytics/pedidos/agenda/realizados",{
+    method:"POST",body:{laboratorio:recordLab,fecha:recordDate,tipo:recordType}});
+   setNotice("Fecha global registrada. Se ha recalculado el próximo vencimiento del laboratorio.");
    setRecordLab("");setAgendaRefresh(n=>n+1);
   }catch(e){setRecordError(e.message)}finally{setRecordBusy(false)}
  }
@@ -331,10 +322,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   <ReportPageHeader title="Preparador de pedidos" description="Pedido por laboratorio · visión conjunta de todas las farmacias"
    period={range} updatedAt={updatedAt} refreshing={loading}
    onRefresh={()=>setReload(n=>n+1)}/>
-  <PreparadorAgenda clientSlug={clientSlug} pharmacyIds={ids.map(Number)} laboratories={labs}
+  <PreparadorAgenda clientSlug={clientSlug} laboratories={labs}
    canEdit={canEdit} refreshToken={agendaRefresh}
-   onSelect={(key,pharmacyIds)=>chooseLaboratory(key,pharmacyIds)}
-   onInitial={(key,pharmacyIds)=>beginRecord(key,pharmacyIds,"fecha_inicial")}/>
+   onSelect={key=>chooseLaboratory(key)}
+   onInitial={key=>beginRecord(key,"fecha_inicial")}/>
   <section id="fm-preparador-laboratorio" className="card fm-lab-order">
    <div className="fm-lab-order-top">
     <div><h2>1. Selecciona el laboratorio</h2>
@@ -490,7 +481,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
      {canEdit&&<button className="btn btn-secondary" type="button"
-      onClick={()=>beginRecord(laboratory,ids.map(Number))} disabled={busy||!laboratory||!ids.length}>
+      onClick={()=>beginRecord(laboratory)} disabled={busy||!laboratory||!ids.length}>
       Marcar pedido realizado</button>}
     </div>
     <p className="fm-muted">Generar Excel no confirma ni envía un pedido. Marca «Pedido realizado» solo después de haberlo cursado.</p>
@@ -502,25 +493,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <p><strong>{labs.find(l=>l.key===recordLab)?.name||recordLab}</strong></p>
     <p>{recordType==="fecha_inicial"?
       "Registra la fecha del último pedido conocido para iniciar la planificación. No se enviará ningún pedido.":
-      "Confirma únicamente si ya has hecho el pedido fuera de Farmétrica. Esta acción reinicia el calendario solo en las farmacias indicadas."}</p>
+      "Confirma únicamente si ya has hecho el pedido conjunto fuera de Farmétrica. Esta acción reinicia el calendario global del laboratorio."}</p>
     <label>Fecha del pedido
      <input type="date" value={recordDate}
       max={new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"})}
       onChange={e=>setRecordDate(e.target.value)}/>
     </label>
-    <fieldset><legend>Farmacias incluidas</legend>
-     <div className="fm-order-confirm-pharmacies">
-      {pharmacies.filter(p=>recordCandidates.includes(String(p.id))).map(p=><label key={p.id}>
-       <input type="checkbox" checked={recordIds.includes(String(p.id))}
-        onChange={e=>setRecordIds(old=>e.target.checked?[...old,String(p.id)]:old.filter(id=>id!==String(p.id)))}/>
-       {p.name}
-      </label>)}
-     </div>
-    </fieldset>
+    <p className="fm-muted">La fecha se aplica a la planificación conjunta del laboratorio, independientemente de la farmacia.</p>
     {recordError&&<p role="alert" className="fm-op-message fm-op-error">{recordError}</p>}
     <div className="fm-order-confirm-actions">
      <button className="btn btn-secondary" disabled={recordBusy} onClick={()=>setRecordLab("")}>Cancelar</button>
-     <button className="btn btn-primary" disabled={recordBusy||!recordIds.length||!recordDate}
+     <button className="btn btn-primary" disabled={recordBusy||!recordDate}
       onClick={()=>void confirmRecord()}>{recordBusy?"Guardando…":"Confirmar fecha"}</button>
     </div>
    </div>

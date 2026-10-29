@@ -33,13 +33,14 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
  const items=agenda.items||[];
  const matched=useMemo(()=>items.filter(l=>l.name.toLocaleLowerCase("es").includes(search.toLocaleLowerCase("es"))),[items,search]);
  const status=l=>l.overdue>0?"vencido":l.today>0?"hoy":l.tomorrow>0?"manana":l.withoutDate===l.pharmacies.length?"sin_fecha":"proximo";
+ const withinWeek=l=>l.pharmacies.some(p=>p.daysUntil!==null&&p.daysUntil>=2&&p.daysUntil<=7);
  const counts={vencido:items.filter(l=>status(l)==="vencido").length,
   hoy:items.filter(l=>status(l)==="hoy").length,manana:items.filter(l=>status(l)==="manana").length,
-  proximo:items.filter(l=>status(l)==="proximo").length,
+  proximo:items.filter(l=>status(l)==="proximo"&&withinWeek(l)).length,
   sin_fecha:items.filter(l=>status(l)==="sin_fecha").length};
  const visible=matched.filter(l=>filter==="todos"||filter==="pendientes"?
    (filter==="todos"||["vencido","hoy"].includes(status(l))):
-   status(l)===filter);
+   status(l)===filter&&(filter!=="proximo"||withinWeek(l)));
  const candidates=l=>{
   const due=l.pharmacies.filter(p=>p.daysUntil!==null&&p.daysUntil<=0);
   return (due.length?due:l.pharmacies).map(p=>p.id);
@@ -72,7 +73,7 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
     onClick={()=>setLocalVersion(v=>v+1)} aria-label="Actualizar agenda"><RefreshCcw size={15}/> Actualizar</button>
   </header>
   <div className="fm-order-agenda-kpis">
-   {[[ "vencido","Vencidos"],["hoy","Hoy"],["manana","Mañana"],["proximo","Próximos"],["sin_fecha","Sin fecha inicial"]].map(([key,label])=>
+   {[[ "vencido","Vencidos"],["hoy","Hoy"],["manana","Mañana"],["proximo","Próx. 7 días"],["sin_fecha","Sin fecha inicial"]].map(([key,label])=>
     <button key={key} className={"fm-order-agenda-kpi "+(filter===key?"active":"")}
      onClick={()=>{setFilter(key);setLimit(12)}} aria-pressed={filter===key}>
      <strong>{counts[key]}</strong><span>{label}</span>
@@ -83,7 +84,7 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
     <option value="pendientes">Pendientes hoy o vencidos</option>
     <option value="todos">Todos los programados</option>
     <option value="vencido">Vencidos</option><option value="hoy">Hoy</option>
-    <option value="manana">Mañana</option><option value="proximo">Próximos días</option>
+    <option value="manana">Mañana</option><option value="proximo">Próximos 7 días</option>
     <option value="sin_fecha">Sin fecha inicial</option>
    </select></label>
    <label>Buscar laboratorio <input type="search" value={search}

@@ -7,6 +7,7 @@ import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import {setupLaboratoryRetirements} from "./laboratoryRetirements.js";
 import {setupLaboratoryOrderSettings} from "./laboratoryOrderSettings.js";
+import {setupPreparadorAgenda} from "./preparadorAgenda.js";
 import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
@@ -115,6 +116,7 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = s
 setupMasterSources(app,pool,{requireSuperadmin});
 setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantAdmin});
 setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin});
+setupPreparadorAgenda(app,pool,{requireTenant});
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
 // Lleva su propia autenticación OAuth y no expone ninguna operación de escritura.
 const {authenticateDemo}=setupAIMcp(app,pool,{sessionUser,resolveAccess,resolveTenant,requireUser});

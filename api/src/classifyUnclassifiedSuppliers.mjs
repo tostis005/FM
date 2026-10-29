@@ -18,37 +18,37 @@ try{
  await db.query("SET LOCAL statement_timeout='40000ms'");
  if(action!=="plan")
   await db.query("SELECT pg_advisory_xact_lock(hashtext('fm:classify:'||$1))",[slug]);
- const {rows:master}=await db.query(\`SELECT id::text,nombre AS name,
+ const {rows:master}=await db.query(`SELECT id::text,nombre AS name,
   clase AS class,activo AS active,actualizado_en AS updated
  FROM farmetrica.proveedores_unificados WHERE cliente_slug=$1
- \${action==="apply"?"FOR UPDATE":""}\`,[slug]);
- const {rows:aliases}=await db.query(\`SELECT proveedor_id::text AS supplier,
+ ${action==="apply"?"FOR UPDATE":""}`,[slug]);
+ const {rows:aliases}=await db.query(`SELECT proveedor_id::text AS supplier,
   farmacia_codigo AS "pharmacyCode",codigo_origen AS "sourceCode",
   nombre_origen AS "sourceName",procedencia AS provenance
- FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=$1\`,[slug]);
+ FROM farmetrica.proveedores_unificados_alias WHERE cliente_slug=$1`,[slug]);
  const totalBefore=master.filter(p=>p.active&&p.class==="SIN_CLASIFICAR").length;
  out.before=totalBefore;
  if(action==="rollback"){
-  const {rows:batch}=await db.query(\`SELECT id,revertido_en FROM farmetrica.proveedores_reclasificacion_lotes
-   WHERE cliente_slug=$1 AND criterio=$2 FOR UPDATE\`,[slug,criterion]);
+  const {rows:batch}=await db.query(`SELECT id,revertido_en FROM farmetrica.proveedores_reclasificacion_lotes
+   WHERE cliente_slug=$1 AND criterio=$2 FOR UPDATE`,[slug,criterion]);
   if(!batch.length)throw Error("No existe lote de clasificación para revertir");
   if(batch[0].revertido_en){out.alreadyReverted=true;out.reverted=0}
   else{
-   const result=await db.query(\`
+   const result=await db.query(`
     UPDATE farmetrica.proveedores_unificados p
     SET clase=c.clase_anterior,actualizado_en=now()
     FROM farmetrica.proveedores_reclasificacion_cambios c
     WHERE c.lote=$1 AND p.cliente_slug=$2 AND p.id=c.proveedor_id
      AND p.nombre=c.nombre AND p.clase=c.clase_nueva
      AND p.actualizado_en=c.actualizado_aplicacion AND p.activo
-    RETURNING p.id\`,[batch[0].id,slug]);
-   const {rows:count}=await db.query(\`
-    SELECT count(*)::int AS total FROM farmetrica.proveedores_reclasificacion_cambios WHERE lote=$1\`,
+    RETURNING p.id`,[batch[0].id,slug]);
+   const {rows:count}=await db.query(`
+    SELECT count(*)::int AS total FROM farmetrica.proveedores_reclasificacion_cambios WHERE lote=$1`,
     [batch[0].id]);
    if(result.rowCount!==count[0].total)
     throw Error("Hubo ediciones posteriores: rollback parcial cancelado para no sobrescribirlas");
-   await db.query(\`UPDATE farmetrica.proveedores_reclasificacion_lotes
-    SET revertido_en=now() WHERE id=$1\`,[batch[0].id]);
+   await db.query(`UPDATE farmetrica.proveedores_reclasificacion_lotes
+    SET revertido_en=now() WHERE id=$1`,[batch[0].id]);
    out.reverted=result.rowCount;
   }
  }else{
@@ -63,27 +63,27 @@ try{
   out.proposedExamples=operations.filter(x=>x.to==="MAYORISTA"||x.to==="INTERNO"||x.to==="OTROS").slice(0,110);
   out.alliance=operations.filter(x=>/ALLIANCE HEALT/i.test(x.name));
   if(action==="apply"){
-   const existing=await db.query(\`SELECT id,revertido_en FROM farmetrica.proveedores_reclasificacion_lotes
-    WHERE cliente_slug=$1 AND criterio=$2 FOR UPDATE\`,[slug,criterion]);
+   const existing=await db.query(`SELECT id,revertido_en FROM farmetrica.proveedores_reclasificacion_lotes
+    WHERE cliente_slug=$1 AND criterio=$2 FOR UPDATE`,[slug,criterion]);
    if(existing.rowCount){
     if(existing.rows[0].revertido_en)throw Error("Lote revertido: requiere nueva revisión");
     out.alreadyApplied=true;out.batch=existing.rows[0].id;
    }else{
     if(!operations.length)throw Error("Sin operaciones verificables");
     const batch=randomUUID();
-    await db.query(\`INSERT INTO farmetrica.proveedores_reclasificacion_lotes
-     (id,cliente_slug,criterio) VALUES($1,$2,$3)\`,[batch,slug,criterion]);
+    await db.query(`INSERT INTO farmetrica.proveedores_reclasificacion_lotes
+     (id,cliente_slug,criterio) VALUES($1,$2,$3)`,[batch,slug,criterion]);
     for(const op of operations){
-     const updated=await db.query(\`
+     const updated=await db.query(`
       UPDATE farmetrica.proveedores_unificados
       SET clase=$3,actualizado_en=clock_timestamp()
       WHERE cliente_slug=$1 AND id=$2 AND nombre=$4 AND activo
        AND clase='SIN_CLASIFICAR'
-      RETURNING actualizado_en\`,[slug,op.id,op.to,op.name]);
+      RETURNING actualizado_en`,[slug,op.id,op.to,op.name]);
      if(updated.rowCount!==1)throw Error("Cambio concurrente en proveedor "+op.id);
-     await db.query(\`INSERT INTO farmetrica.proveedores_reclasificacion_cambios
+     await db.query(`INSERT INTO farmetrica.proveedores_reclasificacion_cambios
       (lote,proveedor_id,nombre,clase_anterior,clase_nueva,razon,actualizado_aplicacion)
-      VALUES($1,$2,$3,'SIN_CLASIFICAR',$4,$5,$6)\`,
+      VALUES($1,$2,$3,'SIN_CLASIFICAR',$4,$5,$6)`,
       [batch,op.id,op.name,op.to,op.reason,updated.rows[0].actualizado_en]);
     }
     out.applied=operations.length;out.batch=batch;

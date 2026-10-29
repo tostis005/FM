@@ -48,6 +48,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [recordDate,setRecordDate]=useState(()=>new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
  const [recordBusy,setRecordBusy]=useState(false),[recordError,setRecordError]=useState("");
  function chooseLaboratory(key){
+  // Pulsar otra vez el laboratorio seleccionado también relanza su consulta.
+  if(key===laboratory)setReload(n=>n+1);
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");

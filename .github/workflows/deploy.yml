@@ -391,6 +391,14 @@ jobs:
             timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorLastReceipt.mjs
           '
 
+      - name: Auditar variantes de laboratorios y códigos locales (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditar nombres laboratorios')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditAdvancedLaboratoryNames.mjs
+          '
+
       - name: Auditar duplicados del maestro completo y preparador (solo lectura)
         if: github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, 'auditar equivalencias laboratorios') || contains(github.event.head_commit.message, 'fichas de farmacia'))
         continue-on-error: false

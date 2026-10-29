@@ -439,6 +439,14 @@ jobs:
             timeout 110 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditAdvancedLaboratoryNames.mjs
           '
 
+      - name: Revisar lote ERP aplicado y excluir servicios no laboratorios
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditar lote proveedores')
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 90 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditAppliedERPLaboratoryBatch.mjs
+          '
+
       - name: Auditar variantes de laboratorios y códigos locales (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'auditar nombres laboratorios')
         run: |

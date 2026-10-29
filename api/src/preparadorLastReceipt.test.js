@@ -12,7 +12,7 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
    calls.push(q);
    if(text.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))return {rows:[]};
    if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"*BAJA*"}]};
-   if(text.includes("p.id::text=ANY($2::text[])"))return {rows:[
+   if(text.includes("p.id=ANY($2::bigint[])"))return {rows:[
     {id:"2",key:"P:2",name:"Lab último"}
    ]};
    return {rows:[{lab_id:"2",cn:"750001",nombre:"Medicamento"},
@@ -68,7 +68,7 @@ test("selector evita agrupar todos los alias después de resolver CN",async()=>{
    return {rows:[{actualizado_en:new Date()}]};
   if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))
    return {rows:[{lab_id:"5",cn:"450123",nombre:"Artículo válido"}]};
-  if(sql.includes("p.id::text=ANY($2::text[])"))
+  if(sql.includes("p.id=ANY($2::bigint[])"))
    return {rows:[{id:"5",key:"P:5",name:"Fabricante"}]};
   throw Error("SQL inesperado");
  }};

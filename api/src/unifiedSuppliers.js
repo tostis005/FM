@@ -24,7 +24,7 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
    SELECT p.id::text AS id,('P:'||p.id::text) AS key,p.nombre AS name,
     p.clase AS class,p.activo AS active,'[]'::json AS origins
    FROM farmetrica.proveedores_unificados p
-   WHERE p.cliente_slug=$1 AND p.id::text=ANY($2::text[])
+   WHERE p.cliente_slug=$1 AND p.id=ANY($2::bigint[])
     AND p.activo AND p.clase IN ('DIRECTO','VACUNAS','FÓRMULAS')
     AND upper(p.nombre) !~ '(COOPERATIVA|COOP\\.?|MAYORISTA|DISTRIBUIDOR)'
     AND upper(p.nombre) !~ '(^|[^A-Z])FARMACIAS?([^A-Z]|$)'

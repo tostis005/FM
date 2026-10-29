@@ -10,18 +10,42 @@ export const validOrderDate=date=>VALID_DATE.test(date)&&
  new Date(date+"T00:00:00Z").toISOString().slice(0,10)===date;
 // Un pedido tiene un solo vencimiento por laboratorio y por cliente, no
 // una fecha distinta para cada farmacia. Los CN se cuentan una sola vez.
+// La previsión sin pedidos reales es únicamente visual, no se guarda en DB.
+// Distribuimos de forma estable los laboratorios por ciclos de su frecuencia.
+// Al avanzar el día, un turno de demostración que no se confirmó se desplaza
+// al próximo ciclo: nunca se acumulan vencidos ni se inventa un historial.
+// Los laboratorios con un pedido real usan exclusivamente fechas reales.
 export function buildAgenda(raw,today){
+ const dayNumber=Math.floor(Date.parse(today+"T00:00:00Z")/86400000);
+ const groups=new Map();
+ for(const row of raw){
+  if(row.lastOrder)continue;
+  const days=Number(row.days);
+  if(!groups.has(days))groups.set(days,[]);
+  groups.get(days).push(row);
+ }
+ const previewOffsets=new Map();
+ for(const [days,rows] of groups){
+  rows.sort((a,b)=>Number(a.id)-Number(b.id));
+  rows.forEach((r,index)=>{
+   // Una vez asignada la fase a cada laboratorio, su turno se mueve con el
+   // calendario sin persistir pedidos ficticios.
+   const offset=((index-dayNumber)%days+days)%days;
+   previewOffsets.set(String(r.id),offset);
+  });
+ }
  return raw.map(r=>{
-  const days=Number(r.days),last=r.lastOrder||null;
-  const next=last?new Date(Date.parse(last+"T00:00:00Z")+days*86400000).toISOString().slice(0,10):null;
-  const until=next?civilDays(today,next):null;
-  const status=until===null?"sin_fecha":until<0?"vencido":until===0?"hoy":until===1?"manana":"proximo";
+  const days=Number(r.days),last=r.lastOrder||null,demo=!last;
+  const offset=demo?previewOffsets.get(String(r.id))??0:null;
+  const next=demo?new Date(Date.parse(today+"T00:00:00Z")+offset*86400000).toISOString().slice(0,10):
+   new Date(Date.parse(last+"T00:00:00Z")+days*86400000).toISOString().slice(0,10);
+  const until=civilDays(today,next);
+  const status=until<0?"vencido":until===0?"hoy":until===1?"manana":"proximo";
   return {key:"P:"+r.id,name:r.name,days,lastOrder:last,nextDue:next,
-   daysUntil:until,status,cn:Number(r.cn||0),
+   daysUntil:until,status,cn:Number(r.cn||0),demo,
    overdue:Number(status==="vencido"),today:Number(status==="hoy"),
-   tomorrow:Number(status==="manana"),withoutDate:Number(status==="sin_fecha"),
-   priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:
-    status==="sin_fecha"?4:3};
+   tomorrow:Number(status==="manana"),withoutDate:0,
+   priority:status==="vencido"?0:status==="hoy"?1:status==="manana"?2:3};
  }).sort((a,b)=>a.priority-b.priority||(a.nextDue||"9999").localeCompare(b.nextDue||"9999")||
   a.name.localeCompare(b.name,"es"));
 }

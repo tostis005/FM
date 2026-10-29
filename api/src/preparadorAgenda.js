@@ -73,10 +73,13 @@ export function setupPreparadorAgenda(app,pool,{requireTenant}){
     ) last_order ON true
     WHERE fr.cliente_slug=$1 AND fr.intervalo_dias BETWEEN 1 AND 365
      AND p.activo=true AND p.clase=ANY($3::text[])
-     AND EXISTS(
-      SELECT 1 FROM farmetrica.proveedores_unificados_alias a
-      WHERE a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
-       AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+     AND (
+      EXISTS(SELECT 1 FROM farmetrica.proveedores_unificados_alias a
+       WHERE a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
+        AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")})
+      OR EXISTS(SELECT 1 FROM farmetrica.preparador_pedidos_realizados e
+       WHERE e.cliente_slug=p.cliente_slug AND e.laboratorio_id=p.id
+        AND e.farmacia_id=f.id AND e.anulado_en IS NULL)
      )
     ORDER BY p.nombre,f.nombre`,values:[clientSlug(req),ids,READY],query_timeout:7000});
    const today=rows[0]?.today||null;
@@ -123,11 +126,6 @@ export function setupPreparadorAgenda(app,pool,{requireTenant}){
     JOIN farmetrica.farmacias f ON f.cliente_slug=p.cliente_slug
      AND f.id=ANY($3::int[]) AND f.activo=true
     WHERE p.cliente_slug=$1 AND p.id=$2 AND p.activo=true AND p.clase=ANY($8::text[])
-     AND EXISTS(
-      SELECT 1 FROM farmetrica.proveedores_unificados_alias a
-      WHERE a.cliente_slug=p.cliente_slug AND a.proveedor_id=p.id
-       AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-     )
      AND $5::date<=(now() AT TIME ZONE 'Europe/Madrid')::date
     RETURNING farmacia_id`,
     [clientSlug(req),labId,ids,group,date,type,req.user?.email||"usuario",READY]);

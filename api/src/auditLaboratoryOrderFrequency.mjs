@@ -7,9 +7,9 @@ const slug="ampedia",result={slug,readonly:true};
 try{
  const {rows}=await pool.query(`
  SELECT p.id::text AS id,p.nombre AS name,p.clase AS class,
-  count(c.cn)::int AS cn,
-  count(c.cn) FILTER(WHERE c.cn ~ '^[4-9][0-9]{5,6}$')::int AS meds,
-  count(c.cn) FILTER(WHERE c.cn !~ '^[4-9][0-9]{5,6}$')::int AS para,
+  count(DISTINCT c.cn)::int AS cn,
+  count(DISTINCT c.cn) FILTER(WHERE c.cn ~ '^[4-9][0-9]{5,6}$')::int AS meds,
+  count(DISTINCT c.cn) FILTER(WHERE c.cn !~ '^[4-9][0-9]{5,6}$')::int AS para,
   count(DISTINCT f.id)::int AS farms,
   fr.intervalo_dias AS frequency,
   (SELECT count(*)::int FROM farmetrica.proveedores_unificados_alias a

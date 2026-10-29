@@ -103,6 +103,9 @@ export default function PreparadorAgenda({clientSlug,pharmacyIds=[],laboratories
         <small>{l.overdue?l.overdue+" vencidas · ":""}{l.today?l.today+" para hoy · ":""}
          {l.withoutDate?l.withoutDate+" sin fecha inicial · ":""}
          {l.nextDue?"Próximo vencimiento: "+dateLabel(l.nextDue):"Indica la última fecha de pedido para empezar"}</small>
+        <small>{l.pharmacies.filter(p=>p.daysUntil!==null&&p.daysUntil<=0).length?
+         "Farmacias pendientes: "+l.pharmacies.filter(p=>p.daysUntil!==null&&p.daysUntil<=0).map(p=>p.name).join(", "):
+         l.withoutDate?"Sin fecha registrada: "+l.pharmacies.filter(p=>p.status==="sin_fecha").map(p=>p.name).join(", "):""}</small>
        </div>
        <span className={"fm-order-agenda-status fm-order-agenda-status-"+current}>{STATUS[current]}</span>
        <div className="fm-order-agenda-actions">

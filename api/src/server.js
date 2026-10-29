@@ -523,6 +523,8 @@ try {
   await pool.query(unifiedSuppliersMigration);
   await pool.query(await readFile(new URL(
    "./migrations/041_preparador_ultima_recepcion_cache.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL(
+   "./migrations/042_preparador_agenda_y_cobertura.sql",import.meta.url),"utf8"));
    for(const file of ["031_preparador_bajas.sql"])
     await pool.query(await readFile(new URL("./migrations/"+file,import.meta.url),"utf8"));
   const leadsMigration=await readFile(new URL("./migrations/006_solicitudes_demo.sql",import.meta.url),"utf8");

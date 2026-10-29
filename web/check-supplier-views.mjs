@@ -28,7 +28,7 @@ const origins=[
  {sourceCode:"105",name:"Movimiento interno",origins:[{pharmacyId:"1",name:"Movimiento interno",source:"farmatic"}]},
  {sourceCode:"200",name:"Sin clasificar B",origins:[{pharmacyId:"2",name:"Sin clasificar B",source:"farmatic"}]}
 ];
-let frequency=[],writes=[],errors=[];
+let frequency=[],writes=[],errors=[],catalogRequests=[];
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),path=u.pathname;
@@ -56,8 +56,19 @@ await page.route("**/api/**",async route=>{
   body={laboratories:suppliers.filter(p=>p.class==="DIRECTO").map(p=>({key:p.key,name:p.name}))};
  else if(path==="/api/analytics/pedidos/agenda")
   body={today:"2026-10-29",items:[{
-   key:"P:1",name:"Laboratorios Alfa SA",days:4,cn:240,overdue:1,today:0,tomorrow:0,withoutDate:0,
-   nextDue:"2026-10-27",lastOrder:"2026-10-23",daysUntil:-2,status:"vencido"}]};
+   key:"P:1",name:"Laboratorios Alfa SA",days:4,cn:240,demo:false,
+   nextDue:"2026-10-27",lastOrder:"2026-10-23",daysUntil:-2,status:"vencido"},
+   {key:"P:2",name:"Alfa SA",days:7,cn:130,demo:true,
+    nextDue:"2026-10-29",lastOrder:null,daysUntil:0,status:"hoy"}]};
+ else if(path==="/api/analytics/pedidos/catalogo-unificado"){
+  catalogRequests.push(u.searchParams.get("laboratorio"));
+  body={rows:[{referencia:"123456",cn:"123456",nombre:"Artículo laboratorio Alfa",
+   byPharmacy:{},totalSold:0,totalSuggested:0}],total:1};
+ }
+ else if(path==="/api/analytics/pedidos/matriz-conjunta")
+  body={rows:[{referencia:"123456",cn:"123456",nombre:"Artículo laboratorio Alfa",
+   byPharmacy:{},totalSold:0,totalSuggested:0}],frequencyDays:7,metricsUnavailable:false};
+
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
@@ -97,7 +108,16 @@ try{
  }
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:/Planificación de pedidos/}).waitFor({timeout:15000});
- await page.getByText("Laboratorios Alfa SA").first().waitFor();
+ assert.equal(await page.locator(".fm-order-agenda-filters select").count(),0);
+ assert.equal(await page.locator(".fm-order-agenda-filters input").count(),0);
+ await page.getByRole("button",{name:"Abrir Alfa SA y cargar sus códigos nacionales"}).waitFor();
+ await page.getByText("Previsión de demostración").first().waitFor();
+ await page.getByRole("button",{name:"Abrir Alfa SA y cargar sus códigos nacionales"}).click();
+ await page.waitForFunction(()=>document.querySelector('input[aria-label="Seleccionar laboratorio"]')?.value==="Alfa SA");
+ await page.waitForFunction(()=>document.body.textContent.includes("Artículo laboratorio Alfa"));
+ assert.ok(catalogRequests.includes("P:2"),"La agenda debe lanzar la consulta del catálogo al pulsar un laboratorio");
+ await page.getByRole("button",{name:/Vencidos/}).click();
+ await page.getByRole("button",{name:"Abrir Laboratorios Alfa SA y cargar sus códigos nacionales"}).waitFor();
  await page.getByText("240 códigos nacionales únicos").waitFor();
  assert.equal(await page.getByText("Farmacias pendientes:").count(),0);
  for(const width of [1240,768,375]){

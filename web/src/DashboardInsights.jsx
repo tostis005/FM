@@ -9,7 +9,7 @@ const DAYS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"
 const HOURS=[{from:0,to:9,label:"00–09"},
  ...Array.from({length:12},(_,i)=>({from:9+i,to:10+i,label:String(9+i).padStart(2,"0")+"–"+String(10+i).padStart(2,"0")})),
  {from:21,to:24,label:"21–24"}];
-const CHANNELS={cooperativa:"Cooperativa",laboratorio:"Laboratorio"};
+const CHANNELS={cooperativa:"Mayorista*",laboratorio:"Laboratorio"};
 const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca"};
 const EMPTY=[];
 const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
@@ -142,6 +142,28 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
  const [sort,setSort]=useState({key:"potentialSaving",direction:"desc"});
  const [page,setPage]=useState(1);
  const [pageSize,setPageSize]=useState(25);
+ const [posting,setPosting]=useState(""),[postNotice,setPostNotice]=useState("");
+ const createOpportunity=async r=>{
+  const rowKey=String(r.pharmacyId)+"|"+String(r.articleId);
+  setPosting(rowKey);setPostNotice("");
+  try{
+   const title="Revisar compra de "+String(r.articleName||r.cn||r.articleId).slice(0,140);
+   const response=await fetch("/api/operativa",{method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":scope.clientSlug},
+    body:JSON.stringify({
+     recurso:"oportunidades",farmacia:r.pharmacyId,regla:"comparador-puc:"+String(r.articleId).slice(0,90),
+     titulo:title,
+     accion:"Verificar condiciones de laboratorio y mayorista para esta referencia y preparar el próximo pedido.",
+     descripcion:"Oportunidad generada desde el comparador de PUC. Es una diferencia histórica; no implica ahorro conseguido.",
+     impacto_tipo:"ahorro_potencial",importe_potencial:Math.max(0,Number(r.potentialSaving)||0),
+     periodo:scope.from+" / "+scope.to,metodo:"Comparación PUC histórico por canal",
+     prioridad:"media"
+    })});
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(result.error||"No se pudo registrar la oportunidad");
+   onNavigate?.("acciones");
+  }catch(e){setPostNotice(e.message);}finally{setPosting("");}
+ };
  useEffect(()=>{
   const timer=setTimeout(()=>setReadyFilters(filters),300);
   return()=>clearTimeout(timer);
@@ -159,7 +181,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
     <small>{r.cn||"ID ERP "+r.articleId}</small></div>},
   {key:"pharmacy",label:"Farmacia",filterMode:"multi",
    value:r=>names.get(String(r.pharmacyId))||"Farmacia "+r.pharmacyId},
-  {key:"coopPuc",label:"PUC coop.",value:r=>r.coopPuc,render:r=>price(r.coopPuc)},
+  {key:"coopPuc",label:"PUC mayorista*",value:r=>r.coopPuc,render:r=>price(r.coopPuc)},
   {key:"labPuc",label:"PUC lab.",value:r=>r.labPuc,render:r=>price(r.labPuc)},
   {key:"difference",label:"Diferencia",value:r=>r.difference,
    render:r=><span className={r.difference>0?"fm-cost-higher":"fm-cost-lower"}>{price(r.difference)}</span>},
@@ -169,13 +191,18 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
    render:r=>r.cheaper},
   {key:"potentialSaving",label:"Ahorro potencial",value:r=>r.potentialSaving,
    render:r=><strong>{euro(r.potentialSaving)}</strong>},
-  {key:"action",label:"Pedido",sortable:false,searchable:false,value:()=>"",
-   render:r=><button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
-    onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
-     supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>}
+  {key:"action",label:"Acciones",sortable:false,searchable:false,value:()=>"",
+   render:r=><div className="fm-insight-actions">
+    <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
+     onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
+      supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>
+    <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("oportunidades-seguimiento")||Boolean(posting)}
+     onClick={()=>void createOpportunity(r)}>
+     {posting===String(r.pharmacyId)+"|"+String(r.articleId)?"Guardando…":"Registrar oportunidad"}</button>
+   </div>}
  ];
  const changeFilters=next=>{setFilters(next);setPage(1)};
- return <Panel title="¿Dónde estamos comprando mejor?" subtitle="Cooperativa frente a laboratorio · coste ponderado de las compras, según PUC registrado" insight={insight}>
+ return <Panel title="¿Dónde estamos comprando mejor?" subtitle="Comparativa de mayorista y laboratorio · coste ponderado de las compras, según PUC registrado" insight={insight}>
   {insight.data?.available===false?<p className="fm-insight-status">{insight.data.reason||"No hay datos de compras por artículo."}</p>:
    <>
     <div className="fm-purchase-overview">
@@ -196,7 +223,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
         <small>{known>0?pct(value/known*100):"—"}</small>
        </div>;
       })}
-      <p className="fm-insight-foot">Importes de compras según su PUC. Solo se consideran cooperativas los proveedores con el indicador activado; el resto son laboratorios.</p>
+      <p className="fm-insight-foot">Importes de compras según su PUC. La categoría Mayorista* recoge por ahora las cooperativas identificadas; no presupone que estén clasificados todos los mayoristas. Revisa los proveedores antes de interpretar la comparación.</p>
      </div>
     </div>
     <div className="fm-insight-divider"/>
@@ -215,7 +242,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
        tableClass="fm-puc-smart-table"
        emptyText={known===0?"No hay compras con PUC de ambos canales para comparar.":"No hay artículos que coincidan en ambos canales con estos filtros."}
        loading={comparator.status==="loading"}
-       loadingLabel="Comparando PUC de laboratorio y cooperativa…"
+       loadingLabel="Comparando PUC de laboratorio y mayorista…"
        serverFilters={filters}
        onServerFiltersChange={changeFilters}
        filterOptions={{pharmacy:pharmacies.map(p=>p.name),cheaper:["Laboratorio","Cooperativa","Igual"]}}
@@ -225,18 +252,17 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
         onPageSizeChange:n=>{setPageSize(n);setPage(1)}}}
       />
      </div>}
+    {postNotice&&<p role="alert" className="fm-insight-status">{postNotice}</p>}
     <p className="fm-insight-foot">PUC medio ponderado por unidades compradas (sin devoluciones y con PUC positivo). El ahorro estimado compara las unidades compradas al canal más caro, sin considerar rappels, portes ni otras condiciones comerciales.</p>
    </>}
  </Panel>;
 }
-export default function DashboardInsights({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false}){
+export default function DashboardInsights({mode="dashboard",clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false}){
  const scope={clientSlug,from:period.from,to:period.to,valid:period.valid,
   pharmacyIds,reloadKey};
  return <div className="fm-dashboard-insights">
-  <Heatmap scope={scope}/>
-  <div className="fm-dashboard-insights-bottom">
-   <Sellers scope={scope}/>
-   <Purchases scope={scope} pharmacies={pharmacies} onNavigate={onNavigate} canNavigate={canNavigate}/>
-  </div>
+  {mode==="ventas"&&<><Heatmap scope={scope}/><Sellers scope={scope}/></>}
+  {mode==="compras"&&<Purchases scope={scope} pharmacies={pharmacies}
+   onNavigate={onNavigate} canNavigate={canNavigate}/>}
  </div>;
 }

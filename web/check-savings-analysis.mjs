@@ -38,7 +38,7 @@ await page.route("**/api/**",async route=>{
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
- await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
+ await page.goto(BASE+"/compras",{waitUntil:"domcontentloaded"});
  const button=page.getByRole("button",{name:/Calcular ahorro real/});
  await button.waitFor({timeout:12000});
  assert.equal(paths.filter(p=>p.startsWith("/api/analytics/ahorro/")).length,0,"No precargar análisis costoso");

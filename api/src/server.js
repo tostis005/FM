@@ -37,6 +37,7 @@ import {promotionBundle} from "./promotionEligibility.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 import {setupOperativa} from "./operativa.js";
+import {setupWorkDigestPreferences,startWorkDigestNotifications} from "./workDigests.js";
 import {setupDocumentScreens} from "./documentScreens.js";
 import {setupStockSinRecepciones} from "./stockSinRecepciones.js";
 import {setupMasterSources} from "./masterSources.js";
@@ -165,6 +166,7 @@ const salesCache=createSalesCache(pool);
 setupSalesDetail(app,pool,{requireTenant,cache:salesCache});
 setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
 setupOperativa(app,pool,{requireTenant});
+setupWorkDigestPreferences(app,pool,{requireTenant});
 setupGenericosReales(app,pool,{requireTenantModule});
 setupAssistant(app,pool,{requireTenant});
 
@@ -539,6 +541,7 @@ try {
   await pool.query(await readFile(new URL("./migrations/039_dashboard_consolidados_diarios.sql",import.meta.url),"utf8"));
   const operationalMigration=await readFile(new URL("./migrations/016_operativa_manual.sql",import.meta.url),"utf8");
   await pool.query(operationalMigration);
+  await pool.query(await readFile(new URL("./migrations/045_resumen_trabajo_correo.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL("./migrations/032_laboratory_order_frequency.sql",import.meta.url),"utf8"));
   const mcpMigration=await readFile(new URL("./migrations/022_ai_mcp.sql",import.meta.url),"utf8");
   await pool.query(mcpMigration);
@@ -561,6 +564,7 @@ try {
   app.listen(Number(PORT), "0.0.0.0", () => console.log(`Farmetrica API en puerto ${PORT}`));
   salesCache.start();
   dashboardCache.start();
+  startWorkDigestNotifications(pool);
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);
   await pool.end();

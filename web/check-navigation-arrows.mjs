@@ -34,7 +34,7 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
  await page.locator("#farmetrica-sidebar .side-nav").waitFor({state:"visible",timeout:15000});
- for(const group of ["Ventas","Compras","Stock","Proveedores","Rentabilidad","Promociones","Oportunidades","Alertas"]){
+ for(const group of ["Compras","Stock","Promociones"]){
   const caret=page.getByRole("button",{name:"Mostrar subopciones de "+group,exact:true});
   assert.equal(await caret.count(),1,group+" necesita flecha desplegable");
   assert.equal(await caret.getAttribute("aria-expanded"),"false");
@@ -82,5 +82,5 @@ try{
   "No deben quedar secciones de ejemplo en la navegación principal");
  assert.equal(await page.getByText("Pantalla de demostración").count(),0);
  await page.getByText(/No representa el stock histórico/).waitFor({timeout:5000});
- console.log("OK: flechas de todas las secciones con hijos, apertura/cierre, navegación, recarga y móvil");
+ console.log("OK: menú compacto, flechas de secciones con hijos, rutas antiguas, recarga y móvil");
 }finally{await browser.close();}

@@ -85,6 +85,7 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
+ await page.getByRole("button",{name:"Ver todos los meses"}).click();
  await page.getByText("Promoción antigua").first().waitFor({state:"visible",timeout:12000});
  const file={name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await excel()};
@@ -98,7 +99,7 @@ try{
  assert.deepEqual(gum.cns,["123456"]);
  assert.deepEqual(eucerin.cns,["654321"]);
  assert.deepEqual(gum.targets,{"1":12});
- assert.equal(gum.status,"Activa");
+ assert.equal(gum.status,new Date().toISOString().slice(0,10)>"2026-10-31"?"Finalizada":"Activa");
  assert.equal(eucerin.status,"Finalizada");
  assert.ok(!lastImport.some(p=>p.name.includes("KNEIPP")));
  assert.equal(await page.getByText("Promoción antigua").first().count(),1);
@@ -122,6 +123,7 @@ try{
  assert.ok(stored.some(p=>p.id===eucerin.id),"La primera importación se conserva");
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
+ await page.getByRole("button",{name:"Ver todos los meses"}).click();
  await page.getByText(eucerin.name).first().waitFor({timeout:10000});
  assert.equal(await page.getByText("Promoción antigua").count(),0);
  assert.deepEqual(errors,[]);

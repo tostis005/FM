@@ -42,7 +42,7 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
  const withoutSales=stock.reduce((sum,p)=>sum+Number(p.withoutSalesValue||0),0);
  const exportCsv=()=>{if(!prices?.rows?.length)return;
   downloadTableCSV("farmetrica-ahorro-puc-verificado",
-   ["Farmacia ID","Artículo ERP","PUC coop","PUC otro","Unidades coop","Líneas coop","Líneas otro","Diferencial histórico €"],
+   ["Farmacia ID","Artículo ERP","PUC mayorista*","PUC otro","Unidades mayorista*","Líneas mayorista*","Líneas otro","Diferencial histórico €"],
    prices.rows.map(p=>[p.fid,p.article,p.coop_puc,p.other_puc,p.coop_units,p.coop_lines,p.other_lines,p.diff_eur]));};
  return <section className="card fm-demo-table" aria-busy={busy}>
   <div className="section-heading"><div>
@@ -62,13 +62,13 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
    <div className="card"><span>Stock valorado</span><strong>{euro(summary.stock.amount)}</strong><small>{summary.stock.pricedReferences}/{summary.stock.references} referencias valoradas</small></div>
    <div className="card"><span>Diferencial de precios contrastado</span><strong>{euro(priced)}</strong><small>Histórico; no ahorro realizado</small></div>
   </div>}
-  {summary&&<p className="fm-insight-foot">Gasto por canal identificado: cooperativas {euro(summary.purchases.channels.cooperativa?.amount??(summary.purchases.channels.cooperativa?null:0))}; proveedores no cooperativos identificados {euro(summary.purchases.channels.no_cooperativa?.amount??(summary.purchases.channels.no_cooperativa?null:0))}; sin clasificación verificada {euro(summary.purchases.channels.sin_verificar?.amount??(summary.purchases.channels.sin_verificar?null:0))}. Los importes solo se consideran completos si todas las líneas tienen importe.</p>}
+  {summary&&<p className="fm-insight-foot">Gasto por canal identificado: mayoristas* {euro(summary.purchases.channels.cooperativa?.amount??(summary.purchases.channels.cooperativa?null:0))}; otros proveedores identificados {euro(summary.purchases.channels.no_cooperativa?.amount??(summary.purchases.channels.no_cooperativa?null:0))}; sin clasificación verificada {euro(summary.purchases.channels.sin_verificar?.amount??(summary.purchases.channels.sin_verificar?null:0))}. Los importes solo se consideran completos si todas las líneas tienen importe.</p>}
   {prices&&<div>
    <h3>Comparación de costes realmente pagados</h3>
    <p>{integer(prices.totals?.verified)} referencias con al menos dos compras en cada canal. Diferencial histórico observado: <strong>{euro(priced)}</strong>. Importe indicativo incluyendo referencias con menos evidencia: {euro(prices.totals?.indicative)}.</p>
-   <p className="fm-insight-foot">No supone que el precio pueda repetirse ni incluye descuentos posteriores, rappels, portes o mínimos de pedido. «No cooperativa» no equivale necesariamente a laboratorio.</p>
+   <p className="fm-insight-foot">No supone que el precio pueda repetirse ni incluye descuentos posteriores, rappels, portes o mínimos de pedido. La categoría mayorista* refleja de momento las cooperativas identificadas; otros proveedores no equivalen necesariamente a laboratorios.</p>
    {prices.rows?.length>0&&<HorizontalTableScroll className="table-scroll" label="comparación de costes">
-    <table><thead><tr><th>Farmacia</th><th>Artículo ERP</th><th>PUC coop.</th><th>PUC otro</th><th>Unid. coop.</th><th>Compras por canal</th><th>Diferencial €</th></tr></thead>
+    <table><thead><tr><th>Farmacia</th><th>Artículo ERP</th><th>PUC mayorista*</th><th>PUC otro</th><th>Unid. mayorista*</th><th>Compras por canal</th><th>Diferencial €</th></tr></thead>
     <tbody>{prices.rows.map(p=><tr key={p.fid+"-"+p.article}>
      <td>{p.fid}</td><td>{p.article}</td><td>{euro(p.coop_puc)}</td><td>{euro(p.other_puc)}</td>
      <td>{integer(p.coop_units)}</td><td>{integer(p.coop_lines)} / {integer(p.other_lines)}</td>

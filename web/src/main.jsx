@@ -931,11 +931,12 @@ function App(){
  const canManagePromotions=["administrador","superadministrador"].includes(role);
  const canOpenSection=id=>sessionUser?.role==="superadministrador"||
    tenantContext?.sections?.[id]===true;
- const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas"]
+ const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
+   if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
      NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||
      (item.id==="promociones"&&canOpenSection("seguimiento-global"));

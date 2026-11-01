@@ -16,6 +16,8 @@ import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import DashboardInsights from "./DashboardInsights.jsx";
 import SavingsAnalysis from "./SavingsAnalysis.jsx";
+import ImpactoVerificado from "./ImpactoVerificado.jsx";
+import "./centroTrabajo.css";
 import "./moduleDemo.css";
 
 // Las consultas intensivas no deben dejar la pantalla bloqueada indefinidamente.
@@ -825,8 +827,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {(module==="reposicion"||module==="compras")&&canNavigate("compras-preparador")&&
    <section className="fm-module-links"><button type="button" className="card fm-module-link"
     onClick={()=>go("compras-preparador")}><strong>Preparar pedido con datos de ventas y stock</strong><ArrowRight size={17}/></button></section>}
-  {isDashboard&&<section className="fm-module-links" aria-label="Acceso a módulos">
-   {REPORTS.filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button" className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
+  {isDashboard&&<section className="fm-module-links" aria-label="Acciones principales">
+   {[
+    ["acciones","Gestionar oportunidades y ahorro"],
+    ["compras-preparador","Preparar pedidos"],
+    ["promociones","Gestionar promociones"],
+    ["stock-sin-recepciones","Revisar stock inmovilizado"]
+   ].filter(([id])=>canNavigate(id)).map(([id,title])=><button key={id} type="button"
+    className="card fm-module-link" onClick={()=>go(id)}><strong>{title}</strong><ArrowRight size={17}/></button>)}
   </section>}
   {(salesError||reportError||isDashboard&&fastFailed||isDashboard&&purchaseSummaryError)&&
     <p role="alert" className="fm-inline-status">{reportError||salesError||fastFailed||purchaseSummaryError}</p>}
@@ -875,10 +883,17 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      </BarChart>
     </ResponsiveContainer></div>}
    </section>}
-  {isDashboard&&<DashboardInsights clientSlug={clientSlug} period={period}
+  {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
+   pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}
+  {["ventas","compras"].includes(module)&&<DashboardInsights mode={module} clientSlug={clientSlug} period={period}
    pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
    onNavigate={onNavigate} canNavigate={canNavigate}/>}
-  {isDashboard&&["administrador","superadministrador"].includes(tenantRole)&&<SavingsAnalysis clientSlug={clientSlug} period={period} pharmacyIds={filters.pharmacyIds}/> }
+  {module==="compras"&&["administrador","superadministrador"].includes(tenantRole)&&
+   <SavingsAnalysis clientSlug={clientSlug} period={period} pharmacyIds={filters.pharmacyIds}/>}
+  {module==="compras"&&canNavigate("acciones")&&<section className="fm-module-links">
+   <button type="button" className="card fm-module-link" onClick={()=>go("acciones")}>
+    <strong>Convertir el análisis en una oportunidad de ahorro</strong><ArrowRight size={17}/>
+   </button></section>}
   {isReports?<section className="card fm-demo-table">
    <div className="section-heading"><h2>Informes por área</h2></div>
    <div className="fm-link-list">{REPORTS.filter(([id])=>canNavigate(id)).map(([id,title,scope])=>

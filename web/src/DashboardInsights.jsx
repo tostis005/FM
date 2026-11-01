@@ -142,6 +142,28 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
  const [sort,setSort]=useState({key:"potentialSaving",direction:"desc"});
  const [page,setPage]=useState(1);
  const [pageSize,setPageSize]=useState(25);
+ const [posting,setPosting]=useState(""),[postNotice,setPostNotice]=useState("");
+ const createOpportunity=async r=>{
+  const rowKey=String(r.pharmacyId)+"|"+String(r.articleId);
+  setPosting(rowKey);setPostNotice("");
+  try{
+   const title="Revisar compra de "+String(r.articleName||r.cn||r.articleId).slice(0,140);
+   const response=await fetch("/api/operativa",{method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":scope.clientSlug},
+    body:JSON.stringify({
+     recurso:"oportunidades",farmacia:r.pharmacyId,regla:"comparador-puc:"+String(r.articleId).slice(0,90),
+     titulo:title,
+     accion:"Verificar condiciones de laboratorio y mayorista para esta referencia y preparar el próximo pedido.",
+     descripcion:"Oportunidad generada desde el comparador de PUC. Es una diferencia histórica; no implica ahorro conseguido.",
+     impacto_tipo:"ahorro_potencial",importe_potencial:Math.max(0,Number(r.potentialSaving)||0),
+     periodo:scope.from+" / "+scope.to,metodo:"Comparación PUC histórico por canal",
+     prioridad:"media"
+    })});
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(result.error||"No se pudo registrar la oportunidad");
+   onNavigate?.("acciones");
+  }catch(e){setPostNotice(e.message);}finally{setPosting("");}
+ };
  useEffect(()=>{
   const timer=setTimeout(()=>setReadyFilters(filters),300);
   return()=>clearTimeout(timer);
@@ -169,10 +191,15 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
    render:r=>r.cheaper},
   {key:"potentialSaving",label:"Ahorro potencial",value:r=>r.potentialSaving,
    render:r=><strong>{euro(r.potentialSaving)}</strong>},
-  {key:"action",label:"Pedido",sortable:false,searchable:false,value:()=>"",
-   render:r=><button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
-    onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
-     supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>}
+  {key:"action",label:"Acciones",sortable:false,searchable:false,value:()=>"",
+   render:r=><div className="fm-insight-actions">
+    <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
+     onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
+      supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>
+    <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("acciones")||Boolean(posting)}
+     onClick={()=>void createOpportunity(r)}>
+     {posting===String(r.pharmacyId)+"|"+String(r.articleId)?"Guardando…":"Registrar oportunidad"}</button>
+   </div>}
  ];
  const changeFilters=next=>{setFilters(next);setPage(1)};
  return <Panel title="¿Dónde estamos comprando mejor?" subtitle="Comparativa de mayorista y laboratorio · coste ponderado de las compras, según PUC registrado" insight={insight}>
@@ -225,6 +252,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
         onPageSizeChange:n=>{setPageSize(n);setPage(1)}}}
       />
      </div>}
+    {postNotice&&<p role="alert" className="fm-insight-status">{postNotice}</p>}
     <p className="fm-insight-foot">PUC medio ponderado por unidades compradas (sin devoluciones y con PUC positivo). El ahorro estimado compara las unidades compradas al canal más caro, sin considerar rappels, portes ni otras condiciones comerciales.</p>
    </>}
  </Panel>;

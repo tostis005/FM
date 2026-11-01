@@ -196,7 +196,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
     <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("compras-preparador")}
      onClick={()=>{putPurchaseLink(scope.clientSlug,{cn:r.cn,articleId:r.articleId,pharmacyId:r.pharmacyId,
       supplier:"",from:scope.from,to:scope.to});onNavigate?.("compras-preparador");}}>Añadir al pedido</button>
-    <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("acciones")||Boolean(posting)}
+    <button className="btn btn-secondary" type="button" disabled={!canNavigate?.("oportunidades-seguimiento")||Boolean(posting)}
      onClick={()=>void createOpportunity(r)}>
      {posting===String(r.pharmacyId)+"|"+String(r.articleId)?"Guardando…":"Registrar oportunidad"}</button>
    </div>}

@@ -109,9 +109,9 @@ try{
  assert.equal(by("/api/analytics/ventas").length,0,"Inicio no debe repetir el detalle pesado");
  assert.equal(by("/api/analytics/ventas/totales").length,0,"Inicio consolidado no reconsulta ventas completas");
  assert.equal(by("/api/analytics/dashboard/compras").length,0,"Inicio consolidado no reconsulta recepciones completas");
- assert.equal(await page.locator(".fm-demo-kpi").count(),8);
+ assert.equal(await page.locator(".fm-demo-kpi").count(),4);
  const dashboardLabels=await page.locator(".fm-demo-kpi>span").allTextContents();
- assert.deepEqual(dashboardLabels.slice(0,6),["Ventas","Compras","Diferencia ventas − compras","Diferencia sobre ventas","Unidades vendidas","Unidades compradas"]);
+ assert.deepEqual(dashboardLabels.slice(0,4),["Ventas","Compras","Margen bruto estimado","Diferencia ventas − compras"]);
  const moneyMetrics=await page.locator(".fm-demo-kpi strong").evaluateAll(els=>els.slice(0,2).map(el=>{
   const css=getComputedStyle(el);return {size:parseFloat(css.fontSize),whiteSpace:css.whiteSpace,
    width:el.clientWidth,scroll:el.scrollWidth,value:el.textContent};
@@ -125,9 +125,6 @@ try{
  await resultCard.locator("strong").waitFor({state:"visible",timeout:12000});
  const resultText=await resultCard.locator("strong").textContent();
  assert.ok(resultText.includes("1.350.161,90"),"Resultado comercial incorrecto: "+resultText);
- const pctCard=page.locator(".fm-demo-kpi").filter({hasText:"Diferencia sobre ventas"});
- const pctText=await pctCard.locator("strong").textContent();
- assert.ok(pctText.includes("33,37"),"Porcentaje comercial incorrecto: "+pctText);
  const shortcuts=page.getByRole("group",{name:"Períodos rápidos"});
  assert.deepEqual(await shortcuts.getByRole("button").allTextContents(),
   ["Hoy","Ayer","Esta semana","Este mes","Este año"]);
@@ -146,17 +143,20 @@ try{
  assert.equal(await page.getByRole("group",{name:"Períodos rápidos"})
   .getByRole("button",{name:"Este año",exact:true}).getAttribute("aria-pressed"),"true",
   "Al navegar a Ventas debe conservarse el atajo activo");
- await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Mapa de calor de ventas"}).waitFor({timeout:12000});
  await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor({timeout:12000});
+ await page.goto(BASE+"/compras",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).waitFor({timeout:12000});
  await page.waitForFunction(()=>document.body.textContent.includes("Artículo prueba"),null,{timeout:12000});
  assert.ok(await page.getByLabel("Paginación de artículos comparables").count()>0,"Comparador PUC con paginador");
- assert.ok(await page.getByRole("button",{name:"Ordenar PUC coop."}).count()>0,"Comparador ordenable");
+ assert.ok(await page.getByRole("button",{name:"Ordenar PUC mayorista*"}).count()>0,"Comparador ordenable");
+ await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
+ assert.equal(await page.getByRole("heading",{name:"Mapa de calor de ventas"}).count(),0,
+  "El mapa de calor pertenece a Ventas, no a Inicio");
+ assert.equal(await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).count(),0,
+  "La comparativa de costes pertenece a Compras, no a Inicio");
  assert.equal(await page.locator(".fm-dashboard-lazy-detail").count(),0,
   "Inicio no debe renderizar un detalle de artículos sin solicitar");
- assert.equal(by("/api/analytics/reportes").length,0,
-  "Inicio no debe solicitar el informe pesado de artículos");
  for(const endpoint of ["horarios","vendedores","canales-compra","comparador-puc"]){
   assert.ok(by("/api/analytics/dashboard/"+endpoint).length>0,
    "No se lanzó la consulta independiente de "+endpoint);
@@ -170,7 +170,7 @@ try{
  const loadingTexts=await page.locator(".fm-demo-kpi").allTextContents();
  assert.ok(!loadingTexts.some(t=>/Cargando \d+\/\d+ (bloques|períodos)/.test(t)),
   "No enseñar términos ni cantidades internas de procesamiento");
- await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===8&&
+ await page.waitForFunction(()=>[...document.querySelectorAll(".fm-demo-kpi")].length===4&&
   [...document.querySelectorAll(".fm-demo-kpi")].every(card=>card.getAttribute("aria-busy")==="false"),
   {timeout:18000});
  const salesWindows=by("/api/analytics/ventas/totales").slice(beforeSales);
@@ -183,13 +183,13 @@ try{
   "El histórico de cinco años se resuelve en una sola petición consolidada");
  await page.waitForFunction(()=>{
   const cards=[...document.querySelectorAll(".fm-demo-kpi")];
-  return cards.length===8&&cards.slice(0,6).every(card=>
+  return cards.length===4&&cards.slice(0,4).every(card=>
    card.getAttribute("aria-busy")==="false"&&
    card.querySelector("strong")?.textContent&&
    card.querySelector("strong").textContent!=="—");
  },null,{timeout:15000});
  const values=await page.locator(".fm-demo-kpi").evaluateAll(
-  cards=>cards.slice(0,6).map(card=>card.querySelector("strong")?.textContent));
+  cards=>cards.slice(0,4).map(card=>card.querySelector("strong")?.textContent));
  assert.ok(values.every(v=>v&&v!=="—"),
   "Los importes y unidades principales deben estar disponibles: "+JSON.stringify(values));
 
@@ -200,7 +200,7 @@ try{
  await page.waitForFunction(()=>{
   const label=document.querySelector(".fm-unified-filters select")?.value;
   const cards=[...document.querySelectorAll(".fm-demo-kpi")];
-  return label==="last_month"&&cards.length===8&&cards.every(x=>x.getAttribute("aria-busy")==="false");
+  return label==="last_month"&&cards.length===4&&cards.every(x=>x.getAttribute("aria-busy")==="false");
  },null,{timeout:13000});
  await page.waitForTimeout(120);
  const dailyCalls=by("/api/analytics/dashboard/consolidados").slice(dayCountBefore);

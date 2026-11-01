@@ -12,13 +12,14 @@ const TABS=[
 ];
 function EmailPreferences({clientSlug}){
  const [model,setModel]=useState(null),[status,setStatus]=useState("loading"),[notice,setNotice]=useState("");
+ const [deliveryEnabled,setDeliveryEnabled]=useState(false);
  useEffect(()=>{
   let live=true;
   setStatus("loading");setNotice("");
   fetch("/api/operativa/resumen-email",{credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug}})
    .then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Error(body.error||"No disponible");
     return body;})
-   .then(body=>{if(live){setModel(body.preference);setStatus("ready");}})
+   .then(body=>{if(live){setModel(body.preference);setDeliveryEnabled(Boolean(body.deliveryEnabled));setStatus("ready");}})
    .catch(()=>{if(live)setStatus("unavailable");});
   return()=>{live=false;};
  },[clientSlug]);
@@ -30,7 +31,8 @@ function EmailPreferences({clientSlug}){
     body:JSON.stringify(model)});
    const body=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(body.error||"No se pudo guardar");
-   setModel(body.preference);setStatus("ready");setNotice("Preferencias guardadas.");
+   setModel(body.preference);setDeliveryEnabled(Boolean(body.deliveryEnabled));setStatus("ready");
+   setNotice(body.deliveryEnabled?"Preferencias guardadas.":"Preferencias guardadas. Los envíos todavía no están habilitados en el servidor.");
   }catch(e){setStatus("ready");setNotice(e.message);}
  };
  return <section className="card fm-work-mail">
@@ -55,7 +57,7 @@ function EmailPreferences({clientSlug}){
      {Array.from({length:13},(_,i)=>i+7).map(hour=><option key={hour} value={hour}>{String(hour).padStart(2,"0")}:00</option>)}
     </select></label>}
    </div>
-   <p className="fm-insight-foot">Se envía solo a la dirección de tu cuenta y únicamente cuando el servicio SMTP y el envío de resúmenes están activados. No se incluyen datos de pacientes.</p>
+   <p className="fm-insight-foot">{deliveryEnabled?"Servicio de envío habilitado.":"Envío todavía no activado en el servidor."} El resumen se enviará solo a la dirección de tu cuenta, cuando el envío esté habilitado. No se incluyen datos de pacientes.</p>
    <div className="fm-work-mail-actions"><button type="button" className="btn btn-primary" disabled={status==="saving"}
      onClick={save}>{status==="saving"?"Guardando…":"Guardar preferencias"}</button></div>
    {notice&&<p role="status">{notice}</p>}</>}

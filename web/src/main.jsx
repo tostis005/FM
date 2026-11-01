@@ -588,7 +588,7 @@ function App(){
  function nav(id,promoId){
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
-  if(!(isAdministrative?visibleNav.some(item=>item.id===intended):canOpenSection(intended))){
+  if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
    const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||
     (intended==="promociones"&&canOpenSection("seguimiento-global")?"seguimiento-global":null);
    if(next)return nav(next);
@@ -931,6 +931,8 @@ function App(){
  const canManagePromotions=["administrador","superadministrador"].includes(role);
  const canOpenSection=id=>sessionUser?.role==="superadministrador"||
    tenantContext?.sections?.[id]===true;
+ const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas"]
+   .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
@@ -940,7 +942,7 @@ function App(){
    return true;
  });
  const allowed=CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
-   visibleNav.some(item=>item.id===page):canOpenSection(page);
+   visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.
  // No redirigir de /ventas a /promociones mientras el rol aún no está resuelto.
  useEffect(()=>{

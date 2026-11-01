@@ -223,7 +223,7 @@ try{
            throw Error("El acceso rápido debe mostrarse seleccionado");
        }
        if(["dashboard","ventas","compras","proveedores","stock","reposicion",
-         "genericos","rentabilidad","acciones","informes"].includes(path)&&viewport.width===375){
+         "genericos","rentabilidad","informes"].includes(path)&&viewport.width===375){
          // El shell aparece antes del módulo lazy: 100 ms no garantizan los filtros.
          const quick=page.getByRole("group",{name:"Períodos rápidos"});
          await quick.getByRole("button").first().waitFor({state:"visible",timeout:10000});

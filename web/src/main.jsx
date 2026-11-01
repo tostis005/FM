@@ -29,6 +29,7 @@ const AsistenteDemo=React.lazy(()=>import("./AsistenteDemo.jsx"));
 const PharmacyState=React.lazy(()=>import("./PharmacyState.jsx"));
 const PoliticaReposicionFarmacia=React.lazy(()=>import("./PoliticaReposicionFarmacia.jsx"));
 const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
+const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -169,7 +170,7 @@ const NAV=[
  {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
- {id:"acciones",label:"Oportunidades",icon:ClipboardList,module:"acciones"},
+ {id:"acciones",label:"Trabajo y ahorro",icon:ClipboardList,module:"acciones"},
  {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
  {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
  {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
@@ -185,7 +186,11 @@ const NAV=[
 ];
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
 const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","estado","ajustes"]);
-const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","acciones","informes"]);
+const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","informes"]);
+// La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
+// Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
+const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
+ "stock","stock-sin-recepciones","genericos","promociones","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -948,8 +953,8 @@ function App(){
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
    <nav className="side-nav" aria-label="Módulos">
-    {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)).map(item=>{
-     const children=visibleNav.filter(child=>child.childOf===item.id);
+    {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)&&DEMO_NAV_IDS.has(item.id)).map(item=>{
+     const children=visibleNav.filter(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id));
      const hasChildren=children.length>0||(item.id==="promociones"&&canOpenSection("seguimiento-global"));
      const expanded=hasChildren&&expandedNavIds.includes(item.id);
      const submenuId="fm-submenu-"+item.id;
@@ -1224,6 +1229,9 @@ function App(){
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="solicitudes"&&<SolicitudesDemo/>}
     {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}/>}
+    {page==="acciones"&&<CentroTrabajo key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
+      pharmacies={tenantContext.pharmacies} userEmail={sessionUser?.email} tenantRole={tenantContext.role}
+      canOpenSection={canOpenSection}/>}
     {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}

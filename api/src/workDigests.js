@@ -70,31 +70,29 @@ async function assignedDigest(pool,{cliente_slug,email}){
  }
  if(!ids.length)return null;
  const [tasks,opportunities]=await Promise.all([
-  pool.query("SELECT titulo,prioridad FROM farmetrica.op_trabajo "+
+  pool.query("SELECT count(*)::integer AS total, "+
+   "count(*) FILTER (WHERE prioridad IN ('critica','alta'))::integer AS urgentes FROM farmetrica.op_trabajo "+
    "WHERE cliente_slug=$1 AND responsable=$2 AND farmacia_id=ANY($3::integer[]) "+
-   "AND estado IN ('pendiente','en_curso') ORDER BY "+
-   "CASE prioridad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END, actualizado_en DESC LIMIT 100",
+   "AND estado IN ('pendiente','en_curso')",
    [cliente_slug,email,ids]),
-  pool.query("SELECT titulo,importe_potencial FROM farmetrica.op_oportunidades "+
+  pool.query("SELECT count(*)::integer AS total FROM farmetrica.op_oportunidades "+
    "WHERE cliente_slug=$1 AND responsable=$2 AND farmacia_id=ANY($3::integer[]) "+
-   "AND estado NOT IN ('aplicada','descartada') ORDER BY creado_en DESC LIMIT 100",
+   "AND estado NOT IN ('aplicada','descartada')",
    [cliente_slug,email,ids])
  ]);
- const taskList=tasks.rows,opportunityList=opportunities.rows;
- if(!taskList.length&&!opportunityList.length)return null;
- const lines=[
+ const pendingTasks=Number(tasks.rows[0]?.total||0),urgent=Number(tasks.rows[0]?.urgentes||0);
+ const pendingOpportunities=Number(opportunities.rows[0]?.total||0);
+ if(!pendingTasks&&!pendingOpportunities)return null;
+ return [
   "Resumen personal de Farmetrica", "",
-  "Tareas pendientes: "+taskList.length,
-  ...taskList.slice(0,8).map(row=>"- "+String(row.titulo).slice(0,180)+" ("+row.prioridad+")"),
-  "", "Oportunidades pendientes: "+opportunityList.length,
-  ...opportunityList.slice(0,8).map(row=>"- "+String(row.titulo).slice(0,180)),
-  "",
-  "Para revisar o desactivar avisos, entra en Trabajo y ahorro > Correos.",
-  "https://farmetrica.com/acciones",
-  "",
-  "El importe de una oportunidad es potencial y no equivale a un ahorro conseguido."
- ];
- return lines.join("\n");
+  "Tareas pendientes: "+pendingTasks,
+  "De ellas, prioritarias: "+urgent,
+  "Oportunidades de ahorro pendientes de revisar: "+pendingOpportunities, "",
+  "Entra en Trabajo y ahorro para ver los detalles, asignaciones y próximos pasos:",
+  "https://farmetrica.com/acciones", "",
+  "El ahorro potencial no es un ahorro realizado.",
+  "Puedes cambiar la frecuencia o desactivar estos avisos en Trabajo y ahorro > Correos."
+ ].join("\n");
 }
 
 export function startWorkDigestNotifications(pool,{env=process.env,intervalMs=300000,createTransport=nodemailer.createTransport}={}){

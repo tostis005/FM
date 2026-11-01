@@ -84,13 +84,8 @@ function metricCards(module,k,analysisMonths=12){
   CARD("Reposiciones","reposiciones","n","reposicion")
  ];
  const map={
-  dashboard:[shared[0],shared[1],
-   CARD("Diferencia ventas − compras","resultadoComercial","€"),
-   CARD("Diferencia sobre ventas","resultadoComercialPct","%"),
-   CARD("Unidades vendidas","unidades","n","ventas"),
-   CARD("Unidades compradas","unidadesCompradas","n","compras"),
-   CARD("Recepciones registradas","recepciones","n","compras"),
-   CARD("Líneas de compra","lineasCompra","n","compras")],
+  dashboard:[shared[0],shared[1],shared[3],
+   CARD("Diferencia ventas − compras","resultadoComercial","€")],
   ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Referencias por farmacia","productosFarmacia","n"),CARD("Artículos diferentes","articulosVendidos","n")],
   compras:[shared[1],CARD("Recepciones registradas","recepciones","n"),
    CARD("Unidades compradas","unidadesCompradas","n"),

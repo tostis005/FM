@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1240,height:850}});
 const user={email:"source-ci@example.invalid",name:"Fuentes CI",role:"superadministrador"};
+const currentMonth=new Date().toISOString().slice(0,7);
 const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],role:"superadministrador",pharmacies:[],
  modules:{dashboard:true}};
@@ -20,9 +21,9 @@ await page.route("**/api/**",async route=>{
   updatedAt:"2026-10-24T06:00:00Z",sourceUrl:"https://example.com/catalogo"}};
  }else if(p.pathname==="/api/admin/fuentes/vademecum/cargar"){
   assert.equal(req.method(),"POST");
-  assert.equal(p.searchParams.get("version"),"2026-10");
+  assert.equal(p.searchParams.get("version"),currentMonth);
   assert.match(req.headers()["content-type"],/octet-stream/);
-  uploads++;body={ok:true,total:2,version:"2026-10"};
+  uploads++;body={ok:true,total:2,version:currentMonth};
  }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });

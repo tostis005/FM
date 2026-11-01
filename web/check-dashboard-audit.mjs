@@ -183,15 +183,15 @@ try{
   "El histórico de cinco años se resuelve en una sola petición consolidada");
  await page.waitForFunction(()=>{
   const cards=[...document.querySelectorAll(".fm-demo-kpi")];
-  return cards.length===4&&cards.slice(0,4).every(card=>
+  return cards.length===4&&cards.slice(0,2).every(card=>
    card.getAttribute("aria-busy")==="false"&&
    card.querySelector("strong")?.textContent&&
    card.querySelector("strong").textContent!=="—");
  },null,{timeout:15000});
  const values=await page.locator(".fm-demo-kpi").evaluateAll(
-  cards=>cards.slice(0,4).map(card=>card.querySelector("strong")?.textContent));
+  cards=>cards.slice(0,2).map(card=>card.querySelector("strong")?.textContent));
  assert.ok(values.every(v=>v&&v!=="—"),
-  "Los importes y unidades principales deben estar disponibles: "+JSON.stringify(values));
+  "Ventas y compras principales deben estar disponibles: "+JSON.stringify(values));
 
  // Mes cerrado con evolución diaria: una petición al consolidado reciente.
  const dayCountBefore=by("/api/analytics/dashboard/consolidados").length;

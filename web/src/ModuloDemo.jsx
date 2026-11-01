@@ -885,7 +885,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    onNavigate={onNavigate} canNavigate={canNavigate}/>}
   {module==="compras"&&["administrador","superadministrador"].includes(tenantRole)&&
    <SavingsAnalysis clientSlug={clientSlug} period={period} pharmacyIds={filters.pharmacyIds}/>}
-  {module==="compras"&&canNavigate("acciones")&&<section className="fm-module-links">
+  {module==="compras"&&canNavigate("oportunidades-seguimiento")&&<section className="fm-module-links">
    <button type="button" className="card fm-module-link" onClick={()=>go("acciones")}>
     <strong>Convertir el análisis en una oportunidad de ahorro</strong><ArrowRight size={17}/>
    </button></section>}

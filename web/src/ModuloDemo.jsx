@@ -865,8 +865,16 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
      <span>Ventas todavía no disponibles para esta selección.</span></div>}
    {realReport?.availability&&!realReport.availability.stock&&["stock","reposicion"].includes(module)&&
-    <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
-     <span>Esperando inventario actualizado.</span></div>}
+    <div className="fm-stock-snapshot-warning" role="status">
+     <strong>{realReport.stockRows?.length?"Último inventario conocido":"Inventario pendiente"}</strong>
+     <span>{realReport.stockRows?.length?
+       "Se muestran referencias de la última sincronización disponible, que podría estar desactualizada. Los indicadores de stock actual se ocultan hasta verificar los datos.":
+       "No hay un inventario sincronizado y verificable para las farmacias seleccionadas."}
+       {realReport.availability.stockAsOf&&" Última sincronización: "+
+        new Date(realReport.availability.stockAsOf).toLocaleString("es-ES") +"."}</span>
+     {module==="stock"&&canNavigate("stock-sin-recepciones")&&
+      <button type="button" className="btn btn-secondary btn-sm" onClick={()=>go("stock-sin-recepciones")}>Consultar stock sin recepciones</button>}
+    </div>}
 
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>

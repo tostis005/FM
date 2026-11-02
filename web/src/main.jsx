@@ -7,10 +7,9 @@ import {
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail
 } from "lucide-react";
 import "./styles.css";
-// Las tarjetas compartidas de documentos/stock se usan también en rutas lazy.
-// Cargar su base al arrancar evita el panel sin padding en la primera visita.
-import "./operativaPreview.css";
 import "./loginTheme.css";
+// Base visual de tarjetas de stock y operativa: se carga en el primer acceso.
+import "./operativaPreview.css";
 import "./settingsLayout.css";
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));

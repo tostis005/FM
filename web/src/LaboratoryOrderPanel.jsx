@@ -369,8 +369,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        </span>)}
        {diagnostic.evidence&&<>
         <span>Nomenclátor: <b>{diagnostic.evidence.official}</b></span>
-        <span>Fichas ERP con laboratorio: <b>{diagnostic.evidence.erpArticles}</b></span>
-        <span>Proveedores ERP con ese nombre: <b>{diagnostic.evidence.erpSuppliers}</b></span>
+        <span>Fichas de farmacia con laboratorio: <b>{diagnostic.evidence.erpArticles}</b></span>
+        <span>Proveedores de farmacia con ese nombre: <b>{diagnostic.evidence.erpSuppliers}</b></span>
         <span>Líneas de compra vinculadas por nombre: <b>{diagnostic.evidence.purchasesWithNamedSupplier}</b></span>
         <span>Compras con enlace manual: <b>{diagnostic.evidence.purchasesWithManualLink}</b></span>
        </>}

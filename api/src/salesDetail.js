@@ -170,6 +170,48 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
    ON co."pharmacyId"=p."pharmacyId" AND co.cn=p.cn
  ORDER BY p."__order" ${directions} NULLS LAST,p."pharmacyId",p.cn`;
 }
+// Fallback real sin costes ni ABCD: sólo cuando la consulta enriquecida excede su
+// tiempo y el usuario pide el primer listado por ventas, sin otros filtros.
+export function buildSalesDetailFallbackSQL(schema){
+ if(!VALID.test(schema))throw Error("Esquema no permitido");
+ const t='"'+schema+'"';
+ return `
+ WITH raw AS MATERIALIZED (
+  SELECT upper(btrim(v.farmacia_codigo)) AS code,v.articulo_id,
+   sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS value
+  FROM ${t}.fm_ventas_analitica v
+  WHERE upper(btrim(v.farmacia_codigo))=ANY($3::text[])
+   AND v.fecha >= $1::date AND v.fecha < ($2::date+interval '1 day')
+   AND nullif(btrim(v.articulo_id),'') IS NOT NULL
+  GROUP BY 1,2 HAVING sum(v.unidades)>0
+ ),
+ page AS MATERIALIZED (
+  SELECT pm.pharmacy_id AS "pharmacyId",r.code,r.articulo_id,r.units,r.value
+  FROM raw r JOIN unnest($3::text[],$4::text[]) AS pm(code,pharmacy_id)
+   ON pm.code=r.code
+  ORDER BY r.value DESC,pm.pharmacy_id,r.articulo_id
+  LIMIT $5::int OFFSET $6::int
+ )
+ SELECT p."pharmacyId",
+  coalesce(nullif(btrim(a.codigo_nacional),''),p.articulo_id) AS cn,
+  nullif(btrim(a.codigo_nacional),'') AS "nationalCode",
+  p.articulo_id AS "sourceId",
+  coalesce(nullif(a.nombre,''),p.articulo_id) AS name,
+  coalesce(a.familia,'') AS family,a.pvp::float8 AS pvp,
+  p.units,p.value,NULL::text AS "abcdClass",
+  NULL::float8 AS "purchaseCost",NULL::float8 AS "saleUnitPrice",
+  NULL::float8 AS "unitMargin",NULL::float8 AS margin,NULL::float8 AS "marginPct"
+ FROM page p
+ LEFT JOIN LATERAL (
+  SELECT a.codigo_nacional,a.nombre,a.familia,a.pvp
+  FROM ${t}.articulos a
+  WHERE upper(btrim(a.farmacia_codigo))=p.code
+   AND a.origen_id=p.articulo_id
+  ORDER BY a.sincronizado_en DESC NULLS LAST LIMIT 1
+ ) a ON true
+ ORDER BY p.value DESC,p."pharmacyId",p.articulo_id`;
+}
+const isQueryTimeout=e=>e?.code==="57014"||/timeout|timed out|canceling statement/i.test(String(e?.message||""));
 export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
  app.get("/api/analytics/ventas/detalle",...requireTenant(),async(req,res,next)=>{
   try{
@@ -244,12 +286,24 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
     if(cache.isCacheRange?.(args)&&typeof res.once==="function")
      res.once("finish",refresh);
    }
-   const {rows}=await pool.query(buildSalesDetailSQL(schema,order,direction,source,columnFilters),
-    [from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
-     pageSize+1,(page-1)*pageSize,JSON.stringify(columnFilters)]);
-   res.json({totalFiltered:Number(rows[0]?.__totalFiltered||0),products:rows.slice(0,pageSize).map(x=>({
-    ...x,id:x.pharmacyId+"|"+x.cn,pharmacyId:String(x.pharmacyId)
-   })),hasMore:rows.length>pageSize,page,from,to});
+   const args=[from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
+    pageSize+1,(page-1)*pageSize,JSON.stringify(columnFilters)];
+   let rows,partialData=false;
+   try{
+    ({rows}=await pool.query({text:buildSalesDetailSQL(schema,order,direction,source,columnFilters),
+     values:args,query_timeout:14000}));
+   }catch(error){
+    const recover=isQueryTimeout(error)&&order==="value"&&direction==="desc"&&
+     !search&&!families.length&&!Object.keys(columnFilters).length&&source.articles==="normalized";
+    if(!recover)throw error;
+    ({rows}=await pool.query({text:buildSalesDetailFallbackSQL(schema),
+     values:[from,to,args[2],args[3],pageSize+1,(page-1)*pageSize],query_timeout:12000}));
+    partialData=true;
+   }
+   res.json({totalFiltered:partialData?null:Number(rows[0]?.__totalFiltered||0),
+    products:rows.slice(0,pageSize).map(x=>({
+     ...x,id:x.pharmacyId+"|"+x.cn,pharmacyId:String(x.pharmacyId)
+    })),partialData,hasMore:rows.length>pageSize,page,from,to});
   }catch(e){next(e)}
  });
 }

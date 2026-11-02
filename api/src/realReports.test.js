@@ -97,6 +97,18 @@ test("Compras devuelve PUC y KPI sin ejecutar las consultas pesadas de Ventas",a
  assert.ok(queries.some(x=>x.sql.includes(".articulos")));
  assert.ok(queries.every(x=>!x.sql.includes('GROUP BY f.id,t.proveedor_id')));
 });
+test("Compras devuelve artículos sin esperar el agregado mensual cuando la página pide solo detalle",async()=>{
+ const {call,queries,req}=create();
+ const result=(await call({query:{...req.query,soloDetalle:"1"}})).result;
+ assert.equal(result.available,true);
+ assert.equal(result.buyRows.length,1);
+ assert.equal(result.buyRows[0].cn,"654321");
+ assert.equal(result.buyRows[0].value,60);
+ assert.equal(result.kpis.compras,null,"Los KPI proceden del resumen rápido independiente");
+ assert.deepEqual(result.monthly,[]);
+ assert.equal(queries.filter(x=>!x.sql.includes("information_schema")).length,1,
+  "El detalle no puede quedar bloqueado por un segundo escaneo mensual");
+});
 test("no accede a otra farmacia",async()=>{
  const {call,req}=create();
  const {status,result}=await call({query:{...req.query,farmacias:"2"}});

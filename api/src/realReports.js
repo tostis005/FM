@@ -402,7 +402,10 @@ export function setupRealReports(app,pool,{requireTenant}){
    const readSalesRows=!["compras","proveedores"].includes(f.module);
    const readBuyRows=f.module!=="proveedores";
    const readSalesPeriod=!["compras","proveedores","acciones"].includes(f.module);
-   const readBuyPeriod=!["stock","reposicion"].includes(f.module);
+   // El resumen y la gráfica de Compras ya se consultan por una API separada.
+   // No repetir esta agregación para cargar el listado de artículos.
+   const readBuyPeriod=!["stock","reposicion"].includes(f.module)&&
+    !(f.module==="compras"&&req.query.soloDetalle==="1");
    // El informe Compras ya trae proveedor por línea; repetir toda la agregación
    // para un ranking independiente duplica la consulta pesada.
    const readSupplierRows=f.module==="proveedores";

@@ -4,7 +4,9 @@ import {buildSalesDetailSQL,setupSalesDetail} from "./salesDetail.js";
 function make(){
  const routes={},calls=[];
  const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
- const pool={async query(sql,params){
+ const pool={async query(statement,parameters){
+  const sql=typeof statement==="string"?statement:statement.text;
+  const params=typeof statement==="string"?parameters:statement.values;
   calls.push({sql,params});
   return {rows:[{pharmacyId:"5",cn:"654321",name:"Producto",family:"12",units:3,value:45,abcdClass:"A",margin:30}]};
  }};
@@ -22,6 +24,37 @@ function make(){
  }
  return {request,calls};
 }
+
+test("recupera artículos y paginación sin inventar el margen tras timeout SQL",async()=>{
+ const {buildSalesDetailFallbackSQL}=await import("./salesDetail.js");
+ const sql=buildSalesDetailFallbackSQL("ampedia");
+ assert.match(sql,/WITH raw AS MATERIALIZED/);
+ assert.match(sql,/LIMIT \$5::int OFFSET \$6::int/);
+ assert.doesNotMatch(sql,/fm_recepciones_analitica/);
+ assert.throws(()=>buildSalesDetailFallbackSQL("ampedia;drop"));
+ const routes={},calls=[];
+ const app={get(p,...handlers){routes[p]=handlers.at(-1)}};
+ const pool={async query(statement){
+  calls.push(statement);
+  if(calls.length%2===1)throw Object.assign(new Error("canceling statement due to statement timeout"),{code:"57014"});
+  return {rows:[{pharmacyId:"5",cn:"654321",name:"Producto real",units:4,value:32,
+   purchaseCost:null,abcdClass:null}]};
+ }};
+ setupSalesDetail(app,pool,{requireTenant:()=>[]});
+ const req={context:{client:{slug:"ampedia",schema:"ampedia"},role:"superadministrador",
+  modules:{ventas:true},allowedPharmacyIds:[5],pharmacies:[{id:"5",databaseCode:"VAL"}]},
+  query:{desde:"2026-10-01",hasta:"2026-10-25",farmacias:"5",pagina:"2"}};
+ const res={status(){return this},json(x){this.data=x;return this}};
+ let failure;
+ await routes["/api/analytics/ventas/detalle"](req,res,e=>failure=e);
+ if(failure)throw failure;
+ assert.equal(res.data.partialData,true);
+ assert.equal(res.data.products[0].name,"Producto real");
+ assert.equal(res.data.totalFiltered,null);
+ assert.equal(calls[0].query_timeout,14000);
+ assert.equal(calls[1].query_timeout,12000);
+ assert.equal(calls[1].values[5],400,"La recuperación respeta la página solicitada");
+});
 test("detalle pagina en PostgreSQL y solo cruza compras para referencias de la página",async()=>{
  const {request,calls}=make();const {data,status}=await request();
  assert.equal(status,200);

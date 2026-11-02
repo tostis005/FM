@@ -339,6 +339,7 @@ jobs:
           node check-dashboard-audit.mjs
           node check-responsive.mjs
           node check-sales-loading.mjs
+          node check-ventas-compras-datos.mjs
           node check-recepciones.mjs
           node check-recepciones-completas.mjs
           node check-refresh-navigation.mjs

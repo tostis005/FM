@@ -578,6 +578,8 @@ export function setupRealReports(app,pool,{requireTenant}){
        units:Number(summary[0]?.units||0),
        unpriced:Number(summary[0]?.unpriced||0),
        value:Number(summary[0]?.value||0)};
+     // La tabla de fichas puede existir sin stock; usar otra fuente si aporta datos.
+     if(stockSummary.articles===0){stockRows=[];stockSource=null;stockSummary=null;}
 
     }
    }

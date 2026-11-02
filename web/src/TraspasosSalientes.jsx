@@ -47,7 +47,7 @@ export default function TraspasosSalientes({clientSlug,suppliers=[]}){
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  async function remove(m){
-  if(!window.confirm("¿Desactivar la exclusión de salidas de "+pharmacyName(m.pharmacyId)+" para el cliente ERP "+m.customerId+"?"))return;
+  if(!window.confirm("¿Desactivar la exclusión de salidas de "+pharmacyName(m.pharmacyId)+" para el cliente de la farmacia "+m.customerId+"?"))return;
   setBusy(true);setError("");
   try{
    await api(root,{method:"DELETE",body:JSON.stringify({pharmacyId:m.pharmacyId,customerId:m.customerId})});
@@ -69,7 +69,7 @@ export default function TraspasosSalientes({clientSlug,suppliers=[]}){
    {mappings.map(m=><div className="fm-manage-domain-item"
      key={m.pharmacyId+"|"+m.customerId}>
     <strong>{pharmacyName(m.pharmacyId)}</strong>
-    <span>Cliente ERP {m.customerId} → proveedor {m.supplierCode}
+    <span>Cliente de farmacia {m.customerId} → proveedor {m.supplierCode}
      {!ignored.some(p=>p.sourceCode===m.supplierCode)?" (exclusión desactivada en el proveedor)":""}</span>
     <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
       onClick={()=>remove(m)}>Desactivar</button>

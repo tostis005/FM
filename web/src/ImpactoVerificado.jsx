@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ArrowRight,CheckCircle2,Target} from "lucide-react";
 import {euro} from "./localeES.js";
+import "./centroTrabajo.css";
 
 // Sólo contabiliza registros contrastados del libro de resultados.
 // Un pedido preparado o una oportunidad aplicada NO es ahorro realizado.

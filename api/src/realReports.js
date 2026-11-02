@@ -509,7 +509,9 @@ export function setupRealReports(app,pool,{requireTenant}){
         return s&&s.total>0&&s.priced/s.total>=0.9&&s.recent/s.total>=0.9;
       });
     stockAsOf=times.every(Number.isFinite)?new Date(Math.min(...times)).toISOString():null;
-    if(snapshotAvailable){
+    // Stock debe mostrar el último inventario disponible aunque esté desactualizado.
+    // Mantener snapshotAvailable=false para que los KPI no simulen datos recientes.
+    if(snapshotAvailable||f.module==="stock"){
      const {rows:current}=await queryTable(`
        WITH latest AS MATERIALIZED (
         SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id)
@@ -607,7 +609,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        });
      stockAsOf=times.every(Number.isFinite)?
        new Date(Math.min(...times)).toISOString():null;
-     if(snapshotAvailable){
+     if(snapshotAvailable||f.module==="stock"){
        const fromStock=`FROM (
          SELECT s.farmacia_id,${pharmacyDataCodeSQL("f")} AS farmacia_codigo,
            s.producto_id AS articulo_id,s.unidades,s.coste_unitario
@@ -682,7 +684,7 @@ export function setupRealReports(app,pool,{requireTenant}){
      snapshotAvailable=valid.length===pharmacyIds.length &&
        valid.every(r=>Date.now()-new Date(r.last).getTime()<=48*3600000&&
          Date.now()-new Date(r.last).getTime()>=-3600000);
-     if(snapshotAvailable){
+     if(snapshotAvailable||f.module==="stock"){
       // public.stock_farmacia.id_articu es el ID DEL ERP, no el código
       // nacional. Convertir mediante la ficha de artículo de la misma farmacia
       // antes de cruzar demanda, PMC y coste de compras.
@@ -848,7 +850,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     proveedores:readSupplierRows&&buyers&&providers.rows.length<1000?supplierRows.length:
       f.module==="compras"&&buyers&&completeBuys?
         new Set(buyRows.map(r=>key(r.pharmacyId,r.providerId))).size:null,
-    stock:stockSummary
+    stock:!snapshotAvailable?null:stockSummary
       ?(stockSummary.unpriced===0?round(stockSummary.value):null)
       :completeStock&&pricedStock.length===stockRows.length?round(sum(stockRows,"value")):null,
     margen:readSalesRows&&sales&&completeMargins&&coveredItems===salesRows.length?round(coveredMargin):null,
@@ -873,7 +875,7 @@ export function setupRealReports(app,pool,{requireTenant}){
     supplierRows,stockRows,replenishmentRows,profitRows:salesRows,
     actions,families:families.rows.map(r=>r.familia),
     availability:{sales, purchases:buyers,stock:snapshotAvailable,stockAsOf,stockSource,stockRowsTruncated,
-     snapshotReason:!snapshotAvailable?"No hay inventario sincronizado en las últimas 48 horas":null,
+     snapshotReason:!snapshotAvailable?"No hay inventario actualizado y completo en las últimas 48 horas; Stock puede mostrar la última instantánea conocida.":null,
      stockSummaryBasis:stockSummary?(stockSource==="stock"?"Coste unitario del inventario (todos los artículos)":"PMC de ficha (todos los artículos)"):null,
      rowsTruncated:!complete,supplierRowsTruncated:readSupplierRows&&providers.rows.length>=1000,
      marginCoverage:coveredItems}});

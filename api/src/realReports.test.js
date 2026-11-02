@@ -2,10 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupRealReports} from "./realReports.js";
 
-function create({missingCost=false,truncatedBuys=false}={}){
+function create({missingCost=false,truncatedBuys=false,staleStock=false}={}){
  const routes={};const app={get(path,...handlers){routes[path]=handlers.at(-1)}};
  const tableFields={
-  articulos:["farmacia_codigo","origen_id","nombre","codigo_nacional","familia","pvp","pmc"],
+  articulos:["farmacia_codigo","origen_id","nombre","codigo_nacional","familia","pvp","pmc",
+    ...(staleStock?["stock_actual","sincronizado_en"]:[])],
   fm_ventas_analitica:["farmacia_codigo","articulo_id","fecha","unidades","importe"],
   fm_recepciones_analitica:["farmacia_codigo","articulo_id","proveedor_id","proveedor_nombre","unidades","coste_unitario","importe","fecha"],
   proveedores:["farmacia_codigo","origen_id","nombre"]
@@ -18,6 +19,16 @@ function create({missingCost=false,truncatedBuys=false}={}){
   if(sql.includes("information_schema.columns"))
    return {rows:(tableFields[params[1]]||[]).map(column_name=>({column_name}))};
   if(sql.includes("to_regclass"))return {rows:[{tbl:null}]};
+  if(staleStock&&sql.includes("max(sincronizado_en) AS last"))
+   return {rows:[{code:"ABA",last:"2026-10-01T10:00:00.000Z",total:1,priced:1,recent:0}]};
+  if(staleStock&&sql.includes("WITH latest AS MATERIALIZED")&&
+    sql.includes('AS "pharmacyId"'))
+   return {rows:[{pharmacyId:"1",cn:"654321",nationalCode:"654321",sourceId:"654321",
+    name:"Amoxicilina",family:"Antibióticos",pmc:1,pvp:6,units:12,
+    stockValue:12,unpricedItems:0}]};
+  if(staleStock&&sql.includes("WITH latest AS MATERIALIZED")&&
+    sql.includes("SELECT count(*)::int AS articles"))
+   return {rows:[{articles:1,units:12,unpriced:0,value:12}]};
   if(sql.includes("SELECT DISTINCT familia"))return {rows:[{familia:"Antibióticos"}]};
   if(sql.includes("AS \"pharmacyId\"")&&sql.includes(".fm_ventas_analitica"))
    return {rows:[{pharmacyId:"1",cn:"654321",name:"Amoxicilina",family:"Antibióticos",
@@ -199,4 +210,19 @@ test("margen no depende del top-3000 de compras ordenado por otro campo",async()
  assert.equal(result.kpis.margen,60,"suma calculada con costes completos y ventas completas");
  assert.ok(queries.some(x=>x.sql.includes('sum(t.cost)::float8 AS cost')),
   "calcular costes de todo el universo, independientemente del orden y del LIMIT");
+});
+
+test("Stock muestra referencias conocidas cuando la instantánea está caducada, sin fingir indicadores",async()=>{
+ const a=create({staleStock:true});
+ const {status,result}=await a.call({query:{...a.req.query,modulo:"stock"}});
+ assert.equal(status,200);
+ assert.equal(result.stockRows.length,1,"El catálogo no debe desaparecer por falta de frescura");
+ assert.equal(result.stockRows[0].cn,"654321");
+ assert.equal(result.stockRows[0].units,12);
+ assert.equal(result.availability.stock,false,"La instantánea caducada no se presenta como actual");
+ assert.equal(result.availability.stockSource,"articulos");
+ assert.equal(result.availability.stockAsOf,"2026-10-01T10:00:00.000Z");
+ assert.equal(result.kpis.stock,null,"No mostrar valoración actual a partir de stock caducado");
+ assert.equal(result.kpis.stockArticulos,null);
+ assert.match(result.availability.snapshotReason,/48 horas/);
 });

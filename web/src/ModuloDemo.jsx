@@ -237,6 +237,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const pendingTableFilters=JSON.stringify(tableFilters)!==activeTableFilters;
  const changeTableFilters=next=>{setTableFilters(next);setDetailPage(1);setReceiptPage(1);setDetailHasMore(false);};
  const [detailHasMore,setDetailHasMore]=useState(false);
+ const [detailPartial,setDetailPartial]=useState(false);
  const [totalFiltered,setTotalFiltered]=useState(null);
  const [realReport,setRealReport]=useState(null);
  const [showDashboardDetail,setShowDashboardDetail]=useState(false);
@@ -436,7 +437,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    Array.isArray(tableFiltersReady[key])?tableFiltersReady[key].length:Boolean(tableFiltersReady[key])))
    params.set("columnas",JSON.stringify(tableFiltersReady));
   setLoading(true);setSalesError("");setRealSales(null);
-  if(module==="ventas"&&detailPage===1)setRealReport(null);
+  if(module==="ventas"&&detailPage===1){setRealReport(null);setDetailPartial(false);}
   // El detalle paginado no repite la agregación histórica ni los recuentos.
   if(module==="ventas"){
    params.set("pagina",String(detailPage));
@@ -450,6 +451,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .then(data=>{if(!controller.signal.aborted){
     if(module==="ventas"){
      setDetailHasMore(Boolean(data.hasMore));
+     setDetailPartial(Boolean(data.partialData));
      setTotalFiltered(data.totalFiltered??null);
      setRealReport(prev=>({available:true,
       salesRows:detailPage===1?(data.products||[]):[...(prev?.salesRows||[]),...(data.products||[])],
@@ -461,7 +463,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    }})
    .catch(e=>{if(!controller.signal.aborted){
     setSalesError(e.message);
-    if(module==="ventas")setRealReport(null);
+    if(module==="ventas"&&detailPage===1)setRealReport(null);
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
@@ -594,6 +596,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(!period.valid){setReportLoading(false);setRealReport(null);return}
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,modulo:module});
+  if(module==="compras")params.set("soloDetalle","1");
   if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
   if(filters.families.length)params.set("familias",filters.families.join(","));
   if(searchReady)params.set("buscar",searchReady);
@@ -932,11 +935,24 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     sort={receiptMode?undefined:remoteSort} onSortChange={!receiptMode&&remoteSort?changeTableSort:undefined} defaultSort={receiptMode?null:tableSort} label={receiptMode?"recepciones":"registros"} loading={receiptMode?receiptLoading:isFetchingSales&&rows.length===0} loadingLabel={"Cargando detalle de "+(module==="compras"?"compras":module==="stock"?"stock":"artículos")+"…"}
     onRowClick={receiptMode?undefined:row=>isDashboard&&row.targetModule?go(row.targetModule):setDetail(row)}
     emptyText={receiptMode?"No se encontraron recepciones para esta búsqueda, período o farmacia.":reportError?"No se pudo consultar el informe":available?"No hay resultados":"Sin datos disponibles"} columns={columns}/>}
+   {(module==="ventas"||module==="compras")&&(salesError||reportError)&&
+     <div className="fm-report-data-warning fm-report-data-error" role="alert">
+      <span>{salesError||reportError}</span>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
+       setAsOf(new Date());setReloadKey(x=>x+1);
+      }}>Reintentar consulta</button>
+     </div>}
    {module==="ventas"&&detailHasMore&&<div style={{padding:"16px",textAlign:"center"}}>
     <button type="button" className="btn btn-secondary" disabled={isFetchingSales}
       onClick={()=>setDetailPage(n=>n+1)}>
       {isFetchingSales?"Cargando artículos…":"Cargar 400 artículos más"}
     </button></div>}
+   {module==="ventas"&&detailPartial&&rows.length>0&&<div className="fm-report-data-warning" role="status">
+     <strong>Listado de ventas en modo ágil</strong>
+     <span>Se muestran artículos y ventas registradas. La consulta completa tardó demasiado;
+      el margen, el coste y la clasificación ABCD no están verificados en estas filas.
+      Puedes seguir cargando páginas o reducir el período para obtener el detalle completo.</span>
+    </div>}
    {module==="ventas"&&rows.length>0&&<small className="fm-sales-period-info">Mostrando {integer(rows.length)} referencias cargadas{totalFiltered!=null?" de "+integer(totalFiltered)+" resultados del filtro completo":""}. El CSV incluye las páginas cargadas.</small>}
    {["compras","proveedores","stock"].includes(module)&&
     Object.values(tableFiltersReady).some(v=>Array.isArray(v)?v.length:Boolean(v))&&

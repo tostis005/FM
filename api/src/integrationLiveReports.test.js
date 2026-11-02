@@ -44,6 +44,11 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(reports.available,true);
   assert.ok(reports.kpis.compras>0);
   assert.equal(reports.kpis.ventas,null,"Compras no solicita la serie mensual de ventas");
+  const fastBuyDetail=await request("/api/analytics/reportes",
+   {modulo:"compras",soloDetalle:"1"});
+  assert.ok(fastBuyDetail.buyRows.length>0,"El listado independiente de Compras debe tener artículos");
+  assert.deepEqual(fastBuyDetail.monthly,[],"El listado no repite los totales mensuales");
+  assert.equal(fastBuyDetail.kpis.compras,null);
   // Asegurar que hay información real antes de ejecutar el detalle
   // y distinguir farmacia sin compras, filtro de fechas y origen inexistente.
   const checkBuys=await request("/api/analytics/compras/estado",{farmacias:"1,5"});

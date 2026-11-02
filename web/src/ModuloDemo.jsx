@@ -288,12 +288,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastEligible=["ventas","dashboard"].includes(module)&&period.valid;
  const effectiveAnalysisMonths=[3,6,12,24,36].includes(Number(analysisMonths))?Number(analysisMonths):12;
  const fastScope=[clientSlug,period.from,period.to,period.granularity,filters.pharmacyIds.join(","),reloadKey].join("|");
- // Si el SUM agregado tarda, no dejar bloqueado el listado de artículos.
- useEffect(()=>{
-  if(module!=="ventas"||!period.valid)return;
-  const timer=setTimeout(()=>setDetailFallbackScope(fastScope),1600);
-  return()=>clearTimeout(timer);
- },[module,period.valid,fastScope]);
  // También aprovechar meses cerrados completos cuando el filtro empieza o
  // termina a mitad de mes: el servidor calcula solo los extremos en vivo.
  const dashboardCacheEligible=module==="dashboard"&&period.valid&&
@@ -336,6 +330,13 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
  const fastLoading=fastEligible&&!fastSales&&!fastFailed;
+ // Sólo activar la carga independiente si el resumen no ha llegado a tiempo.
+ // Cancelar este temporizador en cuanto llegue evita consultas duplicadas.
+ useEffect(()=>{
+  if(module!=="ventas"||!period.valid||fastSales||fastFailed)return;
+  const timer=setTimeout(()=>setDetailFallbackScope(fastScope),1600);
+  return()=>clearTimeout(timer);
+ },[module,period.valid,fastScope,fastSales,fastFailed]);
  useEffect(()=>{
   if(!fastEligible)return;
   if(dashboardCacheEligible&&dashboardCacheStatus!=="miss")return;

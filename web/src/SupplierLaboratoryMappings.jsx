@@ -95,7 +95,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
    const result=await request("/api/tenant/proveedores/autovincular-farmacias",clientSlug,{
     method:"POST",body:JSON.stringify({apply,approvalToken:apply?approvalToken:undefined})});
    if(!apply){setAutoPreview(result.suggestions||[]);setApprovalToken(result.approvalToken||"");setNotice(result.count+
-     " correspondencias propuestas entre laboratorios oficiales y proveedores ERP, incluidas identidades nuevas.");}
+     " correspondencias propuestas entre laboratorios oficiales y proveedores de farmacia, incluidas identidades nuevas.");}
    else{
     setAutoPreview(null);setApprovalToken("");setNotice(result.applied+" relaciones por farmacia guardadas.");
     const [m,local,official]=await Promise.all([
@@ -124,7 +124,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
   <div><h2>Identidades unificadas de proveedores y laboratorios</h2>
    <p>El Nomenclátor aporta laboratorios oficiales y Farmatic los proveedores originales de cada farmacia. También puedes agrupar proveedores sin laboratorio AEMPS bajo una identidad propia. Los códigos originales se conservan; las cooperativas no se vinculan automáticamente.</p>
    <div className="fm-supplier-identity-stats" aria-label="Resumen de unificación">
-    <span><strong>{localSuppliers.length}</strong> proveedores ERP</span>
+    <span><strong>{localSuppliers.length}</strong> proveedores de farmacia</span>
     <span><strong>{linked}</strong> relacionados o identificados</span>
     <span><strong>{localSuppliers.length-linked}</strong> pendientes</span>
     <span><strong>{laboratories.length}</strong> identidades disponibles</span>
@@ -153,7 +153,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
   <div className="fm-supplier-mapping-controls" ref={controlsRef}>
    <label>Farmacia<select value={pharmacyId} onChange={e=>{setPharmacyId(e.target.value);setSourceCode("");setLaboratoryKey("")}}>
     {pharmacies.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-   <label>Proveedor ERP<select value={sourceCode} onChange={e=>{const next=e.target.value;setSourceCode(next);
+   <label>Proveedor de farmacia<select value={sourceCode} onChange={e=>{const next=e.target.value;setSourceCode(next);
      const current=supplierChoices.find(s=>s.sourceCode===next);
      setLaboratoryKey(current?.laboratoryKey||current?.inferredLaboratoryKey||"");}}>
     <option value="">Selecciona proveedor de esta farmacia…</option>
@@ -175,7 +175,7 @@ export default function SupplierLaboratoryMappings({clientSlug,suppliers=[]}){
     <select value={view} onChange={e=>{setView(e.target.value);setVisibleGroups(30)}}>
      <option value="all">Todos</option><option value="linked">Relacionados</option>
      <option value="unlinked">Pendientes</option>
-     <option value="catalog-only">Sin proveedores ERP</option>
+     <option value="catalog-only">Sin proveedores de farmacia</option>
     </select></label>
    <span>{grouped.length} grupos · {grouped.reduce((n,[,entries])=>n+entries.length,0)} proveedores</span>
   </div>

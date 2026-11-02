@@ -7,7 +7,7 @@ import {mkdir} from "node:fs/promises";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const routes=[
  "promociones","promociones/seguimiento","dashboard","ventas","compras",
- "proveedores","stock","reposicion","genericos","rentabilidad","acciones",
+ "proveedores","stock","stock-sin-recepciones","reposicion","genericos","rentabilidad","acciones",
  "informes","asistente","farmacias","usuarios","clientes","accesos","ajustes"
 ];
 const sizes=[
@@ -59,10 +59,17 @@ async function mockApi(route){
   payload={available:true,monthly:[{month:"2026-10",ventas:money,compras:money/2,unidades:count*75}],
    kpis:{ventas:money,compras:money/2,unidades:count*75,proveedores:count,
     articulosVendidos:count,stock:null,margen:15},
-   salesRows:[product],buyRows:[],supplierRows:[],stockRows:[],replenishmentRows:[],
+   salesRows:[product],buyRows:[],supplierRows:[],stockRows:url.searchParams.get("modulo")==="stock"?[{
+    ...product,units:12,sold:2,unitCost:2,coverage:14,value:24,excessValue:0
+   }]:[],replenishmentRows:[],
    profitRows:[product],actions:[],families:[],
-   availability:{sales:true,purchases:true,stock:false,rowsTruncated:false}};
+   availability:{sales:true,purchases:true,stock:false,stockAsOf:"2026-10-01T10:00:00.000Z",rowsTruncated:false}};
  }
+ else if(path==="/api/analytics/stock/sin-recepciones")
+  payload={available:true,total:1,page:1,rows:[{
+   pharmacyId:"1",pharmacyName:"Abadía",cn:"030303",sourceId:"030303",
+   name:"Artículo de stock con CN",supplierName:"Laboratorio",
+   stock:12,pvp:4.5,lastReceiptAt:"2023-01-01",lastSaleAt:"2026-09-01"}]};
  else if(path==="/api/analytics/ventas/totales"){
   const selected=url.searchParams.get("farmacias");
   const count=selected?selected.split(",").length:pharmacies.length;
@@ -130,6 +137,10 @@ try{
        await page.goto(BASE+"/"+path,{waitUntil:"domcontentloaded",timeout:20000});
        await page.locator(".workspace .topbar").waitFor({state:"visible",timeout:12000});
        await page.waitForTimeout(100);
+       if(path==="stock-sin-recepciones")
+         await page.getByRole("heading",{name:"Artículos encontrados"}).waitFor({state:"visible",timeout:12000});
+       if(path==="stock")
+         await page.getByText("Último inventario conocido").waitFor({state:"visible",timeout:12000});
        const result=await page.evaluate(()=>({
          viewport:window.innerWidth,
          htmlWidth:document.documentElement.scrollWidth,
@@ -150,6 +161,13 @@ try{
            const first=document.querySelector(".workspace>.main-content")?.firstElementChild;
            return bar&&first?Math.round(first.getBoundingClientRect().top-
              bar.getBoundingClientRect().bottom):null;
+         })(),
+         staleStockPanel:(()=>{
+           const panel=document.querySelector(".fm-stale-stock .fm-preview-panel");
+           const head=panel?.querySelector(".fm-preview-panel-head h2");
+           if(!panel||!head)return null;
+           const a=panel.getBoundingClientRect(),b=head.getBoundingClientRect();
+           return {left:Math.round(b.left-a.left),right:Math.round(a.right-b.right)};
          })(),
          table:([...document.querySelectorAll(".table-scroll")].map(e=>({
            viewport:e.clientWidth,content:e.scrollWidth}))),
@@ -172,6 +190,10 @@ try{
             !layout.hasTop||layout.maxHeight==="none")
            throw Error("Cabecera o scroll uniforme no disponible en "+path+": "+JSON.stringify(layout));
        }
+       if(path==="stock-sin-recepciones"&&(
+          !result.staleStockPanel||result.staleStockPanel.left<13||
+          result.staleStockPanel.right<13))
+         throw Error("Stock sin recepciones sin márgenes: "+JSON.stringify(result.staleStockPanel));
        const excess=Math.max(result.htmlWidth,result.bodyWidth)-result.viewport;
        if(excess>2||result.topbarRight>result.viewport+2){
          throw Error("Desbordamiento de "+excess+"px; "+JSON.stringify(result));

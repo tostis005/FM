@@ -199,7 +199,7 @@ export default function ProveedoresMaestro({clientSlug}){
       <button className="icon-btn" type="button" aria-label="Cerrar"
        onClick={()=>setMappingSupplier(null)}><X size={19}/></button>
      </div>
-     <p><strong>{mappingSupplier.name}</strong> · código ERP {mappingSupplier.sourceCode}</p>
+     <p><strong>{mappingSupplier.name}</strong> · código de proveedor {mappingSupplier.sourceCode}</p>
      <p>La correspondencia se aplicará a las farmacias que utilicen este proveedor.
       Puedes definir excepciones por farmacia en la configuración avanzada.</p>
      <div className="fm-provider-lab-field">
@@ -224,7 +224,7 @@ export default function ProveedoresMaestro({clientSlug}){
       <button className="icon-btn fm-provider-dialog-close" type="button" aria-label="Cerrar" onClick={()=>setForm(null)}><X size={19}/></button>
      </div>
      <form className="fm-provider-form" onSubmit={save}>
-      <label>Código de origen<input required maxLength="60" value={form.sourceCode} onChange={e=>setForm({...form,sourceCode:e.target.value})} placeholder="Código del ERP"/></label>
+      <label>Código de origen<input required maxLength="60" value={form.sourceCode} onChange={e=>setForm({...form,sourceCode:e.target.value})} placeholder="Código del proveedor en la farmacia"/></label>
       <label>Nombre<input required maxLength="200" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Nombre del proveedor"/></label>
       <div className="fm-provider-options">
        <label className="fm-provider-option"><input type="checkbox" checked={Boolean(form.cooperative)} onChange={e=>setForm({...form,cooperative:e.target.checked})}/><span>Cooperativa</span></label>

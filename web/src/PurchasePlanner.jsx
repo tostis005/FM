@@ -25,7 +25,7 @@ export function putPurchaseLink(slug,link){
  sessionStorage.setItem(STAGING_PREFIX+slug,JSON.stringify(link));
 }
 function makeCSV(lines){
- return "\ufeff"+[["Proveedor","Código proveedor","Farmacia","CN","Código ERP","Artículo","Unidades"],
+ return "\ufeff"+[["Proveedor","Código proveedor","Farmacia","CN","Referencia de farmacia","Artículo","Unidades"],
   ...lines.map(x=>[x.supplierName||"Nombre no disponible",x.supplier,x.pharmacyName,x.cn||"",x.articleId,x.articleName,x.units])]
   .map(line=>line.map(exportSafe).join(";")).join("\r\n");
 }

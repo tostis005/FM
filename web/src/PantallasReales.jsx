@@ -32,7 +32,7 @@ const nowZone=slug=>slug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resol
 // El catálogo actual usa el identificador de origen de seis cifras para el CN.
 function ArticleIdentification({cn,name,sourceId}){
  const code=String(cn||"").trim(),origin=String(sourceId||"").trim();
- const realCn=code||(/^[0-9]{6,7}$/.test(origin)?origin:"");
+ const realCn=/^[0-9]{6,7}$/.test(code)?code:/^[0-9]{6,7}$/.test(origin)?origin:"";
  const realName=String(name||"").trim();
  return <span className="fm-article-identity">
   <span className={realCn?"fm-article-cn":"fm-article-cn fm-article-cn-unknown"}>
@@ -43,10 +43,10 @@ function ArticleIdentification({cn,name,sourceId}){
 }
 const META={
  "productos":{title:"Productos",desc:"Catálogo realmente sincronizado de las farmacias seleccionadas.",
-  note:"PVP, PMC y existencias proceden del catálogo del ERP. El margen unitario es una estimación PVP − PMC, no un beneficio realizado.",
+  note:"PVP, PMC y existencias proceden del catálogo de la farmacia. El margen unitario es una estimación PVP − PMC, no un beneficio realizado.",
   cols:[
    ["cn","CN · Artículo",r=><ArticleIdentification cn={r.cn} name={r.name} sourceId={r.sourceId}/>],
-   ["sourceId","Código origen / CN",r=>TXT(r.sourceId)],["family","Familia",r=>TXT(r.family)],
+   ["family","Familia",r=>TXT(r.family)],
    ["laboratory","Laboratorio",r=>TXT(r.laboratory)],["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],
    ["pvp","PVP",r=>EUR(r.pvp)],["pmc","PMC",r=>EUR(r.pmc)],
    ["margin","Margen teórico/ud.",r=>r.pvp!=null&&r.pmc>0?EUR(r.pvp-r.pmc):"—"],
@@ -80,7 +80,7 @@ const META={
    ["amount","Importe neto",r=>EUR(r.amount)]
   ]},
  "ventas-devoluciones":{title:"Devoluciones y anulaciones de venta",
-  desc:"Movimientos negativos, documentos anulados y líneas anuladas registrados por el ERP.",
+  desc:"Movimientos negativos, documentos anulados y líneas anuladas registrados por el sistema de la farmacia.",
   note:"Los documentos anulados no generan importes de devolución; solo se contabilizan las líneas de devolución.",
   cols:[
    ["reference","Documento",r=>TXT(r.reference)],["at","Fecha",r=>DATE(r.at)],
@@ -93,7 +93,7 @@ const META={
   cols:[
    ["reference","Albarán",r=>TXT(r.reference)],["at","Fecha",r=>DATE(r.at)],
    ["pharmacy","Farmacia",r=>TXT(r.pharmacyName)],["supplier","Proveedor",r=>TXT(r.supplierName||r.supplier)],
-   ["article","Artículo ERP",r=>TXT(r.article)],["units","Unidades",r=>UNITS(r.units)],
+   ["article","CN · Artículo",r=><ArticleIdentification cn={r.cn||r.article} name={r.articleName} sourceId={r.articleId||r.article}/>],["units","Unidades",r=>UNITS(r.units)],
    ["amount","Importe neto",r=>EUR(r.amount)] ]},
  "proveedores-condiciones":{title:"Análisis de proveedores",
   desc:"Importes, recepciones y productos comprados a cada proveedor en el periodo.",
@@ -307,7 +307,7 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
        {ticketDetail.loading?<LoadingPanel kind="table" label="Cargando detalle de líneas…" rows={5}/>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
         <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
-         {["Línea","CN · Artículo","Unidades","Precio unidad","Descuento (valor ERP)","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
+         {["Línea","CN · Artículo","Unidades","Precio unidad","Descuento aplicado","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
         </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>
          <td>{TXT(line.lineId)}</td><td><ArticleIdentification cn={line.cn}
           name={line.articleName} sourceId={line.articleId}/></td><td>{UNITS(line.units)}</td>

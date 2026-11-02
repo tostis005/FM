@@ -238,7 +238,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
          {canApprove&&p.estado==="pendiente_aprobacion"&&<Button disabled={busy} onClick={()=>update(p,"aprobado")}>Aprobar</Button>}
          {canEdit&&p.estado==="aprobado"&&<Button disabled={busy} onClick={()=>update(p,"exportado")}>Marcar exportado</Button>}
           {canEdit&&p.estado==="exportado"&&<Button disabled={busy}
-           onClick={()=>{if(window.confirm("¿Confirmas que el pedido ya se ha recibido? Esta marca no modifica las existencias del ERP."))void update(p,"recibido")}}>Marcar recibido</Button>}
+           onClick={()=>{if(window.confirm("¿Confirmas que el pedido ya se ha recibido? Esta marca no modifica las existencias de la farmacia."))void update(p,"recibido")}}>Marcar recibido</Button>}
          {canEdit&&["borrador","pendiente_aprobacion","aprobado"].includes(p.estado)&&
           <Button disabled={busy} onClick={()=>update(p,"cancelado")}>Cancelar</Button>}
          <Button onClick={()=>history(p)}>Historial</Button>
@@ -282,7 +282,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
        onChange={e=>setAllocCost(e.target.value)}/></FormField>
       <div className="fm-op-field-action"><Button onClick={allocate}>Asignar / modificar</Button></div>
      </div>
-     <p className="fm-op-fine">Si quitas una asignación, las unidades siguen en Pendientes de asignar. El pedido no se envía automáticamente al ERP.</p>
+     <p className="fm-op-fine">Si quitas una asignación, las unidades siguen en Pendientes de asignar. El pedido no se envía automáticamente al sistema de farmacia.</p>
      <div className="fm-preview-actions"><Button primary disabled={busy||!draft.lineas.length}
       onClick={async()=>{
        const payload={lineas:draft.lineas,...(!draft.id||draft.estado==="borrador"?{nombre:draft.nombre}:{})};

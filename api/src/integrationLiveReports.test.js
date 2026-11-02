@@ -186,7 +186,9 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   // Existencias: no basta con que una de las farmacias se haya refrescado.
   const oldStock=await request("/api/analytics/reportes",{modulo:"stock",farmacias:"1,2"});
   assert.equal(oldStock.availability.stock,false);
-  assert.equal(oldStock.stockRows.length,0);
+  assert.ok(oldStock.stockRows.length>0,
+    "Mostrar inventario histórico disponible, sin considerarlo actualizado");
+  assert.ok(oldStock.availability.stockAsOf,"Comunicar fecha de la instantánea");
   assert.equal(oldStock.kpis.stock,null);
   // Una vez ambas farmacias están frescas, el ID ART-03 debe resolverse al CN
   // de su propia farmacia para relacionarlo con el PUC real y el PMC.

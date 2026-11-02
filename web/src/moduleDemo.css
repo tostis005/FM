@@ -431,3 +431,14 @@
 .fm-manage-form .fm-user-copy-permissions>select{
  width:100%;max-width:520px;min-width:0;font-size:13px}
 .fm-user-copy-notice{margin:0;color:#176544;font-size:12px;line-height:1.6;font-weight:600}
+
+/* Advertencia de inventario existente pero no verificado como reciente. */
+.fm-stock-snapshot-warning{
+ display:flex;align-items:flex-start;gap:9px 13px;flex-wrap:wrap;
+ padding:15px 18px;border:1px solid #e9d6aa;background:#fffbf0;
+ color:#684f25;border-radius:12px;font-size:12px;line-height:1.6;
+}
+.fm-stock-snapshot-warning strong{font-size:13px;white-space:nowrap}
+.fm-stock-snapshot-warning span{flex:1 1 230px;min-width:0;overflow-wrap:anywhere}
+.fm-stock-snapshot-warning .btn{flex:0 1 auto;white-space:normal}
+@media(max-width:560px){.fm-stock-snapshot-warning{padding:13px}.fm-stock-snapshot-warning .btn{width:100%}}

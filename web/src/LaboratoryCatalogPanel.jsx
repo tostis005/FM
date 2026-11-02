@@ -78,22 +78,22 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
    <div className="fm-laboratory-toolbar">
     <label><span>Buscar artículo o CN/EAN</span><input type="search" value={search}
      onChange={e=>{setSearch(e.target.value)}}
-     placeholder="Artículo, código nacional o ERP…"/></label>
+     placeholder="Artículo o CN…" /></label>
     <span>{(result.rows||[]).length+" de "+result.total+" artículos"+(loading?" · cargando…":"")}</span>
    </div>
    <HorizontalTableScroll className="fm-laboratory-scroll" label="catálogo de laboratorio" role="tabpanel">
-    <table><thead><tr><th>Código nacional / ERP</th><th>Artículo</th><th>Origen</th><th>Farmacias con movimientos</th></tr></thead>
+    <table><thead><tr><th>CN</th><th>Artículo</th><th>Origen</th><th>Farmacias con movimientos</th></tr></thead>
      <tbody>{(result.rows||[]).map(r=><tr key={r.referencia}>
-      <td><strong>{r.cn||r.referencia}</strong></td>
+      <td><strong>{r.cn||(/^[0-9]{6,7}$/.test(String(r.referencia||""))?r.referencia:"CN no disponible")}</strong></td>
       <td>{r.nombre}{r.provisional&&<small className="fm-laboratory-provisional"> · Clasificación provisional (no figura en el maestro)</small>}</td>
-      <td>{r.inMaster&&r.inReceipts?"Nomenclátor + movimientos":r.inMaster?"Nomenclátor":"Ventas o recepciones ERP"}</td>
+      <td>{r.inMaster&&r.inReceipts?"Nomenclátor + movimientos":r.inMaster?"Nomenclátor":"Ventas o recepciones"}</td>
       <td>{r.pharmacyIds||"—"}</td>
      </tr>)}
      {!loading&&!(result.rows||[]).length&&<tr><td colSpan={4}>No se han encontrado artículos en esta categoría para el laboratorio seleccionado.</td></tr>}
      </tbody>
     </table>
    </HorizontalTableScroll>
-   <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las ventas y recepciones se asocian mediante sus códigos nacionales y las correspondencias ERP configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
+   <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las ventas y recepciones se asocian mediante sus códigos nacionales y las correspondencias configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
   </>}
  </section>;
 }

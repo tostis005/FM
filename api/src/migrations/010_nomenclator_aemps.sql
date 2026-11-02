@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS farmetrica.nomenclator_presentaciones (
   laboratorio_comercializador text,
   principio_activo text,
   dcpf text NOT NULL,
+  descripcion_dcpf text,
   dcp text,
   dcsa text,
   generico boolean NOT NULL,
@@ -39,7 +40,8 @@ ALTER TABLE farmetrica.nomenclator_presentaciones
  ADD COLUMN IF NOT EXISTS laboratorio_titular_codigo text,
  ADD COLUMN IF NOT EXISTS laboratorio_titular text,
  ADD COLUMN IF NOT EXISTS laboratorio_comercializador_codigo text,
- ADD COLUMN IF NOT EXISTS laboratorio_comercializador text;
+ ADD COLUMN IF NOT EXISTS laboratorio_comercializador text,
+ ADD COLUMN IF NOT EXISTS descripcion_dcpf text;
 CREATE INDEX IF NOT EXISTS nomenclator_presentaciones_dcpf
  ON farmetrica.nomenclator_presentaciones(dcpf) WHERE generico;
 CREATE INDEX IF NOT EXISTS nomenclator_presentaciones_dcp

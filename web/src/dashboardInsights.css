@@ -55,3 +55,14 @@
 .fm-puc-comparator-table .fm-cost-higher{color:#c16d23}
 .fm-puc-comparator-table .fm-cost-lower{color:#08764f}
 .fm-puc-comparator-table .list-pagination{margin-top:8px}
+
+/* Lectura cromática y navegación horizontal sin perder las etiquetas. */
+.fm-heat-scroll{border:1px solid #e6eee9;border-radius:10px;padding:10px;background:#fafcfb}
+.fm-heat-cell{font-size:10.5px;min-height:39px;border:1px solid #ffffff90;transition:outline-color .15s}
+.fm-heat-cell:hover{outline:2px solid #163d2c;outline-offset:-2px}
+.fm-heat-cell-strong{color:#fff;text-shadow:0 1px 2px #132d2b55}
+.fm-heat-legend{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;margin:13px 0 2px;color:#557264;font-size:11px;font-weight:650}
+.fm-heat-legend>span:first-child{margin-right:5px}
+.fm-heat-legend-swatch{width:23px;height:13px;border-radius:3px;flex:none}
+.fm-heat-legend-empty{width:16px;height:13px;margin-left:12px;border-radius:3px;background:#edf2ef;border:1px solid #d9e2dc}
+@media(max-width:650px){.fm-heat-scroll{padding:7px}.fm-heat-legend{justify-content:flex-start}.fm-insight-head h2{line-height:1.35}}

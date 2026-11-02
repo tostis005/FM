@@ -194,8 +194,8 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(cnFast.puc>0,"El PUC observado procede de recepciones reales");
   assert.equal(Object.hasOwn(cnFast,"targetPuc"),false,"No calcular objetivos por proveedor");
   const detailOther=await request("/api/genericos/reales/123456789",{vista:"articulos",farmacias:"5"});
-  assert.equal(detailOther.products.find(p=>p.cn==="654321").soldUnits,0,
-   "Una farmacia sin movimientos no hereda ventas de otra");
+  assert.equal(detailOther.products.find(p=>p.cn==="654321").soldUnits,4,
+   "La farmacia VAL recibe solo sus cuatro unidades, no las ventas de ABA");
   // IDs proveedor iguales en ERP diferentes no comparten nombre ni gasto.
   const multi=await request("/api/analytics/reportes",{modulo:"proveedores",farmacias:"1,2"});
   const sameCode=multi.supplierRows.filter(r=>r.providerId==="PR1");

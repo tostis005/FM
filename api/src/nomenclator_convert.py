@@ -18,7 +18,7 @@ from xml.etree import ElementTree as ET
 COLUMNS = ("cn", "nombre", "laboratorio_codigo", "laboratorio",
            "laboratorio_titular_codigo", "laboratorio_titular",
            "laboratorio_comercializador_codigo", "laboratorio_comercializador",
-           "principio_activo", "dcpf", "dcp", "dcsa", "generico", "comercializado")
+           "principio_activo", "dcpf", "descripcion_dcpf", "dcp", "dcsa", "generico", "comercializado")
 CN = re.compile(r"^[0-9]{6,7}$")
 FIELDS = {
     "cod_nacion", "cod_dcpf", "cod_dcp", "cod_dcsa", "des_prese",
@@ -112,6 +112,7 @@ def parse(archive):
                     "laboratorio_comercializador": labs.get(comercial_code, ""),
                     "principio_activo": substances.get(values.get("cod_dcsa", ""), ""),
                     "dcpf": dcpf,
+                    "descripcion_dcpf": dcpf_names.get(dcpf, "")[:450],
                     "dcp": values.get("cod_dcp", ""),
                     "dcsa": values.get("cod_dcsa", ""),
                     "generico": "true" if values.get("sw_generico") == "1" else "false",

@@ -110,6 +110,21 @@ try{
  assert.equal(by("/api/analytics/ventas/totales").length,0,"Inicio consolidado no reconsulta ventas completas");
  assert.equal(by("/api/analytics/dashboard/compras").length,0,"Inicio consolidado no reconsulta recepciones completas");
  assert.equal(await page.locator(".fm-demo-kpi").count(),4);
+ // El contenedor de impacto no puede dejar el texto pegado al borde.
+ const impact=page.locator(".fm-verified-impact");
+ await impact.waitFor({state:"visible",timeout:12000});
+ const impactLayout=await impact.evaluate(el=>{
+  const style=getComputedStyle(el),rect=el.getBoundingClientRect();
+  const head=el.querySelector(".section-heading")?.getBoundingClientRect();
+  const foot=el.querySelector(".fm-insight-foot")?.getBoundingClientRect();
+  return {padding:parseFloat(style.paddingLeft),left:rect.left,
+   headLeft:head?.left,footLeft:foot?.left,right:rect.right,footRight:foot?.right};
+ });
+ assert.ok(impactLayout.padding>=14,"La tarjeta de impacto necesita margen interior");
+ assert.ok(impactLayout.headLeft>=impactLayout.left+13&&
+  impactLayout.footLeft>=impactLayout.left+13&&
+  impactLayout.footRight<=impactLayout.right-13,
+  "La cabecera o la nota invaden el borde de la tarjeta: "+JSON.stringify(impactLayout));
  const dashboardLabels=await page.locator(".fm-demo-kpi>span").allTextContents();
  assert.deepEqual(dashboardLabels.slice(0,4),["Ventas","Compras","Margen bruto estimado","Diferencia ventas − compras"]);
  const moneyMetrics=await page.locator(".fm-demo-kpi strong").evaluateAll(els=>els.slice(0,2).map(el=>{

@@ -12,6 +12,16 @@ const HOURS=[{from:0,to:9,label:"00–09"},
 const CHANNELS={cooperativa:"Mayorista*",laboratorio:"Laboratorio"};
 const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca"};
 const EMPTY=[];
+// Diferenciar poco y mucho volumen sin colorear los huecos como ventas bajas.
+const HEAT_STOPS=["#bc3442","#e88e53","#f4d779","#8fcb9a","#176a46"];
+function heatColor(rank){
+ const position=Math.max(0,Math.min(1,rank))*(HEAT_STOPS.length-1);
+ const a=Math.floor(position),b=Math.min(HEAT_STOPS.length-1,a+1),fraction=position-a;
+ const one=HEAT_STOPS[a],two=HEAT_STOPS[b];
+ const hex=i=>Math.round(parseInt(one.slice(i,i+2),16)*(1-fraction)+
+  parseInt(two.slice(i,i+2),16)*fraction).toString(16).padStart(2,"0");
+ return "#"+hex(1)+hex(3)+hex(5);
+}
 const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v));
 const pct=v=>v==null?"—":percentage(v);
@@ -68,8 +78,11 @@ function Heatmap({scope}){
   }
   return map;
  },[cells]);
- const max=Math.max(0,...[...grid.values()].map(x=>Math.max(0,x.value)));
- return <Panel title="Mapa de calor de ventas" subtitle="Importe neto vendido por día de la semana y franja horaria · verde más intenso = más ventas" insight={insight}>
+ // Los cuantiles evitan que un único pico haga indistinguibles todas las horas.
+ const levels=[...new Set([...grid.values()].map(x=>x.value).filter(v=>v>0))].sort((a,b)=>a-b);
+ const colorFor=value=>value<0?"#a32339":value===0?"#edf2ef":
+  heatColor(levels.length===1?1:levels.indexOf(value)/Math.max(1,levels.length-1));
+ return <Panel title="Mapa de calor de ventas" subtitle="Ventas netas por día y hora · rojo = menor actividad, verde oscuro = mayor actividad" insight={insight}>
   {cells.length===0?<p className="fm-insight-status">No hay ventas registradas para la selección.</p>:
    <><div className="fm-heat-scroll"><div className="fm-heat-grid" role="table" aria-label="Importe de ventas según día y horario" style={{gridTemplateColumns:"98px repeat("+HOURS.length+", minmax(75px,1fr))"}}>
     <div className="fm-heat-axis" role="columnheader">Día</div>
@@ -78,16 +91,22 @@ function Heatmap({scope}){
      <div className="fm-heat-day" role="rowheader">{day}</div>
      {HOURS.map((h,k)=>{
       const cell=grid.get(String(index+1)+"|"+k),value=cell?.value||0;
-      const fraction=max>0?Math.sqrt(Math.max(0,value)/max):0;
-      const background=value>0?"rgba(11, 158, 103, "+(0.12+fraction*0.83)+")":"#f4f8f6";
-      const dark=fraction>0.58;
+      const fraction=value>0&&levels.length>1?levels.indexOf(value)/(levels.length-1):value>0?1:0;
+      const background=colorFor(value);
+      const dark=value<0||value>0&&(fraction<0.24||fraction>0.81);
       return <div key={h.label} role="cell" className={"fm-heat-cell "+(dark?"fm-heat-cell-strong":"")}
        style={{backgroundColor:background}} title={day+" "+h.label+": "+euro(value)+" · "+integer(cell?.lines||0)+" líneas"}
        aria-label={day+" de "+h.from+" a "+h.to+": "+euro(value)}>
        {value!==0?euro(value):"—"}</div>;
      })}
     </React.Fragment>)}
-   </div></div><p className="fm-insight-foot">Suma de movimientos de todo el período agrupados por día y hora de venta; incluye las franjas fuera del horario habitual. Total: <strong>{euro(total)}</strong>.</p></>}
+   </div></div>
+   <div className="fm-heat-legend" aria-label="Leyenda de intensidad de ventas">
+    <span>Menos ventas</span>
+    {HEAT_STOPS.map(color=><span key={color} className="fm-heat-legend-swatch" style={{backgroundColor:color}} aria-hidden="true"/>)}
+    <span>Más ventas</span><span className="fm-heat-legend-empty" aria-hidden="true"/><span>Sin ventas</span>
+   </div>
+   <p className="fm-insight-foot">Escala relativa a las franjas con ventas del período; los importes se muestran en cada celda y al pasar el cursor. Total: <strong>{euro(total)}</strong>.</p></>}
  </Panel>;
 }
 function Sellers({scope}){

@@ -223,6 +223,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const remoteSort=remoteFields?tableSort:undefined;
  const changeTableSort=next=>{setTableSort(next);setDetailPage(1);};
  const [detailPage,setDetailPage]=useState(1);
+ const [detailFallbackScope,setDetailFallbackScope]=useState(null);
  const [tableFilters,setTableFilters]=useState({});
  const [globalFamilyResult,setGlobalFamilyResult]=useState(null);
  useEffect(()=>{setTableFilters({});setTableFiltersReady({})},[module,clientSlug]);
@@ -329,6 +330,13 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
  const fastLoading=fastEligible&&!fastSales&&!fastFailed;
+ // Sólo activar la carga independiente si el resumen no ha llegado a tiempo.
+ // Cancelar este temporizador en cuanto llegue evita consultas duplicadas.
+ useEffect(()=>{
+  if(module!=="ventas"||!period.valid||fastSales||fastFailed)return;
+  const timer=setTimeout(()=>setDetailFallbackScope(fastScope),1600);
+  return()=>clearTimeout(timer);
+ },[module,period.valid,fastScope,fastSales,fastFailed]);
  useEffect(()=>{
   if(!fastEligible)return;
   if(dashboardCacheEligible&&dashboardCacheStatus!=="miss")return;
@@ -413,7 +421,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   // Prioridad al SUM histórico: no competir con el trabajo pesado hasta
   // que el total y gráfico estén listos; después detalle y recuento van EN PARALELO.
-  if(module==="ventas"&&fastEligible&&!fastSales&&!fastFailed){
+  if(module==="ventas"&&fastEligible&&!fastSales&&!fastFailed&&detailFallbackScope!==fastScope){
    setLoading(true);setRealReport(null);
    return ()=>controller.abort();
   }
@@ -457,7 +465,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters,detailFallbackScope]);
 
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
  const fastPurchase=["compras","dashboard"].includes(module)&&
@@ -880,7 +888,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    </section>}
   {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
    pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}
-  {["ventas","compras"].includes(module)&&<DashboardInsights mode={module} clientSlug={clientSlug} period={period}
+  {module==="compras"&&<DashboardInsights mode="compras" clientSlug={clientSlug} period={period}
    pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
    onNavigate={onNavigate} canNavigate={canNavigate}/>}
   {module==="compras"&&["administrador","superadministrador"].includes(tenantRole)&&
@@ -897,8 +905,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="section-heading"><h2>Consultas de análisis</h2></div>
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
-  </section>:isDashboard?null:<section className="card fm-demo-table">
-   <div className="section-heading"><h2>{receiptMode?"Recepciones":isDashboard?"Artículos con ventas":module==="ventas"?"Artículos":TITLES[module]+" por artículo"}</h2>
+  </section>:isDashboard?null:<section className="card fm-demo-table" id={module==="ventas"?"fm-sales-articles":undefined}>
+   <div className="section-heading"><h2>{receiptMode?"Recepciones":module==="ventas"?"Artículos vendidos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    {isDashboard&&!showDashboardDetail?<div className="fm-dashboard-lazy-detail"><p>El detalle completo de artículos se consulta cuando lo necesitas para que Inicio abra sin esperar el análisis pesado.</p><button type="button" className="btn btn-secondary" onClick={()=>setShowDashboardDetail(true)}>Consultar artículos del período</button></div>:<ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")}
     serverFilters={globalColumnFiltering?tableFilters:null}
@@ -930,6 +938,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      {" "}referencias coincidentes{realReport?.tableTotalFiltered>3000?" (se muestran las primeras 3.000)":""}.
     </small>}
   </section>}
+  {module==="ventas"&&<DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
+   pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
+   onNavigate={onNavigate} canNavigate={canNavigate}/>}
   {(isReports||isAssistant)&&<section className="card fm-demo-table">
    <div className="section-heading"><h2>Artículos vendidos en el período</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length}

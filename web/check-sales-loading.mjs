@@ -46,6 +46,9 @@ await page.route("**/api/**",async route=>{
     unitMargin:11.54,margin:138.48,abcdClass:letter}],
     totalFiltered:byColumn.abcdClass?31:25600,hasMore:false,page:1};
  }
+ else if(p==="/api/analytics/dashboard/horarios")body={
+  total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))
+ };
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/health/database")body={status:"ok",database:"connected"};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
@@ -82,6 +85,21 @@ try{
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});
  await page.locator(".fm-demo-kpi").first().waitFor({state:"visible",timeout:15000});
  await verifyPeriod("month");
+ // Mostrar artículos antes del análisis horario y no al final de la página.
+ const visualOrder=await page.evaluate(()=>{
+  const table=document.querySelector("#fm-sales-articles");
+  const map=document.querySelector(".fm-dashboard-insights .fm-insight-panel");
+  return {hasTable:!!table,hasMap:!!map,
+   tableBeforeMap:!!(table&&map&&(table.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING))};
+ });
+ if(!visualOrder.tableBeforeMap)
+  throw Error("El detalle debe aparecer antes del mapa: "+JSON.stringify(visualOrder));
+ await page.locator(".fm-heat-legend-swatch").first().waitFor({state:"visible",timeout:12000});
+ const heatColors=await page.locator(".fm-heat-cell").evaluateAll(cells=>
+  [...new Set(cells.map(el=>getComputedStyle(el).backgroundColor))]);
+ if(heatColors.length<6)
+  throw Error("El mapa debe distinguir cinco intensidades y celdas sin ventas: "+heatColors);
+
  if(totals().length!==1)throw Error("Se esperaba una consulta SQL mensual");
  await page.locator(".fm-unified-filters select").first().selectOption("today");
  await verifyPeriod("hour");

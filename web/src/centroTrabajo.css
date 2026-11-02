@@ -23,3 +23,22 @@
 
 .fm-insight-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;min-width:260px}
 .fm-insight-actions .btn{font-size:12px;padding:7px 9px;white-space:nowrap}
+
+/* Coherencia de espaciado: el panel de Inicio es una tarjeta completa,
+   no un borde rodeando texto sin márgenes interiores. */
+.fm-verified-impact{padding:22px;min-width:0;overflow:hidden}
+.fm-verified-impact>.section-heading{padding:0 0 16px;gap:14px;flex-wrap:wrap}
+.fm-verified-impact>.section-heading>div{min-width:0;flex:1 1 250px}
+.fm-verified-impact>.section-heading p{line-height:1.5}
+.fm-verified-impact>.kpi-grid{margin:0}
+.fm-verified-impact>p{margin:15px 0 0;line-height:1.6;overflow-wrap:anywhere}
+.fm-verified-impact .kpi-grid .card{display:flex;flex-direction:column;justify-content:space-between;gap:12px}
+.fm-verified-impact .kpi-grid .card span{min-width:0;line-height:1.5;overflow-wrap:anywhere}
+.fm-verified-impact .kpi-grid .card strong{margin:0;min-width:0;overflow-wrap:anywhere}
+.fm-insight-actions{min-width:0;max-width:100%}
+@media(max-width:650px){
+ .fm-verified-impact{padding:16px}
+ .fm-verified-impact .kpi-grid .card{padding:15px}
+ .fm-verified-impact>.section-heading .btn{width:100%}
+ .fm-work-intro h1{line-height:1.3}
+}

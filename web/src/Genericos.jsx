@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useState,useRef} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
 import {ChevronDown,RefreshCw,Search,Package,Download} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
@@ -9,7 +9,6 @@ import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReport
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
-import SortableDataTable from "./SortableDataTable.jsx";
 import {ListPagination} from "./ListTable.jsx";
 import {searchText} from "./listLogic.js";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
@@ -46,73 +45,53 @@ function downloadRows(rows){
 const reportSignal=(controller)=>
  typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
   ?AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]):controller.signal;
-function GroupDetail({group,query,clientSlug,pharmacies=[],useReal=false}){
- const [data,setData]=useState(null),[error,setError]=useState("");
+function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
+ const [data,setData]=useState(()=>cache.get(cacheKey)||null);
+ const [error,setError]=useState("");
+ const [retry,setRetry]=useState(0);
  useEffect(()=>{
+  const previous=cache.get(cacheKey);
+  if(previous){setData(previous);setError("");return;}
   let cancel=false;const controller=new AbortController();
   setData(null);setError("");
-  fetch("/api/genericos/"+(useReal?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query,{
-   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
-   .then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"No se pudo cargar el conjunto");return j})
-   .then(d=>{if(!cancel)setData(d)}).catch(e=>{if(!cancel)setError(e.message)});
+  fetch("/api/genericos/"+(useReal?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query+"&vista=articulos",{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
+   .then(async r=>{const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw Error(j.error||"No se pudieron consultar los artículos");return j})
+   .then(d=>{if(cancel)return;if(cache.size>50)cache.clear();cache.set(cacheKey,d);setData(d)})
+   .catch(e=>{if(!cancel)setError(e.name==="TimeoutError"?
+     "La consulta ha tardado demasiado. Prueba un período más corto.":e.message)});
   return()=>{cancel=true;controller.abort()};
- },[group.dcpf,query,clientSlug,useReal]);
- if(error)return <div role="alert" className="fm-generic-detail-error">{error}</div>;
- if(!data)return <LoadingPanel kind="table" label="Consultando los CN del conjunto…" rows={4}/>;
- // Un mismo CN vendido por varias farmacias debe SUMARSE, nunca sobrescribirse.
- const saleMap=new Map();
- for(const r of data.sales){
-  const prev=saleMap.get(r.cn)||{units:0,revenue:0};
-  prev.units+=Number(r.units||0);prev.revenue+=Number(r.revenue||0);
-  saleMap.set(r.cn,prev);
- }
- const pharmacyNames=new Map(pharmacies.map(p=>[String(p.id),p.name]));
- const articleNames=new Map((data.products||[]).map(p=>[String(p.cn),p.nombre||p.descripcion||""]));
- const activePolicy=data.policy?.global||{percentile:20,months:6};
- const policyFor=id=>data.policy?.overrides?.find(x=>String(x.pharmacyId)===String(id))||activePolicy;
- const policyLabels=[...new Set((data.purchases||[]).map(p=>{
-  const rule=policyFor(p.pharmacyId);return rule.percentile+" % / "+rule.months+" meses";
- }))];
- const purchaseMap=new Map();
- for(const r of data.purchases){
-  const list=purchaseMap.get(r.cn)||[];list.push(r);purchaseMap.set(r.cn,list);
- }
+ },[group.dcpf,query,clientSlug,useReal,cache,cacheKey,retry]);
+ if(error)return <div role="alert" className="fm-generic-detail-error">
+  <span>{error}</span><button className="btn btn-secondary btn-sm" type="button"
+   onClick={()=>setRetry(n=>n+1)}>Reintentar</button></div>;
+ if(!data)return <div className="fm-generic-detail-loading" role="status">
+  <span className="fm-load-spinner" aria-hidden="true"/> Consultando artículos del conjunto…</div>;
+ const products=data.products||[];
  return <div className="fm-generic-detail">
-  <p>Presentaciones del <strong>DCPF {group.dcpf}</strong>. Los importes y unidades se suman entre las farmacias seleccionadas; el <strong>PUC observado</strong> es el coste neto de recepciones dividido entre unidades con coste válido. No es el PMC del catálogo.</p>
-  <p className="fm-generic-price-note">El <strong>PUC óptimo</strong> se calcula con las unidades más baratas del histórico de cada farmacia, CN y proveedor. Configuración activa: {policyLabels.length?policyLabels.join(" · "):activePolicy.percentile+" % / "+activePolicy.months+" meses"}. Se exige un mínimo de 3 líneas de compra por referencia. Al seleccionar varias farmacias, los valores observados se ponderan por unidades; los objetivos se calculan dentro de cada farmacia, sin trasladar precios de una farmacia a otra.</p>
-  <SortableDataTable label="presentaciones de genéricos"
-   headers={["CN","Presentación","Laboratorio","Tipo","Vendidas","Ventas","Compradas","PUC observado","Objetivo DCPF/ud."]}
-   rows={data.products.map(product=>{
-    const sales=saleMap.get(product.cn),bought=purchaseMap.get(product.cn)||[];
-    const buyQty=bought.reduce((v,r)=>v+Number(r.units||0),0);
-    const buyAmount=bought.reduce((v,r)=>v+Number(r.cost??r.spend??0),0);
-    const pricedQty=bought.reduce((v,r)=>v+Number(r.pricedUnits??r.units??0),0);
-    const avg=pricedQty>0?buyAmount/pricedQty:null;
-    const pricedWithTarget=bought.filter(x=>Number(x.pricedUnits)>0&&x.targetPuc!=null);
-    const covered=pricedWithTarget.reduce((a,x)=>a+Number(x.pricedUnits),0);
-    const target=covered>0&&Math.abs(covered-pricedQty)<0.0001?
-      pricedWithTarget.reduce((a,x)=>a+Number(x.pricedUnits)*Number(x.targetPuc),0)/covered:null;
-    return [<strong className="fm-generic-code" key={product.cn}>{product.cn}</strong>,
-      product.nombre,product.laboratorio||product.laboratorio_codigo||"—",
-      product.generico?"Genérico":"Equivalente de referencia",
-      data.salesAvailable?quantity(sales?.units||0):"—",
-      data.salesAvailable?money(sales?.revenue||0):"—",
-      data.purchasesAvailable?quantity(buyQty):"—",unitPrice(avg),unitPrice(target)];
-   })}/>
-  <h3>Comparativa de compras por CN, proveedor y farmacia</h3>
-  {!data.purchasesAvailable?<p>El cliente todavía no tiene datos de compras integrados.</p>:
-   !data.purchases.length?<p>No hay compras del conjunto en el período seleccionado.</p>:
-   <SortableDataTable label="compras por genérico"
-    headers={["Farmacia","CN · Artículo","Proveedor de compra","Unidades","PUC observado","PUC óptimo CN/proveedor","Objetivo equivalente DCPF","Proveedor y CN objetivo","Ahorro orientativo","Compras (€)"]}
-    rows={data.purchases.map(r=>[
-     pharmacyNames.get(String(r.pharmacyId))||"Farmacia "+r.pharmacyId,
-     <span className="fm-generic-cn-name" key={r.cn}><strong className="fm-generic-code">{r.cn}</strong><span>{articleNames.get(String(r.cn))||"Nombre no disponible"}</span></span>,
-     r.supplier||r.supplierCode||"Sin proveedor",quantity(r.units),
-     unitPrice(r.puc),unitPrice(r.referencePuc),unitPrice(r.targetPuc),
-     r.targetSupplier?((r.targetSupplierName||r.targetSupplier)+(r.targetCn?" · CN "+r.targetCn+" · "+(articleNames.get(String(r.targetCn))||"Nombre no disponible"):"")):"—",
-     money(r.potential),money(r.spend)
-    ])}/>}
-
+  <div className="fm-generic-detail-title">
+   <strong>{integer(products.length)} artículos del conjunto</strong>
+   <span>CN, laboratorio y movimientos del período seleccionado</span>
+  </div>
+  <table className="fm-generic-articles-table" aria-label={"Artículos del conjunto "+group.dcpf}>
+   <thead><tr>
+    <th scope="col">CN</th><th scope="col">Artículo</th><th scope="col">Laboratorio</th>
+    <th scope="col">Vendidas</th><th scope="col">Ventas</th>
+    <th scope="col">Compradas</th><th scope="col">Compras</th><th scope="col">PUC medio</th>
+   </tr></thead>
+   <tbody>{products.map(p=><tr key={p.cn}>
+    <td><strong className="fm-generic-code">{p.cn}</strong></td>
+    <td className="fm-generic-article-name">{p.nombre||"Sin descripción"}</td>
+    <td>{p.laboratorio||"—"}</td>
+    <td className="fm-generic-number">{data.salesAvailable?quantity(p.soldUnits):"—"}</td>
+    <td className="fm-generic-number">{data.salesAvailable?money(p.soldAmount):"—"}</td>
+    <td className="fm-generic-number">{data.purchasesAvailable?quantity(p.buyUnits):"—"}</td>
+    <td className="fm-generic-number">{data.purchasesAvailable?money(p.buyAmount):"—"}</td>
+    <td className="fm-generic-number">{data.purchasesAvailable?unitPrice(p.puc):"—"}</td>
+   </tr>)}</tbody>
+  </table>
  </div>;
 }
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id])=>id));
@@ -152,6 +131,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const [loading,setLoading]=useState(true),[error,setError]=useState(""),[data,setData]=useState(null);
  const [updatedAt,setUpdatedAt]=useState(null);
  const [active,setActive]=useState(null),[page,setPage]=useState(0),[reload,setReload]=useState(0);
+ const detailCache=useRef(new Map());
  const asOf=useMemo(()=>new Date(),[reload]);
  const range=resolveSalesPeriod(periodKey,asOf,{from:customFrom,to:customTo},
    clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -165,6 +145,12 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   p.set("orden",sort.key);p.set("direccion",sort.direction);
   return p.toString();
  },[range.from,range.to,range.valid,ids.join(","),queryText,abcdFilter,sort.key,sort.direction]);
+ // Detalle solo depende del período y farmacias, no de orden/ABCD/búsqueda de grupos.
+ const detailQuery=useMemo(()=>{
+  const p=new URLSearchParams({desde:range.from,hasta:range.to});
+  if(ids.length)p.set("farmacias",ids.join(","));
+  return p.toString();
+ },[range.from,range.to,ids.join(",")]);
  useEffect(()=>{
   if(!query){setData(null);setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
@@ -320,7 +306,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
         <ChevronDown size={18} className={active===g.dcpf?"is-open":""}/></button></td>
       </tr>
       {active===g.dcpf&&<tr className="fm-generic-detail-row"><td colSpan={12}>
-       <GroupDetail group={g} query={query} clientSlug={clientSlug} pharmacies={pharmacies} useReal={useReal}/>
+       <GroupDetail group={g} query={detailQuery} clientSlug={clientSlug} useReal={useReal}
+         cache={detailCache.current}
+         cacheKey={[clientSlug,g.dcpf,detailQuery,useReal,reload].join("|")}/>
       </td></tr>}
      </React.Fragment>)}</tbody>
     </table></HorizontalTableScroll>}

@@ -72,7 +72,10 @@ def main():
              (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.8 OR
            (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
               nullif(btrim(principio_activo),'') IS NOT NULL) <
-             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.6
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.6 OR
+           (SELECT count(*) FROM fm_nomen_stage WHERE generico AND
+             nullif(btrim(descripcion_dcpf),'') IS NOT NULL) <
+             (SELECT count(*) FROM fm_nomen_stage WHERE generico)*0.65
         THEN RAISE EXCEPTION 'AEMPS: datos incompletos o inválidos. Conservada versión vigente.';
         END IF;
       END $nomen$;""")

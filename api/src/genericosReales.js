@@ -296,12 +296,12 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
      })),references:relevant,salesAvailable:hasSales,purchasesAvailable:hasBuys,policy});
    }
    const term=f.search.toLocaleLowerCase("es");
-   let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
+   let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    if(term){
     const {rows:matched}=await pool.query(`SELECT DISTINCT dcpf FROM farmetrica.nomenclator_presentaciones
      WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%'`,[term]);
     const ids=new Set(matched.map(x=>x.dcpf));
-    groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
+    groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    }
    if(f.abcd!=="ALL")groups=groups.filter(g=>g.abcdClass===f.abcd);
    const topGroups=sortGenericGroups(groups,"revenue","desc").slice(0,12);

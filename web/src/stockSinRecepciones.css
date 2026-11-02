@@ -15,3 +15,20 @@
 @media(max-width:640px){
  .fm-stale-stock .fm-stale-stock-table .fm-article-name{min-width:140px;max-width:260px}
 }
+
+/* Autonomía visual: esta vista debe tener espaciado aunque se abra por URL directa. */
+.fm-stale-stock .fm-preview-panel{padding:clamp(16px,3vw,24px);overflow:hidden}
+.fm-stale-stock .fm-preview-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;margin:0 0 18px}
+.fm-stale-stock .fm-preview-panel-head h2{margin:0;font-size:clamp(18px,2.4vw,22px);line-height:1.35;overflow-wrap:anywhere}
+.fm-stale-stock .fm-real-count{line-height:1.5;overflow-wrap:anywhere}
+.fm-stale-stock .fm-table-toolbar{margin-top:0;gap:10px;flex-wrap:wrap}
+.fm-stale-stock .fm-table-toolbar>*{min-width:0}
+.fm-stale-stock .list-pagination{padding-left:10px;padding-right:10px}
+@media(max-width:640px){
+ .fm-stale-stock .fm-preview-panel{padding:16px}
+ .fm-stale-stock .fm-preview-panel-head{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin-bottom:15px}
+ .fm-stale-stock .fm-table-toolbar{padding:12px 0}
+ .fm-stale-stock .fm-table-export-scope{font-size:11px;line-height:1.45}
+ .fm-stale-stock .fm-table-toolbar .btn{width:auto;max-width:100%}
+ .fm-stale-stock .fm-stale-info{line-height:1.65}
+}

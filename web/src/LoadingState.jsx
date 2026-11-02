@@ -29,6 +29,16 @@ export function LoadingStatus({label="Cargando datos…",compact=false}){
    <span>{label}</span>
  </div>;
 }
+// Una misma estructura en todos los KPI: ni el texto ni el indicador se desplazan
+// entre "cargando" y "valor", incluso cuando el mensaje ocupa dos líneas.
+export function KpiValue({loading=false,value,loadingText="Cargando…",label=""}){
+ return <strong className="fm-kpi-value" aria-busy={loading}>
+  {loading?<span className="fm-kpi-spinner" role="status" aria-label={label?("Cargando "+label):loadingText}>
+   <span className="fm-load-spinner" aria-hidden="true"/>
+   <span className="fm-kpi-loading-label">{loadingText}</span>
+  </span>:value}
+ </strong>;
+}
 export function SkeletonLine({width="100%",height="14px"}){
  return <span className="fm-skeleton" aria-hidden="true" style={{width,height}}/>;
 }

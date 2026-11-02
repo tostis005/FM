@@ -51,10 +51,12 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    const [version,catalog,policy]=await Promise.all([
     pool.query("SELECT sha256,fecha_fuente,importado_en,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo LIMIT 1"),
     pool.query(`SELECT dcpf,min(coalesce(nullif(principio_activo,''),nombre)) AS principle,
-      min(nombre) AS name,count(*)::int AS "skuCount",
+      min(nombre) FILTER(WHERE generico) AS name,
+      max(nullif(btrim(to_jsonb(n)->>'descripcion_dcpf'),'')) AS "officialDescription",
+      count(*)::int AS "skuCount",
       count(*) FILTER(WHERE generico)::int AS "genericCount",
       count(DISTINCT nullif(laboratorio_codigo,''))::int AS "labCount"
-      FROM farmetrica.nomenclator_presentaciones
+      FROM farmetrica.nomenclator_presentaciones n
       ${detail?"WHERE dcpf=$1":""}
       GROUP BY dcpf HAVING bool_or(generico)`,detail?[selectedDcpf]:[]),
     readPricePolicy(pool,req.context.client.slug)
@@ -294,12 +296,12 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
      })),references:relevant,salesAvailable:hasSales,purchasesAvailable:hasBuys,policy});
    }
    const term=f.search.toLocaleLowerCase("es");
-   let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
+   let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    if(term){
     const {rows:matched}=await pool.query(`SELECT DISTINCT dcpf FROM farmetrica.nomenclator_presentaciones
      WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%'`,[term]);
     const ids=new Set(matched.map(x=>x.dcpf));
-    groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name).toLocaleLowerCase("es").includes(term));
+    groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    }
    if(f.abcd!=="ALL")groups=groups.filter(g=>g.abcdClass===f.abcd);
    const topGroups=sortGenericGroups(groups,"revenue","desc").slice(0,12);

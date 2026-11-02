@@ -101,10 +101,12 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      GROUP BY n.dcpf`;
    const [catalog,sales,purchases]=await Promise.all([
     pool.query(`SELECT dcpf,min(coalesce(nullif(principio_activo,''),nombre)) AS principle,
-      min(nombre) AS name,count(*)::int AS "skuCount",
+      min(nombre) FILTER(WHERE generico) AS name,
+      max(nullif(btrim(to_jsonb(n)->>'descripcion_dcpf'),'')) AS "officialDescription",
+      count(*)::int AS "skuCount",
       count(DISTINCT nullif(laboratorio_codigo,''))::int AS "labCount",
       count(*) FILTER(WHERE generico)::int AS "genericCount"
-      FROM farmetrica.nomenclator_presentaciones
+      FROM farmetrica.nomenclator_presentaciones n
       GROUP BY dcpf HAVING bool_or(generico)
       ORDER BY min(coalesce(nullif(principio_activo,''),nombre)),dcpf`),
     hasSales&&q.ids.length?pool.query(salesSql,params):{rows:[]},
@@ -122,7 +124,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
        coalesce(principio_activo,'') ILIKE '%'||$1||'%'`,[q.search]):{rows:[]};
    const matchedIds=new Set(matched.rows.map(x=>x.dcpf));
    let groups=catalog.rows.filter(g=>!q.search||matchedIds.has(g.dcpf)||
-     (g.principle+" "+g.name).toLocaleLowerCase("es").includes(q.search.toLocaleLowerCase("es")));
+     (g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(q.search.toLocaleLowerCase("es")));
    groups=groups.map(g=>{
     const s=sm.get(g.dcpf),p=pm.get(g.dcpf);
     const avg=p?.avg_puc??null,best=p?.best_puc??null,qty=p?.units??0;

@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
 import {ChevronDown,RefreshCw,Search,Package,Download} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
-import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine} from "./LoadingState.jsx";
+import {LoadingPanel,LoadingStatus,SkeletonKpis,SkeletonLine,KpiValue} from "./LoadingState.jsx";
 import {resolveSalesPeriod,SALES_PERIODS} from "./salesPeriods.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters,initializeSharedReportFilters} from "./sharedReportFilters.js";
@@ -20,16 +20,22 @@ const unitPrice=euro;
 const labelDate=dateES;
 function Metric({label,value,caption,loading}){
  return <div className="card fm-generic-metric" aria-busy={loading}>
-   <span>{label}</span>{loading?<div role="status" aria-label={"Cargando "+label} className="fm-kpi-spinner"><span className="fm-load-spinner"/><small>Cargando…</small></div>:
-    <strong>{value}</strong>}<small className="fm-generic-caption">{caption||"\u00a0"}</small>
+   <span>{label}</span>
+   <KpiValue loading={loading} label={label} loadingText="Calculando datos…" value={value}/>
+   <small className="fm-generic-caption">{caption||"\u00a0"}</small>
  </div>;
 }
+// DCPF = presentación clínica equivalente; el principio activo aislado no identifica
+// la dosis, la forma ni el tamaño del envase.
+export const genericGroupLabel=group=>
+ String(group?.officialDescription||group?.name||"Presentación sin descripción").trim();
+
 function downloadRows(rows){
- const data=[["Conjunto DCPF","Nombre","Molécula","Códigos","ABCD","Ventas (€)","Unidades vendidas",
+ const data=[["Conjunto DCPF","Descripción clínica completa","Molécula","Códigos","ABCD","Ventas (€)","Unidades vendidas",
    "Compras (€)","PUC medio","Mejor PUC","Ahorro orientativo"],
   ...rows.map(g=>{
    const n=v=>v==null?"":quantity(v);
-   return [g.dcpf,g.name,g.principle,integer(g.skuCount),g.abcdClass,n(g.revenue),
+   return [g.dcpf,genericGroupLabel(g),g.principle,integer(g.skuCount),g.abcdClass,n(g.revenue),
     n(g.salesUnits),n(g.spent),n(g.averagePuc),n(g.bestPuc),n(g.indicativeSavings)];
   })];
  const csv="\ufeff"+data.map(r=>r.map(v=>'"'+String(v??"").replaceAll('"','""')+'"').join(";")).join("\r\n");
@@ -128,7 +134,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  const [tableFilters,setTableFilters]=useState({});
  const [pageSize,setPageSize]=useState(25);
  const sortColumns=[
-  ["name","Conjunto DCPF / molécula"],["skuCount","Códigos"],
+  ["name","Presentación equivalente (DCPF)"],["skuCount","Códigos"],
   ["abcdClass","ABCD"],["salesUnits","Venta (uds.)"],["revenue","Ventas"],
   ["averagePuc","PUC medio"],["averagePvp","PVP medio"],["unitMargin","Margen/ud."],
   ["pvpMarginPct","Margen PVP (%)"],["bestPuc","Menor PUC objetivo"],
@@ -194,11 +200,11 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   spend:buysEnabled?data?.summary?.purchases??0:null,
  }),[data,salesEnabled,buysEnabled]);
  const top=(data?.topGroups||groups).filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
-  name:(g.principle||g.name||g.dcpf).slice(0,28),revenue:Number(g.revenue),dcpf:g.dcpf}));
+  name:genericGroupLabel(g),revenue:Number(g.revenue),dcpf:g.dcpf}));
  const visibleGroups=groups.filter(g=>sortColumns.every(([key])=>{
   const selected=tableFilters[key];
   if(!selected||(Array.isArray(selected)&&!selected.length))return true;
-  const value=key==="name"?[g.name,g.principle,g.dcpf].join(" "):
+  const value=key==="name"?[genericGroupLabel(g),g.name,g.principle,g.dcpf].join(" "):
    key==="unitMargin"?(g.averagePvp!=null&&g.averagePuc!=null?g.averagePvp-g.averagePuc:""):
    g[key];
   return Array.isArray(selected)?selected.includes(String(value??"")):
@@ -263,16 +269,18 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
       <BarChart data={top} layout="vertical" margin={{top:8,right:14,bottom:5,left:0}}>
        <CartesianGrid horizontal={false} stroke="#edf2ef"/>
        <XAxis type="number" fontSize={10} tickLine={false} axisLine={false}/>
-       <YAxis dataKey="name" type="category" width={142} fontSize={10} tickLine={false} axisLine={false}/>
-       <Tooltip formatter={v=>money(v)}/>
-       <Bar dataKey="revenue" fill="#159c70" radius={[0,5,5,0]}/>
+       <YAxis dataKey="name" type="category" width={206} fontSize={10} tickLine={false}
+         tickFormatter={value=>value.length>32?value.slice(0,32)+"…":value} axisLine={false}/>
+       <Tooltip formatter={v=>[money(v),"Ventas netas"]} labelFormatter={(_,items)=>items?.[0]?.payload?.name||""}/>
+       <Bar dataKey="revenue" name="Ventas netas" fill="#159c70" radius={[0,5,5,0]}/>
       </BarChart>
      </ResponsiveContainer></div>}
    </section>
    </div>
   <section className="card fm-generic-list">
    <div className="section-heading"><div><h2>Conjuntos genéricos</h2>
-    <p>{loading?"Consultando catálogo…":number(data?.totalGroups||0)+" conjuntos · "+number(groups.length)+" visibles en la consulta"}</p></div>
+    <p>{loading?"Consultando catálogo…":number(data?.totalGroups||0)+" conjuntos · "+number(groups.length)+" visibles en la consulta"}</p>
+     <p className="fm-generic-criteria">Cada conjunto identifica la composición, dosis, forma farmacéutica y presentación según el Nomenclátor AEMPS. Los CN equivalentes se comparan dentro de su DCPF.</p></div>
     <button type="button" className="btn btn-secondary" disabled={loading||!visibleGroups.length}
      onClick={()=>downloadRows(visibleGroups)}><Download size={16}/> Exportar CSV</button></div>
    {loading?<LoadingPanel kind="table" label="Agrupando presentaciones y movimientos…" rows={6}/>:
@@ -296,7 +304,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
      </th>)}<th><span className="smart-filter-blank"/></th></tr></thead>
      <tbody>{!chunk.length&&<tr><td colSpan={12}>Ningún conjunto coincide con los filtros de columna. Puedes modificarlos arriba.</td></tr>}{chunk.map(g=><React.Fragment key={g.dcpf}>
       <tr className="fm-generic-click-row" onClick={()=>setActive(active===g.dcpf?null:g.dcpf)}>
-       <td><strong>{g.principle||g.name}</strong><small>DCPF {g.dcpf} · {g.name}</small></td>
+       <td><strong className="fm-generic-full-name">{genericGroupLabel(g)}</strong>
+       <small>Principio activo: {g.principle||"No informado"} · DCPF {g.dcpf}</small></td>
        <td>{number(g.skuCount)} <small>({g.genericCount} EFG)</small></td>
        <td>{g.abcdClass?<span className={"fm-abcd fm-abcd-"+g.abcdClass} title="Clasificación por peso de ventas del conjunto en el período">{g.abcdClass}</span>:"—"}</td>
        <td>{quantity(g.salesUnits)}</td><td>{money(g.revenue)}</td>

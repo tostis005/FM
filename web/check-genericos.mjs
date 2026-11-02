@@ -25,10 +25,15 @@ await page.route("**/api/**",async route=>{
   listRequests++;
   await new Promise(resolve=>setTimeout(resolve,650));
   data={version:{sha256:"aa",fecha_fuente:"2026-10-18",importado_en:"2026-10-18",total_genericos:6000},
-    totalGroups:1,summary:{salesUnits:22,revenue:240,purchases:118,savings:19.68},policy:{global:{percentile:20,months:6},overrides:[]},
-    groups:[{dcpf:"123456789",principle:"Omeprazol",name:"Omeprazol 20 mg 28 cápsulas",
+    totalGroups:2,summary:{salesUnits:22,revenue:240,purchases:118,savings:19.68},policy:{global:{percentile:20,months:6},overrides:[]},
+    groups:[{dcpf:"123456789",principle:"Omeprazol",name:"Omeprazol A 20 mg 28 cápsulas",
+      officialDescription:"Omeprazol 20 mg 28 cápsulas gastrorresistentes vía oral",
       skuCount:2,genericCount:2,salesUnits:22,revenue:240,
-      purchaseUnits:12,spent:118,averagePuc:9.84,averagePvp:15,pvpMarginPct:34.4,bestPuc:8.2,indicativeSavings:19.68}],
+      purchaseUnits:12,spent:118,averagePuc:9.84,averagePvp:15,pvpMarginPct:34.4,bestPuc:8.2,indicativeSavings:19.68},
+     {dcpf:"987654321",principle:"Omeprazol",name:"Omeprazol B 40 mg 14 cápsulas",
+      officialDescription:"Omeprazol 40 mg 14 cápsulas gastrorresistentes vía oral",
+      skuCount:1,genericCount:1,salesUnits:0,revenue:0,spent:0,averagePuc:null,averagePvp:null,
+      bestPuc:null,indicativeSavings:null}],
     sales:{available:true},purchases:{available:true}};
  }
  else if(p==="/api/genericos/reales/123456789"){
@@ -52,8 +57,23 @@ try{
  await page.waitForFunction(()=>document.querySelectorAll(".fm-generic-metric .fm-kpi-spinner").length===5,
   {timeout:7000});
  assert.equal(await page.locator(".fm-generic-chart .fm-loading-panel").count(),1);
+ const alignment=await page.locator(".fm-generic-metric .fm-kpi-spinner").evaluateAll(items=>
+  items.map(item=>{
+   const spin=item.querySelector(".fm-load-spinner")?.getBoundingClientRect();
+   const label=item.querySelector(".fm-kpi-loading-label")?.getBoundingClientRect();
+   return spin&&label?Math.abs((spin.top+spin.height/2)-(label.top+label.height/2)):99;
+  }));
+ assert.ok(alignment.length===5&&alignment.every(delta=>delta<=2.5),
+   "Spinner y texto deben estar centrados en todos los KPI: "+alignment);
  assert.equal(await page.locator(".fm-generic-list .fm-loading-panel").count(),1);
- await page.getByText("Omeprazol",{exact:true}).first().waitFor({timeout:10000});
+ // La molécula no puede sustituir al descriptor clínico con dosis y envase.
+ await page.getByText("Omeprazol 20 mg 28 cápsulas gastrorresistentes vía oral",{exact:true}).first().waitFor({timeout:10000});
+ await page.getByText("Omeprazol 40 mg 14 cápsulas gastrorresistentes vía oral",{exact:true}).first().waitFor({timeout:10000});
+ assert.equal(await page.locator(".fm-generic-click-row").count(),2,
+   "Distinta dosis y tamaño de envase deben aparecer como conjuntos distintos");
+ assert.equal(await page.locator(".fm-generic-chart .recharts-bar-rectangle").count()>0,true);
+ assert.equal(await page.getByText("revenue",{exact:true}).count(),0,
+   "El gráfico debe emplear denominaciones en castellano");
  await page.getByRole("button",{name:"Desplegar conjunto 123456789"}).click();
  await page.getByText("Proveedor A").first().waitFor();
  assert.equal(headerSeen,true,"Detalle debe mantener tenant explícito");
@@ -79,7 +99,7 @@ try{
  await page.getByPlaceholder("Buscar conjunto…").fill("error-api");
  await page.locator(".fm-generic-list .fm-generic-empty-text").waitFor({timeout:8000});
  await page.getByRole("alert").filter({hasText:"Error de consulta simulado"}).first().waitFor({timeout:7000});
- assert.equal(await page.locator(".fm-generic-list").getByText("Omeprazol",{exact:true}).count(),0,
+ assert.equal(await page.locator(".fm-generic-click-row").count(),0,
   "Tras un fallo de consulta no se deben mostrar los resultados del filtro anterior");
  console.log("OK: Genéricos carga por visual, muestra agrupación DCPF y desglose aislado por cliente");
 }finally{await browser.close();}

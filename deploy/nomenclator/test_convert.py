@@ -46,7 +46,7 @@ class ConverterTest(unittest.TestCase):
                  "<nombredcsa>Omeprazol</nombredcsa></dcsa></root>")
                 z.writestr("dic/DICCIONARIO_DCPF.xml",
                  "<root><dcpf><codigodcpf>123456789</codigodcpf>"
-                 "<nombredcpf>Omeprazol cápsulas</nombredcpf></dcpf></root>")
+                 "<nombredcpf>Omeprazol 20 mg 28 cápsulas gastrorresistentes vía oral</nombredcpf></dcpf></root>")
             out=root/"csv.csv"; meta=root/"meta.json"
             convert(src,out,meta,2)
             rows=list(csv.DictReader(out.open(encoding="utf8")))
@@ -63,6 +63,10 @@ class ConverterTest(unittest.TestCase):
             self.assertEqual(rows[1]["nombre"],"Medicamento B")
             self.assertNotEqual(rows[0]["nombre"],"Omeprazol cápsulas")
             self.assertEqual(rows[0]["principio_activo"],"Omeprazol")
+            self.assertEqual(rows[0]["descripcion_dcpf"],
+                             "Omeprazol 20 mg 28 cápsulas gastrorresistentes vía oral")
+            self.assertEqual(rows[1]["descripcion_dcpf"],rows[0]["descripcion_dcpf"])
+            self.assertNotEqual(rows[0]["nombre"],rows[0]["descripcion_dcpf"])
             self.assertEqual(rows[0]["generico"],"true")
             self.assertEqual(rows[2]["generico"],"false")
             self.assertEqual(rows[1]["comercializado"],"false")

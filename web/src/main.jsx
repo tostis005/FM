@@ -35,7 +35,7 @@ const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
-import {LoadingStatus,SkeletonLine,StartupScreen} from "./LoadingState.jsx";
+import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd} from "./promotionLifecycle.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
@@ -128,7 +128,7 @@ function downloadCSV(name, rows) {
 }
 function Pill({status}){return <span className={"pill pill-"+status.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g,"-")}><span className="pill-dot"/>{status==="Finalizada"?"Archivada":status}</span>;}
 function Progress({value,wide=false}) {return <div className={"progress "+(wide?"progress-wide":"")}><div style={{width:Math.min(Math.max(value,0),100)+"%"}}/></div>}
-function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div className="kpi-content"><div className="kpi-label">{title}</div><div className="kpi-value">{loading?<SkeletonLine width="74%" height="28px"/>:value}</div><div className="kpi-caption">{caption||"\u00a0"}</div></div></div>}
+function Kpi({icon:Icon,title,value,caption,kind="mint",loading=false}){return <div className="kpi card"><div className={"kpi-icon kpi-"+kind}><Icon size={23}/></div><div className="kpi-content"><div className="kpi-label">{title}</div><div className="kpi-value"><KpiValue loading={loading} label={title} loadingText="Calculando…" value={value}/></div><div className="kpi-caption">{caption||"\u00a0"}</div></div></div>}
 function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=false}){
  const m=promotionMetrics(campaigns,salesAvailable);
  const show=value=>value==null?"—":integer(value);
@@ -138,9 +138,9 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{quantity(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Uds. atribuidas</span><strong>{salesLoading?<SkeletonLine width="70%" height="24px"/>:quantity(m.units)}</strong></div>
+   <div className="campaign-metric"><span>Uds. atribuidas</span><KpiValue loading={salesLoading} label="Uds. atribuidas" loadingText="Calculando…" value={quantity(m.units)}/></div>
    <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
-    <strong>{salesLoading?<SkeletonLine width="64%" height="24px"/>:m.completion==null?"—":percentage(m.completion)}</strong>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
+    <KpiValue loading={salesLoading} label="Cumplimiento" loadingText="Calculando…" value={m.completion==null?"—":percentage(m.completion)}/>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
   </div>
  </section>;

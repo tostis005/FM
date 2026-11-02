@@ -2,7 +2,7 @@ import React,{useMemo,useState,useEffect} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
 import {ArrowDownToLine,ArrowRight,Search,X,RefreshCw} from "lucide-react";
 import ListTable from "./ListTable.jsx";
-import {LoadingPanel,SkeletonLine} from "./LoadingState.jsx";
+import {LoadingPanel,SkeletonLine,KpiValue} from "./LoadingState.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {normalizeTables,money,number,monthAt} from "./businessDemoData.js";
 import {euro,quantity,integer,percentage,dateES} from "./localeES.js";
@@ -819,10 +819,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    return <button key={c.label+c.key} type="button" className={"card fm-demo-kpi fm-kpi-link "+(active?"fm-kpi-active":"")}
     disabled={!active||kpiLoading} aria-busy={kpiLoading} onClick={()=>go(c.link)} aria-label={c.label+(kpiLoading?", cargando":active?": abrir "+TITLES[c.link]:"")}>
     <span>{c.label}</span>
-    {kpiLoading?<div className="fm-kpi-spinner" role="status" aria-label={"Cargando "+c.label}>
-       <span className="fm-load-spinner" aria-hidden="true"/>
-       <small>{userLoadingText(progress,"Calculando "+sourceLabel)}</small>
-     </div>:<strong>{canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}</strong>}
+    <KpiValue loading={kpiLoading} label={c.label}
+     loadingText={userLoadingText(progress,"Calculando "+sourceLabel)}
+     value={canShowKpi(c.key)?format(c.value,c.unit,c.key):"—"}/>
     <small className="fm-kpi-caption">{reason||"\u00a0"}</small>
     {active&&<ArrowRight size={17} className="fm-kpi-arrow"/>}
    </button>;

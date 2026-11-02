@@ -58,7 +58,11 @@ export async function loadGenericArticleDetail(pool,req,res,f,{legacy=false}={})
   mapped.set((legacy?"*":upper(row.code))+"|"+trim(row.origen_id),trim(row.cn));
   ids.add(trim(row.origen_id));
  }
- const findCN=(code,id)=>mapped.get(upper(code)+"|"+trim(id))||
+ // Incluso en el modelo legado el id local sólo puede atribuirse a
+ // las farmacias expresamente autorizadas para el usuario y esta consulta.
+ const allowedCodes=new Set(codes);
+ const findCN=(code,id)=>!allowedCodes.has(upper(code))?null:
+  mapped.get(upper(code)+"|"+trim(id))||
   mapped.get("*|"+trim(id))||(data.has(trim(id))?trim(id):null);
  const params=[f.from,f.to,codes,[...ids]];
  const where="upper(btrim(v.farmacia_codigo))=ANY($3::text[]) "+

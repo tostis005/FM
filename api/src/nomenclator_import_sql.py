@@ -9,7 +9,7 @@ from pathlib import Path
 FIELDS = ("cn,nombre,laboratorio_codigo,laboratorio,"
           "laboratorio_titular_codigo,laboratorio_titular,"
           "laboratorio_comercializador_codigo,laboratorio_comercializador,"
-          "principio_activo,dcpf,dcp,dcsa,generico,comercializado")
+          "principio_activo,dcpf,descripcion_dcpf,dcp,dcsa,generico,comercializado")
 def main():
     metadata=json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     csv_path=Path(sys.argv[2])
@@ -28,7 +28,7 @@ def main():
           "cn text,nombre text,laboratorio_codigo text,laboratorio text,"
           "laboratorio_titular_codigo text,laboratorio_titular text,"
           "laboratorio_comercializador_codigo text,laboratorio_comercializador text,"
-          "principio_activo text,dcpf text,dcp text,dcsa text,"
+          "principio_activo text,dcpf text,descripcion_dcpf text,dcp text,dcsa text,"
           "generico boolean,comercializado boolean) ON COMMIT DROP;")
     # PostgreSQL COPY FROM STDIN puede fallar con finales de línea de los XML
     # oficiales al atravesar psql+SSH. Insertar lotes SQL bien escapados evita
@@ -80,11 +80,11 @@ def main():
       (cn,nombre,laboratorio_codigo,laboratorio,
        laboratorio_titular_codigo,laboratorio_titular,
        laboratorio_comercializador_codigo,laboratorio_comercializador,
-       principio_activo,dcpf,dcp,dcsa,generico,comercializado,actualizado_en)
+       principio_activo,dcpf,descripcion_dcpf,dcp,dcsa,generico,comercializado,actualizado_en)
       SELECT cn,nombre,nullif(laboratorio_codigo,''),nullif(laboratorio,''),
        nullif(laboratorio_titular_codigo,''),nullif(laboratorio_titular,''),
        nullif(laboratorio_comercializador_codigo,''),nullif(laboratorio_comercializador,''),
-       nullif(principio_activo,''),dcpf,nullif(dcp,''),nullif(dcsa,''),
+       nullif(principio_activo,''),dcpf,nullif(descripcion_dcpf,''),nullif(dcp,''),nullif(dcsa,''),
        generico,comercializado,now()
       FROM fm_nomen_stage
       ON CONFLICT (cn) DO UPDATE SET
@@ -95,7 +95,7 @@ def main():
        laboratorio_comercializador_codigo=excluded.laboratorio_comercializador_codigo,
        laboratorio_comercializador=excluded.laboratorio_comercializador,
        principio_activo=excluded.principio_activo,
-       dcpf=excluded.dcpf,dcp=excluded.dcp,dcsa=excluded.dcsa,
+       dcpf=excluded.dcpf,descripcion_dcpf=excluded.descripcion_dcpf,dcp=excluded.dcp,dcsa=excluded.dcsa,
        generico=excluded.generico,comercializado=excluded.comercializado,
        actualizado_en=now();""")
     print("DELETE FROM farmetrica.nomenclator_presentaciones p "
@@ -105,7 +105,7 @@ def main():
           "(fuente,sha256,fecha_fuente,total_presentaciones,total_genericos,fichero,transformacion_version,activo)"
           f" VALUES('AEMPS Nomenclátor de Prescripción','{sha}',"
           f"{chr(39)+date+chr(39) if date else 'NULL'},"
-          f"{rows},{generics},'prescripcion.zip',2,true)"
+          f"{rows},{generics},'prescripcion.zip',3,true)"
       " ON CONFLICT (sha256) DO UPDATE SET "
       "importado_en=now(),fecha_fuente=excluded.fecha_fuente,"
       "total_presentaciones=excluded.total_presentaciones,"

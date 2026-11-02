@@ -29,3 +29,13 @@
 - El Nomenclátor de Prescripción no es exactamente el mismo producto que el Nomenclátor de Facturación del SNS, que añade financiación, agrupaciones homogéneas y precios oficiales. La agrupación actual por DCPF es clínica / de presentación; no se debe afirmar que implica sustitución farmacéutica regulatoria automática.
 - Mantener la atribución a AEMPS y revisar las **condiciones de explotación y redistribución** del Nomenclátor antes de ampliar la explotación comercial o permitir descargas completas a terceros. La aplicación no expone el ZIP ni XML originales.
 - Fuera de España se implementarán otros catálogos terminológicos; el núcleo comercial de productos/ventas/compras sigue siendo agnóstico del origen.
+
+## Denominación clínica completa (versión 3)
+
+- **Agrupación y comparabilidad:** exclusivamente mediante el DCPF de la AEMPS, no por molécula, nombre comercial o laboratorio. El DCPF agrupa la descripción clínica con formato, que distingue la composición, la dosis o concentración, la forma farmacéutica y el envase; también se conserva la vía cuando figure en la fuente.
+- **Nombre del conjunto:** se prioriza la descripción oficial del DICCIONARIO_DCPF.xml, almacenada en descripcion_dcpf, frente a los nombres de cada CN. El nombre específico del artículo sigue intacto en el detalle; el principio activo es complementario.
+- **Compatibilidad:** la migración 010 añade la columna opcional de forma idempotente; las consultas funcionan con o sin ella mientras se produce la importación. Hasta entonces se emplea el nombre completo de una presentación EFG real, nunca la molécula aislada.
+- **Calidad:** se valida cobertura del diccionario DCPF entre los EFG. Si es insuficiente se aborta la importación y se conserva la versión anterior.
+- **Seguridad clínica y económica:** comparar productos del mismo conjunto oficial no autoriza automáticamente una sustitución ni demuestra que exista una oferta comercial disponible.
+
+Fuentes: AEMPS, Estructura del nombre de un medicamento; AEMPS, Nomenclátor de Prescripción; EMA, Generic and hybrid medicines.

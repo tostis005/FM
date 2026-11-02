@@ -32,6 +32,7 @@ const noData = status=>({available:false,reason:status});
 function catalogData(pool){
  return pool.query("SELECT sha256,fecha_fuente,importado_en,total_presentaciones,total_genericos FROM farmetrica.nomenclator_versiones WHERE activo=true LIMIT 1");
 }
+import {loadGenericArticleDetail} from "./genericArticleDetail.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {nameCommercialRows} from "./commercialNames.js";
@@ -153,6 +154,9 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
  });
  app.get("/api/genericos/conjuntos/:dcpf",...guard,async(req,res,next)=>{
   const q=filters(req,res);if(!q)return;
+  if(req.query.vista==="articulos")
+   try{return await loadGenericArticleDetail(pool,req,res,q,{legacy:true})}
+   catch(e){return next(e)}
   const dcpf=String(req.params.dcpf||"");
   if(!/^\d{1,30}$/.test(dcpf))return res.status(400).json({error:"Conjunto inválido"});
   try{

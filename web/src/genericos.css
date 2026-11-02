@@ -119,3 +119,49 @@
 @media(max-width:600px){.fm-generic-table-scroll tbody td:first-child{min-width:220px}
  .fm-generic-table-scroll td .fm-generic-full-name{max-width:290px}
  .fm-generic-criteria{font-size:11px}}
+
+/* Detalle DCPF: una tabla ligera dentro de la fila padre, sin otros
+   contenedores desplazables, filtros, paginadores ni scrolls encadenados. */
+.fm-generic-list .fm-dual-scroll-top{display:none}
+.fm-generic-list .fm-generic-detail-row>td{padding:13px 16px 17px;background:#f3f9f5;
+ border-top:1px solid #d7e8dc;overflow:visible}
+.fm-generics .fm-generic-detail{display:block;width:100%;min-width:0;max-width:100%;
+ overflow:visible}
+.fm-generic-detail-title{display:flex;align-items:center;justify-content:space-between;
+ gap:8px 15px;flex-wrap:wrap;margin:0 0 10px;padding:0 2px;color:#1a533a}
+.fm-generic-detail-title strong{font-size:13px;font-weight:800}
+.fm-generic-detail-title span{font-size:11px;color:#648271}
+.fm-generics .fm-generic-detail .fm-generic-articles-table{
+ border-collapse:separate;border-spacing:0;table-layout:fixed;
+ width:100%;min-width:0!important;max-width:100%;
+ background:#fff;border:1px solid #deebe1;border-radius:10px;
+ overflow:hidden;font-size:11.5px
+}
+.fm-generic-articles-table th{background:#ebf4ee;color:#4e7060;font-size:10.5px;
+ font-weight:750;padding:11px 8px;white-space:normal;line-height:1.4}
+.fm-generic-articles-table td{padding:11px 8px;vertical-align:middle;
+ border-top:1px solid #eef2ee;line-height:1.5;overflow-wrap:anywhere}
+.fm-generics .fm-generic-detail .fm-generic-articles-table th:nth-child(1){width:9%}
+.fm-generics .fm-generic-detail .fm-generic-articles-table th:nth-child(2){width:26%}
+.fm-generics .fm-generic-detail .fm-generic-articles-table th:nth-child(3){width:19%}
+.fm-generics .fm-generic-detail .fm-generic-articles-table th:nth-child(n+4){width:11.5%}
+.fm-generics .fm-generic-detail .fm-generic-articles-table td:first-child{
+ min-width:0;max-width:none;white-space:nowrap}
+.fm-generics .fm-generic-detail .fm-generic-articles-table td .fm-generic-code{
+ display:inline;color:#19714e;font-size:11.5px;font-weight:800;
+ max-width:none;white-space:nowrap;overflow-wrap:normal}
+.fm-generic-article-name{color:#234a39;font-weight:650}
+.fm-generics .fm-generic-articles-table .fm-generic-number{
+ font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;
+ overflow-wrap:normal;font-size:11px}
+.fm-generics .fm-generic-articles-table th:nth-child(n+4){text-align:right}
+.fm-generic-detail-loading{display:flex;align-items:center;gap:12px;
+ min-height:64px;padding:12px 14px;font-size:12px;color:#597565}
+.fm-generic-detail-loading .fm-load-spinner{width:19px;height:19px;flex:none}
+.fm-generic-detail-error{display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:10px;line-height:1.5}
+@media(max-width:700px){
+ .fm-generic-list .fm-generic-detail-row>td{padding:11px 8px 13px}
+ .fm-generic-detail-title{gap:4px;margin-bottom:8px}
+ .fm-generic-articles-table td,.fm-generic-articles-table th{padding:9px 5px}
+}

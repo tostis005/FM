@@ -1,5 +1,6 @@
 // Conjuntos DCPF de la AEMPS combinados con ventas/compras/artículos REALES de Ampedia.
 // El percentil de referencia afecta solo a la estimación, nunca al coste observado.
+import {loadGenericArticleDetail} from "./genericArticleDetail.js";
 import {readPricePolicy} from "./pricePolicy.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {includedPurchaseSupplier} from "./supplierReporting.js";
@@ -43,6 +44,8 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
  const guard=requireTenantModule("genericos");
  async function query(req,res,detail=false){
   const f=getFilter(req,res);if(!f)return;
+  if(detail&&req.query.vista==="articulos")
+   return loadGenericArticleDetail(pool,req,res,f);
   const selectedDcpf=detail?String(req.params.dcpf||""):"";
   if(detail&&!/^\d{1,30}$/.test(selectedDcpf))
    return res.status(400).json({error:"Conjunto inválido"});

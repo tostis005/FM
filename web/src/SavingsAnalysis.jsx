@@ -5,6 +5,9 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 
 const euro=n=>n==null?"No verificable":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",maximumFractionDigits:2}).format(Number(n));
 const integer=n=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(n||0));
+// Los IDs internos del sistema sólo son CN visibles cuando tienen formato nacional.
+const articleCN=value=>/^[0-9]{6,7}$/.test(String(value??"").trim())?
+ String(value).trim():"CN no disponible";
 export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
  const [report,setReport]=useState(null),[error,setError]=useState("");
  const [busy,setBusy]=useState(false);
@@ -43,7 +46,7 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
  const exportCsv=()=>{if(!prices?.rows?.length)return;
   downloadTableCSV("farmetrica-ahorro-puc-verificado",
    ["Farmacia","CN","PUC mayorista*","PUC otro","Unidades mayorista*","Líneas mayorista*","Líneas otro","Diferencial histórico €"],
-   prices.rows.map(p=>[p.fid,p.article,p.coop_puc,p.other_puc,p.coop_units,p.coop_lines,p.other_lines,p.diff_eur]));};
+   prices.rows.map(p=>[p.fid,articleCN(p.article)==="CN no disponible"?"":articleCN(p.article),p.coop_puc,p.other_puc,p.coop_units,p.coop_lines,p.other_lines,p.diff_eur]));};
  return <section className="card fm-demo-table" aria-busy={busy}>
   <div className="section-heading"><div>
    <h2>Análisis de ahorro con datos reales</h2>
@@ -70,7 +73,7 @@ export default function SavingsAnalysis({clientSlug,period,pharmacyIds=[]}){
    {prices.rows?.length>0&&<HorizontalTableScroll className="table-scroll" label="comparación de costes">
     <table><thead><tr><th>Farmacia</th><th>CN</th><th>PUC mayorista*</th><th>PUC otro</th><th>Unid. mayorista*</th><th>Compras por canal</th><th>Diferencial €</th></tr></thead>
     <tbody>{prices.rows.map(p=><tr key={p.fid+"-"+p.article}>
-     <td>{p.fid}</td><td>{p.article}</td><td>{euro(p.coop_puc)}</td><td>{euro(p.other_puc)}</td>
+     <td>{p.fid}</td><td>{articleCN(p.article)}</td><td>{euro(p.coop_puc)}</td><td>{euro(p.other_puc)}</td>
      <td>{integer(p.coop_units)}</td><td>{integer(p.coop_lines)} / {integer(p.other_lines)}</td>
      <td><strong>{euro(p.diff_eur)}</strong></td>
     </tr>)}</tbody></table>

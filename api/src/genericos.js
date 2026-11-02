@@ -101,10 +101,12 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
      GROUP BY n.dcpf`;
    const [catalog,sales,purchases]=await Promise.all([
     pool.query(`SELECT dcpf,min(coalesce(nullif(principio_activo,''),nombre)) AS principle,
-      min(nombre) AS name,count(*)::int AS "skuCount",
+      min(nombre) FILTER(WHERE generico) AS name,
+      max(nullif(btrim(to_jsonb(n)->>'descripcion_dcpf'),'')) AS "officialDescription",
+      count(*)::int AS "skuCount",
       count(DISTINCT nullif(laboratorio_codigo,''))::int AS "labCount",
       count(*) FILTER(WHERE generico)::int AS "genericCount"
-      FROM farmetrica.nomenclator_presentaciones
+      FROM farmetrica.nomenclator_presentaciones n
       GROUP BY dcpf HAVING bool_or(generico)
       ORDER BY min(coalesce(nullif(principio_activo,''),nombre)),dcpf`),
     hasSales&&q.ids.length?pool.query(salesSql,params):{rows:[]},

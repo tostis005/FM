@@ -181,6 +181,20 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(detail.products.length,2);
   assert.equal(detail.purchases.length,2);
   assert.ok(detail.purchases.some(r=>r.referencePuc>0));
+  // Abrir el conjunto no recalcula referencias óptimas: CN, ventas y compras
+  // reales de la selección con el mismo formato visible en el navegador.
+  const detailFast=await request("/api/genericos/reales/123456789",{vista:"articulos"});
+  assert.equal(detailFast.view,"articles");
+  assert.equal(detailFast.products.length,2);
+  const cnFast=detailFast.products.find(p=>p.cn==="654321");
+  assert.ok(cnFast,"La descripción oficial incluye ambos CN");
+  assert.ok(cnFast.soldUnits>0,"Se muestran ventas del CN");
+  assert.ok(cnFast.buyUnits>0,"Se muestran unidades recibidas");
+  assert.ok(cnFast.puc>0,"El PUC observado procede de recepciones reales");
+  assert.equal(Object.hasOwn(cnFast,"targetPuc"),false,"No calcular objetivos por proveedor");
+  const detailOther=await request("/api/genericos/reales/123456789",{vista:"articulos",farmacias:"5"});
+  assert.equal(detailOther.products.find(p=>p.cn==="654321").soldUnits,0,
+   "Una farmacia sin movimientos no hereda ventas de otra");
   // IDs proveedor iguales en ERP diferentes no comparten nombre ni gasto.
   const multi=await request("/api/analytics/reportes",{modulo:"proveedores",farmacias:"1,2"});
   const sameCode=multi.supplierRows.filter(r=>r.providerId==="PR1");

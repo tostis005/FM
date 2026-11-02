@@ -200,7 +200,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   spend:buysEnabled?data?.summary?.purchases??0:null,
  }),[data,salesEnabled,buysEnabled]);
  const top=(data?.topGroups||groups).filter(g=>Number(g.revenue)>0).slice(0,12).map(g=>({
-  name:genericGroupLabel(g).slice(0,52),fullName:genericGroupLabel(g),revenue:Number(g.revenue),dcpf:g.dcpf}));
+  name:genericGroupLabel(g),revenue:Number(g.revenue),dcpf:g.dcpf}));
  const visibleGroups=groups.filter(g=>sortColumns.every(([key])=>{
   const selected=tableFilters[key];
   if(!selected||(Array.isArray(selected)&&!selected.length))return true;
@@ -269,8 +269,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
       <BarChart data={top} layout="vertical" margin={{top:8,right:14,bottom:5,left:0}}>
        <CartesianGrid horizontal={false} stroke="#edf2ef"/>
        <XAxis type="number" fontSize={10} tickLine={false} axisLine={false}/>
-       <YAxis dataKey="name" type="category" width={206} fontSize={10} tickLine={false} axisLine={false}/>
-       <Tooltip formatter={v=>[money(v),"Ventas netas"]} labelFormatter={(_,items)=>items?.[0]?.payload?.fullName||""}/>
+       <YAxis dataKey="name" type="category" width={206} fontSize={10} tickLine={false}
+         tickFormatter={value=>value.length>32?value.slice(0,32)+"…":value} axisLine={false}/>
+       <Tooltip formatter={v=>[money(v),"Ventas netas"]} labelFormatter={(_,items)=>items?.[0]?.payload?.name||""}/>
        <Bar dataKey="revenue" name="Ventas netas" fill="#159c70" radius={[0,5,5,0]}/>
       </BarChart>
      </ResponsiveContainer></div>}

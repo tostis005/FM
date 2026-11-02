@@ -247,7 +247,7 @@ export default function ProveedoresUnificados({clientSlug}){
      {!suggestions.length?<p>No se detectan nombres duplicados pendientes en el maestro actual.</p>:
       suggestions.slice(0,50).map(x=><div key={x.destination} className="fm-master-suggestion">
        <div><strong>{x.name}</strong><small>{x.count} identidades · {x.matchingCodes.length?
-        "Mismo código ERP: "+x.matchingCodes.join(", "):"Sin evidencia de código compartido"}</small></div>
+        "Código de proveedor coincidente: "+x.matchingCodes.join(", "):"Sin evidencia de código compartido"}</small></div>
        <button className="btn btn-secondary btn-sm" type="button" onClick={()=>{
         setSelected(x.sourceIds);setMergeTo(x.destination);setShowSuggestions(false);
        }}>Revisar fusión</button>

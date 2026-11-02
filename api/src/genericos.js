@@ -124,7 +124,7 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
        coalesce(principio_activo,'') ILIKE '%'||$1||'%'`,[q.search]):{rows:[]};
    const matchedIds=new Set(matched.rows.map(x=>x.dcpf));
    let groups=catalog.rows.filter(g=>!q.search||matchedIds.has(g.dcpf)||
-     (g.principle+" "+g.name).toLocaleLowerCase("es").includes(q.search.toLocaleLowerCase("es")));
+     (g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(q.search.toLocaleLowerCase("es")));
    groups=groups.map(g=>{
     const s=sm.get(g.dcpf),p=pm.get(g.dcpf);
     const avg=p?.avg_puc??null,best=p?.best_puc??null,qty=p?.units??0;

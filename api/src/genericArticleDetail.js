@@ -36,7 +36,7 @@ export async function loadGenericArticleDetail(pool,req,res,f,{legacy=false}={})
  }
  const has=(table,...names)=>names.every(x=>cols.get(table)?.has(x));
  const salesAvailable=has("fm_ventas_analitica","farmacia_codigo","articulo_id","fecha","unidades","importe");
- const purchasesAvailable=has("fm_recepciones_analitica","farmacia_codigo","articulo_id","fecha","unidades","coste_unitario");
+ const purchasesAvailable=has("fm_recepciones_analitica","farmacia_codigo","articulo_id","fecha","unidades","importe","coste_unitario","proveedor_id");
  const mappingAvailable=legacy?has("productos","id","cn"):
   has("articulos","farmacia_codigo","origen_id","codigo_nacional","sincronizado_en");
  const nationalCodes=products.map(p=>trim(p.cn)).filter(Boolean);

@@ -100,6 +100,20 @@ try{
  await page.getByRole("button",{name:"Desplegar conjunto 123456789"}).click();
  await page.getByText("Omeprazol A 20 mg",{exact:true}).waitFor();
  assert.equal(detailRequests,1,"Reabrir reutiliza la caché");
+ await page.setViewportSize({width:390,height:844});
+ const mobile=await page.evaluate(()=>{
+  const outer=document.querySelector(".fm-generic-list .fm-generic-table-scroll");
+  const inner=document.querySelector(".fm-generic-detail");
+  const top=document.querySelector(".fm-generic-list .fm-dual-scroll-top");
+  return {outerScroll:outer?.scrollWidth>outer?.clientWidth,
+   nestedScroll:[...inner.querySelectorAll("*")].some(el=>
+    /auto|scroll/.test(getComputedStyle(el).overflowX)&&el.scrollWidth>el.clientWidth+2),
+   extraTopVisible:top&&getComputedStyle(top).display!=="none"};
+ });
+ assert.equal(mobile.outerScroll,true,"En móvil se conserva el scroll de la tabla padre");
+ assert.equal(mobile.nestedScroll,false,"En móvil no aparecen scrolls internos");
+ assert.equal(mobile.extraTopVisible,false,"No duplicar las barras de desplazamiento");
+ await page.setViewportSize({width:1280,height:850});
  // Recuperar foco no debe desmontar los conjuntos ni rehacer la petición.
  const initialRequests=listRequests;
  await page.evaluate(()=>{

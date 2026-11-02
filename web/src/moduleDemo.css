@@ -442,3 +442,17 @@
 .fm-stock-snapshot-warning span{flex:1 1 230px;min-width:0;overflow-wrap:anywhere}
 .fm-stock-snapshot-warning .btn{flex:0 1 auto;white-space:normal}
 @media(max-width:560px){.fm-stock-snapshot-warning{padding:13px}.fm-stock-snapshot-warning .btn{width:100%}}
+
+/* Estados explícitos de consulta, visibles junto a la tabla y sin desplazar celdas. */
+.fm-report-data-warning{
+ display:flex;align-items:flex-start;gap:10px 15px;flex-wrap:wrap;
+ margin:14px 0 8px;padding:13px 17px;border-radius:11px;
+ border:1px solid #d8e7c9;background:#f6faf0;color:#34543a;
+ font-size:12px;line-height:1.65;min-width:0;overflow-wrap:anywhere;
+}
+.fm-report-data-warning>strong{font-size:13px;flex:0 0 100%}
+.fm-report-data-warning>span{flex:1 1 260px;min-width:0}
+.fm-report-data-error{background:#fff6f4;border-color:#edcecb;color:#803f38}
+.fm-report-data-error .btn{flex:none;white-space:normal}
+@media(max-width:650px){.fm-report-data-warning{padding:12px 14px}
+ .fm-report-data-error .btn{width:100%}}

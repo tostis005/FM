@@ -857,6 +857,30 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      <span className="fm-preview-badge">Datos parciales</span>
      <span>Algunos importes y artículos de compras todavía no están disponibles.</span>
     </div>}
+   {module==="compras"&&reportLoading&&purchaseSlow&&
+     <div className="fm-report-data-warning" role="status">
+      <strong>Consultando artículos de compras</strong>
+      <span>La consulta de referencias está tardando más de lo habitual.
+       Los indicadores y las recepciones se consultan por separado; no se mostrarán
+       importes ni artículos incompletos como resultados definitivos.</span>
+     </div>}
+   {module==="compras"&&!reportLoading&&!receiptLoading&&!rows.length&&!reportError&&
+     purchaseState?.hasPurchases&&
+     <div className="fm-report-data-warning" role="status">
+      <strong>Hay compras, pero no aparecen artículos con estos filtros</strong>
+      <span>Existen recepciones para la selección. Puede que las líneas de artículo
+       estén pendientes de sincronizar o que los filtros no tengan coincidencias.
+       Revisa también el listado de recepciones y el período seleccionado.</span>
+     </div>}
+   {module==="compras"&&!reportLoading&&!receiptLoading&&!rows.length&&!reportError&&
+     purchaseState?.hasPurchases===false&&
+     <div className="fm-report-data-warning" role="status">
+      <strong>Sin recepciones para la selección</strong>
+      <span>No hay compras registradas en el período y farmacias elegidos.
+       Prueba otro período o selecciona otras farmacias.</span>
+     </div>}
+   {module==="compras"&&purchaseStateError&&
+     <p className="fm-inline-status" role="alert">No se pudo comprobar la disponibilidad del origen de compras: {purchaseStateError}</p>}
    {realReport?.available===false&&
     <div className="fm-preview-data-hint"><span className="fm-preview-badge">Datos pendientes</span>
      <span>La información de este módulo todavía está pendiente de sincronización.</span></div>}

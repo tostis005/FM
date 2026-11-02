@@ -188,7 +188,8 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.equal(detailFast.products.length,2);
   const cnFast=detailFast.products.find(p=>p.cn==="654321");
   assert.ok(cnFast,"La descripción oficial incluye ambos CN");
-  assert.ok(cnFast.soldUnits>0,"Se muestran ventas del CN");
+  const soldFast=detailFast.products.find(p=>p.cn==="654322");
+  assert.ok(soldFast?.soldUnits>0,"Se muestran las ventas del CN que sí se vendió");
   assert.ok(cnFast.buyUnits>0,"Se muestran unidades recibidas");
   assert.ok(cnFast.puc>0,"El PUC observado procede de recepciones reales");
   assert.equal(Object.hasOwn(cnFast,"targetPuc"),false,"No calcular objetivos por proveedor");

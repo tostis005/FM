@@ -190,7 +190,7 @@ export function buildSalesDetailFallbackSQL(schema){
   FROM raw r JOIN unnest($3::text[],$4::text[]) AS pm(code,pharmacy_id)
    ON pm.code=r.code
   ORDER BY r.value DESC,pm.pharmacy_id,r.articulo_id
-  LIMIT $5::int
+  LIMIT $5::int OFFSET $6::int
  )
  SELECT p."pharmacyId",
   coalesce(nullif(btrim(a.codigo_nacional),''),p.articulo_id) AS cn,
@@ -293,17 +293,17 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
     ({rows}=await pool.query({text:buildSalesDetailSQL(schema,order,direction,source,columnFilters),
      values:args,query_timeout:14000}));
    }catch(error){
-    const recover=isQueryTimeout(error)&&page===1&&order==="value"&&direction==="desc"&&
+    const recover=isQueryTimeout(error)&&order==="value"&&direction==="desc"&&
      !search&&!families.length&&!Object.keys(columnFilters).length&&source.articles==="normalized";
     if(!recover)throw error;
     ({rows}=await pool.query({text:buildSalesDetailFallbackSQL(schema),
-     values:[from,to,args[2],args[3],pageSize+1],query_timeout:12000}));
+     values:[from,to,args[2],args[3],pageSize+1,(page-1)*pageSize],query_timeout:12000}));
     partialData=true;
    }
    res.json({totalFiltered:partialData?null:Number(rows[0]?.__totalFiltered||0),
     products:rows.slice(0,pageSize).map(x=>({
      ...x,id:x.pharmacyId+"|"+x.cn,pharmacyId:String(x.pharmacyId)
-    })),partialData,hasMore:!partialData&&rows.length>pageSize,page,from,to});
+    })),partialData,hasMore:rows.length>pageSize,page,from,to});
   }catch(e){next(e)}
  });
 }

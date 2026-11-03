@@ -36,6 +36,17 @@ function fixture({legacy=false,allowed=[1]}={}){
  const f={from:"2026-10-01",to:"2026-10-31",ids:allowed};
  return {pool,req,res,f,calls,legacy};
 }
+test("el catálogo DCPF aparece con una sola consulta sin leer ventas ni compras",async()=>{
+ const x=fixture();
+ await loadGenericArticleDetail(x.pool,x.req,x.res,x.f,{catalogOnly:true});
+ assert.equal(x.calls.length,1,"Abrir el DCPF no debe esperar a movimientos ni al ERP");
+ assert.equal(x.res.body.products[0].cn,"654321");
+ assert.equal(x.res.body.products[0].nombre,"Medicamento 20 mg 28 cápsulas");
+ assert.equal(x.res.body.movementsPending,true);
+ assert.equal(x.res.body.salesAvailable,null);
+ assert.equal(x.res.body.purchasesAvailable,null);
+ assert.doesNotMatch(x.calls[0].text,/fm_ventas|fm_recepciones|articulos/);
+});
 test("DCPF rápido consulta únicamente CN específicos y agrega ventas y compras",async()=>{
  const x=fixture();
  await loadGenericArticleDetail(x.pool,x.req,x.res,x.f);
@@ -54,6 +65,10 @@ test("DCPF rápido consulta únicamente CN específicos y agrega ventas y compra
  assert.match(queries,/articulo_id=ANY\(\$4::text\[\]\)/);
  assert.ok(x.calls.every(c=>!c.text.includes("JOIN farmetrica.farmacias")),
   "El acceso debe depender solo de los códigos de farmacia ya autorizados");
+ assert.ok(x.calls.some(c=>c.text.includes("btrim(a.codigo_nacional)=ANY($1::text[])")),
+  "La resolución de CN utiliza el índice directo de código nacional");
+ assert.ok(x.calls.every(c=>!c.text.includes("JOIN farmetrica.nomenclator_presentaciones n")),
+  "No se reescanea el Nomenclátor al resolver correspondencias locales");
 });
 test("desglose legado reutiliza el mapeo de CN sin políticas comerciales",async()=>{
  const x=fixture({legacy:true});

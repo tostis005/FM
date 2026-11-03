@@ -155,7 +155,9 @@ export function setupGenericAnalytics(app,pool,{requireTenantModule}){
  app.get("/api/genericos/conjuntos/:dcpf",...guard,async(req,res,next)=>{
   const q=filters(req,res);if(!q)return;
   if(req.query.vista==="articulos")
-   try{return await loadGenericArticleDetail(pool,req,res,q,{legacy:true})}
+   try{return await loadGenericArticleDetail(pool,req,res,q,{
+     legacy:true,catalogOnly:req.query.soloCatalogo==="1"
+    })}
    catch(e){return next(e)}
   const dcpf=String(req.params.dcpf||"");
   if(!/^\d{1,30}$/.test(dcpf))return res.status(400).json({error:"Conjunto inválido"});

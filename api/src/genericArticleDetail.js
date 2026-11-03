@@ -5,7 +5,7 @@ const trim=x=>String(x??"").trim();
 const upper=x=>trim(x).toUpperCase();
 const n=x=>Number(x)||0;
 const timeout=10000;
-export async function loadGenericArticleDetail(pool,req,res,f,{legacy=false}={}){
+export async function loadGenericArticleDetail(pool,req,res,f,{legacy=false,catalogOnly=false}={}){
  const dcpf=trim(req.params.dcpf),schema=req.context.client.schema;
  if(!/^\d{1,30}$/.test(dcpf))return res.status(400).json({error:"Conjunto inválido"});
  if(!VALID.test(schema))return res.status(400).json({error:"Esquema no válido"});
@@ -22,6 +22,10 @@ export async function loadGenericArticleDetail(pool,req,res,f,{legacy=false}={})
   cn:trim(p.cn),nombre:p.nombre,laboratorio:p.laboratorio||p.laboratorio_codigo||null,
   soldUnits:0,soldAmount:0,buyUnits:0,buyAmount:null,puc:null
  }]));
+ // El catálogo AEMPS está en PostgreSQL y se entrega sin tocar el histórico
+ // de ventas/compras: jamás debe esperar a la resolución del ERP.
+ if(catalogOnly)return res.json({products:[...data.values()],
+  salesAvailable:null,purchasesAvailable:null,view:"articles",movementsPending:true});
  if(!codes.length)return res.json({products:[...data.values()],salesAvailable:false,
   purchasesAvailable:false,view:"articles"});
  const {rows:columns}=await pool.query({
@@ -44,13 +48,14 @@ export async function loadGenericArticleDetail(pool,req,res,f,{legacy=false}={})
  if(mappingAvailable){
   const sql=legacy?
    "SELECT id::text AS origen_id,cn::text AS cn FROM "+t+".productos WHERE cn::text=ANY($1::text[])":
-   "SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id) upper(btrim(a.farmacia_codigo)) AS code,a.origen_id,n.cn "+
-   "FROM "+t+".articulos a JOIN farmetrica.nomenclator_presentaciones n "+
-   "ON n.cn=coalesce(nullif(btrim(a.codigo_nacional),''),CASE WHEN a.origen_id ~ '^[0-9]{6,7}$' THEN a.origen_id END) "+
-   "WHERE n.dcpf=$1 AND upper(btrim(a.farmacia_codigo))=ANY($2::text[]) "+
+   "SELECT DISTINCT ON (upper(btrim(a.farmacia_codigo)),a.origen_id) "+
+   "upper(btrim(a.farmacia_codigo)) AS code,a.origen_id,btrim(a.codigo_nacional) AS cn "+
+   "FROM "+t+".articulos a "+
+   "WHERE btrim(a.codigo_nacional)=ANY($1::text[]) "+
+   "AND upper(btrim(a.farmacia_codigo))=ANY($2::text[]) "+
    "ORDER BY upper(btrim(a.farmacia_codigo)),a.origen_id,a.sincronizado_en DESC NULLS LAST";
   ({rows:mappings}=await pool.query({text:sql,
-   values:legacy?[nationalCodes]:[dcpf,codes],query_timeout:timeout}));
+   values:legacy?[nationalCodes]:[nationalCodes,codes],query_timeout:timeout}));
  }
  const mapped=new Map(),ids=new Set(nationalCodes);
  for(const row of mappings){

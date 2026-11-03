@@ -45,7 +45,9 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
  async function query(req,res,detail=false){
   const f=getFilter(req,res);if(!f)return;
   if(detail&&req.query.vista==="articulos")
-   return loadGenericArticleDetail(pool,req,res,f);
+   return loadGenericArticleDetail(pool,req,res,f,{
+    catalogOnly:req.query.soloCatalogo==="1"
+   });
   const selectedDcpf=detail?String(req.params.dcpf||""):"";
   if(detail&&!/^\d{1,30}$/.test(selectedDcpf))
    return res.status(400).json({error:"Conjunto inválido"});

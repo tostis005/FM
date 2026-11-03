@@ -165,3 +165,23 @@
  .fm-generic-detail-title{gap:4px;margin-bottom:8px}
  .fm-generic-articles-table td,.fm-generic-articles-table th{padding:9px 5px}
 }
+
+/* La tabla aparece antes que las estadísticas: el estado no la sustituye. */
+.fm-generic-movements-status,.fm-generic-movements-warning{
+ display:flex;align-items:center;gap:9px 12px;min-width:0;
+ padding:9px 12px;margin:0 0 10px;border-radius:9px;
+ background:#f0f8f3;border:1px solid #dbece0;
+ color:#426a54;font-size:12px;line-height:1.5;flex-wrap:wrap;
+}
+.fm-generic-movements-status .fm-load-spinner{
+ width:16px;height:16px;flex:none;border-width:2px
+}
+.fm-generic-movements-warning{
+ background:#fff9ee;border-color:#f0dfba;color:#73552b
+}
+.fm-generic-movements-warning>span{flex:1 1 280px}
+.fm-generic-movements-warning .btn{flex:none}
+@media(max-width:650px){
+ .fm-generic-movements-status,.fm-generic-movements-warning{padding:8px 10px}
+ .fm-generic-movements-warning .btn{width:100%}
+}

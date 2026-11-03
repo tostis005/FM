@@ -9,7 +9,7 @@ const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",active:true},{
 const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
-let listRequests=0,detailRequests=0;
+let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0;
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
  let data={};
@@ -40,12 +40,26 @@ await page.route("**/api/**",async route=>{
   detailRequests++;
   assert.equal(u.searchParams.get("vista"),"articulos");
   headerSeen=req.headers()["x-farmetrica-cliente"]==="ampedia";
-  data={view:"articles",products:[
+  const products=[
    {cn:"654321",nombre:"Omeprazol A 20 mg",laboratorio:"Lab A",
     soldUnits:27,soldAmount:295,buyUnits:14,buyAmount:144,puc:144/14},
    {cn:"654322",nombre:"Omeprazol B 20 mg",laboratorio:"Lab B",
     soldUnits:0,soldAmount:0,buyUnits:0,buyAmount:0,puc:null}
-  ],salesAvailable:true,purchasesAvailable:true};
+  ];
+  if(u.searchParams.get("soloCatalogo")==="1"){
+   catalogRequests++;
+   data={view:"articles",products:products.map(p=>({...p,
+    soldUnits:0,soldAmount:0,buyUnits:0,buyAmount:null,puc:null})),
+    salesAvailable:null,purchasesAvailable:null,movementsPending:true};
+  }else{
+   movementsRequests++;
+   await new Promise(resolve=>setTimeout(resolve,700));
+   if(movementsRequests===1){
+    await route.fulfill({status:503,contentType:"application/json",
+     body:JSON.stringify({error:"Consulta de movimientos agotada"})});return;
+   }
+   data={view:"articles",products,salesAvailable:true,purchasesAvailable:true};
+  }
  }
  else if(p==="/api/ventas/seguimiento")data={sales:{}};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(data)});
@@ -76,7 +90,9 @@ try{
  await page.getByRole("button",{name:"Desplegar conjunto 123456789"}).click();
  await page.getByText("Omeprazol A 20 mg",{exact:true}).waitFor();
  assert.equal(headerSeen,true,"La petición de detalle mantiene tenant explícito");
- assert.equal(detailRequests,1,"Abrir un DCPF requiere una única consulta");
+ assert.equal(catalogRequests,1,"El catálogo debe tener una sola lectura rápida");
+ assert.ok(await page.locator(".fm-generic-detail table tbody tr").count()===2,
+  "El catálogo aparece antes de los cálculos de ventas");
  assert.equal(await page.locator(".fm-generic-detail .fm-dual-scroll").count(),0,
   "El detalle no debe introducir otro scroll anidado");
  assert.equal(await page.locator(".fm-generic-detail .fm-table-toolbar").count(),0,
@@ -87,7 +103,13 @@ try{
  assert.equal(await page.getByText("PUC óptimo",{exact:true}).count(),0);
  const firstRow=page.locator(".fm-generic-detail table tbody tr").first();
  assert.match(await firstRow.innerText(),/654321/);
- assert.match(await firstRow.innerText(),/27/,"Ventas del mismo CN se suman entre farmacias");
+ await page.getByText("Los artículos siguen disponibles.",{exact:false}).first().waitFor({timeout:9000});
+ assert.equal(await page.locator(".fm-generic-detail table tbody tr").count(),2,
+  "Un fallo de movimientos nunca debe eliminar los CN ya cargados");
+ await page.getByRole("button",{name:"Reintentar movimientos"}).click();
+ await page.waitForFunction(()=>document.querySelector(".fm-generic-detail table tbody tr")?.
+   textContent.includes("27"),{timeout:9000});
+ assert.match(await firstRow.innerText(),/27/,"Las ventas se recuperan al reintentar");
  const scrolls=await page.evaluate(()=>{
   const detail=document.querySelector(".fm-generic-detail");
   const parent=document.querySelector(".fm-generic-list .fm-generic-table-scroll");
@@ -99,7 +121,8 @@ try{
  await page.getByRole("button",{name:"Desplegar conjunto 123456789"}).click();
  await page.getByRole("button",{name:"Desplegar conjunto 123456789"}).click();
  await page.getByText("Omeprazol A 20 mg",{exact:true}).waitFor();
- assert.equal(detailRequests,1,"Reabrir reutiliza la caché");
+ assert.equal(catalogRequests,1,"Reabrir reutiliza el catálogo");
+ assert.equal(movementsRequests,2,"Reabrir no reconsulta los movimientos una vez completos");
  await page.setViewportSize({width:390,height:844});
  const mobile=await page.evaluate(()=>{
   const outer=document.querySelector(".fm-generic-list .fm-generic-table-scroll");

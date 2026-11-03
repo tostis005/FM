@@ -46,35 +46,83 @@ const reportSignal=(controller)=>
  typeof AbortSignal!=="undefined"&&AbortSignal.any&&AbortSignal.timeout
   ?AbortSignal.any([controller.signal,AbortSignal.timeout(30000)]):controller.signal;
 function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
- const [data,setData]=useState(()=>cache.get(cacheKey)||null);
+ const previous=cache.get(cacheKey);
+ const [data,setData]=useState(()=>previous?.data||null);
  const [error,setError]=useState("");
+ const [statsLoading,setStatsLoading]=useState(false);
+ const [statsError,setStatsError]=useState("");
  const [retry,setRetry]=useState(0);
  useEffect(()=>{
-  const previous=cache.get(cacheKey);
-  if(previous){setData(previous);setError("");return;}
   let cancel=false;const controller=new AbortController();
-  setData(null);setError("");
-  fetch("/api/genericos/"+(useReal?"reales/":"conjuntos/")+encodeURIComponent(group.dcpf)+"?"+query+"&vista=articulos",{
-   credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:reportSignal(controller)})
-   .then(async r=>{const j=await r.json().catch(()=>({}));
-    if(!r.ok)throw Error(j.error||"No se pudieron consultar los artículos");return j})
-   .then(d=>{if(cancel)return;if(cache.size>50)cache.clear();cache.set(cacheKey,d);setData(d)})
-   .catch(e=>{if(!cancel)setError(e.name==="TimeoutError"?
-     "La consulta ha tardado demasiado. Prueba un período más corto.":e.message)});
+  const base="/api/genericos/"+(useReal?"reales/":"conjuntos/")+
+    encodeURIComponent(group.dcpf)+"?"+query+"&vista=articulos";
+  const load=async(suffix="")=>{
+   const signal=reportSignal(controller);
+   const response=await fetch(base+suffix,{credentials:"same-origin",cache:"no-store",
+    headers:{"X-Farmetrica-Cliente":clientSlug},signal});
+   const json=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(json.error||"No se pudieron consultar los artículos");
+   return json;
+  };
+  (async()=>{
+   let catalog=cache.get(cacheKey)?.data||null;
+   if(catalog&&cache.get(cacheKey)?.complete){
+    if(!cancel){setData(catalog);setError("");setStatsLoading(false);setStatsError("");}
+    return;
+   }
+   setError("");setStatsError("");
+   if(catalog){
+    setData(catalog);setStatsLoading(true);
+   }else{
+    setData(null);setStatsLoading(false);
+    try{
+     // Primera petición: solo los CN del Nomenclátor, sin acceso al histórico.
+     catalog=await load("&soloCatalogo=1");
+     if(cancel)return;
+     if(cache.size>50)cache.clear();
+     cache.set(cacheKey,{data:catalog,complete:false});
+     setData(catalog);
+     setStatsLoading(true);
+    }catch(e){
+     if(!cancel)setError(e.name==="AbortError"?"Consulta interrumpida":e.message);
+     return;
+    }
+   }
+   try{
+    // Segunda petición no bloqueante: ventas y compras del período.
+    const movements=await load();
+    if(cancel)return;
+    cache.set(cacheKey,{data:movements,complete:true});
+    setData(movements);setStatsLoading(false);setStatsError("");
+   }catch(e){
+    if(!cancel){
+     setStatsLoading(false);
+     setStatsError("No se han podido calcular las ventas y compras de este conjunto. Los artículos siguen disponibles.");
+    }
+   }
+  })();
   return()=>{cancel=true;controller.abort()};
  },[group.dcpf,query,clientSlug,useReal,cache,cacheKey,retry]);
  if(error)return <div role="alert" className="fm-generic-detail-error">
   <span>{error}</span><button className="btn btn-secondary btn-sm" type="button"
    onClick={()=>setRetry(n=>n+1)}>Reintentar</button></div>;
  if(!data)return <div className="fm-generic-detail-loading" role="status">
-  <span className="fm-load-spinner" aria-hidden="true"/> Consultando artículos del conjunto…</div>;
+  <span className="fm-load-spinner" aria-hidden="true"/> Consultando CN del conjunto…</div>;
  const products=data.products||[];
  return <div className="fm-generic-detail">
   <div className="fm-generic-detail-title">
    <strong>{integer(products.length)} artículos del conjunto</strong>
    <span>CN, laboratorio y movimientos del período seleccionado</span>
   </div>
+  {statsLoading&&<div className="fm-generic-movements-status" role="status">
+   <span className="fm-load-spinner" aria-hidden="true"/>
+   Artículos disponibles. Calculando ventas y compras…
+  </div>}
+  {statsError&&<div className="fm-generic-movements-warning" role="status">
+   <span>{statsError}</span>
+   <button className="btn btn-secondary btn-sm" type="button"
+    onClick={()=>setRetry(n=>n+1)}>Reintentar movimientos</button>
+  </div>}
   <table className="fm-generic-articles-table" aria-label={"Artículos del conjunto "+group.dcpf}>
    <thead><tr>
     <th scope="col">CN</th><th scope="col">Artículo</th><th scope="col">Laboratorio</th>

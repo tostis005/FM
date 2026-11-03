@@ -183,6 +183,13 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
   assert.ok(detail.purchases.some(r=>r.referencePuc>0));
   // Abrir el conjunto no recalcula referencias óptimas: CN, ventas y compras
   // reales de la selección con el mismo formato visible en el navegador.
+  const catalogOnly=await request("/api/genericos/reales/123456789",
+   {vista:"articulos",soloCatalogo:"1"});
+  assert.equal(catalogOnly.products.length,2);
+  assert.equal(catalogOnly.movementsPending,true);
+  assert.equal(catalogOnly.salesAvailable,null);
+  assert.ok(catalogOnly.products.every(p=>p.cn&&p.nombre),
+   "La denominación de los artículos procede del Nomenclátor PostgreSQL");
   const detailFast=await request("/api/genericos/reales/123456789",{vista:"articulos"});
   assert.equal(detailFast.view,"articles");
   assert.equal(detailFast.products.length,2);

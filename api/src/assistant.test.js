@@ -1,10 +1,40 @@
 import assert from "node:assert/strict";
-import {callOllama,startJsonHeartbeat} from "./assistant.js";
+import {callOllama,startJsonHeartbeat,setupAssistant,requireAssistantModule} from "./assistant.js";
 import test from "node:test";
 import {validateAssistantBody} from "./assistantPolicy.js";
 import {quoteSchema,authorizedIds,selectTools,periodFromQuestion,normalizedPeriod,runAssistantTool,pharmacyIdsFromQuestion} from "./assistantAnalytics.js";
 
 const ctx={role:"gestor",client:{schema:"ampedia"},modules:{ventas:true,compras:true,stock:false},allowedPharmacyIds:[1,2]};
+test("Asistente IA solo funciona cuando el cliente tiene habilitado el módulo",()=>{
+ const routes=new Map();
+ const app={
+  get:(url,...handlers)=>routes.set("GET "+url,handlers),
+  post:(url,...handlers)=>routes.set("POST "+url,handlers)
+ };
+ setupAssistant(app,{},{
+  requireTenant:()=>[(req,_res,next)=>{req.context={modules:req.modules};next()}]
+ });
+ for(const route of ["GET /api/asistente/estado","POST /api/asistente/chat",
+  "POST /api/asistente/chat/stream","POST /api/asistente/transcribir"]){
+  const handlers=routes.get(route);
+  assert.ok(handlers?.includes(requireAssistantModule),route+" debe exigir permiso de IA");
+  for(const modules of [{asistente:false},{ventas:true},{}]){
+   const req={context:{modules,role:"superadministrador"}};
+   let nextCalled=false;
+   const response={status(code){this.code=code;return this},
+    json(body){this.body=body;return this}};
+   requireAssistantModule(req,response,()=>{nextCalled=true});
+   assert.equal(nextCalled,false,"Módulo desactivado: no debe alcanzar la API");
+   assert.equal(response.code,403);
+   assert.match(response.body.error,/Asistente IA/);
+  }
+  let nextCalled=false;
+  requireAssistantModule({context:{modules:{asistente:true}}},
+   {status(){throw Error("La ruta debería estar habilitada")}},
+   ()=>{nextCalled=true});
+  assert.equal(nextCalled,true);
+ }
+});
 test("heartbeat mantiene el prefijo JSON válido mientras Ollama responde",()=>{
  const writes=[],headers={};
  const res={destroyed:false,writableEnded:false,

@@ -37,7 +37,9 @@ async function mockApi(route){
  if(path==="/api/auth/me")payload={user};
  else if(path==="/api/tenant/context")payload={...context,
    client:url.searchParams.get("cliente")==="cliente_demo"
-    ? {slug:"cliente_demo",name:"Cliente de pruebas",schema:"cliente_demo"}:context.client};
+    ? {slug:"cliente_demo",name:"Cliente de pruebas",schema:"cliente_demo"}:context.client,
+   modules:url.searchParams.get("cliente")==="cliente_demo"
+    ? {...modules,asistente:false}:modules};
  else if(path==="/api/health/database")payload={database:"unavailable",status:"ok"};
  else if(path==="/api/tenant/farmacias"||path==="/api/farmacias")payload=pharmacies;
  else if(path==="/api/admin/clientes")payload=[client];
@@ -288,6 +290,25 @@ try{
          fullPage:true,timeout:5000}).catch(()=>{});
        console.error("FAIL",id,error.message);
      }
+   }
+   // El mismo superadministrador no debe ver IA en un cliente desactivado.
+   if([375,1440].includes(viewport.width)){
+    try{
+     await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
+     const launcher=page.getByRole("button",{name:"Abrir asistente de Farmétrica"});
+     await launcher.waitFor({state:"visible",timeout:12000});
+     const selector=page.getByRole("combobox",{name:"Cambiar de cliente"});
+     await selector.selectOption("cliente_demo");
+     await launcher.waitFor({state:"detached",timeout:12000});
+     if(await page.locator(".fm-ai-root").count())
+      throw Error("El diálogo del asistente permanece en un cliente desactivado");
+     await selector.selectOption("ampedia");
+     await launcher.waitFor({state:"visible",timeout:12000});
+     console.log("OK",viewport.width,"asistente por cliente");
+    }catch(error){
+     failures.push(viewport.width+"-permisos-asistente: "+error.message);
+     console.error("FAIL",viewport.width,"asistente por cliente",error.message);
+    }
    }
    await ctx.close();
  }

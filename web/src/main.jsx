@@ -42,7 +42,7 @@ import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
-import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod} from "./promotionMonthFilter.js";
+import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod,promotionMatchesReportScope} from "./promotionMonthFilter.js";
 import {mapLimited} from "./asyncBatches.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -209,8 +209,9 @@ function selectedIdsFromUrl(){
 function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
  const status=params.get("estado")||"Todos";
+ const month=promotionMonthRange(params.get("mes"))?params.get("mes"):"";
  return {status:["Activa","Pendiente de revisión","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
-  year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
+  month,year:!month&&/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
 }
 function pageFromUrl(){
@@ -352,6 +353,7 @@ function App(){
   const [savingPharmacy,setSavingPharmacy]=useState(false);
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
  const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
+ const [reportMonth,setReportMonth]=useState(()=>reportFiltersFromUrl().month);
   const [reportModal,setReportModal]=useState(null);
  const [reportPage,setReportPage]=useState(0);
  const [reportPageSize,setReportPageSize]=useState(10);
@@ -455,7 +457,7 @@ function App(){
  useEffect(()=>{
    const onBackForward=()=>{
    const filters=reportFiltersFromUrl();
-   setReportStatus(filters.status);setReportYear(filters.year);
+   setReportStatus(filters.status);setReportYear(filters.year);setReportMonth(filters.month);
    setReportSelectedIds(filters.ids===null?data.promos.map(p=>p.id):filters.ids);
    setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
@@ -546,10 +548,10 @@ function App(){
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
  }:p);
- const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
- const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
+ const reportFilterBase=promos.filter(p=>promotionMatchesReportScope(p,{
+  status:reportStatus,month:reportMonth,year:reportYear}));
  const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
- const draftFilterBase=reportModal?promos.filter(p=>(reportModal.status==="Todos"||p.status===reportModal.status)&&(reportModal.year==="Todos"||(p.start||"").slice(0,4)===reportModal.year)):[];
+ const draftFilterBase=reportModal?promos.filter(p=>promotionMatchesReportScope(p,reportModal)):[];
  const draftVisible=reportModal?draftFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportModal.search.toLocaleLowerCase("es"))):[];
  const draftPageSize=reportModal?.pageSize||10;
  const draftMaxPage=Math.max(0,Math.ceil(draftVisible.length/draftPageSize)-1);

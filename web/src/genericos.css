@@ -16,7 +16,9 @@
 .fm-generic-metric>span{font-size:12px;color:#647e71;font-weight:750}
 .fm-generic-metric>strong{font-size:clamp(18px,2vw,26px);color:#164a35;letter-spacing:-.035em;overflow-wrap:anywhere}
 .fm-generic-metric>small{font-size:11px;color:#819286}
-.fm-generic-panels{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(240px,1fr);gap:14px}
+/* El gráfico es el único panel de esta fila: usar todo el ancho del informe. */
+.fm-generic-panels{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;width:100%;min-width:0}
+.fm-generic-panels>.fm-generic-chart{grid-column:1/-1;width:100%;max-width:100%;box-sizing:border-box}
 .fm-generic-chart,.fm-generic-explainer,.fm-generic-list{padding:18px!important;min-width:0}
 .fm-generic-chart-inner{height:375px;width:100%;margin-top:8px}
 .fm-generic-explainer h2{font-size:16px;margin:2px 0 17px}

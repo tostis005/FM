@@ -31,3 +31,14 @@ export function promotionOverlapsPeriod(promo,from="",to=""){
  if(!dayPattern.test(start||"")||!dayPattern.test(end||"")||start>end)return false;
  return (!from||end>=from)&&(!to||start<=to);
 }
+
+// Seguimiento comparte con Campañas la misma definición de vigencia mensual.
+// El año se conserva únicamente para interpretar enlaces históricos ?anio=AAAA.
+export function promotionMatchesReportScope(promo,{status="Todos",month="",year="Todos"}={}){
+ if(status!=="Todos"&&promo?.status!==status)return false;
+ if(month){
+  const range=promotionMonthRange(month);
+  return Boolean(range&&promotionOverlapsPeriod(promo,range.from,range.to));
+ }
+ return year==="Todos"||promo?.start?.slice(0,4)===year;
+}

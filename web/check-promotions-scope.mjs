@@ -11,7 +11,11 @@ const base={status:"Activa",start:"2026-10-01",end:"2026-10-31",type:"tres_por_d
 const promotions=[
  {...base,id:"P1",name:"Campaña Centro y Norte",cns:["123456"],targets:{"1":10,"2":10}},
  {...base,id:"P2",name:"Campaña solo Norte",cns:["234567"],targets:{"2":8}},
- {...base,id:"P3",name:"Campaña coincidente Centro",cns:["123456"],targets:{"1":5}}
+ {...base,id:"P3",name:"Campaña coincidente Centro",cns:["123456"],targets:{"1":5}},
+ {...base,id:"P4",name:"Campaña de noviembre",start:"2026-11-05",end:"2026-11-25",
+  cns:["345678"],targets:{"1":7}},
+ {...base,id:"P5",name:"Campaña de octubre a diciembre",start:"2026-10-20",end:"2026-12-10",
+  cns:["456789"],targets:{"1":8}}
 ];
 const ticketRequests=[],errors=[];
 page.on("pageerror",e=>errors.push(e.message));
@@ -69,6 +73,28 @@ try{
  assert.equal((await withoutCn.locator("td").nth(4).innerText()).trim(),"—",
   "El identificador ERP no se presenta como CN");
  await page.getByText(/Una misma venta puede atribuirse a varias promociones/).waitFor();
+ // El selector de Seguimiento debe usar la MISMA vigencia mensual que Campañas:
+ // P5 empieza en octubre pero continúa en noviembre.
+ await page.getByRole("button",{name:/Filtrar campañas/}).click();
+ const modal=page.getByRole("dialog",{name:"Filtrar campañas"});
+ await modal.getByLabel("Seleccionar mes y año de campañas en seguimiento").fill("2026-11");
+ const choices=modal.locator(".report-modal-campaigns .report-choice-body strong");
+ assert.deepEqual(await choices.allTextContents(),
+  ["Campaña de noviembre","Campaña de octubre a diciembre"],
+  "La selección mensual incluye las campañas vigentes que empezaron otro mes");
+ await modal.getByRole("button",{name:"Aplicar filtros y visualizar"}).click();
+ await modal.waitFor({state:"detached"});
+ await page.waitForURL(/mes=2026-11/,{timeout:8000});
+ assert.equal(await page.getByLabel("Seleccionar mes y año de seguimiento").inputValue(),"2026-11");
+ assert.match(await page.locator(".report-scope-info").innerText(),/noviembre de 2026|noviembre 2026/i);
+ assert.match(await page.locator(".report-scope-info").innerText(),/2 promociones seleccionadas/);
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByLabel("Seleccionar mes y año de seguimiento").waitFor();
+ assert.equal(await page.getByLabel("Seleccionar mes y año de seguimiento").inputValue(),"2026-11",
+  "El mes y año se conservan al recargar un enlace compartido");
+ await page.getByRole("button",{name:"Ver todos los meses"}).first().click();
+ await page.waitForURL(url=>!new URL(url).searchParams.has("mes"),{timeout:8000});
+ assert.equal(await page.getByLabel("Seleccionar mes y año de seguimiento").inputValue(),"");
  assert.deepEqual(errors,[],"No hay excepciones de navegador");
- console.log("OK: el filtro de farmacias se propaga al detalle de tickets y se advierten solapes de CN");
+ console.log("OK: Seguimiento filtra por mes y año con vigencia real y conserva filtro en URL");
 }finally{await browser.close()}

@@ -42,7 +42,7 @@ import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
-import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod} from "./promotionMonthFilter.js";
+import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod,promotionMatchesReportScope} from "./promotionMonthFilter.js";
 import {mapLimited} from "./asyncBatches.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -209,8 +209,9 @@ function selectedIdsFromUrl(){
 function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
  const status=params.get("estado")||"Todos";
+ const month=promotionMonthRange(params.get("mes"))?params.get("mes"):"";
  return {status:["Activa","Pendiente de revisión","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
-  year:/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
+  month,year:!month&&/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
 }
 function pageFromUrl(){
@@ -352,6 +353,7 @@ function App(){
   const [savingPharmacy,setSavingPharmacy]=useState(false);
  const [reportStatus,setReportStatus]=useState(()=>reportFiltersFromUrl().status);
  const [reportYear,setReportYear]=useState(()=>reportFiltersFromUrl().year);
+ const [reportMonth,setReportMonth]=useState(()=>reportFiltersFromUrl().month);
   const [reportModal,setReportModal]=useState(null);
  const [reportPage,setReportPage]=useState(0);
  const [reportPageSize,setReportPageSize]=useState(10);
@@ -455,7 +457,7 @@ function App(){
  useEffect(()=>{
    const onBackForward=()=>{
    const filters=reportFiltersFromUrl();
-   setReportStatus(filters.status);setReportYear(filters.year);
+   setReportStatus(filters.status);setReportYear(filters.year);setReportMonth(filters.month);
    setReportSelectedIds(filters.ids===null?data.promos.map(p=>p.id):filters.ids);
    setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
@@ -546,10 +548,10 @@ function App(){
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
  }:p);
- const reportYears=[...new Set(promos.map(p=>(p.start||"").slice(0,4)).filter(y=>/^(19|20)\d{2}$/.test(y)))].sort().reverse();
- const reportFilterBase=promos.filter(p=>(reportStatus==="Todos"||p.status===reportStatus)&&(reportYear==="Todos"||(p.start||"").slice(0,4)===reportYear));
+ const reportFilterBase=promos.filter(p=>promotionMatchesReportScope(p,{
+  status:reportStatus,month:reportMonth,year:reportYear}));
  const reportSelected=reportFilterBase.filter(p=>reportSelectedIds.includes(p.id));
- const draftFilterBase=reportModal?promos.filter(p=>(reportModal.status==="Todos"||p.status===reportModal.status)&&(reportModal.year==="Todos"||(p.start||"").slice(0,4)===reportModal.year)):[];
+ const draftFilterBase=reportModal?promos.filter(p=>promotionMatchesReportScope(p,reportModal)):[];
  const draftVisible=reportModal?draftFilterBase.filter(p=>(p.name+" "+p.id+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(reportModal.search.toLocaleLowerCase("es"))):[];
  const draftPageSize=reportModal?.pageSize||10;
  const draftMaxPage=Math.max(0,Math.ceil(draftVisible.length/draftPageSize)-1);
@@ -600,9 +602,14 @@ function App(){
    const p=promoId?promos.find(item=>item.id===promoId):null;
    const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
    const status=p?p.status:defaultStatus,ids=p?[p.id]:data.promos.filter(item=>item.status===status).map(item=>item.id);
-   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
+   const month=promotionSelectedMonth;
+   setReportStatus(status);setReportYear("Todos");setReportMonth(month);
+   setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));
-   const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
+   const params=new URLSearchParams();
+   if(p){params.set("ids",p.id);params.set("estado",status);}
+   if(month)params.set("mes",month);
+   const url="/promociones/seguimiento"+(params.size?"?"+params.toString():"");
    if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
   }
@@ -612,24 +619,36 @@ function App(){
   setPage(id);setSearch("");setMobileMenu(false);
  }
  function openReportFilters(){
-  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],page:0,pageSize:10});
+  setReportModal({status:reportStatus,year:reportYear,month:reportMonth,
+   search:"",ids:[...reportSelectedIds],page:0,pageSize:10});
  }
- function updateDraftScope(status,year){
+ function updateDraftScope(status,month){
   setReportModal(prev=>{
    if(!prev)return prev;
-   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+   const eligible=data.promos.filter(p=>promotionMatchesReportScope(p,{status,month}));
    const kept=prev.ids.filter(id=>eligible.some(p=>p.id===id));
-   return {...prev,status,year,search:"",page:0,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
+   return {...prev,status,month,year:"Todos",search:"",page:0,
+    ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
   });
+ }
+ function selectReportMonth(month){
+  if(month&&!promotionMonthRange(month))return;
+  const eligible=data.promos.filter(p=>promotionMatchesReportScope(p,{status:reportStatus,month}));
+  setReportMonth(month);setReportYear("Todos");
+  setReportSelectedIds(previous=>{
+   const kept=previous.filter(id=>eligible.some(p=>p.id===id));
+   return kept.length?kept:(reportStatus==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id);
+  });
+  setReportPage(0);
  }
  function selectDraftAll(visible){setReportModal(prev=>prev?{...prev,ids:[...new Set([...prev.ids,...visible.map(p=>p.id)])]}:prev);}
  function clearDraftVisible(visible){setReportModal(prev=>prev?{...prev,ids:prev.ids.filter(id=>!visible.some(p=>p.id===id))}:prev);}
  function toggleDraftCampaign(id){setReportModal(prev=>prev?{...prev,ids:prev.ids.includes(id)?prev.ids.filter(v=>v!==id):[...prev.ids,id]}:prev);}
  function applyReportFilters(){
   if(!reportModal)return;
-  const {status,year,ids}=reportModal;
-  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
-  setReportStatus(status);setReportYear(year);
+  const {status,month,ids}=reportModal;
+  const eligible=data.promos.filter(p=>promotionMatchesReportScope(p,reportModal));
+  setReportStatus(status);setReportMonth(month);setReportYear(reportModal.year);
   setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
   setSelectedPharmacyIds(sharedPharmacyIds.length?sharedPharmacyIds:null);setReportPage(0);setReportModal(null);
  }
@@ -917,12 +936,13 @@ function App(){
   if(page!=="seguimiento-global")return;
   const params=new URLSearchParams();
   params.set("estado",reportStatus);
-  if(reportYear!=="Todos")params.set("anio",reportYear);
+  if(reportMonth)params.set("mes",reportMonth);
+  else if(reportYear!=="Todos")params.set("anio",reportYear);
   params.set("ids",reportSelectedIds.join(","));
    if(selectedPharmacyIds!==null)params.set("farmacias",selectedPharmacyIds.join(","));
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
- },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
+ },[page,reportStatus,reportYear,reportMonth,reportSelectedIds,selectedPharmacyIds]);
  useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true);if(ADMIN_IDS.has(page))setAdminOpen(true)},[page]);
  useEffect(()=>{
   // Si se navega directamente a una subpágina, mostrar sus opciones.
@@ -1159,9 +1179,15 @@ function App(){
    <label className="fm-unified-filter">Buscar campaña o CN
     <input type="search" value={reportListSearch} onChange={e=>{setReportListSearch(e.target.value);setReportPage(0)}}
      placeholder="Nombre, laboratorio o CN…"/></label>
+   <label className="fm-unified-filter">Mes y año
+    <input type="month" value={reportMonth} onChange={e=>selectReportMonth(e.target.value)}
+     aria-label="Seleccionar mes y año de seguimiento"/></label>
+   <button type="button" className="fm-promotion-all-periods"
+    aria-pressed={!reportMonth&&reportYear==="Todos"} onClick={()=>selectReportMonth("")}>
+    Ver todos los meses</button>
  </ReportFilterBar>
  <div className="report-active-summary">
-  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Archivadas":reportStatus==="Borrador"?"Borradores":reportStatus==="Pendiente de revisión"?"Pendientes de revisión":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
+  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Archivadas":reportStatus==="Borrador"?"Borradores":reportStatus==="Pendiente de revisión"?"Pendientes de revisión":"Todos los estados"}</span>{reportMonth?<span>· {new Date(reportMonth+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</span>:reportYear!=="Todos"&&<span>· Año {reportYear}</span>}</div>
  </div>
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
@@ -1273,12 +1299,18 @@ function App(){
     </div>
     <div className="report-modal-body">
      <div className="report-modal-filters">
-      <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.year)}>
+      <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.month)}>
        <option value="Activa">Activas</option><option value="Pendiente de revisión">Pendientes de revisión</option><option value="Finalizada">Archivadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
       </select></Field>
-      <Field label="Año de inicio"><select value={reportModal.year} onChange={e=>updateDraftScope(reportModal.status,e.target.value)}>
-       <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
-      </select></Field>
+      <Field label="Mes y año"><input type="month" value={reportModal.month}
+       onChange={e=>updateDraftScope(reportModal.status,e.target.value)}
+       aria-label="Seleccionar mes y año de campañas en seguimiento"/></Field>
+      <button type="button" className="fm-promotion-all-periods"
+       aria-pressed={!reportModal.month&&reportModal.year==="Todos"}
+       onClick={()=>updateDraftScope(reportModal.status,"")}>Ver todos los meses</button>
+      {reportModal.year!=="Todos"&&!reportModal.month&&
+       <small className="fm-report-year-legacy">Filtro de enlace antiguo: año {reportModal.year}.
+        Selecciona un mes o pulsa «Ver todos los meses» para cambiarlo.</small>}
       <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,page:0}))}/></Field>
      </div>
      <div className="report-modal-selection-head">
@@ -1291,7 +1323,7 @@ function App(){
        <input type="checkbox" checked={reportModal.ids.includes(p.id)} onChange={()=>toggleDraftCampaign(p.id)}/>
        <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {p.end?dateES(p.end):"Sin fecha de fin"} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span><Pill status={p.status}/>
       </label>)}
-      {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, año o búsqueda.</div>}
+      {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, mes y año o búsqueda.</div>}
      </div>
      <ListPagination total={draftVisible.length} page={draftPage} pageSize={draftPageSize}
         label="campañas" onPageChange={n=>setReportModal(prev=>({...prev,page:n}))}

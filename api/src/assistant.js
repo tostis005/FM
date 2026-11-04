@@ -165,8 +165,15 @@ function ffmpegConvert(buffer,directory){
   child.stdin.end(buffer);
  });
 }
+// La disponibilidad del motor de IA no sustituye el permiso contratado por cliente.
+// También se comprueba para superadministradores que consultan otro cliente.
+export function requireAssistantModule(req,res,next){
+ if(req.context?.modules?.asistente!==true)
+  return res.status(403).json({error:"El módulo Asistente IA no está habilitado para este cliente"});
+ next();
+}
 export function setupAssistant(app,pool,{requireTenant}) {
- app.get("/api/asistente/estado",...requireTenant(),async(_req,res)=>{
+ app.get("/api/asistente/estado",...requireTenant(),requireAssistantModule,async(_req,res)=>{
   let available=false;
   if(enabled())try{
     const response=await fetch(ollama().replace(/\/+$/,"")+"/api/tags",{signal:AbortSignal.timeout(2200)});
@@ -178,7 +185,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
   res.json({enabled:available,configured:enabled(),voiceEnabled:voiceEnabled(),
     model:enabled()?model():null,mode:available?"local":enabled()?"model_unavailable":"not_configured"});
  });
- app.post("/api/asistente/chat",...requireTenant(),async(req,res)=>{
+ app.post("/api/asistente/chat",...requireTenant(),requireAssistantModule,async(req,res)=>{
   if(!enabled())return res.status(503).json({error:"El asistente está pendiente de activación en el servidor"});
   const body=validateAssistantBody(req.body);
   if(!body)return res.status(400).json({error:"Pregunta o historial inválidos"});
@@ -231,7 +238,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
 
  // SSE autenticado por POST: el navegador recibe el plan, las consultas MCP
  // y la respuesta token a token. No altera el contrato JSON anterior.
- app.post("/api/asistente/chat/stream",...requireTenant(),async(req,res)=>{
+ app.post("/api/asistente/chat/stream",...requireTenant(),requireAssistantModule,async(req,res)=>{
   if(!enabled())return res.status(503).json({error:"El asistente está pendiente de activación en el servidor"});
   const body=validateAssistantBody(req.body);
   if(!body)return res.status(400).json({error:"Pregunta o historial inválidos"});
@@ -307,7 +314,7 @@ export function setupAssistant(app,pool,{requireTenant}) {
  });
  // Audio recibido como cuerpo binario; no se persiste y se elimina el WAV temporal.
  const raw=express.raw({type:["audio/webm","audio/mp4","audio/ogg","audio/wav","application/octet-stream"],limit:"6mb"});
- app.post("/api/asistente/transcribir",...requireTenant(),raw,async(req,res)=>{
+ app.post("/api/asistente/transcribir",...requireTenant(),requireAssistantModule,raw,async(req,res)=>{
   if(!voiceEnabled())return res.status(503).json({error:"La transcripción local no está habilitada"});
   if(active>=1)return res.status(429).json({error:"La IA está ocupada. Repite el dictado más tarde"});
   if(!Buffer.isBuffer(req.body)||req.body.length<512||req.body.length>6*1024*1024)

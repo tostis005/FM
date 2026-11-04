@@ -78,10 +78,10 @@ try{
  await page.getByRole("button",{name:/Filtrar campañas/}).click();
  const modal=page.getByRole("dialog",{name:"Filtrar campañas"});
  await modal.getByLabel("Seleccionar mes y año de campañas en seguimiento").fill("2026-11");
- const choices=modal.locator(".report-modal-campaigns .report-choice");
- assert.deepEqual((await choices.allTextContents()).map(x=>x.match(/Campaña[^·\n]*/)?.[0]?.trim()).filter(Boolean),
+ const choices=modal.locator(".report-modal-campaigns .report-choice-body strong");
+ assert.deepEqual(await choices.allTextContents(),
   ["Campaña de noviembre","Campaña de octubre a diciembre"],
-  "La selección de mes incluye las campañas solapadas con ese mes");
+  "La selección mensual incluye las campañas vigentes que empezaron otro mes");
  await modal.getByRole("button",{name:"Aplicar filtros y visualizar"}).click();
  await modal.waitFor({state:"detached"});
  await page.waitForURL(/mes=2026-11/,{timeout:8000});

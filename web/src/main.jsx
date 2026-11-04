@@ -1179,9 +1179,15 @@ function App(){
    <label className="fm-unified-filter">Buscar campaña o CN
     <input type="search" value={reportListSearch} onChange={e=>{setReportListSearch(e.target.value);setReportPage(0)}}
      placeholder="Nombre, laboratorio o CN…"/></label>
+   <label className="fm-unified-filter">Mes y año
+    <input type="month" value={reportMonth} onChange={e=>selectReportMonth(e.target.value)}
+     aria-label="Seleccionar mes y año de seguimiento"/></label>
+   <button type="button" className="fm-promotion-all-periods"
+    aria-pressed={!reportMonth&&reportYear==="Todos"} onClick={()=>selectReportMonth("")}>
+    Ver todos los meses</button>
  </ReportFilterBar>
  <div className="report-active-summary">
-  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Archivadas":reportStatus==="Borrador"?"Borradores":reportStatus==="Pendiente de revisión"?"Pendientes de revisión":"Todos los estados"}</span>{reportYear!=="Todos"&&<span>· {reportYear}</span>}</div>
+  <div className="report-scope-info"><span className="scope-indicator"/><strong>{reportSelected.length} {reportSelected.length===1?"promoción seleccionada":"promociones seleccionadas"}</strong><span className="report-scope-separator">·</span><span>{reportStatus==="Activa"?"Activas":reportStatus==="Finalizada"?"Archivadas":reportStatus==="Borrador"?"Borradores":reportStatus==="Pendiente de revisión"?"Pendientes de revisión":"Todos los estados"}</span>{reportMonth?<span>· {new Date(reportMonth+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</span>:reportYear!=="Todos"&&<span>· Año {reportYear}</span>}</div>
  </div>
  {reportSelected.length>0?<>
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
@@ -1293,12 +1299,18 @@ function App(){
     </div>
     <div className="report-modal-body">
      <div className="report-modal-filters">
-      <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.year)}>
+      <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.month)}>
        <option value="Activa">Activas</option><option value="Pendiente de revisión">Pendientes de revisión</option><option value="Finalizada">Archivadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
       </select></Field>
-      <Field label="Año de inicio"><select value={reportModal.year} onChange={e=>updateDraftScope(reportModal.status,e.target.value)}>
-       <option value="Todos">Todos los años</option>{reportYears.map(year=><option value={year} key={year}>{year}</option>)}
-      </select></Field>
+      <Field label="Mes y año"><input type="month" value={reportModal.month}
+       onChange={e=>updateDraftScope(reportModal.status,e.target.value)}
+       aria-label="Seleccionar mes y año de campañas en seguimiento"/></Field>
+      <button type="button" className="fm-promotion-all-periods"
+       aria-pressed={!reportModal.month&&reportModal.year==="Todos"}
+       onClick={()=>updateDraftScope(reportModal.status,"")}>Ver todos los meses</button>
+      {reportModal.year!=="Todos"&&!reportModal.month&&
+       <small className="fm-report-year-legacy">Filtro de enlace antiguo: año {reportModal.year}.
+        Selecciona un mes o pulsa «Ver todos los meses» para cambiarlo.</small>}
       <Field label="Buscar por promoción o CN"><input type="search" placeholder="Nombre, código o CN…" value={reportModal.search} onChange={e=>setReportModal(prev=>({...prev,search:e.target.value,page:0}))}/></Field>
      </div>
      <div className="report-modal-selection-head">
@@ -1311,7 +1323,7 @@ function App(){
        <input type="checkbox" checked={reportModal.ids.includes(p.id)} onChange={()=>toggleDraftCampaign(p.id)}/>
        <span className="report-choice-body"><strong>{p.name}</strong><small>{dateES(p.start)} — {p.end?dateES(p.end):"Sin fecha de fin"} · {p.cns.length} CN · {Object.keys(p.targets||{}).length} farmacias</small></span><Pill status={p.status}/>
       </label>)}
-      {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, año o búsqueda.</div>}
+      {!draftVisible.length&&<div className="report-choice-empty">No hay campañas para los filtros seleccionados. Prueba con otro estado, mes y año o búsqueda.</div>}
      </div>
      <ListPagination total={draftVisible.length} page={draftPage} pageSize={draftPageSize}
         label="campañas" onPageChange={n=>setReportModal(prev=>({...prev,page:n}))}

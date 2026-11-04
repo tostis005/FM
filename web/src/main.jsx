@@ -602,9 +602,14 @@ function App(){
    const p=promoId?promos.find(item=>item.id===promoId):null;
    const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
    const status=p?p.status:defaultStatus,ids=p?[p.id]:data.promos.filter(item=>item.status===status).map(item=>item.id);
-   setReportStatus(status);setReportYear("Todos");setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
+   const month=promotionSelectedMonth;
+   setReportStatus(status);setReportYear("Todos");setReportMonth(month);
+   setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));
-   const url="/promociones/seguimiento"+(p?"?ids="+encodeURIComponent(p.id)+"&estado="+encodeURIComponent(status):"");
+   const params=new URLSearchParams();
+   if(p){params.set("ids",p.id);params.set("estado",status);}
+   if(month)params.set("mes",month);
+   const url="/promociones/seguimiento"+(params.size?"?"+params.toString():"");
    if(window.location.pathname+window.location.search!==url)window.history.pushState({page:"seguimiento-global"},"",url);
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
   }
@@ -614,24 +619,36 @@ function App(){
   setPage(id);setSearch("");setMobileMenu(false);
  }
  function openReportFilters(){
-  setReportModal({status:reportStatus,year:reportYear,search:"",ids:[...reportSelectedIds],page:0,pageSize:10});
+  setReportModal({status:reportStatus,year:reportYear,month:reportMonth,
+   search:"",ids:[...reportSelectedIds],page:0,pageSize:10});
  }
- function updateDraftScope(status,year){
+ function updateDraftScope(status,month){
   setReportModal(prev=>{
    if(!prev)return prev;
-   const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
+   const eligible=data.promos.filter(p=>promotionMatchesReportScope(p,{status,month}));
    const kept=prev.ids.filter(id=>eligible.some(p=>p.id===id));
-   return {...prev,status,year,search:"",page:0,ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
+   return {...prev,status,month,year:"Todos",search:"",page:0,
+    ids:kept.length?kept:(status==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id)};
   });
+ }
+ function selectReportMonth(month){
+  if(month&&!promotionMonthRange(month))return;
+  const eligible=data.promos.filter(p=>promotionMatchesReportScope(p,{status:reportStatus,month}));
+  setReportMonth(month);setReportYear("Todos");
+  setReportSelectedIds(previous=>{
+   const kept=previous.filter(id=>eligible.some(p=>p.id===id));
+   return kept.length?kept:(reportStatus==="Todos"?eligible.filter(p=>p.status==="Activa"):eligible).map(p=>p.id);
+  });
+  setReportPage(0);
  }
  function selectDraftAll(visible){setReportModal(prev=>prev?{...prev,ids:[...new Set([...prev.ids,...visible.map(p=>p.id)])]}:prev);}
  function clearDraftVisible(visible){setReportModal(prev=>prev?{...prev,ids:prev.ids.filter(id=>!visible.some(p=>p.id===id))}:prev);}
  function toggleDraftCampaign(id){setReportModal(prev=>prev?{...prev,ids:prev.ids.includes(id)?prev.ids.filter(v=>v!==id):[...prev.ids,id]}:prev);}
  function applyReportFilters(){
   if(!reportModal)return;
-  const {status,year,ids}=reportModal;
-  const eligible=data.promos.filter(p=>(status==="Todos"||p.status===status)&&(year==="Todos"||(p.start||"").slice(0,4)===year));
-  setReportStatus(status);setReportYear(year);
+  const {status,month,ids}=reportModal;
+  const eligible=data.promos.filter(p=>promotionMatchesReportScope(p,reportModal));
+  setReportStatus(status);setReportMonth(month);setReportYear(reportModal.year);
   setReportSelectedIds(eligible.map(p=>p.id).filter(id=>ids.includes(id)));
   setSelectedPharmacyIds(sharedPharmacyIds.length?sharedPharmacyIds:null);setReportPage(0);setReportModal(null);
  }
@@ -919,12 +936,13 @@ function App(){
   if(page!=="seguimiento-global")return;
   const params=new URLSearchParams();
   params.set("estado",reportStatus);
-  if(reportYear!=="Todos")params.set("anio",reportYear);
+  if(reportMonth)params.set("mes",reportMonth);
+  else if(reportYear!=="Todos")params.set("anio",reportYear);
   params.set("ids",reportSelectedIds.join(","));
    if(selectedPharmacyIds!==null)params.set("farmacias",selectedPharmacyIds.join(","));
   const url="/promociones/seguimiento?"+params.toString();
   if(window.location.pathname+window.location.search!==url)window.history.replaceState({page},"",url);
- },[page,reportStatus,reportYear,reportSelectedIds,selectedPharmacyIds]);
+ },[page,reportStatus,reportYear,reportMonth,reportSelectedIds,selectedPharmacyIds]);
  useEffect(()=>{if(CONFIG_IDS.has(page))setSettingsOpen(true);if(ADMIN_IDS.has(page))setAdminOpen(true)},[page]);
  useEffect(()=>{
   // Si se navega directamente a una subpágina, mostrar sus opciones.

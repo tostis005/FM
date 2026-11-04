@@ -87,6 +87,20 @@ try{
  assert.equal(await page.locator(".fm-generic-chart .recharts-bar-rectangle").count()>0,true);
  assert.equal(await page.getByText("revenue",{exact:true}).count(),0,
    "El gráfico debe emplear denominaciones en castellano");
+ // El gráfico debe ocupar toda la zona de contenido del informe en escritorio,
+ // no dejar una segunda columna vacía a su derecha.
+ const chartWidth=await page.evaluate(()=>{
+  const wrapper=document.querySelector(".fm-generic-panels");
+  const chart=wrapper?.querySelector(".fm-generic-chart");
+  if(!wrapper||!chart)return null;
+  const a=wrapper.getBoundingClientRect(),b=chart.getBoundingClientRect();
+  return {outerWidth:a.width,chartWidth:b.width,leftGap:b.left-a.left,rightGap:a.right-b.right};
+ });
+ assert.ok(chartWidth&&chartWidth.outerWidth>300&&
+  chartWidth.chartWidth>=chartWidth.outerWidth-2&&
+  Math.abs(chartWidth.leftGap)<=2&&Math.abs(chartWidth.rightGap)<=2,
+  "Conjuntos con mayor venta debe ocupar todo el ancho: "+JSON.stringify(chartWidth));
+
  await page.getByRole("button",{name:"Desplegar conjunto 123456789"}).click();
  await page.getByText("Omeprazol A 20 mg",{exact:true}).waitFor();
  assert.equal(headerSeen,true,"La petición de detalle mantiene tenant explícito");
@@ -124,6 +138,14 @@ try{
  assert.equal(catalogRequests,1,"Reabrir reutiliza el catálogo");
  assert.equal(movementsRequests,2,"Reabrir no reconsulta los movimientos una vez completos");
  await page.setViewportSize({width:390,height:844});
+ const mobileChart=await page.evaluate(()=>{
+  const wrapper=document.querySelector(".fm-generic-panels"),chart=wrapper?.querySelector(".fm-generic-chart");
+  if(!wrapper||!chart)return null;
+  const a=wrapper.getBoundingClientRect(),b=chart.getBoundingClientRect();
+  return {width:a.width,chartWidth:b.width};
+ });
+ assert.ok(mobileChart&&mobileChart.chartWidth>=mobileChart.width-2,
+  "El gráfico también debe rellenar la columna en móvil: "+JSON.stringify(mobileChart));
  const mobile=await page.evaluate(()=>{
   const outer=document.querySelector(".fm-generic-list .fm-generic-table-scroll");
   const inner=document.querySelector(".fm-generic-detail");

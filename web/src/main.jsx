@@ -1334,7 +1334,8 @@ function App(){
    canEdit={pharmacyApiStatus==="connected"}/></React.Suspense>}
  </div></div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
-  <React.Suspense fallback={null}><AsistenteDemo section={title}/></React.Suspense>
+  {tenantContext.modules?.asistente===true&&
+   <React.Suspense fallback={null}><AsistenteDemo key={tenantContext.client.slug} section={title}/></React.Suspense>}
 
  </div>
 }

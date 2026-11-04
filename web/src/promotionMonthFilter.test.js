@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod} from "./promotionMonthFilter.js";
+import {currentPromotionMonth,promotionMonthRange,promotionMonthFromRange,promotionOverlapsPeriod,promotionMatchesReportScope} from "./promotionMonthFilter.js";
 
 test("mes actual usa calendario del cliente, no huso del navegador",()=>{
  assert.equal(currentPromotionMonth(new Date("2026-11-01T00:30:00Z"),"Europe/Madrid"),"2026-11");
@@ -32,4 +32,26 @@ test("fechas incompletas no contaminan vistas de mes; todas sí",()=>{
  assert.equal(promotionOverlapsPeriod({start:"2026-10-12",end:"2026-10-01"},"2026-10-01","2026-10-31"),false);
  assert.equal(promotionOverlapsPeriod({start:"",end:""},"",""),true);
  assert.equal(promotionOverlapsPeriod({start:"2026-09-15",end:"2026-10-20"},"2026-10-03","2026-10-05"),true);
+});
+
+test("Seguimiento comparte solapamiento mensual con Campañas, no año de inicio",()=>{
+ const campaigns=[
+  {id:"oct",status:"Activa",start:"2026-10-10",end:"2026-10-31"},
+  {id:"cross",status:"Activa",start:"2026-10-15",end:"2026-12-01"},
+  {id:"nov",status:"Activa",start:"2026-11-10",end:"2026-11-20"},
+  {id:"archived",status:"Finalizada",start:"2026-11-10",end:"2026-11-20"},
+  {id:"previous",status:"Activa",start:"2026-09-20",end:"2026-11-01"},
+  {id:"future",status:"Activa",start:"2026-12-02",end:"2026-12-31"}
+ ];
+ const inMonth=(month,status="Todos")=>campaigns.filter(p=>
+  promotionMatchesReportScope(p,{month,status})).map(p=>p.id);
+ assert.deepEqual(inMonth("2026-11","Activa"),["cross","nov","previous"],
+  "Una campaña iniciada otro mes también debe aparecer si continúa vigente");
+ assert.deepEqual(inMonth("2026-10","Activa"),["oct","cross","previous"]);
+ assert.deepEqual(inMonth("2026-11","Finalizada"),["archived"]);
+ assert.deepEqual(inMonth("2026-11"),["cross","nov","archived","previous"]);
+ assert.deepEqual(inMonth(""),campaigns.map(p=>p.id));
+ assert.deepEqual(inMonth("2026-13"),[],"Un mes inválido nunca debe incluir campañas");
+ assert.deepEqual(campaigns.filter(p=>promotionMatchesReportScope(p,{year:"2026"})).length,6,
+  "Los enlaces antiguos por año se siguen interpretando");
 });

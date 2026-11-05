@@ -111,3 +111,34 @@
  .fm-objectives-extraction .fm-sales-compact-toolbar{align-items:flex-start}
  .fm-objectives-extraction .fm-sales-export-actions{width:100%;margin-left:0}
 }
+
+/* Elección explícita de una sola forma de añadir artículos: no se mezcla
+   un texto con un bloque de CN mediante un AND/OR oculto. */
+.fm-objectives-methods{display:inline-flex;align-items:center;gap:3px;border:1px solid #d6e6db;
+ border-radius:10px;background:#f4faf6;padding:3px;margin:0 0 15px;max-width:100%}
+.fm-objectives-methods button{display:inline-flex;align-items:center;justify-content:center;
+ gap:7px;border:0;border-radius:7px;padding:9px 13px;background:transparent;color:#527765;
+ font-size:12px;font-weight:750;cursor:pointer;white-space:nowrap}
+.fm-objectives-methods button.active,.fm-objectives-methods button[aria-selected="true"]{
+ background:#fff;color:#126b49;box-shadow:0 1px 5px #173e271a}
+.fm-objectives-methods button:focus-visible{outline:2px solid #258c67;outline-offset:2px}
+.fm-objectives-search{grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:10px}
+.fm-objectives-search input{min-height:42px}
+.fm-objectives-search-loading{padding:13px 4px}
+.fm-objectives-paste{display:grid;gap:10px;max-width:100%}
+.fm-objectives-paste>label{display:grid;gap:7px;font-size:12px;font-weight:700;color:#476456}
+.fm-objectives-paste textarea{box-sizing:border-box;resize:vertical;width:100%;min-height:76px;
+ padding:10px 12px;border:1px solid #d5e4db;border-radius:9px;font:inherit;color:#213e32;background:#fff}
+.fm-objectives-paste-action{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fm-objectives-paste-action>span{color:#647e71;font-size:12px}
+.fm-objectives-excluded{font-size:11px;color:#758b7e;line-height:1.45;margin:10px 0 2px}
+.fm-objectives-loading-frame{margin-top:14px;border-radius:11px}
+.fm-objectives-loading-frame .fm-objectives-history-scroll{margin-top:0}
+.fm-objectives-loading-frame.fm-is-loading{min-height:185px}
+.fm-objectives-loading-frame .fm-loading-overlay{padding-top:26px;align-items:flex-start}
+@media(max-width:720px){
+ .fm-objectives-methods{width:100%;box-sizing:border-box;display:flex}
+ .fm-objectives-methods button{flex:1 1 0;font-size:11px;padding:9px 6px;min-width:0}
+ .fm-objectives-search{grid-template-columns:1fr}
+ .fm-objectives-search button{justify-self:stretch}
+}

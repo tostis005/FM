@@ -69,19 +69,25 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   if(term.length<2&&!codes.length){setResults([]);setSearchBusy(false);
    setSearchError("Introduce al menos dos caracteres para buscar.");return;}
   const controller=new AbortController();
+  let timedOut=false;
+  setResults([]);setSearchBusy(true);setSearchError("");
+  const deadline=setTimeout(()=>{timedOut=true;controller.abort();},10500);
   const timer=setTimeout(()=>{
-   setSearchBusy(true);setSearchError("");
    post(clientSlug,"/api/ventas/objetivos/buscar",{search:term,cns:codes},controller.signal)
     .then(data=>{
      if(controller.signal.aborted)return;
      const products=data.products||[],found=new Set(products.map(x=>x.cn).filter(Boolean));
      setResults([...products,...codes.filter(cn=>!found.has(cn))
       .map(cn=>({cn,description:"CN no localizado en el catálogo",supplier:null}))]);
+     if(data.partial)setSearchError("Resultados parciales: alguna fuente ha tardado demasiado. Prueba una búsqueda más específica.");
     })
-    .catch(error=>{if(!controller.signal.aborted){setSearchError(error.message);setResults([]);}})
-    .finally(()=>{if(!controller.signal.aborted)setSearchBusy(false);});
-  },320);
-  return()=>{clearTimeout(timer);controller.abort();};
+    .catch(error=>{
+     if(timedOut)setSearchError("La búsqueda ha tardado demasiado. Prueba con un nombre o CN más específico.");
+     else if(!controller.signal.aborted){setSearchError(error.message);setResults([]);}
+    })
+    .finally(()=>{clearTimeout(deadline);if(!controller.signal.aborted||timedOut)setSearchBusy(false);});
+  },420);
+  return()=>{clearTimeout(timer);clearTimeout(deadline);controller.abort();};
  },[clientSlug,search,bulk,searchNonce]);
 
  useEffect(()=>{

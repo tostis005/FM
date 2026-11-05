@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Check,Plus,Search,Trash2,RefreshCcw} from "lucide-react";
+import {Check,Plus,Search,Trash2} from "lucide-react";
 import "./ObjetivosPromociones.css";
 const ISO=value=>/^20\d{2}-\d{2}-\d{2}$/.test(value||"");
 const CN=value=>/^\d{6}$/.test(value);
@@ -59,7 +59,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    active.filter(f=>!ids.includes(String(f.id))&&ids.length===0).map(f=>String(f.id))));
  },[active]);
  useEffect(()=>{
-  if(!selectedCNs.length||!selectedPharmacies.length){setHistorical({});setError("");return;}
+  if(!selectedCNs.length||!selectedPharmacies.length){setHistorical({});setHistoryBusy(false);setError("");return;}
   const controller=new AbortController();
   setHistoryBusy(true);setError("");
   post(clientSlug,"/api/ventas/objetivos/historico",{

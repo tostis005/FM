@@ -102,9 +102,14 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const target=id=>manualTargets[id]===undefined?proposal(id):Number(manualTargets[id])||0;
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
  const canChoose=canManage&&Boolean(selected.length)&&Boolean(selectedPharmacies.length);
+ const customComplete=(!customFrom&&!customTo)||Boolean(
+   ISO(customFrom)&&ISO(customTo)&&customFrom<=customTo);
+ const queryDays=(Date.parse(periodToConsult.to+"T00:00:00Z")-
+   Date.parse(periodToConsult.from+"T00:00:00Z"))/86400000;
+ const periodValid=customComplete&&Number.isFinite(queryDays)&&queryDays>=0&&queryDays<=366;
  const canCreate=canChoose&&!historyBusy&&!error;
- const canCreateRetro=canChoose&&periodToConsult.to<=today;
- const canConsult=Boolean(selectedCNs.length&&selectedPharmacies.length&&periodToConsult.from<=periodToConsult.to);
+ const canCreateRetro=canChoose&&periodValid&&periodToConsult.to<=today;
+ const canConsult=Boolean(selectedCNs.length&&selectedPharmacies.length&&periodValid);
  function create(mode="goals"){
   if(mode==="retroactive"?!canCreateRetro:!canCreate)return;
   const withGoals=mode==="goals";
@@ -159,6 +164,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    <p>Por defecto se incluyen todas las farmacias disponibles. Puedes desmarcar cualquiera.</p>
    <div className="fm-objectives-pharmacies">{active.map(f=><label key={f.id}><input type="checkbox" checked={selectedPharmacies.includes(String(f.id))} onChange={e=>setSelectedPharmacies(ids=>e.target.checked?[...ids,String(f.id)]:ids.filter(id=>id!==String(f.id)))}/>{f.name}</label>)}</div>
    <div className="fm-objectives-custom"><label>Desde (consulta libre) <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label>Hasta (consulta libre) <input type="date" min={customFrom||undefined} value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></div>
+   {!periodValid&&<p role="alert" className="fm-objectives-warning">Completa las dos fechas y elige un intervalo máximo de 367 días naturales para consultar tickets.</p>}
    <p className="fm-objectives-hint">El rango libre tiene prioridad para extraer líneas. Si lo dejas vacío, se utilizará el período de referencia seleccionado en la calculadora. Los tres meses representan el acumulado, no la media mensual.</p>
    <div className="fm-objectives-history-scroll">
     <table className="fm-objectives-table"><thead><tr><th>Farmacia</th>{periods.map(p=><th key={p.id}>{p.label}<small>{p.from} — {p.to}</small></th>)}</tr></thead>

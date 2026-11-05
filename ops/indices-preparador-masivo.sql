@@ -13,7 +13,8 @@ JOIN pg_index i ON i.indexrelid=c.oid
 WHERE n.nspname='ampedia' AND c.relname IN (
  'fm_preparador_articulo_cn_idx','fm_preparador_articulo_origen_idx',
  'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx',
- 'fm_preparador_recepciones_proveedor_idx')
+ 'fm_preparador_recepciones_proveedor_idx',
+ 'fm_promociones_articulos_proveedor_idx')
  AND (NOT i.indisvalid OR NOT i.indisready)
 \gexec
 
@@ -76,6 +77,19 @@ WHERE EXISTS (
  AND c.relkind='r')
 \gexec
 
+-- Simulador: buscar los artículos de un proveedor habitual por farmacia.
+-- Índice concurrente, opcional si la sincronización aún no aporta esa columna.
+SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_promociones_articulos_proveedor_idx
+ ON ampedia.articulos (
+  (upper(btrim(farmacia_codigo::text))),
+  (upper(btrim(coalesce(proveedor_habitual_id::text,''''))))
+ );'
+WHERE EXISTS (
+ SELECT 1 FROM information_schema.columns
+ WHERE table_schema='ampedia' AND table_name='articulos'
+   AND column_name='proveedor_habitual_id')
+\gexec
+
 -- Estadísticas para estimar correctamente cardinalidades tras crear índices.
 SELECT 'ANALYZE ampedia.articulos;' WHERE EXISTS (
  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -97,5 +111,6 @@ JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='ampedia' AND c.relname IN (
  'fm_preparador_articulo_cn_idx','fm_preparador_articulo_origen_idx',
  'fm_preparador_articulo_normalizado_idx','fm_preparador_ventas_linea_idx',
- 'fm_preparador_recepciones_proveedor_idx')
+ 'fm_preparador_recepciones_proveedor_idx',
+ 'fm_promociones_articulos_proveedor_idx')
 ORDER BY c.relname;

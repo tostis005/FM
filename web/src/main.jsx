@@ -34,6 +34,7 @@ const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
+const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
@@ -193,7 +194,7 @@ const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock"
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","genericos","promociones","acciones"]);
+ "stock","stock-sin-recepciones","genericos","promociones","promociones-objetivos","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);

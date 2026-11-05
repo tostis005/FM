@@ -48,3 +48,18 @@
 .report-consolidated-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:1150px){.campaign-metrics-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.report-consolidated-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-objectives-search{grid-template-columns:1fr 1fr}.fm-objectives-search button{justify-self:start}}
 @media(max-width:720px){.fm-objectives-search{grid-template-columns:1fr}.fm-objectives-intro{align-items:stretch}.fm-objectives-intro .btn{width:100%;justify-content:center}.fm-objectives-card{padding:16px}.campaign-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-objectives-custom{flex-direction:column}}
+
+/* Simulador unificado: extracción de tickets y dos formas de crear una campaña. */
+.fm-objectives-extraction{min-width:0;max-width:100%}
+.fm-objectives-extract-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:4px 0 14px}
+.fm-objectives-extract-head h2{font-size:20px;color:#1c4635;margin:0 0 7px}
+.fm-objectives-extract-head p{color:#647e70;font-size:12px;line-height:1.5;margin:0}
+.fm-objectives-extraction .lab-detail-panel{max-width:100%;min-width:0}
+.fm-objectives-extraction .fm-table-toolbar{gap:9px;flex-wrap:wrap}
+.fm-objectives-retro{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.fm-objectives-retro>div{flex:1 1 430px}
+.fm-objectives-retro>div p{color:#688579;font-size:12px;line-height:1.6}
+.fm-objectives-retro>.btn{flex-shrink:0}
+.fm-objectives-card .fm-objectives-section-title>div{flex:1 1 280px}
+.fm-objectives-card .fm-objectives-section-title h2{margin:0 0 6px}
+@media(max-width:720px){.fm-objectives-retro>.btn,.fm-objectives-extract-head>.btn{width:100%;justify-content:center}}

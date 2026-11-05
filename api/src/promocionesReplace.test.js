@@ -17,8 +17,13 @@ function setup({role="administrador",previous=[old],failInsert=false,failRevisio
    if(sql.includes("pg_advisory_xact_lock"))return {rows:[]};
    if(sql.includes("SELECT id,documento")&&sql.includes("FOR UPDATE"))
     return {rows:[...records].map(([id,documento])=>({id,documento}))};
-   if(sql.includes("SELECT documento FROM")&&sql.includes("ORDER BY"))
-    return {rows:[...records.values()].map(documento=>({documento}))};
+   if(sql.includes("SELECT documento,creado_por FROM")&&sql.includes("FOR UPDATE")){
+    const ids=params[0]||[];
+    return {rows:ids.filter(id=>records.has(id)).map(id=>({
+      documento:records.get(id),creado_por:"qa@example.org"}))};
+   }
+   if(sql.includes("SELECT documento,creado_por FROM")&&sql.includes("ORDER BY"))
+    return {rows:[...records.values()].map(documento=>({documento,creado_por:"qa@example.org"}))};
    if(sql.includes("DELETE FROM")&&sql.includes("RETURNING id,documento")){
     const gone=[];
     for(const id of params[0]||[]){

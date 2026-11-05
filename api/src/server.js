@@ -295,34 +295,36 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
           !validDates(p.start, p.end) || !validCodes(p.cns))) {
       return res.status(400).json({ error: "Promociones, fechas o CNs inválidos" });
     }
-    const summary = {};
+    const sales = {}, totalSales = {};
     for (const p of promotions) {
-      if (!p.cns.length) { summary[p.id] = {}; continue; }
-      // Solo se atribuyen las unidades incluidas en lotes completos dentro
-      // del mismo ticket, farmacia y día. Los CN de una campaña se evalúan
-      // juntos: dos líneas de una unidad pueden formar un 2x1.
+      if (!p.cns.length) { sales[p.id] = {}; totalSales[p.id] = {}; continue; }
+      // Los lotes completos se calculan por ticket y farmacia. En paralelo,
+      // contabilizar TODAS las unidades de esos CN, incluidas las sueltas,
+      // devoluciones y ventas sin ticket informado.
       const bundle=promotionBundle(p);
-      if(!bundle){summary[p.id]={};continue;}
       const query=`WITH ticket_units AS (
-            SELECT f.id::text AS farmacia_id,
-              NULLIF(btrim(v.numero_ticket::text),'') AS ticket,
-              v.fecha::date AS dia, sum(v.unidades)::float8 AS units
-            ${salesJoin(req)} WHERE ${salesPeriod}
-              AND btrim(v.articulo_id::text)=ANY($3::text[])
-            GROUP BY f.id,NULLIF(btrim(v.numero_ticket::text),''),v.fecha::date
-          )
-          SELECT farmacia_id,
-            coalesce(sum(CASE
-              WHEN $5::boolean AND units >= $4::integer THEN units
-              ELSE floor(greatest(units,0)/$4::integer)*$4::integer
-            END),0)::float8 AS unidades
-          FROM ticket_units WHERE ticket IS NOT NULL AND units>0
-          GROUP BY farmacia_id`;
+          SELECT f.id::text AS farmacia_id,
+            NULLIF(btrim(v.numero_ticket::text),'') AS ticket,
+            v.fecha::date AS dia, sum(v.unidades)::float8 AS units
+          ${salesJoin(req)} WHERE ${salesPeriod}
+            AND btrim(v.articulo_id::text)=ANY($3::text[])
+          GROUP BY f.id,NULLIF(btrim(v.numero_ticket::text),''),v.fecha::date
+        )
+        SELECT farmacia_id,
+          coalesce(sum(CASE
+            WHEN ticket IS NULL OR units <= 0 OR NOT $6::boolean THEN 0
+            WHEN $5::boolean AND units >= $4::integer THEN units
+            ELSE floor(greatest(units,0)/$4::integer)*$4::integer
+          END),0)::float8 AS unidades,
+          coalesce(sum(units),0)::float8 AS unidades_totales
+        FROM ticket_units GROUP BY farmacia_id`;
       const {rows}=await pool.query(query,
-        [p.start,p.end,p.cns,bundle,p.type==="escalonado"]);
-      summary[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
+        [p.start,p.end,p.cns,bundle||1,p.type==="escalonado",Boolean(bundle)]);
+      sales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
+      totalSales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades_totales)]));
     }
-    res.json({ sales: summary, origin: req.context.client.schema+".fm_ventas_analitica", updatedAt: new Date().toISOString() });
+    res.json({sales,totalSales,origin:req.context.client.schema+".fm_ventas_analitica",
+      updatedAt:new Date().toISOString()});
   } catch (err) { next(err); }
 });
 

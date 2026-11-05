@@ -83,6 +83,10 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     selectedPharmacies.length&&validDate(filters.start)&&validDate(filters.end)&&filters.start<=filters.end);
   useEffect(()=>{setPage(0)},[scopeKey]);
   useEffect(()=>{
+    if(!simulator)return;
+    setPage(0);setColumnFilters({});setColumnDraft({});setExportError("");
+  },[simulator,directQuery?.start,directQuery?.end,directQuery?.cns?.join(",")]);
+  useEffect(()=>{
     if(!eligible){setResult({rows:[],total:0,status:"idle",error:""});return;}
     let cancelled=false;
     setResult(prev=>({...prev,status:"loading"}));

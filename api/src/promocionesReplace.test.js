@@ -17,8 +17,13 @@ function setup({role="administrador",previous=[old],failInsert=false,failRevisio
    if(sql.includes("pg_advisory_xact_lock"))return {rows:[]};
    if(sql.includes("SELECT id,documento")&&sql.includes("FOR UPDATE"))
     return {rows:[...records].map(([id,documento])=>({id,documento}))};
-   if(sql.includes("SELECT documento FROM")&&sql.includes("ORDER BY"))
-    return {rows:[...records.values()].map(documento=>({documento}))};
+   if(sql.includes("SELECT documento,creado_por FROM")&&sql.includes("FOR UPDATE")){
+    const ids=params[0]||[];
+    return {rows:ids.filter(id=>records.has(id)).map(id=>({
+      documento:records.get(id),creado_por:"qa@example.org"}))};
+   }
+   if(sql.includes("SELECT documento,creado_por FROM")&&sql.includes("ORDER BY"))
+    return {rows:[...records.values()].map(documento=>({documento,creado_por:"qa@example.org"}))};
    if(sql.includes("DELETE FROM")&&sql.includes("RETURNING id,documento")){
     const gone=[];
     for(const id of params[0]||[]){
@@ -112,4 +117,19 @@ test("sin permisos o con IDs repetidos no se modifican las promociones",async()=
  assert.equal((await admin.call("/api/tenant/promociones/eliminar-lote",{ids:["OLD","OLD"]})).status,400);
  assert.equal((await admin.call("/api/tenant/promociones/eliminar-lote",{ids:[]})).status,400);
  assert.deepEqual([...admin.records().keys()],["OLD"]);
+});
+
+test("gestor puede importar Excel con farmacias asignadas",async()=>{
+ const t=setup({role:"gestor",previous:[]});
+ const result=await t.call("/api/tenant/promociones/importar",{promotions:[next]});
+ assert.equal(result.status,200);
+ assert.equal(result.payload.imported,1);
+ assert.equal(t.records().get("NEW").targets["1"],8);
+});
+test("gestor no puede importar objetivos de farmacias ajenas",async()=>{
+ const t=setup({role:"gestor",previous:[]});
+ const result=await t.call("/api/tenant/promociones/importar",{
+  promotions:[{...next,targets:{"2":5}}]});
+ assert.equal(result.status,400);
+ assert.equal(t.records().size,0);
 });

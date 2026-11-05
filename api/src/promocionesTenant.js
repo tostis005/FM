@@ -2,7 +2,27 @@ import {planPromotionImport} from "./promotionImportIdentity.js";
 // Persistencia de promociones por esquema cliente. Las promociones anteriores del
 // navegador se importan explícitamente y nunca se borran en una migración.
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
-const ROLE_EDIT=new Set(["administrador","superadministrador"]);
+const ROLE_EDIT=new Set(["gestor","administrador","superadministrador"]);
+const isManager=req=>req.context.role==="gestor";
+const allowedIds=req=>new Set(req.context.allowedPharmacyIds.map(String));
+function canMutate(req,p,creator=""){
+ if(!isManager(req))return true;
+ const ids=Object.keys(p?.targets||{}),allowed=allowedIds(req);
+ return ids.length?ids.every(id=>allowed.has(String(id))):
+   String(creator||"").toLowerCase()===String(req.user.email||"").toLowerCase();
+}
+function visiblePromos(rows,req){
+ const all=["administrador","superadministrador"].includes(req.context.role);
+ const allowed=allowedIds(req),email=String(req.user.email||"").toLowerCase();
+ return rows.filter(r=>all||Object.keys(r.documento.targets||{}).some(id=>allowed.has(String(id)))||
+   String(r.creado_por||"").toLowerCase()===email).map(r=>{
+   const p=r.documento;
+   if(all)return p;
+   return {...p,targets:Object.fromEntries(Object.entries(p.targets||{})
+     .filter(([id])=>allowed.has(String(id)))),sales:{},
+     managerCanEdit:isManager(req)&&canMutate(req,p,r.creado_por)};
+ });
+}
 const validId=id=>typeof id==="string"&&id.length>0&&id.length<=120;
 
 function cleanDocument(raw,id,pharmacyIds) {
@@ -16,7 +36,8 @@ function cleanDocument(raw,id,pharmacyIds) {
   if(ids.length>500||ids.some(key=>!pharmacyIds.has(String(key))||
     (raw.targets[key]!=="" && (!Number.isFinite(Number(raw.targets[key])) || Number(raw.targets[key])<0))))
     return null;
-  const payload={...raw,sales:{}}; // Ventas de seguimiento se calculan desde PostgreSQL.
+  const {managerCanEdit:_clientPermission,...persisted}=raw;
+   const payload={...persisted,sales:{}}; // Ventas de seguimiento se calculan desde PostgreSQL.
   if(JSON.stringify(payload).length>110000)return null;
   return payload;
 }
@@ -26,14 +47,9 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
       const schema=req.context.client.schema;
       if(!SCHEMA.test(schema))return res.status(400).json({error:"Cliente no válido"});
       const {rows}=await pool.query(
-        `SELECT documento FROM "${schema}".fm_promociones ORDER BY actualizado_en DESC LIMIT 2000`);
-      const all=ROLE_EDIT.has(req.context.role);
-      const allowed=new Set(req.context.allowedPharmacyIds.map(String));
-      const promos=rows.map(r=>r.documento).filter(p=>all||
-        Object.keys(p.targets||{}).some(id=>allowed.has(String(id)))).map(p=>{
-        if(all)return p;
-        return {...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>allowed.has(String(id)))),sales:{}};
-      });
+        `SELECT documento,creado_por FROM "${schema}".fm_promociones ORDER BY actualizado_en DESC LIMIT 2000`);
+      const all=ROLE_EDIT.has(req.context.role)&&!isManager(req);
+      const promos=visiblePromos(rows,req);
       // Un borrado confirmado no puede revivir en otro navegador que conserve
       // una copia local anterior. Las revisiones de borrado son los tombstones.
       let deletedIds=[];
@@ -68,6 +84,12 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     try{
       db=await pool.connect();
       await db.query("BEGIN");
+      const {rows:original}=await db.query(
+        `SELECT documento,creado_por FROM "${schema}".fm_promociones WHERE id=$1 FOR UPDATE`,[id]);
+      if(original.length&&!canMutate(req,original[0].documento,original[0].creado_por)){
+        await db.query("ROLLBACK");
+        return res.status(403).json({error:"Promoción fuera de tus farmacias autorizadas"});
+      }
       const {rows}=await db.query(
         `DELETE FROM "${schema}".fm_promociones WHERE id=$1 RETURNING documento`,[id]);
       if(rows.length){
@@ -92,7 +114,7 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
    const schema=req.context.client.schema,input=req.body?.promotions;
    if(!SCHEMA.test(schema)||!Array.isArray(input)||!input.length||input.length>150)
     return res.status(400).json({error:"Importación de promociones inválida"});
-   const pharmacyIds=new Set(req.context.pharmacies.map(p=>String(p.id)));
+   const pharmacyIds=isManager(req)?allowedIds(req):new Set(req.context.pharmacies.map(p=>String(p.id)));
    const campaigns=input.map(p=>cleanDocument(p,p?.id,pharmacyIds));
    if(campaigns.some(p=>!p))return res.status(400).json({error:"Datos de promociones o farmacias inválidos"});
    let db;
@@ -107,10 +129,9 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
        (id,documento,fuente,creado_por,actualizado_por)
        VALUES($1,$2::jsonb,$3,$4,$4)`,[promo.id,JSON.stringify(promo),
       String(promo.source||"").slice(0,200),req.user.email]);
-    const {rows:all}=await db.query(`SELECT documento FROM "${schema}".fm_promociones
-      ORDER BY actualizado_en DESC LIMIT 2000`);
+    const {rows:all}=await db.query(`SELECT documento,creado_por FROM "${schema}".fm_promociones ORDER BY actualizado_en DESC LIMIT 2000`);
     await db.query("COMMIT");
-    return res.json({imported:additions.length,skipped,promotions:all.map(r=>r.documento)});
+    return res.json({imported:additions.length,skipped,promotions:visiblePromos(all,req)});
    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e)}
    finally{db?.release()}
   });
@@ -124,7 +145,13 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
    let db;
    try{
     db=await pool.connect();await db.query("BEGIN");
-    const {rows:deleted}=await db.query(`DELETE FROM "${schema}".fm_promociones
+    const {rows:existing}=await db.query(`SELECT documento,creado_por FROM "${schema}".fm_promociones
+       WHERE id=ANY($1::text[]) FOR UPDATE`,[ids]);
+     if(existing.some(r=>!canMutate(req,r.documento,r.creado_por))){
+       await db.query("ROLLBACK");
+       return res.status(403).json({error:"Hay promociones de otras farmacias en la selección"});
+     }
+     const {rows:deleted}=await db.query(`DELETE FROM "${schema}".fm_promociones
       WHERE id=ANY($1::text[]) RETURNING id,documento`,[ids]);
     const deletedAt=new Date().toISOString();
     for(const row of deleted)
@@ -145,7 +172,7 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     const schema=req.context.client.schema;
     if(!SCHEMA.test(schema)||!validId(id))
       return res.status(400).json({error:"Cliente o promoción inválidos"});
-    const ids=new Set(req.context.pharmacies.map(p=>String(p.id)));
+    const ids=isManager(req)?allowedIds(req):new Set(req.context.pharmacies.map(p=>String(p.id)));
     const document=cleanDocument(req.body?.promotion,id,ids);
     if(!document)return res.status(400).json({error:"Comprueba nombre, identificadores y farmacias de la promoción"});
     let db;
@@ -153,7 +180,11 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
       db=await pool.connect();
       await db.query("BEGIN");
       const {rows:old}=await db.query(
-        `SELECT documento FROM "${schema}".fm_promociones WHERE id=$1 FOR UPDATE`,[id]);
+         `SELECT documento,creado_por FROM "${schema}".fm_promociones WHERE id=$1 FOR UPDATE`,[id]);
+       if(old.length&&!canMutate(req,old[0].documento,old[0].creado_por)){
+         await db.query("ROLLBACK");
+         return res.status(403).json({error:"Promoción fuera de tus farmacias autorizadas"});
+       }
       if(old.length && JSON.stringify(old[0].documento)!==JSON.stringify(document)){
         await db.query(
           `INSERT INTO "${schema}".fm_promocion_revisiones(promocion_id,documento_anterior,cambiado_por) VALUES($1,$2::jsonb,$3)`,

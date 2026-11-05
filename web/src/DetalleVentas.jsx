@@ -2,6 +2,7 @@ import React,{useEffect,useState} from "react";
 import {Filter,Download} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {loadTicketLines} from "./farmaciasApi.js";
+import {readFullLabSales} from "./laboratoryExport.js";
 import {ListPagination} from "./ListTable.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
@@ -32,8 +33,10 @@ const TICKET_COLUMNS=[
     percentage(v.discountRate===null?null:v.discountRate*100)],
 ];
 
-export default function DetalleVentas({promotions,pharmacies,connected,loading=false,pharmacyScopeIds=null}){
+export default function DetalleVentas({promotions=[],pharmacies=[],connected,loading=false,pharmacyScopeIds=null,simulator=false,directQuery=null}){
   const [promoId,setPromoId]=useState("");
+  const [exporting,setExporting]=useState(false);
+  const [exportError,setExportError]=useState("");
   const [draft,setDraft]=useState(INITIAL);
   const [applied,setApplied]=useState(INITIAL);
   const [result,setResult]=useState({rows:[],total:0,status:"idle",error:""});
@@ -61,20 +64,28 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
       prev.direction==="asc"?{key,direction:"desc"}:{key,direction:"asc"});
     setPage(0);
   };
-  const promo=promotions.find(p=>p.id===promoId);
+  const promo=simulator?(directQuery?{id:"consulta",name:"selección de productos",
+    cns:directQuery.cns||[],start:directQuery.start,end:directQuery.end}:null):
+    promotions.find(p=>p.id===promoId);
   useEffect(()=>{
+    if(simulator)return;
     if(promotions.length && !promotions.some(p=>p.id===promoId)){
       setPromoId(promotions[0].id);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({});
     }
     if(!promotions.length)setPromoId("");
   },[promotions.map(p=>p.id).join("|")]);
   const filters=promo?{
-    cns:promo.cns||[],start:applied.start||promo.start,end:applied.end||promo.end,
+    cns:promo.cns||[],start:simulator?promo.start:applied.start||promo.start,
+    end:simulator?promo.end:applied.end||promo.end,
 
   }:null;
   const eligible=Boolean(connected&&filters?.cns.length&&scopeIds.length&&
     selectedPharmacies.length&&validDate(filters.start)&&validDate(filters.end)&&filters.start<=filters.end);
   useEffect(()=>{setPage(0)},[scopeKey]);
+  useEffect(()=>{
+    if(!simulator)return;
+    setPage(0);setColumnFilters({});setColumnDraft({});setExportError("");
+  },[simulator,directQuery?.start,directQuery?.end,directQuery?.cns?.join(",")]);
   useEffect(()=>{
     if(!eligible){setResult({rows:[],total:0,status:"idle",error:""});return;}
     let cancelled=false;
@@ -93,15 +104,35 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
       })
       .catch(err=>{if(!cancelled)setResult({rows:[],total:0,status:"error",error:err.message});});
     return()=>{cancelled=true;};
-  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,scopeKey,applied.start,applied.end,(promo?.cns||[]).join(",")]);
+  },[connected,promoId,page,pageSize,sort.key,sort.direction,filterSignature,scopeKey,applied.start,applied.end,
+    (promo?.cns||[]).join(","),promo?.start,promo?.end,simulator]);
+  async function exportAllSimulation(){
+    if(!simulator||!eligible||exporting)return;
+    setExporting(true);setExportError("");
+    try{
+      const rows=await readFullLabSales(promo,loadTicketLines,()=>{},{pharmacyIds:selectedPharmacies});
+      const allowed=new Set(filters.cns);
+      const prepared=rows.map(row=>{
+        const code=String(row.nationalCode||"").trim(),origin=String(row.sourceArticleId||row.cn||"").trim();
+        return {...row,...ticketLineAmounts(row),displayCN:code||(allowed.has(origin)?origin:"")};
+      });
+      downloadTableCSV("farmetrica-extraccion-ventas-"+filters.start+"-"+filters.end,
+        TICKET_COLUMNS.map(c=>c[1]),prepared.map(row=>TICKET_COLUMNS.map(c=>c[2](row))));
+    }catch(error){setExportError(error.message||"No se pudo exportar el detalle");}
+    finally{setExporting(false);}
+  }
   function applyFilters(e){
     e.preventDefault();setApplied({...draft});setPage(0);
   }
 
-  if(loading)return <section className="card lab-detail-panel"><div className="section-heading"><h2>Consulta de tickets</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
+  if(loading)return <section className="card lab-detail-panel"><div className="section-heading"><h2>{simulator?"Extracción de ventas":"Consulta de tickets"}</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
   return <section className="card lab-detail-panel">
-    <div className="section-heading"><div><h2>Consulta de tickets</h2></div></div>
+    <div className="section-heading"><div><h2>{simulator?"Extracción de ventas por líneas":"Consulta de tickets"}</h2>
+    {simulator&&<p>Consulta real de tickets, sin necesidad de tener una promoción creada.</p>}</div></div>
     {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas conexión con PostgreSQL y permiso de acceso a promociones.</div>}
+    {simulator?<p className="fm-sales-period-info">{promo?
+      "Del "+promo.start+" al "+promo.end+" · "+promo.cns.length+" CN seleccionados.":
+      "Selecciona productos y período, y pulsa «Consultar líneas de venta»."}</p>:
     <form className="card fm-unified-filters lab-detail-filters" onSubmit={applyFilters}>
       <label>Promoción
         <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({})}}>
@@ -116,11 +147,17 @@ export default function DetalleVentas({promotions,pharmacies,connected,loading=f
         <input type="date" value={draft.end} onChange={e=>setDraft({...draft,end:e.target.value})}/>
       </label>
       <button type="submit" className="btn btn-secondary"><Filter size={16}/> Aplicar filtros</button>
-    </form>
-    {promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
+    </form>}
+    {!simulator&&promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
+    {exportError&&<div className="access-alert access-alert-error">{exportError}</div>}
     <div className="fm-table-toolbar">
      <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
+     {simulator&&<button type="button" className="btn btn-secondary btn-sm"
+       disabled={!eligible||result.status==="loading"||exporting}
+       onClick={()=>void exportAllSimulation()}><Download size={15}/>
+       {exporting?"Exportando…":"Exportar todas las líneas (CSV)"}
+     </button>}
      <button type="button" className="btn btn-secondary btn-sm"
       disabled={result.status==="loading"||!result.rows.length}
       onClick={()=>downloadTableCSV("farmetrica-tickets-"+(promo?.id||"ventas")+"-pagina",

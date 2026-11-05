@@ -33,7 +33,9 @@ import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
+import {setupPromotionObjectives} from "./promocionesObjetivos.js";
 import {promotionBundle} from "./promotionEligibility.js";
+import {resolvePromotionArticleKeys,articleKeysForCNs} from "./promocionesArticulos.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
 import {setupOperativa} from "./operativa.js";
@@ -147,6 +149,7 @@ setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
 setupTenantPromotions(app,pool,{requireTenantModule});
+setupPromotionObjectives(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
 setupRealReports(app,pool,{requireTenant});
 setupPurchaseTotals(app,pool,{requireTenant});
@@ -295,34 +298,39 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
           !validDates(p.start, p.end) || !validCodes(p.cns))) {
       return res.status(400).json({ error: "Promociones, fechas o CNs inválidos" });
     }
-    const summary = {};
+    const sales = {}, totalSales = {};
+    const articleKeys=await resolvePromotionArticleKeys(pool,req.context,promotions.flatMap(p=>p.cns));
     for (const p of promotions) {
-      if (!p.cns.length) { summary[p.id] = {}; continue; }
-      // Solo se atribuyen las unidades incluidas en lotes completos dentro
-      // del mismo ticket, farmacia y día. Los CN de una campaña se evalúan
-      // juntos: dos líneas de una unidad pueden formar un 2x1.
+      if (!p.cns.length) { sales[p.id] = {}; totalSales[p.id] = {}; continue; }
+      // Los lotes completos se calculan por ticket y farmacia. En paralelo,
+      // contabilizar TODAS las unidades de esos CN, incluidas las sueltas,
+      // devoluciones y ventas sin ticket informado.
       const bundle=promotionBundle(p);
-      if(!bundle){summary[p.id]={};continue;}
+      const mappedKeys=articleKeysForCNs(articleKeys,p.cns);
       const query=`WITH ticket_units AS (
-            SELECT f.id::text AS farmacia_id,
-              NULLIF(btrim(v.numero_ticket::text),'') AS ticket,
-              v.fecha::date AS dia, sum(v.unidades)::float8 AS units
-            ${salesJoin(req)} WHERE ${salesPeriod}
-              AND btrim(v.articulo_id::text)=ANY($3::text[])
-            GROUP BY f.id,NULLIF(btrim(v.numero_ticket::text),''),v.fecha::date
-          )
-          SELECT farmacia_id,
-            coalesce(sum(CASE
-              WHEN $5::boolean AND units >= $4::integer THEN units
-              ELSE floor(greatest(units,0)/$4::integer)*$4::integer
-            END),0)::float8 AS unidades
-          FROM ticket_units WHERE ticket IS NOT NULL AND units>0
-          GROUP BY farmacia_id`;
+          SELECT f.id::text AS farmacia_id,
+            NULLIF(btrim(v.numero_ticket::text),'') AS ticket,
+            v.fecha::date AS dia, sum(v.unidades)::float8 AS units
+          ${salesJoin(req)} WHERE ${salesPeriod}
+            AND (btrim(v.articulo_id::text)=ANY($3::text[])
+             OR f.id::text||'|'||btrim(v.articulo_id::text)=ANY($7::text[]))
+          GROUP BY f.id,NULLIF(btrim(v.numero_ticket::text),''),v.fecha::date
+        )
+        SELECT farmacia_id,
+          coalesce(sum(CASE
+            WHEN ticket IS NULL OR units <= 0 OR NOT $6::boolean THEN 0
+            WHEN $5::boolean AND units >= $4::integer THEN units
+            ELSE floor(greatest(units,0)/$4::integer)*$4::integer
+          END),0)::float8 AS unidades,
+          coalesce(sum(units),0)::float8 AS unidades_totales
+        FROM ticket_units GROUP BY farmacia_id`;
       const {rows}=await pool.query(query,
-        [p.start,p.end,p.cns,bundle,p.type==="escalonado"]);
-      summary[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
+        [p.start,p.end,p.cns,bundle||1,p.type==="escalonado",Boolean(bundle),mappedKeys]);
+      sales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
+      totalSales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades_totales)]));
     }
-    res.json({ sales: summary, origin: req.context.client.schema+".fm_ventas_analitica", updatedAt: new Date().toISOString() });
+    res.json({sales,totalSales,origin:req.context.client.schema+".fm_ventas_analitica",
+      updatedAt:new Date().toISOString()});
   } catch (err) { next(err); }
 });
 
@@ -431,24 +439,34 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
     return res.status(400).json({ error: "Filtros de ventas inválidos" });
   }
   try {
-    const filters = [
+    const articleKeys=await resolvePromotionArticleKeys(pool,req.context,cns);
+    const matchedKeys=articleKeysForCNs(articleKeys,cns);
+    const singleCNKeys=cn?articleKeysForCNs(articleKeys,[cn]):[];
+    const sourceKey="f.id::text||'|'||btrim(v.articulo_id::text)";
+    const filters=[
       salesPeriod,
-      "btrim(v.articulo_id::text) = ANY($3::text[])",
+      "(btrim(v.articulo_id::text)=ANY($3::text[]) OR "+sourceKey+"=ANY($7::text[]))",
       "($4::integer IS NULL OR f.id=$4)",
       "($5::text IS NULL OR v.numero_ticket::text ILIKE '%' || $5 || '%')",
-      "($6::text IS NULL OR btrim(v.articulo_id::text)=$6)",
+      "($6::text IS NULL OR btrim(v.articulo_id::text)=$6 OR "+sourceKey+"=ANY($8::text[]))",
     ];
-    const params = [
+    const params=[
       start,end,cns,
       farmaciaId == null || farmaciaId === "" ? null : Number(farmaciaId),
-      ticket ? ticket.trim() : null, cn || null,
+      ticket ? ticket.trim() : null, cn || null,matchedKeys,singleCNKeys,
     ];
     for (const [column,value] of Object.entries(columnFilters)) {
       if(Array.isArray(value)){
         if(!value.length)continue;
         params.push(value);
-        filters.push((column==="pharmacy"?"f.id::text":"btrim(v.articulo_id::text)")+
-          " = ANY($"+params.length+"::text[])");
+        if(column==="cn"){
+          const pos=params.length;
+          params.push(articleKeysForCNs(articleKeys,value));
+          filters.push("(btrim(v.articulo_id::text)=ANY($"+pos+"::text[]) OR "+
+            sourceKey+"=ANY($"+params.length+"::text[]))");
+        }else{
+          filters.push("f.id::text=ANY($"+params.length+"::text[])");
+        }
       }else{
         if(!value.trim())continue;
         params.push(value.trim());

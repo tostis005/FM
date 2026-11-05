@@ -19,7 +19,7 @@ const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
 const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
 const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.jsx"));
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
-import {promotionMetrics,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
+import {promotionMetrics,promotionAverageCompletion,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
@@ -34,6 +34,7 @@ const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
+const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
@@ -138,8 +139,9 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{quantity(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Uds. atribuidas</span><KpiValue loading={salesLoading} label="Uds. atribuidas" loadingText="Calculando…" value={quantity(m.units)}/></div>
-   <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
+   <div className="campaign-metric"><span>Uds. en promoción</span><KpiValue loading={salesLoading} label="Uds. atribuidas" loadingText="Calculando…" value={quantity(m.units)}/></div>
+   <div className="campaign-metric"><span>Uds. totales de CNs</span><KpiValue loading={salesLoading} label="Uds. totales" loadingText="Calculando…" value={quantity(m.totalUnits)}/></div>
+    <div className="campaign-metric metric-progress"><span>{campaigns.length>1?"Cumplimiento medio":"Cumplimiento"}</span>
     <KpiValue loading={salesLoading} label="Cumplimiento" loadingText="Calculando…" value={m.completion==null?"—":percentage(m.completion)}/>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
   </div>
@@ -172,6 +174,7 @@ const NAV=[
  {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
+ {id:"promociones-objetivos",label:"Simulador",icon:Target,module:"promociones",childOf:"promociones"},
  {id:"acciones",label:"Trabajo y ahorro",icon:ClipboardList,module:"acciones"},
  {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
  {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
@@ -192,7 +195,7 @@ const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock"
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","genericos","promociones","acciones"]);
+ "stock","stock-sin-recepciones","genericos","promociones","promociones-objetivos","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -217,6 +220,7 @@ function reportFiltersFromUrl(){
 function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
  if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
+ if(path==="promociones/simulador")return "promociones-objetivos";
  return ROUTES.has(path)?path:"dashboard";
 }
 
@@ -337,7 +341,7 @@ function App(){
       setData(prev=>({...prev,promos:[]}));
       const ctx=await loadContext(slug);
       setData(await tenantState(ctx,sessionUser?.email));
-      setSalesStatus("sin_conexion");setSalesByPromotion({});
+      setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});
       const initial=ctx.sections?.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
         NAV.find(item=>item.module&&ctx.sections?.[item.id])?.id||
         (ctx.sections?.["seguimiento-global"]?"seguimiento-global":"farmacias");
@@ -377,6 +381,7 @@ function App(){
   const [salesStatus,setSalesStatus]=useState("sin_conexion");
   const [salesError,setSalesError]=useState("");
   const [salesByPromotion,setSalesByPromotion]=useState({});
+   const [totalSalesByPromotion,setTotalSalesByPromotion]=useState({});
   const [targetIncrease,setTargetIncrease]=useState("5");
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
@@ -416,7 +421,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -435,19 +440,22 @@ function App(){
          const results=await mapLimited(chunks,3,
            chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
-         const byPromotion={};
+         const byPromotion={},byTotalPromotion={};
          for(let i=0;i<segments.length;i++){
            const seg=segments[i],partial=results[Math.floor(i/25)]?.sales?.[seg.id]||{};
            const out=byPromotion[seg.id]||(byPromotion[seg.id]={});
            for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
+            const totals=results[Math.floor(i/25)]?.totalSales?.[seg.id]||{};
+            const totalOut=byTotalPromotion[seg.id]||(byTotalPromotion[seg.id]={});
+            for(const [id,qty] of Object.entries(totals))totalOut[id]=(totalOut[id]||0)+(Number(qty)||0);
          }
 
-         setSalesByPromotion(byPromotion);
+         setSalesByPromotion(byPromotion);setTotalSalesByPromotion(byTotalPromotion);
          setSalesLastUpdated(new Date());setSalesError("");
          setSalesStatus("real");
        }catch(error){
          if(cancelled)return;
-         setSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
+         setSalesByPromotion({});setTotalSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
        }
      };
      void sync();
@@ -508,8 +516,9 @@ function App(){
  const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
  const storedPromos=(rawPromos||[]).map(p=>({...p,
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
-   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
- })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0);
+   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+    totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
+ })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0||p.managerCanEdit===true);
 
   const users=sessionUser?.role==="superadministrador"
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
@@ -517,7 +526,7 @@ function App(){
     : storedUsers;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?participatingPromotionSales(p,totalSalesByPromotion[p.id]):{},sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
 
@@ -546,7 +555,8 @@ function App(){
   &&(!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
  const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
-  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
+  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
+   totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
  }:p);
  const reportFilterBase=promos.filter(p=>promotionMatchesReportScope(p,{
   status:reportStatus,month:reportMonth,year:reportYear}));
@@ -562,7 +572,8 @@ function App(){
  const reportFilteredCampaigns=reportSelected.filter(p=>selectedPharmacyIds===null||Object.keys(p.targets||{}).some(id=>activePharmacySet.has(id))).map(p=>({
   ...p,
   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
-  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id)))
+  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id))),
+   totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>activePharmacySet.has(id)))
  }));
  const goalListFiltered=reportFilteredCampaigns.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" "))
    .toLocaleLowerCase("es").includes(reportListSearch.toLocaleLowerCase("es"))).sort((a,b)=>{
@@ -583,6 +594,7 @@ function App(){
  const reportTargets=Object.entries(combinedReport.targets);
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
+  const reportTotalSales=reportFilteredCampaigns.reduce((n,p)=>n+sum(p.totalSales),0);
  const reportCNs=[...new Set(reportFilteredCampaigns.flatMap(p=>p.cns||[]))];
  const searchedCNs=reportCNs.filter(cn=>(cn+" "+(reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"")).toLowerCase().includes(cnSearch.toLowerCase()));
  const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
@@ -614,7 +626,7 @@ function App(){
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
   }
   if(!ROUTES.has(id))return;
-  const url="/"+id;
+  const url=id==="promociones-objetivos"?"/promociones/simulador":"/"+id;
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
  }
@@ -662,7 +674,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
@@ -672,10 +684,10 @@ function App(){
    return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
   const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
-  if(!codes.length&&promoForm.status==="Activa")return setToast("Añade al menos un CN antes de activar");
+  if(!codes.length&&(promoForm.status==="Activa"||promoForm.retroactive))return setToast("Añade al menos un CN para vincular ventas a la promoción.");
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
-  if(promoForm.status==="Activa"&&!promoForm.start)return setToast("La fecha de inicio es obligatoria para activar");
+  if((promoForm.status==="Activa"||promoForm.retroactive)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
   if(promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
@@ -683,21 +695,37 @@ function App(){
   if(promoForm.status==="Activa" && !selections.length)return setToast("Selecciona farmacias y completa sus objetivos antes de activar");
   if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
      return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
+  if(promoForm.retroactive&&promoForm.type==="sin_clasificar")
+    return setToast("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
   if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
      return setToast("Clasifica el tipo de promoción antes de activarla");
-  if(promoForm.status==="Activa" && requiresPct &&
+  if((promoForm.status==="Activa"||promoForm.retroactive) && requiresPct &&
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
      return setToast("Introduce el porcentaje de descuento antes de activar");
-  if(promoForm.status==="Activa"&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
-   if(promoForm.status==="Activa"&&promoForm.type==="precio_especial"&&
+  if((promoForm.status==="Activa"||promoForm.retroactive)&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
+   if((promoForm.status==="Activa"||promoForm.retroactive)&&promoForm.type==="precio_especial"&&
      (promoForm.specialPrice===""||promoForm.specialPrice==null||!(Number(promoForm.specialPrice)>=0)))
       return setToast("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
+  if(promoForm.retroactive){
+   const todayMadrid=civilToday(new Date(),reportTimeZone);
+   if(!/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.start||"")||
+      !/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.end||"")||
+      promoForm.end>todayMadrid)
+     return setToast("La promoción retroactiva requiere fechas válidas y un período ya terminado.");
+   if(promoForm.status!=="Finalizada")
+     return setToast("Las promociones retroactivas se guardan como finalizadas.");
+   if(!selections.length)
+     return setToast("Selecciona al menos una farmacia para atribuir las ventas históricas.");
+   try{promotionTicketPolicy(promoForm);}
+   catch(error){return setToast(error.message);}
+  }
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
-  const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
+  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,...fields}=promoForm;
+   const result={...fields,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   if(result.status==="Finalizada"){
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
     if(manualClose){
@@ -721,7 +749,11 @@ function App(){
    setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?
     prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
    setEditingPromo(null);
-   setToast("Promoción guardada correctamente");
+   if(result.retroactive){
+     setStatusFilter("Finalizada");
+     setFrom(result.start);setTo(result.end);
+     setToast("Promoción retroactiva guardada. Revisa Seguimiento para consultar sus ventas históricas.");
+   }else setToast("Promoción guardada correctamente");
   }catch(err){
    const message="No se ha guardado la promoción: "+err.message+". Reintenta.";
    setPromoSaveError(message);setToast(message);
@@ -741,7 +773,7 @@ function App(){
   }catch(error){setToast("No se pudo confirmar la promoción: "+error.message);}
  }
  async function removePromotion(p){
-  if(!["administrador","superadministrador"].includes(tenantContext?.role))return;
+  if(!canManagePromotions||p.managerCanEdit===false)return;
   if(deletingPromoId||deletingSelected)return;
   const confirmed=window.confirm(
    '¿Eliminar definitivamente la promoción "'+p.name+'"?\n\n'+
@@ -766,6 +798,7 @@ function App(){
   if(!canManagePromotions||deletingSelected||deletingPromoId)return;
   const ids=[...new Set(selectedPromotionIds)].filter(id=>data.promos.some(p=>String(p.id)===String(id)));
   if(!ids.length)return;
+  if(data.promos.some(p=>ids.some(id=>String(id)===String(p.id))&&p.managerCanEdit===false))return setToast("Desmarca las promociones fuera de tus farmacias asignadas.");
   if(ids.length>500)return setToast("Selecciona un máximo de 500 promociones por eliminación.");
   if(!window.confirm("¿Eliminar definitivamente "+ids.length+" promociones seleccionadas?\n\nNo se puede deshacer."))return;
   setDeletingSelected(true);
@@ -950,7 +983,7 @@ function App(){
   setExpandedNavIds(previous=>previous.includes(parent)?previous:[...previous,parent]);
  },[page]);
  const role=tenantContext?.role;
- const canManagePromotions=["administrador","superadministrador"].includes(role);
+ const canManagePromotions=["gestor","administrador","superadministrador"].includes(role);
  const canOpenSection=id=>sessionUser?.role==="superadministrador"||
    tenantContext?.sections?.[id]===true;
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
@@ -1141,9 +1174,10 @@ function App(){
     .map(f=>({value:f.id,label:f.name})),
   value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
-      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
-      {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
-      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.status==="Pendiente de revisión"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();void confirmPromotion(p)}}>Confirmar vigencia</button>}{canManagePromotions&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
+      {key:"sales",label:"Uds. promoción",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
+      {key:"totalSales",label:"Uds. totales",value:p=>salesStatus==="real"?sum(p.totalSales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.totalSales)):"—"}</span>},
+       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.managerCanEdit!==false&&p.status==="Pendiente de revisión"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();void confirmPromotion(p)}}>Confirmar vigencia</button>}{canManagePromotions&&p.managerCanEdit!==false&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&p.managerCanEdit!==false&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&p.managerCanEdit!==false&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
     ]}/>
  </section>
 
@@ -1193,7 +1227,7 @@ function App(){
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. atribuidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. atribuidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Uds. totales de CNs</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportTotalSales)+" uds.":"—"}</strong></div><div><span>Cumplimiento medio</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percentage(promotionAverageCompletion(reportFilteredCampaigns)):"—"}</strong></div></div>
    {hasOverlappingPromotions(reportFilteredCampaigns)&&
      <p role="note" className="fm-sales-period-info">
       Hay promociones con el mismo CN, farmacia y fechas solapadas. Una misma
@@ -1253,6 +1287,11 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
+    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
+      pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones")}
+      onCreatePromotion={draft=>{startPromo({...EMPTY_PROMO,...draft,id:null,
+       start:draft.start||civilToday(new Date(),reportTimeZone),
+       end:draft.end??"",status:draft.status||"Borrador"});nav("promociones");}}/>}
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
@@ -1336,6 +1375,8 @@ function App(){
    </section>
   </div>}
   {editingPromo&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPromo(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPromo==="nuevo"?"Nueva promoción":"Editar promoción"}</h2><p>Configura productos y objetivos de venta por farmacia.</p></div><button className="icon-btn" aria-label="Cerrar" onClick={()=>setEditingPromo(null)}><X size={21}/></button></div><form onSubmit={savePromo} className="drawer-content">
+   {promoForm.retroactive&&<div className="note data-note"><CircleHelp size={16}/>
+     Promoción retroactiva: los tickets se consultarán al guardar, sin modificar las ventas originales. Los objetivos son opcionales, pero es necesario elegir el tipo de oferta.</div>}
    <Field label="Nombre de promoción"><input required placeholder="Ej.: Especial hidratación" value={promoForm.name} onChange={e=>setPromoForm({...promoForm,name:e.target.value})}/></Field>
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>
    <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field><Field label="Fecha de fin (opcional)"><input type="date" value={promoForm.end||""} onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field></div>

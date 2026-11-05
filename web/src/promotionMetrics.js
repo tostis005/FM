@@ -1,23 +1,37 @@
-// Resumen consistente con la lista visible y la disponibilidad de ventas.
+// El avance de cada campaña conserva su porcentaje real, incluso si supera 100 %.
+// En una media de campañas, cada una cuenta como máximo 100 %.
+export function promotionAverageCompletion(campaigns,salesAvailable=true){
+ if(!salesAvailable)return null;
+ const list=campaigns||[];
+ const valid=list.map(p=>{
+  const goal=Object.values(p.targets||{}).reduce((n,x)=>n+(Number(x)>0?Number(x):0),0);
+  const sold=Object.values(p.sales||{}).reduce((n,x)=>n+(Number.isFinite(Number(x))?Number(x):0),0);
+  return goal>0?sold/goal*100:null;
+ }).filter(value=>value!==null);
+ if(!valid.length)return null;
+ // Una única campaña conserva su porcentaje real. Si hay varias,
+ // incluso aunque sólo una tenga objetivos, el indicador global nunca
+ // puede superar el 100 % por campaña.
+ return Math.round(list.length===1?valid[0]:
+  valid.reduce((a,value)=>a+Math.min(100,Math.max(0,value)),0)/valid.length);
+}
+// Resumen consistente con el conjunto visible y la disponibilidad de ventas.
 export function promotionMetrics(campaigns, salesAvailable=false){
  const list=Array.isArray(campaigns)?campaigns:[];
  const target=list.reduce((total,p)=>total+Object.values(p.targets||{}).reduce((n,value)=>{
-   const quantity=Number(value);
-   return n+(Number.isFinite(quantity)&&quantity>0?quantity:0);
+   const amount=Number(value);return n+(Number.isFinite(amount)&&amount>0?amount:0);
  },0),0);
- const units=salesAvailable?list.reduce((total,p)=>total+Object.values(p.sales||{}).reduce((n,value)=>{
-   const quantity=Number(value);
-   return n+(Number.isFinite(quantity)?quantity:0);
- },0),0):null;
+ const total=(field)=>salesAvailable?list.reduce((acc,p)=>acc+Object.values(p[field]||{}).reduce(
+   (n,value)=>n+(Number.isFinite(Number(value))?Number(value):0),0),0):null;
  const cnCount=new Set(list.flatMap(p=>(p.cns||[]).map(String))).size;
  return {
   promotions:list.length,cnCount,
   target:target>0?target:null,
-  units,
-  completion:target>0&&units!==null?Math.round(units/target*100):null
+  units:total("sales"),
+  totalUnits:total("totalSales"),
+  completion:promotionAverageCompletion(list,salesAvailable)
  };
 }
-
 /**
  * Una línea vendida puede atribuirse a varias campañas cuando comparten
  * CN, farmacia participante y fechas. Detectarlo sin sumar ventas ficticias.
@@ -37,7 +51,6 @@ export function hasOverlappingPromotions(campaigns){
  }
  return false;
 }
-
 // Nunca atribuir a una campaña ventas de farmacias que no participan en ella.
 export function participatingPromotionSales(promo,rawSales){
  const targets=promo?.targets||{};

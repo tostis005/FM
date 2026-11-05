@@ -1,7 +1,7 @@
 // Consulta acotada de catálogo y ventas para el preparador de objetivos.
 // Sólo expone farmacias autorizadas, CN reales y agregados, nunca tickets.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {promotionCatalogSearchSQL} from "./promotionCatalogSearch.js";
+import {promotionCatalogSearchSQL,mergePromotionCatalogRows} from "./promotionCatalogSearch.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const CN=/^\d{6}$/;
@@ -14,6 +14,66 @@ const validPeriod=p=>{
   start.toISOString().slice(0,10)===p.from&&end.toISOString().slice(0,10)===p.to&&
   end>=start&&(end-start)<=5*366*86400000;
 };
+
+const metaCache=new WeakMap();
+async function catalogColumns(pool,schema){
+ let cache=metaCache.get(pool);
+ if(!cache){cache=new Map();metaCache.set(pool,cache);}
+ const current=cache.get(schema);
+ if(current&&(current.promise||current.expires>Date.now()))
+  return current.promise||current.value;
+ const pending=pool.query({
+  text:"SELECT table_name,column_name FROM information_schema.columns "+
+   "WHERE table_schema=$1 AND table_name IN ('articulos','proveedores')",
+  values:[schema],query_timeout:1800
+ }).then(result=>{
+  const value=result.rows||[];
+  cache.set(schema,{value,expires:Date.now()+600000});
+  return value;
+ }).catch(error=>{cache.delete(schema);throw error;});
+ cache.set(schema,{promise:pending});
+ return pending;
+}
+async function findPromotionArticles(pool,{schema,slug,ids,search,cns}){
+ const metadata=await catalogColumns(pool,schema);
+ const sql=promotionCatalogSearchSQL(schema,metadata);
+ const direct=pool.query({text:sql.direct,values:[slug,ids,search,cns,240],query_timeout:5000});
+ const supplierNames=search.length>=2&&sql.suppliers?
+  pool.query({text:sql.suppliers,values:[slug,ids,search,80],query_timeout:2500}):
+  Promise.resolve({rows:[]});
+ const [a,b]=await Promise.allSettled([direct,supplierNames]);
+ const rows=a.status==="fulfilled"?a.value.rows||[]:[];
+ const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
+ let supplierError=null;
+ if(supplierCodes.length&&sql.bySupplier){
+  try{
+   const r=await pool.query({
+    text:sql.bySupplier,
+    values:[slug,ids,search,cns,JSON.stringify(supplierCodes),180],
+    query_timeout:4500
+   });
+   rows.push(...(r.rows||[]));
+  }catch(error){supplierError=error;}
+ }
+ const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&!supplierError;
+ if(!complete&&!rows.length)
+  throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
+ // A Farmatic ERP ID is not necessarily a CN. Only recover six-digit ids
+ // independently verified against the official AEMPS nomenclator.
+ const possible=[...new Set(rows.map(r=>String(r.source_id||"").trim())
+  .filter(v=>/^\d{6}$/.test(v)))];
+ let verified=new Set();
+ if(possible.length){
+  try{
+   const r=await pool.query({text:
+    "SELECT cn::text AS cn FROM farmetrica.nomenclator_presentaciones WHERE cn=ANY($1::text[])",
+    values:[possible],query_timeout:1800});
+   verified=new Set(r.rows.map(row=>String(row.cn)));
+  }catch(error){console.warn("PROMOTION_CN_LOOKUP",error.code||error.name);}
+ }
+ return {products:mergePromotionCatalogRows(rows,verified),partial:!complete};
+}
+
 export function setupPromotionObjectives(app,pool,{requireTenantModule}){
  const protectedRoute=requireTenantModule("promociones");
  app.post("/api/ventas/objetivos/buscar",...protectedRoute,async(req,res,next)=>{
@@ -26,17 +86,8 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    if(search.length<2&&!cns.length)return res.json({products:[]});
    const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
    if(!ids.length)return res.json({products:[]});
-   const {rows:metadata}=await pool.query(
-    "SELECT table_name,column_name FROM information_schema.columns "+
-    "WHERE table_schema=$1 AND table_name IN ('articulos','proveedores')",[schema]);
-   let sql;
-   try{sql=promotionCatalogSearchSQL(schema,metadata);}
-   catch(error){return res.status(503).json({error:error.message});}
-   const {rows}=await pool.query(sql,[slug,ids,search,cns]);
-   return res.json({products:rows.map(r=>({
-    cn:r.cn||null,description:r.description||"Artículo sin nombre",
-    supplier:r.supplier||null,sourceId:r.sourceId||null
-   }))});
+   const result=await findPromotionArticles(pool,{schema,slug,ids,search,cns});
+   return res.json(result);
   }catch(e){next(e);}
  });
  app.post("/api/ventas/objetivos/historico",...protectedRoute,async(req,res,next)=>{

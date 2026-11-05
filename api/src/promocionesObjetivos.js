@@ -62,7 +62,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
      [...allowed];
    if(ids.some(id=>!Number.isSafeInteger(id)||!allowed.has(id)))
      return res.status(403).json({error:"Farmacia fuera de tu ámbito"});
-   if(!ids.length)return res.json({periods:Object.fromEntries(periods.map(p=>[p.id,{}]))});
+   if(!ids.length)return res.json({periods:Object.fromEntries(periods.map(p=>[p.id,{}])),amounts:Object.fromEntries(periods.map(p=>[p.id,{}]))});
    // Los tickets usan a veces el ID Farmatic y no el CN. Resolver el maestro
    // una sola vez y comparar siempre por farmacia para evitar cruces de IDs.
    const {rows:links}=await pool.query(`
@@ -73,7 +73,9 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
     WHERE f.id=ANY($2::int[]) AND btrim(a.codigo_nacional::text)=ANY($3::text[])`,
     [slug,ids,cns]);
    const mappedKeys=links.map(r=>r.pharmacy_id+"|"+r.source_id);
-   const query=`SELECT f.id::text AS pharmacy_id,coalesce(sum(v.unidades),0)::float8 AS units
+   const query=`SELECT f.id::text AS pharmacy_id,
+      coalesce(sum(v.unidades),0)::float8 AS units,
+      coalesce(sum(v.importe),0)::float8 AS amount
      FROM "${schema}".fm_ventas_analitica v JOIN farmetrica.farmacias f
       ON f.cliente_slug=$1
       AND upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
@@ -82,12 +84,13 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
        AND (btrim(v.articulo_id::text)=ANY($5::text[])
           OR f.id::text||'|'||btrim(v.articulo_id::text)=ANY($6::text[]))
      GROUP BY f.id`;
-   const totals={};
+   const totals={},amounts={};
    for(const p of periods){
     const {rows}=await pool.query(query,[slug,ids,p.from,p.to,cns,mappedKeys]);
     totals[p.id]=Object.fromEntries(rows.map(r=>[r.pharmacy_id,Number(r.units)]));
+    amounts[p.id]=Object.fromEntries(rows.map(r=>[r.pharmacy_id,Number(r.amount)]));
    }
-   res.json({periods:totals});
+   res.json({periods:totals,amounts});
   }catch(e){next(e);}
  });
 }

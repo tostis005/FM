@@ -27,7 +27,7 @@ test("proveedor habitual se busca por nombre en la misma farmacia y solo despué
  assert.match(sql.suppliers,/pm\.cliente_slug=\$1/);
  assert.match(sql.suppliers,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.match(sql.bySupplier,/a\."proveedor_habitual_id"::text/);
- assert.match(sql.bySupplier,/matched\.supplier_code=ANY/);
+ assert.match(sql.bySupplier,/=matched\.supplier_code/);
  assert.match(sql.bySupplier,/jsonb_to_recordset/);
  assert.match(sql.bySupplier,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.doesNotMatch(sql.bySupplier,/ILIKE|EXISTS|LATERAL/);

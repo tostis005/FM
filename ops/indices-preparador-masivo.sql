@@ -82,7 +82,7 @@ WHERE EXISTS (
 SELECT 'CREATE INDEX CONCURRENTLY IF NOT EXISTS fm_promociones_articulos_proveedor_idx
  ON ampedia.articulos (
   (upper(btrim(farmacia_codigo::text))),
-  (upper(btrim(coalesce(proveedor_habitual_id::text,'''')))
+  (upper(btrim(coalesce(proveedor_habitual_id::text,''''))))
  );'
 WHERE EXISTS (
  SELECT 1 FROM information_schema.columns

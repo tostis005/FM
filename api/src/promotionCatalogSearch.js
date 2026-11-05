@@ -23,7 +23,7 @@ export function promotionCatalogSearchSQL(schema,columns){
  const refs=["proveedor_habitual_id","proveedor_id","proveedor_codigo","proveedor","laboratorio_id"]
   .filter(name=>has(columns,"articulos",name));
  const primary=refs.length?col("a",refs[0]):"NULL::text";
- const refArray=refs.length?"ARRAY["+refs.map(ref=>upper(col("a",ref))).join(",")+"]::text[]":null;
+ const refCondition=refs.map(ref=>upper(col("a",ref))+"=matched.supplier_code").join(" OR ");
  const fields=(supplier="NULL::text")=>[
   "f.id::text AS pharmacy_id",col("a","origen_id")+" AS source_id",
   col("a","nombre")+" AS description",col("a","codigo_nacional")+" AS national_code",
@@ -75,7 +75,7 @@ export function promotionCatalogSearchSQL(schema,columns){
   "JOIN jsonb_to_recordset($5::jsonb) AS matched("+
    "pharmacy_code text,supplier_code text,supplier_name text) "+
   "ON "+upper("a.farmacia_codigo::text")+"=matched.pharmacy_code "+
-  "AND matched.supplier_code=ANY("+refArray+") "+
+  "AND ("+refCondition+") "+
   scope+"LIMIT $6::int":null;
  return {direct,suppliers,bySupplier,supplierReady};
 }

@@ -710,8 +710,8 @@ function App(){
      return setToast("Los objetivos deben ser unidades enteras no negativas");
   if(promoForm.retroactive){
    const todayMadrid=civilToday(new Date(),reportTimeZone);
-   if(!/^20\\d{2}-\\d{2}-\\d{2}$/.test(promoForm.start||"")||
-      !/^20\\d{2}-\\d{2}-\\d{2}$/.test(promoForm.end||"")||
+   if(!/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.start||"")||
+      !/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.end||"")||
       promoForm.end>todayMadrid)
      return setToast("La promoción retroactiva requiere fechas válidas y un período ya terminado.");
    if(promoForm.status!=="Finalizada")

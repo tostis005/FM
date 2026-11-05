@@ -261,8 +261,10 @@ jobs:
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           test "$(psql_test -At -c "SELECT cooperativa=false AND ignorar_informes=true FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND codigo_origen='COOP01'")" = t
           psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
+          psql_test -At -c "ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS proveedor_habitual_id text;" >/dev/null
           psql_test < ops/indices-preparador-masivo.sql
           psql_test < ops/indices-preparador-masivo.sql
+          test "$(psql_test -At -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_index x ON x.indexrelid=c.oid WHERE n.nspname='ampedia' AND c.relname='fm_promociones_articulos_proveedor_idx' AND x.indisvalid AND x.indisready")" = 1
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class c
            JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_index i ON i.indexrelid=c.oid
            WHERE n.nspname='ampedia' AND c.relname IN ('fm_preparador_articulo_cn_idx',
@@ -302,6 +304,7 @@ jobs:
            TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCatalog.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCnRecovery.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/promotionCatalogSearch.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierCatalog.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/customSupplierIdentity.integration.test.js
            TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryMerge.integration.test.js

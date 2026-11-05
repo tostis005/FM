@@ -12,6 +12,9 @@ function create({role="administrador",document={id:"P1",name:"Oferta",cns:["1234
    queries.push({sql,params});
    if(sql==="BEGIN"||sql==="COMMIT")return {rows:[]};
    if(sql==="ROLLBACK"){rollback=true;return {rows:[]};}
+   if(sql.includes("SELECT documento,creado_por FROM")&&sql.includes("FOR UPDATE")){
+    const old=records.get(params[0]);return {rows:old?[{documento:old,creado_por:"admin@example.com"}]:[]};
+   }
    if(sql.includes("DELETE FROM")){
     const old=records.get(params[0]);if(old)records.delete(params[0]);
     return {rows:old?[{documento:old}]:[]};
@@ -50,7 +53,7 @@ test("administrador elimina en la base del cliente y conserva revisión de audit
  assert.equal(ctx.revisions[0][2],"admin@example.com");
  assert.deepEqual(JSON.parse(ctx.revisions[0][1]).targets,{"1":8});
  assert.ok(JSON.parse(ctx.revisions[0][1]).deletedAt);
- assert.deepEqual(ctx.queries.map(q=>q.sql==="BEGIN"?"BEGIN":q.sql==="COMMIT"?"COMMIT":q.sql.includes("DELETE FROM")?"DELETE":"AUDIT"),["BEGIN","DELETE","AUDIT","COMMIT"]);
+ assert.deepEqual(ctx.queries.map(q=>q.sql==="BEGIN"?"BEGIN":q.sql==="COMMIT"?"COMMIT":q.sql.includes("DELETE FROM")?"DELETE":q.sql.includes("SELECT documento")?"SELECT":"AUDIT"),["BEGIN","SELECT","DELETE","AUDIT","COMMIT"]);
  assert.equal(ctx.release(),true);
 });
 test("eliminar dos veces es idempotente, la segunda no crea revisiones",async()=>{
@@ -76,4 +79,14 @@ test("no se ejecuta SQL con ID o esquema inválidos",async()=>{
  const response=await ctx2.call("P1",{context:{role:"administrador",client:{schema:'ampedia";DROP SCHEMA x;--'}}});
  assert.equal(response.status,400);
  assert.equal(ctx2.queries.length,0);
+});
+
+test("gestor elimina promociones de sus farmacias, sin permisos globales",async()=>{
+ const allowed=create({role:"gestor"});
+ assert.equal((await allowed.call()).status,200);
+ const denied=create({role:"gestor",document:{id:"P1",name:"Campaña ajena",cns:["123456"],targets:{"2":7}}});
+ const response=await denied.call();
+ assert.equal(response.status,403);
+ assert.equal(denied.records.size,1);
+ assert.equal(denied.rolledBack(),true);
 });

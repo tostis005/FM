@@ -67,3 +67,33 @@
 .fm-objectives-table tbody td strong{display:block;font-size:12px;color:#244c38}
 .fm-objectives-table tbody td small{display:block;font-size:10px;font-weight:500;color:#789384;margin-top:4px;font-variant-numeric:tabular-nums}
 .fm-objectives-summary td strong,.fm-objectives-summary td small{color:#13744f}
+
+/* Tabla única de referencias de ventas, incrementos y objetivos. */
+.fm-objectives-unified-table{min-width:1280px;table-layout:auto}
+.fm-objectives-unified-table th:first-child{min-width:132px;text-align:left}
+.fm-objectives-unified-table th:nth-child(n+2):nth-child(-n+5){min-width:130px}
+.fm-objectives-unified-table th:nth-last-child(2){min-width:252px}
+.fm-objectives-unified-table th:last-child{min-width:122px}
+.fm-objectives-base{display:flex;gap:7px;align-items:center;justify-content:flex-end;cursor:pointer;padding:4px 1px;white-space:normal}
+.fm-objectives-base input{accent-color:#0c9a67;flex:0 0 auto;width:14px;height:14px}
+.fm-objectives-base.chosen{color:#0b8859;font-weight:800}
+.fm-objectives-base.chosen span{border-bottom:2px solid #0a9c68}
+.fm-objectives-table thead th:has(.fm-objectives-base.chosen){background:#e8f8f0}
+.fm-objectives-unified-table tbody td:nth-last-child(2){min-width:252px}
+.fm-objectives-goal-cell input{width:98px;max-width:100%;box-sizing:border-box;text-align:right;
+ border:1px solid #d5e4db;border-radius:8px;padding:8px;font:inherit;font-weight:750;color:#254936;background:#fff}
+.fm-objectives-unified-table .fm-objectives-rates{flex-wrap:nowrap;gap:3px}
+.fm-objectives-unified-table .fm-objectives-rates button{padding:6px 5px;font-size:10px}
+.fm-objectives-unified-table .fm-objectives-rate-custom{margin-top:6px}
+.fm-objectives-unified-table .fm-objectives-rate-custom input{width:72px}
+.fm-objectives-product.unavailable{cursor:default;opacity:.67}
+.fm-objectives-product>span strong{display:block;font-weight:650;color:#385a49}
+.fm-objectives-product>span small{display:block;font-size:11px;color:#789084;margin-top:4px}
+.fm-objectives-search textarea::placeholder,.fm-objectives-search input::placeholder{
+ color:#899e93!important;opacity:1!important
+}
+.fm-objectives-search textarea:placeholder-shown{color:#213e32}
+.fm-objectives-create{display:flex;justify-content:flex-end;padding:2px 0 12px}
+.fm-objectives-create .btn{min-width:188px}
+.fm-objectives-extract-head h2{margin:0;font-size:19px}
+@media(max-width:720px){.fm-objectives-create .btn{width:100%}.fm-objectives-base{justify-content:flex-start}}

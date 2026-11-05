@@ -10,8 +10,15 @@ function fixture(){
    return {rows:[{pharmacy_id:"1",source_id:"ERP-123"}]};
   if(sql.includes("coalesce(sum(v.unidades)"))
    return {rows:[{pharmacy_id:"1",units:7,amount:53.8}]};
-  if(sql.includes("WITH catalog"))
-   return {rows:[{cn:"123456",description:"Artículo de prueba"}]};
+  if(sql.includes("SELECT table_name,column_name FROM information_schema.columns"))
+   return {rows:[
+    ...["farmacia_codigo","origen_id","nombre","codigo_nacional","laboratorio","proveedor_id"]
+      .map(column_name=>({table_name:"articulos",column_name})),
+    ...["farmacia_codigo","origen_id","nombre"]
+      .map(column_name=>({table_name:"proveedores",column_name}))
+   ]};
+  if(sql.includes("WITH matching"))
+   return {rows:[{cn:"123456",description:"Artículo de prueba",supplier:"Proveedor Ejemplo",sourceId:"ERP-123"}]};
   throw Error("Consulta SQL inesperada: "+sql);
  }};
  const app={post(path,...handlers){routes.set(path,handlers.at(-1));}};
@@ -51,8 +58,9 @@ test("permite buscar por CN en el catálogo autorizado",async()=>{
  const api=fixture();
  const out=await api.call("/api/ventas/objetivos/buscar",{cns:["123456"],search:""});
  assert.equal(out.status,200);
- assert.deepEqual(out.response.products,[{cn:"123456",description:"Artículo de prueba"}]);
- assert.deepEqual(api.queries[0].params.slice(0,2),["ampedia",[1,2]]);
+ assert.deepEqual(out.response.products,[{cn:"123456",description:"Artículo de prueba",supplier:"Proveedor Ejemplo",sourceId:"ERP-123"}]);
+ assert.deepEqual(api.queries[0].params,["ampedia"]);
+ assert.deepEqual(api.queries[1].params.slice(0,2),["ampedia",[1,2]]);
 });
 test("rechaza rangos inválidos antes de consultar PostgreSQL",async()=>{
  const api=fixture();
@@ -60,4 +68,21 @@ test("rechaza rangos inválidos antes de consultar PostgreSQL",async()=>{
    cns:["123456"],pharmacyIds:[1],periods:[{id:"future",from:"2026-10-31",to:"2026-10-01"}]});
  assert.equal(invalid.status,400);
  assert.equal(api.queries.length,0);
+});
+
+test("buscar por nombre de proveedor no confunde identificador ERP con CN",async()=>{
+ const api=fixture();
+ const out=await api.call("/api/ventas/objetivos/buscar",{search:"Proveedor Ejemplo",cns:[]});
+ assert.equal(out.status,200);
+ const query=api.queries.find(q=>q.sql.includes("WITH matching")).sql;
+ assert.match(query,/pm\.nombre ILIKE/);
+ assert.match(query,/pr\.nombre ILIKE/);
+ assert.match(query,/btrim\(a\.codigo_nacional::text\) ~ '\^\[0-9\]\{6\}\$'/);
+ assert.doesNotMatch(query,/WHEN btrim\(a\.origen_id/);
+});
+test("no muestra productos de farmacias ajenas en la búsqueda",async()=>{
+ const api=fixture();
+ await api.call("/api/ventas/objetivos/buscar",{search:"ibuprofeno",cns:[]},[1]);
+ assert.deepEqual(api.queries[1].params[1],[1]);
+ assert.match(api.queries[1].sql,/f\.id=ANY\(\$2::int\[\]\)/);
 });

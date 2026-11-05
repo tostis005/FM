@@ -682,12 +682,14 @@ function App(){
   if(!canManagePromotions)return setToast("No tienes permiso para modificar promociones.");
   if(promotionStoreStatus!=="connected")
    return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
+  const retroactiveFromSimulator=Boolean(promoForm.simulatorDraft&&promoForm.status==="Finalizada");
+  const needsRetroactiveValidation=Boolean(promoForm.retroactive||retroactiveFromSimulator);
   const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
-  if(!codes.length&&(promoForm.status==="Activa"||promoForm.retroactive))return setToast("Añade al menos un CN para vincular ventas a la promoción.");
+  if(!codes.length&&(promoForm.status==="Activa"||needsRetroactiveValidation))return setToast("Añade al menos un CN para vincular ventas a la promoción.");
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
-  if((promoForm.status==="Activa"||promoForm.retroactive)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
+  if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
   if(promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
@@ -695,20 +697,20 @@ function App(){
   if(promoForm.status==="Activa" && !selections.length)return setToast("Selecciona farmacias y completa sus objetivos antes de activar");
   if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
      return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
-  if(promoForm.retroactive&&promoForm.type==="sin_clasificar")
+  if(needsRetroactiveValidation&&promoForm.type==="sin_clasificar")
     return setToast("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
   if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
      return setToast("Clasifica el tipo de promoción antes de activarla");
-  if((promoForm.status==="Activa"||promoForm.retroactive) && requiresPct &&
+  if((promoForm.status==="Activa"||needsRetroactiveValidation) && requiresPct &&
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
      return setToast("Introduce el porcentaje de descuento antes de activar");
-  if((promoForm.status==="Activa"||promoForm.retroactive)&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
-   if((promoForm.status==="Activa"||promoForm.retroactive)&&promoForm.type==="precio_especial"&&
+  if((promoForm.status==="Activa"||needsRetroactiveValidation)&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
+   if((promoForm.status==="Activa"||needsRetroactiveValidation)&&promoForm.type==="precio_especial"&&
      (promoForm.specialPrice===""||promoForm.specialPrice==null||!(Number(promoForm.specialPrice)>=0)))
       return setToast("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
-  if(promoForm.retroactive){
+  if(needsRetroactiveValidation){
    const todayMadrid=civilToday(new Date(),reportTimeZone);
    if(!/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.start||"")||
       !/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.end||"")||
@@ -724,9 +726,10 @@ function App(){
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
-  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,...fields}=promoForm;
-   const result={...fields,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
+  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,simulatorDraft:_simDraft,...fields}=promoForm;
+   const result={...fields,retroactive:needsRetroactiveValidation,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   if(result.status==="Finalizada"){
+    if(needsRetroactiveValidation&&!result.closedOn)result.closedOn=result.end;
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
     if(manualClose){
       if(result.closedOn&&result.closedOn<result.start)return setToast("El cierre no puede ser anterior al inicio");
@@ -1288,10 +1291,9 @@ function App(){
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
     {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
-      pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones")}
-      onCreatePromotion={draft=>{startPromo({...EMPTY_PROMO,...draft,id:null,
-       start:draft.start||civilToday(new Date(),reportTimeZone),
-       end:draft.end??"",status:draft.status||"Borrador"});nav("promociones");}}/>}
+      pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
+      onCreatePromotion={draft=>startPromo({...EMPTY_PROMO,...draft,id:null,
+       name:"",start:"",end:"",status:"Borrador",simulatorDraft:true})}/>}
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
@@ -1375,7 +1377,7 @@ function App(){
    </section>
   </div>}
   {editingPromo&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPromo(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPromo==="nuevo"?"Nueva promoción":"Editar promoción"}</h2><p>Configura productos y objetivos de venta por farmacia.</p></div><button className="icon-btn" aria-label="Cerrar" onClick={()=>setEditingPromo(null)}><X size={21}/></button></div><form onSubmit={savePromo} className="drawer-content">
-   {promoForm.retroactive&&<div className="note data-note"><CircleHelp size={16}/>
+   {(promoForm.retroactive||promoForm.simulatorDraft&&promoForm.status==="Finalizada")&&<div className="note data-note"><CircleHelp size={16}/>
      Promoción retroactiva: los tickets se consultarán al guardar, sin modificar las ventas originales. Los objetivos son opcionales, pero es necesario elegir el tipo de oferta.</div>}
    <Field label="Nombre de promoción"><input required placeholder="Ej.: Especial hidratación" value={promoForm.name} onChange={e=>setPromoForm({...promoForm,name:e.target.value})}/></Field>
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>

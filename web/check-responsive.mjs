@@ -6,7 +6,7 @@ import {chromium} from "playwright";
 import {mkdir} from "node:fs/promises";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const routes=[
- "promociones","promociones/seguimiento","dashboard","ventas","compras",
+ "promociones","promociones/seguimiento","promociones/simulador","dashboard","ventas","compras",
  "proveedores","stock","stock-sin-recepciones","reposicion","genericos","rentabilidad","acciones",
  "informes","asistente","farmacias","usuarios","clientes","accesos","ajustes"
 ];
@@ -92,6 +92,16 @@ async function mockApi(route){
  else if(path==="/api/ventas/cobertura")payload={pharmacies:[]};
  else if(path==="/api/ventas/seguimiento")payload={sales:{}};
  else if(path==="/api/ventas/detalle")payload={rows:[],total:0,offset:0,limit:25};
+ else if(path==="/api/ventas/objetivos/buscar")payload={products:[
+  {cn:"123456",description:"Producto de prueba",supplier:"Laboratorio ejemplo",sourceId:"88"}
+ ]};
+ else if(path==="/api/ventas/objetivos/historico"){
+  const body=JSON.parse(route.request().postData()||"{}");
+  payload={periods:Object.fromEntries((body.periods||[]).map(p=>
+   [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,100]))])),
+   amounts:Object.fromEntries((body.periods||[]).map(p=>
+   [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,900]))]))};
+ }
  await route.fulfill({status:200,contentType:"application/json",
    headers:{"cache-control":"no-store"},body:JSON.stringify(payload)});
 }
@@ -211,6 +221,27 @@ try{
        if(path==="promociones"&&viewport.width<=560&&
           !result.table.some(t=>t.content>t.viewport)){
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");
+       }
+       if(path==="promociones/simulador"&&viewport.width===375){
+         const headers=await page.locator(".fm-objectives-base input[type=radio]").count();
+         if(headers!==4)throw Error("El simulador necesita cuatro períodos con selector de referencia");
+         const paste=page.locator(".fm-objectives-search textarea");
+         await paste.fill("123456");
+         await page.locator(".fm-objectives-results").waitFor({state:"visible",timeout:10000});
+         await page.getByRole("button",{name:"Seleccionar CN disponibles"}).click();
+         await page.getByRole("radio",{name:"Usar Mismo mes hace 1 año como base de objetivos"}).check();
+         await page.getByRole("button",{name:"Crear promoción",exact:true}).click();
+         await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
+         const transferred=await page.locator(".drawer textarea.cn-area").inputValue();
+         if(!transferred.includes("123456"))throw Error("Los CN no se transfieren al formulario lateral");
+         const targets=await page.locator(".drawer .target-row").count();
+         if(targets!==pharmacies.length)throw Error("Las farmacias no se transfieren al panel: "+targets);
+         await page.locator(".drawer-top button[aria-label=Cerrar]").click();
+         if(await page.locator(".drawer-backdrop").count())throw Error("El formulario no se puede cerrar");
+         await paste.fill("");
+         const placeholder=await paste.getAttribute("placeholder");
+         if(!placeholder||!placeholder.includes("123456"))
+           throw Error("No se recupera el placeholder al vaciar los CN");
        }
        if(path==="promociones"&&viewport.width===375){
          const paired=await page.locator(".fm-dual-scroll").first().evaluate(root=>{

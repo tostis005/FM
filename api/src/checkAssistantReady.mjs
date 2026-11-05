@@ -11,6 +11,11 @@ async function verify(){
  const models=(await tags.json()).models||[];
  if(!models.some(m=>m.name===expected||m.model===expected))
   throw Error("Qwen3 0.6B no está descargado en Ollama; instalar: ollama pull "+expected);
+ if(process.argv.includes("--catalog-only")){
+   console.log("Asistente Farmétrica: modelo disponible en el catálogo de Ollama ("+
+     expected+"). Inferencia no ejecutada en el despliegue para evitar presión de memoria.");
+   return;
+ }
  const started=performance.now();
  const test=await fetch(url+"/api/chat",{
   method:"POST",

@@ -25,7 +25,7 @@ export function mergePromotionSelection(current,items){
   const label=String(item.description||"").trim();
   // Una ficha real nunca se sustituye por el texto genérico del pegado.
   const real=label&&label!=="CN introducido";
-  result.set(item.cn,existing&&(!real||!existing.description||existing.description!=="CN introducido")?
+  result.set(item.cn,existing&&(!real||(existing.description&&existing.description!=="CN introducido"))?
    existing:{...existing,...item,description:label||"CN introducido"});
  }
  return [...result.values()];

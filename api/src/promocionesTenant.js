@@ -85,8 +85,7 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
       db=await pool.connect();
       await db.query("BEGIN");
       const {rows:original}=await db.query(
-        `SELECT documento,creado_por FROM "${schema}".fm_promociones WHERE id=
-       FOR UPDATE`,[id]);
+        `SELECT documento,creado_por FROM "${schema}".fm_promociones WHERE id=$1 FOR UPDATE`,[id]);
       if(original.length&&!canMutate(req,original[0].documento,original[0].creado_por)){
         await db.query("ROLLBACK");
         return res.status(403).json({error:"Promoción fuera de tus farmacias autorizadas"});

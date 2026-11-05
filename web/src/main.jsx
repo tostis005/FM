@@ -684,10 +684,10 @@ function App(){
    return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
   const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
-  if(!codes.length&&promoForm.status==="Activa")return setToast("Añade al menos un CN antes de activar");
+  if(!codes.length&&(promoForm.status==="Activa"||promoForm.retroactive))return setToast("Añade al menos un CN para vincular ventas a la promoción.");
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
-  if(promoForm.status==="Activa"&&!promoForm.start)return setToast("La fecha de inicio es obligatoria para activar");
+  if((promoForm.status==="Activa"||promoForm.retroactive)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
   if(promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
@@ -699,15 +699,28 @@ function App(){
     return setToast("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
   if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
      return setToast("Clasifica el tipo de promoción antes de activarla");
-  if(promoForm.status==="Activa" && requiresPct &&
+  if((promoForm.status==="Activa"||promoForm.retroactive) && requiresPct &&
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
      return setToast("Introduce el porcentaje de descuento antes de activar");
-  if(promoForm.status==="Activa"&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
-   if(promoForm.status==="Activa"&&promoForm.type==="precio_especial"&&
+  if((promoForm.status==="Activa"||promoForm.retroactive)&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
+   if((promoForm.status==="Activa"||promoForm.retroactive)&&promoForm.type==="precio_especial"&&
      (promoForm.specialPrice===""||promoForm.specialPrice==null||!(Number(promoForm.specialPrice)>=0)))
       return setToast("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
      return setToast("Los objetivos deben ser unidades enteras no negativas");
+  if(promoForm.retroactive){
+   const todayMadrid=civilToday(new Date(),reportTimeZone);
+   if(!/^20\\d{2}-\\d{2}-\\d{2}$/.test(promoForm.start||"")||
+      !/^20\\d{2}-\\d{2}-\\d{2}$/.test(promoForm.end||"")||
+      promoForm.end>todayMadrid)
+     return setToast("La promoción retroactiva requiere fechas válidas y un período ya terminado.");
+   if(promoForm.status!=="Finalizada")
+     return setToast("Las promociones retroactivas se guardan como finalizadas.");
+   if(!selections.length)
+     return setToast("Selecciona al menos una farmacia para atribuir las ventas históricas.");
+   try{promotionTicketPolicy(promoForm);}
+   catch(error){return setToast(error.message);}
+  }
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";

@@ -517,7 +517,7 @@ function App(){
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
    sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
     totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
- })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0);
+ })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0||p.managerCanEdit===true);
 
   const users=sessionUser?.role==="superadministrador"
     ? [{id:"AUTH",name:sessionUser.name||sessionUser.email,email:sessionUser.email,role:"superadmin",pharmacies:[],active:true},
@@ -708,7 +708,7 @@ function App(){
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
-  const {managerCanEdit:_scopeFlag,...fields}=promoForm;
+  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,...fields}=promoForm;
    const result={...fields,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   if(result.status==="Finalizada"){
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
@@ -778,6 +778,7 @@ function App(){
   if(!canManagePromotions||deletingSelected||deletingPromoId)return;
   const ids=[...new Set(selectedPromotionIds)].filter(id=>data.promos.some(p=>String(p.id)===String(id)));
   if(!ids.length)return;
+  if(data.promos.some(p=>ids.some(id=>String(id)===String(p.id))&&p.managerCanEdit===false))return setToast("Desmarca las promociones fuera de tus farmacias asignadas.");
   if(ids.length>500)return setToast("Selecciona un máximo de 500 promociones por eliminación.");
   if(!window.confirm("¿Eliminar definitivamente "+ids.length+" promociones seleccionadas?\n\nNo se puede deshacer."))return;
   setDeletingSelected(true);
@@ -1267,7 +1268,7 @@ function App(){
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
     {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
-      pharmacies={pharmacies} canManage={canManagePromotions}
+      pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones")}
       onCreatePromotion={draft=>{startPromo({...EMPTY_PROMO,...draft,id:null,
        start:civilToday(new Date(),reportTimeZone),end:"",status:"Borrador"});nav("promociones");}}/>}
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}

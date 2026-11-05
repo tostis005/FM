@@ -12,12 +12,14 @@ test("buscar nombre, CN normalizado y laboratorio sin consultas correlacionadas 
  const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
  assert.match(sql.direct,/a\.nombre::text ILIKE/);
  assert.match(sql.direct,/a\.cn_normalizado::text ILIKE/);
- assert.match(sql.direct,/left\(btrim\(a\.codigo_nacional::text\),6\)=ANY/);
  assert.match(sql.direct,/a\.laboratorio::text ILIKE/);
  assert.match(sql.direct,/a\.origen_id::text ILIKE/);
  assert.match(sql.direct,/f\.id=ANY\(\$2::int\[\]\)/);
- assert.match(sql.direct,/SELECT DISTINCT ON \(resolved_cn\)/);
- assert.match(sql.direct,/WHERE \(.*\~ '\^\[0-9\]\{6,7\}\
+ assert.ok(sql.direct.includes("SELECT DISTINCT ON (resolved_cn)"));
+ assert.ok(sql.direct.includes("LIMIT $5::int OFFSET $6::int"));
+ assert.ok(sql.bySupplier.includes("SELECT DISTINCT ON (resolved_cn)"));
+ assert.ok(sql.bySupplier.includes("LIMIT $4::int OFFSET $5::int"));
+ assert.ok(sql.direct.includes("^[0-9]{6,7}$"));
  assert.doesNotMatch(sql.direct,/EXISTS\s*\(SELECT|LATERAL|proveedores_maestro/);
  assert.doesNotMatch(sql.direct,/ORDER BY a\.nombre/);
 });

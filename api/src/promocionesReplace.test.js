@@ -118,3 +118,18 @@ test("sin permisos o con IDs repetidos no se modifican las promociones",async()=
  assert.equal((await admin.call("/api/tenant/promociones/eliminar-lote",{ids:[]})).status,400);
  assert.deepEqual([...admin.records().keys()],["OLD"]);
 });
+
+test("gestor puede importar Excel con farmacias asignadas",async()=>{
+ const t=setup({role:"gestor",previous:[]});
+ const result=await t.call("/api/tenant/promociones/importar",{promotions:[next]});
+ assert.equal(result.status,200);
+ assert.equal(result.payload.imported,1);
+ assert.equal(t.records().get("NEW").targets["1"],8);
+});
+test("gestor no puede importar objetivos de farmacias ajenas",async()=>{
+ const t=setup({role:"gestor",previous:[]});
+ const result=await t.call("/api/tenant/promociones/importar",{
+  promotions:[{...next,targets:{"2":5}}]});
+ assert.equal(result.status,400);
+ assert.equal(t.records().size,0);
+});

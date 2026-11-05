@@ -19,6 +19,8 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "(farmacia_codigo,origen_id,nombre,codigo_nacional,cn_normalizado,laboratorio,proveedor_habitual_id) "+
    "VALUES('ABA','SIM-ART-123','Crema buscador Farmetrica ZZZ',NULL,'765432','',"+"'SIMSUP-123'),"+
    "('EUR','SIM-ART-123','Otro producto de otra farmacia',NULL,'654321','','SIMSUP-123')");
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio) "+
+   "VALUES('ABA','SIM-7-DIGIT-194700','Artículo CN con dígito de control','1947001','Lab Test')");
   const {rows:cols}=await db.query(
    "SELECT table_name,column_name FROM information_schema.columns "+
    "WHERE table_schema='ampedia' AND table_name IN ('articulos','proveedores')");
@@ -31,6 +33,10 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   const product=cnHits.find(row=>row.source_id==="SIM-ART-123");
   assert.ok(product);
   assert.equal(promotionResultCN(product),"765432");
+  const pasted=(await db.query(sql.direct,["ampedia",own,"",["194700"],240])).rows;
+  const sevenDigit=pasted.find(row=>row.source_id==="SIM-7-DIGIT-194700");
+  assert.ok(sevenDigit,"El CN de seis dígitos debe localizar la ficha ERP con dígito de control");
+  assert.equal(promotionResultCN(sevenDigit),"194700");
   const suppliers=(await db.query(sql.suppliers,["ampedia",own,"Buscador Particular",80])).rows;
   assert.ok(suppliers.some(row=>row.supplier_code==="SIMSUP-123"));
   const bySupplier=(await db.query(sql.bySupplier,[

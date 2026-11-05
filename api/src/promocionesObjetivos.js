@@ -1,6 +1,7 @@
 // Consulta acotada de catálogo y ventas para el preparador de objetivos.
 // Sólo expone farmacias autorizadas, CN reales y agregados, nunca tickets.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {promotionCatalogSearchSQL} from "./promotionCatalogSearch.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const CN=/^\d{6}$/;
@@ -25,25 +26,17 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    if(search.length<2&&!cns.length)return res.json({products:[]});
    const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
    if(!ids.length)return res.json({products:[]});
-   const {rows}=await pool.query(`
-    WITH catalog AS (
-      SELECT CASE
-        WHEN btrim(a.codigo_nacional::text) ~ '^[0-9]{6}$' THEN btrim(a.codigo_nacional::text)
-        ELSE NULL END AS cn,
-        nullif(btrim(a.nombre::text),'') AS description
-      FROM "${schema}".articulos a
-      JOIN farmetrica.farmacias f ON f.cliente_slug=$1
-        AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-      WHERE f.id=ANY($2::int[])
-        AND (
-          ($3::text<>'' AND (a.nombre ILIKE '%'||$3||'%' OR a.codigo_nacional::text ILIKE '%'||$3||'%'))
-          OR btrim(a.codigo_nacional::text)=ANY($4::text[])
-        )
-    )
-    SELECT cn,max(description) AS description FROM catalog WHERE cn IS NOT NULL
-    GROUP BY cn ORDER BY cn LIMIT 500`,
-    [slug,ids,search,cns]);
-   return res.json({products:rows.map(r=>({cn:r.cn,description:r.description||"Sin descripción"}))});
+   const {rows:metadata}=await pool.query(
+    "SELECT table_name,column_name FROM information_schema.columns "+
+    "WHERE table_schema=$1 AND table_name IN ('articulos','proveedores')",[schema]);
+   let sql;
+   try{sql=promotionCatalogSearchSQL(schema,metadata);}
+   catch(error){return res.status(503).json({error:error.message});}
+   const {rows}=await pool.query(sql,[slug,ids,search,cns]);
+   return res.json({products:rows.map(r=>({
+    cn:r.cn||null,description:r.description||"Artículo sin nombre",
+    supplier:r.supplier||null,sourceId:r.sourceId||null
+   }))});
   }catch(e){next(e);}
  });
  app.post("/api/ventas/objetivos/historico",...protectedRoute,async(req,res,next)=>{

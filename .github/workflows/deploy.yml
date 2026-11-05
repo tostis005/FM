@@ -266,12 +266,12 @@ jobs:
             docker compose -f compose.yaml -f compose.farmacias.yml up -d --build --no-deps api web
           '
 
-      - name: Verificar Qwen3 0.6B local dentro de API
+      - name: Verificar catálogo Qwen3 sin inferencia de alto consumo
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             set -eu
             cd /opt/farmawao
-            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkAssistantReady.mjs
+            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkAssistantReady.mjs --catalog-only
           '
       - name: Comprobar API, PostgreSQL y rutas web
         run: |

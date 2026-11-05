@@ -1,6 +1,8 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Check,Plus,Search,Trash2} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
+import {LoadingFrame,LoadingStatus} from "./LoadingState.jsx";
+import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection} from "./simuladorProductSelection.js";
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
 import "./ObjetivosPromociones.css";
 
@@ -25,12 +27,16 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const active=useMemo(()=>pharmacies.filter(f=>f.active!==false),[pharmacies]);
  const [selectedPharmacies,setSelectedPharmacies]=useState(()=>active.map(f=>String(f.id)));
  const initializedPharmacies=useRef(active.length>0);
+ const [mode,setMode]=useState("search");
  const [search,setSearch]=useState("");
  const [bulk,setBulk]=useState("");
  const [searchNonce,setSearchNonce]=useState(0);
  const [results,setResults]=useState([]);
  const [selected,setSelected]=useState([]);
  const [searchBusy,setSearchBusy]=useState(false);
+ const [unavailableCount,setUnavailableCount]=useState(0);
+ const [bulkBusy,setBulkBusy]=useState(false);
+ const [bulkError,setBulkError]=useState("");
  const [searchError,setSearchError]=useState("");
  const [historyBusy,setHistoryBusy]=useState(false);
  const [historyError,setHistoryError]=useState("");
@@ -40,8 +46,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [customTo,setCustomTo]=useState(madridToday);
  const [rateByPharmacy,setRateByPharmacy]=useState({});
  const [manualTargets,setManualTargets]=useState({});
- const codes=useMemo(()=>[...new Set(bulk.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))],[bulk]);
- const invalid=codes.filter(x=>!CN(x));
+ const {codes,invalid}=useMemo(()=>parsePromotionCNs(bulk),[bulk]);
  const selectedCNs=useMemo(()=>selected.map(x=>x.cn),[selected]);
  const selectedKey=selectedCNs.join(",");
  const pharmacyKey=selectedPharmacies.join(",");
@@ -59,27 +64,26 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   setSelectedPharmacies(ids=>ids.filter(id=>active.some(f=>String(f.id)===id)));
  },[active]);
 
- // Al escribir se buscan productos automáticamente, y el botón permite
- // repetir la búsqueda sin cambiar el filtro. Al vaciar, vuelve el placeholder.
+ // Cada modo busca por su cuenta: nunca se aplican AND/OR implícitos
+ // entre un texto y la lista de CN pegados.
  useEffect(()=>{
   const term=search.trim();
-  if(!term&&!codes.length){setResults([]);setSearchBusy(false);setSearchError("");return;}
-  if(invalid.length){setResults([]);setSearchBusy(false);
-   setSearchError("Cada código nacional debe tener exactamente 6 dígitos.");return;}
-  if(term.length<2&&!codes.length){setResults([]);setSearchBusy(false);
-   setSearchError("Introduce al menos dos caracteres para buscar.");return;}
+  if(mode!=="search"||!term){
+   setResults([]);setSearchBusy(false);setSearchError("");setUnavailableCount(0);return;
+  }
+  if(term.length<2){setResults([]);setSearchBusy(false);setSearchError("");
+   setUnavailableCount(0);return;}
   const controller=new AbortController();
   let timedOut=false;
-  setResults([]);setSearchBusy(true);setSearchError("");
+  setResults([]);setSearchBusy(true);setSearchError("");setUnavailableCount(0);
   const deadline=setTimeout(()=>{timedOut=true;controller.abort();},10500);
   const timer=setTimeout(()=>{
-   post(clientSlug,"/api/ventas/objetivos/buscar",{search:term,cns:codes},controller.signal)
+   post(clientSlug,"/api/ventas/objetivos/buscar",{search:term,cns:[]},controller.signal)
     .then(data=>{
      if(controller.signal.aborted)return;
-     const products=data.products||[],found=new Set(products.map(x=>x.cn).filter(Boolean));
-     setResults([...products,...codes.filter(cn=>!found.has(cn))
-      .map(cn=>({cn,description:"CN no localizado en el catálogo",supplier:null}))]);
-     if(data.partial)setSearchError("Resultados parciales: alguna fuente ha tardado demasiado. Prueba una búsqueda más específica.");
+     const {products,unavailableCount:missing}=selectablePromotionProducts(data.products);
+     setResults(products);setUnavailableCount(missing);
+     if(data.partial)setSearchError("Resultados parciales: prueba una búsqueda más específica.");
     })
     .catch(error=>{
      if(timedOut)setSearchError("La búsqueda ha tardado demasiado. Prueba con un nombre o CN más específico.");
@@ -88,7 +92,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     .finally(()=>{clearTimeout(deadline);if(!controller.signal.aborted||timedOut)setSearchBusy(false);});
   },420);
   return()=>{clearTimeout(timer);clearTimeout(deadline);controller.abort();};
- },[clientSlug,search,bulk,searchNonce]);
+ },[clientSlug,search,mode,searchNonce]);
 
  useEffect(()=>{
   if(!selectedCNs.length||!selectedPharmacies.length||!validRange){
@@ -123,12 +127,25 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const canCreate=Boolean(canManage&&selectedCNs.length&&selectedPharmacies.length&&
   validRange&&!historyBusy&&!historyError);
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));
- function append(items){
-  setSelected(current=>{
-   const currentByCN=new Map(current.map(item=>[item.cn,item]));
-   for(const item of items)if(CN(item.cn))currentByCN.set(item.cn,item);
-   return [...currentByCN.values()];
-  });
+ function append(items){setSelected(current=>mergePromotionSelection(current,items));}
+ async function addPastedCNs(){
+  if(bulkBusy||!codes.length||invalid.length||codes.length>500)return;
+  const requested=[...codes];
+  append(requested.map(cn=>({cn,description:"CN introducido"})));
+  setBulk("");setBulkError("");setBulkBusy(true);
+  // Añadir es instantáneo; recuperar la ficha es solo un enriquecimiento.
+  try{
+   const data=await post(clientSlug,"/api/ventas/objetivos/buscar",{search:"",cns:requested});
+   const byCode=new Map((data.products||[]).filter(item=>CN(item.cn)&&
+    requested.includes(item.cn)).map(item=>[item.cn,item]));
+   setSelected(current=>current.map(item=>{
+    const known=byCode.get(item.cn);
+    return known&&item.description==="CN introducido"?
+     {...item,description:known.description||item.description,supplier:known.supplier||null}:item;
+   }));
+  }catch{
+   setBulkError("Los CN están añadidos. No se han podido recuperar algunos nombres del catálogo.");
+  }finally{setBulkBusy(false);}
  }
  function create(){
   if(!canCreate)return;
@@ -148,37 +165,60 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   </div>
   <section className="card fm-objectives-card">
    <h2>1. Seleccionar productos</h2>
-   <div className="fm-objectives-search">
-    <label>Buscar por artículo, proveedor o CN
-     <input type="search" placeholder="Nombre, marca, laboratorio o CN…" value={search}
-      onChange={e=>setSearch(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setSearchNonce(n=>n+1);}}}/></label>
-    <label>Pegar códigos nacionales (uno por línea)
-     <textarea rows={4} placeholder={"123456\n654321"} value={bulk}
-      onChange={e=>setBulk(e.target.value)}/></label>
-    <button className="btn btn-secondary" type="button" disabled={searchBusy||(!search.trim()&&!codes.length)}
-     onClick={()=>setSearchNonce(n=>n+1)}><Search size={16}/>{searchBusy?"Buscando…":"Buscar productos"}</button>
+   <div className="fm-objectives-methods" role="tablist" aria-label="Forma de seleccionar productos">
+    <button type="button" role="tab" id="simulator-search-tab" aria-controls="simulator-search-panel"
+     aria-selected={mode==="search"} className={mode==="search"?"active":""} onClick={()=>setMode("search")}>
+     <Search size={15}/> Buscar artículos</button>
+    <button type="button" role="tab" id="simulator-paste-tab" aria-controls="simulator-paste-panel"
+     aria-selected={mode==="paste"} className={mode==="paste"?"active":""} onClick={()=>setMode("paste")}>
+     <Plus size={15}/> Pegar lista de CN</button>
    </div>
-   {searchError&&<p role="alert" className="fm-objectives-warning">{searchError}</p>}
-   {searchBusy&&<p role="status" className="fm-objectives-hint">Buscando artículos…</p>}
-   {!searchBusy&&results.length>0&&<div className="fm-objectives-results">
-    <div className="fm-objectives-section-title"><strong>Resultados ({results.length})</strong>
-     <button className="btn btn-secondary btn-sm" type="button" onClick={()=>append(results.filter(item=>CN(item.cn)))}>
-      <Check size={14}/> Seleccionar CN disponibles</button></div>
-    <div className="fm-objectives-result-scroll">
-     {results.map((item,i)=><label key={item.cn||"erp-"+item.sourceId+"-"+i}
-      className={"fm-objectives-product "+(!CN(item.cn)?"unavailable":"")}>
-      <input type="checkbox" disabled={!CN(item.cn)}
-       checked={CN(item.cn)&&selected.some(x=>x.cn===item.cn)}
-       onChange={e=>e.target.checked?append([item]):setSelected(s=>s.filter(x=>x.cn!==item.cn))}/>
-      <code>{CN(item.cn)?item.cn:"Sin CN"}</code>
-      <span><strong>{item.description}</strong>
-       {item.supplier&&<small>{item.supplier}</small>}
-       {!CN(item.cn)&&<small>Sin código nacional válido en el catálogo; no se puede seleccionar.</small>}
-      </span></label>)}
+   {mode==="search"?<div id="simulator-search-panel" role="tabpanel" aria-labelledby="simulator-search-tab">
+    <div className="fm-objectives-search">
+     <label>Buscar por artículo, proveedor o CN
+      <input type="search" placeholder="Nombre, marca, laboratorio o CN…" value={search}
+       onChange={e=>setSearch(e.target.value)}
+       onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setSearchNonce(n=>n+1);}}}/></label>
+     <button className="btn btn-secondary" type="button" disabled={searchBusy||search.trim().length<2}
+      onClick={()=>setSearchNonce(n=>n+1)}><Search size={16}/>{searchBusy?"Buscando…":"Buscar"}</button>
     </div>
+    {searchBusy&&<div className="fm-objectives-search-loading"><LoadingStatus label="Buscando artículos con CN…"/></div>}
+    {searchError&&<p role="alert" className="fm-objectives-warning">{searchError}</p>}
+    {!searchBusy&&results.length>0&&<div className="fm-objectives-results">
+     <div className="fm-objectives-section-title"><strong>Artículos con CN ({results.length})</strong>
+      <button className="btn btn-secondary btn-sm" type="button" onClick={()=>append(results)}>
+       <Check size={14}/> Seleccionar todos</button></div>
+     <div className="fm-objectives-result-scroll">
+      {results.map(item=><label key={item.cn} className="fm-objectives-product">
+       <input type="checkbox" checked={selected.some(x=>x.cn===item.cn)}
+        onChange={e=>e.target.checked?append([item]):setSelected(v=>v.filter(x=>x.cn!==item.cn))}/>
+       <code>{item.cn}</code>
+       <span><strong>{item.description}</strong>{item.supplier&&<small>{item.supplier}</small>}</span>
+      </label>)}
+     </div>
+    </div>}
+    {!searchBusy&&unavailableCount>0&&<p className="fm-objectives-excluded">
+     {unavailableCount} {unavailableCount===1?"artículo no aparece":"artículos no aparecen"} porque
+     {unavailableCount===1?" no tiene":" no tienen"} un CN identificable en el catálogo.</p>}
+    {!searchBusy&&!searchError&&results.length===0&&unavailableCount===0&&search.trim().length>=2&&
+     <p className="fm-objectives-hint">No hay artículos con CN que coincidan con la búsqueda.</p>}
+   </div>:
+   <div id="simulator-paste-panel" role="tabpanel" aria-labelledby="simulator-paste-tab"
+    className="fm-objectives-paste">
+    <label>Pegar códigos nacionales
+     <textarea rows={4} placeholder={"123456\n654321"} value={bulk}
+      onChange={e=>{setBulk(e.target.value);setBulkError("");}}/></label>
+    <div className="fm-objectives-paste-action">
+     <span>{codes.length} CN {codes.length===1?"válido":"válidos"} detectados</span>
+     <button type="button" className="btn btn-secondary" disabled={!codes.length||invalid.length>0||codes.length>500||bulkBusy}
+      onClick={()=>void addPastedCNs()}><Plus size={16}/> Añadir CN</button>
+    </div>
+    {invalid.length>0&&<p role="alert" className="fm-objectives-warning">
+     Comprueba {invalid.length===1?"el código":"los "+invalid.length+" códigos"}: deben tener exactamente 6 dígitos.</p>}
+    {codes.length>500&&<p role="alert" className="fm-objectives-warning">Máximo 500 CN a la vez.</p>}
+    {bulkBusy&&<LoadingStatus label="Recuperando nombres de los CN añadidos…"/>}
+    {bulkError&&<p role="status" className="fm-objectives-hint">{bulkError}</p>}
    </div>}
-   {!searchBusy&&!searchError&&results.length===0&&(search.trim().length>=2||codes.length>0)&&
-    <p className="fm-objectives-hint">No se han encontrado artículos con esos filtros.</p>}
    <div className="fm-objectives-selected">
     <div className="fm-objectives-section-title"><strong>Productos seleccionados · {selected.length} CN</strong>
      <button type="button" className="btn btn-secondary btn-sm" disabled={!selected.length}
@@ -203,6 +243,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    </div>
    {!validRange&&<p role="alert" className="fm-objectives-warning">
     Selecciona un período válido de hasta 367 días para consultar las ventas.</p>}
+   <LoadingFrame loading={historyBusy} label="Calculando ventas y objetivos por farmacia…" className="fm-objectives-loading-frame">
    <div className="fm-objectives-history-scroll">
     <table className="fm-objectives-table fm-objectives-unified-table">
      <thead><tr><th>Farmacia</th>
@@ -244,8 +285,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      </tbody>
     </table>
    </div>
-   {!selectedCNs.length&&<p className="fm-objectives-hint">Selecciona productos para cargar las ventas y calcular objetivos automáticamente.</p>}
-   {historyBusy&&<p role="status" className="fm-objectives-hint">Actualizando las ventas por farmacia…</p>}
+   </LoadingFrame>
    {historyError&&<p role="alert" className="fm-objectives-warning">{historyError}</p>}
   </section>
   <section className="fm-objectives-extraction" aria-label="Extracción de ventas">

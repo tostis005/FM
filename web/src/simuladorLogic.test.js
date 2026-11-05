@@ -26,7 +26,7 @@ test("validar fecha sin aceptar rangos vacíos, inversos o demasiado largos",()=
  assert.equal(validSimulatorPeriod("2024-01-01","2026-11-01"),false);
 });
 test("objetivos redondeados y porcentajes 5, 8, 10, 12 y 14",()=>{
- assert.deepEqual([5,8,10,12,14].map(p=>simulatorTarget(100,p)),[105,108,111,113,115]);
+ assert.deepEqual([5,8,10,12,14].map(p=>simulatorTarget(100,p)),[105,108,110,112,114]);
  assert.equal(simulatorTarget(3,5),4);
  assert.equal(simulatorTarget(0,14),0);
  assert.equal(simulatorTarget(-2,10),0);

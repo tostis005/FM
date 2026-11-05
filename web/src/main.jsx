@@ -682,6 +682,8 @@ function App(){
   if(!canManagePromotions)return setToast("No tienes permiso para modificar promociones.");
   if(promotionStoreStatus!=="connected")
    return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
+  const retroactiveFromSimulator=Boolean(promoForm.simulatorDraft&&promoForm.status==="Finalizada");
+  const needsRetroactiveValidation=Boolean(promoForm.retroactive||retroactiveFromSimulator);
   const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
   if(!codes.length&&(promoForm.status==="Activa"||needsRetroactiveValidation))return setToast("Añade al menos un CN para vincular ventas a la promoción.");
@@ -689,8 +691,6 @@ function App(){
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
   if(promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
-  const retroactiveFromSimulator=Boolean(promoForm.simulatorDraft&&promoForm.status==="Finalizada");
-  const needsRetroactiveValidation=Boolean(promoForm.retroactive||retroactiveFromSimulator);
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
    const requiresPct=promoType?.needsPercent;

@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Check,Plus,Search,Trash2,FileSearch} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
 import "./ObjetivosPromociones.css";
@@ -36,6 +36,7 @@ async function post(clientSlug,path,body,signal){
 export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion}){
  const active=useMemo(()=>pharmacies.filter(f=>f.active!==false),[pharmacies]);
  const [selectedPharmacies,setSelectedPharmacies]=useState(()=>active.map(f=>String(f.id)));
+ const pharmaciesInitialized=useRef(active.length>0);
  const [search,setSearch]=useState("");
  const [bulk,setBulk]=useState("");
  const [results,setResults]=useState([]);
@@ -65,8 +66,13 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()),[]);
  useEffect(()=>{setConsultedQuery(null);},[selectedKey,pharmacyKey,customFrom,customTo,baseline]);
  useEffect(()=>{
-  // Respetar la selección vacía: no volver a marcar todas las farmacias
-  // después de que el usuario haya desmarcado la última.
+  // Si la lista llega después del primer render, marcar todas una sola vez.
+  // Más adelante, una selección vacía deliberada debe permanecer vacía.
+  if(!pharmaciesInitialized.current&&active.length){
+   pharmaciesInitialized.current=true;
+   setSelectedPharmacies(active.map(p=>String(p.id)));
+   return;
+  }
   setSelectedPharmacies(ids=>ids.filter(id=>active.some(p=>String(p.id)===id)));
  },[active]);
  useEffect(()=>{

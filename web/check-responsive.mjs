@@ -230,6 +230,36 @@ try{
          await page.locator(".fm-objectives-results").waitFor({state:"visible",timeout:10000});
          await page.getByRole("button",{name:"Seleccionar CN disponibles"}).click();
          await page.getByRole("radio",{name:"Usar Mismo mes hace 1 año como base de objetivos"}).check();
+         const compact=await page.evaluate(()=>{
+           const table=document.querySelector(".fm-objectives-unified-table");
+           const rate=document.querySelector(".fm-objectives-rate-line");
+           const rateInput=rate?.querySelector("input");
+           const objective=document.querySelector(".fm-objectives-goal-cell input");
+           const extract=document.querySelector(".fm-sales-simulator");
+           const exports=extract?.querySelector(".fm-sales-export-actions");
+           return {
+             text:table?.querySelector("tbody")?.textContent||"",
+             rateWrap:rate?getComputedStyle(rate).flexWrap:null,
+             rateWidth:rateInput?.getBoundingClientRect().width||0,
+             objectiveWidth:objective?.getBoundingClientRect().width||0,
+             extraLabel:rate?.textContent?.includes("Otro"),
+             hasExplanation:Boolean(extract?.querySelector(".fm-sales-period-info,.lab-detail-money-help")),
+             dateColumn:[...(extract?.querySelectorAll(".data-table thead tr:first-child th")||[])]
+               .some(th=>th.textContent.includes("Fecha y hora")),
+             exportCount:exports?.querySelectorAll("button").length||0,
+             exportAligned:Boolean(exports&&exports.getBoundingClientRect().right<=
+               extract.getBoundingClientRect().right+1)
+           };
+         });
+         if(/uds\.|€|netos/.test(compact.text))throw Error("La tabla debe mostrar solo unidades numéricas");
+         if(compact.rateWrap!=="nowrap"||compact.extraLabel||compact.rateWidth>75)
+           throw Error("Incrementos sin compactar: "+JSON.stringify(compact));
+         if(compact.objectiveWidth>85)throw Error("El campo de objetivo no es compacto");
+         if(compact.hasExplanation||compact.dateColumn)
+           throw Error("La extracción del Simulador mantiene fechas o textos explicativos");
+         if(compact.exportCount!==2||!compact.exportAligned)
+           throw Error("Las exportaciones deben quedar agrupadas a la derecha");
+
          await page.getByRole("button",{name:"Crear promoción",exact:true}).click();
          await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
          const transferred=await page.locator(".drawer textarea.cn-area").inputValue();

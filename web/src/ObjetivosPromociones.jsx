@@ -6,7 +6,6 @@ import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
 const num=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(value)||0);
-const money=value=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(value)||0);
 const madridToday=()=>new Intl.DateTimeFormat("sv-SE",{
  timeZone:"Europe/Madrid",year:"numeric",month:"2-digit",day:"2-digit"
 }).format(new Date());
@@ -36,7 +35,6 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [historyBusy,setHistoryBusy]=useState(false);
  const [historyError,setHistoryError]=useState("");
  const [historical,setHistorical]=useState({});
- const [amounts,setAmounts]=useState({});
  const [baseline,setBaseline]=useState("previous");
  const [customFrom,setCustomFrom]=useState(()=>{const {year,month}=monthAtMadrid();return first(year,month);});
  const [customTo,setCustomTo]=useState(madridToday);
@@ -88,7 +86,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
 
  useEffect(()=>{
   if(!selectedCNs.length||!selectedPharmacies.length||!validRange){
-   setHistorical({});setAmounts({});setHistoryBusy(false);setHistoryError("");return;
+   setHistorical({});setHistoryBusy(false);setHistoryError("");return;
   }
   const controller=new AbortController();
   setHistoryBusy(true);setHistoryError("");
@@ -96,9 +94,9 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    cns:selectedCNs,pharmacyIds:selectedPharmacies,periods
   },controller.signal).then(data=>{
    if(controller.signal.aborted)return;
-   setHistorical(data.periods||{});setAmounts(data.amounts||{});
+   setHistorical(data.periods||{});
   }).catch(error=>{
-   if(!controller.signal.aborted){setHistoryError(error.message);setHistorical({});setAmounts({});}
+   if(!controller.signal.aborted){setHistoryError(error.message);setHistorical({});}
   }).finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false);});
   return()=>controller.abort();
  },[clientSlug,selectedKey,pharmacyKey,customFrom,customTo]);
@@ -111,12 +109,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   {cns:[...selectedCNs],start:customFrom,end:customTo}:null,
   [selectedKey,pharmacyKey,customFrom,customTo,validRange]);
  const units=(id,periodId)=>Number(historical[periodId]?.[id]||0);
- const amount=(id,periodId)=>Number(amounts[periodId]?.[id]||0);
  const rate=id=>Number(rateByPharmacy[id]??5);
  const proposal=id=>simulatorTarget(units(id,chosen.id),rate(id));
  const target=id=>manualTargets[id]===undefined?proposal(id):manualTargets[id];
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
- const monetaryTotal=periodId=>selectedPharmacies.reduce((n,id)=>n+amount(id,periodId),0);
  const totalTarget=()=>selectedPharmacies.reduce((n,id)=>n+(Number(target(id))||0),0);
  const canCreate=Boolean(canManage&&selectedCNs.length&&selectedPharmacies.length&&
   validRange&&!historyBusy&&!historyError);
@@ -208,27 +204,27 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        <input type="radio" name="simulator-objective-reference" value={p.id}
         checked={baseline===p.id} onChange={()=>setBaseline(p.id)}
         aria-label={"Usar "+p.label+" como base de objetivos"}/>
-       <span>{p.label}</span></label><small>{p.from} — {p.to}</small></th>)}
-      <th>Incremento (%)</th><th>Objetivo (uds.)</th>
+       <span>{p.label}</span></label><small>{p.id==="custom"?p.from+" — "+p.to:p.from.slice(0,7)}</small></th>)}
+      <th>Incremento (%)</th><th>Objetivo</th>
      </tr></thead>
      <tbody>
       {chosenPharmacies.map(f=>{
        const id=String(f.id),pct=rate(id);
        return <tr key={id}><th>{f.name}</th>
         {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
-         <><strong>{num(units(id,p.id))} uds.</strong><small>{money(amount(id,p.id))} netos</small></>}</td>)}
-        <td><div className="fm-objectives-rates">{[5,8,10,12,14].map(value=><button type="button"
+         <strong>{num(units(id,p.id))}</strong>}</td>)}
+        <td><div className="fm-objectives-rate-line"><div className="fm-objectives-rates">{[5,8,10,12,14].map(value=><button type="button"
          key={value} className={pct===value?"chosen":""} aria-pressed={pct===value}
          onClick={()=>{setRateByPharmacy(v=>({...v,[id]:value}));setManualTargets(v=>({...v,[id]:undefined}));}}>
          {value}%</button>)}</div>
-         <label className="fm-objectives-rate-custom">Otro
+         <label className="fm-objectives-rate-custom">
           <input type="number" min="-100" max="500" step="0.5"
            aria-label={"Incremento personalizado "+f.name} value={rateByPharmacy[id]??5}
            onChange={e=>{const v=Number(e.target.value);
             if(Number.isFinite(v)&&v>=-100&&v<=500){
              setRateByPharmacy(old=>({...old,[id]:v}));
              setManualTargets(old=>({...old,[id]:undefined}));
-            }}}/> %</label></td>
+            }}}/><span>%</span></label></div></td>
         <td className="fm-objectives-goal-cell"><input type="number" min="0" step="1"
          aria-label={"Objetivo "+f.name} value={target(id)}
          onChange={e=>setManualTargets(old=>({...old,[id]:e.target.value===""?"":
@@ -237,8 +233,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
       })}
       <tr className="fm-objectives-summary"><th>Total</th>
        {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
-        <><strong>{num(totals(p.id))} uds.</strong><small>{money(monetaryTotal(p.id))} netos</small></>}</td>)}
-       <td>—</td><td><strong>{num(totalTarget())} uds.</strong></td></tr>
+        <strong>{num(totals(p.id))}</strong>}</td>)}
+       <td>—</td><td><strong>{num(totalTarget())}</strong></td></tr>
      </tbody>
     </table>
    </div>

@@ -30,7 +30,7 @@ try{
  if(!samples.length)throw Error("El maestro no contiene artículos consultables");
  const id=Number(samples[0].id),term=samples[0].name.slice(0,90);
  const {rows:products}=await pool.query({
-  text:sql.direct,values:[slug,[id],term,[],240],query_timeout:7000});
+  text:sql.direct,values:[slug,[id],term,[],240,0],query_timeout:7000});
  if(!products.length)throw Error("El buscador no devuelve un artículo que existe en el maestro");
  console.log("BÚSQUEDA POR ARTÍCULO: OK");
  if(sql.supplierReady){
@@ -47,7 +47,7 @@ try{
    })).rows;
    if(!provider.length)throw Error("El buscador no devuelve un proveedor que existe");
    await pool.query({
-    text:sql.bySupplier,values:[slug,[id],JSON.stringify(provider),180],
+    text:sql.bySupplier,values:[slug,[id],JSON.stringify(provider),180,0],
     query_timeout:7000
    });
    console.log("BÚSQUEDA POR PROVEEDOR: OK");

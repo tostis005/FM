@@ -220,6 +220,7 @@ function reportFiltersFromUrl(){
 function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
  if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
+ if(path==="promociones/simulador")return "promociones-objetivos";
  return ROUTES.has(path)?path:"dashboard";
 }
 
@@ -625,7 +626,7 @@ function App(){
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
   }
   if(!ROUTES.has(id))return;
-  const url="/"+id;
+  const url=id==="promociones-objetivos"?"/promociones/simulador":"/"+id;
   if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
  }

@@ -1,0 +1,64 @@
+name: Auditoría de cobertura CN del Simulador (solo lectura)
+on:
+  push:
+    branches: [diag/simulador-cobertura-cn-20261105]
+    paths: [".github/workflows/diagnostico-cn-simulador.yml"]
+permissions:
+  contents: read
+jobs:
+  auditoria:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar acceso SSH
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+      - name: Recontar fuentes de CN sin datos identificables
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -A -t -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN TRANSACTION READ ONLY;
+          SELECT 'ARTICLE_FIELDS',
+            count(*) AS rows,
+            count(*) FILTER (WHERE btrim(coalesce(a.codigo_nacional::text,'')) ~ '^[0-9]{6,7}$') AS valid_original,
+            count(*) FILTER (WHERE btrim(coalesce(to_jsonb(a)->>'cn_normalizado','')) ~ '^[0-9]{6,7}$') AS valid_normalized,
+            count(*) FILTER (WHERE btrim(coalesce(a.origen_id::text,'')) ~ '^[0-9]{6}$') AS six_digit_source,
+            count(DISTINCT CASE WHEN btrim(coalesce(a.codigo_nacional::text,'')) ~ '^[0-9]{6,7}$'
+              THEN left(btrim(a.codigo_nacional::text),6) END) AS unique_original,
+            count(DISTINCT CASE WHEN btrim(coalesce(to_jsonb(a)->>'cn_normalizado','')) ~ '^[0-9]{6,7}$'
+              THEN left(btrim(to_jsonb(a)->>'cn_normalizado'),6) END) AS unique_normalized
+          FROM ampedia.articulos a JOIN farmetrica.farmacias f
+            ON f.cliente_slug='ampedia'
+            AND upper(btrim(a.farmacia_codigo))=
+              (CASE WHEN f.cliente_slug='ampedia' AND f.id=5
+                AND upper(btrim(f.codigo_origen)) IN ('POL','VAL') THEN 'VAL'
+                ELSE upper(btrim(f.codigo_origen)) END)
+          WHERE f.activo=true;
+          SELECT 'DOCUMENT_MAPPINGS',count(*),
+            count(*) FILTER (WHERE btrim(coalesce(c.codigo_nacional_normalizado,'')) ~ '^[0-9]{6,7}$'),
+            count(*) FILTER (WHERE btrim(coalesce(c.codigo_nacional_original,'')) ~ '^[0-9]{6,7}$'),
+            count(DISTINCT CASE WHEN btrim(coalesce(c.codigo_nacional_normalizado,'')) ~ '^[0-9]{6,7}$'
+              THEN left(btrim(c.codigo_nacional_normalizado),6) END)
+          FROM ampedia.fm_producto_correspondencias c;
+          SELECT 'VERIFIED_FROM_SOURCE',count(DISTINCT n.cn)
+          FROM ampedia.articulos a JOIN farmetrica.nomenclator_presentaciones n
+            ON n.cn=btrim(a.origen_id::text);
+          SELECT 'EUCERIN',count(*),
+            count(*) FILTER (WHERE btrim(coalesce(a.codigo_nacional::text,'')) ~ '^[0-9]{6,7}$'),
+            count(*) FILTER (WHERE btrim(coalesce(to_jsonb(a)->>'cn_normalizado','')) ~ '^[0-9]{6,7}$')
+          FROM ampedia.articulos a WHERE a.nombre ILIKE '%EUCERIN%';
+          COMMIT;
+          SQL

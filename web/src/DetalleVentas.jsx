@@ -74,6 +74,7 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     }
     if(!promotions.length)setPromoId("");
   },[promotions.map(p=>p.id).join("|")]);
+  const visibleColumns=simulator?TICKET_COLUMNS.filter(([key])=>key!=="at"):TICKET_COLUMNS;
   const filters=promo?{
     cns:promo.cns||[],start:simulator?promo.start:applied.start||promo.start,
     end:simulator?promo.end:applied.end||promo.end,
@@ -126,14 +127,10 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
   }
 
   if(loading)return <section className="card lab-detail-panel"><div className="section-heading"><h2>{simulator?"Extracción de ventas":"Consulta de tickets"}</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
-  return <section className="card lab-detail-panel">
-    <div className="section-heading"><div><h2>{simulator?"Extracción de ventas por líneas":"Consulta de tickets"}</h2>
-    {simulator&&<p>Consulta real de tickets, sin necesidad de tener una promoción creada.</p>}</div></div>
+  return <section className={"card lab-detail-panel"+(simulator?" fm-sales-simulator":"")}>
+    {!simulator&&<div className="section-heading"><h2>Consulta de tickets</h2></div>}
     {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas conexión con PostgreSQL y permiso de acceso a promociones.</div>}
-    {simulator?<p className="fm-sales-period-info">{promo?
-      "Del "+promo.start+" al "+promo.end+" · "+promo.cns.length+" CN seleccionados.":
-      "Selecciona productos y período, y pulsa «Consultar líneas de venta»."}</p>:
-    <form className="card fm-unified-filters lab-detail-filters" onSubmit={applyFilters}>
+    {!simulator&&<form className="card fm-unified-filters lab-detail-filters" onSubmit={applyFilters}>
       <label>Promoción
         <select value={promoId} onChange={e=>{setPromoId(e.target.value);setDraft(INITIAL);setApplied(INITIAL);setPage(0);setColumnDraft({});setColumnFilters({})}}>
           {!promotions.length&&<option value="">Selecciona una promoción</option>}
@@ -151,29 +148,31 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     {!simulator&&promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
     {exportError&&<div className="access-alert access-alert-error">{exportError}</div>}
-    <div className="fm-table-toolbar">
+    <div className={"fm-table-toolbar"+(simulator?" fm-sales-compact-toolbar":"")}>
      <div className="lab-detail-count">{result.status==="loading"?<LoadingStatus label="Consultando líneas de venta…"/>:num(result.total)+" líneas de venta"}</div>
-     {simulator&&<button type="button" className="btn btn-secondary btn-sm"
+     <div className="fm-sales-export-actions">
+      {simulator&&<button type="button" className="btn btn-secondary btn-sm"
        disabled={!eligible||result.status==="loading"||exporting}
        onClick={()=>void exportAllSimulation()}><Download size={15}/>
-       {exporting?"Exportando…":"Exportar todas las líneas (CSV)"}
-     </button>}
-     <button type="button" className="btn btn-secondary btn-sm"
-      disabled={result.status==="loading"||!result.rows.length}
-      onClick={()=>downloadTableCSV("farmetrica-tickets-"+(promo?.id||"ventas")+"-pagina",
-       TICKET_COLUMNS.map(c=>c[1]),result.rows.map(row=>TICKET_COLUMNS.map(c=>c[2](row))))}>
-      <Download size={15}/> Exportar CSV (página actual)</button>
+       {exporting?"Exportando…":"Exportar todo (CSV)"}
+      </button>}
+      <button type="button" className="btn btn-secondary btn-sm"
+       disabled={result.status==="loading"||!result.rows.length}
+       onClick={()=>downloadTableCSV("farmetrica-tickets-"+(promo?.id||"ventas")+"-pagina",
+        TICKET_COLUMNS.map(c=>c[1]),result.rows.map(row=>TICKET_COLUMNS.map(c=>c[2](row))))}>
+       <Download size={15}/> Exportar página (CSV)</button>
+     </div>
     </div>
-    <p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se muestran en negativo; en el Excel de laboratorio se exportan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>
+    {!simulator&&<p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se muestran en negativo; en el Excel de laboratorio se exportan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>}
     <HorizontalTableScroll className="table-scroll" label="líneas de venta" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>
-        <tr>{TICKET_COLUMNS.map(([key,label,,sortable=true])=><th key={key}
+        <tr>{visibleColumns.map(([key,label,,sortable=true])=><th key={key}
           aria-sort={sortable?(sort.key===key?(sort.direction==="asc"?"ascending":"descending"):"none"):undefined}>
           {sortable?<button className="smart-sort" type="button" onClick={()=>toggleSort(key)} aria-label={"Ordenar "+label}>
             {label} <span aria-hidden="true" className="smart-sort-arrow">{sort.key===key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
           </button>:<span>{label}</span>}
         </th>)}</tr>
-        <tr className="smart-filter-row">{TICKET_COLUMNS.map(([key,label])=><th key={key}>
+        <tr className="smart-filter-row">{visibleColumns.map(([key,label])=><th key={key}>
           {key==="pharmacy"||key==="cn"?
             <MultiSelectFilter label={label}
               options={key==="pharmacy"?pharmacies.filter(f=>scopeIds.includes(String(f.id))).map(f=>({value:String(f.id),label:f.name})):
@@ -186,8 +185,8 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
             onChange={e=>setColumnDraft(prev=>({...prev,[key]:e.target.value}))}/>}
         </th>)}</tr>
       </thead>
-      <tbody>{result.status==="loading"?<tr><td colSpan={TICKET_COLUMNS.length}><LoadingPanel kind="table" label="Cargando registros de tickets…" rows={5}/></td></tr>:result.rows.map((v,i)=><tr key={v.pharmacyCode+"-"+v.saleId+"-"+v.lineId+"-"+i}>
-        {TICKET_COLUMNS.map(([key,,render])=><td key={key}>{render(v)}</td>)}
+      <tbody>{result.status==="loading"?<tr><td colSpan={visibleColumns.length}><LoadingPanel kind="table" label="Cargando registros de tickets…" rows={5}/></td></tr>:result.rows.map((v,i)=><tr key={v.pharmacyCode+"-"+v.saleId+"-"+v.lineId+"-"+i}>
+        {visibleColumns.map(([key,,render])=><td key={key}>{render(v)}</td>)}
       </tr>)}</tbody>
     </table>{!result.rows.length&&result.status!=="loading"&&<p className="lab-detail-empty">{connected?"No hay tickets que coincidan con los filtros.":"Detalle disponible al conectar PostgreSQL y autenticarte."}</p>}</HorizontalTableScroll>
     <ListPagination total={result.total} page={page} pageSize={pageSize} loading={result.status==="loading"}

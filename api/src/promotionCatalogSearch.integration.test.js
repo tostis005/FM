@@ -26,21 +26,40 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "WHERE table_schema='ampedia' AND table_name IN ('articulos','proveedores')");
   const sql=promotionCatalogSearchSQL("ampedia",cols);
   const own=[1];
-  const nameHits=(await db.query(sql.direct,["ampedia",own,"Farmetrica ZZZ",[],240])).rows;
+  const nameHits=(await db.query(sql.direct,["ampedia",own,"Farmetrica ZZZ",[],240,0])).rows;
   assert.equal(nameHits.some(row=>row.source_id==="SIM-ART-123"&&row.pharmacy_id==="1"),true);
   assert.equal(nameHits.every(row=>row.pharmacy_id==="1"),true);
-  const cnHits=(await db.query(sql.direct,["ampedia",own,"765432",[],240])).rows;
+  const cnHits=(await db.query(sql.direct,["ampedia",own,"765432",[],240,0])).rows;
   const product=cnHits.find(row=>row.source_id==="SIM-ART-123");
   assert.ok(product);
   assert.equal(promotionResultCN(product),"765432");
-  const pasted=(await db.query(sql.direct,["ampedia",own,"",["194700"],240])).rows;
+  const pasted=(await db.query(sql.direct,["ampedia",own,"",["194700"],240,0])).rows;
   const sevenDigit=pasted.find(row=>row.source_id==="SIM-7-DIGIT-194700");
   assert.ok(sevenDigit,"El CN de seis dígitos debe localizar la ficha ERP con dígito de control");
   assert.equal(promotionResultCN(sevenDigit),"194700");
+
+  // Reproduce el fallo: cientos de filas ERP sin CN intercaladas con
+  // más de 200 CN distintos. Ninguna fila sin CN puede ocupar una plaza.
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional) "+
+   "SELECT 'ABA','SIM-EMPTY-'||i,'BUSQUEDA-AMPLIA-TEST',NULL "+
+   "FROM generate_series(1,330) i");
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional) "+
+   "SELECT 'ABA','SIM-CN-'||i,'BUSQUEDA-AMPLIA-TEST',lpad((880000+i)::text,6,'0') "+
+   "FROM generate_series(1,235) i");
+  await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional) "+
+   "SELECT 'EUR','SIM-REPEAT-'||i,'BUSQUEDA-AMPLIA-TEST',lpad((880000+i)::text,6,'0') "+
+   "FROM generate_series(1,140) i");
+  const first=(await db.query(sql.direct,["ampedia",[1,2],"BUSQUEDA-AMPLIA-TEST",[],180,0])).rows;
+  const second=(await db.query(sql.direct,["ampedia",[1,2],"BUSQUEDA-AMPLIA-TEST",[],180,180])).rows;
+  assert.equal(first.length,180);
+  assert.equal(second.length,55);
+  const all=[...first,...second];
+  assert.equal(new Set(all.map(row=>promotionResultCN(row))).size,235);
+  assert.ok(all.every(row=>/^\d{6}$/.test(row.resolved_cn)));
   const suppliers=(await db.query(sql.suppliers,["ampedia",own,"Buscador Particular",80])).rows;
   assert.ok(suppliers.some(row=>row.supplier_code==="SIMSUP-123"));
   const bySupplier=(await db.query(sql.bySupplier,[
-   "ampedia",own,JSON.stringify(suppliers),180
+   "ampedia",own,JSON.stringify(suppliers),180,0
   ])).rows;
   assert.equal(bySupplier.some(row=>row.source_id==="SIM-ART-123"&&
    row.supplier_name==="Laboratorio Buscador Particular"),true);

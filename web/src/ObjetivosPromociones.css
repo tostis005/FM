@@ -142,3 +142,8 @@
  .fm-objectives-search{grid-template-columns:1fr}
  .fm-objectives-search button{justify-self:stretch}
 }
+
+/* Los resultados pueden paginarse; mantener el control fuera del área de scroll. */
+.fm-objectives-more{display:flex;justify-content:center;padding:12px 8px 4px}
+.fm-objectives-more .btn{min-width:210px}
+@media(max-width:720px){.fm-objectives-more .btn{width:100%}}

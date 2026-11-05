@@ -92,10 +92,19 @@ async function mockApi(route){
  else if(path==="/api/ventas/cobertura")payload={pharmacies:[]};
  else if(path==="/api/ventas/seguimiento")payload={sales:{}};
  else if(path==="/api/ventas/detalle")payload={rows:[],total:0,offset:0,limit:25};
- else if(path==="/api/ventas/objetivos/buscar")payload={products:[
-  {cn:"123456",description:"Producto de prueba",supplier:"Laboratorio ejemplo",sourceId:"88"},
-  {cn:null,description:"Ficha ERP sin CN verificable",supplier:null,sourceId:"PO564"}
- ]};
+ else if(path==="/api/ventas/objetivos/buscar"){
+  const body=JSON.parse(route.request().postData()||"{}");
+  if(body.search==="Paginacion"){
+   const start=Number(body.page||0)*180;
+   payload={products:Array.from({length:start===0?180:30},(_,i)=>({
+    cn:String(700000+start+i),description:"Prueba paginada "+(start+i),
+    supplier:"Laboratorio de prueba",sourceId:"ERP-"+(start+i)
+   })),hasMore:start===0};
+  }else payload={products:[
+   {cn:"123456",description:"Producto de prueba",supplier:"Laboratorio ejemplo",sourceId:"88"},
+   {cn:null,description:"Ficha ERP sin CN verificable",supplier:null,sourceId:"PO564"}
+  ],hasMore:false};
+ }
  else if(path==="/api/ventas/objetivos/historico"){
   const body=JSON.parse(route.request().postData()||"{}");
   payload={periods:Object.fromEntries((body.periods||[]).map(p=>
@@ -286,6 +295,19 @@ try{
          const targets=await page.locator(".drawer .target-row").count();
          if(targets!==pharmacies.length)throw Error("Las farmacias no se transfieren al panel: "+targets);
          await page.locator(".drawer-top button[aria-label=Cerrar]").click();
+         await searchInput.fill("Paginacion");
+         await page.locator(".fm-objectives-results .fm-objectives-product").first()
+           .waitFor({state:"visible",timeout:10000});
+         await page.waitForFunction(()=>
+          document.querySelectorAll(".fm-objectives-results .fm-objectives-product").length===180,
+          null,{timeout:10000});
+         await page.getByRole("button",{name:"Mostrar más artículos"}).click();
+         await page.waitForFunction(()=>
+          document.querySelectorAll(".fm-objectives-results .fm-objectives-product").length===210,
+          null,{timeout:10000});
+         if(await page.getByRole("button",{name:"Mostrar más artículos"}).count())
+           throw Error("Sigue mostrando más tras consumir la última página");
+
          if(await page.locator(".drawer-backdrop").count())throw Error("El formulario no se puede cerrar");
          await page.getByRole("tab",{name:"Pegar lista de CN"}).click();
          await paste.fill("");

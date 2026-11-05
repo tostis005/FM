@@ -67,6 +67,9 @@ jobs:
           node --check api/src/syncStatus.js
           node --test api/src/pharmacyState.test.js
           node --check api/src/promocionesTenant.js
+          node --check api/src/promocionesObjetivos.js
+          node --check api/src/promotionCatalogSearch.js
+          node --test api/src/promocionesObjetivos.test.js api/src/promotionCatalogSearch.test.js
           node --test api/src/promocionesTenant.test.js
           node --test api/src/promocionesReplace.test.js
           node --test api/src/promotionImportIdentity.test.js
@@ -130,7 +133,7 @@ jobs:
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js
-          node --test src/promotionMetrics.test.js src/promotionMonthFilter.test.js src/promotionLifecycle.test.js
+          node --test src/promotionMetrics.test.js src/promotionMonthFilter.test.js src/promotionLifecycle.test.js src/simuladorLogic.test.js
           node --test src/laboratoryExport.test.js src/laboratoryOrderSheet.test.js
           node --test src/dictadoVoz.test.js src/assistantStreamClient.test.js
           node check-login.mjs

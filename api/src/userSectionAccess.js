@@ -26,6 +26,7 @@ export const USER_SECTIONS=[
  ["informes","Informes","informes"],
  ["promociones","Promociones","promociones"],
  ["seguimiento-global","Seguimiento de promociones","promociones"],
+ ["promociones-objetivos","Objetivos de promociones","promociones"],
  ["acciones","Oportunidades","acciones"],
  ["oportunidades-seguimiento","Seguimiento de oportunidades","acciones"],
  ["alertas","Alertas","acciones"],
@@ -55,6 +56,7 @@ export function requestSections(req){
  const path=String(req.path||req.originalUrl?.split("?")[0]||"");
  const screen=path.match(/^\/api\/analytics\/pantallas\/([^/]+)/)?.[1];
  if(screen&&byId.has(screen))return [screen];
+ if(path.startsWith("/api/ventas/objetivos/"))return ["promociones-objetivos"];
  if(path.startsWith("/api/analytics/stock/sin-recepciones"))return ["stock-sin-recepciones"];
  if(path.startsWith("/api/analytics/stock/traspasos"))return ["stock-traspasos"];
  if(path.startsWith("/api/tenant/proveedores/traspasos-salidas"))return ["stock-traspasos"];

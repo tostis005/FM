@@ -49,7 +49,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns}){
   try{
    const r=await pool.query({
     text:sql.bySupplier,
-    values:[slug,ids,search,cns,JSON.stringify(supplierCodes),180],
+    values:[slug,ids,JSON.stringify(supplierCodes),180],
     query_timeout:4500
    });
    rows.push(...(r.rows||[]));

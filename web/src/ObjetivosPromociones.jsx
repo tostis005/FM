@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Check,Plus,Search,Trash2} from "lucide-react";
+import {Check,Plus,Search,Trash2,FileSearch} from "lucide-react";
+import DetalleVentas from "./DetalleVentas.jsx";
 import "./ObjetivosPromociones.css";
 const ISO=value=>/^20\d{2}-\d{2}-\d{2}$/.test(value||"");
 const CN=value=>/^\d{6}$/.test(value);
@@ -47,6 +48,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [customTo,setCustomTo]=useState("");
  const [rateByPharmacy,setRateByPharmacy]=useState({});
  const [manualTargets,setManualTargets]=useState({});
+ const [consultedQuery,setConsultedQuery]=useState(null);
+ const [goalsOpen,setGoalsOpen]=useState(false);
  const codes=useMemo(()=>[...new Set(bulk.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))],[bulk]);
  const invalid=codes.filter(x=>!CN(x));
  const periods=useMemo(()=>periodsFor(currentMadrid(),customFrom,customTo),[customFrom,customTo]);
@@ -54,6 +57,11 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const selectedCNs=useMemo(()=>selected.map(x=>x.cn),[selected]);
  const selectedKey=selectedCNs.join(",");
  const pharmacyKey=selectedPharmacies.join(",");
+ const periodToConsult=ISO(customFrom)&&ISO(customTo)&&customFrom<=customTo?
+   {from:customFrom,to:customTo}:chosen;
+ const today=useMemo(()=>new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Madrid",
+   year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()),[]);
+ useEffect(()=>{setConsultedQuery(null);},[selectedKey,pharmacyKey,customFrom,customTo,baseline]);
  useEffect(()=>{
   setSelectedPharmacies(ids=>ids.filter(id=>active.some(p=>String(p.id)===id)).concat(
    active.filter(f=>!ids.includes(String(f.id))&&ids.length===0).map(f=>String(f.id))));
@@ -93,20 +101,38 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const proposal=id=>Math.max(0,Math.ceil(units(id,chosen.id)*(1+rate(id)/100)));
  const target=id=>manualTargets[id]===undefined?proposal(id):Number(manualTargets[id])||0;
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
- const canCreate=canManage&&Boolean(selected.length)&&Boolean(selectedPharmacies.length)&&!historyBusy&&!error;
- function create(){
-  if(!canCreate)return;
-  const targets=Object.fromEntries(selectedPharmacies.map(id=>[id,target(id)]));
+ const canChoose=canManage&&Boolean(selected.length)&&Boolean(selectedPharmacies.length);
+ const canCreate=canChoose&&!historyBusy&&!error;
+ const canCreateRetro=canChoose&&periodToConsult.to<=today;
+ const canConsult=Boolean(selectedCNs.length&&selectedPharmacies.length&&periodToConsult.from<=periodToConsult.to);
+ function create(mode="goals"){
+  if(mode==="retroactive"?!canCreateRetro:!canCreate)return;
+  const withGoals=mode==="goals";
+  const targets=Object.fromEntries(selectedPharmacies.map(id=>[id,withGoals?target(id):""]));
   onCreatePromotion?.({
-   cns:selectedCNs,cnDescriptions:Object.fromEntries(selected.map(x=>[x.cn,x.description])),
-   targets,objectiveBaseline:chosen.id,objectiveBaselineRange:{from:chosen.from,to:chosen.to},
-   objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,rate(id)]))
+   cns:selectedCNs,
+   cnDescriptions:Object.fromEntries(selected.map(x=>[x.cn,x.description])),
+   targets,
+   ...(withGoals?{
+    objectiveBaseline:chosen.id,objectiveBaselineRange:{from:chosen.from,to:chosen.to},
+    objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,rate(id)]))
+   }:{
+    start:periodToConsult.from,end:periodToConsult.to,
+    status:"Finalizada",closedOn:periodToConsult.to,
+    retroactive:true
+   })
   });
+ }
+ function consult(){
+  if(!canConsult)return;
+  setConsultedQuery({start:periodToConsult.from,end:periodToConsult.to,
+   cns:[...selectedCNs],pharmacyIds:[...selectedPharmacies]});
  }
  return <div className="fm-objectives">
   <div className="fm-objectives-intro">
-   <div><h1>Objetivos de promociones</h1><p>Elige los CN, compara ventas reales por farmacia y prepara una promoción con objetivos sugeridos.</p></div>
-   <button className="btn btn-primary" type="button" disabled={!canCreate} onClick={create}><Plus size={17}/> Crear promoción con estos objetivos</button>
+   <div><h1>Simulador de promociones</h1><p>Selecciona productos, analiza sus ventas y tickets, y crea promociones futuras o retroactivas. Los objetivos son opcionales.</p></div>
+   <button className="btn btn-primary" type="button" disabled={!canConsult} onClick={consult}>
+    <FileSearch size={17}/> Consultar líneas de venta</button>
   </div>
   <section className="card fm-objectives-card">
    <h2>1. Seleccionar productos</h2>
@@ -129,11 +155,11 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    </div>
   </section>
   <section className="card fm-objectives-card">
-   <h2>2. Farmacias y períodos de referencia</h2>
+   <h2>2. Farmacias y períodos de análisis</h2>
    <p>Por defecto se incluyen todas las farmacias disponibles. Puedes desmarcar cualquiera.</p>
    <div className="fm-objectives-pharmacies">{active.map(f=><label key={f.id}><input type="checkbox" checked={selectedPharmacies.includes(String(f.id))} onChange={e=>setSelectedPharmacies(ids=>e.target.checked?[...ids,String(f.id)]:ids.filter(id=>id!==String(f.id)))}/>{f.name}</label>)}</div>
-   <div className="fm-objectives-custom"><label>Rango libre desde <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label>Hasta <input type="date" min={customFrom||undefined} value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></div>
-   <p className="fm-objectives-hint">Las ventas de tres meses son el total acumulado, no una media mensual. Cada columna suma todos los CN seleccionados.</p>
+   <div className="fm-objectives-custom"><label>Desde (consulta libre) <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label><label>Hasta (consulta libre) <input type="date" min={customFrom||undefined} value={customTo} onChange={e=>setCustomTo(e.target.value)}/></label></div>
+   <p className="fm-objectives-hint">El rango libre tiene prioridad para extraer líneas. Si lo dejas vacío, se utilizará el período de referencia seleccionado en la calculadora. Los tres meses representan el acumulado, no la media mensual.</p>
    <div className="fm-objectives-history-scroll">
     <table className="fm-objectives-table"><thead><tr><th>Farmacia</th>{periods.map(p=><th key={p.id}>{p.label}<small>{p.from} — {p.to}</small></th>)}</tr></thead>
       <tbody>{active.filter(f=>selectedPharmacies.includes(String(f.id))).map(f=><tr key={f.id}><th>{f.name}</th>{periods.map(p=><td key={p.id}>{!selected.length||historyBusy?"—":num(units(String(f.id),p.id))}</td>)}</tr>)}
@@ -143,8 +169,25 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    {historyBusy&&<p role="status">Calculando ventas reales por farmacia…</p>}
    {error&&<p role="alert" className="fm-objectives-warning">{error}</p>}
   </section>
+  <section className="fm-objectives-extraction" aria-label="Consulta de ventas para el simulador">
+   <div className="fm-objectives-extract-head">
+     <div><h2>3. Extracción y detalle de ventas</h2>
+       <p>Consulta tickets, importes reales, descuentos, CN, vendedores y fechas. Puedes exportar todas las líneas del período.</p></div>
+     <button type="button" className="btn btn-secondary" disabled={!canConsult} onClick={consult}>
+       <FileSearch size={16}/> Consultar líneas de venta
+     </button>
+   </div>
+   <DetalleVentas simulator directQuery={consultedQuery} pharmacies={pharmacies}
+     pharmacyScopeIds={selectedPharmacies} connected={true}/>
+  </section>
   <section className="card fm-objectives-card">
-   <h2>3. Calculadora de objetivos</h2>
+   <div className="fm-objectives-section-title">
+    <div><h2>4. Calculadora de objetivos (opcional)</h2>
+      <p className="fm-objectives-hint">Úsala para proponer objetivos por farmacia. No es necesaria para crear una promoción retroactiva.</p></div>
+    <button className="btn btn-secondary btn-sm" type="button" aria-expanded={goalsOpen}
+     onClick={()=>setGoalsOpen(value=>!value)}>{goalsOpen?"Ocultar calculadora":"Mostrar calculadora"}</button>
+   </div>
+   {goalsOpen&&<>
    <p>Selecciona qué período utilizar como base. Después aplica a cada farmacia un incremento rápido o personalizado y revisa las unidades objetivo.</p>
    <div className="fm-objectives-period-picks">{periods.map(p=><label key={p.id} className={chosen.id===p.id?"chosen":""}><input type="radio" name="baseline-objectives" checked={chosen.id===p.id} onChange={()=>{setBaseline(p.id);setManualTargets({});}}/>{p.label}</label>)}</div>
    <div className="fm-objectives-history-scroll"><table className="fm-objectives-table fm-objectives-targets"><thead><tr><th>Farmacia</th><th>Ventas base</th><th>Incremento</th><th>Objetivo propuesto</th></tr></thead>
@@ -157,9 +200,20 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    })}
     <tr className="fm-objectives-summary"><th>Total</th><td>{num(totals(chosen.id))} uds.</td><td>—</td><td><strong>{num(selectedPharmacies.reduce((n,id)=>n+target(id),0))} uds.</strong></td></tr>
    </tbody></table></div>
-   <div className="fm-objectives-footer"><p>Los objetivos se redondean hacia arriba. Podrás modificar todos los datos y completar el tipo y las fechas al crear la promoción.</p>
-    <button className="btn btn-primary" type="button" disabled={!canCreate} onClick={create}><Plus size={17}/> Continuar a crear promoción</button>
+   <div className="fm-objectives-footer"><p>El redondeo de objetivos es hacia arriba. Las cifras pueden modificarse en el formulario.</p>
+    <button className="btn btn-primary" type="button" disabled={!canCreate} onClick={()=>create("goals")}>
+      <Plus size={17}/> Crear promoción con objetivos</button>
    </div>
+   </>}
+  </section>
+  <section className="card fm-objectives-card fm-objectives-retro">
+   <div><h2>5. Crear una promoción retroactiva</h2>
+     <p>Utiliza los CN, farmacias y fechas de la consulta. No exige establecer objetivos: se enlazarán las ventas históricas mediante sus tickets, según la mecánica de la promoción.</p>
+     <p className="fm-objectives-hint">Período: {periodToConsult.from} a {periodToConsult.to}. Las ventas reales no se modifican; el seguimiento se calcula al guardar la campaña.</p>
+   </div>
+   <button type="button" className="btn btn-primary" disabled={!canCreateRetro}
+     onClick={()=>create("retroactive")}><Plus size={17}/> Crear promoción retroactiva sin objetivos</button>
+   {!canCreateRetro&&<p className="fm-objectives-warning">Para una promoción retroactiva, selecciona CN y farmacias y un período ya terminado.</p>}
   </section>
  </div>;
 }

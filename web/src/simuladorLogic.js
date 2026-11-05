@@ -23,5 +23,5 @@ export function validSimulatorPeriod(from,to){
 export function simulatorTarget(base,percent){
  const units=Number(base),rate=Number(percent);
  return Number.isFinite(units)&&Number.isFinite(rate)?
-  Math.max(0,Math.ceil(units*(1+rate/100))):0;
+  Math.max(0,Math.ceil(units*(100+rate)/100-1e-9)):0;
 }

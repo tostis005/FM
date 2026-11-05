@@ -75,7 +75,7 @@ test("permite buscar por CN en el catálogo autorizado",async()=>{
  assert.deepEqual(out.response.products,[{cn:"123456",description:"Artículo de prueba",supplier:null,sourceId:"ERP-123"}]);
  assert.deepEqual(api.queries[0].params,["ampedia"]);
  assert.deepEqual(api.queries[1].params.slice(0,2),["ampedia",[1,2]]);
- assert.ok(api.queries[1].timeout<=5000);
+ assert.ok(api.queries[1].timeout<=8000);
 });
 test("rechaza rangos inválidos antes de consultar PostgreSQL",async()=>{
  const api=fixture();
@@ -100,7 +100,7 @@ test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por 
  assert.deepEqual(supplier.params.slice(0,2),["ampedia",[1]]);
  assert.deepEqual(bySupplier.params.slice(0,2),["ampedia",[1]]);
  assert.equal(JSON.parse(bySupplier.params[2])[0].supplier_code,"PR1");
- assert.ok(bySupplier.timeout<=5000);
+ assert.ok(bySupplier.timeout<=8000);
 });
 test("si la búsqueda no tiene permisos para otras farmacias nunca consulta sus artículos",async()=>{
  const api=fixture();

@@ -66,3 +66,11 @@ test("no deja que una campaña al 502% infle la media",()=>{
  assert.equal(promotionAverageCompletion(rows.slice(0,1)),502);
  assert.equal(promotionAverageCompletion([],true),null);
 });
+
+test("una promoción al 502 % no infla la media si otra no tiene objetivos",()=>{
+ const p={id:"A",cns:["123456"],targets:{"1":100},sales:{"1":502}};
+ const empty={id:"B",cns:["654321"],targets:{"1":""},sales:{"1":0}};
+ assert.equal(promotionAverageCompletion([p]),502);
+ assert.equal(promotionAverageCompletion([p,empty]),100);
+ assert.equal(promotionMetrics([p,empty],true).completion,100);
+});

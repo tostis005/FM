@@ -34,7 +34,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   const suppliers=(await db.query(sql.suppliers,["ampedia",own,"Buscador Particular",80])).rows;
   assert.ok(suppliers.some(row=>row.supplier_code==="SIMSUP-123"));
   const bySupplier=(await db.query(sql.bySupplier,[
-   "ampedia",own,"Buscador Particular",[],JSON.stringify(suppliers),180
+   "ampedia",own,JSON.stringify(suppliers),180
   ])).rows;
   assert.equal(bySupplier.some(row=>row.source_id==="SIM-ART-123"&&
    row.supplier_name==="Laboratorio Buscador Particular"),true);

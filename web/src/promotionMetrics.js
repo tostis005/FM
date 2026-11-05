@@ -2,13 +2,17 @@
 // En una media de campañas, cada una cuenta como máximo 100 %.
 export function promotionAverageCompletion(campaigns,salesAvailable=true){
  if(!salesAvailable)return null;
- const valid=(campaigns||[]).map(p=>{
+ const list=campaigns||[];
+ const valid=list.map(p=>{
   const goal=Object.values(p.targets||{}).reduce((n,x)=>n+(Number(x)>0?Number(x):0),0);
   const sold=Object.values(p.sales||{}).reduce((n,x)=>n+(Number.isFinite(Number(x))?Number(x):0),0);
   return goal>0?sold/goal*100:null;
  }).filter(value=>value!==null);
  if(!valid.length)return null;
- return Math.round(valid.length===1?valid[0]:
+ // Una única campaña conserva su porcentaje real. Si hay varias,
+ // incluso aunque sólo una tenga objetivos, el indicador global nunca
+ // puede superar el 100 % por campaña.
+ return Math.round(list.length===1?valid[0]:
   valid.reduce((a,value)=>a+Math.min(100,Math.max(0,value)),0)/valid.length);
 }
 // Resumen consistente con el conjunto visible y la disponibilidad de ventas.

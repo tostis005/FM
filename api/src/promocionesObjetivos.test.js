@@ -125,3 +125,23 @@ test("si el Nomenclátor tampoco conoce el CN, no inventa una descripción ni co
  assert.equal(out.status,200);
  assert.deepEqual(out.response.products,[]);
 });
+
+test("paginación por CN: las filas de ERP no consumen cupo antes de DISTINCT",async()=>{
+ const api=fixture();
+ const out=await api.call("/api/ventas/objetivos/buscar",
+  {search:"Crema",cns:[],page:2},[1]);
+ assert.equal(out.status,200);
+ const direct=api.queries.find(q=>q.sql.includes("SELECT DISTINCT ON (resolved_cn)"));
+ assert.ok(direct);
+ assert.equal(direct.params[4],181);
+ assert.equal(direct.params[5],360);
+ assert.equal(out.response.hasMore,false);
+ assert.ok(direct.sql.includes("ORDER BY resolved_cn"));
+});
+test("rechaza paginaciones fuera de rango sin acceder al catálogo",async()=>{
+ const api=fixture();
+ const out=await api.call("/api/ventas/objetivos/buscar",
+  {search:"Crema",cns:[],page:-1});
+ assert.equal(out.status,400);
+ assert.equal(api.queries.length,0);
+});

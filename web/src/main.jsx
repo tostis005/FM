@@ -1289,9 +1289,8 @@ function App(){
   ]}/></div></div></>}
     {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones")}
-      onCreatePromotion={draft=>{startPromo({...EMPTY_PROMO,...draft,id:null,
-       start:draft.start||civilToday(new Date(),reportTimeZone),
-       end:draft.end??"",status:draft.status||"Borrador"});nav("promociones");}}/>}
+      onCreatePromotion={draft=>startPromo({...EMPTY_PROMO,...draft,id:null,
+       name:"",start:"",end:"",status:"Borrador",simulatorDraft:true})}/>}
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}

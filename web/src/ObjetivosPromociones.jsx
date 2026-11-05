@@ -5,6 +5,7 @@ import "./ObjetivosPromociones.css";
 const ISO=value=>/^20\d{2}-\d{2}-\d{2}$/.test(value||"");
 const CN=value=>/^\d{6}$/.test(value);
 const num=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(value||0);
+const money=value=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(value)||0);
 const first=(year,month)=>new Date(Date.UTC(year,month,1)).toISOString().slice(0,10);
 const last=(year,month)=>new Date(Date.UTC(year,month+1,0)).toISOString().slice(0,10);
 function periodsFor(now,customFrom,customTo){
@@ -43,6 +44,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [historyBusy,setHistoryBusy]=useState(false);
  const [error,setError]=useState("");
  const [historical,setHistorical]=useState({});
+ const [amounts,setAmounts]=useState({});
  const [baseline,setBaseline]=useState("previous");
  const [customFrom,setCustomFrom]=useState("");
  const [customTo,setCustomTo]=useState("");
@@ -68,13 +70,13 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   setSelectedPharmacies(ids=>ids.filter(id=>active.some(p=>String(p.id)===id)));
  },[active]);
  useEffect(()=>{
-  if(!selectedCNs.length||!selectedPharmacies.length){setHistorical({});setHistoryBusy(false);setError("");return;}
+  if(!selectedCNs.length||!selectedPharmacies.length){setHistorical({});setAmounts({});setHistoryBusy(false);setError("");return;}
   const controller=new AbortController();
   setHistoryBusy(true);setError("");
   post(clientSlug,"/api/ventas/objetivos/historico",{
    cns:selectedCNs,pharmacyIds:selectedPharmacies,periods
-  },controller.signal).then(data=>{setHistorical(data.periods||{});setManualTargets({});})
-   .catch(e=>{if(e.name!=="AbortError"){setError(e.message);setHistorical({});}})
+  },controller.signal).then(data=>{setHistorical(data.periods||{});setAmounts(data.amounts||{});setManualTargets({});})
+   .catch(e=>{if(e.name!=="AbortError"){setError(e.message);setHistorical({});setAmounts({});}})
    .finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false);});
   return()=>controller.abort();
  },[clientSlug,selectedKey,pharmacyKey,customFrom,customTo]);
@@ -98,10 +100,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   return [...indexed.values()];
  });}
  const units=(id,periodId)=>Number(historical[periodId]?.[id]||0);
+ const amount=(id,periodId)=>Number(amounts[periodId]?.[id]||0);
  const rate=id=>Number(rateByPharmacy[id]??5);
  const proposal=id=>Math.max(0,Math.ceil(units(id,chosen.id)*(1+rate(id)/100)));
  const target=id=>manualTargets[id]===undefined?proposal(id):Number(manualTargets[id])||0;
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
+ const monetaryTotal=periodId=>selectedPharmacies.reduce((n,id)=>n+amount(id,periodId),0);
  const canChoose=canManage&&Boolean(selected.length)&&Boolean(selectedPharmacies.length);
  const customComplete=(!customFrom&&!customTo)||Boolean(
    ISO(customFrom)&&ISO(customTo)&&customFrom<=customTo);
@@ -169,8 +173,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    <p className="fm-objectives-hint">El rango libre tiene prioridad para extraer líneas. Si lo dejas vacío, se utilizará el período de referencia seleccionado en la calculadora. Los tres meses representan el acumulado, no la media mensual.</p>
    <div className="fm-objectives-history-scroll">
     <table className="fm-objectives-table"><thead><tr><th>Farmacia</th>{periods.map(p=><th key={p.id}>{p.label}<small>{p.from} — {p.to}</small></th>)}</tr></thead>
-      <tbody>{active.filter(f=>selectedPharmacies.includes(String(f.id))).map(f=><tr key={f.id}><th>{f.name}</th>{periods.map(p=><td key={p.id}>{!selected.length||historyBusy?"—":num(units(String(f.id),p.id))}</td>)}</tr>)}
-       <tr className="fm-objectives-summary"><th>Total seleccionado</th>{periods.map(p=><td key={p.id}>{!selected.length||historyBusy?"—":num(totals(p.id))}</td>)}</tr>
+      <tbody>{active.filter(f=>selectedPharmacies.includes(String(f.id))).map(f=><tr key={f.id}><th>{f.name}</th>{periods.map(p=><td key={p.id}>{!selected.length||historyBusy?"—":<><strong>{num(units(String(f.id),p.id))} uds.</strong><small>{money(amount(String(f.id),p.id))} netos</small></>}</td>)}</tr>)}
+       <tr className="fm-objectives-summary"><th>Total seleccionado</th>{periods.map(p=><td key={p.id}>{!selected.length||historyBusy?"—":<><strong>{num(totals(p.id))} uds.</strong><small>{money(monetaryTotal(p.id))} netos</small></>}</td>)}</tr>
       </tbody></table>
    </div>
    {historyBusy&&<p role="status">Calculando ventas reales por farmacia…</p>}

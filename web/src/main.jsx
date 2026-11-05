@@ -694,6 +694,8 @@ function App(){
   if(promoForm.status==="Activa" && !selections.length)return setToast("Selecciona farmacias y completa sus objetivos antes de activar");
   if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
      return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
+  if(promoForm.retroactive&&promoForm.type==="sin_clasificar")
+    return setToast("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
   if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
      return setToast("Clasifica el tipo de promoción antes de activarla");
   if(promoForm.status==="Activa" && requiresPct &&
@@ -1359,6 +1361,8 @@ function App(){
    </section>
   </div>}
   {editingPromo&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPromo(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPromo==="nuevo"?"Nueva promoción":"Editar promoción"}</h2><p>Configura productos y objetivos de venta por farmacia.</p></div><button className="icon-btn" aria-label="Cerrar" onClick={()=>setEditingPromo(null)}><X size={21}/></button></div><form onSubmit={savePromo} className="drawer-content">
+   {promoForm.retroactive&&<div className="note data-note"><CircleHelp size={16}/>
+     Promoción retroactiva: los tickets se consultarán al guardar, sin modificar las ventas originales. Los objetivos son opcionales, pero es necesario elegir el tipo de oferta.</div>}
    <Field label="Nombre de promoción"><input required placeholder="Ej.: Especial hidratación" value={promoForm.name} onChange={e=>setPromoForm({...promoForm,name:e.target.value})}/></Field>
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>
    <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field><Field label="Fecha de fin (opcional)"><input type="date" value={promoForm.end||""} onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field></div>

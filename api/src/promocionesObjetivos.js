@@ -71,7 +71,28 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns}){
    verified=new Set(r.rows.map(row=>String(row.cn)));
   }catch(error){console.warn("PROMOTION_CN_LOOKUP",error.code||error.name);}
  }
- return {products:mergePromotionCatalogRows(rows,verified),partial:!complete};
+ const products=mergePromotionCatalogRows(rows,verified);
+ if(!search&&cns.length){
+  // Un CN pegado es válido aunque ninguna farmacia tenga ficha local. Para
+  // rellenar su nombre usar solo una fuente oficial con correspondencia exacta.
+  const selected=new Set(cns);
+  const inCatalog=products.filter(item=>selected.has(item.cn));
+  const missing=cns.filter(cn=>!inCatalog.some(item=>item.cn===cn));
+  if(missing.length){
+   try{
+    const result=await pool.query({
+     text:"SELECT cn::text AS cn,nombre::text AS description "+
+      "FROM farmetrica.nomenclator_presentaciones WHERE cn=ANY($1::text[])",
+     values:[missing],query_timeout:1500
+    });
+    inCatalog.push(...result.rows.filter(item=>selected.has(item.cn))
+     .map(item=>({cn:item.cn,description:item.description||"CN introducido",
+      supplier:null,sourceId:null})));
+   }catch(error){console.warn("PROMOTION_CN_NAME_LOOKUP",error.code||error.name);}
+  }
+  return {products:inCatalog,partial:!complete};
+ }
+ return {products,partial:!complete};
 }
 
 export function setupPromotionObjectives(app,pool,{requireTenantModule}){

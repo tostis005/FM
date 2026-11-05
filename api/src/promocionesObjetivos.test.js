@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
 
-function fixture(){
+function fixture({directRows,officialRows}={}){
  const routes=new Map(),queries=[];
  const pool={async query(input,values=[]){
   const sql=typeof input==="string"?input:input.text;
@@ -26,9 +26,11 @@ function fixture(){
     national_code:"123456",normalized_code:null,laboratory:null,supplier_ref:"PR1",
     supplier_name:"Proveedor Ejemplo"}]};
   if(sql.includes("FROM \"ampedia\".articulos a JOIN farmetrica.farmacias"))
-   return {rows:[{pharmacy_id:"1",source_id:"ERP-123",description:"Artículo de prueba",
+   return {rows:directRows??[{pharmacy_id:"1",source_id:"ERP-123",description:"Artículo de prueba",
     national_code:"123456",normalized_code:null,laboratory:null,supplier_ref:"PR1",
     supplier_name:null}]};
+  if(sql.includes("SELECT cn::text AS cn,nombre::text AS description"))
+   return {rows:officialRows||[]};
   if(sql.includes("nomenclator_presentaciones"))
    return {rows:[]};
   throw Error("Consulta SQL inesperada: "+sql);
@@ -106,4 +108,20 @@ test("si la búsqueda no tiene permisos para otras farmacias nunca consulta sus 
  const sql=api.queries.find(q=>q.sql.includes('FROM "ampedia".articulos a JOIN farmetrica.farmacias'));
  assert.deepEqual(sql.params[1],[1]);
  assert.match(sql.sql,/f\.id=ANY\(\$2::int\[\]\)/);
+});
+
+test("al pegar un CN sin ficha ERP recupera nombre oficial si existe, sin decir no localizado",async()=>{
+ const api=fixture({directRows:[],officialRows:[{cn:"194700",description:"Nombre oficial del CN"}]});
+ const out=await api.call("/api/ventas/objetivos/buscar",{search:"",cns:["194700"]},[1]);
+ assert.equal(out.status,200);
+ assert.deepEqual(out.response.products,[{
+  cn:"194700",description:"Nombre oficial del CN",supplier:null,sourceId:null
+ }]);
+ assert.equal(api.queries.some(q=>q.sql.includes("nomenclator_presentaciones")),true);
+});
+test("si el Nomenclátor tampoco conoce el CN, no inventa una descripción ni confunde el ERP",async()=>{
+ const api=fixture({directRows:[],officialRows:[]});
+ const out=await api.call("/api/ventas/objetivos/buscar",{search:"",cns:["168770"]},[1]);
+ assert.equal(out.status,200);
+ assert.deepEqual(out.response.products,[]);
 });

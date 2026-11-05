@@ -46,9 +46,13 @@ export function promotionCatalogSearchSQL(schema,columns){
  const direct="SELECT "+fields()+" FROM "+a+" a "+scope+
   "WHERE (($3::text<>'' AND ("+terms.join(" OR ")+")) "+
   "OR btrim(a.codigo_nacional::text)=ANY($4::text[]) "+
+  "OR (btrim(a.codigo_nacional::text) ~ '^[0-9]{7}$' AND "+
+   "left(btrim(a.codigo_nacional::text),6)=ANY($4::text[])) "+
   (has(columns,"articulos","cn_normalizado")?
-   "OR btrim(a.cn_normalizado::text)=ANY($4::text[]) ":"")+
-  "OR btrim(a.origen_id::text)=ANY($4::text[])) LIMIT $5::int";
+   "OR btrim(a.cn_normalizado::text)=ANY($4::text[]) "+
+   "OR (btrim(a.cn_normalizado::text) ~ '^[0-9]{7}$' AND "+
+    "left(btrim(a.cn_normalizado::text),6)=ANY($4::text[])) ":"")+
+  ") LIMIT $5::int";
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+

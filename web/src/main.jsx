@@ -174,7 +174,7 @@ const NAV=[
  {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
- {id:"promociones-objetivos",label:"Objetivos",icon:Target,module:"promociones",childOf:"promociones"},
+ {id:"promociones-objetivos",label:"Simulador",icon:Target,module:"promociones",childOf:"promociones"},
  {id:"acciones",label:"Trabajo y ahorro",icon:ClipboardList,module:"acciones"},
  {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
  {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
@@ -1270,7 +1270,8 @@ function App(){
     {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones")}
       onCreatePromotion={draft=>{startPromo({...EMPTY_PROMO,...draft,id:null,
-       start:civilToday(new Date(),reportTimeZone),end:"",status:"Borrador"});nav("promociones");}}/>}
+       start:draft.start||civilToday(new Date(),reportTimeZone),
+       end:draft.end??"",status:draft.status||"Borrador"});nav("promociones");}}/>}
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}

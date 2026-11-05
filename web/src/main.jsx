@@ -733,7 +733,11 @@ function App(){
    setData(prev=>({...prev,promos:prev.promos.some(p=>p.id===result.id)?
     prev.promos.map(p=>p.id===result.id?result:p):[result,...prev.promos]}));
    setEditingPromo(null);
-   setToast("Promoción guardada correctamente");
+   if(result.retroactive){
+     setStatusFilter("Finalizada");
+     setFrom(result.start);setTo(result.end);
+     setToast("Promoción retroactiva guardada. Revisa Seguimiento para consultar sus ventas históricas.");
+   }else setToast("Promoción guardada correctamente");
   }catch(err){
    const message="No se ha guardado la promoción: "+err.message+". Reintenta.";
    setPromoSaveError(message);setToast(message);

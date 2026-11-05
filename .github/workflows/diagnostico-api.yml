@@ -1,0 +1,44 @@
+name: Diagnóstico puntual de arranque API (solo lectura)
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/diagnostico-api.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Estado contenedores y errores API sin secretos
+        shell: bash
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            echo "ESTADO CONTENEDORES:"
+            docker compose -f compose.yaml -f compose.farmacias.yml ps api web
+            echo "HEALTH API:"
+            curl -sS -m 8 -o /dev/null -w "HTTP %{http_code}\n" http://127.0.0.1:18080/api/health || true
+            echo "ERRORES ARRANQUE API (máximo 65 líneas):"
+            docker compose -f compose.yaml -f compose.farmacias.yml logs --tail=240 --no-color api 2>&1 | grep -Ei "error|fail|no se pudo|falta|fatal|ECONN|uncaught|exception|ERR_|SIG|killed|OOM|SyntaxError|ReferenceError|TypeError" | tail -65 | sed -E "s#(postgres(ql)?://)[^ @]+@#\\1[REDACTED]@#g" || true
+          '

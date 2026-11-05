@@ -72,11 +72,11 @@ export function promotionCatalogSearchSQL(schema,columns){
    "WHERE supplier_code<>'' ORDER BY supplier_name LIMIT $4::int":null;
  const bySupplier=supplierReady?
   "SELECT "+fields("matched.supplier_name")+" FROM "+a+" a "+
-  "JOIN jsonb_to_recordset($5::jsonb) AS matched("+
+  "JOIN jsonb_to_recordset($3::jsonb) AS matched("+
    "pharmacy_code text,supplier_code text,supplier_name text) "+
   "ON "+upper("a.farmacia_codigo::text")+"=matched.pharmacy_code "+
   "AND ("+refCondition+") "+
-  scope+"LIMIT $6::int":null;
+  scope+"LIMIT $4::int":null;
  return {direct,suppliers,bySupplier,supplierReady};
 }
 

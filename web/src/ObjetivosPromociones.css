@@ -101,3 +101,13 @@
 .fm-objectives-create .btn{min-width:188px}
 .fm-objectives-extract-head h2{margin:0;font-size:19px}
 @media(max-width:720px){.fm-objectives-create .btn{width:100%}.fm-objectives-base{justify-content:flex-start}}
+
+/* Extracción limpia: contador a la izquierda y exportaciones juntas a la derecha. */
+.fm-objectives-extraction .fm-sales-simulator{padding-top:10px}
+.fm-objectives-extraction .fm-sales-compact-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:4px}
+.fm-objectives-extraction .fm-sales-export-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-left:auto;flex-wrap:wrap}
+.fm-objectives-extraction .fm-sales-export-actions .btn{white-space:nowrap}
+@media(max-width:720px){
+ .fm-objectives-extraction .fm-sales-compact-toolbar{align-items:flex-start}
+ .fm-objectives-extraction .fm-sales-export-actions{width:100%;margin-left:0}
+}

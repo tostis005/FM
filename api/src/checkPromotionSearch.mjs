@@ -26,7 +26,7 @@ try{
    "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
    "AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+" "+
    "WHERE f.activo=true AND nullif(btrim(a.nombre::text),'') IS NOT NULL "+
-   "AND btrim(a.codigo_nacional::text) ~ '^[0-9]{6,7}
+   "AND btrim(a.codigo_nacional::text) ~ '^[0-9]{6,7}$' LIMIT 1",
   values:[slug],query_timeout:6500});
  if(!samples.length)throw Error("El maestro no contiene artículos consultables");
  const id=Number(samples[0].id),term=samples[0].name.slice(0,90);

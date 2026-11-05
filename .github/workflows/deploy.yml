@@ -60,6 +60,7 @@ jobs:
           node --check api/src/promocionesTenant.js
           node --check api/src/promocionesObjetivos.js
           node --check api/src/promotionCatalogSearch.js
+          node --check api/src/checkPromotionSearch.mjs
           node --check api/src/promocionesArticulos.js
           node --test api/src/promocionesObjetivos.test.js api/src/promocionesArticulos.test.js api/src/promotionCatalogSearch.test.js
           node --test api/src/promocionesTenant.test.js
@@ -325,6 +326,14 @@ jobs:
             echo "::error::Falló el chequeo HTTP: API=$api web=$web login=$login privada=$panel soluciones=$solutions ficha=$solution ERP=$integration blog=$blog sitemap=$sitemap demo=$demo rechazado=$rejected"
             echo "Falló la comprobación posterior del despliegue"
             exit 1
+          '
+
+      - name: Verificar buscador de artículos y proveedores con el maestro real
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPromotionSearch.mjs
           '
 
       - name: Precargar última recepción por CN fuera del selector

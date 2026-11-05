@@ -97,7 +97,7 @@ test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por 
  assert.equal(direct.params[1][0],1);
  assert.deepEqual(supplier.params.slice(0,2),["ampedia",[1]]);
  assert.deepEqual(bySupplier.params.slice(0,2),["ampedia",[1]]);
- assert.equal(JSON.parse(bySupplier.params[4])[0].supplier_code,"PR1");
+ assert.equal(JSON.parse(bySupplier.params[2])[0].supplier_code,"PR1");
  assert.ok(bySupplier.timeout<=5000);
 });
 test("si la búsqueda no tiene permisos para otras farmacias nunca consulta sus artículos",async()=>{

@@ -63,3 +63,7 @@
 .fm-objectives-card .fm-objectives-section-title>div{flex:1 1 280px}
 .fm-objectives-card .fm-objectives-section-title h2{margin:0 0 6px}
 @media(max-width:720px){.fm-objectives-retro>.btn,.fm-objectives-extract-head>.btn{width:100%;justify-content:center}}
+
+.fm-objectives-table tbody td strong{display:block;font-size:12px;color:#244c38}
+.fm-objectives-table tbody td small{display:block;font-size:10px;font-weight:500;color:#789384;margin-top:4px;font-variant-numeric:tabular-nums}
+.fm-objectives-summary td strong,.fm-objectives-summary td small{color:#13744f}

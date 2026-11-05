@@ -107,7 +107,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     })
     .catch(error=>{if(!controller.signal.aborted){setSearchError(error.message);setResults([]);}})
     .finally(()=>{if(!controller.signal.aborted)setSearchBusy(false);});
-  },searchNonce?0:320);
+  },320);
   return()=>{clearTimeout(timer);controller.abort();};
  },[clientSlug,search,bulk,searchNonce]);
 

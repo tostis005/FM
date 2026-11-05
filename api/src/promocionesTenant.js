@@ -147,8 +147,7 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
    try{
     db=await pool.connect();await db.query("BEGIN");
     const {rows:existing}=await db.query(`SELECT documento,creado_por FROM "${schema}".fm_promociones
-       WHERE id=ANY(
-    ::text[]) FOR UPDATE`,[ids]);
+       WHERE id=ANY($1::text[]) FOR UPDATE`,[ids]);
      if(existing.some(r=>!canMutate(req,r.documento,r.creado_por))){
        await db.query("ROLLBACK");
        return res.status(403).json({error:"Hay promociones de otras farmacias en la selección"});

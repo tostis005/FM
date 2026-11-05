@@ -19,7 +19,7 @@ const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
 const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
 const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.jsx"));
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
-import {promotionMetrics,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
+import {promotionMetrics,promotionAverageCompletion,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
@@ -138,8 +138,9 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{quantity(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Uds. atribuidas</span><KpiValue loading={salesLoading} label="Uds. atribuidas" loadingText="Calculando…" value={quantity(m.units)}/></div>
-   <div className="campaign-metric metric-progress"><span>Cumplimiento</span>
+   <div className="campaign-metric"><span>Uds. en promoción</span><KpiValue loading={salesLoading} label="Uds. atribuidas" loadingText="Calculando…" value={quantity(m.units)}/></div>
+   <div className="campaign-metric"><span>Uds. totales de CNs</span><KpiValue loading={salesLoading} label="Uds. totales" loadingText="Calculando…" value={quantity(m.totalUnits)}/></div>
+    <div className="campaign-metric metric-progress"><span>{campaigns.length>1?"Cumplimiento medio":"Cumplimiento"}</span>
     <KpiValue loading={salesLoading} label="Cumplimiento" loadingText="Calculando…" value={m.completion==null?"—":percentage(m.completion)}/>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
   </div>
@@ -337,7 +338,7 @@ function App(){
       setData(prev=>({...prev,promos:[]}));
       const ctx=await loadContext(slug);
       setData(await tenantState(ctx,sessionUser?.email));
-      setSalesStatus("sin_conexion");setSalesByPromotion({});
+      setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});
       const initial=ctx.sections?.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
         NAV.find(item=>item.module&&ctx.sections?.[item.id])?.id||
         (ctx.sections?.["seguimiento-global"]?"seguimiento-global":"farmacias");
@@ -377,6 +378,7 @@ function App(){
   const [salesStatus,setSalesStatus]=useState("sin_conexion");
   const [salesError,setSalesError]=useState("");
   const [salesByPromotion,setSalesByPromotion]=useState({});
+   const [totalSalesByPromotion,setTotalSalesByPromotion]=useState({});
   const [targetIncrease,setTargetIncrease]=useState("5");
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
@@ -416,7 +418,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});return;}
+     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -435,19 +437,22 @@ function App(){
          const results=await mapLimited(chunks,3,
            chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
-         const byPromotion={};
+         const byPromotion={},byTotalPromotion={};
          for(let i=0;i<segments.length;i++){
            const seg=segments[i],partial=results[Math.floor(i/25)]?.sales?.[seg.id]||{};
            const out=byPromotion[seg.id]||(byPromotion[seg.id]={});
            for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
+            const totals=results[Math.floor(i/25)]?.totalSales?.[seg.id]||{};
+            const totalOut=byTotalPromotion[seg.id]||(byTotalPromotion[seg.id]={});
+            for(const [id,qty] of Object.entries(totals))totalOut[id]=(totalOut[id]||0)+(Number(qty)||0);
          }
 
-         setSalesByPromotion(byPromotion);
+         setSalesByPromotion(byPromotion);setTotalSalesByPromotion(byTotalPromotion);
          setSalesLastUpdated(new Date());setSalesError("");
          setSalesStatus("real");
        }catch(error){
          if(cancelled)return;
-         setSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
+         setSalesByPromotion({});setTotalSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
        }
      };
      void sync();
@@ -508,7 +513,8 @@ function App(){
  const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
  const storedPromos=(rawPromos||[]).map(p=>({...p,
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
-   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
+   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+    totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
  })).filter(p=>["administrador","superadministrador"].includes(tenantContext?.role)||Object.keys(p.targets||{}).length>0);
 
   const users=sessionUser?.role==="superadministrador"
@@ -517,7 +523,7 @@ function App(){
     : storedUsers;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?participatingPromotionSales(p,totalSalesByPromotion[p.id]):{},sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
 
@@ -546,7 +552,8 @@ function App(){
   &&(!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
  const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
-  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
+  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
+   totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id))))
  }:p);
  const reportFilterBase=promos.filter(p=>promotionMatchesReportScope(p,{
   status:reportStatus,month:reportMonth,year:reportYear}));
@@ -562,7 +569,8 @@ function App(){
  const reportFilteredCampaigns=reportSelected.filter(p=>selectedPharmacyIds===null||Object.keys(p.targets||{}).some(id=>activePharmacySet.has(id))).map(p=>({
   ...p,
   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
-  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id)))
+  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id))),
+   totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>activePharmacySet.has(id)))
  }));
  const goalListFiltered=reportFilteredCampaigns.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" "))
    .toLocaleLowerCase("es").includes(reportListSearch.toLocaleLowerCase("es"))).sort((a,b)=>{
@@ -583,6 +591,7 @@ function App(){
  const reportTargets=Object.entries(combinedReport.targets);
  const reportGoal=sum(combinedReport.targets);
  const reportSales=sum(combinedReport.sales);
+  const reportTotalSales=reportFilteredCampaigns.reduce((n,p)=>n+sum(p.totalSales),0);
  const reportCNs=[...new Set(reportFilteredCampaigns.flatMap(p=>p.cns||[]))];
  const searchedCNs=reportCNs.filter(cn=>(cn+" "+(reportSelected.find(p=>p.cnDescriptions?.[cn])?.cnDescriptions?.[cn]||"")).toLowerCase().includes(cnSearch.toLowerCase()));
  const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
@@ -662,7 +671,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
@@ -697,7 +706,8 @@ function App(){
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
-  const result={...promoForm,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
+  const {managerCanEdit:_scopeFlag,...fields}=promoForm;
+   const result={...fields,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   if(result.status==="Finalizada"){
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
     if(manualClose){
@@ -741,7 +751,7 @@ function App(){
   }catch(error){setToast("No se pudo confirmar la promoción: "+error.message);}
  }
  async function removePromotion(p){
-  if(!["administrador","superadministrador"].includes(tenantContext?.role))return;
+  if(!canManagePromotions||p.managerCanEdit===false)return;
   if(deletingPromoId||deletingSelected)return;
   const confirmed=window.confirm(
    '¿Eliminar definitivamente la promoción "'+p.name+'"?\n\n'+
@@ -950,7 +960,7 @@ function App(){
   setExpandedNavIds(previous=>previous.includes(parent)?previous:[...previous,parent]);
  },[page]);
  const role=tenantContext?.role;
- const canManagePromotions=["administrador","superadministrador"].includes(role);
+ const canManagePromotions=["gestor","administrador","superadministrador"].includes(role);
  const canOpenSection=id=>sessionUser?.role==="superadministrador"||
    tenantContext?.sections?.[id]===true;
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
@@ -1141,9 +1151,10 @@ function App(){
     .map(f=>({value:f.id,label:f.name})),
   value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
-      {key:"sales",label:"Vendidas",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
-      {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
-      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.status==="Pendiente de revisión"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();void confirmPromotion(p)}}>Confirmar vigencia</button>}{canManagePromotions&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
+      {key:"sales",label:"Uds. promoción",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
+      {key:"totalSales",label:"Uds. totales",value:p=>salesStatus==="real"?sum(p.totalSales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.totalSales)):"—"}</span>},
+       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.managerCanEdit!==false&&p.status==="Pendiente de revisión"&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();void confirmPromotion(p)}}>Confirmar vigencia</button>}{canManagePromotions&&p.managerCanEdit!==false&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&p.managerCanEdit!==false&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&p.managerCanEdit!==false&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
     ]}/>
  </section>
 
@@ -1193,7 +1204,7 @@ function App(){
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. atribuidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Avance global</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percent(reportSales,reportGoal)+"%":"—"}</strong></div></div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. atribuidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Uds. totales de CNs</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportTotalSales)+" uds.":"—"}</strong></div><div><span>Cumplimiento medio</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percentage(promotionAverageCompletion(reportFilteredCampaigns)):"—"}</strong></div></div>
    {hasOverlappingPromotions(reportFilteredCampaigns)&&
      <p role="note" className="fm-sales-period-info">
       Hay promociones con el mismo CN, farmacia y fechas solapadas. Una misma

@@ -63,8 +63,9 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()),[]);
  useEffect(()=>{setConsultedQuery(null);},[selectedKey,pharmacyKey,customFrom,customTo,baseline]);
  useEffect(()=>{
-  setSelectedPharmacies(ids=>ids.filter(id=>active.some(p=>String(p.id)===id)).concat(
-   active.filter(f=>!ids.includes(String(f.id))&&ids.length===0).map(f=>String(f.id))));
+  // Respetar la selección vacía: no volver a marcar todas las farmacias
+  // después de que el usuario haya desmarcado la última.
+  setSelectedPharmacies(ids=>ids.filter(id=>active.some(p=>String(p.id)===id)));
  },[active]);
  useEffect(()=>{
   if(!selectedCNs.length||!selectedPharmacies.length){setHistorical({});setHistoryBusy(false);setError("");return;}

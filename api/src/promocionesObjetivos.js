@@ -34,47 +34,41 @@ async function catalogColumns(pool,schema){
  cache.set(schema,{promise:pending});
  return pending;
 }
-async function findPromotionArticles(pool,{schema,slug,ids,search,cns}){
+const PAGE_SIZE=180;
+const MAX_PAGE=50;
+async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const metadata=await catalogColumns(pool,schema);
  const sql=promotionCatalogSearchSQL(schema,metadata);
- const direct=pool.query({text:sql.direct,values:[slug,ids,search,cns,240],query_timeout:5000});
+ const pageSize=search?PAGE_SIZE:Math.min(500,Math.max(1,cns.length));
+ const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
+ const direct=pool.query({
+  text:sql.direct,values:[slug,ids,search,cns,pageLimit,offset],query_timeout:8000
+ });
  const supplierNames=search.length>=2&&sql.suppliers?
-  pool.query({text:sql.suppliers,values:[slug,ids,search,80],query_timeout:2500}):
+  pool.query({text:sql.suppliers,values:[slug,ids,search,400],query_timeout:4000}):
   Promise.resolve({rows:[]});
  const [a,b]=await Promise.allSettled([direct,supplierNames]);
- const rows=a.status==="fulfilled"?a.value.rows||[]:[];
+ const directRows=a.status==="fulfilled"?a.value.rows||[]:[];
  const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
- let supplierError=null;
+ let supplierResult={rows:[]},supplierError=null;
  if(supplierCodes.length&&sql.bySupplier){
   try{
-   const r=await pool.query({
+   supplierResult=await pool.query({
     text:sql.bySupplier,
-    values:[slug,ids,JSON.stringify(supplierCodes),180],
-    query_timeout:4500
+    values:[slug,ids,JSON.stringify(supplierCodes),pageLimit,offset],
+    query_timeout:8000
    });
-   rows.push(...(r.rows||[]));
   }catch(error){supplierError=error;}
  }
  const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&!supplierError;
- if(!complete&&!rows.length)
+ const supplierRows=supplierResult.rows||[];
+ if(!complete&&!directRows.length&&!supplierRows.length)
   throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
- // A Farmatic ERP ID is not necessarily a CN. Only recover six-digit ids
- // independently verified against the official AEMPS nomenclator.
- const possible=[...new Set(rows.map(r=>String(r.source_id||"").trim())
-  .filter(v=>/^\d{6}$/.test(v)))];
- let verified=new Set();
- if(possible.length){
-  try{
-   const r=await pool.query({text:
-    "SELECT cn::text AS cn FROM farmetrica.nomenclator_presentaciones WHERE cn=ANY($1::text[])",
-    values:[possible],query_timeout:1800});
-   verified=new Set(r.rows.map(row=>String(row.cn)));
-  }catch(error){console.warn("PROMOTION_CN_LOOKUP",error.code||error.name);}
- }
- const products=mergePromotionCatalogRows(rows,verified);
+ // Ambas búsquedas devuelven CN únicos. El límite está aplicado después de
+ // DISTINCT, nunca a los artículos ERP sin CN o duplicados entre farmacias.
+ const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize)];
+ const products=mergePromotionCatalogRows(rows);
  if(!search&&cns.length){
-  // Un CN pegado es válido aunque ninguna farmacia tenga ficha local. Para
-  // rellenar su nombre usar solo una fuente oficial con correspondencia exacta.
   const selected=new Set(cns);
   const inCatalog=products.filter(item=>selected.has(item.cn));
   const missing=cns.filter(cn=>!inCatalog.some(item=>item.cn===cn));
@@ -90,9 +84,10 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns}){
       supplier:null,sourceId:null})));
    }catch(error){console.warn("PROMOTION_CN_NAME_LOOKUP",error.code||error.name);}
   }
-  return {products:inCatalog,partial:!complete};
+  return {products:inCatalog,partial:!complete,hasMore:false};
  }
- return {products,partial:!complete};
+ const hasMore=directRows.length>pageSize||supplierRows.length>pageSize;
+ return {products,partial:!complete||supplierCodes.length>=400,hasMore,pageSize};
 }
 
 export function setupPromotionObjectives(app,pool,{requireTenantModule}){
@@ -102,12 +97,15 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    const schema=req.context.client.schema,slug=req.context.client.slug;
    if(!SCHEMA.test(schema)||!SCHEMA.test(slug))return res.status(400).json({error:"Cliente inválido"});
    const search=String(req.body?.search||"").trim().slice(0,90),cns=cleanCNs(req.body?.cns);
+   const page=Number(req.body?.page??0);
+   if(!Number.isInteger(page)||page<0||page>MAX_PAGE)
+    return res.status(400).json({error:"Página de resultados inválida"});
    if(Array.isArray(req.body?.cns)&&cns.length!==new Set(req.body.cns).size||
       cns.length>500)return res.status(400).json({error:"Introduce un máximo de 500 CN válidos"});
    if(search.length<2&&!cns.length)return res.json({products:[]});
    const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
    if(!ids.length)return res.json({products:[]});
-   const result=await findPromotionArticles(pool,{schema,slug,ids,search,cns});
+   const result=await findPromotionArticles(pool,{schema,slug,ids,search,cns,page});
    return res.json(result);
   }catch(e){next(e);}
  });

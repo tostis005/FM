@@ -58,6 +58,9 @@ jobs:
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
+          node --check api/src/promocionesObjetivos.js
+          node --check api/src/promocionesArticulos.js
+          node --test api/src/promocionesObjetivos.test.js api/src/promocionesArticulos.test.js
           node --test api/src/promocionesTenant.test.js
           node --test api/src/promocionesReplace.test.js
           node --test api/src/promotionEligibility.test.js

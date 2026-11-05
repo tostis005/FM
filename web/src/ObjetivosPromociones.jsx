@@ -31,6 +31,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [search,setSearch]=useState("");
  const [bulk,setBulk]=useState("");
  const [searchNonce,setSearchNonce]=useState(0);
+ const [searchPage,setSearchPage]=useState(0);
+ const [hasMore,setHasMore]=useState(false);
  const [results,setResults]=useState([]);
  const [selected,setSelected]=useState([]);
  const [searchBusy,setSearchBusy]=useState(false);
@@ -69,20 +71,25 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  useEffect(()=>{
   const term=search.trim();
   if(mode!=="search"||!term){
-   setResults([]);setSearchBusy(false);setSearchError("");setUnavailableCount(0);return;
+   setResults([]);setHasMore(false);setSearchBusy(false);setSearchError("");setUnavailableCount(0);return;
   }
-  if(term.length<2){setResults([]);setSearchBusy(false);setSearchError("");
+  if(term.length<2){setResults([]);setHasMore(false);setSearchBusy(false);setSearchError("");
    setUnavailableCount(0);return;}
   const controller=new AbortController();
   let timedOut=false;
-  setResults([]);setSearchBusy(true);setSearchError("");setUnavailableCount(0);
+  if(searchPage===0){setResults([]);setHasMore(false);setUnavailableCount(0);}
+  setSearchBusy(true);setSearchError("");
   const deadline=setTimeout(()=>{timedOut=true;controller.abort();},10500);
   const timer=setTimeout(()=>{
-   post(clientSlug,"/api/ventas/objetivos/buscar",{search:term,cns:[]},controller.signal)
+   post(clientSlug,"/api/ventas/objetivos/buscar",{search:term,cns:[],page:searchPage},controller.signal)
     .then(data=>{
      if(controller.signal.aborted)return;
      const {products,unavailableCount:missing}=selectablePromotionProducts(data.products);
-     setResults(products);setUnavailableCount(missing);
+     setResults(previous=>searchPage===0?products:(()=>{
+      const seen=new Set(previous.map(item=>item.cn));
+      return [...previous,...products.filter(item=>!seen.has(item.cn))];
+     })());
+     setHasMore(Boolean(data.hasMore));setUnavailableCount(previous=>searchPage===0?missing:previous+missing);
      if(data.partial)setSearchError("Resultados parciales: prueba una búsqueda más específica.");
     })
     .catch(error=>{
@@ -92,7 +99,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     .finally(()=>{clearTimeout(deadline);if(!controller.signal.aborted||timedOut)setSearchBusy(false);});
   },420);
   return()=>{clearTimeout(timer);clearTimeout(deadline);controller.abort();};
- },[clientSlug,search,mode,searchNonce]);
+ },[clientSlug,search,mode,searchNonce,searchPage]);
 
  useEffect(()=>{
   if(!selectedCNs.length||!selectedPharmacies.length||!validRange){
@@ -177,17 +184,17 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     <div className="fm-objectives-search">
      <label>Buscar por artículo, proveedor o CN
       <input type="search" placeholder="Nombre, marca, laboratorio o CN…" value={search}
-       onChange={e=>setSearch(e.target.value)}
+       onChange={e=>{setSearch(e.target.value);setSearchPage(0);}}
        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setSearchNonce(n=>n+1);}}}/></label>
      <button className="btn btn-secondary" type="button" disabled={searchBusy||search.trim().length<2}
-      onClick={()=>setSearchNonce(n=>n+1)}><Search size={16}/>{searchBusy?"Buscando…":"Buscar"}</button>
+      onClick={()=>{setSearchPage(0);setSearchNonce(n=>n+1);}}><Search size={16}/>{searchBusy?"Buscando…":"Buscar"}</button>
     </div>
     {searchBusy&&<div className="fm-objectives-search-loading"><LoadingStatus label="Buscando artículos con CN…"/></div>}
     {searchError&&<p role="alert" className="fm-objectives-warning">{searchError}</p>}
-    {!searchBusy&&results.length>0&&<div className="fm-objectives-results">
-     <div className="fm-objectives-section-title"><strong>Artículos con CN ({results.length})</strong>
+    {results.length>0&&<div className="fm-objectives-results">
+     <div className="fm-objectives-section-title"><strong>Artículos con CN ({results.length} mostrados)</strong>
       <button className="btn btn-secondary btn-sm" type="button" onClick={()=>append(results)}>
-       <Check size={14}/> Seleccionar todos</button></div>
+       <Check size={14}/> Seleccionar mostrados</button></div>
      <div className="fm-objectives-result-scroll">
       {results.map(item=><label key={item.cn} className="fm-objectives-product">
        <input type="checkbox" checked={selected.some(x=>x.cn===item.cn)}
@@ -196,6 +203,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        <span><strong>{item.description}</strong>{item.supplier&&<small>{item.supplier}</small>}</span>
       </label>)}
      </div>
+     {hasMore&&<div className="fm-objectives-more">
+      <button type="button" className="btn btn-secondary btn-sm" disabled={searchBusy}
+       onClick={()=>setSearchPage(page=>page+1)}>
+       {searchBusy?"Cargando más coincidencias…":"Mostrar más artículos"}
+      </button>
+     </div>}
     </div>}
     {!searchBusy&&unavailableCount>0&&<p className="fm-objectives-excluded">
      {unavailableCount} {unavailableCount===1?"artículo no aparece":"artículos no aparecen"} porque

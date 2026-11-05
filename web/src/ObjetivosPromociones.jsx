@@ -1,14 +1,12 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Check,Plus,Search,Trash2} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
+import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
 import "./ObjetivosPromociones.css";
 
-const ISO=value=>/^20\d{2}-\d{2}-\d{2}$/.test(value||"");
 const CN=value=>/^\d{6}$/.test(value||"");
 const num=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(Number(value)||0);
 const money=value=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(Number(value)||0);
-const first=(year,month)=>new Date(Date.UTC(year,month,1)).toISOString().slice(0,10);
-const last=(year,month)=>new Date(Date.UTC(year,month+1,0)).toISOString().slice(0,10);
 const madridToday=()=>new Intl.DateTimeFormat("sv-SE",{
  timeZone:"Europe/Madrid",year:"numeric",month:"2-digit",day:"2-digit"
 }).format(new Date());
@@ -16,29 +14,6 @@ const monthAtMadrid=()=>{
  const today=madridToday();
  return {year:Number(today.slice(0,4)),month:Number(today.slice(5,7))-1};
 };
-const DATE_LIMIT_DAYS=366;
-export function simulatorPeriods(today,customFrom,customTo){
- const year=Number(today.slice(0,4)),month=Number(today.slice(5,7))-1;
- return [
-  {id:"previous",label:"Mes anterior",from:first(year,month-1),to:last(year,month-1)},
-  {id:"year",label:"Mismo mes hace 1 año",from:first(year-1,month-1),to:last(year-1,month-1)},
-  {id:"twoYears",label:"Mismo mes hace 2 años",from:first(year-2,month-1),to:last(year-2,month-1)},
-  {id:"custom",label:"Período seleccionado",from:customFrom,to:customTo}
- ];
-}
-export function validSimulatorPeriod(from,to){
- if(!ISO(from)||!ISO(to))return false;
- const start=Date.parse(from+"T00:00:00Z"),end=Date.parse(to+"T00:00:00Z");
- return Number.isFinite(start)&&Number.isFinite(end)&&end>=start&&
-  (end-start)<=DATE_LIMIT_DAYS*86400000&&
-  new Date(start).toISOString().slice(0,10)===from&&
-  new Date(end).toISOString().slice(0,10)===to;
-}
-export function simulatorTarget(base,percent){
- const units=Number(base),rate=Number(percent);
- return Number.isFinite(units)&&Number.isFinite(rate)?
-  Math.max(0,Math.ceil(units*(1+rate/100))):0;
-}
 async function post(clientSlug,path,body,signal){
  const response=await fetch(path,{method:"POST",credentials:"same-origin",signal,
   headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug},

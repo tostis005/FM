@@ -8,8 +8,7 @@ const upper=expr=>"upper(btrim(coalesce("+expr+",'')))";
 
 export function promotionSearchPatterns(search){
  const words=String(search||"").trim().split(/\s+/u).filter(Boolean);
- return words.map(word=>"%"+word.replace(/[\\%_]/g,"\\/**
- * Solo devolver artículos con CN identificable")+"%");
+ return words.map(word=>"%"+word.replace(/[\\%_]/g,character=>"\\"+character)+"%");
 }
 
 /**

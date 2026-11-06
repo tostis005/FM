@@ -108,7 +108,7 @@ export async function laboratoryIdsFromSnapshot(pool,ctx,pharmacies){
   SELECT DISTINCT lab_id::text AS lab_id
   FROM farmetrica.preparador_ultima_recepcion_cache
   WHERE cliente_slug=$1 AND pharmacy_ids && $2::int[]
-   AND NOT (blocked_pharmacy_ids && $2::int[])`,
+`,
   values:[ctx.client.slug,ids],query_timeout:6000});
  if(Date.now()-new Date(state[0].actualizado_en).getTime()>STALE_MS)
   void refreshLastReceiptSnapshot(pool,ctx).catch(()=>{});
@@ -139,10 +139,10 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
      WHERE cliente_slug=$1`,values:[ctx.client.slug],query_timeout:3000});
     if(state.rows.length){
      const response=await pool.query({text:`
-      SELECT lab_id::text AS lab_id,cn,nombre
+      SELECT lab_id::text AS lab_id,cn,nombre,(blocked_pharmacy_ids && $2::int[]) AS excluded
       FROM farmetrica.preparador_ultima_recepcion_cache
       WHERE cliente_slug=$1 AND pharmacy_ids && $2::int[]
-       AND NOT (blocked_pharmacy_ids && $2::int[])
+
       ORDER BY lab_id,cn`,values:[ctx.client.slug,ids],query_timeout:6000});
      rows=response.rows;
      if(Date.now()-new Date(state.rows[0].actualizado_en).getTime()>STALE_MS)
@@ -167,7 +167,7 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
     byLab.get(id).push({referencia:cn,cn,nombre:r.nombre||cn,
      tipo:Number(cn.slice(0,6))>=400000?"medicacion":"parafarmacia",
      inMaster:false,inReceipts:true,inPurchases:true,inSales:false,
-     generic:false,provisional:false,pharmacyIds:null});
+     generic:false,provisional:false,pharmacyIds:null,excluded:r.excluded===true});
    }
    console.info("PREPARADOR_ULTIMA_RECEPCION",JSON.stringify({
     status:"ok",source,elapsedMs:Date.now()-started,

@@ -32,6 +32,12 @@ function cleanDocument(raw,id,pharmacyIds) {
     raw.cns.some(v=>typeof v!=="string"||v.length<1||v.length>120) ||
     !raw.targets || typeof raw.targets!=="object" || Array.isArray(raw.targets))
     return null;
+  // La duración es independiente del tipo comercial (2x1, descuento, etc.).
+  // Los documentos antiguos sin durationMode continúan siendo compatibles.
+  if(raw.durationMode!==undefined&&
+     !["dates","stock"].includes(raw.durationMode))return null;
+  if(raw.durationMode==="stock"&&raw.end)return null;
+  if(raw.durationMode==="dates"&&raw.start&&!raw.end)return null;
   const ids=Object.keys(raw.targets);
   if(ids.length>500||ids.some(key=>!pharmacyIds.has(String(key))||
     (raw.targets[key]!=="" && (!Number.isFinite(Number(raw.targets[key])) || Number(raw.targets[key])<0))))

@@ -55,7 +55,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   // La búsqueda de campañas no debe depender del Nomenclátor.
   assert.equal(sql.officialCatalog,undefined);
   assert.ok(!sql.direct.includes("nomenclator_presentaciones"));
-   assert.match(sql.direct,/LIKE \$7::text/);
+   assert.match(sql.direct,/LIKE \$6::text/);
    assert.match(sql.byCodes,/left\(btrim\(a.codigo_nacional::text\),6\)/);
   const product=cnHits.find(row=>row.source_id==="SIM-ART-123");
   assert.ok(product);

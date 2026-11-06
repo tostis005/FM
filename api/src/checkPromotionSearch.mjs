@@ -32,11 +32,11 @@ try{
  if(!samples.length)throw Error("El maestro no contiene artículos consultables");
  const id=Number(samples[0].id),term=samples[0].name.slice(0,90);
  const {rows:products}=await pool.query({
-  text:sql.direct,values:[slug,[id],promotionSearchPatterns(term),[],240,0,"%"+term.toLowerCase().split(/\\s+/u).sort((a,b)=>b.length-a.length)[0]+"%"],query_timeout:7000});
+  text:sql.direct,values:[slug,[id],promotionSearchPatterns(term),[],240,0,"%"+term.toLowerCase().split(/\s+/u).sort((a,b)=>b.length-a.length)[0]+"%"],query_timeout:7000});
  if(!products.length)throw Error("El buscador no devuelve un artículo que existe en el maestro");
  const reversed=term.trim().split(/\s+/u).slice(0,3).reverse().join(" ");
  const unordered=(await pool.query({
-  text:sql.direct,values:[slug,[id],promotionSearchPatterns(reversed),[],10,0,"%"+reversed.toLowerCase().split(/\\s+/u).sort((a,b)=>b.length-a.length)[0]+"%"],
+  text:sql.direct,values:[slug,[id],promotionSearchPatterns(reversed),[],10,0,"%"+reversed.toLowerCase().split(/\s+/u).sort((a,b)=>b.length-a.length)[0]+"%"],
   query_timeout:7000
  })).rows;
  if(!unordered.length)throw Error("La búsqueda no reconoce palabras desordenadas");

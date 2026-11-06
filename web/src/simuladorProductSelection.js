@@ -17,16 +17,26 @@ export function selectablePromotionProducts(items){
  return {products,unavailableCount:unavailable.length};
 }
 
+export const UNKNOWN_PRODUCT_NAME="Nombre no disponible";
+export function promotionProductName(item){
+ const name=String(item?.description||"").trim();
+ return name&&name!=="CN introducido"?name:UNKNOWN_PRODUCT_NAME;
+}
+export function promotionProductLabel(item){
+ return String(item.cn)+" - "+promotionProductName(item);
+}
+
 export function mergePromotionSelection(current,items){
  const result=new Map((current||[]).map(item=>[item.cn,item]));
  for(const item of items||[]){
   if(!isValidPromotionCN(item.cn))continue;
   const existing=result.get(item.cn);
   const label=String(item.description||"").trim();
-  // Una ficha real nunca se sustituye por el texto genérico del pegado.
-  const real=label&&label!=="CN introducido";
-  result.set(item.cn,existing&&(!real||(existing.description&&existing.description!=="CN introducido"))?
-   existing:{...existing,...item,description:label||"CN introducido"});
+  // La ficha real prevalece siempre sobre un marcador temporal.
+  const real=label&&label!=="CN introducido"&&label!==UNKNOWN_PRODUCT_NAME;
+  const existingReal=existing&&promotionProductName(existing)!==UNKNOWN_PRODUCT_NAME;
+  result.set(item.cn,existingReal||existing&&!real?
+   existing:{...existing,...item,description:real?label:UNKNOWN_PRODUCT_NAME});
  }
  return [...result.values()];
 }

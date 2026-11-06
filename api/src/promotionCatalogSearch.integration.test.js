@@ -62,7 +62,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   assert.equal(promotionResultCN(product),"765432");
 
   const pastedParapharmacy=(await db.query(sql.byCodes,[
-   "ampedia",own,[],["168766"],240,0
+   "ampedia",own,["168766"],240,0
   ])).rows;
   const eucerin=pastedParapharmacy.find(row=>row.resolved_cn==="168766");
   assert.ok(eucerin,"El CN pegado debe resolver por origen_id de Farmatic");
@@ -73,7 +73,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   ])).rows;
   assert.ok(textResults.some(row=>row.resolved_cn==="168766"),
    "El buscador por palabras debe incluir referencias ERP sin CN rellenado");
-  const pasted=(await db.query(sql.byCodes,["ampedia",own,[],["194700"],240,0])).rows;
+  const pasted=(await db.query(sql.byCodes,["ampedia",own,["194700"],240,0])).rows;
   const sevenDigit=pasted.find(row=>row.source_id==="SIM-7-DIGIT-194700");
   assert.ok(sevenDigit,"El CN de seis dígitos debe localizar la ficha ERP con dígito de control");
   assert.equal(promotionResultCN(sevenDigit),"194700");

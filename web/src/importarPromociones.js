@@ -116,7 +116,7 @@ function createCampaign(laboratory,range,offer,start,end,description,cns,source,
     id:null,name:clean(range)+" · "+(typeof offer==="number" ? (offer>0&&offer<=1?Math.round(offer*100)+"% DTO":offer+"€ DTO") : clean(offer||"Promoción")),
     subtitle:clean(laboratory),laboratory:clean(laboratory),range:clean(range),
     description:clean(description||offer),originalOffer:clean(offer),
-    start,end,endRaw:!end?clean(endRaw):"",status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),cnDescriptions,
+    start,end,endRaw:!end?clean(endRaw):"",durationMode:end?"dates":"stock",status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),cnDescriptions,
     targets:{},sales:{},...classification,
     source:"Excel octubre 2026",sourceSheet:source,
   };
@@ -124,7 +124,7 @@ function createCampaign(laboratory,range,offer,start,end,description,cns,source,
   promo.id=makeId(promo.fingerprint);
   promo.importWarnings=[];
   if(!start)promo.importWarnings.push("Fecha de inicio no reconocida: revisar");
-   if(!end)promo.importWarnings.push("Sin fecha final interpretable: revisar vigencia a los 30 días");
+   // Sin fecha de fin: la duración de stock no requiere avisos periódicos.
   if(!promo.cns.length)promo.importWarnings.push("Sin CNs asociados: revisar antes de activar");
   if(promo.type==="sin_clasificar")promo.importWarnings.push("Tipo de promoción pendiente de clasificación");
   return promo;

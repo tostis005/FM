@@ -119,7 +119,7 @@ try{
  assert.equal(postCount,2);
  assert.equal(stored.length,3,"Reimportar el mismo Excel no debe duplicar campañas");
  assert.equal(stored[1].targets["1"],77,"La nueva importación no altera la campaña anterior");
- await page.getByRole("button",{name:"Mostrar todas"}).click();
+ await page.getByRole("button",{name:"Cerrar aviso de importación"}).click();
  await page.getByRole("button",{name:"Ver todos los meses"}).click();
  // Selección de varias filas, no hay que eliminar una por una.
  await page.getByRole("checkbox",{name:"Seleccionar Promoción antigua"}).check();

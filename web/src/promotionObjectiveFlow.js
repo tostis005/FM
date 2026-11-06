@@ -35,7 +35,7 @@ export function mergeObjectivesIntoPromotion(p,objectives,now=new Date(),timeZon
  // Sólo las campañas de Excel en borrador pasan automáticamente a activas
  // al añadir objetivos válidos. No cambiar un cierre manual ni las fechas.
  if(/^Excel(?:\s|:|$)/i.test(String(p.source||""))&&p.status==="Borrador"&&
-   Object.values(targets).every(v=>v>0)){
+   updated.type!=="sin_clasificar"&&Object.values(targets).every(v=>v>0)){
   updated.statusSource="automatic";
   updated.status=effectivePromotionStatus(updated,now,timeZone);
  }

@@ -958,3 +958,16 @@ html,body{overflow-x:clip}
  .fm-import-result-actions{width:100%;justify-content:flex-end}
  .fm-import-result-actions .btn{flex:1;white-space:normal;min-height:40px}
 }
+
+
+/* Circuito de objetivos: acciones por borrador y acceso desde la ficha. */
+.fm-promotion-row-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.fm-promotion-row-actions .btn{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.fm-promotion-objectives-link{display:flex;flex-direction:column;gap:8px;margin:16px 0}
+.fm-promotion-objectives-link .btn{align-self:flex-start;max-width:100%;white-space:normal;text-align:left}
+.fm-promotion-objectives-link small{font-size:12px;line-height:1.5;color:#638071}
+@media(max-width:720px){
+ .fm-promotion-row-actions{flex-direction:column;align-items:stretch}
+ .fm-promotion-row-actions .btn{justify-content:center}
+ .fm-promotion-objectives-link .btn{align-self:stretch}
+}

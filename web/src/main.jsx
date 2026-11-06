@@ -38,6 +38,7 @@ const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
+import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
@@ -252,6 +253,8 @@ function App(){
  const [from,setFrom]=useState(()=>promotionMonthRange(currentPromotionMonth())?.from||"");
  const [to,setTo]=useState(()=>promotionMonthRange(currentPromotionMonth())?.to||"");
  const [editingPromo,setEditingPromo]=useState(null);
+ const [objectiveCampaign,setObjectiveCampaign]=useState(null);
+ const [objectiveSession,setObjectiveSession]=useState(0);
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
@@ -446,7 +449,7 @@ function App(){
                {status:reportStatus,month:reportMonth,year:reportYear})))continue;
            const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
             if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
-           if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
+           if((p.cns||[]).length>1000)throw new Error("La campaña "+p.name+" tiene más de 1.000 CN. Revisa su catálogo.");
            if((p.cns||[]).length)for(const range of splitPromotionSalesPeriod(p.start,reportEnd)){
              segments.push({...p,...range,id:"S"+segments.length,parentId:p.id});
            }
@@ -617,7 +620,8 @@ function App(){
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
- function nav(id,promoId){
+ function nav(id,promoId,{preserveObjectiveDraft=false}={}){
+  if(id==="promociones-objetivos"&&!preserveObjectiveDraft)setObjectiveCampaign(null);
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
@@ -691,6 +695,50 @@ function App(){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
  function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function openObjectivePlanner(p){
+  if(!canManagePromotions||p?.managerCanEdit===false)
+   return setToast("No tienes permiso para asignar objetivos a esta promoción.");
+  if(!canOpenSection("promociones-objetivos"))
+   return setToast("No tienes acceso a Nueva campaña para asignar objetivos.");
+  const draft={...p,cns:p?.cns||[],targets:{...(p?.targets||{})},
+   cnDescriptions:{...(p?.cnDescriptions||{})}};
+  setObjectiveCampaign(draft);setObjectiveSession(n=>n+1);
+  setEditingPromo(null);
+  nav("promociones-objetivos",undefined,{preserveObjectiveDraft:true});
+ }
+ async function saveObjectivesFromPlanner(objectives){
+  if(!canManagePromotions||promotionStoreStatus!=="connected")
+   throw Error("No se pueden guardar objetivos sin una conexión activa");
+  const stored=data.promos.find(p=>p.id===objectiveCampaign?.id);
+  if(!stored||stored.managerCanEdit===false)
+   throw Error("La promoción ha desaparecido o no está autorizada. Vuelve al listado.");
+  const combined={...stored,...objectiveCampaign,managerCanEdit:stored.managerCanEdit};
+  const updated=mergeObjectivesIntoPromotion(combined,objectives,new Date(),reportTimeZone);
+  const response=await saveStoredPromotion(updated);
+  if(!response.saved)throw Error("El servidor no confirmó el guardado");
+  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
+  setStatusFilter("Todos");setImportSourceFilter("");
+  setObjectiveCampaign(null);
+  nav("promociones");
+  startPromo(updated);
+  setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
+ }
+ function continuePlannerToDrawer(objectives){
+  const base=objectiveCampaign||EMPTY_PROMO;
+  const draft={...EMPTY_PROMO,...base,...objectives,id:null,
+   name:base.name||"",start:base.start||"",end:base.end||"",status:"Borrador",
+   durationMode:objectiveCampaign?.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
+   simulatorDraft:true};
+  setObjectiveCampaign(null);
+  nav("promociones");
+  startPromo(draft);
+ }
+ function returnFromPlanner(){
+  const draft=objectiveCampaign;
+  setObjectiveCampaign(null);
+  nav("promociones");
+  if(draft)startPromo(draft);
+ }
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
@@ -857,7 +905,9 @@ function App(){
     // Las campañas importadas sin objetivos son borradores; el filtro Activa
     // y la selección de farmacias solían ocultarlas aunque el servidor las
     // hubiera guardado. Mostrar las del fichero sin depender de esos filtros.
-    setSearch("");setStatusFilter("Todos");setFrom("");setTo("");
+    setSearch("");setStatusFilter("Todos");
+    const currentMonth=promotionMonthRange(currentPromotionMonth(new Date(),timeZone));
+    if(currentMonth){setFrom(currentMonth.from);setTo(currentMonth.to);}
     setImportSourceFilter(source);
     setImportFeedback({kind:"success",filename:file.name,...summary,
       message:summary.imported?
@@ -1200,6 +1250,15 @@ function App(){
      onRowClick={canManagePromotions?p=>startPromo(promos.find(original=>original.id===p.id)||p):undefined} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
+      {key:"action",label:"Acciones",sortable:false,searchable:false,value:()=>"",render:p=>canManagePromotions?
+       <div className="fm-promotion-row-actions">
+        <button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();startPromo(data.promos.find(item=>item.id===p.id)||p);}}>
+         <Pencil size={14}/> Editar</button>
+        {objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();openObjectivePlanner(data.promos.find(item=>item.id===p.id)||p);}}>
+         <Target size={14}/> Asignar objetivos</button>}
+       </div>:null},
       {key:"type",label:"Tipo",filterMode:"multi",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
       {key:"status",label:"Estado",filterMode:"multi",value:p=>p.status,render:p=><Pill status={p.status}/>},
       {key:"start",label:"Periodo",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{p.end?dateES(p.end):promotionDurationMode(p)==="stock"?"Hasta agotar stock":"Sin fecha de fin"}</small></div>},
@@ -1325,10 +1384,11 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
+    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
-      onCreatePromotion={draft=>startPromo({...EMPTY_PROMO,...draft,id:null,
-       name:"",start:"",end:"",status:"Borrador",durationMode:draft.objectiveBaseline==="stock"?"stock":"dates",simulatorDraft:true})}/>}
+      editingPromotion={objectiveCampaign} onCreatePromotion={continuePlannerToDrawer}
+      onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
+
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
@@ -1444,6 +1504,13 @@ function App(){
      label={promoForm.type==="segunda_porcentaje"?"Descuento aplicado a la segunda unidad (%)":"Porcentaje de descuento (%)"}
      hint={promoForm.type==="segunda_porcentaje"?"Ej.: 50 = 50 % de descuento. Por cada pareja del ticket, el descuento se aplica a la unidad de menor precio.":null}>
      <input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
+   {canManagePromotions&&<div className="fm-promotion-objectives-link">
+    <button type="button" className="btn btn-secondary" disabled={savingPromo}
+     onClick={()=>openObjectivePlanner({...promoForm,cns:parseCNs(cnText)})}>
+     <Target size={16}/> Asignar objetivos con ventas históricas y stock
+    </button>
+    <small>Conservamos los datos y los CN. Al guardar los objetivos volverás a este formulario.</small>
+   </div>}
    <div className="form-divider"/><div className="field-heading"><div><strong>CN</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
    {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos incluidos</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>

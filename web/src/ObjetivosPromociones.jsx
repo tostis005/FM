@@ -221,12 +221,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
       <button className="btn btn-secondary btn-sm" type="button" onClick={()=>append(results)}>
        <Check size={14}/> Seleccionar mostrados</button></div>
      <div className="fm-objectives-result-scroll">
-      {results.map(item=><label key={item.cn} className="fm-objectives-product">
+      {results.map(item=><label key={item.cn}
+       className={"fm-objectives-product"+(selected.some(x=>x.cn===item.cn)?" is-selected":"")}>
        <input type="checkbox" checked={selected.some(x=>x.cn===item.cn)}
         onChange={e=>e.target.checked?append([item]):setSelected(v=>v.filter(x=>x.cn!==item.cn))}/>
        <code>{item.cn}</code>
-       <span><strong>{item.description}</strong>{item.supplier&&<small>{item.supplier}</small>}
-        {item.referenceType==="farmatic"&&<small title="Identificador de artículo procedente de Farmatic">Referencia Farmatic</small>}</span>
+       <span><strong>{item.description}</strong></span>
       </label>)}
      </div>
      {hasMore&&<div className="fm-objectives-more">

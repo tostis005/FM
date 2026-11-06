@@ -19,6 +19,9 @@ function create({role="administrador",document={id:"P1",name:"Oferta",cns:["1234
     const old=records.get(params[0]);if(old)records.delete(params[0]);
     return {rows:old?[{documento:old}]:[]};
    }
+   if(sql.includes("INSERT INTO")&&sql.includes("fm_promociones")){
+    records.set(params[0],JSON.parse(params[1]));return {rows:[]};
+   }
    if(sql.includes("fm_promocion_revisiones")){
     revisions.push(params);return {rows:[]};
    }
@@ -41,7 +44,17 @@ function create({role="administrador",document={id:"P1",name:"Oferta",cns:["1234
   if(error)throw error;
   return {status,body};
  }
- return {call,queries,revisions,records,release:()=>released,rolledBack:()=>rollback};
+ async function save(promotion,override={}){
+  const req={params:{id:promotion.id},body:{promotion},
+   context:{role,client:{schema:"ampedia"},pharmacies:[{id:"1"}],allowedPharmacyIds:[1]},
+   user:{email:"admin@example.com"},...override};
+  let status=200,body,error;
+  const res={status(v){status=v;return res;},json(v){body=v;return res;}};
+  await routes.get("PUT /api/tenant/promociones/:id")(req,res,e=>{error=e;});
+  if(error)throw error;
+  return {status,body};
+ }
+ return {call,save,queries,revisions,records,release:()=>released,rolledBack:()=>rollback};
 }
 test("administrador elimina en la base del cliente y conserva revisión de auditoría",async()=>{
  const ctx=create();
@@ -89,4 +102,26 @@ test("gestor elimina promociones de sus farmacias, sin permisos globales",async(
  assert.equal(response.status,403);
  assert.equal(denied.records.size,1);
  assert.equal(denied.rolledBack(),true);
+});
+
+test("guarda modalidad de stock sin fecha final y objetivos ajustados",async()=>{
+ const ctx=create({document:null});
+ const campaign={id:"PStock",name:"Hasta agotar existencias",cns:["123456"],
+  targets:{"1":8},durationMode:"stock",start:"2026-11-06",end:""};
+ const saved=await ctx.save(campaign);
+ assert.equal(saved.status,200);
+ assert.equal(ctx.records.get("PStock").durationMode,"stock");
+ assert.equal(ctx.records.get("PStock").end,"");
+ assert.deepEqual(ctx.records.get("PStock").targets,{"1":8});
+});
+
+test("rechaza incoherencias entre modalidad por fechas y stock",async()=>{
+ const ctx=create({document:null});
+ const base={id:"P1",name:"Promoción",cns:["123456"],
+  targets:{"1":11},start:"2026-11-06"};
+ assert.equal((await ctx.save({...base,durationMode:"stock",end:"2026-11-30"})).status,400);
+ assert.equal((await ctx.save({...base,durationMode:"dates",end:""})).status,400);
+ assert.equal(ctx.records.size,0);
+ assert.equal((await ctx.save({...base,durationMode:"dates",end:"2026-11-30"})).status,200);
+ assert.equal(ctx.records.get("P1").targets["1"],11);
 });

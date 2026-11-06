@@ -29,7 +29,7 @@ export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madri
   return "Finalizada";
  const automaticallyManaged=p.statusSource==="automatic"||
   (!p.statusSource&&String(p.source||"").startsWith("Excel"))||
-  (!p.end&&["Activa","Pendiente de revisión"].includes(p.status));
+  ["Activa","Pendiente de revisión"].includes(p.status);
  const today=civilToday(now,timeZone);
  // Las antiguas campañas pendientes por el aviso de 30 días dejan de
  // solicitar renovaciones. Con objetivos, vuelven a estar activas.

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
 
-function fixture({directRows,officialRows,officialCatalogRows}={}){
+function fixture({directRows,officialRows,officialCatalogRows,matchedSupplierRows}={}){
  const routes=new Map(),queries=[];
  const pool={async query(input,values=[]){
   const sql=typeof input==="string"?input:input.text;
@@ -22,7 +22,7 @@ function fixture({directRows,officialRows,officialCatalogRows}={}){
   if(sql.includes("WITH allowed AS MATERIALIZED"))
    return {rows:[{pharmacy_code:"ABA",supplier_code:"PR1",supplier_name:"Proveedor Ejemplo"}]};
   if(sql.includes("jsonb_to_recordset"))
-   return {rows:[{pharmacy_id:"1",source_id:"ERP-123",description:"Artículo de prueba",
+   return {rows:matchedSupplierRows??[{pharmacy_id:"1",source_id:"ERP-123",description:"Artículo de prueba",
     national_code:"123456",normalized_code:null,laboratory:null,supplier_ref:"PR1",
     supplier_name:"Proveedor Ejemplo"}]};
   if(sql.includes("FROM \"ampedia\".articulos a JOIN farmetrica.farmacias"))
@@ -152,7 +152,7 @@ test("rechaza paginaciones fuera de rango sin acceder al catálogo",async()=>{
 });
 
 test("reúne fichas AEMPS oficiales aunque falten en el maestro ERP",async()=>{
- const api=fixture({directRows:[],officialCatalogRows:[{
+ const api=fixture({directRows:[],matchedSupplierRows:[],officialCatalogRows:[{
   resolved_cn:"793421",national_code:"793421",description:"Comprimidos multipalabra Solar",
   supplier_name:"Laboratorio Cosmo",source_id:null,pharmacy_id:null
  }]});
@@ -169,7 +169,7 @@ test("reúne fichas AEMPS oficiales aunque falten en el maestro ERP",async()=>{
 });
 test("no se permiten búsquedas artificialmente largas",async()=>{
  const api=fixture();
- const search=Array.from({length:13},(_,i)=>"palabra"+i).join(" ");
+ const search=Array.from({length:13},(_,i)=>"a"+i).join(" ");
  const out=await api.call("/api/ventas/objetivos/buscar",{search,cns:[]},[1]);
  assert.equal(out.status,400);
  assert.equal(api.queries.length,0);

@@ -1,6 +1,5 @@
-// Estados derivados sin cron: se calculan con el día civil de la farmacia.
-// Una promoción sin fin no se da por terminada al cumplir 30 días: se pide revisión.
-export const PROMOTION_REVIEW_DAYS=30;
+// Vigencia por fechas o hasta agotar existencias, sin renovaciones periódicas.
+// Las campañas de stock permanecen abiertas hasta que se cierran expresamente.
 const DAY=/^\d{4}-\d{2}-\d{2}$/;
 export function civilToday(now=new Date(),timeZone="Europe/Madrid"){
  const parts=Object.fromEntries(new Intl.DateTimeFormat("en-GB",{
@@ -15,18 +14,15 @@ export function addCivilDays(iso,days){
  d.setUTCDate(d.getUTCDate()+days);
  return d.toISOString().slice(0,10);
 }
+export function promotionDurationMode(p){
+ if(p?.durationMode==="stock")return "stock";
+ if(p?.durationMode==="dates")return "dates";
+ // Compatibilidad con campañas anteriores sin fecha de fin.
+ return p?.end?"dates":"stock";
+}
 function validTargets(p){
  return Object.values(p.targets||{}).some(v=>v!==""&&v!==null&&v!==undefined&&
   Number.isSafeInteger(Number(v))&&Number(v)>0);
-}
-export function lastPromotionConfirmation(p){
- const recorded=[p.start,p.importedOn||p.importedAt?.slice(0,10),p.lastConfirmedOn||p.lastConfirmedAt?.slice(0,10)]
-  .filter(value=>DAY.test(value||""));
- return recorded.sort().at(-1)||"";
-}
-export function promotionReviewDue(p){
- const anchor=lastPromotionConfirmation(p);
- return anchor?addCivilDays(anchor,PROMOTION_REVIEW_DAYS):"";
 }
 export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madrid"){
  if(p.closedAt||p.closedOn||p.status==="Finalizada"&&p.statusSource!=="automatic")
@@ -34,26 +30,25 @@ export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madri
  const automaticallyManaged=p.statusSource==="automatic"||
   (!p.statusSource&&String(p.source||"").startsWith("Excel"))||
   (!p.end&&["Activa","Pendiente de revisión"].includes(p.status));
- if(!automaticallyManaged)return p.status||"Borrador";
- if(!DAY.test(p.start||""))return "Borrador";
  const today=civilToday(now,timeZone);
- if(p.end){
+ // Las antiguas campañas pendientes por el aviso de 30 días dejan de
+ // solicitar renovaciones. Con objetivos, vuelven a estar activas.
+ if(!automaticallyManaged&&p.status!=="Pendiente de revisión")
+  return p.status||"Borrador";
+ if(!DAY.test(p.start||"")||p.start>today)return "Borrador";
+ if(promotionDurationMode(p)==="dates"&&p.end){
   if(!DAY.test(p.end)||p.start>p.end||!validTargets(p))return "Borrador";
-  return p.end<today?"Finalizada":p.start>today?"Borrador":"Activa";
+  return p.end<today?"Finalizada":"Activa";
  }
- if(p.start>today)return "Borrador";
- const due=promotionReviewDue(p);
- if(due&&today>=due)return "Pendiente de revisión";
+ if(promotionDurationMode(p)==="dates"&&!p.end)return "Borrador";
  return validTargets(p)?"Activa":"Borrador";
 }
-// Límite técnico para consultas SQL. No se escribe en el campo fin original.
+// Una campaña de stock se consulta hasta hoy (o hasta su cierre real),
+// nunca se inventa una fecha de fin ni se recorta cada 30 días.
 export function promotionReportingEnd(p,now=new Date(),timeZone="Europe/Madrid"){
  if(!DAY.test(p.start||""))return "";
  const today=civilToday(now,timeZone);
  if(DAY.test(p.closedOn||""))return p.closedOn<today?p.closedOn:today;
- if(DAY.test(p.end||""))return p.end;
- const due=promotionReviewDue(p);
- if(due&&today>=due&&effectivePromotionStatus(p,now,timeZone)==="Pendiente de revisión")
-  return addCivilDays(due,-1);
+ if(promotionDurationMode(p)==="dates"&&DAY.test(p.end||""))return p.end;
  return today;
 }

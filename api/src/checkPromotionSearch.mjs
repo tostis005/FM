@@ -32,11 +32,11 @@ try{
  if(!samples.length)throw Error("El maestro no contiene artículos consultables");
  const id=Number(samples[0].id),term=samples[0].name.slice(0,90);
  const {rows:products}=await pool.query({
-  text:sql.direct,values:[slug,[id],promotionSearchPatterns(term),[],240,0],query_timeout:7000});
+  text:sql.direct,values:[slug,[id],promotionSearchPatterns(term),[],240,0,"%"+term.toLowerCase().split(/\\s+/u).sort((a,b)=>b.length-a.length)[0]+"%"],query_timeout:7000});
  if(!products.length)throw Error("El buscador no devuelve un artículo que existe en el maestro");
  const reversed=term.trim().split(/\s+/u).slice(0,3).reverse().join(" ");
  const unordered=(await pool.query({
-  text:sql.direct,values:[slug,[id],promotionSearchPatterns(reversed),[],10,0],
+  text:sql.direct,values:[slug,[id],promotionSearchPatterns(reversed),[],10,0,"%"+reversed.toLowerCase().split(/\\s+/u).sort((a,b)=>b.length-a.length)[0]+"%"],
   query_timeout:7000
  })).rows;
  if(!unordered.length)throw Error("La búsqueda no reconoce palabras desordenadas");
@@ -77,14 +77,14 @@ try{
  if(example.length){
   const name=example[0].name;
   const {rows:lookedUp}=await pool.query({
-   text:sql.direct,values:[slug,[Number(example[0].id)],[],["168766"],25,0],
+   text:sql.byCodes,values:[slug,[Number(example[0].id)],[],["168766"],25,0],
    query_timeout:7000
   });
   if(!lookedUp.some(row=>row.resolved_cn==="168766"&&row.description===name))
    throw Error("Nueva campaña no recupera el nombre ERP del CN 168766");
   const {rows:searched}=await pool.query({
    text:sql.direct,values:[slug,[Number(example[0].id)],
-    promotionSearchPatterns("Atopi Eucerin"),[],181,0],query_timeout:7000
+    promotionSearchPatterns("Atopi Eucerin"),[],181,0,"%eucerin%"],query_timeout:7000
   });
   if(!searched.some(row=>row.resolved_cn==="168766"))
    throw Error("Búsqueda por nombre Farmatic no encuentra el CN 168766");
@@ -114,12 +114,12 @@ try{
   const expected=Number(counts[0]?.n||0);
   if(expected<15)continue;
   const first=(await pool.query({text:sql.direct,
-   values:[slug,scoped,promotionSearchPatterns(term),[],181,0],query_timeout:8000})).rows;
+   values:[slug,scoped,promotionSearchPatterns(term),[],181,0,"%"+term.toLowerCase()+"%"],query_timeout:8000})).rows;
   if(first.length<Math.min(180,expected))
    throw Error("El buscador está ocultando CN en una consulta amplia");
   if(expected>180){
    const second=(await pool.query({text:sql.direct,
-    values:[slug,scoped,promotionSearchPatterns(term),[],181,180],query_timeout:8000})).rows;
+    values:[slug,scoped,promotionSearchPatterns(term),[],181,180,"%"+term.toLowerCase()+"%"],query_timeout:8000})).rows;
    const found=new Set([...first.slice(0,180),...second].map(row=>row.resolved_cn));
    if(found.size<Math.min(360,expected))
     throw Error("La paginación pierde CN reales del catálogo");

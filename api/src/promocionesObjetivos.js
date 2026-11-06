@@ -48,9 +48,13 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const supplierNames=search.length>=2&&sql.suppliers?
   pool.query({text:sql.suppliers,values:[slug,ids,patterns,400],query_timeout:4000}):
   Promise.resolve({rows:[]});
- const [a,b]=await Promise.allSettled([direct,supplierNames]);
+ const official=patterns.length?
+  pool.query({text:sql.officialCatalog,values:[patterns,pageLimit,offset],
+   query_timeout:6500}):Promise.resolve({rows:[]});
+ const [a,b,o]=await Promise.allSettled([direct,supplierNames,official]);
  const directRows=a.status==="fulfilled"?a.value.rows||[]:[];
  const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
+ const officialRows=o.status==="fulfilled"?o.value.rows||[]:[];
  let supplierResult={rows:[]},supplierError=null;
  if(supplierCodes.length&&sql.bySupplier){
   try{
@@ -61,13 +65,13 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
    });
   }catch(error){supplierError=error;}
  }
- const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&!supplierError;
+ const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&o.status==="fulfilled"&&!supplierError;
  const supplierRows=supplierResult.rows||[];
- if(!complete&&!directRows.length&&!supplierRows.length)
+ if(!complete&&!directRows.length&&!supplierRows.length&&!officialRows.length)
   throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
  // Ambas búsquedas devuelven CN únicos. El límite está aplicado después de
  // DISTINCT, nunca a los artículos ERP sin CN o duplicados entre farmacias.
- const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize)];
+ const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize),...officialRows.slice(0,pageSize)];
  const products=mergePromotionCatalogRows(rows);
  if(!search&&cns.length){
   const selected=new Set(cns);
@@ -87,7 +91,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
   }
   return {products:inCatalog,partial:!complete,hasMore:false};
  }
- const hasMore=directRows.length>pageSize||supplierRows.length>pageSize;
+ const hasMore=directRows.length>pageSize||supplierRows.length>pageSize||officialRows.length>pageSize;
  return {products,partial:!complete||supplierCodes.length>=400,hasMore,pageSize};
 }
 

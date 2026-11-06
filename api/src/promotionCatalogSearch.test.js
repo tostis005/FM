@@ -47,6 +47,7 @@ test("si no existe el maestro de proveedores todavía puede buscar artículos",(
  assert.equal(sql.supplierReady,false);
  assert.equal(sql.suppliers,null);
  assert.equal(sql.bySupplier,null);
+ assert.equal(sql.byReceiptSupplier,null);
  assert.match(sql.direct,/a\.nombre::text/);
  assert.doesNotMatch(sql.direct,/a\.cn_normalizado/);
 });
@@ -92,4 +93,23 @@ test("búsqueda de varias palabras sin orden, con caracteres SQL literales",()=>
  assert.match(sql.suppliers,/sp.nombre::text ILIKE ANY/);
  assert.match(sql.suppliers,/pm.nombre::text ILIKE ANY/);
  assert.match(sql.bySupplier,/matched.supplier_name/);
+ assert.match(sql.byReceiptSupplier,/fm_recepciones_analitica r/);
+ assert.match(sql.byReceiptSupplier,/r\.proveedor_id::text/);
+ assert.match(sql.byReceiptSupplier,/r\.articulo_id::text/);
+ assert.match(sql.byReceiptSupplier,/matched\.pharmacy_code/);
+});
+
+test("Farmatic de seis dígitos sin CN oficial se puede buscar y etiquetar como no verificado",()=>{
+ const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
+ assert.match(sql.direct,/a\.origen_id::text/);
+ assert.match(sql.direct,/reference_type/);
+ assert.match(sql.direct,/OR \(btrim\(coalesce\(a\.origen_id::text/);
+ const result=mergePromotionCatalogRows([{
+  pharmacy_id:"1",source_id:"168766",resolved_cn:"168766",
+  reference_type:"farmatic",description:"Eucerin Atopi Control 250 ml"
+ }]);
+ assert.deepEqual(result,[{
+  cn:"168766",description:"Eucerin Atopi Control 250 ml",
+  supplier:null,sourceId:"168766",referenceType:"farmatic"
+ }]);
 });

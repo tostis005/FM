@@ -29,22 +29,32 @@ export function promotionCatalogSearchSQL(schema,columns){
  const normalized=has(columns,"articulos","cn_normalizado")?
   "btrim(coalesce(a.cn_normalizado::text,''))":"''::text";
  const isCode=value=>value+" ~ '^[0-9]{6,7}$'";
+ const origin="btrim(coalesce(a.origen_id::text,''))";
+ const isOriginCode=origin+" ~ '^[0-9]{6}$'";
  const official="official.cn";
  const code="CASE WHEN "+isCode(raw)+" THEN left("+raw+",6) "+
   "WHEN "+isCode(normalized)+" THEN left("+normalized+",6) "+
-  "WHEN "+official+" IS NOT NULL THEN "+official+"::text ELSE NULL::text END";
- const hasCN="("+isCode(raw)+" OR "+isCode(normalized)+" OR "+official+" IS NOT NULL)";
+  "WHEN "+official+" IS NOT NULL THEN "+official+"::text "+
+  "WHEN "+isOriginCode+" THEN "+origin+" ELSE NULL::text END";
+ const hasCN="("+isCode(raw)+" OR "+isCode(normalized)+" OR "+official+
+  " IS NOT NULL OR "+isOriginCode+")";
+ const referenceType="CASE WHEN "+isCode(raw)+" OR "+isCode(normalized)+
+  " OR "+official+" IS NOT NULL THEN 'cn' "+
+  "WHEN "+isOriginCode+" THEN 'farmatic' ELSE NULL END";
  const lab=has(columns,"articulos","laboratorio")?col("a","laboratorio"):"NULL::text";
  const refs=["proveedor_habitual_id","proveedor_id","proveedor_codigo","proveedor","laboratorio_id"]
   .filter(name=>has(columns,"articulos",name));
  const primary=refs.length?col("a",refs[0]):"NULL::text";
- const refCondition=refs.map(ref=>upper(col("a",ref))+"=matched.supplier_code").join(" OR ");
+ const supplierCode=expr=>"CASE WHEN btrim(coalesce("+expr+",'')) ~ '^[0-9]+$' "+
+  "THEN coalesce(nullif(ltrim(btrim(coalesce("+expr+",'')),'0'),''),'0') "+
+  "ELSE "+upper(expr)+" END";
+ const refCondition=refs.map(ref=>supplierCode(col("a",ref))+"=matched.supplier_code").join(" OR ");
  const fields=(supplier="NULL::text")=>[
   "f.id::text AS pharmacy_id",col("a","origen_id")+" AS source_id",
   col("a","nombre")+" AS description",col("a","codigo_nacional")+" AS national_code",
   normalized+" AS normalized_code",lab+" AS laboratory",
   primary+" AS supplier_ref",supplier+" AS supplier_name",
-  code+" AS resolved_cn"
+  code+" AS resolved_cn",referenceType+" AS reference_type"
  ].join(", ");
  const scope="JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
   "AND "+upper("a.farmacia_codigo::text")+"="+pharmacyDataCodeSQL("f")+" "+
@@ -75,7 +85,8 @@ export function promotionCatalogSearchSQL(schema,columns){
   (has(columns,"articulos","cn_normalizado")?
    "OR "+normalized+"=ANY($4::text[]) "+
    "OR ("+isCode(normalized)+" AND left("+normalized+",6)=ANY($4::text[])) ":"")+
-  "OR (official.cn IS NOT NULL AND official.cn=ANY($4::text[])))","$5","$6");
+  "OR (official.cn IS NOT NULL AND official.cn=ANY($4::text[])) "+
+  "OR ("+isOriginCode+" AND "+origin+"=ANY($4::text[])))","$5","$6");
  // Fuente complementaria: la ficha AEMPS puede existir aunque la farmacia
  // no la tenga en su maestro. Ofrecer el CN con nombre oficial sin inventar
  // ninguna relación de stock o venta para ese producto.
@@ -95,14 +106,14 @@ export function promotionCatalogSearchSQL(schema,columns){
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+
   pharmacyDataCodeSQL("f")+" AS code FROM farmetrica.farmacias f "+
   "WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])) ";
- const sources="SELECT p.code AS pharmacy_code,"+upper("sp.origen_id::text")+
+ const sources="SELECT p.code AS pharmacy_code,"+supplierCode("sp.origen_id::text")+
   " AS supplier_code,nullif(btrim(sp.nombre::text),'') AS supplier_name "+
   "FROM "+p+" sp JOIN allowed p ON "+upper("sp.farmacia_codigo::text")+"=p.code "+
   "WHERE sp.nombre::text ILIKE ANY($3::text[])";
- const master="SELECT p.code AS pharmacy_code,"+upper("sp.origen_id::text")+
+ const master="SELECT p.code AS pharmacy_code,"+supplierCode("sp.origen_id::text")+
   " AS supplier_code,nullif(btrim(pm.nombre::text),'') AS supplier_name "+
   "FROM farmetrica.proveedores_maestro pm JOIN "+p+" sp ON "+
-  upper("sp.origen_id::text")+"="+upper("pm.codigo_origen::text")+
+  supplierCode("sp.origen_id::text")+"="+supplierCode("pm.codigo_origen::text")+
   " JOIN allowed p ON "+upper("sp.farmacia_codigo::text")+"=p.code "+
   "WHERE pm.cliente_slug=$1 AND pm.nombre::text ILIKE ANY($3::text[])";
  const suppliers=supplierReady?
@@ -117,7 +128,21 @@ export function promotionCatalogSearchSQL(schema,columns){
   "AND ("+refCondition+") "+scope+officialJoin+
   "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const bySupplier=supplierRows?page(supplierRows,"$4","$5"):null;
- return {direct,suppliers,bySupplier,officialCatalog,supplierReady};
+ // Farmatic no siempre sincroniza proveedor_habitual_id. Extraer también
+ // los artículos recibidos de ese proveedor, vinculando siempre por farmacia.
+ const receiptRows=supplierReady?
+  "SELECT "+fields("matched.supplier_name")+" FROM "+a+" a "+
+  "JOIN jsonb_to_recordset($3::jsonb) AS matched("+
+   "pharmacy_code text,supplier_code text,supplier_name text) "+
+  "ON "+upper("a.farmacia_codigo::text")+"=matched.pharmacy_code "+
+  "JOIN "+quote(schema)+".fm_recepciones_analitica r ON "+
+   upper("r.farmacia_codigo::text")+"=matched.pharmacy_code "+
+  "AND btrim(r.articulo_id::text)=btrim(a.origen_id::text) "+
+  "AND "+supplierCode("r.proveedor_id::text")+"=matched.supplier_code "+
+  scope+officialJoin+
+  "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
+ const byReceiptSupplier=receiptRows?page(receiptRows,"$4","$5"):null;
+ return {direct,suppliers,bySupplier,byReceiptSupplier,officialCatalog,supplierReady};
 }
 
 export function promotionResultCN(row,verifiedOrigins=new Set()){
@@ -143,7 +168,8 @@ export function mergePromotionCatalogRows(rows,verifiedOrigins=new Set(),max=200
    if(!current.supplier&&supplier)current.supplier=supplier;
    continue;
   }
-  found.set(key,{cn,description,supplier,sourceId:String(r.source_id||"")||null});
+  found.set(key,{cn,description,supplier,sourceId:String(r.source_id||"")||null,
+   ...(r.reference_type==="farmatic"?{referenceType:"farmatic"}:{})});
   if(found.size>=max)break;
  }
  return [...found.values()];

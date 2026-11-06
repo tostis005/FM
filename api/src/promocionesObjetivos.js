@@ -55,23 +55,28 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const directRows=a.status==="fulfilled"?a.value.rows||[]:[];
  const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
  const officialRows=o.status==="fulfilled"?o.value.rows||[]:[];
- let supplierResult={rows:[]},supplierError=null;
+ let supplierResult={rows:[]},receiptResult={rows:[]},supplierError=null;
+ const checkReceipts=Boolean(supplierCodes.length&&supplierCodes.length<=80&&sql.byReceiptSupplier);
  if(supplierCodes.length&&sql.bySupplier){
-  try{
-   supplierResult=await pool.query({
-    text:sql.bySupplier,
-    values:[slug,ids,JSON.stringify(supplierCodes),pageLimit,offset,patterns],
-    query_timeout:8000
-   });
-  }catch(error){supplierError=error;}
+  const codes=JSON.stringify(supplierCodes),values=[slug,ids,codes,pageLimit,offset,patterns];
+  const [usual,receipts]=await Promise.allSettled([
+   pool.query({text:sql.bySupplier,values,query_timeout:6500}),
+   checkReceipts?
+    pool.query({text:sql.byReceiptSupplier,values,query_timeout:6500}):
+    Promise.resolve({rows:[]})
+  ]);
+  if(usual.status==="fulfilled")supplierResult=usual.value;
+  else supplierError=usual.reason;
+  if(receipts.status==="fulfilled")receiptResult=receipts.value;
+  else supplierError=receipts.reason;
  }
- const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&o.status==="fulfilled"&&!supplierError;
- const supplierRows=supplierResult.rows||[];
- if(!complete&&!directRows.length&&!supplierRows.length&&!officialRows.length)
+ const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&o.status==="fulfilled"&&
+  !supplierError&&(!supplierCodes.length||supplierCodes.length<=80);
+ const supplierRows=supplierResult.rows||[],receiptRows=receiptResult.rows||[];
+ if(!complete&&!directRows.length&&!supplierRows.length&&!receiptRows.length&&!officialRows.length)
   throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
- // Ambas búsquedas devuelven CN únicos. El límite está aplicado después de
- // DISTINCT, nunca a los artículos ERP sin CN o duplicados entre farmacias.
- const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize),...officialRows.slice(0,pageSize)];
+ const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize),
+  ...receiptRows.slice(0,pageSize),...officialRows.slice(0,pageSize)];
  const products=mergePromotionCatalogRows(rows);
  if(!search&&cns.length){
   const selected=new Set(cns);
@@ -91,7 +96,8 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
   }
   return {products:inCatalog,partial:!complete,hasMore:false};
  }
- const hasMore=directRows.length>pageSize||supplierRows.length>pageSize||officialRows.length>pageSize;
+ const hasMore=directRows.length>pageSize||supplierRows.length>pageSize||
+  receiptRows.length>pageSize||officialRows.length>pageSize;
  return {products,partial:!complete||supplierCodes.length>=400,hasMore,pageSize};
 }
 

@@ -695,6 +695,50 @@ function App(){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
  function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function openObjectivePlanner(p){
+  if(!canManagePromotions||p?.managerCanEdit===false)
+   return setToast("No tienes permiso para asignar objetivos a esta promoción.");
+  if(!canOpenSection("promociones-objetivos"))
+   return setToast("No tienes acceso a Nueva campaña para asignar objetivos.");
+  const draft={...p,cns:p?.cns||[],targets:{...(p?.targets||{})},
+   cnDescriptions:{...(p?.cnDescriptions||{})}};
+  setObjectiveCampaign(draft);setObjectiveSession(n=>n+1);
+  setEditingPromo(null);
+  nav("promociones-objetivos",undefined,{preserveObjectiveDraft:true});
+ }
+ async function saveObjectivesFromPlanner(objectives){
+  if(!canManagePromotions||promotionStoreStatus!=="connected")
+   throw Error("No se pueden guardar objetivos sin una conexión activa");
+  const stored=data.promos.find(p=>p.id===objectiveCampaign?.id);
+  if(!stored||stored.managerCanEdit===false)
+   throw Error("La promoción ha desaparecido o no está autorizada. Vuelve al listado.");
+  const combined={...stored,...objectiveCampaign,managerCanEdit:stored.managerCanEdit};
+  const updated=mergeObjectivesIntoPromotion(combined,objectives,new Date(),reportTimeZone);
+  const response=await saveStoredPromotion(updated);
+  if(!response.saved)throw Error("El servidor no confirmó el guardado");
+  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
+  setStatusFilter("Todos");setImportSourceFilter("");
+  setObjectiveCampaign(null);
+  nav("promociones");
+  startPromo(updated);
+  setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
+ }
+ function continuePlannerToDrawer(objectives){
+  const base=objectiveCampaign||EMPTY_PROMO;
+  const draft={...EMPTY_PROMO,...base,...objectives,id:null,
+   name:base.name||"",start:base.start||"",end:base.end||"",status:"Borrador",
+   durationMode:base.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
+   simulatorDraft:true};
+  setObjectiveCampaign(null);
+  nav("promociones");
+  startPromo(draft);
+ }
+ function returnFromPlanner(){
+  const draft=objectiveCampaign;
+  setObjectiveCampaign(null);
+  nav("promociones");
+  if(draft)startPromo(draft);
+ }
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
@@ -1206,6 +1250,15 @@ function App(){
      onRowClick={canManagePromotions?p=>startPromo(promos.find(original=>original.id===p.id)||p):undefined} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
+      {key:"action",label:"Acciones",sortable:false,searchable:false,value:()=>"",render:p=>canManagePromotions?
+       <div className="fm-promotion-row-actions">
+        <button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();startPromo(data.promos.find(item=>item.id===p.id)||p);}}>
+         <Pencil size={14}/> Editar</button>
+        {objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();openObjectivePlanner(data.promos.find(item=>item.id===p.id)||p);}}>
+         <Target size={14}/> Asignar objetivos</button>}
+       </div>:null},
       {key:"type",label:"Tipo",filterMode:"multi",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
       {key:"status",label:"Estado",filterMode:"multi",value:p=>p.status,render:p=><Pill status={p.status}/>},
       {key:"start",label:"Periodo",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{p.end?dateES(p.end):promotionDurationMode(p)==="stock"?"Hasta agotar stock":"Sin fecha de fin"}</small></div>},

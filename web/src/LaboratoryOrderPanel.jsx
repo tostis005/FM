@@ -537,11 +537,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <textarea autoFocus rows={5} maxLength={2000} value={commentText}
       disabled={!canEdit} onChange={e=>setCommentText(e.target.value)}
       aria-label="Comentario de la línea" placeholder="Añade una observación a esta línea…"/>
-     <small>{commentText.length} / 2000 caracteres</small>
+     <small>{commentText.length} / 2000 caracteres · Guarda el borrador del pedido para conservar este comentario.</small>
      <div className="fm-lab-comment-actions">
       <button className="btn btn-secondary" type="button" onClick={()=>setCommentRow(null)}>
        {canEdit?"Cancelar":"Cerrar"}</button>
-      {canEdit&&<button className="btn btn-primary" type="button" onClick={confirmComment}>Guardar comentario</button>}
+      {canEdit&&<button className="btn btn-primary" type="button" onClick={confirmComment}>Aplicar comentario</button>}
      </div>
     </div>
    </div>}

@@ -172,11 +172,22 @@ function brandScore(brand,gama){
     x.length>=5&&t.startsWith(x.slice(0,5)))).length;
   return overlap?Math.round(35+45*overlap/Math.max(first.length,second.length)):0;
 }
-function offerScore(a,b){
+function offerScore(a,b,november=false){
+  // En noviembre, una celda de oferta vacía en el listado de CN puede
+  // pertenecer a una campaña de marca inequívoca. Se puntúa ligeramente por
+  // debajo de una oferta exacta y nunca desplaza a esta.
+  if(november&&!clean(b))return 25;
   const x=typeInfo(a),y=typeInfo(b);
   if(x.type===y.type){
     if(x.discountPercent&&y.discountPercent&&x.discountPercent!==y.discountPercent)return -200;
-    if(x.discountAmount&&y.discountAmount&&x.discountAmount!==y.discountAmount)return -200;
+    if(x.discountAmount&&y.discountAmount&&x.discountAmount!==y.discountAmount){
+      // "2, 3 o 4€" engloba tres importes distintos de una misma gama.
+      const raw=fold(a);
+      const multiple=/\d+\s*(?:,|O|Y|\/)\s*\d+/.test(raw);
+      if(november&&multiple&&(raw.match(/\d+/g)||[])
+          .map(Number).includes(Number(y.discountAmount)))return 30;
+      return -200;
+    }
     return 30;
   }
   // Descripciones especiales ("20% del champú") pueden representar la misma
@@ -196,14 +207,14 @@ function cnListGroups(rows){
   }
   return [...groups.values()];
 }
-function matchingCNs(row,group){
+function matchingCNs(row,group,november=false){
   const [lab,brand,offer,, ,description]=row;
   if(normalizedLab(lab,brand)!==normalizedLab(group.lab,group.gama))return null;
   let score=brandScore(brand,group.gama);
   if(key(brand)==="VARIOS"&&key(lab)==="DRASANVI"&&
      /HYDROPS/i.test(description||"")&&/HYDROPS/i.test(group.gama))score=90;
   if(score<40)return null;
-  const offerWeight=offerScore(offer,group.offer);
+  const offerWeight=offerScore(offer,group.offer,november);
   if(offerWeight<0 && score<90)return null;
   let entries=group.entries;
   // Dos filas URIAGE en RESUMEN tienen el mismo laboratorio, marca, fechas y
@@ -228,7 +239,7 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
   const reserved=options.preferSpecific?new Set(groups.flatMap((group,index)=>
     summary.some(({row})=>
       normalizedLab(row[0],row[1])===normalizedLab(group.lab,group.gama)&&
-      brandScore(row[1],group.gama)>=90&&offerScore(row[2],group.offer)>=0)
+      brandScore(row[1],group.gama)>=90&&offerScore(row[2],group.offer,options.preferSpecific)>=0)
       ?[index]:[])):new Set();
   for(const {row,rowNumber} of summary){
     const [lab,brand,offer,from,to,description]=row;
@@ -247,7 +258,7 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
        end=excelDate(to,startYear+1);
      }
     const candidates=groups.map((group,index)=>{
-      const result=matchingCNs(row,group);
+      const result=matchingCNs(row,group,options.preferSpecific);
       if(!result)return null;
       if(options.preferSpecific&&reserved.has(index)&&brandScore(brand,group.gama)<90)return null;
       return {index,group,...result};
@@ -255,7 +266,7 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
     // Agrupar subgamas de una misma marca únicamente cuando su puntuación
     // coincide y no tienen ofertas diferentes: p.ej. dos ramas PHYTO.
     const top=candidates[0]?.score??-Infinity;
-    const relevant=candidates.filter(x=>x.score>=top-8&&x.score>=50);
+    const relevant=candidates.filter(x=>x.score>=top-(options.preferSpecific?12:8)&&x.score>=50);
     const takeAvailable=candidates=>candidates.flatMap(g=>{
       const assigned=assignedByGroup.get(g.index)||new Set();
       const available=g.entries.filter(e=>!assigned.has(e.cn));

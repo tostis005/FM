@@ -46,12 +46,16 @@ export function promotionCatalogSearchSQL(schema,columns){
   "THEN coalesce(nullif(ltrim(btrim(coalesce("+expr+",'')),'0'),''),'0') "+
   "ELSE "+upper(expr)+" END";
  const refCondition=refs.map(ref=>supplierCode(col("a",ref))+"=matched.supplier_code").join(" OR ");
- const fields=(supplier="NULL::text")=>[
+ const fields=(supplier="NULL::text",requested=false)=>[
+
   "f.id::text AS pharmacy_id",col("a","origen_id")+" AS source_id",
   col("a","nombre")+" AS description",col("a","codigo_nacional")+" AS national_code",
   normalized+" AS normalized_code",lab+" AS laboratory",
   primary+" AS supplier_ref",supplier+" AS supplier_name",
-  code+" AS resolved_cn",referenceType+" AS reference_type"
+  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($4::text[]) THEN "+origin+
+   " ELSE "+code+" END":code)+" AS resolved_cn",
+  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($4::text[]) THEN 'farmatic' ELSE "+
+   referenceType+" END":referenceType)+" AS reference_type"
  ].join(", ");
  const scope="JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
   "AND "+upper("a.farmacia_codigo::text")+"="+pharmacyDataCodeSQL("f")+" "+
@@ -66,7 +70,7 @@ export function promotionCatalogSearchSQL(schema,columns){
   "SELECT DISTINCT ON (resolved_cn) * FROM ("+candidate+") found "+
   "WHERE resolved_cn IS NOT NULL ORDER BY resolved_cn,description NULLS LAST "+
   "LIMIT "+limit+"::int OFFSET "+offset+"::int";
- const direct=page("SELECT "+fields()+" FROM "+a+" a "+scope+
+ const direct=page("SELECT "+fields("NULL::text",true)+" FROM "+a+" a "+scope+
   "WHERE "+hasCN+" AND ((cardinality($3::text[])>0 AND "+searchable+" ILIKE ALL($3::text[])) "+
   "OR "+raw+"=ANY($4::text[]) "+
   "OR ("+isCode(raw)+" AND left("+raw+",6)=ANY($4::text[])) "+
@@ -129,10 +133,10 @@ export function promotionResultCN(row){
  return /^\d{6}$/.test(id)?id:null;
 }
 
-export function mergePromotionCatalogRows(rows,verifiedOrigins=new Set(),max=2000){
+export function mergePromotionCatalogRows(rows,max=2000){
  const found=new Map();
  for(const r of rows||[]){
-  const cn=promotionResultCN(r,verifiedOrigins);
+  const cn=promotionResultCN(r);
   const key=cn||"ERP:"+r.pharmacy_id+":"+r.source_id;
   const description=String(r.description||"").trim()||"Artículo sin nombre";
   const supplier=String(r.supplier_name||r.laboratory||"").trim()||null;

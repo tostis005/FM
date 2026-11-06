@@ -240,7 +240,7 @@ function validDates(from, to) {
     b >= a && b - a <= 366 * 86400000;
 }
 function validCodes(cns) {
-  return Array.isArray(cns) && cns.length <= 500 &&
+  return Array.isArray(cns) && cns.length <= 1000 &&
     cns.every(cn => typeof cn === "string" && /^[0-9]{6}$/.test(cn));
 }
 // SQL se acota al esquema del cliente y a farmacias autorizadas.
@@ -426,7 +426,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
   const { start, end, cns, farmaciaId, ticket, cn, offset = 0, limit = 25,
     columnFilters = {}, orderBy = "at", orderDir = "desc" } = req.body || {};
   if (!validDates(start, end) || !validCodes(cns) || !cns.length ||
-      cns.length > 500 || typeof offset !== "number" || !Number.isInteger(offset) ||
+      cns.length > 1000 || typeof offset !== "number" || !Number.isInteger(offset) ||
       offset < 0 || offset > 50000 || !Number.isInteger(limit) || limit < 1 || limit > 500 ||
       (farmaciaId != null && farmaciaId !== "" && !/^[1-9]\\d{0,5}$/.test(String(farmaciaId))) ||
       (ticket != null && (typeof ticket !== "string" || ticket.length > 60)) ||
@@ -436,7 +436,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
       Object.entries(columnFilters).some(([name,value]) => {
         if(!Object.hasOwn(ticketColumns,name))return true;
         if(Array.isArray(value)){
-          if(!["pharmacy","cn"].includes(name) || value.length>500)return true;
+          if(!["pharmacy","cn"].includes(name) || value.length>1000)return true;
           return value.some(v=>typeof v!=="string"||
             (name==="pharmacy"?!/^[1-9]\d{0,5}$/.test(v):!/^\d{6}$/.test(v)||!cns.includes(v)));
         }
@@ -451,7 +451,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
     const singleCNKeys=cn?articleKeysForCNs(articleKeys,[cn]):[];
     const sourceKey="f.id::text||'|'||btrim(v.articulo_id::text)";
     // Filtro previo compatible con el índice (farmacia, artículo, fecha).
-    // Con 500 CN evita aplicar la concatenación farmacia|ERP a cada venta.
+    // Con hasta 1.000 CN evita aplicar la concatenación farmacia|ERP a cada venta.
     const articleIds=[...new Set([...cns,...articleKeys.map(({key})=>
       key.slice(key.indexOf("|")+1)).filter(Boolean)])];
     const filters=[

@@ -193,7 +193,7 @@ jobs:
             for attempt in 1 2 3 4 5; do
               if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
                   'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' \
-                  < <(printf "SET LOCAL lock_timeout = '\''8s'\'';\\n"; cat "api/src/migrations/$migration"); then
+                  < <(printf "SET LOCAL lock_timeout = '8s';\\n"; cat "api/src/migrations/$migration"); then
                 break
               fi
               if [ "$attempt" = 5 ]; then

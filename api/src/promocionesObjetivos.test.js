@@ -225,3 +225,16 @@ test("cuatro períodos de 500 CN ejecutan una sola agregación de ventas",async(
  const links=api.queries.find(q=>q.sql.includes("SELECT DISTINCT f.id::text AS pharmacy_id"));
  assert.match(links.sql,/left\(btrim\(a.codigo_nacional::text\),6\)=ANY/);
 });
+
+test("800 CN válidos no son rechazados por la API de catálogo y de histórico",async()=>{
+ const api=fixture();
+ const cns=Array.from({length:800},(_,i)=>String(i).padStart(6,"0"));
+ const found=await api.call("/api/ventas/objetivos/buscar",{search:"",cns},[1]);
+ assert.equal(found.status,200);
+ const result=await api.call("/api/ventas/objetivos/historico",{
+  cns,pharmacyIds:[1],periods});
+ assert.equal(result.status,200);
+ assert.equal(result.response.periods.october["1"],7);
+ const sales=api.queries.filter(q=>q.sql.includes("sum(v.unidades) FILTER (WHERE"));
+ assert.equal(sales.length,1);
+});

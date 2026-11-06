@@ -65,3 +65,18 @@ test("si una petición falla, no presenta un histórico parcial",async()=>{
   }
  ),/Tiempo agotado/);
 });
+
+test("800 CN generan ocho lotes exactos y resultados completos",async()=>{
+ const cns=Array.from({length:800},(_,i)=>String(i).padStart(6,"0"));
+ const sizes=[];
+ const result=await loadPromotionHistoryInBatches(cns,async batch=>{
+  sizes.push(batch.length);
+  return {periods:{previous:{"1":batch.length}},amounts:{previous:{"1":batch.length*1.5}},
+   stock:{"1":batch.length},stockUnavailable:false};
+ });
+ assert.equal(sizes.length,8);
+ assert.ok(sizes.every(n=>n===100));
+ assert.deepEqual(result.periods,{previous:{"1":800}});
+ assert.deepEqual(result.amounts,{previous:{"1":1200}});
+ assert.deepEqual(result.stock,{"1":800});
+});

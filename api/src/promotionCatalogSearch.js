@@ -52,9 +52,9 @@ export function promotionCatalogSearchSQL(schema,columns){
   col("a","nombre")+" AS description",col("a","codigo_nacional")+" AS national_code",
   normalized+" AS normalized_code",lab+" AS laboratory",
   primary+" AS supplier_ref",supplier+" AS supplier_name",
-  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($4::text[]) THEN "+origin+
+  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($3::text[]) THEN "+origin+
    " ELSE "+code+" END":code)+" AS resolved_cn",
-  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($4::text[]) THEN 'farmatic' ELSE "+
+  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($3::text[]) THEN 'farmatic' ELSE "+
    referenceType+" END":referenceType)+" AS reference_type"
  ].join(", ");
  const scope="JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
@@ -82,13 +82,13 @@ export function promotionCatalogSearchSQL(schema,columns){
   "WHERE "+hasCN+" AND "+searchable+" LIKE $6::text "+
   "AND "+searchable+" ILIKE ALL($3::text[])","$4","$5");
  const codePredicates=[
-  "a.origen_id::text=ANY($4::text[])",
-  "left(btrim(a.codigo_nacional::text),6)=ANY($4::text[])"
+  "a.origen_id::text=ANY($3::text[])",
+  "left(btrim(a.codigo_nacional::text),6)=ANY($3::text[])"
  ];
  if(has(columns,"articulos","cn_normalizado"))
-  codePredicates.push("left(btrim(a.cn_normalizado::text),6)=ANY($4::text[])");
+  codePredicates.push("left(btrim(a.cn_normalizado::text),6)=ANY($3::text[])");
  const byCodes=page("SELECT "+fields("NULL::text",true)+" FROM "+a+" a "+scope+
-  "WHERE "+hasCN+" AND ("+codePredicates.join(" OR ")+")","$5","$6");
+  "WHERE "+hasCN+" AND ("+codePredicates.join(" OR ")+")","$4","$5");
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+

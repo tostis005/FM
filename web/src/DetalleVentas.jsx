@@ -9,6 +9,7 @@ import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
 import {ticketLineAmounts} from "./ticketLineAmounts.js";
 import {downloadTableCSV} from "./tableExport.js";
+import {civilToday} from "./promotionLifecycle.js";
 
 const num=quantity;
 const money=euro;
@@ -77,7 +78,7 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
   const visibleColumns=simulator?TICKET_COLUMNS.filter(([key])=>key!=="at"):TICKET_COLUMNS;
   const filters=promo?{
     cns:promo.cns||[],start:simulator?promo.start:applied.start||promo.start,
-    end:simulator?promo.end:applied.end||promo.end,
+    end:simulator?promo.end:applied.end||promo.end||civilToday(),
 
   }:null;
   const eligible=Boolean(connected&&filters?.cns.length&&scopeIds.length&&
@@ -126,8 +127,8 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     e.preventDefault();setApplied({...draft});setPage(0);
   }
 
-  if(loading)return <section className="card lab-detail-panel"><div className="section-heading"><h2>{simulator?"Extracción de ventas":"Consulta de tickets"}</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
-  return <section className={"card lab-detail-panel"+(simulator?" fm-sales-simulator":"")}>
+  if(loading)return <section className={"card lab-detail-panel"+(simulator?"":" fm-followup-tickets")}><div className="section-heading"><h2>{simulator?"Extracción de ventas":"Consulta de tickets"}</h2></div><LoadingPanel kind="table" label="Preparando el seguimiento de ventas…" rows={5}/></section>;
+  return <section className={"card lab-detail-panel"+(simulator?" fm-sales-simulator":" fm-followup-tickets")}>
     {!simulator&&<div className="section-heading"><h2>Consulta de tickets</h2></div>}
     {!connected&&<div className="access-alert access-alert-error">Para consultar los tickets necesitas conexión con PostgreSQL y permiso de acceso a promociones.</div>}
     {!simulator&&<form className="card fm-unified-filters lab-detail-filters" onSubmit={applyFilters}>
@@ -145,7 +146,6 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
       </label>
       <button type="submit" className="btn btn-secondary"><Filter size={16}/> Aplicar filtros</button>
     </form>}
-    {!simulator&&promo&&!validDate(promo.end)&&<div className="access-alert access-alert-error">La promoción no tiene fecha final concreta («fin de existencias»). Indica un periodo explícito en los filtros antes de consultar.</div>}
     {result.error&&<div className="access-alert access-alert-error">{result.error}</div>}
     {exportError&&<div className="access-alert access-alert-error">{exportError}</div>}
     <div className={"fm-table-toolbar"+(simulator?" fm-sales-compact-toolbar":"")}>

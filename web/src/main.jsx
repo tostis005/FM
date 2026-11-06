@@ -429,7 +429,9 @@ function App(){
          const segments=[];
          for(const p of data.promos){
            if(page==="promociones"&&!promotionOverlapsPeriod(p,from,to))continue;
-           if(page==="seguimiento-global"&&!reportSelectedIds.includes(p.id))continue;
+           if(page==="seguimiento-global"&&(!reportSelectedIds.includes(p.id)||
+             !promotionMatchesReportScope({...p,status:effectivePromotionStatus(p,new Date(),reportTimeZone)},
+               {status:reportStatus,month:reportMonth,year:reportYear})))continue;
            const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
             if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
            if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
@@ -439,7 +441,7 @@ function App(){
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
-         const results=await mapLimited(chunks,3,
+         const results=await mapLimited(chunks,2,
            chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
          const byPromotion={},byTotalPromotion={};
@@ -462,7 +464,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,reportSelectedIds]);
+   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,reportSelectedIds,reportStatus,reportMonth,reportYear]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -1233,7 +1235,7 @@ function App(){
       label="campañas" onPageChange={setReportPage}
       onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
-  <DetalleVentas promotions={reportFilteredCampaigns} pharmacies={pharmacies} pharmacyScopeIds={effectivePharmacyIds} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
+  <DetalleVentas promotions={reportFilteredCampaigns} pharmacies={pharmacies} pharmacyScopeIds={effectivePharmacyIds} connected={promotionStoreStatus==="connected"} />
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>
@@ -1377,7 +1379,7 @@ function App(){
    <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field>
     {promotionDurationMode(promoForm)==="dates"&&<Field label="Fecha de fin"><input type="date" required
      min={promoForm.start||undefined} value={promoForm.end||""}
-     onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field>}</div>}
+     onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field>}</div>
    <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></Field>
     {promoForm.status==="Finalizada"&&<div className="field-row"><Field label="Fecha real de finalización"><input type="date" min={promoForm.start||undefined} max={civilToday(new Date(),reportTimeZone)} value={promoForm.closedOn||""} onChange={e=>setPromoForm({...promoForm,closedOn:e.target.value})}/></Field><Field label="Motivo del cierre (opcional)"><input value={promoForm.closedReason||""} onChange={e=>setPromoForm({...promoForm,closedReason:e.target.value})} placeholder="Promoción terminada"/></Field></div>}
     <Field label="Tipo de promoción"><select value={promoForm.type||"sin_clasificar"} onChange={e=>setPromoForm({...promoForm,type:e.target.value,discountPercent:PROMOTION_TYPES.find(t=>t.id===e.target.value)?.needsPercent?promoForm.discountPercent:""})}>{PROMOTION_TYPES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>

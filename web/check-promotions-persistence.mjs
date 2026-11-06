@@ -76,6 +76,13 @@ try{
  },null,{timeout:12000});
  await continueButton.click();
  const modal=page.locator(".drawer").filter({hasText:"Nueva campaña"});
+ // No debe imprimirse una llave JSX después del selector de fechas.
+ const strayText=await modal.locator(".drawer-content > .field-row").first().evaluate(row=>{
+  let sibling=row.nextSibling;
+  while(sibling&&sibling.nodeType===8)sibling=sibling.nextSibling;
+  return sibling?.nodeType===3?sibling.textContent.trim():"";
+ });
+ assert.equal(strayText,"","La creación de campaña muestra una llave } literal tras las fechas");
  await modal.getByLabel("Nombre de promoción").fill("Campaña de verificación");
  assert.ok(await modal.getByRole("radio",{name:"Por fechas"}).isChecked(),
   "La selección de ventas históricas preselecciona campañas por fechas");

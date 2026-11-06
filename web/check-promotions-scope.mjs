@@ -18,6 +18,9 @@ const promotions=[
   cns:["456789"],targets:{"1":8}}
 ];
 const ticketRequests=[],errors=[];
+let salesResponseCompleted=false;
+let unlockSalesResponse;
+const firstTicketRequest=new Promise(resolve=>{unlockSalesResponse=resolve});
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname;
@@ -29,9 +32,14 @@ await page.route("**/api/**",async route=>{
   pharmacies,allowedPharmacyIds:[1,2]};
  else if(path==="/api/tenant/farmacias")payload=pharmacies;
  else if(path==="/api/tenant/promociones")payload={promotions,deletedIds:[]};
- else if(path==="/api/ventas/seguimiento")payload={sales:{}};
+ else if(path==="/api/ventas/seguimiento"){
+  await Promise.race([firstTicketRequest,new Promise(resolve=>setTimeout(resolve,5000))]);
+  payload={sales:{}};
+  salesResponseCompleted=true;
+ }
  else if(path==="/api/ventas/detalle"){
-  ticketRequests.push(request.postDataJSON());
+  ticketRequests.push({...request.postDataJSON(),beforeSummary:!salesResponseCompleted});
+  unlockSalesResponse();
   payload={rows:[{
    pharmacyId:"1",pharmacyName:"Farmacia Centro",saleId:"7891",lineId:"1",ticket:"T-101",
    at:"2026-10-15T10:00:00Z",cn:"789",sourceArticleId:"789",nationalCode:"123456",
@@ -52,6 +60,25 @@ try{
  await page.getByRole("heading",{name:"Consulta de tickets"}).waitFor({timeout:16000});
  for(let i=0;i<80&&!ticketRequests.length;i++)await page.waitForTimeout(150);
  assert.ok(ticketRequests.length>0,"El desglose consulta el servidor");
+ assert.ok(ticketRequests.some(req=>req.beforeSummary),
+  "Consulta de tickets debería cargarse sin esperar a los agregados");
+ const layout=await page.evaluate(()=>{
+  const cards=[".report-goals-panel",".fm-followup-tickets",".campaign-cn-panel"]
+   .map(selector=>document.querySelector(selector));
+  if(cards.some(node=>!node))return null;
+  const headings=cards.map(card=>card.querySelector(".section-heading h2")?.getBoundingClientRect().left);
+  const boxes=cards.map(card=>card.getBoundingClientRect());
+  return {headings,gapGoalsTickets:boxes[1].top-boxes[0].bottom,
+   gapTicketsCNs:boxes[2].top-boxes[1].bottom,
+   widths:boxes.map(box=>box.width)};
+ });
+ assert.ok(layout,"Las tres tarjetas de seguimiento deben aparecer");
+ assert.ok(Math.max(...layout.headings)-Math.min(...layout.headings)<=3,
+  "Los títulos deben quedar alineados: "+JSON.stringify(layout));
+ assert.ok(layout.gapGoalsTickets>=15&&layout.gapTicketsCNs>=15,
+  "Las tarjetas necesitan la misma separación: "+JSON.stringify(layout));
+ assert.ok(Math.max(...layout.widths)-Math.min(...layout.widths)<=3,
+  "Las tarjetas deben tener el mismo ancho: "+JSON.stringify(layout));
  for(const request of ticketRequests)
   assert.deepEqual(request.columnFilters.pharmacy,["1"],
    "El filtro de farmacia del consolidado debe aplicarse a los tickets");

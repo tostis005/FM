@@ -272,6 +272,7 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
       const alternatives=groups.map((group,index)=>({
         index,entries:group.entries,score:brandScore(brand,group.gama)
       })).filter(candidate=>candidate.score>=50&&
+        (!options.preferSpecific||!key(brand).includes("VARIOS")||candidate.score>=90)&&
         (!options.preferSpecific||!reserved.has(candidate.index)||candidate.score>=90)&&
         candidate.entries.some(e=>!assignedByGroup.get(candidate.index)?.has(e.cn)))
         .sort((a,b)=>b.score-a.score);

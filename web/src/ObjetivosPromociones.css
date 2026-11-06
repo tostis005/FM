@@ -168,3 +168,19 @@
  .fm-objectives-product code{padding:5px 6px;font-size:11px}
  .fm-objectives-product>span strong{font-size:12px}
 }
+
+
+/* Los tres apartados usan la misma tarjeta, padding y cabecera. */
+.fm-objectives-extraction{min-width:0;max-width:100%}
+.fm-objectives-extraction .fm-objectives-extract-head{margin:0 0 14px}
+.fm-objectives-extraction .fm-objectives-extract-head h2{font-size:19px;color:#164c37;margin:0}
+.fm-objectives-extraction .lab-detail-panel.fm-sales-simulator{
+ border:0;box-shadow:none;border-radius:0;background:transparent;
+ margin:0;padding:8px 0 0;max-width:100%}
+.fm-objectives-stock-note{margin:12px 0 0;padding:10px 12px;
+ border:1px solid #e8dfc4;background:#fffdf7;border-radius:8px;
+ color:#78633b;font-size:12px;line-height:1.5}
+@media(max-width:720px){
+ .fm-objectives-extraction{padding:16px}
+ .fm-objectives-extraction .lab-detail-panel.fm-sales-simulator{padding:6px 0 0}
+}

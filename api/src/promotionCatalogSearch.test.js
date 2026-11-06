@@ -16,13 +16,14 @@ test("buscar nombre, CN normalizado y laboratorio sin consultas correlacionadas 
  assert.match(sql.direct,/a\.origen_id::text/);
  assert.match(sql.direct,/ILIKE ALL\(\$3::text\[\]\)/);
  assert.match(sql.direct,/LIKE \$6::text/);
- assert.match(sql.byCodes,/a.origen_id::text=ANY\(\$4::text\[\]\)/);
+ assert.match(sql.byCodes,/a.origen_id::text=ANY\(\$3::text\[\]\)/);
  assert.doesNotMatch(Object.values(sql).filter(v=>typeof v==="string").join(" "),/nomenclator_presentaciones/);
  assert.match(sql.direct,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.ok(sql.direct.includes("SELECT DISTINCT ON (resolved_cn)"));
  assert.ok(sql.direct.includes("LIMIT $4::int OFFSET $5::int"));
  assert.ok(sql.bySupplier.includes("SELECT DISTINCT ON (resolved_cn)"));
  assert.ok(sql.bySupplier.includes("LIMIT $4::int OFFSET $5::int"));
+ assert.ok(sql.byCodes.includes("LIMIT $4::int OFFSET $5::int"));
  assert.ok(sql.direct.includes("^[0-9]{6,7}$"));
  assert.doesNotMatch(sql.direct,/EXISTS\s*\(SELECT|LATERAL|proveedores_maestro/);
  assert.doesNotMatch(sql.direct,/ORDER BY a\.nombre/);
@@ -104,7 +105,7 @@ test("Farmatic de seis dígitos sin CN oficial se puede buscar y etiquetar como 
  assert.match(sql.direct,/a\.origen_id::text/);
  assert.match(sql.direct,/reference_type/);
  assert.match(sql.direct,/a\.origen_id::text/);
- assert.match(sql.byCodes,/ANY\(\$4::text\[\]\)/);
+ assert.match(sql.byCodes,/ANY\(\$3::text\[\]\)/);
  const result=mergePromotionCatalogRows([{
   pharmacy_id:"1",source_id:"168766",resolved_cn:"168766",
   reference_type:"farmatic",description:"Eucerin Atopi Control 250 ml"

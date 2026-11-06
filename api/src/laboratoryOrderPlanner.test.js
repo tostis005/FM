@@ -119,7 +119,11 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  const app={get(name,...args){routes["GET "+name]=args.at(-1)},
   put(name,...args){routes["PUT "+name]=args.at(-1)},
   post(name,...args){routes["POST "+name]=args.at(-1)}};
+ const statements=[];
  const pool={async query(q){
+  statements.push(q);
+  if(typeof q==="string"&&q.includes("FROM farmetrica.preparador_exclusiones"))
+   return {rows:[{cadena:"*BAJA*"}]};
   return {rows:[{updatedAt:"2026-10-24T06:00Z"}]};
  }};
  setupLaboratoryOrderPlanner(app,pool,{requireTenant:()=>[]});
@@ -137,9 +141,17 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  }
  const path="/api/analytics/pedidos/borrador-laboratorio";
  const base={laboratorio:"C:LAB",farmacias:[1],tipo:"parafarmacia",
-  desde:"2026-10-01",hasta:"2026-10-24",lineas:[
-   {reference:"000001",cn:"000001",name:"Crema",units:7}]};
+  desde:"2026-10-01",hasta:"2026-10-24",comentarioGlobal:"Confirmar portes",lineas:[
+   {reference:"000001",cn:"000001",name:"Crema",units:7,comment:"Caja especial"}]};
  assert.equal((await call("PUT",path,base)).status,200);
+ const insert=statements.find(q=>typeof q==="string"?false:q.text?.includes("INSERT INTO farmetrica.pedidos_laboratorio_borradores"));
+ assert.equal(insert.values[7],"Confirmar portes");
+ assert.equal(JSON.parse(insert.values[6])[0].comment,"Caja especial");
+ assert.equal((await call("PUT",path,{...base,comentarioGlobal:"a".repeat(3001)})).status,400);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],comment:"a".repeat(2001)}]})).status,400);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],excluded:true}]})).status,400);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],name:"*BAJA* Crema"}]})).status,400);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:0,excluded:true}]})).status,200);
  assert.equal((await call("PUT",path,{...base,farmacias:[9]})).status,400);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:2.5}]})).status,400);
  assert.equal((await call("PUT",path,{...base,tipo:"medicacion"})).status,400);

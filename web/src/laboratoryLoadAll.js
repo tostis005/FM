@@ -67,6 +67,36 @@ export async function collectLaboratoryCatalog(fetchPage,{
 }
 
 export const LAB_METRICS_CONCURRENCY=3;
+const MIN_METRICS_BATCH=25;
+// Algunos laboratorios concentran muchas líneas históricas: si PostgreSQL no
+// puede agregar 200 referencias, dividir solo ese lote, sin perder ni limitar
+// los artículos restantes. Las peticiones hijas son secuenciales para no
+// multiplicar la carga simultánea sobre la base de datos.
+export async function fetchLaboratoryMetricsAdaptive(items,fetchBatch,{signal}={}){
+ const cancelled=()=>Object.assign(new Error("Consulta cancelada"),{name:"AbortError"});
+ if(signal?.aborted)throw cancelled();
+ try{
+  const result=await fetchBatch(items);
+  if(result?.metricsUnavailable){
+   const failure=new Error(result.warning||"Métricas de stock y ventas no disponibles");
+   failure.code=result.metricsErrorCode||"QUERY_ERROR";
+   throw failure;
+  }
+  if(!Array.isArray(result?.rows))
+   throw Error("Respuesta incompleta al calcular las ventas y el stock");
+  return result;
+ }catch(error){
+  if(signal?.aborted)throw cancelled();
+  // Errores de estructura/autorización no mejoran partiendo los lotes.
+  const definitive=new Set(["42P01","42703","42883","42601","42501","22P02","23502"]);
+  if(items.length<=MIN_METRICS_BATCH||definitive.has(error?.code))throw error;
+  const middle=Math.ceil(items.length/2);
+  const first=await fetchLaboratoryMetricsAdaptive(items.slice(0,middle),fetchBatch,{signal});
+  const second=await fetchLaboratoryMetricsAdaptive(items.slice(middle),fetchBatch,{signal});
+  return {rows:[...first.rows,...second.rows],
+   frequencyDays:first.frequencyDays??second.frequencyDays};
+ }
+}
 // Actualizar cada bloque por su referencia, no por la posición de llegada.
 // El usuario puede editar cantidades mientras llegan otras métricas.
 export async function collectLaboratoryMetrics(catalogRows,fetchBatch,{
@@ -81,10 +111,8 @@ export async function collectLaboratoryMetrics(catalogRows,fetchBatch,{
    const index=next++,start=index*batchSize;
    const originals=rows.slice(start,start+batchSize);
    try{
-    const result=await fetchBatch(originals,index);
+    const result=await fetchLaboratoryMetricsAdaptive(originals,items=>fetchBatch(items,index),{signal});
     if(signal?.aborted||failure)return;
-    if(result?.metricsUnavailable||!Array.isArray(result?.rows))
-     throw Error(result?.warning||"No se pueden calcular las ventas y el stock");
     const byReference=new Map(result.rows.map(r=>[r.referencia,r]));
     for(let i=start;i<Math.min(start+batchSize,rows.length);i++){
      const details=byReference.get(rows[i].referencia);

@@ -77,6 +77,8 @@ try{
  await continueButton.click();
  const modal=page.locator(".drawer").filter({hasText:"Nueva campaña"});
  await modal.getByLabel("Nombre de promoción").fill("Campaña de verificación");
+ await modal.getByLabel("Fecha de inicio").fill("2026-11-01");
+ await modal.getByLabel("Fecha de fin (opcional)").fill("2026-11-30");
  await modal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).fill("10");
  await modal.getByRole("button",{name:"Crear campaña"}).click();
  await modal.getByRole("alert").waitFor();

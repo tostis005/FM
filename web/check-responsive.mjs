@@ -333,8 +333,16 @@ try{
            throw Error("El objetivo de stock no se ha rellenado desde Farmatic");
          await stockGoal.fill("4");
          await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).click();
-         await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
-         const transferred=await page.locator(".drawer textarea.cn-area").inputValue();
+         const campaignDrawer=page.locator(".drawer");
+         await campaignDrawer.waitFor({state:"visible",timeout:10000});
+         if(!await campaignDrawer.getByRole("radio",{name:"Hasta agotar stock"}).isChecked())
+           throw Error("Elegir stock debe preseleccionar Hasta agotar stock en el formulario");
+         if(await campaignDrawer.getByLabel("Fecha de fin").count())
+           throw Error("La campaña hasta agotar stock no debe pedir fecha de fin");
+         if(await campaignDrawer.locator(".increase-controls").count()||
+            await campaignDrawer.getByRole("button",{name:"Aplicar",exact:true}).count())
+           throw Error("Los objetivos ya calculados no necesitan incremento ni Aplicar");
+         const transferred=await campaignDrawer.locator("textarea.cn-area").inputValue();
          if(!transferred.includes("123456")||!transferred.includes("654321"))
            throw Error("Los CN pegados no se transfieren al formulario lateral");
          const targets=await page.locator(".drawer .target-row").count();

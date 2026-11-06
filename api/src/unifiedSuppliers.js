@@ -112,15 +112,17 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
     THEN btrim(a.codigo_nacional) END,
    CASE WHEN btrim(a.origen_id::text)~'^[0-9]{6,7}$'
     THEN btrim(a.origen_id::text) END) AS cn,
-   coalesce(nullif(btrim(a.nombre),''),b.article_id) AS nombre
+   coalesce(nullif(btrim(a.nombre),''),b.article_id) AS nombre,
+   ${retiredProductSQL("a.nombre","$6")} AS inactive
   FROM bought b JOIN ${q}.articulos a
    ON a.farmacia_codigo=b.farmacia_codigo
     AND a.origen_id::text=b.article_id
-  WHERE NOT ${retiredProductSQL("a.nombre","$6")}
+  
  )
  SELECT cn AS referencia,cn, min(nombre) AS nombre,$4::text AS tipo,
   false AS "inMaster",true AS "inReceipts",true AS "inPurchases",
-  false AS "inSales",false AS generic,false AS provisional
+  false AS "inSales",false AS generic,false AS provisional,
+  bool_or(inactive) AS excluded
  FROM products WHERE cn IS NOT NULL
   AND (CASE WHEN left(cn,6)::integer>=400000 THEN 'medicacion'
       ELSE 'parafarmacia' END)=$4

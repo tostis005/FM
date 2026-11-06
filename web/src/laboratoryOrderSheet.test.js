@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {defaultLaboratoryLine,mergeVisibleOrderLines,orderLineFor,
  laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,
- medicationOrderTotal,distributeMedicationOrderTotal} from "./laboratoryOrderSheet.js";
+ medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor} from "./laboratoryOrderSheet.js";
 const pharmacies=[{id:"1",name:"Central"},{id:"2",name:"Norte"}];
 const row={referencia:"000123",cn:"000123",nombre:"Crema solar",
  byPharmacy:{"1":{stock:4,units3:33,units12:110,unitsPeriod:8,suggested:10},
@@ -12,10 +12,11 @@ test("parafarmacia suma la propuesta en un único campo editable",()=>{
  assert.equal(line.units,17);
  assert.equal(line.metrics["1"].stock,4);
  const data=laboratoryExcelRows([{row,line}],pharmacies,"parafarmacia");
- assert.equal(data[0].length,2+5*2+3);
- assert.equal(data[1].at(-1),"Pedir total");
- assert.equal(data[0].at(-1),"Pedir total");
- assert.deepEqual(data[2].slice(-3),[14,17,17]);
+ assert.equal(data[0].length,2+5*2+5);
+ assert.equal(data[1].at(-2),"Pedir total");
+  assert.equal(data[1].at(-1),"Comentarios");
+ assert.equal(data[0].at(-2),"Pedir total");
+ assert.deepEqual(data[2].slice(-5),[7,14,17,17,""]);
  assert.equal(data[2][0],"000123");
 });
 test("medicación nunca mezcla cantidades entre farmacias",()=>{
@@ -23,10 +24,10 @@ test("medicación nunca mezcla cantidades entre farmacias",()=>{
  assert.deepEqual(line.unitsByPharmacy,{"1":10,"2":7});
  line.unitsByPharmacy["1"]=4;
  const data=laboratoryExcelRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
- assert.equal(data[0].length,2+5*2+3);
+ assert.equal(data[0].length,2+5*2+5);
  assert.equal(data[2][6],4);
  assert.equal(data[2][11],7);
- assert.deepEqual(data[2].slice(-3),[14,17,11]);
+ assert.deepEqual(data[2].slice(-5),[7,14,17,11,""]);
 });
 test("borrador conserva ediciones previas al cambiar de página",()=>{
  const edited={"000123":{...defaultLaboratoryLine(row,"parafarmacia",["1","2"]),units:12}};
@@ -42,15 +43,15 @@ test("Pedia recibe un solo pedido con cantidades conjuntas de parafarmacia",()=>
  const line=defaultLaboratoryLine(row,"parafarmacia",["1","2"]);
  line.units=18;
  const sheet=laboratoryOrderListRows([{row,line}],pharmacies,"parafarmacia");
- assert.deepEqual(sheet[0],["Cliente","Código nacional / EAN","Artículo","Unidades"]);
- assert.deepEqual(sheet[1],["Pedia","000123","Crema solar",18]);
+ assert.deepEqual(sheet[0],["Cliente","Código nacional / EAN","Artículo","Unidades","Comentarios"]);
+ assert.deepEqual(sheet[1],["Pedia","000123","Crema solar",18,""]);
 });
 test("Medicación exporta unidades por cada farmacia, sin confundirlas con propuesta",()=>{
  const line=defaultLaboratoryLine({...row,cn:"400123"},"medicacion",["1","2"]);
  line.unitsByPharmacy={"1":3,"2":6};
  const sheet=laboratoryOrderListRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
- assert.deepEqual(sheet[0],["Código nacional / EAN","Artículo","Pedir Central","Pedir Norte","Total pedir"]);
- assert.deepEqual(sheet[1],["400123","Crema solar",3,6,9]);
+ assert.deepEqual(sheet[0],["Código nacional / EAN","Artículo","Pedir Central","Pedir Norte","Total pedir","Comentarios"]);
+ assert.deepEqual(sheet[1],["400123","Crema solar",3,6,9,""]);
 });
 
 test("medicación: editar el total redistribuye sin perder las farmacias",()=>{
@@ -61,9 +62,9 @@ test("medicación: editar el total redistribuye sin perder las farmacias",()=>{
  assert.equal(medicationOrderTotal(edited,["1","2"]),34);
  assert.deepEqual(line.unitsByPharmacy,{"1":10,"2":7},"No modifica el borrador anterior");
  const workbook=laboratoryExcelRows([{row,line:edited}],pharmacies,"medicacion");
- assert.equal(workbook[2].at(-1),34);
+ assert.equal(workbook[2].at(-2),34);
  const order=laboratoryOrderListRows([{row,line:edited}],pharmacies,"medicacion");
- assert.deepEqual(order[1].slice(-3),[20,14,34]);
+ assert.deepEqual(order[1].slice(-4),[20,14,34,""]);
 });
 test("medicación: respeta reparto actual, redondea y permite cero",()=>{
  const line={unitsByPharmacy:{"1":4,"2":7}};
@@ -85,4 +86,30 @@ test("medicación: sin venta ni propuesta reparte de forma estable entre farmaci
  assert.equal(distributeMedicationOrderTotal(noDemand,draft,["1","2"],1.5),null);
  assert.equal(distributeMedicationOrderTotal(noDemand,draft,["1","2"],1000000),null);
  assert.equal(distributeMedicationOrderTotal(noDemand,draft,[],4),null);
+});
+
+test("el Excel incluye stock total, comentarios de línea y generales en las dos hojas",()=>{
+ const line={...defaultLaboratoryLine(row,"parafarmacia",["1","2"]),units:5,comment:"Enviar muestra"};
+ const detail=laboratoryExcelRows([{row,line}],pharmacies,"parafarmacia","Entrega urgente");
+ const order=laboratoryOrderListRows([{row,line}],pharmacies,"parafarmacia","Entrega urgente");
+ assert.deepEqual(detail[1].slice(2,5),["Stock","Ventas 12m","Ventas 3m"]);
+ assert.equal(detail[2][2],4);
+ assert.equal(detail[2][12],7);
+ assert.equal(detail[2].at(-1),"Enviar muestra");
+ assert.equal(order[1].at(-1),"Enviar muestra");
+ assert.deepEqual(detail.at(-1).slice(0,2),["Comentarios generales del pedido","Entrega urgente"]);
+ assert.deepEqual(order.at(-1).slice(0,2),["Comentarios generales del pedido","Entrega urgente"]);
+});
+test("los artículos excluidos conservan comentarios, pero nunca cantidades",()=>{
+ const excluded={...row,excluded:true};
+ const first=defaultLaboratoryLine(excluded,"parafarmacia",["1","2"]);
+ assert.equal(first.units,0);
+ const draft={"000123":{...first,units:25,comment:"Referencia descatalogada"}};
+ const line=orderLineFor(excluded,"parafarmacia",["1","2"],draft);
+ assert.equal(line.units,0);
+ assert.equal(line.comment,"Referencia descatalogada");
+ assert.equal(mergeVisibleOrderLines([excluded],"parafarmacia",["1","2"],draft)["000123"].units,0);
+ const medication=defaultLaboratoryLine({...excluded,cn:"400123"},"medicacion",["1","2"]);
+ assert.deepEqual(medication.unitsByPharmacy,{"1":0,"2":0});
+ assert.equal(totalStockFor({...row,byPharmacy:{"1":{stock:4},"2":{stock:null}}},["1","2"]),null);
 });

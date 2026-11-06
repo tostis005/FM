@@ -107,10 +107,11 @@ received_with_cn AS MATERIALIZED (
  FROM received_with_cn
  ORDER BY cn,fecha DESC,pharmacy_code,sistema_origen,documento_id,linea_id
 )
-SELECT l.lab_id::text AS lab_id,l.cn,l.nombre
+SELECT l.lab_id::text AS lab_id,l.cn,l.nombre,
+ (EXISTS(SELECT 1 FROM excluded_cn b WHERE b.cn=l.cn)
+  OR upper(coalesce(l.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
+  OR EXISTS (SELECT 1 FROM unnest($3::text[]) AS exclude(cadena)
+    WHERE position(upper(exclude.cadena) in upper(coalesce(l.nombre,'')))>0)
+ ) AS excluded
 FROM latest l JOIN scoped_cn s USING(cn)
-WHERE NOT EXISTS (SELECT 1 FROM excluded_cn b WHERE b.cn=l.cn)
- AND NOT (upper(coalesce(l.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
-   OR EXISTS (SELECT 1 FROM unnest($3::text[]) AS exclude(cadena)
-     WHERE position(upper(exclude.cadena) in upper(coalesce(l.nombre,'')))>0))
 ORDER BY l.lab_id,l.cn;

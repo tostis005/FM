@@ -189,6 +189,12 @@ jobs:
           psql_test --single-transaction < api/src/migrations/010_nomenclator_aemps.sql
           psql_test --single-transaction < api/src/migrations/026_catalogo_laboratorios.sql
           psql_test --single-transaction < api/src/migrations/027_pedidos_laboratorio_borradores.sql
+           psql_test --single-transaction < api/src/migrations/047_pedidos_laboratorio_comentarios.sql
+           psql_test --single-transaction < api/src/migrations/047_pedidos_laboratorio_comentarios.sql
+           test "$(psql_test -At -c "SELECT CASE WHEN EXISTS (
+             SELECT 1 FROM information_schema.columns WHERE table_schema='farmetrica'
+              AND table_name='pedidos_laboratorio_borradores' AND column_name='comentario_global'
+           ) THEN 1 ELSE 0 END;")" = 1
           psql_test --single-transaction < api/src/migrations/029_fuentes_catalogo.sql
           psql_test --single-transaction < api/src/migrations/030_proveedor_laboratorio.sql
           psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql

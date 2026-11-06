@@ -31,11 +31,11 @@ async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,h
   SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,
    'medicacion'::text AS tipo,true AS "inMaster",
    false AS "inReceipts",false AS "inSales",false AS "inPurchases",
-   NULL::text AS "pharmacyIds",n.dcpf,n.generico AS generic,false AS provisional
+   NULL::text AS "pharmacyIds",n.dcpf,n.generico AS generic,false AS provisional,
+   (${retiredProductSQL("n.nombre","$7")} OR EXISTS(SELECT 1 FROM blocked b WHERE b.cn=n.cn)) AS excluded
   FROM farmetrica.nomenclator_presentaciones n
-  WHERE ${officialMatch("n")} AND NOT ${retiredProductSQL("n.nombre","$7")}
+  WHERE ${officialMatch("n")}
    AND ($4::text='' OR n.nombre ILIKE '%'||$4||'%' OR n.cn ILIKE '%'||$4||'%')
-   AND NOT EXISTS(SELECT 1 FROM blocked b WHERE b.cn=n.cn)
  )
  SELECT *,count(*) OVER()::int AS total FROM official
  ORDER BY nombre,referencia LIMIT $5 OFFSET $6`;
@@ -193,8 +193,9 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
    false AS "inMaster",bool_or(bought OR sold) AS "inReceipts",
    bool_or(sold) AS "inSales",bool_or(bought) AS "inPurchases",
    string_agg(DISTINCT pharmacy_id::text,',' ORDER BY pharmacy_id::text) AS "pharmacyIds",
-   NULL::text AS dcpf,false AS generic,bool_and(cn IS NULL) AS provisional
-  FROM activity WHERE tipo=$8 AND NOT inactive AND valid_lab
+   NULL::text AS dcpf,false AS generic,bool_and(cn IS NULL) AS provisional,
+   bool_or(inactive) AS excluded
+  FROM activity WHERE tipo=$8 AND valid_lab
   GROUP BY coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id)
  ), filtered AS (
   SELECT * FROM summarized

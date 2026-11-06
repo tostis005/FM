@@ -103,3 +103,36 @@
  .fm-lab-matrix-loading>strong{font-size:12px}
  .fm-lab-matrix-loading .fm-lab-spinner{width:24px;height:24px}
 }
+
+/* Las bajas permanecen a la vista para consultar stock y ventas, pero sin pedido. */
+.fm-lab-order-table tbody tr.fm-lab-order-excluded td,
+.fm-lab-order-table tbody tr.fm-lab-order-excluded .shade-0,
+.fm-lab-order-table tbody tr.fm-lab-order-excluded .shade-1,
+.fm-lab-order-table tbody tr.fm-lab-order-excluded .shade-2{background:#fbecec!important;color:#6d3c42}
+.fm-lab-order-table tbody tr.fm-lab-order-excluded td.fm-lab-order-sticky{background:#fbecec!important}
+.fm-lab-order-table tbody tr.fm-lab-order-excluded input:disabled{background:#f5e7e7;color:#805258;cursor:not-allowed}
+.fm-lab-order-commentcol{min-width:110px!important}
+.fm-lab-comment-link{display:inline-flex;gap:5px;align-items:center;justify-content:center;
+ border:1px solid #d1ddd5;border-radius:7px;background:#f8faf8;color:#52675a;
+ padding:5px 7px;font-size:10px;cursor:pointer;white-space:nowrap}
+.fm-lab-comment-link:hover,.fm-lab-comment-link:focus-visible{border-color:#8da797;color:#215941}
+.fm-lab-comment-link.has-comment{border-color:#8eaf9c;background:#e3f1e8;color:#1d6041;font-weight:700}
+.fm-lab-order-global-comment{display:grid;gap:6px;margin-top:5px}
+.fm-lab-order-global-comment label{font-size:13px;font-weight:700;color:#28533d}
+.fm-lab-order-global-comment textarea,.fm-lab-comment-dialog textarea{
+ box-sizing:border-box;width:100%;padding:10px 12px;min-height:82px;
+ font:inherit;font-size:13px;line-height:1.5;color:inherit;
+ background:var(--surface,#fff);border:1px solid #cbd9cf;border-radius:9px;resize:vertical}
+.fm-lab-order-global-comment textarea:focus,.fm-lab-comment-dialog textarea:focus{
+ outline:2px solid #71b392;outline-offset:1px}
+.fm-lab-order-global-comment small{font-size:11px;color:#60756a}
+.fm-lab-comment-overlay{position:fixed;inset:0;z-index:150;background:#14291a88;
+ display:flex;align-items:center;justify-content:center;padding:16px}
+.fm-lab-comment-dialog{box-sizing:border-box;width:min(100%,560px);max-height:90vh;overflow:auto;
+ padding:22px;background:var(--surface,#fff);border:1px solid #d9e5db;border-radius:13px;
+ box-shadow:0 24px 60px #0d221f40;display:grid;gap:11px}
+.fm-lab-comment-dialog h2{font-size:17px;color:#24543f;margin:0}
+.fm-lab-comment-dialog p{font-size:12px;color:#61766b;margin:0;overflow-wrap:anywhere}
+.fm-lab-comment-dialog small{font-size:11px;color:#60756a;text-align:right}
+.fm-lab-comment-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px}
+@media(max-width:720px){.fm-lab-comment-dialog{padding:16px}}

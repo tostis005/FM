@@ -22,6 +22,7 @@ export function unionLaboratoryReferences(official,received,search="",type="medi
    inPurchases:Boolean(previous.inPurchases||row.inPurchases),
    inSales:Boolean(previous.inSales||row.inSales),
    inReceipts:Boolean(previous.inReceipts||row.inReceipts),
+    excluded:Boolean(previous.excluded||row.excluded),
    pharmacyIds:[...new Set(
     [previous.pharmacyIds,row.pharmacyIds].filter(Boolean).flatMap(x=>String(x).split(","))
    )].sort().join(",")||null

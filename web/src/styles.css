@@ -908,3 +908,16 @@ html,body{overflow-x:clip}
  .campaign-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .report-consolidated-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* Duración de campaña: dos modalidades, sin fechas finales ficticias ni recordatorios. */
+.campaign-duration-options{display:flex;align-items:stretch;flex-wrap:wrap;gap:9px;
+ min-width:0;margin:0;padding:0;border:0}
+.campaign-duration-options legend{float:none;width:100%;padding:0;margin:0 0 8px;
+ color:#476456;font-size:12px;font-weight:750}
+.campaign-duration-options label{display:inline-flex;align-items:center;gap:9px;
+ flex:1 1 170px;min-height:44px;padding:10px 13px;box-sizing:border-box;
+ background:#fff;border:1px solid #dbe9e0;border-radius:10px;cursor:pointer;
+ color:#466656;font-weight:650;font-size:12px;line-height:1.45}
+.campaign-duration-options label.chosen{background:#eff9f3;border-color:#5eb995;color:#165f40}
+.campaign-duration-options input{width:17px;height:17px;flex:0 0 auto;margin:0;accent-color:#12835c}
+.campaign-duration-options label:focus-within{outline:2px solid #379f73;outline-offset:2px}

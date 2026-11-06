@@ -22,7 +22,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio) "+
    "VALUES('ABA','SIM-7-DIGIT-194700','Artículo CN con dígito de control','1947001','Lab Test')");
   // El mismo código que aparece con nombre en Extracción de ventas debe
-  // recuperar su nombre al pegarlo, aunque el Nomenclátor no lo conozca.
+  // recuperar su nombre al pegarlo, desde Farmatic, sin consultar fuentes externas.
   await db.query("INSERT INTO ampedia.articulos"+
    "(farmacia_codigo,origen_id,nombre,codigo_nacional,laboratorio,proveedor_habitual_id) "+
    "VALUES('ABA','168766','Eucerin Atopi Control 250 ml',NULL,NULL,NULL)");
@@ -52,19 +52,9 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "ampedia",own,promotionSearchPatterns("765432 Farmetrica"),[],240,0
   ])).rows;
   assert.ok(acrossFields.some(row=>row.source_id==="SIM-ART-123"));
-  // Fuente oficial con CN válido aunque no exista ficha ERP.
-  await db.query(`INSERT INTO farmetrica.nomenclator_presentaciones
-   (cn,nombre,dcpf,generico,laboratorio_titular,laboratorio_comercializador)
-   VALUES('793421','Comprimidos multipalabra Solar','QA-MULTI',false,
-    'Laboratorio Torre','Laboratorio Cosmo')
-   ON CONFLICT (cn) DO UPDATE SET nombre=EXCLUDED.nombre,
-    laboratorio_titular=EXCLUDED.laboratorio_titular,
-    laboratorio_comercializador=EXCLUDED.laboratorio_comercializador`);
-  const officialRows=(await db.query(sql.officialCatalog,[
-   promotionSearchPatterns("Cosmo Solar"),240,0
-  ])).rows;
-  assert.ok(officialRows.some(row=>row.resolved_cn==="793421"));
-  assert.ok(officialRows.some(row=>row.description==="Comprimidos multipalabra Solar"));
+  // La búsqueda de campañas no debe depender del Nomenclátor.
+  assert.equal(sql.officialCatalog,undefined);
+  assert.ok(!sql.direct.includes("nomenclator_presentaciones"));
   const product=cnHits.find(row=>row.source_id==="SIM-ART-123");
   assert.ok(product);
   assert.equal(promotionResultCN(product),"765432");
@@ -80,7 +70,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "ampedia",own,promotionSearchPatterns("Atopi Eucerin"),[],240,0
   ])).rows;
   assert.ok(textResults.some(row=>row.resolved_cn==="168766"),
-   "El buscador por palabras debe incluir referencias ERP sin CN oficial");
+   "El buscador por palabras debe incluir referencias ERP sin CN rellenado");
   const pasted=(await db.query(sql.direct,["ampedia",own,[],["194700"],240,0])).rows;
   const sevenDigit=pasted.find(row=>row.source_id==="SIM-7-DIGIT-194700");
   assert.ok(sevenDigit,"El CN de seis dígitos debe localizar la ficha ERP con dígito de control");

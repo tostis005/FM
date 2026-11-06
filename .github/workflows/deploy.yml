@@ -361,6 +361,17 @@ jobs:
             exit 1
           '
 
+      - name: Diagnosticar matriz real de ventas y stock del preparador (solo lectura)
+        # Este diagnóstico no altera datos ni frena la publicación si una
+        # farmacia tiene histórico de ventas aún demasiado costoso.
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            timeout 210 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorBulkPerformance.mjs
+          '
+
       - name: Verificar buscador de artículos y proveedores con el maestro real
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '

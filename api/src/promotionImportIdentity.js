@@ -18,12 +18,12 @@ export function promotionImportIdentity(p){
 // coincidan también oferta, fechas y CNs, evita duplicados al reintentarlo.
 export function promotionExcelFileIdentity(p){
  const source=String(p?.source||"");
- if(!/^Excel:\\s*.+\\.xlsx$/i.test(source)||!Number.isInteger(Number(p?.sourceRow))||
+ if(!/^Excel:\s*.+\.xlsx$/i.test(source)||!Number.isInteger(Number(p?.sourceRow))||
   Number(p.sourceRow)<2)return null;
  return [source,p.sourceSheet||"RESUMEN",p.sourceRow,
   p.start,p.end||"",p.laboratory||p.subtitle,p.range,p.originalOffer,
   p.description||"",[...(p.cns||[])].map(normalize).sort().join(",")
- ].map(normalize).join("\\u001F");
+ ].map(normalize).join("\u001F");
 }
 export function planPromotionImport(existing,incoming){
  const identities=new Set(existing.map(promotionImportIdentity).filter(Boolean));

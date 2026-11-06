@@ -20,6 +20,31 @@ try{
   ' FROM "'+schema+'".fm_promociones WHERE documento->>\'source\' ILIKE $1',
   values:["Excel: NOVIEMBRE 2026 PROMOCIONES FARMACIA ABADIA Y PB%"],query_timeout:8000});
  console.log("PROMOCIONES_NOVIEMBRE_ESTADO",JSON.stringify(rows[0]||{}));
+
+ // Solo estadísticas agregadas: no extraer CN, descripciones ni usuarios.
+ // Distinguir campañas duplicadas por fila (mismo Excel), y duplicados
+ // exactos que también contienen el mismo listado CN.
+ const {rows:duplicateRows}=await pool.query({text:
+  'WITH imports AS ('+
+  ' SELECT documento->>\'importBatchId\' AS batch,'+
+  ' md5(jsonb_build_array(documento->>\'source\',documento->>\'sourceSheet\','+
+  ' documento->>\'sourceRow\',documento->>\'laboratory\','+
+  ' documento->>\'range\',documento->>\'originalOffer\','+
+  ' documento->>\'start\',documento->>\'end\')::text) AS rowkey,'+
+  ' md5(jsonb_build_array(documento->>\'source\',documento->>\'sourceSheet\','+
+  ' documento->>\'sourceRow\',documento->>\'laboratory\','+
+  ' documento->>\'range\',documento->>\'originalOffer\','+
+  ' documento->>\'start\',documento->>\'end\',documento->\'cns\')::text) AS contentkey'+
+  ' FROM "'+schema+'".fm_promociones WHERE documento->>\'source\' ILIKE $1),'+
+  ' rows_by_identity AS (SELECT rowkey,count(*) n FROM imports GROUP BY rowkey),'+
+  ' rows_by_content AS (SELECT contentkey,count(*) n FROM imports GROUP BY contentkey),'+
+  ' batches AS (SELECT batch,count(*) n FROM imports GROUP BY batch)'+
+  ' SELECT (SELECT count(*)::int FROM rows_by_identity) AS distinct_rows,'+
+  ' (SELECT coalesce(sum(n-1),0)::int FROM rows_by_identity WHERE n>1) AS duplicate_rows,'+
+  ' (SELECT coalesce(sum(n-1),0)::int FROM rows_by_content WHERE n>1) AS exact_duplicate_rows,'+
+  ' (SELECT coalesce(jsonb_agg(n ORDER BY n),\'[]\'::jsonb) FROM batches) AS batch_sizes',
+  values:["Excel: NOVIEMBRE 2026 PROMOCIONES FARMACIA ABADIA Y PB%"],query_timeout:8000});
+ console.log("PROMOCIONES_NOVIEMBRE_DUPLICADOS",JSON.stringify(duplicateRows[0]||{}));
 }catch(error){
  console.error("PROMOCIONES_NOVIEMBRE_ESTADO_ERROR",error.code||error.name);
  process.exitCode=1;

@@ -307,12 +307,43 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 --single-transaction -U farmawao -d farmawao' < api/src/migrations/011_configuracion_precios.sql
 
-      - name: Crear índices concurrentes del preparador de pedidos
+      - name: Comprobar índices operativos del preparador (sin DDL si están creados)
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+          # En producción hay transacciones ERP abiertas: incluso
+          # CREATE INDEX CONCURRENTLY IF NOT EXISTS requiere bloqueos.
+          # No volver a ejecutar INDEX/ANALYZE en cada publicación cuando
+          # los índices ya están válidos. Consulta únicamente metadatos.
+          index_state=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SELECT CASE WHEN count(*)=5
+            AND bool_and(i.indisvalid AND i.indisready)
+            THEN 'ready' ELSE 'missing' END
+          FROM pg_index i
+          JOIN pg_class c ON c.oid=i.indexrelid
+          JOIN pg_namespace n ON n.oid=c.relnamespace
+          WHERE n.nspname='ampedia'
+            AND c.relname IN (
+              'fm_preparador_articulo_cn_idx',
+              'fm_preparador_articulo_origen_idx',
+              'fm_preparador_articulo_normalizado_idx',
+              'fm_preparador_ventas_linea_idx',
+              'fm_preparador_recepciones_proveedor_idx'
+            );
+          SQL
+          )
+          if [ "$index_state" = ready ]; then
+            echo "Los 5 índices críticos están creados y válidos; no se repite DDL/ANALYZE."
+            exit 0
+          fi
+          echo "::warning::Falta algún índice del preparador. Se intenta su mantenimiento; un bloqueo de escrituras ERP no impedirá actualizar API y web."
+          if ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' \
-            < ops/indices-preparador-masivo.sql
+            < ops/indices-preparador-masivo.sql; then
+            echo "Mantenimiento de índices completado."
+          else
+            echo "::warning::Los índices necesitan una ventana de mantenimiento sin bloqueos. Se mantiene la publicación; no se ha modificado el histórico."
+          fi
 
       - name: Actualizar API y web en el VPS
         run: |

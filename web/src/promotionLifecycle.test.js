@@ -39,3 +39,12 @@ test("la fecha de la farmacia no depende del día UTC",()=>{
  assert.equal(civilToday(new Date("2026-10-31T23:30:00Z"),"Europe/Madrid"),"2026-11-01");
  assert.equal(civilToday(new Date("2026-10-31T23:30:00Z"),"America/Bogota"),"2026-10-31");
 });
+
+test("campañas manuales por fechas vencen; los borradores siguen sin activarse",()=>{
+ const active={...open,source:"manual",statusSource:"manual",status:"Activa",
+  durationMode:"dates",end:"2026-10-31"};
+ assert.equal(effectivePromotionStatus(active,utc("2026-10-31")),"Activa");
+ assert.equal(effectivePromotionStatus(active,utc("2026-11-01")),"Finalizada");
+ assert.equal(effectivePromotionStatus({...active,status:"Borrador"},utc("2026-10-20")),"Borrador");
+ assert.equal(effectivePromotionStatus({...active,durationMode:"stock",end:""},utc("2027-03-15")),"Activa");
+});

@@ -168,6 +168,26 @@ jobs:
       - name: Aplicar migraciones aditivas transaccionales
         run: |
           set -euo pipefail
+          # Este VPS ya se inicializó con las migraciones históricas. Volver a
+          # ejecutar ALTER/CREATE VIEW en millones de ventas en cada deploy
+          # puede quedar esperando transacciones activas y bloquear la entrega.
+          # Esta detección es SOLO para el esquema productivo completo; las
+          # instalaciones nuevas siguen ejecutando la secuencia íntegra.
+          baseline_state=$(ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          SELECT CASE WHEN
+            to_regclass('farmetrica.pedidos_laboratorio_borradores') IS NOT NULL
+            AND to_regclass('farmetrica.preparador_frecuencia_laboratorio') IS NOT NULL
+            AND to_regclass('farmetrica.proveedores_unificados_alias') IS NOT NULL
+            AND to_regclass('ampedia.fm_ventas_lineas') IS NOT NULL
+            AND to_regclass('ampedia.fm_ventas_analitica') IS NOT NULL
+            THEN 'ready' ELSE 'missing' END;
+          SQL
+          )
+          test "$baseline_state" = ready || test "$baseline_state" = missing
+          # La lista de legado es CERRADA. Si se añade una migración nueva
+          # al bucle, no se omitirá en un VPS ya inicializado.
+          legacy_migrations="001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 041_preparador_ultima_recepcion_cache.sql 042_preparador_agenda_y_cobertura.sql 043_preparador_agenda_global.sql 044_proveedores_otros_servicios.sql 035_stock_sin_recepciones_indices.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql"
           # Las migraciones documentales ya instaladas vuelven a pedir locks
           # exclusivos sobre millones de líneas ERP. Comprobar su presencia
           # antes de reejecutarlas evita bloquear el VPS y agotar el despliegue.
@@ -186,6 +206,14 @@ jobs:
           )
           test "$documental_state" = ready || test "$documental_state" = missing
           for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 027_pedidos_laboratorio_borradores.sql 047_pedidos_laboratorio_comentarios.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 041_preparador_ultima_recepcion_cache.sql 042_preparador_agenda_y_cobertura.sql 043_preparador_agenda_global.sql 044_proveedores_otros_servicios.sql 035_stock_sin_recepciones_indices.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
+            if [ "$baseline_state" = ready ]; then
+              case " $legacy_migrations " in
+                *" $migration "*)
+                  echo "Migración ya instalada en el VPS: $migration (sin reejecutar DDL)"
+                  continue
+                  ;;
+              esac
+            fi
             if [ "$documental_state" = ready ] && { [ "$migration" = "016_modelo_documental.sql" ] || [ "$migration" = "018_lectura_documental.sql" ]; }; then
               echo "Ya existen las entidades y vistas documentales: omitiendo migración pesada $migration"
               continue

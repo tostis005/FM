@@ -247,8 +247,12 @@ try{
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");
        }
        if(path==="promociones/nueva"&&viewport.width===375){
+         // La pantalla se importa con React.lazy. No medir los controles
+         // mientras Suspense todavía presenta el indicador de carga.
+         await page.locator(".fm-objectives-base input[type=radio]").first()
+          .waitFor({state:"attached",timeout:20000});
          const headers=await page.locator(".fm-objectives-base input[type=radio]").count();
-         if(headers!==5)throw Error("Nueva campaña necesita cuatro períodos y stock actual seleccionables");
+         if(headers!==5)throw Error("Nueva campaña necesita cuatro períodos y stock actual seleccionables (detectados "+headers+")");
          const searchInput=page.getByRole("searchbox",{name:"Buscar por artículo, proveedor o CN"});
          await searchInput.fill("Crema");
          await page.locator(".fm-objectives-results").waitFor({state:"visible",timeout:10000});

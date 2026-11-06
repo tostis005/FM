@@ -390,7 +390,6 @@ function App(){
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
   const [importFeedback,setImportFeedback]=useState(null);
-  const [importSourceFilter,setImportSourceFilter]=useState("");
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [labIncludeSeller,setLabIncludeSeller]=useState(false);
   const [toast,setToast]=useState("");
@@ -570,8 +569,8 @@ function App(){
   const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&promotionOverlapsPeriod(p,from,to)
-  &&(!importSourceFilter||p.source===importSourceFilter)
-  &&(importSourceFilter||promotionVisibleInPharmacyScope(p,sharedPharmacyIds)));
+  &&(promotionVisibleInPharmacyScope(p,sharedPharmacyIds)||
+    (canManagePromotions&&p.status==="Borrador"&&!Object.keys(p.targets||{}).length)));
  const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
@@ -717,7 +716,7 @@ function App(){
   const response=await saveStoredPromotion(updated);
   if(!response.saved)throw Error("El servidor no confirmó el guardado");
   setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
-  setStatusFilter("Todos");setImportSourceFilter("");
+  setStatusFilter("Todos");
   setObjectiveCampaign(null);
   nav("promociones");
   startPromo(updated);
@@ -907,7 +906,6 @@ function App(){
     setSearch("");setStatusFilter("Todos");
     const currentMonth=promotionMonthRange(currentPromotionMonth(new Date(),timeZone));
     if(currentMonth){setFrom(currentMonth.from);setTo(currentMonth.to);}
-    setImportSourceFilter(source);
     setImportFeedback({kind:"success",
       message:summary.imported?
        summary.imported+" "+(summary.imported===1?"promoción importada":"promociones importadas"):
@@ -1188,7 +1186,7 @@ function App(){
      <span className="fm-load-spinner" aria-hidden="true"/>}
     <span className="fm-import-result-message">{importFeedback.message}</span>
     {importFeedback.kind!=="progress"&&<button type="button" className="icon-btn"
-      onClick={()=>{setImportFeedback(null);setImportSourceFilter("");}}
+      onClick={()=>setImportFeedback(null)}
       aria-label="Cerrar aviso de importación"><X size={16}/></button>}
    </div>}
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}

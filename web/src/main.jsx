@@ -727,7 +727,7 @@ function App(){
   const base=objectiveCampaign||EMPTY_PROMO;
   const draft={...EMPTY_PROMO,...base,...objectives,id:null,
    name:base.name||"",start:base.start||"",end:base.end||"",status:"Borrador",
-   durationMode:base.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
+   durationMode:objectiveCampaign?.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
    simulatorDraft:true};
   setObjectiveCampaign(null);
   nav("promociones");

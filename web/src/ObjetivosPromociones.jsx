@@ -4,6 +4,7 @@ import DetalleVentas from "./DetalleVentas.jsx";
 import {LoadingFrame,LoadingStatus} from "./LoadingState.jsx";
 import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,promotionProductName,promotionProductLabel,UNKNOWN_PRODUCT_NAME} from "./simuladorProductSelection.js";
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
+import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
@@ -109,9 +110,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   }
   const controller=new AbortController();
   setHistoryBusy(true);setHistoryError("");
-  post(clientSlug,"/api/ventas/objetivos/historico",{
-   cns:selectedCNs,pharmacyIds:selectedPharmacies,periods
-  },controller.signal).then(data=>{
+  loadPromotionHistoryInBatches(selectedCNs,batch=>
+   post(clientSlug,"/api/ventas/objetivos/historico",{
+    cns:batch,pharmacyIds:selectedPharmacies,periods
+   },controller.signal)).then(data=>{
    if(controller.signal.aborted)return;
    setHistorical(data.periods||{});
    setStock(data.stock||{});
@@ -152,8 +154,9 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   // Mantener la lista intacta mientras se consulta Farmatic: no insertar
   // códigos provisionales que aparezcan como "Nombre no disponible".
   try{
-   const data=await post(clientSlug,"/api/ventas/objetivos/buscar",{search:"",cns:requested});
-   const byCode=new Map((data.products||[])
+   const responses=await requestPromotionBatches(requested,batch=>
+    post(clientSlug,"/api/ventas/objetivos/buscar",{search:"",cns:batch}));
+   const byCode=new Map(responses.flatMap(data=>data.products||[])
     .filter(item=>CN(item.cn)&&requested.includes(item.cn)&&
      String(item.description||"").trim()&&
      ![UNKNOWN_PRODUCT_NAME,"Artículo sin nombre","CN introducido"]

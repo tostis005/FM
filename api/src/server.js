@@ -450,8 +450,13 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
     const matchedKeys=articleKeysForCNs(articleKeys,cns);
     const singleCNKeys=cn?articleKeysForCNs(articleKeys,[cn]):[];
     const sourceKey="f.id::text||'|'||btrim(v.articulo_id::text)";
+    // Filtro previo compatible con el índice (farmacia, artículo, fecha).
+    // Con 500 CN evita aplicar la concatenación farmacia|ERP a cada venta.
+    const articleIds=[...new Set([...cns,...articleKeys.map(({key})=>
+      key.slice(key.indexOf("|")+1)).filter(Boolean)])];
     const filters=[
       salesPeriod,
+      "btrim(v.articulo_id::text)=ANY($9::text[])",
       "(btrim(v.articulo_id::text)=ANY($3::text[]) OR "+sourceKey+"=ANY($7::text[]))",
       "($4::integer IS NULL OR f.id=$4)",
       "($5::text IS NULL OR v.numero_ticket::text ILIKE '%' || $5 || '%')",
@@ -460,7 +465,7 @@ app.post("/api/ventas/detalle", ...requireTenantModule("promociones"), async (re
     const params=[
       start,end,cns,
       farmaciaId == null || farmaciaId === "" ? null : Number(farmaciaId),
-      ticket ? ticket.trim() : null, cn || null,matchedKeys,singleCNKeys,
+      ticket ? ticket.trim() : null, cn || null,matchedKeys,singleCNKeys,articleIds,
     ];
     for (const [column,value] of Object.entries(columnFilters)) {
       if(Array.isArray(value)){

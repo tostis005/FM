@@ -11,8 +11,9 @@ function fixture({directRows,stockRows,matchedSupplierRows}={}){
   if(sql.includes("WITH latest AS"))return {rows:stockRows??[{pharmacy_id:"1",units:12,updated_at:"2026-11-06T00:00:00Z"}]};
   if(sql.includes("SELECT DISTINCT f.id::text AS pharmacy_id"))
    return {rows:[{pharmacy_id:"1",source_id:"ERP-123"}]};
-  if(sql.includes("coalesce(sum(v.unidades)"))
-   return {rows:[{pharmacy_id:"1",units:7,amount:53.8}]};
+  if(sql.includes("sum(v.unidades) FILTER (WHERE"))
+   return {rows:[{pharmacy_id:"1",units_0:7,amount_0:53.8,
+    units_1:4,amount_1:20}]};
   if(sql.includes("SELECT table_name,column_name FROM information_schema.columns"))
    return {rows:[
     ...["farmacia_codigo","origen_id","nombre","codigo_nacional","cn_normalizado",
@@ -55,8 +56,11 @@ test("histórico por farmacia devuelve unidades e importe neto",async()=>{
  assert.deepEqual(response.amounts,{october:{"1":53.8}});
  assert.deepEqual(api.queries[1].params,["ampedia",[1],["123456"]]);
  assert.deepEqual(api.queries[2].params,
-   ["ampedia",[1],"2026-10-01","2026-10-31",["123456"],["1|ERP-123"]]);
- assert.match(api.queries[2].sql,/sum\(v.importe\)/);
+   ["ampedia",[1],["123456"],["123456","ERP-123"],["1|ERP-123"],
+    "2026-10-01","2026-10-31"]);
+ assert.match(api.queries[2].sql,/sum\(v.importe\) FILTER \(WHERE/);
+ assert.match(api.queries[2].sql,/btrim\(v.articulo_id::text\)=ANY\(\$4::text\[\]\)/);
+ assert.ok(api.queries[2].timeout<=30000);
  assert.deepEqual(response.stock,{"1":12});
  assert.equal(response.stockUnavailable,false);
  assert.match(api.queries[3].sql,/DISTINCT ON \(f.id,a.origen_id\)/);
@@ -197,4 +201,27 @@ test("stock suma artículos seleccionados por farmacia, con cero real y sin mezc
  assert.match(q.sql,/f.id=ANY\(\$2::int\[\]\)/);
  assert.match(q.sql,/a.origen_id::text/);
  assert.deepEqual(q.params,["ampedia",[1,2],["123456","168766"]]);
+});
+
+test("cuatro períodos de 500 CN ejecutan una sola agregación de ventas",async()=>{
+ const api=fixture();
+ const cns=Array.from({length:500},(_,i)=>String(i).padStart(6,"0"));
+ const four=[
+  {id:"previous",from:"2026-10-01",to:"2026-10-31"},
+  {id:"year",from:"2025-10-01",to:"2025-10-31"},
+  {id:"twoYears",from:"2024-10-01",to:"2024-10-31"},
+  {id:"custom",from:"2026-11-01",to:"2026-11-06"}
+ ];
+ const {status,response}=await api.call("/api/ventas/objetivos/historico",
+  {cns,pharmacyIds:[1],periods:four});
+ assert.equal(status,200);
+ assert.equal(response.periods.previous["1"],7);
+ assert.equal(response.periods.year["1"],4);
+ const sales=api.queries.filter(q=>q.sql.includes("sum(v.unidades) FILTER (WHERE"));
+ assert.equal(sales.length,1,"no consultar la tabla de ventas cuatro veces");
+ assert.equal(sales[0].params.length,5+four.length*2);
+ assert.ok(sales[0].params[3].includes("ERP-123"));
+ assert.match(sales[0].sql,/OR \(v.fecha >= \$12::date/);
+ const links=api.queries.find(q=>q.sql.includes("SELECT DISTINCT f.id::text AS pharmacy_id"));
+ assert.match(links.sql,/left\(btrim\(a.codigo_nacional::text\),6\)=ANY/);
 });

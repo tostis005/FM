@@ -136,10 +136,11 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    // una sola vez y comparar siempre por farmacia para evitar cruces de IDs.
    const metadata=await catalogColumns(pool,schema);
    const have=(column)=>metadata.some(c=>c.table_name==="articulos"&&c.column_name===column);
+   // Usar las expresiones de los índices del catálogo (migración 045):
+   // en lotes de muchos CN, un OR con btrim sin índice forzaba barridos.
    const normalizedMatch=have("cn_normalizado")?
-    " OR btrim(a.cn_normalizado::text)=ANY($3::text[]) OR left(btrim(a.cn_normalizado::text),6)=ANY($3::text[])":"";
-   const matchProducts="(btrim(a.origen_id::text)=ANY($3::text[]) "+
-    "OR btrim(a.codigo_nacional::text)=ANY($3::text[]) "+
+    " OR left(btrim(a.cn_normalizado::text),6)=ANY($3::text[])":"";
+   const matchProducts="(a.origen_id::text=ANY($3::text[]) "+
     "OR left(btrim(a.codigo_nacional::text),6)=ANY($3::text[])"+normalizedMatch+")";
    const {rows:links}=await pool.query(`
     SELECT DISTINCT f.id::text AS pharmacy_id,btrim(a.origen_id::text) AS source_id
@@ -148,27 +149,39 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
       AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
     WHERE f.id=ANY($2::int[]) AND ${matchProducts}`,
     [slug,ids,cns]);
-   const mappedKeys=links.map(r=>r.pharmacy_id+"|"+r.source_id);
-   const query=`SELECT f.id::text AS pharmacy_id,
-      coalesce(sum(v.unidades),0)::float8 AS units,
-      coalesce(sum(v.importe),0)::float8 AS amount
+   const mappedKeys=links.filter(r=>r.source_id).map(r=>r.pharmacy_id+"|"+r.source_id);
+   const articleIds=[...new Set([...cns,...links.map(r=>r.source_id).filter(Boolean)])];
+   // Calcular todos los períodos en un único acceso a ventas. Antes se
+   // ejecutaba un GROUP BY completo por cada período (hasta seis recorridos
+   // para los mismos 500 CN). FILTER devuelve un par de agregados por período.
+   const windows=periods.map((_,i)=>
+    "(v.fecha >= $"+(6+i*2)+"::date AND v.fecha < ($"+(7+i*2)+"::date + interval '1 day'))");
+   const columns=windows.flatMap((window,i)=>[
+    "coalesce(sum(v.unidades) FILTER (WHERE "+window+"),0)::float8 AS units_"+i,
+    "coalesce(sum(v.importe) FILTER (WHERE "+window+"),0)::float8 AS amount_"+i
+   ]);
+   const query=`SELECT f.id::text AS pharmacy_id, ${columns.join(", ")}
      FROM "${schema}".fm_ventas_analitica v JOIN farmetrica.farmacias f
       ON f.cliente_slug=$1
       AND upper(btrim(v.farmacia_codigo::text))=${pharmacyDataCodeSQL("f")}
-     WHERE f.id=ANY($2::int[]) AND v.fecha >= $3::date
-       AND v.fecha < ($4::date+interval '1 day')
-       AND (btrim(v.articulo_id::text)=ANY($5::text[])
-          OR f.id::text||'|'||btrim(v.articulo_id::text)=ANY($6::text[]))
+     WHERE f.id=ANY($2::int[])
+       AND (${windows.join(" OR ")})
+       AND btrim(v.articulo_id::text)=ANY($4::text[])
+       AND (btrim(v.articulo_id::text)=ANY($3::text[])
+          OR f.id::text||'|'||btrim(v.articulo_id::text)=ANY($5::text[]))
      GROUP BY f.id`;
+   const values=[slug,ids,cns,articleIds,mappedKeys,
+    ...periods.flatMap(p=>[p.from,p.to])];
+   const {rows:sold}=await pool.query({text:query,values,query_timeout:28000});
    const totals={},amounts={};
-   for(const p of periods){
-    const {rows}=await pool.query(query,[slug,ids,p.from,p.to,cns,mappedKeys]);
-    totals[p.id]=Object.fromEntries(rows.map(r=>[r.pharmacy_id,Number(r.units)]));
-    amounts[p.id]=Object.fromEntries(rows.map(r=>[r.pharmacy_id,Number(r.amount)]));
+   for(let i=0;i<periods.length;i++){
+    const p=periods[i];
+    totals[p.id]=Object.fromEntries(sold.map(r=>[r.pharmacy_id,Number(r["units_"+i])]));
+    amounts[p.id]=Object.fromEntries(sold.map(r=>[r.pharmacy_id,Number(r["amount_"+i])]));
    }
    // Stock de la ficha Farmatic más reciente por ID de artículo y farmacia.
    // No contar varias sincronizaciones o referencias seleccionadas dos veces.
-   let stock={},stockUpdatedAt=null,stockUnavailable=false;
+   let stock={},stockUpdatedAt=null,stockUnavailable=false,stockMissingPharmacyIds=[];
    if(have("stock_actual")){
     const order=have("sincronizado_en")?
      "a.sincronizado_en DESC NULLS LAST":"a.origen_id";
@@ -187,10 +200,14 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
        ORDER BY f.id,a.origen_id,${order}
       )
       SELECT pharmacy_id,coalesce(sum(stock),0)::float8 AS units,
+       bool_and(stock IS NOT NULL) AS complete,
        max(updated_at) AS updated_at
-      FROM latest GROUP BY pharmacy_id HAVING count(*)=count(stock)`,
+      FROM latest GROUP BY pharmacy_id`,
       values:[slug,ids,cns],query_timeout:8000});
-     stock=Object.fromEntries(rows.map(row=>[row.pharmacy_id,Number(row.units)]));
+     stock=Object.fromEntries(rows.filter(row=>row.complete!==false)
+      .map(row=>[row.pharmacy_id,Number(row.units)]));
+     stockMissingPharmacyIds=rows.filter(row=>row.complete===false)
+      .map(row=>row.pharmacy_id);
      const dates=rows.map(row=>row.updated_at).filter(Boolean)
       .map(value=>new Date(value).getTime()).filter(Number.isFinite);
      if(dates.length)stockUpdatedAt=new Date(Math.min(...dates)).toISOString();
@@ -199,7 +216,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
      stockUnavailable=true;
     }
    }else stockUnavailable=true;
-   res.json({periods:totals,amounts,stock,stockUpdatedAt,stockUnavailable});
+   res.json({periods:totals,amounts,stock,stockUpdatedAt,stockUnavailable,stockMissingPharmacyIds});
   }catch(e){next(e);}
  });
 }

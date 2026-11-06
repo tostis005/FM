@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {promotionExcelBatchId,importResultSummary} from "./promotionImportFlow.js";
+import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 
 const sample=bytes=>({arrayBuffer:async()=>Uint8Array.from(bytes).buffer});
 test("el mismo Excel conserva ID de lote incluso tras recargar la página en un móvil",async()=>{
@@ -25,4 +25,11 @@ test("la confirmación distingue promos nuevas, repetidas y borradores sin farma
 test("un resultado incompleto de red nunca se presenta como importación correcta",()=>{
  assert.throws(()=>importResultSummary({imported:2,skipped:0,promotions:[]},
   [{},{},{}],"Excel: noviembre.xlsx"),/no confirmó/);
+});
+
+test("un borrador sin farmacia se ve aunque exista filtro global; las campañas asignadas respetan el ámbito",()=>{
+ assert.equal(promotionVisibleInPharmacyScope({status:"Borrador",targets:{}},["1"]),true);
+ assert.equal(promotionVisibleInPharmacyScope({targets:{"2":10}},["1"]),false);
+ assert.equal(promotionVisibleInPharmacyScope({targets:{"1":10}},["1"]),true);
+ assert.equal(promotionVisibleInPharmacyScope({targets:{"2":10}},[]),true);
 });

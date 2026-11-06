@@ -104,7 +104,7 @@ test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por 
  assert.equal(JSON.parse(bySupplier.params[2])[0].supplier_code,"PR1");
  assert.deepEqual(direct.params[2],["%Proveedor%","%Ejemplo%"]);
  assert.equal(direct.params[6],"%proveedor%");
- assert.match(direct.sql,/LIKE \\$7::text/);
+ assert.match(direct.sql,/LIKE \$7::text/);
  assert.deepEqual(supplier.params[2],["%Proveedor%","%Ejemplo%"]);
  assert.deepEqual(bySupplier.params[5],["%Proveedor%","%Ejemplo%"]);
  assert.ok(bySupplier.timeout<=8000);

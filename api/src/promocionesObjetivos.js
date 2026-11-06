@@ -43,7 +43,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const pageSize=search?PAGE_SIZE:Math.min(500,Math.max(1,cns.length));
  const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
  const direct=pool.query({
-  text:sql.direct,values:[slug,ids,patterns,cns,pageLimit,offset],query_timeout:8000
+  text:sql.direct,values:[slug,ids,patterns,/^\d{6}$/.test(search)?[search]:cns,pageLimit,offset],query_timeout:8000
  });
  const supplierNames=search.length>=2&&sql.suppliers?
   pool.query({text:sql.suppliers,values:[slug,ids,patterns,400],query_timeout:4000}):

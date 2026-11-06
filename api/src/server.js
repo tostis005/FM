@@ -300,7 +300,10 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
     }
     const sales = {}, totalSales = {};
     const articleKeys=await resolvePromotionArticleKeys(pool,req.context,promotions.flatMap(p=>p.cns));
-    for (const p of promotions) {
+    let cursor=0;
+    const worker=async()=>{
+     while(cursor<promotions.length){
+      const p=promotions[cursor++];
       if (!p.cns.length) { sales[p.id] = {}; totalSales[p.id] = {}; continue; }
       // Los lotes completos se calculan por ticket y farmacia. En paralelo,
       // contabilizar TODAS las unidades de esos CN, incluidas las sueltas,
@@ -329,7 +332,9 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
         [p.start,p.end,p.cns,bundle||1,p.type==="escalonado",Boolean(bundle),mappedKeys,p.durationMode==="stock"]);
       sales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
       totalSales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades_totales)]));
-    }
+     }
+    };
+    await Promise.all(Array.from({length:Math.min(2,promotions.length)},worker));
     res.json({sales,totalSales,origin:req.context.client.schema+".fm_ventas_analitica",
       updatedAt:new Date().toISOString()});
   } catch (err) { next(err); }

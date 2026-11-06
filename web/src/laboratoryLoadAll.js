@@ -82,7 +82,7 @@ export async function fetchLaboratoryMetricsAdaptive(items,fetchBatch,{signal}={
    failure.code=result.metricsErrorCode||"QUERY_ERROR";
    throw failure;
   }
-  if(!Array.isArray(result?.rows)||result.rows.length!==items.length)
+  if(!Array.isArray(result?.rows))
    throw Error("Respuesta incompleta al calcular las ventas y el stock");
   return result;
  }catch(error){

@@ -1,12 +1,12 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
-import {Download,Save,AlertTriangle,LoaderCircle} from "lucide-react";
+import {Download,Save,AlertTriangle,LoaderCircle,MessageSquareText} from "lucide-react";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import PreparadorAgenda from "./PreparadorAgenda.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal} from "./laboratoryOrderSheet.js";
+import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
 import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";
@@ -40,6 +40,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
+ const [globalComment,setGlobalComment]=useState(""),[savedGlobalComment,setSavedGlobalComment]=useState("");
+ const [commentRow,setCommentRow]=useState(null),[commentText,setCommentText]=useState("");
  const [savedDate,setSavedDate]=useState(null),[dirty,setDirty]=useState(false),[persisted,setPersisted]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const [reload,setReload]=useState(0),[updatedAt,setUpdatedAt]=useState(null);
@@ -87,6 +89,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  },[clientSlug,scope]);
  useEffect(()=>{
   setDrafts({});setSavedLines([]);setPersisted(false);setDirty(false);setSavedDate(null);
+  setGlobalComment("");setSavedGlobalComment("");setCommentRow(null);
   if(!laboratory||!scope)return;
   const controller=new AbortController();
   const query=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope});
@@ -95,6 +98,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     const lines=Array.isArray(d.lineas)?d.lineas:[];
     setDrafts(Object.fromEntries(lines.map(line=>[line.reference,line])));
     setSavedLines(lines);setSavedDate(d.desde&&d.hasta?{from:d.desde,to:d.hasta}:null);
+    setGlobalComment(d.comentarioGlobal||"");setSavedGlobalComment(d.comentarioGlobal||"");
     setPersisted(Boolean(d.updatedAt));
    }).catch(e=>{if(!controller.signal.aborted)setError(e.message)});
   return()=>controller.abort();
@@ -246,6 +250,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  },[data.rows,search]);
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&(loadStage==="metrics"||loadStage==="fallback")&&Boolean(data.rows?.length);
+ const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
+ const pageTotalStock=stocks.every(value=>value!==null)?
+  stocks.reduce((sum,value)=>sum+value,0):null;
  const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
  const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
  const pageTotalOrder=currentRows.reduce((sum,row)=>{
@@ -264,7 +271,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setCustomFrom(from);setCustomTo(to);setPeriod("custom");
   updateSharedReportFilters(clientSlug,{period:"custom",customFrom:from,customTo:to});
  }
+ function openComment(row){
+  setCommentRow(row);setCommentText(showLine(row).comment||"");
+ }
+ function confirmComment(){
+  if(!commentRow||!canEdit)return;
+  setDrafts(current=>{
+   const previous=orderLineFor(commentRow,tab,ids,current);
+   return {...current,[commentRow.referencia]:{...previous,comment:commentText.trim()}};
+  });
+  setDirty(true);setNotice("");setCommentRow(null);
+ }
  function updateLine(row,newQty,pharmacyId=null){
+  if(isExcludedOrderRow(row))return;
   const amount=newQty===""?0:Number(newQty);
   setDrafts(current=>{
    const previous=orderLineFor(row,tab,ids,current);
@@ -284,7 +303,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  }
  async function save(){
   if(!canEdit||!laboratory||!range.valid||!scope||hasInvalid)return;
-  const combined=mergeVisibleOrderLines(currentRows,tab,ids,drafts);
+  const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
   const lines=Object.values(combined);
   if(lines.length>5000){setError("Demasiadas referencias para un único borrador. Acota la selección.");return}
   if(lines.some(line=>tab==="parafarmacia"?qty(line.units)===null:
@@ -295,8 +314,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   try{
    const result=await api(clientSlug,"/api/analytics/pedidos/borrador-laboratorio",{
     method:"PUT",body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
-     desde:range.from,hasta:range.to,lineas:lines}});
-   setDrafts(combined);setSavedLines(lines);setPersisted(true);
+     desde:range.from,hasta:range.to,lineas:lines,comentarioGlobal:globalComment}});
+   setDrafts(combined);setSavedLines(lines);setSavedGlobalComment(globalComment);setPersisted(true);
    setDirty(false);setSavedDate({from:range.from,to:range.to});
    setNotice("Borrador guardado: "+result.count+" referencias revisadas. Ya puedes generar el Excel.");
   }catch(e){setError(e.message)}finally{setBusy(false)}
@@ -305,14 +324,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   if(!persisted||dirty||!savedLines.length)return;
   try{
    setBusy(true);setError("");
-   const matrix=savedLines.map(line=>({
-    row:{referencia:line.reference,cn:line.cn,nombre:line.name,
-     byPharmacy:line.metrics||{}},line
-   })).filter(item=>tab==="parafarmacia"?Number(item.line.units)>0:
-    Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0));
-   if(!matrix.length){setError("El borrador no contiene cantidades positivas para exportar.");return}
-   const rows=laboratoryExcelRows(matrix,chosen,tab);
-   const orderRows=laboratoryOrderListRows(matrix,chosen,tab);
+   const activeCatalog=new Map((data.rows||[]).map(row=>[row.referencia,row]));
+   const matrix=savedLines.map(line=>{
+    const active=activeCatalog.get(line.reference);
+    const row={referencia:line.reference,cn:line.cn,nombre:line.name,
+     byPharmacy:line.metrics||{},excluded:active?.excluded===true||line.excluded===true};
+    return {row,line:orderLineFor(row,tab,ids,{[line.reference]:line})};
+   });
+   const ordered=matrix.filter(item=>!isExcludedOrderRow(item.row)&&(
+    tab==="parafarmacia"?Number(item.line.units)>0:
+    Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0)));
+   if(!ordered.length){setError("El borrador no contiene cantidades positivas para exportar.");return}
+   const rows=laboratoryExcelRows(matrix,chosen,tab,savedGlobalComment);
+   const orderRows=laboratoryOrderListRows(ordered,chosen,tab,savedGlobalComment);
    await exportLaboratoryOrderWorkbook(rows,laboratoryExportName(labName,tab),orderRows,tab);
    setNotice("Excel generado desde el último borrador guardado. No se ha enviado ningún pedido.");
   }catch(e){setError(e.message)}finally{setBusy(false)}

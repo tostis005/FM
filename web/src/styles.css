@@ -908,3 +908,16 @@ html,body{overflow-x:clip}
  .campaign-metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .report-consolidated-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+
+/* Modalidad de vigencia de las campañas: elección clara sin segundo cálculo. */
+.promotion-duration-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:3px 0 16px}
+.promotion-duration-picker label{display:flex;align-items:center;gap:10px;cursor:pointer;
+ min-width:0;min-height:46px;padding:10px 12px;border:1px solid #dce8df;border-radius:10px;
+ background:#f9fbfa;color:#405f50;font-size:13px;font-weight:650;box-sizing:border-box;
+ transition:background-color .15s ease,border-color .15s ease}
+.promotion-duration-picker label:hover{border-color:#9cceb1;background:#f2faf5}
+.promotion-duration-picker label.chosen{background:#eaf7ef;border-color:#5ab88b;color:#175b3d}
+.promotion-duration-picker label:focus-within{outline:2px solid #158b60;outline-offset:2px}
+.promotion-duration-picker input[type="radio"]{width:18px;height:18px;flex:0 0 auto;margin:0;accent-color:#16865b;cursor:pointer}
+@media(max-width:480px){.promotion-duration-picker{grid-template-columns:1fr}}

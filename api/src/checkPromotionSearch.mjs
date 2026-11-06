@@ -63,6 +63,33 @@ try{
   }else console.log("BÚSQUEDA POR PROVEEDOR: maestro sin fichas para la muestra");
  }else console.log("BÚSQUEDA POR PROVEEDOR: falta campo de relación o maestro ERP");
 
+ // Comprobar el caso descrito: la extracción de ventas nombra el artículo
+ // a través de origen_id. El Simulador debe mostrar exactamente esa ficha.
+ const {rows:example}=await pool.query({
+  text:"SELECT f.id,a.nombre::text AS name FROM \""+schema+"\".articulos a "+
+   "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
+   "AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+" "+
+   "WHERE f.activo=true AND btrim(a.origen_id::text)='168766' "+
+   "AND a.nombre ILIKE '%eucerin%' LIMIT 1",
+  values:[slug],query_timeout:6500
+ });
+ if(example.length){
+  const name=example[0].name;
+  const {rows:lookedUp}=await pool.query({
+   text:sql.direct,values:[slug,[Number(example[0].id)],[],["168766"],25,0],
+   query_timeout:7000
+  });
+  if(!lookedUp.some(row=>row.resolved_cn==="168766"&&row.description===name))
+   throw Error("El Simulador no recupera el nombre ERP del CN 168766");
+  const {rows:searched}=await pool.query({
+   text:sql.direct,values:[slug,[Number(example[0].id)],
+    promotionSearchPatterns("Atopi Eucerin"),[],181,0],query_timeout:7000
+  });
+  if(!searched.some(row=>row.resolved_cn==="168766"))
+   throw Error("Búsqueda por nombre Farmatic no encuentra el CN 168766");
+  console.log("NOMBRE 168766 Y BÚSQUEDA ATOPI EUCERIN: OK");
+ }else console.log("REFERENCIA 168766: no está entre las fichas de la muestra autorizada");
+
  // Control de cobertura, no solo que exista un producto: comprobar que los
  // primeros lotes contienen todos los CN distintos en una búsqueda amplia.
  const {rows:active}=await pool.query({

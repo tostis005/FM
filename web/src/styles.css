@@ -939,3 +939,22 @@ html,body{overflow-x:clip}
  .fm-followup-tickets>:not(.section-heading){margin-left:15px;margin-right:15px}
  .fm-followup-tickets>.lab-detail-filters{padding:13px}
 }
+
+/* Resultado persistente de importación Excel: legible desde Safari/Chrome móvil. */
+.fm-import-result{margin:0 0 18px;padding:15px 17px;display:flex;align-items:flex-start;
+ justify-content:space-between;gap:15px;border:1px solid #dce9e1;border-radius:12px;
+ background:#fff;box-shadow:0 2px 12px #163b2b0b;color:#375448;min-width:0}
+.fm-import-result-success{border-left:4px solid #159568}
+.fm-import-result-error{border-left:4px solid #d06b51}
+.fm-import-result-progress{border-left:4px solid #92a89b}
+.fm-import-result-copy{min-width:0;flex:1;overflow-wrap:anywhere}
+.fm-import-result-copy strong{font-size:13px;color:#254537}
+.fm-import-result-copy p{font-size:12px;line-height:1.5;margin:6px 0 0}
+.fm-import-result-copy small{display:block;font-size:11px;line-height:1.5;color:#637970;margin-top:8px}
+.fm-import-result-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.fm-import-result-actions .icon-btn{border:1px solid #e5eee8}
+@media(max-width:620px){
+ .fm-import-result{padding:14px;flex-direction:column;gap:11px}
+ .fm-import-result-actions{width:100%;justify-content:flex-end}
+ .fm-import-result-actions .btn{flex:1;white-space:normal;min-height:40px}
+}

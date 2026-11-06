@@ -31,3 +31,8 @@ test("solo se contabilizan condiciones comerciales completas y válidas",()=>{
  assert.equal(promotionBundle({type:"regalo",formula:"2+1"}),3);
  assert.equal(promotionBundle({type:"precio_especial",specialPrice:0}),1);
 });
+
+test("hasta agotar existencias cuenta todas las unidades sin exigir promoción comercial",()=>{
+ assert.equal(promotionBundle({durationMode:"stock",type:"sin_clasificar"}),1);
+ assert.equal(promotionBundle({durationMode:"stock",type:"dos_por_uno"}),1);
+});

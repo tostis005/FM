@@ -60,6 +60,7 @@ jobs:
           node --check api/src/promocionesTenant.js
           node --check api/src/promocionesObjetivos.js
           node --check api/src/checkPromotion800Performance.mjs
+          node --check api/src/checkPromotionImportsMobile.mjs
           node --check api/src/promotionCatalogSearch.js
           node --check api/src/checkPromotionSearch.mjs
           node --check api/src/promocionesArticulos.js
@@ -107,7 +108,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
-          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js
+          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js src/promotionImportFlow.test.js
           node --test src/businessAnalytics.test.js
           node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js src/promotionMonthFilter.test.js src/simuladorLogic.test.js src/simuladorProductSelection.test.js
           node --test src/salesPeriods.test.js
@@ -438,6 +439,16 @@ jobs:
             set -eu
             cd /opt/farmawao
             docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPromotionSearch.mjs
+          '
+
+      - name: Auditar si noviembre ya está importado y oculto por filtros (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Excel móvil')
+        timeout-minutes: 2
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            timeout 25 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPromotionImportsMobile.mjs
           '
 
       - name: Comprobar 800 CN con consultas reales de promoción (solo lectura)

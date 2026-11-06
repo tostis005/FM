@@ -181,7 +181,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    }
    // Stock de la ficha Farmatic más reciente por ID de artículo y farmacia.
    // No contar varias sincronizaciones o referencias seleccionadas dos veces.
-   let stock={},stockUpdatedAt=null,stockUnavailable=false;
+   let stock={},stockUpdatedAt=null,stockUnavailable=false,stockMissingPharmacyIds=[];
    if(have("stock_actual")){
     const order=have("sincronizado_en")?
      "a.sincronizado_en DESC NULLS LAST":"a.origen_id";
@@ -200,10 +200,14 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
        ORDER BY f.id,a.origen_id,${order}
       )
       SELECT pharmacy_id,coalesce(sum(stock),0)::float8 AS units,
+       bool_and(stock IS NOT NULL) AS complete,
        max(updated_at) AS updated_at
-      FROM latest GROUP BY pharmacy_id HAVING count(*)=count(stock)`,
+      FROM latest GROUP BY pharmacy_id`,
       values:[slug,ids,cns],query_timeout:8000});
-     stock=Object.fromEntries(rows.map(row=>[row.pharmacy_id,Number(row.units)]));
+     stock=Object.fromEntries(rows.filter(row=>row.complete!==false)
+      .map(row=>[row.pharmacy_id,Number(row.units)]));
+     stockMissingPharmacyIds=rows.filter(row=>row.complete===false)
+      .map(row=>row.pharmacy_id);
      const dates=rows.map(row=>row.updated_at).filter(Boolean)
       .map(value=>new Date(value).getTime()).filter(Number.isFinite);
      if(dates.length)stockUpdatedAt=new Date(Math.min(...dates)).toISOString();
@@ -212,7 +216,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
      stockUnavailable=true;
     }
    }else stockUnavailable=true;
-   res.json({periods:totals,amounts,stock,stockUpdatedAt,stockUnavailable});
+   res.json({periods:totals,amounts,stock,stockUpdatedAt,stockUnavailable,stockMissingPharmacyIds});
   }catch(e){next(e);}
  });
 }

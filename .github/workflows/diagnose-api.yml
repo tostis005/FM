@@ -45,6 +45,17 @@ jobs:
               grep -E "Error|error|ERR_|Cannot|Syntax|TypeError|ReferenceError|RangeError|stack|at file:|at Module|Node.js|missing|ECONN|ETIMEDOUT|FATAL|SIGTERM|SIGKILL|not found|undefined|Unhandled" |
               tail -n 65 || true
             echo "::endgroup::"
+            echo "::group::Configuración de arranque sin secretos"
+            docker inspect --format "Logging={{.HostConfig.LogConfig.Type}} StateError={{.State.Error}}" farmawao-api-1
+            echo "::endgroup::"
+            echo "::group::Salida corta sin filtrar del contenedor API"
+            docker logs --tail=45 farmawao-api-1 2>&1 | tail -n 45 || true
+            echo "::endgroup::"
+            echo "::group::Comprobar arranque Node en contenedor temporal"
+            # Servicio temporal sin publicar puertos ni alterar el contenedor
+            # principal. timeout evita quedar escuchando indefinidamente.
+            timeout 15 docker compose -f compose.yaml -f compose.farmacias.yml run --rm --no-deps --entrypoint node api src/server.js 2>&1 | tail -n 45 || true
+            echo "::endgroup::"
             echo "::group::Salud HTTP"
             curl -sS -m 6 -o /dev/null -w "health HTTP %{http_code}\n" http://127.0.0.1:18080/api/health/database || true
             echo "::endgroup::"

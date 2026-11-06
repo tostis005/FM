@@ -84,22 +84,24 @@ test("selector evita agrupar todos los alias después de resolver CN",async()=>{
  }
 });
 
-test("snapshot persistente filtra por farmacia sin escanear el histórico",async()=>{
+test("snapshot persistente conserva bajas por farmacia sin escanear el histórico",async()=>{
  const queries=[],pool={query:async q=>{
   queries.push(q);
   const sql=typeof q==="string"?q:q.text;
   if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))
    return {rows:[{actualizado_en:new Date()}]};
   if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))
-   return {rows:[{lab_id:"21",cn:"700111",nombre:"Artículo reciente"}]};
+   return {rows:[{lab_id:"21",cn:"700111",nombre:"Artículo reciente",excluded:true}]};
   throw Error("El histórico no debe ejecutarse con snapshot preparado");
  }};
  const first=await latestLaboratoryCN(pool,ctx,[2,1]);
  assert.equal(first.total,1);
  assert.deepEqual([...first.byLab.keys()],["21"]);
+ assert.equal(first.byLab.get("21")[0].excluded,true);
  const sql=queries.find(q=>q.text?.includes("FROM farmetrica.preparador_ultima_recepcion_cache"));
  assert.match(sql.text,/pharmacy_ids && \$2::int\[\]/);
- assert.match(sql.text,/NOT \(blocked_pharmacy_ids && \$2::int\[\]\)/);
+ assert.match(sql.text,/\(blocked_pharmacy_ids && \$2::int\[\]\) AS excluded/);
+ assert.doesNotMatch(sql.text,/AND NOT \(blocked_pharmacy_ids/);
  assert.deepEqual(sql.values,["ampedia",[1,2]]);
  await latestLaboratoryCN(pool,ctx,[1,2]);
  assert.equal(queries.length,2,"La misma selección usa caché en memoria");
@@ -115,4 +117,5 @@ test("snapshot SQL mantiene última recepción global y exclusiones por farmacia
  assert.match(snapshot,/array_agg\(DISTINCT p\.pharmacy_id\)::int\[\]/);
  assert.match(snapshot,/position\(upper\(exclude\.cadena\) in upper\(coalesce\(ar\.nombre/);
  assert.doesNotMatch(snapshot,/WHERE\s+AND/);
+ assert.doesNotMatch(snapshot,/WHERE NOT \(upper\(coalesce\(l.nombre/);
 });

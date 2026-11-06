@@ -72,7 +72,7 @@ try{
  assert.equal(stored.length,51);
  assert.ok(stored.every(p=>p.status==="Borrador"&&Object.keys(p.targets).length===0));
  assert.equal(await page.getByRole("combobox",{name:"Estado"}).inputValue(),"Todos");
- assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"");
+ assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"2026-11");
  assert.match(await page.locator(".fm-import-result").innerText(),/51 sin objetivos por farmacia/);
  assert.match(await page.locator(".fm-promotions-bulk-actions .count-label").last().innerText(),/51 promociones/);
  assert.ok(await page.locator(".campaign-table tbody tr").count()>0,

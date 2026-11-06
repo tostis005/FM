@@ -38,6 +38,7 @@ const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
+import {promotionExcelBatchId,importResultSummary} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
@@ -245,7 +246,7 @@ function App(){
   return [parent];
  });
  const [search,setSearch]=useState("");
- const [statusFilter,setStatusFilter]=useState("Activa");
+ const [statusFilter,setStatusFilter]=useState("Todos");
   const [promotionClock,setPromotionClock]=useState(()=>new Date());
   useEffect(()=>{const id=setInterval(()=>setPromotionClock(new Date()),15*60*1000);return()=>clearInterval(id);},[]);
  const [from,setFrom]=useState(()=>promotionMonthRange(currentPromotionMonth())?.from||"");
@@ -385,6 +386,8 @@ function App(){
    const [totalSalesByPromotion,setTotalSalesByPromotion]=useState({});
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
+  const [importFeedback,setImportFeedback]=useState(null);
+  const [importSourceFilter,setImportSourceFilter]=useState("");
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [labIncludeSeller,setLabIncludeSeller]=useState(false);
   const [toast,setToast]=useState("");
@@ -412,7 +415,13 @@ function App(){
  },[mobileMenu]);
  useEffect(()=>{
     if(!tenantContext || !sessionUser)return;
-    localStorage.setItem(tenantStorageKey(tenantContext.client.slug,sessionUser.email),JSON.stringify({...data,promos:data.promos.map(p=>({...p,sales:{}})),pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies}));
+    // PostgreSQL es el catálogo principal. No duplicar miles de CN en el
+    // almacenamiento local del móvil (Safari puede quedarse sin cuota).
+    const persist={...data,promos:promotionStoreStatus==="connected"?[]:
+      data.promos.map(p=>({...p,sales:{}})),
+      pharmacies:pharmacyBackendConfigured?DEFAULT_PHARMACIES:data.pharmacies};
+    try{localStorage.setItem(tenantStorageKey(tenantContext.client.slug,sessionUser.email),JSON.stringify(persist));}
+    catch{} // La cuota de almacenamiento no debe romper la pantalla tras importar.
   },[data,pharmacyApiStatus,tenantContext?.client?.slug,sessionUser?.email]);
   useEffect(()=>{
     if (pharmacyBackendConfigured) void refreshPharmacies();
@@ -429,6 +438,9 @@ function App(){
          const segments=[];
          for(const p of data.promos){
            if(page==="promociones"&&!promotionOverlapsPeriod(p,from,to))continue;
+           // Un borrador importado sin farmacias ni objetivos no tiene ventas
+           // atribuibles; calcular sus miles de CN bloquearía la vista móvil.
+           if(!Object.keys(p.targets||{}).length)continue;
            if(page==="seguimiento-global"&&(!reportSelectedIds.includes(p.id)||
              !promotionMatchesReportScope({...p,status:effectivePromotionStatus(p,new Date(),reportTimeZone)},
                {status:reportStatus,month:reportMonth,year:reportYear})))continue;
@@ -555,7 +567,8 @@ function App(){
   const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&promotionOverlapsPeriod(p,from,to)
-  &&(!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
+  &&(!importSourceFilter||p.source===importSourceFilter)
+  &&(importSourceFilter?true:!sharedPharmacyIds.length||Object.keys(p.targets||{}).some(id=>sharedPharmacyIds.includes(String(id)))));
  const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
@@ -819,25 +832,44 @@ function App(){
   setPromoForm({...promoForm,targets});
  }
  async function importPromotionFile(event){
-   const file=event.target.files?.[0];if(!file)return;
+   const input=event.currentTarget;
+   const file=input?.files?.[0];if(!file)return;
+   if(importBusy)return;
    setImportBusy(true);
+   setImportFeedback({kind:"progress",message:"Leyendo y comprobando el Excel…"});
    try{
     if(!canManagePromotions)throw Error("No tienes permiso para importar promociones");
     const campaigns=await readPromotionExcel(file);
+    const batchId=await promotionExcelBatchId(file);
     const timeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
       Intl.DateTimeFormat().resolvedOptions().timeZone;
     const now=new Date();
-    const batchId="IMPORT-"+(globalThis.crypto?.randomUUID?.()||now.getTime()+"-"+Math.random().toString(36).slice(2));
-     const newPromos=campaigns.map(p=>({...p,
+    const newPromos=campaigns.map(p=>({...p,
       importBatchId:batchId,importedAt:now.toISOString(),importedOn:civilToday(now,timeZone),
       statusSource:"automatic",status:importedPromotionStatus({...p,importedOn:civilToday(now,timeZone)},now,timeZone)}));
+    setImportFeedback({kind:"progress",
+      message:campaigns.length+" promociones identificadas. Guardando en Farmetrica…"});
     const result=await importStoredPromotions(newPromos);
-    if(!Array.isArray(result.promotions))throw Error("El servidor no devolvió el catálogo actualizado");
+    const source="Excel: "+file.name;
+    const summary=importResultSummary(result,campaigns,source);
     setData(prev=>({...prev,promos:result.promotions}));
     setReportSelectedIds(prev=>[...new Set([...prev,...result.promotions.map(p=>p.id)])]);
-    // Sin avisos previos, sin borrar ni sobrescribir campañas existentes.
-   }catch(error){setToast(error.message||"No se pudo importar el Excel")}
-   finally{setImportBusy(false);event.target.value="";}
+    // Las campañas importadas sin objetivos son borradores; el filtro Activa
+    // y la selección de farmacias solían ocultarlas aunque el servidor las
+    // hubiera guardado. Mostrar las del fichero sin depender de esos filtros.
+    setSearch("");setStatusFilter("Todos");setFrom("");setTo("");
+    setImportSourceFilter(source);
+    setImportFeedback({kind:"success",filename:file.name,...summary,
+      message:summary.imported?
+       summary.imported+" promociones guardadas. "+summary.skipped+" ya estaban importadas.":
+       "El Excel ya estaba importado. No se han creado duplicados."});
+   }catch(error){
+    // El aviso permanece visible: en móvil un toast de 3 segundos se perdía
+    // antes de que el usuario llegara a leer el error.
+    setImportFeedback({kind:"error",
+      message:"No se ha podido confirmar la importación: "+(error.message||"Error al leer el Excel")+
+       ". Puedes repetir la carga del mismo fichero sin crear duplicados."});
+   }finally{setImportBusy(false);if(input)input.value="";}
   }
   function exportLocalPromos(){
     const key="fm_promos_respaldo_v1:"+tenantContext?.client?.slug+":"+String(sessionUser?.email||"").toLowerCase();
@@ -1101,6 +1133,28 @@ function App(){
     {importBusy?"Importando y guardando…":"Importar Excel"}</button>}
 
   </div>}/>
+  {importFeedback&&<div className={"fm-import-result fm-import-result-"+importFeedback.kind}
+    role={importFeedback.kind==="error"?"alert":"status"} aria-live={importFeedback.kind==="error"?"assertive":"polite"}>
+    <div className="fm-import-result-copy">
+     <strong>{importFeedback.kind==="progress"?"Importando Excel…":importFeedback.kind==="error"?"Importación no confirmada":"Resultado de la importación"}</strong>
+     <p>{importFeedback.message}</p>
+     {importFeedback.kind==="success"&&<p>
+       En el catálogo hay {importFeedback.visible} promociones de este archivo;
+       {importFeedback.drafts} sin objetivos por farmacia (borradores). Las tienes a continuación, aunque antes estuvieran ocultas por los filtros.
+     </p>}
+     {importSourceFilter&&importFeedback.kind==="success"&&<small>
+       Vista del archivo importado; no se aplican los filtros de farmacias hasta que pulses «Mostrar todas».
+     </small>}
+    </div>
+    <div className="fm-import-result-actions">
+     {importSourceFilter&&<button type="button" className="btn btn-secondary btn-sm"
+       onClick={()=>{setImportSourceFilter("");setStatusFilter("Todos");}}>
+       Mostrar todas
+     </button>}
+     {importFeedback.kind!=="progress"&&<button type="button" className="icon-btn"
+       onClick={()=>{setImportFeedback(null);setImportSourceFilter("");}} aria-label="Cerrar resultado de importación"><X size={17}/></button>}
+    </div>
+   </div>}
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}
   onPharmacyChange={selectSharedPharmacies}
   quickPeriodKey={promotionQuickPeriod} onQuickPeriodChange={selectPromotionQuickPeriod}>

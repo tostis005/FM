@@ -237,7 +237,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      <button type="button" className="btn btn-secondary btn-sm" disabled={!selected.length}
       onClick={()=>setSelected([])}>Limpiar selección</button></div>
     {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)}>
-     <code>{item.cn}</code> {" - "}{promotionProductName(item)}
+     <code>{item.cn}</code>{" - "}{promotionProductName(item)}
      <button type="button" aria-label={"Quitar "+item.cn}
       onClick={()=>setSelected(s=>s.filter(x=>x.cn!==item.cn))}><Trash2 size={13}/></button>
     </span>)}</div>:<p>Busca o pega CN para seleccionar los productos.</p>}

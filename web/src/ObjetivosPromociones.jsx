@@ -215,7 +215,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
         onChange={e=>e.target.checked?append([item]):setSelected(v=>v.filter(x=>x.cn!==item.cn))}/>
        <code>{item.cn}</code>
        <span><strong>{item.description}</strong>{item.supplier&&<small>{item.supplier}</small>}
-        {item.referenceType==="farmatic"&&<small title="El origen ERP coincide con este código, pero el CN no está contrastado con el catálogo oficial">Referencia Farmatic · CN sin verificar</small>}</span>
+        {item.referenceType==="farmatic"&&<small title="Identificador de artículo procedente de Farmatic">Referencia Farmatic</small>}</span>
       </label>)}
      </div>
      {hasMore&&<div className="fm-objectives-more">
@@ -251,7 +251,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     <div className="fm-objectives-section-title"><strong>Productos seleccionados · {selected.length} CN</strong>
      <button type="button" className="btn btn-secondary btn-sm" disabled={!selected.length}
       onClick={()=>setSelected([])}>Limpiar selección</button></div>
-    {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)+(item.referenceType==="farmatic"?" (referencia Farmatic, CN no contrastado)":"")}>
+    {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)+(item.referenceType==="farmatic"?" (referencia Farmatic)":"")}>
      <code>{item.cn}</code>{" - "}{promotionProductName(item)}
      <button type="button" aria-label={"Quitar "+item.cn}
       onClick={()=>setSelected(s=>s.filter(x=>x.cn!==item.cn))}><Trash2 size={13}/></button>
@@ -273,7 +273,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     Selecciona un período válido de hasta 367 días para consultar las ventas.</p>}
    <LoadingFrame loading={historyBusy} label="Calculando ventas y objetivos por farmacia…" className="fm-objectives-loading-frame">
    <div className="fm-objectives-history-scroll">
-    <table className="fm-objectives-table fm-objectives-unified-table">
+    <table className={"fm-objectives-table fm-objectives-unified-table"+(baseline==="stock"?" fm-objectives-stock-mode":"")}>
      <thead><tr><th>Farmacia</th>
       {periods.map(p=><th key={p.id}><label className={"fm-objectives-base "+(baseline===p.id?"chosen":"")}>
        <input type="radio" name="simulator-objective-reference" value={p.id}

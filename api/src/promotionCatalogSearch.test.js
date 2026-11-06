@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {promotionCatalogSearchSQL,promotionResultCN,mergePromotionCatalogRows} from "./promotionCatalogSearch.js";
+import {promotionCatalogSearchSQL,promotionSearchPatterns,promotionResultCN,mergePromotionCatalogRows} from "./promotionCatalogSearch.js";
 
 const fields=(table,columns)=>columns.map(column_name=>({table_name:table,column_name}));
 const articleFields=["farmacia_codigo","origen_id","nombre","codigo_nacional",
@@ -10,10 +10,13 @@ const suppliers=fields("proveedores",["farmacia_codigo","origen_id","nombre"]);
 
 test("buscar nombre, CN normalizado y laboratorio sin consultas correlacionadas sobre todos los artículos",()=>{
  const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
- assert.match(sql.direct,/a\.nombre::text ILIKE/);
- assert.match(sql.direct,/a\.cn_normalizado::text ILIKE/);
- assert.match(sql.direct,/a\.laboratorio::text ILIKE/);
- assert.match(sql.direct,/a\.origen_id::text ILIKE/);
+ assert.match(sql.direct,/a\.nombre::text/);
+ assert.match(sql.direct,/a\.cn_normalizado::text/);
+ assert.match(sql.direct,/a\.laboratorio::text/);
+ assert.match(sql.direct,/a\.origen_id::text/);
+ assert.match(sql.direct,/ILIKE ALL\(\$3::text\[\]\)/);
+ assert.match(sql.officialCatalog,/ILIKE ALL\(\$1::text\[\]\)/);
+ assert.match(sql.officialCatalog,/n\.laboratorio_comercializador/);
  assert.match(sql.direct,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.ok(sql.direct.includes("SELECT DISTINCT ON (resolved_cn)"));
  assert.ok(sql.direct.includes("LIMIT $5::int OFFSET $6::int"));
@@ -34,7 +37,8 @@ test("proveedor habitual se busca por nombre en la misma farmacia y solo despué
  assert.match(sql.bySupplier,/=matched\.supplier_code/);
  assert.match(sql.bySupplier,/jsonb_to_recordset/);
  assert.match(sql.bySupplier,/f\.id=ANY\(\$2::int\[\]\)/);
- assert.doesNotMatch(sql.bySupplier,/ILIKE|EXISTS|LATERAL/);
+ assert.match(sql.bySupplier,/ILIKE ALL\(\$6::text\[\]\)/);
+ assert.doesNotMatch(sql.bySupplier,/EXISTS|LATERAL/);
 });
 test("si no existe el maestro de proveedores todavía puede buscar artículos",()=>{
  const sql=promotionCatalogSearchSQL("ampedia",fields("articulos",[
@@ -43,7 +47,7 @@ test("si no existe el maestro de proveedores todavía puede buscar artículos",(
  assert.equal(sql.supplierReady,false);
  assert.equal(sql.suppliers,null);
  assert.equal(sql.bySupplier,null);
- assert.match(sql.direct,/a\.nombre::text ILIKE/);
+ assert.match(sql.direct,/a\.nombre::text/);
  assert.doesNotMatch(sql.direct,/a\.cn_normalizado/);
 });
 test("no admitir nombres de esquema inseguros ni maestros sin columnas necesarias",()=>{
@@ -70,4 +74,22 @@ test("combinar resultados de nombre y proveedor por CN sin perder nombre de prov
   {cn:"123456",description:"Crema dermatológica",supplier:"Laboratorio X",sourceId:"ERP-X"},
   {cn:null,description:"Artículo sin CN",supplier:null,sourceId:"888"}
  ]);
+});
+
+test("búsqueda de varias palabras sin orden, con caracteres SQL literales",()=>{
+ assert.deepEqual(promotionSearchPatterns("  crema     solar  "),["%crema%","%solar%"]);
+ assert.deepEqual(promotionSearchPatterns("laboratorio CN 123456"),[
+  "%laboratorio%","%CN%","%123456%"
+ ]);
+ assert.deepEqual(promotionSearchPatterns("50% _ \\ test"),[
+  "%50\\%%","%\\_%","%\\\\%","%test%"
+ ]);
+ assert.deepEqual(promotionSearchPatterns(""),[]);
+ const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
+ assert.match(sql.direct,/concat_ws\(' ', a.nombre::text/);
+ assert.match(sql.direct,/official.nombre/);
+ assert.match(sql.direct,/official.laboratorio_titular/);
+ assert.match(sql.suppliers,/sp.nombre::text ILIKE ANY/);
+ assert.match(sql.suppliers,/pm.nombre::text ILIKE ANY/);
+ assert.match(sql.bySupplier,/matched.supplier_name/);
 });

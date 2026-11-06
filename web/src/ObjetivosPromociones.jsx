@@ -44,8 +44,6 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [historyError,setHistoryError]=useState("");
  const [historical,setHistorical]=useState({});
  const [stock,setStock]=useState({});
- const [stockUpdatedAt,setStockUpdatedAt]=useState(null);
- const [stockUnavailable,setStockUnavailable]=useState(false);
  const [baseline,setBaseline]=useState("previous");
  const [customFrom,setCustomFrom]=useState(()=>{const {year,month}=monthAtMadrid();return first(year,month);});
  const [customTo,setCustomTo]=useState(madridToday);
@@ -107,8 +105,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
 
  useEffect(()=>{
   if(!selectedCNs.length||!selectedPharmacies.length||!validRange){
-   setHistorical({});setStock({});setStockUpdatedAt(null);
-   setStockUnavailable(false);setHistoryBusy(false);setHistoryError("");return;
+   setHistorical({});setStock({});setHistoryBusy(false);setHistoryError("");return;
   }
   const controller=new AbortController();
   setHistoryBusy(true);setHistoryError("");
@@ -118,8 +115,6 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    if(controller.signal.aborted)return;
    setHistorical(data.periods||{});
    setStock(data.stock||{});
-   setStockUpdatedAt(data.stockUpdatedAt||null);
-   setStockUnavailable(Boolean(data.stockUnavailable));
   }).catch(error=>{
    if(!controller.signal.aborted){setHistoryError(error.message);setHistorical({});setStock({});}
   }).finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false);});
@@ -142,10 +137,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
  const totalStock=()=>selectedPharmacies.reduce((n,id)=>n+(stockUnits(id)??0),0);
  const hasStock=selectedPharmacies.some(id=>stockUnits(id)!==null);
- const stockReady=baseline!=="stock"||selectedPharmacies.every(id=>stockUnits(id)!==null);
  const totalTarget=()=>selectedPharmacies.reduce((n,id)=>n+(Number(target(id))||0),0);
+ // La falta de datos de stock no impide crear una campaña: se parte de 0
+ // únicamente en el campo de objetivo editable, sin presentar ese 0 como stock real.
+ // Las campañas basadas en stock no dependen de que las ventas históricas estén disponibles.
  const canCreate=Boolean(canManage&&selectedCNs.length&&selectedPharmacies.length&&
-  validRange&&!historyBusy&&!historyError&&stockReady);
+  validRange&&!historyBusy&&(baseline==="stock"||!historyError));
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));
  function append(items){setSelected(current=>mergePromotionSelection(current,items));}
  async function addPastedCNs(){
@@ -335,13 +332,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    </div>
    </LoadingFrame>
    {historyError&&<p role="alert" className="fm-objectives-warning">{historyError}</p>}
-   {stockUnavailable&&selectedCNs.length>0&&<p role="status" className="fm-objectives-warning">
-    El stock de Farmatic no está disponible para esta consulta.</p>}
-   {baseline==="stock"&&<p className="fm-objectives-hint">
-    El objetivo se rellena con las existencias de cada farmacia, sin aplicar incrementos.
-    Puedes modificar manualmente las unidades. {stockUpdatedAt&&"Datos sincronizados desde Farmatic; referencia más antigua: "+new Date(stockUpdatedAt).toLocaleString("es-ES")+"."}
-    {!stockReady&&" Algunas farmacias no tienen stock disponible; revisa la selección."}
-   </p>}
+
   </section>
   <section className="fm-objectives-extraction" aria-label="Extracción de ventas">
    <div className="fm-objectives-extract-head"><h2>3. Extracción de ventas</h2></div>

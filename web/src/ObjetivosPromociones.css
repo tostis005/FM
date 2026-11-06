@@ -83,6 +83,8 @@
 .fm-objectives-unified-table thead small{font-size:9px;margin-top:3px}
 .fm-objectives-unified-table tbody td strong{font-size:12px;font-variant-numeric:tabular-nums}
 .fm-objectives-unified-table tbody td:nth-last-child(2){min-width:235px}
+.fm-objectives-unified-table.fm-objectives-stock-mode th:nth-last-child(2),
+.fm-objectives-unified-table.fm-objectives-stock-mode tbody td:nth-last-child(2){min-width:105px}
 .fm-objectives-rate-line{display:flex;gap:4px;justify-content:flex-end;align-items:center;flex-wrap:nowrap}
 .fm-objectives-unified-table .fm-objectives-rates{display:flex;flex-wrap:nowrap;gap:2px}
 .fm-objectives-unified-table .fm-objectives-rates button{padding:5px 4px;font-size:10px;border-radius:5px;white-space:nowrap}

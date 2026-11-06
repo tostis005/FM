@@ -203,9 +203,11 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
        bool_and(stock IS NOT NULL) AS complete,
        max(updated_at) AS updated_at
       FROM latest GROUP BY pharmacy_id`,
-      values:[slug,ids,cns],query_timeout:8000});
-     stock=Object.fromEntries(rows.filter(row=>row.complete!==false)
-      .map(row=>[row.pharmacy_id,Number(row.units)]));
+      values:[slug,ids,cns],query_timeout:16000});
+     // En una farmacia puede faltar stock_actual para uno de cientos
+     // de artículos. No ocultar el stock conocido de los demás: devolver
+     // su suma y marcar expresamente esa farmacia como parcial.
+     stock=Object.fromEntries(rows.map(row=>[row.pharmacy_id,Number(row.units)]));
      stockMissingPharmacyIds=rows.filter(row=>row.complete===false)
       .map(row=>row.pharmacy_id);
      const dates=rows.map(row=>row.updated_at).filter(Boolean)

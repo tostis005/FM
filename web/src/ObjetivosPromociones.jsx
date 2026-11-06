@@ -148,7 +148,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    setSelected(current=>current.map(item=>{
     const known=byCode.get(item.cn);
     return known&&promotionProductName(item)===UNKNOWN_PRODUCT_NAME?
-     {...item,description:promotionProductName(known),supplier:known.supplier||null}:item;
+     {...item,description:promotionProductName(known),supplier:known.supplier||null,
+       referenceType:known.referenceType||null}:item;
    }));
   }catch{
    setBulkError("Los CN están añadidos. No se han podido recuperar algunos nombres del catálogo.");
@@ -192,7 +193,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     {searchBusy&&<div className="fm-objectives-search-loading"><LoadingStatus label="Buscando artículos con CN…"/></div>}
     {searchError&&<p role="alert" className="fm-objectives-warning">{searchError}</p>}
     {results.length>0&&<div className="fm-objectives-results">
-     <div className="fm-objectives-section-title"><strong>Artículos con CN ({results.length} mostrados)</strong>
+     <div className="fm-objectives-section-title"><strong>Artículos identificados ({results.length} mostrados)</strong>
       <button className="btn btn-secondary btn-sm" type="button" onClick={()=>append(results)}>
        <Check size={14}/> Seleccionar mostrados</button></div>
      <div className="fm-objectives-result-scroll">
@@ -200,7 +201,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        <input type="checkbox" checked={selected.some(x=>x.cn===item.cn)}
         onChange={e=>e.target.checked?append([item]):setSelected(v=>v.filter(x=>x.cn!==item.cn))}/>
        <code>{item.cn}</code>
-       <span><strong>{item.description}</strong>{item.supplier&&<small>{item.supplier}</small>}</span>
+       <span><strong>{item.description}</strong>{item.supplier&&<small>{item.supplier}</small>}
+        {item.referenceType==="farmatic"&&<small title="El origen ERP coincide con este código, pero el CN no está contrastado con el catálogo oficial">Referencia Farmatic · CN sin verificar</small>}</span>
       </label>)}
      </div>
      {hasMore&&<div className="fm-objectives-more">
@@ -214,7 +216,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      {unavailableCount} {unavailableCount===1?"artículo no aparece":"artículos no aparecen"} porque
      {unavailableCount===1?" no tiene":" no tienen"} un CN identificable en el catálogo.</p>}
     {!searchBusy&&!searchError&&results.length===0&&unavailableCount===0&&search.trim().length>=2&&
-     <p className="fm-objectives-hint">No hay artículos con CN que coincidan con la búsqueda.</p>}
+     <p className="fm-objectives-hint">No hay artículos identificables que coincidan con la búsqueda.</p>}
    </div>:
    <div id="simulator-paste-panel" role="tabpanel" aria-labelledby="simulator-paste-tab"
     className="fm-objectives-paste">
@@ -236,7 +238,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     <div className="fm-objectives-section-title"><strong>Productos seleccionados · {selected.length} CN</strong>
      <button type="button" className="btn btn-secondary btn-sm" disabled={!selected.length}
       onClick={()=>setSelected([])}>Limpiar selección</button></div>
-    {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)}>
+    {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)+(item.referenceType==="farmatic"?" (referencia Farmatic, CN no contrastado)":"")}>
      <code>{item.cn}</code>{" - "}{promotionProductName(item)}
      <button type="button" aria-label={"Quitar "+item.cn}
       onClick={()=>setSelected(s=>s.filter(x=>x.cn!==item.cn))}><Trash2 size={13}/></button>

@@ -38,18 +38,18 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "WHERE table_schema='ampedia' AND table_name IN ('articulos','proveedores')");
   const sql=promotionCatalogSearchSQL("ampedia",cols);
   const own=[1];
-  const nameHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("Farmetrica ZZZ"),[],240,0,"%farmetrica%"])).rows;
+  const nameHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("Farmetrica ZZZ"),240,0,"%farmetrica%"])).rows;
   assert.equal(nameHits.some(row=>row.source_id==="SIM-ART-123"&&row.pharmacy_id==="1"),true);
   assert.equal(nameHits.every(row=>row.pharmacy_id==="1"),true);
-  const cnHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("765432"),[],240,0,"%765432%"])).rows;
+  const cnHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("765432"),240,0,"%765432%"])).rows;
 
   // Todas las palabras, en otro orden e incluso repartidas entre columnas.
   const orderFree=(await db.query(sql.direct,[
-   "ampedia",own,promotionSearchPatterns("ZZZ Crema"),[],240,0,"%crema%"
+   "ampedia",own,promotionSearchPatterns("ZZZ Crema"),240,0,"%crema%"
   ])).rows;
   assert.ok(orderFree.some(row=>row.source_id==="SIM-ART-123"));
   const acrossFields=(await db.query(sql.direct,[
-   "ampedia",own,promotionSearchPatterns("765432 Farmetrica"),[],240,0,"%farmetrica%"
+   "ampedia",own,promotionSearchPatterns("765432 Farmetrica"),240,0,"%farmetrica%"
   ])).rows;
   assert.ok(acrossFields.some(row=>row.source_id==="SIM-ART-123"));
   // La búsqueda de campañas no debe depender del Nomenclátor.
@@ -69,7 +69,7 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   assert.equal(eucerin.description,"Eucerin Atopi Control 250 ml");
   assert.equal(eucerin.reference_type,"farmatic");
   const textResults=(await db.query(sql.direct,[
-   "ampedia",own,promotionSearchPatterns("Atopi Eucerin"),[],240,0,"%eucerin%"
+   "ampedia",own,promotionSearchPatterns("Atopi Eucerin"),240,0,"%eucerin%"
   ])).rows;
   assert.ok(textResults.some(row=>row.resolved_cn==="168766"),
    "El buscador por palabras debe incluir referencias ERP sin CN rellenado");
@@ -89,8 +89,8 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional) "+
    "SELECT 'EUR','SIM-REPEAT-'||i,'BUSQUEDA-AMPLIA-TEST',lpad((880000+i)::text,6,'0') "+
    "FROM generate_series(1,140) i");
-  const first=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),[],180,0,"%busqueda-amplia-test%"])).rows;
-  const second=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),[],180,180,"%busqueda-amplia-test%"])).rows;
+  const first=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),180,0,"%busqueda-amplia-test%"])).rows;
+  const second=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),180,180,"%busqueda-amplia-test%"])).rows;
   assert.equal(first.length,180);
   assert.equal(second.length,55);
   const all=[...first,...second];

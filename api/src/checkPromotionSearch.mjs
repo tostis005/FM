@@ -25,8 +25,9 @@ try{
   text:"SELECT f.id,a.nombre::text AS name FROM \""+schema+"\".articulos a "+
    "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
    "AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+" "+
-   "JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text) "+
-   "WHERE f.activo=true AND nullif(btrim(a.nombre::text),'') IS NOT NULL LIMIT 1",
+   "WHERE f.activo=true AND nullif(btrim(a.nombre::text),'') IS NOT NULL "+
+   "AND (btrim(a.codigo_nacional::text) ~ '^[0-9]{6,7}$' "+
+   "OR btrim(a.origen_id::text) ~ '^[0-9]{6}$') LIMIT 1",
   values:[slug],query_timeout:6500});
  if(!samples.length)throw Error("El maestro no contiene artículos consultables");
  const id=Number(samples[0].id),term=samples[0].name.slice(0,90);
@@ -64,7 +65,7 @@ try{
  }else console.log("BÚSQUEDA POR PROVEEDOR: falta campo de relación o maestro ERP");
 
  // Comprobar el caso descrito: la extracción de ventas nombra el artículo
- // a través de origen_id. El Simulador debe mostrar exactamente esa ficha.
+ // a través de origen_id. Nueva campaña debe mostrar exactamente esa ficha.
  const {rows:example}=await pool.query({
   text:"SELECT f.id,a.nombre::text AS name FROM \""+schema+"\".articulos a "+
    "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
@@ -80,7 +81,7 @@ try{
    query_timeout:7000
   });
   if(!lookedUp.some(row=>row.resolved_cn==="168766"&&row.description===name))
-   throw Error("El Simulador no recupera el nombre ERP del CN 168766");
+   throw Error("Nueva campaña no recupera el nombre ERP del CN 168766");
   const {rows:searched}=await pool.query({
    text:sql.direct,values:[slug,[Number(example[0].id)],
     promotionSearchPatterns("Atopi Eucerin"),[],181,0],query_timeout:7000
@@ -101,9 +102,10 @@ try{
  for(const term of ["IBUPROFENO","PARACETAMOL","OMEPRAZOL"]){
   if(!scoped.length)break;
   const {rows:counts}=await pool.query({
-   text:"SELECT count(DISTINCT n.cn)::int AS n "+
-    "FROM \""+schema+"\".articulos a "+
-    "JOIN farmetrica.nomenclator_presentaciones n ON n.cn=btrim(a.origen_id::text) "+
+   text:"SELECT count(DISTINCT CASE "+
+    "WHEN btrim(a.codigo_nacional::text) ~ '^[0-9]{6,7}$' THEN left(btrim(a.codigo_nacional::text),6) "+
+    "WHEN btrim(a.origen_id::text) ~ '^[0-9]{6}$' THEN btrim(a.origen_id::text) "+
+    "END)::int AS n FROM \""+schema+"\".articulos a "+
     "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
     "AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+" "+
     "WHERE f.id=ANY($2::int[]) AND a.nombre ILIKE '%'||$3||'%'",

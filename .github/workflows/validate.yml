@@ -67,6 +67,7 @@ jobs:
           node --check api/src/syncStatus.js
           node --test api/src/pharmacyState.test.js
           node --check api/src/promocionesTenant.js
+          node --check api/src/resetTenantPromotions.mjs
           node --check api/src/promocionesObjetivos.js
           node --check api/src/promotionCatalogSearch.js
           node --test api/src/promocionesObjetivos.test.js api/src/promotionCatalogSearch.test.js
@@ -122,7 +123,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
-          node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js
+          node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
           node --test src/tableExport.test.js src/userPermissionCopy.test.js src/userPermissionCopy.test.js
@@ -368,6 +369,7 @@ jobs:
           node check-traspasos-salientes.mjs
           node check-promotions-import.mjs
           node check-promotions-import-mobile.mjs
+          node check-promotion-objectives-flow.mjs
           node check-operativa.mjs
           node check-demo-v1.mjs
           node check-pantallas-reales.mjs

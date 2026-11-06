@@ -40,7 +40,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const metadata=await catalogColumns(pool,schema);
  const sql=promotionCatalogSearchSQL(schema,metadata);
  const patterns=promotionSearchPatterns(search);
- const pageSize=search?PAGE_SIZE:Math.min(500,Math.max(1,cns.length));
+ const pageSize=search?PAGE_SIZE:Math.min(1000,Math.max(1,cns.length));
  const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
  // Índice GIN: escoger la palabra más larga para acotar rápidamente el maestro.
  const anchor=patterns.reduce((best,word)=>word.length>best.length?word:best,"").toLowerCase();
@@ -109,7 +109,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    if(!Number.isInteger(page)||page<0||page>MAX_PAGE)
     return res.status(400).json({error:"Página de resultados inválida"});
    if(Array.isArray(req.body?.cns)&&cns.length!==new Set(req.body.cns).size||
-      cns.length>500)return res.status(400).json({error:"Introduce un máximo de 500 CN válidos"});
+      cns.length>1000)return res.status(400).json({error:"Introduce un máximo de 1.000 CN válidos"});
    if(search.length<2&&!cns.length)return res.json({products:[]});
    const ids=req.context.allowedPharmacyIds.filter(Number.isSafeInteger);
    if(!ids.length)return res.json({products:[]});
@@ -122,7 +122,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    const schema=req.context.client.schema,slug=req.context.client.slug;
    if(!SCHEMA.test(schema)||!SCHEMA.test(slug))return res.status(400).json({error:"Cliente inválido"});
    const cns=cleanCNs(req.body?.cns),periods=req.body?.periods,requested=req.body?.pharmacyIds;
-   if(!cns.length||cns.length>500||!Array.isArray(periods)||periods.length<1||
+   if(!cns.length||cns.length>1000||!Array.isArray(periods)||periods.length<1||
      periods.length>6||periods.some(p=>!validPeriod(p))||
      !Array.isArray(req.body?.cns)||cns.length!==new Set(req.body.cns).size)
     return res.status(400).json({error:"CNs o períodos inválidos"});
@@ -153,7 +153,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    const articleIds=[...new Set([...cns,...links.map(r=>r.source_id).filter(Boolean)])];
    // Calcular todos los períodos en un único acceso a ventas. Antes se
    // ejecutaba un GROUP BY completo por cada período (hasta seis recorridos
-   // para los mismos 500 CN). FILTER devuelve un par de agregados por período.
+   // para los mismos 1.000 CN). FILTER devuelve un par de agregados por período.
    const windows=periods.map((_,i)=>
     "(v.fecha >= $"+(6+i*2)+"::date AND v.fecha < ($"+(7+i*2)+"::date + interval '1 day'))");
    const columns=windows.flatMap((window,i)=>[

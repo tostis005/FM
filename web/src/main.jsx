@@ -672,7 +672,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,durationMode:entry.durationMode||(!entry.end?"stock":"dates"),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,status:entry.status==="Pendiente de revisión"?effectivePromotionStatus(entry,new Date(),reportTimeZone):entry.status,durationMode:entry.durationMode||(!entry.end?"stock":"dates"),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
@@ -680,7 +680,7 @@ function App(){
   if(!canManagePromotions)return setToast("No tienes permiso para modificar promociones.");
   if(promotionStoreStatus!=="connected")
    return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
-  const retroactiveFromSimulator=Boolean(promoForm.simulatorDraft&&promoForm.status==="Finalizada");
+  const retroactiveFromSimulator=Boolean(promoForm.simulatorDraft&&promoForm.durationMode!=="stock"&&promoForm.status==="Finalizada");
   const needsRetroactiveValidation=Boolean(promoForm.retroactive||retroactiveFromSimulator);
   const codes=parseCNs(cnText);
   if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");

@@ -152,7 +152,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  // Las campañas basadas en stock no dependen de que las ventas históricas estén disponibles.
  const validTargets=selectedPharmacies.length>0&&selectedPharmacies.every(id=>
   target(id)!==""&&Number.isSafeInteger(Number(target(id)))&&Number(target(id))>=0)&&
-  selectedPharmacies.some(id=>Number(target(id))>0);
+  (!isEditing||selectedPharmacies.some(id=>Number(target(id))>0));
  const canCreate=Boolean(canManage&&selectedCNs.length&&selectedPharmacies.length&&
   validTargets&&validRange&&!historyBusy&&!savingObjectives&&(baseline==="stock"||!historyError));
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));

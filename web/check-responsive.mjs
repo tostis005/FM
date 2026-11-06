@@ -6,7 +6,7 @@ import {chromium} from "playwright";
 import {mkdir} from "node:fs/promises";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const routes=[
- "promociones","promociones/seguimiento","promociones/simulador","dashboard","ventas","compras",
+ "promociones","promociones/seguimiento","promociones/nueva","dashboard","ventas","compras",
  "proveedores","stock","stock-sin-recepciones","reposicion","genericos","rentabilidad","acciones",
  "informes","asistente","farmacias","usuarios","clientes","accesos","ajustes"
 ];
@@ -110,7 +110,9 @@ async function mockApi(route){
   payload={periods:Object.fromEntries((body.periods||[]).map(p=>
    [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,100]))])),
    amounts:Object.fromEntries((body.periods||[]).map(p=>
-   [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,900]))]))};
+   [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,900]))])),
+   stock:Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,6])),
+   stockUpdatedAt:"2026-11-06T00:00:00Z",stockUnavailable:false};
   await new Promise(resolve=>setTimeout(resolve,550));
  }
  await route.fulfill({status:200,contentType:"application/json",
@@ -233,9 +235,9 @@ try{
           !result.table.some(t=>t.content>t.viewport)){
          throw Error("La tabla de promociones debería desplazarse dentro de su tarjeta");
        }
-       if(path==="promociones/simulador"&&viewport.width===375){
+       if(path==="promociones/nueva"&&viewport.width===375){
          const headers=await page.locator(".fm-objectives-base input[type=radio]").count();
-         if(headers!==4)throw Error("El simulador necesita cuatro períodos con selector de referencia");
+         if(headers!==5)throw Error("Nueva campaña necesita cuatro períodos y stock actual seleccionables");
          const searchInput=page.getByRole("searchbox",{name:"Buscar por artículo, proveedor o CN"});
          await searchInput.fill("Crema");
          await page.locator(".fm-objectives-results").waitFor({state:"visible",timeout:10000});
@@ -299,13 +301,22 @@ try{
          if(compact.exportCount!==2||!compact.exportAligned)
            throw Error("Las exportaciones deben quedar agrupadas a la derecha");
 
-         await page.getByRole("button",{name:"Crear promoción",exact:true}).click();
+         await page.getByRole("radio",{name:"Usar stock actual como base de objetivos"}).check();
+         if(await page.locator(".fm-objectives-rate-line").count()!==0)
+           throw Error("El modo Stock actual no debe mostrar controles de incremento");
+         const stockGoal=page.locator(".fm-objectives-goal-cell input").first();
+         if(await stockGoal.inputValue()!=="6")
+           throw Error("El objetivo de stock no se ha rellenado desde Farmatic");
+         await stockGoal.fill("4");
+         await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).click();
          await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
          const transferred=await page.locator(".drawer textarea.cn-area").inputValue();
          if(!transferred.includes("123456")||!transferred.includes("654321"))
            throw Error("Los CN pegados no se transfieren al formulario lateral");
          const targets=await page.locator(".drawer .target-row").count();
          if(targets!==pharmacies.length)throw Error("Las farmacias no se transfieren al panel: "+targets);
+         if(await page.locator(".drawer .target-row input").first().inputValue()!=="4")
+           throw Error("El objetivo de stock editado no se transfiere al formulario lateral");
          await page.locator(".drawer-top button[aria-label=Cerrar]").click();
          await searchInput.fill("Paginacion");
          await page.locator(".fm-objectives-results .fm-objectives-product").first()

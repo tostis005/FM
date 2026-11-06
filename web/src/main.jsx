@@ -38,7 +38,7 @@ const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
-import {civilToday,effectivePromotionStatus,promotionReportingEnd} from "./promotionLifecycle.js";
+import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
@@ -63,7 +63,7 @@ const DEFAULT_PHARMACIES = [
   {id:"4",name:"Estación",city:"",active:true,sourceCode:"EST",sourceHost:"",sourceDatabase:"Farmatic"},
   {id:"5",name:"Valdemarías",city:"",active:true,sourceCode:"POL",databaseCode:"VAL",displayCode:"POL",sourceHost:"",sourceDatabase:"Farmatic"}
 ];
-const EMPTY_PROMO = {id:null,name:"",subtitle:"",description:"",status:"Borrador",start:"2026-10-16",end:"2026-11-30",cns:[],targets:{},sales:{},type:"sin_clasificar",discountPercent:""};
+const EMPTY_PROMO = {id:null,name:"",subtitle:"",description:"",status:"Borrador",start:"2026-10-16",end:"2026-11-30",cns:[],targets:{},sales:{},type:"sin_clasificar",discountPercent:"",durationMode:"dates"};
 const PROMOTION_TYPES = [
   {id:"sin_clasificar",name:"Sin clasificar"},
   {id:"dos_por_uno",name:"2×1"},
@@ -213,7 +213,7 @@ function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
  const status=params.get("estado")||"Todos";
  const month=promotionMonthRange(params.get("mes"))?params.get("mes"):"";
- return {status:["Activa","Pendiente de revisión","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
+ return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
   month,year:!month&&/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
 }
@@ -382,7 +382,6 @@ function App(){
   const [salesError,setSalesError]=useState("");
   const [salesByPromotion,setSalesByPromotion]=useState({});
    const [totalSalesByPromotion,setTotalSalesByPromotion]=useState({});
-  const [targetIncrease,setTargetIncrease]=useState("5");
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
   const [labExportBusy,setLabExportBusy]=useState(false);
@@ -548,7 +547,6 @@ function App(){
    setFrom(range.from);setTo(range.to);setSelectedPromotionIds([]);
  }
  const filterText=search.toLocaleLowerCase("es");
- const pendingPromotionCount=promos.filter(p=>p.status==="Pendiente de revisión").length;
   const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&promotionOverlapsPeriod(p,from,to)
@@ -674,7 +672,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setTargetIncrease("5");setPromoForm({...entry,type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
@@ -690,7 +688,11 @@ function App(){
    const invalid=codes.filter(cn=>!isValidCN(cn));
    if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
-  if(promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)return setToast("La fecha final debe ser posterior a la inicial");
+  const durationMode=promotionDurationMode(promoForm);
+   if(durationMode==="dates"&&!promoForm.end)
+    return setToast("Las campañas por fechas necesitan una fecha de fin.");
+   if(durationMode==="dates"&&promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)
+    return setToast("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
    const requiresPct=promoType?.needsPercent;
@@ -727,7 +729,11 @@ function App(){
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
   const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,simulatorDraft:_simDraft,...fields}=promoForm;
-   const result={...fields,retroactive:needsRetroactiveValidation,sales:{},id:promoForm.id||"P"+Date.now(),name:promoForm.name.trim(),cns:codes,targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
+   const result={...fields,durationMode,end:durationMode==="stock"?"":promoForm.end,
+    endRaw:durationMode==="stock"?"":promoForm.endRaw,
+    retroactive:needsRetroactiveValidation,sales:{},id:promoForm.id||"P"+Date.now(),
+    name:promoForm.name.trim(),cns:codes,
+    targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
   if(result.status==="Finalizada"){
     if(needsRetroactiveValidation&&!result.closedOn)result.closedOn=result.end;
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
@@ -742,8 +748,6 @@ function App(){
     const wasAutomatic=original&&(original.statusSource==="automatic"||!original.statusSource&&String(original.source||"").startsWith("Excel"));
     if(wasAutomatic&&(result.status===oldStatus||result.status==="Activa"&&oldStatus==="Borrador")){
       result.statusSource="automatic";
-    }else if(wasAutomatic&&result.status==="Activa"&&oldStatus==="Pendiente de revisión"){
-      result.statusSource="automatic";result.lastConfirmedAt=now.toISOString();result.lastConfirmedOn=today;
     }else result.statusSource="manual";
   }
   setSavingPromo(true);
@@ -762,18 +766,6 @@ function App(){
    setPromoSaveError(message);setToast(message);
   }finally{setSavingPromo(false)}
 
- }
- async function confirmPromotion(p){
-  if(!canManagePromotions||!p||p.end)return;
-  const stored=data.promos.find(x=>String(x.id)===String(p.id));
-  if(!stored)return;
-  const now=new Date(),updated={...stored,status:"Activa",statusSource:"automatic",
-    lastConfirmedAt:now.toISOString(),lastConfirmedOn:civilToday(now,reportTimeZone)};
-  try{
-    await saveStoredPromotion(updated);
-    setData(prev=>({...prev,promos:prev.promos.map(x=>x.id===updated.id?updated:x)}));
-    setToast("Vigencia confirmada durante otros 30 días");
-  }catch(error){setToast("No se pudo confirmar la promoción: "+error.message);}
  }
  async function removePromotion(p){
   if(!canManagePromotions||p.managerCanEdit===false)return;
@@ -821,18 +813,7 @@ function App(){
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
   setPromoForm({...promoForm,targets});
  }
- function applyIncrease(){
-    const increase=Number(targetIncrease);
-    if(targetIncrease==="" || !Number.isFinite(increase) || increase < -100 || increase > 500)
-       return setToast("Introduce un porcentaje entre -100 y 500");
-    const targets={...promoForm.targets};
-    if(!Object.values(targets).some(v=>v!=="" && Number(v)>0))
-       return setToast("Introduce primero los objetivos base de las farmacias");
-    Object.keys(targets).forEach(id=>{if(targets[id]!=="" && Number(targets[id])>=0)targets[id]=Math.max(0,Math.ceil(Number(targets[id])*(1+increase/100)));});
-    setPromoForm({...promoForm,targets});
-    setToast("Incremento aplicado. Puedes retocar cada objetivo antes de guardar");
-  }
-  async function importPromotionFile(event){
+ async function importPromotionFile(event){
    const file=event.target.files?.[0];if(!file)return;
    setImportBusy(true);
    try{

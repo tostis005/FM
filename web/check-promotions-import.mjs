@@ -90,8 +90,10 @@ try{
  const file={name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await excel()};
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
- await page.waitForFunction(()=>document.querySelectorAll(".campaign-table tbody tr").length>=2,null,{timeout:12000});
  await page.getByRole("status").filter({hasText:"Resultado de la importación"}).waitFor({timeout:10000});
+ // El filtro por defecto es ahora noviembre, no octubre.
+ await page.getByRole("button",{name:"Ver todos los meses"}).click();
+ await page.waitForFunction(()=>document.querySelectorAll(".campaign-table tbody tr").length>=2,null,{timeout:12000});
  assert.match(await page.locator(".fm-import-result").innerText(),/2 promociones guardadas/);
  assert.equal(postCount,1);
  assert.equal(stored.length,3,"El Excel añade dos promociones sin eliminar la anterior");
@@ -118,6 +120,7 @@ try{
  assert.equal(stored.length,3,"Reimportar el mismo Excel no debe duplicar campañas");
  assert.equal(stored[1].targets["1"],77,"La nueva importación no altera la campaña anterior");
  await page.getByRole("button",{name:"Mostrar todas"}).click();
+ await page.getByRole("button",{name:"Ver todos los meses"}).click();
  // Selección de varias filas, no hay que eliminar una por una.
  await page.getByRole("checkbox",{name:"Seleccionar Promoción antigua"}).check();
  await page.getByRole("checkbox",{name:"Seleccionar "+gum.name}).first().check();

@@ -213,3 +213,22 @@ test("noviembre conserva promociones tras separadores vacíos y excluye NO HACER
  // La estructura octubre sigue cerrándose en la primera fila vacía.
  assert.equal(importCampaignRows(summary,cnRows).length,1);
 });
+
+test("noviembre no asigna los CN de COLLMAR BEAUTY a la campaña genérica VARIOS",()=>{
+ const summary=[
+  ["NOVIEMBRE","MARCA","NOMBRE PROMOCIÓN","FECHA DE INICIO","FECHA DE FIN"],
+  ["DRASANVI","DRASANVI VARIOS",0.25,"1 NOVIEMBRE","30 NOVIEMBRE"],
+  ["DRASANVI","DRASANVI COLLMAR BEAUTY Y BEBIBLES",0.25,"16 NOVIEMBRE","30 NOVIEMBRE"]
+ ];
+ const rows=[
+  ["LABORATORIO","MARCA","CN","DESCRIPCION","PROMOCION"],
+  ["DRASANVI","DRASANVI COLLMAR BEAUTY Y BEBIBLES","100001","Collmar Beauty",0.25],
+  ["DRASANVI","DRASANVI COLLMAR BEAUTY Y BEBIBLES","100002","Collmar Bebible",0.25]
+ ];
+ const result=importCampaignRows(summary,rows,2026,null,
+  {allowBlankSeparators:true,preferSpecific:true});
+ assert.equal(result.length,2);
+ assert.deepEqual(result[0].cns,[]);
+ assert.deepEqual(result[1].cns,["100001","100002"]);
+ assert.ok(result[0].importWarnings.some(w=>w.includes("Sin CNs")));
+});

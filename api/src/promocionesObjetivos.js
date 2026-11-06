@@ -199,12 +199,15 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
        WHERE f.id=ANY($2::int[]) AND ${matchProducts}
        ORDER BY f.id,a.origen_id,${order}
       )
-      SELECT pharmacy_id,coalesce(sum(stock),0)::float8 AS units,
+      SELECT pharmacy_id,sum(stock)::float8 AS units,
        bool_and(stock IS NOT NULL) AS complete,
        max(updated_at) AS updated_at
       FROM latest GROUP BY pharmacy_id`,
-      values:[slug,ids,cns],query_timeout:8000});
-     stock=Object.fromEntries(rows.filter(row=>row.complete!==false)
+      values:[slug,ids,cns],query_timeout:16000});
+     // En una farmacia puede faltar stock_actual para uno de cientos
+     // de artículos. No ocultar el stock conocido de los demás: devolver
+     // su suma y marcar expresamente esa farmacia como parcial.
+     stock=Object.fromEntries(rows.filter(row=>row.units!==null&&row.units!==undefined)
       .map(row=>[row.pharmacy_id,Number(row.units)]));
      stockMissingPharmacyIds=rows.filter(row=>row.complete===false)
       .map(row=>row.pharmacy_id);

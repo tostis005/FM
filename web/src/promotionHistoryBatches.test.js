@@ -53,7 +53,8 @@ test("stock no completo en un lote no se muestra como total real",async()=>{
   })
  );
  assert.deepEqual(out.periods,{previous:{"1":3}});
- assert.deepEqual(out.stock,{"2":6});
+ assert.deepEqual(out.stock,{"1":12,"2":6});
+ assert.deepEqual(out.stockPartialPharmacyIds,["1"]);
 });
 
 test("si una petición falla, no presenta un histórico parcial",async()=>{
@@ -79,4 +80,31 @@ test("800 CN generan ocho lotes exactos y resultados completos",async()=>{
  assert.deepEqual(result.periods,{previous:{"1":800}});
  assert.deepEqual(result.amounts,{previous:{"1":1200}});
  assert.deepEqual(result.stock,{"1":800});
+});
+
+test("700 CN conservan stock confirmado de todas las farmacias aunque falle un lote",async()=>{
+ const cns=Array.from({length:700},(_,i)=>String(i).padStart(6,"0"));
+ const result=await loadPromotionHistoryInBatches(cns,async (_batch,index)=>({
+  periods:{previous:{"1":3,"2":2,"3":1}},
+  amounts:{previous:{"1":4}},
+  stock:index===2?{}:{"1":4,"2":2,"3":0},
+  stockUnavailable:index===2,
+  stockMissingPharmacyIds:index===4?["2"]:[],
+ }),{pharmacyIds:["1","2","3"]});
+ assert.deepEqual(result.periods,{previous:{"1":21,"2":14,"3":7}});
+ assert.deepEqual(result.stock,{"1":24,"2":12,"3":0});
+ assert.equal(result.stockUnavailable,true);
+ assert.deepEqual(result.stockPartialPharmacyIds.sort(),["1","2","3"]);
+});
+test("700 CN con stock nulo en una farmacia no borran las otras sumas",async()=>{
+ const cns=Array.from({length:700},(_,i)=>String(i).padStart(6,"0"));
+ const result=await loadPromotionHistoryInBatches(cns,async (_batch,index)=>({
+  periods:{},amounts:{},
+  stock:{"1":2,"2":0,"3":6},
+  stockMissingPharmacyIds:index===3?["2"]:[],
+  stockUnavailable:false
+ }),{pharmacyIds:["1","2","3"]});
+ assert.deepEqual(result.stock,{"1":14,"2":0,"3":42});
+ assert.deepEqual(result.stockPartialPharmacyIds,["2"]);
+ assert.equal(result.stockUnavailable,false);
 });

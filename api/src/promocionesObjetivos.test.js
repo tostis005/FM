@@ -238,3 +238,19 @@ test("800 CN válidos no son rechazados por la API de catálogo y de histórico"
  const sales=api.queries.filter(q=>q.sql.includes("sum(v.unidades) FILTER (WHERE"));
  assert.equal(sales.length,1);
 });
+
+test("stock parcial por un producto sin sincronizar conserva otras unidades de esa farmacia",async()=>{
+ const api=fixture({stockRows:[
+  {pharmacy_id:"1",units:18,complete:false,updated_at:"2026-11-06T08:00:00Z"},
+  {pharmacy_id:"2",units:5,complete:true,updated_at:"2026-11-06T08:00:00Z"},
+  {pharmacy_id:"3",units:null,complete:false,updated_at:"2026-11-06T08:00:00Z"}
+ ]});
+ const {response}=await api.call("/api/ventas/objetivos/historico",{
+  cns:["123456","654321"],pharmacyIds:[1,2,3],periods},[1,2,3]);
+ assert.deepEqual(response.stock,{"1":18,"2":5});
+ assert.deepEqual(response.stockMissingPharmacyIds,["1","3"]);
+ assert.equal(response.stockUnavailable,false);
+ const sql=api.queries.find(q=>q.sql.includes("WITH latest AS")).sql;
+ assert.match(sql,/sum\(stock\)::float8 AS units/);
+ assert.doesNotMatch(sql,/coalesce\(sum\(stock\),0\)/);
+});

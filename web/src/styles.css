@@ -971,3 +971,34 @@ html,body{overflow-x:clip}
  .fm-promotion-row-actions .btn{justify-content:center}
  .fm-promotion-objectives-link .btn{align-self:stretch}
 }
+
+
+/* Confirmación de importación concisa: una línea y botón de cierre. */
+.fm-import-result{display:flex;align-items:center;flex-direction:row;gap:9px;
+ margin:0 0 14px;padding:9px 12px;border-radius:9px;box-shadow:none;
+ min-width:0;min-height:37px}
+.fm-import-result>svg{flex:0 0 16px}
+.fm-import-result-message{flex:1 1 auto;min-width:0;font-size:12px;
+ font-weight:650;line-height:1.4;overflow-wrap:anywhere}
+.fm-import-result-success>svg{color:#158c63}
+.fm-import-result-error>svg{color:#bf6338}
+.fm-import-result .icon-btn{flex:0 0 29px;width:29px;height:29px;
+ border:0;background:transparent;border-radius:7px;display:grid;place-items:center}
+.fm-import-result .icon-btn:hover{background:#eef5f1}
+@media(max-width:620px){
+ .fm-import-result{padding:9px 11px;flex-direction:row;align-items:center;gap:8px}
+ .fm-import-result .icon-btn{margin-left:auto;flex:0 0 29px}
+}
+/* Una sola columna de acciones, con todas las opciones juntas. */
+.campaign-row-actions.fm-promotion-unified-actions{display:flex;justify-content:flex-end;
+ gap:6px;align-items:center;flex-wrap:nowrap}
+.fm-promotion-unified-actions .btn{min-height:32px;padding:7px 9px;
+ display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.fm-promotion-unified-actions .btn.fm-delete-promo{color:#a54b48;
+ background:#fff;border-color:#eed8d6;flex:0 0 auto;min-height:32px}
+.fm-promotion-unified-actions .btn.fm-delete-promo:hover:not(:disabled){
+ background:#fff5f3;border-color:#e9c4c0;color:#a13332}
+@media(max-width:720px){
+ .campaign-row-actions.fm-promotion-unified-actions{flex-direction:row;align-items:center;flex-wrap:nowrap}
+ .fm-promotion-unified-actions .btn{justify-content:center;flex:0 0 auto}
+}

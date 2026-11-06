@@ -29,9 +29,10 @@ function addValues(target,values){
  }
 }
 
-export async function loadPromotionHistoryInBatches(cns,fetchBatch){
+export async function loadPromotionHistoryInBatches(cns,fetchBatch,{pharmacyIds=[]}={}){
  const blocks=await requestPromotionBatches(cns,fetchBatch);
- const periods={},amounts={},stock={},stockMissing=new Set();
+ const periods={},amounts={},stock={},stockPartial=new Set();
+ const requested=pharmacyIds.map(String);
  let stockUnavailable=false,stockUpdatedAt=null;
  for(const block of blocks){
   for(const [period,byPharmacy] of Object.entries(block?.periods||{})){
@@ -42,14 +43,19 @@ export async function loadPromotionHistoryInBatches(cns,fetchBatch){
    if(!amounts[period])amounts[period]={};
    addValues(amounts[period],byPharmacy);
   }
+  // No borrar el stock de una farmacia porque una de sus referencias no
+  // tenga stock_actual; conservar el conocido, pero rotularlo «parcial».
   addValues(stock,block?.stock);
-  for(const id of block?.stockMissingPharmacyIds||[])stockMissing.add(String(id));
-  stockUnavailable ||=Boolean(block?.stockUnavailable);
+  for(const id of block?.stockMissingPharmacyIds||[])stockPartial.add(String(id));
+  if(block?.stockUnavailable){
+   stockUnavailable=true;
+   for(const id of requested.length?requested:Object.keys(stock))stockPartial.add(String(id));
+  }
   const stamp=block?.stockUpdatedAt;
   if(stamp&&Number.isFinite(Date.parse(stamp))&&
-      (!stockUpdatedAt||Date.parse(stamp)<Date.parse(stockUpdatedAt)))
+     (!stockUpdatedAt||Date.parse(stamp)<Date.parse(stockUpdatedAt)))
    stockUpdatedAt=stamp;
  }
- for(const id of stockMissing)delete stock[id];
- return {periods,amounts,stock:stockUnavailable?{}:stock,stockUnavailable,stockUpdatedAt};
+ return {periods,amounts,stock,stockUnavailable,stockUpdatedAt,
+  stockPartialPharmacyIds:[...stockPartial]};
 }

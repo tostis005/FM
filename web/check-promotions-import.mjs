@@ -90,11 +90,11 @@ try{
  const file={name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await excel()};
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
- await page.getByRole("status").filter({hasText:"Resultado de la importación"}).waitFor({timeout:10000});
+ await page.getByRole("status").filter({hasText:"2 promociones importadas"}).waitFor({timeout:10000});
  // El filtro por defecto es ahora noviembre, no octubre.
  await page.getByRole("button",{name:"Ver todos los meses"}).click();
  await page.waitForFunction(()=>document.querySelectorAll(".campaign-table tbody tr").length>=2,null,{timeout:12000});
- assert.match(await page.locator(".fm-import-result").innerText(),/2 promociones guardadas/);
+ assert.match(await page.locator(".fm-import-result").innerText(),/2 promociones importadas/);
  assert.equal(postCount,1);
  assert.equal(stored.length,3,"El Excel añade dos promociones sin eliminar la anterior");
  assert.equal(lastImport.length,2,"RESUMEN debe cortar al llegar a la primera fila en blanco");
@@ -106,7 +106,7 @@ try{
  assert.equal(gum.status,new Date().toISOString().slice(0,10)>"2026-10-31"?"Finalizada":"Activa");
  assert.equal(eucerin.status,"Finalizada");
  assert.ok(!lastImport.some(p=>p.name.includes("KNEIPP")));
- await page.getByRole("button",{name:"Mostrar todas"}).click();
+ await page.getByRole("button",{name:"Cerrar aviso de importación"}).click();
  assert.equal(await page.getByText("Promoción antigua").first().count(),1);
  // La misma importación NO actualiza objetivos ni CNs de campañas existentes.
  stored[1].targets={"1":77};
@@ -115,11 +115,11 @@ try{
   response.request().method()==="POST",{timeout:12000});
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
  await secondImport;
- await page.getByText("El Excel ya estaba importado. No se han creado duplicados.").waitFor();
+ await page.getByText("2 promociones ya importadas").waitFor();
  assert.equal(postCount,2);
  assert.equal(stored.length,3,"Reimportar el mismo Excel no debe duplicar campañas");
  assert.equal(stored[1].targets["1"],77,"La nueva importación no altera la campaña anterior");
- await page.getByRole("button",{name:"Mostrar todas"}).click();
+ await page.getByRole("button",{name:"Cerrar aviso de importación"}).click();
  await page.getByRole("button",{name:"Ver todos los meses"}).click();
  // Selección de varias filas, no hay que eliminar una por una.
  await page.getByRole("checkbox",{name:"Seleccionar Promoción antigua"}).check();

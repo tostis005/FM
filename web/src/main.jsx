@@ -390,7 +390,6 @@ function App(){
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
   const [importFeedback,setImportFeedback]=useState(null);
-  const [importSourceFilter,setImportSourceFilter]=useState("");
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [labIncludeSeller,setLabIncludeSeller]=useState(false);
   const [toast,setToast]=useState("");
@@ -570,8 +569,8 @@ function App(){
   const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&promotionOverlapsPeriod(p,from,to)
-  &&(!importSourceFilter||p.source===importSourceFilter)
-  &&(importSourceFilter||promotionVisibleInPharmacyScope(p,sharedPharmacyIds)));
+  &&(promotionVisibleInPharmacyScope(p,sharedPharmacyIds)||
+    (canManagePromotions&&p.status==="Borrador"&&!Object.keys(p.targets||{}).length)));
  const scopedFilteredPromos=filteredPromos.map(p=>sharedPharmacyIds.length?{
   ...p,targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>sharedPharmacyIds.includes(String(id)))),
@@ -717,7 +716,7 @@ function App(){
   const response=await saveStoredPromotion(updated);
   if(!response.saved)throw Error("El servidor no confirmó el guardado");
   setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
-  setStatusFilter("Todos");setImportSourceFilter("");
+  setStatusFilter("Todos");
   setObjectiveCampaign(null);
   nav("promociones");
   startPromo(updated);
@@ -884,7 +883,7 @@ function App(){
    const file=input?.files?.[0];if(!file)return;
    if(importBusy)return;
    setImportBusy(true);
-   setImportFeedback({kind:"progress",message:"Leyendo y comprobando el Excel…"});
+   setImportFeedback({kind:"progress",message:"Importando Excel…"});
    try{
     if(!canManagePromotions)throw Error("No tienes permiso para importar promociones");
     const campaigns=await readPromotionExcel(file);
@@ -895,8 +894,7 @@ function App(){
     const newPromos=campaigns.map(p=>({...p,
       importBatchId:batchId,importedAt:now.toISOString(),importedOn:civilToday(now,timeZone),
       statusSource:"automatic",status:importedPromotionStatus({...p,importedOn:civilToday(now,timeZone)},now,timeZone)}));
-    setImportFeedback({kind:"progress",
-      message:campaigns.length+" promociones identificadas. Guardando en Farmetrica…"});
+    setImportFeedback({kind:"progress",message:"Guardando promociones…"});
     const result=await importStoredPromotions(newPromos);
     const source="Excel: "+file.name;
     const summary=importResultSummary(result,campaigns,source);
@@ -908,17 +906,15 @@ function App(){
     setSearch("");setStatusFilter("Todos");
     const currentMonth=promotionMonthRange(currentPromotionMonth(new Date(),timeZone));
     if(currentMonth){setFrom(currentMonth.from);setTo(currentMonth.to);}
-    setImportSourceFilter(source);
-    setImportFeedback({kind:"success",filename:file.name,...summary,
+    setImportFeedback({kind:"success",
       message:summary.imported?
-       summary.imported+" promociones guardadas. "+summary.skipped+" ya estaban importadas.":
-       "El Excel ya estaba importado. No se han creado duplicados."});
+       summary.imported+" "+(summary.imported===1?"promoción importada":"promociones importadas"):
+       summary.skipped+" "+(summary.skipped===1?"promoción ya importada":"promociones ya importadas")});
    }catch(error){
     // El aviso permanece visible: en móvil un toast de 3 segundos se perdía
     // antes de que el usuario llegara a leer el error.
     setImportFeedback({kind:"error",
-      message:"No se ha podido confirmar la importación: "+(error.message||"Error al leer el Excel")+
-       ". Puedes repetir la carga del mismo fichero sin crear duplicados."});
+      message:"No se pudo importar: "+(error.message||"Error al leer el Excel")});
    }finally{setImportBusy(false);if(input)input.value="";}
   }
   function exportLocalPromos(){
@@ -1185,25 +1181,13 @@ function App(){
   </div>}/>
   {importFeedback&&<div className={"fm-import-result fm-import-result-"+importFeedback.kind}
     role={importFeedback.kind==="error"?"alert":"status"} aria-live={importFeedback.kind==="error"?"assertive":"polite"}>
-    <div className="fm-import-result-copy">
-     <strong>{importFeedback.kind==="progress"?"Importando Excel…":importFeedback.kind==="error"?"Importación no confirmada":"Resultado de la importación"}</strong>
-     <p>{importFeedback.message}</p>
-     {importFeedback.kind==="success"&&<p>
-       En el catálogo hay {importFeedback.visible} promociones de este archivo;
-       {importFeedback.drafts} sin objetivos por farmacia (borradores). Las tienes a continuación, aunque antes estuvieran ocultas por los filtros.
-     </p>}
-     {importSourceFilter&&importFeedback.kind==="success"&&<small>
-       Vista del archivo importado; no se aplican los filtros de farmacias hasta que pulses «Mostrar todas».
-     </small>}
-    </div>
-    <div className="fm-import-result-actions">
-     {importSourceFilter&&<button type="button" className="btn btn-secondary btn-sm"
-       onClick={()=>{setImportSourceFilter("");setStatusFilter("Todos");}}>
-       Mostrar todas
-     </button>}
-     {importFeedback.kind!=="progress"&&<button type="button" className="icon-btn"
-       onClick={()=>{setImportFeedback(null);setImportSourceFilter("");}} aria-label="Cerrar resultado de importación"><X size={17}/></button>}
-    </div>
+    {importFeedback.kind==="success"?<CheckCircle2 size={16} aria-hidden="true"/>:
+     importFeedback.kind==="error"?<CircleHelp size={16} aria-hidden="true"/>:
+     <span className="fm-load-spinner" aria-hidden="true"/>}
+    <span className="fm-import-result-message">{importFeedback.message}</span>
+    {importFeedback.kind!=="progress"&&<button type="button" className="icon-btn"
+      onClick={()=>setImportFeedback(null)}
+      aria-label="Cerrar aviso de importación"><X size={16}/></button>}
    </div>}
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}
   onPharmacyChange={selectSharedPharmacies}
@@ -1250,15 +1234,6 @@ function App(){
      onRowClick={canManagePromotions?p=>startPromo(promos.find(original=>original.id===p.id)||p):undefined} emptyText="No hay promociones con estos filtros"
     columns={[
       {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
-      {key:"action",label:"Acciones",sortable:false,searchable:false,value:()=>"",render:p=>canManagePromotions?
-       <div className="fm-promotion-row-actions">
-        <button type="button" className="btn btn-secondary btn-sm"
-         onClick={e=>{e.stopPropagation();startPromo(data.promos.find(item=>item.id===p.id)||p);}}>
-         <Pencil size={14}/> Editar</button>
-        {objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
-         onClick={e=>{e.stopPropagation();openObjectivePlanner(data.promos.find(item=>item.id===p.id)||p);}}>
-         <Target size={14}/> Asignar objetivos</button>}
-       </div>:null},
       {key:"type",label:"Tipo",filterMode:"multi",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
       {key:"status",label:"Estado",filterMode:"multi",value:p=>p.status,render:p=><Pill status={p.status}/>},
       {key:"start",label:"Periodo",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{p.end?dateES(p.end):promotionDurationMode(p)==="stock"?"Hasta agotar stock":"Sin fecha de fin"}</small></div>},
@@ -1274,7 +1249,28 @@ function App(){
       {key:"sales",label:"Uds. promoción",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
       {key:"totalSales",label:"Uds. totales",value:p=>salesStatus==="real"?sum(p.totalSales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.totalSales)):"—"}</span>},
        {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
-      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:p=><div className="campaign-row-actions"><button className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id)}}><BarChart3 size={14}/> Seguimiento</button>{canManagePromotions&&p.managerCanEdit!==false&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&<button type="button" className="btn btn-secondary btn-sm" onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)})}}>Finalizar</button>}{canManagePromotions&&p.managerCanEdit!==false&&<button className="row-action" title="Editar promoción" aria-label={"Editar "+p.name} onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p)}}><Pencil size={16}/></button>}{canManagePromotions&&p.managerCanEdit!==false&&<button type="button" className="row-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected} title="Eliminar promoción" aria-label={"Eliminar "+p.name} onClick={e=>{e.stopPropagation();void removePromotion(p)}}><Trash2 size={16}/></button>}</div>}
+      {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
+       render:p=><div className="campaign-row-actions fm-promotion-unified-actions">
+        {canManagePromotions&&p.managerCanEdit!==false&&<button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p);}}>
+         <Pencil size={14}/> Editar</button>}
+        {canManagePromotions&&objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();openObjectivePlanner(promos.find(original=>original.id===p.id)||p);}}>
+         <Target size={14}/> Asignar objetivos</button>}
+        <button type="button" className="btn btn-secondary btn-sm"
+         onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id);}}>
+         <BarChart3 size={14}/> Seguimiento</button>
+        {canManagePromotions&&p.managerCanEdit!==false&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&
+         <button type="button" className="btn btn-secondary btn-sm"
+          onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;
+           startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)});}}>
+          Finalizar</button>}
+        {canManagePromotions&&p.managerCanEdit!==false&&<button type="button"
+         className="btn btn-secondary btn-sm fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected}
+         aria-label={"Eliminar "+p.name}
+         onClick={e=>{e.stopPropagation();void removePromotion(promos.find(original=>original.id===p.id)||p);}}>
+         <Trash2 size={14}/> Eliminar</button>}
+       </div>}
     ]}/>
  </section>
 

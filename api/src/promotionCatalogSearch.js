@@ -61,8 +61,14 @@ export function promotionCatalogSearchSQL(schema,columns){
   "AND "+upper("a.farmacia_codigo::text")+"="+pharmacyDataCodeSQL("f")+" "+
   "AND f.id=ANY($2::int[]) ";
  // Sólo nombre, CN, referencia, laboratorio y proveedores del ERP Farmatic.
- const searchable="concat_ws(' ', a.nombre::text, "+lab+", "+
-  "a.origen_id::text, "+raw+", "+normalized+", "+primary+")";
+ // Esta expresión coincide exactamente con el índice GIN de la migración 045.
+ // La primera palabra (la más discriminante) activa pg_trgm, y las demás
+ // conservan la coincidencia de palabras repartidas en varias columnas.
+ const searchable="lower("+[
+  "a.nombre::text","a.codigo_nacional::text",
+  has(columns,"articulos","cn_normalizado")?"a.cn_normalizado::text":"NULL::text",
+  "a.origen_id::text",lab,primary
+ ].map(expr=>"coalesce("+expr+",'')").join(" || ' ' || ")+")";
  const supplierSearchable="concat_ws(' ', a.nombre::text, "+lab+", "+
   "a.origen_id::text, "+raw+", "+normalized+", matched.supplier_name)";
  // Deduplicación en PostgreSQL antes de LIMIT/OFFSET; estable entre páginas.
@@ -70,14 +76,19 @@ export function promotionCatalogSearchSQL(schema,columns){
   "SELECT DISTINCT ON (resolved_cn) * FROM ("+candidate+") found "+
   "WHERE resolved_cn IS NOT NULL ORDER BY resolved_cn,description NULLS LAST "+
   "LIMIT "+limit+"::int OFFSET "+offset+"::int";
- const direct=page("SELECT "+fields("NULL::text",true)+" FROM "+a+" a "+scope+
-  "WHERE "+hasCN+" AND ((cardinality($3::text[])>0 AND "+searchable+" ILIKE ALL($3::text[])) "+
-  "OR "+raw+"=ANY($4::text[]) "+
-  "OR ("+isCode(raw)+" AND left("+raw+",6)=ANY($4::text[])) "+
-  (has(columns,"articulos","cn_normalizado")?
-   "OR "+normalized+"=ANY($4::text[]) "+
-   "OR ("+isCode(normalized)+" AND left("+normalized+",6)=ANY($4::text[])) ":"")+
-  "OR ("+isOriginCode+" AND "+origin+"=ANY($4::text[])))","$5","$6");
+ // Buscar texto y consultar CN pegados no deben compartir una condición OR:
+ // la rama de CN impedía al planificador aprovechar el índice GIN de texto.
+ const direct=page("SELECT "+fields()+" FROM "+a+" a "+scope+
+  "WHERE "+hasCN+" AND "+searchable+" LIKE $7::text "+
+  "AND "+searchable+" LIKE ALL($3::text[])","$5","$6");
+ const codePredicates=[
+  "a.origen_id::text=ANY($4::text[])",
+  "left(btrim(a.codigo_nacional::text),6)=ANY($4::text[])"
+ ];
+ if(has(columns,"articulos","cn_normalizado"))
+  codePredicates.push("left(btrim(a.cn_normalizado::text),6)=ANY($4::text[])");
+ const byCodes=page("SELECT "+fields("NULL::text",true)+" FROM "+a+" a "+scope+
+  "WHERE "+hasCN+" AND ("+codePredicates.join(" OR ")+")","$5","$6");
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+
@@ -119,7 +130,7 @@ export function promotionCatalogSearchSQL(schema,columns){
   scope+
   "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const byReceiptSupplier=receiptRows?page(receiptRows,"$4","$5"):null;
- return {direct,suppliers,bySupplier,byReceiptSupplier,supplierReady};
+ return {direct,byCodes,suppliers,bySupplier,byReceiptSupplier,supplierReady};
 }
 
 export function promotionResultCN(row){

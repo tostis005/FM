@@ -77,7 +77,7 @@ try{
  if(example.length){
   const name=example[0].name;
   const {rows:lookedUp}=await pool.query({
-   text:sql.byCodes,values:[slug,[Number(example[0].id)],[],["168766"],25,0],
+   text:sql.byCodes,values:[slug,[Number(example[0].id)],["168766"],25,0],
    query_timeout:7000
   });
   if(!lookedUp.some(row=>row.resolved_cn==="168766"&&row.description===name))

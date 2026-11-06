@@ -412,7 +412,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      </div>}
     <div className="fm-lab-order-summary">
      <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias</span>
-     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
+     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock conjunto</span>
+      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
      <span><strong>{data.frequencyDays>0?data.frequencyDays+" días":"Bajo demanda"}</strong> · frecuencia de planificación</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
@@ -432,44 +433,54 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
+       <th colSpan={5} className="fm-lab-order-total-group">Totales</th>
       </tr><tr>
-       {chosen.flatMap((p,i)=>["V. 3m","V. 12m","Stock","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
+       {chosen.flatMap((p,i)=>["Stock","V. 12m","V. 3m","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       <th>Vendido</th><th>Propuesta</th>
-       <th className="fm-lab-order-editcol">Pedir total</th>
+       <th>Stock</th><th>Vendido</th><th>Propuesta</th>
+       <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
       </tr></thead>
       <tbody>{currentRows.map(row=>{
        const line=showLine(row);
-       return <tr key={row.referencia}>
+       return <tr key={row.referencia} className={isExcludedOrderRow(row)?"fm-lab-order-excluded":""}>
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
          {row.provisional&&<small>CN pendiente</small>}</td>
-        <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>{row.nombre}</td>
+        <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>
+          {row.nombre}{isExcludedOrderRow(row)&&<small>Excluido de pedidos</small>}</td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
-         return [row.metricsReady?m.units3??0:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.stock??null:null,row.metricsReady?m.unitsPeriod??0:null,
+         return [row.metricsReady?m.stock??null:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,
           tab==="medicacion"?"edit":row.metricsReady?m.suggested??null:null].map((value,k)=>
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
-             disabled={!canEdit||loading||!row.metricsReady} value={line.unitsByPharmacy?.[String(p.id)]??0}
+             disabled={!canEdit||loading||!row.metricsReady||isExcludedOrderRow(row)} value={line.unitsByPharmacy?.[String(p.id)]??0}
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
-        <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSold):"—"}</td>
+        <td className="fm-lab-order-total">{row.metricsReady?fmt(totalStockFor(row,ids)):"—"}</td>
+         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSold):"—"}</td>
         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
         <td className="fm-lab-order-editcol">
          <input type="number" min="0" max="999999" step="1"
-          disabled={!canEdit||loading||!row.metricsReady}
+          disabled={!canEdit||loading||!row.metricsReady||isExcludedOrderRow(row)}
           title={tab==="medicacion"?"Reparte el total proporcionalmente entre las farmacias; después puedes ajustar cada una.":"Unidades totales a pedir"}
           aria-label={tab==="medicacion"?"Pedir total de "+row.nombre:"Pedir "+row.nombre+" para el laboratorio"}
           value={tab==="medicacion"?medicationOrderTotal(line,ids):line.units??0}
           onChange={e=>updateLine(row,e.target.value,tab==="medicacion"?"total":null)}/></td>
+         <td className="fm-lab-order-commentcol">
+          <button type="button" onClick={()=>openComment(row)}
+           className={"fm-lab-comment-link"+(line.comment?.trim()?" has-comment":"")}
+           aria-label={(line.comment?.trim()?"Ver o editar":"Añadir")+" comentario para "+row.nombre}
+           title={line.comment?.trim()?"Comentario guardado en esta línea":"Añadir comentario"}>
+           <MessageSquareText size={14}/>{line.comment?.trim()?"Con comentario":"Comentar"}
+          </button>
+         </td>
        </tr>;
       })}
-      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+5}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
-      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+5}>
+      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+7}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
+      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+7}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":
@@ -495,7 +506,15 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      </div>
     </div>}
    </div>
-   <div className="fm-lab-order-actions">
+   <div className="fm-lab-order-global-comment">
+     <label htmlFor="fm-lab-order-global-notes">Comentarios generales del pedido</label>
+     <textarea id="fm-lab-order-global-notes" rows={3} maxLength={3000}
+      placeholder="Observaciones para el laboratorio, condiciones o instrucciones del pedido…"
+      value={globalComment} disabled={!canEdit}
+      onChange={e=>{setGlobalComment(e.target.value);setDirty(true);setNotice("")}}/>
+     <small>Se incluirán en el Excel y quedan guardados con el borrador. No se envía ningún correo.</small>
+    </div>
+    <div className="fm-lab-order-actions">
      <button className="btn btn-secondary" type="button" onClick={save}
       disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>
@@ -509,7 +528,24 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <p className="fm-muted">Generar Excel no confirma ni envía un pedido. Marca «Pedido realizado» solo después de haberlo cursado.</p>
    </>}
   </section>
-  {recordLab&&<div className="fm-order-confirm-overlay" role="dialog" aria-modal="true" aria-label="Confirmar fecha de pedido">
+  {commentRow&&<div className="fm-lab-comment-overlay" role="dialog" aria-modal="true"
+     aria-label={"Comentario de "+commentRow.nombre}
+     onKeyDown={e=>{if(e.key==="Escape")setCommentRow(null)}}>
+    <div className="fm-lab-comment-dialog">
+     <h2>Comentario del artículo</h2>
+     <p>{commentRow.nombre} · {commentRow.cn||commentRow.referencia}</p>
+     <textarea autoFocus rows={5} maxLength={2000} value={commentText}
+      disabled={!canEdit} onChange={e=>setCommentText(e.target.value)}
+      aria-label="Comentario de la línea" placeholder="Añade una observación a esta línea…"/>
+     <small>{commentText.length} / 2000 caracteres</small>
+     <div className="fm-lab-comment-actions">
+      <button className="btn btn-secondary" type="button" onClick={()=>setCommentRow(null)}>
+       {canEdit?"Cancelar":"Cerrar"}</button>
+      {canEdit&&<button className="btn btn-primary" type="button" onClick={confirmComment}>Guardar comentario</button>}
+     </div>
+    </div>
+   </div>}
+   {recordLab&&<div className="fm-order-confirm-overlay" role="dialog" aria-modal="true" aria-label="Confirmar fecha de pedido">
    <div className="fm-order-confirm">
     <h2>{recordType==="fecha_inicial"?"Establecer fecha inicial":"Marcar pedido realizado"}</h2>
     <p><strong>{labs.find(l=>l.key===recordLab)?.name||recordLab}</strong></p>

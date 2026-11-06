@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupTenantPromotions} from "./promocionesTenant.js";
+import {setupTenantPromotions,cleanDocument} from "./promocionesTenant.js";
 
 function create({role="administrador",document={id:"P1",name:"Oferta",cns:["123456"],targets:{"1":8}}}={}){
  const routes=new Map();
@@ -89,4 +89,28 @@ test("gestor elimina promociones de sus farmacias, sin permisos globales",async(
  assert.equal(response.status,403);
  assert.equal(denied.records.size,1);
  assert.equal(denied.rolledBack(),true);
+});
+
+test("la API distingue campañas por fechas y hasta agotar stock",()=>{
+ const ids=new Set(["1"]);
+ const base={id:"P-CAMP-1",name:"Prueba stock",cns:["123456"],targets:{"1":10},
+  start:"2026-11-06",end:"",status:"Borrador",durationMode:"stock"};
+ const stock=cleanDocument(base,base.id,ids);
+ assert.equal(stock?.durationMode,"stock");
+ assert.equal(stock?.end,"");
+ assert.deepEqual(stock?.targets,{"1":10});
+ assert.equal(cleanDocument({...base,end:"2026-12-01"},base.id,ids),null,
+  "No permitir fecha final oculta en campañas de stock");
+ const dates={...base,durationMode:"dates",end:"2026-12-01"};
+ assert.equal(cleanDocument(dates,dates.id,ids)?.end,"2026-12-01");
+ assert.equal(cleanDocument({...dates,end:""},dates.id,ids),null);
+ assert.equal(cleanDocument({...dates,end:"2026-11-01"},dates.id,ids),null);
+ assert.equal(cleanDocument({...base,durationMode:"stock",retroactive:true},base.id,ids),null);
+ assert.equal(cleanDocument({...base,durationMode:"desconocida"},base.id,ids),null);
+ // No romper documentos históricos del Excel sin duración explícita.
+ const {durationMode:_ignore,...legacy}=base;
+ assert.ok(cleanDocument(legacy,legacy.id,ids));
+ const excelIncomplete={...base,durationMode:"dates",source:"Excel: archivo.xlsx",start:"",end:""};
+ assert.ok(cleanDocument(excelIncomplete,excelIncomplete.id,ids),
+  "No bloquear la importación de una ficha Excel incompleta");
 });

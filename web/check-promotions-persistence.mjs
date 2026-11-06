@@ -77,8 +77,17 @@ try{
  await continueButton.click();
  const modal=page.locator(".drawer").filter({hasText:"Nueva campaña"});
  await modal.getByLabel("Nombre de promoción").fill("Campaña de verificación");
+ assert.ok(await modal.getByRole("radio",{name:"Por fechas"}).isChecked(),
+  "La selección de ventas históricas preselecciona campañas por fechas");
+ assert.equal(await modal.getByText("Productos incluidos").count(),1);
+ assert.equal(await modal.getByText("Productos importados del Excel").count(),0);
+ assert.equal(await modal.getByText("CN",{exact:true}).count(),1);
+ assert.equal(await modal.locator(".increase-controls").count(),0);
+ assert.equal(await modal.getByRole("button",{name:"Aplicar",exact:true}).count(),0);
+ assert.equal(await modal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).inputValue(),"11",
+  "El objetivo ya incluye el incremento elegido en la pantalla anterior");
  await modal.getByLabel("Fecha de inicio").fill("2026-11-01");
- await modal.getByLabel("Fecha de fin (opcional)").fill("2026-11-30");
+ await modal.getByLabel("Fecha de fin",{exact:true}).fill("2026-11-30");
  await modal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).fill("10");
  await modal.getByRole("button",{name:"Crear campaña"}).click();
  await modal.getByRole("alert").waitFor();
@@ -110,6 +119,34 @@ try{
  assert.equal(await page.getByText(cached.name,{exact:true}).count(),0,
   "La lista tras recargar viene exclusivamente de la base de datos");
 
+ // Segunda vía: elegir stock prepara una campaña sin fecha de fin,
+ // conservando las unidades editadas y sin volver a aplicar incrementos.
+ await page.goto(BASE+"/promociones/nueva",{waitUntil:"domcontentloaded"});
+ await page.getByRole("searchbox",{name:"Buscar por artículo, proveedor o CN"}).fill("Producto");
+ await page.getByRole("button",{name:"Seleccionar mostrados"}).waitFor({timeout:12000});
+ await page.getByRole("button",{name:"Seleccionar mostrados"}).click();
+ await page.getByRole("radio",{name:"Usar stock actual como base de objetivos"}).check();
+ const stockGoal=page.locator(".fm-objectives-goal-cell input").first();
+ await page.waitForFunction(()=>document.querySelector(".fm-objectives-goal-cell input")?.value==="10",
+  null,{timeout:12000});
+ await stockGoal.fill("8");
+ await page.getByRole("button",{name:"Continuar con la campaña"}).click();
+ const stockModal=page.locator(".drawer").filter({hasText:"Nueva campaña"});
+ assert.ok(await stockModal.getByRole("radio",{name:"Hasta agotar stock"}).isChecked());
+ assert.equal(await stockModal.getByLabel("Fecha de fin").count(),0);
+ assert.equal(await stockModal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).inputValue(),"8");
+ assert.equal(await stockModal.locator(".increase-controls").count(),0);
+ await stockModal.getByLabel("Nombre de promoción").fill("Campaña hasta agotar stock");
+ await stockModal.getByLabel("Fecha de inicio").fill("2026-11-01");
+ await stockModal.getByRole("button",{name:"Crear campaña"}).click();
+ await stockModal.waitFor({state:"detached",timeout:12000});
+ assert.equal(saved.length,2);
+ const stockCampaign=saved.find(p=>p.name==="Campaña hasta agotar stock");
+ assert.ok(stockCampaign,"Campaña por stock guardada en PostgreSQL");
+ assert.equal(stockCampaign.durationMode,"stock");
+ assert.equal(stockCampaign.end,"");
+ assert.equal(Number(stockCampaign.targets["1"]),8);
+ 
  role="farmacia";
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");

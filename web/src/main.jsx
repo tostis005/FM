@@ -1357,9 +1357,25 @@ function App(){
      Promoción retroactiva: los tickets se consultarán al guardar, sin modificar las ventas originales. Los objetivos son opcionales, pero es necesario elegir el tipo de oferta.</div>}
    <Field label="Nombre de promoción"><input required placeholder="Ej.: Especial hidratación" value={promoForm.name} onChange={e=>setPromoForm({...promoForm,name:e.target.value})}/></Field>
    <Field label="Descripción"><textarea rows="3" placeholder="¿En qué consiste esta campaña?" value={promoForm.description} onChange={e=>setPromoForm({...promoForm,description:e.target.value})}/></Field>
-   <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field><Field label="Fecha de fin (opcional)"><input type="date" value={promoForm.end||""} onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field></div>
-    {!promoForm.end&&<div className="note small-note">Sin fecha final: {promoForm.endRaw||"no indicada"}. La promoción pedirá confirmación cada 30 días.</div>}
-   <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Pendiente de revisión" disabled>Pendiente de revisión</option><option value="Finalizada">Archivada</option></select></Field>
+   <div className="promotion-duration-picker" role="group" aria-label="Duración de campaña">
+    <label className={promotionDurationMode(promoForm)==="dates"?"chosen":""}>
+     <input type="radio" name="promotion-duration" value="dates"
+      checked={promotionDurationMode(promoForm)==="dates"}
+      onChange={()=>setPromoForm({...promoForm,durationMode:"dates"})}/>
+     <span>Por fechas</span>
+    </label>
+    <label className={promotionDurationMode(promoForm)==="stock"?"chosen":""}>
+     <input type="radio" name="promotion-duration" value="stock"
+      checked={promotionDurationMode(promoForm)==="stock"}
+      onChange={()=>setPromoForm({...promoForm,durationMode:"stock",end:"",endRaw:""})}/>
+     <span>Hasta agotar stock</span>
+    </label>
+   </div>
+   <div className="field-row"><Field label="Fecha de inicio"><input type="date" required value={promoForm.start} onChange={e=>setPromoForm({...promoForm,start:e.target.value})}/></Field>
+    {promotionDurationMode(promoForm)==="dates"&&<Field label="Fecha de fin"><input type="date" required
+     min={promoForm.start||undefined} value={promoForm.end||""}
+     onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field>}</div>}
+   <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></Field>
     {promoForm.status==="Finalizada"&&<div className="field-row"><Field label="Fecha real de finalización"><input type="date" min={promoForm.start||undefined} max={civilToday(new Date(),reportTimeZone)} value={promoForm.closedOn||""} onChange={e=>setPromoForm({...promoForm,closedOn:e.target.value})}/></Field><Field label="Motivo del cierre (opcional)"><input value={promoForm.closedReason||""} onChange={e=>setPromoForm({...promoForm,closedReason:e.target.value})} placeholder="Promoción terminada"/></Field></div>}
     <Field label="Tipo de promoción"><select value={promoForm.type||"sin_clasificar"} onChange={e=>setPromoForm({...promoForm,type:e.target.value,discountPercent:PROMOTION_TYPES.find(t=>t.id===e.target.value)?.needsPercent?promoForm.discountPercent:""})}>{PROMOTION_TYPES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&<Field label="Importe de descuento (€)"><input type="number" min="0.01" step="0.01" value={promoForm.discountAmount||""} onChange={e=>setPromoForm({...promoForm,discountAmount:e.target.value})}/></Field>}
@@ -1369,11 +1385,20 @@ function App(){
      label={promoForm.type==="segunda_porcentaje"?"Descuento aplicado a la segunda unidad (%)":"Porcentaje de descuento (%)"}
      hint={promoForm.type==="segunda_porcentaje"?"Ej.: 50 = 50 % de descuento. Por cada pareja del ticket, el descuento se aplica a la unidad de menor precio.":null}>
      <input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
-   <div className="form-divider"/><div className="field-heading"><div><strong>CNs (6 dígitos)</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
-   {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos importados del Excel</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
+   <div className="form-divider"/><div className="field-heading"><div><strong>CN</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
+   {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos incluidos</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
-   {Object.keys(promoForm.targets).length>0&&<div className="target-list"><div className="target-head"><strong>Objetivos por farmacia</strong><div className="increase-controls"><label>Incremento <input type="number" step="0.5" min="-100" max="500" value={targetIncrease} onChange={e=>setTargetIncrease(e.target.value)} aria-label="Incremento porcentual"/> %</label><button type="button" onClick={applyIncrease}>Aplicar</button></div></div>{Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}><div><strong>{pharmaName(id)}</strong><small>{id}</small></div><div className="numeric-input"><input type="number" min="0" value={value} onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})} aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div></div>)}<div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(promoForm.targets))} uds.</strong></div><small className="hint">Deja el objetivo vacío mientras sea borrador. Introduce valores base y pulsa Aplicar para incrementar el porcentaje; cambiar el campo no altera los objetivos hasta pulsar el botón. El cálculo desde histórico se añadirá más adelante.</small></div>}
+   {Object.keys(promoForm.targets).length>0&&<div className="target-list">
+    <div className="target-head"><strong>Objetivos por farmacia</strong></div>
+    {Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}>
+     <div><strong>{pharmaName(id)}</strong><small>{id}</small></div>
+     <div className="numeric-input"><input type="number" min="0" step="1" value={value}
+      onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})}
+      aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div>
+    </div>)}
+    <div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(promoForm.targets))} uds.</strong></div>
+   </div>}
    {promoSaveError&&<p role="alert" className="fm-manage-feedback">{promoSaveError}</p>}
    <FormActions onCancel={()=>{if(!savingPromo)setEditingPromo(null)}} disabled={savingPromo} label={savingPromo?"Guardando…":editingPromo==="nuevo"?"Crear campaña":"Guardar cambios"}/>
    {editingPromo!=="nuevo"&&<div className="drawer-extra"><button type="button" className="btn btn-secondary" onClick={()=>{const p={...promoForm};setEditingPromo(null);copyPromo(p)}}><Copy size={16}/> Duplicar promoción</button><button type="button" className="btn btn-secondary" onClick={()=>exportPromo(promoForm)}><ArrowDownToLine size={16}/> Descargar ficha de promoción</button></div>}

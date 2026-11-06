@@ -23,3 +23,11 @@ export function importResultSummary(result,campaigns,source){
  return {imported:result.imported,skipped:result.skipped,visible:visible.length,
   drafts,source};
 }
+
+export function promotionVisibleInPharmacyScope(p,pharmacyIds=[]){
+ if(!pharmacyIds.length)return true;
+ const assigned=Object.keys(p?.targets||{});
+ // Los borradores aún sin asignación deben seguir siendo encontrables
+ // desde el catálogo; de otro modo un filtro global los oculta por completo.
+ return !assigned.length||assigned.some(id=>pharmacyIds.includes(String(id)));
+}

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
 
-function fixture({directRows,officialRows}={}){
+function fixture({directRows,officialRows,officialCatalogRows}={}){
  const routes=new Map(),queries=[];
  const pool={async query(input,values=[]){
   const sql=typeof input==="string"?input:input.text;
@@ -31,6 +31,8 @@ function fixture({directRows,officialRows}={}){
     supplier_name:null}]};
   if(sql.includes("SELECT cn::text AS cn,nombre::text AS description"))
    return {rows:officialRows||[]};
+  if(sql.includes("FROM farmetrica.nomenclator_presentaciones n"))
+   return {rows:officialCatalogRows||[]};
   if(sql.includes("nomenclator_presentaciones"))
    return {rows:[]};
   throw Error("Consulta SQL inesperada: "+sql);
@@ -100,6 +102,9 @@ test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por 
  assert.deepEqual(supplier.params.slice(0,2),["ampedia",[1]]);
  assert.deepEqual(bySupplier.params.slice(0,2),["ampedia",[1]]);
  assert.equal(JSON.parse(bySupplier.params[2])[0].supplier_code,"PR1");
+ assert.deepEqual(direct.params[2],["%Proveedor%","%Ejemplo%"]);
+ assert.deepEqual(supplier.params[2],["%Proveedor%","%Ejemplo%"]);
+ assert.deepEqual(bySupplier.params[5],["%Proveedor%","%Ejemplo%"]);
  assert.ok(bySupplier.timeout<=8000);
 });
 test("si la búsqueda no tiene permisos para otras farmacias nunca consulta sus artículos",async()=>{
@@ -142,6 +147,30 @@ test("rechaza paginaciones fuera de rango sin acceder al catálogo",async()=>{
  const api=fixture();
  const out=await api.call("/api/ventas/objetivos/buscar",
   {search:"Crema",cns:[],page:-1});
+ assert.equal(out.status,400);
+ assert.equal(api.queries.length,0);
+});
+
+test("reúne fichas AEMPS oficiales aunque falten en el maestro ERP",async()=>{
+ const api=fixture({directRows:[],officialCatalogRows:[{
+  resolved_cn:"793421",national_code:"793421",description:"Comprimidos multipalabra Solar",
+  supplier_name:"Laboratorio Cosmo",source_id:null,pharmacy_id:null
+ }]});
+ const out=await api.call("/api/ventas/objetivos/buscar",
+  {search:"Cosmo Solar",cns:[]},[1]);
+ assert.equal(out.status,200);
+ assert.equal(out.response.partial,false);
+ assert.deepEqual(out.response.products,[{
+  cn:"793421",description:"Comprimidos multipalabra Solar",
+  supplier:"Laboratorio Cosmo",sourceId:null
+ }]);
+ const official=api.queries.find(q=>q.sql.includes("FROM farmetrica.nomenclator_presentaciones n"));
+ assert.deepEqual(official.params[0],["%Cosmo%","%Solar%"]);
+});
+test("no se permiten búsquedas artificialmente largas",async()=>{
+ const api=fixture();
+ const search=Array.from({length:13},(_,i)=>"palabra"+i).join(" ");
+ const out=await api.call("/api/ventas/objetivos/buscar",{search,cns:[]},[1]);
  assert.equal(out.status,400);
  assert.equal(api.queries.length,0);
 });

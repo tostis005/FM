@@ -103,8 +103,8 @@ test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por 
  assert.deepEqual(bySupplier.params.slice(0,2),["ampedia",[1]]);
  assert.equal(JSON.parse(bySupplier.params[2])[0].supplier_code,"PR1");
  assert.deepEqual(direct.params[2],["%Proveedor%","%Ejemplo%"]);
- assert.equal(direct.params[6],"%proveedor%");
- assert.match(direct.sql,/LIKE \$7::text/);
+ assert.equal(direct.params[5],"%proveedor%");
+ assert.match(direct.sql,/LIKE \$6::text/);
  assert.deepEqual(supplier.params[2],["%Proveedor%","%Ejemplo%"]);
  assert.deepEqual(bySupplier.params[5],["%Proveedor%","%Ejemplo%"]);
  assert.ok(bySupplier.timeout<=8000);
@@ -132,8 +132,8 @@ test("paginación por CN: las filas de ERP no consumen cupo antes de DISTINCT",a
  assert.equal(out.status,200);
  const direct=api.queries.find(q=>q.sql.includes("SELECT DISTINCT ON (resolved_cn)"));
  assert.ok(direct);
- assert.equal(direct.params[4],181);
- assert.equal(direct.params[5],360);
+ assert.equal(direct.params[3],181);
+ assert.equal(direct.params[4],360);
  assert.equal(out.response.hasMore,false);
  assert.ok(direct.sql.includes("ORDER BY resolved_cn"));
 });

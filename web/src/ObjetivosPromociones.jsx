@@ -151,21 +151,32 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  async function addPastedCNs(){
   if(bulkBusy||!codes.length||invalid.length||codes.length>500)return;
   const requested=[...codes];
-  append(requested.map(cn=>({cn,description:UNKNOWN_PRODUCT_NAME})));
-  setBulk("");setBulkError("");setBulkBusy(true);
-  // Añadir es instantáneo; recuperar la ficha es solo un enriquecimiento.
+  setBulkError("");setBulkBusy(true);
+  // Mantener la lista intacta mientras se consulta Farmatic: no insertar
+  // códigos provisionales que aparezcan como "Nombre no disponible".
   try{
    const data=await post(clientSlug,"/api/ventas/objetivos/buscar",{search:"",cns:requested});
-   const byCode=new Map((data.products||[]).filter(item=>CN(item.cn)&&
-    requested.includes(item.cn)).map(item=>[item.cn,item]));
-   setSelected(current=>current.map(item=>{
-    const known=byCode.get(item.cn);
-    return known&&promotionProductName(item)===UNKNOWN_PRODUCT_NAME?
-     {...item,description:promotionProductName(known),supplier:known.supplier||null,
-       referenceType:known.referenceType||null}:item;
-   }));
-  }catch{
-   setBulkError("Los CN están añadidos. No se han podido recuperar algunos nombres del catálogo.");
+   const byCode=new Map((data.products||[])
+    .filter(item=>CN(item.cn)&&requested.includes(item.cn)&&
+     String(item.description||"").trim()&&
+     ![UNKNOWN_PRODUCT_NAME,"Artículo sin nombre","CN introducido"]
+      .includes(String(item.description).trim()))
+    .map(item=>[item.cn,item]));
+   const resolved=requested.map(cn=>byCode.get(cn)).filter(Boolean);
+   if(resolved.length)append(resolved);
+   const missing=requested.filter(cn=>!byCode.has(cn));
+   if(missing.length){
+    // Conservar solo los códigos no localizados para facilitar el reintento.
+    setBulk(missing.join("\n"));
+    setBulkError("No se ha encontrado una ficha con nombre para "+
+     (missing.length===1?"el CN ":"los "+missing.length+" CN: ")+
+     missing.slice(0,12).join(", ")+(missing.length>12?"…":"")+
+     ". Comprueba la importación de artículos de Farmatic.");
+   }else setBulk("");
+  }catch(error){
+   // No alterar ni la selección ni los códigos pegados si la consulta falla.
+   setBulkError("No se han podido recuperar los nombres de Farmatic: "+error.message+
+    ". Los códigos siguen en el cuadro para reintentarlo.");
   }finally{setBulkBusy(false);}
  }
  function create(){
@@ -244,7 +255,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     {invalid.length>0&&<p role="alert" className="fm-objectives-warning">
      Comprueba {invalid.length===1?"el código":"los "+invalid.length+" códigos"}: deben tener exactamente 6 dígitos.</p>}
     {codes.length>500&&<p role="alert" className="fm-objectives-warning">Máximo 500 CN a la vez.</p>}
-    {bulkBusy&&<LoadingStatus label="Recuperando nombres de los CN añadidos…"/>}
+    {bulkBusy&&<LoadingStatus label="Consultando artículos y recuperando sus nombres…"/>}
     {bulkError&&<p role="status" className="fm-objectives-hint">{bulkError}</p>}
    </div>}
    <div className="fm-objectives-selected">

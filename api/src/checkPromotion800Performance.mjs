@@ -39,12 +39,18 @@ try{
  const ids=pharmacies.map(p=>p.id),slug="ampedia";
  if(!ids.length)throw Error("No hay farmacias activas");
  const {rows:sample}=await pool.query({text:
-  "SELECT DISTINCT left(btrim(a.codigo_nacional::text),6) AS cn FROM \""+schema+"\".articulos a "+
+  "SELECT DISTINCT btrim(a.origen_id::text) AS cn FROM \""+schema+"\".articulos a "+
   "JOIN farmetrica.farmacias f ON f.cliente_slug=$1 AND upper(btrim(a.farmacia_codigo))="+pharmacyDataCodeSQL("f")+
-  " WHERE f.id=ANY($2::int[]) AND btrim(a.codigo_nacional::text)~'^[0-9]{6,7}$' LIMIT 800",
+  " WHERE f.id=ANY($2::int[]) AND length(btrim(a.origen_id::text))=6 AND btrim(a.origen_id::text)~'^[0-9]+$' LIMIT 800",
   values:[slug,ids],query_timeout:16000});
  const cns=sample.map(r=>r.cn);
- if(cns.length!==800)throw Error("No hay 800 CN únicos");
+ report.existingCN=cns.length;
+ const seen=new Set(cns);
+ for(let i=0;cns.length<800;i++){
+  const cn=String(i).padStart(6,"0");
+  if(!seen.has(cn)){seen.add(cn);cns.push(cn);}
+ }
+ if(cns.length!==800)throw Error("No se pudieron seleccionar 800 códigos");
  const context={client:{slug,schema},allowedPharmacyIds:ids};
  const periods=[
   {id:"previous",from:"2026-10-01",to:"2026-10-31"},

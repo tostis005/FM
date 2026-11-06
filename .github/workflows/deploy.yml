@@ -58,6 +58,7 @@ jobs:
           node --test api/src/outgoingTransfersRules.test.js
           node --check api/src/syncStatus.js
           node --check api/src/promocionesTenant.js
+          node --check api/src/resetTenantPromotions.mjs
           node --check api/src/promocionesObjetivos.js
           node --check api/src/checkPromotion800Performance.mjs
           node --check api/src/checkPromotionImportsMobile.mjs
@@ -108,7 +109,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
-          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js src/promotionImportFlow.test.js
+          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js
           node --test src/businessAnalytics.test.js
           node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js src/promotionMonthFilter.test.js src/simuladorLogic.test.js src/simuladorProductSelection.test.js
           node --test src/salesPeriods.test.js
@@ -420,6 +421,19 @@ jobs:
             echo "::error::Falló el chequeo HTTP: API=$api web=$web login=$login privada=$panel soluciones=$solutions ficha=$solution ERP=$integration blog=$blog sitemap=$sitemap demo=$demo rechazado=$rejected"
             echo "Falló la comprobación posterior del despliegue"
             exit 1
+          '
+
+      - name: Reiniciar catálogo de promociones de Ampedia (solicitado, auditado)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'RESET_COMPLETO_PROMOCIONES_20261106')
+        timeout-minutes: 3
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            timeout 80 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api \
+              env FM_PROMOTION_RESET_CLIENT=ampedia \
+              FM_PROMOTION_RESET_CONFIRM=BORRAR_TODAS_AMPEDIA_20261106 \
+              node src/resetTenantPromotions.mjs
           '
 
       - name: Diagnosticar matriz real de ventas y stock del preparador (solo lectura)

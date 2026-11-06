@@ -120,8 +120,8 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
   put(name,...args){routes["PUT "+name]=args.at(-1)},
   post(name,...args){routes["POST "+name]=args.at(-1)}};
  const statements=[];
- const pool={async query(q){
-  statements.push(q);
+ const pool={async query(q,values){
+  statements.push({text:typeof q==="string"?q:q.text,values:values||q.values||[]});
   if(typeof q==="string"&&q.includes("FROM farmetrica.preparador_exclusiones"))
    return {rows:[{cadena:"*BAJA*"}]};
   return {rows:[{updatedAt:"2026-10-24T06:00Z"}]};
@@ -144,7 +144,7 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
   desde:"2026-10-01",hasta:"2026-10-24",comentarioGlobal:"Confirmar portes",lineas:[
    {reference:"000001",cn:"000001",name:"Crema",units:7,comment:"Caja especial"}]};
  assert.equal((await call("PUT",path,base)).status,200);
- const insert=statements.find(q=>typeof q==="string"?false:q.text?.includes("INSERT INTO farmetrica.pedidos_laboratorio_borradores"));
+ const insert=statements.find(q=>q.text.includes("INSERT INTO farmetrica.pedidos_laboratorio_borradores"));
  assert.equal(insert.values[7],"Confirmar portes");
  assert.equal(JSON.parse(insert.values[6])[0].comment,"Caja especial");
  assert.equal((await call("PUT",path,{...base,comentarioGlobal:"a".repeat(3001)})).status,400);

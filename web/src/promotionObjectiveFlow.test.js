@@ -35,3 +35,10 @@ test("rechaza objetivos no válidos y no reemplaza campañas fuera de ámbito",(
  assert.equal(objectivePromotionIsEditable(raw),true);
  assert.equal(objectivePromotionIsEditable({...raw,managerCanEdit:false}),false);
 });
+
+test("una promoción sin clasificación sigue en borrador aunque ya tenga metas",()=>{
+ const updated=mergeObjectivesIntoPromotion({...raw,type:"sin_clasificar",statusSource:"automatic"},
+  {cns:raw.cns,targets:{"1":20}},new Date("2026-11-06T12:00:00Z"));
+ assert.equal(updated.status,"Borrador");
+ assert.equal(updated.statusSource,"manual");
+});

@@ -159,7 +159,8 @@ test("fecha española con de y fin no interpretable preservan el texto original"
    [["LAB","GAMA","CN","DESC","OFERTA"],["LAB","GAMA","123456","Crema","20% DTO"]]);
   assert.equal(promos[0].end,"");
   assert.equal(promos[0].endRaw,raw);
-  assert.ok(promos[0].importWarnings.some(w=>w.includes("30 días")));
+  assert.equal(promos[0].durationMode,"stock");
+  assert.ok(!promos[0].importWarnings.some(w=>w.includes("30 días")));
  }
 });
 test("cambio de año sin año explícito: diciembre a enero",()=>{

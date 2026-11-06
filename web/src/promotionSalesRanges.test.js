@@ -9,10 +9,10 @@ test("campaña por fechas de un mes conserva el intervalo único",()=>{
 });
 
 test("stock hasta agotarse: periodos consecutivos sin caducidad ficticia",()=>{
- const parts=splitPromotionSalesPeriod("2025-01-01","2027-01-01");
+ const parts=splitPromotionSalesPeriod("2025-01-01","2028-01-01");
  assert.equal(parts.length,3);
  assert.equal(parts[0].start,"2025-01-01");
- assert.equal(parts.at(-1).end,"2027-01-01");
+ assert.equal(parts.at(-1).end,"2028-01-01");
  for(let i=0;i<parts.length;i++){
   const a=Date.parse(parts[i].start+"T00:00:00Z");
   const b=Date.parse(parts[i].end+"T00:00:00Z");

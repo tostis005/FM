@@ -350,6 +350,16 @@ try{
          if(await page.locator(".drawer .target-row input").first().inputValue()!=="4")
            throw Error("El objetivo de stock editado no se transfiere al formulario lateral");
          await page.locator(".drawer-top button[aria-label=Cerrar]").click();
+         // El flujo nuevo regresa al listado con el formulario a la derecha.
+         // La segunda comprobación de stock empieza en un planificador nuevo.
+         if(new URL(page.url()).pathname!=="/promociones")
+          throw Error("Continuar desde Nueva campaña debe volver al listado");
+         await page.goto(BASE+"/promociones/nueva",{waitUntil:"domcontentloaded"});
+         await page.getByRole("tab",{name:"Pegar lista de CN"}).click();
+         await page.locator(".fm-objectives-paste textarea").fill("123456\\n654321");
+         await page.getByRole("button",{name:"Añadir CN"}).click();
+         await page.getByRole("button",{name:"Quitar 123456"}).waitFor({timeout:12000});
+         await page.getByRole("radio",{name:"Usar stock actual como base de objetivos"}).check();
          // Al faltar stock para la selección, el objetivo es editable y
          // "Continuar" debe seguir disponible sin mensajes técnicos.
          await page.getByRole("button",{name:"Quitar 123456"}).click();
@@ -369,6 +379,7 @@ try{
          if(await page.locator(".drawer .target-row input").first().inputValue()!=="3")
            throw Error("El objetivo manual sin stock no llega al formulario de campaña");
          await page.locator(".drawer-top button[aria-label=Cerrar]").click();
+         await page.goto(BASE+"/promociones/nueva",{waitUntil:"domcontentloaded"});
          await searchInput.fill("Paginacion");
          await page.locator(".fm-objectives-results .fm-objectives-product").first()
            .waitFor({state:"visible",timeout:10000});

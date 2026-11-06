@@ -356,7 +356,7 @@ try{
           throw Error("Continuar desde Nueva campaña debe volver al listado");
          await page.goto(BASE+"/promociones/nueva",{waitUntil:"domcontentloaded"});
          await page.getByRole("tab",{name:"Pegar lista de CN"}).click();
-         await page.locator(".fm-objectives-paste textarea").fill("123456\\n654321");
+         await page.locator(".fm-objectives-paste textarea").fill("123456\n654321");
          await page.getByRole("button",{name:"Añadir CN"}).click();
          await page.getByRole("button",{name:"Quitar 123456"}).waitFor({timeout:12000});
          await page.getByRole("radio",{name:"Usar stock actual como base de objetivos"}).check();

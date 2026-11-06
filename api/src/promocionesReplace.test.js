@@ -133,3 +133,31 @@ test("gestor no puede importar objetivos de farmacias ajenas",async()=>{
  assert.equal(result.status,400);
  assert.equal(t.records().size,0);
 });
+
+test("reintentar desde el móvil el mismo Excel tras una recarga no duplica campañas previas",async()=>{
+ const t=setup({previous:[]});
+ const src="Excel: NOVIEMBRE 2026 PROMOCIONES FARMACIA ABADIA Y PB (3).xlsx";
+ const first={...next,id:"NOV-1",source:src,sourceSheet:"RESUMEN PROMOS",
+  sourceRow:2,importBatchId:"IMPORT-aleatorio-telefono",targets:{},
+  status:"Borrador",cns:["123456","654321"]};
+ const retry={...first,importBatchId:"XLSX-6-AABBCCDDEEFF0011",id:"NOV-2"};
+ const path="/api/tenant/promociones/importar";
+ const initial=await t.call(path,{promotions:[first]});
+ assert.deepEqual([initial.payload.imported,initial.payload.skipped],[1,0]);
+ const again=await t.call(path,{promotions:[retry]});
+ assert.deepEqual([again.payload.imported,again.payload.skipped],[0,1]);
+ assert.equal(t.records().size,1);
+ assert.ok(t.records().has("NOV-1"));
+});
+test("cambiar CN del Excel constituye una nueva revisión importable, no falsa duplicación",async()=>{
+ const t=setup({previous:[]});
+ const src="Excel: NOVIEMBRE 2026 PROMOCIONES.xlsx";
+ const base={...next,id:"NOV-1",source:src,sourceSheet:"RESUMEN PROMOS",
+  sourceRow:2,importBatchId:"BATCH1",targets:{},status:"Borrador"};
+ const path="/api/tenant/promociones/importar";
+ await t.call(path,{promotions:[base]});
+ const modified={...base,id:"NOV-2",importBatchId:"BATCH2",cns:["123456","234567"]};
+ const result=await t.call(path,{promotions:[modified]});
+ assert.equal(result.payload.imported,1);
+ assert.equal(t.records().size,2);
+});

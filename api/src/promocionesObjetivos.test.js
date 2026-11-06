@@ -88,7 +88,7 @@ test("rechaza rangos inválidos antes de consultar PostgreSQL",async()=>{
 });
 
 test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por cada artículo",async()=>{
- const api=fixture();
+ const api=fixture({directRows:[]});
  const out=await api.call("/api/ventas/objetivos/buscar",
   {search:"Proveedor Ejemplo",cns:[]},[1]);
  assert.equal(out.status,200);
@@ -103,6 +103,8 @@ test("busca por proveedor habitual en su farmacia, sin recorrer proveedores por 
  assert.deepEqual(bySupplier.params.slice(0,2),["ampedia",[1]]);
  assert.equal(JSON.parse(bySupplier.params[2])[0].supplier_code,"PR1");
  assert.deepEqual(direct.params[2],["%Proveedor%","%Ejemplo%"]);
+ assert.equal(direct.params[6],"%proveedor%");
+ assert.match(direct.sql,/LIKE \\$7::text/);
  assert.deepEqual(supplier.params[2],["%Proveedor%","%Ejemplo%"]);
  assert.deepEqual(bySupplier.params[5],["%Proveedor%","%Ejemplo%"]);
  assert.ok(bySupplier.timeout<=8000);

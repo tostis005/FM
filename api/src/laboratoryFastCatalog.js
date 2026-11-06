@@ -206,7 +206,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
    ON upper(btrim(a.farmacia_codigo))=c.code AND a.origen_id::text=c.article_id
   LEFT JOIN farmetrica.nomenclator_presentaciones n ON n.cn=${cn}
  ), blocked_refs AS MATERIALIZED (
-  -- Incluso un medicamento oficial se oculta si Farmatic lo marca de baja.
+  -- Las bajas siguen visibles, pero se marcan como no pedibles.
   -- Las etiquetas se leen de las farmacias seleccionadas, no de otro cliente.
   SELECT DISTINCT ${blockedCN} AS reference
   FROM ${schema}.articulos a JOIN pharmacies p ON upper(btrim(a.farmacia_codigo))=p.code
@@ -217,13 +217,14 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  ), union_catalog AS (
   SELECT n.cn::text AS referencia,n.cn::text AS cn,n.nombre::text AS nombre,
     'medicacion'::text AS tipo,true AS from_master,false AS from_sales,false AS from_receipts,
-    NULL::text AS pharmacy_id,n.dcpf,n.generico
+    NULL::text AS pharmacy_id,n.dcpf,n.generico,
+    ${retiredProductSQL("n.nombre")} AS inactive
   FROM farmetrica.nomenclator_presentaciones n
-  WHERE ${officialMatch("n")} AND NOT ${retiredProductSQL("n.nombre")}
+  WHERE ${officialMatch("n")}
   UNION ALL
   SELECT coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id),
-   cn,nombre,tipo,false,from_sales,from_receipts,pharmacy_id::text,dcpf,generico
-  FROM activity WHERE belongs AND NOT inactive
+   cn,nombre,tipo,false,from_sales,from_receipts,pharmacy_id::text,dcpf,generico,inactive
+  FROM activity WHERE belongs
  ), summarized AS (
   SELECT referencia,max(cn) AS cn,
    coalesce(min(nombre) FILTER(WHERE from_sales OR from_receipts),
@@ -235,11 +236,11 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
    bool_or(from_receipts) AS "inPurchases",
    string_agg(DISTINCT pharmacy_id,',' ORDER BY pharmacy_id)
      FILTER (WHERE pharmacy_id IS NOT NULL) AS "pharmacyIds",
-   max(dcpf) AS dcpf,bool_or(coalesce(generico,false)) AS generic
+   max(dcpf) AS dcpf,bool_or(coalesce(generico,false)) AS generic,
+    (bool_or(inactive) OR EXISTS(SELECT 1 FROM blocked_refs b WHERE b.reference=union_catalog.referencia)) AS excluded
   FROM union_catalog
   WHERE referencia IS NOT NULL
-    AND NOT EXISTS(SELECT 1 FROM blocked_refs b WHERE b.reference=union_catalog.referencia)
-  GROUP BY referencia
+   GROUP BY referencia
  ), filtered AS (
   SELECT *,("inReceipts" AND NOT "inMaster" AND cn IS NULL) AS provisional
   FROM summarized WHERE tipo=$4 AND

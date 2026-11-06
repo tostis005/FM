@@ -86,3 +86,10 @@ test("devoluciones reducen las unidades elegibles, sin generar descuento simulad
  assert.deepEqual(apply({},[sale(-2,{net:-20,lineDiscount:0})]),[]);
  assert.deepEqual(apply({},[sale(2),sale(-1,{net:-10,lineDiscount:0})]),[]);
 });
+
+test("hasta agotar stock contabiliza ventas sin simular descuentos",()=>{
+ const rows=apply({durationMode:"stock",type:"sin_clasificar"},[sale(3)]);
+ assert.equal(sum(rows,"quantity"),3);
+ assert.equal(sum(rows,"lineDiscount"),0);
+ assert.deepEqual(promotionTicketPolicy({durationMode:"stock",type:"sin_clasificar"}),{kind:"stock",bundle:1});
+});

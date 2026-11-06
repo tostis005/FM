@@ -19,6 +19,8 @@ const promotions=[
 ];
 const ticketRequests=[],errors=[];
 let salesResponseCompleted=false;
+let unlockSalesResponse;
+const firstTicketRequest=new Promise(resolve=>{unlockSalesResponse=resolve});
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const request=route.request(),url=new URL(request.url()),path=url.pathname;
@@ -31,12 +33,13 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/farmacias")payload=pharmacies;
  else if(path==="/api/tenant/promociones")payload={promotions,deletedIds:[]};
  else if(path==="/api/ventas/seguimiento"){
-  await new Promise(resolve=>setTimeout(resolve,850));
+  await Promise.race([firstTicketRequest,new Promise(resolve=>setTimeout(resolve,5000))]);
   payload={sales:{}};
   salesResponseCompleted=true;
  }
  else if(path==="/api/ventas/detalle"){
   ticketRequests.push({...request.postDataJSON(),beforeSummary:!salesResponseCompleted});
+  unlockSalesResponse();
   payload={rows:[{
    pharmacyId:"1",pharmacyName:"Farmacia Centro",saleId:"7891",lineId:"1",ticket:"T-101",
    at:"2026-10-15T10:00:00Z",cn:"789",sourceArticleId:"789",nationalCode:"123456",

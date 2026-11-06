@@ -2,12 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
 
-function fixture({directRows,officialRows,officialCatalogRows,matchedSupplierRows}={}){
+function fixture({directRows,stockRows,matchedSupplierRows}={}){
  const routes=new Map(),queries=[];
  const pool={async query(input,values=[]){
   const sql=typeof input==="string"?input:input.text;
   const params=typeof input==="string"?values:input.values||[];
   queries.push({sql,params,timeout:input?.query_timeout});
+  if(sql.includes("WITH latest AS"))return {rows:stockRows??[{pharmacy_id:"1",units:12,updated_at:"2026-11-06T00:00:00Z"}]};
   if(sql.includes("SELECT DISTINCT f.id::text AS pharmacy_id"))
    return {rows:[{pharmacy_id:"1",source_id:"ERP-123"}]};
   if(sql.includes("coalesce(sum(v.unidades)"))
@@ -15,7 +16,7 @@ function fixture({directRows,officialRows,officialCatalogRows,matchedSupplierRow
   if(sql.includes("SELECT table_name,column_name FROM information_schema.columns"))
    return {rows:[
     ...["farmacia_codigo","origen_id","nombre","codigo_nacional","cn_normalizado",
-      "laboratorio","proveedor_habitual_id"].map(column_name=>({table_name:"articulos",column_name})),
+      "laboratorio","proveedor_habitual_id","stock_actual","sincronizado_en"].map(column_name=>({table_name:"articulos",column_name})),
     ...["farmacia_codigo","origen_id","nombre"]
       .map(column_name=>({table_name:"proveedores",column_name}))
    ]};
@@ -29,12 +30,6 @@ function fixture({directRows,officialRows,officialCatalogRows,matchedSupplierRow
    return {rows:directRows??[{pharmacy_id:"1",source_id:"ERP-123",description:"Artículo de prueba",
     national_code:"123456",normalized_code:null,laboratory:null,supplier_ref:"PR1",
     supplier_name:null}]};
-  if(sql.includes("SELECT cn::text AS cn,nombre::text AS description"))
-   return {rows:officialRows||[]};
-  if(sql.includes("FROM farmetrica.nomenclator_presentaciones n"))
-   return {rows:officialCatalogRows||[]};
-  if(sql.includes("nomenclator_presentaciones"))
-   return {rows:[]};
   throw Error("Consulta SQL inesperada: "+sql);
  }};
  const app={post(path,...handlers){routes.set(path,handlers.at(-1));}};
@@ -58,10 +53,15 @@ test("histórico por farmacia devuelve unidades e importe neto",async()=>{
  assert.equal(status,200);
  assert.deepEqual(response.periods,{october:{"1":7}});
  assert.deepEqual(response.amounts,{october:{"1":53.8}});
- assert.deepEqual(api.queries[0].params,["ampedia",[1],["123456"]]);
- assert.deepEqual(api.queries[1].params,
+ assert.deepEqual(api.queries[1].params,["ampedia",[1],["123456"]]);
+ assert.deepEqual(api.queries[2].params,
    ["ampedia",[1],"2026-10-01","2026-10-31",["123456"],["1|ERP-123"]]);
- assert.match(api.queries[1].sql,/sum\(v.importe\)/);
+ assert.match(api.queries[2].sql,/sum\(v.importe\)/);
+ assert.deepEqual(response.stock,{"1":12});
+ assert.equal(response.stockUnavailable,false);
+ assert.match(api.queries[3].sql,/DISTINCT ON \(f.id,a.origen_id\)/);
+ assert.match(api.queries[3].sql,/stock_actual/);
+ assert.deepEqual(api.queries[3].params,["ampedia",[1],["123456"]]);
 });
 test("prohíbe leer ventas de otras farmacias sin lanzar ninguna consulta",async()=>{
  const api=fixture();
@@ -115,20 +115,12 @@ test("si la búsqueda no tiene permisos para otras farmacias nunca consulta sus 
  assert.match(sql.sql,/f\.id=ANY\(\$2::int\[\]\)/);
 });
 
-test("al pegar un CN sin ficha ERP recupera nombre oficial si existe, sin decir no localizado",async()=>{
- const api=fixture({directRows:[],officialRows:[{cn:"194700",description:"Nombre oficial del CN"}]});
+test("un CN sin ficha Farmatic no usa el Nomenclátor ni inventa un nombre",async()=>{
+ const api=fixture({directRows:[]});
  const out=await api.call("/api/ventas/objetivos/buscar",{search:"",cns:["194700"]},[1]);
  assert.equal(out.status,200);
- assert.deepEqual(out.response.products,[{
-  cn:"194700",description:"Nombre oficial del CN",supplier:null,sourceId:null
- }]);
- assert.equal(api.queries.some(q=>q.sql.includes("nomenclator_presentaciones")),true);
-});
-test("si el Nomenclátor tampoco conoce el CN, no inventa una descripción ni confunde el ERP",async()=>{
- const api=fixture({directRows:[],officialRows:[]});
- const out=await api.call("/api/ventas/objetivos/buscar",{search:"",cns:["168770"]},[1]);
- assert.equal(out.status,200);
  assert.deepEqual(out.response.products,[]);
+ assert.equal(api.queries.some(q=>/nomenclator|aemps|official/i.test(q.sql)),false);
 });
 
 test("paginación por CN: las filas de ERP no consumen cupo antes de DISTINCT",async()=>{
@@ -151,22 +143,15 @@ test("rechaza paginaciones fuera de rango sin acceder al catálogo",async()=>{
  assert.equal(api.queries.length,0);
 });
 
-test("reúne fichas AEMPS oficiales aunque falten en el maestro ERP",async()=>{
- const api=fixture({directRows:[],matchedSupplierRows:[],officialCatalogRows:[{
-  resolved_cn:"793421",national_code:"793421",description:"Comprimidos multipalabra Solar",
-  supplier_name:"Laboratorio Cosmo",source_id:null,pharmacy_id:null
- }]});
+test("el buscador sólo devuelve artículos existentes en Farmatic",async()=>{
+ const api=fixture({directRows:[],matchedSupplierRows:[]});
  const out=await api.call("/api/ventas/objetivos/buscar",
   {search:"Cosmo Solar",cns:[]},[1]);
  assert.equal(out.status,200);
- assert.equal(out.response.partial,false);
- assert.deepEqual(out.response.products,[{
-  cn:"793421",description:"Comprimidos multipalabra Solar",
-  supplier:"Laboratorio Cosmo",sourceId:null
- }]);
- const official=api.queries.find(q=>q.sql.includes("FROM farmetrica.nomenclator_presentaciones n"));
- assert.deepEqual(official.params[0],["%Cosmo%","%Solar%"]);
+ assert.deepEqual(out.response.products,[]);
+ assert.ok(!api.queries.some(q=>/nomenclator_presentaciones/.test(q.sql)));
 });
+
 test("no se permiten búsquedas artificialmente largas",async()=>{
  const api=fixture();
  const search=Array.from({length:13},(_,i)=>"a"+i).join(" ");
@@ -180,7 +165,7 @@ test("el CN 168766 pegado recupera el nombre desde Farmatic aunque falte en el N
   pharmacy_id:"1",source_id:"168766",resolved_cn:"168766",
   reference_type:"farmatic",national_code:null,normalized_code:null,
   description:"Eucerin Atopi Control 250 ml",supplier_name:null,laboratory:null
- }],officialRows:[]});
+ }]});
  const out=await api.call("/api/ventas/objetivos/buscar",
   {search:"",cns:["168766"]},[1]);
  assert.equal(out.status,200);
@@ -191,4 +176,23 @@ test("el CN 168766 pegado recupera el nombre desde Farmatic aunque falte en el N
  const byCode=api.queries.find(q=>q.sql.includes("SELECT DISTINCT ON (resolved_cn)"));
  assert.deepEqual(byCode.params[3],["168766"]);
  assert.match(byCode.sql,/a\."nombre"::text AS description/);
+});
+
+test("stock suma artículos seleccionados por farmacia, con cero real y sin mezclar ámbitos",async()=>{
+ const api=fixture({stockRows:[
+  {pharmacy_id:"1",units:9,updated_at:"2026-11-06T00:00:00Z"},
+  {pharmacy_id:"2",units:0,updated_at:"2026-11-06T01:00:00Z"}
+ ]});
+ const {status,response}=await api.call("/api/ventas/objetivos/historico",{
+  cns:["123456","168766"],pharmacyIds:[1,2],periods});
+ assert.equal(status,200);
+ assert.deepEqual(response.stock,{"1":9,"2":0});
+ assert.equal(response.stockUnavailable,false);
+ const q=api.queries.find(q=>q.sql.includes("WITH latest AS"));
+ assert.ok(q);
+ assert.match(q.sql,/DISTINCT ON \(f.id,a.origen_id\)/);
+ assert.match(q.sql,/a.stock_actual::float8/);
+ assert.match(q.sql,/f.id=ANY\(\$2::int\[\]\)/);
+ assert.match(q.sql,/a.origen_id::text/);
+ assert.deepEqual(q.params,["ampedia",[1,2],["123456","168766"]]);
 });

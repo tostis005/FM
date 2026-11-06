@@ -1,7 +1,7 @@
 // Consulta acotada de catálogo y ventas para el preparador de objetivos.
 // Sólo expone farmacias autorizadas, CN reales y agregados, nunca tickets.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {promotionCatalogSearchSQL,mergePromotionCatalogRows} from "./promotionCatalogSearch.js";
+import {promotionCatalogSearchSQL,promotionSearchPatterns,mergePromotionCatalogRows} from "./promotionCatalogSearch.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const CN=/^\d{6}$/;
@@ -39,34 +39,39 @@ const MAX_PAGE=50;
 async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const metadata=await catalogColumns(pool,schema);
  const sql=promotionCatalogSearchSQL(schema,metadata);
+ const patterns=promotionSearchPatterns(search);
  const pageSize=search?PAGE_SIZE:Math.min(500,Math.max(1,cns.length));
  const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
  const direct=pool.query({
-  text:sql.direct,values:[slug,ids,search,cns,pageLimit,offset],query_timeout:8000
+  text:sql.direct,values:[slug,ids,patterns,cns,pageLimit,offset],query_timeout:8000
  });
  const supplierNames=search.length>=2&&sql.suppliers?
-  pool.query({text:sql.suppliers,values:[slug,ids,search,400],query_timeout:4000}):
+  pool.query({text:sql.suppliers,values:[slug,ids,patterns,400],query_timeout:4000}):
   Promise.resolve({rows:[]});
- const [a,b]=await Promise.allSettled([direct,supplierNames]);
+ const official=patterns.length?
+  pool.query({text:sql.officialCatalog,values:[patterns,pageLimit,offset],
+   query_timeout:6500}):Promise.resolve({rows:[]});
+ const [a,b,o]=await Promise.allSettled([direct,supplierNames,official]);
  const directRows=a.status==="fulfilled"?a.value.rows||[]:[];
  const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
+ const officialRows=o.status==="fulfilled"?o.value.rows||[]:[];
  let supplierResult={rows:[]},supplierError=null;
  if(supplierCodes.length&&sql.bySupplier){
   try{
    supplierResult=await pool.query({
     text:sql.bySupplier,
-    values:[slug,ids,JSON.stringify(supplierCodes),pageLimit,offset],
+    values:[slug,ids,JSON.stringify(supplierCodes),pageLimit,offset,patterns],
     query_timeout:8000
    });
   }catch(error){supplierError=error;}
  }
- const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&!supplierError;
+ const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&o.status==="fulfilled"&&!supplierError;
  const supplierRows=supplierResult.rows||[];
- if(!complete&&!directRows.length&&!supplierRows.length)
+ if(!complete&&!directRows.length&&!supplierRows.length&&!officialRows.length)
   throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
  // Ambas búsquedas devuelven CN únicos. El límite está aplicado después de
  // DISTINCT, nunca a los artículos ERP sin CN o duplicados entre farmacias.
- const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize)];
+ const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize),...officialRows.slice(0,pageSize)];
  const products=mergePromotionCatalogRows(rows);
  if(!search&&cns.length){
   const selected=new Set(cns);
@@ -86,7 +91,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
   }
   return {products:inCatalog,partial:!complete,hasMore:false};
  }
- const hasMore=directRows.length>pageSize||supplierRows.length>pageSize;
+ const hasMore=directRows.length>pageSize||supplierRows.length>pageSize||officialRows.length>pageSize;
  return {products,partial:!complete||supplierCodes.length>=400,hasMore,pageSize};
 }
 
@@ -97,6 +102,8 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    const schema=req.context.client.schema,slug=req.context.client.slug;
    if(!SCHEMA.test(schema)||!SCHEMA.test(slug))return res.status(400).json({error:"Cliente inválido"});
    const search=String(req.body?.search||"").trim().slice(0,90),cns=cleanCNs(req.body?.cns);
+   if(promotionSearchPatterns(search).length>12)
+    return res.status(400).json({error:"La búsqueda admite hasta 12 palabras"});
    const page=Number(req.body?.page??0);
    if(!Number.isInteger(page)||page<0||page>MAX_PAGE)
     return res.status(400).json({error:"Página de resultados inválida"});

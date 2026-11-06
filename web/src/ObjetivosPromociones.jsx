@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Check,Plus,Search,Trash2} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
 import {LoadingFrame,LoadingStatus} from "./LoadingState.jsx";
-import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection} from "./simuladorProductSelection.js";
+import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,promotionProductName,promotionProductLabel,UNKNOWN_PRODUCT_NAME} from "./simuladorProductSelection.js";
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
 import "./ObjetivosPromociones.css";
 
@@ -138,7 +138,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  async function addPastedCNs(){
   if(bulkBusy||!codes.length||invalid.length||codes.length>500)return;
   const requested=[...codes];
-  append(requested.map(cn=>({cn,description:"CN introducido"})));
+  append(requested.map(cn=>({cn,description:UNKNOWN_PRODUCT_NAME})));
   setBulk("");setBulkError("");setBulkBusy(true);
   // Añadir es instantáneo; recuperar la ficha es solo un enriquecimiento.
   try{
@@ -147,8 +147,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     requested.includes(item.cn)).map(item=>[item.cn,item]));
    setSelected(current=>current.map(item=>{
     const known=byCode.get(item.cn);
-    return known&&item.description==="CN introducido"?
-     {...item,description:known.description||item.description,supplier:known.supplier||null}:item;
+    return known&&promotionProductName(item)===UNKNOWN_PRODUCT_NAME?
+     {...item,description:promotionProductName(known),supplier:known.supplier||null}:item;
    }));
   }catch{
    setBulkError("Los CN están añadidos. No se han podido recuperar algunos nombres del catálogo.");
@@ -183,7 +183,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    {mode==="search"?<div id="simulator-search-panel" role="tabpanel" aria-labelledby="simulator-search-tab">
     <div className="fm-objectives-search">
      <label>Buscar por artículo, proveedor o CN
-      <input type="search" placeholder="Nombre, marca, laboratorio o CN…" value={search}
+      <input type="search" placeholder="Artículo, laboratorio, proveedor o CN (palabras en cualquier orden)…" value={search}
        onChange={e=>{setSearch(e.target.value);setSearchPage(0);}}
        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setSearchNonce(n=>n+1);}}}/></label>
      <button className="btn btn-secondary" type="button" disabled={searchBusy||search.trim().length<2}
@@ -236,8 +236,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     <div className="fm-objectives-section-title"><strong>Productos seleccionados · {selected.length} CN</strong>
      <button type="button" className="btn btn-secondary btn-sm" disabled={!selected.length}
       onClick={()=>setSelected([])}>Limpiar selección</button></div>
-    {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={item.description}>
-     <code>{item.cn}</code> {item.description}
+    {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)}>
+     <code>{item.cn}</code>{" - "}{promotionProductName(item)}
      <button type="button" aria-label={"Quitar "+item.cn}
       onClick={()=>setSelected(s=>s.filter(x=>x.cn!==item.cn))}><Trash2 size={13}/></button>
     </span>)}</div>:<p>Busca o pega CN para seleccionar los productos.</p>}
@@ -278,10 +278,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
          onClick={()=>{setRateByPharmacy(v=>({...v,[id]:value}));setManualTargets(v=>({...v,[id]:undefined}));}}>
          {value}%</button>)}</div>
          <label className="fm-objectives-rate-custom">
-          <input type="number" min="-100" max="500" step="0.5"
+          <input type="number" min="-100" max="500" step="1" inputMode="numeric"
            aria-label={"Incremento personalizado "+f.name} value={rateByPharmacy[id]??5}
            onChange={e=>{const v=Number(e.target.value);
-            if(Number.isFinite(v)&&v>=-100&&v<=500){
+            if(Number.isInteger(v)&&v>=-100&&v<=500){
              setRateByPharmacy(old=>({...old,[id]:v}));
              setManualTargets(old=>({...old,[id]:undefined}));
             }}}/><span>%</span></label></div></td>

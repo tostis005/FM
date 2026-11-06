@@ -254,8 +254,14 @@ try{
          if(await page.getByText("Selecciona productos para cargar las ventas").count())
            throw Error("Sobra el texto explicativo de la tabla del Simulador");
          await page.getByRole("tab",{name:"Buscar artículos"}).click();
-         if(!(await page.locator(".fm-objectives-selected").textContent()).includes("654321"))
-           throw Error("Cambiar de método pierde los CN añadidos");
+         await page.waitForFunction(()=>{
+           const labels=document.querySelector(".fm-objectives-selected")?.textContent||"";
+           return labels.includes("123456 - Producto de prueba")&&
+             labels.includes("654321 - Nombre no disponible");
+         },null,{timeout:10000});
+         const selectedLabels=await page.locator(".fm-objectives-selected").textContent();
+         if(selectedLabels.includes("CN introducido"))
+           throw Error("La selección no debe mostrar CN introducido: "+selectedLabels);
          await page.getByRole("radio",{name:"Usar Mismo mes hace 1 año como base de objetivos"}).check();
          const compact=await page.evaluate(()=>{
            const table=document.querySelector(".fm-objectives-unified-table");
@@ -279,6 +285,12 @@ try{
            };
          });
          if(/uds\.|€|netos/.test(compact.text))throw Error("La tabla debe mostrar solo unidades numéricas");
+         const customRate=page.locator(".fm-objectives-rate-custom input").first();
+         if(await customRate.getAttribute("step")!=="1")
+           throw Error("Los incrementos solo permiten porcentajes enteros");
+         await customRate.fill("9");
+         if(await customRate.inputValue()!=="9")
+           throw Error("No se puede editar un porcentaje entero");
          if(compact.rateWrap!=="nowrap"||compact.extraLabel||compact.rateWidth>75)
            throw Error("Incrementos sin compactar: "+JSON.stringify(compact));
          if(compact.objectiveWidth>85)throw Error("El campo de objetivo no es compacto");

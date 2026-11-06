@@ -6,6 +6,11 @@ const quote=s=>'"'+s+'"';
 const col=(table,column)=>table+"."+quote(column)+"::text";
 const upper=expr=>"upper(btrim(coalesce("+expr+",'')))";
 
+export function promotionSearchPatterns(search){
+ const words=String(search||"").trim().split(/\s+/u).filter(Boolean);
+ return words.map(word=>"%"+word.replace(/[\\%_]/g,character=>"\\"+character)+"%");
+}
+
 /**
  * Solo devolver artículos con CN identificable y paginar DESPUÉS de
  * deduplicar por CN. Antes el LIMIT se aplicaba a filas del ERP (muchas sin CN
@@ -47,28 +52,44 @@ export function promotionCatalogSearchSQL(schema,columns){
  const officialJoin="LEFT JOIN farmetrica.nomenclator_presentaciones official "+
   "ON official.cn=btrim(a.origen_id::text) "+
   "AND btrim(a.origen_id::text) ~ '^[0-9]{6}$' ";
- const terms=[
-  "a.nombre::text ILIKE '%'||$3||'%'",
-  "a.codigo_nacional::text ILIKE '%'||$3||'%'",
-  ...(has(columns,"articulos","cn_normalizado")?
-   ["a.cn_normalizado::text ILIKE '%'||$3||'%'"]:[]),
-  ...(has(columns,"articulos","laboratorio")?
-   ["a.laboratorio::text ILIKE '%'||$3||'%'"]:[]),
-  "a.origen_id::text ILIKE '%'||$3||'%'"
- ];
+ // Cada palabra debe encontrarse, pero puede estar en CUALQUIER orden
+ // y en CUALQUIERA de los campos: nombre ERP, laboratorio, CN, nombre AEMPS.
+ // Los patrones son parámetros bindados; nunca se interpolan en el SQL.
+ const searchable="concat_ws(' ', a.nombre::text, "+lab+", "+
+  "a.origen_id::text, "+raw+", "+normalized+", official.cn, "+
+  "official.nombre, official.laboratorio, "+
+  "official.laboratorio_titular, official.laboratorio_comercializador)";
+ const supplierSearchable="concat_ws(' ', a.nombre::text, "+lab+", "+
+  "a.origen_id::text, "+raw+", "+normalized+", official.cn, "+
+  "official.nombre, official.laboratorio, "+
+  "official.laboratorio_titular, official.laboratorio_comercializador, matched.supplier_name)";
  // Deduplicación en PostgreSQL antes de LIMIT/OFFSET; estable entre páginas.
  const page=(candidate,limit,offset)=>
   "SELECT DISTINCT ON (resolved_cn) * FROM ("+candidate+") found "+
   "WHERE resolved_cn IS NOT NULL ORDER BY resolved_cn,description NULLS LAST "+
   "LIMIT "+limit+"::int OFFSET "+offset+"::int";
  const direct=page("SELECT "+fields()+" FROM "+a+" a "+scope+officialJoin+
-  "WHERE "+hasCN+" AND (($3::text<>'' AND ("+terms.join(" OR ")+")) "+
+  "WHERE "+hasCN+" AND ((cardinality($3::text[])>0 AND "+searchable+" ILIKE ALL($3::text[])) "+
   "OR "+raw+"=ANY($4::text[]) "+
   "OR ("+isCode(raw)+" AND left("+raw+",6)=ANY($4::text[])) "+
   (has(columns,"articulos","cn_normalizado")?
    "OR "+normalized+"=ANY($4::text[]) "+
    "OR ("+isCode(normalized)+" AND left("+normalized+",6)=ANY($4::text[])) ":"")+
   "OR (official.cn IS NOT NULL AND official.cn=ANY($4::text[])))","$5","$6");
+ // Fuente complementaria: la ficha AEMPS puede existir aunque la farmacia
+ // no la tenga en su maestro. Ofrecer el CN con nombre oficial sin inventar
+ // ninguna relación de stock o venta para ese producto.
+ const officialCatalog=
+  "SELECT n.cn::text AS resolved_cn,n.cn::text AS national_code, "+
+  "n.nombre::text AS description, "+
+  "coalesce(nullif(n.laboratorio_comercializador::text,''), "+
+  "nullif(n.laboratorio_titular::text,''),n.laboratorio::text) AS supplier_name, "+
+  "NULL::text AS source_id,NULL::text AS pharmacy_id "+
+  "FROM farmetrica.nomenclator_presentaciones n "+
+  "WHERE cardinality($1::text[])>0 AND "+
+  "concat_ws(' ',n.nombre,n.cn,n.laboratorio,n.laboratorio_titular, "+
+   "n.laboratorio_comercializador) ILIKE ALL($1::text[]) "+
+  "ORDER BY n.cn LIMIT $2::int OFFSET $3::int";
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+
@@ -77,13 +98,13 @@ export function promotionCatalogSearchSQL(schema,columns){
  const sources="SELECT p.code AS pharmacy_code,"+upper("sp.origen_id::text")+
   " AS supplier_code,nullif(btrim(sp.nombre::text),'') AS supplier_name "+
   "FROM "+p+" sp JOIN allowed p ON "+upper("sp.farmacia_codigo::text")+"=p.code "+
-  "WHERE sp.nombre::text ILIKE '%'||$3||'%'";
+  "WHERE sp.nombre::text ILIKE ANY($3::text[])";
  const master="SELECT p.code AS pharmacy_code,"+upper("sp.origen_id::text")+
   " AS supplier_code,nullif(btrim(pm.nombre::text),'') AS supplier_name "+
   "FROM farmetrica.proveedores_maestro pm JOIN "+p+" sp ON "+
   upper("sp.origen_id::text")+"="+upper("pm.codigo_origen::text")+
   " JOIN allowed p ON "+upper("sp.farmacia_codigo::text")+"=p.code "+
-  "WHERE pm.cliente_slug=$1 AND pm.nombre::text ILIKE '%'||$3||'%'";
+  "WHERE pm.cliente_slug=$1 AND pm.nombre::text ILIKE ANY($3::text[])";
  const suppliers=supplierReady?
   allowed+"SELECT DISTINCT pharmacy_code,supplier_code,supplier_name FROM ("+
    sources+" UNION ALL "+master+") found "+
@@ -94,9 +115,9 @@ export function promotionCatalogSearchSQL(schema,columns){
    "pharmacy_code text,supplier_code text,supplier_name text) "+
   "ON "+upper("a.farmacia_codigo::text")+"=matched.pharmacy_code "+
   "AND ("+refCondition+") "+scope+officialJoin+
-  "WHERE "+hasCN:null;
+  "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const bySupplier=supplierRows?page(supplierRows,"$4","$5"):null;
- return {direct,suppliers,bySupplier,supplierReady};
+ return {direct,suppliers,bySupplier,officialCatalog,supplierReady};
 }
 
 export function promotionResultCN(row,verifiedOrigins=new Set()){

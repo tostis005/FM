@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
-import {promotionCatalogSearchSQL,promotionResultCN} from "./promotionCatalogSearch.js";
+import {promotionCatalogSearchSQL,promotionSearchPatterns,promotionResultCN} from "./promotionCatalogSearch.js";
 
 test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, sin consultas correlacionadas",{
  skip:!process.env.TEST_DB_URL
@@ -26,14 +26,37 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "WHERE table_schema='ampedia' AND table_name IN ('articulos','proveedores')");
   const sql=promotionCatalogSearchSQL("ampedia",cols);
   const own=[1];
-  const nameHits=(await db.query(sql.direct,["ampedia",own,"Farmetrica ZZZ",[],240,0])).rows;
+  const nameHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("Farmetrica ZZZ"),[],240,0])).rows;
   assert.equal(nameHits.some(row=>row.source_id==="SIM-ART-123"&&row.pharmacy_id==="1"),true);
   assert.equal(nameHits.every(row=>row.pharmacy_id==="1"),true);
-  const cnHits=(await db.query(sql.direct,["ampedia",own,"765432",[],240,0])).rows;
+  const cnHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("765432"),[],240,0])).rows;
+
+  // Todas las palabras, en otro orden e incluso repartidas entre columnas.
+  const orderFree=(await db.query(sql.direct,[
+   "ampedia",own,promotionSearchPatterns("ZZZ Crema"),[],240,0
+  ])).rows;
+  assert.ok(orderFree.some(row=>row.source_id==="SIM-ART-123"));
+  const acrossFields=(await db.query(sql.direct,[
+   "ampedia",own,promotionSearchPatterns("765432 Farmetrica"),[],240,0
+  ])).rows;
+  assert.ok(acrossFields.some(row=>row.source_id==="SIM-ART-123"));
+  // Fuente oficial con CN válido aunque no exista ficha ERP.
+  await db.query(`INSERT INTO farmetrica.nomenclator_presentaciones
+   (cn,nombre,dcpf,generico,laboratorio_titular,laboratorio_comercializador)
+   VALUES('793421','Comprimidos multipalabra Solar','QA-MULTI',false,
+    'Laboratorio Torre','Laboratorio Cosmo')
+   ON CONFLICT (cn) DO UPDATE SET nombre=EXCLUDED.nombre,
+    laboratorio_titular=EXCLUDED.laboratorio_titular,
+    laboratorio_comercializador=EXCLUDED.laboratorio_comercializador`);
+  const officialRows=(await db.query(sql.officialCatalog,[
+   promotionSearchPatterns("Cosmo Solar"),240,0
+  ])).rows;
+  assert.ok(officialRows.some(row=>row.resolved_cn==="793421"));
+  assert.ok(officialRows.some(row=>row.description==="Comprimidos multipalabra Solar"));
   const product=cnHits.find(row=>row.source_id==="SIM-ART-123");
   assert.ok(product);
   assert.equal(promotionResultCN(product),"765432");
-  const pasted=(await db.query(sql.direct,["ampedia",own,"",["194700"],240,0])).rows;
+  const pasted=(await db.query(sql.direct,["ampedia",own,[],["194700"],240,0])).rows;
   const sevenDigit=pasted.find(row=>row.source_id==="SIM-7-DIGIT-194700");
   assert.ok(sevenDigit,"El CN de seis dígitos debe localizar la ficha ERP con dígito de control");
   assert.equal(promotionResultCN(sevenDigit),"194700");
@@ -49,17 +72,23 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional) "+
    "SELECT 'EUR','SIM-REPEAT-'||i,'BUSQUEDA-AMPLIA-TEST',lpad((880000+i)::text,6,'0') "+
    "FROM generate_series(1,140) i");
-  const first=(await db.query(sql.direct,["ampedia",[1,2],"BUSQUEDA-AMPLIA-TEST",[],180,0])).rows;
-  const second=(await db.query(sql.direct,["ampedia",[1,2],"BUSQUEDA-AMPLIA-TEST",[],180,180])).rows;
+  const first=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),[],180,0])).rows;
+  const second=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),[],180,180])).rows;
   assert.equal(first.length,180);
   assert.equal(second.length,55);
   const all=[...first,...second];
   assert.equal(new Set(all.map(row=>promotionResultCN(row))).size,235);
   assert.ok(all.every(row=>/^\d{6}$/.test(row.resolved_cn)));
-  const suppliers=(await db.query(sql.suppliers,["ampedia",own,"Buscador Particular",80])).rows;
+  const suppliers=(await db.query(sql.suppliers,["ampedia",own,promotionSearchPatterns("Buscador Particular"),80])).rows;
   assert.ok(suppliers.some(row=>row.supplier_code==="SIMSUP-123"));
+
+  const supplierMixed=(await db.query(sql.bySupplier,[
+   "ampedia",own,JSON.stringify(suppliers),180,0,
+   promotionSearchPatterns("Particular Crema")
+  ])).rows;
+  assert.ok(supplierMixed.some(row=>row.source_id==="SIM-ART-123"));
   const bySupplier=(await db.query(sql.bySupplier,[
-   "ampedia",own,JSON.stringify(suppliers),180,0
+   "ampedia",own,JSON.stringify(suppliers),180,0,promotionSearchPatterns("Buscador Particular")
   ])).rows;
   assert.equal(bySupplier.some(row=>row.source_id==="SIM-ART-123"&&
    row.supplier_name==="Laboratorio Buscador Particular"),true);

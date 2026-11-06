@@ -46,8 +46,10 @@ export function defaultLaboratoryLine(row,type,pharmacyIds){
   [id,isExcludedOrderRow(row)?0:row.byPharmacy?.[id]?.suggested??0]))};
 }
 export function orderLineFor(row,type,ids,drafts={}){
- return sanitizeExcludedOrderLine(row,
-  drafts[row.referencia]||defaultLaboratoryLine(row,type,ids),type,ids);
+ const previous=drafts[row.referencia]||defaultLaboratoryLine(row,type,ids);
+ // La regla vigente del catálogo prevalece sobre el estado de un borrador antiguo.
+ return sanitizeExcludedOrderLine(row,{...previous,excluded:isExcludedOrderRow(row),
+  name:row.nombre,cn:row.cn||null,metrics:row.byPharmacy||previous.metrics||{}},type,ids);
 }
 export function mergeVisibleOrderLines(rows,type,ids,drafts={}){
  const result={...drafts};

@@ -321,7 +321,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  async function exportExcel(){
-  if(!persisted||dirty||!savedLines.length)return;
+  if(!persisted||dirty||loading||data.metricsUnavailable||!savedLines.length)return;
   try{
    setBusy(true);setError("");
    const activeCatalog=new Map((data.rows||[]).map(row=>[row.referencia,row]));
@@ -519,7 +519,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>
      <button className="btn btn-primary" type="button" onClick={exportExcel}
-      disabled={busy||!persisted||dirty||!savedLines.length}>
+      disabled={busy||loading||data.metricsUnavailable||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
      {canEdit&&<button className="btn btn-secondary" type="button"
       onClick={()=>beginRecord(laboratory)} disabled={busy||!laboratory||!ids.length}>

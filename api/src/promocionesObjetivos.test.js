@@ -174,3 +174,21 @@ test("no se permiten búsquedas artificialmente largas",async()=>{
  assert.equal(out.status,400);
  assert.equal(api.queries.length,0);
 });
+
+test("el CN 168766 pegado recupera el nombre desde Farmatic aunque falte en el Nomenclátor",async()=>{
+ const api=fixture({directRows:[{
+  pharmacy_id:"1",source_id:"168766",resolved_cn:"168766",
+  reference_type:"farmatic",national_code:null,normalized_code:null,
+  description:"Eucerin Atopi Control 250 ml",supplier_name:null,laboratory:null
+ }],officialRows:[]});
+ const out=await api.call("/api/ventas/objetivos/buscar",
+  {search:"",cns:["168766"]},[1]);
+ assert.equal(out.status,200);
+ assert.deepEqual(out.response.products,[{
+  cn:"168766",description:"Eucerin Atopi Control 250 ml",supplier:null,
+  sourceId:"168766",referenceType:"farmatic"
+ }]);
+ const byCode=api.queries.find(q=>q.sql.includes("SELECT DISTINCT ON (resolved_cn)"));
+ assert.deepEqual(byCode.params[3],["168766"]);
+ assert.match(byCode.sql,/a\.nombre::text AS description/);
+});

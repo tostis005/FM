@@ -177,7 +177,7 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
       )
       SELECT pharmacy_id,coalesce(sum(stock),0)::float8 AS units,
        max(updated_at) AS updated_at
-      FROM latest WHERE stock IS NOT NULL GROUP BY pharmacy_id`,
+      FROM latest GROUP BY pharmacy_id HAVING count(*)=count(stock)`,
       values:[slug,ids,cns],query_timeout:8000});
      stock=Object.fromEntries(rows.map(row=>[row.pharmacy_id,Number(row.units)]));
      const dates=rows.map(row=>row.updated_at).filter(Boolean)

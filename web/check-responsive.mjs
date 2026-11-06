@@ -254,11 +254,14 @@ try{
          if(await page.getByText("Selecciona productos para cargar las ventas").count())
            throw Error("Sobra el texto explicativo de la tabla del Simulador");
          await page.getByRole("tab",{name:"Buscar artículos"}).click();
+         await page.waitForFunction(()=>{
+           const labels=document.querySelector(".fm-objectives-selected")?.textContent||"";
+           return labels.includes("123456 - Producto de prueba")&&
+             labels.includes("654321 - Nombre no disponible");
+         },null,{timeout:10000});
          const selectedLabels=await page.locator(".fm-objectives-selected").textContent();
-         if(!selectedLabels.includes("654321 - Nombre no disponible")||
-            !selectedLabels.includes("123456 - Producto de prueba")||
-            selectedLabels.includes("CN introducido"))
-           throw Error("Los productos seleccionados deben tener formato CN - nombre");
+         if(selectedLabels.includes("CN introducido"))
+           throw Error("La selección no debe mostrar CN introducido: "+selectedLabels);
          await page.getByRole("radio",{name:"Usar Mismo mes hace 1 año como base de objetivos"}).check();
          const compact=await page.evaluate(()=>{
            const table=document.querySelector(".fm-objectives-unified-table");

@@ -334,6 +334,14 @@ try{
          await stockGoal.fill("4");
          await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).click();
          await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
+         const stockDrawer=page.locator(".drawer");
+         if(!await stockDrawer.getByRole("radio",{name:"Hasta agotar existencias"}).isChecked())
+           throw Error("Stock actual debe preseleccionar Hasta agotar existencias");
+         if(await stockDrawer.getByLabel("Fecha de fin").count())
+           throw Error("Una campaña de stock no puede pedir fecha de fin");
+         if(await stockDrawer.getByRole("spinbutton",{name:"Incremento porcentual"}).count()||
+            await stockDrawer.getByRole("button",{name:"Aplicar",exact:true}).count())
+           throw Error("El formulario lateral ya no debe volver a aplicar incrementos");
          const transferred=await page.locator(".drawer textarea.cn-area").inputValue();
          if(!transferred.includes("123456")||!transferred.includes("654321"))
            throw Error("Los CN pegados no se transfieren al formulario lateral");

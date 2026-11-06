@@ -429,7 +429,9 @@ function App(){
          const segments=[];
          for(const p of data.promos){
            if(page==="promociones"&&!promotionOverlapsPeriod(p,from,to))continue;
-           if(page==="seguimiento-global"&&!reportSelectedIds.includes(p.id))continue;
+           if(page==="seguimiento-global"&&(!reportSelectedIds.includes(p.id)||
+             !promotionMatchesReportScope({...p,status:effectivePromotionStatus(p,new Date(),reportTimeZone)},
+               {status:reportStatus,month:reportMonth,year:reportYear})))continue;
            const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
             if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
            if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
@@ -439,7 +441,7 @@ function App(){
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
-         const results=await mapLimited(chunks,3,
+         const results=await mapLimited(chunks,2,
            chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
          const byPromotion={},byTotalPromotion={};
@@ -462,7 +464,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,reportSelectedIds]);
+   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,reportSelectedIds,reportStatus,reportMonth,reportYear]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -1233,7 +1235,7 @@ function App(){
       label="campañas" onPageChange={setReportPage}
       onPageSizeChange={n=>{setReportPageSize(n);setReportPage(0)}}/>
   </section>
-  <DetalleVentas promotions={reportFilteredCampaigns} pharmacies={pharmacies} pharmacyScopeIds={effectivePharmacyIds} connected={salesStatus==="real"} loading={salesStatus==="cargando"}/>
+  <DetalleVentas promotions={reportFilteredCampaigns} pharmacies={pharmacies} pharmacyScopeIds={effectivePharmacyIds} connected={promotionStoreStatus==="connected"} />
   <section className="card campaign-cn-panel">
    <div className="section-heading"><div><h2>CNs incluidos</h2></div><span className="count-label">{reportCNs.length} CNs</span></div>
    <div className="list-options"><label>Buscar CN <input type="search" placeholder="CN o descripción…" value={cnSearch} onChange={e=>{setCnSearch(e.target.value);setCnPage(0)}}/></label>

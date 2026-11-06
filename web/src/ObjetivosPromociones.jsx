@@ -5,6 +5,7 @@ import {LoadingFrame,LoadingStatus} from "./LoadingState.jsx";
 import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,promotionProductName,promotionProductLabel,UNKNOWN_PRODUCT_NAME} from "./simuladorProductSelection.js";
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
+import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
@@ -24,9 +25,11 @@ async function post(clientSlug,path,body,signal){
  if(!response.ok)throw Error(data.error||"No se pudo completar la consulta");
  return data;
 }
-export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion}){
+export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion,editingPromotion=null,onSaveObjectives,onBack}){
  const active=useMemo(()=>pharmacies.filter(f=>f.active!==false),[pharmacies]);
- const [selectedPharmacies,setSelectedPharmacies]=useState(()=>active.map(f=>String(f.id)));
+ const preset=useMemo(()=>objectiveDraftSelection(editingPromotion,active),[editingPromotion,active]);
+ const isEditing=Boolean(editingPromotion?.id);
+ const [selectedPharmacies,setSelectedPharmacies]=useState(()=>preset.pharmacyIds);
  const initializedPharmacies=useRef(active.length>0);
  const [mode,setMode]=useState("search");
  const [search,setSearch]=useState("");
@@ -35,7 +38,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [searchPage,setSearchPage]=useState(0);
  const [hasMore,setHasMore]=useState(false);
  const [results,setResults]=useState([]);
- const [selected,setSelected]=useState([]);
+ const [selected,setSelected]=useState(()=>preset.products);
  const [searchBusy,setSearchBusy]=useState(false);
  const [unavailableCount,setUnavailableCount]=useState(0);
  const [bulkBusy,setBulkBusy]=useState(false);
@@ -45,11 +48,14 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [historyError,setHistoryError]=useState("");
  const [historical,setHistorical]=useState({});
  const [stock,setStock]=useState({});
- const [baseline,setBaseline]=useState("previous");
- const [customFrom,setCustomFrom]=useState(()=>{const {year,month}=monthAtMadrid();return first(year,month);});
- const [customTo,setCustomTo]=useState(madridToday);
- const [rateByPharmacy,setRateByPharmacy]=useState({});
- const [manualTargets,setManualTargets]=useState({});
+ const [baseline,setBaseline]=useState(()=>preset.baseline);
+ const [customFrom,setCustomFrom]=useState(()=>preset.customFrom||(()=>{const {year,month}=monthAtMadrid();return first(year,month);})());
+ const [customTo,setCustomTo]=useState(()=>preset.customTo||madridToday());
+ const [rateByPharmacy,setRateByPharmacy]=useState(()=>({...preset.rateByPharmacy}));
+ const [manualTargets,setManualTargets]=useState(()=>({...preset.targets}));
+ const initializedTargets=useRef(false);
+ const [savingObjectives,setSavingObjectives]=useState(false);
+ const [saveError,setSaveError]=useState("");
  const {codes,invalid}=useMemo(()=>parsePromotionCNs(bulk),[bulk]);
  const selectedCNs=useMemo(()=>selected.map(x=>x.cn),[selected]);
  const selectedKey=selectedCNs.join(",");
@@ -125,7 +131,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
 
  // Recalcular objetivos cuando cambian productos, la referencia o las fechas
  // del período seleccionado. No sobrescribir una edición manual al recibir datos.
- useEffect(()=>{setManualTargets({});},[selectedKey,baseline,baseline==="custom"?customFrom:"",baseline==="custom"?customTo:""]);
+ useEffect(()=>{if(!initializedTargets.current){initializedTargets.current=true;return;}
+   setManualTargets({});},[selectedKey,baseline,baseline==="custom"?customFrom:"",baseline==="custom"?customTo:""]);
 
  const query=useMemo(()=>selectedCNs.length&&selectedPharmacies.length&&validRange?
   {cns:[...selectedCNs],start:customFrom,end:customTo}:null,
@@ -143,8 +150,11 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  // La falta de datos de stock no impide crear una campaña: se parte de 0
  // únicamente en el campo de objetivo editable, sin presentar ese 0 como stock real.
  // Las campañas basadas en stock no dependen de que las ventas históricas estén disponibles.
+ const validTargets=selectedPharmacies.length>0&&selectedPharmacies.every(id=>
+  target(id)!==""&&Number.isSafeInteger(Number(target(id)))&&Number(target(id))>=0)&&
+  selectedPharmacies.some(id=>Number(target(id))>0);
  const canCreate=Boolean(canManage&&selectedCNs.length&&selectedPharmacies.length&&
-  validRange&&!historyBusy&&(baseline==="stock"||!historyError));
+  validTargets&&validRange&&!historyBusy&&!savingObjectives&&(baseline==="stock"||!historyError));
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));
  function append(items){setSelected(current=>mergePromotionSelection(current,items));}
  async function addPastedCNs(){
@@ -179,21 +189,29 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     ". Los códigos siguen en el cuadro para reintentarlo.");
   }finally{setBulkBusy(false);}
  }
- function create(){
+ async function create(){
   if(!canCreate)return;
-  onCreatePromotion?.({
+  const payload={
    cns:[...selectedCNs],
    cnDescriptions:Object.fromEntries(selected.map(x=>[x.cn,x.description])),
-   targets:Object.fromEntries(selectedPharmacies.map(id=>[id,target(id)])),
+   targets:Object.fromEntries(selectedPharmacies.map(id=>[id,Number(target(id))])),
    objectiveBaseline:chosen.id,
    objectiveBaselineRange:baseline==="stock"?null:{from:chosen.from,to:chosen.to},
    objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,baseline==="stock"?0:rate(id)]))
-  });
+  };
+  setSaveError("");setSavingObjectives(true);
+  try{
+   if(isEditing){if(!onSaveObjectives)throw Error("No está disponible el guardado de objetivos");
+    await onSaveObjectives(payload);}
+   else await onCreatePromotion?.(payload);
+  }catch(error){setSaveError(error.message||"No se pudieron guardar los objetivos");}
+  finally{setSavingObjectives(false);}
  }
  return <div className="fm-objectives">
   <div className="fm-objectives-intro">
-   <div><h1>Nueva campaña</h1>
-    <p>Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual.</p></div>
+   <div><h1>{isEditing?"Asignar objetivos":"Nueva campaña"}</h1>
+    <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán todos los datos y CN del borrador.":"Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual."}</p></div>
+   {isEditing&&<button type="button" className="btn btn-secondary" onClick={onBack}>Volver al formulario</button>}
   </div>
   <section className="card fm-objectives-card">
    <h2>1. Seleccionar productos</h2>
@@ -343,8 +361,9 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     pharmacyScopeIds={selectedPharmacies} connected={true}/>
   </section>
   <div className="fm-objectives-create">
+   {saveError&&<p role="alert" className="fm-objectives-warning">{saveError}</p>}
    <button type="button" className="btn btn-primary" disabled={!canCreate}
-    onClick={create}><Plus size={17}/> Continuar con la campaña</button>
+    onClick={()=>void create()}><Check size={17}/> {savingObjectives?"Guardando…":isEditing?"Guardar objetivos":"Continuar con la campaña"}</button>
   </div>
  </div>;
 }

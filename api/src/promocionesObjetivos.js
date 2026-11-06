@@ -42,47 +42,58 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const patterns=promotionSearchPatterns(search);
  const pageSize=search?PAGE_SIZE:Math.min(500,Math.max(1,cns.length));
  const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
- const direct=pool.query({
-  text:sql.direct,values:[slug,ids,patterns,/^\d{6}$/.test(search)?[search]:cns,pageLimit,offset],query_timeout:8000
- });
- const supplierNames=search.length>=2&&sql.suppliers?
-  pool.query({text:sql.suppliers,values:[slug,ids,patterns,400],query_timeout:4000}):
-  Promise.resolve({rows:[]});
- const [a,b]=await Promise.allSettled([direct,supplierNames]);
- const directRows=a.status==="fulfilled"?a.value.rows||[]:[];
- const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
- let supplierResult={rows:[]},receiptResult={rows:[]},supplierError=null;
- const checkReceipts=Boolean(supplierCodes.length&&supplierCodes.length<=80&&sql.byReceiptSupplier);
- if(supplierCodes.length&&sql.bySupplier){
-  const codes=JSON.stringify(supplierCodes),values=[slug,ids,codes,pageLimit,offset,patterns];
-  const [usual,receipts]=await Promise.allSettled([
-   pool.query({text:sql.bySupplier,values,query_timeout:6500}),
-   checkReceipts?
-    pool.query({text:sql.byReceiptSupplier,values,query_timeout:6500}):
-    Promise.resolve({rows:[]})
-  ]);
-  if(usual.status==="fulfilled")supplierResult=usual.value;
-  else supplierError=usual.reason;
-  if(receipts.status==="fulfilled")receiptResult=receipts.value;
-  else supplierError=receipts.reason;
+ // Índice GIN: escoger la palabra más larga para acotar rápidamente el maestro.
+ const anchor=patterns.reduce((best,word)=>word.length>best.length?word:best,"").toLowerCase();
+ const directQuery=search?{
+  text:sql.direct,values:[slug,ids,patterns,pageLimit,offset,anchor],query_timeout:5000
+ }:{
+  text:sql.byCodes,values:[slug,ids,cns,pageLimit,0],query_timeout:5000
+ };
+ let directRows=[],directError=null;
+ try{
+  const result=await pool.query(directQuery);
+  directRows=result.rows||[];
+ }catch(error){directError=error;}
+ let supplierRows=[],receiptRows=[],supplierError=null,supplierCount=0;
+ // No consultar proveedores ni el histórico de recepciones cuando el artículo
+ // ya aparece en el maestro. La antigua búsqueda hacía los cuatro recorridos
+ // incluso al escribir un CN o un nombre que ya se había encontrado.
+ if(search&&sql.suppliers&&directRows.length===0&&/[^\d\s]/u.test(search)){
+  try{
+   const {rows:suppliers}=await pool.query({
+    text:sql.suppliers,values:[slug,ids,patterns,120],query_timeout:2000
+   });
+   supplierCount=suppliers.length;
+   if(supplierCount){
+    const values=[slug,ids,JSON.stringify(suppliers),pageLimit,offset,patterns];
+    const lookup=[
+     pool.query({text:sql.bySupplier,values,query_timeout:2800}),
+     supplierCount<=40&&sql.byReceiptSupplier?
+      pool.query({text:sql.byReceiptSupplier,values,query_timeout:2800}):
+      Promise.resolve({rows:[]})
+    ];
+    const [usual,received]=await Promise.allSettled(lookup);
+    if(usual.status==="fulfilled")supplierRows=usual.value.rows||[];
+    else supplierError=usual.reason;
+    if(received.status==="fulfilled")receiptRows=received.value.rows||[];
+    else supplierError=received.reason;
+   }
+  }catch(error){supplierError=error;}
  }
- const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&
-  !supplierError&&(!supplierCodes.length||supplierCodes.length<=80);
- const supplierRows=supplierResult.rows||[],receiptRows=receiptResult.rows||[];
- if(!complete&&!directRows.length&&!supplierRows.length&&!receiptRows.length)
+ const partial=Boolean(directError||supplierError||supplierCount>=120);
+ if(partial&&!directRows.length&&!supplierRows.length&&!receiptRows.length)
   throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
  const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize),
   ...receiptRows.slice(0,pageSize)];
  const products=mergePromotionCatalogRows(rows);
  if(!search&&cns.length){
   const selected=new Set(cns);
-  // Sin catálogo externo: un CN inexistente en Farmatic queda sin descripción.
   return {products:products.filter(item=>selected.has(item.cn)),
-   partial:!complete,hasMore:false};
+   partial,hasMore:false};
  }
  const hasMore=directRows.length>pageSize||supplierRows.length>pageSize||
   receiptRows.length>pageSize;
- return {products,partial:!complete||supplierCodes.length>=400,hasMore,pageSize};
+ return {products,partial,hasMore,pageSize};
 }
 
 export function setupPromotionObjectives(app,pool,{requireTenantModule}){

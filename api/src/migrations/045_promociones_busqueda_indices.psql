@@ -1,0 +1,72 @@
+-- Índices de sólo lectura para el buscador de Nueva campaña.
+-- Un índice GIN sobre el texto agregado del maestro Farmatic evita recorrer
+-- todas las fichas y ordenar el inventario antes de devolver coincidencias.
+-- CONCURRENTLY no bloquea la sincronización de artículos.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TEMP TABLE fm_promocion_search_targets AS
+SELECT DISTINCT c.esquema_datos AS schema_name,
+ EXISTS (SELECT 1 FROM information_schema.columns x
+  WHERE x.table_schema=c.esquema_datos AND x.table_name='articulos'
+   AND x.column_name='cn_normalizado') AS has_normalized,
+ EXISTS (SELECT 1 FROM information_schema.columns x
+  WHERE x.table_schema=c.esquema_datos AND x.table_name='articulos'
+   AND x.column_name='laboratorio') AS has_lab,
+ (SELECT quote_ident(x.column_name)||'::text'
+  FROM information_schema.columns x
+  WHERE x.table_schema=c.esquema_datos AND x.table_name='articulos'
+   AND x.column_name IN ('proveedor_habitual_id','proveedor_id',
+     'proveedor_codigo','proveedor','laboratorio_id')
+  ORDER BY array_position(ARRAY['proveedor_habitual_id','proveedor_id',
+    'proveedor_codigo','proveedor','laboratorio_id'],x.column_name)
+  LIMIT 1) AS supplier_expr
+FROM farmetrica.clientes c
+JOIN pg_namespace n ON n.nspname=c.esquema_datos
+JOIN pg_class t ON t.relnamespace=n.oid AND t.relname='articulos'
+ AND t.relkind IN ('r','p')
+WHERE c.esquema_datos ~ '^[a-z][a-z0-9_]{1,62}$'
+ AND (SELECT count(DISTINCT x.column_name) FROM information_schema.columns x
+  WHERE x.table_schema=c.esquema_datos AND x.table_name='articulos'
+    AND x.column_name IN ('farmacia_codigo','origen_id','nombre','codigo_nacional'))=4;
+
+-- Esta expresión debe ser idéntica a searchable en promotionCatalogSearch.js.
+SELECT format($sql$
+CREATE INDEX CONCURRENTLY IF NOT EXISTS promocion_articulos_texto_trgm_idx
+ON %I.articulos USING gin ((lower(
+ coalesce(nombre::text,'') || ' ' ||
+ coalesce(codigo_nacional::text,'') || ' ' ||
+ coalesce(%s,'') || ' ' ||
+ coalesce(origen_id::text,'') || ' ' ||
+ coalesce(%s,'') || ' ' ||
+ coalesce(%s,'')
+)) gin_trgm_ops)
+$sql$,schema_name,
+ CASE WHEN has_normalized THEN 'cn_normalizado::text' ELSE 'NULL::text' END,
+ CASE WHEN has_lab THEN 'laboratorio::text' ELSE 'NULL::text' END,
+ coalesce(supplier_expr,'NULL::text'))
+FROM fm_promocion_search_targets
+\gexec
+
+-- Los CN pegados no deben leer todo el inventario ni utilizar el índice textual.
+SELECT format($sql$
+CREATE INDEX CONCURRENTLY IF NOT EXISTS promocion_articulos_id_idx
+ON %I.articulos ((origen_id::text))
+$sql$,schema_name)
+FROM fm_promocion_search_targets
+\gexec
+
+SELECT format($sql$
+CREATE INDEX CONCURRENTLY IF NOT EXISTS promocion_articulos_cn_idx
+ON %I.articulos ((left(btrim(codigo_nacional::text),6)))
+$sql$,schema_name)
+FROM fm_promocion_search_targets
+\gexec
+
+SELECT format($sql$
+CREATE INDEX CONCURRENTLY IF NOT EXISTS promocion_articulos_normalizado_idx
+ON %I.articulos ((left(btrim(cn_normalizado::text),6)))
+$sql$,schema_name)
+FROM fm_promocion_search_targets WHERE has_normalized
+\gexec
+
+DROP TABLE fm_promocion_search_targets;

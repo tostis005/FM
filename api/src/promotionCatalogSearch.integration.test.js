@@ -38,40 +38,42 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
    "WHERE table_schema='ampedia' AND table_name IN ('articulos','proveedores')");
   const sql=promotionCatalogSearchSQL("ampedia",cols);
   const own=[1];
-  const nameHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("Farmetrica ZZZ"),[],240,0])).rows;
+  const nameHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("Farmetrica ZZZ"),240,0,"%farmetrica%"])).rows;
   assert.equal(nameHits.some(row=>row.source_id==="SIM-ART-123"&&row.pharmacy_id==="1"),true);
   assert.equal(nameHits.every(row=>row.pharmacy_id==="1"),true);
-  const cnHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("765432"),[],240,0])).rows;
+  const cnHits=(await db.query(sql.direct,["ampedia",own,promotionSearchPatterns("765432"),240,0,"%765432%"])).rows;
 
   // Todas las palabras, en otro orden e incluso repartidas entre columnas.
   const orderFree=(await db.query(sql.direct,[
-   "ampedia",own,promotionSearchPatterns("ZZZ Crema"),[],240,0
+   "ampedia",own,promotionSearchPatterns("ZZZ Crema"),240,0,"%crema%"
   ])).rows;
   assert.ok(orderFree.some(row=>row.source_id==="SIM-ART-123"));
   const acrossFields=(await db.query(sql.direct,[
-   "ampedia",own,promotionSearchPatterns("765432 Farmetrica"),[],240,0
+   "ampedia",own,promotionSearchPatterns("765432 Farmetrica"),240,0,"%farmetrica%"
   ])).rows;
   assert.ok(acrossFields.some(row=>row.source_id==="SIM-ART-123"));
   // La búsqueda de campañas no debe depender del Nomenclátor.
   assert.equal(sql.officialCatalog,undefined);
   assert.ok(!sql.direct.includes("nomenclator_presentaciones"));
+   assert.match(sql.direct,/LIKE \$6::text/);
+   assert.match(sql.byCodes,/left\(btrim\(a.codigo_nacional::text\),6\)/);
   const product=cnHits.find(row=>row.source_id==="SIM-ART-123");
   assert.ok(product);
   assert.equal(promotionResultCN(product),"765432");
 
-  const pastedParapharmacy=(await db.query(sql.direct,[
-   "ampedia",own,[],["168766"],240,0
+  const pastedParapharmacy=(await db.query(sql.byCodes,[
+   "ampedia",own,["168766"],240,0
   ])).rows;
   const eucerin=pastedParapharmacy.find(row=>row.resolved_cn==="168766");
   assert.ok(eucerin,"El CN pegado debe resolver por origen_id de Farmatic");
   assert.equal(eucerin.description,"Eucerin Atopi Control 250 ml");
   assert.equal(eucerin.reference_type,"farmatic");
   const textResults=(await db.query(sql.direct,[
-   "ampedia",own,promotionSearchPatterns("Atopi Eucerin"),[],240,0
+   "ampedia",own,promotionSearchPatterns("Atopi Eucerin"),240,0,"%eucerin%"
   ])).rows;
   assert.ok(textResults.some(row=>row.resolved_cn==="168766"),
    "El buscador por palabras debe incluir referencias ERP sin CN rellenado");
-  const pasted=(await db.query(sql.direct,["ampedia",own,[],["194700"],240,0])).rows;
+  const pasted=(await db.query(sql.byCodes,["ampedia",own,["194700"],240,0])).rows;
   const sevenDigit=pasted.find(row=>row.source_id==="SIM-7-DIGIT-194700");
   assert.ok(sevenDigit,"El CN de seis dígitos debe localizar la ficha ERP con dígito de control");
   assert.equal(promotionResultCN(sevenDigit),"194700");
@@ -87,8 +89,8 @@ test("PostgreSQL: busca nombre, proveedor habitual y CN dentro de la farmacia, s
   await db.query("INSERT INTO ampedia.articulos(farmacia_codigo,origen_id,nombre,codigo_nacional) "+
    "SELECT 'EUR','SIM-REPEAT-'||i,'BUSQUEDA-AMPLIA-TEST',lpad((880000+i)::text,6,'0') "+
    "FROM generate_series(1,140) i");
-  const first=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),[],180,0])).rows;
-  const second=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),[],180,180])).rows;
+  const first=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),180,0,"%busqueda-amplia-test%"])).rows;
+  const second=(await db.query(sql.direct,["ampedia",[1,2],promotionSearchPatterns("BUSQUEDA-AMPLIA-TEST"),180,180,"%busqueda-amplia-test%"])).rows;
   assert.equal(first.length,180);
   assert.equal(second.length,55);
   const all=[...first,...second];

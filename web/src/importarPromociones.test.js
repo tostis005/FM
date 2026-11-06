@@ -232,3 +232,27 @@ test("noviembre no asigna los CN de COLLMAR BEAUTY a la campaña genérica VARIO
  assert.deepEqual(result[1].cns,["100001","100002"]);
  assert.ok(result[0].importWarnings.some(w=>w.includes("Sin CNs")));
 });
+
+test("noviembre incluye CNs con ofertas de 2, 3 y 4 euros y ofertas no informadas",()=>{
+ const summary=[
+  ["NOVIEMBRE","MARCA","OFERTA","DESDE","HASTA"],
+  ["P&G","ZZZQUIL","2, 3 o 4€","1 NOVIEMBRE","30 NOVIEMBRE"],
+  ["PIERRE FABRE","RENE FURTERER",0.2,"16 NOVIEMBRE","30 NOVIEMBRE"],
+  ["DRASANVI","DRASANVI HYDROPS Y MASCARILLA",0.2,"1 NOVIEMBRE","30 NOVIEMBRE"]
+ ];
+ const listed=[
+  ["LAB","MARCA","CN","DESCRIPCION","PROMOCION"],
+  ["P&G","ZZZQUIL","100001","2 eur",2],
+  ["P&G","ZZZQUIL","100002","3 eur",3],
+  ["P&G","ZZZQUIL","100003","4 eur",4],
+  ["PIERRE FABRE","RENE FURTERER","100004","Rene",0.2],
+  ["PIERRE FABRE","RENE FURTERER","100005","Rene sin oferta",null],
+  ["DRASANVI","DRASANVI HYDROPS","100006","Hydrops",0.2],
+  ["DRASANVI","DRASANVI HYDROPS + MASCARILLA","100007","Mascarilla",0.2]
+ ];
+ const result=importCampaignRows(summary,listed,2026,null,
+  {allowBlankSeparators:true,preferSpecific:true});
+ assert.deepEqual(result[0].cns,["100001","100002","100003"]);
+ assert.deepEqual(result[1].cns,["100004","100005"]);
+ assert.deepEqual(result[2].cns,["100006","100007"]);
+});

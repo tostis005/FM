@@ -698,7 +698,7 @@ function App(){
      return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
   if(needsRetroactiveValidation&&promoForm.type==="sin_clasificar")
     return setToast("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
-  if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
+  if(promoForm.status==="Activa" && promoForm.durationMode!=="stock" && promoForm.type==="sin_clasificar")
      return setToast("Clasifica el tipo de promoción antes de activarla");
   if((promoForm.status==="Activa"||needsRetroactiveValidation) && requiresPct &&
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))

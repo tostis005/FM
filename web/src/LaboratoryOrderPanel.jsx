@@ -6,7 +6,7 @@ import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow from "./laboratoryOrderSheet.js";
+import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
 import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";

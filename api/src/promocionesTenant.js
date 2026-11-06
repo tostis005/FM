@@ -40,10 +40,15 @@ export function cleanDocument(raw,id,pharmacyIds) {
   // En campañas nuevas, validar siempre fechas y ausencia de fin para stock.
   if(raw.durationMode!==undefined){
     if(!["dates","stock"].includes(raw.durationMode))return null;
-    if(!/^20\d{2}-\d{2}-\d{2}$/.test(raw.start||""))return null;
-    if(raw.durationMode==="dates"&&
-       (!/^20\d{2}-\d{2}-\d{2}$/.test(raw.end||"")||raw.end<raw.start))
-      return null;
+    const fromExcel=/^Excel(?:\s|:|$)/i.test(String(raw.source||""));
+    // Los Excel pueden traer fechas incompletas: preservarlos como borrador
+    // para revisión de datos, sin reintroducir recordatorios de 30 días.
+    if(!fromExcel){
+      if(!/^20\d{2}-\d{2}-\d{2}$/.test(raw.start||""))return null;
+      if(raw.durationMode==="dates"&&
+         (!/^20\d{2}-\d{2}-\d{2}$/.test(raw.end||"")||raw.end<raw.start))
+        return null;
+    }
     if(raw.durationMode==="stock"&&(raw.end||raw.retroactive))return null;
   }
   const {managerCanEdit:_clientPermission,...persisted}=raw;

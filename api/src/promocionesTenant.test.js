@@ -110,4 +110,7 @@ test("la API distingue campañas por fechas y hasta agotar stock",()=>{
  // No romper documentos históricos del Excel sin duración explícita.
  const {durationMode:_ignore,...legacy}=base;
  assert.ok(cleanDocument(legacy,legacy.id,ids));
+ const excelIncomplete={...base,durationMode:"dates",source:"Excel: archivo.xlsx",start:"",end:""};
+ assert.ok(cleanDocument(excelIncomplete,excelIncomplete.id,ids),
+  "No bloquear la importación de una ficha Excel incompleta");
 });

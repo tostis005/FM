@@ -213,7 +213,7 @@ function reportFiltersFromUrl(){
  const params=new URLSearchParams(window.location.search),selected=selectedIdsFromUrl();
  const status=params.get("estado")||"Todos";
  const month=promotionMonthRange(params.get("mes"))?params.get("mes"):"";
- return {status:["Activa","Pendiente de revisión","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
+ return {status:["Activa","Finalizada","Borrador","Todos"].includes(status)?status:"Activa",
   month,year:!month&&/^(19|20)\d{2}$/.test(params.get("anio")||"")?params.get("anio"):"Todos",ids:selected,
   pharmacies:params.has("farmacias")?[...new Set(params.get("farmacias").split(",").filter(Boolean))]:null};
 }
@@ -1311,7 +1311,7 @@ function App(){
     <div className="report-modal-body">
      <div className="report-modal-filters">
       <Field label="Estado"><select value={reportModal.status} onChange={e=>updateDraftScope(e.target.value,reportModal.month)}>
-       <option value="Activa">Activas</option><option value="Pendiente de revisión">Pendientes de revisión</option><option value="Finalizada">Archivadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
+       <option value="Activa">Activas</option><option value="Finalizada">Archivadas</option><option value="Borrador">Borradores</option><option value="Todos">Todos los estados</option>
       </select></Field>
       <Field label="Mes y año"><input type="month" value={reportModal.month}
        onChange={e=>updateDraftScope(reportModal.status,e.target.value)}

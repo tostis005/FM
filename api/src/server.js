@@ -318,6 +318,7 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
         )
         SELECT farmacia_id,
           coalesce(sum(CASE
+            WHEN $8::boolean THEN units
             WHEN ticket IS NULL OR units <= 0 OR NOT $6::boolean THEN 0
             WHEN $5::boolean AND units >= $4::integer THEN units
             ELSE floor(greatest(units,0)/$4::integer)*$4::integer
@@ -325,7 +326,7 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
           coalesce(sum(units),0)::float8 AS unidades_totales
         FROM ticket_units GROUP BY farmacia_id`;
       const {rows}=await pool.query(query,
-        [p.start,p.end,p.cns,bundle||1,p.type==="escalonado",Boolean(bundle),mappedKeys]);
+        [p.start,p.end,p.cns,bundle||1,p.type==="escalonado",Boolean(bundle),mappedKeys,p.durationMode==="stock"]);
       sales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
       totalSales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades_totales)]));
     }

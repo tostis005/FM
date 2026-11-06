@@ -31,3 +31,9 @@ test("solo se contabilizan condiciones comerciales completas y válidas",()=>{
  assert.equal(promotionBundle({type:"regalo",formula:"2+1"}),3);
  assert.equal(promotionBundle({type:"precio_especial",specialPrice:0}),1);
 });
+
+test("campañas de stock cuentan unidades vendidas sin exigir lotes comerciales",()=>{
+ assert.equal(promotionBundle({durationMode:"stock",type:"sin_clasificar"}),1);
+ assert.equal(promotionBundle({durationMode:"stock",type:"dos_por_uno"}),1);
+ assert.equal(promotionBundle({durationMode:"dates",type:"dos_por_uno"}),2);
+});

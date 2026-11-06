@@ -47,7 +47,7 @@ await page.route("**/api/**",async route=>{
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(payload)});
 });
 try{
- await page.goto(BASE+"/promociones/seguimiento?estado=Activa&ids=P1,P2,P3&farmacias=1",
+ await page.goto(BASE+"/promociones/seguimiento?estado=Todos&ids=P1,P2,P3&farmacias=1",
   {waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Consulta de tickets"}).waitFor({timeout:16000});
  for(let i=0;i<80&&!ticketRequests.length;i++)await page.waitForTimeout(150);

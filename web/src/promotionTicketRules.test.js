@@ -86,3 +86,15 @@ test("devoluciones reducen las unidades elegibles, sin generar descuento simulad
  assert.deepEqual(apply({},[sale(-2,{net:-20,lineDiscount:0})]),[]);
  assert.deepEqual(apply({},[sale(2),sale(-1,{net:-10,lineDiscount:0})]),[]);
 });
+
+test("stock sin oferta clasificada admite todas las unidades sin descuento ficticio",()=>{
+ const rows=apply({durationMode:"stock",type:"sin_clasificar"},[sale(3)]);
+ assert.equal(sum(rows,"quantity"),3);
+ assert.equal(sum(rows,"lineDiscount"),0);
+ assert.deepEqual(promotionTicketPolicy({durationMode:"stock",type:"sin_clasificar"}),{kind:"stock",bundle:1});
+});
+test("campaña con 2x1 hasta agotar stock conserva el descuento comercial",()=>{
+ const rows=apply({durationMode:"stock",type:"dos_por_uno"},[sale(2)]);
+ assert.equal(sum(rows,"lineDiscount"),10);
+ assert.equal(sum(rows,"quantity"),2);
+});

@@ -39,6 +39,7 @@ import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
+import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
@@ -432,7 +433,9 @@ function App(){
            const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
             if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
            if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
-           if((p.cns||[]).length)segments.push({...p,end:reportEnd});
+           if((p.cns||[]).length)for(const range of splitPromotionSalesPeriod(p.start,reportEnd)){
+             segments.push({...p,...range,id:"S"+segments.length,parentId:p.id});
+           }
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
@@ -442,10 +445,10 @@ function App(){
          const byPromotion={},byTotalPromotion={};
          for(let i=0;i<segments.length;i++){
            const seg=segments[i],partial=results[Math.floor(i/25)]?.sales?.[seg.id]||{};
-           const out=byPromotion[seg.id]||(byPromotion[seg.id]={});
+           const out=byPromotion[seg.parentId]||(byPromotion[seg.parentId]={});
            for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
             const totals=results[Math.floor(i/25)]?.totalSales?.[seg.id]||{};
-            const totalOut=byTotalPromotion[seg.id]||(byTotalPromotion[seg.id]={});
+            const totalOut=byTotalPromotion[seg.parentId]||(byTotalPromotion[seg.parentId]={});
             for(const [id,qty] of Object.entries(totals))totalOut[id]=(totalOut[id]||0)+(Number(qty)||0);
          }
 

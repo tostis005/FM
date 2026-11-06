@@ -23,7 +23,7 @@ export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madri
   return "Finalizada";
  const automaticallyManaged=p.statusSource==="automatic"||
   (!p.statusSource&&String(p.source||"").startsWith("Excel"))||
-  (!p.end&&["Activa","Pendiente de revisión"].includes(p.status));
+  ["Activa","Pendiente de revisión"].includes(p.status);
  if(!automaticallyManaged)
   return p.status==="Pendiente de revisión"?"Activa":p.status||"Borrador";
  if(!DAY.test(p.start||""))return "Borrador";

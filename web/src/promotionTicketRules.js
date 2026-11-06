@@ -8,6 +8,10 @@ const tiersOf=p=>[...textOf(p).matchAll(/(\d{1,3})\s*%\s*(?:DTO\s*)?(?:POR\s*)?(
   .sort((a,b)=>a.minimum-b.minimum);
 
 export function promotionTicketPolicy(promo){
+ // La duración no sustituye a las condiciones comerciales de una oferta 2x1, etc.
+ // Solo las campañas de stock sin oferta clasificada usan recuento simple.
+ if(promo.durationMode==="stock"&&(!promo.type||["sin_clasificar","otros"].includes(promo.type)))
+  return {kind:"stock",bundle:1};
  const pct=finite(promo.discountPercent),amount=finite(promo.discountAmount);
  switch(promo.type){
   case "dos_por_uno":return {kind:"gift",bundle:2,free:1};

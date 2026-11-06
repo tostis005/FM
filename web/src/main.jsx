@@ -38,6 +38,7 @@ const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
+import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
@@ -252,6 +253,8 @@ function App(){
  const [from,setFrom]=useState(()=>promotionMonthRange(currentPromotionMonth())?.from||"");
  const [to,setTo]=useState(()=>promotionMonthRange(currentPromotionMonth())?.to||"");
  const [editingPromo,setEditingPromo]=useState(null);
+ const [objectiveCampaign,setObjectiveCampaign]=useState(null);
+ const [objectiveSession,setObjectiveSession]=useState(0);
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
@@ -446,7 +449,7 @@ function App(){
                {status:reportStatus,month:reportMonth,year:reportYear})))continue;
            const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
             if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
-           if((p.cns||[]).length>500)throw new Error("La campaña "+p.name+" tiene más de 500 CN. Revisa su catálogo.");
+           if((p.cns||[]).length>1000)throw new Error("La campaña "+p.name+" tiene más de 1.000 CN. Revisa su catálogo.");
            if((p.cns||[]).length)for(const range of splitPromotionSalesPeriod(p.start,reportEnd)){
              segments.push({...p,...range,id:"S"+segments.length,parentId:p.id});
            }
@@ -617,7 +620,8 @@ function App(){
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
- function nav(id,promoId){
+ function nav(id,promoId,{preserveObjectiveDraft=false}={}){
+  if(id==="promociones-objetivos"&&!preserveObjectiveDraft)setObjectiveCampaign(null);
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
@@ -857,7 +861,9 @@ function App(){
     // Las campañas importadas sin objetivos son borradores; el filtro Activa
     // y la selección de farmacias solían ocultarlas aunque el servidor las
     // hubiera guardado. Mostrar las del fichero sin depender de esos filtros.
-    setSearch("");setStatusFilter("Todos");setFrom("");setTo("");
+    setSearch("");setStatusFilter("Todos");
+    const currentMonth=promotionMonthRange(currentPromotionMonth(new Date(),timeZone));
+    if(currentMonth){setFrom(currentMonth.from);setTo(currentMonth.to);}
     setImportSourceFilter(source);
     setImportFeedback({kind:"success",filename:file.name,...summary,
       message:summary.imported?
@@ -1325,10 +1331,11 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
+    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
-      onCreatePromotion={draft=>startPromo({...EMPTY_PROMO,...draft,id:null,
-       name:"",start:"",end:"",status:"Borrador",durationMode:draft.objectiveBaseline==="stock"?"stock":"dates",simulatorDraft:true})}/>}
+      editingPromotion={objectiveCampaign} onCreatePromotion={continuePlannerToDrawer}
+      onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
+
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}

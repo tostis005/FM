@@ -76,6 +76,20 @@ export function promotionCatalogSearchSQL(schema,columns){
    "OR "+normalized+"=ANY($4::text[]) "+
    "OR ("+isCode(normalized)+" AND left("+normalized+",6)=ANY($4::text[])) ":"")+
   "OR (official.cn IS NOT NULL AND official.cn=ANY($4::text[])))","$5","$6");
+ // Fuente complementaria: la ficha AEMPS puede existir aunque la farmacia
+ // no la tenga en su maestro. Ofrecer el CN con nombre oficial sin inventar
+ // ninguna relación de stock o venta para ese producto.
+ const officialCatalog=
+  "SELECT n.cn::text AS resolved_cn,n.cn::text AS national_code, "+
+  "n.nombre::text AS description, "+
+  "coalesce(nullif(n.laboratorio_comercializador::text,''), "+
+  "nullif(n.laboratorio_titular::text,''),n.laboratorio::text) AS supplier_name, "+
+  "NULL::text AS source_id,NULL::text AS pharmacy_id "+
+  "FROM farmetrica.nomenclator_presentaciones n "+
+  "WHERE cardinality($1::text[])>0 AND "+
+  "concat_ws(' ',n.nombre,n.cn,n.laboratorio,n.laboratorio_titular, "+
+   "n.laboratorio_comercializador) ILIKE ALL($1::text[]) "+
+  "ORDER BY n.cn LIMIT $2::int OFFSET $3::int";
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+
@@ -103,7 +117,7 @@ export function promotionCatalogSearchSQL(schema,columns){
   "AND ("+refCondition+") "+scope+officialJoin+
   "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const bySupplier=supplierRows?page(supplierRows,"$4","$5"):null;
- return {direct,suppliers,bySupplier,supplierReady};
+ return {direct,suppliers,bySupplier,officialCatalog,supplierReady};
 }
 
 export function promotionResultCN(row,verifiedOrigins=new Set()){

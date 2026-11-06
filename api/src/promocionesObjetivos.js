@@ -45,7 +45,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  // Índice GIN: escoger la palabra más larga para acotar rápidamente el maestro.
  const anchor=patterns.reduce((best,word)=>word.length>best.length?word:best,"").toLowerCase();
  const directQuery=search?{
-  text:sql.direct,values:[slug,ids,patterns,[],pageLimit,offset,anchor],query_timeout:5000
+  text:sql.direct,values:[slug,ids,patterns,pageLimit,offset,anchor],query_timeout:5000
  }:{
   text:sql.byCodes,values:[slug,ids,[],cns,pageLimit,0],query_timeout:5000
  };

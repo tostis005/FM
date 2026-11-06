@@ -12,7 +12,7 @@ test("buscar nombre, CN normalizado y laboratorio sin consultas correlacionadas 
  const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
  assert.match(sql.direct,/a\.nombre::text/);
  assert.match(sql.direct,/a\.cn_normalizado::text/);
- assert.match(sql.direct,/a\.laboratorio::text/);
+ assert.match(sql.direct,/a\."laboratorio"::text/);
  assert.match(sql.direct,/a\.origen_id::text/);
  assert.match(sql.direct,/ILIKE ALL\(\$3::text\[\]\)/);
  assert.match(sql.officialCatalog,/ILIKE ALL\(\$1::text\[\]\)/);

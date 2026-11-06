@@ -73,6 +73,7 @@ try{
  console.log("PROMOTION_800_READONLY_OK",JSON.stringify(report));
 }catch(error){
  console.error("PROMOTION_800_READONLY_FAIL",JSON.stringify({
-  ...report,code:error.code||error.name||"ERROR"}));
+  ...report,code:error.code||error.name||"ERROR",
+  detail:String(error.message||"").replace(/[^A-Za-z0-9 _.-]/g,"").slice(0,120)}));
  process.exitCode=1;
 }finally{await pool.end();}

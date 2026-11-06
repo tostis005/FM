@@ -79,8 +79,8 @@ export function promotionCatalogSearchSQL(schema,columns){
  // Buscar texto y consultar CN pegados no deben compartir una condición OR:
  // la rama de CN impedía al planificador aprovechar el índice GIN de texto.
  const direct=page("SELECT "+fields()+" FROM "+a+" a "+scope+
-  "WHERE "+hasCN+" AND "+searchable+" LIKE $7::text "+
-  "AND "+searchable+" ILIKE ALL($3::text[])","$5","$6");
+  "WHERE "+hasCN+" AND "+searchable+" LIKE $6::text "+
+  "AND "+searchable+" ILIKE ALL($3::text[])","$4","$5");
  const codePredicates=[
   "a.origen_id::text=ANY($4::text[])",
   "left(btrim(a.codigo_nacional::text),6)=ANY($4::text[])"

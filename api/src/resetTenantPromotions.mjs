@@ -20,6 +20,16 @@ try{
   throw Error("Esquema de cliente no válido");
  const schema=schemas[0].esquema_datos;
  const {rows:before}=await client.query('SELECT count(*)::int AS n FROM "'+schema+'".fm_promociones');
+ const marker="__RESET_ALL_PROMOS_20261106__";
+ const {rows:prior}=await client.query(
+  'SELECT count(*)::int AS n FROM "'+schema+'".fm_promocion_revisiones WHERE promocion_id=$1',[marker]);
+ if(prior[0].n>0){
+  // Una repetición del despliegue nunca debe eliminar campañas nuevas
+  // importadas DESPUÉS del primer reinicio.
+  await client.query("COMMIT");open=false;
+  console.log("PROMOCIONES_RESET_ALREADY_APPLIED",JSON.stringify({
+   client:"ampedia",alreadyApplied:true,remaining:before[0].n}));
+ }else{
  const {rows:deleted}=await client.query(`
   WITH removed AS (
    DELETE FROM "${schema}".fm_promociones RETURNING id,documento
@@ -38,8 +48,13 @@ try{
  const {rows:after}=await client.query('SELECT count(*)::int AS n FROM "'+schema+'".fm_promociones');
  const initial=before[0].n,n=deleted[0].removed,audited=deleted[0].audited,remaining=after[0].n;
  if(initial!==n||n!==audited||remaining!==0)throw Error("Reinicio incompleto; se revierte toda la transacción");
+ await client.query(
+  'INSERT INTO "'+schema+'".fm_promocion_revisiones (promocion_id,documento_anterior,cambiado_por) VALUES($1,$2::jsonb,$3)',
+  [marker,JSON.stringify({resetAt:new Date().toISOString(),removed:n}),
+   "system:promotions-reset-20261106"]);
  await client.query("COMMIT");open=false;
  console.log("PROMOCIONES_RESET_OK",JSON.stringify({client:"ampedia",before:initial,removed:n,audited,remaining}));
+ }
 }catch(error){
  if(open)await client.query("ROLLBACK").catch(()=>{});
  console.error("PROMOCIONES_RESET_ERROR",error.code||error.name,error.message?.slice(0,120));

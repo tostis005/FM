@@ -47,7 +47,7 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const directQuery=search?{
   text:sql.direct,values:[slug,ids,patterns,pageLimit,offset,anchor],query_timeout:5000
  }:{
-  text:sql.byCodes,values:[slug,ids,[],cns,pageLimit,0],query_timeout:5000
+  text:sql.byCodes,values:[slug,ids,cns,pageLimit,0],query_timeout:5000
  };
  let directRows=[],directError=null;
  try{

@@ -176,7 +176,7 @@ test("el CN 168766 pegado recupera el nombre desde Farmatic aunque falte en el N
   sourceId:"168766",referenceType:"farmatic"
  }]);
  const byCode=api.queries.find(q=>q.sql.includes("SELECT DISTINCT ON (resolved_cn)"));
- assert.deepEqual(byCode.params[3],["168766"]);
+ assert.deepEqual(byCode.params[2],["168766"]);
  assert.match(byCode.sql,/a\."nombre"::text AS description/);
 });
 

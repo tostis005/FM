@@ -65,7 +65,7 @@ try{
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   buffer:await buildExcel()};
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
- await page.getByText("51 promociones guardadas.",{exact:false}).waitFor({timeout:20000});
+ await page.getByText("51 promociones importadas",{exact:false}).waitFor({timeout:20000});
  assert.equal(requests.length,1);
  assert.equal(requests[0].length,51);
  assert.equal(requests[0].reduce((n,p)=>n+p.cns.length,0),2467);
@@ -73,12 +73,20 @@ try{
  assert.ok(stored.every(p=>p.status==="Borrador"&&Object.keys(p.targets).length===0));
  assert.equal(await page.getByRole("combobox",{name:"Estado"}).inputValue(),"Todos");
  assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"2026-11");
- assert.match(await page.locator(".fm-import-result").innerText(),/51 sin objetivos por farmacia/);
+ assert.equal((await page.locator(".fm-import-result").innerText()).trim(),"51 promociones importadas");
+ assert.equal(await page.locator(".fm-import-result p").count(),0);
+ assert.equal(await page.getByRole("button",{name:"Cerrar aviso de importación"}).count(),1);
+ assert.equal(await page.locator(".campaign-table thead th").filter({hasText:"Acciones"}).count(),1);
+ const firstRow=page.locator(".campaign-table tbody tr").first();
+ assert.equal(await firstRow.getByRole("button",{name:"Editar",exact:true}).count(),1);
+ assert.equal(await firstRow.getByRole("button",{name:"Asignar objetivos"}).count(),1);
+ assert.equal(await firstRow.getByRole("button",{name:"Seguimiento"}).count(),1);
+ assert.equal(await firstRow.getByRole("button",{name:/Eliminar/}).count(),1);
  assert.match(await page.locator(".fm-promotions-bulk-actions .count-label").last().innerText(),/51 promociones/);
  assert.ok(await page.locator(".campaign-table tbody tr").count()>0,
   "Tras importar deben ser visibles las campañas aunque sean borradores");
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
- await page.getByText("El Excel ya estaba importado. No se han creado duplicados.").waitFor({timeout:20000});
+ await page.getByText("51 promociones ya importadas").waitFor({timeout:20000});
  assert.equal(requests.length,2);
  assert.equal(stored.length,51);
  await page.reload({waitUntil:"domcontentloaded"});

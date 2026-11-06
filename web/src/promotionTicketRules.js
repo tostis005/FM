@@ -8,6 +8,7 @@ const tiersOf=p=>[...textOf(p).matchAll(/(\d{1,3})\s*%\s*(?:DTO\s*)?(?:POR\s*)?(
   .sort((a,b)=>a.minimum-b.minimum);
 
 export function promotionTicketPolicy(promo){
+ if(promo.durationMode==="stock")return {kind:"stock",bundle:1};
  const pct=finite(promo.discountPercent),amount=finite(promo.discountAmount);
  switch(promo.type){
   case "dos_por_uno":return {kind:"gift",bundle:2,free:1};

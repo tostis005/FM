@@ -356,7 +356,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
         <strong>{num(totals(p.id))}</strong>}</td>)}
        <td>{!selectedCNs.length||historyBusy||historyError||!hasStock?"—":
         <><strong>{num(totalStock())}</strong>
-        {partialStockCount>0&&<small>Parcial</small>}</>}</td>
+        {(partialStockCount>0||missingStockCount>0)&&<small>Parcial</small>}</>}</td>
        {baseline!=="stock"&&<td>—</td>}<td><strong>{num(totalTarget())}</strong></td></tr>
      </tbody>
     </table>

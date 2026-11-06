@@ -262,6 +262,10 @@ jobs:
           test "$(psql_test -At -c "SELECT cooperativa=false AND ignorar_informes=true FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND codigo_origen='COOP01'")" = t
           psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
           psql_test -At -c "ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS proveedor_habitual_id text;" >/dev/null
+          # CONCURRENTLY no puede ejecutarse con --single-transaction.
+          psql_test < api/src/migrations/045_promociones_busqueda_indices.psql
+          psql_test < api/src/migrations/045_promociones_busqueda_indices.psql
+          psql_test < api/src/migrations/046_verificar_indices_promociones.sql
           psql_test < ops/indices-preparador-masivo.sql
           psql_test < ops/indices-preparador-masivo.sql
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_index x ON x.indexrelid=c.oid WHERE n.nspname='ampedia' AND c.relname='fm_promociones_articulos_proveedor_idx' AND x.indisvalid AND x.indisready")" = 1

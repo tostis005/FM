@@ -100,6 +100,13 @@ async function mockApi(route){
     cn:String(700000+start+i),description:"Prueba paginada "+(start+i),
     supplier:"Laboratorio de prueba",sourceId:"ERP-"+(start+i)
    })),hasMore:start===0};
+  }else if(Array.isArray(body.cns)&&body.cns.length){
+   // Respuesta deliberadamente lenta: mientras espera no deben verse CN sin nombre.
+   await new Promise(resolve=>setTimeout(resolve,420));
+   payload={products:[
+    {cn:"123456",description:"Producto de prueba",supplier:"Laboratorio ejemplo",sourceId:"88"},
+    {cn:"654321",description:"Segundo producto Farmatic",supplier:"Laboratorio ejemplo",sourceId:"89"}
+   ].filter(item=>body.cns.includes(item.cn)),hasMore:false};
   }else payload={products:[
    {cn:"123456",description:"Producto de prueba",supplier:"Laboratorio ejemplo",sourceId:"88"},
    {cn:null,description:"Ficha ERP sin CN verificable",supplier:null,sourceId:"PO564"}
@@ -249,6 +256,14 @@ try{
          const paste=page.locator("#simulator-paste-panel textarea");
          await paste.fill("123456\n654321");
          await page.getByRole("button",{name:"Añadir CN"}).click();
+         await page.locator("#simulator-paste-panel .fm-load-status")
+          .waitFor({state:"visible",timeout:5000});
+         const duringPaste=await page.locator(".fm-objectives-selected").innerText();
+         if(duringPaste.includes("123456")||duringPaste.includes("654321")||
+            duringPaste.includes("Nombre no disponible"))
+          throw Error("Aparecen CN provisionales antes de recuperar sus nombres: "+duringPaste);
+         await page.locator("#simulator-paste-panel .fm-load-status")
+          .waitFor({state:"hidden",timeout:8000});
          await page.locator(".fm-objectives-loading-frame .fm-loading-overlay")
            .waitFor({state:"visible",timeout:5000});
          await page.locator(".fm-objectives-loading-frame .fm-loading-overlay")
@@ -259,7 +274,7 @@ try{
          await page.waitForFunction(()=>{
            const labels=document.querySelector(".fm-objectives-selected")?.textContent||"";
            return labels.includes("123456 - Producto de prueba")&&
-             labels.includes("654321 - Nombre no disponible");
+             labels.includes("654321 - Segundo producto Farmatic");
          },null,{timeout:10000});
          const selectedLabels=await page.locator(".fm-objectives-selected").textContent();
          if(selectedLabels.includes("CN introducido"))

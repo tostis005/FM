@@ -90,7 +90,7 @@ try{
  const file={name:"PROMOCIONES ABADIA OCTUBRE 2026.xlsx",
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:await excel()};
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
- await page.getByRole("status").filter({hasText:"Resultado de la importación"}).waitFor({timeout:10000});
+ await page.getByRole("status").filter({hasText:"2 promociones importadas"}).waitFor({timeout:10000});
  // El filtro por defecto es ahora noviembre, no octubre.
  await page.getByRole("button",{name:"Ver todos los meses"}).click();
  await page.waitForFunction(()=>document.querySelectorAll(".campaign-table tbody tr").length>=2,null,{timeout:12000});

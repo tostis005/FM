@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {excelDate,importCampaignRows,mergeImportedPromos,importedPromotionStatus} from "./importarPromociones.js";
+import {excelDate,importCampaignRows,mergeImportedPromos,importedPromotionStatus,promotionInputSheets} from "./importarPromociones.js";
 
 test("fechas españolas y serial Excel",()=>{
   assert.equal(excelDate("1 OCTUBRE"),"2026-10-01");
@@ -176,4 +176,40 @@ test("cambio de año sin año explícito: diciembre a enero",()=>{
   2026,new Date("2026-12-15T12:00:00Z"));
  assert.equal(across[0].start,"2026-12-15");
  assert.equal(across[0].end,"2027-01-15");
+});
+
+test("el Excel de noviembre admite RESUMEN PROMOS y CNs INCLUIDOS",()=>{
+ const expected=[["LABORATORIO","MARCA"],["LABORATORIO","MARCA"]];
+ const november={"RESUMEN PROMOS":expected[0],"CNs INCLUIDOS":expected[1]};
+ const sheets=promotionInputSheets(november);
+ assert.equal(sheets.summary[0],"RESUMEN PROMOS");
+ assert.equal(sheets.cnList[0],"CNs INCLUIDOS");
+ const october=promotionInputSheets({RESUMEN:expected[0],"LISTADO CN PROMOCIONES":expected[1]});
+ assert.equal(october.summary[0],"RESUMEN");
+ assert.equal(october.cnList[0],"LISTADO CN PROMOCIONES");
+});
+
+test("noviembre conserva promociones tras separadores vacíos y excluye NO HACER",()=>{
+ const summary=[
+  ["NOVIEMBRE","MARCA","NOMBRE PROMOCIÓN","FECHA DE INICIO","FECHA DE FIN"],
+  ["BEIERSDORF","EUCERIN",0.3,"1 NOVIEMBRE","30 NOVIEMBRE"],
+  [null,null,null,null,null],
+  ["PHARMABABY","PHARMABABY",0.2,"1 NOVIEMBRE","30 NOVIEMBRE"],
+  ["NO HACER ESTAS PROMOCIONES",null,null,null,null],
+  ["TEST","OTRA",0.1,"1 NOVIEMBRE","30 NOVIEMBRE"]
+ ];
+ const cnRows=[
+  ["LABORATORIO","MARCA","CN","DESCRIPCION","PROMOCION"],
+  ["BEIERSDORF","EUCERIN","001474","Eucerin",0.3],
+  ["PHARMABABY","PHARMABABY","123456","Champú",0.2],
+  ["TEST","OTRA","654321","No importar",0.1]
+ ];
+ const result=importCampaignRows(summary,cnRows,2026,null,{allowBlankSeparators:true});
+ assert.equal(result.length,2);
+ assert.deepEqual(result.map(x=>x.sourceRow),[2,4]);
+ assert.deepEqual(result.map(x=>x.cns),[["001474"],["123456"]]);
+ assert.equal(result[1].start,"2026-11-01");
+ assert.equal(result[1].end,"2026-11-30");
+ // La estructura octubre sigue cerrándose en la primera fila vacía.
+ assert.equal(importCampaignRows(summary,cnRows).length,1);
 });

@@ -5,6 +5,7 @@ import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readUnifiedLaboratoryCatalog} from "./laboratoryUnionCatalog.js";
 import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
 import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
+import {readRetirementPatterns,isRetiredProductName} from "./laboratoryRetirements.js";
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -96,6 +97,9 @@ export function normalizeDraftItems(items,type,pharmacies){
    typeof row.name!=="string"||row.name.length>240||
    (row.cn!==null&&row.cn!==undefined&&!/^\d{6,7}$/.test(row.cn))||
    (row.cn&&cnCategory(row.cn)!==null&&cnCategory(row.cn)!==type)||seen.has(row.reference))return null;
+  if((row.comment!==undefined&&(typeof row.comment!=="string"||row.comment.length>2000))||
+   (row.excluded!==undefined&&typeof row.excluded!=="boolean"))return null;
+  const comment=String(row.comment||"").trim(),excluded=row.excluded===true;
   seen.add(row.reference);
   const metrics={};
   if(row.metrics!==undefined){
@@ -110,8 +114,8 @@ export function normalizeDraftItems(items,type,pharmacies){
    }
   }
   if(type==="parafarmacia"){
-   if(!isOrderQuantity(row.units))return null;
-   output.push({reference:row.reference,cn:row.cn||null,name:row.name,units:row.units,metrics});
+   if(!isOrderQuantity(row.units)||(excluded&&row.units!==0))return null;
+   output.push({reference:row.reference,cn:row.cn||null,name:row.name,units:row.units,metrics,comment,excluded});
   }else{
    if(!row.unitsByPharmacy||typeof row.unitsByPharmacy!=="object"||
     Array.isArray(row.unitsByPharmacy))return null;
@@ -120,7 +124,8 @@ export function normalizeDraftItems(items,type,pharmacies){
     if(!allowed.has(String(id))||!isOrderQuantity(count))return null;
     units[String(id)]=count;
    }
-   output.push({reference:row.reference,cn:row.cn||null,name:row.name,unitsByPharmacy:units,metrics});
+   if(excluded&&Object.values(units).some(n=>n!==0))return null;
+   output.push({reference:row.reference,cn:row.cn||null,name:row.name,unitsByPharmacy:units,metrics,comment,excluded});
   }
  }
  return output;
@@ -260,9 +265,9 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
    return res.status(400).json({error:"Borrador inválido"});
   try{
    const {rows}=await pool.query(
-    'SELECT desde::text,hasta::text,lineas,actualizado_en AS "updatedAt" FROM farmetrica.pedidos_laboratorio_borradores WHERE cliente_slug=$1 AND laboratorio_clave=$2 AND tipo=$3 AND farmacias_clave=$4',
+    'SELECT desde::text,hasta::text,lineas,comentario_global AS "comentarioGlobal",actualizado_en AS "updatedAt" FROM farmetrica.pedidos_laboratorio_borradores WHERE cliente_slug=$1 AND laboratorio_clave=$2 AND tipo=$3 AND farmacias_clave=$4',
     [req.context.client.slug,common.laboratory,type,pharmacyScope(common.pharmacies)]);
-   res.json(rows[0]||{lineas:[]});
+   res.json(rows[0]||{lineas:[],comentarioGlobal:""});
   }catch(e){next(e);}
  });
  if(typeof app.put==="function")app.put("/api/analytics/pedidos/borrador-laboratorio",...guard,async(req,res,next)=>{
@@ -271,14 +276,24 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
   const common=parse(req),type=String(req.body?.tipo||""),
    from=String(req.body?.desde||""),to=String(req.body?.hasta||"");
   const items=normalizeDraftItems(req.body?.lineas,type,common?.pharmacies||[]);
+  const comment=req.body?.comentarioGlobal??"";
   if(!common||!common.pharmacies.length||!["medicacion","parafarmacia"].includes(type)||
-   !validPlannerDate(from)||!validPlannerDate(to)||from>to||items===null)
-   return res.status(400).json({error:"No se pueden guardar cantidades o fechas inválidas"});
+   !validPlannerDate(from)||!validPlannerDate(to)||from>to||items===null||
+   typeof comment!=="string"||comment.length>3000)
+   return res.status(400).json({error:"No se pueden guardar cantidades, comentarios o fechas inválidas"});
   try{
+   const patterns=await readRetirementPatterns(pool,req.context.client.slug);
+   const hasRetiredOrder=items.some(item=>{
+    const amount=type==="parafarmacia"?item.units:
+     Object.values(item.unitsByPharmacy).reduce((sum,n)=>sum+n,0);
+    return amount>0&&(item.excluded||isRetiredProductName(item.name,patterns));
+   });
+   if(hasRetiredOrder)return res.status(400).json({
+    error:"Las referencias marcadas como baja no admiten unidades a pedir."});
    const {rows}=await pool.query(
-    "INSERT INTO farmetrica.pedidos_laboratorio_borradores (cliente_slug,laboratorio_clave,tipo,farmacias_clave,desde,hasta,lineas) VALUES ($1,$2,$3,$4,$5::date,$6::date,$7::jsonb) ON CONFLICT(cliente_slug,laboratorio_clave,tipo,farmacias_clave) DO UPDATE SET desde=EXCLUDED.desde,hasta=EXCLUDED.hasta,lineas=EXCLUDED.lineas,actualizado_en=now() RETURNING actualizado_en AS \"updatedAt\"",
+    "INSERT INTO farmetrica.pedidos_laboratorio_borradores (cliente_slug,laboratorio_clave,tipo,farmacias_clave,desde,hasta,lineas,comentario_global) VALUES ($1,$2,$3,$4,$5::date,$6::date,$7::jsonb,$8) ON CONFLICT(cliente_slug,laboratorio_clave,tipo,farmacias_clave) DO UPDATE SET desde=EXCLUDED.desde,hasta=EXCLUDED.hasta,lineas=EXCLUDED.lineas,comentario_global=EXCLUDED.comentario_global,actualizado_en=now() RETURNING actualizado_en AS \"updatedAt\"",
     [req.context.client.slug,common.laboratory,type,pharmacyScope(common.pharmacies),
-     from,to,JSON.stringify(items)]);
+     from,to,JSON.stringify(items),comment.trim()]);
    res.json({saved:true,count:items.length,updatedAt:rows[0]?.updatedAt});
   }catch(e){next(e);}
  });

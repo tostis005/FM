@@ -148,7 +148,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));
  function append(items){setSelected(current=>mergePromotionSelection(current,items));}
  async function addPastedCNs(){
-  if(bulkBusy||!codes.length||invalid.length||codes.length>500)return;
+  if(bulkBusy||!codes.length||invalid.length||codes.length>1000)return;
   const requested=[...codes];
   setBulkError("");setBulkBusy(true);
   // Mantener la lista intacta mientras se consulta Farmatic: no insertar
@@ -249,12 +249,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
       onChange={e=>{setBulk(e.target.value);setBulkError("");}}/></label>
     <div className="fm-objectives-paste-action">
      <span>{codes.length} CN {codes.length===1?"válido":"válidos"} detectados</span>
-     <button type="button" className="btn btn-secondary" disabled={!codes.length||invalid.length>0||codes.length>500||bulkBusy}
+     <button type="button" className="btn btn-secondary" disabled={!codes.length||invalid.length>0||codes.length>1000||bulkBusy}
       onClick={()=>void addPastedCNs()}><Plus size={16}/> Añadir CN</button>
     </div>
     {invalid.length>0&&<p role="alert" className="fm-objectives-warning">
      Comprueba {invalid.length===1?"el código":"los "+invalid.length+" códigos"}: deben tener exactamente 6 dígitos.</p>}
-    {codes.length>500&&<p role="alert" className="fm-objectives-warning">Máximo 500 CN a la vez.</p>}
+    {codes.length>1000&&<p role="alert" className="fm-objectives-warning">Máximo 1.000 CN a la vez.</p>}
     {bulkBusy&&<LoadingStatus label="Consultando artículos y recuperando sus nombres…"/>}
     {bulkError&&<p role="status" className="fm-objectives-hint">{bulkError}</p>}
    </div>}

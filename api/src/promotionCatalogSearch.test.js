@@ -14,7 +14,7 @@ test("buscar nombre, CN normalizado y laboratorio sin consultas correlacionadas 
  assert.match(sql.direct,/a\.cn_normalizado::text/);
  assert.match(sql.direct,/a\."laboratorio"::text/);
  assert.match(sql.direct,/a\.origen_id::text/);
- assert.match(sql.direct,/LIKE ALL\(\$3::text\[\]\)/);
+ assert.match(sql.direct,/ILIKE ALL\(\$3::text\[\]\)/);
  assert.match(sql.direct,/LIKE \$7::text/);
  assert.match(sql.byCodes,/a.origen_id::text=ANY\(\$4::text\[\]\)/);
  assert.doesNotMatch(Object.values(sql).filter(v=>typeof v==="string").join(" "),/nomenclator_presentaciones/);

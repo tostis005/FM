@@ -250,6 +250,11 @@ try{
          await page.locator(".fm-objectives-results").waitFor({state:"visible",timeout:10000});
          if(await page.locator(".fm-objectives-results .fm-objectives-product").count()!==1)
            throw Error("La búsqueda muestra artículos sin CN seleccionable");
+         if(await page.locator(".fm-objectives-results .fm-objectives-product small").count())
+           throw Error("Los resultados del buscador deben mostrar solo CN y nombre, sin segunda línea");
+         const checkboxSize=await page.locator(".fm-objectives-results .fm-objectives-product input[type=checkbox]")
+           .first().evaluate(node=>parseFloat(getComputedStyle(node).width));
+         if(checkboxSize<18)throw Error("El checkbox de los resultados es demasiado pequeño: "+checkboxSize);
          await page.getByRole("tab",{name:"Pegar lista de CN"}).click();
          if(await page.locator("#simulator-search-panel").count())
            throw Error("El segundo método sigue mostrando el primero");

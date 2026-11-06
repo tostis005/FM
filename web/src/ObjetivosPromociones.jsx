@@ -48,6 +48,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [historyError,setHistoryError]=useState("");
  const [historical,setHistorical]=useState({});
  const [stock,setStock]=useState({});
+ const [stockPartialIds,setStockPartialIds]=useState([]);
+ const [stockUnavailable,setStockUnavailable]=useState(false);
  const [baseline,setBaseline]=useState(()=>preset.baseline);
  const [customFrom,setCustomFrom]=useState(()=>preset.customFrom||(()=>{const {year,month}=monthAtMadrid();return first(year,month);})());
  const [customTo,setCustomTo]=useState(()=>preset.customTo||madridToday());
@@ -112,19 +114,21 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
 
  useEffect(()=>{
   if(!selectedCNs.length||!selectedPharmacies.length||!validRange){
-   setHistorical({});setStock({});setHistoryBusy(false);setHistoryError("");return;
+   setHistorical({});setStock({});setStockPartialIds([]);setStockUnavailable(false);setHistoryBusy(false);setHistoryError("");return;
   }
   const controller=new AbortController();
   setHistoryBusy(true);setHistoryError("");
   loadPromotionHistoryInBatches(selectedCNs,batch=>
    post(clientSlug,"/api/ventas/objetivos/historico",{
     cns:batch,pharmacyIds:selectedPharmacies,periods
-   },controller.signal)).then(data=>{
+   },controller.signal),{pharmacyIds:selectedPharmacies}).then(data=>{
    if(controller.signal.aborted)return;
    setHistorical(data.periods||{});
    setStock(data.stock||{});
+   setStockPartialIds(data.stockPartialPharmacyIds||[]);
+   setStockUnavailable(Boolean(data.stockUnavailable));
   }).catch(error=>{
-   if(!controller.signal.aborted){setHistoryError(error.message);setHistorical({});setStock({});}
+   if(!controller.signal.aborted){setHistoryError(error.message);setHistorical({});setStock({});setStockPartialIds([]);setStockUnavailable(false);}
   }).finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false);});
   return()=>controller.abort();
  },[clientSlug,selectedKey,pharmacyKey,customFrom,customTo]);
@@ -140,7 +144,9 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const units=(id,periodId)=>Number(historical[periodId]?.[id]||0);
  const rate=id=>Number(rateByPharmacy[id]??5);
  const stockUnits=id=>Object.prototype.hasOwnProperty.call(stock,id)?Number(stock[id]):null;
- const proposal=id=>baseline==="stock"?Math.max(0,Math.round(stockUnits(id)??0)):
+ const stockPartial=id=>stockPartialIds.includes(String(id));
+ const partialStockCount=selectedPharmacies.filter(stockPartial).length;
+ const proposal=id=>baseline==="stock"?Math.max(0,Math.round(stockPartial(id)?0:(stockUnits(id)??0))):
   simulatorTarget(units(id,chosen.id),rate(id));
  const target=id=>manualTargets[id]===undefined?proposal(id):manualTargets[id];
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
@@ -322,8 +328,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        return <tr key={id}><th>{f.name}</th>
         {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
          <strong>{num(units(id,p.id))}</strong>}</td>)}
-        <td>{!selectedCNs.length||historyBusy||historyError||stockUnits(id)===null?"—":
-         <strong>{num(stockUnits(id))}</strong>}</td>
+        <td>{!selectedCNs.length||historyBusy||historyError?"—":
+         stockUnits(id)===null?<span title="No hay un stock confirmado para los artículos seleccionados">—</span>:
+         <><strong>{num(stockUnits(id))}</strong>
+         {stockPartial(id)&&<small title="Falta stock de algunos artículos o lotes">Parcial</small>}</>}</td>
         {baseline!=="stock"&&<td><div className="fm-objectives-rate-line"><div className="fm-objectives-rates">{[5,8,10,12,14].map(value=><button type="button"
          key={value} className={pct===value?"chosen":""} aria-pressed={pct===value}
          onClick={()=>{setRateByPharmacy(v=>({...v,[id]:value}));setManualTargets(v=>({...v,[id]:undefined}));}}>
@@ -346,16 +354,24 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
         <strong>{num(totals(p.id))}</strong>}</td>)}
        <td>{!selectedCNs.length||historyBusy||historyError||!hasStock?"—":
-        <strong>{num(totalStock())}</strong>}</td>
+        <><strong>{num(totalStock())}</strong>
+        {partialStockCount>0&&<small>Parcial</small>}</>}</td>
        {baseline!=="stock"&&<td>—</td>}<td><strong>{num(totalTarget())}</strong></td></tr>
      </tbody>
     </table>
    </div>
    </LoadingFrame>
    {historyError&&<p role="alert" className="fm-objectives-warning">{historyError}</p>}
+   {!historyBusy&&!historyError&&selectedCNs.length>0&&partialStockCount>0&&
+    <p role="status" className="fm-objectives-stock-note">
+     Stock parcial en {partialStockCount} {partialStockCount===1?"farmacia":"farmacias"}:
+     se muestran únicamente las unidades confirmadas en Farmatic.
+     {stockUnavailable?" Una o más consultas de stock no se han completado.":""}
+     {" "}Los objetivos basados en stock incompleto se rellenan manualmente.
+    </p>}
 
   </section>
-  <section className="fm-objectives-extraction" aria-label="Extracción de ventas">
+  <section className="card fm-objectives-card fm-objectives-extraction" aria-label="Extracción de ventas">
    <div className="fm-objectives-extract-head"><h2>3. Extracción de ventas</h2></div>
    <DetalleVentas simulator directQuery={query} pharmacies={pharmacies}
     pharmacyScopeIds={selectedPharmacies} connected={true}/>

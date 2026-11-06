@@ -15,8 +15,7 @@ test("buscar nombre, CN normalizado y laboratorio sin consultas correlacionadas 
  assert.match(sql.direct,/a\."laboratorio"::text/);
  assert.match(sql.direct,/a\.origen_id::text/);
  assert.match(sql.direct,/ILIKE ALL\(\$3::text\[\]\)/);
- assert.match(sql.officialCatalog,/ILIKE ALL\(\$1::text\[\]\)/);
- assert.match(sql.officialCatalog,/n\.laboratorio_comercializador/);
+ assert.doesNotMatch(Object.values(sql).filter(v=>typeof v==="string").join(" "),/nomenclator_presentaciones/);
  assert.match(sql.direct,/f\.id=ANY\(\$2::int\[\]\)/);
  assert.ok(sql.direct.includes("SELECT DISTINCT ON (resolved_cn)"));
  assert.ok(sql.direct.includes("LIMIT $5::int OFFSET $6::int"));
@@ -57,11 +56,11 @@ test("no admitir nombres de esquema inseguros ni maestros sin columnas necesaria
   "farmacia_codigo","origen_id","nombre"
  ])),/campos necesarios/);
 });
-test("normalizar CN reales y recuperar ERP solo si consta verificado en AEMPS",()=>{
+test("normalizar CN y admitir referencias Farmatic de seis dígitos sin AEMPS",()=>{
  assert.equal(promotionResultCN({national_code:"1234567",source_id:"99"}),"123456");
  assert.equal(promotionResultCN({normalized_code:"000123",source_id:"98"}),"000123");
  assert.equal(promotionResultCN({source_id:"790326"},new Set(["790326"])),"790326");
- assert.equal(promotionResultCN({source_id:"790326"},new Set()),null);
+ assert.equal(promotionResultCN({source_id:"790326"}),"790326");
  assert.equal(promotionResultCN({source_id:"ERP-790326"},new Set(["790326"])),null);
 });
 test("combinar resultados de nombre y proveedor por CN sin perder nombre de proveedor",()=>{
@@ -88,8 +87,7 @@ test("búsqueda de varias palabras sin orden, con caracteres SQL literales",()=>
  assert.deepEqual(promotionSearchPatterns(""),[]);
  const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
  assert.match(sql.direct,/concat_ws\(' ', a.nombre::text/);
- assert.match(sql.direct,/official.nombre/);
- assert.match(sql.direct,/official.laboratorio_titular/);
+ assert.doesNotMatch(sql.direct,/official|nomenclator|aemps/i);
  assert.match(sql.suppliers,/sp.nombre::text ILIKE ANY/);
  assert.match(sql.suppliers,/pm.nombre::text ILIKE ANY/);
  assert.match(sql.bySupplier,/matched.supplier_name/);
@@ -103,7 +101,8 @@ test("Farmatic de seis dígitos sin CN oficial se puede buscar y etiquetar como 
  const sql=promotionCatalogSearchSQL("ampedia",[...articles,...suppliers]);
  assert.match(sql.direct,/a\.origen_id::text/);
  assert.match(sql.direct,/reference_type/);
- assert.match(sql.direct,/OR \(btrim\(coalesce\(a\.origen_id::text/);
+ assert.match(sql.direct,/a\.origen_id::text/);
+ assert.match(sql.direct,/ANY\(\$4::text\[\]\)/);
  const result=mergePromotionCatalogRows([{
   pharmacy_id:"1",source_id:"168766",resolved_cn:"168766",
   reference_type:"farmatic",description:"Eucerin Atopi Control 250 ml"

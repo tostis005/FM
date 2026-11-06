@@ -42,6 +42,14 @@ await page.route("**/api/**",async route=>{
   }
  }
  else if(path==="/api/ventas/seguimiento")body={sales:{}};
+ else if(path==="/api/ventas/objetivos/buscar")body={products:[
+  {cn:"123456",description:"Producto Farmatic de prueba",supplier:"Laboratorio de prueba",
+   sourceId:"123456",referenceType:"farmatic"}],hasMore:false};
+ else if(path==="/api/ventas/objetivos/historico"){
+  const request=route.request().postDataJSON();
+  body={periods:Object.fromEntries((request.periods||[]).map(p=>[p.id,{"1":10}])),
+   stock:{"1":10},amounts:{},stockUnavailable:false};
+ }
  await route.fulfill({status,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
@@ -53,16 +61,26 @@ try{
   "No permitir altas cuando el listado compartido es desconocido");
  offline=false;
  await page.getByRole("button",{name:"Reintentar"}).click();
- await page.getByRole("button",{name:"Nueva promoción"}).waitFor({timeout:10000});
+ await page.getByRole("button",{name:"Importar Excel"}).waitFor({timeout:10000});
  assert.equal(await page.getByText(cached.name,{exact:true}).count(),0,
   "Tras recuperar la conexión no deben revivir campañas antiguas del navegador");
 
- await page.getByRole("button",{name:"Nueva promoción"}).click();
- const modal=page.locator(".drawer").filter({hasText:"Nueva promoción"});
+ await page.goto(BASE+"/promociones/nueva",{waitUntil:"domcontentloaded"});
+ await page.getByRole("searchbox",{name:"Buscar por artículo, proveedor o CN"}).fill("Producto");
+ await page.getByRole("button",{name:"Seleccionar mostrados"}).waitFor({timeout:12000});
+ await page.getByRole("button",{name:"Seleccionar mostrados"}).click();
+ const continueButton=page.getByRole("button",{name:"Continuar con la campaña"});
+ await page.waitForFunction(()=>{
+  const button=[...document.querySelectorAll("button")].find(b=>b.textContent.includes("Continuar con la campaña"));
+  return button&&!button.disabled;
+ },null,{timeout:12000});
+ await continueButton.click();
+ const modal=page.locator(".drawer").filter({hasText:"Nueva campaña"});
  await modal.getByLabel("Nombre de promoción").fill("Campaña de verificación");
- await modal.locator(".pharmacy-picker .pharmacy-choice").first().click();
+ await modal.getByLabel("Fecha de inicio").fill("2026-11-01");
+ await modal.getByLabel("Fecha de fin (opcional)").fill("2026-11-30");
  await modal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).fill("10");
- await modal.getByRole("button",{name:"Crear promoción"}).click();
+ await modal.getByRole("button",{name:"Crear campaña"}).click();
  await modal.getByRole("alert").waitFor();
  assert.match(await modal.getByRole("alert").textContent(),
   /No se ha guardado la promoción: PostgreSQL temporalmente no disponible/);
@@ -71,12 +89,12 @@ try{
   "No añadir una campaña sin confirmación del servidor");
  assert.equal(saved.length,0);
 
- await modal.getByRole("button",{name:"Crear promoción"}).click();
+ await modal.getByRole("button",{name:"Crear campaña"}).click();
  await page.getByText("Promoción guardada correctamente").waitFor();
  await modal.waitFor({state:"detached"});
  assert.equal(saved.length,1);
  assert.equal(saveCalls,2);
- await page.reload({waitUntil:"domcontentloaded"});
+ await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  try{
   await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
    await page.locator(".campaign-table").getByText("Campaña de verificación").waitFor({timeout:12000});

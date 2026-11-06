@@ -31,16 +31,13 @@ export function promotionCatalogSearchSQL(schema,columns){
  const isCode=value=>value+" ~ '^[0-9]{6,7}$'";
  const origin="btrim(coalesce(a.origen_id::text,''))";
  const isOriginCode=origin+" ~ '^[0-9]{6}$'";
- const official="official.cn";
+ // Las campañas sólo utilizan el catálogo Farmatic de cada farmacia.
  const code="CASE WHEN "+isCode(raw)+" THEN left("+raw+",6) "+
   "WHEN "+isCode(normalized)+" THEN left("+normalized+",6) "+
-  "WHEN "+official+" IS NOT NULL THEN "+official+"::text "+
   "WHEN "+isOriginCode+" THEN "+origin+" ELSE NULL::text END";
- const hasCN="("+isCode(raw)+" OR "+isCode(normalized)+" OR "+official+
-  " IS NOT NULL OR "+isOriginCode+")";
+ const hasCN="("+isCode(raw)+" OR "+isCode(normalized)+" OR "+isOriginCode+")";
  const referenceType="CASE WHEN "+isCode(raw)+" OR "+isCode(normalized)+
-  " OR "+official+" IS NOT NULL THEN 'cn' "+
-  "WHEN "+isOriginCode+" THEN 'farmatic' ELSE NULL END";
+  " THEN 'cn' WHEN "+isOriginCode+" THEN 'farmatic' ELSE NULL END";
  const lab=has(columns,"articulos","laboratorio")?col("a","laboratorio"):"NULL::text";
  const refs=["proveedor_habitual_id","proveedor_id","proveedor_codigo","proveedor","laboratorio_id"]
   .filter(name=>has(columns,"articulos",name));
@@ -49,58 +46,38 @@ export function promotionCatalogSearchSQL(schema,columns){
   "THEN coalesce(nullif(ltrim(btrim(coalesce("+expr+",'')),'0'),''),'0') "+
   "ELSE "+upper(expr)+" END";
  const refCondition=refs.map(ref=>supplierCode(col("a",ref))+"=matched.supplier_code").join(" OR ");
- const fields=(supplier="NULL::text")=>[
+ const fields=(supplier="NULL::text",requested=false)=>[
+
   "f.id::text AS pharmacy_id",col("a","origen_id")+" AS source_id",
   col("a","nombre")+" AS description",col("a","codigo_nacional")+" AS national_code",
   normalized+" AS normalized_code",lab+" AS laboratory",
   primary+" AS supplier_ref",supplier+" AS supplier_name",
-  code+" AS resolved_cn",referenceType+" AS reference_type"
+  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($4::text[]) THEN "+origin+
+   " ELSE "+code+" END":code)+" AS resolved_cn",
+  (requested?"CASE WHEN "+isOriginCode+" AND "+origin+"=ANY($4::text[]) THEN 'farmatic' ELSE "+
+   referenceType+" END":referenceType)+" AS reference_type"
  ].join(", ");
  const scope="JOIN farmetrica.farmacias f ON f.cliente_slug=$1 "+
   "AND "+upper("a.farmacia_codigo::text")+"="+pharmacyDataCodeSQL("f")+" "+
   "AND f.id=ANY($2::int[]) ";
- const officialJoin="LEFT JOIN farmetrica.nomenclator_presentaciones official "+
-  "ON official.cn=btrim(a.origen_id::text) "+
-  "AND btrim(a.origen_id::text) ~ '^[0-9]{6}$' ";
- // Cada palabra debe encontrarse, pero puede estar en CUALQUIER orden
- // y en CUALQUIERA de los campos: nombre ERP, laboratorio, CN, nombre AEMPS.
- // Los patrones son parámetros bindados; nunca se interpolan en el SQL.
+ // Sólo nombre, CN, referencia, laboratorio y proveedores del ERP Farmatic.
  const searchable="concat_ws(' ', a.nombre::text, "+lab+", "+
-  "a.origen_id::text, "+raw+", "+normalized+", official.cn, "+
-  "official.nombre, official.laboratorio, "+
-  "official.laboratorio_titular, official.laboratorio_comercializador)";
+  "a.origen_id::text, "+raw+", "+normalized+", "+primary+")";
  const supplierSearchable="concat_ws(' ', a.nombre::text, "+lab+", "+
-  "a.origen_id::text, "+raw+", "+normalized+", official.cn, "+
-  "official.nombre, official.laboratorio, "+
-  "official.laboratorio_titular, official.laboratorio_comercializador, matched.supplier_name)";
+  "a.origen_id::text, "+raw+", "+normalized+", matched.supplier_name)";
  // Deduplicación en PostgreSQL antes de LIMIT/OFFSET; estable entre páginas.
  const page=(candidate,limit,offset)=>
   "SELECT DISTINCT ON (resolved_cn) * FROM ("+candidate+") found "+
   "WHERE resolved_cn IS NOT NULL ORDER BY resolved_cn,description NULLS LAST "+
   "LIMIT "+limit+"::int OFFSET "+offset+"::int";
- const direct=page("SELECT "+fields()+" FROM "+a+" a "+scope+officialJoin+
+ const direct=page("SELECT "+fields("NULL::text",true)+" FROM "+a+" a "+scope+
   "WHERE "+hasCN+" AND ((cardinality($3::text[])>0 AND "+searchable+" ILIKE ALL($3::text[])) "+
   "OR "+raw+"=ANY($4::text[]) "+
   "OR ("+isCode(raw)+" AND left("+raw+",6)=ANY($4::text[])) "+
   (has(columns,"articulos","cn_normalizado")?
    "OR "+normalized+"=ANY($4::text[]) "+
    "OR ("+isCode(normalized)+" AND left("+normalized+",6)=ANY($4::text[])) ":"")+
-  "OR (official.cn IS NOT NULL AND official.cn=ANY($4::text[])) "+
   "OR ("+isOriginCode+" AND "+origin+"=ANY($4::text[])))","$5","$6");
- // Fuente complementaria: la ficha AEMPS puede existir aunque la farmacia
- // no la tenga en su maestro. Ofrecer el CN con nombre oficial sin inventar
- // ninguna relación de stock o venta para ese producto.
- const officialCatalog=
-  "SELECT n.cn::text AS resolved_cn,n.cn::text AS national_code, "+
-  "n.nombre::text AS description, "+
-  "coalesce(nullif(n.laboratorio_comercializador::text,''), "+
-  "nullif(n.laboratorio_titular::text,''),n.laboratorio::text) AS supplier_name, "+
-  "NULL::text AS source_id,NULL::text AS pharmacy_id "+
-  "FROM farmetrica.nomenclator_presentaciones n "+
-  "WHERE cardinality($1::text[])>0 AND "+
-  "concat_ws(' ',n.nombre,n.cn,n.laboratorio,n.laboratorio_titular, "+
-   "n.laboratorio_comercializador) ILIKE ALL($1::text[]) "+
-  "ORDER BY n.cn LIMIT $2::int OFFSET $3::int";
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+
@@ -125,7 +102,7 @@ export function promotionCatalogSearchSQL(schema,columns){
   "JOIN jsonb_to_recordset($3::jsonb) AS matched("+
    "pharmacy_code text,supplier_code text,supplier_name text) "+
   "ON "+upper("a.farmacia_codigo::text")+"=matched.pharmacy_code "+
-  "AND ("+refCondition+") "+scope+officialJoin+
+  "AND ("+refCondition+") "+scope+
   "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const bySupplier=supplierRows?page(supplierRows,"$4","$5"):null;
  // Farmatic no siempre sincroniza proveedor_habitual_id. Extraer también
@@ -139,13 +116,13 @@ export function promotionCatalogSearchSQL(schema,columns){
    upper("r.farmacia_codigo::text")+"=matched.pharmacy_code "+
   "AND btrim(r.articulo_id::text)=btrim(a.origen_id::text) "+
   "AND "+supplierCode("r.proveedor_id::text")+"=matched.supplier_code "+
-  scope+officialJoin+
+  scope+
   "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const byReceiptSupplier=receiptRows?page(receiptRows,"$4","$5"):null;
- return {direct,suppliers,bySupplier,byReceiptSupplier,officialCatalog,supplierReady};
+ return {direct,suppliers,bySupplier,byReceiptSupplier,supplierReady};
 }
 
-export function promotionResultCN(row,verifiedOrigins=new Set()){
+export function promotionResultCN(row){
  if(/^\d{6}$/.test(String(row.resolved_cn||"")))return String(row.resolved_cn);
  const codes=[row.national_code,row.normalized_code];
  for(const value of codes){
@@ -153,13 +130,13 @@ export function promotionResultCN(row,verifiedOrigins=new Set()){
   if(/^\d{6,7}$/.test(s))return s.slice(0,6);
  }
  const id=String(row.source_id??"").trim();
- return /^\d{6}$/.test(id)&&verifiedOrigins.has(id)?id:null;
+ return /^\d{6}$/.test(id)?id:null;
 }
 
-export function mergePromotionCatalogRows(rows,verifiedOrigins=new Set(),max=2000){
+export function mergePromotionCatalogRows(rows,max=2000){
  const found=new Map();
  for(const r of rows||[]){
-  const cn=promotionResultCN(r,verifiedOrigins);
+  const cn=promotionResultCN(r);
   const key=cn||"ERP:"+r.pharmacy_id+":"+r.source_id;
   const description=String(r.description||"").trim()||"Artículo sin nombre";
   const supplier=String(r.supplier_name||r.laboratory||"").trim()||null;

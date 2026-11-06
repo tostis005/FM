@@ -43,18 +43,14 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const pageSize=search?PAGE_SIZE:Math.min(500,Math.max(1,cns.length));
  const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
  const direct=pool.query({
-  text:sql.direct,values:[slug,ids,patterns,cns,pageLimit,offset],query_timeout:8000
+  text:sql.direct,values:[slug,ids,patterns,/^\d{6}$/.test(search)?[search]:cns,pageLimit,offset],query_timeout:8000
  });
  const supplierNames=search.length>=2&&sql.suppliers?
   pool.query({text:sql.suppliers,values:[slug,ids,patterns,400],query_timeout:4000}):
   Promise.resolve({rows:[]});
- const official=patterns.length?
-  pool.query({text:sql.officialCatalog,values:[patterns,pageLimit,offset],
-   query_timeout:6500}):Promise.resolve({rows:[]});
- const [a,b,o]=await Promise.allSettled([direct,supplierNames,official]);
+ const [a,b]=await Promise.allSettled([direct,supplierNames]);
  const directRows=a.status==="fulfilled"?a.value.rows||[]:[];
  const supplierCodes=b.status==="fulfilled"?b.value.rows||[]:[];
- const officialRows=o.status==="fulfilled"?o.value.rows||[]:[];
  let supplierResult={rows:[]},receiptResult={rows:[]},supplierError=null;
  const checkReceipts=Boolean(supplierCodes.length&&supplierCodes.length<=80&&sql.byReceiptSupplier);
  if(supplierCodes.length&&sql.bySupplier){
@@ -70,34 +66,22 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
   if(receipts.status==="fulfilled")receiptResult=receipts.value;
   else supplierError=receipts.reason;
  }
- const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&o.status==="fulfilled"&&
+ const complete=a.status==="fulfilled"&&b.status==="fulfilled"&&
   !supplierError&&(!supplierCodes.length||supplierCodes.length<=80);
  const supplierRows=supplierResult.rows||[],receiptRows=receiptResult.rows||[];
- if(!complete&&!directRows.length&&!supplierRows.length&&!receiptRows.length&&!officialRows.length)
+ if(!complete&&!directRows.length&&!supplierRows.length&&!receiptRows.length)
   throw Error("La búsqueda ha superado el tiempo disponible. Prueba con un término más específico.");
  const rows=[...directRows.slice(0,pageSize),...supplierRows.slice(0,pageSize),
-  ...receiptRows.slice(0,pageSize),...officialRows.slice(0,pageSize)];
+  ...receiptRows.slice(0,pageSize)];
  const products=mergePromotionCatalogRows(rows);
  if(!search&&cns.length){
   const selected=new Set(cns);
-  const inCatalog=products.filter(item=>selected.has(item.cn));
-  const missing=cns.filter(cn=>!inCatalog.some(item=>item.cn===cn));
-  if(missing.length){
-   try{
-    const result=await pool.query({
-     text:"SELECT cn::text AS cn,nombre::text AS description "+
-      "FROM farmetrica.nomenclator_presentaciones WHERE cn=ANY($1::text[])",
-     values:[missing],query_timeout:1500
-    });
-    inCatalog.push(...result.rows.filter(item=>selected.has(item.cn))
-     .map(item=>({cn:item.cn,description:item.description||"CN introducido",
-      supplier:null,sourceId:null})));
-   }catch(error){console.warn("PROMOTION_CN_NAME_LOOKUP",error.code||error.name);}
-  }
-  return {products:inCatalog,partial:!complete,hasMore:false};
+  // Sin catálogo externo: un CN inexistente en Farmatic queda sin descripción.
+  return {products:products.filter(item=>selected.has(item.cn)),
+   partial:!complete,hasMore:false};
  }
  const hasMore=directRows.length>pageSize||supplierRows.length>pageSize||
-  receiptRows.length>pageSize||officialRows.length>pageSize;
+  receiptRows.length>pageSize;
  return {products,partial:!complete||supplierCodes.length>=400,hasMore,pageSize};
 }
 
@@ -139,12 +123,19 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
    if(!ids.length)return res.json({periods:Object.fromEntries(periods.map(p=>[p.id,{}])),amounts:Object.fromEntries(periods.map(p=>[p.id,{}]))});
    // Los tickets usan a veces el ID Farmatic y no el CN. Resolver el maestro
    // una sola vez y comparar siempre por farmacia para evitar cruces de IDs.
+   const metadata=await catalogColumns(pool,schema);
+   const have=(column)=>metadata.some(c=>c.table_name==="articulos"&&c.column_name===column);
+   const normalizedMatch=have("cn_normalizado")?
+    " OR btrim(a.cn_normalizado::text)=ANY($3::text[]) OR left(btrim(a.cn_normalizado::text),6)=ANY($3::text[])":"";
+   const matchProducts="(btrim(a.origen_id::text)=ANY($3::text[]) "+
+    "OR btrim(a.codigo_nacional::text)=ANY($3::text[]) "+
+    "OR left(btrim(a.codigo_nacional::text),6)=ANY($3::text[])"+normalizedMatch+")";
    const {rows:links}=await pool.query(`
     SELECT DISTINCT f.id::text AS pharmacy_id,btrim(a.origen_id::text) AS source_id
     FROM "${schema}".articulos a
     JOIN farmetrica.farmacias f ON f.cliente_slug=$1
       AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-    WHERE f.id=ANY($2::int[]) AND btrim(a.codigo_nacional::text)=ANY($3::text[])`,
+    WHERE f.id=ANY($2::int[]) AND ${matchProducts}`,
     [slug,ids,cns]);
    const mappedKeys=links.map(r=>r.pharmacy_id+"|"+r.source_id);
    const query=`SELECT f.id::text AS pharmacy_id,
@@ -164,7 +155,40 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
     totals[p.id]=Object.fromEntries(rows.map(r=>[r.pharmacy_id,Number(r.units)]));
     amounts[p.id]=Object.fromEntries(rows.map(r=>[r.pharmacy_id,Number(r.amount)]));
    }
-   res.json({periods:totals,amounts});
+   // Stock de la ficha Farmatic más reciente por ID de artículo y farmacia.
+   // No contar varias sincronizaciones o referencias seleccionadas dos veces.
+   let stock={},stockUpdatedAt=null,stockUnavailable=false;
+   if(have("stock_actual")){
+    const order=have("sincronizado_en")?
+     "a.sincronizado_en DESC NULLS LAST":"a.origen_id";
+    const stamp=have("sincronizado_en")?
+     "a.sincronizado_en AS updated_at":"NULL::timestamp AS updated_at";
+    try{
+     const {rows}=await pool.query({text:`
+      WITH latest AS (
+       SELECT DISTINCT ON (f.id,a.origen_id)
+        f.id::text AS pharmacy_id,a.stock_actual::float8 AS stock,
+        ${stamp}
+       FROM "${schema}".articulos a
+       JOIN farmetrica.farmacias f ON f.cliente_slug=$1
+        AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
+       WHERE f.id=ANY($2::int[]) AND ${matchProducts}
+       ORDER BY f.id,a.origen_id,${order}
+      )
+      SELECT pharmacy_id,coalesce(sum(stock),0)::float8 AS units,
+       max(updated_at) AS updated_at
+      FROM latest GROUP BY pharmacy_id HAVING count(*)=count(stock)`,
+      values:[slug,ids,cns],query_timeout:8000});
+     stock=Object.fromEntries(rows.map(row=>[row.pharmacy_id,Number(row.units)]));
+     const dates=rows.map(row=>row.updated_at).filter(Boolean)
+      .map(value=>new Date(value).getTime()).filter(Number.isFinite);
+     if(dates.length)stockUpdatedAt=new Date(Math.min(...dates)).toISOString();
+    }catch(error){
+     console.warn("PROMOTION_STOCK_LOOKUP",error.code||error.name);
+     stockUnavailable=true;
+    }
+   }else stockUnavailable=true;
+   res.json({periods:totals,amounts,stock,stockUpdatedAt,stockUnavailable});
   }catch(e){next(e);}
  });
 }

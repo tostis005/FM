@@ -118,8 +118,12 @@ async function mockApi(route){
    [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,100]))])),
    amounts:Object.fromEntries((body.periods||[]).map(p=>
    [p.id,Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,900]))])),
-   stock:Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,6])),
-   stockUpdatedAt:"2026-11-06T00:00:00Z",stockUnavailable:false};
+   // Simular una farmacia con artículo sin stock sincronizado: la campaña
+   // debe poder continuar y el objetivo se puede rellenar manualmente.
+   stock:body.cns?.length===1&&body.cns[0]==="654321"?{}:
+    Object.fromEntries((body.pharmacyIds||[]).map(id=>[id,6])),
+   stockUpdatedAt:"2026-11-06T00:00:00Z",
+   stockUnavailable:body.cns?.length===1&&body.cns[0]==="654321"};
   await new Promise(resolve=>setTimeout(resolve,550));
  }
  await route.fulfill({status:200,contentType:"application/json",
@@ -337,6 +341,25 @@ try{
          if(targets!==pharmacies.length)throw Error("Las farmacias no se transfieren al panel: "+targets);
          if(await page.locator(".drawer .target-row input").first().inputValue()!=="4")
            throw Error("El objetivo de stock editado no se transfiere al formulario lateral");
+         await page.locator(".drawer-top button[aria-label=Cerrar]").click();
+         // Al faltar stock para la selección, el objetivo es editable y
+         // "Continuar" debe seguir disponible sin mensajes técnicos.
+         await page.getByRole("button",{name:"Quitar 123456"}).click();
+         await page.locator(".fm-objectives-loading-frame .fm-loading-overlay")
+           .waitFor({state:"visible",timeout:5000});
+         await page.locator(".fm-objectives-loading-frame .fm-loading-overlay")
+           .waitFor({state:"hidden",timeout:12000});
+         if(await stockGoal.inputValue()!=="0")
+           throw Error("Sin stock, el objetivo manual debe partir de 0");
+         if(await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).isDisabled())
+           throw Error("El modo stock sin datos no debe bloquear la campaña");
+         if(await page.getByText(/El objetivo se rellena con las existencias|Datos sincronizados desde Farmatic|stock de Farmatic no está disponible/i).count())
+           throw Error("El modo stock sigue mostrando explicaciones que deben eliminarse");
+         await stockGoal.fill("3");
+         await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).click();
+         await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
+         if(await page.locator(".drawer .target-row input").first().inputValue()!=="3")
+           throw Error("El objetivo manual sin stock no llega al formulario de campaña");
          await page.locator(".drawer-top button[aria-label=Cerrar]").click();
          await searchInput.fill("Paginacion");
          await page.locator(".fm-objectives-results .fm-objectives-product").first()

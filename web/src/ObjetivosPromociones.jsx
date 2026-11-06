@@ -146,6 +146,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const stockUnits=id=>Object.prototype.hasOwnProperty.call(stock,id)?Number(stock[id]):null;
  const stockPartial=id=>stockPartialIds.includes(String(id));
  const partialStockCount=selectedPharmacies.filter(stockPartial).length;
+ const missingStockCount=selectedPharmacies.filter(id=>stockUnits(id)===null).length;
  const proposal=id=>baseline==="stock"?Math.max(0,Math.round(stockPartial(id)?0:(stockUnits(id)??0))):
   simulatorTarget(units(id,chosen.id),rate(id));
  const target=id=>manualTargets[id]===undefined?proposal(id):manualTargets[id];
@@ -362,12 +363,14 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    </div>
    </LoadingFrame>
    {historyError&&<p role="alert" className="fm-objectives-warning">{historyError}</p>}
-   {!historyBusy&&!historyError&&selectedCNs.length>0&&partialStockCount>0&&
+   {!historyBusy&&!historyError&&selectedCNs.length>0&&(partialStockCount>0||missingStockCount>0)&&
     <p role="status" className="fm-objectives-stock-note">
-     Stock parcial en {partialStockCount} {partialStockCount===1?"farmacia":"farmacias"}:
-     se muestran únicamente las unidades confirmadas en Farmatic.
-     {stockUnavailable?" Una o más consultas de stock no se han completado.":""}
-     {" "}Los objetivos basados en stock incompleto se rellenan manualmente.
+     {partialStockCount>0?<>Stock parcial en {partialStockCount} {partialStockCount===1?"farmacia":"farmacias"}.
+     Solo se muestran las unidades confirmadas en Farmatic. </>:null}
+     {missingStockCount>0?<>Sin stock verificable para {missingStockCount} {missingStockCount===1?"farmacia":"farmacias"}.
+     El guion no significa cero unidades. </>:null}
+     {stockUnavailable?"Una o más consultas de stock no se han completado. ":""}
+     Los objetivos basados en stock incompleto se rellenan manualmente.
     </p>}
 
   </section>

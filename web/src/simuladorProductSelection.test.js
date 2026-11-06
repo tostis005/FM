@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection} from "./simuladorProductSelection.js";
+import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,promotionProductLabel,UNKNOWN_PRODUCT_NAME} from "./simuladorProductSelection.js";
 
 test("pegar CN permite líneas, comas y espacios, mantiene ceros iniciales y evita duplicados",()=>{
  const list=parsePromotionCNs("194700\n168770,194700; 000123 \n");
@@ -29,4 +29,16 @@ test("los CN pegados se seleccionan aunque no exista ficha local y no ocultan un
  assert.equal(list[0].description,"Producto identificado");
  list=mergePromotionSelection(list,[{cn:null,description:"Sin CN"}]);
  assert.equal(list.length,2);
+});
+
+test("al pegar un CN mostrar CN - nombre real o indicar que no se conoce, nunca CN introducido",()=>{
+ const raw=mergePromotionSelection([],[{cn:"194700",description:"CN introducido"},
+  {cn:"168770",description:"Nombre no disponible"}]);
+ assert.equal(raw[0].description,UNKNOWN_PRODUCT_NAME);
+ assert.equal(promotionProductLabel(raw[0]),"194700 - Nombre no disponible");
+ const named=mergePromotionSelection(raw,[{cn:"194700",description:"Champú Eucerin 250 ml"}]);
+ assert.equal(promotionProductLabel(named[0]),"194700 - Champú Eucerin 250 ml");
+ assert.equal(promotionProductLabel(named[1]),"168770 - Nombre no disponible");
+ assert.equal(mergePromotionSelection(named,[{cn:"194700",description:null}])[0].description,
+  "Champú Eucerin 250 ml");
 });

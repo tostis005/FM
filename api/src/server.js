@@ -3,6 +3,7 @@ import helmet from "helmet";
 import pg from "pg";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { readFile } from "node:fs/promises";
+import {needsStartupMigrations} from "./startupDatabase.js";
 import { setupAccess } from "./accesos.js";
 import { setupTenant } from "./tenant.js";
 import {setupLaboratoryRetirements} from "./laboratoryRetirements.js";
@@ -518,6 +519,7 @@ app.use((err, req, res, next) => {
 });
 
 try {
+  if(await needsStartupMigrations(pool)){
   const migration = await readFile(new URL("./migrations/001_farmacias.sql", import.meta.url), "utf8");
   await pool.query(migration);
   const accessMigration = await readFile(new URL("./migrations/002_accesos.sql", import.meta.url), "utf8");
@@ -574,6 +576,9 @@ try {
   // Migración aditiva: respeta automáticamente 24h en los enlaces antiguos.
   const shareLinkDurationMigration=await readFile(new URL("./migrations/025_ai_share_link_duration.sql",import.meta.url),"utf8");
   await pool.query(shareLinkDurationMigration);
+  } else {
+    console.info("Base de datos inicializada: omitiendo DDL histórico al arrancar la API.");
+  }
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

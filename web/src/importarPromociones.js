@@ -222,7 +222,15 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
   const groups=cnListGroups(cnRows);
   const campaigns=[];
   const assignedByGroup=new Map();
-  for(const {row,rowNumber} of summaryRowsUntilBlank(summaryRows,options)){
+  const summary=summaryRowsUntilBlank(summaryRows,options);
+  // En los Excel nuevos, una marca genérica ("VARIOS") no debe consumir
+  // los CN de una promoción específica situada más abajo en el resumen.
+  const reserved=options.preferSpecific?new Set(groups.flatMap((group,index)=>
+    summary.some(({row})=>
+      normalizedLab(row[0],row[1])===normalizedLab(group.lab,group.gama)&&
+      brandScore(row[1],group.gama)>=90&&offerScore(row[2],group.offer)>=0)
+      ?[index]:[])):new Set();
+  for(const {row,rowNumber} of summary){
     const [lab,brand,offer,from,to,description]=row;
     // Sin año en el archivo, los Excel mensuales pueden cruzar diciembre/enero.
      // Resolver respecto al mes de importación, nunca mezclando campañas de otros años.
@@ -240,7 +248,9 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
      }
     const candidates=groups.map((group,index)=>{
       const result=matchingCNs(row,group);
-      return result?{index,group,...result}:null;
+      if(!result)return null;
+      if(options.preferSpecific&&reserved.has(index)&&brandScore(brand,group.gama)<90)return null;
+      return {index,group,...result};
     }).filter(Boolean).sort((a,b)=>b.score-a.score);
     // Agrupar subgamas de una misma marca únicamente cuando su puntuación
     // coincide y no tienen ofertas diferentes: p.ej. dos ramas PHYTO.
@@ -262,6 +272,7 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
       const alternatives=groups.map((group,index)=>({
         index,entries:group.entries,score:brandScore(brand,group.gama)
       })).filter(candidate=>candidate.score>=50&&
+        (!options.preferSpecific||!reserved.has(candidate.index)||candidate.score>=90)&&
         candidate.entries.some(e=>!assignedByGroup.get(candidate.index)?.has(e.cn)))
         .sort((a,b)=>b.score-a.score);
       const bestBrand=alternatives[0]?.score??-Infinity;
@@ -301,7 +312,8 @@ export async function readPromotionExcel(file){
     throw Error("Excel no compatible: se necesitan una hoja RESUMEN (o RESUMEN PROMOS) y una hoja de CNs (LISTADO CN PROMOCIONES o CNs INCLUIDOS)");
   const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):new Date().getFullYear();
   let promos=importCampaignRows(summary[1],cnList[1],year,match?null:new Date(),
-    {allowBlankSeparators:key(summary[0])===key("RESUMEN PROMOS")})
+    {allowBlankSeparators:key(summary[0])===key("RESUMEN PROMOS"),
+     preferSpecific:key(summary[0])===key("RESUMEN PROMOS")})
     .map(p=>({...p,source:"Excel: "+file.name,sourceSheet:summary[0]}));
   if(sheets["OBJETIVOS OCTUBRE 2026"]) {
     promos=applyObjectiveRows(promos,sheets["OBJETIVOS OCTUBRE 2026"],year).promotions;

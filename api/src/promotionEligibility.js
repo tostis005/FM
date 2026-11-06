@@ -13,6 +13,9 @@ const giftBundle=promo=>{
  return Number(match[1])+Number(match[2]);
 };
 export function promotionBundle(promo={}) {
+ // Hasta agotar existencias: contabilizar cada unidad vendida, sin exigir
+ // lotes ni una oferta comercial para medir las salidas de stock.
+ if(promo.durationMode==="stock")return 1;
  const pct=finite(promo.discountPercent),amount=finite(promo.discountAmount);
  switch(promo.type){
   case "dos_por_uno": return 2;

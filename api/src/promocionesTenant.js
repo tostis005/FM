@@ -25,7 +25,7 @@ function visiblePromos(rows,req){
 }
 const validId=id=>typeof id==="string"&&id.length>0&&id.length<=120;
 
-function cleanDocument(raw,id,pharmacyIds) {
+export function cleanDocument(raw,id,pharmacyIds) {
   if(!raw || typeof raw!=="object" || Array.isArray(raw) || !validId(id) ||
     raw.id!==id || typeof raw.name!=="string" || !raw.name.trim() ||
     raw.name.length>250 || !Array.isArray(raw.cns) || raw.cns.length>10000 ||

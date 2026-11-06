@@ -284,14 +284,19 @@ export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,refere
   }
   return campaigns;
 }
+export function promotionInputSheets(sheets){
+  const sheetByAlias=aliases=>Object.entries(sheets||{}).find(([name])=>
+    aliases.some(alias=>key(name)===key(alias)));
+  return {
+    summary:sheetByAlias(["RESUMEN","RESUMEN PROMOS"]),
+    cnList:sheetByAlias(["LISTADO CN PROMOCIONES","CNs INCLUIDOS"])
+  };
+}
 export async function readPromotionExcel(file){
   if(!file||file.size>15*1024*1024)throw Error("El fichero es demasiado grande (máximo 15 MB)");
   if(!/\.xlsx$/i.test(file.name))throw Error("Selecciona un Excel .xlsx");
   const sheets=await sheetsFromExcel(await file.arrayBuffer());
-  const sheetByAlias=aliases=>Object.entries(sheets).find(([name])=>
-    aliases.some(alias=>key(name)===key(alias)));
-  const summary=sheetByAlias(["RESUMEN","RESUMEN PROMOS"]);
-  const cnList=sheetByAlias(["LISTADO CN PROMOCIONES","CNs INCLUIDOS"]);
+  const {summary,cnList}=promotionInputSheets(sheets);
   if(!summary||!cnList)
     throw Error("Excel no compatible: se necesitan una hoja RESUMEN (o RESUMEN PROMOS) y una hoja de CNs (LISTADO CN PROMOCIONES o CNs INCLUIDOS)");
   const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):new Date().getFullYear();

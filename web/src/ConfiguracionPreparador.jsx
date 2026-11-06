@@ -36,7 +36,7 @@ export default function ConfiguracionPreparador({clientSlug}){
    const result=await request(clientSlug,"/api/tenant/pedidos/exclusiones",{
     method:"POST",body:JSON.stringify({text:newRule})});
    setRules(prev=>[...prev.filter(x=>x.id!==result.id),result].sort((a,b)=>a.text.localeCompare(b.text,"es")));
-   setNewRule("");setNotice("La regla de baja se aplicará al abrir el preparador.");
+   setNewRule("");setNotice("La regla marcará los artículos como no pedibles al abrir el preparador.");
   }catch(e){setError(e.message)}finally{setSaving(false)}
  }
  async function remove(id){
@@ -53,7 +53,7 @@ export default function ConfiguracionPreparador({clientSlug}){
   </section>
   <section className="card fm-price-settings">
    <h2>Artículos excluidos de nuevos pedidos</h2>
-   <p>Se excluyen automáticamente los nombres que empiezan por ZZZ, *BAJA, **BAJA o variantes con espacios. Las reglas personalizadas son texto literal, incluidos los asteriscos: *BAJA* solo coincide si aparecen los dos asteriscos en el nombre, sin distinguir mayúsculas. No se borran productos, ventas ni recepciones.</p>
+   <p>Se marcan automáticamente como no pedibles los nombres que empiezan por ZZZ, *BAJA, **BAJA o variantes con espacios. Las reglas personalizadas son texto literal, incluidos los asteriscos: *BAJA* solo coincide si aparecen los dos asteriscos en el nombre, sin distinguir mayúsculas. Los productos siguen visibles en el preparador con fondo rojo suave, mostrando ventas y stock, pero no permiten pedir unidades. No se borran productos, ventas ni recepciones.</p>
    <p><strong>Prefijos automáticos:</strong> {automatic.join(", ")}</p>
    <form onSubmit={add}>
     <div className="fm-price-settings-grid">

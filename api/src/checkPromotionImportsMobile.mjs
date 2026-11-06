@@ -15,7 +15,7 @@ try{
  const {rows}=await pool.query({text:
   'SELECT count(*)::int AS campaigns,'+
   ' count(DISTINCT documento->>\'importBatchId\')::int AS batches,'+
-  ' count(*) FILTER (WHERE coalesce(jsonb_object_length(documento->\'targets\'),0)=0)::int AS drafts_without_pharmacies,'+
+  ' count(*) FILTER (WHERE coalesce(documento->\'targets\',\'{}\'::jsonb)=\'{}\'::jsonb)::int AS drafts_without_pharmacies,'+
   ' count(*) FILTER (WHERE actualizado_en>=now()-interval \'24 hours\')::int AS imported_last_24h'+
   ' FROM "'+schema+'".fm_promociones WHERE documento->>\'source\' ILIKE $1',
   values:["Excel: NOVIEMBRE 2026 PROMOCIONES FARMACIA ABADIA Y PB%"],query_timeout:8000});

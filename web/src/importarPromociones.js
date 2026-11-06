@@ -118,7 +118,7 @@ function createCampaign(laboratory,range,offer,start,end,description,cns,source,
     description:clean(description||offer),originalOffer:clean(offer),
     start,end,endRaw:!end?clean(endRaw):"",durationMode:end?"dates":/agot|existencias|stock/i.test(clean(endRaw))?"stock":"dates",status:"Borrador",cns:[...new Set(cns)].filter(isValidCN),cnDescriptions,
     targets:{},sales:{},...classification,
-    source:"Excel octubre 2026",sourceSheet:source,
+    source:"Excel",sourceSheet:source,
   };
   promo.fingerprint=makeFingerprint(promo);
   promo.id=makeId(promo.fingerprint);
@@ -131,13 +131,18 @@ function createCampaign(laboratory,range,offer,start,end,description,cns,source,
 }
 // RESUMEN es la única fuente de campañas. LISTADO CN PROMOCIONES es un
 // catálogo auxiliar que NUNCA puede crear una campaña nueva.
-function summaryRowsUntilBlank(rows){
+function summaryRowsUntilBlank(rows,{allowBlankSeparators=false}={}){
   const result=[];
   for(let i=1;i<(rows||[]).length;i++){
     const r=rows[i]||[];
-    // La primera fila con las columnas principales vacías termina la tabla:
-    // todo lo posterior, incluido "NO HACER ESTAS PROMOCIONES", es ajeno.
-    if(!clean(r[0])&&!clean(r[1])&&!clean(r[2]))break;
+    // Los Excel antiguos usan la primera fila vacía para separar un bloque
+    // "NO HACER"; los nuevos pueden tener separadores entre promociones.
+    // Nunca importar el bloque explícito de promociones excluidas.
+    if(/^NO\s+(?:HACER|IMPORTAR)\b/i.test(clean(r[0])))break;
+    if(!clean(r[0])&&!clean(r[1])&&!clean(r[2])){
+      if(allowBlankSeparators)continue;
+      break;
+    }
     if(typeof r[0]!=="string"||!clean(r[0])||!clean(r[1])||!clean(r[2]))continue;
     result.push({row:r,rowNumber:i+1});
   }
@@ -213,11 +218,11 @@ function matchingCNs(row,group){
   // Premiar coincidencias explícitas y no mezclar gamas parcialmente relacionadas.
   return {score:score+offerWeight,entries};
 }
-export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,referenceDate=null){
+export function importCampaignRows(summaryRows,cnRows,year=PROMOTION_YEAR,referenceDate=null,options={}){
   const groups=cnListGroups(cnRows);
   const campaigns=[];
   const assignedByGroup=new Map();
-  for(const {row,rowNumber} of summaryRowsUntilBlank(summaryRows)){
+  for(const {row,rowNumber} of summaryRowsUntilBlank(summaryRows,options)){
     const [lab,brand,offer,from,to,description]=row;
     // Sin año en el archivo, los Excel mensuales pueden cruzar diciembre/enero.
      // Resolver respecto al mes de importación, nunca mezclando campañas de otros años.
@@ -283,10 +288,16 @@ export async function readPromotionExcel(file){
   if(!file||file.size>15*1024*1024)throw Error("El fichero es demasiado grande (máximo 15 MB)");
   if(!/\.xlsx$/i.test(file.name))throw Error("Selecciona un Excel .xlsx");
   const sheets=await sheetsFromExcel(await file.arrayBuffer());
-  if(!sheets["RESUMEN"] || !sheets["LISTADO CN PROMOCIONES"])
-    throw Error("Excel no compatible: se necesitan las hojas RESUMEN y LISTADO CN PROMOCIONES");
+  const sheetByAlias=aliases=>Object.entries(sheets).find(([name])=>
+    aliases.some(alias=>key(name)===key(alias)));
+  const summary=sheetByAlias(["RESUMEN","RESUMEN PROMOS"]);
+  const cnList=sheetByAlias(["LISTADO CN PROMOCIONES","CNs INCLUIDOS"]);
+  if(!summary||!cnList)
+    throw Error("Excel no compatible: se necesitan una hoja RESUMEN (o RESUMEN PROMOS) y una hoja de CNs (LISTADO CN PROMOCIONES o CNs INCLUIDOS)");
   const match=file.name.match(/20\d{2}/),year=match?Number(match[0]):new Date().getFullYear();
-  let promos=importCampaignRows(sheets["RESUMEN"],sheets["LISTADO CN PROMOCIONES"],year,match?null:new Date()).map(p=>({...p,source:"Excel: "+file.name}));
+  let promos=importCampaignRows(summary[1],cnList[1],year,match?null:new Date(),
+    {allowBlankSeparators:key(summary[0])===key("RESUMEN PROMOS")})
+    .map(p=>({...p,source:"Excel: "+file.name,sourceSheet:summary[0]}));
   if(sheets["OBJETIVOS OCTUBRE 2026"]) {
     promos=applyObjectiveRows(promos,sheets["OBJETIVOS OCTUBRE 2026"],year).promotions;
   }

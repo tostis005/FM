@@ -30,7 +30,7 @@ test("no activa campaña futura; respeta las campañas manuales y cerradas",()=>
 });
 test("rechaza objetivos no válidos y no reemplaza campañas fuera de ámbito",()=>{
  assert.throws(()=>mergeObjectivesIntoPromotion(raw,{cns:[],targets:{"1":2}}),/CN/);
- assert.throws(()=>mergeObjectivesIntoPromotion(raw,{cns:raw.cns,targets:{"1":""}}),/objetivo positivo/);
+ assert.throws(()=>mergeObjectivesIntoPromotion(raw,{cns:raw.cns,targets:{"1":""}}),/unidades enteras/);
  assert.throws(()=>mergeObjectivesIntoPromotion(raw,{cns:raw.cns,targets:{"1":2.5}}),/enteras/);
  assert.equal(objectivePromotionIsEditable(raw),true);
  assert.equal(objectivePromotionIsEditable({...raw,managerCanEdit:false}),false);

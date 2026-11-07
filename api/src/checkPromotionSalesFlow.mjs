@@ -47,15 +47,23 @@ try{
   text:"SELECT documento FROM \""+schema+"\".fm_promociones"+
    " WHERE jsonb_typeof(documento->'cns')='array'"+
    " AND jsonb_array_length(documento->'cns')>0"+
-   " ORDER BY (CASE WHEN jsonb_typeof(documento->'targets')='object'"+
-   " AND documento->'targets'<>'{}'::jsonb THEN 0 ELSE 1 END),"+
-   " actualizado_en DESC LIMIT 9",query_timeout:10000});
+   " ORDER BY CASE WHEN jsonb_array_length(documento->'cns')=267 THEN 0"+
+   " WHEN (documento->>'start')<=$1::text"+
+   " AND documento->'targets'<>'{}'::jsonb THEN 1 ELSE 2 END,"+
+   " actualizado_en DESC LIMIT 12",
+  values:[today],query_timeout:10000});
  stats.candidates=source.map(r=>({cnCount:(r.documento.cns||[]).length,
   targets:Object.keys(r.documento.targets||{}).length,
   status:r.documento.status||"?"}));
- const priority=source.filter(r=>Object.keys(r.documento.targets||{}).length);
- const unassigned=source.find(r=>!Object.keys(r.documento.targets||{}).length);
- const picked=[...priority.slice(0,2),...(unassigned?[unassigned]:[])].slice(0,3);
+ const target267=source.find(r=>(r.documento.cns||[]).length===267);
+ const priority=source.filter(r=>Object.keys(r.documento.targets||{}).length&&
+  r.documento.start<=today&&r!==target267);
+ const unassigned=source.find(r=>r!==target267&&
+  !Object.keys(r.documento.targets||{}).length&&r.documento.start<=today);
+ const picked=[...(target267?[target267]:[]),...priority.slice(0,1),
+  ...(unassigned?[unassigned]:[])].slice(0,3);
+ stats.hasExact267=Boolean(target267);
+ stats.futureDatedCandidates=source.filter(r=>r.documento.start>today).length;
  if(!picked.length)throw Error("No hay promociones para comparar");
  const ctx={client:{slug:"ampedia",schema},allowedPharmacyIds:ids};
  for(const [index,row] of picked.entries()){
@@ -80,6 +88,7 @@ try{
   stats.rows.push(summary);stats.checked++;
   if(summary.matched)stats.matching++;else stats.unmatched++;
  }
+ if(!stats.checked)throw Error("No hay períodos pasados aptos para contrastar");
  console.log("PROMOTION_SALES_FLOW_AUDIT",JSON.stringify(stats));
  if(stats.unmatched)process.exitCode=2;
 }catch(error){

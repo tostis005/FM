@@ -69,19 +69,31 @@ try{
  for(const [index,row] of picked.entries()){
   const p=row.documento,cns=[...new Set((p.cns||[]).map(String).filter(c=>/^\d{6}$/.test(c)))];
   if(!iso(p.start)||!cns.length){stats.rows.push({index,error:"Inicio/CN inválidos"});continue;}
-  let end=iso(p.closedOn)?p.closedOn:iso(p.end)?p.end:today;
+  let from=p.start,end=iso(p.closedOn)?p.closedOn:iso(p.end)?p.end:today;
   if(end>today)end=today;
-  if(end<p.start){stats.rows.push({index,error:"Fecha futura"});continue;}
-  const first=Date.parse(p.start+"T00:00:00Z"),last=Date.parse(end+"T00:00:00Z");
+  let historicalProbe=false;
+  if(end<from){
+   if(cns.length!==267){stats.rows.push({index,error:"Fecha futura"});continue;}
+   // Una campaña futura tendrá cero ventas propias. Contrastar con el
+   // mes anterior (en el que se conocen ventas de estos 267 CN) verifica
+   // que seguimiento e histórico utilizan las mismas referencias reales.
+   const y=Number(today.slice(0,4)),m=Number(today.slice(5,7));
+   const lastPrevious=new Date(Date.UTC(y,m-1,0)).toISOString().slice(0,10);
+   from=lastPrevious.slice(0,7)+"-01";
+   end=lastPrevious;
+   historicalProbe=true;
+  }
+  const first=Date.parse(from+"T00:00:00Z"),last=Date.parse(end+"T00:00:00Z");
   if((last-first)/86400000>366){stats.rows.push({index,error:"Duración mayor de un año"});continue;}
-  const {sales,totalSales}=await calculatePromotionTracking(pool,ctx,[{...p,cns,end}]);
-  const actual=await historical(ctx,cns,ids,p.start,end);
+  const {sales,totalSales}=await calculatePromotionTracking(pool,ctx,[{...p,cns,start:from,end}]);
+  const actual=await historical(ctx,cns,ids,from,end);
   const tracked=totalSales[p.id]||{},attributed=sales[p.id]||{};
   const mismatched=ids.filter(id=>Math.abs(Number(tracked[id]||0)-Number(actual[id]||0))>0.001);
   const summary={index,cnCount:cns.length,status:p.status,
    sourceMode:p.statusSource||"legacy",
    targetPharmacies:Object.keys(p.targets||{}).length,
-   start:p.start,end,
+   start:from,end,historicalProbe,
+   campaignStartIsFuture:historicalProbe,
    trackingTotalUnits:sum(tracked),historicalTotalUnits:sum(actual),
    attributedUnits:sum(attributed),pharmacyMismatches:mismatched.length,
    matched:mismatched.length===0};

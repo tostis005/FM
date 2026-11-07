@@ -902,7 +902,7 @@ function App(){
     setImportFeedback({kind:"progress",message:"Guardando promociones…"});
     const result=await importStoredPromotions(newPromos);
     const source="Excel: "+file.name;
-    const summary=importResultSummary(result,campaigns,source);
+    const summary=importResultSummary(result,newPromos,source);
     setData(prev=>({...prev,promos:result.promotions}));
     setReportSelectedIds(prev=>[...new Set([...prev,...result.promotions.map(p=>p.id)])]);
     // Las campañas importadas sin objetivos son borradores; el filtro Activa

@@ -68,7 +68,7 @@ jobs:
           node --check api/src/promotionCatalogSearch.js
           node --check api/src/checkPromotionSearch.mjs
           node --check api/src/promocionesArticulos.js
-          node --test api/src/promocionesObjetivos.test.js api/src/promocionesArticulos.test.js api/src/promotionCatalogSearch.test.js
+          node --test api/src/promocionesObjetivos.test.js api/src/promocionesArticulos.test.js api/src/promotionCatalogSearch.test.js api/src/promotionTrackingSales.test.js
           node --test api/src/promocionesTenant.test.js
           node --test api/src/promocionesReplace.test.js
           node --test api/src/promotionEligibility.test.js
@@ -112,7 +112,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
-          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js
+          node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/laboratoryExport.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js src/promotionSalesVisibility.test.js
           node --test src/businessAnalytics.test.js
           node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js src/promotionMonthFilter.test.js src/simuladorLogic.test.js src/simuladorProductSelection.test.js
           node --test src/salesPeriods.test.js

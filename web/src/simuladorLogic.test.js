@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {simulatorPeriods,validSimulatorPeriod,simulatorTarget} from "./simuladorLogic.js";
+import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarget} from "./simuladorLogic.js";
 
 test("cuatro períodos y ningún trimestre; seleccionable el rango libre",()=>{
  const periods=simulatorPeriods("2026-11-05","2026-10-12","2026-11-02");
@@ -30,4 +30,15 @@ test("objetivos redondeados y porcentajes 5, 8, 10, 12 y 14",()=>{
  assert.equal(simulatorTarget(3,5),4);
  assert.equal(simulatorTarget(0,14),0);
  assert.equal(simulatorTarget(-2,10),0);
+});
+
+test("700 CN: al escoger stock se copia exactamente su suma, sin forzar cero por CN nulos",()=>{
+ const byPharmacy={"1":147,"2":32,"3":0,"4":875,"5":28};
+ const goals=Object.fromEntries(Object.entries(byPharmacy)
+  .map(([id,units])=>[id,simulatorStockTarget(units)]));
+ assert.deepEqual(goals,byPharmacy);
+ assert.equal(simulatorStockTarget(null),0);
+ assert.equal(simulatorStockTarget(undefined),0);
+ assert.equal(simulatorStockTarget(-4),0);
+ assert.equal(simulatorStockTarget("52"),52);
 });

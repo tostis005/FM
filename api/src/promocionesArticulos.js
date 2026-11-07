@@ -12,16 +12,30 @@ export async function resolvePromotionArticleKeys(pool,context,requestedCNs){
  if(!cns.length||!ids.length)return [];
  const schema='"'+client.schema+'"';
  const {rows:meta}=await pool.query(
-  "SELECT to_regclass($1::text) IS NOT NULL AS present",
-  [client.schema+".articulos"]);
+  "SELECT to_regclass($1::text) IS NOT NULL AS present, "+
+  "EXISTS(SELECT 1 FROM information_schema.columns WHERE "+
+  "table_schema=$2 AND table_name='articulos' AND column_name='cn_normalizado') AS has_normal",
+  [client.schema+".articulos",client.schema]);
  if(!meta[0]?.present)return [];
+ const normal=meta[0]?.has_normal===true?
+  "left(btrim(a.cn_normalizado::text),6)":"NULL::text";
+ // Reutilizar EXACTAMENTE la identificación del histórico por farmacia:
+ // origen_id (CN Farmatic), seis primeras cifras de codigo_nacional y
+ // cn_normalizado cuando existe. Antes solo se miraba codigo_nacional exacto
+ // y el seguimiento podía devolver cero mientras el planificador tenía ventas.
+ const code="left(btrim(a.codigo_nacional::text),6)";
+ const match="(btrim(a.origen_id::text)=ANY($3::text[]) OR "+
+  code+"=ANY($3::text[])"+
+  (meta[0]?.has_normal===true?" OR "+normal+"=ANY($3::text[])":"")+")";
  const {rows}=await pool.query(`
   SELECT DISTINCT f.id::text AS pharmacy_id,
-    btrim(a.codigo_nacional::text) AS cn,
-    btrim(a.origen_id::text) AS source_id
+    code.cn AS cn,btrim(a.origen_id::text) AS source_id
   FROM ${schema}.articulos a JOIN farmetrica.farmacias f
     ON f.cliente_slug=$1 AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
-  WHERE f.id=ANY($2::int[]) AND btrim(a.codigo_nacional::text)=ANY($3::text[])
+  CROSS JOIN LATERAL (VALUES (btrim(a.origen_id::text)),
+    (${code}),(${normal})) AS code(cn)
+  WHERE f.id=ANY($2::int[]) AND ${match}
+    AND code.cn=ANY($3::text[])
     AND nullif(btrim(a.origen_id::text),'') IS NOT NULL
  `,[client.slug,ids,cns]);
  return rows.map(r=>({cn:String(r.cn),key:String(r.pharmacy_id)+"|"+String(r.source_id)}));

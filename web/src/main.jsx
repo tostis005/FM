@@ -780,8 +780,11 @@ function App(){
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
    const requiresPct=promoType?.needsPercent;
   if(promoForm.status==="Activa" && !selections.length)return rejectPromo("Selecciona farmacias y completa sus objetivos antes de activar");
-  if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
-     return rejectPromo("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
+  if(promoForm.status==="Activa"&&selections.some(([,v])=>
+    v===""||!Number.isSafeInteger(Number(v))||Number(v)<0))
+    return rejectPromo("Para activar, indica objetivos enteros no negativos por farmacia.");
+  if(promoForm.status==="Activa"&&!selections.some(([,v])=>Number(v)>0))
+    return rejectPromo("Para activar, necesitas al menos un objetivo mayor que cero. Las farmacias sin ventas pueden tener objetivo cero.");
   if(needsRetroactiveValidation&&promoForm.type==="sin_clasificar")
     return rejectPromo("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
   if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")

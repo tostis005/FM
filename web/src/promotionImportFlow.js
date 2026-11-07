@@ -23,7 +23,9 @@ const rowIdentity=p=>[
 ].map(normalized).join("|");
 
 export function importedPromotionMatches(result,campaigns,source){
- const rows=(result?.promotions||[]).filter(p=>p.source===source);
+ const batchId=campaigns.find(p=>p.importBatchId)?.importBatchId;
+ const rows=(result?.promotions||[]).filter(p=>p.source===source||
+  (batchId&&p.importBatchId===batchId));
  const exact=new Map();
  for(const p of rows){
   const key=rowIdentity(p);

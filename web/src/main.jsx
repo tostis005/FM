@@ -390,6 +390,7 @@ function App(){
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
   const [importFeedback,setImportFeedback]=useState(null);
+ const [importViewIds,setImportViewIds]=useState(null);
   const [labExportBusy,setLabExportBusy]=useState(false);
   const [labIncludeSeller,setLabIncludeSeller]=useState(false);
   const [toast,setToast]=useState("");
@@ -555,18 +556,22 @@ function App(){
      return range.valid&&range.from===from&&range.to===to;
    })?.[0]||"";
  function selectPromotionMonth(month){
+   setImportViewIds(null);
    const range=promotionMonthRange(month);
    if(!range)return;
    setFrom(range.from);setTo(range.to);setSelectedPromotionIds([]);
  }
  function selectPromotionQuickPeriod(key){
+   setImportViewIds(null);
    if(key==="this_month"){selectPromotionMonth(currentPromotionMonth(new Date(),reportTimeZone));return;}
    const range=resolveSalesPeriod(key,new Date(),{},reportTimeZone);
    if(!range.valid)return;
    setFrom(range.from);setTo(range.to);setSelectedPromotionIds([]);
  }
  const filterText=search.toLocaleLowerCase("es");
-  const filteredPromos=promos.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
+ const importedIdSet=importViewIds?new Set(importViewIds.map(String)):null;
+ const filteredPromos=promos.filter(p=>importedIdSet?importedIdSet.has(String(p.id)):
+  (p.name+" "+p.subtitle+" "+p.cns.join(" ")).toLocaleLowerCase("es").includes(filterText)
   &&(statusFilter==="Todos"||p.status===statusFilter)
   &&promotionOverlapsPeriod(p,from,to)
   &&(promotionVisibleInPharmacyScope(p,sharedPharmacyIds)||
@@ -904,8 +909,8 @@ function App(){
     // y la selección de farmacias solían ocultarlas aunque el servidor las
     // hubiera guardado. Mostrar las del fichero sin depender de esos filtros.
     setSearch("");setStatusFilter("Todos");
-    const currentMonth=promotionMonthRange(currentPromotionMonth(new Date(),timeZone));
-    if(currentMonth){setFrom(currentMonth.from);setTo(currentMonth.to);}
+    setImportViewIds(summary.visibleIds);
+    setFrom("");setTo("");
     setImportFeedback({kind:"success",
       message:summary.imported?
        summary.imported+" "+(summary.imported===1?"promoción importada":"promociones importadas"):
@@ -1190,12 +1195,12 @@ function App(){
       aria-label="Cerrar aviso de importación"><X size={16}/></button>}
    </div>}
  <ReportFilterBar showPeriod={false} pharmacies={pharmacies} pharmacyIds={sharedPharmacyIds}
-  onPharmacyChange={selectSharedPharmacies}
+  onPharmacyChange={ids=>{setImportViewIds(null);selectSharedPharmacies(ids)}}
   quickPeriodKey={promotionQuickPeriod} onQuickPeriodChange={selectPromotionQuickPeriod}>
   <label className="fm-unified-filter">Buscar promoción o CN
-   <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Nombre, laboratorio o CN…"/></label>
+   <input type="search" value={search} onChange={e=>{setImportViewIds(null);setSearch(e.target.value)}} placeholder="Nombre, laboratorio o CN…"/></label>
   <label className="fm-unified-filter">Estado
-   <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+   <select value={statusFilter} onChange={e=>{setImportViewIds(null);setStatusFilter(e.target.value)}}>
     <option value="Todos">Todos los estados</option><option>Activa</option><option>Borrador</option>
     <option value="Finalizada">Archivada</option>
    </select></label>
@@ -1203,17 +1208,26 @@ function App(){
    <input type="month" value={promotionSelectedMonth} onChange={e=>selectPromotionMonth(e.target.value)}
     aria-label="Seleccionar mes y año de promociones"/></label>
   <label className="fm-unified-filter">Desde
-   <input type="date" value={from} onChange={e=>{setFrom(e.target.value);setSelectedPromotionIds([])}}/></label>
+   <input type="date" value={from} onChange={e=>{setImportViewIds(null);setFrom(e.target.value);setSelectedPromotionIds([])}}/></label>
   <label className="fm-unified-filter">Hasta
-   <input type="date" value={to} onChange={e=>{setTo(e.target.value);setSelectedPromotionIds([])}}/></label>
+   <input type="date" value={to} onChange={e=>{setImportViewIds(null);setTo(e.target.value);setSelectedPromotionIds([])}}/></label>
   <button type="button" className="fm-promotion-all-periods" aria-pressed={!from&&!to}
-   onClick={()=>{setFrom("");setTo("");setSelectedPromotionIds([])}}>Ver todos los meses</button>
+   onClick={()=>{setImportViewIds(null);setFrom("");setTo("");setSelectedPromotionIds([])}}>Ver todos los meses</button>
  </ReportFilterBar>
   {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
  <CampaignMetrics campaigns={scopedFilteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
  <section className="card list-card full-table-card">
-  <div className="section-heading"><div><h2>Listado de promociones</h2></div>
+  <div className="section-heading"><div><h2>Listado de promociones</h2>
+    {importViewIds&&<div className="fm-imported-view">
+      <span>Promociones del Excel</span>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
+       setImportViewIds(null);
+       const month=promotionMonthRange(currentPromotionMonth(new Date(),reportTimeZone));
+       if(month){setFrom(month.from);setTo(month.to);}
+       setSelectedPromotionIds([]);
+      }}>Volver al mes actual</button>
+    </div>}</div>
     <div className="fm-promotions-bulk-actions">
      {canManagePromotions&&selectedPromotionIds.length>0&&<>
       <span className="count-label">{selectedPromotionIds.length} seleccionadas</span>

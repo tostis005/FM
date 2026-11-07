@@ -40,7 +40,7 @@ import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
-import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
+import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode,promotionStatusSourceOnSave} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
 import {promotionSalesInterval,includePromotionForSales,scopePromotionSales} from "./promotionSalesVisibility.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
@@ -751,54 +751,62 @@ function App(){
  async function savePromo(e){
   e.preventDefault();
   setPromoSaveError("");
+  const rejectPromo=message=>{setPromoSaveError(message);setToast(message);};
   if(savingPromo)return;
-  if(!canManagePromotions)return setToast("No tienes permiso para modificar promociones.");
+  if(!canManagePromotions)return rejectPromo("No tienes permiso para modificar promociones.");
   if(promotionStoreStatus!=="connected")
-   return setToast("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
+   return rejectPromo("No se pueden guardar promociones sin conexión con PostgreSQL. Reintenta cargar el catálogo.");
   const retroactiveFromSimulator=Boolean(promoForm.simulatorDraft&&promoForm.status==="Finalizada");
   const needsRetroactiveValidation=Boolean(promoForm.retroactive||retroactiveFromSimulator);
   const codes=parseCNs(cnText);
-  if(!promoForm.name.trim())return setToast("Introduce el nombre de la promoción");
-  if(!codes.length&&(promoForm.status==="Activa"||needsRetroactiveValidation))return setToast("Añade al menos un CN para vincular ventas a la promoción.");
+  if(!promoForm.name.trim())return rejectPromo("Introduce el nombre de la promoción");
+  if(!codes.length&&(promoForm.status==="Activa"||needsRetroactiveValidation))return rejectPromo("Añade al menos un CN para vincular ventas a la promoción.");
    const invalid=codes.filter(cn=>!isValidCN(cn));
-   if(invalid.length)return setToast("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
-  if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return setToast("La fecha de inicio es obligatoria.");
+   if(invalid.length)return rejectPromo("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
+  if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return rejectPromo("La fecha de inicio es obligatoria.");
   const durationMode=promotionDurationMode(promoForm);
+  if(promoForm.status==="Activa"){
+   const todayMadrid=civilToday(new Date(),reportTimeZone);
+   if(promoForm.start>todayMadrid)
+    return rejectPromo("No se puede activar antes de la fecha de inicio. Mantén la campaña en borrador hasta entonces.");
+   if(durationMode==="dates"&&promoForm.end&&promoForm.end<todayMadrid)
+    return rejectPromo("La promoción ya ha terminado según sus fechas. Selecciona Archivada o revisa las fechas antes de activarla.");
+  }
    if(durationMode==="dates"&&!promoForm.end)
-    return setToast("Las campañas por fechas necesitan una fecha de fin.");
+    return rejectPromo("Las campañas por fechas necesitan una fecha de fin.");
    if(durationMode==="dates"&&promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)
-    return setToast("La fecha final debe ser posterior a la inicial");
+    return rejectPromo("La fecha final debe ser posterior a la inicial");
   const selections=Object.entries(promoForm.targets);
   const promoType=PROMOTION_TYPES.find(t=>t.id===promoForm.type);
    const requiresPct=promoType?.needsPercent;
-  if(promoForm.status==="Activa" && !selections.length)return setToast("Selecciona farmacias y completa sus objetivos antes de activar");
+  if(promoForm.status==="Activa" && !selections.length)return rejectPromo("Selecciona farmacias y completa sus objetivos antes de activar");
   if(promoForm.status==="Activa" && selections.some(([,v])=>v==="" || !Number.isInteger(Number(v)) || Number(v)<=0))
-     return setToast("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
+     return rejectPromo("Para activar, todos los objetivos por farmacia son obligatorios y deben ser mayores que cero");
   if(needsRetroactiveValidation&&promoForm.type==="sin_clasificar")
-    return setToast("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
+    return rejectPromo("Indica el tipo de promoción para atribuir las unidades históricas. Los objetivos pueden quedar vacíos.");
   if(promoForm.status==="Activa" && promoForm.type==="sin_clasificar")
-     return setToast("Clasifica el tipo de promoción antes de activarla");
+     return rejectPromo("Clasifica el tipo de promoción antes de activarla");
   if((promoForm.status==="Activa"||needsRetroactiveValidation) && requiresPct &&
     (promoForm.discountPercent==="" || !Number.isFinite(Number(promoForm.discountPercent)) || Number(promoForm.discountPercent)<=0 || Number(promoForm.discountPercent)>100))
-     return setToast("Introduce el porcentaje de descuento antes de activar");
-  if((promoForm.status==="Activa"||needsRetroactiveValidation)&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return setToast("Completa el importe del descuento en euros");
+     return rejectPromo("Introduce el porcentaje de descuento antes de activar");
+  if((promoForm.status==="Activa"||needsRetroactiveValidation)&&PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&!(Number(promoForm.discountAmount)>0))return rejectPromo("Completa el importe del descuento en euros");
    if((promoForm.status==="Activa"||needsRetroactiveValidation)&&promoForm.type==="precio_especial"&&
      (promoForm.specialPrice===""||promoForm.specialPrice==null||!(Number(promoForm.specialPrice)>=0)))
-      return setToast("Completa el precio especial por unidad");
+      return rejectPromo("Completa el precio especial por unidad");
   if(selections.some(([,v])=>v!=="" && (!Number.isInteger(Number(v)) || Number(v)<0)))
-     return setToast("Los objetivos deben ser unidades enteras no negativas");
+     return rejectPromo("Los objetivos deben ser unidades enteras no negativas");
   if(needsRetroactiveValidation){
    const todayMadrid=civilToday(new Date(),reportTimeZone);
    if(!/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.start||"")||
       !/^20\d{2}-\d{2}-\d{2}$/.test(promoForm.end||"")||
       promoForm.end>todayMadrid)
-     return setToast("La promoción retroactiva requiere fechas válidas y un período ya terminado.");
+     return rejectPromo("La promoción retroactiva requiere fechas válidas y un período ya terminado.");
    if(promoForm.status!=="Finalizada")
-     return setToast("Las promociones retroactivas se guardan como finalizadas.");
+     return rejectPromo("Las promociones retroactivas se guardan como finalizadas.");
    if(!selections.length)
-     return setToast("Selecciona al menos una farmacia para atribuir las ventas históricas.");
+     return rejectPromo("Selecciona al menos una farmacia para atribuir las ventas históricas.");
    try{promotionTicketPolicy(promoForm);}
-   catch(error){return setToast(error.message);}
+   catch(error){return rejectPromo(error.message);}
   }
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
@@ -813,17 +821,14 @@ function App(){
     if(needsRetroactiveValidation&&!result.closedOn)result.closedOn=result.end;
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
     if(manualClose){
-      if(result.closedOn&&result.closedOn<result.start)return setToast("El cierre no puede ser anterior al inicio");
+      if(result.closedOn&&result.closedOn<result.start)return rejectPromo("El cierre no puede ser anterior al inicio");
       result.closedOn=result.closedOn||today;
       result.closedAt=result.closedAt||now.toISOString();
       result.statusSource="manual";
     }else result.statusSource=original?.statusSource||"manual";
   }else{
     delete result.closedAt;delete result.closedOn;delete result.closedReason;
-    const wasAutomatic=original&&(original.statusSource==="automatic"||!original.statusSource&&String(original.source||"").startsWith("Excel"));
-    if(wasAutomatic&&(result.status===oldStatus||result.status==="Activa"&&oldStatus==="Borrador")){
-      result.statusSource="automatic";
-    }else result.statusSource="manual";
+    result.statusSource=promotionStatusSourceOnSave(original,result,now,reportTimeZone);
   }
   setSavingPromo(true);
   try{

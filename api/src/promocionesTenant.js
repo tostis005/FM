@@ -139,6 +139,17 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     const {rows:current}=await db.query(
      `SELECT id,documento FROM "${schema}".fm_promociones FOR UPDATE`);
     const {additions,skipped}=planPromotionImport(current.map(r=>r.documento),campaigns);
+    // Un gestor puede intentar subir un Excel ya cargado por otro usuario.
+    // Nunca responder «ya importadas» si su ámbito no permite recuperarlas.
+    if(skipped&&isManager(req)){
+     const accessible=visiblePromos(current,req);
+     const visiblePlan=planPromotionImport(accessible,campaigns);
+     if(visiblePlan.skipped!==skipped){
+      await db.query("ROLLBACK");
+      return res.status(409).json({error:
+       "Algunas promociones de este Excel ya existen, pero no son visibles con tus permisos. Un administrador debe revisar el catálogo."});
+     }
+    }
     for(const promo of additions)
      await db.query(`INSERT INTO "${schema}".fm_promociones
        (id,documento,fuente,creado_por,actualizado_por)

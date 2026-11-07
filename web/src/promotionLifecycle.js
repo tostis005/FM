@@ -14,39 +14,16 @@ export function promotionDurationMode(p){
  return /agot(?:ar|amiento|ad[ao]s?)|existencias|stock/i.test(String(p?.endRaw||""))?
   "stock":"dates";
 }
-function validTargets(p){
- return Object.values(p.targets||{}).some(v=>v!==""&&v!==null&&v!==undefined&&
-  Number.isSafeInteger(Number(v))&&Number(v)>0);
-}
-export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madrid"){
- if(p.closedAt||p.closedOn||p.status==="Finalizada"&&p.statusSource!=="automatic")
-  return "Finalizada";
- // Un cambio explícito Borrador -> Activa NO debe recalcularse como
- // Borrador por la política automática de campañas importadas.
- if(p.statusSource==="manual"){
-  if(p.status==="Borrador")return "Borrador";
-  if(p.status==="Activa"){
-   const today=civilToday(now,timeZone);
-   if(!DAY.test(p.start||"")||p.start>today||
-     p.end&&(!DAY.test(p.end)||p.end<p.start))return "Borrador";
-   return p.end&&p.end<today?"Finalizada":"Activa";
-  }
-  return p.status==="Pendiente de revisión"?"Activa":p.status||"Borrador";
- }
- const automaticallyManaged=p.statusSource==="automatic"||
-  (!p.statusSource&&(String(p.source||"").startsWith("Excel")||
-   ["Activa","Pendiente de revisión"].includes(p.status)));
- if(!automaticallyManaged)return p.status||"Borrador";
- if(!DAY.test(p.start||""))return "Borrador";
- const today=civilToday(now,timeZone);
- if(p.end){
-  if(!DAY.test(p.end)||p.start>p.end||!validTargets(p))return "Borrador";
-  return p.end<today?"Finalizada":p.start>today?"Borrador":"Activa";
- }
- if(p.start>today)return "Borrador";
- // Sin fin definido: sigue activa hasta su cierre real. Cumplir los
- // objetivos de venta no prueba por sí solo que el stock sea cero.
- return validTargets(p)?"Activa":"Borrador";
+// El estado es una decisión de PUBLICACIÓN, no un cálculo de vigencia.
+// - Borrador: privado de gestores y administradores autorizados.
+// - Activa: publicada y visible para las farmacias participantes incluso
+//   antes de su fecha de inicio y después de su fecha fin (hasta archivarla).
+// - Finalizada: archivada de forma explícita.
+// Las fechas solo delimitan las ventas consultadas y las reglas comerciales.
+export function effectivePromotionStatus(p,_now=new Date(),_timeZone="Europe/Madrid"){
+ if(p?.closedAt||p?.closedOn)return "Finalizada";
+ if(p?.status==="Activa"||p?.status==="Finalizada")return p.status;
+ return "Borrador";
 }
 // Límite de lectura SQL para campañas abiertas: hoy, nunca una fecha inventada.
 export function promotionReportingEnd(p,now=new Date(),timeZone="Europe/Madrid"){
@@ -57,13 +34,9 @@ export function promotionReportingEnd(p,now=new Date(),timeZone="Europe/Madrid")
  return today;
 }
 
-/** Al confirmar «Activa» desde la ficha, su estado pasa a ser manual.
- * Mantener la automatización solo si el usuario no ha cambiado el estado. */
-export function promotionStatusSourceOnSave(original,form,now=new Date(),timeZone="Europe/Madrid"){
- if(!original)return "manual";
- const oldStatus=effectivePromotionStatus(original,now,timeZone);
- if(form.status!==oldStatus)return "manual";
- return original.statusSource==="automatic"||
-  (!original.statusSource&&String(original.source||"").startsWith("Excel"))?
-  "automatic":"manual";
+/** Los cambios de publicación siempre los decide una persona.
+ * Conservar el origen anterior si solo se editan campos descriptivos. */
+export function promotionStatusSourceOnSave(original,form){
+ if(!original||form.status!==effectivePromotionStatus(original))return "manual";
+ return original.statusSource||"manual";
 }

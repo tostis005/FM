@@ -643,7 +643,9 @@ function App(){
    const p=promoId?promos.find(item=>item.id===promoId):null;
    const defaultStatus=data.promos.some(item=>item.status==="Activa")?"Activa":"Borrador";
    const status=p?p.status:defaultStatus,ids=p?[p.id]:data.promos.filter(item=>item.status===status).map(item=>item.id);
-   const month=promotionSelectedMonth;
+   // Entrar al seguimiento de una campaña concreta no debe descartarla
+   // por conservar el filtro mensual de la página anterior.
+   const month=p?"":promotionSelectedMonth;
    setReportStatus(status);setReportYear("Todos");setReportMonth(month);
    setReportSelectedIds(ids);setReportPage(0);setSelectedPharmacyIds(null);
    setExpandedCampaignIds(p?[p.id]:data.promos.filter(item=>item.status==="Activa").slice(0,2).map(item=>item.id));

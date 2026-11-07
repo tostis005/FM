@@ -69,6 +69,7 @@ jobs:
           node --check api/src/promocionesTenant.js
           node --check api/src/resetTenantPromotions.mjs
           node --check api/src/promocionesObjetivos.js
+          node --check api/src/promotionTrackingSales.js
           node --check api/src/promotionCatalogSearch.js
           node --test api/src/promocionesObjetivos.test.js api/src/promotionCatalogSearch.test.js api/src/promocionesArticulos.test.js api/src/promotionTrackingSales.test.js
           node --test api/src/promocionesTenant.test.js
@@ -372,6 +373,7 @@ jobs:
           node check-promotions-import.mjs
           node check-promotions-import-mobile.mjs
           node check-promotion-objectives-flow.mjs
+          node check-promotion-sales-activation-flow.mjs
           node check-operativa.mjs
           node check-demo-v1.mjs
           node check-pantallas-reales.mjs

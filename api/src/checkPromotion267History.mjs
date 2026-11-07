@@ -73,9 +73,11 @@ try{
  report.masterMatchedDistinctCN=matched.size;
  report.masterUnmatchedCN=codes.length-matched.size;
  report.masterMatchedPharmacyArticleKeys=internal.size;
- const today=new Intl.DateTimeFormat("en-CA",{year:"numeric",month:"2-digit",day:"2-digit",
-  timeZone:"Europe/Madrid"}).format(new Date());
- const y=Number(today.slice(0,4)),m=Number(today.slice(5,7));
+ const parts=new Intl.DateTimeFormat("en-GB",{year:"numeric",month:"2-digit",day:"2-digit",
+  timeZone:"Europe/Madrid"}).formatToParts(new Date());
+ const fields=Object.fromEntries(parts.filter(p=>p.type!=="literal").map(p=>[p.type,p.value]));
+ const today=[fields.year,fields.month,fields.day].join("-");
+ const y=Number(fields.year),m=Number(fields.month);
  const monthOf=(year,month)=>year+"-"+String(month).padStart(2,"0");
  const prevYear=m===1?y-1:y,prevMonth=m===1?12:m-1;
  const periods=[

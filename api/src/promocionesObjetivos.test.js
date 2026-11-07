@@ -248,9 +248,25 @@ test("stock parcial por un producto sin sincronizar conserva otras unidades de e
  const {response}=await api.call("/api/ventas/objetivos/historico",{
   cns:["123456","654321"],pharmacyIds:[1,2,3],periods},[1,2,3]);
  assert.deepEqual(response.stock,{"1":18,"2":5});
- assert.deepEqual(response.stockMissingPharmacyIds,["1","3"]);
+ assert.deepEqual(response.stockMissingPharmacyIds,["3"]);
  assert.equal(response.stockUnavailable,false);
  const sql=api.queries.find(q=>q.sql.includes("WITH latest AS")).sql;
  assert.match(sql,/sum\(stock\)::float8 AS units/);
+ assert.match(sql,/count\(stock\)::int AS known_items/);
  assert.doesNotMatch(sql,/coalesce\(sum\(stock\),0\)/);
+});
+
+test("un solo CN sin stock no vuelve a marcar como parcial una farmacia con 699 stocks válidos",async()=>{
+ const api=fixture({stockRows:[
+  {pharmacy_id:"1",units:479,known_items:699,matched_items:700,
+   updated_at:"2026-11-07T08:00:00Z"},
+  {pharmacy_id:"2",units:310,known_items:700,matched_items:700,
+   updated_at:"2026-11-07T08:00:00Z"}
+ ]});
+ const cns=Array.from({length:700},(_,i)=>String(i).padStart(6,"0"));
+ const {response}=await api.call("/api/ventas/objetivos/historico",{
+  cns,pharmacyIds:[1,2],periods});
+ assert.deepEqual(response.stock,{"1":479,"2":310});
+ assert.deepEqual(response.stockMissingPharmacyIds,[]);
+ assert.equal(response.stockUnavailable,false);
 });

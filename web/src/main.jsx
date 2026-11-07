@@ -42,6 +42,7 @@ import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promo
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
+import {promotionSalesInterval,includePromotionForSales,scopePromotionSales} from "./promotionSalesVisibility.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
@@ -440,19 +441,16 @@ function App(){
        try{
          const segments=[];
          for(const p of data.promos){
-           if(page==="promociones"&&!promotionOverlapsPeriod(p,from,to))continue;
-           // Un borrador importado sin farmacias ni objetivos no tiene ventas
-           // atribuibles; calcular sus miles de CN bloquearía la vista móvil.
-           if(!Object.keys(p.targets||{}).length)continue;
-           if(page==="seguimiento-global"&&(!reportSelectedIds.includes(p.id)||
-             !promotionMatchesReportScope({...p,status:effectivePromotionStatus(p,new Date(),reportTimeZone)},
-               {status:reportStatus,month:reportMonth,year:reportYear})))continue;
-           const reportEnd=promotionReportingEnd(p,new Date(),reportTimeZone);
-            if(!/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"") || !/^20\d{2}-\d{2}-\d{2}$/.test(reportEnd)||reportEnd<p.start)continue;
-           if((p.cns||[]).length>1000)throw new Error("La campaña "+p.name+" tiene más de 1.000 CN. Revisa su catálogo.");
-           if((p.cns||[]).length)for(const range of splitPromotionSalesPeriod(p.start,reportEnd)){
-             segments.push({...p,...range,id:"S"+segments.length,parentId:p.id});
-           }
+           if(!includePromotionForSales(p,{page,from,to,importIds:importViewIds,
+              selectedIds:reportSelectedIds,reportMatches:promo=>
+               promotionMatchesReportScope({...promo,status:effectivePromotionStatus(promo,new Date(),reportTimeZone)},
+                {status:reportStatus,month:reportMonth,year:reportYear})}))continue;
+           const range=promotionSalesInterval(p,new Date(),reportTimeZone);
+           if(!range)continue;
+           // También incluir borradores y campañas sin objetivos: las
+           // unidades TOTALES de los CN no dependen de su mecánica comercial.
+           for(const segment of splitPromotionSalesPeriod(range.start,range.end))
+             segments.push({...p,...segment,id:"S"+segments.length,parentId:p.id});
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
@@ -479,7 +477,7 @@ function App(){
      };
      void sync();
      return()=>{cancelled=true;};
-   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,reportSelectedIds,reportStatus,reportMonth,reportYear]);
+   },[data.promos,promotionStoreStatus,tenantContext?.client?.slug,tenantContext?.modules?.promociones,sessionUser?.email,page,from,to,importViewIds,reportSelectedIds,reportStatus,reportMonth,reportYear]);
  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(""),3800);return()=>clearTimeout(id);},[toast]);
  useEffect(()=>{
    const onBackForward=()=>{
@@ -547,7 +545,7 @@ function App(){
     : storedUsers;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?participatingPromotionSales(p,totalSalesByPromotion[p.id]):{},sales:salesStatus==="real"?participatingPromotionSales(p,salesByPromotion[p.id]):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?scopePromotionSales(p,totalSalesByPromotion[p.id],"total"):{},sales:salesStatus==="real"?scopePromotionSales(p,salesByPromotion[p.id],"attributed"):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
 
@@ -591,10 +589,15 @@ function App(){
  const draftPageSize=reportModal?.pageSize||10;
  const draftMaxPage=Math.max(0,Math.ceil(draftVisible.length/draftPageSize)-1);
  const draftPage=Math.min(reportModal?.page||0,draftMaxPage);
- const reportPharmacyIds=[...new Set(reportSelected.flatMap(p=>Object.keys(p.targets||{})))];
+ const reportPharmacyIds=[...new Set([
+  ...reportSelected.flatMap(p=>Object.keys(p.targets||{})),
+  ...(reportSelected.some(p=>!Object.keys(p.targets||{}).length)?
+   pharmacies.map(f=>String(f.id)):[])
+ ])];
  const effectivePharmacyIds=selectedPharmacyIds===null?reportPharmacyIds:selectedPharmacyIds.filter(id=>reportPharmacyIds.includes(id));
  const activePharmacySet=new Set(effectivePharmacyIds);
- const reportFilteredCampaigns=reportSelected.filter(p=>selectedPharmacyIds===null||Object.keys(p.targets||{}).some(id=>activePharmacySet.has(id))).map(p=>({
+ const reportFilteredCampaigns=reportSelected.filter(p=>selectedPharmacyIds===null||
+  !Object.keys(p.targets||{}).length||Object.keys(p.targets||{}).some(id=>activePharmacySet.has(id))).map(p=>({
   ...p,
   targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
   sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id))),

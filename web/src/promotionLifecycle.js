@@ -21,11 +21,22 @@ function validTargets(p){
 export function effectivePromotionStatus(p,now=new Date(),timeZone="Europe/Madrid"){
  if(p.closedAt||p.closedOn||p.status==="Finalizada"&&p.statusSource!=="automatic")
   return "Finalizada";
- const automaticallyManaged=p.statusSource==="automatic"||
-  (!p.statusSource&&String(p.source||"").startsWith("Excel"))||
-  ["Activa","Pendiente de revisión"].includes(p.status);
- if(!automaticallyManaged)
+ // Un cambio explícito Borrador -> Activa NO debe recalcularse como
+ // Borrador por la política automática de campañas importadas.
+ if(p.statusSource==="manual"){
+  if(p.status==="Borrador")return "Borrador";
+  if(p.status==="Activa"){
+   const today=civilToday(now,timeZone);
+   if(!DAY.test(p.start||"")||p.start>today||
+     p.end&&(!DAY.test(p.end)||p.end<p.start))return "Borrador";
+   return p.end&&p.end<today?"Finalizada":"Activa";
+  }
   return p.status==="Pendiente de revisión"?"Activa":p.status||"Borrador";
+ }
+ const automaticallyManaged=p.statusSource==="automatic"||
+  (!p.statusSource&&(String(p.source||"").startsWith("Excel")||
+   ["Activa","Pendiente de revisión"].includes(p.status)));
+ if(!automaticallyManaged)return p.status||"Borrador";
  if(!DAY.test(p.start||""))return "Borrador";
  const today=civilToday(now,timeZone);
  if(p.end){
@@ -44,4 +55,15 @@ export function promotionReportingEnd(p,now=new Date(),timeZone="Europe/Madrid")
  if(DAY.test(p.closedOn||""))return p.closedOn<today?p.closedOn:today;
  if(DAY.test(p.end||""))return p.end;
  return today;
+}
+
+/** Al confirmar «Activa» desde la ficha, su estado pasa a ser manual.
+ * Mantener la automatización solo si el usuario no ha cambiado el estado. */
+export function promotionStatusSourceOnSave(original,form,now=new Date(),timeZone="Europe/Madrid"){
+ if(!original)return "manual";
+ const oldStatus=effectivePromotionStatus(original,now,timeZone);
+ if(form.status!==oldStatus)return "manual";
+ return original.statusSource==="automatic"||
+  (!original.statusSource&&String(original.source||"").startsWith("Excel"))?
+  "automatic":"manual";
 }

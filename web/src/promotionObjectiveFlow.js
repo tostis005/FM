@@ -1,5 +1,3 @@
-import {effectivePromotionStatus} from "./promotionLifecycle.js";
-
 const validCN=cn=>/^\d{6}$/.test(String(cn||""));
 const safeTargets=targets=>Object.fromEntries(Object.entries(targets||{})
  .filter(([id,value])=>id&&value!==""&&Number.isSafeInteger(Number(value))&&Number(value)>=0)
@@ -32,19 +30,8 @@ export function mergeObjectivesIntoPromotion(p,objectives,now=new Date(),timeZon
   objectiveBaselineRange:objectives.objectiveBaselineRange,
   objectiveRates:objectives.objectiveRates,
   sales:{}};
- // Sólo las campañas de Excel en borrador pasan automáticamente a activas
- // al añadir objetivos válidos. No cambiar un cierre manual ni las fechas.
- if(/^Excel(?:\s|:|$)/i.test(String(p.source||""))&&p.status==="Borrador"){
-  if(updated.type!=="sin_clasificar"&&Object.values(targets).every(v=>v>0)){
-   updated.statusSource="automatic";
-   updated.status=effectivePromotionStatus(updated,now,timeZone);
-  }else{
-   // Los objetivos parciales o la oferta sin clasificar no activan campañas.
-   // En la ficha derecha puede completar la clasificación y activarla.
-   updated.statusSource="manual";
-   updated.status="Borrador";
-  }
- }
+ // Guardar objetivos NO publica la promoción. Borrador y Activa son
+ // decisiones explícitas de visibilidad y no dependen del calendario.
  return updated;
 }
 export function objectivePromotionIsEditable(p){

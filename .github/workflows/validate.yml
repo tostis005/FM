@@ -70,7 +70,7 @@ jobs:
           node --check api/src/resetTenantPromotions.mjs
           node --check api/src/promocionesObjetivos.js
           node --check api/src/promotionCatalogSearch.js
-          node --test api/src/promocionesObjetivos.test.js api/src/promotionCatalogSearch.test.js
+          node --test api/src/promocionesObjetivos.test.js api/src/promotionCatalogSearch.test.js api/src/promocionesArticulos.test.js api/src/promotionTrackingSales.test.js
           node --test api/src/promocionesTenant.test.js
           node --test api/src/promocionesReplace.test.js
           node --test api/src/promotionImportIdentity.test.js
@@ -123,7 +123,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
-          node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js
+          node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js src/promotionSalesVisibility.test.js
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
           node --test src/tableExport.test.js src/userPermissionCopy.test.js src/userPermissionCopy.test.js

@@ -11,15 +11,15 @@ test("precarga CN y nombres del Excel y farmacias disponibles en el planificador
  assert.deepEqual(data.products.map(p=>p.description),["Leche","Champú"]);
  assert.deepEqual(data.pharmacyIds,["1","2"]);
 });
-test("el objetivo sobre un borrador conserva ID, oferta y descripción, activando noviembre con metas",()=>{
+test("el objetivo sobre un borrador conserva ID, oferta, descripción y estado privado",()=>{
  const draft=mergeObjectivesIntoPromotion(raw,{cns:raw.cns,
   targets:{"1":12,"2":20},cnDescriptions:{"001234":"Leche"},
   objectiveBaseline:"previous",objectiveBaselineRange:{from:"2026-10-01",to:"2026-10-31"},
   objectiveRates:{"1":8}},new Date("2026-11-06T12:00:00Z"));
  assert.equal(draft.id,raw.id);assert.equal(draft.sourceRow,2);assert.equal(draft.name,raw.name);
  assert.deepEqual(draft.targets,{"1":12,"2":20});
- assert.deepEqual(draft.cns,raw.cns);assert.equal(draft.status,"Activa");
- assert.equal(draft.statusSource,"automatic");
+ assert.deepEqual(draft.cns,raw.cns);assert.equal(draft.status,"Borrador");
+ assert.equal(draft.statusSource,undefined);
  assert.deepEqual(raw.targets,{});
 });
 test("no activa campaña futura; respeta las campañas manuales y cerradas",()=>{
@@ -40,5 +40,14 @@ test("una promoción sin clasificación sigue en borrador aunque ya tenga metas"
  const updated=mergeObjectivesIntoPromotion({...raw,type:"sin_clasificar",statusSource:"automatic"},
   {cns:raw.cns,targets:{"1":20}},new Date("2026-11-06T12:00:00Z"));
  assert.equal(updated.status,"Borrador");
- assert.equal(updated.statusSource,"manual");
+ assert.equal(updated.statusSource,"automatic");
+});
+
+test("la asignación de objetivos no cambia el estado de una campaña ya publicada",()=>{
+ const published={...raw,status:"Activa",statusSource:"manual",start:"2026-12-01",end:"2026-12-31"};
+ const result=mergeObjectivesIntoPromotion(published,{cns:raw.cns,targets:{"1":7}},new Date("2026-11-07"));
+ assert.equal(result.status,"Activa");
+ assert.equal(result.statusSource,"manual");
+ assert.equal(result.start,"2026-12-01");
+ assert.equal(result.end,"2026-12-31");
 });

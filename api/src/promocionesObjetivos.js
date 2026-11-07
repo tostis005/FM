@@ -200,16 +200,20 @@ export function setupPromotionObjectives(app,pool,{requireTenantModule}){
        ORDER BY f.id,a.origen_id,${order}
       )
       SELECT pharmacy_id,sum(stock)::float8 AS units,
-       bool_and(stock IS NOT NULL) AS complete,
+       count(stock)::int AS known_items,
+       count(*)::int AS matched_items,
        max(updated_at) AS updated_at
       FROM latest GROUP BY pharmacy_id`,
       values:[slug,ids,cns],query_timeout:16000});
-     // En una farmacia puede faltar stock_actual para uno de cientos
-     // de artículos. No ocultar el stock conocido de los demás: devolver
-     // su suma y marcar expresamente esa farmacia como parcial.
-     stock=Object.fromEntries(rows.filter(row=>row.units!==null&&row.units!==undefined)
+     // El stock de una selección es la suma de las unidades que Farmatic
+     // registra para sus artículos. Un NULL aislado no anula la suma de
+     // cientos de referencias y no debe transformar el objetivo en cero.
+     // Si NINGÚN artículo de una farmacia aporta un valor numérico, la
+     // respuesta carece de stock confirmado (nunca se inventa un cero).
+     const known=row=>row.known_items==null?row.units!=null:Number(row.known_items)>0;
+     stock=Object.fromEntries(rows.filter(known)
       .map(row=>[row.pharmacy_id,Number(row.units)]));
-     stockMissingPharmacyIds=rows.filter(row=>row.complete===false)
+     stockMissingPharmacyIds=rows.filter(row=>!known(row))
       .map(row=>row.pharmacy_id);
      const dates=rows.map(row=>row.updated_at).filter(Boolean)
       .map(value=>new Date(value).getTime()).filter(Number.isFinite);

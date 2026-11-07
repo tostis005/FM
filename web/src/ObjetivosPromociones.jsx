@@ -3,7 +3,7 @@ import {Check,Plus,Search,Trash2} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
 import {LoadingFrame,LoadingStatus} from "./LoadingState.jsx";
 import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,promotionProductName,promotionProductLabel,UNKNOWN_PRODUCT_NAME} from "./simuladorProductSelection.js";
-import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
+import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarget,first} from "./simuladorLogic.js";
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
 import "./ObjetivosPromociones.css";
@@ -147,7 +147,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const stockPartial=id=>stockPartialIds.includes(String(id));
  const partialStockCount=selectedPharmacies.filter(stockPartial).length;
  const missingStockCount=selectedPharmacies.filter(id=>stockUnits(id)===null).length;
- const proposal=id=>baseline==="stock"?Math.max(0,Math.round(stockUnits(id)??0)):
+ const proposal=id=>baseline==="stock"?simulatorStockTarget(stockUnits(id)):
   simulatorTarget(units(id,chosen.id),rate(id));
  const target=id=>manualTargets[id]===undefined?proposal(id):manualTargets[id];
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupTenantPromotions,cleanDocument} from "./promocionesTenant.js";
+import {setupTenantPromotions,cleanDocument,visiblePromos} from "./promocionesTenant.js";
 
 function create({role="administrador",document={id:"P1",name:"Oferta",cns:["123456"],targets:{"1":8}}}={}){
  const routes=new Map();
@@ -113,4 +113,30 @@ test("la API distingue campañas por fechas y hasta agotar stock",()=>{
  const excelIncomplete={...base,durationMode:"dates",source:"Excel: archivo.xlsx",start:"",end:""};
  assert.ok(cleanDocument(excelIncomplete,excelIncomplete.id,ids),
   "No bloquear la importación de una ficha Excel incompleta");
+});
+
+test("API: empleadas de farmacia ven una campaña publicada de fecha FUTURA, nunca un borrador",()=>{
+ const future={id:"F",name:"Diciembre",status:"Activa",statusSource:"manual",
+  start:"2026-12-01",end:"2026-12-31",targets:{"1":10},cns:["123456"]};
+ const draft={...future,id:"D",status:"Borrador"};
+ const other={...future,id:"OTHER",targets:{"2":5}};
+ const archived={...future,id:"ARCH",status:"Finalizada"};
+ const rows=[future,draft,other,archived].map(documento=>({documento,creado_por:"farmacia@example.com"}));
+ const request=role=>({context:{role,allowedPharmacyIds:[1]},user:{email:"farmacia@example.com"}});
+ const regular=visiblePromos(rows,request("farmacia"));
+ assert.deepEqual(regular.map(p=>p.id),["F","ARCH"]);
+ assert.deepEqual(visiblePromos(rows,request("colaborador")).map(p=>p.id),["F","ARCH"]);
+ assert.deepEqual(visiblePromos(rows,request("gestor")).map(p=>p.id),["F","D","OTHER","ARCH"],
+  "El creador gestor puede ver sus propios borradores incluso sin ámbito actual");
+ assert.deepEqual(visiblePromos(rows,request("administrador")).map(p=>p.id),
+  ["F","D","OTHER","ARCH"]);
+});
+test("API: gestor ve borradores de sus farmacias, pero no los de otra farmacia ajena",()=>{
+ const base={id:"P1",status:"Borrador",targets:{"1":5},cns:["123456"]};
+ const rows=[{documento:base,creado_por:"otro@example.com"},
+  {documento:{...base,id:"P2",targets:{"2":5}},creado_por:"otro@example.com"},
+  {documento:{...base,id:"P3",targets:{}},creado_por:"gestor@example.com"}];
+ const req={context:{role:"gestor",allowedPharmacyIds:[1]},
+  user:{email:"gestor@example.com"}};
+ assert.deepEqual(visiblePromos(rows,req).map(p=>p.id),["P1","P3"]);
 });

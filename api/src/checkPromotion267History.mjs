@@ -83,10 +83,10 @@ try{
  const periods=[
   {id:"previous",from:monthOf(prevYear,prevMonth)+"-01",
    to:monthOf(prevYear,prevMonth)+"-"+new Date(Date.UTC(prevYear,prevMonth,0)).getUTCDate()},
-  {id:"year",from:monthOf(prevYear-1,prevMonth)+"-01",
-   to:monthOf(prevYear-1,prevMonth)+"-"+new Date(Date.UTC(prevYear-1,prevMonth,0)).getUTCDate()},
-  {id:"twoYears",from:monthOf(prevYear-2,prevMonth)+"-01",
-   to:monthOf(prevYear-2,prevMonth)+"-"+new Date(Date.UTC(prevYear-2,prevMonth,0)).getUTCDate()},
+  {id:"year",from:monthOf(y-1,m)+"-01",
+   to:monthOf(y-1,m)+"-"+new Date(Date.UTC(y-1,m,0)).getUTCDate()},
+  {id:"twoYears",from:monthOf(y-2,m)+"-01",
+   to:monthOf(y-2,m)+"-"+new Date(Date.UTC(y-2,m,0)).getUTCDate()},
   {id:"currentMonth",from:monthOf(y,m)+"-01",to:today}
  ];
  report.periods=periods.map(p=>({id:p.id,from:p.from,to:p.to}));

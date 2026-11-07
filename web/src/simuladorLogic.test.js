@@ -7,8 +7,8 @@ test("cuatro períodos y ningún trimestre; seleccionable el rango libre",()=>{
  assert.deepEqual(periods.map(p=>p.id),["previous","year","twoYears","custom"]);
  assert.deepEqual(periods.map(p=>[p.from,p.to]),[
   ["2026-10-01","2026-10-31"],
-  ["2025-10-01","2025-10-31"],
-  ["2024-10-01","2024-10-31"],
+  ["2025-11-01","2025-11-30"],
+  ["2024-11-01","2024-11-30"],
   ["2026-10-12","2026-11-02"]
  ]);
 });
@@ -41,4 +41,22 @@ test("700 CN: al escoger stock se copia exactamente su suma, sin forzar cero por
  assert.equal(simulatorStockTarget(undefined),0);
  assert.equal(simulatorStockTarget(-4),0);
  assert.equal(simulatorStockTarget("52"),52);
+});
+
+test("en enero el mismo mes de años anteriores es enero, no diciembre",()=>{
+ const periods=simulatorPeriods("2027-01-05","2026-12-01","2027-01-05");
+ assert.deepEqual(periods.map(p=>[p.id,p.from,p.to]),[
+  ["previous","2026-12-01","2026-12-31"],
+  ["year","2026-01-01","2026-01-31"],
+  ["twoYears","2025-01-01","2025-01-31"],
+  ["custom","2026-12-01","2027-01-05"]
+ ]);
+});
+test("febrero de año bisiesto respeta todos los días del mes",()=>{
+ const periods=simulatorPeriods("2024-02-17","2024-02-01","2024-02-17");
+ assert.deepEqual(periods.slice(0,3).map(p=>[p.from,p.to]),[
+  ["2024-01-01","2024-01-31"],
+  ["2023-02-01","2023-02-28"],
+  ["2022-02-01","2022-02-28"]
+ ]);
 });

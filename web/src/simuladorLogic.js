@@ -7,8 +7,8 @@ export function simulatorPeriods(today,customFrom,customTo){
  const year=Number(today.slice(0,4)),month=Number(today.slice(5,7))-1;
  return [
   {id:"previous",label:"Mes anterior",from:first(year,month-1),to:last(year,month-1)},
-  {id:"year",label:"Mismo mes hace 1 año",from:first(year-1,month-1),to:last(year-1,month-1)},
-  {id:"twoYears",label:"Mismo mes hace 2 años",from:first(year-2,month-1),to:last(year-2,month-1)},
+  {id:"year",label:"Mismo mes hace 1 año",from:first(year-1,month),to:last(year-1,month)},
+  {id:"twoYears",label:"Mismo mes hace 2 años",from:first(year-2,month),to:last(year-2,month)},
   {id:"custom",label:"Período seleccionado",from:customFrom,to:customTo}
  ];
 }

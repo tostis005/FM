@@ -35,7 +35,7 @@ import { setupGenericosReales } from "./genericosReales.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
-import {promotionBundle} from "./promotionEligibility.js";
+import {calculatePromotionTracking} from "./promotionTrackingSales.js";
 import {resolvePromotionArticleKeys,articleKeysForCNs} from "./promocionesArticulos.js";
 import { setupPublicLeads } from "./publicLeads.js";
 import { setupPrivacyRequests } from "./privacyRequests.js";
@@ -299,43 +299,7 @@ app.post("/api/ventas/seguimiento", ...requireTenantModule("promociones"), async
           !validDates(p.start, p.end) || !validCodes(p.cns))) {
       return res.status(400).json({ error: "Promociones, fechas o CNs inválidos" });
     }
-    const sales = {}, totalSales = {};
-    const articleKeys=await resolvePromotionArticleKeys(pool,req.context,promotions.flatMap(p=>p.cns));
-    let cursor=0;
-    const worker=async()=>{
-     while(cursor<promotions.length){
-      const p=promotions[cursor++];
-      if (!p.cns.length) { sales[p.id] = {}; totalSales[p.id] = {}; continue; }
-      // Los lotes completos se calculan por ticket y farmacia. En paralelo,
-      // contabilizar TODAS las unidades de esos CN, incluidas las sueltas,
-      // devoluciones y ventas sin ticket informado.
-      const bundle=promotionBundle(p);
-      const mappedKeys=articleKeysForCNs(articleKeys,p.cns);
-      const query=`WITH ticket_units AS (
-          SELECT f.id::text AS farmacia_id,
-            NULLIF(btrim(v.numero_ticket::text),'') AS ticket,
-            v.fecha::date AS dia, sum(v.unidades)::float8 AS units
-          ${salesJoin(req)} WHERE ${salesPeriod}
-            AND (btrim(v.articulo_id::text)=ANY($3::text[])
-             OR f.id::text||'|'||btrim(v.articulo_id::text)=ANY($7::text[]))
-          GROUP BY f.id,NULLIF(btrim(v.numero_ticket::text),''),v.fecha::date
-        )
-        SELECT farmacia_id,
-          coalesce(sum(CASE
-            WHEN $8::boolean THEN units
-            WHEN ticket IS NULL OR units <= 0 OR NOT $6::boolean THEN 0
-            WHEN $5::boolean AND units >= $4::integer THEN units
-            ELSE floor(greatest(units,0)/$4::integer)*$4::integer
-          END),0)::float8 AS unidades,
-          coalesce(sum(units),0)::float8 AS unidades_totales
-        FROM ticket_units GROUP BY farmacia_id`;
-      const {rows}=await pool.query(query,
-        [p.start,p.end,p.cns,bundle||1,p.type==="escalonado",Boolean(bundle),mappedKeys,p.durationMode==="stock"]);
-      sales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades)]));
-      totalSales[p.id]=Object.fromEntries(rows.map(row=>[row.farmacia_id,Number(row.unidades_totales)]));
-     }
-    };
-    await Promise.all(Array.from({length:Math.min(2,promotions.length)},worker));
+    const {sales,totalSales}=await calculatePromotionTracking(pool,req.context,promotions);
     res.json({sales,totalSales,origin:req.context.client.schema+".fm_ventas_analitica",
       updatedAt:new Date().toISOString()});
   } catch (err) { next(err); }

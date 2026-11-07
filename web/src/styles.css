@@ -1002,3 +1002,9 @@ html,body{overflow-x:clip}
  .campaign-row-actions.fm-promotion-unified-actions{flex-direction:row;align-items:center;flex-wrap:nowrap}
  .fm-promotion-unified-actions .btn{justify-content:center;flex:0 0 auto}
 }
+
+
+/* Vista puntual de las filas verificadas después de importar un Excel. */
+.fm-imported-view{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:7px;
+ font-size:11px;color:#668579;font-weight:650}
+.fm-imported-view .btn{padding:5px 9px;min-height:28px;font-size:11px}

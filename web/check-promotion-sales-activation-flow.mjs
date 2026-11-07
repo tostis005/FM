@@ -63,7 +63,6 @@ try{
  await waitTotal();
  assert.ok(requests.length>0,"Se consultan ventas incluso con targets vacíos");
  assert.equal(campaign.status,"Borrador");
- const cells=row().locator("td");
  assert.ok((await row().innerText()).includes("22"),"Las unidades totales son 13 + 9");
  await row().getByRole("button",{name:"Asignar objetivos"}).click();
  await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:20000});
@@ -74,7 +73,7 @@ try{
  assert.equal(writes.length,1);
  assert.equal(writes[0].status,"Borrador");
  assert.deepEqual(writes[0].targets,{"1":10,"2":0});
- await page.getByLabel("Estado").selectOption("Activa");
+ await page.locator(".drawer").getByLabel("Estado").selectOption("Activa");
  await page.getByRole("button",{name:"Guardar cambios"}).click();
  await page.getByRole("heading",{name:"Editar promoción"}).waitFor({state:"detached",timeout:20000});
  assert.equal(writes.length,2);

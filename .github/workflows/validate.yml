@@ -374,6 +374,7 @@ jobs:
           node check-promotions-import-mobile.mjs
           node check-promotion-objectives-flow.mjs
           node check-promotion-sales-activation-flow.mjs
+          node check-promotion-future-publication.mjs
           node check-operativa.mjs
           node check-demo-v1.mjs
           node check-pantallas-reales.mjs

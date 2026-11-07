@@ -69,7 +69,7 @@ try{
  assert.equal(writes[0].sourceRow,2);
  assert.deepEqual(writes[0].cns,["123456","654321"]);
  assert.equal(writes[0].targets["1"],25);
- assert.equal(writes[0].status,"Activa");
+ assert.equal(writes[0].status,"Borrador"); // Asignar metas no publica
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
  await page.getByRole("button",{name:"Asignar objetivos con ventas históricas y stock"}).click();
  await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});

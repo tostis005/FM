@@ -767,13 +767,8 @@ function App(){
    if(invalid.length)return rejectPromo("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return rejectPromo("La fecha de inicio es obligatoria.");
   const durationMode=promotionDurationMode(promoForm);
-  if(promoForm.status==="Activa"){
-   const todayMadrid=civilToday(new Date(),reportTimeZone);
-   if(promoForm.start>todayMadrid)
-    return rejectPromo("No se puede activar antes de la fecha de inicio. Mantén la campaña en borrador hasta entonces.");
-   if(durationMode==="dates"&&promoForm.end&&promoForm.end<todayMadrid)
-    return rejectPromo("La promoción ya ha terminado según sus fechas. Selecciona Archivada o revisa las fechas antes de activarla.");
-  }
+  // «Activa» publica la campaña, no inicia su vigencia comercial: permitir
+  // publicar antes de la fecha inicial y mantenerla publicada al vencer.
    if(durationMode==="dates"&&!promoForm.end)
     return rejectPromo("Las campañas por fechas necesitan una fecha de fin.");
    if(durationMode==="dates"&&promoForm.end&&promoForm.start&&promoForm.end<promoForm.start)
@@ -1071,6 +1066,14 @@ function App(){
  },[page]);
  const role=tenantContext?.role;
  const canManagePromotions=["gestor","administrador","superadministrador"].includes(role);
+ // Para el personal de farmacia, abrir el catálogo publicado sin limitarlo
+ // al mes en curso: también deben ver campañas activadas para el mes próximo.
+ useEffect(()=>{
+  if(!role)return;
+  if(!["gestor","administrador","superadministrador"].includes(role)){
+   setFrom("");setTo("");setStatusFilter("Activa");setImportViewIds(null);
+  }
+ },[tenantContext?.client?.slug,role]);
  const canOpenSection=id=>sessionUser?.role==="superadministrador"||
    tenantContext?.sections?.[id]===true;
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
@@ -1519,7 +1522,8 @@ function App(){
     {promotionDurationMode(promoForm)==="dates"&&<Field label="Fecha de fin"><input type="date" required
      min={promoForm.start||undefined} value={promoForm.end||""}
      onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field>}</div>
-   <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select></Field>
+   <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select>
+    <small className="fm-promotion-publication-hint">Activa: visible para las farmacias participantes desde que se publica, aunque empiece más adelante. Borrador: solo gestores y administradores. Las fechas delimitan las ventas, no la visibilidad.</small></Field>
     {promoForm.status==="Finalizada"&&<div className="field-row"><Field label="Fecha real de finalización"><input type="date" min={promoForm.start||undefined} max={civilToday(new Date(),reportTimeZone)} value={promoForm.closedOn||""} onChange={e=>setPromoForm({...promoForm,closedOn:e.target.value})}/></Field><Field label="Motivo del cierre (opcional)"><input value={promoForm.closedReason||""} onChange={e=>setPromoForm({...promoForm,closedReason:e.target.value})} placeholder="Promoción terminada"/></Field></div>}
     <Field label="Tipo de promoción"><select value={promoForm.type||"sin_clasificar"} onChange={e=>setPromoForm({...promoForm,type:e.target.value,discountPercent:PROMOTION_TYPES.find(t=>t.id===e.target.value)?.needsPercent?promoForm.discountPercent:""})}>{PROMOTION_TYPES.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
     {PROMOTION_TYPES.find(t=>t.id===promoForm.type)?.needsAmount&&<Field label="Importe de descuento (€)"><input type="number" min="0.01" step="0.01" value={promoForm.discountAmount||""} onChange={e=>setPromoForm({...promoForm,discountAmount:e.target.value})}/></Field>}

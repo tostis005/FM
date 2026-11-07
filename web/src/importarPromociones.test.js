@@ -40,24 +40,24 @@ test("reimportar no duplica; nuevo CN completa campaña y respeta objetivos",()=
   assert.equal(mergeImportedPromos(merged.updates,second).duplicates,1);
 });
 
-test("importar objetivos asignados activa promociones vigentes, archiva vencidas",()=>{
+test("el Excel siempre se importa en borrador; fechas y metas no publican automáticamente",()=>{
  const now=new Date("2026-10-19T22:30:00Z");
- const promo={cns:["001474"],targets:{"1":12,"2":5},start:"2026-10-01",end:"2026-10-31"};
- assert.equal(importedPromotionStatus(promo,now),"Activa");
- assert.equal(importedPromotionStatus({...promo,end:"2026-10-18"},now),"Finalizada");
+ const promo={status:"Borrador",cns:["001474"],targets:{"1":12,"2":5},
+  start:"2026-10-01",end:"2026-10-31"};
+ assert.equal(importedPromotionStatus(promo,now),"Borrador");
+ assert.equal(importedPromotionStatus({...promo,end:"2026-10-18"},now),"Borrador");
  assert.equal(importedPromotionStatus({...promo,start:"2026-11-01",end:"2026-11-30"},now),"Borrador");
  assert.equal(importedPromotionStatus({...promo,targets:{}},now),"Borrador");
- assert.equal(importedPromotionStatus({...promo,targets:{"1":12,"2":""}},now),"Activa");
  assert.equal(importedPromotionStatus({...promo,targets:{"1":0}},now),"Borrador");
- assert.equal(importedPromotionStatus({...promo,cns:[]},now),"Activa");
- assert.equal(importedPromotionStatus({...promo,end:""},now),"Activa");
+ assert.equal(importedPromotionStatus({...promo,end:""},now),"Borrador");
  assert.equal(importedPromotionStatus({...promo,start:"",end:""},now),"Borrador");
 });
-test("el estado de importación usa la fecha civil de la farmacia, no el UTC",()=>{
- const promo={cns:["123456"],targets:{"1":25},start:"2026-10-19",end:"2026-10-19"};
- const midnight=new Date("2026-10-19T22:30:00Z");
- assert.equal(importedPromotionStatus(promo,midnight,"Europe/Madrid"),"Finalizada");
- assert.equal(importedPromotionStatus(promo,midnight,"America/Bogota"),"Activa");
+test("publicar una promoción importada no depende de la fecha civil de la farmacia",()=>{
+ const promo={status:"Activa",cns:["123456"],targets:{"1":25},
+  start:"2026-12-01",end:"2026-12-31"};
+ const now=new Date("2026-10-19T22:30:00Z");
+ assert.equal(importedPromotionStatus(promo,now,"Europe/Madrid"),"Activa");
+ assert.equal(importedPromotionStatus(promo,now,"America/Bogota"),"Activa");
 });
 
 test("primera fila vacía detiene la importación: ni texto posterior ni CN huérfanos crean promociones",()=>{

@@ -103,8 +103,8 @@ try{
  assert.deepEqual(gum.cns,["123456"]);
  assert.deepEqual(eucerin.cns,["654321"]);
  assert.deepEqual(gum.targets,{"1":12});
- assert.equal(gum.status,new Date().toISOString().slice(0,10)>"2026-10-31"?"Finalizada":"Activa");
- assert.equal(eucerin.status,"Finalizada");
+ assert.equal(gum.status,"Borrador","El Excel no publica por fechas ni objetivos");
+ assert.equal(eucerin.status,"Borrador","Una oferta vencida también se importa sin publicar");
  assert.ok(!lastImport.some(p=>p.name.includes("KNEIPP")));
  await page.getByRole("button",{name:"Cerrar aviso de importación"}).click();
  assert.equal(await page.getByText("Promoción antigua").first().count(),1);

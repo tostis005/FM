@@ -55,3 +55,15 @@ test("Seguimiento comparte solapamiento mensual con Campañas, no año de inicio
  assert.deepEqual(campaigns.filter(p=>promotionMatchesReportScope(p,{year:"2026"})).length,6,
   "Los enlaces antiguos por año se siguen interpretando");
 });
+
+test("los borradores de Excel sin fecha se muestran en el mes de importación",()=>{
+ const draft={source:"Excel: noviembre.xlsx",start:"",end:"",targets:{},importedOn:"2026-11-07"};
+ assert.equal(promotionOverlapsPeriod(draft,"2026-11-01","2026-11-30"),true);
+ assert.equal(promotionOverlapsPeriod(draft,"2026-10-01","2026-10-31"),false);
+ assert.equal(promotionOverlapsPeriod({...draft,source:"Manual"},"2026-11-01","2026-11-30"),false);
+});
+test("campaña futura hasta agotar existencias aparece en su propio mes",()=>{
+ const future={start:"2027-01-10",end:"",durationMode:"stock"};
+ assert.equal(promotionOverlapsPeriod(future,"2027-01-01","2027-01-31"),true);
+ assert.equal(promotionOverlapsPeriod(future,"2026-11-01","2026-11-30"),false);
+});

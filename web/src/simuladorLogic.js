@@ -25,3 +25,11 @@ export function simulatorTarget(base,percent){
  return Number.isFinite(units)&&Number.isFinite(rate)?
   Math.max(0,Math.ceil(units*(100+rate)/100-1e-9)):0;
 }
+
+/** Objetivo al escoger «Stock actual»: se copia el stock registrado sin %
+ * de incremento y sin perderlo porque otro CN carece de dato. */
+export function simulatorStockTarget(registeredUnits){
+ if(registeredUnits===null||registeredUnits===undefined||registeredUnits==="")return 0;
+ const value=Number(registeredUnits);
+ return Number.isFinite(value)?Math.max(0,Math.round(value)):0;
+}

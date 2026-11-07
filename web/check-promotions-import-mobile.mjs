@@ -39,6 +39,7 @@ const user={email:"mobile-admin@example.invalid",role:"superadministrador",name:
 const pharmacy={id:"1",name:"Abadía",sourceCode:"ABA",active:true};
 let stored=[];
 page.on("pageerror",e=>errors.push(e.message));
+page.on("dialog",dialog=>void dialog.accept());
 await page.route("**/api/**",async route=>{
  const path=new URL(route.request().url()).pathname;
  let body={};
@@ -55,12 +56,17 @@ await page.route("**/api/**",async route=>{
   const {additions,skipped}=planPromotionImport(stored,input);
   stored=[...stored,...additions];
   body={imported:additions.length,skipped,promotions:stored};
+ }else if(path==="/api/tenant/promociones/eliminar-lote"){
+  const ids=route.request().postDataJSON().ids;
+  stored=stored.filter(p=>!ids.includes(p.id));
+  body={deletedIds:ids,removed:ids.length};
  }else if(path==="/api/ventas/seguimiento")body={sales:{},totalSales:{}};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  await page.getByRole("button",{name:"Importar Excel"}).waitFor({timeout:15000});
+ assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"2026-11");
  const file={name:"NOVIEMBRE 2026 PROMOCIONES FARMACIA ABADIA Y PB (3).xlsx",
   mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   buffer:await buildExcel()};
@@ -72,7 +78,8 @@ try{
  assert.equal(stored.length,51);
  assert.ok(stored.every(p=>p.status==="Borrador"&&Object.keys(p.targets).length===0));
  assert.equal(await page.getByRole("combobox",{name:"Estado"}).inputValue(),"Todos");
- assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"2026-11");
+ assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"");
+ await page.getByRole("button",{name:"Volver al mes actual"}).waitFor();
  assert.equal((await page.locator(".fm-import-result").innerText()).trim(),"51 promociones importadas");
  assert.equal(await page.locator(".fm-import-result p").count(),0);
  assert.equal(await page.getByRole("button",{name:"Cerrar aviso de importación"}).count(),1);
@@ -85,10 +92,27 @@ try{
  assert.match(await page.locator(".fm-promotions-bulk-actions .count-label").last().innerText(),/51 promociones/);
  assert.ok(await page.locator(".campaign-table tbody tr").count()>0,
   "Tras importar deben ser visibles las campañas aunque sean borradores");
+ // Reproducir el fallo original: el catálogo tiene 51 promociones,
+ // pero un filtro de mes distinto deja el listado completamente vacío.
+ await page.getByLabel("Seleccionar mes y año de promociones").fill("2027-01");
+ await page.locator(".fm-promotions-bulk-actions .count-label").last()
+  .getByText("0 promociones").waitFor({timeout:10000});
  await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
  await page.getByText("51 promociones ya importadas").waitFor({timeout:20000});
+ assert.match(await page.locator(".fm-promotions-bulk-actions .count-label").last().innerText(),/51 promociones/);
  assert.equal(requests.length,2);
  assert.equal(stored.length,51);
+ // Borrar TODOS los registros existentes, no solo los de la página 1.
+ await page.getByRole("checkbox",{name:"Seleccionar todas las promociones filtradas"}).check();
+ await page.getByRole("button",{name:"Eliminar seleccionadas"}).click();
+ await page.getByText("0 promociones",{exact:false}).first().waitFor({timeout:15000});
+ assert.equal(stored.length,0);
+ // Tras eliminarlos debe poder importarse de nuevo el MISMO Excel.
+ await page.locator('input[type="file"][accept=".xlsx"]').setInputFiles(file);
+ await page.getByText("51 promociones importadas").waitFor({timeout:20000});
+ assert.equal(requests.length,3);
+ assert.equal(stored.length,51);
+ assert.match(await page.locator(".fm-promotions-bulk-actions .count-label").last().innerText(),/51 promociones/);
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("button",{name:"Importar Excel"}).waitFor();
  assert.equal(await page.getByRole("combobox",{name:"Estado"}).inputValue(),"Todos");

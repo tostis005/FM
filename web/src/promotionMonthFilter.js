@@ -27,8 +27,19 @@ export function promotionMonthFromRange(from,to){
 // Solape inclusivo: comienza, acaba o atraviesa el período seleccionado.
 export function promotionOverlapsPeriod(promo,from="",to=""){
  if((!from&&!to))return true;
- const start=promo?.start,end=promo?.closedOn||promo?.end||civilToday();
- if(!dayPattern.test(start||"")||!dayPattern.test(end||"")||start>end)return false;
+ const start=promo?.start;
+ if(!dayPattern.test(start||"")){
+  // El Excel puede traer fechas no interpretables: preservar el borrador en
+  // el mes en que se importó para que no sea invisible tras recargar la web.
+  const uploaded=promo?.importedOn;
+  if(String(promo?.source||"").startsWith("Excel")&&
+    !Object.keys(promo?.targets||{}).length&&dayPattern.test(uploaded||""))
+   return (!from||uploaded>=from)&&(!to||uploaded<=to);
+  return false;
+ }
+ const end=promo?.closedOn||promo?.end||(
+  start>civilToday()?start:civilToday());
+ if(!dayPattern.test(end||"")||start>end)return false;
  return (!from||end>=from)&&(!to||start<=to);
 }
 

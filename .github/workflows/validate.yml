@@ -144,7 +144,8 @@ jobs:
           npm run build
 
   validar_postgresql:
-    runs-on: ubuntu-latest
+    # Evitar ralentizaciones y timeouts de consultas de integración en ubuntu-26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
@@ -324,7 +325,8 @@ jobs:
 
 
   validar_responsive:
-    runs-on: ubuntu-latest
+    # Playwright 1.56 no soporta Chromium en ubuntu-26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

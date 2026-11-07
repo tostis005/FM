@@ -3,7 +3,7 @@ import {Check,Plus,Search,Trash2} from "lucide-react";
 import DetalleVentas from "./DetalleVentas.jsx";
 import {LoadingFrame,LoadingStatus} from "./LoadingState.jsx";
 import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,promotionProductName,promotionProductLabel,UNKNOWN_PRODUCT_NAME} from "./simuladorProductSelection.js";
-import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,first} from "./simuladorLogic.js";
+import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarget,first} from "./simuladorLogic.js";
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
 import "./ObjetivosPromociones.css";
@@ -147,7 +147,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const stockPartial=id=>stockPartialIds.includes(String(id));
  const partialStockCount=selectedPharmacies.filter(stockPartial).length;
  const missingStockCount=selectedPharmacies.filter(id=>stockUnits(id)===null).length;
- const proposal=id=>baseline==="stock"?Math.max(0,Math.round(stockPartial(id)?0:(stockUnits(id)??0))):
+ const proposal=id=>baseline==="stock"?simulatorStockTarget(stockUnits(id)):
   simulatorTarget(units(id,chosen.id),rate(id));
  const target=id=>manualTargets[id]===undefined?proposal(id):manualTargets[id];
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
@@ -316,7 +316,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
         checked={baseline===p.id} onChange={()=>setBaseline(p.id)}
         aria-label={"Usar "+p.label+" como base de objetivos"}/>
        <span>{p.label}</span></label><small>{p.id==="custom"?p.from+" — "+p.to:p.from.slice(0,7)}</small></th>)}
-      <th><label className={"fm-objectives-base "+(baseline==="stock"?"chosen":"")}>
+      <th title="Suma de unidades registradas de los CN seleccionados"><label className={"fm-objectives-base "+(baseline==="stock"?"chosen":"")}>
        <input type="radio" name="simulator-objective-reference" value="stock"
         checked={baseline==="stock"} onChange={()=>setBaseline("stock")}
         aria-label="Usar stock actual como base de objetivos"/>
@@ -331,8 +331,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
          <strong>{num(units(id,p.id))}</strong>}</td>)}
         <td>{!selectedCNs.length||historyBusy||historyError?"—":
          stockUnits(id)===null?<span title="No hay un stock confirmado para los artículos seleccionados">—</span>:
-         <><strong>{num(stockUnits(id))}</strong>
-         {stockPartial(id)&&<small title="Falta stock de algunos artículos o lotes">Parcial</small>}</>}</td>
+         <strong title="Unidades registradas para los CN seleccionados">{num(stockUnits(id))}</strong>}</td>
         {baseline!=="stock"&&<td><div className="fm-objectives-rate-line"><div className="fm-objectives-rates">{[5,8,10,12,14].map(value=><button type="button"
          key={value} className={pct===value?"chosen":""} aria-pressed={pct===value}
          onClick={()=>{setRateByPharmacy(v=>({...v,[id]:value}));setManualTargets(v=>({...v,[id]:undefined}));}}>
@@ -355,24 +354,19 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
         <strong>{num(totals(p.id))}</strong>}</td>)}
        <td>{!selectedCNs.length||historyBusy||historyError||!hasStock?"—":
-        <><strong>{num(totalStock())}</strong>
-        {(partialStockCount>0||missingStockCount>0)&&<small>Parcial</small>}</>}</td>
+        <strong title="Suma de unidades registradas para las farmacias seleccionadas">{num(totalStock())}</strong>}</td>
        {baseline!=="stock"&&<td>—</td>}<td><strong>{num(totalTarget())}</strong></td></tr>
      </tbody>
     </table>
    </div>
    </LoadingFrame>
    {historyError&&<p role="alert" className="fm-objectives-warning">{historyError}</p>}
-   {!historyBusy&&!historyError&&selectedCNs.length>0&&(partialStockCount>0||missingStockCount>0)&&
+   {!historyBusy&&!historyError&&selectedCNs.length>0&&(stockUnavailable||missingStockCount>0)&&
     <p role="status" className="fm-objectives-stock-note">
-     {partialStockCount>0?<>Stock parcial en {partialStockCount} {partialStockCount===1?"farmacia":"farmacias"}.
-     Solo se muestran las unidades confirmadas en Farmatic. </>:null}
-     {missingStockCount>0?<>Sin stock verificable para {missingStockCount} {missingStockCount===1?"farmacia":"farmacias"}.
-     El guion no significa cero unidades. </>:null}
-     {stockUnavailable?"Una o más consultas de stock no se han completado. ":""}
-     Los objetivos basados en stock incompleto se rellenan manualmente.
+     {stockUnavailable?"No se han podido consultar algunas existencias. Revisa las cifras antes de guardar. ":""}
+     {missingStockCount>0?"En "+missingStockCount+" "+(missingStockCount===1?"farmacia":"farmacias")+
+       " no hay stock registrado para esta selección; puedes ajustar su objetivo manualmente.":""}
     </p>}
-
   </section>
   <section className="card fm-objectives-card fm-objectives-extraction" aria-label="Extracción de ventas">
    <div className="fm-objectives-extract-head"><h2>3. Extracción de ventas</h2></div>

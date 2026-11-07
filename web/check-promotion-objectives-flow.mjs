@@ -31,7 +31,7 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/ventas/seguimiento")response={sales:{},totalSales:{}};
  else if(path==="/api/ventas/objetivos/historico"){
   const body=route.request().postDataJSON();
-  response={periods:Object.fromEntries(body.periods.map(p=>[p.id,{"1":14}])),stock:{"1":8}};
+  response={periods:Object.fromEntries(body.periods.map(p=>[p.id,{"1":14}])),stock:{"1":8},stockMissingPharmacyIds:["1"]};
  }else if(path==="/api/ventas/detalle")response={lines:[],total:0,items:[],rows:[]};
  else if(path==="/api/tenant/promociones/"+campaign.id&&method==="PUT"){
   const body=route.request().postDataJSON();
@@ -49,6 +49,13 @@ try{
  assert.equal(new URL(page.url()).pathname,"/promociones/nueva");
  assert.match(await page.locator(".fm-objectives-selected").innerText(),/2 CN/);
  assert.match(await page.locator(".fm-objectives-selected").innerText(),/Producto A/);
+ // Un CN sin stock registrado NO debe poner objetivo 0 cuando los demás suman 8.
+ await page.getByRole("radio",{name:"Usar stock actual como base de objetivos"}).check();
+ await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).waitFor();
+ await page.waitForFunction(()=>document.querySelector('input[aria-label="Objetivo Abadía"]')?.value==="8",
+   null,{timeout:15000});
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"8");
+ assert.equal(await page.locator(".fm-objectives-table").getByText("Parcial").count(),0);
  await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).fill("25");
  const save=page.getByRole("button",{name:"Guardar objetivos"});
  await save.waitFor({state:"visible"});

@@ -11,16 +11,40 @@ test("el mismo Excel conserva ID de lote incluso tras recargar la página en un 
  assert.notEqual(first,changed);
  assert.match(first,/^XLSX-[0-9A-F]+-[0-9A-F]{16}$/);
 });
-test("la confirmación distingue promos nuevas, repetidas y borradores sin farmacia",()=>{
- const source="Excel: NOVIEMBRE 2026 PROMOCIONES.xlsx";
- const campaigns=[{id:"1"},{id:"2"},{id:"3"}];
+const source="Excel: NOVIEMBRE 2026 PROMOCIONES.xlsx";
+const makeRow=n=>({id:"P"+n,source,sourceRow:n+1,sourceSheet:"RESUMEN PROMOS",
+ start:"2026-11-01",end:"2026-11-30",laboratory:"LAB",range:"GAMA "+n,
+ originalOffer:"20% DTO",description:"Campaña "+n,targets:{}});
+test("confirmación comprueba las filas realmente recuperables, no los contadores",()=>{
+ const campaigns=[makeRow(1),makeRow(2),makeRow(3)];
  const server={imported:2,skipped:1,promotions:[
-  {id:"1",source,targets:{}},{id:"2",source,targets:{"1":12}},
-  {id:"3",source,targets:{}},{id:"old",source:"Excel: Octubre.xlsx",targets:{}}
+  {...campaigns[0]}, {...campaigns[1],targets:{"1":12}},
+  {...campaigns[2]}, {...makeRow(4),source:"Excel: Octubre.xlsx"}
  ]};
  assert.deepEqual(importResultSummary(server,campaigns,source),{
-  imported:2,skipped:1,visible:3,drafts:2,source
+  imported:2,skipped:1,visible:3,drafts:2,source,visibleIds:["P1","P2","P3"]
  });
+});
+test("51 supuestas duplicadas pero invisibles no deben considerarse importadas con éxito",()=>{
+ const campaigns=Array.from({length:51},(_,i)=>makeRow(i+1));
+ assert.throws(()=>importResultSummary({imported:0,skipped:51,promotions:[]},campaigns,source),
+  /no devuelve todas las filas/);
+});
+test("reimportar después del borrado puede crear 51 campañas y mostrarlas",()=>{
+ const campaigns=Array.from({length:51},(_,i)=>makeRow(i+1));
+ const first=importResultSummary({imported:51,skipped:0,promotions:campaigns},campaigns,source);
+ const repeated=importResultSummary({imported:0,skipped:51,promotions:campaigns},campaigns,source);
+ const afterDelete=importResultSummary({imported:51,skipped:0,promotions:campaigns},campaigns,source);
+ assert.equal(first.visible,51);assert.equal(repeated.visible,51);
+ assert.equal(afterDelete.imported,51);assert.equal(afterDelete.visibleIds.length,51);
+});
+test("múltiples subidas antiguas del mismo Excel se muestran una vez por fila",()=>{
+ const campaigns=[makeRow(1),makeRow(2)];
+ const server={imported:0,skipped:2,promotions:[
+  {...campaigns[0],id:"older"}, {...campaigns[0],id:"newer"},
+  {...campaigns[1],id:"second"}
+ ]};
+ assert.equal(importResultSummary(server,campaigns,source).visible,2);
 });
 test("un resultado incompleto de red nunca se presenta como importación correcta",()=>{
  assert.throws(()=>importResultSummary({imported:2,skipped:0,promotions:[]},

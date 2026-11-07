@@ -46,6 +46,14 @@ test("múltiples subidas antiguas del mismo Excel se muestran una vez por fila",
  ]};
  assert.equal(importResultSummary(server,campaigns,source).visible,2);
 });
+test("reconoce el mismo Excel por contenido aunque el teléfono lo renombre",()=>{
+ const fileName="Excel: NOVIEMBRE (4).xlsx";
+ const oldSource="Excel: NOVIEMBRE (3).xlsx";
+ const campaigns=[{...makeRow(1),source:fileName,importBatchId:"XLSX-123-ABCD"}];
+ const alreadyStored=[{...campaigns[0],id:"EXISTING",source:oldSource}];
+ assert.deepEqual(importResultSummary({imported:0,skipped:1,promotions:alreadyStored},
+   campaigns,fileName).visibleIds,["EXISTING"]);
+});
 test("un resultado incompleto de red nunca se presenta como importación correcta",()=>{
  assert.throws(()=>importResultSummary({imported:2,skipped:0,promotions:[]},
   [{},{},{}],"Excel: noviembre.xlsx"),/no confirmó/);

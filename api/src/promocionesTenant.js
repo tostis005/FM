@@ -11,16 +11,27 @@ function canMutate(req,p,creator=""){
  return ids.length?ids.every(id=>allowed.has(String(id))):
    String(creator||"").toLowerCase()===String(req.user.email||"").toLowerCase();
 }
-function visiblePromos(rows,req){
+// La visibilidad se autoriza EN EL SERVIDOR, nunca por un filtro React.
+// Una promoción publicada se ve aunque sus fechas de venta sean futuras.
+export function visiblePromos(rows,req){
  const all=["administrador","superadministrador"].includes(req.context.role);
+ const manager=isManager(req);
  const allowed=allowedIds(req),email=String(req.user.email||"").toLowerCase();
- return rows.filter(r=>all||Object.keys(r.documento.targets||{}).some(id=>allowed.has(String(id)))||
-   String(r.creado_por||"").toLowerCase()===email).map(r=>{
+ return rows.filter(r=>{
+   if(all)return true;
+   const p=r.documento;
+   const assigned=Object.keys(p.targets||{}).some(id=>allowed.has(String(id)));
+   if(manager)return assigned||
+     String(r.creado_por||"").toLowerCase()===email;
+   // Empleados y colaboradores nunca reciben los borradores, ni aunque
+   // antes hubieran creado la campaña o conozcan su identificador.
+   return assigned&&["Activa","Finalizada"].includes(p.status);
+ }).map(r=>{
    const p=r.documento;
    if(all)return p;
    return {...p,targets:Object.fromEntries(Object.entries(p.targets||{})
      .filter(([id])=>allowed.has(String(id)))),sales:{},
-     managerCanEdit:isManager(req)&&canMutate(req,p,r.creado_por)};
+     managerCanEdit:manager&&canMutate(req,p,r.creado_por)};
  });
 }
 const validId=id=>typeof id==="string"&&id.length>0&&id.length<=120;

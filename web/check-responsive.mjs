@@ -177,6 +177,30 @@ try{
          await page.getByRole("heading",{name:"Artículos encontrados"}).waitFor({state:"visible",timeout:12000});
        if(path==="stock")
          await page.getByText("Último inventario conocido").waitFor({state:"visible",timeout:12000});
+       if(path==="promociones/nueva"&&viewport.width<=790)
+         await page.locator(".fm-objectives-methods").waitFor({state:"visible",timeout:15000});
+       // Las acciones de Promociones deben caber dentro del botón, sin
+       // recortar el texto. El scroll horizontal de las tablas es intencionado.
+       if(viewport.width<=790&&["promociones","promociones/seguimiento","promociones/nueva"].includes(path)){
+         const clipped=await page.evaluate(()=>{
+           const buttons=document.querySelectorAll(
+             ".campaign-header-actions>.btn,"+
+             ".fm-objectives .btn,.fm-objectives-methods button,"+
+             ".fm-followup-tickets .fm-sales-export-actions .btn"
+           );
+           return [...buttons].filter(node=>{
+             const css=getComputedStyle(node),r=node.getBoundingClientRect();
+             return css.display!=="none"&&css.visibility!=="hidden"&&r.width>1&&r.height>1;
+           }).map(node=>{
+             const r=node.getBoundingClientRect();
+             return {text:node.textContent.trim().replace(/\\s+/g," ").slice(0,85),
+               clipped:node.scrollWidth>node.clientWidth+3,
+               outside:r.left < -2||r.right>window.innerWidth+2,
+               width:Math.round(r.width),scroll:node.scrollWidth,client:node.clientWidth};
+           }).filter(item=>item.clipped||item.outside);
+         });
+         if(clipped.length)throw Error("Botones de Promociones con texto recortado: "+JSON.stringify(clipped));
+       }
        const result=await page.evaluate(()=>({
          viewport:window.innerWidth,
          htmlWidth:document.documentElement.scrollWidth,

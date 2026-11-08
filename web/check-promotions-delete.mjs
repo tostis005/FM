@@ -43,6 +43,33 @@ try{
  const del=page.getByRole("button",{name:"Eliminar Oferta con objetivos"});
  await del.waitFor({state:"visible",timeout:14000});
  await page.locator(".pill-finalizada").first().waitFor({state:"visible",timeout:10000});
+ // Comprobar tamaño y separación visual de la selección, sin alterar la operación.
+ const selectAll=page.getByRole("checkbox",{name:"Seleccionar todas las promociones filtradas"});
+ const rowCheck=page.getByRole("checkbox",{name:"Seleccionar Oferta con objetivos"});
+ await selectAll.waitFor({state:"visible"});
+ for(const checkbox of [selectAll,rowCheck]){
+  const size=await checkbox.evaluate(el=>({
+   width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height
+  }));
+  assert.ok(size.width>=20&&size.height>=20,"Checkbox de promociones demasiado pequeño: "+JSON.stringify(size));
+ }
+ await selectAll.check();
+ const bulk=page.locator(".fm-promotions-bulk-actions");
+ await bulk.getByRole("button",{name:"Eliminar seleccionadas"}).waitFor({state:"visible"});
+ await page.setViewportSize({width:375,height:812});
+ const layout=await bulk.evaluate(el=>{
+  const style=getComputedStyle(el),buttons=[...el.querySelectorAll("button")];
+  return {gap:parseFloat(style.rowGap),buttons:buttons.map(b=>{
+   const r=b.getBoundingClientRect();
+   return {text:b.textContent.trim(),left:r.left,right:r.right,width:r.width,
+    scrollWidth:b.scrollWidth,clientWidth:b.clientWidth};
+  })};
+ });
+ assert.ok(layout.gap>=8,"Las acciones múltiples necesitan espacio vertical: "+JSON.stringify(layout));
+ assert.ok(layout.buttons.every(b=>b.left>=0&&b.right<=375&&b.scrollWidth<=b.clientWidth+2),
+  "Los botones de acciones múltiples deben caber en el móvil: "+JSON.stringify(layout));
+ await selectAll.uncheck();
+ await page.setViewportSize({width:1270,height:820});
  // Cancelar no envía una operación destructiva.
  page.once("dialog",dialog=>dialog.dismiss());
  await del.click();

@@ -184,3 +184,67 @@
  .fm-objectives-extraction{padding:16px}
  .fm-objectives-extraction .lab-detail-panel.fm-sales-simulator{padding:6px 0 0}
 }
+
+
+/* Preparador de objetivos: controles legibles sin desbordamientos en móvil. */
+@media(max-width:720px){
+  .fm-objectives{min-width:0;max-width:100%}
+  .fm-objectives .fm-objectives-card{min-width:0}
+  .fm-objectives .fm-objectives-card h2,
+  .fm-objectives .fm-objectives-section-title strong{
+    overflow-wrap:anywhere;line-height:1.4;
+  }
+  .fm-objectives .fm-objectives-methods button{
+    min-height:44px;white-space:normal;overflow-wrap:anywhere;
+    text-align:center;line-height:1.35;
+  }
+  .fm-objectives .fm-objectives-methods button svg{flex-shrink:0}
+  .fm-objectives .fm-objectives-search button,
+  .fm-objectives .fm-objectives-more .btn,
+  .fm-objectives .fm-objectives-section-title .btn,
+  .fm-objectives .fm-objectives-paste-action .btn{
+    min-width:0;max-width:100%;height:auto;min-height:42px;
+    white-space:normal;overflow-wrap:anywhere;line-height:1.4;text-align:center;
+  }
+  .fm-objectives .fm-objectives-custom label{
+    min-width:0;max-width:100%;flex:1 1 190px;
+  }
+  .fm-objectives .fm-objectives-custom input{
+    min-width:0;width:100%;max-width:100%;box-sizing:border-box;
+  }
+  .fm-objectives .fm-objectives-chips>span{
+    min-width:0;max-width:100%;white-space:normal;
+    overflow-wrap:anywhere;line-height:1.5;
+  }
+  .fm-objectives .fm-objectives-chips>span button{flex-shrink:0}
+  .fm-objectives .fm-objectives-extraction .fm-sales-export-actions .btn{
+    flex:1 1 160px;min-width:0;max-width:100%;height:auto;min-height:42px;
+    white-space:normal;overflow-wrap:anywhere;line-height:1.4;text-align:center;
+  }
+  .fm-objectives .fm-objectives-create{
+    align-items:stretch;flex-wrap:wrap;gap:10px;
+  }
+  .fm-objectives .fm-objectives-create .btn{
+    min-width:0;max-width:100%;height:auto;min-height:44px;
+    white-space:normal;overflow-wrap:anywhere;line-height:1.4;text-align:center;
+  }
+}
+@media(max-width:480px){
+  .fm-objectives .fm-objectives-section-title{align-items:stretch}
+  .fm-objectives .fm-objectives-section-title>strong{width:100%}
+  .fm-objectives .fm-objectives-section-title>.btn{width:100%}
+  .fm-objectives .fm-objectives-paste-action{align-items:stretch}
+  .fm-objectives .fm-objectives-paste-action>.btn{width:100%}
+  .fm-objectives .fm-objectives-extraction .fm-sales-export-actions{
+    justify-content:stretch;width:100%;
+  }
+  .fm-objectives .fm-objectives-extraction .fm-sales-export-actions .btn{
+    flex:1 1 100%;
+  }
+  .fm-objectives .fm-objectives-create{
+    flex-direction:column;
+  }
+  .fm-objectives .fm-objectives-create .btn{
+    width:100%;
+  }
+}

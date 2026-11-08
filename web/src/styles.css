@@ -1008,3 +1008,132 @@ html,body{overflow-x:clip}
 .fm-imported-view{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:7px;
  font-size:11px;color:#668579;font-weight:650}
 .fm-imported-view .btn{padding:5px 9px;min-height:28px;font-size:11px}
+
+
+/* Ajustes exclusivamente visuales para Promociones y Seguimiento en móvil.
+   No cambiar semántica de botones, cálculos ni columnas de las tablas. */
+@media(max-width:790px){
+  .main-content .fm-unified-header-right:has(.campaign-header-actions){
+    flex:1 1 100%;width:100%;min-width:0;justify-content:flex-start;
+  }
+  .main-content .fm-unified-header-right .campaign-header-actions{
+    flex:1 1 100%;width:100%;min-width:0;justify-content:flex-start;
+  }
+  .main-content .fm-unified-header-right .campaign-header-actions>.btn{
+    flex:1 1 185px;min-width:0;max-width:100%;min-height:43px;
+    height:auto;white-space:normal;overflow-wrap:anywhere;
+    line-height:1.4;text-align:center;
+  }
+  .main-content .fm-unified-header-right .campaign-header-actions>.btn svg{
+    flex-shrink:0;
+  }
+  .main-content .fm-unified-header-right .campaign-header-actions>.fm-lab-seller-option{
+    flex:1 1 100%;min-width:0;white-space:normal;
+  }
+  .campaign-metrics-header h2,.campaign-metric>span{
+    overflow-wrap:anywhere;line-height:1.4;
+  }
+  .report-consolidated-title h2,.goal-campaign-title,.goal-title-copy{
+    min-width:0;overflow-wrap:anywhere;
+  }
+  .report-modal .report-modal-actions .btn{
+    min-width:0;max-width:100%;height:auto;
+    line-height:1.4;white-space:normal;overflow-wrap:anywhere;text-align:center;
+  }
+  .report-modal .report-modal-filters input,
+  .report-modal .report-modal-filters select{min-width:0;box-sizing:border-box}
+  .fm-followup-tickets>.fm-dual-scroll{
+    width:calc(100% - 44px);max-width:calc(100% - 44px);
+  }
+  .fm-followup-tickets .fm-table-toolbar{
+    min-width:0;flex-wrap:wrap;
+  }
+  .fm-followup-tickets .fm-sales-export-actions{
+    min-width:0;max-width:100%;display:flex;flex-wrap:wrap;gap:8px;
+  }
+  .fm-followup-tickets .fm-sales-export-actions .btn{
+    max-width:100%;min-width:0;height:auto;white-space:normal;
+    overflow-wrap:anywhere;text-align:center;line-height:1.4;
+  }
+}
+@media(max-width:600px){
+  .fm-followup-tickets>.fm-dual-scroll{
+    width:calc(100% - 30px);max-width:calc(100% - 30px);
+  }
+  .report-modal .report-modal-selection-head .report-select-all{
+    min-width:0;max-width:100%;white-space:normal;line-height:1.5;
+  }
+  .report-modal .report-modal-selection-head .report-select-all input{
+    flex:0 0 16px;
+  }
+  .report-goals-panel .goal-progress-meta{
+    flex-wrap:wrap;align-items:flex-start;justify-content:space-between;
+    gap:4px 10px;line-height:1.4;
+  }
+  .report-goals-panel .goal-group-label{
+    align-items:flex-start;
+  }
+  .report-goals-panel .goal-group-label>span:first-child{
+    min-width:0;overflow-wrap:anywhere;
+  }
+  .fm-followup-tickets .fm-sales-export-actions{
+    width:100%;justify-content:stretch;
+  }
+  .fm-followup-tickets .fm-sales-export-actions .btn{
+    flex:1 1 100%;min-height:42px;
+  }
+}
+@media(max-width:560px){
+  .main-content .fm-unified-header-right .campaign-header-actions{
+    display:flex;flex-direction:column;align-items:stretch;gap:9px;
+  }
+  .main-content .fm-unified-header-right .campaign-header-actions>.btn{
+    width:100%;flex:0 1 auto;padding:11px 13px;min-height:44px;
+  }
+  .main-content .fm-unified-header-right .campaign-header-actions>.fm-lab-seller-option{
+    flex:0 1 auto;align-self:flex-start;padding:5px 1px;
+  }
+  .campaign-metric{padding:15px 12px}
+  .campaign-metrics-header{padding:16px}
+  .report-consolidated-stats>div{padding:13px 10px}
+  .report-consolidated-stats span{overflow-wrap:anywhere;line-height:1.45}
+  .drawer-backdrop .drawer{max-width:100%;min-width:0}
+  .drawer .drawer-content>.fm-promotion-objectives-link .btn{
+    width:100%;min-width:0;min-height:44px;line-height:1.45;
+    white-space:normal;overflow-wrap:anywhere;text-align:center;
+  }
+  .drawer .drawer-extra{flex-direction:column;align-items:stretch}
+  .drawer .drawer-extra .btn{
+    width:100%;min-width:0;flex:0 1 auto;min-height:44px;
+    white-space:normal;overflow-wrap:anywhere;line-height:1.45;text-align:center;
+  }
+  .drawer .form-actions .btn{
+    width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.45;
+  }
+  .drawer .field-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .drawer .field-row .field input{min-width:0;box-sizing:border-box}
+  .drawer .field-heading{align-items:flex-start}
+  .drawer .field-heading>div{min-width:0;overflow-wrap:anywhere}
+}
+@media(max-width:420px){
+  .report-modal .report-modal-filters{grid-template-columns:minmax(0,1fr)}
+  .report-modal .report-modal-filters>.field:nth-child(4){
+    grid-column:auto;
+  }
+  .report-modal .report-modal-actions{
+    display:flex;flex-direction:column;align-items:stretch;gap:9px;
+  }
+  .report-modal .report-modal-actions .btn{
+    width:100%;flex:0 1 auto;min-height:44px;
+  }
+  .report-modal .report-modal-bottom{padding:11px 14px}
+  .report-modal .report-modal-selection-head>span{
+    min-width:0;overflow-wrap:anywhere;
+  }
+  .report-goals-panel .goal-accordion-actions{
+    flex-wrap:wrap;justify-content:flex-start;
+  }
+  .drawer .field-row{grid-template-columns:minmax(0,1fr)}
+  .drawer .target-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+  .drawer .numeric-input{flex:0 0 120px}
+}

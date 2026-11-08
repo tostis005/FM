@@ -1137,3 +1137,75 @@ html,body{overflow-x:clip}
   .drawer .target-row>div:first-child{min-width:0;overflow-wrap:anywhere}
   .drawer .numeric-input{flex:0 0 120px}
 }
+
+/* Promociones: selección múltiple visible, cómoda y coherente con el diseño. */
+.full-table-card .campaign-table th.fm-selection-column,
+.full-table-card .campaign-table td.fm-selection-column{
+  box-sizing:border-box;width:58px;min-width:58px;max-width:58px;
+  padding:12px 15px!important;text-align:center;vertical-align:middle;
+}
+.full-table-card .campaign-table .fm-selection-column input[type="checkbox"]{
+  appearance:auto;display:inline-block;vertical-align:middle;
+  width:21px;height:21px;min-width:21px;min-height:21px;
+  margin:0;accent-color:#0c9d70;cursor:pointer;
+}
+.full-table-card .campaign-table .fm-selection-column input[type="checkbox"]:focus-visible{
+  outline:3px solid #6dd0a5;outline-offset:3px;
+}
+.full-table-card .campaign-table .fm-selection-column input[type="checkbox"]:disabled{
+  cursor:not-allowed;opacity:.5;
+}
+.full-table-card .campaign-table tbody tr:has(> .fm-selection-column input[type="checkbox"]:checked){
+  background:#effaf4;
+}
+.full-table-card .campaign-table tbody tr:has(> .fm-selection-column input[type="checkbox"]:checked):hover{
+  background:#e8f7ee;
+}
+
+/* Al seleccionar campañas, las acciones son un grupo separado y no se pegan. */
+.full-table-card>.section-heading:has(.fm-promotions-bulk-actions){
+  flex-wrap:wrap;column-gap:20px;row-gap:13px;
+}
+.full-table-card>.section-heading .fm-promotions-bulk-actions{
+  display:flex;align-items:center;justify-content:flex-end;
+  flex-wrap:wrap;gap:10px 12px;min-width:0;margin-left:auto;
+}
+.fm-promotions-bulk-actions .count-label{
+  display:inline-flex;align-items:center;min-height:34px;
+  box-sizing:border-box;line-height:1.35;
+}
+.fm-promotions-bulk-actions .btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:38px;padding:9px 13px;line-height:1.35;
+  white-space:normal;text-align:center;gap:7px;
+}
+.fm-promotions-bulk-actions .btn svg{flex-shrink:0}
+.fm-promotions-bulk-actions .fm-delete-promo{
+  color:#ad4741;border-color:#f0d5d2;background:#fffafa;
+}
+.fm-promotions-bulk-actions .fm-delete-promo:hover:not(:disabled){
+  background:#fff2f0;border-color:#e3ada8;color:#962c27;
+}
+@media(max-width:790px){
+  .full-table-card>.section-heading:has(.fm-promotions-bulk-actions){
+    align-items:flex-start;
+  }
+  .full-table-card>.section-heading .fm-promotions-bulk-actions{
+    width:100%;margin-left:0;justify-content:flex-start;
+    gap:10px;
+  }
+}
+@media(max-width:560px){
+  .full-table-card>.section-heading .fm-promotions-bulk-actions .btn{
+    flex:1 1 138px;min-width:0;min-height:42px;
+  }
+  .full-table-card .campaign-table th.fm-selection-column,
+  .full-table-card .campaign-table td.fm-selection-column{
+    width:54px;min-width:54px;max-width:54px;padding:10px 13px!important;
+  }
+}
+@media(max-width:380px){
+  .full-table-card>.section-heading .fm-promotions-bulk-actions .btn{
+    flex:1 1 100%;width:100%;
+  }
+}

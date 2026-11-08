@@ -86,7 +86,7 @@ try{
  await waitTotal();
  assert.match(await row().innerText(),/Activa/);
  await row().getByRole("button",{name:"Seguimiento"}).click();
- await page.getByText("Uds. totales de CNs").first().waitFor({timeout:20000});
+ await page.locator(".campaign-metrics").getByText("Unidades totales",{exact:true}).waitFor({timeout:20000});
  await page.waitForFunction(()=>document.body.textContent.includes("22"),null,{timeout:20000});
  assert.equal(errors.length,0,errors.join(" | "));
  console.log("PROMO_E2E_MOBILE_OK: borrador 22 unidades totales, objetivos 10+0, activación manual persistente, 0 por mecánica 2x1 y seguimiento tras recarga");

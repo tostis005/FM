@@ -143,8 +143,8 @@ function CampaignMetrics({campaigns,heading,salesAvailable=false,salesLoading=fa
    <div className="campaign-metric"><span>Promociones</span><strong>{show(m.promotions)}</strong></div>
    <div className="campaign-metric"><span>CNs</span><strong>{show(m.cnCount)}</strong></div>
    <div className="campaign-metric"><span>Objetivo</span><strong>{quantity(m.target)}</strong></div>
-   <div className="campaign-metric"><span>Uds. en promoción</span><KpiValue loading={salesLoading} label="Uds. atribuidas" loadingText="Calculando…" value={quantity(m.units)}/></div>
-   <div className="campaign-metric"><span>Uds. totales de CNs</span><KpiValue loading={salesLoading} label="Uds. totales" loadingText="Calculando…" value={quantity(m.totalUnits)}/></div>
+   <div className="campaign-metric"><span title="Unidades vendidas que cumplen las condiciones de la promoción">Unidades en promoción</span><KpiValue loading={salesLoading} label="Unidades en promoción" loadingText="Calculando…" value={quantity(m.units)}/></div>
+   <div className="campaign-metric"><span title="Todas las unidades vendidas de los CN de la promoción, incluidas las que no cumplen sus condiciones">Unidades totales</span><KpiValue loading={salesLoading} label="Unidades totales" loadingText="Calculando…" value={quantity(m.totalUnits)}/></div>
     <div className="campaign-metric metric-progress"><span>{campaigns.length>1?"Cumplimiento medio":"Cumplimiento"}</span>
     <KpiValue loading={salesLoading} label="Cumplimiento" loadingText="Calculando…" value={m.completion==null?"—":percentage(m.completion)}/>{!salesLoading&&m.completion!=null&&<Progress value={m.completion}/>} 
    </div>
@@ -1278,7 +1278,7 @@ function App(){
     .map(f=>({value:f.id,label:f.name})),
   value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
       {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
-      {key:"sales",label:"Uds. promoción",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
+      {key:"sales",label:"Uds. en promoción",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
       {key:"totalSales",label:"Uds. totales",value:p=>salesStatus==="real"?sum(p.totalSales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.totalSales)):"—"}</span>},
        {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
       {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
@@ -1352,7 +1352,7 @@ function App(){
   <CampaignMetrics campaigns={reportFilteredCampaigns} heading={reportSelected.length===1?reportSelected[0].name:"Promociones seleccionadas"} salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
   {reportSelected.length>1&&<section className="card report-pharmacy-totals report-pharmacy-highlight">
    <div className="report-consolidated-head"><div className="report-consolidated-icon"><Store size={23}/></div><div className="report-consolidated-title"><h2>Consolidado por farmacia</h2></div><span className="report-consolidated-count">{reportTargets.length} farmacias</span></div>
-   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. atribuidas</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Uds. totales de CNs</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportTotalSales)+" uds.":"—"}</strong></div><div><span>Cumplimiento medio</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percentage(promotionAverageCompletion(reportFilteredCampaigns)):"—"}</strong></div></div>
+   <div className="report-consolidated-stats"><div><span>Objetivo conjunto</span><strong>{quantity(reportGoal)} uds.</strong></div><div><span>Uds. en promoción</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportSales)+" uds.":"—"}</strong></div><div><span>Uds. totales</span><strong>{salesStatus==="cargando"?<SkeletonLine width="110px" height="22px"/>:salesStatus==="real"?quantity(reportTotalSales)+" uds.":"—"}</strong></div><div><span>Cumplimiento medio</span><strong>{salesStatus==="cargando"?<SkeletonLine width="75px" height="22px"/>:salesStatus==="real"?percentage(promotionAverageCompletion(reportFilteredCampaigns)):"—"}</strong></div></div>
    {hasOverlappingPromotions(reportFilteredCampaigns)&&
      <p role="note" className="fm-sales-period-info">
       Hay promociones con el mismo CN, farmacia y fechas solapadas. Una misma

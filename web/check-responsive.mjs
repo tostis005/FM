@@ -193,7 +193,7 @@ try{
              return css.display!=="none"&&css.visibility!=="hidden"&&r.width>1&&r.height>1;
            }).map(node=>{
              const r=node.getBoundingClientRect();
-             return {text:node.textContent.trim().replace(/\\s+/g," ").slice(0,85),
+             return {text:node.textContent.trim().replace(/\s+/g," ").slice(0,85),
                clipped:node.scrollWidth>node.clientWidth+3,
                outside:r.left < -2||r.right>window.innerWidth+2,
                width:Math.round(r.width),scroll:node.scrollWidth,client:node.clientWidth};

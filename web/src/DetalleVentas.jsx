@@ -163,7 +163,6 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
        <Download size={15}/> Exportar página (CSV)</button>
      </div>
     </div>
-    {!simulator&&<p className="lab-detail-money-help">Bruto = importe neto + descuento en línea; % descuento = descuento / bruto × 100. Las devoluciones se muestran en negativo; en el Excel de laboratorio se exportan en positivo. «—» indica que no hay datos suficientes para calcular un importe.</p>}
     <HorizontalTableScroll className="table-scroll" label="líneas de venta" aria-busy={result.status==="loading"}><table className="data-table lab-detail-table smart-table">
       <thead>
         <tr>{visibleColumns.map(([key,label,,sortable=true])=><th key={key}

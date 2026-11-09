@@ -107,8 +107,8 @@ try{
   "Volver a un mes guardado mantiene las unidades manuales anteriores");
  await page.getByRole("button",{name:"Volver al formulario"}).click();
  await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:15000});
- assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"40",
-  "El panel lateral conserva el mes más recientemente editado");
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25",
+  "El panel lateral mantiene el mes seleccionado sin recalcular unidades manuales");
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByText("Gama nueva · 20% DTO").first().waitFor({timeout:15000});
  assert.equal(writes.length,2);

@@ -35,10 +35,12 @@ const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
+const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
+import {objectiveTargetsForPeriod,preferredObjectiveMonth,objectiveMonthDates,promotionObjectiveMonths,hasMonthlyObjectives,hasGoalInMonth} from "./promotionMonthlyObjectives.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode,promotionStatusSourceOnSave} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
@@ -58,7 +60,7 @@ import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -255,10 +257,12 @@ function App(){
  const [to,setTo]=useState(()=>promotionMonthRange(currentPromotionMonth())?.to||"");
  const [editingPromo,setEditingPromo]=useState(null);
  const [objectiveCampaign,setObjectiveCampaign]=useState(null);
+ const [objectiveMonth,setObjectiveMonth]=useState("");
  const [objectiveSession,setObjectiveSession]=useState(0);
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
+ const [formObjectiveMonth,setFormObjectiveMonth]=useState("");
  const [cnText,setCnText]=useState("");
  const [editingUser,setEditingUser]=useState(null);
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
@@ -387,6 +391,7 @@ function App(){
   const [salesStatus,setSalesStatus]=useState("sin_conexion");
   const [salesError,setSalesError]=useState("");
   const [salesByPromotion,setSalesByPromotion]=useState({});
+ const [goalSalesByPromotion,setGoalSalesByPromotion]=useState({});
    const [totalSalesByPromotion,setTotalSalesByPromotion]=useState({});
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
@@ -398,6 +403,7 @@ function App(){
  const [deletingPromoId,setDeletingPromoId]=useState(null);
  const [selectedPromotionIds,setSelectedPromotionIds]=useState([]);
  const [deletingSelected,setDeletingSelected]=useState(false);
+ const [activatingSelected,setActivatingSelected]=useState(false);
  useEffect(()=>setSelectedPromotionIds([]),[tenantContext?.client?.slug]);
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
@@ -434,12 +440,13 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});return;}
+     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setGoalSalesByPromotion({});setTotalSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
        try{
          const segments=[];
+         const selectedMonthRange=page==="seguimiento-global"&&reportMonth?promotionMonthRange(reportMonth):null;
          for(const p of data.promos){
            if(!includePromotionForSales(p,{page,from,to,importIds:importViewIds,
               selectedIds:reportSelectedIds,reportMatches:promo=>
@@ -447,32 +454,54 @@ function App(){
                 {status:reportStatus,month:reportMonth,year:reportYear})}))continue;
            const range=promotionSalesInterval(p,new Date(),reportTimeZone);
            if(!range)continue;
-           // También incluir borradores y campañas sin objetivos: las
-           // unidades TOTALES de los CN no dependen de su mecánica comercial.
-           for(const segment of splitPromotionSalesPeriod(range.start,range.end))
-             segments.push({...p,...segment,id:"S"+segments.length,parentId:p.id});
+           // Mantener las reglas originales de venta; limitar por el mes al consultar objetivos.
+           const begin=selectedMonthRange&&selectedMonthRange.from>range.start?
+             selectedMonthRange.from:range.start;
+           const finish=selectedMonthRange&&selectedMonthRange.to<range.end?
+             selectedMonthRange.to:range.end;
+           if(begin>finish)continue;
+           // En "todos los meses" distinguimos ventas comerciales de ventas
+           // correspondientes a meses con objetivos configurados.
+           const slices=page==="seguimiento-global"&&!reportMonth&&hasMonthlyObjectives(p)?
+             promotionObjectiveMonths(p).map(month=>{
+              const dates=objectiveMonthDates(p,month);
+              if(!dates)return null;
+              return {start:dates.from>begin?dates.from:begin,
+               end:dates.to<finish?dates.to:finish,goalRelevant:hasGoalInMonth(p,month)};
+             }).filter(x=>x&&x.start<=x.end):
+             [{start:begin,end:finish,goalRelevant:true}];
+           for(const slice of slices)
+            for(const segment of splitPromotionSalesPeriod(slice.start,slice.end))
+             segments.push({...p,...segment,id:"S"+segments.length,parentId:p.id,
+              goalRelevant:slice.goalRelevant});
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
          const results=await mapLimited(chunks,2,
            chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
-         const byPromotion={},byTotalPromotion={};
+         const byPromotion={},byTotalPromotion={},byGoalPromotion={};
          for(let i=0;i<segments.length;i++){
            const seg=segments[i],partial=results[Math.floor(i/25)]?.sales?.[seg.id]||{};
            const out=byPromotion[seg.parentId]||(byPromotion[seg.parentId]={});
-           for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
+           for(const [id,qty] of Object.entries(partial)){
+            out[id]=(out[id]||0)+(Number(qty)||0);
+            if(seg.goalRelevant){
+             const goals=byGoalPromotion[seg.parentId]||(byGoalPromotion[seg.parentId]={});
+             goals[id]=(goals[id]||0)+(Number(qty)||0);
+            }
+           }
             const totals=results[Math.floor(i/25)]?.totalSales?.[seg.id]||{};
             const totalOut=byTotalPromotion[seg.parentId]||(byTotalPromotion[seg.parentId]={});
             for(const [id,qty] of Object.entries(totals))totalOut[id]=(totalOut[id]||0)+(Number(qty)||0);
          }
 
-         setSalesByPromotion(byPromotion);setTotalSalesByPromotion(byTotalPromotion);
+         setSalesByPromotion(byPromotion);setGoalSalesByPromotion(byGoalPromotion);setTotalSalesByPromotion(byTotalPromotion);
          setSalesLastUpdated(new Date());setSalesError("");
          setSalesStatus("real");
        }catch(error){
          if(cancelled)return;
-         setSalesByPromotion({});setTotalSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
+         setSalesByPromotion({});setGoalSalesByPromotion({});setTotalSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
        }
      };
      void sync();
@@ -533,6 +562,9 @@ function App(){
  const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
  const storedPromos=(rawPromos||[]).map(p=>({...p,
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+   monthlyObjectives:p.monthlyObjectives?Object.fromEntries(Object.entries(p.monthlyObjectives).map(([month,entry])=>
+    [month,{...entry,targets:Object.fromEntries(Object.entries(entry?.targets||{})
+     .filter(([id])=>permittedPharmacyIds.has(String(id))))}])):undefined,
    sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
     totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
  }));
@@ -545,7 +577,7 @@ function App(){
     : storedUsers;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?scopePromotionSales(p,totalSalesByPromotion[p.id],"total"):{},sales:salesStatus==="real"?scopePromotionSales(p,salesByPromotion[p.id],"attributed"):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?scopePromotionSales(p,totalSalesByPromotion[p.id],"total"):{},sales:salesStatus==="real"?scopePromotionSales(p,salesByPromotion[p.id],"attributed"):{},goalSales:salesStatus==="real"?scopePromotionSales(p,goalSalesByPromotion[p.id],"attributed"):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
 
@@ -599,8 +631,10 @@ function App(){
  const reportFilteredCampaigns=reportSelected.filter(p=>selectedPharmacyIds===null||
   !Object.keys(p.targets||{}).length||Object.keys(p.targets||{}).some(id=>activePharmacySet.has(id))).map(p=>({
   ...p,
-  targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
-  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id))),
+  targets:Object.fromEntries(Object.entries(objectiveTargetsForPeriod(p,reportMonth))
+   .filter(([id])=>activePharmacySet.has(id))),
+  sales:Object.fromEntries(Object.entries(reportMonth?p.sales:p.goalSales||{})
+   .filter(([id])=>activePharmacySet.has(id))),
    totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>activePharmacySet.has(id)))
  }));
  const goalListFiltered=reportFilteredCampaigns.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" "))
@@ -705,7 +739,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setFormObjectiveMonth(preferredObjectiveMonth(entry,promotionSelectedMonth,new Date()));setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  function openObjectivePlanner(p){
   if(!canManagePromotions||p?.managerCanEdit===false)
    return setToast("No tienes permiso para asignar objetivos a esta promoción.");
@@ -713,6 +747,7 @@ function App(){
    return setToast("No tienes acceso a Nueva campaña para asignar objetivos.");
   const draft={...p,cns:p?.cns||[],targets:{...(p?.targets||{})},
    cnDescriptions:{...(p?.cnDescriptions||{})}};
+  setObjectiveMonth(preferredObjectiveMonth(draft,formObjectiveMonth||reportMonth||promotionSelectedMonth,new Date()));
   setObjectiveCampaign(draft);setObjectiveSession(n=>n+1);
   setEditingPromo(null);
   nav("promociones-objetivos",undefined,{preserveObjectiveDraft:true});
@@ -725,19 +760,29 @@ function App(){
    throw Error("La promoción ha desaparecido o no está autorizada. Vuelve al listado.");
   const combined={...stored,...objectiveCampaign,managerCanEdit:stored.managerCanEdit};
   const updated=mergeObjectivesIntoPromotion(combined,objectives,new Date(),reportTimeZone);
-  const response=await saveStoredPromotion(updated);
+  const {managerCanEdit:_editFlag,goalSales:_derivedGoalSales,totalSales:_derivedTotal,
+   salesSource:_derivedSource,...persistable}=updated;
+  const response=await saveStoredPromotion(persistable);
   if(!response.saved)throw Error("El servidor no confirmó el guardado");
-  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
+  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?persistable:p)}));
   setStatusFilter("Todos");
   setObjectiveCampaign(null);
+  setObjectiveMonth("");
   nav("promociones");
-  startPromo(updated);
+  startPromo(persistable);
   setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
  }
  function continuePlannerToDrawer(objectives){
   const base=objectiveCampaign||EMPTY_PROMO;
+  const month=objectives.objectiveMonth;
+  const monthlyObjectives=month?{...(base.monthlyObjectives||{}),
+   [month]:{targets:{...(objectives.targets||{})},
+    objectiveBaseline:objectives.objectiveBaseline,
+    objectiveBaselineRange:objectives.objectiveBaselineRange,
+    objectiveRates:objectives.objectiveRates}}:base.monthlyObjectives;
   const draft={...EMPTY_PROMO,...base,...objectives,id:null,
    name:base.name||"",start:base.start||"",end:base.end||"",status:"Borrador",
+   monthlyObjectives,
    durationMode:objectiveCampaign?.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
    simulatorDraft:true};
   setObjectiveCampaign(null);
@@ -811,7 +856,7 @@ function App(){
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
-  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,simulatorDraft:_simDraft,...fields}=promoForm;
+  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,goalSales:_derivedGoalSales,salesSource:_derivedSource,simulatorDraft:_simDraft,...fields}=promoForm;
    const result={...fields,durationMode,end:durationMode==="stock"?"":promoForm.end,
     endRaw:durationMode==="stock"?"":promoForm.endRaw,
     retroactive:needsRetroactiveValidation,sales:{},id:promoForm.id||"P"+Date.now(),
@@ -889,9 +934,38 @@ function App(){
   }catch(err){setToast("No se pudieron eliminar las promociones: "+err.message)}
   finally{setDeletingSelected(false)}
  }
+ async function activateSelectedPromotions(){
+  if(!canManagePromotions||activatingSelected||deletingSelected)return;
+  const selected=promos.filter(p=>selectedPromotionIds.some(id=>String(id)===String(p.id)));
+  const drafts=selected.filter(p=>p.status==="Borrador");
+  if(!drafts.length)return setToast("No hay promociones en borrador seleccionadas.");
+  if(drafts.some(p=>p.managerCanEdit===false))return setToast("Hay promociones fuera de tus permisos.");
+  if(drafts.length>200)return setToast("Selecciona un máximo de 200 borradores.");
+  if(!window.confirm("¿Activar "+drafts.length+" promociones? Serán visibles para las farmacias participantes, aunque sus fechas sean futuras."))return;
+  setActivatingSelected(true);
+  try{
+   const result=await activateStoredPromotions(drafts.map(p=>String(p.id)));
+   const activated=new Set((result.activatedIds||[]).map(String));
+   if(activated.size!==drafts.length)throw Error("No se confirmó la activación de todas las promociones");
+   setData(prev=>({...prev,promos:prev.promos.map(p=>activated.has(String(p.id))?
+    {...p,status:"Activa",statusSource:"manual"}:p)}));
+   setSelectedPromotionIds(prev=>prev.filter(id=>!activated.has(String(id))));
+   setToast(activated.size+" promociones activadas correctamente.");
+  }catch(error){setToast("No se pudieron activar: "+error.message);}
+  finally{setActivatingSelected(false);}
+ }
  function togglePromoPharmacy(id) {
-  const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
-  setPromoForm({...promoForm,targets});
+  const targets={...promoForm.targets};
+  const removed=Object.hasOwn(targets,id);
+  if(removed)delete targets[id];else targets[id]="";
+  // Una farmacia retirada no puede permanecer oculta en objetivos de otros meses.
+  // No cambiar las unidades de las demás farmacias.
+  const monthlyObjectives=removed&&promoForm.monthlyObjectives?
+   Object.fromEntries(Object.entries(promoForm.monthlyObjectives).map(([month,entry])=>{
+    const next={...(entry.targets||{})};delete next[id];
+    return [month,{...entry,targets:next}];
+   })):promoForm.monthlyObjectives;
+  setPromoForm({...promoForm,targets,monthlyObjectives});
  }
  async function importPromotionFile(event){
    const input=event.currentTarget;
@@ -1045,7 +1119,11 @@ function App(){
     } catch(err){setToast(err.message);}
     finally{setSavingPharmacy(false);}
   }
-  const cnParsed=parseCNs(cnText);
+  const configuredDrawerMonths=Object.keys(promoForm.monthlyObjectives||{}).sort();
+ const activeDrawerMonth=configuredDrawerMonths.includes(formObjectiveMonth)?formObjectiveMonth:configuredDrawerMonths[0]||"";
+ const drawerTargets=activeDrawerMonth?
+  promoForm.monthlyObjectives?.[activeDrawerMonth]?.targets||{}:promoForm.targets;
+ const cnParsed=parseCNs(cnText);
  const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Dashboard";
  useEffect(()=>{
   if(page!=="seguimiento-global")return;
@@ -1255,7 +1333,11 @@ function App(){
       <span className="count-label">{selectedPromotionIds.length} seleccionadas</span>
       <button type="button" className="btn btn-secondary btn-sm" disabled={deletingSelected||Boolean(deletingPromoId)}
        onClick={()=>setSelectedPromotionIds([])}>Deseleccionar</button>
-      <button type="button" className="btn btn-secondary btn-sm fm-delete-promo" disabled={deletingSelected||Boolean(deletingPromoId)}
+      {selectedPromotionIds.some(id=>promos.some(p=>String(p.id)===String(id)&&p.status==="Borrador"))&&
+       <button type="button" className="btn btn-secondary btn-sm" disabled={activatingSelected||deletingSelected||Boolean(deletingPromoId)}
+        onClick={()=>void activateSelectedPromotions()}><Check size={15}/>
+        {activatingSelected?"Activando…":"Activar seleccionadas"}</button>}
+      <button type="button" className="btn btn-secondary btn-sm fm-delete-promo" disabled={activatingSelected||deletingSelected||Boolean(deletingPromoId)}
        onClick={()=>void removeSelectedPromotions()}><Trash2 size={15}/>
        {deletingSelected?"Eliminando…":"Eliminar seleccionadas"}</button>
      </>}
@@ -1292,7 +1374,7 @@ function App(){
          <Pencil size={14}/> Editar</button>}
         {canManagePromotions&&objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
          onClick={e=>{e.stopPropagation();openObjectivePlanner(promos.find(original=>original.id===p.id)||p);}}>
-         <Target size={14}/> Asignar objetivos</button>}
+         <Target size={14}/> {hasMonthlyObjectives(p)?"Editar objetivos":"Asignar objetivos"}</button>}
         <button type="button" className="btn btn-secondary btn-sm"
          onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id);}}>
          <BarChart3 size={14}/> Seguimiento</button>
@@ -1364,6 +1446,8 @@ function App(){
      </p>}
     <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
+  <PromotionColorReport campaigns={reportFilteredCampaigns} pharmacies={pharmacies}
+   pharmacyName={pharmaName} month={reportMonth} salesReady={salesStatus==="real"} onMessage={setToast}/>
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
@@ -1418,7 +1502,9 @@ function App(){
   ]}/></div></div></>}
     {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
-      editingPromotion={objectiveCampaign} onCreatePromotion={continuePlannerToDrawer}
+      editingPromotion={objectiveCampaign} objectiveMonth={objectiveMonth}
+      onObjectiveMonthChange={month=>{setObjectiveMonth(month);setObjectiveSession(n=>n+1);}}
+      onCreatePromotion={continuePlannerToDrawer}
       onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
@@ -1550,15 +1636,43 @@ function App(){
    {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos incluidos</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
-   {Object.keys(promoForm.targets).length>0&&<div className="target-list">
-    <div className="target-head"><strong>Objetivos por farmacia</strong></div>
-    {Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}>
+   {configuredDrawerMonths.length>0&&
+      <div className="target-list">
+       <div className="target-head"><strong>Objetivos mensuales configurados</strong></div>
+       {configuredDrawerMonths.map(month=><div className="target-row" key={month}>
+        <strong>{new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>
+        <span>{quantity(sum(promoForm.monthlyObjectives[month]?.targets))} uds.</span>
+       </div>)}
+       <label>Mes que estás editando
+        <select value={activeDrawerMonth} onChange={e=>setFormObjectiveMonth(e.target.value)}>
+         {configuredDrawerMonths.map(month=><option key={month} value={month}>
+          {new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}
+         </option>)}
+        </select>
+       </label>
+       <small>Las unidades de cada mes se guardan de manera independiente. Los porcentajes históricos solo son una referencia.</small>
+      </div>}
+     {Object.keys(drawerTargets||{}).length>0&&<div className="target-list">
+    <div className="target-head"><strong>Objetivos por farmacia {activeDrawerMonth?"· "+activeDrawerMonth:""}</strong></div>
+    {Object.entries(drawerTargets||{}).map(([id,value])=><div className="target-row" key={id}>
      <div><strong>{pharmaName(id)}</strong><small>{id}</small></div>
      <div className="numeric-input"><input type="number" min="0" step="1" value={value}
-      onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})}
+      onChange={e=>{
+       const next=e.target.value;
+       if(!activeDrawerMonth){
+        setPromoForm(prev=>({...prev,targets:{...prev.targets,[id]:next}}));
+       }else{
+        setPromoForm(prev=>({...prev,
+         monthlyObjectives:{...prev.monthlyObjectives,
+          [activeDrawerMonth]:{...prev.monthlyObjectives[activeDrawerMonth],
+           targets:{...prev.monthlyObjectives[activeDrawerMonth].targets,[id]:next}}},
+         targets:configuredDrawerMonths.length===1?{...prev.targets,[id]:next}:prev.targets
+        }));
+       }
+      }}
       aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div>
     </div>)}
-    <div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(promoForm.targets))} uds.</strong></div>
+    <div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(drawerTargets))} uds.</strong></div>
    </div>}
    {promoSaveError&&<p role="alert" className="fm-manage-feedback">{promoSaveError}</p>}
    <FormActions onCancel={()=>{if(!savingPromo)setEditingPromo(null)}} disabled={savingPromo} label={savingPromo?"Guardando…":editingPromo==="nuevo"?"Crear campaña":"Guardar cambios"}/>

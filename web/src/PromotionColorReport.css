@@ -1,0 +1,30 @@
+.fm-color-report{display:flex;flex-direction:column;gap:16px;min-width:0}
+.fm-color-report-heading,.fm-color-report-controls{display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap}
+.fm-color-report-heading h2{margin:0 0 5px;font-size:1.17rem}
+.fm-color-report-heading p,.fm-color-report-note{margin:0;color:var(--muted,#64748b);font-size:.88rem}
+.fm-color-report-actions,.fm-color-report-switch{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.fm-color-report-actions .btn{display:inline-flex;align-items:center;gap:7px;white-space:normal}
+.fm-color-report-switch{border:1px solid var(--line,#dbe5e2);border-radius:10px;padding:3px}
+.fm-color-report-switch button{border:0;border-radius:7px;padding:9px 12px;background:transparent;color:inherit;cursor:pointer;display:flex;gap:7px;align-items:center}
+.fm-color-report-switch button.active{background:#e0f2e8;color:#125c3d;font-weight:700}
+.fm-color-report-controls label{display:flex;align-items:center;gap:9px;font-size:.9rem}
+.fm-color-report-controls select{max-width:250px;padding:8px;border-radius:8px;border:1px solid #c9d7d3;background:var(--surface,#fff);color:inherit}
+.fm-color-report-period{font-size:.83rem;color:var(--muted,#64748b)}
+.fm-color-report-scroll{width:100%;max-height:410px;overflow:auto;border:1px solid var(--line,#dbe5e2);border-radius:10px}
+.fm-color-report-scroll table{width:100%;border-collapse:collapse;font-size:.88rem}
+.fm-color-report-scroll th{position:sticky;top:0;background:#194f3e;color:white;text-align:left;padding:11px 13px;white-space:nowrap}
+.fm-color-report-scroll td{padding:10px 13px;border-bottom:1px solid var(--line,#e6edeb)}
+.fm-color-report-scroll td:nth-child(n+3){text-align:right}
+.fm-color-report-pct{display:inline-block;min-width:74px;padding:5px 9px;border-radius:6px;text-align:center;font-weight:700}
+.fm-color-success{background:#d9f3e4;color:#17663c}
+.fm-color-warning{background:#fff1ca;color:#825400}
+.fm-color-danger{background:#ffe1dd;color:#9c332d}
+.fm-color-none{background:#edf0f3;color:#57606d}
+.fm-objective-month-options{display:flex;flex-wrap:wrap;gap:8px}
+.fm-objective-month-options button{white-space:normal}
+.fm-objective-month-options button.active{border-color:#218260;background:#e4f4eb;color:#176449}
+.fm-objectives-month-range{margin:8px 0 0;font-size:.87rem;color:var(--muted,#64748b)}
+@media(max-width:680px){.fm-color-report-heading,.fm-color-report-controls{align-items:stretch;flex-direction:column}
+.fm-color-report-actions .btn{flex:1;justify-content:center}
+.fm-color-report-switch button{flex:1;justify-content:center}
+.fm-color-report-scroll table{min-width:580px}}

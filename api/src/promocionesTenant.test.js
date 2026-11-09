@@ -140,3 +140,30 @@ test("API: gestor ve borradores de sus farmacias, pero no los de otra farmacia a
   user:{email:"gestor@example.com"}};
  assert.deepEqual(visiblePromos(rows,req).map(p=>p.id),["P1","P3"]);
 });
+
+test("API guarda objetivos por mes y rechaza farmacias o meses fuera de la vigencia",()=>{
+ const ids=new Set(["1","2"]);
+ const campaign={id:"M",name:"Objetivos por mes",start:"2026-10-01",end:"2026-12-15",
+  durationMode:"dates",status:"Activa",cns:["123456"],targets:{"1":125,"2":20},
+  monthlyObjectives:{
+   "2026-11":{targets:{"1":125,"2":20},objectiveBaseline:"previous",
+    objectiveRates:{"1":10,"2":5}},
+   "2026-12":{targets:{"1":80},objectiveBaseline:"year",objectiveRates:{"1":8}}
+  }};
+ const stored=cleanDocument(campaign,campaign.id,ids);
+ assert.deepEqual(stored?.monthlyObjectives,campaign.monthlyObjectives);
+ assert.deepEqual(stored?.targets,campaign.targets);
+ assert.equal(cleanDocument({...campaign,monthlyObjectives:{"2027-01":{targets:{"1":5}}}},
+  campaign.id,ids),null);
+ assert.equal(cleanDocument({...campaign,monthlyObjectives:{"2026-11":{targets:{"3":5}}}},
+  campaign.id,ids),null);
+ assert.equal(cleanDocument({...campaign,monthlyObjectives:{"2026-11":{targets:{"1":-2}}}},
+  campaign.id,ids),null);
+ const rows=[{documento:campaign,creado_por:"admin@example.com"}];
+ const restricted=visiblePromos(rows,{context:{role:"farmacia",allowedPharmacyIds:[1]},
+  user:{email:"employee@example.com"}});
+ assert.deepEqual(restricted[0].monthlyObjectives["2026-11"].targets,{"1":125});
+ assert.deepEqual(restricted[0].monthlyObjectives["2026-11"].objectiveRates,{"1":10});
+ assert.deepEqual(restricted[0].monthlyObjectives["2026-12"].targets,{"1":80});
+ assert.deepEqual(restricted[0].targets,{"1":125});
+});

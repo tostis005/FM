@@ -853,7 +853,7 @@ function App(){
   const original=data.promos.find(p=>String(p.id)===String(promoForm.id));
   const now=new Date(),today=civilToday(now,reportTimeZone);
   const oldStatus=original?effectivePromotionStatus(original,now,reportTimeZone):"";
-  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,simulatorDraft:_simDraft,...fields}=promoForm;
+  const {managerCanEdit:_scopeFlag,totalSales:_derivedTotals,goalSales:_derivedGoalSales,salesSource:_derivedSource,simulatorDraft:_simDraft,...fields}=promoForm;
    const result={...fields,durationMode,end:durationMode==="stock"?"":promoForm.end,
     endRaw:durationMode==="stock"?"":promoForm.endRaw,
     retroactive:needsRetroactiveValidation,sales:{},id:promoForm.id||"P"+Date.now(),
@@ -952,8 +952,17 @@ function App(){
   finally{setActivatingSelected(false);}
  }
  function togglePromoPharmacy(id) {
-  const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
-  setPromoForm({...promoForm,targets});
+  const targets={...promoForm.targets};
+  const removed=Object.hasOwn(targets,id);
+  if(removed)delete targets[id];else targets[id]="";
+  // Una farmacia retirada no puede permanecer oculta en objetivos de otros meses.
+  // No cambiar las unidades de las demás farmacias.
+  const monthlyObjectives=removed&&promoForm.monthlyObjectives?
+   Object.fromEntries(Object.entries(promoForm.monthlyObjectives).map(([month,entry])=>{
+    const next={...(entry.targets||{})};delete next[id];
+    return [month,{...entry,targets:next}];
+   })):promoForm.monthlyObjectives;
+  setPromoForm({...promoForm,targets,monthlyObjectives});
  }
  async function importPromotionFile(event){
    const input=event.currentTarget;
@@ -1620,7 +1629,17 @@ function App(){
    {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos incluidos</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
-   {Object.keys(promoForm.targets).length>0&&<div className="target-list">
+   {promoForm.monthlyObjectives&&Object.keys(promoForm.monthlyObjectives).length>0&&
+      <div className="target-list">
+       <div className="target-head"><strong>Objetivos mensuales guardados</strong></div>
+       {Object.entries(promoForm.monthlyObjectives).sort(([a],[b])=>a.localeCompare(b))
+        .map(([month,entry])=><div className="target-row" key={month}>
+         <strong>{new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>
+         <span>{quantity(sum(entry.targets))} uds. · {Object.keys(entry.targets||{}).length} farmacias</span>
+        </div>)}
+       <small>Para modificar estas cifras sin perder los objetivos manuales, usa «Asignar objetivos con ventas históricas y stock» y elige el mes.</small>
+      </div>}
+     {Object.keys(promoForm.targets).length>0&&!Object.keys(promoForm.monthlyObjectives||{}).length&&<div className="target-list">
     <div className="target-head"><strong>Objetivos por farmacia</strong></div>
     {Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}>
      <div><strong>{pharmaName(id)}</strong><small>{id}</small></div>

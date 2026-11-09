@@ -113,7 +113,7 @@ test("cambiar fechas tras configurar objetivos no los reasigna automáticamente"
 test("sin fecha de fin por agotar stock puede escoger meses futuros",()=>{
  const dates={...proposal,start:"2027-03-05",end:"",durationMode:"stock"};
  assert.deepEqual(promotionDraftGoalMonths(dates,new Date("2026-11-09T09:00:00Z")),
-  ["2027-03","2027-04","2027-05"]);
+  ["2027-03","2027-04","2027-05","2027-06"]);
  const may=assignProposalToMonth(dates,"2027-05",new Date("2026-11-09T09:00:00Z"));
  assert.equal(may.monthlyObjectives["2027-05"].targets["2"],80);
 });

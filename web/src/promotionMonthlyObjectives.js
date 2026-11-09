@@ -77,7 +77,7 @@ export function objectiveHistoryAnchor(month,today){
 }
 export function historicPeriodAvailable(p,today){
  // No presentar cero ventas como histórico de un mes todavía sin terminar.
- return Boolean(p?.from&&p?.to&&p.to<today);
+ return Boolean(p?.from&&p?.to&&p.from<=today&&\n  (p.id==="custom"?p.to<=today:p.to<today));
 }
 export function sanitizeMonthlyObjectives(p,allowed){
  const input=p?.monthlyObjectives;

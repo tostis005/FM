@@ -1079,6 +1079,9 @@ function App(){
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
+   // El directorio deja de ser un acceso administrativo oculto, pero debe
+   // respetar que el módulo Proveedores esté habilitado para este cliente.
+   if(item.id==="proveedores"&&tenantContext?.modules?.proveedores!==true)return false;
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
@@ -1087,7 +1090,8 @@ function App(){
      (item.id==="promociones"&&canOpenSection("seguimiento-global"));
    return true;
  });
- const allowed=CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
+ const allowed=page==="proveedores"?Boolean(tenantContext?.modules?.proveedores)&&canOpenSection(page):
+   CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.
  // No redirigir de /ventas a /promociones mientras el rol aún no está resuelto.

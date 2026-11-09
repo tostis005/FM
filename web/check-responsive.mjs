@@ -360,13 +360,15 @@ try{
          if(await stockGoal.inputValue()!=="6")
            throw Error("El objetivo de stock no se ha rellenado desde Farmatic");
          await stockGoal.fill("4");
-         await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).click();
+         await page.getByRole("button",{name:"Crear promoción con esta propuesta",exact:true}).click();
          const campaignDrawer=page.locator(".drawer");
          await campaignDrawer.waitFor({state:"visible",timeout:10000});
-         if(!await campaignDrawer.getByRole("radio",{name:"Hasta agotar stock"}).isChecked())
-           throw Error("Elegir stock debe preseleccionar Hasta agotar stock en el formulario");
-         if(await campaignDrawer.getByLabel("Fecha de fin").count())
-           throw Error("La campaña hasta agotar stock no debe pedir fecha de fin");
+         if(!await campaignDrawer.getByRole("radio",{name:"Por fechas"}).isChecked())
+           throw Error("La base de stock no determina la duración comercial de una campaña");
+         if(!await campaignDrawer.getByLabel("Fecha de fin").count())
+           throw Error("Las fechas se configuran en el formulario, después de simular");
+         if(await campaignDrawer.locator(".fm-promotion-proposal-month").count())
+           throw Error("No se puede escoger mes sin definir las fechas de la promoción");
          if(await campaignDrawer.locator(".increase-controls").count()||
             await campaignDrawer.getByRole("button",{name:"Aplicar",exact:true}).count())
            throw Error("Los objetivos ya calculados no necesitan incremento ni Aplicar");
@@ -397,12 +399,12 @@ try{
            .waitFor({state:"hidden",timeout:12000});
          if(await stockGoal.inputValue()!=="0")
            throw Error("Sin stock, el objetivo manual debe partir de 0");
-         if(await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).isDisabled())
+         if(await page.getByRole("button",{name:"Crear promoción con esta propuesta",exact:true}).isDisabled())
            throw Error("El modo stock sin datos no debe bloquear la campaña");
          if(await page.getByText(/El objetivo se rellena con las existencias|Datos sincronizados desde Farmatic|stock de Farmatic no está disponible/i).count())
            throw Error("El modo stock sigue mostrando explicaciones que deben eliminarse");
          await stockGoal.fill("3");
-         await page.getByRole("button",{name:"Continuar con la campaña",exact:true}).click();
+         await page.getByRole("button",{name:"Crear promoción con esta propuesta",exact:true}).click();
          await page.locator(".drawer").waitFor({state:"visible",timeout:10000});
          if(await page.locator(".drawer .target-row input").first().inputValue()!=="3")
            throw Error("El objetivo manual sin stock no llega al formulario de campaña");

@@ -252,8 +252,12 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
      const p=row.documento;
      const positive=targets=>Object.values(targets||{}).some(value=>Number(value)>0);
      const goals=positive(p.targets)||Object.values(p.monthlyObjectives||{}).some(entry=>positive(entry.targets));
-     const valid=p.status==="Borrador"&&p.type&&p.type!=="sin_clasificar"&&
-       Array.isArray(p.cns)&&p.cns.length>0&&goals&&
+     const datesOk=/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"")&&
+       (p.durationMode==="stock"||/^20\d{2}-\d{2}-\d{2}$/.test(p.end||"")&&p.end>=p.start);
+     const unitsOk=Object.values(p.targets||{}).every(value=>
+       value!==""&&Number.isSafeInteger(Number(value))&&Number(value)>=0);
+     const valid=p.status==="Borrador"&&datesOk&&unitsOk&&p.type&&p.type!=="sin_clasificar"&&
+       Array.isArray(p.cns)&&p.cns.length>0&&p.cns.every(cn=>/^\d{6}$/.test(cn))&&goals&&
        (!["segunda_porcentaje","descuento_porcentaje"].includes(p.type)||
          Number(p.discountPercent)>0&&Number(p.discountPercent)<=100)&&
        (!["descuento_importe","segunda_importe"].includes(p.type)||

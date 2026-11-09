@@ -30,8 +30,11 @@ export function visiblePromos(rows,req){
    const p=r.documento;
    if(all)return p;
    return {...p,targets:Object.fromEntries(Object.entries(p.targets||{})
-     .filter(([id])=>allowed.has(String(id)))),sales:{},
-     managerCanEdit:manager&&canMutate(req,p,r.creado_por)};
+     .filter(([id])=>allowed.has(String(id)))),
+     monthlyObjectives:Object.fromEntries(Object.entries(p.monthlyObjectives||{}).map(([month,entry])=>
+      [month,{...entry,targets:Object.fromEntries(Object.entries(entry?.targets||{})
+       .filter(([id])=>allowed.has(String(id))))}])),
+     sales:{},managerCanEdit:manager&&canMutate(req,p,r.creado_por)};
  });
 }
 const validId=id=>typeof id==="string"&&id.length>0&&id.length<=120;
@@ -47,6 +50,22 @@ export function cleanDocument(raw,id,pharmacyIds) {
   if(ids.length>500||ids.some(key=>!pharmacyIds.has(String(key))||
     (raw.targets[key]!=="" && (!Number.isFinite(Number(raw.targets[key])) || Number(raw.targets[key])<0))))
     return null;
+  if(raw.monthlyObjectives!==undefined){
+    const months=raw.monthlyObjectives;
+    if(!months||typeof months!=="object"||Array.isArray(months)||Object.keys(months).length>60)return null;
+    for(const [month,entry] of Object.entries(months)){
+      if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)||!entry||
+        typeof entry!=="object"||Array.isArray(entry)||!entry.targets||
+        typeof entry.targets!=="object"||Array.isArray(entry.targets))return null;
+      const participants=Object.entries(entry.targets);
+      if(participants.length>500||participants.some(([id,value])=>
+       !pharmacyIds.has(id)||!Object.hasOwn(raw.targets,id)||
+       !Number.isSafeInteger(Number(value))||Number(value)<0))return null;
+      if(!/^20\d{2}-\d{2}-\d{2}$/.test(raw.start||"")||
+        month<raw.start.slice(0,7)||
+        (raw.end&&month>String(raw.closedOn||raw.end).slice(0,7)))return null;
+    }
+  }
   // Los documentos heredados de Excel pueden no tener modalidad explícita.
   // En campañas nuevas, validar siempre fechas y ausencia de fin para stock.
   if(raw.durationMode!==undefined){
@@ -201,6 +220,54 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
     return res.json({deletedIds:deleted.map(r=>r.id),removed:deleted.length});
    }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e)}
    finally{db?.release()}
+  });
+  // Activación múltiple atómica: cada campaña debe ser válida y estar autorizada.
+  app.post("/api/tenant/promociones/activar-lote",...requireTenantModule("promociones"),async(req,res,next)=>{
+   if(!ROLE_EDIT.has(req.context.role))return res.status(403).json({error:"Sin permiso para activar promociones"});
+   const schema=req.context.client.schema,ids=req.body?.ids;
+   if(!SCHEMA.test(schema)||!Array.isArray(ids)||!ids.length||ids.length>200||
+      ids.some(id=>!validId(id))||new Set(ids).size!==ids.length)
+     return res.status(400).json({error:"Selecciona entre 1 y 200 promociones válidas"});
+   let db;
+   try{
+    db=await pool.connect();await db.query("BEGIN");
+    const {rows}=await db.query(
+     `SELECT id,documento,creado_por FROM "${schema}".fm_promociones
+      WHERE id=ANY($1::text[]) FOR UPDATE`,[ids]);
+    if(rows.length!==ids.length||rows.some(row=>!canMutate(req,row.documento,row.creado_por))){
+     await db.query("ROLLBACK");
+     return res.status(403).json({error:"Alguna promoción no existe o está fuera de tus permisos"});
+    }
+    for(const row of rows){
+     const p=row.documento;
+     const positive=targets=>Object.values(targets||{}).some(value=>Number(value)>0);
+     const goals=positive(p.targets)||Object.values(p.monthlyObjectives||{}).some(entry=>positive(entry.targets));
+     const valid=p.status==="Borrador"&&p.type&&p.type!=="sin_clasificar"&&
+       Array.isArray(p.cns)&&p.cns.length>0&&goals&&
+       (!["segunda_porcentaje","descuento_porcentaje"].includes(p.type)||
+         Number(p.discountPercent)>0&&Number(p.discountPercent)<=100)&&
+       (!["descuento_importe","segunda_importe"].includes(p.type)||
+         Number(p.discountAmount)>0)&&
+       (p.type!=="precio_especial"||
+         p.specialPrice!==""&&p.specialPrice!=null&&Number(p.specialPrice)>=0);
+     if(!valid){
+      await db.query("ROLLBACK");
+      return res.status(400).json({error:"Revisa tipo, artículos y objetivos de «"+p.name+"» antes de activarla."});
+     }
+    }
+    for(const row of rows){
+     await db.query(`INSERT INTO "${schema}".fm_promocion_revisiones
+      (promocion_id,documento_anterior,cambiado_por) VALUES($1,$2::jsonb,$3)`,
+      [row.id,JSON.stringify(row.documento),req.user.email]);
+     await db.query(`UPDATE "${schema}".fm_promociones
+      SET documento=$2::jsonb,actualizado_por=$3,actualizado_en=now() WHERE id=$1`,
+      [row.id,JSON.stringify({...row.documento,status:"Activa",statusSource:"manual"}),
+       req.user.email]);
+    }
+    await db.query("COMMIT");
+    return res.json({activatedIds:ids});
+   }catch(e){if(db)await db.query("ROLLBACK").catch(()=>{});next(e);}
+   finally{db?.release();}
   });
   app.put("/api/tenant/promociones/:id",...requireTenantModule("promociones"),async(req,res,next)=>{
     if(!ROLE_EDIT.has(req.context.role))

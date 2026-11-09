@@ -1182,7 +1182,11 @@ function App(){
  useEffect(()=>{
   if(page!=="promociones-objetivos")return;
   const route=objectiveEditorRoute(window.location.pathname,window.location.search);
-  if(!route?.id&&!route?.invalid)return;
+  if(!route?.id&&!route?.invalid){
+   setObjectiveRestoreError("");
+   if(objectiveCampaign){setObjectiveCampaign(null);setObjectiveMonth("");}
+   return;
+  }
   if(route.invalid){
    setObjectiveRestoreError("El identificador de promoción de la URL no es válido.");
    return;
@@ -1236,7 +1240,7 @@ function App(){
    return true;
  });
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
-  {editingObjectives:Boolean(objectiveCampaign)});
+  {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
  const allowed=page==="proveedores"?canOpenSection(page):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);

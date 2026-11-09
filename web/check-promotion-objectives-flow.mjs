@@ -131,6 +131,9 @@ try{
   "Volver al listado tampoco abre el panel de la derecha");
  await page.getByRole("button",{name:"Editar objetivos",exact:true}).click();
  await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).waitFor({timeout:15000});
+ await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).click();
+ await page.waitForFunction(()=>document.querySelector('input[aria-label="Objetivo Abadía"]')?.value==="25",
+  null,{timeout:15000});
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
  await page.getByRole("button",{name:"Volver a promociones"}).click();
  await page.reload({waitUntil:"domcontentloaded"});

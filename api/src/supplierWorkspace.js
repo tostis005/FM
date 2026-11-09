@@ -41,7 +41,7 @@ async function categories(pool,slug){
 }
 async function contacts(pool,slug,id){
  const {rows}=await pool.query(
-  "SELECT id::text,nombre AS name,apellidos AS surname,cargo AS position,email,telefono AS phone,notas AS notes,principal AS primary,creado_en AS createdAt FROM farmetrica.proveedor_contactos WHERE cliente_slug=$1 AND proveedor_id=$2 ORDER BY principal DESC,nombre,apellidos",
+  "SELECT id::text,nombre AS name,apellidos AS surname,cargo AS position,email,telefono AS phone,notas AS notes,principal AS \"primary\",creado_en AS createdAt FROM farmetrica.proveedor_contactos WHERE cliente_slug=$1 AND proveedor_id=$2 ORDER BY principal DESC,nombre,apellidos",
   [slug,id]);
  return rows;
 }

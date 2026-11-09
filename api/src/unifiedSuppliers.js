@@ -291,6 +291,23 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     SET proveedor_id=$2,procedencia='manual',actualizado_en=now()
     WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[]) RETURNING id`,
     [slug,destination,sources]);
+   // Conservar toda la documentación, contactos y ficha enriquecida al fusionar.
+   // Los contactos principales de origen se degradan para no violar el único
+   // principal por proveedor; el principal del destino siempre prevalece.
+   await db.query(`UPDATE farmetrica.proveedor_contactos
+    SET principal=false WHERE cliente_slug=$1 AND proveedor_id=ANY($2::bigint[]) AND principal`,
+    [slug,sources]);
+   await db.query(`UPDATE farmetrica.proveedor_contactos SET proveedor_id=$2
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query(`UPDATE farmetrica.proveedor_documentos SET proveedor_id=$2
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query(`INSERT INTO farmetrica.proveedor_fichas(cliente_slug,proveedor_id,datos)
+    SELECT cliente_slug,$2,datos FROM farmetrica.proveedor_fichas
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])
+    ORDER BY actualizado_en DESC LIMIT 1
+    ON CONFLICT(cliente_slug,proveedor_id) DO NOTHING`,[slug,destination,sources]);
    // La frecuencia del destino prevalece; si no tiene una, se conserva una de origen.
    await db.query(`INSERT INTO farmetrica.preparador_frecuencia_laboratorio
     (cliente_slug,laboratorio_clave,intervalo_dias)

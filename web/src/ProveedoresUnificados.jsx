@@ -47,7 +47,7 @@ const Frequency=({value,onChange,disabled,name})=><select aria-label={"Frecuenci
  {[14,21,30].map(x=><option key={x} value={x}>Cada {x} días</option>)}
  </select>;
 
-export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
+export default function ProveedoresUnificados({clientSlug,canEditMaster=false,canMergeMaster=false}){
  const [suppliers,setSuppliers]=useState([]),[sources,setSources]=useState([]),
   [pharmacies,setPharmacies]=useState([]),[frequencies,setFrequencies]=useState([]);
  const [tab,setTab]=useState("todos"),[search,setSearch]=useState(""),
@@ -63,15 +63,15 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
   try{
    const [p,s,f,q]=await Promise.all([
     api(clientSlug,"/api/tenant/proveedores-unificados"),
-    api(clientSlug,"/api/tenant/proveedores"),
-    api(clientSlug,"/api/tenant/farmacias"),
-    api(clientSlug,"/api/tenant/pedidos/frecuencias").catch(()=>({items:[]}))]);
+    canEditMaster?api(clientSlug,"/api/tenant/proveedores"):Promise.resolve([]),
+    canEditMaster?api(clientSlug,"/api/tenant/farmacias"):Promise.resolve([]),
+    canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias").catch(()=>({items:[]})):Promise.resolve({items:[]})]);
    setSuppliers(Array.isArray(p)?p:[]);setSources(Array.isArray(s)?s:[]);
    setPharmacies(Array.isArray(f)?f:[]);setFrequencies(q.items||[]);
   }catch(e){setError(e.message)}
   finally{setLoading(false)}
  }
- useEffect(()=>{void refresh()},[clientSlug]);
+ useEffect(()=>{void refresh()},[clientSlug,canEditMaster,canMergeMaster]);
  const linked=useMemo(()=>new Set(suppliers.flatMap(p=>(p.origins||[]).map(o=>
   String(o.pharmacyCode).toUpperCase()+"|"+cleanCode(o.sourceCode)))),[suppliers]);
  const pending=useMemo(()=>{
@@ -104,7 +104,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
  const matches=pending.filter(p=>[p.name,p.pharmacyName,p.sourceCode].join(" ")
   .toLocaleLowerCase("es").includes(search.trim().toLocaleLowerCase("es")));
  const frequenciesByKey=new Map(frequencies.map(f=>[f.key,f.days]));
- const checked=new Set(selected),canMerge=tab==="laboratorios"&&canEditMaster;
+ const checked=new Set(selected),canMerge=tab==="laboratorios"&&canMergeMaster;
  const destinations=suppliers.filter(isLaboratory).filter(p=>!checked.has(String(p.id))&&
   selected.every(id=>suppliers.find(x=>String(x.id)===id)?.class===p.class));
  const changeTab=value=>{setTab(value);setSearch("");setLimit(60);setSelected([]);setMergeTo("");setShowSuggestions(false)};
@@ -182,11 +182,11 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
    <button type="button" className="fm-master-name-link" onClick={e=>{e.stopPropagation();setSelectedSupplier(p.id)}}>{p.name}</button>
    <small>Proveedor #{p.id}</small></div>},
   {key:"class",label:"Tipo",value:p=>LABELS[p.class]||p.class,filterMode:"multi",
-   render:p=><div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
-    <select aria-label={"Tipo de "+p.name} className="fm-master-type" value={p.class} disabled={busy||!canEditMaster}
+   render:p=>canEditMaster?<div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+    <select aria-label={"Tipo de "+p.name} className="fm-master-type" value={p.class} disabled={busy}
      onChange={e=>void setType(p,e.target.value)}>{TYPES.map(t=><option key={t} value={t}>{LABELS[t]}</option>)}</select>
     <small className="fm-master-type-caption">{LABELS[p.class]}</small>
-   </div>},
+   </div>:<span className="fm-master-readonly-type">{LABELS[p.class]||p.class}</span>},
   {key:"origins",label:"Origen en farmacias",value:p=>(p.origins||[]).map(o=>[o.pharmacyCode,o.sourceCode,o.sourceName].join(" ")).join(" "),
    render:p=><details className="fm-master-origins" onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
     <summary><Link2 size={14}/> {p.origins?.length||0} {(p.origins||[]).length===1?"código":"códigos"}</summary>
@@ -210,19 +210,20 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
   {key:"actions",label:"Acción",value:()=>"",sortable:false,searchable:false,
    render:p=>canEditMaster?<button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setLinking(p);setChosen("");setNewOriginType("DIRECTO")}}>Clasificar / vincular <ChevronRight size={14}/></button>:<span className="fm-muted">Solo lectura</span>}
  ];
- if(categoryView)return <SupplierCategories clientSlug={clientSlug} onBack={()=>setCategoryView(false)}/>;
+ if(categoryView&&canEditMaster)return <SupplierCategories clientSlug={clientSlug} onBack={()=>setCategoryView(false)}/>;
  if(selectedSupplier)return <SupplierWorkspace clientSlug={clientSlug} supplierId={selectedSupplier}
   onBack={()=>{setSelectedSupplier(null);void refresh()}} onSupplierChanged={()=>void refresh()} onCategories={()=>setCategoryView(true)}/>;
- const nPending=tab==="pendientes";
+ const nPending=tab==="pendientes"&&canEditMaster;
  return <div className="fm-management fm-production-panel fm-unified-master">
   <header className="fm-supplier-head">
    <div className="fm-supplier-heading">
-    <span className="fm-master-eyebrow"><Users size={14}/> Configuración · Proveedores</span>
-    <h1>Maestro de proveedores</h1>
-    <p>Clasifica todos los proveedores de las farmacias. Unifica únicamente los laboratorios para preparar pedidos conjuntos.</p>
+    <span className="fm-master-eyebrow"><Users size={14}/> Proveedores · Directorio compartido</span>
+    <h1>{canEditMaster?"Maestro de proveedores":"Directorio de proveedores"}</h1>
+    <p>{canEditMaster?"Gestiona proveedores, contactos y documentación de todo el grupo. Los cambios se comparten entre farmacias.":
+      "Consulta las fichas, contactos y documentos compartidos del grupo de farmacias."}</p>
    </div>
    <div className="fm-master-header-actions">
-    <button type="button" className="btn btn-secondary" onClick={()=>setCategoryView(true)}><FolderOpen size={15}/> Categorías documentales</button>
+    {canEditMaster&&<button type="button" className="btn btn-secondary fm-master-categories-button" aria-label="Configurar categorías documentales" title="Configurar categorías documentales" onClick={()=>setCategoryView(true)}><FolderOpen size={15}/><span>Categorías</span></button>}
     <button type="button" className="btn btn-secondary" disabled={loading||busy} onClick={()=>void refresh()}><RefreshCcw size={15}/> Actualizar</button>
     {canEditMaster&&<button type="button" className="btn btn-primary" disabled={busy} onClick={()=>editSupplier(null)}><Plus size={16}/> Nuevo proveedor</button>}
    </div>
@@ -237,7 +238,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
     </button>)}
   </div>
   <div className="fm-supplier-tabs" role="tablist" aria-label="Vistas del maestro">
-   {TABS.map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
+   {TABS.filter(([key])=>canEditMaster||key!=="pendientes").map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
     className={tab===key?"active":""} onClick={()=>changeTab(key)}>
     {label} <span>{counts[key]}</span>
    </button>)}
@@ -253,13 +254,13 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
        nPending?"Códigos de Farmatic que todavía no tienen un proveedor definitivo asignado.":
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>
-    <span className="fm-master-count">{nPending?matches.length:visible.length+(tab==="todos"?matches.length:0)} resultados</span>
+    <span className="fm-master-count">{nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"?matches.length:0)} resultados</span>
    </div>
    <div className="fm-master-toolbar">
     <label className="fm-master-search"><span><Search size={15}/> Buscar proveedor o código</span>
      <input type="search" value={search} placeholder="Nombre, código, farmacia…" onChange={e=>{setSearch(e.target.value);setLimit(60)}}/>
     </label>
-    {nPending&&canEditMaster&&<label className="fm-master-upload">Importar CSV
+    {nPending&&canMergeMaster&&<label className="fm-master-upload">Importar CSV
       <input aria-label="Importar equivalencias desde CSV" type="file" accept=".csv,text/csv" disabled={busy}
        onChange={e=>{void importFile(e.target.files?.[0]);e.target.value=""}}/>
     </label>}

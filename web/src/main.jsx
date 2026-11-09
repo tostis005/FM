@@ -11,6 +11,7 @@ import "./loginTheme.css";
 // Base visual de tarjetas de stock y operativa: se carga en el primer acceso.
 import "./operativaPreview.css";
 import "./settingsLayout.css";
+import "./navigationBreadcrumbs.css";
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
@@ -46,6 +47,7 @@ import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurat
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
 import {promotionSalesInterval,includePromotionForSales,scopePromotionSales} from "./promotionSalesVisibility.js";
 import {REAL_SECTIONS,DOCUMENT_SCREENS} from "./moduleRoutes.js";
+import {navigationBreadcrumbs} from "./navigationBreadcrumbs.js";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {ReportPageHeader,ReportFilterBar,QUICK_PERIODS} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
@@ -194,6 +196,23 @@ const NAV=[
  {id:"solicitudes",label:"Solicitudes",icon:Mail,super:true},
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
 ];
+function AppBreadcrumbs({items,onNavigate}){
+ return <nav className="fm-breadcrumbs" aria-label="Ruta de navegación">
+  <ol>{items.map((crumb,index)=><li key={(crumb.id||"group")+"-"+index}>
+   {index>0&&<ChevronRight size={14} className="fm-breadcrumb-separator" aria-hidden="true"/>}
+   {crumb.link?
+    <button type="button" className="fm-breadcrumb-link" onClick={()=>onNavigate(crumb.id)}>
+     {crumb.id==="dashboard"&&<Home size={15} aria-hidden="true"/>}
+     <span>{crumb.label}</span>
+    </button>:
+    <span className={"fm-breadcrumb-label"+(crumb.current?" is-current":"")}
+     aria-current={crumb.current?"page":undefined}>
+     {crumb.id==="dashboard"&&<Home size={15} aria-hidden="true"/>}
+     {crumb.label}
+    </span>}
+  </li>)}</ol>
+ </nav>;
+}
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
 const CONFIG_IDS=new Set(["farmacias","usuarios","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
@@ -1165,6 +1184,8 @@ function App(){
      (item.id==="promociones"&&canOpenSection("seguimiento-global"));
    return true;
  });
+ const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
+  {editingObjectives:Boolean(objectiveCampaign)});
  const allowed=page==="proveedores"?canOpenSection(page):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
@@ -1259,6 +1280,7 @@ function App(){
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
+   <AppBreadcrumbs items={breadcrumbs} onNavigate={nav}/>
    <React.Suspense fallback={<LoadingStatus label="Cargando sección…"/>}>
     {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
      <section className="card fm-preview-panel" role={promotionStoreStatus==="error"?"alert":"status"}>
@@ -1444,7 +1466,8 @@ function App(){
     <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
   <PromotionColorReport campaigns={reportFilteredCampaigns} pharmacies={pharmacies}
-   pharmacyName={pharmaName} month={reportMonth} salesReady={salesStatus==="real"} onMessage={setToast}/>
+   pharmacyName={pharmaName} month={reportMonth} today={civilToday(new Date(),reportTimeZone)}
+   salesReady={salesStatus==="real"} onMessage={setToast}/>
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>

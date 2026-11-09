@@ -7,7 +7,7 @@
 .fm-color-report-body{display:grid;gap:16px;min-width:0;padding:20px 24px 23px}
 .fm-color-report-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}
 .fm-color-report-switch{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid #dbe7df;border-radius:10px;padding:4px;background:#f8fbf9;max-width:100%}
-.fm-color-report-switch button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;border-radius:7px;padding:9px 12px;background:transparent;color:#567264;font:700 12px inherit;cursor:pointer}
+.fm-color-report-switch button{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid transparent;border-radius:7px;padding:9px 12px;background:transparent;color:#567264;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .fm-color-report-switch button.active{border-color:#c4e6d1;background:#e8f7ed;color:#126344}
 .fm-color-report-switch button:focus-visible,.fm-color-report-pharmacy select:focus-visible{outline:2px solid #0e9164;outline-offset:2px}
 .fm-color-report-pharmacy{display:flex;align-items:center;gap:9px;font-size:12px;color:#527465;font-weight:700;min-width:0}

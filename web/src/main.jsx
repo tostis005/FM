@@ -691,7 +691,9 @@ function App(){
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
-  if(id==="promociones-objetivos"&&!preserveObjectiveDraft)setObjectiveCampaign(null);
+  if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
+   setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
+  }
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
@@ -1173,6 +1175,45 @@ function App(){
  },[page]);
  const role=tenantContext?.role;
  const canManagePromotions=["gestor","administrador","superadministrador"].includes(role);
+ const objectiveLocation=page==="promociones-objetivos"?
+  objectiveEditorRoute(window.location.pathname,window.location.search):null;
+ // En F5, Ctrl+R, enlaces compartidos y Atrás/Adelante reconstruir el
+ // borrador del servidor. No abrir jamás "Nueva campaña" si existe un ID.
+ useEffect(()=>{
+  if(page!=="promociones-objetivos")return;
+  const route=objectiveEditorRoute(window.location.pathname,window.location.search);
+  if(!route?.id&&!route?.invalid)return;
+  if(route.invalid){
+   setObjectiveRestoreError("El identificador de promoción de la URL no es válido.");
+   return;
+  }
+  if(!sessionUser||!tenantContext||!objectiveCatalogLoaded)return;
+  if(promotionStoreStatus!=="connected"){
+   if(promotionStoreStatus==="error")
+    setObjectiveRestoreError("No se pudieron cargar las promociones del servidor. Reintenta la conexión.");
+   return;
+  }
+  const stored=data.promos.find(p=>String(p.id)===route.id);
+  if(!stored||stored.managerCanEdit===false||
+   !["gestor","administrador","superadministrador"].includes(tenantContext.role)){
+   setObjectiveRestoreError("La promoción ya no existe o no tienes permiso para editar sus objetivos.");
+   return;
+  }
+  const selected=preferredObjectiveMonth(stored,route.month,new Date());
+  if(route.month!==selected)
+   window.history.replaceState({page:"promociones-objetivos"},"",
+    objectiveEditorUrl(route.id,selected));
+  if(objectiveCampaign?.id===stored.id&&objectiveMonth===selected){
+   setObjectiveRestoreError("");
+   return;
+  }
+  setObjectiveRestoreError("");
+  setObjectiveCampaign(stored);
+  setObjectiveMonth(selected);
+  setObjectiveSession(v=>v+1);
+ },[page,objectiveCatalogLoaded,promotionStoreStatus,data.promos,
+  objectiveRouteRevision,tenantContext?.client?.slug,sessionUser?.email,
+  objectiveCampaign?.id,objectiveMonth]);
  // Para el personal de farmacia, abrir el catálogo publicado sin limitarlo
  // al mes en curso: también deben ver campañas activadas para el mes próximo.
  useEffect(()=>{
@@ -1530,7 +1571,22 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
+    {page==="promociones-objetivos"&&(
+     objectiveLocation?.invalid||objectiveRestoreError?
+      <section className="card" style={{padding:24}}>
+       <h2>No se pueden recuperar los objetivos de la promoción</h2>
+       <p role="alert">{objectiveRestoreError||"El identificador de la promoción no es válido."}</p>
+       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {promotionStoreStatus==="error"&&<button type="button" className="btn btn-secondary"
+         onClick={()=>void retryPromotions()}>Reintentar conexión</button>}
+        <button type="button" className="btn btn-secondary" onClick={()=>nav("promociones")}>Volver a promociones</button>
+       </div>
+      </section>:
+     objectiveLocation?.id&&(!objectiveCampaign||
+      String(objectiveCampaign.id)!==objectiveLocation.id||
+      objectiveMonth!==preferredObjectiveMonth(objectiveCampaign,objectiveLocation.month,new Date()))?
+      <LoadingStatus label="Recuperando los objetivos guardados de la promoción…"/>:
+      <ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
       editingPromotion={objectiveCampaign} objectiveMonth={objectiveMonth}
       onObjectiveMonthChange={month=>{
@@ -1541,7 +1597,8 @@ function App(){
          objectiveEditorUrl(route.id,month));
       }}
       onCreatePromotion={continuePlannerToDrawer}
-      onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
+      onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>
+    )}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}

@@ -430,6 +430,7 @@ function App(){
  const [selectedPromotionIds,setSelectedPromotionIds]=useState([]);
  const [deletingSelected,setDeletingSelected]=useState(false);
  const [activatingSelected,setActivatingSelected]=useState(false);
+ const [activationError,setActivationError]=useState("");
  useEffect(()=>setSelectedPromotionIds([]),[tenantContext?.client?.slug]);
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
@@ -976,6 +977,7 @@ function App(){
   if(drafts.some(p=>p.managerCanEdit===false))return setToast("Hay promociones fuera de tus permisos.");
   if(drafts.length>200)return setToast("Selecciona un máximo de 200 borradores.");
   if(!window.confirm("¿Activar "+drafts.length+" promociones? Serán visibles para las farmacias participantes, aunque sus fechas sean futuras."))return;
+  setActivationError("");
   setActivatingSelected(true);
   try{
    const result=await activateStoredPromotions(drafts.map(p=>String(p.id)));
@@ -985,8 +987,10 @@ function App(){
     {...p,status:"Activa",statusSource:"manual"}:p)}));
    setSelectedPromotionIds(prev=>prev.filter(id=>!activated.has(String(id))));
    setToast(activated.size+" promociones activadas correctamente.");
-  }catch(error){setToast("No se pudieron activar: "+error.message);}
-  finally{setActivatingSelected(false);}
+  }catch(error){
+   setActivationError(error.message||"No se pudieron activar las promociones.");
+   setToast("No se activó ninguna promoción. Revisa el motivo en el listado.");
+  }finally{setActivatingSelected(false);}
  }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};
@@ -1424,6 +1428,14 @@ function App(){
      <span className="count-label">{scopedFilteredPromos.length} promociones</span>
     </div>
    </div>
+  {activationError&&<div className="fm-promotion-activation-error" role="alert">
+   <div><strong>No se activó ninguna promoción</strong>
+    <p>{activationError}</p>
+    <small>Puedes corregir los datos de la promoción indicada y volver a intentarlo. Los objetivos de otros meses se pueden añadir más adelante.</small>
+   </div>
+   <button type="button" className="btn btn-secondary btn-sm"
+    onClick={()=>setActivationError("")}>Cerrar aviso</button>
+  </div>}
   <ListTable rows={scopedFilteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
     tableClass="campaign-table"
      selection={canManagePromotions?{

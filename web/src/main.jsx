@@ -795,13 +795,12 @@ function App(){
    salesSource:_derivedSource,...persistable}=updated;
   const response=await saveStoredPromotion(persistable);
   if(!response.saved)throw Error("El servidor no confirmó el guardado");
-  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?persistable:p)}));
-  setStatusFilter("Todos");
-  setObjectiveCampaign(null);
-  setObjectiveMonth("");
-  nav("promociones");
-  startPromo(persistable);
-  setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
+  // Guardar objetivos de una campaña existente no debe abrir el formulario
+  // comercial ni cambiar de pantalla: actualizar el editor con lo persistido.
+  const refreshed={...persistable,managerCanEdit:stored.managerCanEdit};
+  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?
+   {...persistable,managerCanEdit:p.managerCanEdit}:p)}));
+  setObjectiveCampaign(refreshed);
  }
  function continuePlannerToDrawer(objectives){
   // El simulador ofrece una propuesta, no objetivos guardados ni asociados
@@ -814,10 +813,10 @@ function App(){
   startPromo(draft);
  }
  function returnFromPlanner(){
-  const draft=objectiveCampaign;
+  // Salir del editor existente vuelve al listado, no al formulario lateral.
   setObjectiveCampaign(null);
+  setObjectiveMonth("");
   nav("promociones");
-  if(draft)startPromo(draft);
  }
  async function savePromo(e){
   e.preventDefault();

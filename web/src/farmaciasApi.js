@@ -125,6 +125,11 @@ export const importStoredPromotions = (promotions) => request(
     method:"POST",body:JSON.stringify({promotions}),
   });
 
+export const activateStoredPromotions = (ids) => request(
+  "/api/tenant/promociones/activar-lote",{
+    method:"POST",body:JSON.stringify({ids}),
+  });
+
 export const deleteStoredPromotions = (ids) => request(
   "/api/tenant/promociones/eliminar-lote",{
     method:"POST",body:JSON.stringify({ids}),

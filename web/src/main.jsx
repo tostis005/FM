@@ -35,10 +35,12 @@ const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
+const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
+import {objectiveTargetsForPeriod,preferredObjectiveMonth,objectiveMonthDates,promotionObjectiveMonths,hasMonthlyObjectives,hasGoalInMonth} from "./promotionMonthlyObjectives.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode,promotionStatusSourceOnSave} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
@@ -58,7 +60,7 @@ import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -255,6 +257,7 @@ function App(){
  const [to,setTo]=useState(()=>promotionMonthRange(currentPromotionMonth())?.to||"");
  const [editingPromo,setEditingPromo]=useState(null);
  const [objectiveCampaign,setObjectiveCampaign]=useState(null);
+ const [objectiveMonth,setObjectiveMonth]=useState("");
  const [objectiveSession,setObjectiveSession]=useState(0);
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
@@ -387,6 +390,7 @@ function App(){
   const [salesStatus,setSalesStatus]=useState("sin_conexion");
   const [salesError,setSalesError]=useState("");
   const [salesByPromotion,setSalesByPromotion]=useState({});
+ const [goalSalesByPromotion,setGoalSalesByPromotion]=useState({});
    const [totalSalesByPromotion,setTotalSalesByPromotion]=useState({});
   const importFileRef=useRef(null);
   const [importBusy,setImportBusy]=useState(false);
@@ -398,6 +402,7 @@ function App(){
  const [deletingPromoId,setDeletingPromoId]=useState(null);
  const [selectedPromotionIds,setSelectedPromotionIds]=useState([]);
  const [deletingSelected,setDeletingSelected]=useState(false);
+ const [activatingSelected,setActivatingSelected]=useState(false);
  useEffect(()=>setSelectedPromotionIds([]),[tenantContext?.client?.slug]);
  const [mobileMenu,setMobileMenu]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
@@ -434,12 +439,13 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});return;}
+     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setGoalSalesByPromotion({});setTotalSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
        try{
          const segments=[];
+         const selectedMonthRange=page==="seguimiento-global"&&reportMonth?promotionMonthRange(reportMonth):null;
          for(const p of data.promos){
            if(!includePromotionForSales(p,{page,from,to,importIds:importViewIds,
               selectedIds:reportSelectedIds,reportMatches:promo=>
@@ -447,32 +453,54 @@ function App(){
                 {status:reportStatus,month:reportMonth,year:reportYear})}))continue;
            const range=promotionSalesInterval(p,new Date(),reportTimeZone);
            if(!range)continue;
-           // También incluir borradores y campañas sin objetivos: las
-           // unidades TOTALES de los CN no dependen de su mecánica comercial.
-           for(const segment of splitPromotionSalesPeriod(range.start,range.end))
-             segments.push({...p,...segment,id:"S"+segments.length,parentId:p.id});
+           // Mantener las reglas originales de venta; limitar por el mes al consultar objetivos.
+           const begin=selectedMonthRange&&selectedMonthRange.from>range.start?
+             selectedMonthRange.from:range.start;
+           const finish=selectedMonthRange&&selectedMonthRange.to<range.end?
+             selectedMonthRange.to:range.end;
+           if(begin>finish)continue;
+           // En "todos los meses" distinguimos ventas comerciales de ventas
+           // correspondientes a meses con objetivos configurados.
+           const slices=page==="seguimiento-global"&&!reportMonth&&hasMonthlyObjectives(p)?
+             promotionObjectiveMonths(p).map(month=>{
+              const dates=objectiveMonthDates(p,month);
+              if(!dates)return null;
+              return {start:dates.from>begin?dates.from:begin,
+               end:dates.to<finish?dates.to:finish,goalRelevant:hasGoalInMonth(p,month)};
+             }).filter(x=>x&&x.start<=x.end):
+             [{start:begin,end:finish,goalRelevant:true}];
+           for(const slice of slices)
+            for(const segment of splitPromotionSalesPeriod(slice.start,slice.end))
+             segments.push({...p,...segment,id:"S"+segments.length,parentId:p.id,
+              goalRelevant:slice.goalRelevant});
          }
          const chunks=[];
          for(let i=0;i<segments.length;i+=25)chunks.push(segments.slice(i,i+25));
          const results=await mapLimited(chunks,2,
            chunk=>loadPromotionSales(chunk),{shouldStop:()=>cancelled});
          if(cancelled)return;
-         const byPromotion={},byTotalPromotion={};
+         const byPromotion={},byTotalPromotion={},byGoalPromotion={};
          for(let i=0;i<segments.length;i++){
            const seg=segments[i],partial=results[Math.floor(i/25)]?.sales?.[seg.id]||{};
            const out=byPromotion[seg.parentId]||(byPromotion[seg.parentId]={});
-           for(const [id,qty] of Object.entries(partial))out[id]=(out[id]||0)+(Number(qty)||0);
+           for(const [id,qty] of Object.entries(partial)){
+            out[id]=(out[id]||0)+(Number(qty)||0);
+            if(seg.goalRelevant){
+             const goals=byGoalPromotion[seg.parentId]||(byGoalPromotion[seg.parentId]={});
+             goals[id]=(goals[id]||0)+(Number(qty)||0);
+            }
+           }
             const totals=results[Math.floor(i/25)]?.totalSales?.[seg.id]||{};
             const totalOut=byTotalPromotion[seg.parentId]||(byTotalPromotion[seg.parentId]={});
             for(const [id,qty] of Object.entries(totals))totalOut[id]=(totalOut[id]||0)+(Number(qty)||0);
          }
 
-         setSalesByPromotion(byPromotion);setTotalSalesByPromotion(byTotalPromotion);
+         setSalesByPromotion(byPromotion);setGoalSalesByPromotion(byGoalPromotion);setTotalSalesByPromotion(byTotalPromotion);
          setSalesLastUpdated(new Date());setSalesError("");
          setSalesStatus("real");
        }catch(error){
          if(cancelled)return;
-         setSalesByPromotion({});setTotalSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
+         setSalesByPromotion({});setGoalSalesByPromotion({});setTotalSalesByPromotion({});setSalesStatus("error");setSalesError(error.message);
        }
      };
      void sync();

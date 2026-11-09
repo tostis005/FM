@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {setupTenantPromotions,cleanDocument,visiblePromos} from "./promocionesTenant.js";
+import {setupTenantPromotions,cleanDocument,visiblePromos,promotionActivationIssues} from "./promocionesTenant.js";
 
 function create({role="administrador",document={id:"P1",name:"Oferta",cns:["123456"],targets:{"1":8}}}={}){
  const routes=new Map();
@@ -166,4 +166,101 @@ test("API guarda objetivos por mes y rechaza farmacias o meses fuera de la vigen
  assert.deepEqual(restricted[0].monthlyObjectives["2026-11"].objectiveRates,{"1":10});
  assert.deepEqual(restricted[0].monthlyObjectives["2026-12"].targets,{"1":80});
  assert.deepEqual(restricted[0].targets,{"1":125});
+});
+
+test("activar con objetivos de noviembre permite diciembre sin configurar y sin objetivos generales rellenados",()=>{
+ const campaign={id:"PRUEBA2",name:"prueba 2",status:"Borrador",start:"2026-11-01",end:"2026-12-31",
+  type:"descuento_porcentaje",discountPercent:20,cns:["123456"],durationMode:"dates",
+  targets:{"1":"","2":""},monthlyObjectives:{"2026-11":{targets:{"1":120,"2":0}}}};
+ assert.deepEqual(promotionActivationIssues(campaign),[],
+  "Una campaña mensual guardada no necesita objetivos generales duplicados ni metas en diciembre");
+ assert.deepEqual(promotionActivationIssues({...campaign,monthlyObjectives:{"2026-12":{targets:{"1":0}}}}),
+  ["no hay ningún mes con un objetivo guardado mayor que cero"]);
+ const future={...campaign,start:"2026-12-01",end:"2027-01-31",
+  monthlyObjectives:{"2026-12":{targets:{"1":8}}}};
+ assert.deepEqual(promotionActivationIssues(future),[],
+  "Se pueden publicar campañas que empiezan después del mes actual");
+});
+test("activación masiva informa de cada campo concreto en vez de un error genérico",()=>{
+ const base={name:"prueba 2",status:"Borrador",start:"2026-11-01",end:"2026-12-31",
+  cns:["123456"],targets:{"1":8},durationMode:"dates",type:"descuento_porcentaje"};
+ assert.deepEqual(promotionActivationIssues(base),["falta un porcentaje de descuento válido (1–100 %)"]);
+ assert.deepEqual(promotionActivationIssues({...base,discountPercent:20,targets:{"1":""}}),
+  ["hay objetivos generales vacíos o con unidades inválidas","no hay ningún objetivo mayor que cero"]);
+ assert.deepEqual(promotionActivationIssues({...base,discountPercent:20,targets:{"1":8},
+   type:"sin_clasificar",cns:[],start:"",end:""}),
+  ["falta una fecha de inicio válida","falta una fecha de fin válida o es anterior al inicio",
+   "falta clasificar el tipo de promoción","no tiene artículos (CN) incluidos"]);
+});
+test("activar-lote es atómico: indica qué falla en prueba 2 sin activar prueba",async()=>{
+ const good={id:"P1",name:"prueba",status:"Borrador",start:"2026-11-01",end:"2026-12-31",
+  durationMode:"dates",type:"dos_por_uno",cns:["123456"],targets:{"1":8},
+  monthlyObjectives:{"2026-11":{targets:{"1":8}}}};
+ const bad={...good,id:"P2",name:"prueba 2",type:"descuento_porcentaje",discountPercent:""};
+ const queries=[],routes=new Map();
+ const pool={connect:async()=>({
+  async query(sql,params=[]){
+   queries.push({sql,params});
+   if(sql.includes("SELECT id,documento,creado_por")&&sql.includes("FOR UPDATE"))
+    return {rows:[good,bad].map(p=>({id:p.id,documento:p,creado_por:"admin@example.com"}))};
+   return {rows:[]};
+  },release(){}
+ })};
+ const app={get(path,...h){routes.set("GET "+path,h.at(-1));},
+  post(path,...h){routes.set("POST "+path,h.at(-1));},
+  put(path,...h){routes.set("PUT "+path,h.at(-1));},
+  delete(path,...h){routes.set("DELETE "+path,h.at(-1));}};
+ setupTenantPromotions(app,pool,{requireTenantModule:()=>[]});
+ let status=200,body,err;
+ const res={status(code){status=code;return res;},json(data){body=data;return res;}};
+ await routes.get("POST /api/tenant/promociones/activar-lote")({
+  body:{ids:["P1","P2"]},context:{role:"administrador",client:{schema:"ampedia"},
+   allowedPharmacyIds:[1],pharmacies:[{id:"1"}]},user:{email:"admin@example.com"}
+ },res,e=>{err=e;});
+ assert.equal(err,undefined);
+ assert.equal(status,400);
+ assert.match(body.error,/«prueba 2»: falta un porcentaje de descuento válido/);
+ assert.deepEqual(body.invalidPromotions.map(x=>x.id),["P2"]);
+ assert.equal(queries.some(q=>q.sql.startsWith("UPDATE")),false);
+ assert.equal(queries.some(q=>q.sql==="ROLLBACK"),true);
+ assert.equal(queries.some(q=>q.sql==="COMMIT"),false);
+});
+
+test("activar-lote publica dos borradores con metas mensuales aunque otros meses estén pendientes",async()=>{
+ const base={status:"Borrador",start:"2026-11-01",end:"2026-12-31",
+  durationMode:"dates",type:"dos_por_uno",cns:["123456"],targets:{"1":""},
+  monthlyObjectives:{"2026-11":{targets:{"1":20}}}};
+ const promos=[{...base,id:"P1",name:"prueba"},
+  {...base,id:"P2",name:"prueba 2",monthlyObjectives:{"2026-11":{targets:{"1":15}}}}];
+ const routes=new Map(),writes=[],queries=[];
+ const pool={connect:async()=>({
+  async query(sql,params=[]){
+   queries.push(sql);
+   if(sql.includes("SELECT id,documento,creado_por")&&sql.includes("FOR UPDATE"))
+    return {rows:promos.map(p=>({id:p.id,documento:p,creado_por:"admin@example.com"}))};
+   if(sql.includes("SET documento=$2::jsonb"))
+    writes.push(JSON.parse(params[1]));
+   return {rows:[]};
+  },release(){}
+ })};
+ const app={get(path,...h){routes.set("GET "+path,h.at(-1));},
+  post(path,...h){routes.set("POST "+path,h.at(-1));},
+  put(path,...h){routes.set("PUT "+path,h.at(-1));},
+  delete(path,...h){routes.set("DELETE "+path,h.at(-1));}};
+ setupTenantPromotions(app,pool,{requireTenantModule:()=>[]});
+ let status=200,body,err;
+ const res={status(code){status=code;return res;},json(value){body=value;return res;}};
+ await routes.get("POST /api/tenant/promociones/activar-lote")({
+  body:{ids:["P1","P2"]},context:{role:"administrador",client:{schema:"ampedia"},
+   allowedPharmacyIds:[1],pharmacies:[{id:"1"}]},user:{email:"admin@example.com"}
+ },res,e=>{err=e;});
+ assert.equal(err,undefined);
+ assert.equal(status,200);
+ assert.deepEqual(body.activatedIds,["P1","P2"]);
+ assert.equal(writes.length,2);
+ assert.equal(writes.every(p=>p.status==="Activa"&&p.statusSource==="manual"),true);
+ assert.equal(writes.every(p=>p.monthlyObjectives["2026-12"]===undefined),true,
+  "No inventar ni exigir objetivos para diciembre");
+ assert.equal(queries.includes("COMMIT"),true);
+ assert.equal(queries.includes("ROLLBACK"),false);
 });

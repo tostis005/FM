@@ -1,5 +1,5 @@
 // Objetivos mensuales independientes de la vigencia comercial de la promoción.
-// Los documentos anteriores sin monthlyObjectives se mantienen como objetivos heredados.
+// Los objetivos nuevos siempre se guardan por mes de forma explícita.
 import {promotionMonthRange} from "./promotionMonthFilter.js";
 
 const MONTH=/^20\d{2}-(0[1-9]|1[0-2])$/;
@@ -46,22 +46,36 @@ export function monthlyObjectiveEntry(p,month){
  if(!MONTH.test(month||""))return null;
  return p?.monthlyObjectives?.[month]||null;
 }
-/** Estado de guardado real del mes. Una propuesta automática nunca cuenta
- * como objetivo configurado, aunque la tabla muestre unidades calculadas. */
+/** Un mes solo se considera guardado si hay objetivos mensuales explícitos.
+ * Los números calculados automáticamente nunca cuentan como guardados. */
 export function objectiveMonthSaveState(p,month){
  if(!MONTH.test(month||"")||!promotionObjectiveMonths(p).includes(month))
   return "unconfigured";
  const entry=monthlyObjectiveEntry(p,month);
- if(entry&&entry.targets&&Object.keys(entry.targets).length)return "saved";
- // Las promociones anteriores guardaban objetivos en targets, sin mes.
- // No decir "Sin objetivos": los datos EXISTEN. Tampoco atribuir esas
- // unidades a un mes determinado si la campaña abarca varios meses.
- if(!hasMonthlyObjectives(p)&&keys(p?.targets).length)
-  return promotionObjectiveMonths(p).length===1?"saved":"legacy";
- return "unconfigured";
+ return entry&&keys(entry.targets).length>0?"saved":"unconfigured";
 }
-export function hasLegacyUnassignedObjectives(p){
- return !hasMonthlyObjectives(p)&&keys(p?.targets).length>0;
+
+/** No permitir que cambiar las fechas deje objetivos fuera de la campaña. */
+export function objectiveMonthsOutsideCampaign(p){
+ return keys(p?.monthlyObjectives).filter(month=>
+  !MONTH.test(month)||!promotionObjectiveMonths(p).includes(month)||
+  !objectiveMonthDates(p,month));
+}
+
+/** Cambio explícito de mes del objetivo inicial sin recalcular ni perder unidades. */
+export function reassignDraftObjectiveMonth(p,fromMonth,toMonth){
+ if(!MONTH.test(fromMonth||"")||!MONTH.test(toMonth||""))
+  throw Error("Selecciona un mes válido para los objetivos");
+ const entries=p?.monthlyObjectives||{};
+ if(!Object.hasOwn(entries,fromMonth))
+  throw Error("No hay objetivos que trasladar de ese mes");
+ if(fromMonth===toMonth)return p;
+ if(Object.hasOwn(entries,toMonth))
+  throw Error("El mes de destino ya tiene objetivos; no se sobrescribirán");
+ if(!promotionObjectiveMonths(p).includes(toMonth)||!objectiveMonthDates(p,toMonth))
+  throw Error("El mes elegido debe estar incluido en la promoción");
+ const {[fromMonth]:entry,...remaining}=entries;
+ return {...p,monthlyObjectives:{...remaining,[toMonth]:entry}};
 }
 export function hasMonthlyObjectives(p){
  return keys(p?.monthlyObjectives).length>0;

@@ -185,6 +185,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=true}){
    render:p=><div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
     <select aria-label={"Tipo de "+p.name} className="fm-master-type" value={p.class} disabled={busy||!canEditMaster}
      onChange={e=>void setType(p,e.target.value)}>{TYPES.map(t=><option key={t} value={t}>{LABELS[t]}</option>)}</select>
+    <small className="fm-master-type-caption">{LABELS[p.class]}</small>
    </div>},
   {key:"origins",label:"Origen en farmacias",value:p=>(p.origins||[]).map(o=>[o.pharmacyCode,o.sourceCode,o.sourceName].join(" ")).join(" "),
    render:p=><details className="fm-master-origins" onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>

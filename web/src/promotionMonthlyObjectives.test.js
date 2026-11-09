@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {promotionObjectiveMonths,preferredObjectiveMonth,objectiveMonthDates,
  objectiveTargetsForMonth,objectiveTargetsForPeriod,historicPeriodAvailable,
- hasGoalInMonth,objectiveHistoryAnchor,objectiveMonthSaveState,hasLegacyUnassignedObjectives} from "./promotionMonthlyObjectives.js";
+ hasGoalInMonth,objectiveHistoryAnchor,objectiveMonthSaveState,
+ promotionDraftGoalMonths,assignProposalToMonth,objectiveMonthsOutsideCampaign} from "./promotionMonthlyObjectives.js";
 import {objectiveDraftSelection,mergeObjectivesIntoPromotion} from "./promotionObjectiveFlow.js";
 import {simulatorPeriods} from "./simuladorLogic.js";
 
@@ -59,27 +60,60 @@ test("objetivos heredados sin mes no se borran ni se migran implícitamente",()=
  assert.deepEqual(objectiveTargetsForMonth(inFuture,"2026-12"),{"1":90});
 });
 
-test("la etiqueta de mes solo indica guardado cuando existe realmente un registro mensual",()=>{
- assert.equal(objectiveMonthSaveState(base,"2026-11"),"legacy");
- assert.equal(objectiveMonthSaveState(base,"2026-12"),"legacy");
- const oneMonth={...base,end:"2026-10-31"};
- assert.equal(objectiveMonthSaveState(oneMonth,"2026-10"),"saved",
-  "Los objetivos anteriores de una promoción de un mes están guardados en ese único mes");
- assert.equal(objectiveMonthSaveState(oneMonth,"2026-11"),"unconfigured");
- assert.equal(hasLegacyUnassignedObjectives(base),true);
+test("solo los objetivos mensuales guardados aparecen como guardados; nunca una propuesta",()=>{
+ assert.equal(objectiveMonthSaveState(base,"2026-10"),"unconfigured");
+ assert.equal(objectiveMonthSaveState(base,"2026-11"),"unconfigured");
+ const single={...base,end:"2026-10-31"};
+ assert.equal(objectiveMonthSaveState(single,"2026-10"),"unconfigured");
  const nov=mergeObjectivesIntoPromotion(base,{
   cns:base.cns,objectiveMonth:"2026-11",targets:{"1":125,"2":22},
   objectiveBaseline:"previous",objectiveRates:{"1":10,"2":5}
  });
  assert.equal(objectiveMonthSaveState(nov,"2026-11"),"saved");
  assert.equal(objectiveMonthSaveState(nov,"2026-12"),"unconfigured");
- assert.deepEqual(objectiveDraftSelection(base,[{id:1},{id:2}],"2026-11").targets,
-  {"1":110,"2":20},"El editor recupera los objetivos antiguos sin cambiarlos");
- assert.equal(hasLegacyUnassignedObjectives(nov),false);
- assert.deepEqual(objectiveDraftSelection(nov,[{id:1},{id:2}],"2026-12").targets,{},
-  "El mes sin guardar muestra una propuesta, no el objetivo del mes anterior");
- assert.deepEqual(objectiveDraftSelection(nov,[{id:1},{id:2}],"2026-11").targets,{"1":125,"2":22},
-  "El mes guardado conserva las últimas unidades manuales");
- const cleared={...nov,monthlyObjectives:{"2026-11":{targets:{}}}};
- assert.equal(objectiveMonthSaveState(cleared,"2026-11"),"unconfigured");
+ assert.deepEqual(objectiveDraftSelection(nov,[{id:1},{id:2}],"2026-11").targets,
+  {"1":125,"2":22});
+ assert.deepEqual(objectiveDraftSelection(nov,[{id:1},{id:2}],"2026-12").targets,{});
+ assert.equal(objectiveMonthSaveState({...nov,monthlyObjectives:{"2026-11":{targets:{}}}},"2026-11"),"unconfigured");
+});
+
+const proposal={...base,id:"P-CREATED",start:"",end:"",monthlyObjectives:undefined,
+ durationMode:"dates",objectiveBaseline:"previous",
+ objectiveBaselineRange:{from:"2026-10-01",to:"2026-10-31"},
+ objectiveRates:{"1":20,"2":5},targets:{"1":120,"2":80}};
+test("simular no guarda: las fechas de un mes asignan automáticamente la propuesta",()=>{
+ const dates={...proposal,start:"2026-11-10",end:"2026-11-24"};
+ assert.deepEqual(promotionDraftGoalMonths(proposal),[]);
+ assert.deepEqual(promotionDraftGoalMonths(dates),["2026-11"]);
+ const result=assignProposalToMonth(dates);
+ assert.deepEqual(result.monthlyObjectives["2026-11"].targets,{"1":120,"2":80});
+ assert.deepEqual(result.monthlyObjectives["2026-11"].objectiveRates,{"1":20,"2":5});
+ assert.deepEqual(result.monthlyObjectives["2026-11"].objectiveBaselineRange,
+  {from:"2026-10-01",to:"2026-10-31"});
+ assert.equal(result.start,"2026-11-10");assert.equal(result.end,"2026-11-24");
+ assert.equal(proposal.monthlyObjectives,undefined,"La simulación original continúa sin guardarse");
+});
+test("campaña de dos meses exige escoger a cuál asignar la propuesta, sin prorratearla",()=>{
+ const dates={...proposal,start:"2026-11-15",end:"2026-12-15"};
+ assert.deepEqual(promotionDraftGoalMonths(dates),["2026-11","2026-12"]);
+ assert.throws(()=>assignProposalToMonth(dates),/Selecciona a qué mes/);
+ const dec=assignProposalToMonth(dates,"2026-12");
+ assert.deepEqual(dec.monthlyObjectives["2026-12"].targets,{"1":120,"2":80});
+ assert.equal(dec.monthlyObjectives["2026-11"],undefined);
+ assert.deepEqual(objectiveMonthsOutsideCampaign(dec),[]);
+ assert.equal(objectiveMonthSaveState(dec,"2026-12"),"saved");
+ assert.equal(objectiveMonthSaveState(dec,"2026-11"),"unconfigured");
+ assert.throws(()=>assignProposalToMonth(dates,"2027-01"),/Selecciona a qué mes/);
+});
+test("cambiar fechas tras configurar objetivos no los reasigna automáticamente",()=>{
+ const dates=assignProposalToMonth({...proposal,start:"2026-11-15",end:"2026-12-15"},"2026-11");
+ assert.deepEqual(objectiveMonthsOutsideCampaign({...dates,start:"2026-12-01"}),["2026-11"]);
+ assert.equal(dates.monthlyObjectives["2026-11"].targets["1"],120);
+});
+test("sin fecha de fin por agotar stock puede escoger meses futuros",()=>{
+ const dates={...proposal,start:"2027-03-05",end:"",durationMode:"stock"};
+ assert.deepEqual(promotionDraftGoalMonths(dates,new Date("2026-11-09T09:00:00Z")),
+  ["2027-03","2027-04","2027-05"]);
+ const may=assignProposalToMonth(dates,"2027-05",new Date("2026-11-09T09:00:00Z"));
+ assert.equal(may.monthlyObjectives["2027-05"].targets["2"],80);
 });

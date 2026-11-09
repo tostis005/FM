@@ -60,6 +60,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const initializedTargets=useRef(false);
  const [savingObjectives,setSavingObjectives]=useState(false);
  const [saveError,setSaveError]=useState("");
+ const [savedMonth,setSavedMonth]=useState("");
  const {codes,invalid}=useMemo(()=>parsePromotionCNs(bulk),[bulk]);
  const selectedCNs=useMemo(()=>selected.map(x=>x.cn),[selected]);
  const selectedKey=selectedCNs.join(",");
@@ -217,11 +218,15 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,baseline==="stock"?0:rate(id)])),
     objectiveMonth:objectiveMonth||""
   };
-  setSaveError("");setSavingObjectives(true);
+  setSaveError("");setSavedMonth("");setSavingObjectives(true);
   try{
-   if(isEditing){if(!onSaveObjectives)throw Error("No está disponible el guardado de objetivos");
-    await onSaveObjectives(payload);}
-   else await onCreatePromotion?.(payload);
+   if(isEditing){
+    if(!onSaveObjectives)throw Error("No está disponible el guardado de objetivos");
+    await onSaveObjectives(payload);
+    // Permanecer en el mes que se acaba de confirmar en el servidor.
+    setDraftTouched(false);
+    setSavedMonth(payload.objectiveMonth);
+   }else await onCreatePromotion?.(payload);
   }catch(error){setSaveError(error.message||"No se pudieron guardar los objetivos");}
   finally{setSavingObjectives(false);}
  }
@@ -229,8 +234,19 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   <div className="fm-objectives-intro">
    <div><h1>{isEditing?"Asignar objetivos":"Simulador de ventas y objetivos"}</h1>
     <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán la promoción, sus productos y los objetivos de los demás meses.":"Consulta ventas y stock, prueba objetivos sin crear ninguna promoción y, si te interesa, conviértelos en una campaña."}</p></div>
-   {isEditing&&<button type="button" className="btn btn-secondary" onClick={onBack}>Volver al formulario</button>}
+   {isEditing&&<button type="button" className="btn btn-secondary" disabled={savingObjectives}
+    onClick={()=>{
+     if(draftTouched&&!window.confirm("Tienes cambios sin guardar en "+selectedMonthName+". ¿Volver a promociones y descartarlos?"))return;
+     onBack?.();
+    }}>Volver a promociones</button>}
   </div>
+  {isEditing&&savedMonth===objectiveMonth&&!draftTouched&&
+   <div className="fm-objectives-save-success" role="status" aria-live="polite">
+    <Check size={19} aria-hidden="true"/>
+    <div><strong>Objetivos de {selectedMonthName} guardados correctamente.</strong>
+     <p>Ya están guardados en esta promoción. Puedes seleccionar otro mes para asignarle sus objetivos o volver al listado de promociones.</p>
+    </div>
+   </div>}
    {months.length>0&&<section className="card fm-objectives-card fm-objectives-months">
     <h2>Mes del objetivo</h2>
     <div className="fm-objective-month-options" role="group" aria-label="Elegir mes de objetivos">
@@ -238,7 +254,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
       const state=objectiveMonthSaveState(editingPromotion,month);
       const stored=state==="saved";
       const pending=month===objectiveMonth&&draftTouched;
-      return <button key={month} type="button"
+      return <button key={month} type="button" disabled={savingObjectives}
        className={"btn fm-objective-month-option"+(objectiveMonth===month?" active":"")+
         (pending?" is-pending":stored?" is-saved":" is-empty")}
        aria-pressed={objectiveMonth===month}

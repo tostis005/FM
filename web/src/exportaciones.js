@@ -287,10 +287,17 @@ export async function exportLaboratoryOrderWorkbook(rows,filename,orderRows=null
  * persistente en Excel y sin alterar los formatos de exportación al laboratorio. */
 export async function exportObjectiveTrackingExcel(rows,{title="Seguimiento de objetivos",month="",mode="promotion"}={}){
  const safeMonth=/^20\d{2}-\d{2}$/.test(month)?month:"todos-los-meses";
- const data=[["Promoción","Farmacia","Objetivo (uds.)","Vendidas (uds.)","Cumplimiento (%)"],
+ const data=[["Promoción","Farmacia","Objetivo (uds.)","Vendidas (uds.)",
+   "Avance objetivo (%)","Plazo transcurrido (%)","Ritmo (%)","Estado"],
   ...rows.map(row=>[String(row.promotion||""),String(row.pharmacy||""),
-   Number(row.goal)||0,Number(row.sold)||0,row.pct===null?null:Number(row.pct)])];
- const blob=await workbook([{name:"Seguimiento",rows:data,widths:[48,36,21,22,22],heatmapCols:[4]}]);
+   Number(row.goal)||0,Number(row.sold)||0,
+   row.pct===null?null:Number(row.pct),
+   row.elapsedPct===null?null:Number(row.elapsedPct),
+   row.pacePct===null?null:Number(row.pacePct),
+   String(row.status||"")])];
+ // Solo Ritmo se colorea: el % absoluto no indica si se va en plazo.
+ const blob=await workbook([{name:"Seguimiento",rows:data,
+  widths:[46,32,19,19,21,22,18,23],heatmapCols:[6]}]);
  const name="seguimiento-objetivos-"+safeMonth+"-"+(mode==="pharmacy"?"por-farmacia":"por-promocion")+".xlsx";
  downloadBlob(blob,name);
  return {title,name};

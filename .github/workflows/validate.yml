@@ -126,7 +126,7 @@ jobs:
         working-directory: web
         run: |
           npm install --no-audit --no-fund
-          node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js src/promotionMonthlyObjectives.test.js src/promotionSalesVisibility.test.js
+          node --test src/importarPromociones.test.js src/promotionHistoryBatches.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js src/promotionMonthlyObjectives.test.js src/promotionTrackingPace.test.js src/navigationBreadcrumbs.test.js src/promotionSalesVisibility.test.js
           node --test src/objetivosImportacion.test.js
           node --test src/listLogic.test.js
           node --test src/tableExport.test.js src/userPermissionCopy.test.js src/userPermissionCopy.test.js
@@ -375,6 +375,7 @@ jobs:
           node check-promotions-delete.mjs
           node check-promotions-persistence.mjs
           node check-promotions-scope.mjs
+          node check-tracking-navigation-presentation.mjs
           node check-traspasos-salientes.mjs
           node check-promotions-import.mjs
           node check-promotions-import-mobile.mjs

@@ -1,0 +1,18 @@
+/* Orientación consistente y accesible en todos los módulos. */
+.fm-breadcrumbs{display:block;width:100%;max-width:100%;min-width:0;margin:0 0 19px}
+.fm-breadcrumbs ol{display:flex;align-items:center;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:0;min-height:20px}
+.fm-breadcrumbs li{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%}
+.fm-breadcrumbs .fm-breadcrumb-separator{color:#a0b2a8;flex:none}
+.fm-breadcrumb-link,.fm-breadcrumb-label{display:inline-flex;align-items:center;gap:6px;min-width:0;max-width:100%;font-family:inherit;font-size:12px;font-weight:650;line-height:1.45}
+.fm-breadcrumb-link{background:transparent;border:0;border-radius:5px;padding:2px 3px;margin:-2px -3px;color:#577c68;cursor:pointer;text-align:left;text-decoration:none}
+.fm-breadcrumb-link:hover{color:#117951;text-decoration:underline;text-underline-offset:3px}
+.fm-breadcrumb-link:focus-visible{outline:2px solid #118962;outline-offset:3px}
+.fm-breadcrumb-label{color:#7e9587;overflow-wrap:anywhere}
+.fm-breadcrumb-label.is-current{color:#28543d;font-weight:800}
+.fm-breadcrumb-link svg,.fm-breadcrumb-label svg{flex:none;color:#15845c}
+@media(max-width:560px){
+ .fm-breadcrumbs{margin-bottom:16px}
+ .fm-breadcrumbs ol{gap:5px}
+ .fm-breadcrumbs li{gap:5px}
+ .fm-breadcrumb-link,.fm-breadcrumb-label{font-size:11.5px}
+}

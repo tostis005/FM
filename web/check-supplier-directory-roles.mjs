@@ -17,7 +17,7 @@ async function setup(role,moduleEnabled=true){
   else if(path==="/api/tenant/context")body={user,role,
    client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
    clients:[{slug:"ampedia",name:"Ampedia"}],
-   modules:{proveedores:moduleEnabled},sections:{proveedores:moduleEnabled},pharmacies,allowedPharmacyIds:[1]};
+   modules:{proveedores:moduleEnabled},sections:{proveedores:true,"proveedores-condiciones":moduleEnabled},pharmacies,allowedPharmacyIds:[1]};
   else if(path==="/api/tenant/proveedores-unificados")body=[supplier];
   else if(path==="/api/tenant/proveedores")body=[{sourceCode:"L1",name:"Laboratorio Demo",
    origins:[{pharmacyId:"1",name:"Laboratorio Demo",source:"farmatic"}]}];
@@ -41,9 +41,12 @@ async function setup(role,moduleEnabled=true){
  return {page,errors};
 }
 try{
- const reader=await setup("farmacia");
+ const reader=await setup("farmacia",false);
  await reader.page.goto(base+"/proveedores",{waitUntil:"domcontentloaded"});
  await reader.page.getByRole("heading",{name:"Directorio de proveedores"}).waitFor({timeout:15000});
+ assert.equal(await reader.page.getByRole("navigation",{name:"Módulos"})
+  .getByRole("button",{name:"Proveedores",exact:true}).count(),1);
+ assert.equal(await reader.page.getByRole("button",{name:"Análisis de proveedores"}).count(),0);
  assert.equal(await reader.page.getByRole("button",{name:"Configurar categorías documentales"}).count(),0);
  assert.equal(await reader.page.getByRole("combobox",{name:/Tipo de Laboratorio Demo/}).count(),0);
  assert.equal(await reader.page.getByRole("button",{name:"Nuevo proveedor"}).count(),0);
@@ -62,6 +65,16 @@ try{
  assert.deepEqual(reader.errors,[]);
  await reader.page.close();
 
+ const collaborator=await setup("colaborador",false);
+ await collaborator.page.goto(base+"/proveedores",{waitUntil:"domcontentloaded"});
+ await collaborator.page.getByRole("heading",{name:"Directorio de proveedores"}).waitFor({timeout:15000});
+ await collaborator.page.getByRole("button",{name:"Ver ficha y documentos"}).click();
+ await collaborator.page.getByText("Ana Pérez").first().waitFor();
+ assert.equal(await collaborator.page.getByRole("button",{name:"Nuevo contacto"}).count(),0);
+ assert.equal(await collaborator.page.getByRole("button",{name:"Subir documento"}).count(),0);
+ assert.deepEqual(collaborator.errors,[]);
+ await collaborator.page.close();
+
  const superadmin=await setup("superadministrador",false);
  await superadmin.page.goto(base+"/proveedores",{waitUntil:"domcontentloaded"});
  await superadmin.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
@@ -74,7 +87,7 @@ try{
  assert.deepEqual(superadmin.errors,[]);
  await superadmin.page.close();
  
- const manager=await setup("gestor");
+ const manager=await setup("gestor",false);
  await manager.page.goto(base+"/proveedores-maestro",{waitUntil:"domcontentloaded"});
  await manager.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
  const categoryButton=manager.page.getByRole("button",{name:"Configurar categorías documentales"});
@@ -95,5 +108,5 @@ try{
  assert.equal(await manager.page.getByRole("button",{name:/Añadir categoría/}).count(),1);
  assert.deepEqual(manager.errors,[]);
  await manager.page.close();
- console.log("OK: lectores consultan y descargan, gestores configuran, Categorías cabe en móvil");
+ console.log("OK: farmacia y colaboradores sin módulo consultan, descargan; gestores configuran, móvil correcto");
 }finally{await browser.close()}

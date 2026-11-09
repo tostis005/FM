@@ -33,23 +33,22 @@ test("tenant and section grants cover every shared supplier endpoint",()=>{
   "/api/tenant/proveedores-unificados/14/contactos",
   "/api/tenant/proveedores-unificados/14/documentos/17/descargar",
   "/api/tenant/proveedor-documento-categorias"]){
-  assert.deepEqual(requestModules({path}),["proveedores"]);
+  assert.deepEqual(requestModules({path}),[]);
   assert.deepEqual(requestSections({path}),["proveedores"]);
  }
 });
-test("pharmacy users can see categories; disabled module cannot read",async()=>{
+test("pharmacy and collaborator can read categories with module disabled",async()=>{
  const {app,routes}=makeApp(),queries=[];
  const pool={query:async(sql,args)=>{
   queries.push({sql,args});return {rows:[{id:"7",name:"Tarifas",active:true}]};
  }};
  setupSupplierWorkspace(app,pool,{requireTenant:()=>[]});
  const path="/api/tenant/proveedor-documento-categorias";
- const blocked=await call(routes,"GET",path,{role:"farmacia",moduleEnabled:false});
- assert.equal(blocked.status,403);
- assert.equal(queries.length,0);
- const reader=await call(routes,"GET",path,{role:"farmacia",slug:"grupo_farmacias"});
+ const reader=await call(routes,"GET",path,{role:"farmacia",moduleEnabled:false,slug:"grupo_farmacias"});
  assert.equal(reader.status,200);
  assert.equal(reader.data[0].name,"Tarifas");
+ const collaborator=await call(routes,"GET",path,{role:"colaborador",moduleEnabled:false,slug:"grupo_farmacias"});
+ assert.equal(collaborator.status,200);
  assert.deepEqual(queries[0].args,["grupo_farmacias"]);
  assert.match(queries[0].sql,/WHERE cliente_slug=\$1/);
 });
@@ -70,14 +69,14 @@ test("read-only users cannot create categories, upload documents or alter contac
  }
  assert.equal(queries.length,0);
 });
-test("managers can configure shared document categories, but not without module",async()=>{
+test("managers configure shared categories by role, independently of analysis grants",async()=>{
  const {app,routes}=makeApp();let args;
  const pool={query:async(sql,values)=>{
   args=values;return {rows:[{id:"8",name:"Condiciones comerciales",active:true}]};
  }};
  setupSupplierWorkspace(app,pool,{requireTenant:()=>[]});
  const path="/api/tenant/proveedor-documento-categorias";
- assert.equal((await call(routes,"POST",path,{role:"gestor",moduleEnabled:false,body:{name:"Condiciones comerciales"}})).status,403);
+ assert.equal((await call(routes,"POST",path,{role:"gestor",moduleEnabled:false,body:{name:"Condiciones comerciales"}})).status,201);
  assert.equal((await call(routes,"POST",path,{role:"gestor",body:{name:"A"}})).status,400);
  const allowed=await call(routes,"POST",path,{role:"gestor",slug:"ampedia",body:{name:"Condiciones comerciales"}});
  assert.equal(allowed.status,201);
@@ -93,4 +92,15 @@ test("superadministrador may consult supplier categories with client module disa
  });
  assert.equal(result.status,200);
  assert.equal(result.data[0].name,"Tarifas");
+});
+
+test("pharmacy users cannot write even with supplier directory enabled",async()=>{
+ const {app,routes}=makeApp();
+ const pool={query:async()=>{throw Error("A readonly user must not write SQL")}};
+ setupSupplierWorkspace(app,pool,{requireTenant:()=>[]});
+ for(const role of ["farmacia","colaborador"]){
+  const response=await call(routes,"PUT","/api/tenant/proveedores-unificados/:id/ficha",
+   {role,moduleEnabled:false,params:{id:"7"},body:{name:"Changed"}});
+  assert.equal(response.status,403);
+ }
 });

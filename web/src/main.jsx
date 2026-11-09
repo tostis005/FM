@@ -759,14 +759,16 @@ function App(){
    throw Error("La promoción ha desaparecido o no está autorizada. Vuelve al listado.");
   const combined={...stored,...objectiveCampaign,managerCanEdit:stored.managerCanEdit};
   const updated=mergeObjectivesIntoPromotion(combined,objectives,new Date(),reportTimeZone);
-  const response=await saveStoredPromotion(updated);
+  const {managerCanEdit:_editFlag,goalSales:_derivedGoalSales,totalSales:_derivedTotal,
+   salesSource:_derivedSource,...persistable}=updated;
+  const response=await saveStoredPromotion(persistable);
   if(!response.saved)throw Error("El servidor no confirmó el guardado");
-  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
+  setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?persistable:p)}));
   setStatusFilter("Todos");
   setObjectiveCampaign(null);
   setObjectiveMonth("");
   nav("promociones");
-  startPromo(updated);
+  startPromo(persistable);
   setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
  }
  function continuePlannerToDrawer(objectives){

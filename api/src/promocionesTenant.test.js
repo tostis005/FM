@@ -225,3 +225,42 @@ test("activar-lote es atómico: indica qué falla en prueba 2 sin activar prueba
  assert.equal(queries.some(q=>q.sql==="ROLLBACK"),true);
  assert.equal(queries.some(q=>q.sql==="COMMIT"),false);
 });
+
+test("activar-lote publica dos borradores con metas mensuales aunque otros meses estén pendientes",async()=>{
+ const base={status:"Borrador",start:"2026-11-01",end:"2026-12-31",
+  durationMode:"dates",type:"dos_por_uno",cns:["123456"],targets:{"1":""},
+  monthlyObjectives:{"2026-11":{targets:{"1":20}}}};
+ const promos=[{...base,id:"P1",name:"prueba"},
+  {...base,id:"P2",name:"prueba 2",monthlyObjectives:{"2026-11":{targets:{"1":15}}}}];
+ const routes=new Map(),writes=[],queries=[];
+ const pool={connect:async()=>({
+  async query(sql,params=[]){
+   queries.push(sql);
+   if(sql.includes("SELECT id,documento,creado_por")&&sql.includes("FOR UPDATE"))
+    return {rows:promos.map(p=>({id:p.id,documento:p,creado_por:"admin@example.com"}))};
+   if(sql.includes("SET documento=$2::jsonb"))
+    writes.push(JSON.parse(params[1]));
+   return {rows:[]};
+  },release(){}
+ })};
+ const app={get(path,...h){routes.set("GET "+path,h.at(-1));},
+  post(path,...h){routes.set("POST "+path,h.at(-1));},
+  put(path,...h){routes.set("PUT "+path,h.at(-1));},
+  delete(path,...h){routes.set("DELETE "+path,h.at(-1));}};
+ setupTenantPromotions(app,pool,{requireTenantModule:()=>[]});
+ let status=200,body,err;
+ const res={status(code){status=code;return res;},json(value){body=value;return res;}};
+ await routes.get("POST /api/tenant/promociones/activar-lote")({
+  body:{ids:["P1","P2"]},context:{role:"administrador",client:{schema:"ampedia"},
+   allowedPharmacyIds:[1],pharmacies:[{id:"1"}]},user:{email:"admin@example.com"}
+ },res,e=>{err=e;});
+ assert.equal(err,undefined);
+ assert.equal(status,200);
+ assert.deepEqual(body.activatedIds,["P1","P2"]);
+ assert.equal(writes.length,2);
+ assert.equal(writes.every(p=>p.status==="Activa"&&p.statusSource==="manual"),true);
+ assert.equal(writes.every(p=>p.monthlyObjectives["2026-12"]===undefined),true,
+  "No inventar ni exigir objetivos para diciembre");
+ assert.equal(queries.includes("COMMIT"),true);
+ assert.equal(queries.includes("ROLLBACK"),false);
+});

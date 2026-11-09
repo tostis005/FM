@@ -69,9 +69,11 @@ try{
  page.once("dialog",dialog=>dialog.accept());
  await page.getByRole("button",{name:"Activar seleccionadas"}).click();
  await explanation.waitFor({state:"hidden",timeout:15000});
- await page.waitForFunction(()=>[...document.querySelectorAll(".campaign-table tbody tr")]
-  .filter(row=>/prueba/.test(row.textContent||"")).every(row=>
-   row.textContent.includes("Activa")),{timeout:15000});
+ await page.waitForFunction(()=>{
+  const rows=[...document.querySelectorAll(".campaign-table tbody tr")]
+   .filter(row=>/prueba/.test(row.textContent||""));
+  return rows.length===2&&rows.every(row=>row.textContent.includes("Activa"));
+ },null,{timeout:15000});
  assert.equal(attempts.length,2);
  assert.equal(promos.every(p=>p.status==="Activa"),true);
  assert.deepEqual(errors,[]);

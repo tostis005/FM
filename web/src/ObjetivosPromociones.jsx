@@ -6,7 +6,7 @@ import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,pr
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarget,first} from "./simuladorLogic.js";
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
-import {promotionObjectiveMonths,objectiveMonthDates,objectiveHistoryAnchor,historicPeriodAvailable,objectiveMonthSaveState,hasLegacyUnassignedObjectives} from "./promotionMonthlyObjectives.js";
+import {promotionObjectiveMonths,objectiveMonthDates,objectiveHistoryAnchor,historicPeriodAvailable,objectiveMonthSaveState} from "./promotionMonthlyObjectives.js";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
@@ -70,7 +70,6 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const months=useMemo(()=>promotionObjectiveMonths(editingPromotion),[editingPromotion]);
  const monthRange=objectiveMonthDates(editingPromotion,objectiveMonth);
  const currentMonthSaved=objectiveMonthSaveState(editingPromotion,objectiveMonth)==="saved";
- const legacyTargets=hasLegacyUnassignedObjectives(editingPromotion);
  const monthLabel=month=>new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",
   {month:"long",year:"numeric",timeZone:"UTC"});
  const selectedMonthName=objectiveMonth?monthLabel(objectiveMonth):"la campaña";
@@ -228,8 +227,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  }
  return <div className="fm-objectives">
   <div className="fm-objectives-intro">
-   <div><h1>{isEditing?"Asignar objetivos":"Nueva campaña"}</h1>
-    <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán la promoción, sus productos y los objetivos de los demás meses.":"Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual."}</p></div>
+   <div><h1>{isEditing?"Asignar objetivos":"Simulador de ventas y objetivos"}</h1>
+    <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán la promoción, sus productos y los objetivos de los demás meses.":"Consulta ventas y stock, prueba objetivos sin crear ninguna promoción y, si te interesa, conviértelos en una campaña."}</p></div>
    {isEditing&&<button type="button" className="btn btn-secondary" onClick={onBack}>Volver al formulario</button>}
   </div>
    {months.length>0&&<section className="card fm-objectives-card fm-objectives-months">
@@ -238,20 +237,19 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      {months.map(month=>{
       const state=objectiveMonthSaveState(editingPromotion,month);
       const stored=state==="saved";
-      const legacy=state==="legacy";
       const pending=month===objectiveMonth&&draftTouched;
       return <button key={month} type="button"
        className={"btn fm-objective-month-option"+(objectiveMonth===month?" active":"")+
-        (pending?" is-pending":stored?" is-saved":legacy?" is-legacy":" is-empty")}
+        (pending?" is-pending":stored?" is-saved":" is-empty")}
        aria-pressed={objectiveMonth===month}
-       aria-label={monthLabel(month)+": "+(pending?"Cambios sin guardar":stored?"Objetivos guardados":legacy?"Objetivos existentes sin mes asignado":"Sin objetivos asignados")}
+       aria-label={monthLabel(month)+": "+(pending?"Cambios sin guardar":stored?"Objetivos guardados":"Sin objetivos asignados")}
        onClick={()=>{if(month!==objectiveMonth){
         if(draftTouched&&!window.confirm("Tienes cambios sin guardar en "+selectedMonthName+". ¿Cambiar de mes y descartarlos?"))return;
         onObjectiveMonthChange?.(month);
        }}}>
        <span className="fm-objective-month-title">{monthLabel(month)}</span>
        <span className="fm-objective-month-state">
-        {pending?"Cambios sin guardar":stored?<><Check size={13}/> Guardado</>:legacy?"Objetivos existentes · sin mes":"Sin objetivos"}
+        {pending?"Cambios sin guardar":stored?<><Check size={13}/> Guardado</>:"Sin objetivos"}
        </span>
       </button>;
      })}
@@ -334,20 +332,18 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   <section className="card fm-objectives-card">
    <h2>2. Farmacias, ventas y objetivos</h2>
    <div className={"fm-objectives-storage fm-objectives-storage-"+
-    (draftTouched?"pending":currentMonthSaved?"saved":legacyTargets?"legacy":"preview")}
+    (draftTouched?"pending":currentMonthSaved?"saved":"preview")}
     role="status" aria-live="polite">
     <div className="fm-objectives-storage-icon" aria-hidden="true">
      {currentMonthSaved&&!draftTouched?<Check size={18}/>:<span>{draftTouched?"!":"i"}</span>}
     </div>
     <div><strong>{draftTouched?"Cambios sin guardar":
      currentMonthSaved?"Objetivos guardados para "+selectedMonthName:
-     legacyTargets?"Objetivos anteriores sin mes asignado":
-     "Sin objetivos guardados"+(objectiveMonth?" para "+selectedMonthName:"")}</strong>
+          (isEditing?"Sin objetivos guardados"+(objectiveMonth?" para "+selectedMonthName:""):"Propuesta de objetivos para la simulación")}</strong>
      <p>{draftTouched?"Estás viendo cambios de esta sesión. Los objetivos guardados no cambiarán hasta que pulses «"+
-      (isEditing?"Guardar objetivos":"Continuar con la campaña")+"».":
+      (isEditing?"Guardar objetivos":"Crear promoción con esta propuesta")+"».":
       currentMonthSaved?"Las unidades que aparecen en la tabla son las últimas guardadas, aunque no coincidan con el porcentaje seleccionado.":
-      legacyTargets?"Esta promoción tiene objetivos ya guardados, pero se crearon antes de incorporar el desglose mensual. Se muestran sin modificar sus unidades; todavía no están asignados a un mes concreto. Puedes elegir el mes y guardarlos cuando corresponda.":
-      "Las unidades que se muestran por defecto son una propuesta calculada a partir de la referencia histórica y el porcentaje. Todavía no están guardadas."}</p>
+            (isEditing?"Las unidades que se muestran por defecto son una propuesta calculada a partir de la referencia histórica y el porcentaje. Todavía no están guardadas.":"Puedes modificar las unidades libremente. Solo se guardarán como objetivos de una promoción cuando elijas las fechas y el mes en el siguiente paso.")}</p>
     </div>
    </div>
    <div className="fm-objectives-pharmacies">{active.map(f=><label key={f.id}>
@@ -404,7 +400,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
          onChange={e=>{setDraftTouched(true);setManualTargets(old=>({...old,[id]:e.target.value===""?"":
           String(Math.max(0,Math.round(Number(e.target.value)||0)))}));}}/>
          <small className={"fm-objectives-target-source "+(draftTouched?"is-pending":currentMonthSaved?"is-saved":"is-preview")}>
-          {draftTouched?"Sin guardar":currentMonthSaved?"Guardado":legacyTargets?"Anterior · sin mes":"Propuesta"}
+          {draftTouched?"Sin guardar":currentMonthSaved?"Guardado":"Propuesta"}
          </small></td>
        </tr>;
       })}
@@ -436,7 +432,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   <div className="fm-objectives-create">
    {saveError&&<p role="alert" className="fm-objectives-warning">{saveError}</p>}
    <button type="button" className="btn btn-primary" disabled={!canCreate}
-    onClick={()=>void create()}><Check size={17}/> {savingObjectives?"Guardando…":isEditing?"Guardar objetivos":"Continuar con la campaña"}</button>
+    onClick={()=>void create()}><Check size={17}/> {savingObjectives?"Guardando…":isEditing?"Guardar objetivos":"Crear promoción con esta propuesta"}</button>
   </div>
  </div>;
 }

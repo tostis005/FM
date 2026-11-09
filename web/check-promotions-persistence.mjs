@@ -69,9 +69,9 @@ try{
  await page.getByRole("searchbox",{name:"Buscar por artículo, proveedor o CN"}).fill("Producto");
  await page.getByRole("button",{name:"Seleccionar mostrados"}).waitFor({timeout:12000});
  await page.getByRole("button",{name:"Seleccionar mostrados"}).click();
- const continueButton=page.getByRole("button",{name:"Continuar con la campaña"});
+ const continueButton=page.getByRole("button",{name:"Crear promoción con esta propuesta"});
  await page.waitForFunction(()=>{
-  const button=[...document.querySelectorAll("button")].find(b=>b.textContent.includes("Continuar con la campaña"));
+  const button=[...document.querySelectorAll("button")].find(b=>b.textContent.includes("Crear promoción con esta propuesta"));
   return button&&!button.disabled;
  },null,{timeout:12000});
  await continueButton.click();
@@ -95,6 +95,8 @@ try{
   "El objetivo ya incluye el incremento elegido en la pantalla anterior");
  await modal.getByLabel("Fecha de inicio").fill("2026-11-01");
  await modal.getByLabel("Fecha de fin",{exact:true}).fill("2026-11-30");
+ assert.match(await modal.locator(".fm-promotion-proposal-single").innerText(),/noviembre/i,
+  "Las fechas de un mes asignan automáticamente el objetivo");
  await modal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).fill("10");
  await modal.getByRole("button",{name:"Crear campaña"}).click();
  await modal.getByRole("alert").waitFor();
@@ -110,6 +112,8 @@ try{
  await modal.waitFor({state:"detached"});
  assert.equal(saved.length,1);
  assert.equal(saveCalls,2);
+ assert.equal(saved[0].monthlyObjectives["2026-11"].targets["1"],10,
+  "El guardado confirmado conserva el objetivo mensual incluso después de reintentar");
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  try{
   await page.getByRole("combobox",{name:"Estado"}).selectOption("Todos");
@@ -137,14 +141,17 @@ try{
  await page.waitForFunction(()=>document.querySelector(".fm-objectives-goal-cell input")?.value==="10",
   null,{timeout:12000});
  await stockGoal.fill("8");
- await page.getByRole("button",{name:"Continuar con la campaña"}).click();
+ await page.getByRole("button",{name:"Crear promoción con esta propuesta"}).click();
  const stockModal=page.locator(".drawer").filter({hasText:"Nueva campaña"});
- assert.ok(await stockModal.getByRole("radio",{name:"Hasta agotar stock"}).isChecked());
+ assert.ok(await stockModal.getByRole("radio",{name:"Por fechas"}).isChecked(),
+  "El histórico de stock no debe predeterminar la duración de la promoción");
+ await stockModal.getByRole("radio",{name:"Hasta agotar stock"}).check();
  assert.equal(await stockModal.getByLabel("Fecha de fin").count(),0);
  assert.equal(await stockModal.getByRole("spinbutton",{name:"Objetivo Farmacia Centro"}).inputValue(),"8");
  assert.equal(await stockModal.locator(".increase-controls").count(),0);
  await stockModal.getByLabel("Nombre de promoción").fill("Campaña hasta agotar stock");
  await stockModal.getByLabel("Fecha de inicio").fill("2026-11-01");
+ await stockModal.locator('input[name="proposal-objective-month"][value="2026-11"]').check();
  await stockModal.getByRole("button",{name:"Crear campaña"}).click();
  await stockModal.waitFor({state:"detached",timeout:12000});
  assert.equal(saved.length,2);
@@ -153,6 +160,7 @@ try{
  assert.equal(stockCampaign.durationMode,"stock");
  assert.equal(stockCampaign.end,"");
  assert.equal(Number(stockCampaign.targets["1"]),8);
+ assert.equal(stockCampaign.monthlyObjectives["2026-11"].targets["1"],8);
  
  role="farmacia";
  await page.reload({waitUntil:"domcontentloaded"});

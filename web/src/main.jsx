@@ -42,7 +42,7 @@ import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
 import {objectiveEditorUrl,objectiveEditorRoute} from "./promotionObjectiveRoute.js";
-import {objectiveTargetsForPeriod,preferredObjectiveMonth,objectiveMonthDates,promotionObjectiveMonths,hasMonthlyObjectives,hasGoalInMonth} from "./promotionMonthlyObjectives.js";
+import {objectiveTargetsForPeriod,preferredObjectiveMonth,objectiveMonthDates,promotionObjectiveMonths,hasMonthlyObjectives,hasGoalInMonth,promotionDraftGoalMonths,assignProposalToMonth,objectiveMonthsOutsideCampaign} from "./promotionMonthlyObjectives.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode,promotionStatusSourceOnSave} from "./promotionLifecycle.js";
 import {splitPromotionSalesPeriod} from "./promotionSalesRanges.js";
@@ -768,7 +768,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setFormObjectiveMonth(preferredObjectiveMonth(entry,promotionSelectedMonth,new Date()));setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setFormObjectiveMonth(entry.simulatorDraft?"":preferredObjectiveMonth(entry,promotionSelectedMonth,new Date()));setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  function openObjectivePlanner(p){
   if(!canManagePromotions||p?.managerCanEdit===false)
    return setToast("No tienes permiso para asignar objetivos a esta promoción.");
@@ -804,18 +804,11 @@ function App(){
   setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
  }
  function continuePlannerToDrawer(objectives){
-  const base=objectiveCampaign||EMPTY_PROMO;
-  const month=objectives.objectiveMonth;
-  const monthlyObjectives=month?{...(base.monthlyObjectives||{}),
-   [month]:{targets:{...(objectives.targets||{})},
-    objectiveBaseline:objectives.objectiveBaseline,
-    objectiveBaselineRange:objectives.objectiveBaselineRange,
-    objectiveRates:objectives.objectiveRates}}:base.monthlyObjectives;
-  const draft={...EMPTY_PROMO,...base,...objectives,id:null,
-   name:base.name||"",start:base.start||"",end:base.end||"",status:"Borrador",
-   monthlyObjectives,
-   durationMode:objectiveCampaign?.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
-   simulatorDraft:true};
+  // El simulador ofrece una propuesta, no objetivos guardados ni asociados
+  // a un mes hasta elegir las fechas comerciales en el panel lateral.
+  const draft={...EMPTY_PROMO,...objectives,id:null,name:"",description:"",
+   start:"",end:"",status:"Borrador",monthlyObjectives:undefined,
+   durationMode:"dates",simulatorDraft:true};
   setObjectiveCampaign(null);
   nav("promociones");
   startPromo(draft);
@@ -843,6 +836,8 @@ function App(){
    if(invalid.length)return rejectPromo("Cada CN debe contener exactamente 6 dígitos, sin puntos. Revisa: "+invalid[0]);
   if((promoForm.status==="Activa"||needsRetroactiveValidation)&&!promoForm.start)return rejectPromo("La fecha de inicio es obligatoria.");
   const durationMode=promotionDurationMode(promoForm);
+  if(promoForm.simulatorDraft&&!promoForm.start)
+   return rejectPromo("Indica las fechas de la promoción antes de asignar los objetivos.");
   // «Activa» publica la campaña, no inicia su vigencia comercial: permitir
   // publicar antes de la fecha inicial y mantenerla publicada al vencer.
    if(durationMode==="dates"&&!promoForm.end)
@@ -893,6 +888,15 @@ function App(){
     retroactive:needsRetroactiveValidation,sales:{},id:promoForm.id||"P"+Date.now(),
     name:promoForm.name.trim(),cns:codes,
     targets:Object.fromEntries(selections.map(([id,v])=>[id,v===""?"":Number(v)]))};
+  if(promoForm.simulatorDraft){
+   try{
+    Object.assign(result,assignProposalToMonth(result,formObjectiveMonth));
+   }catch(error){return rejectPromo(error.message);}
+  }else{
+   const outside=objectiveMonthsOutsideCampaign(result);
+   if(outside.length)return rejectPromo("Las fechas dejarían fuera de la promoción los objetivos de "+
+    outside.join(", ")+". Ajusta las fechas o revisa los objetivos antes de guardar.");
+  }
   if(result.status==="Finalizada"){
     if(needsRetroactiveValidation&&!result.closedOn)result.closedOn=result.end;
     const manualClose=oldStatus!=="Finalizada"||Boolean(result.closedOn&&!original?.closedOn);
@@ -1151,8 +1155,11 @@ function App(){
     finally{setSavingPharmacy(false);}
   }
   const configuredDrawerMonths=Object.keys(promoForm.monthlyObjectives||{}).sort();
+ const goalProposalMonths=promoForm.simulatorDraft?promotionDraftGoalMonths(promoForm):[];
+ const selectedProposalMonth=goalProposalMonths.length===1?goalProposalMonths[0]:
+  goalProposalMonths.includes(formObjectiveMonth)?formObjectiveMonth:"";
  const activeDrawerMonth=configuredDrawerMonths.includes(formObjectiveMonth)?formObjectiveMonth:configuredDrawerMonths[0]||"";
- const drawerTargets=activeDrawerMonth?
+ const drawerTargets=promoForm.simulatorDraft?promoForm.targets:activeDrawerMonth?
   promoForm.monthlyObjectives?.[activeDrawerMonth]?.targets||{}:promoForm.targets;
  const cnParsed=parseCNs(cnText);
  const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Dashboard";
@@ -1711,6 +1718,42 @@ function App(){
     {promotionDurationMode(promoForm)==="dates"&&<Field label="Fecha de fin"><input type="date" required
      min={promoForm.start||undefined} value={promoForm.end||""}
      onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field>}</div>
+   {promoForm.simulatorDraft&&<div className="fm-promotion-proposal" role="group" aria-label="Asignación mensual de la propuesta">
+    <div className="fm-promotion-proposal-head">
+     <Target size={18} aria-hidden="true"/>
+     <div><strong>Objetivos simulados</strong>
+      <small>{quantity(sum(promoForm.targets))} unidades propuestas · {Object.keys(promoForm.targets).length} farmacias</small>
+     </div>
+    </div>
+    {!goalProposalMonths.length?
+     <p className="fm-promotion-proposal-hint" role="status">
+      Indica las fechas de inicio y fin para decidir a qué mes corresponden estos objetivos.
+     </p>:
+     goalProposalMonths.length===1?
+      <div className="fm-promotion-proposal-single" role="status">
+       <CheckCircle2 size={17} aria-hidden="true"/>
+       La propuesta se asignará a <strong>{new Date(selectedProposalMonth+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>.
+      </div>:
+      <fieldset className="fm-promotion-proposal-fieldset">
+       <legend>¿A qué mes aplicamos los objetivos simulados?</legend>
+       <div className="fm-promotion-proposal-months">
+        {goalProposalMonths.map(month=>{
+         const range=objectiveMonthDates(promoForm,month);
+         return <label key={month} className={"fm-promotion-proposal-month"+(selectedProposalMonth===month?" is-selected":"")}>
+          <input type="radio" name="proposal-objective-month"
+           value={month} checked={selectedProposalMonth===month}
+           onChange={()=>setFormObjectiveMonth(month)}/>
+          <span className="fm-promotion-proposal-month-text">
+           <strong>{new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>
+           {range&&<small>{dateES(range.from)} – {dateES(range.to)}</small>}
+          </span>
+         </label>;
+        })}
+       </div>
+       <small className="fm-promotion-proposal-hint">Los demás meses quedarán sin objetivos. Puedes configurarlos posteriormente desde «Editar objetivos».</small>
+      </fieldset>}
+    <small className="fm-promotion-proposal-footnote">Se conservarán las unidades y los porcentajes de la simulación, sin repartirlos ni recalcularlos.</small>
+   </div>}
    <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select>
     <small className="fm-promotion-publication-hint">Activa: visible para las farmacias participantes desde que se publica, aunque empiece más adelante. Borrador: solo gestores y administradores. Las fechas delimitan las ventas, no la visibilidad.</small></Field>
     {promoForm.status==="Finalizada"&&<div className="field-row"><Field label="Fecha real de finalización"><input type="date" min={promoForm.start||undefined} max={civilToday(new Date(),reportTimeZone)} value={promoForm.closedOn||""} onChange={e=>setPromoForm({...promoForm,closedOn:e.target.value})}/></Field><Field label="Motivo del cierre (opcional)"><input value={promoForm.closedReason||""} onChange={e=>setPromoForm({...promoForm,closedReason:e.target.value})} placeholder="Promoción terminada"/></Field></div>}

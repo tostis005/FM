@@ -248,3 +248,23 @@
     width:100%;
   }
 }
+
+/* Selector mensual del planificador: el estilo viaja con su propia pantalla,
+   no depende de haber visitado previamente la tabla de seguimiento. */
+.fm-objectives .fm-objectives-months{overflow:hidden}
+.fm-objectives .fm-objective-month-options{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.fm-objectives .fm-objective-month-options button{
+ min-height:40px;white-space:normal;line-height:1.35;padding:8px 13px;
+ border-radius:9px;font-size:12px;max-width:100%;
+}
+.fm-objectives .fm-objective-month-options button.active{
+ border-color:#218260;background:#e4f4eb;color:#176449;font-weight:800;
+}
+.fm-objectives .fm-objectives-month-range{margin:8px 0 0;font-size:12px;line-height:1.5;color:#648273}
+@media(max-width:600px){
+ .fm-objectives .fm-objective-month-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fm-objectives .fm-objective-month-options button{min-width:0;width:100%}
+}
+@media(max-width:340px){
+ .fm-objectives .fm-objective-month-options{grid-template-columns:minmax(0,1fr)}
+}

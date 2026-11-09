@@ -60,7 +60,12 @@ test("objetivos heredados sin mes no se borran ni se migran implícitamente",()=
 });
 
 test("la etiqueta de mes solo indica guardado cuando existe realmente un registro mensual",()=>{
- assert.equal(objectiveMonthSaveState(base,"2026-11"),"unconfigured");
+ assert.equal(objectiveMonthSaveState(base,"2026-11"),"legacy");
+ assert.equal(objectiveMonthSaveState(base,"2026-12"),"legacy");
+ const oneMonth={...base,end:"2026-10-31"};
+ assert.equal(objectiveMonthSaveState(oneMonth,"2026-10"),"saved",
+  "Los objetivos anteriores de una promoción de un mes están guardados en ese único mes");
+ assert.equal(objectiveMonthSaveState(oneMonth,"2026-11"),"unconfigured");
  assert.equal(hasLegacyUnassignedObjectives(base),true);
  const nov=mergeObjectivesIntoPromotion(base,{
   cns:base.cns,objectiveMonth:"2026-11",targets:{"1":125,"2":22},
@@ -68,6 +73,8 @@ test("la etiqueta de mes solo indica guardado cuando existe realmente un registr
  });
  assert.equal(objectiveMonthSaveState(nov,"2026-11"),"saved");
  assert.equal(objectiveMonthSaveState(nov,"2026-12"),"unconfigured");
+ assert.deepEqual(objectiveDraftSelection(base,[{id:1},{id:2}],"2026-11").targets,
+  {"1":110,"2":20},"El editor recupera los objetivos antiguos sin cambiarlos");
  assert.equal(hasLegacyUnassignedObjectives(nov),false);
  assert.deepEqual(objectiveDraftSelection(nov,[{id:1},{id:2}],"2026-12").targets,{},
   "El mes sin guardar muestra una propuesta, no el objetivo del mes anterior");

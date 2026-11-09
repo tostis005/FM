@@ -216,14 +216,8 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   return()=>{mounted=false;controller.abort()};
  },[query,clientSlug,reload,useReal]);
  useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
- useEffect(()=>{
-  // Cambiar de pestaña o recuperar foco conserva filtros, resultados y scroll.
-  // Solo actualizar cada cinco minutos mientras la pestaña está visible.
-  const timer=setInterval(()=>{
-    if(document.visibilityState==="visible")setReload(n=>n+1);
-  },5*60*1000);
-  return()=>clearInterval(timer);
- },[]);
+ // No refrescar los datos automáticamente mientras el usuario consulta
+ // grupos o detalles. El botón «Actualizar» sigue disponible para hacerlo a demanda.
  const groups=data?.groups||[];
  const salesEnabled=data?.sales?.available===true;
  const buysEnabled=data?.purchases?.available===true;

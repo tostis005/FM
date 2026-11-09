@@ -260,17 +260,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [reloadKey,setReloadKey]=useState(0);
  const [lastUpdated,setLastUpdated]=useState(null);
  const [asOf,setAsOf]=useState(()=>new Date());
- useEffect(()=>{
-  // Recuperar el foco NO debe relanzar todas las consultas (y mostrar skeletons).
-  // El refresco periódico se limita a la pestaña que ya está visible;
-  // el botón «Actualizar» sigue permitiendo consultar nuevos datos al instante.
-  const timer=setInterval(()=>{
-    if(document.visibilityState==="visible"){
-      setAsOf(new Date());setReloadKey(n=>n+1);
-    }
-  },5*60*1000);
-  return()=>clearInterval(timer);
- },[]);
+ // Mantener filtros, resultados y posición mientras se consulta el módulo.
+ // Solo el botón «Actualizar» debe relanzar las consultas de análisis.
  const ids=pharmacies.map(p=>String(p.id)+":"+p.name+":"+(p.databaseCode||p.sourceCode||"")).join(",");
  // Una sesión antigua puede haber guardado POL/VAL o códigos que ya no pertenecen
  // al ámbito autorizado. Traducirlos a IDs reales antes de solicitar informes.

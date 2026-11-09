@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ArrowLeft,Check,Download,FilePlus,FolderOpen,Pencil,Plus,RefreshCcw,Save,Trash2,Users,X} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 import "./supplierWorkspace.css";
 
 const FIELDS=[
@@ -205,7 +206,10 @@ export default function SupplierWorkspace({clientSlug,supplierId,onBack,onSuppli
    <button className="btn btn-secondary" type="button" disabled={loading||busy} onClick={()=>void refresh()}><RefreshCcw size={15}/> Actualizar</button>
   </header>
   <Alert error={error} notice={notice}/>
-  {loading&&!data?<p role="status">Cargando ficha del proveedor…</p>:data&&<>
+  {loading&&data&&<LoadingStatus label="Actualizando ficha, contactos y documentación…"/>}
+  {loading&&!data?<section className="card fm-workspace-card">
+   <LoadingPanel label="Cargando ficha, contactos y documentación…" rows={5}/>
+  </section>:data&&<>
    <section className="card fm-workspace-card">
     <div className="fm-workspace-section-head"><div><h2>Datos generales</h2>
      <p>Origen: Farmatic. Las correcciones se guardan en Farmétrica y no se pierden en la siguiente importación.</p></div>

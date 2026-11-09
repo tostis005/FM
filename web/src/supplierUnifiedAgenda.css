@@ -268,3 +268,11 @@
 @media(max-width:375px){
  .fm-unified-master .fm-master-header-actions>.btn{flex-basis:100%}
 }
+
+
+/* Proveedores: no mostrar ceros ficticios ni tablas vacías durante la carga. */
+.fm-unified-master .fm-master-loading-indicator{display:flex;align-items:center;min-height:26px;margin:-10px 0 16px}
+.fm-unified-master .fm-supplier-summary-item strong>.fm-load-spinner{width:19px;height:19px;vertical-align:middle}
+.fm-unified-master .fm-supplier-tabs button span.fm-load-spinner{display:inline-block;flex:none;width:13px;height:13px;min-width:0;padding:0;border:2.5px solid #c5e7d8;border-top-color:#128b64;border-radius:50%;background:transparent}
+.fm-unified-master .fm-master-empty .btn{margin-left:9px}
+@media(max-width:640px){.fm-unified-master .fm-master-loading-indicator{margin:-6px 0 14px}}

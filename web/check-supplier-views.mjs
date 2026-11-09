@@ -30,6 +30,9 @@ const origins=[
  {sourceCode:"200",name:"Sin clasificar B",origins:[{pharmacyId:"2",name:"Sin clasificar B",source:"farmatic"}]}
 ];
 let frequency=[],writes=[],errors=[],catalogRequests=0;
+// Mantener pendiente la primera consulta para verificar el estado de carga real.
+let releaseSuppliers;
+const suppliersReady=new Promise(resolve=>{releaseSuppliers=resolve});
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),path=u.pathname;
@@ -38,7 +41,10 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/context")body=context;
  else if(path==="/api/tenant/farmacias")body=pharmacies;
  else if(path==="/api/tenant/proveedores")body=origins;
- else if(path==="/api/tenant/proveedores-unificados")body=suppliers;
+ else if(path==="/api/tenant/proveedores-unificados"){
+  if(req.method()==="GET")await suppliersReady;
+  body=suppliers;
+ }
  else if(path==="/api/tenant/pedidos/frecuencias"){
   if(req.method()==="PUT"){
    const data=req.postDataJSON();writes.push(data);
@@ -69,6 +75,13 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto("http://127.0.0.1:4175/proveedores-maestro",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
+ // Ni los KPI ni las pestañas pueden presentar ceros mientras no hay datos.
+ await page.locator(".fm-supplier-summary-item .fm-load-spinner").first().waitFor({state:"visible",timeout:10000});
+ await page.getByText("Cargando información de proveedores…").waitFor();
+ assert.deepEqual(await page.locator(".fm-supplier-summary-item strong").allTextContents(),["","","","",""]);
+ await page.getByText("Cargando proveedores…").first().waitFor();
+ releaseSuppliers();
+ await page.waitForFunction(()=>document.querySelector(".fm-supplier-summary-item strong")?.textContent==="5",null,{timeout:10000});
  await page.getByRole("tab",{name:/Laboratorios/}).click();
  assert.equal(await page.getByRole("button",{name:/Unificación de laboratorios/}).count(),0);
  await page.getByText("Laboratorios Alfa SA").first().waitFor();
@@ -129,4 +142,4 @@ try{
  }
  assert.deepEqual(errors,[]);
  console.log("OK maestro por categorías, clasificación independiente, frecuencia y agenda responsive");
-}finally{await browser.close()}
+}finally{releaseSuppliers();await browser.close()}

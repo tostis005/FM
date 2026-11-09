@@ -13,7 +13,7 @@ const user={email:"admin@example.invalid",role:"superadministrador",name:"Admini
 let campaign={id:"X-NOV-1",name:"Gama nueva · 20% DTO",laboratory:"LAB",
  subtitle:"LAB",range:"Gama nueva",originalOffer:"20% DTO",description:"Oferta",
  source:"Excel: NOVIEMBRE 2026 PROMOCIONES FARMACIA ABADIA Y PB (3).xlsx",
- sourceSheet:"RESUMEN PROMOS",sourceRow:2,start:"2026-11-01",end:"2026-11-30",
+ sourceSheet:"RESUMEN PROMOS",sourceRow:2,start:"2026-11-01",end:"2026-12-15",
  durationMode:"dates",status:"Borrador",statusSource:"automatic",
  cns:["123456","654321"],cnDescriptions:{"123456":"Producto A","654321":"Producto B"},
  targets:{},sales:{},type:"descuento_porcentaje",discountPercent:"20"};
@@ -47,6 +47,11 @@ try{
  await page.getByRole("button",{name:"Asignar objetivos",exact:true}).click();
  await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});
  assert.equal(new URL(page.url()).pathname,"/promociones/nueva");
+ assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Sin objetivos asignados/i}).count(),1);
+ assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).count(),1);
+ assert.match(await page.locator(".fm-objectives-storage").innerText(),/Sin objetivos guardados/);
+ assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Propuesta/);
+ assert.equal(await page.locator(".fm-objectives-month-range").count(),0);
  assert.match(await page.locator(".fm-objectives-selected").innerText(),/2 CN/);
  assert.match(await page.locator(".fm-objectives-selected").innerText(),/Producto A/);
  // Un CN sin stock registrado NO debe poner objetivo 0 cuando los demás suman 8.
@@ -57,6 +62,8 @@ try{
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"8");
  assert.equal(await page.locator(".fm-objectives-table").getByText("Parcial").count(),0);
  await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).fill("25");
+ assert.match(await page.locator(".fm-objectives-storage").innerText(),/Cambios sin guardar/);
+ assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Sin guardar/);
  const save=page.getByRole("button",{name:"Guardar objetivos"});
  await save.waitFor({state:"visible"});
  await page.waitForFunction(()=>!document.querySelector('.fm-objectives-create button')?.disabled,
@@ -71,15 +78,40 @@ try{
  assert.equal(writes[0].targets["1"],25);
  assert.equal(writes[0].status,"Borrador"); // Asignar metas no publica
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
- await page.getByRole("button",{name:"Asignar objetivos con ventas históricas y stock"}).click();
+ assert.equal(await page.getByRole("button",{name:"Asignar objetivos con ventas históricas y stock"}).count(),0,
+  "El panel de la derecha no debe repetir el botón para asignar objetivos");
+ await page.getByRole("button",{name:"Cerrar",exact:true}).click();
+ await page.getByRole("button",{name:"Editar objetivos",exact:true}).click();
  await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
+ assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).count(),1);
+ assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).count(),1);
+ assert.match(await page.locator(".fm-objectives-storage").innerText(),/Objetivos guardados para noviembre/);
+ assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Guardado/);
+ await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).click();
+ await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).waitFor();
+ assert.match(await page.locator(".fm-objectives-storage").innerText(),/Sin objetivos guardados para diciembre/);
+ assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Propuesta/);
+ await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).fill("40");
+ assert.match(await page.locator(".fm-objectives-storage").innerText(),/Cambios sin guardar/);
+ await page.getByRole("button",{name:"Guardar objetivos"}).click();
+ await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:20000});
+ assert.equal(writes.length,2);
+ assert.equal(writes[1].monthlyObjectives["2026-11"].targets["1"],25);
+ assert.equal(writes[1].monthlyObjectives["2026-12"].targets["1"],40);
+ assert.equal(await page.getByRole("button",{name:"Asignar objetivos con ventas históricas y stock"}).count(),0);
+ await page.getByRole("button",{name:"Cerrar",exact:true}).click();
+ await page.getByRole("button",{name:"Editar objetivos",exact:true}).click();
+ await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).click();
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25",
+  "Volver a un mes guardado mantiene las unidades manuales anteriores");
  await page.getByRole("button",{name:"Volver al formulario"}).click();
  await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:15000});
- assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25",
+  "El panel lateral mantiene el mes seleccionado sin recalcular unidades manuales");
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByText("Gama nueva · 20% DTO").first().waitFor({timeout:15000});
- assert.equal(writes.length,1);
+ assert.equal(writes.length,2);
  assert.deepEqual(errors,[]);
- console.log("OBJETIVOS_MÓVIL_OK: precarga de CN, guardado en la misma promoción, retorno al formulario y recarga");
+ console.log("OBJETIVOS_MÓVIL_OK: panel sin botón redundante, guardado mensual visible, propuestas distinguidas y objetivos manuales preservados");
 }finally{await browser.close();}

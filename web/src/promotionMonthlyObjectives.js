@@ -46,6 +46,17 @@ export function monthlyObjectiveEntry(p,month){
  if(!MONTH.test(month||""))return null;
  return p?.monthlyObjectives?.[month]||null;
 }
+/** Estado de guardado real del mes. Una propuesta automática nunca cuenta
+ * como objetivo configurado, aunque la tabla muestre unidades calculadas. */
+export function objectiveMonthSaveState(p,month){
+ if(!MONTH.test(month||""))return "unconfigured";
+ const entry=monthlyObjectiveEntry(p,month);
+ if(!entry||!entry.targets||!Object.keys(entry.targets).length)return "unconfigured";
+ return "saved";
+}
+export function hasLegacyUnassignedObjectives(p){
+ return !hasMonthlyObjectives(p)&&keys(p?.targets).length>0;
+}
 export function hasMonthlyObjectives(p){
  return keys(p?.monthlyObjectives).length>0;
 }

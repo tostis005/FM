@@ -6,7 +6,7 @@ import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,pr
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarget,first} from "./simuladorLogic.js";
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
-import {promotionObjectiveMonths,objectiveMonthDates,objectiveHistoryAnchor,historicPeriodAvailable} from "./promotionMonthlyObjectives.js";
+import {promotionObjectiveMonths,objectiveMonthDates,objectiveHistoryAnchor,historicPeriodAvailable,objectiveMonthSaveState,hasLegacyUnassignedObjectives} from "./promotionMonthlyObjectives.js";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
@@ -56,6 +56,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [customTo,setCustomTo]=useState(()=>preset.customTo||madridToday());
  const [rateByPharmacy,setRateByPharmacy]=useState(()=>({...preset.rateByPharmacy}));
  const [manualTargets,setManualTargets]=useState(()=>({...preset.targets}));
+ const [draftTouched,setDraftTouched]=useState(false);
  const initializedTargets=useRef(false);
  const [savingObjectives,setSavingObjectives]=useState(false);
  const [saveError,setSaveError]=useState("");
@@ -68,6 +69,11 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const availablePeriods=useMemo(()=>periods.filter(p=>historicPeriodAvailable(p,today)),[periods,today]);
  const months=useMemo(()=>promotionObjectiveMonths(editingPromotion),[editingPromotion]);
  const monthRange=objectiveMonthDates(editingPromotion,objectiveMonth);
+ const currentMonthSaved=objectiveMonthSaveState(editingPromotion,objectiveMonth)==="saved";
+ const legacyTargets=hasLegacyUnassignedObjectives(editingPromotion);
+ const monthLabel=month=>new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",
+  {month:"long",year:"numeric",timeZone:"UTC"});
+ const selectedMonthName=objectiveMonth?monthLabel(objectiveMonth):"la campaña";
  const chosen=baseline==="stock"?{id:"stock",label:"Stock actual",from:null,to:null}:
   periods.find(p=>p.id===baseline)||periods[0];
  const validRange=validSimulatorPeriod(customFrom,customTo);
@@ -168,7 +174,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const canCreate=Boolean(canManage&&(!isEditing||!months.length||monthRange)&&selectedCNs.length&&selectedPharmacies.length&&
   validTargets&&validRange&&!historyBusy&&!savingObjectives&&(baseline==="stock"||!historyError));
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));
- function append(items){setSelected(current=>mergePromotionSelection(current,items));}
+ function append(items){setDraftTouched(true);setSelected(current=>mergePromotionSelection(current,items));}
  async function addPastedCNs(){
   if(bulkBusy||!codes.length||invalid.length||codes.length>1000)return;
   const requested=[...codes];
@@ -228,15 +234,26 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   </div>
    {months.length>0&&<section className="card fm-objectives-card fm-objectives-months">
     <h2>Mes del objetivo</h2>
-    <p>Los objetivos se miden por mes natural, solo durante la vigencia de la promoción. Los históricos se calculan respecto al mes elegido.</p>
     <div className="fm-objective-month-options" role="group" aria-label="Elegir mes de objetivos">
-     {months.map(month=><button key={month} type="button" className={"btn btn-secondary"+(objectiveMonth===month?" active":"")}
-      aria-pressed={objectiveMonth===month} onClick={()=>onObjectiveMonthChange?.(month)}>
-      {new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}
-      {editingPromotion?.monthlyObjectives?.[month]?" · Configurado":""}
-     </button>)}
+     {months.map(month=>{
+      const stored=objectiveMonthSaveState(editingPromotion,month)==="saved";
+      const pending=month===objectiveMonth&&draftTouched;
+      return <button key={month} type="button"
+       className={"btn fm-objective-month-option"+(objectiveMonth===month?" active":"")+
+        (pending?" is-pending":stored?" is-saved":" is-empty")}
+       aria-pressed={objectiveMonth===month}
+       aria-label={monthLabel(month)+": "+(pending?"Cambios sin guardar":stored?"Objetivos guardados":"Sin objetivos asignados")}
+       onClick={()=>{if(month!==objectiveMonth){
+        if(draftTouched&&!window.confirm("Tienes cambios sin guardar en "+selectedMonthName+". ¿Cambiar de mes y descartarlos?"))return;
+        onObjectiveMonthChange?.(month);
+       }}}>
+       <span className="fm-objective-month-title">{monthLabel(month)}</span>
+       <span className="fm-objective-month-state">
+        {pending?"Cambios sin guardar":stored?<><Check size={13}/> Guardado</>:"Sin objetivos"}
+       </span>
+      </button>;
+     })}
     </div>
-    {monthRange&&<p className="fm-objectives-month-range">Período de cumplimiento: {monthRange.from} — {monthRange.to}. No se modifican las fechas de la campaña.</p>}
    </section>}
    <section className="card fm-objectives-card">
     <h2>1. Seleccionar productos</h2>
@@ -267,7 +284,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
       {results.map(item=><label key={item.cn}
        className={"fm-objectives-product"+(selected.some(x=>x.cn===item.cn)?" is-selected":"")}>
        <input type="checkbox" checked={selected.some(x=>x.cn===item.cn)}
-        onChange={e=>e.target.checked?append([item]):setSelected(v=>v.filter(x=>x.cn!==item.cn))}/>
+        onChange={e=>e.target.checked?append([item]):(setDraftTouched(true),setSelected(v=>v.filter(x=>x.cn!==item.cn)))}/>
        <code>{item.cn}</code>
        <span><strong>{item.description}</strong></span>
       </label>)}
@@ -304,24 +321,41 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    <div className="fm-objectives-selected">
     <div className="fm-objectives-section-title"><strong>Productos seleccionados · {selected.length} CN</strong>
      <button type="button" className="btn btn-secondary btn-sm" disabled={!selected.length}
-      onClick={()=>setSelected([])}>Limpiar selección</button></div>
+      onClick={()=>{setDraftTouched(true);setSelected([]);}}>Limpiar selección</button></div>
     {selected.length?<div className="fm-objectives-chips">{selected.map(item=><span key={item.cn} title={promotionProductLabel(item)+(item.referenceType==="farmatic"?" (referencia Farmatic)":"")}>
      <code>{item.cn}</code>{" - "}{promotionProductName(item)}
      <button type="button" aria-label={"Quitar "+item.cn}
-      onClick={()=>setSelected(s=>s.filter(x=>x.cn!==item.cn))}><Trash2 size={13}/></button>
+      onClick={()=>{setDraftTouched(true);setSelected(s=>s.filter(x=>x.cn!==item.cn));}}><Trash2 size={13}/></button>
     </span>)}</div>:<p>Busca o pega CN para seleccionar los productos.</p>}
    </div>
   </section>
   <section className="card fm-objectives-card">
    <h2>2. Farmacias, ventas y objetivos</h2>
+   <div className={"fm-objectives-storage fm-objectives-storage-"+
+    (draftTouched?"pending":currentMonthSaved?"saved":legacyTargets?"legacy":"preview")}
+    role="status" aria-live="polite">
+    <div className="fm-objectives-storage-icon" aria-hidden="true">
+     {currentMonthSaved&&!draftTouched?<Check size={18}/>:<span>{draftTouched?"!":"i"}</span>}
+    </div>
+    <div><strong>{draftTouched?"Cambios sin guardar":
+     currentMonthSaved?"Objetivos guardados para "+selectedMonthName:
+     legacyTargets?"Objetivos anteriores sin mes asignado":
+     "Sin objetivos guardados"+(objectiveMonth?" para "+selectedMonthName:"")}</strong>
+     <p>{draftTouched?"Estás viendo cambios de esta sesión. Los objetivos guardados no cambiarán hasta que pulses «"+
+      (isEditing?"Guardar objetivos":"Continuar con la campaña")+"».":
+      currentMonthSaved?"Las unidades que aparecen en la tabla son las últimas guardadas, aunque no coincidan con el porcentaje seleccionado.":
+      legacyTargets?"Esta promoción tiene objetivos anteriores sin mes asociado. Las unidades visibles son anteriores, pero aún no se han guardado como objetivos de este mes.":
+      "Las unidades que se muestran por defecto son una propuesta calculada a partir de la referencia histórica y el porcentaje. Todavía no están guardadas."}</p>
+    </div>
+   </div>
    <div className="fm-objectives-pharmacies">{active.map(f=><label key={f.id}>
     <input type="checkbox" checked={selectedPharmacies.includes(String(f.id))}
-     onChange={e=>setSelectedPharmacies(ids=>e.target.checked?[...new Set([...ids,String(f.id)])]:
-      ids.filter(id=>id!==String(f.id)))}/>{f.name}</label>)}</div>
+     onChange={e=>{setDraftTouched(true);setSelectedPharmacies(ids=>e.target.checked?[...new Set([...ids,String(f.id)])]:
+      ids.filter(id=>id!==String(f.id)));}}/>{f.name}</label>)}</div>
    <div className="fm-objectives-custom">
-    <label>Período desde <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}/></label>
+    <label>Período desde <input type="date" value={customFrom} onChange={e=>{setDraftTouched(true);setCustomFrom(e.target.value);}}/></label>
     <label>Hasta <input type="date" min={customFrom||undefined} value={customTo}
-     onChange={e=>setCustomTo(e.target.value)}/></label>
+     onChange={e=>{setDraftTouched(true);setCustomTo(e.target.value);}}/></label>
    </div>
    {!validRange&&<p role="alert" className="fm-objectives-warning">
     Selecciona un período válido de hasta 367 días para consultar las ventas.</p>}
@@ -331,12 +365,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      <thead><tr><th>Farmacia</th>
       {periods.map(p=><th key={p.id}><label className={"fm-objectives-base "+(baseline===p.id?"chosen":"")}>
        <input type="radio" name="simulator-objective-reference" value={p.id}
-        checked={baseline===p.id} onChange={()=>setBaseline(p.id)}
+        checked={baseline===p.id} onChange={()=>{setDraftTouched(true);setBaseline(p.id);}}
         aria-label={"Usar "+p.label+" como base de objetivos"}/>
        <span>{p.label}</span></label><small>{p.id==="custom"?p.from+" — "+p.to:p.from.slice(0,7)}</small></th>)}
       <th title="Suma de unidades registradas de los CN seleccionados"><label className={"fm-objectives-base "+(baseline==="stock"?"chosen":"")}>
        <input type="radio" name="simulator-objective-reference" value="stock"
-        checked={baseline==="stock"} onChange={()=>setBaseline("stock")}
+        checked={baseline==="stock"} onChange={()=>{setDraftTouched(true);setBaseline("stock");}}
         aria-label="Usar stock actual como base de objetivos"/>
        <span>Stock actual</span></label><small>Farmatic</small></th>
       {baseline!=="stock"&&<th>Incremento (%)</th>}<th>Objetivo</th>
@@ -352,20 +386,24 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
          <strong title="Unidades registradas para los CN seleccionados">{num(stockUnits(id))}</strong>}</td>
         {baseline!=="stock"&&<td><div className="fm-objectives-rate-line"><div className="fm-objectives-rates">{[5,8,10,12,14].map(value=><button type="button"
          key={value} className={pct===value?"chosen":""} aria-pressed={pct===value}
-         onClick={()=>{setRateByPharmacy(v=>({...v,[id]:value}));setManualTargets(v=>({...v,[id]:undefined}));}}>
+         onClick={()=>{setDraftTouched(true);setRateByPharmacy(v=>({...v,[id]:value}));setManualTargets(v=>({...v,[id]:undefined}));}}>
          {value}%</button>)}</div>
          <label className="fm-objectives-rate-custom">
           <input type="number" min="-100" max="500" step="1" inputMode="numeric"
            aria-label={"Incremento personalizado "+f.name} value={rateByPharmacy[id]??5}
            onChange={e=>{const v=Number(e.target.value);
             if(Number.isInteger(v)&&v>=-100&&v<=500){
+             setDraftTouched(true);
              setRateByPharmacy(old=>({...old,[id]:v}));
              setManualTargets(old=>({...old,[id]:undefined}));
             }}}/><span>%</span></label></div></td>}
         <td className="fm-objectives-goal-cell"><input type="number" min="0" step="1"
          aria-label={"Objetivo "+f.name} value={target(id)}
-         onChange={e=>setManualTargets(old=>({...old,[id]:e.target.value===""?"":
-          String(Math.max(0,Math.round(Number(e.target.value)||0)))}))}/></td>
+         onChange={e=>{setDraftTouched(true);setManualTargets(old=>({...old,[id]:e.target.value===""?"":
+          String(Math.max(0,Math.round(Number(e.target.value)||0)))}));}}/>
+         <small className={"fm-objectives-target-source "+(draftTouched?"is-pending":currentMonthSaved?"is-saved":"is-preview")}>
+          {draftTouched?"Sin guardar":currentMonthSaved?"Guardado":legacyTargets?"Anterior · sin mes":"Propuesta"}
+         </small></td>
        </tr>;
       })}
       <tr className="fm-objectives-summary"><th>Total</th>

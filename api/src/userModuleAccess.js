@@ -42,6 +42,7 @@ export function requestModules(req){
  if(path.startsWith("/api/asistente/"))return ["asistente"];
  if(path.startsWith("/api/genericos/"))return ["genericos"];
  if(path.startsWith("/api/ventas/sincronizacion"))return ["ventas","dashboard"];
+ if(path.startsWith("/api/tenant/proveedores-unificados")||path.startsWith("/api/tenant/proveedor-documento-categorias"))return ["proveedores"];
  if(path.startsWith("/api/tenant/proveedores/"))return ["proveedores"];
  if(path.startsWith("/api/tenant/stock-objetivo"))return ["stock","reposicion","compras"];
  return [];

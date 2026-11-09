@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {Check,ChevronRight,GitMerge,RefreshCcw,Search,SlidersHorizontal,Users,FlaskConical,Truck,Building2,Link2,Plus,FolderOpen} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import ListTable from "./ListTable.jsx";
+import {LoadingStatus} from "./LoadingState.jsx";
 import SupplierWorkspace,{SupplierCategories} from "./SupplierWorkspace.jsx";
 import {isLaboratory,supplierMergeSuggestions} from "./laboratoryUnificationSuggestions.js";
 import "./supplierUnifiedAgenda.css";
@@ -56,7 +57,8 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   [limit,setLimit]=useState(60),[showSuggestions,setShowSuggestions]=useState(false),
   [newOriginType,setNewOriginType]=useState("DIRECTO"),
   [selectedSupplier,setSelectedSupplier]=useState(null),[categoryView,setCategoryView]=useState(false);
- const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),
+ const [loading,setLoading]=useState(true),[loadedOnce,setLoadedOnce]=useState(false),
+  [busy,setBusy]=useState(false),
   [error,setError]=useState(""),[notice,setNotice]=useState("");
  async function refresh(){
   setLoading(true);setError("");
@@ -68,6 +70,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias").catch(()=>({items:[]})):Promise.resolve({items:[]})]);
    setSuppliers(Array.isArray(p)?p:[]);setSources(Array.isArray(s)?s:[]);
    setPharmacies(Array.isArray(f)?f:[]);setFrequencies(q.items||[]);
+   setLoadedOnce(true);
   }catch(e){setError(e.message)}
   finally{setLoading(false)}
  }
@@ -228,19 +231,24 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     {canEditMaster&&<button type="button" className="btn btn-primary" disabled={busy} onClick={()=>editSupplier(null)}><Plus size={16}/> Nuevo proveedor</button>}
    </div>
   </header>
+  {loading&&<div className="fm-master-loading-indicator">
+   <LoadingStatus label={loadedOnce?"Actualizando información de proveedores…":"Cargando información de proveedores…"} />
+  </div>}
   {error&&<div className="fm-master-alert" role="alert">{error}</div>}
   {notice&&<div className="fm-master-notice" role="status"><Check size={15}/>{notice}</div>}
   <div className="fm-supplier-summary">
    {[[ "todos","Todos",Users],["laboratorios","Laboratorios",FlaskConical],["mayoristas","Mayoristas",Truck],["internos","Internos",Building2],["otros","Otros / servicios",Link2]].map(([key,title,Icon])=>
     <button key={key} type="button" onClick={()=>changeTab(key)}
      className={"fm-supplier-summary-item"+(tab===key?" is-selected":"")} aria-pressed={tab===key}>
-     <span><Icon size={16}/>{title}</span><strong>{counts[key]}</strong>
+     <span><Icon size={16}/>{title}</span><strong aria-busy={loading}>
+      {loadedOnce?counts[key]:loading?<span className="fm-load-spinner" aria-hidden="true"/>:"—"}
+     </strong>
     </button>)}
   </div>
   <div className="fm-supplier-tabs" role="tablist" aria-label="Vistas del maestro">
    {TABS.filter(([key])=>canEditMaster||key!=="pendientes").map(([key,label])=><button key={key} role="tab" aria-selected={tab===key}
     className={tab===key?"active":""} onClick={()=>changeTab(key)}>
-    {label} <span>{counts[key]}</span>
+    {label} <span>{loadedOnce?counts[key]:loading?<span className="fm-load-spinner" aria-hidden="true"/>:"—"}</span>
    </button>)}
   </div>
   <section className="card fm-supplier-master-list">
@@ -254,7 +262,9 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
        nPending?"Códigos de Farmatic que todavía no tienen un proveedor definitivo asignado.":
        "Consulta y clasifica proveedores desde el listado general."}</p>
     </div>
-    <span className="fm-master-count">{nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"?matches.length:0)} resultados</span>
+    <span className="fm-master-count">{loadedOnce?
+     (nPending?matches.length:visible.length+(canEditMaster&&tab==="todos"?matches.length:0))+" resultados":
+     loading?"Calculando resultados…":"Datos no disponibles"}</span>
    </div>
    <div className="fm-master-toolbar">
     <label className="fm-master-search"><span><Search size={15}/> Buscar proveedor o código</span>
@@ -295,15 +305,20 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
       </div>)}
     </div>}
    </div>}
-   {loading?<p className="fm-muted" role="status">Cargando proveedores…</p>:nPending?
+   {!loadedOnce&&!loading?<div className="fm-master-empty" role="status">
+    No se ha podido cargar el directorio. <button type="button" className="btn btn-secondary btn-sm"
+     onClick={()=>void refresh()}>Reintentar</button>
+   </div>:nPending?
     <ListTable rows={matches} rowKey={p=>p.pharmacyCode+"|"+p.sourceCode} label="proveedores sin vincular"
      columns={pendingColumns} defaultSort={{key:"name",direction:"asc"}} showExport={false}
+     loading={loading} loadingLabel="Cargando proveedores sin vincular…"
      emptyText="No hay proveedores sin vincular"/>:
     <ListTable rows={visible} rowKey={p=>p.id} label="proveedores del maestro" columns={tableColumns}
      onRowClick={p=>setSelectedSupplier(p.id)} defaultSort={{key:"name",direction:"asc"}} showExport={false}
+     loading={loading} loadingLabel="Cargando proveedores…"
      selection={canMerge?{selectedKeys:selected,onChange:setSelected,disabled:busy}:null}
      emptyText="No hay proveedores para esta búsqueda."/>}
-   {!loading&&canEditMaster&&tab==="todos"&&matches.length>0&&<div className="fm-master-pending-inline">
+   {loadedOnce&&!loading&&canEditMaster&&tab==="todos"&&matches.length>0&&<div className="fm-master-pending-inline">
     <div className="fm-master-pending-inline-head"><div><h3>Orígenes todavía sin vincular</h3>
      <p>También forman parte del listado total. Clasifícalos sin necesidad de unir cooperativas o internos.</p></div>
      <button className="btn btn-secondary btn-sm" onClick={()=>changeTab("pendientes")}>

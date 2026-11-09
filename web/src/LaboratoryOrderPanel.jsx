@@ -512,7 +512,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       placeholder="Observaciones para el laboratorio, condiciones o instrucciones del pedido…"
       value={globalComment} disabled={!canEdit}
       onChange={e=>{setGlobalComment(e.target.value);setDirty(true);setNotice("")}}/>
-     <small>Se incluirán en el Excel y quedan guardados con el borrador. No se envía ningún correo.</small>
     </div>
     <div className="fm-lab-order-actions">
      <button className="btn btn-secondary" type="button" onClick={save}
@@ -525,7 +524,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       onClick={()=>beginRecord(laboratory)} disabled={busy||!laboratory||!ids.length}>
       Marcar pedido realizado</button>}
     </div>
-    <p className="fm-muted">Generar Excel no confirma ni envía un pedido. Marca «Pedido realizado» solo después de haberlo cursado.</p>
    </>}
   </section>
   {commentRow&&<div className="fm-lab-comment-overlay" role="dialog" aria-modal="true"

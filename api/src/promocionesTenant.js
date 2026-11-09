@@ -31,9 +31,14 @@ export function visiblePromos(rows,req){
    if(all)return p;
    return {...p,targets:Object.fromEntries(Object.entries(p.targets||{})
      .filter(([id])=>allowed.has(String(id)))),
+     objectiveRates:Object.fromEntries(Object.entries(p.objectiveRates||{})
+      .filter(([id])=>allowed.has(String(id)))),
      monthlyObjectives:Object.fromEntries(Object.entries(p.monthlyObjectives||{}).map(([month,entry])=>
-      [month,{...entry,targets:Object.fromEntries(Object.entries(entry?.targets||{})
-       .filter(([id])=>allowed.has(String(id))))}])),
+      [month,{...entry,
+       targets:Object.fromEntries(Object.entries(entry?.targets||{})
+        .filter(([id])=>allowed.has(String(id)))),
+       objectiveRates:Object.fromEntries(Object.entries(entry?.objectiveRates||{})
+        .filter(([id])=>allowed.has(String(id))))}])),
      sales:{},managerCanEdit:manager&&canMutate(req,p,r.creado_por)};
  });
 }
@@ -61,6 +66,11 @@ export function cleanDocument(raw,id,pharmacyIds) {
       if(participants.length>500||participants.some(([id,value])=>
        !pharmacyIds.has(id)||!Object.hasOwn(raw.targets,id)||
        !Number.isSafeInteger(Number(value))||Number(value)<0))return null;
+      if(entry.objectiveRates!==undefined&&(
+        !entry.objectiveRates||typeof entry.objectiveRates!=="object"||
+        Array.isArray(entry.objectiveRates)||Object.entries(entry.objectiveRates).some(([id,rate])=>
+         !pharmacyIds.has(id)||!Number.isInteger(Number(rate))||Number(rate)<-100||Number(rate)>500)
+      ))return null;
       if(!/^20\d{2}-\d{2}-\d{2}$/.test(raw.start||"")||
         month<raw.start.slice(0,7)||
         (raw.end&&month>String(raw.closedOn||raw.end).slice(0,7)))return null;

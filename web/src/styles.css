@@ -1233,11 +1233,14 @@ html,body{overflow-x:clip}
 .fm-promotion-proposal-hint,.fm-promotion-proposal-footnote{margin:0;font-size:11px;color:#657b6d;line-height:1.55}
 @media(max-width:480px){.fm-promotion-proposal-months{grid-template-columns:minmax(0,1fr)}.fm-promotion-proposal{padding:12px}}
 
-/* Activación múltiple: explicación persistente y legible de las promociones bloqueadas. */
+/* Aviso de activación: separado del borde de la tabla y de su cabecera.
+   Una banda lateral discreta sustituye al marco completo del mensaje. */
 .fm-promotion-activation-error{
  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
- margin:0 0 16px;padding:15px 17px;border:1px solid #e8b7a7;
- border-radius:11px;background:#fff5f0;color:#753728;
+ margin:18px 22px 24px;padding:15px 18px;
+ border:0;border-left:3px solid #d58d75;
+ border-radius:8px;background:#fff8f5;color:#753728;
+ box-shadow:0 3px 12px rgba(105,58,43,.06);
 }
 .fm-promotion-activation-error>div{min-width:0;flex:1}
 .fm-promotion-activation-error strong{display:block;font-size:14px;line-height:1.45}
@@ -1246,6 +1249,8 @@ html,body{overflow-x:clip}
 .fm-promotion-activation-error small{font-size:11px;color:#8c6254;line-height:1.5}
 .fm-promotion-activation-error .btn{flex:none;max-width:100%}
 @media(max-width:540px){
- .fm-promotion-activation-error{flex-direction:column;padding:13px;gap:10px}
+ .fm-promotion-activation-error{
+  flex-direction:column;gap:10px;margin:14px 14px 20px;padding:13px 14px;
+ }
  .fm-promotion-activation-error .btn{align-self:flex-end;min-height:38px}
 }

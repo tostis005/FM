@@ -6,6 +6,7 @@ import {parsePromotionCNs,selectablePromotionProducts,mergePromotionSelection,pr
 import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarget,first} from "./simuladorLogic.js";
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
+import {promotionObjectiveMonths,objectiveMonthDates,objectiveHistoryAnchor,historicPeriodAvailable} from "./promotionMonthlyObjectives.js";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
@@ -25,9 +26,9 @@ async function post(clientSlug,path,body,signal){
  if(!response.ok)throw Error(data.error||"No se pudo completar la consulta");
  return data;
 }
-export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion,editingPromotion=null,onSaveObjectives,onBack}){
+export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion,editingPromotion=null,objectiveMonth="",onObjectiveMonthChange,onSaveObjectives,onBack}){
  const active=useMemo(()=>pharmacies.filter(f=>f.active!==false),[pharmacies]);
- const preset=useMemo(()=>objectiveDraftSelection(editingPromotion,active),[editingPromotion,active]);
+ const preset=useMemo(()=>objectiveDraftSelection(editingPromotion,active,objectiveMonth),[editingPromotion,active,objectiveMonth]);
  const isEditing=Boolean(editingPromotion?.id);
  const [selectedPharmacies,setSelectedPharmacies]=useState(()=>preset.pharmacyIds);
  const initializedPharmacies=useRef(active.length>0);
@@ -63,7 +64,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const selectedKey=selectedCNs.join(",");
  const pharmacyKey=selectedPharmacies.join(",");
  const today=useMemo(madridToday,[]);
- const periods=useMemo(()=>simulatorPeriods(today,customFrom,customTo),[today,customFrom,customTo]);
+ const periods=useMemo(()=>simulatorPeriods(objectiveHistoryAnchor(objectiveMonth,today),customFrom,customTo),[objectiveMonth,today,customFrom,customTo]);
+ const availablePeriods=useMemo(()=>periods.filter(p=>historicPeriodAvailable(p,today)),[periods,today]);
+ const months=useMemo(()=>promotionObjectiveMonths(editingPromotion),[editingPromotion]);
+ const monthRange=objectiveMonthDates(editingPromotion,objectiveMonth);
  const chosen=baseline==="stock"?{id:"stock",label:"Stock actual",from:null,to:null}:
   periods.find(p=>p.id===baseline)||periods[0];
  const validRange=validSimulatorPeriod(customFrom,customTo);
@@ -113,14 +117,14 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  },[clientSlug,search,mode,searchNonce,searchPage]);
 
  useEffect(()=>{
-  if(!selectedCNs.length||!selectedPharmacies.length||!validRange){
+  if(!selectedCNs.length||!selectedPharmacies.length||!validRange||!availablePeriods.length){
    setHistorical({});setStock({});setStockPartialIds([]);setStockUnavailable(false);setHistoryBusy(false);setHistoryError("");return;
   }
   const controller=new AbortController();
   setHistoryBusy(true);setHistoryError("");
   loadPromotionHistoryInBatches(selectedCNs,batch=>
    post(clientSlug,"/api/ventas/objetivos/historico",{
-    cns:batch,pharmacyIds:selectedPharmacies,periods
+    cns:batch,pharmacyIds:selectedPharmacies,periods:availablePeriods
    },controller.signal),{pharmacyIds:selectedPharmacies}).then(data=>{
    if(controller.signal.aborted)return;
    setHistorical(data.periods||{});
@@ -131,7 +135,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    if(!controller.signal.aborted){setHistoryError(error.message);setHistorical({});setStock({});setStockPartialIds([]);setStockUnavailable(false);}
   }).finally(()=>{if(!controller.signal.aborted)setHistoryBusy(false);});
   return()=>controller.abort();
- },[clientSlug,selectedKey,pharmacyKey,customFrom,customTo]);
+ },[clientSlug,selectedKey,pharmacyKey,customFrom,customTo,objectiveMonth]);
 
  // Recalcular objetivos cuando cambian productos, la referencia o las fechas
  // del período seleccionado. No sobrescribir una edición manual al recibir datos.
@@ -142,13 +146,14 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
   {cns:[...selectedCNs],start:customFrom,end:customTo}:null,
   [selectedKey,pharmacyKey,customFrom,customTo,validRange]);
  const units=(id,periodId)=>Number(historical[periodId]?.[id]||0);
+ const periodReady=p=>historicPeriodAvailable(p,today);
  const rate=id=>Number(rateByPharmacy[id]??5);
  const stockUnits=id=>Object.prototype.hasOwnProperty.call(stock,id)?Number(stock[id]):null;
  const stockPartial=id=>stockPartialIds.includes(String(id));
  const partialStockCount=selectedPharmacies.filter(stockPartial).length;
  const missingStockCount=selectedPharmacies.filter(id=>stockUnits(id)===null).length;
  const proposal=id=>baseline==="stock"?simulatorStockTarget(stockUnits(id)):
-  simulatorTarget(units(id,chosen.id),rate(id));
+   historicPeriodAvailable(chosen,today)?simulatorTarget(units(id,chosen.id),rate(id)):"";
  const target=id=>manualTargets[id]===undefined?proposal(id):manualTargets[id];
  const totals=periodId=>selectedPharmacies.reduce((n,id)=>n+units(id,periodId),0);
  const totalStock=()=>selectedPharmacies.reduce((n,id)=>n+(stockUnits(id)??0),0);
@@ -160,7 +165,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const validTargets=selectedPharmacies.length>0&&selectedPharmacies.every(id=>
   target(id)!==""&&Number.isSafeInteger(Number(target(id)))&&Number(target(id))>=0)&&
   (!isEditing||selectedPharmacies.some(id=>Number(target(id))>0));
- const canCreate=Boolean(canManage&&selectedCNs.length&&selectedPharmacies.length&&
+ const canCreate=Boolean(canManage&&(!isEditing||!months.length||monthRange)&&selectedCNs.length&&selectedPharmacies.length&&
   validTargets&&validRange&&!historyBusy&&!savingObjectives&&(baseline==="stock"||!historyError));
  const chosenPharmacies=active.filter(f=>selectedPharmacies.includes(String(f.id)));
  function append(items){setSelected(current=>mergePromotionSelection(current,items));}
@@ -204,7 +209,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    targets:Object.fromEntries(selectedPharmacies.map(id=>[id,Number(target(id))])),
    objectiveBaseline:chosen.id,
    objectiveBaselineRange:baseline==="stock"?null:{from:chosen.from,to:chosen.to},
-   objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,baseline==="stock"?0:rate(id)]))
+   objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,baseline==="stock"?0:rate(id)])),
+    objectiveMonth:isEditing?objectiveMonth:""
   };
   setSaveError("");setSavingObjectives(true);
   try{
@@ -216,12 +222,24 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  }
  return <div className="fm-objectives">
   <div className="fm-objectives-intro">
-   <div><h1>{isEditing?"Asignar objetivos":"Nueva campaña"}</h1>
-    <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán todos los datos y CN del borrador.":"Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual."}</p></div>
+   <div><h1>{isEditing?"Objetivos mensuales":"Nueva campaña"}</h1>
+    <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán la promoción, sus productos y los objetivos de los demás meses.":"Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual."}</p></div>
    {isEditing&&<button type="button" className="btn btn-secondary" onClick={onBack}>Volver al formulario</button>}
   </div>
-  <section className="card fm-objectives-card">
-   <h2>1. Seleccionar productos</h2>
+   {isEditing&&months.length>0&&<section className="card fm-objectives-card fm-objectives-months">
+    <h2>Mes del objetivo</h2>
+    <p>Los objetivos se miden por mes natural, solo durante la vigencia de la promoción. Los históricos se calculan respecto al mes elegido.</p>
+    <div className="fm-objective-month-options" role="group" aria-label="Elegir mes de objetivos">
+     {months.map(month=><button key={month} type="button" className={"btn btn-secondary"+(objectiveMonth===month?" active":"")}
+      aria-pressed={objectiveMonth===month} onClick={()=>onObjectiveMonthChange?.(month)}>
+      {new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}
+      {editingPromotion?.monthlyObjectives?.[month]?" · Configurado":""}
+     </button>)}
+    </div>
+    {monthRange&&<p className="fm-objectives-month-range">Período de cumplimiento: {monthRange.from} — {monthRange.to}. No se modifican las fechas de la campaña.</p>}
+   </section>}
+   <section className="card fm-objectives-card">
+    <h2>1. Seleccionar productos</h2>
    <div className="fm-objectives-methods" role="tablist" aria-label="Forma de seleccionar productos">
     <button type="button" role="tab" id="simulator-search-tab" aria-controls="simulator-search-panel"
      aria-selected={mode==="search"} className={mode==="search"?"active":""} onClick={()=>setMode("search")}>
@@ -327,7 +345,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
       {chosenPharmacies.map(f=>{
        const id=String(f.id),pct=rate(id);
        return <tr key={id}><th>{f.name}</th>
-        {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
+        {periods.map(p=><td key={p.id}>{!periodReady(p)?"Aún no disponible":!selectedCNs.length||historyBusy||historyError?"—":
          <strong>{num(units(id,p.id))}</strong>}</td>)}
         <td>{!selectedCNs.length||historyBusy||historyError?"—":
          stockUnits(id)===null?<span title="No hay un stock confirmado para los artículos seleccionados">—</span>:
@@ -351,7 +369,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
        </tr>;
       })}
       <tr className="fm-objectives-summary"><th>Total</th>
-       {periods.map(p=><td key={p.id}>{!selectedCNs.length||historyBusy||historyError?"—":
+       {periods.map(p=><td key={p.id}>{!periodReady(p)?"—":!selectedCNs.length||historyBusy||historyError?"—":
         <strong>{num(totals(p.id))}</strong>}</td>)}
        <td>{!selectedCNs.length||historyBusy||historyError||!hasStock?"—":
         <strong title="Suma de unidades registradas para las farmacias seleccionadas">{num(totalStock())}</strong>}</td>
@@ -360,6 +378,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     </table>
    </div>
    </LoadingFrame>
+   {chosen.id!=="stock"&&!periodReady(chosen)&&<p role="status" className="fm-objectives-warning">
+    La referencia elegida todavía no está disponible. Puedes seleccionar otra referencia histórica o indicar los objetivos manualmente; no se inventarán ventas futuras.</p>}
    {historyError&&<p role="alert" className="fm-objectives-warning">{historyError}</p>}
    {!historyBusy&&!historyError&&selectedCNs.length>0&&(stockUnavailable||missingStockCount>0)&&
     <p role="status" className="fm-objectives-stock-note">

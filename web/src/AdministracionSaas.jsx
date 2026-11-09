@@ -8,7 +8,7 @@ import {copyUserPermissions} from "./userPermissionCopy.js";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 const MODULES=[
  ["dashboard","Dashboard"],["promociones","Promociones"],["ventas","Ventas"],
- ["compras","Compras"],["proveedores","Proveedores"],["stock","Stock"],
+ ["compras","Compras"],["proveedores","Análisis de proveedores"],["stock","Stock"],
  ["reposicion","Reposición"],["genericos","Genéricos"],["rentabilidad","Rentabilidad"],
  ["acciones","Acciones"],["informes","Informes"],["asistente","Asistente IA"]
 ];
@@ -167,7 +167,7 @@ export function ClientesPanel({onUpdated}){
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
    <ClientDomains key={c.slug} client={c.slug}/>
-   <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
+   <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{id==="proveedores"?"El directorio de consulta siempre está disponible":c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
     <input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.[id])}
       onChange={e=>toggle(c.slug,id,e.target.checked)} aria-label={"Habilitar "+label+" para "+c.name}/>
     </label>)}</div>
@@ -206,8 +206,8 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
     if(!valid)return;
     setAvailableModules(Array.isArray(info.modules)?info.modules:[]);
     setGrantableModules(Array.isArray(info.grantable)?info.grantable:[]);
-     setAvailableSections(Array.isArray(info.sections)?info.sections:[]);
-     setGrantableSections(Array.isArray(info.grantableSections)?info.grantableSections:[]);
+     setAvailableSections(Array.isArray(info.sections)?info.sections.filter(s=>s.id!=="proveedores"):[]);
+     setGrantableSections(Array.isArray(info.grantableSections)?info.grantableSections.filter(id=>id!=="proveedores"):[]);
   }).catch(error=>{if(valid)setFeedback(error.message)});
   return ()=>{valid=false};
  },[client]);
@@ -352,7 +352,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
      <div className="fm-user-module-heading">
       <div><strong>Secciones y subsecciones autorizadas</strong>
        <small>Marca cada módulo y las pantallas concretas que podrá visualizar el usuario.
-        Puedes dejar sin marcar las subsecciones de demostración mientras mantienes las ya operativas.</small></div>
+        Puedes dejar sin marcar las subsecciones de demostración mientras mantienes las ya operativas. El directorio de Proveedores (listado, fichas, contactos y documentos) está disponible en modo consulta para todos los usuarios, independientemente de estas casillas.</small></div>
       <div className="fm-user-module-actions">
        <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
         onClick={()=>setForm(v=>{
@@ -376,7 +376,7 @@ export function EquipoCliente({client,pharmacies=[],managerRole="administrador"}
         const active=form.modules.includes(m.id);
         return <div className="fm-user-module-group" key={m.id}>
          <label className="fm-user-module-choice fm-user-module-parent">
-          <span><strong>{m.name}</strong><small>{children.length?
+          <span><strong>{m.id==="proveedores"?"Análisis de proveedores":m.name}</strong><small>{children.length?
            form.sections.filter(id=>children.some(s=>s.id===id)).length+" de "+children.length+" pantallas":
            "Módulo independiente"}</small></span>
           <input type="checkbox" checked={active}

@@ -163,6 +163,7 @@ test("API guarda objetivos por mes y rechaza farmacias o meses fuera de la vigen
  const restricted=visiblePromos(rows,{context:{role:"farmacia",allowedPharmacyIds:[1]},
   user:{email:"employee@example.com"}});
  assert.deepEqual(restricted[0].monthlyObjectives["2026-11"].targets,{"1":125});
+ assert.deepEqual(restricted[0].monthlyObjectives["2026-11"].objectiveRates,{"1":10});
  assert.deepEqual(restricted[0].monthlyObjectives["2026-12"].targets,{"1":80});
  assert.deepEqual(restricted[0].targets,{"1":125});
 });

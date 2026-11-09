@@ -134,7 +134,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
  return {rows,total:rows.length,metricsUnavailable:true};
 }
-export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin}){
+export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager=requireTenantAdmin}){
  const permitted=req=>req.context.role==="superadministrador"||req.context.modules?.compras===true;
  const ids=req=>{
   const allowed=new Set((req.context.pharmacies||[]).map(f=>Number(f.id)));
@@ -142,7 +142,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   const chosen=raw?raw.split(",").map(Number):[...allowed];
   return chosen.every(x=>Number.isSafeInteger(x)&&allowed.has(x))?[...new Set(chosen)]:null;
  };
- app.get("/api/tenant/proveedores-unificados",...requireTenantAdmin(),async(req,res,next)=>{
+ app.get("/api/tenant/proveedores-unificados",...requireTenantManager(),async(req,res,next)=>{
   try{res.json(await listUnifiedSuppliers(pool,req.context,ids(req)||[],false))}
   catch(e){next(e)}
  });

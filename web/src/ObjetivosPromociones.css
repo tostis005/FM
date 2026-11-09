@@ -310,8 +310,6 @@
 .fm-objectives-storage-saved .fm-objectives-storage-icon{background:#d5efdf;color:#147750}
 .fm-objectives-storage-pending{border-color:#eedbbb;background:#fffbf3}
 .fm-objectives-storage-pending .fm-objectives-storage-icon{background:#f8ebd0;color:#966a25}
-.fm-objectives-storage-legacy{background:#f7f9fc;border-color:#dce4ee}
-.fm-objectives-storage-legacy .fm-objectives-storage-icon{background:#e6edf7;color:#52708b}
 .fm-objectives-unified-table td.fm-objectives-goal-cell{min-width:104px;text-align:center}
 .fm-objectives-goal-cell input{text-align:center;margin:0 auto}
 .fm-objectives-table tbody td small.fm-objectives-target-source{
@@ -330,11 +328,3 @@
  .fm-objectives-storage{padding:12px;gap:9px}
 }
 
-/* Objetivos guardados en campañas antiguas, anteriores al desglose por mes. */
-.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-legacy{
- background:#eff4fc;border-color:#c8d9ef;border-style:solid;
-}
-.fm-objective-month-option.is-legacy .fm-objective-month-state{color:#486e95}
-.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-legacy.active{
- background:#e9f2fc;border-color:#3275a7;
-}

@@ -170,7 +170,7 @@ const NAV=[
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
- {id:"proveedores",label:"Proveedores y documentos",icon:Users,module:"proveedores"},
+ {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"proveedores-condiciones",label:"Análisis de proveedores",icon:ClipboardList,module:"proveedores",childOf:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
@@ -1081,7 +1081,7 @@ function App(){
  const visibleNav=NAV.filter(item=>{
    // El directorio deja de ser un acceso administrativo oculto, pero debe
    // respetar que el módulo Proveedores esté habilitado para este cliente.
-   if(item.id==="proveedores"&&tenantContext?.modules?.proveedores!==true)return false;
+   if(item.id==="proveedores"&&role!=="superadministrador"&&tenantContext?.modules?.proveedores!==true)return false;
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
@@ -1090,7 +1090,7 @@ function App(){
      (item.id==="promociones"&&canOpenSection("seguimiento-global"));
    return true;
  });
- const allowed=page==="proveedores"?Boolean(tenantContext?.modules?.proveedores)&&canOpenSection(page):
+ const allowed=page==="proveedores"?(role==="superadministrador"||Boolean(tenantContext?.modules?.proveedores)&&canOpenSection(page)):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.

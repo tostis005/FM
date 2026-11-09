@@ -6,7 +6,7 @@ const base=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const supplier={id:"1",key:"P:1",name:"Laboratorio Demo",class:"DIRECTO",origins:[
  {pharmacyCode:"ABA",sourceCode:"L1",sourceName:"Laboratorio Demo"}]};
 const pharmacies=[{id:"1",name:"Farmacia Demo",sourceCode:"ABA",databaseCode:"ABA",active:true}];
-async function setup(role){
+async function setup(role,moduleEnabled=true){
  const page=await browser.newPage({viewport:{width:375,height:800}});
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
  const user={email:"test-"+role+"@example.invalid",name:"Pruebas",role};
@@ -17,7 +17,7 @@ async function setup(role){
   else if(path==="/api/tenant/context")body={user,role,
    client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
    clients:[{slug:"ampedia",name:"Ampedia"}],
-   modules:{proveedores:true},sections:{proveedores:true},pharmacies,allowedPharmacyIds:[1]};
+   modules:{proveedores:moduleEnabled},sections:{proveedores:moduleEnabled},pharmacies,allowedPharmacyIds:[1]};
   else if(path==="/api/tenant/proveedores-unificados")body=[supplier];
   else if(path==="/api/tenant/proveedores")body=[{sourceCode:"L1",name:"Laboratorio Demo",
    origins:[{pharmacyId:"1",name:"Laboratorio Demo",source:"farmatic"}]}];
@@ -62,6 +62,18 @@ try{
  assert.deepEqual(reader.errors,[]);
  await reader.page.close();
 
+ const superadmin=await setup("superadministrador",false);
+ await superadmin.page.goto(base+"/proveedores",{waitUntil:"domcontentloaded"});
+ await superadmin.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
+ assert.equal(await superadmin.page.getByRole("navigation",{name:"Módulos"})
+  .getByRole("button",{name:"Proveedores",exact:true}).count(),1,
+  "El superadministrador debe ver Proveedores aun cuando el módulo esté deshabilitado");
+ await superadmin.page.getByRole("button",{name:"Ver ficha y documentos"}).click();
+ await superadmin.page.getByRole("heading",{name:"Laboratorio Demo"}).waitFor();
+ assert.equal(await superadmin.page.getByRole("button",{name:"Nuevo contacto"}).count(),1);
+ assert.deepEqual(superadmin.errors,[]);
+ await superadmin.page.close();
+ 
  const manager=await setup("gestor");
  await manager.page.goto(base+"/proveedores-maestro",{waitUntil:"domcontentloaded"});
  await manager.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});

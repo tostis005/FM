@@ -17,7 +17,7 @@ export const USER_SECTIONS=[
  ["stock-sin-recepciones","Stock sin recepciones","stock"],
  ["stock-traspasos","Traspasos entre farmacias","stock"],
  ["productos","Productos","stock"],
- ["proveedores","Proveedores y documentos","proveedores"],
+ ["proveedores","Proveedores","proveedores"],
  ["proveedores-condiciones","Análisis de proveedores","proveedores"],
  ["genericos","Genéricos","genericos"],
  ["rentabilidad","Rentabilidad (resumen)","rentabilidad"],

@@ -83,3 +83,14 @@ test("managers can configure shared document categories, but not without module"
  assert.equal(allowed.status,201);
  assert.deepEqual(args,["ampedia","Condiciones comerciales"]);
 });
+
+test("superadministrador may consult supplier categories with client module disabled",async()=>{
+ const {app,routes}=makeApp();
+ const pool={query:async()=>({rows:[{id:"7",name:"Tarifas",active:true}]})};
+ setupSupplierWorkspace(app,pool,{requireTenant:()=>[]});
+ const result=await call(routes,"GET","/api/tenant/proveedor-documento-categorias",{
+  role:"superadministrador",moduleEnabled:false
+ });
+ assert.equal(result.status,200);
+ assert.equal(result.data[0].name,"Tarifas");
+});

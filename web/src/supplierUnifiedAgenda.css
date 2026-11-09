@@ -252,3 +252,19 @@
 .fm-unified-master .smart-table .fm-master-origins{min-width:155px}
 .fm-unified-master .smart-table .fm-master-type{min-height:36px}
 @media(max-width:720px){.fm-unified-master .fm-workspace-actions .btn{white-space:normal}}
+
+/* Directorio accesible a todo el grupo: acciones con texto dentro del borde,
+   incluso con tres botones y en anchuras móviles estrechas. */
+.fm-unified-master .fm-master-header-actions{max-width:100%;min-width:0;flex:0 1 auto;gap:10px}
+.fm-unified-master .fm-master-header-actions>.btn{box-sizing:border-box;min-width:0;max-width:100%;flex:0 1 auto;white-space:normal;overflow-wrap:anywhere;line-height:1.25;text-align:center;padding:9px 13px}
+.fm-unified-master .fm-master-header-actions>.btn svg{flex:0 0 auto}
+.fm-unified-master .fm-master-header-actions>.fm-master-categories-button{min-width:112px}
+.fm-unified-master .fm-master-readonly-type{display:inline-block;font-size:12px;font-weight:650;color:var(--text,#365543);padding:8px 0}
+@media(max-width:640px){
+ .fm-unified-master .fm-master-header-actions{width:100%;justify-content:stretch}
+ .fm-unified-master .fm-master-header-actions>.btn{flex:1 1 calc(50% - 8px);min-height:40px}
+ .fm-unified-master .fm-master-header-actions>.fm-master-categories-button{min-width:0}
+}
+@media(max-width:375px){
+ .fm-unified-master .fm-master-header-actions>.btn{flex-basis:100%}
+}

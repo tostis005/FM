@@ -76,7 +76,7 @@ try{
    const r=e=>e.getBoundingClientRect();
    return {overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
     cardWidth:r(card).width,mainWidth:r(main).width,
-    headingLeft:r(head).left,bodyLeft:r(card.querySelector(".fm-color-report-body")).left,
+    cardLeft:r(card).left,headingLeft:r(head).left,tableLeft:r(card.querySelector(".fm-color-report-scroll")).left,
     objectiveHeaderCenter:r(first).left+r(first).width/2,
     objectiveValueCenter:r(value).left+r(value).width/2,
     hasInternalScroll:card.querySelector(".fm-color-report-scroll").scrollWidth>
@@ -86,8 +86,8 @@ try{
   assert.ok(layout.cardWidth<=layout.mainWidth+3,"La tarjeta debe encajar en el panel");
   assert.ok(Math.abs(layout.objectiveHeaderCenter-layout.objectiveValueCenter)<=3,
    "Objetivo debe centrarse bajo su columna en "+width);
-  assert.ok(layout.headingLeft>layout.bodyLeft,
-   "Cabecera y cuerpo necesitan margen interior en "+width);
+  assert.ok(layout.headingLeft>layout.cardLeft+10&&layout.tableLeft>layout.cardLeft+10,
+   "Cabecera y tabla necesitan margen interior en "+width);
   if(width<=375)assert.ok(layout.hasInternalScroll,"La tabla debe desplazarse dentro de la tarjeta");
  }
  await page.setViewportSize({width:1280,height:860});

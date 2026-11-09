@@ -49,10 +49,16 @@ export function monthlyObjectiveEntry(p,month){
 /** Estado de guardado real del mes. Una propuesta automática nunca cuenta
  * como objetivo configurado, aunque la tabla muestre unidades calculadas. */
 export function objectiveMonthSaveState(p,month){
- if(!MONTH.test(month||""))return "unconfigured";
+ if(!MONTH.test(month||"")||!promotionObjectiveMonths(p).includes(month))
+  return "unconfigured";
  const entry=monthlyObjectiveEntry(p,month);
- if(!entry||!entry.targets||!Object.keys(entry.targets).length)return "unconfigured";
- return "saved";
+ if(entry&&entry.targets&&Object.keys(entry.targets).length)return "saved";
+ // Las promociones anteriores guardaban objetivos en targets, sin mes.
+ // No decir "Sin objetivos": los datos EXISTEN. Tampoco atribuir esas
+ // unidades a un mes determinado si la campaña abarca varios meses.
+ if(!hasMonthlyObjectives(p)&&keys(p?.targets).length)
+  return promotionObjectiveMonths(p).length===1?"saved":"legacy";
+ return "unconfigured";
 }
 export function hasLegacyUnassignedObjectives(p){
  return !hasMonthlyObjectives(p)&&keys(p?.targets).length>0;

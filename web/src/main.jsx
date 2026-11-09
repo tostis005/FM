@@ -41,6 +41,7 @@ import ListTable, {ListPagination} from "./ListTable.jsx";
 import {LoadingStatus,SkeletonLine,StartupScreen,KpiValue} from "./LoadingState.jsx";
 import { readPromotionExcel, importedPromotionStatus } from "./importarPromociones.js";
 import {mergeObjectivesIntoPromotion,objectivePromotionIsEditable} from "./promotionObjectiveFlow.js";
+import {objectiveEditorUrl,objectiveEditorRoute} from "./promotionObjectiveRoute.js";
 import {objectiveTargetsForPeriod,preferredObjectiveMonth,objectiveMonthDates,promotionObjectiveMonths,hasMonthlyObjectives,hasGoalInMonth} from "./promotionMonthlyObjectives.js";
 import {promotionExcelBatchId,importResultSummary,promotionVisibleInPharmacyScope} from "./promotionImportFlow.js";
 import {civilToday,effectivePromotionStatus,promotionReportingEnd,promotionDurationMode,promotionStatusSourceOnSave} from "./promotionLifecycle.js";
@@ -278,6 +279,9 @@ function App(){
  const [objectiveCampaign,setObjectiveCampaign]=useState(null);
  const [objectiveMonth,setObjectiveMonth]=useState("");
  const [objectiveSession,setObjectiveSession]=useState(0);
+ const [objectiveCatalogLoaded,setObjectiveCatalogLoaded]=useState(false);
+ const [objectiveRouteRevision,setObjectiveRouteRevision]=useState(0);
+ const [objectiveRestoreError,setObjectiveRestoreError]=useState("");
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
@@ -296,6 +300,7 @@ function App(){
   const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
   async function tenantState(ctx,email){
     setPromotionStoreStatus("checking");
+    setObjectiveCatalogLoaded(false);
     const local=readState(ctx.client.slug,email);
     // Copia recuperable antes de reconciliar con las promociones compartidas.
     try{
@@ -343,9 +348,11 @@ function App(){
         if(live){setSessionUser(body.user);
           setData({...readState(ctx.client.slug,body.user.email),promos:[]});}
         const loaded=await tenantState(ctx,body.user.email);
-        if(live&&localStorage.getItem("fm_active_tenant")===ctx.client.slug)
+        if(live&&localStorage.getItem("fm_active_tenant")===ctx.client.slug){
           setData(current=>({...current,promos:loaded.promos,
            objectiveSeedVersion:loaded.objectiveSeedVersion}));
+          setObjectiveCatalogLoaded(true);
+        }
       })
       .catch(e=>{if(live){setAuthError(e.message);if(e.message==="Sin sesión")window.location.replace("/login");}});
     return()=>{live=false};
@@ -357,7 +364,7 @@ function App(){
     const server=await loadStoredPromotions();
     if(!Array.isArray(server.promotions))throw Error("El servidor no devolvió un catálogo válido");
     setData(prev=>({...prev,promos:server.promotions}));
-    setPromotionStoreStatus("connected");
+    setPromotionStoreStatus("connected");setObjectiveCatalogLoaded(true);
    }catch(err){
     setPromotionStoreStatus("error");
     setToast("No se pudieron cargar las promociones: "+err.message);
@@ -369,7 +376,7 @@ function App(){
       setPromotionStoreStatus("checking");
       setData(prev=>({...prev,promos:[]}));
       const ctx=await loadContext(slug);
-      setData(await tenantState(ctx,sessionUser?.email));
+      setData(await tenantState(ctx,sessionUser?.email));setObjectiveCatalogLoaded(true);
       setSalesStatus("sin_conexion");setSalesByPromotion({});setTotalSalesByPromotion({});
       const initial=ctx.sections?.dashboard||sessionUser?.role==="superadministrador"?"dashboard":
         NAV.find(item=>item.module&&ctx.sections?.[item.id])?.id||
@@ -533,6 +540,7 @@ function App(){
    setReportStatus(filters.status);setReportYear(filters.year);setReportMonth(filters.month);
    setReportSelectedIds(filters.ids===null?data.promos.map(p=>p.id):filters.ids);
    setSelectedPharmacyIds(filters.pharmacies);setPharmacySelectorOpen(false);setReportPage(0);setReportModal(null);
+   setObjectiveRouteRevision(v=>v+1);
    setPage(pageFromUrl());setSearch("");setMobileMenu(false);
   };
    window.addEventListener("popstate",onBackForward);
@@ -682,8 +690,10 @@ function App(){
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
  const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
- function nav(id,promoId,{preserveObjectiveDraft=false}={}){
-  if(id==="promociones-objetivos"&&!preserveObjectiveDraft)setObjectiveCampaign(null);
+ function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
+  if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
+   setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
+  }
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
@@ -710,8 +720,8 @@ function App(){
    setPage("seguimiento-global");setSearch("");setMobileMenu(false);return;
   }
   if(!ROUTES.has(id))return;
-  const url=id==="promociones-objetivos"?"/promociones/nueva":"/"+id;
-  if(window.location.pathname!==url)window.history.pushState({page:id},"",url);
+  const url=id==="promociones-objetivos"?objectiveEditorUrl(promoId||"",requestedObjectiveMonth):"/"+id;
+  if(window.location.pathname+window.location.search!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
  }
  function openReportFilters(){
@@ -766,10 +776,12 @@ function App(){
    return setToast("No tienes acceso a Nueva campaña para asignar objetivos.");
   const draft={...p,cns:p?.cns||[],targets:{...(p?.targets||{})},
    cnDescriptions:{...(p?.cnDescriptions||{})}};
-  setObjectiveMonth(preferredObjectiveMonth(draft,formObjectiveMonth||reportMonth||promotionSelectedMonth,new Date()));
+  const month=preferredObjectiveMonth(draft,formObjectiveMonth||reportMonth||promotionSelectedMonth,new Date());
+  setObjectiveMonth(month);
   setObjectiveCampaign(draft);setObjectiveSession(n=>n+1);
+  setObjectiveRestoreError("");
   setEditingPromo(null);
-  nav("promociones-objetivos",undefined,{preserveObjectiveDraft:true});
+  nav("promociones-objetivos",draft.id,{preserveObjectiveDraft:true,objectiveMonth:month});
  }
  async function saveObjectivesFromPlanner(objectives){
   if(!canManagePromotions||promotionStoreStatus!=="connected")
@@ -1163,6 +1175,49 @@ function App(){
  },[page]);
  const role=tenantContext?.role;
  const canManagePromotions=["gestor","administrador","superadministrador"].includes(role);
+ const objectiveLocation=page==="promociones-objetivos"?
+  objectiveEditorRoute(window.location.pathname,window.location.search):null;
+ // En F5, Ctrl+R, enlaces compartidos y Atrás/Adelante reconstruir el
+ // borrador del servidor. No abrir jamás "Nueva campaña" si existe un ID.
+ useEffect(()=>{
+  if(page!=="promociones-objetivos")return;
+  const route=objectiveEditorRoute(window.location.pathname,window.location.search);
+  if(!route?.id&&!route?.invalid){
+   setObjectiveRestoreError("");
+   if(objectiveCampaign){setObjectiveCampaign(null);setObjectiveMonth("");}
+   return;
+  }
+  if(route.invalid){
+   setObjectiveRestoreError("El identificador de promoción de la URL no es válido.");
+   return;
+  }
+  if(!sessionUser||!tenantContext||!objectiveCatalogLoaded)return;
+  if(promotionStoreStatus!=="connected"){
+   if(promotionStoreStatus==="error")
+    setObjectiveRestoreError("No se pudieron cargar las promociones del servidor. Reintenta la conexión.");
+   return;
+  }
+  const stored=data.promos.find(p=>String(p.id)===route.id);
+  if(!stored||stored.managerCanEdit===false||
+   !["gestor","administrador","superadministrador"].includes(tenantContext.role)){
+   setObjectiveRestoreError("La promoción ya no existe o no tienes permiso para editar sus objetivos.");
+   return;
+  }
+  const selected=preferredObjectiveMonth(stored,route.month,new Date());
+  if(route.month!==selected)
+   window.history.replaceState({page:"promociones-objetivos"},"",
+    objectiveEditorUrl(route.id,selected));
+  if(objectiveCampaign?.id===stored.id&&objectiveMonth===selected){
+   setObjectiveRestoreError("");
+   return;
+  }
+  setObjectiveRestoreError("");
+  setObjectiveCampaign(stored);
+  setObjectiveMonth(selected);
+  setObjectiveSession(v=>v+1);
+ },[page,objectiveCatalogLoaded,promotionStoreStatus,data.promos,
+  objectiveRouteRevision,tenantContext?.client?.slug,sessionUser?.email,
+  objectiveCampaign?.id,objectiveMonth]);
  // Para el personal de farmacia, abrir el catálogo publicado sin limitarlo
  // al mes en curso: también deben ver campañas activadas para el mes próximo.
  useEffect(()=>{
@@ -1185,7 +1240,7 @@ function App(){
    return true;
  });
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
-  {editingObjectives:Boolean(objectiveCampaign)});
+  {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
  const allowed=page==="proveedores"?canOpenSection(page):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
@@ -1520,12 +1575,34 @@ function App(){
     {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
-    {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
+    {page==="promociones-objetivos"&&(
+     objectiveLocation?.invalid||objectiveRestoreError?
+      <section className="card" style={{padding:24}}>
+       <h2>No se pueden recuperar los objetivos de la promoción</h2>
+       <p role="alert">{objectiveRestoreError||"El identificador de la promoción no es válido."}</p>
+       <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {promotionStoreStatus==="error"&&<button type="button" className="btn btn-secondary"
+         onClick={()=>void retryPromotions()}>Reintentar conexión</button>}
+        <button type="button" className="btn btn-secondary" onClick={()=>nav("promociones")}>Volver a promociones</button>
+       </div>
+      </section>:
+     objectiveLocation?.id&&(!objectiveCampaign||
+      String(objectiveCampaign.id)!==objectiveLocation.id||
+      objectiveMonth!==preferredObjectiveMonth(objectiveCampaign,objectiveLocation.month,new Date()))?
+      <LoadingStatus label="Recuperando los objetivos guardados de la promoción…"/>:
+      <ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
       editingPromotion={objectiveCampaign} objectiveMonth={objectiveMonth}
-      onObjectiveMonthChange={month=>{setObjectiveMonth(month);setObjectiveSession(n=>n+1);}}
+      onObjectiveMonthChange={month=>{
+       setObjectiveMonth(month);setObjectiveSession(n=>n+1);
+       const route=objectiveEditorRoute(window.location.pathname,window.location.search);
+       if(route?.id&&objectiveCampaign?.id===route.id)
+        window.history.replaceState({page:"promociones-objetivos"},"",
+         objectiveEditorUrl(route.id,month));
+      }}
       onCreatePromotion={continuePlannerToDrawer}
-      onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
+      onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>
+    )}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}

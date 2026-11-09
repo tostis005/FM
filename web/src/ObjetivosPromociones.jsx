@@ -236,20 +236,22 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     <h2>Mes del objetivo</h2>
     <div className="fm-objective-month-options" role="group" aria-label="Elegir mes de objetivos">
      {months.map(month=>{
-      const stored=objectiveMonthSaveState(editingPromotion,month)==="saved";
+      const state=objectiveMonthSaveState(editingPromotion,month);
+      const stored=state==="saved";
+      const legacy=state==="legacy";
       const pending=month===objectiveMonth&&draftTouched;
       return <button key={month} type="button"
        className={"btn fm-objective-month-option"+(objectiveMonth===month?" active":"")+
-        (pending?" is-pending":stored?" is-saved":" is-empty")}
+        (pending?" is-pending":stored?" is-saved":legacy?" is-legacy":" is-empty")}
        aria-pressed={objectiveMonth===month}
-       aria-label={monthLabel(month)+": "+(pending?"Cambios sin guardar":stored?"Objetivos guardados":"Sin objetivos asignados")}
+       aria-label={monthLabel(month)+": "+(pending?"Cambios sin guardar":stored?"Objetivos guardados":legacy?"Objetivos existentes sin mes asignado":"Sin objetivos asignados")}
        onClick={()=>{if(month!==objectiveMonth){
         if(draftTouched&&!window.confirm("Tienes cambios sin guardar en "+selectedMonthName+". ¿Cambiar de mes y descartarlos?"))return;
         onObjectiveMonthChange?.(month);
        }}}>
        <span className="fm-objective-month-title">{monthLabel(month)}</span>
        <span className="fm-objective-month-state">
-        {pending?"Cambios sin guardar":stored?<><Check size={13}/> Guardado</>:"Sin objetivos"}
+        {pending?"Cambios sin guardar":stored?<><Check size={13}/> Guardado</>:legacy?"Objetivos existentes · sin mes":"Sin objetivos"}
        </span>
       </button>;
      })}
@@ -344,7 +346,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      <p>{draftTouched?"Estás viendo cambios de esta sesión. Los objetivos guardados no cambiarán hasta que pulses «"+
       (isEditing?"Guardar objetivos":"Continuar con la campaña")+"».":
       currentMonthSaved?"Las unidades que aparecen en la tabla son las últimas guardadas, aunque no coincidan con el porcentaje seleccionado.":
-      legacyTargets?"Esta promoción tiene objetivos anteriores sin mes asociado. Las unidades visibles son anteriores, pero aún no se han guardado como objetivos de este mes.":
+      legacyTargets?"Esta promoción tiene objetivos ya guardados, pero se crearon antes de incorporar el desglose mensual. Se muestran sin modificar sus unidades; todavía no están asignados a un mes concreto. Puedes elegir el mes y guardarlos cuando corresponda.":
       "Las unidades que se muestran por defecto son una propuesta calculada a partir de la referencia histórica y el porcentaje. Todavía no están guardadas."}</p>
     </div>
    </div>

@@ -329,3 +329,12 @@
  }
  .fm-objectives-storage{padding:12px;gap:9px}
 }
+
+/* Objetivos guardados en campañas antiguas, anteriores al desglose por mes. */
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-legacy{
+ background:#eff4fc;border-color:#c8d9ef;border-style:solid;
+}
+.fm-objective-month-option.is-legacy .fm-objective-month-state{color:#486e95}
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-legacy.active{
+ background:#e9f2fc;border-color:#3275a7;
+}

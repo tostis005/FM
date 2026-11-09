@@ -47,6 +47,12 @@ try{
  await page.getByRole("button",{name:"Asignar objetivos",exact:true}).click();
  await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});
  assert.equal(new URL(page.url()).pathname,"/promociones/nueva");
+ assert.equal(new URL(page.url()).searchParams.get("promocion"),campaign.id);
+ assert.equal(new URL(page.url()).searchParams.get("mes"),"2026-11");
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});
+ assert.equal(new URL(page.url()).searchParams.get("promocion"),campaign.id);
+ assert.equal(await page.locator(".fm-objectives-selected").getByText("Producto A").count(),1);
  assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Sin objetivos asignados/i}).count(),1);
  assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).count(),1);
  assert.match(await page.locator(".fm-objectives-storage").innerText(),/Sin objetivos guardados/);
@@ -89,6 +95,11 @@ try{
  assert.match(await page.locator(".fm-objectives-storage").innerText(),/Objetivos guardados para noviembre/);
  assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Guardado/);
  await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).click();
+ assert.equal(new URL(page.url()).searchParams.get("mes"),"2026-12");
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).waitFor({timeout:15000});
+ assert.equal(new URL(page.url()).searchParams.get("promocion"),campaign.id);
+ assert.equal(new URL(page.url()).searchParams.get("mes"),"2026-12");
  await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).waitFor();
  assert.match(await page.locator(".fm-objectives-storage").innerText(),/Sin objetivos guardados para diciembre/);
  assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Propuesta/);
@@ -112,6 +123,20 @@ try{
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByText("Gama nueva · 20% DTO").first().waitFor({timeout:15000});
  assert.equal(writes.length,2);
+ // Una promoción histórica solo tiene targets: nunca tratarla como vacía.
+ campaign={...campaign,monthlyObjectives:undefined,targets:{"1":125},
+  objectiveBaseline:"previous",objectiveRates:{"1":10}};
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByRole("button",{name:"Asignar objetivos",exact:true}).click();
+ await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor();
+ assert.equal(new URL(page.url()).searchParams.get("promocion"),campaign.id);
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"125");
+ assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Objetivos existentes sin mes asignado/i}).count(),1);
+ assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Objetivos existentes sin mes asignado/i}).count(),1);
+ assert.match(await page.locator(".fm-objectives-storage").innerText(),/Objetivos anteriores sin mes asignado/);
+ await page.reload({waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"125");
  assert.deepEqual(errors,[]);
- console.log("OBJETIVOS_MÓVIL_OK: panel sin botón redundante, guardado mensual visible, propuestas distinguidas y objetivos manuales preservados");
+ console.log("OBJETIVOS_MÓVIL_OK: objetivos heredados detectados, URL con ID/mes restaurada en F5 y unidades manuales preservadas");
 }finally{await browser.close();}

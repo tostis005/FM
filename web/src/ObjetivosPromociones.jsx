@@ -210,7 +210,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    objectiveBaseline:chosen.id,
    objectiveBaselineRange:baseline==="stock"?null:{from:chosen.from,to:chosen.to},
    objectiveRates:Object.fromEntries(selectedPharmacies.map(id=>[id,baseline==="stock"?0:rate(id)])),
-    objectiveMonth:isEditing?objectiveMonth:""
+    objectiveMonth:objectiveMonth||""
   };
   setSaveError("");setSavingObjectives(true);
   try{
@@ -226,7 +226,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán la promoción, sus productos y los objetivos de los demás meses.":"Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual."}</p></div>
    {isEditing&&<button type="button" className="btn btn-secondary" onClick={onBack}>Volver al formulario</button>}
   </div>
-   {isEditing&&months.length>0&&<section className="card fm-objectives-card fm-objectives-months">
+   {months.length>0&&<section className="card fm-objectives-card fm-objectives-months">
     <h2>Mes del objetivo</h2>
     <p>Los objetivos se miden por mes natural, solo durante la vigencia de la promoción. Los históricos se calculan respecto al mes elegido.</p>
     <div className="fm-objective-month-options" role="group" aria-label="Elegir mes de objetivos">

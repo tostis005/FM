@@ -76,7 +76,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const monthRange=objectiveMonthDates(editingPromotion,objectiveMonth);
  const currentMonthSaved=objectiveMonthSaveState(editingPromotion,objectiveMonth)==="saved";
  const monthLabel=month=>new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",
-  {month:"long",year:"numeric",timeZone:"UTC"});
+  {month:"long",timeZone:"UTC"})+" "+month.slice(0,4);
  const selectedMonthName=objectiveMonth?monthLabel(objectiveMonth):"la campaña";
  const chosen=baseline==="stock"?{id:"stock",label:"Stock actual",from:null,to:null}:
   periods.find(p=>p.id===baseline)||periods[0];

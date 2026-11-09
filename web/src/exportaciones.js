@@ -19,7 +19,7 @@ function columnName(index) {
   return result;
 }
 
-function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCols = []) {
+function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCols = [], heatmapCols = []) {
   const columnWidths = widths.length
     ? "<cols>" + widths.map((width, index) => '<col min="' + (index + 1) +
       '" max="' + (index + 1) + '" width="' + width + '" customWidth="1"/>').join("") + "</cols>"
@@ -28,7 +28,12 @@ function worksheetXml(rows, widths = [], dateCols = [], timeCols = [], percentCo
     const cells = row.map((value, colIndex) => {
       if (value === null || value === undefined) return "";
       const ref = columnName(colIndex + 1) + (rowIndex + 1);
-      const style = rowIndex === 0 || (dateCols.length && rowIndex === 1) ? ' s="1"' : (typeof value === "number" && dateCols.includes(colIndex) ? ' s="2"' : typeof value === "number" && timeCols.includes(colIndex) ? ' s="3"' : typeof value === "number" && percentCols.includes(colIndex) ? ' s="4"' : "");
+      const colored=rowIndex>0&&heatmapCols.includes(colIndex)&&typeof value==="number"&&Number.isFinite(value);
+      const style=colored?' s="'+(value>=100?5:value>=80?6:7)+'"':
+        rowIndex===0||(dateCols.length&&rowIndex===1)?' s="1"':
+        (typeof value==="number"&&dateCols.includes(colIndex)?' s="2"':
+         typeof value==="number"&&timeCols.includes(colIndex)?' s="3"':
+         typeof value==="number"&&percentCols.includes(colIndex)?' s="4"':"");
       if (typeof value === "number" && Number.isFinite(value)) {
         return '<c r="' + ref + '"' + style + '><v>' + value + '</v></c>';
       }
@@ -78,13 +83,13 @@ async function workbook(sheets) {
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
     '<numFmts count="3"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="hh:mm:ss"/><numFmt numFmtId="166" formatCode="0.00%"/></numFmts>' +
     '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts>' +
-    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF128867"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9F3E4"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1CA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE1DD"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>' +
+    '<cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="4" borderId="0" xfId="0" applyFill="1"/><xf numFmtId="0" fontId="0" fillId="5" borderId="0" xfId="0" applyFill="1"/></cellXfs>' +
     "</styleSheet>");
   sheets.forEach((sheet, index) => zip.file("xl/worksheets/sheet" + (index + 1) + ".xml",
-    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [], sheet.percentCols || [])));
+    worksheetXml(sheet.rows, sheet.widths, sheet.dateCols || [], sheet.timeCols || [], sheet.percentCols || [], sheet.heatmapCols || [])));
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
@@ -276,4 +281,17 @@ export async function exportLaboratoryOrderWorkbook(rows,filename,orderRows=null
  ]:[{name:"Pedido laboratorio",rows,widths}];
  const blob=await workbook(sheets);
  downloadBlob(blob,filename);
+}
+
+/** Descarga del mismo seguimiento mostrado y copiado para correo, con semáforo
+ * persistente en Excel y sin alterar los formatos de exportación al laboratorio. */
+export async function exportObjectiveTrackingExcel(rows,{title="Seguimiento de objetivos",month="",mode="promotion"}={}){
+ const safeMonth=/^20\d{2}-\d{2}$/.test(month)?month:"todos-los-meses";
+ const data=[["Promoción","Farmacia","Objetivo (uds.)","Vendidas (uds.)","Cumplimiento (%)"],
+  ...rows.map(row=>[String(row.promotion||""),String(row.pharmacy||""),
+   Number(row.goal)||0,Number(row.sold)||0,row.pct===null?null:Number(row.pct)])];
+ const blob=await workbook([{name:"Seguimiento",rows:data,widths:[48,36,21,22,22],heatmapCols:[4]}]);
+ const name="seguimiento-objetivos-"+safeMonth+"-"+(mode==="pharmacy"?"por-farmacia":"por-promocion")+".xlsx";
+ downloadBlob(blob,name);
+ return {title,name};
 }

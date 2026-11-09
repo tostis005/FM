@@ -134,7 +134,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
  return {rows,total:rows.length,metricsUnavailable:true};
 }
-export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin}){
+export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager=requireTenantAdmin}){
  const permitted=req=>req.context.role==="superadministrador"||req.context.modules?.compras===true;
  const ids=req=>{
   const allowed=new Set((req.context.pharmacies||[]).map(f=>Number(f.id)));
@@ -142,7 +142,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   const chosen=raw?raw.split(",").map(Number):[...allowed];
   return chosen.every(x=>Number.isSafeInteger(x)&&allowed.has(x))?[...new Set(chosen)]:null;
  };
- app.get("/api/tenant/proveedores-unificados",...requireTenantAdmin(),async(req,res,next)=>{
+ app.get("/api/tenant/proveedores-unificados",...requireTenantManager(),async(req,res,next)=>{
   try{res.json(await listUnifiedSuppliers(pool,req.context,ids(req)||[],false))}
   catch(e){next(e)}
  });
@@ -291,6 +291,23 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
     SET proveedor_id=$2,procedencia='manual',actualizado_en=now()
     WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[]) RETURNING id`,
     [slug,destination,sources]);
+   // Conservar toda la documentación, contactos y ficha enriquecida al fusionar.
+   // Los contactos principales de origen se degradan para no violar el único
+   // principal por proveedor; el principal del destino siempre prevalece.
+   await db.query(`UPDATE farmetrica.proveedor_contactos
+    SET principal=false WHERE cliente_slug=$1 AND proveedor_id=ANY($2::bigint[]) AND principal`,
+    [slug,sources]);
+   await db.query(`UPDATE farmetrica.proveedor_contactos SET proveedor_id=$2
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query(`UPDATE farmetrica.proveedor_documentos SET proveedor_id=$2
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])`,
+    [slug,destination,sources]);
+   await db.query(`INSERT INTO farmetrica.proveedor_fichas(cliente_slug,proveedor_id,datos)
+    SELECT cliente_slug,$2,datos FROM farmetrica.proveedor_fichas
+    WHERE cliente_slug=$1 AND proveedor_id=ANY($3::bigint[])
+    ORDER BY actualizado_en DESC LIMIT 1
+    ON CONFLICT(cliente_slug,proveedor_id) DO NOTHING`,[slug,destination,sources]);
    // La frecuencia del destino prevalece; si no tiene una, se conserva una de origen.
    await db.query(`INSERT INTO farmetrica.preparador_frecuencia_laboratorio
     (cliente_slug,laboratorio_clave,intervalo_dias)

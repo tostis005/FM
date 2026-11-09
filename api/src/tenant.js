@@ -72,7 +72,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
    const requireTenantManager=()=>middleware(ctx=>["gestor","administrador","superadministrador"].includes(ctx.role));
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
   setupOutgoingTransfers(app,pool,{requireTenantAdmin});
-  setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin});
+  setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager});
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
   app.put("/api/tenant/configuracion-ventas",...requireTenantAdmin(),async(req,res,next)=>{
@@ -247,7 +247,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     }catch(e){next(e);}
   });
   const supplierSelect='id::text,codigo_origen AS "sourceCode",nombre AS name,tipo AS type,activo AS active,cooperativa AS cooperative,ignorar_informes AS "ignoreReports",laboratorio_clave AS "laboratoryKey"';
-  app.get("/api/tenant/proveedores",...requireTenantAdmin(),async(req,res,next)=>{
+  app.get("/api/tenant/proveedores",...requireTenantManager(),async(req,res,next)=>{
     try{
       const slug=req.context.client.slug,schema=req.context.client.schema;
       if(!SLUG.test(schema))return res.status(400).json({error:"Esquema inválido"});

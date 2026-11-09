@@ -9,6 +9,7 @@ import { setupTenant } from "./tenant.js";
 import {setupLaboratoryRetirements} from "./laboratoryRetirements.js";
 import {setupLaboratoryOrderSettings} from "./laboratoryOrderSettings.js";
 import {setupPreparadorAgenda} from "./preparadorAgenda.js";
+import {setupSupplierWorkspace} from "./supplierWorkspace.js";
 import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import { setupGenericAnalytics } from "./genericos.js";
@@ -146,6 +147,7 @@ app.use("/api", (req,res,next)=>{
   });
  });
 });
+setupSupplierWorkspace(app,pool,{requireTenant});
 setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
@@ -518,6 +520,7 @@ try {
   await pool.query(supplierLaboratoryMigration);
   const unifiedSuppliersMigration=await readFile(new URL("./migrations/036_proveedores_unificados.sql",import.meta.url),"utf8");
   await pool.query(unifiedSuppliersMigration);
+  await pool.query(await readFile(new URL("./migrations/048_proveedor_fichas_documentos.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
    "./migrations/041_preparador_ultima_recepcion_cache.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(

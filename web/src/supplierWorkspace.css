@@ -1,0 +1,48 @@
+.fm-supplier-workspace{width:100%;max-width:100%;min-width:0;display:flex;flex-direction:column;gap:18px}
+.fm-supplier-workspace *{box-sizing:border-box}
+.fm-supplier-workspace .fm-supplier-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.fm-supplier-workspace .fm-supplier-heading h1{font-size:clamp(23px,2.5vw,30px);line-height:1.25;margin:10px 0 6px;color:var(--text,#173d2c)}
+.fm-supplier-workspace .fm-supplier-heading p{font-size:13px;color:var(--text-muted,#718477);margin:0;max-width:700px}
+.fm-workspace-back{display:inline-flex;align-items:center;gap:7px;cursor:pointer;background:none;border:0;color:#247754;font:inherit;font-weight:700;font-size:12px;padding:6px 0}
+.fm-supplier-workspace .fm-workspace-card{padding:20px;min-width:0;max-width:100%;overflow:visible}
+.fm-workspace-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 17px}
+.fm-workspace-section-head h2{display:flex;align-items:center;gap:8px;font-size:18px;margin:0;font-weight:760;color:var(--text,#1a3f2e)}
+.fm-workspace-section-head p{margin:6px 0 0;color:var(--text-muted,#77877c);font-size:12px;line-height:1.5}
+.fm-workspace-tag{background:#eef6f0;border:1px solid #dcece1;border-radius:9px;padding:7px 11px;font-size:11px;font-weight:750;color:#357654}
+.fm-workspace-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.fm-workspace-fields label,.fm-workspace-inline label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--text,#345747);min-width:0}
+.fm-workspace-fields input:not([type=checkbox]),.fm-workspace-fields select,.fm-workspace-fields textarea,.fm-workspace-inline input{width:100%;min-width:0;min-height:40px;border:1px solid var(--border,#d6e4dc);border-radius:9px;background:var(--card-bg,#fff);color:var(--text,#244b3b);font:inherit;font-size:13px;padding:9px 11px;outline-color:#38986a}
+.fm-workspace-fields textarea{resize:vertical}
+.fm-workspace-fields input:disabled,.fm-workspace-fields textarea:disabled{opacity:.7}
+.fm-workspace-wide{grid-column:1/-1}
+.fm-workspace-form-buttons{display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+.fm-workspace-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.fm-workspace-actions .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.fm-workspace-card .smart-table{min-width:650px}
+.fm-workspace-document-name{display:flex;flex-direction:column;gap:4px;min-width:160px}
+.fm-workspace-document-name strong{overflow-wrap:anywhere}
+.fm-workspace-document-name small{color:var(--text-muted,#7e9388);font-size:11px}
+.fm-workspace-primary{display:block;color:#2c8c60;font-size:10px;margin-top:4px;font-weight:750}
+.fm-workspace-upload{padding:17px;margin-bottom:19px;border:1px solid #dce9e1;background:#f9fcfa;border-radius:12px}
+.fm-workspace-source{margin-top:15px;border-top:1px solid var(--border,#e7eee9);padding-top:13px;font-size:12px}
+.fm-workspace-source summary{cursor:pointer;color:#257150;font-weight:700}
+.fm-workspace-source-list{display:grid;gap:6px;padding:11px;color:var(--text-muted,#61756a)}
+.fm-workspace-inline{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.fm-workspace-inline label{flex:1 1 240px}
+.fm-workspace-inline button{min-height:40px}
+.fm-workspace-checkbox{display:flex!important;flex-direction:row!important;align-items:center;gap:9px!important;cursor:pointer}
+.fm-workspace-checkbox input{width:18px;height:18px;accent-color:#25875f}
+.fm-workspace-dialog{width:min(690px,calc(100vw - 32px));max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+.fm-workspace-dialog .fm-master-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.fm-supplier-workspace .data-table td{vertical-align:middle}
+@media(max-width:720px){
+ .fm-supplier-workspace{gap:14px}
+ .fm-supplier-workspace .fm-workspace-card{padding:14px}
+ .fm-workspace-fields{grid-template-columns:1fr}
+ .fm-workspace-section-head{align-items:flex-start}
+ .fm-workspace-section-head>div{width:100%}
+ .fm-workspace-form-buttons{justify-content:stretch}
+ .fm-workspace-form-buttons button{flex:1 1 150px}
+ .fm-workspace-actions .btn{min-height:36px;white-space:normal}
+ .fm-workspace-inline button{width:100%}
+}

@@ -40,6 +40,8 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/supplierWorkspace.js
+          node --test api/src/supplierWorkspace.test.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js
           node --test api/src/articleSchemaCache.test.js
@@ -205,6 +207,9 @@ jobs:
           psql_test --single-transaction < api/src/migrations/042_preparador_agenda_y_cobertura.sql
           psql_test --single-transaction < api/src/migrations/043_preparador_agenda_global.sql
           psql_test --single-transaction < api/src/migrations/044_proveedores_otros_servicios.sql
+          psql_test --single-transaction < api/src/migrations/048_proveedor_fichas_documentos.sql
+          psql_test --single-transaction < api/src/migrations/048_proveedor_fichas_documentos.sql
+          test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedor_documento_categorias')" -ge 5
           psql_test -v cliente_slug=ampedia < api/src/migrations/036_proveedores_unificados_seed.psql
           test "$(psql_test -At -c 'SELECT count(*) FROM farmetrica.proveedores_unificados_alias')" -ge 2000
           psql_test --single-transaction < api/src/migrations/036_proveedores_unificados.sql

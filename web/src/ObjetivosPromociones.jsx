@@ -222,7 +222,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  }
  return <div className="fm-objectives">
   <div className="fm-objectives-intro">
-   <div><h1>{isEditing?"Objetivos mensuales":"Nueva campaña"}</h1>
+   <div><h1>{isEditing?"Asignar objetivos":"Nueva campaña"}</h1>
     <p>{isEditing?"Trabajando sobre "+editingPromotion.name+". Se conservarán la promoción, sus productos y los objetivos de los demás meses.":"Selecciona artículos Farmatic y define objetivos por ventas históricas o stock actual."}</p></div>
    {isEditing&&<button type="button" className="btn btn-secondary" onClick={onBack}>Volver al formulario</button>}
   </div>

@@ -1718,6 +1718,42 @@ function App(){
     {promotionDurationMode(promoForm)==="dates"&&<Field label="Fecha de fin"><input type="date" required
      min={promoForm.start||undefined} value={promoForm.end||""}
      onChange={e=>setPromoForm({...promoForm,end:e.target.value})}/></Field>}</div>
+   {promoForm.simulatorDraft&&<div className="fm-promotion-proposal" role="group" aria-label="Asignación mensual de la propuesta">
+    <div className="fm-promotion-proposal-head">
+     <Target size={18} aria-hidden="true"/>
+     <div><strong>Objetivos simulados</strong>
+      <small>{quantity(sum(promoForm.targets))} unidades propuestas · {Object.keys(promoForm.targets).length} farmacias</small>
+     </div>
+    </div>
+    {!goalProposalMonths.length?
+     <p className="fm-promotion-proposal-hint" role="status">
+      Indica las fechas de inicio y fin para decidir a qué mes corresponden estos objetivos.
+     </p>:
+     goalProposalMonths.length===1?
+      <div className="fm-promotion-proposal-single" role="status">
+       <CheckCircle2 size={17} aria-hidden="true"/>
+       La propuesta se asignará a <strong>{new Date(selectedProposalMonth+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>.
+      </div>:
+      <fieldset className="fm-promotion-proposal-fieldset">
+       <legend>¿A qué mes aplicamos los objetivos simulados?</legend>
+       <div className="fm-promotion-proposal-months">
+        {goalProposalMonths.map(month=>{
+         const range=objectiveMonthDates(promoForm,month);
+         return <label key={month} className={"fm-promotion-proposal-month"+(selectedProposalMonth===month?" is-selected":"")}>
+          <input type="radio" name="proposal-objective-month"
+           value={month} checked={selectedProposalMonth===month}
+           onChange={()=>setFormObjectiveMonth(month)}/>
+          <span className="fm-promotion-proposal-month-text">
+           <strong>{new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>
+           {range&&<small>{dateES(range.from)} – {dateES(range.to)}</small>}
+          </span>
+         </label>;
+        })}
+       </div>
+       <small className="fm-promotion-proposal-hint">Los demás meses quedarán sin objetivos. Puedes configurarlos posteriormente desde «Editar objetivos».</small>
+      </fieldset>}
+    <small className="fm-promotion-proposal-footnote">Se conservarán las unidades y los porcentajes de la simulación, sin repartirlos ni recalcularlos.</small>
+   </div>}
    <Field label="Estado"><select value={promoForm.status} onChange={e=>setPromoForm({...promoForm,status:e.target.value})}><option>Activa</option><option>Borrador</option><option value="Finalizada">Archivada</option></select>
     <small className="fm-promotion-publication-hint">Activa: visible para las farmacias participantes desde que se publica, aunque empiece más adelante. Borrador: solo gestores y administradores. Las fechas delimitan las ventas, no la visibilidad.</small></Field>
     {promoForm.status==="Finalizada"&&<div className="field-row"><Field label="Fecha real de finalización"><input type="date" min={promoForm.start||undefined} max={civilToday(new Date(),reportTimeZone)} value={promoForm.closedOn||""} onChange={e=>setPromoForm({...promoForm,closedOn:e.target.value})}/></Field><Field label="Motivo del cierre (opcional)"><input value={promoForm.closedReason||""} onChange={e=>setPromoForm({...promoForm,closedReason:e.target.value})} placeholder="Promoción terminada"/></Field></div>}

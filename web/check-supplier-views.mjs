@@ -81,7 +81,7 @@ try{
  assert.deepEqual(await page.locator(".fm-supplier-summary-item strong").allTextContents(),["","","","",""]);
  await page.getByText("Cargando proveedores…").first().waitFor();
  releaseSuppliers();
- await page.locator(".fm-supplier-summary-item strong").first().getByText("5").waitFor({timeout:10000});
+ await page.waitForFunction(()=>document.querySelector(".fm-supplier-summary-item strong")?.textContent==="5",null,{timeout:10000});
  await page.getByRole("tab",{name:/Laboratorios/}).click();
  assert.equal(await page.getByRole("button",{name:/Unificación de laboratorios/}).count(),0);
  await page.getByText("Laboratorios Alfa SA").first().waitFor();

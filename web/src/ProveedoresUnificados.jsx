@@ -1,6 +1,8 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Check,ChevronRight,GitMerge,RefreshCcw,Search,SlidersHorizontal,Users,FlaskConical,Truck,Building2,Link2,Plus} from "lucide-react";
+import {Check,ChevronRight,GitMerge,RefreshCcw,Search,SlidersHorizontal,Users,FlaskConical,Truck,Building2,Link2,Plus,FolderOpen} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import ListTable from "./ListTable.jsx";
+import SupplierWorkspace,{SupplierCategories} from "./SupplierWorkspace.jsx";
 import {isLaboratory,supplierMergeSuggestions} from "./laboratoryUnificationSuggestions.js";
 import "./supplierUnifiedAgenda.css";
 
@@ -52,7 +54,8 @@ export default function ProveedoresUnificados({clientSlug}){
   [editing,setEditing]=useState(null),[linking,setLinking]=useState(null),[chosen,setChosen]=useState(""),
   [selected,setSelected]=useState([]),[mergeTo,setMergeTo]=useState(""),
   [limit,setLimit]=useState(60),[showSuggestions,setShowSuggestions]=useState(false),
-  [newOriginType,setNewOriginType]=useState("DIRECTO");
+  [newOriginType,setNewOriginType]=useState("DIRECTO"),
+  [selectedSupplier,setSelectedSupplier]=useState(null),[categoryView,setCategoryView]=useState(false);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),
   [error,setError]=useState(""),[notice,setNotice]=useState("");
  async function refresh(){
@@ -174,6 +177,41 @@ export default function ProveedoresUnificados({clientSlug}){
    setNotice("Importadas "+data.newAliases+" equivalencias");
   },"Equivalencias importadas");
  }
+ const tableColumns=[
+  {key:"name",label:"Proveedor",value:p=>p.name,render:p=><div className="fm-master-name">
+   <button type="button" className="fm-master-name-link" onClick={e=>{e.stopPropagation();setSelectedSupplier(p.id)}}>{p.name}</button>
+   <small>Proveedor #{p.id}</small></div>},
+  {key:"class",label:"Tipo",value:p=>LABELS[p.class]||p.class,filterMode:"multi",
+   render:p=><div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+    <select aria-label={"Tipo de "+p.name} className="fm-master-type" value={p.class} disabled={busy}
+     onChange={e=>void setType(p,e.target.value)}>{TYPES.map(t=><option key={t} value={t}>{LABELS[t]}</option>)}</select>
+   </div>},
+  {key:"origins",label:"Origen en farmacias",value:p=>(p.origins||[]).map(o=>[o.pharmacyCode,o.sourceCode,o.sourceName].join(" ")).join(" "),
+   render:p=><details className="fm-master-origins" onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+    <summary><Link2 size={14}/> {p.origins?.length||0} {(p.origins||[]).length===1?"código":"códigos"}</summary>
+    <div className="fm-supplier-alias-list">{(p.origins||[]).map((o,i)=><div className="fm-master-alias" key={i}>
+     <span>{o.pharmacyCode} · {o.sourceCode}</span><small>{o.sourceName}</small>
+     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setLinking({pharmacyCode:o.pharmacyCode,sourceCode:o.sourceCode,name:o.sourceName});setChosen("")}}>Reasignar</button>
+    </div>)}</div></details>},
+  ...(canMerge?[{key:"frequency",label:"Frecuencia de pedido",value:p=>frequenciesByKey.get("P:"+p.id)||"demanda",
+   searchable:false,render:p=><div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
+    <Frequency value={frequenciesByKey.get("P:"+p.id)} name={p.name} disabled={busy} onChange={v=>void saveFrequency(p,v)}/></div>}]:[]),
+  {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
+   render:p=><div className="fm-workspace-actions" onClick={e=>e.stopPropagation()}>
+    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSelectedSupplier(p.id)}>Ver ficha y documentos</button>
+    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>editSupplier(p)}>Editar</button>
+   </div>}
+ ];
+ const pendingColumns=[
+  {key:"name",label:"Proveedor de origen",value:p=>p.name,render:p=><strong>{p.name}</strong>},
+  {key:"pharmacyName",label:"Farmacia",value:p=>p.pharmacyName},
+  {key:"sourceCode",label:"Código Farmatic",value:p=>p.sourceCode},
+  {key:"actions",label:"Acción",value:()=>"",sortable:false,searchable:false,
+   render:p=><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setLinking(p);setChosen("");setNewOriginType("DIRECTO")}}>Clasificar / vincular <ChevronRight size={14}/></button>}
+ ];
+ if(categoryView)return <SupplierCategories clientSlug={clientSlug} onBack={()=>setCategoryView(false)}/>;
+ if(selectedSupplier)return <SupplierWorkspace clientSlug={clientSlug} supplierId={selectedSupplier}
+  onBack={()=>{setSelectedSupplier(null);void refresh()}} onSupplierChanged={()=>void refresh()} onCategories={()=>setCategoryView(true)}/>;
  const nPending=tab==="pendientes";
  return <div className="fm-management fm-production-panel fm-unified-master">
   <header className="fm-supplier-head">
@@ -183,6 +221,7 @@ export default function ProveedoresUnificados({clientSlug}){
     <p>Clasifica todos los proveedores de las farmacias. Unifica únicamente los laboratorios para preparar pedidos conjuntos.</p>
    </div>
    <div className="fm-master-header-actions">
+    <button type="button" className="btn btn-secondary" onClick={()=>setCategoryView(true)}><FolderOpen size={15}/> Categorías documentales</button>
     <button type="button" className="btn btn-secondary" disabled={loading||busy} onClick={()=>void refresh()}><RefreshCcw size={15}/> Actualizar</button>
     <button type="button" className="btn btn-primary" disabled={busy} onClick={()=>editSupplier(null)}><Plus size={16}/> Nuevo proveedor</button>
    </div>
@@ -255,46 +294,13 @@ export default function ProveedoresUnificados({clientSlug}){
     </div>}
    </div>}
    {loading?<p className="fm-muted" role="status">Cargando proveedores…</p>:nPending?
-    <HorizontalTableScroll className="fm-master-table-scroll" label="proveedores sin vincular">
-     <table className="fm-table fm-master-table"><thead><tr><th>Proveedor de origen</th><th>Farmacia</th>
-       <th>Código Farmatic</th><th>Acción</th></tr></thead>
-      <tbody>{matches.slice(0,limit).map((p,i)=><tr key={p.pharmacyCode+"|"+p.sourceCode+"|"+i}>
-       <td><strong>{p.name}</strong></td><td>{p.pharmacyName}</td><td><code>{p.sourceCode}</code></td>
-       <td><button className="btn btn-secondary btn-sm" onClick={()=>{setLinking(p);setChosen("");setNewOriginType("DIRECTO")}}>
-         Clasificar / vincular <ChevronRight size={14}/></button></td>
-      </tr>)}</tbody></table>
-    </HorizontalTableScroll>:
-    <HorizontalTableScroll className="fm-master-table-scroll" label="proveedores del maestro">
-     <table className="fm-table fm-master-table"><thead><tr>
-      {canMerge&&<th className="fm-master-check-column">Unificar</th>}
-      <th>Proveedor</th><th>Tipo</th><th>Origen en farmacias</th>
-      {canMerge&&<th>Frecuencia de pedido</th>}
-      <th>Acciones</th>
-     </tr></thead><tbody>
-     {visible.slice(0,limit).map(p=><tr key={p.id}>
-      {canMerge&&<td><input type="checkbox" aria-label={"Seleccionar "+p.name+" para fusionar"}
-       checked={checked.has(String(p.id))} onChange={e=>setSelected(prev=>e.target.checked?[...prev,String(p.id)]:prev.filter(x=>x!==String(p.id)))} /></td>}
-      <td className="fm-master-name"><strong>{p.name}</strong><small>Proveedor #{p.id}</small></td>
-      <td><select aria-label={"Tipo de "+p.name} className="fm-master-type"
-       value={p.class} disabled={busy} onChange={e=>void setType(p,e.target.value)}>
-       {TYPES.map(t=><option value={t} key={t}>{LABELS[t]}</option>)}</select>
-       <small className="fm-master-type-caption">{LABELS[p.class]}</small></td>
-      <td><details className="fm-master-origins">
-       <summary><Link2 size={14}/> {p.origins?.length||0} {p.origins?.length===1?"código":"códigos"}</summary>
-       <div className="fm-supplier-alias-list">{(p.origins||[]).map((o,i)=>
-        <div className="fm-master-alias" key={i}><span>{o.pharmacyCode} · {o.sourceCode}</span>
-         <small>{o.sourceName}</small>
-         <button className="btn btn-secondary btn-sm" type="button" onClick={()=>{
-          setLinking({pharmacyCode:o.pharmacyCode,sourceCode:o.sourceCode,name:o.sourceName});
-          setChosen("");
-         }}>Reasignar</button>
-        </div>)}</div>
-      </details></td>
-      {canMerge&&<td><Frequency value={frequenciesByKey.get("P:"+p.id)} name={p.name}
-       disabled={busy} onChange={v=>void saveFrequency(p,v)}/></td>}
-      <td><button className="btn btn-secondary btn-sm" onClick={()=>editSupplier(p)}>Editar</button></td>
-     </tr>)}</tbody></table>
-    </HorizontalTableScroll>}
+    <ListTable rows={matches} rowKey={p=>p.pharmacyCode+"|"+p.sourceCode} label="proveedores sin vincular"
+     columns={pendingColumns} defaultSort={{key:"name",direction:"asc"}} showExport={false}
+     emptyText="No hay proveedores sin vincular"/>:
+    <ListTable rows={visible} rowKey={p=>p.id} label="proveedores del maestro" columns={tableColumns}
+     onRowClick={p=>setSelectedSupplier(p.id)} defaultSort={{key:"name",direction:"asc"}} showExport={false}
+     selection={canMerge?{selectedKeys:selected,onChange:setSelected,disabled:busy}:null}
+     emptyText="No hay proveedores para esta búsqueda."/>}
    {!loading&&tab==="todos"&&matches.length>0&&<div className="fm-master-pending-inline">
     <div className="fm-master-pending-inline-head"><div><h3>Orígenes todavía sin vincular</h3>
      <p>También forman parte del listado total. Clasifícalos sin necesidad de unir cooperativas o internos.</p></div>
@@ -305,11 +311,6 @@ export default function ProveedoresUnificados({clientSlug}){
      <button type="button" className="btn btn-secondary btn-sm"
       onClick={()=>{setLinking(p);setChosen("");setNewOriginType("DIRECTO")}}>Clasificar / vincular</button>
     </div>)}</div>
-   </div>}
-   {!loading&&!(nPending?matches:visible).length&&!(tab==="todos"&&matches.length)&&<p className="fm-master-empty">No hay proveedores para esta búsqueda.</p>}
-   {(nPending?matches:visible).length>limit&&<div className="fm-master-loadmore">
-    <span>Mostrando {limit} de {(nPending?matches:visible).length}</span>
-    <button type="button" className="btn btn-secondary" onClick={()=>setLimit(x=>x+60)}>Mostrar 60 más</button>
    </div>}
   </section>
   {editing&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar proveedor">

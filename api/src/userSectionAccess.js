@@ -17,7 +17,7 @@ export const USER_SECTIONS=[
  ["stock-sin-recepciones","Stock sin recepciones","stock"],
  ["stock-traspasos","Traspasos entre farmacias","stock"],
  ["productos","Productos","stock"],
- ["proveedores","Proveedores (resumen)","proveedores"],
+ ["proveedores","Proveedores y documentos","proveedores"],
  ["proveedores-condiciones","Análisis de proveedores","proveedores"],
  ["genericos","Genéricos","genericos"],
  ["rentabilidad","Rentabilidad (resumen)","rentabilidad"],
@@ -33,7 +33,7 @@ export const USER_SECTIONS=[
  ["mi-trabajo","Mi trabajo","acciones"]
 ].map(([id,name,module])=>({id,name,module,
  // Estas rutas todavía utilizan ModuloDemo en la SPA.
- demo:new Set(["dashboard","ventas","compras","stock","proveedores","reposicion",
+ demo:new Set(["dashboard","ventas","compras","stock","reposicion",
    "rentabilidad","acciones","informes"]).has(id)
 }));
 const byId=new Map(USER_SECTIONS.map(s=>[s.id,s]));

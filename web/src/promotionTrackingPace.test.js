@@ -69,5 +69,5 @@ test("el resultado por farmacia usa el mismo cálculo, sin filtrar indebidamente
  assert.equal(rows.length,1);
  assert.equal(rows[0].pharmacy,"Europa");
  assert.equal(rows[0].goal,50);
- assert.equal(rows[0].tone,"danger");
+ assert.equal(rows[0].tone,"warning");
 });

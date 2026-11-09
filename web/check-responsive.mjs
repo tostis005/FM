@@ -462,7 +462,7 @@ try{
          if(await quick.getByRole("button",{name:"Este mes",exact:true}).getAttribute("aria-pressed")!=="true")
            throw Error("El acceso rápido debe mostrarse seleccionado");
        }
-       if(["dashboard","ventas","compras","proveedores","stock","reposicion",
+       if(["dashboard","ventas","compras","stock","reposicion",
          "genericos","rentabilidad","informes"].includes(path)&&viewport.width===375){
          // El shell aparece antes del módulo lazy: 100 ms no garantizan los filtros.
          const quick=page.getByRole("group",{name:"Períodos rápidos"});

@@ -11,9 +11,10 @@ export function promotionObjectiveMonths(p,now=new Date()){
  const first=start.slice(0,7);
  // Campañas de stock no tienen fin: enseñar hasta tres meses por delante.
  const today=now.toISOString().slice(0,7);
+ const stockAnchor=first>today?first:today;
  const upper=DATE.test(p?.closedOn||"")?p.closedOn.slice(0,7):
-  DATE.test(p?.end||"")?p.end.slice(0,7):
-  new Date(Date.UTC(Number(today.slice(0,4)),Number(today.slice(5,7))+2,1))
+  DATE.test(p?.end||"")&&p?.durationMode!=="stock"?p.end.slice(0,7):
+  new Date(Date.UTC(Number(stockAnchor.slice(0,4)),Number(stockAnchor.slice(5,7))+2,1))
    .toISOString().slice(0,7);
  const result=[];
  let [year,month]=first.split("-").map(Number);
@@ -63,20 +64,32 @@ export function objectiveMonthsOutsideCampaign(p){
 }
 
 /** Cambio explícito de mes del objetivo inicial sin recalcular ni perder unidades. */
-export function reassignDraftObjectiveMonth(p,fromMonth,toMonth){
- if(!MONTH.test(fromMonth||"")||!MONTH.test(toMonth||""))
-  throw Error("Selecciona un mes válido para los objetivos");
- const entries=p?.monthlyObjectives||{};
- if(!Object.hasOwn(entries,fromMonth))
-  throw Error("No hay objetivos que trasladar de ese mes");
- if(fromMonth===toMonth)return p;
- if(Object.hasOwn(entries,toMonth))
-  throw Error("El mes de destino ya tiene objetivos; no se sobrescribirán");
- if(!promotionObjectiveMonths(p).includes(toMonth)||!objectiveMonthDates(p,toMonth))
-  throw Error("El mes elegido debe estar incluido en la promoción");
- const {[fromMonth]:entry,...remaining}=entries;
- return {...p,monthlyObjectives:{...remaining,[toMonth]:entry}};
+/** Meses compatibles con las fechas comerciales que acabamos de indicar. */
+export function promotionDraftGoalMonths(p,now=new Date()){
+ if(!DATE.test(p?.start||""))return [];
+ const stock=p?.durationMode==="stock";
+ if(!stock&&(!DATE.test(p?.end||"")||p.end<p.start))return [];
+ return promotionObjectiveMonths(p,now).filter(m=>Boolean(objectiveMonthDates(p,m)));
 }
+/** La simulación no crea objetivos persistidos hasta confirmar fechas y mes.
+ * La propuesta se asigna exactamente a un mes, sin prorratear unidades. */
+export function assignProposalToMonth(p,selected="",now=new Date()){
+ const months=promotionDraftGoalMonths(p,now);
+ if(!months.length)throw Error("Define primero las fechas válidas de la promoción.");
+ const month=months.length===1?months[0]:months.includes(selected)?selected:"";
+ if(!month)throw Error("Selecciona a qué mes se aplican los objetivos simulados.");
+ const targets=p?.targets||{};
+ if(!Object.keys(targets).length)throw Error("Selecciona las farmacias de la propuesta.");
+ const normalized=Object.fromEntries(Object.entries(targets).map(([id,value])=>[id,Number(value)]));
+ if(Object.values(normalized).some(n=>!Number.isSafeInteger(n)||n<0))
+  throw Error("Los objetivos deben ser unidades enteras no negativas.");
+ return {...p,monthlyObjectives:{...(p.monthlyObjectives||{}),[month]:{
+  targets:normalized,objectiveBaseline:p.objectiveBaseline,
+  objectiveBaselineRange:p.objectiveBaselineRange,
+  objectiveRates:p.objectiveRates||{}
+ }}};
+}
+
 export function hasMonthlyObjectives(p){
  return keys(p?.monthlyObjectives).length>0;
 }

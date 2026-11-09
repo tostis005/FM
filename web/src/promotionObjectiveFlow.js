@@ -38,7 +38,11 @@ export function mergeObjectivesIntoPromotion(p,objectives,now=new Date(),timeZon
  if(month){
   if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month))throw Error("Mes de objetivo inválido");
   // Las farmacias participantes siguen en targets para filtros, visibilidad y tickets.
-  updated.targets={...(p.targets||{}),...targets};
+  // targets conserva las farmacias participantes y la referencia heredada.
+  // Nunca sustituir sus unidades guardadas al configurar otro mes.
+  updated.targets={...(p.targets||{})};
+  for(const id of Object.keys(targets))
+   if(!Object.hasOwn(updated.targets,id))updated.targets[id]=targets[id];
   updated.monthlyObjectives={...(p.monthlyObjectives||{}),
    [month]:{targets,objectiveBaseline:objectives.objectiveBaseline,
     objectiveBaselineRange:objectives.objectiveBaselineRange,

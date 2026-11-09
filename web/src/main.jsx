@@ -1367,7 +1367,7 @@ function App(){
          <Pencil size={14}/> Editar</button>}
         {canManagePromotions&&objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
          onClick={e=>{e.stopPropagation();openObjectivePlanner(promos.find(original=>original.id===p.id)||p);}}>
-         <Target size={14}/> {p.monthlyObjectives?"Editar objetivos":"Objetivos mensuales"}</button>}
+         <Target size={14}/> {hasMonthlyObjectives(p)?"Editar objetivos":"Asignar objetivos"}</button>}
         <button type="button" className="btn btn-secondary btn-sm"
          onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id);}}>
          <BarChart3 size={14}/> Seguimiento</button>

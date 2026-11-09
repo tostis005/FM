@@ -61,6 +61,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const [savingObjectives,setSavingObjectives]=useState(false);
  const [saveError,setSaveError]=useState("");
  const [savedMonth,setSavedMonth]=useState("");
+ const savedNoticeRef=useRef(null);
+ useEffect(()=>{
+  if(savedMonth)savedNoticeRef.current?.scrollIntoView({behavior:"smooth",block:"start"});
+ },[savedMonth]);
  const {codes,invalid}=useMemo(()=>parsePromotionCNs(bulk),[bulk]);
  const selectedCNs=useMemo(()=>selected.map(x=>x.cn),[selected]);
  const selectedKey=selectedCNs.join(",");
@@ -241,7 +245,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
     }}>Volver a promociones</button>}
   </div>
   {isEditing&&savedMonth===objectiveMonth&&!draftTouched&&
-   <div className="fm-objectives-save-success" role="status" aria-live="polite">
+   <div className="fm-objectives-save-success" ref={savedNoticeRef} role="status" aria-live="polite">
     <Check size={19} aria-hidden="true"/>
     <div><strong>Objetivos de {selectedMonthName} guardados correctamente.</strong>
      <p>Ya están guardados en esta promoción. Puedes seleccionar otro mes para asignarle sus objetivos o volver al listado de promociones.</p>

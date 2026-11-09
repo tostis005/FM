@@ -44,10 +44,6 @@
 .fm-color-none{background:#f1f4f3;border-color:#e2e9e5;color:#66756c}
 .fm-color-report-note,.fm-color-report-preview,.fm-color-report-message{font-size:11.5px;line-height:1.65;color:#6a8275;margin:0}
 .fm-color-report-message{padding:16px;background:#f8fbf9;border-radius:9px}
-.fm-objective-month-options{display:flex;flex-wrap:wrap;gap:8px}
-.fm-objective-month-options button{white-space:normal}
-.fm-objective-month-options button.active{border-color:#218260;background:#e4f4eb;color:#176449}
-.fm-objectives-month-range{margin:8px 0 0;font-size:.87rem;color:var(--muted,#64748b)}
 @media(max-width:920px){
  .fm-color-report-actions{margin-left:0}
  .fm-color-report-controls{justify-content:flex-start}

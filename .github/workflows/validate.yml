@@ -373,6 +373,7 @@ jobs:
           node check-navigation-arrows.mjs
           node check-genericos.mjs
           node check-promotions-delete.mjs
+          node check-promotions-bulk-activation.mjs
           node check-promotions-persistence.mjs
           node check-promotions-scope.mjs
           node check-tracking-navigation-presentation.mjs

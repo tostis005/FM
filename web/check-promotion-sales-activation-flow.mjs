@@ -69,10 +69,17 @@ try{
  await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).fill("10");
  await page.getByRole("spinbutton",{name:"Objetivo Europa"}).fill("0");
  await page.getByRole("button",{name:"Guardar objetivos"}).click();
- await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:20000});
+ await page.locator(".fm-objectives-save-success").waitFor({timeout:20000});
+ assert.match(await page.locator(".fm-objectives-save-success").innerText(),/Objetivos de .* guardados correctamente/);
+ assert.equal(await page.locator(".drawer").count(),0,
+  "Guardar objetivos no debe abrir automáticamente el panel de campaña");
+ assert.equal(new URL(page.url()).searchParams.get("promocion"),campaign.id);
  assert.equal(writes.length,1);
  assert.equal(writes[0].status,"Borrador");
  assert.deepEqual(writes[0].targets,{"1":10,"2":0});
+ await page.getByRole("button",{name:"Volver a promociones"}).click();
+ await row().getByRole("button",{name:"Editar",exact:true}).click();
+ await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:20000});
  await page.locator(".drawer").getByLabel("Estado").selectOption("Activa");
  await page.getByRole("button",{name:"Guardar cambios"}).click();
  await page.getByRole("heading",{name:"Editar promoción"}).waitFor({state:"detached",timeout:20000});

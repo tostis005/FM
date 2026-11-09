@@ -931,6 +931,26 @@ function App(){
   }catch(err){setToast("No se pudieron eliminar las promociones: "+err.message)}
   finally{setDeletingSelected(false)}
  }
+ async function activateSelectedPromotions(){
+  if(!canManagePromotions||activatingSelected||deletingSelected)return;
+  const selected=promos.filter(p=>selectedPromotionIds.some(id=>String(id)===String(p.id)));
+  const drafts=selected.filter(p=>p.status==="Borrador");
+  if(!drafts.length)return setToast("No hay promociones en borrador seleccionadas.");
+  if(drafts.some(p=>p.managerCanEdit===false))return setToast("Hay promociones fuera de tus permisos.");
+  if(drafts.length>200)return setToast("Selecciona un máximo de 200 borradores.");
+  if(!window.confirm("¿Activar "+drafts.length+" promociones? Serán visibles para las farmacias participantes, aunque sus fechas sean futuras."))return;
+  setActivatingSelected(true);
+  try{
+   const result=await activateStoredPromotions(drafts.map(p=>String(p.id)));
+   const activated=new Set((result.activatedIds||[]).map(String));
+   if(activated.size!==drafts.length)throw Error("No se confirmó la activación de todas las promociones");
+   setData(prev=>({...prev,promos:prev.promos.map(p=>activated.has(String(p.id))?
+    {...p,status:"Activa",statusSource:"manual"}:p)}));
+   setSelectedPromotionIds(prev=>prev.filter(id=>!activated.has(String(id))));
+   setToast(activated.size+" promociones activadas correctamente.");
+  }catch(error){setToast("No se pudieron activar: "+error.message);}
+  finally{setActivatingSelected(false);}
+ }
  function togglePromoPharmacy(id) {
   const targets={...promoForm.targets};if(id in targets)delete targets[id];else targets[id]="";
   setPromoForm({...promoForm,targets});

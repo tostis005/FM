@@ -68,6 +68,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
  const periods=useMemo(()=>simulatorPeriods(objectiveHistoryAnchor(objectiveMonth,today),customFrom,customTo),[objectiveMonth,today,customFrom,customTo]);
  const availablePeriods=useMemo(()=>periods.filter(p=>historicPeriodAvailable(p,today)),[periods,today]);
  const months=useMemo(()=>promotionObjectiveMonths(editingPromotion),[editingPromotion]);
+ const monthRange=objectiveMonthDates(editingPromotion,objectiveMonth);
  const currentMonthSaved=objectiveMonthSaveState(editingPromotion,objectiveMonth)==="saved";
  const legacyTargets=hasLegacyUnassignedObjectives(editingPromotion);
  const monthLabel=month=>new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",

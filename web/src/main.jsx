@@ -262,6 +262,7 @@ function App(){
  const [savingPromo,setSavingPromo]=useState(false);
  const [promoSaveError,setPromoSaveError]=useState("");
  const [promoForm,setPromoForm]=useState({...EMPTY_PROMO});
+ const [formObjectiveMonth,setFormObjectiveMonth]=useState("");
  const [cnText,setCnText]=useState("");
  const [editingUser,setEditingUser]=useState(null);
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
@@ -738,7 +739,7 @@ function App(){
  function toggleCampaignExpanded(id){
   setExpandedCampaignIds(prev=>prev.includes(id)?prev.filter(value=>value!==id):[...prev,id]);
  }
- function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
+ function startPromo(p){if(p?.id&&p.managerCanEdit===false)return setToast("Esta campaña incluye farmacias fuera de tu ámbito.");setPromoSaveError("");const entry=p||{...EMPTY_PROMO};setEditingPromo(p?.id||"nuevo");setFormObjectiveMonth(preferredObjectiveMonth(entry,promotionSelectedMonth,new Date()));setPromoForm({...entry,durationMode:promotionDurationMode(entry),type:entry.type||"sin_clasificar",discountPercent:entry.discountPercent??"",importWarnings:(entry.importWarnings||[]).filter(w=>!/30 d[ií]as|revisar vigencia/i.test(String(w))),cns:[...(entry.cns||[])],targets:{...(entry.targets||{})},sales:{}});setCnText((entry.cns||[]).join("\n"));}
  function openObjectivePlanner(p){
   if(!canManagePromotions||p?.managerCanEdit===false)
    return setToast("No tienes permiso para asignar objetivos a esta promoción.");
@@ -746,7 +747,7 @@ function App(){
    return setToast("No tienes acceso a Nueva campaña para asignar objetivos.");
   const draft={...p,cns:p?.cns||[],targets:{...(p?.targets||{})},
    cnDescriptions:{...(p?.cnDescriptions||{})}};
-  setObjectiveMonth(preferredObjectiveMonth(draft,reportMonth||promotionSelectedMonth,new Date()));
+  setObjectiveMonth(preferredObjectiveMonth(draft,formObjectiveMonth||reportMonth||promotionSelectedMonth,new Date()));
   setObjectiveCampaign(draft);setObjectiveSession(n=>n+1);
   setEditingPromo(null);
   nav("promociones-objetivos",undefined,{preserveObjectiveDraft:true});
@@ -1118,7 +1119,11 @@ function App(){
     } catch(err){setToast(err.message);}
     finally{setSavingPharmacy(false);}
   }
-  const cnParsed=parseCNs(cnText);
+  const configuredDrawerMonths=Object.keys(promoForm.monthlyObjectives||{}).sort();
+ const activeDrawerMonth=configuredDrawerMonths.includes(formObjectiveMonth)?formObjectiveMonth:configuredDrawerMonths[0]||"";
+ const drawerTargets=activeDrawerMonth?
+  promoForm.monthlyObjectives?.[activeDrawerMonth]?.targets||{}:promoForm.targets;
+ const cnParsed=parseCNs(cnText);
  const title=page==="seguimiento-global"?"Seguimiento":NAV.find(n=>n.id===page)?.label||"Dashboard";
  useEffect(()=>{
   if(page!=="seguimiento-global")return;
@@ -1631,25 +1636,43 @@ function App(){
    {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos incluidos</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>
    <div className="pharmacy-picker">{pharmacies.filter(f=>f.active||f.id in promoForm.targets).map(f=><label key={f.id} className={"pharmacy-choice "+(f.id in promoForm.targets?"chosen":"")}><input type="checkbox" checked={f.id in promoForm.targets} onChange={()=>togglePromoPharmacy(f.id)}/><span className="choice-check">{f.id in promoForm.targets&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>
-   {promoForm.monthlyObjectives&&Object.keys(promoForm.monthlyObjectives).length>0&&
+   {configuredDrawerMonths.length>0&&
       <div className="target-list">
-       <div className="target-head"><strong>Objetivos mensuales guardados</strong></div>
-       {Object.entries(promoForm.monthlyObjectives).sort(([a],[b])=>a.localeCompare(b))
-        .map(([month,entry])=><div className="target-row" key={month}>
-         <strong>{new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>
-         <span>{quantity(sum(entry.targets))} uds. · {Object.keys(entry.targets||{}).length} farmacias</span>
-        </div>)}
-       <small>Para modificar estas cifras sin perder los objetivos manuales, usa «Asignar objetivos con ventas históricas y stock» y elige el mes.</small>
+       <div className="target-head"><strong>Objetivos mensuales configurados</strong></div>
+       {configuredDrawerMonths.map(month=><div className="target-row" key={month}>
+        <strong>{new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}</strong>
+        <span>{quantity(sum(promoForm.monthlyObjectives[month]?.targets))} uds.</span>
+       </div>)}
+       <label>Mes que estás editando
+        <select value={activeDrawerMonth} onChange={e=>setFormObjectiveMonth(e.target.value)}>
+         {configuredDrawerMonths.map(month=><option key={month} value={month}>
+          {new Date(month+"-01T12:00:00Z").toLocaleDateString("es-ES",{month:"long",year:"numeric",timeZone:"UTC"})}
+         </option>)}
+        </select>
+       </label>
+       <small>Las unidades de cada mes se guardan de manera independiente. Los porcentajes históricos solo son una referencia.</small>
       </div>}
-     {Object.keys(promoForm.targets).length>0&&!Object.keys(promoForm.monthlyObjectives||{}).length&&<div className="target-list">
-    <div className="target-head"><strong>Objetivos por farmacia</strong></div>
-    {Object.entries(promoForm.targets).map(([id,value])=><div className="target-row" key={id}>
+     {Object.keys(drawerTargets||{}).length>0&&<div className="target-list">
+    <div className="target-head"><strong>Objetivos por farmacia {activeDrawerMonth?"· "+activeDrawerMonth:""}</strong></div>
+    {Object.entries(drawerTargets||{}).map(([id,value])=><div className="target-row" key={id}>
      <div><strong>{pharmaName(id)}</strong><small>{id}</small></div>
      <div className="numeric-input"><input type="number" min="0" step="1" value={value}
-      onChange={e=>setPromoForm({...promoForm,targets:{...promoForm.targets,[id]:e.target.value}})}
+      onChange={e=>{
+       const next=e.target.value;
+       if(!activeDrawerMonth){
+        setPromoForm(prev=>({...prev,targets:{...prev.targets,[id]:next}}));
+       }else{
+        setPromoForm(prev=>({...prev,
+         monthlyObjectives:{...prev.monthlyObjectives,
+          [activeDrawerMonth]:{...prev.monthlyObjectives[activeDrawerMonth],
+           targets:{...prev.monthlyObjectives[activeDrawerMonth].targets,[id]:next}}},
+         targets:configuredDrawerMonths.length===1?{...prev.targets,[id]:next}:prev.targets
+        }));
+       }
+      }}
       aria-label={"Objetivo "+pharmaName(id)}/><span>uds.</span></div>
     </div>)}
-    <div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(promoForm.targets))} uds.</strong></div>
+    <div className="target-total"><span>Objetivo total</span><strong>{quantity(sum(drawerTargets))} uds.</strong></div>
    </div>}
    {promoSaveError&&<p role="alert" className="fm-manage-feedback">{promoSaveError}</p>}
    <FormActions onCancel={()=>{if(!savingPromo)setEditingPromo(null)}} disabled={savingPromo} label={savingPromo?"Guardando…":editingPromo==="nuevo"?"Crear campaña":"Guardar cambios"}/>

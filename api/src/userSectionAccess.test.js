@@ -37,3 +37,18 @@ test("todas las rutas tienen claves únicas y se exige la ruta documental exacta
  assert.deepEqual(mock("/api/analytics/pedidos/propuesta"),["compras-preparador","compras-pendientes","compras-pedidos"]);
  assert.deepEqual(mock("/api/analytics/ventas/resumen"),[]);
 });
+
+test("el directorio de proveedores se comparte aunque el usuario no tenga grants",()=>{
+ const restricted=effectiveUserSections({proveedores:false,ventas:true},[]);
+ assert.equal(restricted.proveedores,true);
+ assert.equal(restricted["proveedores-condiciones"],false);
+ assert.equal(restricted.ventas,false);
+ const enabled=effectiveUserSections({proveedores:true},["proveedores-condiciones"]);
+ assert.equal(enabled.proveedores,true);
+ assert.equal(enabled["proveedores-condiciones"],true);
+ const noAnalysis=effectiveUserSections({proveedores:true},[]);
+ assert.equal(noAnalysis.proveedores,true);
+ assert.equal(noAnalysis["proveedores-condiciones"],false);
+ assert.deepEqual(requestSections({path:"/api/tenant/proveedores-unificados/17/ficha"}),["proveedores"]);
+ assert.deepEqual(requestSections({path:"/api/tenant/proveedor-documento-categorias"}),["proveedores"]);
+});

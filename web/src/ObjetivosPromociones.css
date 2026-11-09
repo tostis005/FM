@@ -268,3 +268,64 @@
 @media(max-width:340px){
  .fm-objectives .fm-objective-month-options{grid-template-columns:minmax(0,1fr)}
 }
+
+/* Guardado real frente a propuesta: un mes con números calculados aún no está configurado. */
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option{
+ display:flex;flex-direction:column;align-items:flex-start;justify-content:center;
+ gap:5px;min-width:142px;min-height:65px;padding:11px 13px;
+ border:1px solid #dce8e0;border-radius:10px;background:#fafcfb;
+ color:#385747;text-align:left;box-shadow:none;transition:border-color .15s,background .15s;
+}
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-saved{
+ background:#effaf3;border-color:#bfdfc9;
+}
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-empty{
+ border-style:dashed;
+}
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-pending{
+ background:#fff8e9;border-color:#edce91;
+}
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.active{
+ border:2px solid #148860;background:#e5f6ec;padding:10px 12px;
+ box-shadow:0 0 0 2px #178d6018;
+}
+.fm-objectives .fm-objective-month-options button.fm-objective-month-option.is-pending.active{
+ background:#fff5df;border-color:#bd883d;
+}
+.fm-objective-month-title{display:block;font-size:12px;font-weight:800;text-transform:capitalize;line-height:1.3}
+.fm-objective-month-state{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;
+ color:#778c7e;line-height:1.25;white-space:normal}
+.fm-objective-month-option.is-saved .fm-objective-month-state{color:#15734f}
+.fm-objective-month-option.is-pending .fm-objective-month-state{color:#986922}
+.fm-objective-month-option .fm-objective-month-state svg{flex:none}
+.fm-objective-month-option:focus-visible{outline:2px solid #188d66;outline-offset:3px}
+.fm-objectives-storage{display:flex;align-items:flex-start;gap:12px;min-width:0;
+ padding:13px 14px;margin:0 0 14px;border:1px solid #dce9df;border-radius:10px;background:#f7faf8}
+.fm-objectives-storage-icon{display:flex;align-items:center;justify-content:center;
+ flex:0 0 27px;height:27px;border-radius:8px;background:#e8f0eb;color:#607d6b;font-size:14px;font-weight:900}
+.fm-objectives-storage>div:last-child{min-width:0}
+.fm-objectives-storage strong{display:block;margin:0 0 4px;color:#315c45;font-size:12.5px;line-height:1.45}
+.fm-objectives-storage p{margin:0;font-size:11.5px;line-height:1.55;color:#627a6d}
+.fm-objectives-storage-saved{border-color:#cde8d7;background:#f0faf3}
+.fm-objectives-storage-saved .fm-objectives-storage-icon{background:#d5efdf;color:#147750}
+.fm-objectives-storage-pending{border-color:#eedbbb;background:#fffbf3}
+.fm-objectives-storage-pending .fm-objectives-storage-icon{background:#f8ebd0;color:#966a25}
+.fm-objectives-storage-legacy{background:#f7f9fc;border-color:#dce4ee}
+.fm-objectives-storage-legacy .fm-objectives-storage-icon{background:#e6edf7;color:#52708b}
+.fm-objectives-unified-table td.fm-objectives-goal-cell{min-width:104px;text-align:center}
+.fm-objectives-goal-cell input{text-align:center;margin:0 auto}
+.fm-objectives-table tbody td small.fm-objectives-target-source{
+ display:block;max-width:112px;margin:4px auto 0;font-size:10px;text-align:center;white-space:normal;
+ line-height:1.25;font-weight:750;color:#7c9184;
+}
+.fm-objectives-table tbody td small.fm-objectives-target-source.is-saved{color:#177451}
+.fm-objectives-table tbody td small.fm-objectives-target-source.is-pending{color:#9a712c}
+@media(max-width:600px){
+ .fm-objectives .fm-objective-month-options button.fm-objective-month-option{
+  min-width:0;width:100%;min-height:65px;padding:11px;
+ }
+ .fm-objectives .fm-objective-month-options button.fm-objective-month-option.active{
+  padding:10px;
+ }
+ .fm-objectives-storage{padding:12px;gap:9px}
+}

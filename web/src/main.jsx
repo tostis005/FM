@@ -561,6 +561,9 @@ function App(){
  const permittedPharmacyIds=new Set(pharmacies.map(p=>String(p.id)));
  const storedPromos=(rawPromos||[]).map(p=>({...p,
    targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
+   monthlyObjectives:p.monthlyObjectives?Object.fromEntries(Object.entries(p.monthlyObjectives).map(([month,entry])=>
+    [month,{...entry,targets:Object.fromEntries(Object.entries(entry?.targets||{})
+     .filter(([id])=>permittedPharmacyIds.has(String(id))))}])):undefined,
    sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>permittedPharmacyIds.has(String(id)))),
     totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>permittedPharmacyIds.has(String(id))))
  }));
@@ -573,7 +576,7 @@ function App(){
     : storedUsers;
  const reportTimeZone=tenantContext?.client?.slug==="ampedia"?"Europe/Madrid":
   Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?scopePromotionSales(p,totalSalesByPromotion[p.id],"total"):{},sales:salesStatus==="real"?scopePromotionSales(p,salesByPromotion[p.id],"attributed"):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
+  const promos=storedPromos.map(p=>({...p,status:effectivePromotionStatus(p,promotionClock,reportTimeZone),totalSales:salesStatus==="real"?scopePromotionSales(p,totalSalesByPromotion[p.id],"total"):{},sales:salesStatus==="real"?scopePromotionSales(p,salesByPromotion[p.id],"attributed"):{},goalSales:salesStatus==="real"?scopePromotionSales(p,goalSalesByPromotion[p.id],"attributed"):{},salesSource:salesStatus==="real"?"Ventas sincronizadas · "+tenantContext?.client?.schema+".ventas":"Sin conexión de ventas reales"}));
  
  const pharmaName=(id)=>pharmacies.find(f=>f.id===id)?.name||id;
 
@@ -627,8 +630,10 @@ function App(){
  const reportFilteredCampaigns=reportSelected.filter(p=>selectedPharmacyIds===null||
   !Object.keys(p.targets||{}).length||Object.keys(p.targets||{}).some(id=>activePharmacySet.has(id))).map(p=>({
   ...p,
-  targets:Object.fromEntries(Object.entries(p.targets||{}).filter(([id])=>activePharmacySet.has(id))),
-  sales:Object.fromEntries(Object.entries(p.sales||{}).filter(([id])=>activePharmacySet.has(id))),
+  targets:Object.fromEntries(Object.entries(objectiveTargetsForPeriod(p,reportMonth))
+   .filter(([id])=>activePharmacySet.has(id))),
+  sales:Object.fromEntries(Object.entries(reportMonth?p.sales:p.goalSales||{})
+   .filter(([id])=>activePharmacySet.has(id))),
    totalSales:Object.fromEntries(Object.entries(p.totalSales||{}).filter(([id])=>activePharmacySet.has(id)))
  }));
  const goalListFiltered=reportFilteredCampaigns.filter(p=>(p.name+" "+p.subtitle+" "+p.cns.join(" "))
@@ -741,6 +746,7 @@ function App(){
    return setToast("No tienes acceso a Nueva campaña para asignar objetivos.");
   const draft={...p,cns:p?.cns||[],targets:{...(p?.targets||{})},
    cnDescriptions:{...(p?.cnDescriptions||{})}};
+  setObjectiveMonth(preferredObjectiveMonth(draft,reportMonth||promotionSelectedMonth,new Date()));
   setObjectiveCampaign(draft);setObjectiveSession(n=>n+1);
   setEditingPromo(null);
   nav("promociones-objetivos",undefined,{preserveObjectiveDraft:true});
@@ -758,14 +764,22 @@ function App(){
   setData(prev=>({...prev,promos:prev.promos.map(p=>p.id===updated.id?updated:p)}));
   setStatusFilter("Todos");
   setObjectiveCampaign(null);
+  setObjectiveMonth("");
   nav("promociones");
   startPromo(updated);
   setToast("Objetivos guardados. Revisa los datos completos de la promoción.");
  }
  function continuePlannerToDrawer(objectives){
   const base=objectiveCampaign||EMPTY_PROMO;
+  const month=objectives.objectiveMonth;
+  const monthlyObjectives=month?{...(base.monthlyObjectives||{}),
+   [month]:{targets:{...(objectives.targets||{})},
+    objectiveBaseline:objectives.objectiveBaseline,
+    objectiveBaselineRange:objectives.objectiveBaselineRange,
+    objectiveRates:objectives.objectiveRates}}:base.monthlyObjectives;
   const draft={...EMPTY_PROMO,...base,...objectives,id:null,
    name:base.name||"",start:base.start||"",end:base.end||"",status:"Borrador",
+   monthlyObjectives,
    durationMode:objectiveCampaign?.durationMode||(objectives.objectiveBaseline==="stock"?"stock":"dates"),
    simulatorDraft:true};
   setObjectiveCampaign(null);
@@ -1283,7 +1297,11 @@ function App(){
       <span className="count-label">{selectedPromotionIds.length} seleccionadas</span>
       <button type="button" className="btn btn-secondary btn-sm" disabled={deletingSelected||Boolean(deletingPromoId)}
        onClick={()=>setSelectedPromotionIds([])}>Deseleccionar</button>
-      <button type="button" className="btn btn-secondary btn-sm fm-delete-promo" disabled={deletingSelected||Boolean(deletingPromoId)}
+      {selectedPromotionIds.some(id=>promos.some(p=>String(p.id)===String(id)&&p.status==="Borrador"))&&
+       <button type="button" className="btn btn-secondary btn-sm" disabled={activatingSelected||deletingSelected||Boolean(deletingPromoId)}
+        onClick={()=>void activateSelectedPromotions()}><Check size={15}/>
+        {activatingSelected?"Activando…":"Activar seleccionadas"}</button>}
+      <button type="button" className="btn btn-secondary btn-sm fm-delete-promo" disabled={activatingSelected||deletingSelected||Boolean(deletingPromoId)}
        onClick={()=>void removeSelectedPromotions()}><Trash2 size={15}/>
        {deletingSelected?"Eliminando…":"Eliminar seleccionadas"}</button>
      </>}
@@ -1320,7 +1338,7 @@ function App(){
          <Pencil size={14}/> Editar</button>}
         {canManagePromotions&&objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
          onClick={e=>{e.stopPropagation();openObjectivePlanner(promos.find(original=>original.id===p.id)||p);}}>
-         <Target size={14}/> Asignar objetivos</button>}
+         <Target size={14}/> {p.monthlyObjectives?"Editar objetivos":"Objetivos mensuales"}</button>}
         <button type="button" className="btn btn-secondary btn-sm"
          onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id);}}>
          <BarChart3 size={14}/> Seguimiento</button>
@@ -1392,6 +1410,8 @@ function App(){
      </p>}
     <div className="goal-pharmacy-summary">{reportTargets.map(([id,target])=><div className="goal-summary-line" key={id}><div className="goal-summary-name"><Store size={15}/><strong>{pharmaName(id)}</strong></div><GoalProgressBar goal={Number(target)} sold={Number(combinedReport.sales?.[id]||0)} loading={salesStatus==="cargando"} available={salesStatus==="real"}/></div>)}{!reportTargets.length&&<div className="report-choice-empty">No hay farmacias con objetivos en la selección.</div>}</div>
   </section>}
+  <PromotionColorReport campaigns={reportFilteredCampaigns} pharmacies={pharmacies}
+   pharmacyName={pharmaName} month={reportMonth} salesReady={salesStatus==="real"} onMessage={setToast}/>
   <section className="card report-goals-panel">
    <div className="section-heading goal-panel-title"><div><h2>Avance hacia los objetivos</h2></div><span className="count-label">{reportFilteredCampaigns.length} campañas</span></div>
    <div className="goal-chart-legend"><span className="goal-legend-fill"/><span>Vendido respecto al objetivo</span><span className="goal-legend-marker"/> <span>Meta 100 %</span><span className="goal-legend-over">≥100 %</span><span>Objetivo alcanzado</span></div>
@@ -1446,7 +1466,9 @@ function App(){
   ]}/></div></div></>}
     {page==="promociones-objetivos"&&<ObjetivosPromociones key={tenantContext.client.slug+":"+objectiveSession} clientSlug={tenantContext.client.slug}
       pharmacies={pharmacies} canManage={canManagePromotions&&canOpenSection("promociones-objetivos")}
-      editingPromotion={objectiveCampaign} onCreatePromotion={continuePlannerToDrawer}
+      editingPromotion={objectiveCampaign} objectiveMonth={objectiveMonth}
+      onObjectiveMonthChange={month=>{setObjectiveMonth(month);setObjectiveSession(n=>n+1);}}
+      onCreatePromotion={continuePlannerToDrawer}
       onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}

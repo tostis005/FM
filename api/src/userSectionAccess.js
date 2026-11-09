@@ -61,6 +61,7 @@ export function requestSections(req){
  if(path.startsWith("/api/analytics/stock/sin-recepciones"))return ["stock-sin-recepciones"];
  if(path.startsWith("/api/analytics/stock/traspasos"))return ["stock-traspasos"];
  if(path.startsWith("/api/tenant/proveedores/traspasos-salidas"))return ["stock-traspasos"];
+ if(path.startsWith("/api/tenant/proveedores-unificados")||path.startsWith("/api/tenant/proveedor-documento-categorias"))return ["proveedores"];
  if(path.startsWith("/api/analytics/pedidos/"))return ["compras-preparador","compras-pendientes","compras-pedidos"];
  return [];
 }

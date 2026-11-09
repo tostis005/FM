@@ -1,5 +1,5 @@
-// Recorrido real del navegador móvil: lista -> planificador -> guardar en
-// la misma promoción -> formulario derecho -> planificador -> volver.
+// Recorrido móvil: el guardado de meses existentes es inline, sin abrir el
+// formulario lateral; la simulación sí permite crear una nueva campaña.
 import {chromium} from "playwright";
 import assert from "node:assert/strict";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
@@ -82,8 +82,12 @@ try{
  await page.waitForFunction(()=>!document.querySelector('.fm-objectives-create button')?.disabled,
   null,{timeout:20000});
  await save.click();
- await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:20000});
- assert.equal(new URL(page.url()).pathname,"/promociones");
+ await page.getByText("Objetivos de noviembre de 2026 guardados correctamente.").waitFor({timeout:20000});
+ assert.equal(new URL(page.url()).pathname,"/promociones/nueva",
+  "Guardar objetivos existentes mantiene la página de objetivos");
+ assert.equal(new URL(page.url()).searchParams.get("promocion"),campaign.id);
+ assert.equal(new URL(page.url()).searchParams.get("mes"),"2026-11");
+ assert.equal(await page.locator(".drawer").count(),0,"Guardar objetivos no debe abrir el panel lateral");
  assert.equal(writes.length,1);
  assert.equal(writes[0].id,"X-NOV-1");
  assert.equal(writes[0].sourceRow,2);
@@ -91,16 +95,11 @@ try{
  assert.equal(writes[0].targets["1"],25);
  assert.equal(writes[0].status,"Borrador"); // Asignar metas no publica
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
- assert.equal(await page.getByRole("button",{name:"Asignar objetivos con ventas históricas y stock"}).count(),0,
-  "El panel de la derecha no debe repetir el botón para asignar objetivos");
- await page.getByRole("button",{name:"Cerrar",exact:true}).click();
- await page.getByRole("button",{name:"Editar objetivos",exact:true}).click();
- await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:15000});
- assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
  assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).count(),1);
  assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).count(),1);
  assert.match(await page.locator(".fm-objectives-storage").innerText(),/Objetivos guardados para noviembre/);
  assert.match(await page.locator(".fm-objectives-goal-cell").first().innerText(),/Guardado/);
+ assert.equal(await page.getByRole("button",{name:"Volver a promociones"}).count(),1);
  await page.getByRole("button",{name:/diciembre de 2026: Sin objetivos asignados/i}).click();
  assert.equal(new URL(page.url()).searchParams.get("mes"),"2026-12");
  await page.reload({waitUntil:"domcontentloaded"});
@@ -113,20 +112,27 @@ try{
  await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).fill("40");
  assert.match(await page.locator(".fm-objectives-storage").innerText(),/Cambios sin guardar/);
  await page.getByRole("button",{name:"Guardar objetivos"}).click();
- await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:20000});
+ await page.getByText("Objetivos de diciembre de 2026 guardados correctamente.").waitFor({timeout:20000});
+ assert.equal(await page.locator(".drawer").count(),0);
+ assert.equal(new URL(page.url()).searchParams.get("mes"),"2026-12");
  assert.equal(writes.length,2);
  assert.equal(writes[1].monthlyObjectives["2026-11"].targets["1"],25);
  assert.equal(writes[1].monthlyObjectives["2026-12"].targets["1"],40);
- assert.equal(await page.getByRole("button",{name:"Asignar objetivos con ventas históricas y stock"}).count(),0);
- await page.getByRole("button",{name:"Cerrar",exact:true}).click();
- await page.getByRole("button",{name:"Editar objetivos",exact:true}).click();
+ assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).count(),1);
+ assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Objetivos guardados/i}).count(),1);
  await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).click();
  assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25",
   "Volver a un mes guardado mantiene las unidades manuales anteriores");
- await page.getByRole("button",{name:"Volver al formulario"}).click();
- await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:15000});
- assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25",
-  "El panel lateral mantiene el mes seleccionado sin recalcular unidades manuales");
+ assert.equal(await page.locator(".fm-objectives-save-success").count(),0,
+  "La confirmación de diciembre no debe aparecer en noviembre");
+ await page.getByRole("button",{name:"Volver a promociones"}).click();
+ assert.equal(new URL(page.url()).pathname,"/promociones");
+ assert.equal(await page.locator(".drawer").count(),0,
+  "Volver al listado tampoco abre el panel de la derecha");
+ await page.getByRole("button",{name:"Editar objetivos",exact:true}).click();
+ await page.getByRole("button",{name:/noviembre de 2026: Objetivos guardados/i}).waitFor({timeout:15000});
+ assert.equal(await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).inputValue(),"25");
+ await page.getByRole("button",{name:"Volver a promociones"}).click();
  await page.reload({waitUntil:"domcontentloaded"});
  await page.getByText("Gama nueva · 20% DTO").first().waitFor({timeout:15000});
  assert.equal(writes.length,2);
@@ -176,5 +182,5 @@ try{
  assert.equal(await page.getByRole("button",{name:/diciembre de 2026: Objetivos guardados/i}).count(),1);
  assert.equal(await page.getByRole("button",{name:/noviembre de 2026: Sin objetivos asignados/i}).count(),1);
  assert.deepEqual(errors,[]);
- console.log("OBJETIVOS_MÓVIL_OK: simulación sin guardar, confirmación mensual tras fechas, URL persistente y unidades intactas");
+ console.log("OBJETIVOS_MÓVIL_OK: guardado mensual inline sin drawer, confirmación, vuelta al listado, simulación y URL persistente");
 }finally{await browser.close();}

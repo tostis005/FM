@@ -44,6 +44,48 @@ export function visiblePromos(rows,req){
 }
 const validId=id=>typeof id==="string"&&id.length>0&&id.length<=120;
 
+/** Publicar una campaña no exige metas para todos los meses de su vigencia.
+ * Si tiene objetivos mensuales, las metas generales solo identifican
+ * participantes y pueden conservar casillas antiguas sin rellenar. */
+export function promotionActivationIssues(p){
+ const issues=[];
+ const date=day=>/^20\d{2}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(day||"");
+ if(p?.status!=="Borrador")issues.push("ya no está en borrador");
+ if(!date(p?.start))issues.push("falta una fecha de inicio válida");
+ if(p?.durationMode!=="stock"&&(!date(p?.end)||p.end<p.start))
+  issues.push("falta una fecha de fin válida o es anterior al inicio");
+ if(!p?.type||p.type==="sin_clasificar")issues.push("falta clasificar el tipo de promoción");
+ if(!Array.isArray(p?.cns)||!p.cns.length)issues.push("no tiene artículos (CN) incluidos");
+ else if(p.cns.some(cn=>typeof cn!=="string"||!/^\d{6}$/.test(cn)))
+  issues.push("hay códigos nacionales que no tienen seis dígitos");
+ const participants=Object.entries(p?.targets||{});
+ if(!participants.length)issues.push("no hay farmacias participantes");
+ const entries=Object.entries(p?.monthlyObjectives||{});
+ const goodUnits=units=>units!==""&&Number.isSafeInteger(Number(units))&&Number(units)>=0;
+ const positive=units=>goodUnits(units)&&Number(units)>0;
+ if(entries.length){
+  // Se puede completar noviembre hoy y diciembre más tarde: los meses
+  // sin objetivos aún configurados no impiden activar la promoción.
+  if(!entries.some(([,entry])=>Object.values(entry?.targets||{}).some(positive)))
+   issues.push("no hay ningún mes con un objetivo guardado mayor que cero");
+ }else{
+  if(participants.some(([,units])=>!goodUnits(units)))
+   issues.push("hay objetivos generales vacíos o con unidades inválidas");
+  if(!participants.some(([,units])=>positive(units)))
+   issues.push("no hay ningún objetivo mayor que cero");
+ }
+ if(["segunda_porcentaje","descuento_porcentaje"].includes(p?.type)&&
+    (!(Number(p.discountPercent)>0)||Number(p.discountPercent)>100))
+  issues.push("falta un porcentaje de descuento válido (1–100 %)");
+ if(["descuento_importe","segunda_importe"].includes(p?.type)&&
+    !(Number(p.discountAmount)>0))
+  issues.push("falta el importe del descuento en euros");
+ if(p?.type==="precio_especial"&&
+    (p.specialPrice===""||p.specialPrice==null||!(Number(p.specialPrice)>=0)))
+  issues.push("falta el precio especial por unidad");
+ return issues;
+}
+
 export function cleanDocument(raw,id,pharmacyIds) {
   if(!raw || typeof raw!=="object" || Array.isArray(raw) || !validId(id) ||
     raw.id!==id || typeof raw.name!=="string" || !raw.name.trim() ||
@@ -248,26 +290,17 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
      await db.query("ROLLBACK");
      return res.status(403).json({error:"Alguna promoción no existe o está fuera de tus permisos"});
     }
-    for(const row of rows){
-     const p=row.documento;
-     const positive=targets=>Object.values(targets||{}).some(value=>Number(value)>0);
-     const goals=positive(p.targets)||Object.values(p.monthlyObjectives||{}).some(entry=>positive(entry.targets));
-     const datesOk=/^20\d{2}-\d{2}-\d{2}$/.test(p.start||"")&&
-       (p.durationMode==="stock"||/^20\d{2}-\d{2}-\d{2}$/.test(p.end||"")&&p.end>=p.start);
-     const unitsOk=Object.values(p.targets||{}).every(value=>
-       value!==""&&Number.isSafeInteger(Number(value))&&Number(value)>=0);
-     const valid=p.status==="Borrador"&&datesOk&&unitsOk&&p.type&&p.type!=="sin_clasificar"&&
-       Array.isArray(p.cns)&&p.cns.length>0&&p.cns.every(cn=>/^\d{6}$/.test(cn))&&goals&&
-       (!["segunda_porcentaje","descuento_porcentaje"].includes(p.type)||
-         Number(p.discountPercent)>0&&Number(p.discountPercent)<=100)&&
-       (!["descuento_importe","segunda_importe"].includes(p.type)||
-         Number(p.discountAmount)>0)&&
-       (p.type!=="precio_especial"||
-         p.specialPrice!==""&&p.specialPrice!=null&&Number(p.specialPrice)>=0);
-     if(!valid){
-      await db.query("ROLLBACK");
-      return res.status(400).json({error:"Revisa tipo, artículos y objetivos de «"+p.name+"» antes de activarla."});
-     }
+    const invalid=rows.map(row=>({id:row.id,name:row.documento?.name||row.id,
+     reasons:promotionActivationIssues(row.documento)})).filter(item=>item.reasons.length);
+    if(invalid.length){
+     await db.query("ROLLBACK");
+     const explanations=invalid.slice(0,8).map(item=>
+      "«"+item.name+"»: "+item.reasons.join("; "));
+     const remaining=invalid.length>8?" Y "+(invalid.length-8)+" promociones más con errores.":"";
+     return res.status(400).json({
+      error:"No se activó ninguna promoción. "+explanations.join(" | ")+remaining,
+      invalidPromotions:invalid
+     });
     }
     for(const row of rows){
      await db.query(`INSERT INTO "${schema}".fm_promocion_revisiones

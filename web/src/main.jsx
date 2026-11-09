@@ -1645,13 +1645,6 @@ function App(){
      label={promoForm.type==="segunda_porcentaje"?"Descuento aplicado a la segunda unidad (%)":"Porcentaje de descuento (%)"}
      hint={promoForm.type==="segunda_porcentaje"?"Ej.: 50 = 50 % de descuento. Por cada pareja del ticket, el descuento se aplica a la unidad de menor precio.":null}>
      <input type="number" min="0.01" max="100" step="0.01" placeholder="Ej.: 50" value={promoForm.discountPercent} onChange={e=>setPromoForm({...promoForm,discountPercent:e.target.value})}/></Field>}
-   {canManagePromotions&&<div className="fm-promotion-objectives-link">
-    <button type="button" className="btn btn-secondary" disabled={savingPromo}
-     onClick={()=>openObjectivePlanner({...promoForm,cns:parseCNs(cnText)})}>
-     <Target size={16}/> Asignar objetivos con ventas históricas y stock
-    </button>
-    <small>Conservamos los datos y los CN. Al guardar los objetivos volverás a este formulario.</small>
-   </div>}
    <div className="form-divider"/><div className="field-heading"><div><strong>CN</strong><small>Introduce un CN por línea o sepáralos por comas o espacios. Solo seis números, sin puntos.</small></div><span className="soft-counter">{cnParsed.length} CNs</span></div><textarea rows="5" className="cn-area" placeholder={"184579\n188456\n192334"} value={cnText} onChange={e=>setCnText(e.target.value)}/>{cnParsed.some(cn=>!isValidCN(cn))?<div className="parse-info cn-format-error"><CircleHelp size={15}/> Hay CNs incorrectos. Cada CN debe tener exactamente 6 dígitos, sin puntos ni letras.</div>:<div className="parse-info"><CheckCircle2 size={15}/> CNs válidos de 6 dígitos. Eliminamos automáticamente los duplicados.</div>}
    {Object.keys(promoForm.cnDescriptions||{}).length>0&&<div className="import-cn-catalog"><strong>Productos incluidos</strong>{Object.entries(promoForm.cnDescriptions).slice(0,22).map(([cn,description])=><div key={cn}><code>{cn}</code><span>{description}</span></div>)}{Object.keys(promoForm.cnDescriptions).length>22&&<small>Mostrando 22 de {Object.keys(promoForm.cnDescriptions).length} descripciones</small>}</div>}
     <div className="form-divider"/><div className="field-heading"><div><strong>Farmacias participantes</strong><small>Selecciona las farmacias incluidas en la promoción.</small></div><span className="soft-counter">{Object.keys(promoForm.targets).length} elegidas</span></div>

@@ -18,14 +18,10 @@ const cleanHeader = value => {try{return decodeURIComponent(String(value||""))}c
 const validDay = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
 const jsonRoute = handler => async(req,res,next)=>{try{await handler(req,res)}catch(e){next(e)}};
 
-function guard(req,res,next){
- if(req.context.role!=="superadministrador"&&req.context.modules?.proveedores!==true)
-  return fail(res,"No tienes acceso al directorio de proveedores",403);
- next();
-}
+// requireTenant ya comprueba que la sesión pertenece al cliente activo.
+ // Escribir requiere un rol de gestión; consultar no exige permisos adicionales.
 function writeGuard(req,res,next){
- if(!canManage(req)||!((req.context.modules?.proveedores===true)||req.context.role==="superadministrador"))
-  return fail(res,"No tienes permiso para modificar proveedores",403);
+ if(!canManage(req))return fail(res,"No tienes permiso para modificar proveedores",403);
  next();
 }
 async function supplier(pool,slug,id){
@@ -79,7 +75,7 @@ function readErp(erp){
   notes:""};
 }
 export function setupSupplierWorkspace(app,pool,{requireTenant}){
- const read=[...requireTenant(),guard],write=[...requireTenant(),writeGuard];
+ const read=[...requireTenant()],write=[...requireTenant(),writeGuard];
  app.get(categoryRoot,...read,jsonRoute(async(req,res)=>{
   res.json(await categories(pool,req.context.client.slug));
  }));

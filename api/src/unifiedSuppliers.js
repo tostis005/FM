@@ -142,9 +142,15 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   const chosen=raw?raw.split(",").map(Number):[...allowed];
   return chosen.every(x=>Number.isSafeInteger(x)&&allowed.has(x))?[...new Set(chosen)]:null;
  };
- app.get("/api/tenant/proveedores-unificados",...requireTenantManager(),async(req,res,next)=>{
-  try{res.json(await listUnifiedSuppliers(pool,req.context,ids(req)||[],false))}
-  catch(e){next(e)}
+ app.get("/api/tenant/proveedores-unificados",...requireTenant(),async(req,res,next)=>{
+  try{
+   // Directorio común del cliente, visible en consulta para todos los usuarios
+   // con acceso a Proveedores; no depende de la farmacia local del usuario.
+   const {rows:groupPharmacies}=await pool.query(
+    "SELECT id FROM farmetrica.farmacias WHERE cliente_slug=$1 AND activo ORDER BY id",
+    [req.context.client.slug]);
+   res.json(await listUnifiedSuppliers(pool,req.context,groupPharmacies.map(f=>Number(f.id)),false));
+  }catch(e){next(e)}
  });
  app.get("/api/analytics/pedidos/proveedores-unificados",...requireTenant(),async(req,res,next)=>{
   if(!permitted(req))return res.status(403).json({error:"Compras no habilitado"});
@@ -229,7 +235,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   }catch(e){await client.query("ROLLBACK").catch(()=>{});next(e)}
   finally{client.release()}
  });
- app.post("/api/tenant/proveedores-unificados",...requireTenantAdmin(),async(req,res,next)=>{
+ app.post("/api/tenant/proveedores-unificados",...requireTenantManager(),async(req,res,next)=>{
   const name=String(req.body?.name||"").trim(),className=req.body?.class||"SIN_CLASIFICAR";
   if(name.length<2||name.length>200||
    !["DIRECTO","MAYORISTA","INTERNO","OTROS","VACUNAS","FÓRMULAS","SIN_CLASIFICAR"].includes(className))
@@ -244,7 +250,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
    res.status(201).json({id:String(rows[0].id),name});
   }catch(e){next(e)}
  });
- app.put("/api/tenant/proveedores-unificados/:id",...requireTenantAdmin(),async(req,res,next)=>{
+ app.put("/api/tenant/proveedores-unificados/:id",...requireTenantManager(),async(req,res,next)=>{
   if(!validId(req.params.id))return res.status(400).json({error:"ID incorrecto"});
   const name=String(req.body?.name||"").trim(),className=req.body?.class;
   if(name.length<2||name.length>200||
@@ -345,7 +351,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
  });
  // Clasificar un código local sin obligar a fusionarlo con otra farmacia.
  // La creación del proveedor y su asociación son atómicas.
- app.post("/api/tenant/proveedores-unificados/clasificar-origen",...requireTenantAdmin(),async(req,res,next)=>{
+ app.post("/api/tenant/proveedores-unificados/clasificar-origen",...requireTenantManager(),async(req,res,next)=>{
   const name=String(req.body?.name||"").trim();
   const className=String(req.body?.class||"SIN_CLASIFICAR");
   const pharmacy=String(req.body?.pharmacyCode||"").trim().toUpperCase();
@@ -389,7 +395,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   }catch(e){await db.query("ROLLBACK").catch(()=>{});next(e)}
   finally{db.release()}
  });
- app.put("/api/tenant/proveedores-unificados/:id/origen",...requireTenantAdmin(),async(req,res,next)=>{
+ app.put("/api/tenant/proveedores-unificados/:id/origen",...requireTenantManager(),async(req,res,next)=>{
   if(!validId(req.params.id))return res.status(400).json({error:"ID incorrecto"});
   const pharmacy=String(req.body?.pharmacyCode||"").trim().toUpperCase(),
    code=String(req.body?.sourceCode||"").trim(),name=String(req.body?.sourceName||"").trim();

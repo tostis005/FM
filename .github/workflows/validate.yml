@@ -360,6 +360,7 @@ jobs:
           node check-laboratory-orders.mjs
           node check-supplier-laboratory-map.mjs
           node check-supplier-views.mjs
+          node check-supplier-directory-roles.mjs
           node check-purchase-planner.mjs
           node check-savings-analysis.mjs
           node check-dashboard-audit.mjs

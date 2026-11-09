@@ -170,7 +170,7 @@ const NAV=[
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
- {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
+ {id:"proveedores",label:"Proveedores y documentos",icon:Users,module:"proveedores"},
  {id:"proveedores-condiciones",label:"Análisis de proveedores",icon:ClipboardList,module:"proveedores",childOf:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
@@ -184,7 +184,6 @@ const NAV=[
  {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
  {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
- {id:"proveedores-maestro",label:"Maestro de proveedores",icon:Users,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
@@ -194,12 +193,12 @@ const NAV=[
  {id:"accesos",label:"Accesos",icon:ShieldCheck,super:true}
 ];
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","proveedores-maestro","usuarios","estado","ajustes"]);
-const DEMO_MODULES=new Set(["dashboard","ventas","compras","proveedores","stock","reposicion","genericos","rentabilidad","informes"]);
+const CONFIG_IDS=new Set(["farmacias","usuarios","estado","ajustes"]);
+const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","genericos","promociones","promociones-objetivos","acciones"]);
+ "stock","stock-sin-recepciones","proveedores","genericos","promociones","promociones-objetivos","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -225,6 +224,7 @@ function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
  if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
  if(path==="promociones/nueva"||path==="promociones/simulador")return "promociones-objetivos";
+ if(path==="proveedores-maestro")return "proveedores";
  return ROUTES.has(path)?path:"dashboard";
 }
 
@@ -1079,15 +1079,19 @@ function App(){
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
+   // El directorio deja de ser un acceso administrativo oculto, pero debe
+   // respetar que el módulo Proveedores esté habilitado para este cliente.
+   if(item.id==="proveedores"&&tenantContext?.modules?.proveedores!==true)return false;
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","proveedores-maestro"].includes(item.id)&&role==="gestor");
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
      NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||
      (item.id==="promociones"&&canOpenSection("seguimiento-global"));
    return true;
  });
- const allowed=CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
+ const allowed=page==="proveedores"?Boolean(tenantContext?.modules?.proveedores)&&canOpenSection(page):
+   CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.
  // No redirigir de /ventas a /promociones mientras el rol aún no está resuelto.
@@ -1418,7 +1422,9 @@ function App(){
       onSaveObjectives={saveObjectivesFromPlanner} onBack={returnFromPlanner}/>}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
-     {page==="proveedores-maestro"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} canEditMaster={["administrador","superadministrador"].includes(role)}/>}
+     {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
+      canEditMaster={["gestor","administrador","superadministrador"].includes(role)}
+      canMergeMaster={["administrador","superadministrador"].includes(role)}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="fuentes"&&<FuentesMaestras/>}
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}

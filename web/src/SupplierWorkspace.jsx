@@ -59,7 +59,7 @@ export function SupplierCategories({clientSlug,onBack}){
  ],[busy]);
  return <div className="fm-management fm-production-panel fm-supplier-workspace">
   <header className="fm-supplier-head"><div className="fm-supplier-heading">
-   <button className="fm-workspace-back" onClick={onBack}><ArrowLeft size={17}/> Volver al maestro</button>
+   <button className="fm-workspace-back" onClick={onBack}><ArrowLeft size={17}/> Volver a proveedores</button>
    <h1>Categorías documentales</h1>
    <p>Se aplican a todos los proveedores del grupo de farmacias de este cliente.</p>
   </div></header>
@@ -173,11 +173,11 @@ export default function SupplierWorkspace({clientSlug,supplierId,onBack,onSuppli
   {key:"position",label:"Cargo / departamento",value:r=>r.position},
   {key:"email",label:"Email",value:r=>r.email,render:r=>r.email?<a href={"mailto:"+r.email}>{r.email}</a>:"—"},
   {key:"phone",label:"Teléfono",value:r=>r.phone},
-  {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:r=><div className="fm-workspace-actions">
+  ...(data?.canManage?[{key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,render:r=><div className="fm-workspace-actions">
    <button className="btn btn-secondary btn-sm" disabled={busy} onClick={()=>setContact({...r})}><Pencil size={13}/> Editar</button>
    <button className="btn btn-secondary btn-sm" disabled={busy} onClick={()=>void deleteContact(r)} aria-label={"Eliminar "+r.name}><Trash2 size={13}/></button>
-  </div>}
- ],[busy]);
+  </div>}]:[])
+ ],[busy,data?.canManage]);
  const documentColumns=useMemo(()=>[
   {key:"name",label:"Documento",value:r=>r.name+" "+r.fileName,
    render:r=><div className="fm-workspace-document-name"><strong>{r.name}</strong><small>{r.fileName} · {bytes(r.size)}</small></div>},
@@ -198,9 +198,9 @@ export default function SupplierWorkspace({clientSlug,supplierId,onBack,onSuppli
  return <div className="fm-management fm-production-panel fm-supplier-workspace">
   <header className="fm-supplier-head">
    <div className="fm-supplier-heading">
-    <button className="fm-workspace-back" type="button" onClick={onBack}><ArrowLeft size={17}/> Volver al maestro</button>
+    <button className="fm-workspace-back" type="button" onClick={onBack}><ArrowLeft size={17}/> Volver a proveedores</button>
     <h1>{data?.supplier.name||"Ficha de proveedor"}</h1>
-    <p>Información, contactos y documentación compartidos por todas las farmacias del grupo.</p>
+    <p>Información, contactos y documentación compartidos por todas las farmacias del grupo. {!data?.canManage&&<strong>Acceso de consulta.</strong>}</p>
    </div>
    <button className="btn btn-secondary" type="button" disabled={loading||busy} onClick={()=>void refresh()}><RefreshCcw size={15}/> Actualizar</button>
   </header>
@@ -244,7 +244,7 @@ export default function SupplierWorkspace({clientSlug,supplierId,onBack,onSuppli
       {data.canManage&&<button className="btn btn-secondary" type="button" onClick={onCategories}>Configurar categorías</button>}
       {data.canManage&&<button className="btn btn-primary" type="button" onClick={()=>setUpload(v=>!v)}><FilePlus size={15}/> Subir documento</button>}
      </div></div>
-    {upload&&<form className="fm-workspace-upload" onSubmit={uploadDocument}>
+    {upload&&data.canManage&&<form className="fm-workspace-upload" onSubmit={uploadDocument}>
      <div className="fm-workspace-fields">
       <label className="fm-workspace-wide">Archivo (máximo 15 MB)
        <input type="file" required onChange={e=>{const next=e.target.files?.[0]||null;setFile(next);setNewDoc(old=>({...old,name:next?.name||""}))}}/></label>
@@ -267,7 +267,7 @@ export default function SupplierWorkspace({clientSlug,supplierId,onBack,onSuppli
      defaultSort={{key:"createdAt",direction:"desc"}} showExport={false} emptyText="Aún no hay documentos"/>
    </section>
   </>}
-  {contact&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar contacto">
+  {contact&&data?.canManage&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar contacto">
    <form className="fm-demo-detail fm-provider-dialog fm-workspace-dialog" onSubmit={saveContact}>
     <div className="fm-workspace-section-head"><h2>{contact.id?"Editar contacto":"Nuevo contacto"}</h2>
      <button type="button" className="icon-btn" aria-label="Cerrar" onClick={()=>setContact(null)}><X size={17}/></button></div>
@@ -285,7 +285,7 @@ export default function SupplierWorkspace({clientSlug,supplierId,onBack,onSuppli
     <div className="fm-master-dialog-actions"><button type="button" className="btn btn-secondary" onClick={()=>setContact(null)}>Cancelar</button>
      <button className="btn btn-primary" disabled={busy||!contact.name.trim()}>Guardar contacto</button></div>
    </form></div>}
-  {document&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar documento">
+  {document&&data?.canManage&&<div className="fm-demo-overlay" role="dialog" aria-modal="true" aria-label="Editar documento">
    <form className="fm-demo-detail fm-provider-dialog fm-workspace-dialog" onSubmit={saveDocument}>
     <h2>Editar documento</h2>
     <div className="fm-workspace-fields">

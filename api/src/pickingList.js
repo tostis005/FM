@@ -181,7 +181,7 @@ async function getInventory(pool,ctx,codes){
  const sites=new Map(),items=new Map(),aliases=new Map();
  for(const row of rows){
   if(!sites.has(row.siteId))sites.set(row.siteId,{
-   id:row.siteId,code:row.code,name:row.siteName,kind:row.kind,
+   id:row.siteId,code:row.code,displayCode:row.displayCode,name:row.siteName,kind:row.kind,
    ready:row.ready===true
   });
   if(row.key&&Array.isArray(row.eans)&&row.eans.length){
@@ -212,11 +212,23 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   const key=line.cn||"SKU:"+line.sku;
   if(!grouped.has(key))grouped.set(key,{
    key,cn:line.cn||null,sku:line.sku,name:line.title||"",
-   required:0,orderKeys:new Set(),channels:new Set(),details:[],lines:0
+   required:0,orderKeys:new Set(),channels:new Set(),details:[],lines:0,perChannel:new Map()
   });
   const row=grouped.get(key);
   row.required+=Number(line.quantity);row.lines++;
   row.orderKeys.add(line.orderId);row.channels.add(line.channel||"Sin canal");
+  if(!channel){
+   const key=line.channel||"Sin canal";
+   if(!row.perChannel.has(key))row.perChannel.set(key,{
+    required:0,orderKeys:new Set(),details:[],lines:0
+   });
+   const part=row.perChannel.get(key);
+   part.required+=Number(line.quantity);part.lines++;part.orderKeys.add(line.orderId);
+   if(part.details.length<40)part.details.push({
+    orderId:line.orderId,orderName:line.orderName,
+    createdAt:line.createdAt,channel:key,quantity:Number(line.quantity)
+   });
+  }
   if(!row.name&&line.title)row.name=line.title;
   if(row.details.length<40)row.details.push({
    orderId:line.orderId,orderName:line.orderName,
@@ -254,8 +266,29 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   const shortage=proposal?.remaining??null;
   const status=!matched?"sin_cn":hasMissing?"sin_datos":
    shortage>0?"sin_stock":"cubierto";
+  // Distribución precalculada por canal, reutilizando el mismo inventario.
+  // La interfaz cambia de canal sin nuevas consultas al servidor.
+  const channelSlices=!channel?Object.fromEntries([...entry.perChannel].map(([key,part])=>{
+   const allocation=matched?allocatePending(part.required,
+    warehouseUnknown?0:wh.stock,pharm,{reserve:1}):null;
+   const remaining=allocation?.remaining??null;
+   const partStatus=!matched?"sin_cn":hasMissing?"sin_datos":
+    remaining>0?"sin_stock":"cubierto";
+   const planned=stock.map(site=>allocation?
+    (site.kind==="almacen"?(warehouseUnknown?0:allocation.warehouse||0):
+      allocation.bySite[site.code]||0):0);
+   return [key,{
+    required:part.required,lines:part.lines,orders:part.orderKeys.size,
+    details:part.details,planned,
+    allocated:allocation?.fulfilled??null,shortage:remaining,
+    pending:Math.max(0,part.required-(allocation?.fulfilled||0)),
+    status:partStatus,
+    allocationProvisional:Boolean(allocation)&&(warehouseUnknown||allocation.partial),
+    exhausted:allocation?.zeroedSites||[]
+   }];
+  ])):undefined;
   return {
-   key:entry.key,cn:entry.cn,sku:entry.sku,eans,
+   key:entry.key,cn:entry.cn,sku:entry.sku,eans,channelSlices,
    name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.key)?.name).find(Boolean)||"",
    required:entry.required,orders:entry.orderKeys.size,
    lines:entry.lines,channels:[...entry.channels],details:entry.details,
@@ -266,8 +299,28 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
    exhausted:proposal?.zeroedSites||[]
   };
  }).sort((a,b)=>b.required-a.required||a.key.localeCompare(b.key));
+ const channelTotals={};
+ if(!channel){
+  const uniqueOrders=new Map(channels.map(key=>[key,new Set()]));
+  for(const line of rows)uniqueOrders.get(line.channel||"Sin canal")?.add(line.orderId);
+  for(const key of channels)channelTotals[key]={
+   orders:uniqueOrders.get(key)?.size||0,
+   lines:0,products:0,units:0,allocated:0,pending:0,shortage:0,incomplete:0
+  };
+  for(const row of report)for(const [key,part] of Object.entries(row.channelSlices||{})){
+   const total=channelTotals[key];
+   if(!total)continue;
+   total.products++;
+   total.lines+=part.lines;
+   total.units+=part.required;
+   total.allocated+=part.allocated||0;
+   total.pending+=part.pending;
+   total.shortage+=part.shortage||0;
+   if(part.status==="sin_cn"||part.status==="sin_datos")total.incomplete++;
+  }
+ }
  return {
-  meta,channels,selectedChannel:channel,sites,rows:report,
+  meta,channels,selectedChannel:channel,sites,rows:report,channelTotals,
   totals:{orders:new Set(filtered.map(r=>r.orderId)).size,
    lines:filtered.length,products:report.length,
    units:report.reduce((n,r)=>n+r.required,0),

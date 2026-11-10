@@ -30,7 +30,7 @@ jobs:
           npm install --prefix api --no-audit --no-fund
           node --check api/src/server.js
           node --check api/src/pickingList.js
-          node --test api/src/pickingListSettings.test.js
+          node --test api/src/pickingListSettings.test.js api/src/pickingListAutoRefresh.test.js
           node --check api/src/classifyUnclassifiedSuppliers.mjs
           node --check api/src/auditUnclassifiedSuppliers.mjs
           node --check api/src/ensureLaboratoryReconciliation.mjs

@@ -1,0 +1,68 @@
+import {chromium} from "playwright";
+import assert from "node:assert/strict";
+
+const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
+const page=await browser.newPage({viewport:{width:1320,height:820}});
+const user={email:"picking-stock-ci@example.invalid",name:"Gestor CI",role:"usuario"};
+const sites=[
+ {id:"6",name:"Almacén central",code:"ALMACEN",kind:"almacen",ready:true},
+ {id:"1",name:"Farmacia Abadía",code:"ABA",kind:"farmacia",ready:true},
+ {id:"2",name:"Farmacia Buñol",code:"BUE",kind:"farmacia",ready:true}
+];
+const context={user,role:"gestor",client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
+ clients:[{slug:"ampedia",name:"Ampedia"}],
+ pharmacies:[{id:"1",name:"Farmacia Abadía",sourceCode:"ABA"},
+  {id:"2",name:"Farmacia Buñol",sourceCode:"BUE"}],
+ modules:{stock:true},sections:{stock:true,"picking-list":true},
+ profile:{id:2,name:"Gestor",permissions:{stock:["ver","editar","importar"]}}};
+const stock=[
+ {...sites[0],stock:4,planned:4,matched:true,stockAt:new Date().toISOString()},
+ {...sites[1],stock:5,planned:3,matched:true,stockAt:new Date().toISOString()},
+ {...sites[2],stock:3,planned:1,matched:true,stockAt:new Date().toISOString()}
+];
+let refreshed=false,refreshCalls=0;
+const jsErrors=[];
+page.on("pageerror",error=>jsErrors.push(error.message));
+await page.route("**/api/**",async route=>{
+ const req=route.request(),pathname=new URL(req.url()).pathname;
+ let json={};
+ if(pathname==="/api/auth/me")json={user};
+ else if(pathname==="/api/tenant/context")json=context;
+ else if(pathname==="/api/tenant/farmacias")json=context.pharmacies;
+ else if(pathname==="/api/picking-list/refresh"){
+  refreshCalls++;refreshed=true;json={ok:true,rows:2};
+ }else if(pathname==="/api/picking-list/report"){
+  const meta={sourceConfigured:true,lastImportedAt:refreshed?new Date().toISOString():null,
+   lineCount:refreshed?2:0,sourceState:refreshed?"ok":"error",
+   sourceError:refreshed?null:"Dropbox no ha permitido descargar el CSV.",
+   stockLocations:3,stockLocationsReady:3,unmatchedProducts:0};
+  json={meta,sites,channels:refreshed?["web"]:[],selectedChannel:"",
+   rows:refreshed?[{key:"123456",cn:"123456",sku:"123456",name:"Producto A",
+    required:8,orders:2,lines:2,stock,allocated:8,shortage:0,
+    status:"cubierto",stockTotal:12,exhausted:[],
+    details:[{orderId:"1001",orderName:"#1001",channel:"web",createdAt:null,quantity:5},
+     {orderId:"1002",orderName:"#1002",channel:"web",createdAt:null,quantity:3}]}]:[],
+   totals:{orders:refreshed?2:0,units:refreshed?8:0,products:refreshed?1:0,
+    allocated:refreshed?8:0,shortage:0,incomplete:0}};
+ }
+ await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(json)});
+});
+try{
+ await page.goto("http://127.0.0.1:4175/picking-list",{waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor({timeout:15000});
+ await page.getByText(/Dropbox configurado, pero no se han podido importar los pedidos/).waitFor();
+ await page.getByText(/3 de 3 ubicaciones con artículos sincronizados/).waitFor();
+ await page.getByRole("heading",{name:"Aún no se han importado pedidos de Dropbox"}).waitFor();
+ await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).click();
+ await page.getByRole("heading",{name:"Distribución de pedidos pendientes"}).waitFor();
+ assert.equal(refreshCalls,1);
+ await page.getByText("Producto A",{exact:true}).waitFor();
+ await page.getByRole("button",{name:"Detalle"}).click();
+ await page.getByText("#1001").waitFor();
+ await page.getByText("#1002").waitFor();
+ await page.getByRole("tab",{name:"Farmacia Abadía"}).click();
+ await page.getByRole("heading",{name:"Preparación · Farmacia Abadía"}).waitFor();
+ await page.getByText("3 uds. propuestas en Farmacia Abadía").waitFor();
+ assert.equal(jsErrors.length,0,jsErrors.join("\n"));
+ console.log("OK Picking List: error visible, primera lectura y stock por farmacia con unidades a preparar");
+}finally{await browser.close();}

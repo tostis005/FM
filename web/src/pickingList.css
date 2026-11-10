@@ -76,3 +76,8 @@
 .fm-picking-settings .fm-price-settings-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .fm-picking-settings-hint{display:flex;align-items:center;gap:7px;font-size:12px;color:#6c7f73;line-height:1.5}
 .fm-picking-settings-hint svg{flex-shrink:0}
+
+.fm-picking-stock-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:#4e6b5c;font-size:12px;background:#f3f7f5;border:1px solid #dfebe3;border-radius:10px;padding:10px 13px}
+.fm-picking-stock-summary svg{flex:none}
+.fm-picking-alert span{line-height:1.6}
+.fm-picking-alert strong{font-weight:750}

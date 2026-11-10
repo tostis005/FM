@@ -46,7 +46,12 @@ export async function resolveEANReferences(pool,context,ids,value){
  for(const row of rows){
   const article=String(row.article_id||"").trim(),id=String(row.pharmacy_id||"");
   const cn=String(row.cn||"").trim();
-  if(/^\d{6,7}$/.test(cn))refs.add(cn);
+  if(/^\d{6,7}$/.test(cn)){
+   refs.add(cn);
+   // Algunos catálogos representan el CN de siete cifras sin dígito
+   // de control; conservar también su clave canónica de seis.
+   if(cn.length===7)refs.add(cn.slice(0,6));
+  }
   // No convertir IDs locales de seis cifras en CN: solo usar el CN real
   // o la referencia ERP con su farmacia para evitar coincidencias falsas.
   if(id&&article)refs.add("ERP:"+id+":"+article);

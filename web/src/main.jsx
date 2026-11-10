@@ -36,6 +36,7 @@ const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
+const PickingList=React.lazy(()=>import("./PickingList.jsx"));
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -175,6 +176,7 @@ const NAV=[
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
+ {id:"picking-list",label:"Picking List · PharmaWow",icon:ClipboardList,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"proveedores-condiciones",label:"Análisis de proveedores",icon:ClipboardList,module:"proveedores",childOf:"proveedores"},
@@ -222,7 +224,7 @@ const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion",
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","proveedores","genericos","promociones","promociones-objetivos","acciones"]);
+ "stock","stock-sin-recepciones","picking-list","proveedores","genericos","promociones","promociones-objetivos","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -1271,6 +1273,7 @@ function App(){
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
+   if(item.id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
@@ -1280,7 +1283,8 @@ function App(){
  });
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
   {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
- const allowed=page==="proveedores"?canOpenSection(page):
+ const allowed=page==="picking-list"?visibleNav.some(item=>item.id==="picking-list")&&canOpenSection(page):
+   page==="proveedores"?canOpenSection(page):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.
@@ -1679,6 +1683,7 @@ function App(){
       tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}/>}
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

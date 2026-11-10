@@ -12,6 +12,7 @@ import {setupPreparadorAgenda} from "./preparadorAgenda.js";
 import {setupSupplierWorkspace} from "./supplierWorkspace.js";
 import {setupDemoClients} from "./demoClients.js";
 import { setupSyncStatus } from "./syncStatus.js";
+import {setupPickingList,startPickingListPolling} from "./pickingList.js";
 import { setupGenericAnalytics } from "./genericos.js";
 import { setupRealReports } from "./realReports.js";
 import {setupPurchaseTotals} from "./purchaseTotals.js";
@@ -151,6 +152,7 @@ setupSupplierWorkspace(app,pool,{requireTenant});
 setupPublicLeads(app,pool,{requireSuperadmin});
 setupPrivacyRequests(app,pool,{requireSuperadmin});
 setupSyncStatus(app,pool,{requireTenant});
+setupPickingList(app,pool,{requireTenant});
 setupTenantPromotions(app,pool,{requireTenantModule});
 setupPromotionObjectives(app,pool,{requireTenantModule});
 setupGenericAnalytics(app,pool,{requireTenantModule});
@@ -501,6 +503,7 @@ try {
   await pool.query(userModuleMigration);
   await pool.query(await readFile(new URL("./migrations/040_secciones_usuario.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL("./migrations/050_perfiles_globales.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL("./migrations/051_picking_list.sql",import.meta.url),"utf8"));
   const analysisMigration=await readFile(new URL("./migrations/012_analisis_ventas_cliente.sql",import.meta.url),"utf8");
   await pool.query(analysisMigration);
   for(const filename of ["013_accesos_locales.sql","014_clientes_demo.sql","018_metodos_acceso_usuarios.sql","019_activacion_usuarios.sql","020_google_invitaciones.sql"]){
@@ -567,6 +570,7 @@ try {
   salesCache.start();
   dashboardCache.start();
   startWorkDigestNotifications(pool);
+  startPickingListPolling(pool);
 } catch (err) {
   console.error("No se pudo iniciar la base de datos/API", err.message);
   await pool.end();

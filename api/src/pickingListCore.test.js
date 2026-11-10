@@ -107,7 +107,7 @@ test("CSV pendiente se sustituye en una transacción y conserva campos Shopify",
  assert.equal(statements.at(-2).sql,"COMMIT");
  assert.equal(statements.at(-1).sql,"RELEASE");
 });
-test("Reporte sin almacén importado: no inventar stocks ni pedidos asignados",async()=>{
+test("Reporte sin almacén importado: propuesta provisional desde farmacias, sin inventar stock del almacén",async()=>{
  const pool={async query(sql){
   if(sql.includes("ultima_importacion AS"))return {rows:[{
    lastImportedAt:"2026-11-10T10:00:00Z",lineCount:2,origin:"archivo",sourceConfigured:false
@@ -131,8 +131,11 @@ test("Reporte sin almacén importado: no inventar stocks ni pedidos asignados",a
  assert.equal(report.totals.units,3);
  assert.equal(report.rows.length,1);
  assert.equal(report.rows[0].status,"sin_datos");
- assert.equal(report.rows[0].allocated,null);
+ assert.equal(report.rows[0].allocated,3);
+ assert.equal(report.rows[0].allocationProvisional,true);
  assert.equal(report.rows[0].stock.find(s=>s.code==="ALMACEN").stock,null);
+ assert.equal(report.rows[0].stock.find(s=>s.code==="ALMACEN").planned,0);
+ assert.equal(report.rows[0].stock.find(s=>s.code==="ABA").planned,3);
 });
 
 test("La matriz utiliza EAN sin confundir el SKU con un ID ERP local",async()=>{

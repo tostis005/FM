@@ -1,4 +1,5 @@
 import {readFile} from "node:fs/promises";
+import {createHash} from "node:crypto";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {allocatePending,downloadDropboxCsv,parsePendingCsvDetailed,validateDropboxCsvUrl} from "./pickingListCore.js";
 
@@ -61,7 +62,7 @@ export async function readReportWithCurrentSource(pool,ctx,{fetchFn,...options}=
 }
 
 export async function savePendingSnapshot(pool,slug,lines,{
- origin="dropbox",user="",omitted=0,warning=""
+ origin="dropbox",user="",omitted=0,warning="",fingerprint=null
 }={}){
  if(!SCHEMA.test(slug)||!Array.isArray(lines)||lines.length>50000)
   throw new Error("El CSV puede contener hasta 50.000 líneas.");
@@ -89,8 +90,8 @@ export async function savePendingSnapshot(pool,slug,lines,{
   await tx.query(
    "UPDATE farmetrica.picking_list_fuentes SET ultimo_origen=$2,ultima_importacion=now(),"+
    "ultima_fila=$3,actualizado_por=$4,lineas_omitidas=$5,aviso_importacion=$6,"+
-   "actualizado_en=now() WHERE cliente_slug=$1",
-   [slug,origin,lines.length,user,omitted,warning]);
+   "contenido_sha256=$7,actualizado_en=now() WHERE cliente_slug=$1",
+   [slug,origin,lines.length,user,omitted,warning,fingerprint]);
   await tx.query("COMMIT");
   return {rows:lines.length};
  }catch(e){await tx.query("ROLLBACK");throw e}
@@ -100,12 +101,23 @@ export async function refreshPendingSource(pool,slug,{fetchFn}={}){
  if(pendingFetch.has(slug))return pendingFetch.get(slug);
  const pending=(async()=>{
   const {rows}=await pool.query(
-   "SELECT csv_url FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",[slug]);
+   "SELECT csv_url,contenido_sha256 FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",[slug]);
   if(!rows[0]?.csv_url)throw new Error("Configura primero el enlace de Dropbox al CSV pendiente.");
   const csv=await downloadDropboxCsv(rows[0].csv_url,{fetchFn});
+  const fingerprint=createHash("sha256").update(csv).digest("hex");
+  if(rows[0].contenido_sha256===fingerprint){
+   // El proceso externo sigue publicando el mismo archivo: actualizar la
+   // hora de comprobación sin borrar/reinsertar miles de líneas pendientes.
+   const updated=await pool.query(
+    "UPDATE farmetrica.picking_list_fuentes SET ultima_importacion=now(),"+
+    "actualizado_en=now() WHERE cliente_slug=$1 AND csv_url=$2 RETURNING ultima_fila AS rows",
+    [slug,rows[0].csv_url]);
+   if(updated.rows.length)return {rows:updated.rows[0].rows,unchanged:true};
+   throw new Error("La ruta de Dropbox ha cambiado durante la lectura.");
+  }
   const {lines,omitted,warning}=parsePendingCsvDetailed(csv);
   return savePendingSnapshot(pool,slug,lines,{
-   origin:"dropbox",user:"actualización programada",omitted,warning
+   origin:"dropbox",user:"actualización programada",omitted,warning,fingerprint
   });
  })();
  pendingFetch.set(slug,pending);
@@ -268,8 +280,11 @@ export function setupPickingList(app,pool,{requireTenant}){
   try{
    const url=validateDropboxCsvUrl(req.body?.url);
    await pool.query("INSERT INTO farmetrica.picking_list_fuentes(cliente_slug,csv_url,actualizado_por) "+
-    "VALUES($1,$2,$3) ON CONFLICT(cliente_slug) DO UPDATE SET csv_url=EXCLUDED.csv_url,"+
-    "actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now()",
+    "VALUES($1,$2,$3) ON CONFLICT(cliente_slug) DO UPDATE SET "+
+    "contenido_sha256=CASE WHEN farmetrica.picking_list_fuentes.csv_url "+
+    "IS DISTINCT FROM EXCLUDED.csv_url THEN NULL "+
+    "ELSE farmetrica.picking_list_fuentes.contenido_sha256 END,"+
+    "csv_url=EXCLUDED.csv_url,actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now()",
     [req.context.client.slug,url,req.user.email]);
    sourceDiagnostics.delete(req.context.client.slug);
    // Guardar es suficiente: la fuente se lee en servidor, sin intervención

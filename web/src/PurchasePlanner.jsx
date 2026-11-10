@@ -388,7 +388,7 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
    customFrom={customFrom} customTo={customTo}
    onCustomFromChange={value=>setSharedDate("from",value)}
    onCustomToChange={value=>setSharedDate("to",value)}>
-   <label className="fm-unified-filter"><span>Buscar artículo o CN</span>
+   <label className="fm-unified-filter"><span>Buscar artículo, CN o EAN</span>
     <input type="search" value={search}
      onChange={e=>{setSearch(e.target.value);setPage(1);clearSelection()}}
      placeholder="Nombre o código nacional…"/></label>

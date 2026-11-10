@@ -89,7 +89,7 @@ async function getInventory(pool,ctx,codes){
  ].join("\n"):"";
  const sql=source.replaceAll("__SCHEMA__","\""+schema+"\"")
   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"))
-  .replace("__SYNONYM_EAN_MATCH__",synonymsSql.replaceAll("__SCHEMA__","\""+schema+"\""));
+  .replace("__SYNONYM_EAN_MATCH__",()=>synonymsSql.replaceAll("__SCHEMA__","\""+schema+"\""));
  const {rows}=await pool.query(sql,[ctx.client.slug,JSON.stringify(codes),
   ctx.allowedPharmacyIds||[]]);
  const sites=new Map(),items=new Map();

@@ -2,6 +2,7 @@
 // Sólo expone farmacias autorizadas, CN reales y agregados, nunca tickets.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {promotionCatalogSearchSQL,promotionSearchPatterns,mergePromotionCatalogRows} from "./promotionCatalogSearch.js";
+import {isBarcodeSearch} from "./synonymSearch.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 const CN=/^\d{6}$/;
@@ -24,7 +25,7 @@ async function catalogColumns(pool,schema){
   return current.promise||current.value;
  const pending=pool.query({
   text:"SELECT table_name,column_name FROM information_schema.columns "+
-   "WHERE table_schema=$1 AND table_name IN ('articulos','proveedores')",
+   "WHERE table_schema=$1 AND table_name IN ('articulos','proveedores','sinonimos')",
   values:[schema],query_timeout:1800
  }).then(result=>{
   const value=result.rows||[];
@@ -44,16 +45,25 @@ async function findPromotionArticles(pool,{schema,slug,ids,search,cns,page=0}){
  const pageLimit=pageSize+1,offset=search?page*PAGE_SIZE:0;
  // Índice GIN: escoger la palabra más larga para acotar rápidamente el maestro.
  const anchor=patterns.reduce((best,word)=>word.length>best.length?word:best,"").toLowerCase();
- const directQuery=search?{
-  text:sql.direct,values:[slug,ids,patterns,pageLimit,offset,anchor],query_timeout:5000
- }:{
+ const textQuery={text:sql.direct,values:[slug,ids,patterns,pageLimit,offset,anchor],query_timeout:5000};
+ const eanQuery=search&&sql.byEAN&&isBarcodeSearch(search)?
+  {text:sql.byEAN,values:[slug,ids,[search],pageLimit,offset],query_timeout:5000}:null;
+ const directQuery=search?(eanQuery||textQuery):{
   text:sql.byCodes,values:[slug,ids,cns,pageLimit,0],query_timeout:5000
  };
  let directRows=[],directError=null;
  try{
   const result=await pool.query(directQuery);
   directRows=result.rows||[];
- }catch(error){directError=error;}
+  // Si no hay equivalencia en Sinonimo, la búsqueda textual existente sigue funcionando.
+  if(eanQuery&&!directRows.length)
+   directRows=(await pool.query(textQuery)).rows||[];
+ }catch(error){
+  directError=error;
+  if(eanQuery){
+   try{directRows=(await pool.query(textQuery)).rows||[];directError=null;}catch{ /* mantener error original */ }
+  }
+ }
  let supplierRows=[],receiptRows=[],supplierError=null,supplierCount=0;
  // No consultar proveedores ni el histórico de recepciones cuando el artículo
  // ya aparece en el maestro. La antigua búsqueda hacía los cuatro recorridos

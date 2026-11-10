@@ -516,7 +516,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   // Solo puede cambiarse su nombre: conservar ID y codigo_origen='ALMACEN'.
   app.patch("/api/tenant/establecimientos/:id",...requireTenantAdmin(),async(req,res,next)=>{
     try{
-      if(!/^[1-9]\\d{0,8}$/.test(req.params.id))
+      if(!/^[1-9]\d{0,8}$/.test(req.params.id))
         return res.status(400).json({error:"Establecimiento inválido"});
       const name=String(req.body?.name||"").trim();
       if(!name||name.length>150)

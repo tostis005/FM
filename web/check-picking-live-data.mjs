@@ -43,7 +43,7 @@ await page.route("**/api/**",async route=>{
    stockLocations:3,stockLocationsReady:3,unmatchedProducts:0,
    lastWarning:refreshed?"2 filas no se han podido incluir en la preparación.":null};
   json={meta,sites,channels:refreshed?["web"]:[],selectedChannel:"",
-   rows:refreshed?[{key:"123456",cn:"123456",sku:"123456",name:"Producto A",
+   rows:refreshed?[{key:"123456",cn:"123456",sku:"123456",eans:["8720689021111"],name:"Producto A",
     required:8,orders:2,lines:2,stock,allocated:8,shortage:0,
     status:"cubierto",stockTotal:12,exhausted:[],
     details:[{orderId:"1001",orderName:"#1001",channel:"web",createdAt:null,quantity:5},
@@ -57,9 +57,9 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto("http://127.0.0.1:4175/picking-list",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor({timeout:15000});
- await page.getByText(/Dropbox configurado, pero no se han podido importar los pedidos/).waitFor();
+ await page.getByText(/No se han podido actualizar los pedidos pendientes/).first().waitFor();
  assert.equal(await page.getByText(/ubicaciones con artículos sincronizados/).count(),0);
- await page.getByRole("heading",{name:"Aún no se han importado pedidos de Dropbox"}).waitFor();
+ await page.getByRole("heading",{name:"Aún no se han cargado pedidos pendientes"}).waitFor();
  assert.equal(await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).count(),0);
  assert.equal(await page.getByRole("button",{name:"Actualizar",exact:true}).count(),0);
  // El sistema externo cambia el CSV. En la siguiente visita la API ya lo habrá
@@ -69,6 +69,9 @@ try{
  await page.getByRole("heading",{name:"Distribución de pedidos pendientes"}).waitFor();
  assert.equal(refreshCalls,0,"La UI no necesita invocar endpoints manuales");
  await page.getByText("Producto A",{exact:true}).waitFor();
+ assert.equal(await page.locator(".fm-picking-page").getByText(/Dropbox/i).count(),0,
+  "La pantalla operativa no debe mencionar servicios externos");
+ await page.getByText("EAN 8720689021111",{exact:true}).waitFor();
  assert.equal(await page.getByText("Pedidos online pendientes").count(),0);
  assert.equal(await page.getByText("Pedidos pendientes de Shopify").count(),0);
  assert.equal(await page.getByText("Stock sin actualizar").count(),0);
@@ -99,12 +102,22 @@ try{
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  const sort=page.getByRole("button",{name:"Ordenar Stock ABA"});
  await sort.click();
- await page.getByRole("button",{name:"Ordenar Producto / CN"}).click();
- const filter=page.getByLabel("Buscar en Producto / CN");
+ await page.getByRole("button",{name:"Ordenar Producto / CN / EAN"}).click();
+ const filter=page.getByLabel("Buscar en Producto / CN / EAN");
  await filter.fill("inexistente");
+ await page.getByText("No hay productos con estos filtros").waitFor();
+ await filter.fill("8720689021111");
+ await page.getByText("Producto A",{exact:true}).waitFor();
+ await filter.fill("EAN que no existe");
  await page.getByText("No hay productos con estos filtros").waitFor();
  await filter.fill("");
  await page.getByText("Producto A",{exact:true}).waitFor();
+ const general=page.getByRole("searchbox",{name:"Buscar CN, EAN, producto o pedido"});
+ await general.fill("8720689021111");
+ await page.getByText("Producto A",{exact:true}).waitFor();
+ await general.fill("0000000000000");
+ await page.getByText("No hay productos con estos filtros").waitFor();
+ await general.fill("");
  await page.getByRole("button",{name:"Ver más"}).click();
  await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
  await page.locator(".fm-picking-issues thead th").filter({hasText:"Detalle CSV"}).waitFor();
@@ -124,5 +137,5 @@ try{
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  assert.equal(await page.locator(".fm-picking-grouped thead th").allTextContents().then(x=>x.includes("Líneas")),false);
  assert.equal(jsErrors.length,0,jsErrors.join("\n"));
- console.log("OK Picking List: indicadores por línea, columnas separadas y filas CSV originales visibles");
+ console.log("OK Picking List: sin Dropbox visible, EAN real desde sinónimos en búsquedas y tabla operativa");
 }finally{await browser.close();}

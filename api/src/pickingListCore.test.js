@@ -168,3 +168,10 @@ test("EAN Shopify asociado al artículo participa en el reparto, sin necesitar C
  assert.equal(result.rows[0].stock.find(s=>s.kind==="farmacia").planned,2);
  assert.equal(result.rows[0].shortage,0);
 });
+
+test("La consulta de picking no expone otras farmacias y excluye AMP",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./pickingListStock.sql",import.meta.url),"utf8");
+ assert.match(sql,/f\.id=ANY\(\$3::int\[\]\)/);
+ assert.match(sql,/<>\s*'AMP'/);
+});

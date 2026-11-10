@@ -8,6 +8,8 @@ WITH sources AS MATERIALIZED (
         ELSE 'farmacia' END AS kind
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$1 AND f.activo
+   AND upper(btrim(f.codigo_origen))<>'AMP'
+   AND (f.id=ANY($3::int[]) OR upper(btrim(f.codigo_origen))='ALMACEN')
    AND (coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
         OR upper(btrim(f.codigo_origen))='ALMACEN')
 ), sites AS MATERIALIZED (

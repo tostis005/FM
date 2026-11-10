@@ -70,7 +70,8 @@ async function getInventory(pool,ctx,codes){
  const source=await readFile(new URL("./pickingListStock.sql",import.meta.url),"utf8");
  const sql=source.replaceAll("__SCHEMA__","\""+schema+"\"")
   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
- const {rows}=await pool.query(sql,[ctx.client.slug,JSON.stringify(codes)]);
+ const {rows}=await pool.query(sql,[ctx.client.slug,JSON.stringify(codes),
+  ctx.allowedPharmacyIds||[]]);
  const sites=new Map(),items=new Map();
  for(const row of rows){
   if(!sites.has(row.siteId))sites.set(row.siteId,{

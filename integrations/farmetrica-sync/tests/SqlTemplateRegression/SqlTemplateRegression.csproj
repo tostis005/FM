@@ -10,5 +10,6 @@
     <Compile Include="../../src/FarmetricaSync/Core/Models.cs" Link="Models.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/Validation.cs" Link="Validation.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/SynonymJobs.cs" Link="SynonymJobs.cs" />
+    <Compile Include="../../src/FarmetricaSync/Core/BulkRunPlanner.cs" Link="BulkRunPlanner.cs" />
   </ItemGroup>
 </Project>

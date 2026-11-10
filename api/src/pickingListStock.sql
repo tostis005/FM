@@ -4,6 +4,9 @@
 WITH sources AS MATERIALIZED (
  SELECT f.id::text AS site_id,f.nombre AS site_name,
    __PHARMACY_CODE__ AS source_code,
+   coalesce(nullif(upper(btrim(f.codigo_visible)),''),
+    CASE WHEN upper(btrim(f.codigo_origen))='ALMACEN' THEN 'ALM'
+     ELSE upper(btrim(f.codigo_origen)) END) AS display_code,
    CASE WHEN upper(btrim(f.codigo_origen))='ALMACEN' THEN 'almacen'
         ELSE 'farmacia' END AS kind
  FROM farmetrica.farmacias f
@@ -54,7 +57,7 @@ WITH sources AS MATERIALIZED (
 )
 __SYNONYM_EAN_ALIASES__
 SELECT s.site_id AS "siteId",s.site_name AS "siteName",
- s.source_code AS code,s.kind,s.ready,
+ s.source_code AS code,s.display_code AS "displayCode",s.kind,s.ready,
  c.key,i.stock,i.name,i.stock_at AS "stockAt",
  (i.key IS NOT NULL) AS matched,
  __SYNONYM_EAN_SELECT__

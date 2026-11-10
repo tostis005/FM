@@ -51,5 +51,5 @@ test("matriz del laboratorio incluye referencias directas ERP, además de las re
  assert.match(sent.text,/UNION ALL SELECT \* FROM erp_articles/);
  assert.match(sent.text,/proveedores_laboratorios/);
  assert.match(sent.text,/WITH aliases AS/);
- assert.deepEqual(sent.values,["N:ZIMFA",[1],"ampedia","parafarmacia","",50,0]);
+ assert.deepEqual(sent.values,["N:ZIMFA",[1],"ampedia","parafarmacia","",50,0,[]]);
 });

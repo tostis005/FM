@@ -309,5 +309,29 @@ if (config.Jobs.Count != 2 || config.Jobs.Any(j => !j.Enabled ||
 config.Jobs[0].Enabled = false;
 if (SynonymJobs.EnsureForFarmatic(config) != 0 || config.Jobs[0].Enabled)
     throw new Exception("No reactivar una fuente que un administrador desactivó.");
-Console.WriteLine("OK: 9 plantillas Farmatic, sinónimos semanales, JOIN documentales y catálogos.");
+// La acción global no cambia activaciones y selecciona la carga inicial
+// completa cuando un incremental todavía no tiene su primer checkpoint.
+var bulk = new AppConfig();
+var pharmacyOn = new Pharmacy { Code = "ON", Enabled = true };
+var pharmacyOff = new Pharmacy { Code = "OFF", Enabled = false };
+bulk.Pharmacies.AddRange([pharmacyOn, pharmacyOff]);
+var entityId = bulk.Entities[0].Id;
+var initial = new SyncJob { PharmacyId = pharmacyOn.Id, EntityId = entityId,
+    Enabled = true, Mode = "incremental", Sql = "SELECT 1", FullSql = "SELECT 1" };
+var snapshot = new SyncJob { PharmacyId = pharmacyOn.Id, EntityId = entityId,
+    Enabled = true, Mode = "snapshot", Sql = "SELECT 1", FullSql = "SELECT 1" };
+var disabledJob = new SyncJob { PharmacyId = pharmacyOn.Id, EntityId = entityId,
+    Enabled = false, Mode = "snapshot" };
+var disabledPharmacyJob = new SyncJob { PharmacyId = pharmacyOff.Id, EntityId = entityId,
+    Enabled = true, Mode = "snapshot" };
+bulk.Jobs.AddRange([initial, snapshot, disabledJob, disabledPharmacyJob]);
+var planned = BulkRunPlanner.Plan(bulk);
+if (planned.Count != 2 ||
+    !planned.Any(j => j.JobId == initial.Id && j.NeedsInitialFull) ||
+    !planned.Any(j => j.JobId == snapshot.Id && !j.NeedsInitialFull))
+    throw new Exception("Ejecutar todas: incluir solo fuentes activas y carga inicial cuando corresponda.");
+bulk.States.Add(new SyncState { JobId = initial.Id, LastFullSuccessUtc = DateTimeOffset.UtcNow });
+if (BulkRunPlanner.Plan(bulk).Any(j => j.JobId == initial.Id && j.NeedsInitialFull))
+    throw new Exception("Ejecutar todas: no repetir la carga inicial completada.");
+Console.WriteLine("OK: 9 plantillas Farmatic, sinónimos y planificador de ejecutar todas.");
 

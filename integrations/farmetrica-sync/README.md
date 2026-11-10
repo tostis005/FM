@@ -1,9 +1,40 @@
-# Farmétrica Sync · versión técnica 0.19
+# Farmétrica Sync · versión técnica 0.20
 
 Sincronizador configurable para el servidor Windows del cliente con Farmatic / SQL Server y conexiones a otras farmacias mediante Linked Servers. Procesa los cambios de ventas, compras, artículos (con existencias integradas), proveedores y entidades adicionales hacia **PostgreSQL**. Panel web local y servicio en segundo plano.
 
 > **Estado de entrega:** código y compilación Windows automatizada mediante GitHub Actions. **No se ha validado con el SQL Server Farmatic ni con el PostgreSQL de Contabo reales**. Comprobar primero en preproducción; no incluye credenciales.
 
+
+## Novedades v0.20 · AMP retirado y migración entre equipos
+
+- **AMP:** se elimina automáticamente el origen de código exacto `AMP` al arrancar,
+  junto con sus consultas y cursores locales. Los registros de historial se
+  conservan para auditoría y **no** se borran tablas ni registros de PostgreSQL.
+  Ese código ya no se puede volver a dar de alta desde el panel.
+- **Almacén:** se reconoce Abadía (`ABA`), aunque su nombre aparezca como
+  «Abadía» o «Avadía», y se crea una única fuente `ALMACEN` de conexión
+  directa contra la base `Almacen`. Las consultas existentes del origen
+  directo se copian preservando activación, SQL y horarios. Revisar el
+  almacén en la sección Farmacias después de actualizar.
+- **Exportar / importar:** la sección global **Exportar / importar** genera
+  un fichero único `.fmsyncbak` (AES-256-GCM, PBKDF2-HMAC-SHA256,
+  350.000 iteraciones) con los orígenes, credenciales SQL Server, destino
+  PostgreSQL, configuración SSH/SMTP, consultas, entidades, calendarios
+  y checkpoints confirmados. Requiere contraseña de traslado de al menos
+  12 caracteres, elegida por el administrador.
+- Para instalar en otra máquina: (1) exportar el fichero desde el panel
+  antiguo y guardar su contraseña; (2) **detener el servicio antiguo**;
+  (3) instalar la versión nueva e inicializar el administrador local;
+  (4) importar fichero y contraseña desde **Exportar / importar**;
+  (5) revisar la identidad Windows del servicio y las rutas a claves SSH;
+  (6) probar conexiones y ejecutar las importaciones. La importación
+  sustituye la configuración existente y no se permite mientras haya
+  trabajos en cola o ejecución.
+- **Seguridad:** el fichero se cifra antes de salir del servicio. Las
+  contraseñas se re-cifran con la protección DPAPI del equipo de destino.
+  Ni la contraseña del panel, ni sus claves DPAPI, ni el historial antiguo
+  se trasladan. Nunca enviar el fichero y su contraseña juntos.
+  Las claves privadas SSH son archivos externos y deben copiarse aparte.
 
 ## Nuevo origen Almacén desde Avadía
 

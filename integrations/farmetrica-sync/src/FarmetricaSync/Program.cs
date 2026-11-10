@@ -123,14 +123,14 @@ app.UseAuthorization();
 
 // Liveness independiente de cualquier bloqueo PostgreSQL o del histórico.
 app.MapGet("/api/ping", () => Results.Ok(new {
-    ok = true, version = "0.19.0", atUtc = DateTimeOffset.UtcNow
+    ok = true, version = "0.20.0", atUtc = DateTimeOffset.UtcNow
 }));
 
 // El bootstrap solo se admite desde loopback, con una única contraseña admin.
 app.MapGet("/api/bootstrap-status", (ConfigStore store) => new
 {
     initialized = store.Read(c => c.AdminHash is not null),
-    version = "0.19.0"
+    version = "0.20.0"
 });
 app.MapPost("/api/bootstrap", (PasswordRequest r, HttpContext ctx, ConfigStore store) =>
 {

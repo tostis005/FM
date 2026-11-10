@@ -99,7 +99,7 @@ state.page=currentPageFromUrl();
 if((window.location?.pathname?.replace(/\/$/,'') || '/')!==pageRoutes[state.page] || window.location?.hash)
  window.history?.replaceState?.({},'',pageRoutes[state.page]+(window.location?.search||''));
 function shell(body){
-  $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="${pageRoutes[id]}"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.19.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
+  $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="${pageRoutes[id]}"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.20.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
 }
 function render(){ if(!cfg()) return; const pages={dashboard,pharmacies,jobs,entities,destination,mail,history,transfer}; shell((pages[state.page]||dashboard)()); }
 function dashboard(){

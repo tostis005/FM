@@ -50,12 +50,12 @@ jobs:
           if [ "$ready" -ne 1 ]; then cat /tmp/farmetrica-route-smoke.log; exit 1; fi
           test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:5080/)" = "302"
           curl -sSI http://127.0.0.1:5080/ | grep -qi 'location: /resumen'
-          for route in resumen farmacias consultas entidades postgresql alertas historial; do
+          for route in resumen farmacias consultas entidades postgresql alertas historial traslado; do
             status=$(curl -sS -o /tmp/fs-route.html -w '%{http_code}' "http://127.0.0.1:5080/$route")
             test "$status" = "200" || { echo "Ruta /$route devuelve $status"; exit 1; }
             grep -q 'id="app"' /tmp/fs-route.html || { echo "Falta shell en /$route"; exit 1; }
           done
-          curl -fsS 'http://127.0.0.1:5080/app.js?v=0.19.0' | grep -q 'Ejecutar todas'
+          curl -fsS 'http://127.0.0.1:5080/app.js?v=0.20.0' | grep -q 'Ejecutar todas'
       - name: Probar SQL Farmatic y migración de consultas anteriores
         run: dotnet run --project tests/SqlTemplateRegression/SqlTemplateRegression.csproj --configuration Release
       - name: Probar clasificación ES sin confundir EAN ni IDs locales

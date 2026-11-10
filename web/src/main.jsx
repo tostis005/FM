@@ -1884,7 +1884,7 @@ function App(){
    <div className="drawer">
     <div className="drawer-top">
      <div><h2>{editingIsWarehouse?"Editar almacén":editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2>
-      <p>Nombre y código visible para identificar el establecimiento en Farmétrica. No se modifica el código del sincronizador.</p></div>
+      <p>Nombre y código visible para identificar el establecimiento en Farmetrica. No se modifica el código del sincronizador.</p></div>
      <button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button>
     </div>
     <form onSubmit={savePharmacy} className="drawer-content">

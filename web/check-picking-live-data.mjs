@@ -53,9 +53,14 @@ try{
  await page.getByText(/Dropbox configurado, pero no se han podido importar los pedidos/).waitFor();
  await page.getByText(/3 de 3 ubicaciones con artículos sincronizados/).waitFor();
  await page.getByRole("heading",{name:"Aún no se han importado pedidos de Dropbox"}).waitFor();
- await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).click();
+ assert.equal(await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).count(),0);
+ assert.equal(await page.getByRole("button",{name:"Actualizar",exact:true}).count(),0);
+ // El sistema externo cambia el CSV. En la siguiente visita la API ya lo habrá
+ // leído automáticamente: el usuario no debe pulsar ningún botón.
+ refreshed=true;
+ await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Distribución de pedidos pendientes"}).waitFor();
- assert.equal(refreshCalls,1);
+ assert.equal(refreshCalls,0,"La UI no necesita invocar endpoints manuales");
  await page.getByText("Producto A",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Detalle"}).click();
  await page.getByText("#1001").waitFor();
@@ -64,5 +69,5 @@ try{
  await page.getByRole("heading",{name:"Preparación · Farmacia Abadía"}).waitFor();
  await page.getByText("3 uds. propuestas en Farmacia Abadía").waitFor();
  assert.equal(jsErrors.length,0,jsErrors.join("\n"));
- console.log("OK Picking List: error visible, primera lectura y stock por farmacia con unidades a preparar");
+ console.log("OK Picking List: error visible, lectura automática y stock por farmacia sin botones manuales");
 }finally{await browser.close();}

@@ -20,7 +20,7 @@ const stock=[
  {...sites[1],stock:5,planned:3,matched:true,stockAt:new Date().toISOString()},
  {...sites[2],stock:3,planned:1,matched:true,stockAt:new Date().toISOString()}
 ];
-let refreshed=false,refreshCalls=0;
+let reportCalls=0;
 const jsErrors=[];
 page.on("pageerror",error=>jsErrors.push(error.message));
 await page.route("**/api/**",async route=>{
@@ -29,9 +29,9 @@ await page.route("**/api/**",async route=>{
  if(pathname==="/api/auth/me")json={user};
  else if(pathname==="/api/tenant/context")json=context;
  else if(pathname==="/api/tenant/farmacias")json=context.pharmacies;
- else if(pathname==="/api/picking-list/refresh"){
-  refreshCalls++;refreshed=true;json={ok:true,rows:2};
- }else if(pathname==="/api/picking-list/report"){
+ else if(pathname==="/api/picking-list/report"){
+  reportCalls++;
+  const refreshed=reportCalls>1;
   const meta={sourceConfigured:true,lastImportedAt:refreshed?new Date().toISOString():null,
    lineCount:refreshed?2:0,sourceState:refreshed?"ok":"error",
    sourceError:refreshed?null:"Dropbox no ha permitido descargar el CSV.",
@@ -53,9 +53,10 @@ try{
  await page.getByText(/Dropbox configurado, pero no se han podido importar los pedidos/).waitFor();
  await page.getByText(/3 de 3 ubicaciones con artículos sincronizados/).waitFor();
  await page.getByRole("heading",{name:"Aún no se han importado pedidos de Dropbox"}).waitFor();
- await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).click();
+ assert.equal(await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).count(),0);
+ await page.reload({waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Distribución de pedidos pendientes"}).waitFor();
- assert.equal(refreshCalls,1);
+ assert.equal(reportCalls,2);
  await page.getByText("Producto A",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Detalle"}).click();
  await page.getByText("#1001").waitFor();
@@ -64,5 +65,5 @@ try{
  await page.getByRole("heading",{name:"Preparación · Farmacia Abadía"}).waitFor();
  await page.getByText("3 uds. propuestas en Farmacia Abadía").waitFor();
  assert.equal(jsErrors.length,0,jsErrors.join("\n"));
- console.log("OK Picking List: error visible, primera lectura y stock por farmacia con unidades a preparar");
+ console.log("OK Picking List: aviso de error, importación automática al abrir y stock por farmacia");
 }finally{await browser.close();}

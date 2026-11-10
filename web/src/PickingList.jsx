@@ -114,7 +114,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
    return false;
   return true;
  });
- const perPage=50,limited=filtered.slice(page*perPage,(page+1)*perPage);
+ const perPage=50;
  const pages=Math.max(1,Math.ceil(filtered.length/perPage));
  const showPage=Math.min(page,pages-1);
  const visible=filtered.slice(showPage*perPage,(showPage+1)*perPage);

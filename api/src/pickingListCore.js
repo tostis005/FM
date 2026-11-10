@@ -70,7 +70,7 @@ export function parsePendingCsv(text) {
    title:name.slice(0,300)
   });
  }
- if(!lines.length)throw new Error("No hay líneas pendientes válidas.");
+ // Un CSV con cabecera válida y sin líneas borra los pendientes antiguos.
  return lines;
 }
 const n=value=>Number.isFinite(Number(value))?Math.max(0,Math.trunc(Number(value))):0;

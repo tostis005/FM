@@ -29,7 +29,7 @@ test("CSV semicolon y errores: no aceptar pedidos incompletos ni truncar",()=>{
  assert.throws(()=>parsePendingCsv("order_id,quantity\n1,2"),/columna/);
  assert.throws(()=>parsePendingCsv("order_id,quantity,sku\n1,-1,123456"),/Fila/);
  assert.throws(()=>parseCsvRecords('order_id,quantity,sku\n"abc,1,22'),/comillas/);
- assert.throws(()=>parsePendingCsv("order_id,quantity,sku\n"),/No hay/);
+ assert.deepEqual(parsePendingCsv("order_id,quantity,sku\n"),[]);
 });
 test("Almacén tiene prioridad y el reparto no favorece un orden fijo",()=>{
  const pharmacies=[

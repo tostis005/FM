@@ -13,8 +13,8 @@ const writable=ctx=>managed(ctx)&&(ctx.role==="superadministrador"||
 const pendingFetch=new Map();
 
 export async function savePendingSnapshot(pool,slug,lines,{origin="archivo",user=""}={}){
- if(!SCHEMA.test(slug)||!Array.isArray(lines)||lines.length<1||lines.length>50000)
-  throw new Error("El CSV debe contener entre 1 y 50.000 líneas.");
+ if(!SCHEMA.test(slug)||!Array.isArray(lines)||lines.length>50000)
+  throw new Error("El CSV puede contener hasta 50.000 líneas.");
  const tx=await pool.connect();
  try{
   await tx.query("BEGIN");
@@ -135,7 +135,7 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
    shortage>0?"sin_stock":"cubierto";
   return {
    key:entry.key,cn:entry.cn,sku:entry.sku,
-   name:entry.name||stock.find(s=>items.get(s.id+"|"+entry.cn)?.name)?.name||"",
+   name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.cn)?.name).find(Boolean)||"",
    required:entry.required,orders:entry.orderKeys.size,
    lines:entry.lines,channels:[...entry.channels],details:entry.details,
    stock,allocated:proposal?.fulfilled??null,shortage,status,

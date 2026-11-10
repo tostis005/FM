@@ -135,9 +135,8 @@ export const deleteStoredPromotions = (ids) => request(
     method:"POST",body:JSON.stringify({ids}),
   });
 
- // El almacén no se guarda como farmacia: únicamente su nombre público es editable.
- // Su ID y el código ALMACEN del sincronizador son inmutables.
-export const saveWarehouseNameToServer=(id,name)=>request(
+// Editar solo la presentación del almacén. El código origen e ID no cambian.
+export const saveWarehousePresentationToServer=(id,name,displayCode)=>request(
   "/api/tenant/establecimientos/"+encodeURIComponent(id),{
-    method:"PATCH",body:JSON.stringify({name})
+    method:"PATCH",body:JSON.stringify({name,displayCode})
   });

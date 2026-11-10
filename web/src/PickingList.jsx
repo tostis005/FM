@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from "react";
 import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Warehouse,Store} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import {pickingListChannelView} from "./pickingListChannelView.js";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
@@ -54,12 +55,12 @@ export default function PickingList({clientSlug}){
  useEffect(()=>{
   let alive=true;
   setLoading(true);setError("");
-  callApi(clientSlug,"report"+(channel?"?channel="+encodeURIComponent(channel):""))
+  callApi(clientSlug,"report")
    .then(result=>{if(alive)setData(result)})
    .catch(e=>{if(alive)setError(e.message)})
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
- },[clientSlug,channel]);
+ },[clientSlug]);
  // Actualización silenciosa: conserva pestaña, filtros, scroll y selección del usuario.
  // El servidor evita descargar Dropbox en cada consulta (TTL de 15 minutos).
  useEffect(()=>{
@@ -69,15 +70,14 @@ export default function PickingList({clientSlug}){
    if(!alive||inFlight||document.visibilityState==="hidden")return;
    inFlight=true;
    try{
-    const result=await callApi(clientSlug,"report"+
-     (channel?"?channel="+encodeURIComponent(channel):""));
+    const result=await callApi(clientSlug,"report");
     if(alive){setData(result);setError("");}
    }catch(e){if(alive)setError(e.message)}
    finally{inFlight=false}
   };
   const timer=setInterval(()=>void poll(),2*60*1000);
   return()=>{alive=false;clearInterval(timer)};
- },[clientSlug,channel]);
+ },[clientSlug]);
  async function loadIssues(offset=0){
   setIssuesBusy(true);setIssuesError("");
   try{setIssues(await callApi(clientSlug,"issues?offset="+offset));}
@@ -89,10 +89,11 @@ export default function PickingList({clientSlug}){
   setIssuesOpen(true);void loadIssues(0);
  }
  useEffect(()=>{setIssuesOpen(false);setIssues(null);},[clientSlug,data?.meta?.lastImportedAt]);
- const selectedSite=(data?.sites||[]).find(s=>s.id===tab);
- const all=data?.rows||[];
- const filtered=all.filter(row=>{
-  if(status&&row.status!==status)return false;
+ // Los datos por canal ya vienen precalculados: cambiar el selector es local.
+ const visibleData=pickingListChannelView(data,channel);
+ const selectedSite=(visibleData?.sites||[]).find(s=>s.id===tab);
+ const all=visibleData?.rows||[];
+ const matching=all.filter(row=>{
   const term=search.trim().toLocaleLowerCase("es");
   if(term&&!([row.cn,row.sku,...eanCodes(row),row.name,
     ...row.details.map(d=>d.orderName)]
@@ -101,12 +102,20 @@ export default function PickingList({clientSlug}){
    return false;
   return true;
  });
+ const availableStatuses=new Set(matching.map(row=>row.status));
+ const filtered=status&&availableStatuses.has(status)?
+  matching.filter(row=>row.status===status):matching;
+ useEffect(()=>{
+  if(status&&!availableStatuses.has(status))setStatus("");
+ },[status,channel,tab,search,assignedOnly,data]);
+ useEffect(()=>{
+  if(channel&&data&&!data.channels?.includes(channel))setChannel("");
+ },[channel,data]);
  const assignedToSite=selectedSite?all.reduce((sum,r)=>
   sum+(r.stock.find(s=>s.id===selectedSite.id)?.planned||0),0):0;
- const siteShortCode=site=>site.kind==="almacen"?
-  (String(site.name||"").trim().length<=4?site.name.trim().toUpperCase():"ALM"):
-  String(site.code||"").toUpperCase();
- const tableSites=selectedSite?[selectedSite]:(data?.sites||[]);
+ const siteShortCode=site=>String(site.displayCode||
+  (site.kind==="almacen"?"ALM":site.code)||"").trim().toUpperCase();
+ const tableSites=selectedSite?[selectedSite]:(visibleData?.sites||[]);
  const siteStock=(row,id)=>row.stock.find(s=>String(s.id)===String(id));
  const columns=[
   {key:"product",label:"Producto / CN",
@@ -238,28 +247,28 @@ export default function PickingList({clientSlug}){
     <CheckCircle2 size={17}/> No hay pedidos pendientes ni unidades que preparar.
    </div>}
    <div className="fm-picking-kpis">
-    <div className="card"><span>Pedidos totales</span><strong>{integer(data?.totals.lines??data?.meta?.lineCount)}</strong>
+    <div className="card"><span>Pedidos totales</span><strong>{integer(visibleData?.totals.lines??data?.meta?.lineCount)}</strong>
      <small>Líneas válidas del CSV{channel?" · canal seleccionado":""}</small></div>
-    <div className="card"><span>Unidades totales</span><strong>{integer(data?.totals.units)}</strong>
+    <div className="card"><span>Unidades totales</span><strong>{integer(visibleData?.totals.units)}</strong>
      <small>Unidades de las líneas válidas</small></div>
-    <div className="card"><span>Total unidades disponibles</span><strong>{integer(data?.totals.allocated)}</strong>
+    <div className="card"><span>Total unidades disponibles</span><strong>{integer(visibleData?.totals.allocated)}</strong>
      <small>Unidades propuestas para preparar</small></div>
-    <div className="card"><span>Unidades pendientes</span><strong>{integer(data?.totals.pending??Math.max(0,(data?.totals.units||0)-(data?.totals.allocated||0)))}</strong>
+    <div className="card"><span>Unidades pendientes</span><strong>{integer(visibleData?.totals.pending??Math.max(0,(visibleData?.totals.units||0)-(visibleData?.totals.allocated||0)))}</strong>
      <small>Unidades aún sin asignación</small></div>
    </div>
-   {data?.rows?.some(row=>row.allocationProvisional)&&<p className="fm-picking-warning" role="status">
+   {visibleData?.rows?.some(row=>row.allocationProvisional)&&<p className="fm-picking-warning" role="status">
     <AlertTriangle size={17}/> Hay propuestas provisionales: si falta stock del almacén
     o de alguna farmacia, se calculan las unidades disponibles en los otros establecimientos,
     pero no se confirma la cobertura hasta sincronizar todos los orígenes.
    </p>}
-   {data?.totals.incomplete>0&&<p className="fm-picking-warning" role="status">
-    <AlertTriangle size={17}/> Hay {integer(data.totals.incomplete)} productos con códigos sin equivalencia,
+   {visibleData?.totals.incomplete>0&&<p className="fm-picking-warning" role="status">
+    <AlertTriangle size={17}/> Hay {integer(visibleData.totals.incomplete)} productos con códigos sin equivalencia,
      o algún origen sin datos sincronizados. Su asignación debe revisarse antes de preparar.
    </p>}
    <div className="fm-picking-tabs" role="tablist" aria-label="Ubicación de preparación">
     <button type="button" role="tab" aria-selected={tab==="general"}
      className={tab==="general"?"selected":""} onClick={()=>changeTab("general")}>Vista general</button>
-    {(data?.sites||[]).map(site=><button key={site.id} type="button"
+    {(visibleData?.sites||[]).map(site=><button key={site.id} type="button"
      role="tab" aria-selected={tab===site.id}
      className={tab===site.id?"selected":""} onClick={()=>changeTab(site.id)}>
      <LocationIcon kind={site.kind}/>{site.name}</button>)}
@@ -267,7 +276,7 @@ export default function PickingList({clientSlug}){
    <section className="card fm-picking-main">
     <div className="fm-picking-controls">
      <label>Canal / origen del pedido
-      <select value={channel} onChange={e=>{setChannel(e.target.value);setExpanded("")}}>
+      <select value={channel} onChange={e=>{setChannel(e.target.value);setStatus("");setExpanded("")}}>
        <option value="">Todos los canales</option>
        {(data?.channels||[]).map(x=><option key={x} value={x}>{x}</option>)}
       </select>
@@ -277,9 +286,10 @@ export default function PickingList({clientSlug}){
        onChange={e=>setSearch(e.target.value)}/>
      </label>
      <label>Estado de la propuesta
-      <select value={status} onChange={e=>setStatus(e.target.value)}>
+      <select value={availableStatuses.has(status)?status:""} onChange={e=>setStatus(e.target.value)}>
        <option value="">Todos los estados</option>
-       {Object.entries(STATUS).map(([id,label])=><option key={id} value={id}>{label}</option>)}
+       {Object.entries(STATUS).filter(([id])=>availableStatuses.has(id))
+         .map(([id,label])=><option key={id} value={id}>{label}</option>)}
       </select>
      </label>
      {selectedSite&&<label className="fm-picking-only">

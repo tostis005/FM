@@ -1,9 +1,118 @@
-# Farmétrica Sync · versión técnica 0.17
+# Farmétrica Sync · versión técnica 0.19
 
 Sincronizador configurable para el servidor Windows del cliente con Farmatic / SQL Server y conexiones a otras farmacias mediante Linked Servers. Procesa los cambios de ventas, compras, artículos (con existencias integradas), proveedores y entidades adicionales hacia **PostgreSQL**. Panel web local y servicio en segundo plano.
 
 > **Estado de entrega:** código y compilación Windows automatizada mediante GitHub Actions. **No se ha validado con el SQL Server Farmatic ni con el PostgreSQL de Contabo reales**. Comprobar primero en preproducción; no incluye credenciales.
 
+
+## Nuevo origen Almacén desde Avadía
+
+Al actualizar una instalación con una única farmacia Farmatic de conexión
+directa identificada como Avadía o Navadía, se crea automáticamente
+Almacén (código ALMACEN; base SQL Server Almacen, sin tilde).
+Se utilizan el mismo servidor SQL, usuario, contraseña cifrada, autenticación,
+TLS, zona horaria y habilitación de Avadía, sin Linked Server.
+
+Se replican todas las fuentes realmente configuradas para Avadía:
+artículos/stock, ventas, recepciones/compras, proveedores, familias,
+vendedores y sinónimos, cuando existan. Cada consulta conserva SQL completo
+e incremental, periodicidad, modo, lote, alertas y activación originales;
+se le asignan IDs nuevos y no se copian historiales ni checkpoints.
+Las macros TABLE ya resuelven la base propia; los SQL con referencias
+explícitas Farmatic.dbo se adaptan a Almacen.dbo.
+
+La migración es aditiva y repetible: no modifica las farmacias originales,
+no sobrescribe fuentes del almacén ya existentes y solo añade las fuentes
+que falten en reinicios posteriores. Si no coincide el nombre, también se reconoce el único origen
+Farmatic directo con base Farmatic. Si existen varios candidatos o falta
+la conexión directa, no se crea el almacén automáticamente.
+
+Antes de actualizar, realizar copia segura de ProgramData/FarmetricaSync.
+Tras reiniciar, comprobar en Farmacias la conexión y en Consultas SQL
+las fuentes nuevas. Si estaban activas en Avadía también estarán activas
+en Almacén: validar acceso real a SQL Server y PostgreSQL antes de instalar
+en producción. No hay validación sobre las bases reales del cliente.
+
+## Reejecución masiva y navegación con URL real (0.19)
+
+- En **Consultas SQL** aparece **Ejecutar todas**, junto a **Nueva consulta**.
+  Una confirmación muestra cuántas fuentes activas hay. La acción añade
+  todas las fuentes **activas** de farmacias **habilitadas** a la cola
+  exclusiva del servicio, sin cambiar su programación ni sus checkpoints.
+  Trabajos ya pendientes o ejecutándose **no se duplican**; el resultado
+  informa de los añadidos y de los que ya estaban pendientes.
+- Los incrementales con SELECT completo configurado y sin primera carga
+  confirmada se encolan como **carga inicial completa**, no como
+  incremental sin base. El resto ejecuta su política normal, respetando
+  el orden secuencial. La operación no activa consultas desactivadas.
+- El botón de ejecución masiva no hace conexiones SQL sincrónicas desde
+  el navegador: confirma el **encolado**, no la finalización de los
+  trabajos. Para ver resultados, errores y progreso se utiliza Historial.
+- Los enlaces del menú son ahora **navegaciones nativas** a
+  `/resumen`, `/farmacias`, `/consultas`, `/entidades`,
+  `/postgresql`, `/alertas` e `/historial`, no clics
+  interceptados por `pushState`. La ruta inicial `/` redirige
+  a `/resumen`; la ruta elegida se mantiene tras F5 y se sirve desde
+  `index.html` mediante el fallback del servicio. Se ha versionado
+  el JavaScript/CSS para evitar caché de una interfaz antigua.
+
+**Actualización:** extraer el ZIP completo y ejecutar
+`scripts/instalar-servicio.ps1` como administrador, conservando
+`ProgramData/FarmetricaSync`. La misma instalación mantiene las
+sincronizaciones y credenciales anteriores. Validar primero en el
+servidor de pruebas y comprobar el servicio Windows antes de operar.
+
+## Sinónimos de Farmatic y URLs independientes (0.18)
+
+El panel local utiliza ahora rutas reales: `/resumen`, `/farmacias`,
+`/consultas`, `/entidades`, `/postgresql`, `/alertas` e
+`/historial`. F5, atrás/adelante y enlaces directos mantienen la sección
+mediante History API y el fallback interno de ASP.NET Core. Los enlaces
+antiguos `/#/historial` se redirigen al nuevo formato.
+
+Al actualizar, se crea **una fuente activa por cada farmacia Farmatic**
+que aún no tenga la entidad `sinonimos`, con periodicidad predeterminada
+de **7 días (10080 minutos)**. No altera trabajos existentes ni reactiva
+los desactivados. Las farmacias que se creen después reciben también la
+fuente. Desde Consultas SQL puede previsualizarse o modificarse su
+planificación. La primera ejecución completa requiere acceso al destino
+PostgreSQL y a `dbo.Sinonimo`.
+
+El SELECT trae **toda** `Farmatic.dbo.Sinonimo` sin `TOP`, con
+`IdArticu`, `IdAplicacion` y `Sinonimo`. Los identificadores permanecen
+como texto y conservan los ceros iniciales. La clave de origen incluye
+los tres campos: permite varios códigos por artículo y más de una
+aplicación. Los códigos no numéricos o de longitudes distintas de EAN-13
+se conservan como sinónimos de Farmatic; no se inventa un EAN válido.
+
+En PostgreSQL se mantienen:
+
+- `<esquema>.sinonimos`: fotografía transaccional de cada farmacia,
+  con `farmacia_codigo`, `origen_id`, `articulo_id`, `aplicacion_id`
+  y `codigo`. Una farmacia no borra los datos de otra.
+- `<esquema>.sinonimos_maestro`: maestro unificado, una fila única por
+  `(articulo_id, codigo)` procedente de cualquiera de las farmacias.
+  Índice en `codigo` para buscar por código de barras. Se eliminan
+  entradas del maestro solo si ya no existen en **ninguna** farmacia.
+
+**Consulta de resolución de códigos de barras:**
+
+```sql
+SELECT articulo_id, codigo
+FROM farmetrica.sinonimos_maestro
+WHERE codigo = '8470002076747';
+```
+
+Si el mismo código apunta a distintos artículos, la consulta devuelve
+todos; no se adjudica arbitrariamente. `IdArticu` se conserva como
+identificador de Farmatic, **sin asumir que sea el CN oficial**.
+Para vincular artículos de una farmacia concreta usar `sinonimos`
+por `farmacia_codigo` y `articulo_id`. La aplicación SaaS podrá
+añadir búsqueda por EAN sobre este maestro en una actualización posterior.
+
+Antes de actualizar, copiar de forma segura el directorio de configuración
+existente. Ejecutar el instalador del ZIP como administrador, sin borrar
+ProgramData, y comprobar los logs e historial de las nuevas fuentes.
 
 ## Supervisión central desde Farmétrica (nuevo en 0.17)
 

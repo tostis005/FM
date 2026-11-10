@@ -35,6 +35,27 @@ jobs:
           node-version: '22'
       - name: Comprobar interfaz y contratos
         run: node tests/ui-smoke.cjs
+      - name: Comprobar rutas HTTP de la interfaz y recarga directa
+        env:
+          FARMETRICA_SYNC_DATA: ${{ runner.temp }}/fs-route-smoke
+        run: |
+          dotnet run --project src/FarmetricaSync/FarmetricaSync.csproj -c Release --no-launch-profile >/tmp/farmetrica-route-smoke.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:5080/api/ping >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then cat /tmp/farmetrica-route-smoke.log; exit 1; fi
+          test "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:5080/)" = "302"
+          curl -sSI http://127.0.0.1:5080/ | grep -qi 'location: /resumen'
+          for route in resumen farmacias consultas entidades postgresql alertas historial; do
+            status=$(curl -sS -o /tmp/fs-route.html -w '%{http_code}' "http://127.0.0.1:5080/$route")
+            test "$status" = "200" || { echo "Ruta /$route devuelve $status"; exit 1; }
+            grep -q 'id="app"' /tmp/fs-route.html || { echo "Falta shell en /$route"; exit 1; }
+          done
+          curl -fsS 'http://127.0.0.1:5080/app.js?v=0.19.0' | grep -q 'Ejecutar todas'
       - name: Probar SQL Farmatic y migración de consultas anteriores
         run: dotnet run --project tests/SqlTemplateRegression/SqlTemplateRegression.csproj --configuration Release
       - name: Probar clasificación ES sin confundir EAN ni IDs locales

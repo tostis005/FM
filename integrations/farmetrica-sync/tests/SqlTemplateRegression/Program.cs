@@ -145,9 +145,9 @@ foreach (var (source, alias) in new[] {
 if (SqlTemplates.IsLegacyOptional("articulos", "stock_actual") ||
     SqlTemplates.IsLegacyOptional("articulos", "stock_minimo"))
     throw new Exception("Las cantidades de existencias son obligatorias en los SELECT de artículos, no se deben importar como NULL por omisión.");
-if (SqlTemplates.All.Count != 8 || entities.Count != 8 ||
+if (SqlTemplates.All.Count != 9 || entities.Count != 9 ||
     !entities.ContainsKey("ventas_completas") || !entities.ContainsKey("recepciones_completas"))
-    throw new Exception("Ocho plantillas Farmatic: seis catálogos/movimientos y dos JOIN documentales.");
+    throw new Exception("Nueve plantillas Farmatic: sinónimos, seis catálogos/movimientos y dos JOIN documentales.");
 
 var tickets = SqlTemplates.All.Single(t => t.Entity == "ventas_completas");
 var receipts = SqlTemplates.All.Single(t => t.Entity == "recepciones_completas");
@@ -283,5 +283,55 @@ if (!family.FullSql.Contains("fa.IdFamilia = f.IdFamilia", StringComparison.Ordi
     throw new Exception("Relaciones Familia-FamiliaAux-SuperFamilia incorrectas.");
 if (!family.FullSql.Contains("f.XGrup_IdGrupoIva) AS grupo_iva_id", StringComparison.Ordinal))
     throw new Exception("Conservar el código de grupo de IVA en texto, por ejemplo 02.");
-Console.WriteLine("OK: 8 plantillas Farmatic, vendedores por ID, JOIN documentales y catálogos.");
+// Sinónimos: varios códigos por artículo, fotografía completa semanal y alta idempotente.
+var aliases = SqlTemplates.All.Single(x => x.SystemType == "farmatic" && x.Entity == "sinonimos");
+if (aliases.PreferredMode != "snapshot" || aliases.SuggestedEveryMinutes != 10080 ||
+    aliases.Sql != aliases.FullSql || aliases.FullSql.Contains("TOP (1000)") ||
+    aliases.FullSql.Contains("@desde") || aliases.FullSql.Contains("@hasta") ||
+    !aliases.FullSql.Contains("{{TABLE:dbo.Sinonimo}}"))
+    throw new Exception("Sinónimos debe leer todas las filas de dbo.Sinonimo semanalmente.");
+foreach (var col in new[] { "origen_id", "articulo_id", "aplicacion_id", "codigo" })
+    if (!entities["sinonimos"].Columns.Any(c => c.Name == col && c.Type == "text"))
+        throw new Exception("El código no puede convertirse a número ni perder ceros: " + col);
+if (!aliases.FullSql.Contains("s.IdArticu") ||
+    !aliases.FullSql.Contains("s.IdAplicacion") ||
+    !aliases.FullSql.Contains("s.Sinonimo") ||
+    !aliases.FullSql.Contains("SELECT DISTINCT"))
+    throw new Exception("La clave debe mantener IdArticu + IdAplicacion + Sinonimo.");
+var config = new AppConfig();
+config.Pharmacies.Add(new Pharmacy { Code = "ABA", SystemType = "farmatic" });
+config.Pharmacies.Add(new Pharmacy { Code = "EUR", SystemType = "farmatic" });
+if (SynonymJobs.EnsureForFarmatic(config) != 2 || SynonymJobs.EnsureForFarmatic(config) != 0)
+    throw new Exception("Crear exactamente una fuente por farmacia y no duplicarlas.");
+if (config.Jobs.Count != 2 || config.Jobs.Any(j => !j.Enabled ||
+    j.Mode != "snapshot" || j.EveryMinutes != 10080))
+    throw new Exception("La fuente nueva debe quedar activa por defecto, semanal y snapshot.");
+config.Jobs[0].Enabled = false;
+if (SynonymJobs.EnsureForFarmatic(config) != 0 || config.Jobs[0].Enabled)
+    throw new Exception("No reactivar una fuente que un administrador desactivó.");
+// La acción global no cambia activaciones y selecciona la carga inicial
+// completa cuando un incremental todavía no tiene su primer checkpoint.
+var bulk = new AppConfig();
+var pharmacyOn = new Pharmacy { Code = "ON", Enabled = true };
+var pharmacyOff = new Pharmacy { Code = "OFF", Enabled = false };
+bulk.Pharmacies.AddRange([pharmacyOn, pharmacyOff]);
+var entityId = bulk.Entities[0].Id;
+var initial = new SyncJob { PharmacyId = pharmacyOn.Id, EntityId = entityId,
+    Enabled = true, Mode = "incremental", Sql = "SELECT 1", FullSql = "SELECT 1" };
+var snapshot = new SyncJob { PharmacyId = pharmacyOn.Id, EntityId = entityId,
+    Enabled = true, Mode = "snapshot", Sql = "SELECT 1", FullSql = "SELECT 1" };
+var disabledJob = new SyncJob { PharmacyId = pharmacyOn.Id, EntityId = entityId,
+    Enabled = false, Mode = "snapshot" };
+var disabledPharmacyJob = new SyncJob { PharmacyId = pharmacyOff.Id, EntityId = entityId,
+    Enabled = true, Mode = "snapshot" };
+bulk.Jobs.AddRange([initial, snapshot, disabledJob, disabledPharmacyJob]);
+var planned = BulkRunPlanner.Plan(bulk);
+if (planned.Count != 2 ||
+    !planned.Any(j => j.JobId == initial.Id && j.NeedsInitialFull) ||
+    !planned.Any(j => j.JobId == snapshot.Id && !j.NeedsInitialFull))
+    throw new Exception("Ejecutar todas: incluir solo fuentes activas y carga inicial cuando corresponda.");
+bulk.States.Add(new SyncState { JobId = initial.Id, LastFullSuccessUtc = DateTimeOffset.UtcNow });
+if (BulkRunPlanner.Plan(bulk).Any(j => j.JobId == initial.Id && j.NeedsInitialFull))
+    throw new Exception("Ejecutar todas: no repetir la carga inicial completada.");
+Console.WriteLine("OK: 9 plantillas Farmatic, sinónimos y planificador de ejecutar todas.");
 

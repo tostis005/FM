@@ -152,10 +152,10 @@ test("Con CSV sin cambios se actualiza la comprobación sin reinsertar pedidos",
 
 test("CSV con una fila incorrecta importa las válidas y muestra advertencia",async()=>{
  const f=fixture();
- const csv="order_id,quantity,sku,title\\n"+
-  "1001,2,123456,Producto A\\n"+
-  "1002,1,,Envío sin SKU\\n"+
-  "1003,3,123456,Producto A\\n";
+ const csv="order_id,quantity,sku,title\n"+
+  "1001,2,123456,Producto A\n"+
+  "1002,1,,Envío sin SKU\n"+
+  "1003,3,123456,Producto A\n";
  const response=await readReportWithCurrentSource(f.pool,f.ctx,{
   fetchFn:async()=>new Response(csv,{status:200})});
  assert.equal(response.meta.sourceState,"ok");

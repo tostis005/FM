@@ -139,8 +139,7 @@ async function getInventory(pool,ctx,codes){
 
  // Sinónimos importados por Farmétrica Sync: IDs ERP limitados a cada
  // establecimiento, nunca se cruzan IDs entre dos farmacias.
- const wantsEan=codes.some(x=>!x.cn&&/^\d{8,14}$/.test(x.sku));
- const synonymsAvailable=wantsEan?
+ const synonymsAvailable=codes.length>0?
   (await pool.query("SELECT to_regclass($1) IS NOT NULL AS available",
    [schema+".sinonimos"])).rows[0]?.available===true:false;
  const synonymsSql=synonymsAvailable?[
@@ -155,23 +154,47 @@ async function getInventory(pool,ctx,codes){
   "   AND a.origen_id::text=btrim(si.articulo_id)",
   " WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}$'"
  ].join("\n"):"";
+ // Los EAN importados como sinónimos se agregan por producto después de
+ // resolver el artículo (CN o EAN), sin mezclar IDs ERP entre farmacias.
+ const aliasCte=synonymsAvailable?[
+  ", ean_aliases AS (",
+  " SELECT u.key,array_agg(DISTINCT btrim(si.codigo) ORDER BY btrim(si.codigo)) AS eans",
+  " FROM unique_articles u JOIN sites s ON s.site_id=u.site_id",
+  " JOIN __SCHEMA__.sinonimos si",
+  "  ON upper(btrim(si.farmacia_codigo))=s.source_code",
+  "   AND btrim(si.articulo_id)=u.article_id",
+  " WHERE btrim(si.codigo) ~ '^[0-9]{8,14}$'",
+  " GROUP BY u.key",
+  ")"
+ ].join("\n"):"";
  const sql=source.replaceAll("__SCHEMA__","\""+schema+"\"")
   .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"))
-  .replace("__SYNONYM_EAN_MATCH__",()=>synonymsSql.replaceAll("__SCHEMA__","\""+schema+"\""));
+  .replace("__SYNONYM_EAN_MATCH__",()=>synonymsSql.replaceAll("__SCHEMA__","\""+schema+"\""))
+  .replace("__SYNONYM_EAN_ALIASES__",()=>aliasCte.replaceAll("__SCHEMA__","\""+schema+"\""))
+  .replace("__SYNONYM_EAN_SELECT__",synonymsAvailable?
+   'coalesce(ea.eans,ARRAY[]::text[]) AS "eans"':
+   'ARRAY[]::text[] AS "eans"')
+  .replace("__SYNONYM_EAN_JOIN__",synonymsAvailable?
+   "LEFT JOIN ean_aliases ea ON ea.key=c.key":"");
  const {rows}=await pool.query(sql,[ctx.client.slug,JSON.stringify(codes),
   ctx.allowedPharmacyIds||[]]);
- const sites=new Map(),items=new Map();
+ const sites=new Map(),items=new Map(),aliases=new Map();
  for(const row of rows){
   if(!sites.has(row.siteId))sites.set(row.siteId,{
    id:row.siteId,code:row.code,name:row.siteName,kind:row.kind,
    ready:row.ready===true
   });
+  if(row.key&&Array.isArray(row.eans)&&row.eans.length){
+   const current=aliases.get(row.key)||new Set();
+   for(const code of row.eans)if(/^\d{8,14}$/.test(code))current.add(code);
+   aliases.set(row.key,current);
+  }
   if(row.key)items.set(row.siteId+"|"+row.key,{
    stock:row.stock===null?null:Number(row.stock),
    matched:row.matched===true,name:row.name,stockAt:row.stockAt
   });
  }
- return {sites:[...sites.values()],items};
+ return {sites:[...sites.values()],items,aliases};
 }
 export async function readPickingReport(pool,ctx,{channel=""}={}){
  const slug=ctx.client.slug,meta=await getMetadata(pool,slug);
@@ -202,9 +225,13 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   });
  }
  const entries=[...grouped.values()];
- const {sites,items}=await getInventory(pool,ctx,
+ const {sites,items,aliases}=await getInventory(pool,ctx,
   entries.map(x=>({key:x.key,cn:x.cn,sku:x.sku})));
  const report=entries.map(entry=>{
+  const eans=[...new Set([
+   ...Array.from(aliases.get(entry.key)||[]),
+   ...(/^\d{8,14}$/.test(entry.sku)?[entry.sku]:[])
+  ])].sort();
   const stock=sites.map(s=>{
    const inv=items.get(s.id+"|"+entry.key);
    return {...s,stock:s.ready?(inv?.stock===null?null:inv?Math.max(0,inv.stock):0):null,
@@ -228,7 +255,7 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   const status=!matched?"sin_cn":hasMissing?"sin_datos":
    shortage>0?"sin_stock":"cubierto";
   return {
-   key:entry.key,cn:entry.cn,sku:entry.sku,
+   key:entry.key,cn:entry.cn,sku:entry.sku,eans,
    name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.key)?.name).find(Boolean)||"",
    required:entry.required,orders:entry.orderKeys.size,
    lines:entry.lines,channels:[...entry.channels],details:entry.details,

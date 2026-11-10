@@ -81,3 +81,5 @@
 .fm-picking-stock-summary svg{flex:none}
 .fm-picking-alert span{line-height:1.6}
 .fm-picking-alert strong{font-weight:750}
+
+.fm-picking-provisional-note{display:block;color:#9b6a22;font-size:10px;margin-top:5px;font-weight:650}

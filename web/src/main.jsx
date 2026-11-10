@@ -37,6 +37,7 @@ const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 const PickingList=React.lazy(()=>import("./PickingList.jsx"));
+const ConfiguracionPickingList=React.lazy(()=>import("./ConfiguracionPickingList.jsx"));
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -176,7 +177,7 @@ const NAV=[
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
- {id:"picking-list",label:"Picking List · PharmaWow",icon:ClipboardList,module:"stock",childOf:"stock"},
+ {id:"picking-list",label:"Picking List",icon:ClipboardList,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"proveedores-condiciones",label:"Análisis de proveedores",icon:ClipboardList,module:"proveedores",childOf:"proveedores"},
@@ -1695,6 +1696,8 @@ function App(){
        onSaved={()=>loadContext(tenantContext.client.slug)}/>
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
       <ConfiguracionDiasStock clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
+      <ConfiguracionPickingList clientSlug={tenantContext.client.slug}
+       role={role} permissions={tenantContext.profile?.permissions}/>
        <ConfiguracionPreparador clientSlug={tenantContext.client.slug}/>
      </div>}
    </React.Suspense>

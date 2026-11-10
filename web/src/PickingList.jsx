@@ -215,7 +215,7 @@ export default function PickingList({clientSlug}){
         {issueHeaders.map((name,i)=><th key={i}>{name}</th>)}
        </tr></thead><tbody>
         {issues.rows.map((issue,i)=><tr key={issue.line+"-"+i}>
-         <td>{issue.line}</td><td>{issue.reason}</td>
+         <td>{issue.line}</td><td>{humanizeImportMessage(issue.reason)}</td>
          {issueHeaders.map((_,index)=><td key={index}>{issue.cells?.[index]??""}</td>)}
         </tr>)}
        </tbody></table>

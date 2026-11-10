@@ -191,3 +191,46 @@ test("Sinónimos EAN opcionales y sin asociación entre farmacias",async()=>{
  assert.match(source,/si\.farmacia_codigo/);
  assert.match(source,/a\.origen_id::text=btrim\(si\.articulo_id\)/);
 });
+
+
+test("Importa CSV Shopify con cabeceras habituales y mantiene los SKU",()=>{
+ const csv='Order ID,Order Name,Lineitem quantity,Lineitem sku,Lineitem name,Source Name\n'+
+  '501,#501,2,000123,"Crema, factor 50",web\n';
+ const lines=parsePendingCsv(csv);
+ assert.equal(lines.length,1);
+ assert.equal(lines[0].orderId,"501");
+ assert.equal(lines[0].orderName,"#501");
+ assert.equal(lines[0].cn,"000123");
+ assert.equal(lines[0].quantity,2);
+ assert.equal(lines[0].title,"Crema, factor 50");
+ assert.equal(lines[0].channel,"web");
+});
+test("Importa CSV español de Excel con tabuladores, tildes y números .0",()=>{
+ const text="ID Pedido\tNombre Pedido\tCantidad\tReferencia\tDescripción\n"+
+  "789\t#789\t3.0\t000987.0\tProducto de prueba\n";
+ const lines=parsePendingCsv(text);
+ assert.equal(lines[0].orderId,"789");
+ assert.equal(lines[0].sku,"000987");
+ assert.equal(lines[0].quantity,3);
+ assert.equal(lines[0].cn,"000987");
+ assert.equal(lines[0].title,"Producto de prueba");
+});
+test("Una fila con SKU vacío no destruye los pedidos válidos y muestra su número",()=>{
+ const csv="order_id,quantity,sku,title\n77,2,123456,Producto A\n78,1,,Producto B\n79,0,678901,Sin unidades\n";
+ const lines=parsePendingCsv(csv);
+ assert.equal(lines.length,1);
+ assert.equal(lines[0].orderId,"77");
+ assert.equal(lines.skippedCount,2);
+ assert.match(lines.warnings[0],/Fila 3: producto sin SKU\/CN/);
+ assert.match(lines.warnings[0],/Fila 4: cantidad cero/);
+ assert.throws(()=>parsePendingCsv("order_id,quantity,sku\n77,1,\n"),/No hay líneas válidas.*Fila 2/);
+});
+test("Dropbox: lee CSV UTF-16 de Excel sin dar error de cabeceras",async()=>{
+ const good="https://www.dropbox.com/scl/fi/abc-123/pedidospendientes.csv?rlkey=abcdef&dl=1";
+ const bytes=Buffer.from("\ufefforder_id;quantity;sku\n11;2;000123\n","utf16le");
+ const csv=await downloadDropboxCsv(good,{fetchFn:async()=>({
+  status:200,ok:true,headers:new Headers(),
+  body:new ReadableStream({start(c){c.enqueue(bytes);c.close();}})
+ })});
+ assert.equal(parsePendingCsv(csv)[0].cn,"000123");
+});

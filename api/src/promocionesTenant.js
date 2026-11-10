@@ -1,4 +1,5 @@
 import {planPromotionImport} from "./promotionImportIdentity.js";
+import {profileAllows} from "./profilePolicy.js";
 // Persistencia de promociones por esquema cliente. Las promociones anteriores del
 // navegador se importan explícitamente y nunca se borran en una migración.
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
@@ -332,6 +333,11 @@ export function setupTenantPromotions(app,pool,{requireTenantModule}) {
       await db.query("BEGIN");
       const {rows:old}=await db.query(
          `SELECT documento,creado_por FROM "${schema}".fm_promociones WHERE id=$1 FOR UPDATE`,[id]);
+       if(!profileAllows(req.context.profilePermissions,"promociones",old.length?"editar":"crear")&&
+          req.context.role!=="superadministrador"){
+         await db.query("ROLLBACK");
+         return res.status(403).json({error:"Tu perfil no permite crear o editar esta promoción"});
+       }
        if(old.length&&!canMutate(req,old[0].documento,old[0].creado_por)){
          await db.query("ROLLBACK");
          return res.status(403).json({error:"Promoción fuera de tus farmacias autorizadas"});

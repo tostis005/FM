@@ -1,4 +1,5 @@
 import express from "express";
+import {profileAllows} from "./profilePolicy.js";
 
 // Los documentos/contactos se asocian a la identidad unificada del grupo,
 // nunca al código local de una farmacia. Todas las queries incluyen cliente_slug.
@@ -22,6 +23,10 @@ const jsonRoute = handler => async(req,res,next)=>{try{await handler(req,res)}ca
  // Escribir requiere un rol de gestión; consultar no exige permisos adicionales.
 function writeGuard(req,res,next){
  if(!canManage(req))return fail(res,"No tienes permiso para modificar proveedores",403);
+ const operation=req.method==="POST"?"crear":req.method==="DELETE"?"eliminar":"editar";
+ if(req.context?.role!=="superadministrador"&&
+  !profileAllows(req.context?.profilePermissions,"proveedores",operation))
+  return fail(res,"Tu perfil no permite esta operación en proveedores",403);
  next();
 }
 async function supplier(pool,slug,id){

@@ -20,6 +20,8 @@ import {setupUnifiedSuppliers} from "./unifiedSuppliers.js";
 import {effectiveUserModules,validateModuleGrants,requestModules} from "./userModuleAccess.js";
 import {USER_SECTIONS,effectiveUserSections,validateSectionGrants,requestSections} from "./userSectionAccess.js";
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
+import {setupProfiles} from "./perfiles.js";
+import {effectiveProfileModules,profileAllows,requestProfileOperation} from "./profilePolicy.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
   async function resolve(req) {
@@ -42,11 +44,15 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const all = role==="superadministrador"||role==="administrador";
     const ids = all ? pharmacies.map(p=>Number(p.id)):
       (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
-    const effectiveModules=effectiveUserModules(modules,membership?.module_grants,isSuper(req.user));
+    const effectiveModules=effectiveProfileModules(
+      effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
+      membership?.profile_permissions,isSuper(req.user));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug)},
       role, modules:effectiveModules,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user)),
+      profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,
+      profilePermissions:membership?.profile_permissions??null,
       pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))&&p.establishmentType!=="almacen")
         .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
       establishments:pharmacies.filter(p=>ids.includes(Number(p.id)))
@@ -65,6 +71,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
           return res.status(403).json({error:"No tienes acceso a esta subsección"});
         if(!isSuper(req.user)&&required.length&&!required.some(module=>ctx.modules[module]===true))
           return res.status(403).json({error:"No tienes acceso a este módulo"});
+        const operation=requestProfileOperation(req);
+        if(!isSuper(req.user)&&operation&&
+         !operation.operations.some(action=>profileAllows(ctx.profilePermissions,operation.module,action)))
+         return res.status(403).json({error:"Tu perfil no permite esta operación"});
         if(!predicate(ctx,req.user))return res.status(403).json({error:"No tienes permiso para esta funcionalidad"});
         req.context=ctx;
         next();
@@ -77,6 +87,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
   setupOutgoingTransfers(app,pool,{requireTenantAdmin});
   setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager});
+  setupProfiles(app,pool,{requireTenantManager,requireSuperadmin});
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
   app.put("/api/tenant/configuracion-ventas",...requireTenantAdmin(),async(req,res,next)=>{
@@ -125,6 +136,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const ctx=req.context;
     res.json({user:{email:req.user.email,name:req.user.name,role:req.user.role},
       clients,client:ctx.client,role:ctx.role,modules:ctx.modules,sections:ctx.sections,
+      profile:{id:ctx.profileId,name:ctx.profileName,permissions:ctx.profilePermissions},
       pharmacies:ctx.pharmacies,establishments:ctx.establishments});
     }catch(e){next(e)}
   });
@@ -599,11 +611,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       const scoped=req.context.role==="gestor";
       const {rows}=await pool.query(
         `SELECT uc.email,coalesce(a.nombre,'') AS name,uc.rol AS role,
-          uc.farmacias::text[] AS pharmacies,uc.modulos AS modules,uc.secciones AS sections,uc.activo AS active,
+          uc.perfil_id AS "profileId",p.nombre AS "profileName",
+          uc.farmacias::text[] AS pharmacies,uc.activo AS active,
           uc.metodo_acceso AS "authType",
           (cr.email IS NOT NULL) AS "hasPassword"
          FROM farmetrica.usuario_clientes uc
          LEFT JOIN public.acceso_cuentas a ON a.email=uc.email
+         LEFT JOIN farmetrica.perfiles p ON p.id=uc.perfil_id
          LEFT JOIN farmetrica.credenciales_locales cr ON cr.email=uc.email AND cr.activo=true
          WHERE uc.cliente_slug=$1
           AND (NOT $3::boolean OR (uc.rol IN ('farmacia','colaborador')
@@ -613,160 +627,121 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       res.json(rows);
     }catch(e){next(e);}
   });
+  // Los módulos y pantallas se heredan del perfil global. El usuario solo
+  // conserva su método de entrada, estado y farmacias autorizadas.
   app.put("/api/tenant/usuarios",...requireTenantManager(),async(req,res,next)=>{
-    const email=asEmail(req.body?.email),name=String(req.body?.name||"").trim(),role=req.body?.role;
+    const email=asEmail(req.body?.email),name=String(req.body?.name||"").trim();
+    const profileId=Number(req.body?.profileId);
     const pharmacies=req.body?.pharmacies,active=req.body?.active;
     const authType=req.body?.authType||"google";
-    if(!EMAIL.test(email)||email.length>254||name.length>150||!ROLES.has(role)||
+    if(!EMAIL.test(email)||email.length>254||name.length>150||
+      !Number.isSafeInteger(profileId)||profileId<=0||
       !["google","local"].includes(authType)||
+      req.body?.modules!==undefined||req.body?.sections!==undefined||
       (req.body?.password!==undefined&&req.body.password!=="")||
       typeof active!=="boolean"||!Array.isArray(pharmacies)||pharmacies.length>100||
       pharmacies.some(id=>!/^[1-9]\d{0,8}$/.test(String(id))))
-      return res.status(400).json({error:"Datos de usuario inválidos. Las contraseñas las establece cada usuario."});
-    const ids=[...new Set(pharmacies.map(Number))];
-    if(role!=="administrador"&&active&&!ids.length)
-      return res.status(400).json({error:"Selecciona al menos una farmacia"});
-    if(ids.some(id=>!req.context.pharmacies.some(p=>Number(p.id)===id)))
-      return res.status(403).json({error:"No puedes asignar farmacias ajenas al cliente"});
-    if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
-      return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
-    if(req.context.role==="gestor"){
-      const {rows:existing}=await pool.query(
-        "SELECT rol,farmacias FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
-        [req.context.client.slug,email]);
-      if(existing.length&&(!["farmacia","colaborador"].includes(existing[0].rol)||
-        existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
-        return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
-    }
-    const {rows:availableModules}=await pool.query(
-      "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
-      [req.context.client.slug]);
-    // Peticiones de versiones anteriores conservan la asignación previa.
-    // Una alta nueva sin campo explícito empieza sin módulos (mínimo privilegio).
-    let selectedModules;
-    if(req.body?.modules===undefined){
-      const {rows:existingModules}=await pool.query(
-        "SELECT modulos FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
-        [req.context.client.slug,email]);
-      selectedModules=existingModules.length?existingModules[0].modulos:[];
-    }else{
-      selectedModules=validateModuleGrants(req.body.modules,availableModules);
-      if(selectedModules===null)
-        return res.status(400).json({error:"Selecciona únicamente módulos habilitados para el cliente"});
-    }
-        // Las contraseñas están vinculadas al correo global: no permitir que
-    // dos clientes independientes roten las credenciales de la misma cuenta.
-    let selectedSections;
-    // Los módulos del usuario definen el techo de las subsecciones.
-    const enabledForUser=Object.fromEntries(availableModules.map(m=>[m.id,
-      Boolean(m.enabled)&&(selectedModules===null||selectedModules.includes(m.id))]));
-    if(req.body?.sections===undefined){
-      const {rows:existingSections}=await pool.query(
-        "SELECT secciones FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
-        [req.context.client.slug,email]);
-      selectedSections=existingSections.length?existingSections[0].secciones:[];
-    }else{
-      selectedSections=validateSectionGrants(req.body.sections,enabledForUser);
-      if(selectedSections===null)
-        return res.status(400).json({error:"Selecciona solo subsecciones de módulos habilitados para el usuario"});
-    }
-    if(authType==="local"){
-      const {rows:others}=await pool.query(
-        "SELECT 1 FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug<>$2 AND metodo_acceso='local' LIMIT 1",
-        [email,req.context.client.slug]);
-      if(others.length)return res.status(409).json({
-        error:"Esta dirección ya utiliza contraseña en otro cliente. Pide acceso mediante Google o utiliza otra dirección."
-      });
-    }
-    const db=await pool.connect();
-    let invite=false,committed=false;
+      return res.status(400).json({error:"Datos de usuario o perfil inválidos"});
     try{
-      await db.query("BEGIN");
-      const {rows:previous}=await db.query(
-        "SELECT metodo_acceso,activo,modulos,secciones FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2 FOR UPDATE",
-        [email,req.context.client.slug]);
+      const {rows:profiles}=await pool.query(
+        'SELECT id,clave,nombre,rol_base,modulos,secciones,permisos FROM farmetrica.perfiles WHERE id=$1',[profileId]);
+      if(!profiles.length)return res.status(400).json({error:"Selecciona un perfil existente"});
+      const profile=profiles[0],role=profile.rol_base;
+      if(profile.clave==="superadministrador"){
+        const {rows:superRows}=await pool.query(
+          "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
+        if(!isSuper(req.user)||!superRows.length)
+          return res.status(403).json({error:"El perfil de superadministrador solo corresponde a cuentas autorizadas"});
+      }
+      const ids=[...new Set(pharmacies.map(Number))];
+      if(role!=="administrador"&&active&&!ids.length)
+        return res.status(400).json({error:"Selecciona al menos una farmacia"});
+      if(ids.some(id=>!req.context.pharmacies.some(p=>Number(p.id)===id)))
+        return res.status(403).json({error:"No puedes asignar farmacias ajenas al cliente"});
+      if(req.context.role==="gestor"&&!["farmacia","colaborador"].includes(role))
+        return res.status(403).json({error:"Un gestor solo puede asignar perfiles de farmacia o colaborador"});
+      const {rows:existing}=await pool.query(
+        "SELECT rol,farmacias,perfil_id FROM farmetrica.usuario_clientes WHERE cliente_slug=$1 AND email=$2",
+        [req.context.client.slug,email]);
+      if(req.context.role==="gestor"&&existing.length&&
+        (!["farmacia","colaborador"].includes(existing[0].rol)||
+         existing[0].farmacias.some(id=>!req.context.allowedPharmacyIds.includes(Number(id)))))
+        return res.status(403).json({error:"No puedes modificar un usuario fuera de tu ámbito"});
+      // Un gestor no puede conceder mediante un perfil permisos superiores a
+      // los suyos. Editar datos sin cambiar perfil no modifica concesiones.
+      if(req.context.role==="gestor"&&(!existing.length||Number(existing[0].perfil_id)!==profileId)){
+        const {rows:available}=await pool.query(
+          "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
+          [req.context.client.slug]);
+        const candidateModules=effectiveProfileModules(
+          effectiveUserModules(available,profile.modulos),profile.permisos);
+        const candidateSections=effectiveUserSections(candidateModules,profile.secciones);
+        if(Object.entries(candidateModules).some(([key,allowed])=>allowed&&!req.context.modules[key])||
+           Object.entries(candidateSections).some(([key,allowed])=>allowed&&!req.context.sections[key])||
+           Object.entries(candidateModules).some(([key,enabled])=>enabled&&
+             (profile.permisos?.[key]||[]).some(op=>!profileAllows(req.context.profilePermissions,key,op))))
+          return res.status(403).json({error:"No puedes asignar un perfil con más permisos que los tuyos"});
+      }
       if(authType==="local"){
-        const {rows:credential}=await db.query(
-          "SELECT activo FROM farmetrica.credenciales_locales WHERE email=$1 FOR UPDATE",
-          [email]);
-        invite=!previous.length||previous[0].metodo_acceso!=="local"||
-          !previous[0].activo||!credential.length||!credential[0].activo;
-        if(invite&&!localInvitationsReady()){
-          await db.query("ROLLBACK");
-          return res.status(503).json({
-            error:"Para dar de alta usuarios con contraseña, primero configura SMTP y PUBLIC_APP_ORIGIN en el servidor."
-          });
-        }
+        const {rows:others}=await pool.query(
+          "SELECT 1 FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug<>$2 AND metodo_acceso='local' LIMIT 1",
+          [email,req.context.client.slug]);
+        if(others.length)return res.status(409).json({
+          error:"Esta dirección ya utiliza contraseña en otro cliente. Pide acceso mediante Google o utiliza otra dirección."});
       }
-      if(req.body?.modules===undefined)
-        selectedModules=previous.length?previous[0].modulos:[];
-      else if(!isSuper(req.user)){
-        // Administradores y gestores solo pueden otorgar módulos de los que
-        // disponen. Conservan sin modificar permisos anteriores ajenos a
-        // su ámbito, para no revocarlos al editar otros datos del usuario.
-        const grantable=new Set(Object.keys(req.context.modules)
-          .filter(m=>req.context.modules[m]===true));
-        const before=previous.length?
-          (previous[0].modulos===null?
-            availableModules.filter(m=>m.enabled).map(m=>m.id):previous[0].modulos||[]):[];
-        if(selectedModules.some(id=>!grantable.has(id)&&!before.includes(id))){
-          await db.query("ROLLBACK");
-          return res.status(403).json({error:"No puedes conceder módulos a los que tú no tienes acceso"});
-        }
-        selectedModules=[...new Set([
-          ...selectedModules,
-          ...before.filter(id=>!grantable.has(id))
-        ])];
-      }
-      if(req.body?.sections===undefined)
-        selectedSections=previous.length?previous[0].secciones:[];
-      else if(!isSuper(req.user)){
-        const grantable=new Set(Object.keys(req.context.sections)
-          .filter(id=>req.context.sections[id]===true));
-        const before=previous.length?
-          (previous[0].secciones===null?
-            USER_SECTIONS.filter(s=>availableModules.some(m=>m.id===s.module&&m.enabled)&&
-              (previous[0].modulos===null||previous[0].modulos?.includes(s.module)))
-              .map(s=>s.id):previous[0].secciones||[]):[];
-        if(selectedSections.some(id=>!grantable.has(id)&&!before.includes(id))){
-          await db.query("ROLLBACK");
-          return res.status(403).json({error:"No puedes otorgar subsecciones fuera de tus permisos"});
-        }
-        selectedSections=[...new Set([...selectedSections,...before.filter(id=>
-          !grantable.has(id)&&enabledForUser[USER_SECTIONS.find(s=>s.id===id)?.module])])];
-      }
-      await db.query(
-        "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES ($1,$2,$3,'{}',TRUE) ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre",
-        [email,name,role]);
-      await db.query(
-        "INSERT INTO farmetrica.usuario_clientes(email,cliente_slug,rol,farmacias,activo,metodo_acceso,google_invitado,modulos,secciones) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(email,cliente_slug) DO UPDATE SET rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,metodo_acceso=EXCLUDED.metodo_acceso,google_invitado=EXCLUDED.google_invitado,modulos=EXCLUDED.modulos,secciones=EXCLUDED.secciones",
-        [email,req.context.client.slug,role,ids,active,authType,authType==="google",selectedModules,selectedSections]);
-      if(authType==="local"&&invite){
-        // Contraseña aleatoria desconocida incluso para el administrador.
-        // Sólo el enlace de activación permite establecer la definitiva.
-        const unknownPassword=randomBytes(32).toString("hex");
-        const hash=await hashInternalPassword(unknownPassword);
-        await db.query(
-          "INSERT INTO farmetrica.credenciales_locales(email,password_hash,activo) VALUES($1,$2,true) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,activo=true,actualizado_en=now()",
-          [email,hash]);
-      }
-      await db.query("COMMIT");committed=true;
-    }catch(e){
-      if(!committed)await db.query("ROLLBACK");
-      return next(e);
-    }finally{db.release();}
-    const response={email,name,role,pharmacies:ids.map(String),active,authType,modules:selectedModules,sections:selectedSections,
-      invitationRequired:invite&&active,invitationSent:false};
-    if(invite&&active){
+      const db=await pool.connect();
+      let invite=false,committed=false;
       try{
-        const sent=await sendLocalInvitation(email);
-        response.invitationSent=Boolean(sent.sent);
-        if(sent.recent)response.invitationMessage="Ya se envió una invitación recientemente. Comprueba el correo.";
+        await db.query("BEGIN");
+        const {rows:previous}=await db.query(
+          "SELECT metodo_acceso,activo FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2 FOR UPDATE",
+          [email,req.context.client.slug]);
+        if(authType==="local"){
+          const {rows:credential}=await db.query(
+            "SELECT activo FROM farmetrica.credenciales_locales WHERE email=$1 FOR UPDATE",[email]);
+          invite=!previous.length||previous[0].metodo_acceso!=="local"||
+            !previous[0].activo||!credential.length||!credential[0].activo;
+          if(invite&&!localInvitationsReady()){
+            await db.query("ROLLBACK");committed=true;
+            return res.status(503).json({
+              error:"Para dar de alta usuarios con contraseña, configura SMTP y PUBLIC_APP_ORIGIN en el servidor."});
+          }
+        }
+        await db.query(
+          "INSERT INTO public.acceso_cuentas(email,nombre,rol,farmacias,activo) VALUES ($1,$2,$3,'{}',TRUE) ON CONFLICT(email) DO UPDATE SET nombre=EXCLUDED.nombre",
+          [email,name,role]);
+        await db.query(`
+          INSERT INTO farmetrica.usuario_clientes
+           (email,cliente_slug,rol,farmacias,activo,metodo_acceso,google_invitado,perfil_id,modulos,secciones)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,NULL,NULL)
+          ON CONFLICT(email,cliente_slug) DO UPDATE SET
+           rol=EXCLUDED.rol,farmacias=EXCLUDED.farmacias,activo=EXCLUDED.activo,
+           metodo_acceso=EXCLUDED.metodo_acceso,google_invitado=EXCLUDED.google_invitado,
+           perfil_id=EXCLUDED.perfil_id,modulos=NULL,secciones=NULL`,
+          [email,req.context.client.slug,role,ids,active,authType,authType==="google",profileId]);
+        if(authType==="local"&&invite){
+          const unknownPassword=randomBytes(32).toString("hex");
+          const hash=await hashInternalPassword(unknownPassword);
+          await db.query(
+            "INSERT INTO farmetrica.credenciales_locales(email,password_hash,activo) VALUES($1,$2,true) ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,activo=true,actualizado_en=now()",
+            [email,hash]);
+        }
+        await db.query("COMMIT");committed=true;
       }catch(e){
-        response.invitationMessage="Usuario guardado, pero no se ha podido enviar la invitación. Reinténtalo desde el listado.";
+        if(!committed)await db.query("ROLLBACK");
+        return next(e);
+      }finally{db.release();}
+      const response={email,name,role,profileId,profileName:profile.nombre,
+        pharmacies:ids.map(String),active,authType,invitationRequired:invite&&active,invitationSent:false};
+      if(invite&&active){
+        try{
+          const sent=await sendLocalInvitation(email);
+          response.invitationSent=Boolean(sent.sent);
+          if(sent.recent)response.invitationMessage="Ya se envió una invitación recientemente. Comprueba el correo.";
+        }catch(e){response.invitationMessage="Usuario guardado, pero no se pudo enviar la invitación. Reinténtalo desde el listado.";}
       }
-    }
-    res.json(response);
+      return res.json(response);
+    }catch(e){next(e);}
   });
   app.post("/api/tenant/usuarios/:email/invitar",...requireTenantManager(),async(req,res,next)=>{
     const email=asEmail(req.params.email);

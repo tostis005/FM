@@ -367,6 +367,7 @@ jobs:
           node check-profiles-manager.mjs
           node check-ajustes-gestor.mjs
           node check-picking-settings.mjs
+          node check-picking-live-data.mjs
           node check-laboratory-orders.mjs
           node check-supplier-laboratory-map.mjs
           node check-supplier-views.mjs

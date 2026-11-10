@@ -7,20 +7,13 @@ import "./pickingList.css";
 
 const integer=n=>n===null||n===undefined?"—":new Intl.NumberFormat("es-ES").format(n);
 const dateTime=t=>t?new Date(t).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"Pendiente";
-// La lista operativa usa CN y EAN; SKU permanece como identificador interno
-// únicamente para compatibilidad con pedidos históricos del fichero.
+// La tabla muestra solo el CN; EAN y SKU se conservan para buscar pedidos
+// y resolver referencias históricas, sin mostrarlos en la matriz.
 const eanCodes=row=>[...new Set([
  ...(Array.isArray(row.eans)?row.eans:[]),
  ...(/^\d{8,14}$/.test(String(row.sku||""))?[String(row.sku)]:[])
 ])].filter(value=>/^\d{8,14}$/.test(value));
-const productCodes=row=>{
- const eans=eanCodes(row);
- return [row.cn?"CN "+row.cn:null,
-  eans.length?"EAN "+eans.slice(0,2).join(", ")+
-   (eans.length>2?" (+"+(eans.length-2)+")":""):null,
-  !row.cn&&!eans.length&&row.sku?"Referencia "+row.sku:null
- ].filter(Boolean).join(" · ");
-};
+const productCodes=row=>row.cn?"CN "+row.cn:"—";
 const humanizeImportMessage=message=>String(message||"")
  .replace(/Dropbox/gi,"origen de pedidos")
  .replace(/SKU\/CN/gi,"CN/EAN");
@@ -116,7 +109,7 @@ export default function PickingList({clientSlug}){
  const tableSites=selectedSite?[selectedSite]:(data?.sites||[]);
  const siteStock=(row,id)=>row.stock.find(s=>String(s.id)===String(id));
  const columns=[
-  {key:"product",label:"Producto / CN / EAN",
+  {key:"product",label:"Producto / CN",
    value:row=>[row.name,row.cn,row.sku,...eanCodes(row)].filter(Boolean).join(" "),
    render:row=><div className="fm-picking-product">
     <strong>{row.name||"Producto sin descripción"}</strong>
@@ -157,8 +150,7 @@ export default function PickingList({clientSlug}){
  ];
  function expandedDetails(row){
   return <div className="fm-picking-details-panel">
-   <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:
-    eanCodes(row).length?"el EAN "+eanCodes(row)[0]:"la referencia "+row.sku}</strong>
+   <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:"este producto"}</strong>
    <div className="fm-picking-details">
     {row.details.map((order,i)=><div key={order.orderId+"-"+i}>
      <span>{order.orderName||order.orderId}</span><span>{order.channel}</span>

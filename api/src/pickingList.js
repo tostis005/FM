@@ -299,7 +299,7 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
    exhausted:proposal?.zeroedSites||[]
   };
  }).sort((a,b)=>b.required-a.required||a.key.localeCompare(b.key));
- const channelTotals={};
+ const channelTotals=Object.create(null);
  if(!channel){
   const uniqueOrders=new Map(channels.map(key=>[key,new Set()]));
   for(const line of rows)uniqueOrders.get(line.channel||"Sin canal")?.add(line.orderId);

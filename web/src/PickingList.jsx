@@ -181,7 +181,7 @@ export default function PickingList({clientSlug}){
  return <div className="fm-picking-page">
   <ReportPageHeader title="Picking List"/>
   {error&&<div className="fm-picking-alert" role="alert">
-   <AlertTriangle size={17}/>{error}
+   <AlertTriangle size={17}/>{humanizeImportMessage(error)}
    {" "}La aplicación volverá a comprobarlo automáticamente.
   </div>}
   {sourceError&&<div className="fm-picking-alert" role="alert">

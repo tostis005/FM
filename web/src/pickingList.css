@@ -85,3 +85,12 @@
 .fm-picking-provisional-note{display:block;color:#9b6a22;font-size:10px;margin-top:5px;font-weight:650}
 
 .fm-picking-settings .fm-picking-configured .fm-picking-source-error{color:#923d2b;background:#fff1ec;border:1px solid #f2cbbd;border-radius:9px;padding:10px 12px}
+
+.fm-picking-freshness{display:inline-flex;align-items:center;width:fit-content;font-size:11px;font-weight:700;padding:5px 9px;border-radius:20px;white-space:normal}
+.fm-picking-freshness.current{color:#1d6842;background:#e4f4e9}
+.fm-picking-freshness.stale{color:#936819;background:#fff1cf}
+.fm-picking-freshness.error{color:#923d2b;background:#fff1ec}
+.fm-picking-settings .fm-picking-configured{margin-top:16px;padding:12px 14px;border-radius:9px;background:#f5f8f6;font-size:12px;line-height:1.5}
+.fm-picking-settings .fm-picking-configured .fm-picking-source-error{color:#923d2b;background:#fff1ec;border:1px solid #f2cbbd;border-radius:9px;padding:10px 12px}
+.fm-picking-settings .fm-picking-settings-hint{color:#64786b;font-size:12px;line-height:1.5;margin-top:12px}
+.fm-picking-settings input[type=url]{width:100%;min-width:0}

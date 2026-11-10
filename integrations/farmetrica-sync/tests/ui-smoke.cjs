@@ -45,6 +45,7 @@ const postgresSource=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/
 assert.match(postgresSource,/DROP COLUMN IF EXISTS/);
 assert.match(postgresSource,/ApplyPurchasesSchemaAsync/);
 assert.match(postgresSource,/RetireStockAsync/);
+assert.match(postgresSource,/sinonimos_maestro/);
 assert.ok(postgresSource.includes('DROP TABLE {stock} RESTRICT'));
 assert.match(src,/Retirar tabla stock antigua de PostgreSQL/);
 assert.match(src,/Actualizar desde esquema \(\$\{articleJobs.length\} artículos\)/);
@@ -65,6 +66,11 @@ assert.match(src,/Preparar vendedores/);
 assert.match(src,/\/jobs\/vendedores\/create-missing/);
 assert.match(backendCode,/\/jobs\/vendedores\/create-missing/);
 assert.match(templateCode,/\{\{TABLE:dbo\.Vendedor\}\}/);
+assert.match(templateCode,/\{\{TABLE:dbo\.Sinonimo\}\}/);
+assert.match(templateCode,/new\("farmatic", "sinonimos"/);
+assert.match(backendCode,/SynonymJobs\.EnsureForFarmatic/);
+assert.match(src,/href="\$\{pageRoutes\[id\]\}"/);
+assert.doesNotMatch(src,/href="#\$\{pageRoutes\[id\]\}"/);
 
 assert.match(backendCode,/\/jobs\/familias\/create-missing/);
 assert.match(tunnelSource,/FingerPrintSHA256/);
@@ -134,7 +140,7 @@ const data={
 const dom={'#app':{innerHTML:''},'#toast':{textContent:'',className:'',style:{}}};
 const fakeDoc={querySelector(s){return dom[s]||{focus(){}};},getElementById(){return {value:'',checked:false};}};
 const fakeLocation={pathname:'/',hash:'',search:''};
-const fakeWindow={scrollTo(){},location:fakeLocation,history:{pushState(_s,_t,route){fakeLocation.hash=route;},replaceState(_s,_t,route){fakeLocation.hash=route;}},addEventListener(name,cb){if(name==='popstate')this.onPopstate=cb;if(name==='hashchange')this.onHashChange=cb;},setInterval(cb){this.onRefresh=cb;}};
+const fakeWindow={scrollTo(){},location:fakeLocation,history:{pushState(_s,_t,route){fakeLocation.pathname=route;fakeLocation.hash='';},replaceState(_s,_t,route){fakeLocation.pathname=route;fakeLocation.hash='';}},addEventListener(name,cb){if(name==='popstate')this.onPopstate=cb;if(name==='hashchange')this.onHashChange=cb;},setInterval(cb){this.onRefresh=cb;}};
 const context={
  document:fakeDoc,
  window:fakeWindow,
@@ -155,15 +161,15 @@ context.window.F.go('pharmacies');context.window.F.edit('pharmacy','new');contai
 context.window.F.go('entities');context.window.F.edit('entity','new');contains('e_columns');
 context.window.F.go('jobs');context.window.F.edit('job','new');contains('j_sql');contains('j_fullSql');contains('j_batch');contains('Carga completa');contains('j_period');contains('j_daily_at');
 context.window.F.go('history');contains('Historial de ejecuciones');
-assert.equal(fakeLocation.hash,'#/historial');
+assert.equal(fakeLocation.pathname,'/historial');
 const exampleLive={jobId:'test-job',pharmacyCode:'ABC',entityName:'ventas_completas',startedUtc:new Date().toISOString(),status:'running',mode:'incremental',rows:12500,batches:3,phase:'Leyendo y preparando lotes',provisional:true};
 data.runs=[exampleLive];
 context.window.F.go('dashboard');
-assert.equal(fakeLocation.hash,'#/resumen');
+assert.equal(fakeLocation.pathname,'/resumen');
 context.window.F.go('history');await new Promise(resolve=>setImmediate(resolve));
 contains('12');contains('Ventas');assert.doesNotMatch(dom['#app'].innerHTML,/ventas_completas/);contains('Leyendo y preparando lotes');contains('filas leídas (provisionales)');
-fakeLocation.hash='#/farmacias';fakeWindow.onPopstate();contains('Orígenes configurados');
-const historyContext={...context,window:{...fakeWindow,location:{pathname:'/',hash:'#/historial'}}};
+fakeLocation.pathname='/farmacias';fakeWindow.onPopstate();contains('Orígenes configurados');
+const historyContext={...context,window:{...fakeWindow,location:{pathname:'/historial',hash:''}}};
 const freshDom={'#app':{innerHTML:''},'#toast':{textContent:'',className:'',style:{}}};
 historyContext.document={...fakeDoc,querySelector(s){return freshDom[s]||{focus(){}};}};
 vm.createContext(historyContext);

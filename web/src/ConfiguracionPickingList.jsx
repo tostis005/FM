@@ -17,12 +17,13 @@ const friendlyFile=url=>{
  catch{return "CSV de Dropbox"}
 };
 
-export default function ConfiguracionPickingList({clientSlug,role,permissions=null}){
+export default function ConfiguracionPickingList({clientSlug,role,permissions=null,stockEnabled=false}){
  const [source,setSource]=useState(null),[url,setUrl]=useState("");
  const [editing,setEditing]=useState(false),[loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(""),[notice,setNotice]=useState(""),[error,setError]=useState("");
  const fileRef=useRef(null);
- const canImport=["administrador","gestor","superadministrador"].includes(role)&&
+ const canImport=(stockEnabled||role==="superadministrador")&&
+  ["administrador","gestor","superadministrador"].includes(role)&&
   (role==="superadministrador"||permissions?.stock==null||
    permissions.stock.includes("importar")||permissions.stock.includes("editar"));
 

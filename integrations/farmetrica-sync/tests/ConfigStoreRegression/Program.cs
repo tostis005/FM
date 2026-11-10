@@ -1,5 +1,6 @@
 using FarmetricaSync.Core;
 using FarmetricaSync.Data;
+using System.Text;
 
 string path = Path.Combine(Path.GetTempPath(), "farmetrica-sync-config-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(path);
@@ -130,6 +131,191 @@ try
         throw new Exception("La limpieza de ventas/compras antiguas debe conservar documentos e histórico.");
     if (new ConfigStore(path).Read(c => c.Entities.Any(e => e.Name is "ventas" or "compras")))
         throw new Exception("Las fuentes antiguas no deben recrearse.");
+
+    // Incorporación en reinicio desde un origen Navadía con conexión directa.
+    string warehousePath = Path.Combine(path, "warehouse-clone");
+    var seedWarehouse = new ConfigStore(warehousePath);
+    Guid avadiaId = Guid.NewGuid();
+    Guid articlesId = seedWarehouse.Read(c => c.Entities.Single(e => e.Name == "articulos").Id);
+    seedWarehouse.Change(c =>
+    {
+        c.Pharmacies.Add(new Pharmacy
+        {
+            Id = avadiaId, Code = "AVD", Name = "Farmacia Navadía",
+            ConnectionMode = "direct", Server = "SQL-CENTRAL", Database = "Farmatic",
+            AuthMode = "sql", Username = "lector", PasswordProtected = "cifrada",
+            TimeZoneId = "Europe/Madrid", TrustServerCertificate = true, Enabled = true
+        });
+        c.Jobs.Add(new SyncJob
+        {
+            PharmacyId = avadiaId, EntityId = articlesId, Mode = "snapshot",
+            Sql = "SELECT IdArticu AS origen_id FROM [Farmatic].[dbo].[Articu]",
+            FullSql = "SELECT IdArticu AS origen_id FROM Farmatic.dbo.Articu",
+            EveryMinutes = 720, BatchSize = 1200, ReplayMinutes = 250,
+            SafetyDelayMinutes = 3, AlertRecipients = "alertas@example.invalid",
+            Enabled = true
+        });
+    });
+    var loadedWarehouse = new ConfigStore(warehousePath);
+    var snapshot = loadedWarehouse.Read(c => c);
+    var source = snapshot.Pharmacies.Single(p => p.Id == avadiaId);
+    var target = snapshot.Pharmacies.Single(p => p.Code == "ALMACEN");
+    if (target.Name != "Almacén" || target.Database != "Almacen" ||
+        target.ConnectionMode != "direct" || target.LinkedServer != "" ||
+        target.Server != source.Server || target.Username != source.Username ||
+        target.PasswordProtected != source.PasswordProtected ||
+        target.TimeZoneId != source.TimeZoneId ||
+        target.TrustServerCertificate != source.TrustServerCertificate)
+        throw new Exception("Almacén debe compartir servidor y conexión directa con Navadía.");
+    var sourceJob = snapshot.Jobs.Single(j => j.PharmacyId == avadiaId && j.EntityId == articlesId);
+    var targetJob = snapshot.Jobs.Single(j => j.PharmacyId == target.Id && j.EntityId == articlesId);
+    if (targetJob.Id == sourceJob.Id || targetJob.Mode != sourceJob.Mode ||
+        targetJob.Enabled != sourceJob.Enabled ||
+        targetJob.EveryMinutes != sourceJob.EveryMinutes ||
+        targetJob.BatchSize != sourceJob.BatchSize ||
+        targetJob.ReplayMinutes != sourceJob.ReplayMinutes ||
+        targetJob.SafetyDelayMinutes != sourceJob.SafetyDelayMinutes ||
+        targetJob.AlertRecipients != sourceJob.AlertRecipients ||
+        !targetJob.Sql.Contains("[Almacen].[dbo].[Articu]") ||
+        !targetJob.FullSql.Contains("[Almacen].dbo.Articu") ||
+        sourceJob.Sql.Contains("[Almacen]"))
+        throw new Exception("La clonación no debe perder planificación ni leer Farmatic.");
+    var synonymId = snapshot.Entities.Single(e => e.Name == "sinonimos").Id;
+    if (!snapshot.Jobs.Any(j => j.PharmacyId == target.Id && j.EntityId == synonymId) ||
+        snapshot.States.Any(s => s.JobId == targetJob.Id))
+        throw new Exception("Se deben copiar sinónimos sin heredar estados de Avadía.");
+    int jobCount = snapshot.Jobs.Count(j => j.PharmacyId == target.Id);
+    loadedWarehouse.Change(c => c.Jobs.Single(j => j.Id == targetJob.Id).EveryMinutes = 360);
+    var restarted = new ConfigStore(warehousePath);
+    if (restarted.Read(c => c.Pharmacies.Count(p => p.Code == "ALMACEN")) != 1 ||
+        restarted.Read(c => c.Jobs.Count(j => j.PharmacyId == target.Id)) != jobCount ||
+        restarted.Read(c => c.Jobs.Single(j => j.Id == targetJob.Id).EveryMinutes) != 360)
+        throw new Exception("El reinicio no debe duplicar ni sobrescribir el almacén.");
+    if (WarehouseSource.RedirectDatabase("SELECT * FROM {{TABLE:dbo.Sinonimo}}", "Farmatic") !=
+        "SELECT * FROM {{TABLE:dbo.Sinonimo}}")
+        throw new Exception("No modificar las macros SQL comunes.");
+    var fallbackConfig = new AppConfig();
+    fallbackConfig.Pharmacies.Add(new Pharmacy
+    {
+        Code = "F001", Name = "Farmacia Central", ConnectionMode = "direct", Database = "Farmatic"
+    });
+    if (!WarehouseSource.EnsureFromAvadia(fallbackConfig).Created ||
+        fallbackConfig.Pharmacies.Count(p => p.Code == "ALMACEN") != 1)
+        throw new Exception("Un único origen directo Farmatic también debe reconocerse sin nombre Avadía.");
+    var ambiguousConfig = new AppConfig();
+    ambiguousConfig.Pharmacies.Add(new Pharmacy { Code = "F001", ConnectionMode = "direct", Database = "Farmatic" });
+    ambiguousConfig.Pharmacies.Add(new Pharmacy { Code = "F002", ConnectionMode = "direct", Database = "Farmatic" });
+    if (WarehouseSource.EnsureFromAvadia(ambiguousConfig).Changed ||
+        ambiguousConfig.Pharmacies.Count != 2)
+        throw new Exception("No adivinar cuál es Avadía cuando hay dos orígenes directos.");
+
+    // AMP se da de baja del servicio sin tocar el histórico ni datos de PostgreSQL.
+    string ampPath = Path.Combine(path,"amp-regression");
+    var ampStore = new ConfigStore(ampPath);
+    Guid ampSourceId = Guid.NewGuid(), ampJobId = Guid.NewGuid();
+    Guid ampEntityId = ampStore.Read(c=>c.Entities.Single(e=>e.Name=="articulos").Id);
+    ampStore.Change(c=>{
+        c.Pharmacies.Add(new Pharmacy {Id=ampSourceId,Code="AMP",Name="Antiguo origen AMP"});
+        c.Jobs.Add(new SyncJob {Id=ampJobId,PharmacyId=ampSourceId,EntityId=ampEntityId});
+        c.States.Add(new SyncState {JobId=ampJobId,WatermarkUtc=start});
+        c.Runs.Add(new SyncRun {JobId=ampJobId,PharmacyId=ampSourceId,EntityId=ampEntityId,
+            PharmacyCode="AMP",EntityName="articulos",Status="ok"});
+    });
+    var ampClean=new ConfigStore(ampPath);
+    if (ampClean.Read(c=>c.Pharmacies.Any(p=>p.Code=="AMP")) ||
+        ampClean.Read(c=>c.Jobs.Any(j=>j.Id==ampJobId)) ||
+        ampClean.Read(c=>c.States.Any(t=>t.JobId==ampJobId)) ||
+        !ampClean.Read(c=>c.Runs.Any(r=>r.JobId==ampJobId)))
+        throw new Exception("AMP: eliminar fuente/consultas/cursores, conservar auditoría.");
+    if (new ConfigStore(ampPath).Read(c=>c.Pharmacies.Any(p=>p.Code=="AMP")))
+        throw new Exception("AMP no debe reaparecer tras reiniciar.");
+
+    // Traslado cifrado entre ordenadores: secretos se descifran y vuelven a
+    // proteger con las claves de la máquina nueva, sin copiar la contraseña
+    // de administrador ni las claves DPAPI originales.
+    var portable=new AppConfig {
+        AdminSalt="salt local antiguo",AdminHash="hash local antiguo",
+        MonitorInstanceId=Guid.NewGuid()
+    };
+    portable.Destination.Host="db.internal";
+    portable.Destination.Database="farmetrica";
+    portable.Destination.PasswordProtected="machine1:db_password_only_for_test";
+    portable.Destination.SshPasswordProtected="machine1:ssh_password_only_for_test";
+    portable.Destination.SshKeyPassphraseProtected="machine1:key_password_only_for_test";
+    portable.Destination.SshPrivateKeyPath=@"C:\\Claves\\sync_ed25519";
+    portable.Mail.Host="smtp.internal";
+    portable.Mail.PasswordProtected="machine1:mail_password_only_for_test";
+    var mainSource=new Pharmacy {
+        Id=Guid.NewGuid(),Code="ABA",Name="Abadía",ConnectionMode="direct",
+        Database="Farmatic",Server="SQL-AVADIA",AuthMode="sql",Username="lectura",
+        PasswordProtected="machine1:sql_password_only_for_test"
+    };
+    portable.Pharmacies.Add(mainSource);
+    var removeMe=new Pharmacy { Code="AMP",Name="Origen dado de baja",Enabled=false };
+    portable.Pharmacies.Add(removeMe);
+    var itemEntity=portable.Entities.Single(e=>e.Name=="articulos");
+    var portableJob=new SyncJob {
+        PharmacyId=mainSource.Id,EntityId=itemEntity.Id,
+        Mode="snapshot",Sql="SELECT * FROM {{TABLE:dbo.Articu}}",
+        FullSql="SELECT * FROM {{TABLE:dbo.Articu}}",Enabled=true,EveryMinutes=720
+    };
+    portable.Jobs.Add(portableJob);
+    var oldAmpJob=new SyncJob { PharmacyId=removeMe.Id,EntityId=itemEntity.Id };
+    portable.Jobs.Add(oldAmpJob);
+    portable.States.Add(new SyncState {JobId=portableJob.Id,WatermarkUtc=start,
+        LastFullSuccessUtc=start,LastStatus="ok",LastAttemptUtc=start});
+    portable.States.Add(new SyncState {JobId=oldAmpJob.Id,WatermarkUtc=start});
+    portable.Runs.Add(new SyncRun {JobId=portableJob.Id,PharmacyCode="ABA",Status="ok"});
+    const string transferPassword="very-long-test-transfer-passphrase";
+    string oldMachineUnprotect(string secret) =>
+        secret.StartsWith("machine1:",StringComparison.Ordinal) ?
+            secret["machine1:".Length..] :
+            throw new Exception("No se puede exportar un secreto que no pertenezca a este equipo.");
+    var encrypted=PortableConfigTransfer.Export(portable,transferPassword,oldMachineUnprotect);
+    if(encrypted.Length<100||!Encoding.ASCII.GetString(encrypted,0,8).Equals("FMSYNC01"))
+        throw new Exception("El fichero debe tener formato cifrado autenticado.");
+    if(Encoding.UTF8.GetString(encrypted).Contains("db_password_only_for_test",StringComparison.Ordinal) ||
+       Encoding.UTF8.GetString(encrypted).Contains("SQL-AVADIA",StringComparison.Ordinal))
+        throw new Exception("El archivo portable no puede contener datos o secretos legibles.");
+    if(portable.Pharmacies.Count!=2 || portable.Jobs.Count!=2 ||
+       portable.Destination.PasswordProtected!="machine1:db_password_only_for_test")
+        throw new Exception("Exportar debe ser solo lectura para la configuración actual.");
+    AppConfig restored=PortableConfigTransfer.Import(encrypted,transferPassword,
+        plain=>"machine2:"+plain);
+    if(restored.Destination.PasswordProtected!="machine2:db_password_only_for_test" ||
+       restored.Destination.SshPasswordProtected!="machine2:ssh_password_only_for_test" ||
+       restored.Destination.SshKeyPassphraseProtected!="machine2:key_password_only_for_test" ||
+       restored.Mail.PasswordProtected!="machine2:mail_password_only_for_test" ||
+       restored.Pharmacies.Single().PasswordProtected!="machine2:sql_password_only_for_test" ||
+       restored.Pharmacies.Any(p=>p.Code=="AMP") ||
+       restored.Jobs.Count!=1 || restored.States.Count!=1 ||
+       restored.Jobs.Single().EveryMinutes!=720 ||
+       restored.States.Single().WatermarkUtc!=start ||
+       restored.Runs.Count!=0 || restored.AdminHash!=null || restored.MonitorInstanceId!=Guid.Empty)
+        throw new Exception("La copia completa debe trasladar configuración, claves y cursores sin AMP.");
+    var destinationConfig=new AppConfig {AdminSalt="nuevo-salt",AdminHash="nuevo-hash"};
+    PortableConfigTransfer.RestoreInto(destinationConfig,restored);
+    if(destinationConfig.AdminSalt!="nuevo-salt" || destinationConfig.AdminHash!="nuevo-hash" ||
+       destinationConfig.MonitorInstanceId==Guid.Empty ||
+       destinationConfig.Pharmacies.Count(p=>p.Code=="ALMACEN")!=1 ||
+       destinationConfig.Pharmacies.Count(p=>p.Code=="AMP")!=0 ||
+       destinationConfig.Destination.PasswordProtected!="machine2:db_password_only_for_test" ||
+       destinationConfig.States.Single().WatermarkUtc!=start ||
+       destinationConfig.States.Single().LastAttemptUtc!=null ||
+       destinationConfig.States.Single().LastStatus!="pending")
+        throw new Exception("Restaurar debe mantener administrador local, recrear almacén y preservar marcas.");
+    try {
+        PortableConfigTransfer.Import(encrypted,"incorrect-passphrase-1234",p=>"machine2:"+p);
+        throw new Exception("Se aceptó una clave incorrecta.");
+    } catch (ArgumentException e) when (e.Message.Contains("Contraseña",StringComparison.Ordinal)) {}
+    var tampered=(byte[])encrypted.Clone();
+    tampered[^1]^=1;
+    try {
+        PortableConfigTransfer.Import(tampered,transferPassword,p=>"machine2:"+p);
+        throw new Exception("Se aceptó una copia manipulada.");
+    } catch (ArgumentException e) when (e.Message.Contains("dañado",StringComparison.Ordinal)) {}
+    Console.WriteLine("OK: AMP retirado, traslado cifrado autenticado, secretos re-protegidos y cursores conservados.");
+    Console.WriteLine("OK: almacén directo, fuentes reales, sinónimos, SQL y configuración idempotente.");
     Console.WriteLine("OK: caída VPN sin reintentos, horario diario, zona farmacia, DST y estado persistido.");
     Console.WriteLine("OK: /login and /config reads do not wait behind history writes; snapshot is atomic.");
 }

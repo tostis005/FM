@@ -92,7 +92,15 @@ public sealed class ConfigStore
                 if (!existing.Columns.Any(c => c.Name.Equals(column.Name, StringComparison.OrdinalIgnoreCase)))
                     existing.Columns.Add(new EntityColumn { Name = column.Name, Type = column.Type });
         }
-        if (retiredEntities)
+        // AMP ha quedado obsoleto: retirar su origen, consultas y checkpoints
+        // antes de preparar los trabajos del almacén y los sinónimos.
+        bool ampRemoved = UnusedAmpSource.Remove(_config);
+        // La nueva fuente se añade una sola vez a las farmacias existentes.
+        // No se modifican consultas ni parámetros guardados previamente.
+        bool synonymJobsAdded = SynonymJobs.EnsureForFarmatic(_config) > 0;
+        // Registrar Almacén con las fuentes vigentes de Avadía; no altera los demás orígenes.
+        var warehouseSync = WarehouseSource.EnsureFromAvadia(_config);
+        if (retiredEntities || ampRemoved || synonymJobsAdded || warehouseSync.Changed)
         {
             // Persistir la limpieza una única vez, sin guardar credenciales en logs.
             string tmp = _path + ".tmp";

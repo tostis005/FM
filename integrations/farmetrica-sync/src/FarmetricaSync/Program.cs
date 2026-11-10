@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FarmetricaSync.Connectors;
 using FarmetricaSync.Core;
@@ -63,6 +64,19 @@ builder.Services.AddHostedService<SyncWorker>(sp => sp.GetRequiredService<SyncWo
 var app = builder.Build();
 
 // El panel NO debe escucharse en interfaces públicas sin TLS/proxy/autenticación adicional.
+// La página de entrada canónica es /resumen, nunca una raíz que esconda
+// la sección seleccionada. La ruta /consultas y las demás sirven index.html
+// sin redirigir, mediante MapFallbackToFile al final.
+app.Use(async (ctx, next) =>
+{
+    if ((HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method))
+        && ctx.Request.Path.Value == "/")
+    {
+        ctx.Response.Redirect("/resumen" + ctx.Request.QueryString);
+        return;
+    }
+    await next();
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.Use(async (ctx, next) =>
@@ -109,14 +123,14 @@ app.UseAuthorization();
 
 // Liveness independiente de cualquier bloqueo PostgreSQL o del histórico.
 app.MapGet("/api/ping", () => Results.Ok(new {
-    ok = true, version = "0.16.0", atUtc = DateTimeOffset.UtcNow
+    ok = true, version = "0.20.0", atUtc = DateTimeOffset.UtcNow
 }));
 
 // El bootstrap solo se admite desde loopback, con una única contraseña admin.
 app.MapGet("/api/bootstrap-status", (ConfigStore store) => new
 {
     initialized = store.Read(c => c.AdminHash is not null),
-    version = "0.16.0"
+    version = "0.20.0"
 });
 app.MapPost("/api/bootstrap", (PasswordRequest r, HttpContext ctx, ConfigStore store) =>
 {
@@ -153,6 +167,46 @@ app.MapPost("/api/login", async (PasswordRequest r, HttpContext ctx, ConfigStore
 
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapPost("/logout", async (HttpContext ctx) => { await ctx.SignOutAsync(); return Results.Ok(new { ok = true }); });
+
+// Copia completa portable: credenciales descifradas solamente en memoria y
+// cifradas en el fichero final con una contraseña que el usuario conserva.
+api.MapPost("/configuration/export", (TransferPasswordRequest r, ConfigStore store, Secrets secrets) =>
+{
+    var bytes = PortableConfigTransfer.Export(store.Read(c => c), r.Password, secrets.Decrypt);
+    string name = "farmetrica-sync-config-" +
+        DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".fmsyncbak";
+    return Results.File(bytes, "application/octet-stream", name);
+});
+api.MapPost("/configuration/import", async (HttpRequest request, ConfigStore store,
+    Secrets secrets, SyncWorker worker, CancellationToken ct) =>
+{
+    if (!request.HasFormContentType || request.ContentLength > 17 * 1024 * 1024)
+        return Results.BadRequest(new { error = "Selecciona un fichero de copia válido (máximo 16 MB)." });
+    var form = await request.ReadFormAsync(ct);
+    var file = form.Files.GetFile("backup");
+    string password = form["password"].ToString();
+    if (file is null || file.Length < 54 || file.Length > 16 * 1024 * 1024)
+        return Results.BadRequest(new { error = "Selecciona un fichero de copia válido (máximo 16 MB)." });
+    if (!string.Equals(form["confirm"].ToString(), "REEMPLAZAR", StringComparison.Ordinal))
+        return Results.BadRequest(new { error = "Debes confirmar que se sustituirá la configuración actual." });
+    byte[] bytes;
+    await using (var ms = new MemoryStream((int)file.Length))
+    {
+        await file.CopyToAsync(ms, ct);
+        bytes = ms.ToArray();
+    }
+    var incoming = PortableConfigTransfer.Import(bytes, password, secrets.Encrypt);
+    using var hold = worker.TryPauseForRestore();
+    if (hold is null)
+        return Results.Conflict(new { error = "Hay consultas en ejecución o pendientes. Termínalas antes de importar la copia." });
+    store.Change(c => PortableConfigTransfer.RestoreInto(c, incoming));
+    return Results.Ok(new {
+        ok = true, origins = incoming.Pharmacies.Count(p => !p.Code.Equals("AMP", StringComparison.OrdinalIgnoreCase)),
+        jobs = incoming.Jobs.Count, includesCheckpoints = true,
+        note = "Configuración restaurada. Revisa conexiones y rutas SSH antes de sincronizar; no dejes dos equipos activos a la vez."
+    });
+});
+
 api.MapGet("/config", (ConfigStore store, SyncWorker worker) =>
 {
     var c = store.Read(x => x);
@@ -307,6 +361,8 @@ api.MapPut("/mail", (MailRequest r, ConfigStore store, Secrets secrets) =>
 
 static void ValidatePharmacy(PharmacyRequest r)
 {
+    if (string.Equals(r.Code?.Trim(), "AMP", StringComparison.OrdinalIgnoreCase))
+        throw new ArgumentException("El origen AMP está retirado y no se puede volver a crear.");
     if (!Regex.IsMatch(r.Code ?? "", "^[a-zA-Z0-9_-]{1,40}$") || string.IsNullOrWhiteSpace(r.Name))
         throw new ArgumentException("Código (hasta 40 letras/números/_/-) y nombre son obligatorios.");
     if (!Regex.IsMatch(r.CountryCode ?? "", "^[A-Z]{2}$", RegexOptions.IgnoreCase))
@@ -340,6 +396,7 @@ api.MapPost("/pharmacies", (PharmacyRequest r, ConfigStore store, Secrets secret
         if (c.Pharmacies.Any(x => x.Code.Equals(p.Code, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Ya existe una farmacia con ese código.");
         c.Pharmacies.Add(p);
+        SynonymJobs.EnsureForFarmatic(c);
     });
     return Results.Ok(new { p.Id });
 });
@@ -351,6 +408,7 @@ api.MapPut("/pharmacies/{id:guid}", (Guid id, PharmacyRequest r, ConfigStore sto
         var existing = c.Pharmacies.SingleOrDefault(p => p.Id == id) ?? throw new ArgumentException("Farmacia no encontrada.");
         if (existing.Code != r.Code) throw new ArgumentException("El código de farmacia es inmutable: para cambiarlo hay que migrar antes las filas de destino.");
         Apply(existing, r, secrets);
+        SynonymJobs.EnsureForFarmatic(c);
     });
     return Results.Ok(new { ok = true });
 });
@@ -691,6 +749,39 @@ api.MapDelete("/jobs/{id:guid}", (Guid id, ConfigStore store) =>
     store.Change(c => { c.Jobs.RemoveAll(j => j.Id == id); c.States.RemoveAll(s => s.JobId == id); });
     return Results.Ok(new { ok = true });
 });
+// Reenvío manual de todas las consultas activas, usando la cola secuencial ya existente.
+// Una consulta en cola o ejecutándose no se encola de nuevo. La primera carga
+// incremental sin checkpoint se lanza como snapshot si tiene FullSql configurado.
+api.MapPost("/jobs/run-all", (ConfigStore store, SyncWorker worker) =>
+{
+    var config = store.Read(c => c);
+    var plan = BulkRunPlanner.Plan(config);
+    int queued = 0, alreadyPending = 0, initialFullQueued = 0;
+    foreach (var item in plan)
+    {
+        if (worker.IsPending(item.JobId))
+        {
+            alreadyPending++;
+            continue;
+        }
+        if (worker.Enqueue(item.JobId, full: item.NeedsInitialFull))
+        {
+            queued++;
+            if (item.NeedsInitialFull) initialFullQueued++;
+        }
+        else alreadyPending++; // evita duplicados incluso entre clics simultáneos
+    }
+    return Results.Ok(new
+    {
+        eligible = plan.Count, queued, alreadyPending, initialFullQueued,
+        message = plan.Count == 0
+            ? "No hay consultas activas en farmacias habilitadas."
+            : queued == 0
+                ? "Todas las consultas activas ya estaban en cola o en ejecución."
+                : $"{queued} consultas añadidas a la cola de ejecución."
+    });
+});
+
 api.MapPost("/jobs/{id:guid}/run-full", (Guid id, ConfigStore store, SyncWorker worker) =>
 {
     var job = store.Read(c => c.Jobs.FirstOrDefault(j => j.Id == id));
@@ -720,3 +811,6 @@ api.MapPost("/jobs/{id:guid}/run", (Guid id, ConfigStore store, SyncWorker worke
 // Recarga de pestañas con URL propia sin perder la sección activa.
 app.MapFallbackToFile("index.html");
 app.Run();
+
+// Petición protegida por sesión y cabecera CSRF; no almacenar la clave de traslado.
+public sealed record TransferPasswordRequest(string Password);

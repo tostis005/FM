@@ -14,6 +14,15 @@ assert.match(templateCode,/v\.DescuentoOpera/);
 assert.match(templateCode,/@desde/);
 assert.match(templateCode,/@hasta/);
 assert.match(backendCode,/\/jobs\/preview/);
+assert.match(backendCode,/\/jobs\/run-all/);
+assert.match(backendCode,/BulkRunPlanner\.Plan/);
+assert.match(src,/Ejecutar todas/);
+assert.match(src,/\/jobs\/run-all/);
+assert.match(src,/window\.location\.assign\(pageRoutes\[page\]\)/);
+assert.match(backendCode,/ctx\.Response\.Redirect\("\/resumen"/);
+assert.match(backendCode,/MapFallbackToFile\("index\.html"\)/);
+assert.doesNotMatch(src,/href="\$\{pageRoutes\[id\]\}" onclick=/);
+
 assert.match(backendCode,/\/pharmacies\/test-draft/);
 assert.match(backendCode,/\/destination\/test-draft/);
 assert.match(src,/Probar conexión \(sin guardar\)/);
@@ -40,11 +49,17 @@ assert.match(src,/updateAllPurchaseSchemas/);
 assert.match(backendCode,/\/jobs\/compras\/update-schema-all/);
 assert.match(backendCode,/\/jobs\/compras\/retry-failed/);
 assert.match(backendCode,/\/entities\/compras\/migrate-postgresql/);
+assert.match(src,/\/traslado/);
+assert.match(src,/\/api\/configuration\/export/);
+assert.match(src,/\/api\/configuration\/import/);
+assert.match(backendCode,/\/configuration\/export/);
+assert.match(backendCode,/\/configuration\/import/);
 const tunnelSource=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Data/SshForward.cs'),'utf8');
 const postgresSource=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Data/PostgresDestination.cs'),'utf8');
 assert.match(postgresSource,/DROP COLUMN IF EXISTS/);
 assert.match(postgresSource,/ApplyPurchasesSchemaAsync/);
 assert.match(postgresSource,/RetireStockAsync/);
+assert.match(postgresSource,/sinonimos_maestro/);
 assert.ok(postgresSource.includes('DROP TABLE {stock} RESTRICT'));
 assert.match(src,/Retirar tabla stock antigua de PostgreSQL/);
 assert.match(src,/Actualizar desde esquema \(\$\{articleJobs.length\} artículos\)/);
@@ -65,6 +80,11 @@ assert.match(src,/Preparar vendedores/);
 assert.match(src,/\/jobs\/vendedores\/create-missing/);
 assert.match(backendCode,/\/jobs\/vendedores\/create-missing/);
 assert.match(templateCode,/\{\{TABLE:dbo\.Vendedor\}\}/);
+assert.match(templateCode,/\{\{TABLE:dbo\.Sinonimo\}\}/);
+assert.match(templateCode,/new\("farmatic", "sinonimos"/);
+assert.match(backendCode,/SynonymJobs\.EnsureForFarmatic/);
+assert.match(src,/href="\$\{pageRoutes\[id\]\}"/);
+assert.doesNotMatch(src,/href="#\$\{pageRoutes\[id\]\}"/);
 
 assert.match(backendCode,/\/jobs\/familias\/create-missing/);
 assert.match(tunnelSource,/FingerPrintSHA256/);
@@ -133,41 +153,60 @@ const data={
 };
 const dom={'#app':{innerHTML:''},'#toast':{textContent:'',className:'',style:{}}};
 const fakeDoc={querySelector(s){return dom[s]||{focus(){}};},getElementById(){return {value:'',checked:false};}};
-const fakeLocation={pathname:'/',hash:'',search:''};
-const fakeWindow={scrollTo(){},location:fakeLocation,history:{pushState(_s,_t,route){fakeLocation.hash=route;},replaceState(_s,_t,route){fakeLocation.hash=route;}},addEventListener(name,cb){if(name==='popstate')this.onPopstate=cb;if(name==='hashchange')this.onHashChange=cb;},setInterval(cb){this.onRefresh=cb;}};
+const fakeLocation={pathname:'/',hash:'',search:'',assign(route){this.pathname=route;this.hash='';fakeWindow.onPopstate?.();}};
+const fakeWindow={scrollTo(){},location:fakeLocation,history:{pushState(_s,_t,route){fakeLocation.pathname=route;fakeLocation.hash='';},replaceState(_s,_t,route){fakeLocation.pathname=route;fakeLocation.hash='';}},addEventListener(name,cb){if(name==='popstate')this.onPopstate=cb;if(name==='hashchange')this.onHashChange=cb;},setInterval(cb){this.onRefresh=cb;}};
+let runAllRequests=0;
 const context={
  document:fakeDoc,
  window:fakeWindow,
- fetch:async()=>({ok:true,status:200,json:async()=>data}),
+ confirm:()=>true,
+ fetch:async(url)=>{
+   if(url==='/api/jobs/run-all'){
+     runAllRequests++;
+     return {ok:true,status:200,json:async()=>({eligible:1,queued:1,alreadyPending:0,initialFullQueued:0,message:'1 consultas añadidas a la cola de ejecución.'})};
+   }
+   return {ok:true,status:200,json:async()=>data};
+ },
  clearTimeout(){},setTimeout(cb){ if(cb) cb();return 1;},console
 };
 vm.createContext(context);
 vm.runInContext(src,context);
+context.F=context.window.F; // window y ámbito global son el mismo objeto en el navegador.
 async function run(){
 await new Promise(resolve=>setImmediate(resolve));
 function contains(value){assert.ok(dom['#app'].innerHTML.includes(value),`No aparece: ${value}`);}
 contains('Panel de sincronización');
 for(const [id,label] of [
  ['pharmacies','Farmacias'],['jobs','Consultas SQL'],['entities','Entidades de datos'],
- ['destination','Destino PostgreSQL'],['mail','Avisos por correo'],['history','Historial de ejecuciones']
+ ['destination','Destino PostgreSQL'],['mail','Avisos por correo'],['history','Historial de ejecuciones'],['transfer','Exportar e importar configuración']
 ]){context.window.F.go(id);contains(label);}
 context.window.F.go('pharmacies');context.window.F.edit('pharmacy','new');contains('p_code');contains('p_trust');
 context.window.F.go('entities');context.window.F.edit('entity','new');contains('e_columns');
 context.window.F.go('jobs');context.window.F.edit('job','new');contains('j_sql');contains('j_fullSql');contains('j_batch');contains('Carga completa');contains('j_period');contains('j_daily_at');
 context.window.F.go('history');contains('Historial de ejecuciones');
-assert.equal(fakeLocation.hash,'#/historial');
+assert.equal(fakeLocation.pathname,'/historial');
 const exampleLive={jobId:'test-job',pharmacyCode:'ABC',entityName:'ventas_completas',startedUtc:new Date().toISOString(),status:'running',mode:'incremental',rows:12500,batches:3,phase:'Leyendo y preparando lotes',provisional:true};
 data.runs=[exampleLive];
 context.window.F.go('dashboard');
-assert.equal(fakeLocation.hash,'#/resumen');
+assert.equal(fakeLocation.pathname,'/resumen');
 context.window.F.go('history');await new Promise(resolve=>setImmediate(resolve));
 contains('12');contains('Ventas');assert.doesNotMatch(dom['#app'].innerHTML,/ventas_completas/);contains('Leyendo y preparando lotes');contains('filas leídas (provisionales)');
-fakeLocation.hash='#/farmacias';fakeWindow.onPopstate();contains('Orígenes configurados');
-const historyContext={...context,window:{...fakeWindow,location:{pathname:'/',hash:'#/historial'}}};
+// La acción en masa hace una sola petición y respeta la lista de activas.
+data.pharmacies=[{id:'p1',code:'ABA',enabled:true,name:'Demo',systemType:'farmatic'}];
+data.jobs=[{id:'j1',pharmacyId:'p1',entityId:'0',mode:'snapshot',enabled:true,everyMinutes:60}];
+context.window.F.go('jobs');
+contains('Ejecutar todas');
+assert.match(dom['#app'].innerHTML,/href="\/consultas"/);
+assert.doesNotMatch(dom['#app'].innerHTML,/href="\/consultas" onclick=/);
+await context.window.F.runAll();
+assert.equal(runAllRequests,1);
+fakeLocation.pathname='/farmacias';fakeWindow.onPopstate();contains('Orígenes configurados');
+const historyContext={...context,window:{...fakeWindow,location:{pathname:'/historial',hash:''}}};
 const freshDom={'#app':{innerHTML:''},'#toast':{textContent:'',className:'',style:{}}};
 historyContext.document={...fakeDoc,querySelector(s){return freshDom[s]||{focus(){}};}};
 vm.createContext(historyContext);
 vm.runInContext(src,historyContext);
+historyContext.F=historyContext.window.F;
 await new Promise(resolve=>setImmediate(resolve));
 assert.match(freshDom['#app'].innerHTML,/Historial de ejecuciones/);
 console.log('OK: navegación por rutas, recarga de historial y progreso real en tablas.');

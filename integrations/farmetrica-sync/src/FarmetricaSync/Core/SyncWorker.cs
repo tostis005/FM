@@ -16,6 +16,29 @@ public sealed class SyncWorker(
         new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
     private readonly ConcurrentDictionary<Guid, byte> _pending = new();
     private readonly ConcurrentDictionary<Guid, SyncRun> _live = new();
+    private readonly object _restoreGate = new();
+    private bool _restoring;
+
+    // Solo permitir una importación si no hay consultas ejecutándose ni en
+    // cola. Bloquear encolados nuevos hasta publicar la configuración completa.
+    public IDisposable? TryPauseForRestore()
+    {
+        lock (_restoreGate)
+        {
+            if (_restoring || !_pending.IsEmpty) return null;
+            _restoring = true;
+            return new RestoreLease(this);
+        }
+    }
+
+    private sealed class RestoreLease(SyncWorker owner) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (owner._restoreGate) owner._restoring = false;
+        }
+    }
+
     private static string Diagnostic(Exception exception, string phase)
     {
         // Mostrar el error subyacente de red/SSL/SSH si existe. Nunca datos de conexión.
@@ -42,7 +65,10 @@ public sealed class SyncWorker(
 
     public bool Enqueue(Guid jobId, bool full = false)
     {
-        if (!_pending.TryAdd(jobId, 0)) return false;
+        lock (_restoreGate)
+        {
+            if (_restoring || !_pending.TryAdd(jobId, 0)) return false;
+        }
         var cfg = config.Read(c => c);
         var job = cfg.Jobs.FirstOrDefault(j => j.Id == jobId);
         var pharmacy = cfg.Pharmacies.FirstOrDefault(p => p.Id == job?.PharmacyId);

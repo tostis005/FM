@@ -1,8 +1,8 @@
 'use strict';
-const state = { config: null, page: 'dashboard', editing: null, runFilters: {pharmacyId:'', entityId:'', status:''}, runPage:0, runResults:null };
+const state = { config: null, page: 'dashboard', editing: null, bulkRunPending:false, runFilters: {pharmacyId:'', entityId:'', status:''}, runPage:0, runResults:null };
 const $ = sel => document.querySelector(sel);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-const entityLabel = name => ({ventas_completas:'Ventas',recepciones_completas:'Compras'})[String(name||'').toLowerCase()] || String(name||'');
+const entityLabel = name => ({ventas_completas:'Ventas',recepciones_completas:'Compras',sinonimos:'Sinónimos / EAN'})[String(name||'').toLowerCase()] || String(name||'');
 const date = v => v ? new Date(v).toLocaleString('es-ES', {dateStyle:'short',timeStyle:'short'}) : '—';
 const status = v => `<span class="pill ${v==='ok'?'good':v==='error'?'bad':'wait'}">${esc(({ok:'Correcto',error:'Error',running:'Ejecutando',pending:'Pendiente'})[v] || v || 'Pendiente')}</span>`;
 // El panel web tiene su propia ruta de API; nunca espera a las conexiones
@@ -85,22 +85,23 @@ const nextSchedule = (j,s) => {
 };
 
 
-const nav = [['dashboard','◫','Resumen'],['pharmacies','▦','Farmacias'],['jobs','▤','Consultas SQL'],['entities','▧','Entidades'],['destination','◈','PostgreSQL'],['mail','✉','Alertas'],['history','◷','Historial']];
-const pageRoutes={dashboard:'/resumen',pharmacies:'/farmacias',jobs:'/consultas',entities:'/entidades',destination:'/postgresql',mail:'/alertas',history:'/historial'};
-// Rutas hash: al actualizar siempre se carga / y se conserva la sección activa.
+const nav = [['dashboard','◫','Resumen'],['pharmacies','▦','Farmacias'],['jobs','▤','Consultas SQL'],['entities','▧','Entidades'],['destination','◈','PostgreSQL'],['mail','✉','Alertas'],['history','◷','Historial'],['transfer','⇄','Exportar / importar']];
+const pageRoutes={dashboard:'/resumen',pharmacies:'/farmacias',jobs:'/consultas',entities:'/entidades',destination:'/postgresql',mail:'/alertas',history:'/historial',transfer:'/traslado'};
+// URL real para cada sección. Los enlaces #/ antiguos se migran al abrir.
 const currentPageFromUrl=()=>{
+ const path=window.location?.pathname?.replace(/\/$/,'') || '/';
  const hash=window.location?.hash?.replace(/^#/,'').replace(/\/$/,'');
- const path=window.location?.pathname?.replace(/\/$/,'');
+ // Priorizar el hash heredado solo para migrar enlaces antiguos /#/sección.
  return Object.keys(pageRoutes).find(p=>pageRoutes[p]===hash) ||
    Object.keys(pageRoutes).find(p=>pageRoutes[p]===path) || 'dashboard';
 };
 state.page=currentPageFromUrl();
-if(window.location?.hash!=='#'+pageRoutes[state.page])
- window.history?.replaceState?.({},'','#'+pageRoutes[state.page]);
+if((window.location?.pathname?.replace(/\/$/,'') || '/')!==pageRoutes[state.page] || window.location?.hash)
+ window.history?.replaceState?.({},'',pageRoutes[state.page]+(window.location?.search||''));
 function shell(body){
-  $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="#${pageRoutes[id]}" onclick="F.go('${id}',event)"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.15.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
+  $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="${pageRoutes[id]}"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.20.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
 }
-function render(){ if(!cfg()) return; const pages={dashboard,pharmacies,jobs,entities,destination,mail,history}; shell((pages[state.page]||dashboard)()); }
+function render(){ if(!cfg()) return; const pages={dashboard,pharmacies,jobs,entities,destination,mail,history,transfer}; shell((pages[state.page]||dashboard)()); }
 function dashboard(){
   const c=cfg(), enabled=c.jobs.filter(j=>j.enabled).length;
   const errors=c.states.filter(s=>s.lastStatus==='error').length;
@@ -109,7 +110,7 @@ function dashboard(){
     `<div class="cards"><div class="metric"><div class="metric-label">Farmacias</div><div class="metric-number">${c.pharmacies.length}</div><div class="metric-foot">Orígenes configurados</div></div><div class="metric"><div class="metric-label">Consultas activas</div><div class="metric-number">${enabled}</div><div class="metric-foot">Ejecución programada</div></div><div class="metric"><div class="metric-label">Entidades</div><div class="metric-number">${c.entities.length}</div><div class="metric-foot">Estructuras de destino</div></div><div class="metric"><div class="metric-label">Incidencias</div><div class="metric-number">${errors}</div><div class="metric-foot">Consultas con último fallo</div></div></div>`+
     (!c.destination.host?`<div class="tip danger-note">Falta configurar el destino PostgreSQL. La sincronización permanecerá pendiente hasta completar la conexión.</div>`:'')+
     panel('Últimas sincronizaciones',runs.length?tableRuns(runs):'<div class="empty">Todavía no hay ejecuciones. Añade una farmacia, configura una consulta y actívala.</div>')+
-    (c.pharmacies.length===0?panel('Configurar',`<div class="row-actions"><button class="btn secondary" onclick="F.go('destination')">PostgreSQL</button><button class="btn secondary" onclick="F.go('pharmacies')">Añadir farmacia</button><button class="btn secondary" onclick="F.go('jobs')">Consultas SQL</button></div>`):'');
+    (c.pharmacies.length===0?panel('Configurar',`<div class="row-actions"><a class="btn secondary" href="${pageRoutes.destination}">PostgreSQL</a><a class="btn secondary" href="${pageRoutes.pharmacies}">Añadir farmacia</a><a class="btn secondary" href="${pageRoutes.jobs}">Consultas SQL</a></div>`):'');
 }
 function tableRuns(runs){
   return `<div class="table-scroll"><table><thead><tr><th>Inicio / duración</th><th>Farmacia</th><th>Entidad</th><th>Tipo</th><th>Leídos</th><th>Altas</th><th>Cambios</th><th>Bajas</th><th>Ya presentes</th><th>Resultado</th><th>Avance / fase</th><th>Intervalo / detalle</th></tr></thead><tbody>${runs.map(r=>{const j=cfg().jobs.find(j=>j.id===r.jobId),p=cfg().pharmacies.find(p=>p.id===j?.pharmacyId),e=cfg().entities.find(e=>e.id===j?.entityId);const live=r.status==='running'||r.status==='queued';const ms=r.startedUtc?Math.max(0,((r.finishedUtc?new Date(r.finishedUtc):Date.now())-new Date(r.startedUtc))/1000).toFixed(1)+' s':'—';const idleSec=live&&r.lastProgressUtc?Math.max(0,Math.floor((Date.now()-new Date(r.lastProgressUtc).getTime())/1000)):0;const phase=live?'<div class="sync-live"><span class="sync-pulse" aria-hidden="true"></span><b>'+esc(r.phase||'En proceso')+'</b><small>'+esc(r.batches??0)+' lotes completados · '+esc(r.rows||0)+' filas leídas (provisionales)</small>'+(idleSec>120?'<small>Esta etapa lleva '+Math.floor(idleSec/60)+' min sin cambiar de fase. En cargas históricas grandes PostgreSQL puede seguir trabajando; comprueba sus recursos si se prolonga.</small>':'')+'</div>':esc(r.phase||'—');return `<tr><td>${esc(date(r.startedUtc))}<div class="muted">${esc(ms)}</div></td><td>${esc(r.pharmacyCode||p?.code||'—')}</td><td>${esc(entityLabel(r.entityName||e?.name)||'—')}</td><td>${r.mode==='snapshot'?'Completa (reconciliación)':'Incremental (altas y modificaciones)'}</td><td>${esc(r.rows||0)}${r.provisional?'*':''}</td><td>${esc(r.inserted||0)}</td><td>${esc(r.updated||0)}</td><td>${esc(r.deleted||0)}</td><td>${esc(r.duplicates||0)}</td><td>${status(r.status)}</td><td>${phase}</td><td class="muted">${esc(r.error|| (r.fromUtc&&r.untilUtc?date(r.fromUtc)+' → '+date(r.untilUtc):'—'))}</td></tr>`}).join('')}</tbody></table></div>`;
@@ -143,7 +144,9 @@ function jobs(){
  const familyConfigured=familiesEntity?list.filter(j=>j.entityId===familiesEntity.id).length:0;
  const vendorsEntity=cfg().entities.find(e=>e.name==='vendedores');
  const vendorsConfigured=vendorsEntity?list.filter(j=>j.entityId===vendorsEntity.id && farmaticPharmacies.some(p=>p.id===j.pharmacyId)).length:0;
- let out=head('Consultas SQL','Selecciona una farmacia, entidad, consulta y política de sincronización.',`<button class="btn" onclick="F.edit('job','new')">＋ Nueva consulta</button>`);
+ const executable=list.filter(j=>j.enabled&&cfg().pharmacies.some(p=>p.id===j.pharmacyId&&p.enabled)).length;
+ let out=head('Consultas SQL','Selecciona una farmacia, entidad, consulta y política de sincronización.',
+   `<div class="row-actions"><button id="run-all-jobs" class="btn secondary" type="button" onclick="F.runAll()" ${executable===0||state.bulkRunPending?'disabled':''}>${state.bulkRunPending?'Añadiendo a la cola…':'▶ Ejecutar todas'}</button><button class="btn" onclick="F.edit('job','new')">＋ Nueva consulta</button></div>`);
  // Herramientas opcionales; la pantalla principal muestra primero los trabajos.
   const utilities=[];
   if(familiesEntity && farmaticPharmacies.length)
@@ -228,6 +231,40 @@ function history(){
  return head('Historial de ejecuciones','Consulta cada farmacia, entidad, registros importados e incidencias.',`<button class="btn secondary" onclick="F.loadRuns()">↻ Actualizar</button>`)+panel('Histórico por farmacia y fuente',filterControls+(runs.length?tableRuns(runs):'<div class="empty">No hay ejecuciones con estos filtros.</div>')+pager)+
  panel('Estado por consulta',`<div class="table-scroll"><table><thead><tr><th>Farmacia / Entidad</th><th>Último éxito</th><th>Registros leídos</th><th>Altas / cambios / bajas</th><th>Punto incremental</th><th>Última carga completa</th><th>Resultado</th></tr></thead><tbody>${c.jobs.map(j=>{let p=c.pharmacies.find(p=>p.id===j.pharmacyId),e=c.entities.find(e=>e.id===j.entityId),s=c.states.find(s=>s.jobId===j.id);return `<tr><td>${esc(p?.code||'—')} / ${esc(entityLabel(e?.name)||'—')}</td><td>${esc(date(s?.lastSuccessUtc))}</td><td>${esc(s?.lastRows??'—')}</td><td>${esc(s?.lastInserted??0)} / ${esc(s?.lastUpdated??0)} / ${esc(s?.lastDeleted??0)}</td><td>${esc(date(s?.watermarkUtc))}</td><td>${esc(date(s?.lastFullSuccessUtc))}</td><td>${status(s?.lastStatus||'pending')}<div class="muted">${esc(s?.lastError||'')}</div></td></tr>`}).join('')}</tbody></table></div>`);
 }
+
+function transfer(){
+ const c=cfg();
+ return head('Exportar e importar configuración',
+  'Traslada los mismos orígenes y ajustes a otro equipo Windows.')+
+ panel('Exportar copia cifrada',`
+ <p class="fm-transfer-explain">Un único fichero <b>.fmsyncbak</b> incluirá ${c.pharmacies.length}
+ orígenes, ${c.jobs.length} consultas SQL, conexiones SQL Server, configuración
+ PostgreSQL, alertas, horarios y puntos de sincronización. Las credenciales
+ se incluyen cifradas con la contraseña de traslado.</p>
+ <form class="fm-transfer-form" onsubmit="F.exportConfiguration(event)">
+ ${f('Contraseña de traslado','export_password','','required minlength="12" maxlength="256" autocomplete="new-password"','password')}
+ ${f('Repetir contraseña','export_repeat','','required minlength="12" maxlength="256" autocomplete="new-password"','password')}
+ <div class="field span2"><button type="submit" class="btn">Exportar toda la configuración</button></div>
+ </form>
+ <p class="fm-transfer-tip">Guarda el fichero y la contraseña en lugares seguros.
+ La contraseña del panel y el histórico de ejecuciones no se exportan.</p>`)+
+ panel('Importar copia de otro equipo',`
+ <p class="fm-transfer-explain">Restaura las conexiones, las consultas y sus
+ ajustes en esta instalación. La configuración existente se sustituirá.</p>
+ <form class="fm-transfer-form" onsubmit="F.importConfiguration(event)">
+ <div class="field span2"><label for="import_backup">Fichero de copia</label>
+ <input type="file" id="import_backup" accept=".fmsyncbak,application/octet-stream" required></div>
+ ${f('Contraseña de traslado','import_password','','required minlength="12" maxlength="256" autocomplete="off"','password')}
+ <div class="field span2"><label class="checkline"><input type="checkbox" id="import_accept" required>
+ Confirmo que la configuración actual se reemplazará y que el servicio anterior
+ estará detenido para evitar sincronizar desde dos equipos.</label></div>
+ <div class="field span2"><button class="btn secondary" type="submit">Importar y restaurar configuración</button></div>
+ </form>
+ <p class="fm-transfer-tip">Conserva las marcas incrementales confirmadas.
+ Tras importar, verifica la identidad del servicio Windows, el acceso SQL y,
+ si usas SSH con clave privada, copia la clave y adapta su ruta manualmente.</p>`);
+}
+
 async function showAuth(forceLogin=false){
  // Impide que la actualización periódica de Resumen siga solicitando /config
  // mientras se muestra el login de una sesión realmente caducada.
@@ -250,11 +287,63 @@ window.F={
   state.loginPending=false;
   if(submit)submit.disabled=false;
  },
- go(page,event){if(!pageRoutes[page])return;event?.preventDefault?.();if(window.location?.hash!=='#'+pageRoutes[page])window.history?.pushState?.({},'','#'+pageRoutes[page]);state.page=page;state.editing=null;render();window.scrollTo(0,0);if(page==='history')this.loadRuns();},
+ // La navegación utiliza documentos/rutas reales, no una simulación con pushState.
+ // Esto garantiza que la barra del navegador cambie incluso en WebViews.
+ go(page,event){if(!pageRoutes[page])return;event?.preventDefault?.();window.location.assign(pageRoutes[page]);},
  edit(kind,id){state.editing={kind,id};render();setTimeout(()=>document.querySelector('.panel form input')?.focus(),0);},
  cancel(){state.editing=null;render();},
  refresh(){attempt(reload);},
  async logout(){await attempt(async()=>{await req('/logout','POST');state.config=null;await showAuth(true);});},
+
+ async exportConfiguration(event){
+  event.preventDefault();
+  await attempt(async()=>{
+   const password=val('export_password');
+   if(password.length<12||password!==val('export_repeat'))
+    throw new Error('Las contraseñas deben coincidir y tener al menos 12 caracteres.');
+   const response=await fetch('/api/configuration/export',{
+    method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json','X-Farmetrica-Request':'1'},
+    body:JSON.stringify({password})
+   });
+   if(!response.ok){
+    const data=await response.json().catch(()=>({}));
+    throw new Error(data.error||'No se pudo crear la copia.');
+   }
+   const blob=await response.blob();
+   const address=URL.createObjectURL(blob);
+   const link=document.createElement('a');
+   try{
+    link.href=address;
+    link.download='farmetrica-sync-config-'+new Date().toISOString().slice(0,10)+'.fmsyncbak';
+    document.body.appendChild(link);link.click();
+   }finally{link.remove();URL.revokeObjectURL(address);}
+   document.getElementById('export_password').value='';
+   document.getElementById('export_repeat').value='';
+   toast('Copia cifrada exportada correctamente.');
+  });
+ },
+ async importConfiguration(event){
+  event.preventDefault();
+  await attempt(async()=>{
+   const file=document.getElementById('import_backup')?.files?.[0];
+   if(!file||file.size>16*1024*1024)throw new Error('Selecciona un fichero válido de hasta 16 MB.');
+   if(!checked('import_accept'))throw new Error('Debes confirmar la sustitución.');
+   if(!confirm('¿Sustituir toda la configuración de esta máquina? Comprueba que el equipo antiguo no esté sincronizando.'))return;
+   const form=new FormData();
+   form.append('backup',file);
+   form.append('password',val('import_password'));
+   form.append('confirm','REEMPLAZAR');
+   const response=await fetch('/api/configuration/import',{
+    method:'POST',credentials:'same-origin',
+    headers:{'X-Farmetrica-Request':'1'},body:form
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(result.error||'La importación no se ha podido completar.');
+   await reload();
+   toast('Copia restaurada: '+result.origins+' orígenes y '+result.jobs+' consultas.');
+  });
+ },
  async saveDestination(ev){ev.preventDefault();await attempt(async()=>{await req('/destination','PUT',pgDraft());await reload();toast('Destino PostgreSQL guardado.');});},
  async testDestination(){await attempt(async()=>{let r=await req('/destination/test','POST');toast(r.message);});},
  async testDestinationDraft(){await attempt(async()=>{let r=await req('/destination/test-draft','POST',{destination:pgDraft()});toast(r.message);});},
@@ -420,6 +509,24 @@ window.F={
  },
  async saveJob(ev){ev.preventDefault();await attempt(async()=>{let id=state.editing.id;let data={pharmacyId:val('j_pharmacy'),entityId:val('j_entity'),sql:val('j_sql'),fullSql:val('j_fullSql'),mode:val('j_mode'),everyMinutes:+val('j_every'),dailyAtLocal:+val('j_every')===1440?(val('j_daily_at')||null):null,batchSize:+val('j_batch'),initialFromUtc:val('j_since')+'T00:00:00Z',enabled:checked('j_enabled'),replayMinutes:+val('j_replay'),safetyDelayMinutes:+val('j_delay'),alertRecipients:val('j_alerts')};await req('/jobs'+(id==='new'?'':'/'+id),id==='new'?'POST':'PUT',data);state.editing=null;await reload();toast('Consulta guardada.');});},
  async testPharmacy(id){await attempt(async()=>{let r=await req('/pharmacies/'+id+'/test','POST');toast(r.message);});},
+ async runAll(){
+    if(state.bulkRunPending)return;
+    const active=cfg().jobs.filter(j=>j.enabled&&cfg().pharmacies.some(p=>p.id===j.pharmacyId&&p.enabled)).length;
+    if(active===0){toast('No hay consultas activas en farmacias habilitadas.',true);return;}
+    if(!confirm('¿Ejecutar todas las '+active+' consultas activas? Se añadirán a la cola y se procesarán una a una. Las consultas que ya estén en curso no se duplicarán.'))return;
+    state.bulkRunPending=true;
+    const button=document.getElementById('run-all-jobs');
+    if(button){button.disabled=true;button.textContent='Añadiendo a la cola…';}
+    try {
+      const result=await req('/jobs/run-all','POST');
+      await reload();
+      const summary=result.queued>0
+        ? result.queued+' consultas en cola'+(result.initialFullQueued?' ('+result.initialFullQueued+' cargas iniciales completas)':'')+'.'
+        : result.message;
+      toast(summary+(result.alreadyPending?' '+result.alreadyPending+' ya estaban pendientes.':''));
+    } catch(e){toast(e.message,true);}
+    finally{state.bulkRunPending=false;const button=document.getElementById('run-all-jobs');if(button){button.disabled=false;button.textContent='▶ Ejecutar todas';}}
+ },
  async run(id){await attempt(async()=>{let r=await req('/jobs/'+id+'/run','POST');toast(r.queued?'Ejecución añadida a la cola.':'Esta consulta ya está en cola.');setTimeout(()=>attempt(reload),2500);});},
  async runFull(id){if(!confirm('¿Ejecutar una carga COMPLETA? Se reemplazarán los registros existentes de esta farmacia y entidad en PostgreSQL tras las verificaciones de seguridad.'))return;await attempt(async()=>{let r=await req('/jobs/'+id+'/run-full','POST');toast(r.queued?'Carga completa añadida a la cola.':'Esta consulta ya está en cola.');setTimeout(()=>attempt(reload),2500);});},
  async remove(kind,id){let labels={pharmacy:'la farmacia',entity:'la entidad',job:'la consulta'};if(!confirm('¿Eliminar '+labels[kind]+'? No elimina los registros de PostgreSQL.'))return;await attempt(async()=>{let path={pharmacy:'pharmacies',entity:'entities',job:'jobs'}[kind];await req('/'+path+'/'+id,'DELETE');state.editing=null;await reload();toast('Elemento eliminado.');});}

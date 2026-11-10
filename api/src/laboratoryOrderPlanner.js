@@ -22,6 +22,36 @@ export function validPlannerDate(date){
 }
 export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).join(",");
 
+/** No mezclar necesidades de farmacias con una venta del almacén.
+ * El stock central se descuenta UNA sola vez, del pedido conjunto y solo
+ * para parafarmacia. Si aún no está importado se mantiene la estimación actual.
+ */
+export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
+ const measures=Object.values(byPharmacy);
+ const allStock=measures.every(m=>m.stock!==null&&m.stock!==undefined);
+ const pharmacyStock=allStock?measures.reduce((n,m)=>n+Number(m.stock),0):null;
+ const allSuggested=measures.every(m=>m.suggested!==null&&m.suggested!==undefined);
+ const pharmacySuggested=allSuggested?
+  measures.reduce((n,m)=>n+Number(m.suggested),0):null;
+ const isPara=type==="parafarmacia";
+ const ready=isPara && warehouseMetric?.warehouseReady===true;
+ // Sin CN fiable no extrapolar la misma referencia ERP a otra base de datos.
+ const hasIdentity=Boolean(String(row.cn||"").trim());
+ const sourceStock=warehouseMetric?.warehouseStock;
+ const warehouseStock=ready&&hasIdentity?
+  sourceStock===null||sourceStock===undefined?0:
+   Number.isFinite(Number(sourceStock))?Number(sourceStock):null:null;
+ const globalStock=pharmacyStock!==null&&warehouseStock!==null?
+  pharmacyStock+warehouseStock:null;
+ const totalSuggested=pharmacySuggested===null?null:
+  isPara&&warehouseStock!==null?
+   Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
+ return {pharmacyStock,warehouseStock,globalStock,
+  warehouseReady:ready,warehouseStockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
+  totalSuggested};
+}
+
+
 export async function readLaboratoryOrderMatrix(pool,ctx,options){
  const [base,frequencyDays]=await Promise.all([
   options.prefetchedRows?
@@ -67,34 +97,6 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    warning:"Se han recuperado los artículos, pero no sus métricas de stock y ventas. "+(e.code||"Error de consulta")};
  }
 
-/** No mezclar necesidades de farmacias con una venta del almacén.
- * El stock central se descuenta UNA sola vez, del pedido conjunto y solo
- * para parafarmacia. Si aún no está importado se mantiene la estimación actual.
- */
-export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
- const measures=Object.values(byPharmacy);
- const allStock=measures.every(m=>m.stock!==null&&m.stock!==undefined);
- const pharmacyStock=allStock?measures.reduce((n,m)=>n+Number(m.stock),0):null;
- const allSuggested=measures.every(m=>m.suggested!==null&&m.suggested!==undefined);
- const pharmacySuggested=allSuggested?
-  measures.reduce((n,m)=>n+Number(m.suggested),0):null;
- const isPara=type==="parafarmacia";
- const ready=isPara && warehouseMetric?.warehouseReady===true;
- // Sin CN fiable no extrapolar la misma referencia ERP a otra base de datos.
- const hasIdentity=Boolean(String(row.cn||"").trim());
- const sourceStock=warehouseMetric?.warehouseStock;
- const warehouseStock=ready&&hasIdentity?
-  sourceStock===null||sourceStock===undefined?0:
-   Number.isFinite(Number(sourceStock))?Number(sourceStock):null:null;
- const globalStock=pharmacyStock!==null&&warehouseStock!==null?
-  pharmacyStock+warehouseStock:null;
- const totalSuggested=pharmacySuggested===null?null:
-  isPara&&warehouseStock!==null?
-   Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
- return {pharmacyStock,warehouseStock,globalStock,
-  warehouseReady:ready,warehouseStockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
-  totalSuggested};
-}
 
  const byRef=new Map(),warehouseMetrics=new Map();
  for(const row of rows){

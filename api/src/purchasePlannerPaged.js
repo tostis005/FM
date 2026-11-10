@@ -1,5 +1,6 @@
 import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {synonymsReady,synonymMatchSQL} from "./synonymSearch.js";
 const TEMPLATE=await readFile(new URL("./purchasePlannerPaged.sql",import.meta.url),"utf8");
 const FIELD={
  articleName:'g."articleName"',unitsPeriod:'g."unitsPeriod"',
@@ -148,11 +149,22 @@ export async function readPurchasePlannerPaged(pool,ctx,{
   "g.prioridad DESC,g.suggested "+(desc?"DESC":"ASC")+" NULLS LAST,g.key":
   FIELD[sort]+" "+(desc?"DESC":"ASC")+" NULLS LAST,g.key";
  const sourceCode=pharmacyDataCodeSQL("f");
+ const searchTerm=String(search||"").trim().toUpperCase();
+ const columnTerm=String(columnFilters.articleName||"").trim();
+ const [eanSearch,eanColumn]=await Promise.all([
+  synonymsReady(pool,schema,searchTerm),synonymsReady(pool,schema,columnTerm)]);
+ const ean=(farmacia,articulo,param)=>" OR "+synonymMatchSQL(schema,{
+  pharmacy:farmacia,article:articulo,term:param});
  const query=TEMPLATE.replaceAll("__SCHEMA__","\""+schema+"\"")
   .replaceAll("__FARMACIA_CODE__",sourceCode)
-  .replaceAll("__ORDER__",order);
+  .replaceAll("__ORDER__",order)
+  .replaceAll("__EAN_CATALOG__",eanSearch?ean("a.farmacia_codigo","a.origen_id","$5"):"")
+  .replaceAll("__EAN_CLASSIFIED__",eanSearch?ean("c.farmacia_codigo","c.articulo","$5"):"")
+  .replaceAll("__EAN_COLUMN__",eanColumn?
+   " OR EXISTS(SELECT 1 FROM clasificados ec WHERE ec.grupo=g.key AND "+
+   synonymMatchSQL(schema,{pharmacy:"ec.farmacia_codigo",article:"ec.articulo",term:"$8"})+")":"");
  const keys=["articleName","stock","unitsPeriod","units3","units12","suggested"];
- const params=[from,to,chosen,ctx.client.slug,String(search||"").trim().toUpperCase(),
+ const params=[from,to,chosen,ctx.client.slug,searchTerm,
   pageSize,(page-1)*pageSize,...keys.map(key=>String(columnFilters[key]||""))];
  const {rows}=await pool.query({text:query,values:params,query_timeout:30000});
  const data=rows[0]||{};

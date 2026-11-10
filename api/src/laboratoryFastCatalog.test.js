@@ -49,7 +49,7 @@ test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=
  assert.doesNotMatch(query.sql,/movements AS MATERIALIZED/);
  assert.match(query.sql,/preparador_exclusiones|unnest\(\$8::text\[\]\)/);
  assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);
- assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"]]);
+ assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"],[]]);
 });
 test("catálogo ligero de medicación evita la segunda consulta de movimientos",async()=>{
  const statements=[];

@@ -35,6 +35,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
+ const [eanReferences,setEanReferences]=useState([]);
  const [data,setData]=useState(empty);
  const catalogueCache=useRef(new Map());
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
@@ -240,14 +241,30 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   return()=>{clearTimeout(timer);controller.abort()};
  },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,reload]);
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
- // Buscar por CN no reejecuta el histórico: filtrar solo la tabla cargada.
+ // Los EAN se resuelven a referencias en el servidor por farmacia autorizada.
+ // La tabla y sus ventas/stock siguen cargadas: no refrescar el preparador.
+ useEffect(()=>{
+  const code=search.trim();
+  setEanReferences([]);
+  if(!/^\d{8,14}$/.test(code)||!scope)return;
+  const controller=new AbortController();
+  const timer=setTimeout(()=>{
+   const q=new URLSearchParams({codigo:code,farmacias:scope});
+   api(clientSlug,"/api/analytics/pedidos/resolver-ean?"+q,{signal:controller.signal})
+    .then(result=>{if(!controller.signal.aborted)setEanReferences(result.references||[])})
+    .catch(()=>{if(!controller.signal.aborted)setEanReferences([])});
+  },250);
+  return()=>{clearTimeout(timer);controller.abort()};
+ },[clientSlug,scope,search]);
  const currentRows=useMemo(()=>{
   const term=search.trim().toLocaleLowerCase("es");
   if(!term)return data.rows||[];
+  const matches=new Set(eanReferences);
   return (data.rows||[]).filter(row=>
    String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(term)||
-   String(row.nombre||"").toLocaleLowerCase("es").includes(term));
- },[data.rows,search]);
+   String(row.nombre||"").toLocaleLowerCase("es").includes(term)||
+   matches.has(String(row.referencia||""))||matches.has(String(row.cn||"")));
+ },[data.rows,search,eanReferences]);
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&(loadStage==="metrics"||loadStage==="fallback")&&Boolean(data.rows?.length);
  const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
@@ -373,8 +390,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      customTo={period==="custom"?customTo:range.to||""}
      onCustomFromChange={v=>changeDate("from",v)}
      onCustomToChange={v=>changeDate("to",v)}>
-     <label className="fm-unified-filter"><span>Buscar artículo o CN</span>
-      <input type="search" placeholder="Artículo o CN…" value={search}
+     <label className="fm-unified-filter"><span>Buscar artículo, CN o EAN</span>
+      <input type="search" placeholder="Artículo, CN o EAN…" value={search}
        onChange={e=>{setSearch(e.target.value)}}/></label>
     </ReportFilterBar>
     {!range.valid&&<p role="alert" className="fm-op-message fm-op-error">Selecciona un período válido y comprueba las fechas desde/hasta.</p>}

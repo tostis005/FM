@@ -2,6 +2,7 @@
 // usa el stock actual del ERP y documentos completos de entrada y venta.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {nameCommercialRows} from "./commercialNames.js";
+import {synonymsReady,synonymMatchSQL} from "./synonymSearch.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^20\d{2}-\d{2}-\d{2}$/;
@@ -50,9 +51,11 @@ export function stockSinRecepcionesFilters(req){
 // Se recorre el catálogo con stock positivo y se excluyen todas las recepciones
 // recientes válidas, independientemente de la clasificación del proveedor.
 // Las fechas se consultan en la página, salvo al ordenar globalmente por ellas.
-export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc"){
+export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc",ean={}){
  if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
  const q='"'+schema+'"';
+ const eanSearch=ean.search?" OR "+synonymMatchSQL(schema,{pharmacy:"a.farmacia_codigo",article:"a.origen_id",term:"$4"}):"";
+ const eanCode=ean.cn?" OR "+synonymMatchSQL(schema,{pharmacy:"a.farmacia_codigo",article:"a.origen_id",term:"$8"}):"";
  if(!SORT_KEYS.has(orden)||!["asc","desc"].includes(direccion))throw Error("Orden inválido");
  const basic={stock:"a.stock_actual",pvp:"a.pvp",cn:"coalesce(nullif(btrim(a.codigo_nacional),''),a.origen_id)",
   name:"a.nombre",pharmacy:"f.nombre"};
@@ -126,10 +129,10 @@ export function buildStockSinRecepcionesSQL(schema,orden="stock",direccion="desc
    AND nullif(btrim(a.origen_id),'') IS NOT NULL
    AND ($4::text='' OR a.codigo_nacional ILIKE '%'||$4||'%'
       OR a.nombre ILIKE '%'||$4||'%'
-      OR a.origen_id ILIKE '%'||$4||'%')
+      OR a.origen_id ILIKE '%'||$4||'%' ${eanSearch})
    AND r.farmacia_codigo IS NULL
    AND ($7::text='' OR f.nombre ILIKE '%'||$7||'%')
-   AND ($8::text='' OR coalesce(nullif(btrim(a.codigo_nacional),''),a.origen_id) ILIKE '%'||$8||'%')
+   AND ($8::text='' OR coalesce(nullif(btrim(a.codigo_nacional),''),a.origen_id) ILIKE '%'||$8||'%' ${eanCode})
    AND ($9::text='' OR a.nombre ILIKE '%'||$9||'%')
    AND ($10::text='' OR a.stock_actual::text ILIKE '%'||$10||'%')
    AND ($11::text='' OR a.pvp::text ILIKE '%'||$11||'%')
@@ -219,7 +222,10 @@ export function setupStockSinRecepciones(app,pool,{requireTenantModule}){
       fields.some(field=>!present.has(table+"."+field))))
      return res.json({available:false,rows:[],
       message:"La sincronización aún no incluye todos los campos del catálogo, las recepciones o las ventas necesarios para este informe."});
-    const {rows}=await pool.query({text:buildStockSinRecepcionesSQL(f.schema,f.orden,f.direccion),
+    const [eanSearch,eanCode]=await Promise.all([
+     synonymsReady(pool,f.schema,f.buscar),synonymsReady(pool,f.schema,f.filtros.cn)]);
+    const {rows}=await pool.query({text:buildStockSinRecepcionesSQL(f.schema,f.orden,f.direccion,
+     {search:eanSearch,cn:eanCode}),
      values:[f.desde,f.ids,f.slug,f.buscar,f.tamano+1,(f.pagina-1)*f.tamano,
       f.filtros.pharmacy,f.filtros.cn,f.filtros.name,f.filtros.stock,f.filtros.pvp]});
     const pageRows=rows.slice(0,f.tamano);

@@ -7,6 +7,7 @@ import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {loadCommercialNames} from "./commercialNames.js";
 import {classifyAbcd} from "./abcd.js";
 import {GENERIC_GROUP_SORT_KEYS,sortGenericGroups} from "./genericGroupSort.js";
+import {resolveEANReferences} from "./synonymSearch.js";
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 function dayValid(v){if(!ISO.test(v))return false;const d=new Date(v+"T00:00:00Z");return !isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function getFilter(req,res){
@@ -303,8 +304,10 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    const term=f.search.toLocaleLowerCase("es");
    let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    if(term){
+    const references=await resolveEANReferences(pool,req.context,f.ids,f.search);
+    const codes=references.filter(code=>/^\d{6,7}$/.test(code));
     const {rows:matched}=await pool.query(`SELECT DISTINCT dcpf FROM farmetrica.nomenclator_presentaciones
-     WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%'`,[term]);
+     WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%' OR cn=ANY($2::text[])`,[term,codes]);
     const ids=new Set(matched.map(x=>x.dcpf));
     groups=[...sums.values()].filter(g=>ids.has(g.dcpf)||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    }

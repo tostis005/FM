@@ -277,7 +277,7 @@ try{
           .waitFor({state:"attached",timeout:20000});
          const headers=await page.locator(".fm-objectives-base input[type=radio]").count();
          if(headers!==5)throw Error("Nueva campaña necesita cuatro períodos y stock actual seleccionables (detectados "+headers+")");
-         const searchInput=page.getByRole("searchbox",{name:"Buscar por artículo, proveedor o CN"});
+         const searchInput=page.getByRole("searchbox",{name:"Buscar por artículo, proveedor, CN o EAN"});
          await searchInput.fill("Crema");
          await page.locator(".fm-objectives-results").waitFor({state:"visible",timeout:10000});
          if(await page.locator(".fm-objectives-results .fm-objectives-product").count()!==1)

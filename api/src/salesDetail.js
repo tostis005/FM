@@ -2,6 +2,7 @@
 // No se recalculan aquí gráficos, totales históricos ni indicadores de recuento.
 import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 import {parseSalesColumnFilters,salesColumnWhereSQL} from "./salesColumnFilters.js";
+import {synonymsReady,synonymMatchSQL} from "./synonymSearch.js";
 const VALID=/^[a-z][a-z0-9_]{1,62}$/;
 const ISO=/^20\d{2}-\d{2}-\d{2}$/;
 // Columnas permitidas para ordenar todo el universo SQL, antes del LIMIT/OFFSET.
@@ -9,13 +10,17 @@ export const SALES_DETAIL_SORT_KEYS=["name","cn","family","pharmacy","abcdClass"
  "pvp","purchaseCost","costSource","saleUnitPrice","unitMargin","units",
  "value","margin","marginPct"];
 export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
- {articles="normalized",purchases="normalized"}={},columnFilters={}){
+ {articles="normalized",purchases="normalized"}={},columnFilters={},withSynonyms=false){
  if(!VALID.test(schema))throw Error("Esquema no permitido");
  if(!SALES_DETAIL_SORT_KEYS.includes(sortKey)||!["asc","desc"].includes(sortDir)||
    !["normalized","legacy","none"].includes(articles)||
    !["normalized","legacy","none"].includes(purchases))
   throw Error("Ordenación o formato de detalle de ventas inválido");
  const t='"'+schema+'"';
+ const eanMatch=withSynonyms&&articles==="normalized"?
+  ", "+synonymMatchSQL(schema,{pharmacy:"r.code",article:"r.articulo_id",term:"$5"})+' AS "eanMatch"':"";
+ const eanGroup=eanMatch?',bool_or("eanMatch") AS "eanMatch"':"";
+ const eanFilter=eanMatch?' OR r."eanMatch"':"";
  const purchasePrice=purchases==="legacy"?"b.puc":"b.coste_unitario";
  const purchaseJoin=purchases==="legacy"?`JOIN ${t}.fm_recepciones_analitica b
      ON b.farmacia_id::text=c."pharmacyId" AND b.producto_id=c.articulo_id
@@ -112,6 +117,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
     nullif(btrim(a.codigo_nacional),'') AS "nationalCode",
     r.articulo_id AS "sourceId",coalesce(nullif(a.nombre,''),r.articulo_id) AS name,
     coalesce(a.familia,'') AS family,a.pmc::float8 AS pmc,a.pvp::float8 AS pvp
+    ${eanMatch}
   FROM raw r JOIN pharmacy_map pm ON pm.code=r.code
   ${articleJoin}
  ),
@@ -119,6 +125,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
   SELECT "pharmacyId",cn,max("nationalCode") AS "nationalCode",
     max("sourceId") AS "sourceId",max(name) AS name,max(family) AS family,
     max(pmc) AS pmc,max(pvp) AS pvp,sum(units)::float8 AS units,sum(value)::float8 AS value
+    ${eanGroup}
   FROM catalog GROUP BY "pharmacyId",cn HAVING sum(units)>0
  ),
  ranked AS (
@@ -135,7 +142,7 @@ export function buildSalesDetailSQL(schema,sortKey="value",sortDir="desc",
      WHEN r.previous_positive<r.total_positive*.80 THEN 'A'
      WHEN r.previous_positive<r.total_positive*.95 THEN 'B' ELSE 'C' END AS "abcdClass"
   FROM ranked r
-  WHERE ($5::text='' OR r.cn ILIKE '%'||$5||'%' OR r.name ILIKE '%'||$5||'%')
+  WHERE ($5::text='' OR r.cn ILIKE '%'||$5||'%' OR r.name ILIKE '%'||$5||'%' ${eanFilter})
     AND (cardinality($6::text[])=0 OR r.family=ANY($6::text[]))
  ),
  ${globalCosts}
@@ -286,11 +293,12 @@ export function setupSalesDetail(app,pool,{requireTenant,cache=null}){
     if(cache.isCacheRange?.(args)&&typeof res.once==="function")
      res.once("finish",refresh);
    }
+   const eanEnabled=source.articles==="normalized"&&await synonymsReady(pool,schema,search);
    const args=[from,to,ids.map(id=>byId.get(id)),ids.map(String),search,families,
     pageSize+1,(page-1)*pageSize,JSON.stringify(columnFilters)];
    let rows,partialData=false;
    try{
-    ({rows}=await pool.query({text:buildSalesDetailSQL(schema,order,direction,source,columnFilters),
+    ({rows}=await pool.query({text:buildSalesDetailSQL(schema,order,direction,source,columnFilters,eanEnabled),
      values:args,query_timeout:14000}));
    }catch(error){
     const recover=isQueryTimeout(error)&&order==="value"&&direction==="desc"&&

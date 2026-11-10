@@ -1,0 +1,33 @@
+name: Buscar EAN por sinónimos · regresión
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'api/src/**'
+      - 'web/src/**'
+      - '.github/workflows/busqueda-ean-regresion.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  buscar_ean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependencias API
+        run: npm install --prefix api --no-audit --no-fund
+      - name: Regresiones de sinónimos, compras, ventas, stock, promociones y preparador
+        run: |
+          node --test api/src/synonymSearch.test.js \
+            api/src/promotionCatalogSearch.test.js \
+            api/src/stockSinRecepciones.test.js \
+            api/src/salesDetail.test.js \
+            api/src/purchasePlannerPaged.test.js \
+            api/src/laboratoryFastCatalog.test.js
+      - name: Compilar interfaz
+        run: |
+          npm install --prefix web --no-audit --no-fund
+          npm run build --prefix web

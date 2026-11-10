@@ -6,6 +6,7 @@ import {includedPurchaseSupplier} from "./supplierReporting.js";
 import {loadCommercialNames} from "./commercialNames.js";
 import {classifyAbcd} from "./abcd.js";
 import {parseReportColumnFilters,wrapReportTableSQL} from "./reportTableFilters.js";
+import {synonymsReady,synonymMatchSQL} from "./synonymSearch.js";
 // Solo expresiones SQL conocidas; los nombres de columnas del navegador nunca se interpolan.
 const REPORT_ORDER_KEYS={
  compras:["name","cn","pharmacy","family","pvp","supplier","units","puc","value","lines"],
@@ -152,6 +153,9 @@ export function setupRealReports(app,pool,{requireTenant}){
       tableColumns(pool,schema,"productos"),tableColumns(pool,schema,"stock")
      ]);
    const articles=has(articleCols,"farmacia_codigo","origen_id","nombre","codigo_nacional");
+   const eanEnabled=articles&&await synonymsReady(pool,schema,f.search);
+   const eanMatch=(pharmacy,article,term)=>eanEnabled?
+    " OR "+synonymMatchSQL(schema,{pharmacy,article,term}):"";
    const legacyArticles=!articles&&has(legacyProductCols,"id","descripcion","cn");
    const sales=has(saleCols,"farmacia_codigo","articulo_id","fecha","unidades","importe");
    const normalizedBuys=has(buyCols,"farmacia_codigo","articulo_id","proveedor_id","unidades","coste_unitario","importe","fecha");
@@ -219,7 +223,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    // Conservar el filtro exterior para aplicar nombre/CN del último catálogo.
    const exactCn=/^\d{6,7}$/.test(f.search);
    const articleSearchPushdown=articles&&f.search?`AND (
-      t.articulo_id ILIKE '%'||$4||'%' OR EXISTS (
+      t.articulo_id ILIKE '%'||$4||'%' ${eanMatch("t.farmacia_codigo","t.articulo_id","$4")} OR EXISTS (
        SELECT 1 FROM ${quoted}.articulos search_art
        WHERE upper(btrim(search_art.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
          AND search_art.origen_id=t.articulo_id
@@ -281,7 +285,7 @@ export function setupRealReports(app,pool,{requireTenant}){
    JOIN farmetrica.farmacias f ON f.id=t.pharmacy_id AND f.cliente_slug=$6
    ${article}`;
    const articleFilter=`($4::text='' OR ${cn} ILIKE '%'||$4||'%' OR
-      coalesce(art.nombre,'') ILIKE '%'||$4||'%')
+      coalesce(art.nombre,'') ILIKE '%'||$4||'%' ${eanMatch("t.farmacia_codigo","t.articulo_id","$4")})
       AND (cardinality($5::text[])=0 OR coalesce(art.familia,'')=ANY($5::text[]))`;
    const sqlSales=`SELECT f.id::text AS "pharmacyId",${columns},
      sum(t.unidades)::float8 AS units,sum(t.importe)::float8 AS value
@@ -541,7 +545,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        WHERE f.id=ANY($2::int[]) AND a.stock_actual IS NOT NULL
          AND ($3::text='' OR a.codigo_nacional ILIKE '%'||$3||'%'
            OR a.origen_id ILIKE '%'||$3||'%'
-           OR a.nombre ILIKE '%'||$3||'%')
+           OR a.nombre ILIKE '%'||$3||'%' ${eanMatch("a.farmacia_codigo","a.origen_id","$3")})
          AND (cardinality($5::text[])=0 OR coalesce(a.familia,'')=ANY($5::text[]))
        GROUP BY f.id,coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))
        ${stockOrder(stockSortExpressions,"coalesce(nullif(btrim(a.codigo_nacional),''),btrim(a.origen_id))")} LIMIT ${rowLimit}`,
@@ -574,7 +578,7 @@ export function setupRealReports(app,pool,{requireTenant}){
          AND upper(btrim(a.farmacia_codigo))=${pharmacyDataCodeSQL("f")}
        WHERE f.id=ANY($2::int[]) AND a.stock_actual IS NOT NULL
          AND ($3::text='' OR a.codigo_nacional ILIKE '%'||$3||'%'
-           OR a.origen_id ILIKE '%'||$3||'%' OR a.nombre ILIKE '%'||$3||'%')
+           OR a.origen_id ILIKE '%'||$3||'%' OR a.nombre ILIKE '%'||$3||'%' ${eanMatch("a.farmacia_codigo","a.origen_id","$3")})
          AND (cardinality($5::text[])=0 OR coalesce(a.familia,'')=ANY($5::text[]))
       `,[codes,pharmacyIds,f.search,req.context.client.slug,f.families]);
      stockSummary={articles:Number(summary[0]?.articles||0),
@@ -624,7 +628,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        ) t JOIN farmetrica.farmacias f ON f.id=t.farmacia_id AND f.cliente_slug=$4
        ${article}
        WHERE ($2::text='' OR ${cn} ILIKE '%'||$2||'%' OR
-         coalesce(art.nombre,'') ILIKE '%'||$2||'%')
+         coalesce(art.nombre,'') ILIKE '%'||$2||'%' ${eanMatch("t.farmacia_codigo","t.articulo_id","$2")})
          AND (cardinality($3::text[])=0 OR coalesce(art.familia,'')=ANY($3::text[]))`;
        const params=[pharmacyIds,f.search,f.families,req.context.client.slug];
        const {rows:current}=await queryTable(`
@@ -718,7 +722,7 @@ export function setupRealReports(app,pool,{requireTenant}){
        ) art ON true
        WHERE s.id_farmacia=ANY($1::int[]) AND
          ($2::text='' OR ${stockCn} ILIKE '%'||$2||'%' OR
-           coalesce(art.nombre,s.descripcion,'') ILIKE '%'||$2||'%')
+           coalesce(art.nombre,s.descripcion,'') ILIKE '%'||$2||'%' ${eanMatch(pharmacyDataCodeSQL("f"),"s.id_articu","$2")})
          AND (cardinality($3::text[])=0 OR coalesce(art.familia,'')=ANY($3::text[]))
        GROUP BY s.id_farmacia,${stockCn}
        ${stockOrder({

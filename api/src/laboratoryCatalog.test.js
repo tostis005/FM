@@ -27,7 +27,7 @@ test("las consultas de catálogo aíslan tenant, farmacia y usan el CN ERP docum
  });
  assert.equal(found.total,1);
  assert.equal(found.rows[0].cn,null);
- assert.deepEqual(captured.values,["C:LAB",[4],"cliente","parafarmacia","art",50,50]);
+ assert.deepEqual(captured.values,["C:LAB",[4],"cliente","parafarmacia","art",50,50,[]]);
  assert.match(captured.text,/m\.cliente_slug=\$3/);
  assert.match(captured.text,/m\.farmacia_id=f\.id/);
  assert.match(captured.text,/med\.cn=nullif\(btrim\(a\.codigo_nacional\)/);

@@ -89,6 +89,14 @@ export function promotionCatalogSearchSQL(schema,columns){
   codePredicates.push("left(btrim(a.cn_normalizado::text),6)=ANY($3::text[])");
  const byCodes=page("SELECT "+fields("NULL::text",true)+" FROM "+a+" a "+scope+
   "WHERE "+hasCN+" AND ("+codePredicates.join(" OR ")+")","$4","$5");
+ // EAN no es CN ni ID interno: relacionar con Sinonimo por articulo y farmacia.
+ // Consulta separada para conservar el plan GIN de la búsqueda textual.
+ const synonymsReady=["farmacia_codigo","articulo_id","codigo"].every(name=>has(columns,"sinonimos",name));
+ const byEAN=synonymsReady?page("SELECT "+fields()+" FROM "+a+" a "+scope+
+  "WHERE "+hasCN+" AND EXISTS (SELECT 1 FROM "+quote(schema)+".sinonimos syn "+
+  "WHERE upper(btrim(syn.farmacia_codigo))="+upper("a.farmacia_codigo::text")+" "+
+  "AND btrim(syn.articulo_id)=btrim(a.origen_id::text) "+
+  "AND syn.codigo=ANY($3::text[]))","$4","$5"):null;
  const supplierReady=refs.length>0&&
   ["farmacia_codigo","origen_id","nombre"].every(n=>has(columns,"proveedores",n));
  const allowed="WITH allowed AS MATERIALIZED (SELECT "+
@@ -130,7 +138,7 @@ export function promotionCatalogSearchSQL(schema,columns){
   scope+
   "WHERE "+hasCN+" AND "+supplierSearchable+" ILIKE ALL($6::text[])":null;
  const byReceiptSupplier=receiptRows?page(receiptRows,"$4","$5"):null;
- return {direct,byCodes,suppliers,bySupplier,byReceiptSupplier,supplierReady};
+ return {direct,byCodes,byEAN,suppliers,bySupplier,byReceiptSupplier,supplierReady};
 }
 
 export function promotionResultCN(row){

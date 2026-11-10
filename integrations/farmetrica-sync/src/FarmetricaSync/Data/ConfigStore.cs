@@ -92,7 +92,10 @@ public sealed class ConfigStore
                 if (!existing.Columns.Any(c => c.Name.Equals(column.Name, StringComparison.OrdinalIgnoreCase)))
                     existing.Columns.Add(new EntityColumn { Name = column.Name, Type = column.Type });
         }
-        if (retiredEntities)
+        // La nueva fuente se añade una sola vez a las farmacias existentes.
+        // No se modifican consultas ni parámetros guardados previamente.
+        bool synonymJobsAdded = SynonymJobs.EnsureForFarmatic(_config) > 0;
+        if (retiredEntities || synonymJobsAdded)
         {
             // Persistir la limpieza una única vez, sin guardar credenciales en logs.
             string tmp = _path + ".tmp";

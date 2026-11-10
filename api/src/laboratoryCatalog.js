@@ -1,5 +1,6 @@
 import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {resolveEANReferences,isBarcodeSearch} from "./synonymSearch.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
@@ -114,6 +115,7 @@ const supplierAliases=`SELECT $1::text AS key
 
 export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,search="",page=1,size=50}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema de cliente inválido");
+ const eanRefs=await resolveEANReferences(pool,context,pharmacies,search);
  const q='"'+context.client.schema+'"';
  const sql=`
   WITH aliases AS ( `+supplierAliases+` ),
@@ -198,12 +200,12 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    SELECT *, (tipo='parafarmacia' AND NOT "inMaster" AND cn IS NULL) AS provisional
    FROM aggregate
    WHERE tipo=$4 AND ($5::text='' OR upper(nombre) LIKE '%'||upper($5)||'%'
-      OR upper(referencia) LIKE '%'||upper($5)||'%')
+      OR upper(referencia) LIKE '%'||upper($5)||'%' OR referencia=ANY($8::text[]))
   )
   SELECT *,count(*) OVER()::int AS total
    FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
+  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size,eanRefs],
   query_timeout:30000});
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }
@@ -212,6 +214,19 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  const auth=requireTenant();
  const access=(req,res)=>req.context.role==="superadministrador"||
   req.context.modules?.compras===true;
+ // El preparador filtra una tabla ya cargada: exponer solo las referencias
+ // equivalentes al EAN dentro de las farmacias autorizadas.
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/resolver-ean",...auth,async(req,res,next)=>{
+  if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});
+  const pharmacies=selectedPharmacies(req.context,req.query.farmacias);
+  const codigo=String(req.query.codigo||"").trim();
+  if(!pharmacies||codigo.length>20)return res.status(400).json({error:"Consulta EAN inválida"});
+  if(!isBarcodeSearch(codigo))return res.json({references:[]});
+  try{
+   const references=await resolveEANReferences(pool,req.context,pharmacies,codigo);
+   res.json({references});
+  }catch(e){next(e)}
+ });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
   if(!access(req,res)&&req.context.modules?.proveedores!==true)
    return res.status(403).json({error:"Catálogo no habilitado"});

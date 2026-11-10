@@ -213,6 +213,10 @@ public static class CanonicalEntities
         // El enlace se realiza por farmacia_codigo + origen_id, nunca por NOMBRE.
         E("vendedores", "Catálogo de vendedores Farmatic",
             ("nombre", "text"), ("tipo", "text"), ("color_ventas", "integer")),
+        // IdArticu se conserva como identificador de artículo Farmatic: no se infiere un CN oficial.
+        // Un artículo puede tener varios códigos y el mismo código puede verse en varias farmacias.
+        E("sinonimos", "Equivalencias de códigos de artículo y códigos de barras Farmatic",
+            ("articulo_id", "text"), ("aplicacion_id", "text"), ("codigo", "text")),
         E("proveedores", "Maestro de proveedores", ("nombre", "text"), ("nif", "text"), ("telefono", "text"), ("email", "text"),
             ("direccion", "text"), ("codigo_postal", "text"), ("poblacion", "text"), ("provincia", "text"), ("web", "text"), ("descuento", "numeric"))
     ];

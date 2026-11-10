@@ -96,7 +96,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     if(onExport)return onExport();
     downloadTableCSV(exportFileName||"farmetrica-"+label.trim().toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-"),
-      csvColumns.map(c=>c.label),filtered.map(row=>csvColumns.map(c=>
+      csvColumns.map(c=>c.exportLabel||c.label),filtered.map(row=>csvColumns.map(c=>
        c.exportValue?c.exportValue(row):c.value(row))));
   };
   return <>

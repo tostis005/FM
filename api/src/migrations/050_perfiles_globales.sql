@@ -47,14 +47,14 @@ BEGIN
    profile_modules:=ARRAY['promociones']::text[];
    profile_sections:=ARRAY['promociones','seguimiento-global']::text[];
   END IF;
-  IF base.clave NOT IN ('superadministrador') THEN
+  IF base.clave NOT IN ('superadministrador','colaborador') THEN
    SELECT uc.modulos,uc.secciones INTO profile_modules,profile_sections
    FROM farmetrica.usuario_clientes uc
    LEFT JOIN public.acceso_cuentas ac ON ac.email=uc.email
    WHERE uc.rol=base.rol
    ORDER BY
-    CASE WHEN base.clave='gestor' AND lower(coalesce(ac.nombre,'')) LIKE '%cristina%' THEN 0 ELSE 1 END,
-    CASE WHEN base.clave='farmacia' AND cardinality(uc.secciones)=2 THEN 0 ELSE 1 END,
+    CASE WHEN base.clave='gestor' AND (lower(coalesce(ac.nombre,'')||' '||uc.email) LIKE '%cristina%' OR lower(coalesce(ac.nombre,'')||' '||uc.email) LIKE '%cris%') THEN 0 ELSE 1 END,
+    CASE WHEN base.clave='farmacia' AND cardinality(uc.secciones)=2 AND uc.secciones @> ARRAY['promociones','seguimiento-global']::text[] THEN 0 ELSE 1 END,
     uc.email,uc.cliente_slug
    LIMIT 1;
    IF NOT FOUND THEN

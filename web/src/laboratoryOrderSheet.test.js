@@ -12,11 +12,11 @@ test("parafarmacia suma la propuesta en un único campo editable",()=>{
  assert.equal(line.units,17);
  assert.equal(line.metrics["1"].stock,4);
  const data=laboratoryExcelRows([{row,line}],pharmacies,"parafarmacia");
- assert.equal(data[0].length,2+5*2+5);
+ assert.equal(data[0].length,2+5*2+7);
  assert.equal(data[1].at(-2),"Pedir total");
   assert.equal(data[1].at(-1),"Comentarios");
  assert.equal(data[0].at(-2),"Pedir total");
- assert.deepEqual(data[2].slice(-5),[7,14,17,17,""]);
+ assert.deepEqual(data[2].slice(-7),[7,null,null,14,17,17,""]);
  assert.equal(data[2][0],"000123");
 });
 test("medicación nunca mezcla cantidades entre farmacias",()=>{
@@ -24,10 +24,10 @@ test("medicación nunca mezcla cantidades entre farmacias",()=>{
  assert.deepEqual(line.unitsByPharmacy,{"1":10,"2":7});
  line.unitsByPharmacy["1"]=4;
  const data=laboratoryExcelRows([{row:{...row,cn:"400123"},line}],pharmacies,"medicacion");
- assert.equal(data[0].length,2+5*2+5);
+ assert.equal(data[0].length,2+5*2+7);
  assert.equal(data[2][6],4);
  assert.equal(data[2][11],7);
- assert.deepEqual(data[2].slice(-5),[7,14,17,11,""]);
+ assert.deepEqual(data[2].slice(-7),[7,null,7,14,17,11,""]);
 });
 test("borrador conserva ediciones previas al cambiar de página",()=>{
  const edited={"000123":{...defaultLaboratoryLine(row,"parafarmacia",["1","2"]),units:12}};
@@ -112,4 +112,17 @@ test("los artículos excluidos conservan comentarios, pero nunca cantidades",()=
  const medication=defaultLaboratoryLine({...excluded,cn:"400123"},"medicacion",["1","2"]);
  assert.deepEqual(medication.unitsByPharmacy,{"1":0,"2":0});
  assert.equal(totalStockFor({...row,byPharmacy:{"1":{stock:4},"2":{stock:null}}},["1","2"]),null);
+});
+
+test("parafarmacia descuenta almacén de pedido y Excel sin modificar medicación",()=>{
+ const item={...row,totalSuggested:0,warehouseStock:1000,globalStock:1007};
+ const line=defaultLaboratoryLine(item,"parafarmacia",["1","2"]);
+ assert.equal(line.units,0);
+ const excel=laboratoryExcelRows([{row:item,line}],pharmacies,"parafarmacia");
+ assert.deepEqual(excel[1].slice(-7),[
+  "Total farmacias","Almacén","Stock total","Total vendido",
+  "Propuesta total","Pedir total","Comentarios"]);
+ assert.deepEqual(excel[2].slice(-7),[7,1000,1007,14,0,0,""]);
+ const medication=defaultLaboratoryLine({...item,cn:"400123"},"medicacion",["1","2"]);
+ assert.deepEqual(medication.unitsByPharmacy,{"1":10,"2":7});
 });

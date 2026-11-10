@@ -103,3 +103,30 @@
 .fm-picking-issues-footer>div{display:flex;gap:8px}
 .fm-picking-table th.fm-picking-number{white-space:nowrap;min-width:88px}
 @media(max-width:550px){.fm-picking-issues{padding:14px}.fm-picking-issues-footer>div{width:100%;justify-content:flex-end}}
+
+/* Tabla compartida: Stock y Unidades en grupos, códigos cortos, filtros y 500 filas. */
+.fm-picking-list-table{min-width:0;padding:0 12px 12px}
+.fm-picking-list-table .fm-table-toolbar{padding:10px 8px}
+.fm-picking-list-table .table-scroll{max-height:78vh;overflow:auto}
+.fm-picking-list-table .smart-table{width:100%;white-space:nowrap;font-size:12px}
+.fm-picking-list-table .smart-table th,.fm-picking-list-table .smart-table td{padding:8px 9px}
+.fm-picking-list-table .smart-table thead th{position:sticky;background:#f5f8f6;z-index:2}
+.fm-picking-list-table .smart-table thead .fm-smart-group-row th{top:0;border-bottom:1px solid #d8e9df}
+.fm-picking-list-table .smart-table thead .fm-smart-group-row~tr th{top:37px}
+.fm-picking-list-table .smart-table thead .smart-filter-row th{top:74px;z-index:3}
+.fm-picking-list-table .fm-smart-group-title{text-align:center!important;background:#e4f1e9!important;color:#24573c!important;font-weight:800!important;letter-spacing:.02em}
+.fm-picking-list-table .fm-picking-grouped th:has(.smart-sort[aria-label*=" Stock "]),
+.fm-picking-list-table .fm-picking-grouped th:has(.smart-sort[aria-label*=" Unidades "]){min-width:65px;max-width:95px}
+.fm-picking-list-table .fm-picking-grouped .smart-sort{justify-content:center;gap:4px}
+.fm-picking-list-table .fm-picking-grouped .smart-column-filter{min-width:46px;width:100%;font-size:11px;padding:6px}
+.fm-picking-list-table .fm-picking-grouped td{font-variant-numeric:tabular-nums}
+.fm-picking-list-table .fm-picking-grouped .fm-picking-number{text-align:right;display:block}
+.fm-picking-list-table .fm-picking-grouped .fm-picking-assigned{display:block;text-align:right;color:#207c57}
+.fm-picking-list-table .fm-picking-grouped td .fm-picking-product{min-width:150px;max-width:310px}
+.fm-picking-list-table .fm-picking-details-panel{white-space:normal;padding:12px}
+.fm-picking-list-table .fm-picking-details-panel .fm-picking-details{max-width:100%}
+.fm-picking-list-table .fm-expanded-row td{background:#f8faf9}
+@media(max-width:600px){
+ .fm-picking-list-table{padding:0 5px 10px}
+ .fm-picking-list-table .smart-table th,.fm-picking-list-table .smart-table td{padding:7px 6px}
+}

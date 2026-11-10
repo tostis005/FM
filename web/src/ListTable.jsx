@@ -30,7 +30,7 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName="",renderExpandedRow=null,expandedRowKeys=[]}){
+export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName="",renderExpandedRow=null,expandedRowKeys=[],initialPageSize=50,pageSizes=PAGE_SIZES}){
   const [localFilters,setLocalFilters]=useState({});
  const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
  const filters=remotelyFiltered?serverFilters:localFilters;
@@ -38,7 +38,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const remote=serverSort!==undefined&&typeof onSortChange==="function";
   const sort=remote?serverSort:localSort;
   const [page,setPage]=useState(0);
-  const [pageSize,setPageSize]=useState(50);
+  const [pageSize,setPageSize]=useState(initialPageSize);
   const externalPage=Boolean(serverPagination);
   const activeSize=externalPage?serverPagination.pageSize:pageSize;
   // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
@@ -83,13 +83,20 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     if(remote)onSortChange(next);else setLocalSort(next);
     if(!externalPage)setPage(0);
   };
+  const hasGroups=columns.some(col=>Boolean(col.group));
+  const groups=columns.reduce((all,col)=>{
+   const id=col.group||null,last=all[all.length-1];
+   if(last?.id===id)last.columns.push(col);
+   else all.push({id,label:id,columns:[col]});
+   return all;
+  },[]);
   const csvColumns=columns.filter(col=>col.exportable!==false&&
    col.label&&col.key!=="actions"&&col.key!=="action");
   const exportCurrent=()=>{
     if(onExport)return onExport();
     downloadTableCSV(exportFileName||"farmetrica-"+label.trim().toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-"),
-      csvColumns.map(c=>c.label),filtered.map(row=>csvColumns.map(c=>
+      csvColumns.map(c=>c.exportLabel||c.label),filtered.map(row=>csvColumns.map(c=>
        c.exportValue?c.exportValue(row):c.value(row))));
   };
   return <>
@@ -105,12 +112,24 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     <HorizontalTableScroll className="table-scroll" label={label}>
       <table className={"data-table smart-table "+tableClass}>
         <thead>
+          {hasGroups&&<tr className="fm-smart-group-row">
+           {selection&&<th className="fm-selection-column" aria-hidden="true"/>}
+           {groups.map((g,i)=>g.id?<th key={i} scope="colgroup"
+             colSpan={g.columns.length} className="fm-smart-group-title">{g.label}</th>:
+             g.columns.map(col=><th key={col.key} scope="col" rowSpan={2}
+              aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+              {col.sortable===false?<span className="smart-th-label">{col.label}</span>:
+               <button className="smart-sort" type="button" onClick={()=>changeSort(col.key)} aria-label={"Ordenar "+col.label}>
+                <span>{col.label}</span><span aria-hidden="true" className="smart-sort-arrow">{sort?.key===col.key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
+               </button>}
+             </th>))}
+          </tr>}
           <tr>{selection&&<th scope="col" className="fm-selection-column">
             <input type="checkbox" aria-label={"Seleccionar todas las "+label+" filtradas"}
              checked={allSelected} disabled={Boolean(selection.disabled)||!allFilteredKeys.length}
-             onChange={e=>selectFiltered(e.target.checked)}/></th>}{columns.map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+             onChange={e=>selectFiltered(e.target.checked)}/></th>}{columns.filter(col=>!hasGroups||col.group).map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
             {col.sortable===false?<span className="smart-th-label">{col.label}</span>:
-              <button className="smart-sort" type="button" onClick={()=>changeSort(col.key)} aria-label={"Ordenar "+col.label}>
+              <button className="smart-sort" type="button" onClick={()=>changeSort(col.key)} aria-label={"Ordenar "+(col.group?col.group+" ":"")+col.label}>
                 <span>{col.label}</span><span aria-hidden="true" className="smart-sort-arrow">{sort?.key===col.key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
               </button>}
           </th>)}</tr>
@@ -149,7 +168,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
     <ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
-      onPageSizeChange={changePageSize} label={label} loading={loading}/>
+      onPageSizeChange={changePageSize} label={label} loading={loading} pageSizes={pageSizes}/>
     </LoadingFrame>
   </>;
 }

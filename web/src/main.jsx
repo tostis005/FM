@@ -66,7 +66,7 @@ import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveWarehouseNameToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -699,6 +699,7 @@ function App(){
  // utilizando exclusivamente farmacias reales.
  const establishments=tenantContext?.establishments||pharmacies;
  const currentPharmacies=establishments.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
+ const editingIsWarehouse=pharmacyForm?.establishmentType==="almacen";
  function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
   if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
@@ -1151,10 +1152,6 @@ function App(){
     catch(err){setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
   }
   function startPharmacy(f){
-    if(f?.establishmentType==="almacen"){
-      setToast("Almacén central · ID "+f.id+" · código "+f.sourceCode+" · origen "+f.sourceDatabase+". Se configura desde el sincronizador.");
-      return;
-    }
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
     setEditingPharmacy(f?.id||"nuevo");
     setPharmacyForm(f?{...f}:{id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
@@ -1162,6 +1159,19 @@ function App(){
   async function savePharmacy(e) {
     e.preventDefault();const id=pharmacyForm.id.trim();
     if((editingPharmacy!=="nuevo"&&!/^[1-9][0-9]{0,8}$/.test(id))||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
+    if(pharmacyForm.establishmentType==="almacen"){
+      if(pharmacyBackendConfigured&&pharmacyApiStatus!=="connected")
+        return setToast("Inicia sesión como administrador desde Accesos");
+      setSavingPharmacy(true);
+      try{
+        await saveWarehouseNameToServer(id,pharmacyForm.name.trim());
+        await refreshPharmacies();
+        setToast("Nombre público del almacén actualizado");
+        setEditingPharmacy(null);
+      }catch(err){setToast(err.message)}
+      finally{setSavingPharmacy(false)}
+      return;
+    }
     if(!/^[A-Z0-9_-]{2,16}$/.test((pharmacyForm.sourceCode||"").trim().toUpperCase()))return setToast("Indica un código de origen válido");
     if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
     const f={...pharmacyForm,id,name:pharmacyForm.name.trim(),sourceCode:pharmacyForm.sourceCode.trim().toUpperCase(),sourceHost:pharmacyForm.sourceHost?.trim()||"",sourceDatabase:pharmacyForm.sourceDatabase?.trim()||"Farmatic"};
@@ -1867,11 +1877,48 @@ function App(){
    {editingPromo!=="nuevo"&&<div className="drawer-extra"><button type="button" className="btn btn-secondary" onClick={()=>{const p={...promoForm};setEditingPromo(null);copyPromo(p)}}><Copy size={16}/> Duplicar promoción</button><button type="button" className="btn btn-secondary" onClick={()=>exportPromo(promoForm)}><ArrowDownToLine size={16}/> Descargar ficha de promoción</button></div>}
   </form></div></div>}
   {editingUser&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingUser(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingUser==="nuevo"?"Nuevo usuario":"Editar usuario"}</h2><p>Asigna un rol y define las farmacias disponibles.</p></div><button className="icon-btn" onClick={()=>setEditingUser(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={saveUser} className="drawer-content"><Field label="Nombre completo"><input required value={userForm.name} onChange={e=>setUserForm({...userForm,name:e.target.value})}/></Field><Field label="Correo electrónico"><input type="email" required value={userForm.email} onChange={e=>setUserForm({...userForm,email:e.target.value})}/></Field><Field label="Rol"><select value={userForm.role} onChange={e=>setUserForm({...userForm,role:e.target.value})}><option value="farmacia">Personal de farmacia</option><option value="gestor">Gestor de farmacias</option><option value="superadmin">Superadministrador</option></select></Field><Field label="Estado"><select value={String(userForm.active)} onChange={e=>setUserForm({...userForm,active:e.target.value==="true"})}><option value="true">Activo</option><option value="false">Inactivo</option></select></Field><div className="form-divider"/><div className="field-heading"><div><strong>Farmacias asignadas</strong><small>{userForm.role==="superadmin"?"Este rol tiene acceso a toda la red.":"Marca las farmacias a las que podrá acceder."}</small></div></div>{userForm.role!=="superadmin"&&<div className="pharmacy-picker">{pharmacies.map(f=><label key={f.id} className={"pharmacy-choice "+(userForm.pharmacies.includes(f.id)?"chosen":"")}><input type="checkbox" checked={userForm.pharmacies.includes(f.id)} onChange={()=>setUserForm({...userForm,pharmacies:userForm.pharmacies.includes(f.id)?userForm.pharmacies.filter(x=>x!==f.id):[...userForm.pharmacies,f.id]})}/><span className="choice-check">{userForm.pharmacies.includes(f.id)&&<Check size={14}/>}</span><span>{f.name}</span><small>{f.id}</small></label>)}</div>}<div className="note small-note"><ShieldCheck size={16}/> Estas asignaciones son solo visuales hasta habilitar autenticación y autorización en el servidor.</div><FormActions onCancel={()=>setEditingUser(null)}/></form></div></div>}
-  {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}><div className="drawer"><div className="drawer-top"><div><h2>{editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2><p>El identificador se asigna automáticamente a las farmacias nuevas.</p></div><button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button></div><form onSubmit={savePharmacy} className="drawer-content">{editingPharmacy!=="nuevo"&&<Field label="ID de farmacia"><input disabled value={pharmacyForm.id}/></Field>}<Field label="Nombre público"><input required placeholder="Farmacia Plaza Mayor" value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field><Field label="Ciudad (opcional)"><input value={pharmacyForm.city} onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field><Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA" maxLength="16" value={pharmacyForm.sourceCode||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field><Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local" value={pharmacyForm.sourceHost||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field><Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""} onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field><div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div><Field label="Estado"><select value={String(pharmacyForm.active)} onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}><option value="true">Activa</option><option value="false">Inactiva</option></select></Field><FormActions onCancel={()=>setEditingPharmacy(null)} label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/></form>
-  {editingPharmacy!=="nuevo"&&<React.Suspense fallback={null}><PoliticaReposicionFarmacia
-   clientSlug={tenantContext?.client?.slug||"ampedia"} pharmacyId={pharmacyForm.id}
-   canEdit={pharmacyApiStatus==="connected"}/></React.Suspense>}
- </div></div>}
+  {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}>
+   <div className="drawer">
+    <div className="drawer-top">
+     <div><h2>{editingIsWarehouse?"Editar almacén":editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2>
+      <p>{editingIsWarehouse?"Cambia el nombre público sin modificar la vinculación del sincronizador.":
+       "El identificador se asigna automáticamente a las farmacias nuevas."}</p></div>
+     <button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button>
+    </div>
+    <form onSubmit={savePharmacy} className="drawer-content">
+     {editingPharmacy!=="nuevo"&&<Field label={editingIsWarehouse?"ID del almacén":"ID de farmacia"}>
+      <input disabled value={pharmacyForm.id}/></Field>}
+     <Field label="Nombre público"><input required placeholder={editingIsWarehouse?"ALM":"Farmacia Plaza Mayor"}
+       value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field>
+     {editingIsWarehouse?<div className="note small-note">
+      <ShieldCheck size={16}/> Código del sincronizador: <strong>{pharmacyForm.sourceCode||"ALMACEN"}</strong>.
+      El ID y la conexión SQL Server permanecen intactos.
+     </div>:<>
+      <Field label="Ciudad (opcional)"><input value={pharmacyForm.city}
+       onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field>
+      <Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA"
+       maxLength="16" value={pharmacyForm.sourceCode||""}
+       onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field>
+      <Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local"
+       value={pharmacyForm.sourceHost||""}
+       onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field>
+      <Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""}
+       onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field>
+      <div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div>
+      <Field label="Estado"><select value={String(pharmacyForm.active)}
+       onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}>
+       <option value="true">Activa</option><option value="false">Inactiva</option>
+      </select></Field>
+     </>}
+     <FormActions onCancel={()=>setEditingPharmacy(null)}
+      label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/>
+    </form>
+    {editingPharmacy!=="nuevo"&&!editingIsWarehouse&&<React.Suspense fallback={null}>
+     <PoliticaReposicionFarmacia clientSlug={tenantContext?.client?.slug||"ampedia"}
+      pharmacyId={pharmacyForm.id} canEdit={pharmacyApiStatus==="connected"}/>
+    </React.Suspense>}
+   </div>
+  </div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}
   {tenantContext.modules?.asistente===true&&
    <React.Suspense fallback={null}><AsistenteDemo key={tenantContext.client.slug} section={title}/></React.Suspense>}

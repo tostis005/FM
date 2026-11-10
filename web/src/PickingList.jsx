@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from "react";
-import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Download,Warehouse,Store} from "lucide-react";
+import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Warehouse,Store} from "lucide-react";
+import ListTable from "./ListTable.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
@@ -10,19 +11,6 @@ const STATUS={
  cubierto:"Cubierto",sin_stock:"Sin stock suficiente",
  sin_datos:"Stock pendiente de importar",sin_cn:"Código sin equivalencia"
 };
-function csvValue(value){
- let text=String(value??"");
- if(/^[=+\-@\t\r]/.test(text))text="'"+text;
- return '"'+text.replaceAll('"','""')+'"';
-}
-function saveCsv(filename,records){
- const body="\ufeff"+records.map(record=>record.map(csvValue).join(";")).join("\r\n");
- const blob=new Blob([body],{type:"text/csv;charset=utf-8"});
- const url=URL.createObjectURL(blob);
- const a=document.createElement("a");
- a.href=url;a.download=filename+".csv";document.body.appendChild(a);a.click();
- a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
 async function callApi(clientSlug,path,method="GET",data,contentType="application/json"){
  const headers={"X-Farmetrica-Cliente":clientSlug};
  if(method!=="GET")headers["Content-Type"]=contentType;
@@ -45,7 +33,6 @@ export default function PickingList({clientSlug}){
  const [tab,setTab]=useState("general");
  const [search,setSearch]=useState("");
  const [status,setStatus]=useState("");
- const [page,setPage]=useState(0);
  const [assignedOnly,setAssignedOnly]=useState(false);
  const [expanded,setExpanded]=useState("");
  const [loading,setLoading]=useState(true);
@@ -103,38 +90,67 @@ export default function PickingList({clientSlug}){
    return false;
   return true;
  });
- const perPage=50;
- const pages=Math.max(1,Math.ceil(filtered.length/perPage));
- const showPage=Math.min(page,pages-1);
- const visible=filtered.slice(showPage*perPage,(showPage+1)*perPage);
  const assignedToSite=selectedSite?all.reduce((sum,r)=>
   sum+(r.stock.find(s=>s.id===selectedSite.id)?.planned||0),0):0;
- function exportCurrent(){
-  const sites=data?.sites||[];
-  const base=["CN / SKU","Descripción","Líneas","Unidades totales"];
-  if(selectedSite){
-   const columns=[...base,"Origen","Stock "+selectedSite.code,"Unidades "+selectedSite.code,
-    "Stock tras preparación","Estado","Pedidos Shopify"];
-   const values=filtered.map(row=>{
-    const s=row.stock.find(x=>x.id===selectedSite.id);
-    return [row.cn||row.sku,row.name,row.lines,row.required,selectedSite.name,
-     s?.stock,s?.planned,s?.stock==null?null:s.stock-s.planned,
-     STATUS[row.status],row.details.map(d=>d.orderName).join(", ")];
-   });
-   saveCsv("picking-"+selectedSite.code.toLowerCase(),[columns,...values]);
-  }else{
-   const columns=[...base,...sites.map(s=>"Stock "+s.code),
-    ...sites.map(s=>"Unidades "+s.code),
-    "Stock total","Total unidades disponibles","Unidades pendientes","Estado","Pedidos Shopify"];
-   const values=filtered.map(row=>[row.cn||row.sku,row.name,row.lines,row.required,
-    ...sites.map(site=>row.stock.find(x=>x.id===site.id)?.stock),
-    ...sites.map(site=>row.stock.find(x=>x.id===site.id)?.planned),
-    row.stockTotal,row.allocated,row.pending,STATUS[row.status],
-    row.details.map(d=>d.orderName).join(", ")]);
-   saveCsv("picking-list",[columns,...values]);
-  }
+ const siteShortCode=site=>site.kind==="almacen"?
+  (String(site.name||"").trim().length<=4?site.name.trim().toUpperCase():"ALM"):
+  String(site.code||"").toUpperCase();
+ const tableSites=selectedSite?[selectedSite]:(data?.sites||[]);
+ const siteStock=(row,id)=>row.stock.find(s=>String(s.id)===String(id));
+ const columns=[
+  {key:"product",label:"Producto / CN",value:row=>[row.name,row.cn,row.sku].filter(Boolean).join(" "),
+   render:row=><div className="fm-picking-product">
+    <strong>{row.name||"Producto sin descripción"}</strong>
+    <span>{row.cn?"CN "+row.cn:"SKU "+row.sku}</span></div>,
+   exportValue:row=>(row.cn||row.sku)+" · "+(row.name||"")},
+  {key:"required",label:"Unidades totales",value:row=>row.required,
+   render:row=><strong>{integer(row.required)}</strong>},
+  ...tableSites.map(site=>({
+   key:"stock-"+site.id,group:"Stock",label:siteShortCode(site),
+   exportLabel:"Stock "+siteShortCode(site),
+   value:row=>siteStock(row,site.id)?.stock??null,
+   render:row=><span className="fm-picking-number">{integer(siteStock(row,site.id)?.stock)}</span>
+  })),
+  ...tableSites.map(site=>({
+   key:"units-"+site.id,group:"Unidades",label:siteShortCode(site),
+   exportLabel:"Unidades "+siteShortCode(site),
+   value:row=>siteStock(row,site.id)?.planned??0,
+   render:row=><strong className="fm-picking-assigned">{integer(siteStock(row,site.id)?.planned)}</strong>
+  })),
+  ...(selectedSite?[{key:"remaining",label:"Restante",value:row=>{
+   const item=siteStock(row,selectedSite.id);
+   return item?.stock==null?null:Math.max(0,item.stock-item.planned);
+  },render:row=>{
+   const item=siteStock(row,selectedSite.id);
+   return <span className="fm-picking-number">{integer(item?.stock==null?null:Math.max(0,item.stock-item.planned))}</span>
+  }}]:[{key:"pending",label:"Pendientes",value:row=>row.pending??Math.max(0,row.required-(row.allocated||0)),
+   render:row=><span className="fm-picking-number">{integer(row.pending??Math.max(0,row.required-(row.allocated||0)))}</span>}]),
+  {key:"status",label:"Situación",filterMode:"multi",value:row=>STATUS[row.status]||row.status,
+   render:row=><><Status value={row.status}/>
+    {row.allocationProvisional&&<small className="fm-picking-provisional-note">Propuesta provisional</small>}</>},
+  {key:"details",label:"Pedidos",sortable:false,searchable:false,
+   exportLabel:"Pedidos Shopify",exportValue:row=>row.details.map(d=>d.orderName||d.orderId).join(", "),
+   value:()=>"",
+   render:row=><button className="fm-picking-details-btn" type="button"
+    aria-expanded={expanded===row.key} onClick={()=>setExpanded(expanded===row.key?"":row.key)}>
+    {expanded===row.key?<ChevronUp size={15}/>:<ChevronDown size={15}/>} Detalle
+   </button>}
+ ];
+ function expandedDetails(row){
+  return <div className="fm-picking-details-panel">
+   <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:"el SKU "+row.sku}</strong>
+   <div className="fm-picking-details">
+    {row.details.map((order,i)=><div key={order.orderId+"-"+i}>
+     <span>{order.orderName||order.orderId}</span><span>{order.channel}</span>
+     <span>{dateTime(order.createdAt)}</span><strong>{integer(order.quantity)} uds.</strong>
+    </div>)}
+    {row.lines>row.details.length&&<small>Mostrando {integer(row.details.length)} de {integer(row.lines)} líneas de pedido.</small>}
+   </div>
+   {row.exhausted.length>0&&<p className="fm-picking-warning">
+    La propuesta dejaría sin unidades a: {row.exhausted.join(", ")}.</p>}
+  </div>;
  }
- function changeTab(id){setTab(id);setPage(0);setExpanded("");setAssignedOnly(false);}
+ function changeTab(id){setTab(id);setExpanded("");setAssignedOnly(false);}
  const ready=Boolean(data?.meta?.lastImportedAt);
  const sourceConfigured=Boolean(data?.meta?.sourceConfigured);
  const sourceError=data?.meta?.sourceError;
@@ -143,11 +159,7 @@ export default function PickingList({clientSlug}){
   length:Math.max(issues.headers?.length||0,...(issues.rows||[]).map(row=>row.cells?.length||0))
  },(_,index)=>issues.headers?.[index]||"Columna "+(index+1)):[];
  return <div className="fm-picking-page">
-  <ReportPageHeader title="Picking List"
-   actions={<div className="fm-picking-header-buttons">
-    <button type="button" className="btn btn-secondary" onClick={exportCurrent}
-     disabled={!ready||loading}><Download size={16}/> Exportar preparación</button>
-   </div>}/>
+  <ReportPageHeader title="Picking List"/>
   {error&&<div className="fm-picking-alert" role="alert">
    <AlertTriangle size={17}/>{error}
    {" "}La aplicación volverá a comprobarlo automáticamente.
@@ -244,24 +256,24 @@ export default function PickingList({clientSlug}){
    <section className="card fm-picking-main">
     <div className="fm-picking-controls">
      <label>Canal / origen del pedido
-      <select value={channel} onChange={e=>{setChannel(e.target.value);setPage(0);setExpanded("")}}>
+      <select value={channel} onChange={e=>{setChannel(e.target.value);setExpanded("")}}>
        <option value="">Todos los canales</option>
        {(data?.channels||[]).map(x=><option key={x} value={x}>{x}</option>)}
       </select>
      </label>
      <label>Buscar CN, SKU, producto o pedido
       <input type="search" value={search} placeholder="Código nacional, descripción, #pedido…"
-       onChange={e=>{setSearch(e.target.value);setPage(0)}}/>
+       onChange={e=>setSearch(e.target.value)}/>
      </label>
      <label>Estado de la propuesta
-      <select value={status} onChange={e=>{setStatus(e.target.value);setPage(0)}}>
+      <select value={status} onChange={e=>setStatus(e.target.value)}>
        <option value="">Todos los estados</option>
        {Object.entries(STATUS).map(([id,label])=><option key={id} value={id}>{label}</option>)}
       </select>
      </label>
      {selectedSite&&<label className="fm-picking-only">
       <input type="checkbox" checked={assignedOnly}
-       onChange={e=>{setAssignedOnly(e.target.checked);setPage(0)}}/>
+       onChange={e=>setAssignedOnly(e.target.checked)}/>
       Solo unidades asignadas a esta ubicación
      </label>}
     </div>
@@ -275,74 +287,15 @@ export default function PickingList({clientSlug}){
      El Power BI original también separa almacén y robot. Farmétrica muestra por ahora
      el stock total sincronizado del almacén; el desglose robot requiere incorporar
      las columnas de la vista específica de Farmatic.</p>}
-    <div className="fm-picking-table-wrap">
-     <table className="fm-picking-table">
-      <thead><tr>
-       <th>Producto / CN</th><th className="fm-picking-number">Unidades totales</th>
-       <th className="fm-picking-number">Líneas</th>
-       {selectedSite?<><th className="fm-picking-number">Stock {selectedSite.code}</th>
-        <th className="fm-picking-number">Unidades {selectedSite.code}</th>
-        <th className="fm-picking-number">Stock restante</th></>:
-        <>
-         {(data?.sites||[]).map(site=><th key={site.id+"-stock"}
-          className="fm-picking-number">Stock {site.code}</th>)}
-         {(data?.sites||[]).map(site=><th key={site.id+"-units"}
-          className="fm-picking-number">Unidades {site.code}</th>)}
-        </>}
-       {!selectedSite&&<th className="fm-picking-number">Unidades pendientes</th>}
-       <th>Situación</th><th>Pedidos</th>
-      </tr></thead>
-      <tbody>{visible.map(row=>{
-       const site=selectedSite?row.stock.find(s=>s.id===selectedSite.id):null;
-       const open=expanded===row.key;
-       const colspan=(selectedSite?8:((data?.sites.length||0)*2)+6);
-       return <React.Fragment key={row.key}>
-        <tr>
-         <td><div className="fm-picking-product"><strong>{row.name||"Producto sin descripción"}</strong>
-          <span>{row.cn?"CN "+row.cn:"SKU "+row.sku}</span></div></td>
-         <td className="fm-picking-number"><strong>{integer(row.required)}</strong></td>
-         <td className="fm-picking-number">{integer(row.lines)}</td>
-         {selectedSite?<><td className="fm-picking-number">{integer(site?.stock)}</td>
-           <td className="fm-picking-number fm-picking-assigned">{integer(site?.planned)}</td>
-           <td className="fm-picking-number">{site?.stock==null?"—":integer(Math.max(0,site.stock-site.planned))}</td></>:
-           <>
-            {row.stock.map(s=><td key={s.id+"-stock"}
-             className="fm-picking-number">{integer(s.stock)}</td>)}
-            {row.stock.map(s=><td key={s.id+"-units"}
-             className="fm-picking-number fm-picking-assigned">{integer(s.planned)}</td>)}
-           </>}
-         {!selectedSite&&<td className="fm-picking-number">{integer(row.pending??Math.max(0,row.required-(row.allocated||0)))}</td>}
-         <td><Status value={row.status}/>
-          {row.allocationProvisional&&<small className="fm-picking-provisional-note">
-           Propuesta provisional</small>}</td>
-         <td><button className="fm-picking-details-btn" type="button"
-           aria-expanded={open} onClick={()=>setExpanded(open?"":row.key)}>
-           {open?<ChevronUp size={15}/>:<ChevronDown size={15}/>} Detalle</button></td>
-        </tr>
-        {open&&<tr className="fm-picking-details-row"><td colSpan={colspan}>
-         <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:"el SKU "+row.sku}</strong>
-         <div className="fm-picking-details">
-          {row.details.map((order,i)=><div key={order.orderId+"-"+i}>
-           <span>{order.orderName||order.orderId}</span><span>{order.channel}</span>
-           <span>{dateTime(order.createdAt)}</span><strong>{integer(order.quantity)} uds.</strong>
-          </div>)}
-          {row.lines>row.details.length&&<small>Mostrando {integer(row.details.length)} de {integer(row.lines)} líneas de pedido.</small>}
-         </div>
-         {row.exhausted.length>0&&<p className="fm-picking-warning">
-          La propuesta dejaría sin unidades a: {row.exhausted.join(", ")}.</p>}
-        </td></tr>}
-       </React.Fragment>;
-      })}</tbody>
-     </table>
-     {filtered.length===0&&<div className="fm-picking-no-results">No hay productos con estos filtros.</div>}
-    </div>
-    <div className="fm-picking-pagination">
-     <span>Mostrando {filtered.length?showPage*perPage+1:0}–{Math.min(filtered.length,(showPage+1)*perPage)} de {integer(filtered.length)}</span>
-     <div><button className="btn btn-secondary btn-sm" disabled={showPage<=0}
-      onClick={()=>{setPage(Math.max(0,showPage-1));setExpanded("")}}>Anterior</button>
-      <span>Página {showPage+1} de {pages}</span>
-      <button className="btn btn-secondary btn-sm" disabled={showPage>=pages-1}
-       onClick={()=>{setPage(showPage+1);setExpanded("")}}>Siguiente</button></div>
+    <div className="fm-picking-list-table">
+     <ListTable key={tab} rows={filtered} columns={columns} rowKey={row=>row.key}
+      tableClass="fm-picking-grouped" label="referencias"
+      defaultSort={{key:"required",direction:"desc"}}
+      initialPageSize={500} pageSizes={[50,100,250,500]}
+      exportFileName={selectedSite?"picking-"+siteShortCode(selectedSite).toLowerCase():"picking-list"}
+      emptyText="No hay productos con estos filtros"
+      expandedRowKeys={expanded?[expanded]:[]}
+      renderExpandedRow={expandedDetails}/>
     </div>
    </section>
   </>}

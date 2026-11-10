@@ -40,3 +40,11 @@ ALTER TABLE farmetrica.picking_list_fuentes
 -- El informe las recupera por páginas y solo con permisos para Picking List.
 ALTER TABLE farmetrica.picking_list_fuentes
  ADD COLUMN IF NOT EXISTS ultima_advertencia_detalle jsonb;
+
+-- Alias inicial solicitado para el almacén del cliente Ampedia.
+-- No cambiar jamás codigo_origen=ALMACEN ni sobrescribir nombres personalizados.
+UPDATE farmetrica.farmacias
+SET nombre='ALM', actualizado_en=now()
+WHERE cliente_slug='ampedia'
+  AND upper(btrim(codigo_origen))='ALMACEN'
+  AND lower(btrim(nombre)) IN ('almacén','almacen','almacén central','almacen central');

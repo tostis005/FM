@@ -65,7 +65,7 @@ jobs:
           node --check api/src/stockSinRecepciones.js
           node --test api/src/stockSinRecepciones.test.js
           node --check api/src/pickingList.js
-          node --test api/src/pickingListCore.test.js api/src/pickingListSettings.test.js api/src/pickingListAutoRefresh.test.js
+          node --test api/src/pickingListCore.test.js api/src/pickingListSettings.test.js api/src/pickingListAutoRefresh.test.js api/src/warehouseName.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
@@ -368,6 +368,8 @@ jobs:
           node check-ajustes-gestor.mjs
           node check-picking-settings.mjs
           node check-picking-live-data.mjs
+          node check-picking-table-capacity.mjs
+          node check-warehouse-edit.mjs
           node check-laboratory-orders.mjs
           node check-supplier-laboratory-map.mjs
           node check-supplier-views.mjs

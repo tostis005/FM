@@ -30,7 +30,7 @@ test("las rutas sensibles no evitan permisos cambiando la URL",()=>{
  assert.deepEqual(m("/api/tenant/usuarios"),[]);
 });
 
-test("lectura documental compartida sin conceder acceso al análisis de proveedores",()=>{
+test("el directorio, fichas y documentos exigen el módulo Proveedores; traspasos exigen Stock",()=>{
  const request=path=>requestModules({path});
  for(const path of ["/api/tenant/proveedores-unificados",
   "/api/tenant/proveedores-unificados/12/ficha",
@@ -40,8 +40,8 @@ test("lectura documental compartida sin conceder acceso al análisis de proveedo
   "/api/tenant/proveedores",
   "/api/tenant/proveedores/indicadores",
   "/api/tenant/proveedores/123"]){
-  assert.deepEqual(request(path),[],path);
+  assert.deepEqual(request(path),["proveedores"],path);
  }
  assert.deepEqual(request("/api/analytics/pantallas/proveedores-condiciones"),["proveedores"]);
- assert.deepEqual(request("/api/tenant/proveedores/traspasos-salidas"),["proveedores"]);
+ assert.deepEqual(request("/api/tenant/proveedores/traspasos-salidas"),["stock"]);
 });

@@ -37,12 +37,12 @@ export const USER_SECTIONS=[
    "rentabilidad","acciones","informes"]).has(id)
 }));
 const byId=new Map(USER_SECTIONS.map(s=>[s.id,s]));
-// El directorio de proveedores es de consulta general para usuarios autenticados
-// del cliente; sus informes avanzados siguen sujetos a permisos específicos.
+// Todas las secciones, incluido el directorio de proveedores, requieren
+// módulo habilitado y concesión individual cuando las secciones están definidas.
 export function effectiveUserSections(modules,selected,superadmin=false){
  const grants=Array.isArray(selected)?new Set(selected):null;
  return Object.fromEntries(USER_SECTIONS.map(s=>[s.id,
-  s.id==="proveedores"||Boolean(modules?.[s.module])&&(superadmin||grants===null||grants.has(s.id))]));
+  Boolean(modules?.[s.module])&&(superadmin||grants===null||grants.has(s.id))]));
 }
 export function validateSectionGrants(sections,modules){
  if(!Array.isArray(sections)||sections.length>USER_SECTIONS.length)return null;

@@ -35,7 +35,7 @@
 .fm-picking-controls select,.fm-picking-controls input[type=search]{border:1px solid #d1dfd6;border-radius:8px;padding:10px;color:#234c3a;background:#fff;min-width:0;width:100%;font:inherit;font-size:12px}
 .fm-picking-controls .fm-picking-only{display:flex;flex:1 1 180px;align-items:center;gap:9px;line-height:1.4;padding-bottom:9px}
 .fm-picking-list-head{padding:15px 20px;border-top:1px solid #e9efea;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.fm-picking-list-head h2{font-size:16px;margin:0 0 6px}.fm-picking-list-head span{color:#7d8d83;font-size:11px}
+.fm-picking-list-head h2{font-size:16px;margin:0}
 .fm-picking-site-total{font-size:13px;color:#22714b}
 .fm-picking-minor-note{margin:0 20px 14px;padding:10px 12px;border-radius:8px;background:#f4f7f8;color:#5a6e75;font-size:12px;line-height:1.5}
 .fm-picking-table-wrap{width:100%;overflow:auto;max-height:66vh;min-height:130px}
@@ -116,8 +116,12 @@
 .fm-picking-list-table .smart-table thead .smart-filter-row th{top:74px;z-index:3}
 .fm-picking-list-table .fm-smart-group-title{text-align:center!important;background:#e4f1e9!important;color:#24573c!important;font-weight:800!important;letter-spacing:.02em}
 .fm-picking-list-table .fm-picking-grouped td{font-variant-numeric:tabular-nums}
-.fm-picking-list-table .fm-picking-grouped .fm-picking-number{text-align:right;display:block}
-.fm-picking-list-table .fm-picking-grouped .fm-picking-assigned{display:block;text-align:right;color:#207c57}
+/* Solo la Picking List: números y cabeceras centrados; descripciones alineadas a la izquierda. */
+.fm-picking-list-table .fm-picking-grouped th.fm-table-col-center,
+.fm-picking-list-table .fm-picking-grouped td.fm-table-col-center{text-align:center}
+.fm-picking-list-table .fm-picking-grouped th.fm-table-col-center .smart-sort{display:flex;justify-content:center}
+.fm-picking-list-table .fm-picking-grouped .fm-picking-number{text-align:center;display:block}
+.fm-picking-list-table .fm-picking-grouped .fm-picking-assigned{display:block;text-align:center;color:#207c57}
 .fm-picking-list-table .fm-picking-grouped td .fm-picking-product{min-width:150px;max-width:310px}
 .fm-picking-list-table .fm-picking-details-panel{white-space:normal;padding:12px}
 .fm-picking-list-table .fm-picking-details-panel .fm-picking-details{max-width:100%}

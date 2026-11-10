@@ -81,12 +81,18 @@ try{
   "Se esperaba la columna Stock ABA: "+JSON.stringify(headers));
  assert.ok(headers.some(x=>x.trim()==="Unidades ABA"),
   "Se esperaba la columna Unidades ABA: "+JSON.stringify(headers));
+ const lastStockIndex=headers.findLastIndex(x=>x.trim().startsWith("Stock "));
+ const firstUnitsIndex=headers.findIndex(x=>x.trim().startsWith("Unidades ")&&x.trim()!=="Unidades totales");
+ assert.ok(firstUnitsIndex>lastStockIndex,
+  "Se esperaba agrupar stocks antes de unidades: "+JSON.stringify(headers));
  await page.getByRole("button",{name:"Ver más"}).click();
  await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
- await page.getByRole("columnheader",{name:"Detalle CSV"}).waitFor();
- await page.getByText("producto sin SKU/CN",{exact:true}).waitFor();
- await page.getByText("texto, completo",{exact:true}).waitFor();
- await page.getByText("cantidad no válida",{exact:true}).waitFor();
+ const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
+ assert.ok(issueColumns.some(x=>x.trim()==="Detalle CSV"),JSON.stringify(issueColumns));
+ const issueCells=await page.locator(".fm-picking-issues tbody td").allTextContents();
+ assert.ok(issueCells.includes("producto sin SKU/CN"),JSON.stringify(issueCells));
+ assert.ok(issueCells.includes("texto, completo"),JSON.stringify(issueCells));
+ assert.ok(issueCells.includes("cantidad no válida"),JSON.stringify(issueCells));
  await page.getByRole("button",{name:"Ocultar"}).click();
  await page.getByRole("button",{name:"Detalle"}).click();
  await page.getByText("#1001").waitFor();

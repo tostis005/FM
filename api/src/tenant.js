@@ -39,7 +39,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
       [slug]);
     const {rows:pharmacies}=await pool.query(
-      "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
+      "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",nullif(btrim(f.codigo_visible),'') AS \"displayCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
       [slug]);
     const all = role==="superadministrador"||role==="administrador";
     const ids = all ? pharmacies.map(p=>Number(p.id)):
@@ -512,23 +512,38 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       res.status(201).json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}
   });
-  // El almacén pertenece al cliente, pero no se convierte en farmacia comercial.
-  // Solo puede cambiarse su nombre: conservar ID y codigo_origen='ALMACEN'.
+  // Codigo visible (solo presentación): no cambiar el ID ni codigo_origen del ERP.
+  async function visibleCodeAvailable(req,res,code,id){
+    const {rows}=await pool.query(
+      "SELECT id FROM farmetrica.farmacias WHERE cliente_slug=$1 AND id<>$2 "+
+      "AND upper(btrim(coalesce(nullif(codigo_visible,''),codigo_origen)))=$3 LIMIT 1",
+      [req.context.client.slug,Number(id)||0,code]);
+    if(rows.length){
+      res.status(409).json({error:"Otro establecimiento ya utiliza ese código visible"});
+      return false;
+    }
+    return true;
+  }
+  const visibleCodeValid=code=>/^[A-Z0-9_-]{2,8}$/.test(code);
   app.patch("/api/tenant/establecimientos/:id",...requireTenantAdmin(),async(req,res,next)=>{
     try{
-      if(!/^[1-9]\d{0,8}$/.test(req.params.id))
+      if(!/^[1-9]\\d{0,8}$/.test(req.params.id))
         return res.status(400).json({error:"Establecimiento inválido"});
       const name=String(req.body?.name||"").trim();
+      const displayCode=String(req.body?.displayCode||"").trim().toUpperCase();
       if(!name||name.length>150)
         return res.status(400).json({error:"El nombre debe tener entre 1 y 150 caracteres"});
+      if(!visibleCodeValid(displayCode))
+        return res.status(400).json({error:"El código visible debe tener entre 2 y 8 caracteres (letras, números, _ o -)"});
+      if(!await visibleCodeAvailable(req,res,displayCode,req.params.id))return;
       const {rows}=await pool.query(
-        'UPDATE farmetrica.farmacias SET nombre=$3,actualizado_en=now() '+
+        'UPDATE farmetrica.farmacias SET nombre=$3,codigo_visible=$4,actualizado_en=now() '+
         "WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))='ALMACEN' "+
-        'RETURNING id::text AS id,nombre AS name,codigo_origen AS "sourceCode"',
-        [Number(req.params.id),req.context.client.slug,name]);
+        'RETURNING id::text AS id,nombre AS name,codigo_origen AS "sourceCode",codigo_visible AS "displayCode"',
+        [Number(req.params.id),req.context.client.slug,name,displayCode]);
       if(!rows.length)return res.status(404).json({error:"Almacén no encontrado en este cliente"});
       res.json({id:rows[0].id,name:rows[0].name,sourceCode:rows[0].sourceCode,
-        establishmentType:"almacen"});
+        displayCode:rows[0].displayCode,establishmentType:"almacen"});
     }catch(e){next(e);}
   });
   app.patch("/api/tenant/farmacias/:id",...requireTenantAdmin(),async(req,res,next)=>{
@@ -546,9 +561,16 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
           {demo:true,ordinal:req.context.pharmacies.findIndex(p=>p.id===String(req.params.id))+1}));
       }
       const f=validatePharmacy(req.body);
+      const displayCode=String(req.body?.displayCode||f.sourceCode).trim().toUpperCase();
+      if(!visibleCodeValid(displayCode))
+        return res.status(400).json({error:"El código visible debe tener entre 2 y 8 caracteres (letras, números, _ o -)"});
+      if(!await visibleCodeAvailable(req,res,displayCode,req.params.id))return;
+      // El antiguo código origen, host y base ERP nunca se reescriben al editar.
       const {rows}=await pool.query(
-        'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_origen=$6,host_origen=$7,bd_origen=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
-        [Number(req.params.id),req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase]);
+        'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_visible=$6,actualizado_en=now() '+
+        "WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>'ALMACEN' "+
+        'RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
+        [Number(req.params.id),req.context.client.slug,f.name,f.city,f.active,displayCode]);
       if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
       res.json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}

@@ -1,5 +1,6 @@
 import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {resolveEANReferences} from "./synonymSearch.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
@@ -114,6 +115,7 @@ const supplierAliases=`SELECT $1::text AS key
 
 export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,search="",page=1,size=50}){
  if(!SCHEMA.test(context.client.schema))throw Error("Esquema de cliente inválido");
+ const eanRefs=await resolveEANReferences(pool,context,pharmacies,search);
  const q='"'+context.client.schema+'"';
  const sql=`
   WITH aliases AS ( `+supplierAliases+` ),
@@ -198,12 +200,12 @@ export async function readLaboratoryArticles(pool,context,{key,pharmacies,type,s
    SELECT *, (tipo='parafarmacia' AND NOT "inMaster" AND cn IS NULL) AS provisional
    FROM aggregate
    WHERE tipo=$4 AND ($5::text='' OR upper(nombre) LIKE '%'||upper($5)||'%'
-      OR upper(referencia) LIKE '%'||upper($5)||'%')
+      OR upper(referencia) LIKE '%'||upper($5)||'%' OR referencia=ANY($8::text[]))
   )
   SELECT *,count(*) OVER()::int AS total
    FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size],
+  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size,eanRefs],
   query_timeout:30000});
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }

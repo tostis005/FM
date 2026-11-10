@@ -1140,7 +1140,7 @@ function App(){
         headers:{"X-Farmetrica-Cliente":tenantContext.client.slug}});
        if(response.ok){
         const all=await response.json();
-        if(Array.isArray(all))setTenantContext(c=>c?{...c,establishments:all}:c);
+        if(Array.isArray(all))setTenantContext(c=>c?{...c,pharmacies:records,establishments:all}:c);
        }
       }
       setPharmacyApiStatus("connected");setPharmacyApiError("");setPharmacyLastUpdated(new Date());
@@ -1640,7 +1640,6 @@ function App(){
     {key:"type",label:"Tipo",filterMode:"multi",value:f=>f.establishmentType==="almacen"?"Almacén":"Farmacia",
      render:f=><strong>{f.establishmentType==="almacen"?"Almacén":"Farmacia"}</strong>},
     {key:"code",label:"Código visible",filterMode:"multi",value:f=>f.displayCode||f.sourceCode||"",render:f=><span className="id-code">{f.displayCode||f.sourceCode||"—"}</span>},
-    {key:"database",label:"Base de datos",value:f=>f.sourceDatabase||"",render:f=>f.sourceDatabase||"—"},
     {key:"active",label:"Estado",filterMode:"multi",value:f=>f.active?"Activa":"Inactiva",render:f=><Pill status={f.active?"Activa":"Inactiva"}/>},
     {key:"users",label:"Usuarios",value:f=>f.establishmentType==="almacen"?"—":users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}

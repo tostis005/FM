@@ -12,5 +12,6 @@
     <Compile Include="../../src/FarmetricaSync/Data/ConfigStore.cs" Link="ConfigStore.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/Validation.cs" Link="Validation.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/SynonymJobs.cs" Link="SynonymJobs.cs" />
+    <Compile Include="../../src/FarmetricaSync/Core/WarehouseSource.cs" Link="WarehouseSource.cs" />
   </ItemGroup>
 </Project>

@@ -21,7 +21,7 @@ export function decoratePharmacy(slug,pharmacy,{demo=false,ordinal=0}={}){
   ...pharmacy,
   sourceCode:isVal?"POL":master,
   databaseCode:isVal?"VAL":master,
-  displayCode:visible||(isVal?"POL":master),
+  displayCode:visible||(master==="ALMACEN"?"ALM":isVal?"POL":master),
   name:pharmacy.name
  };
 }

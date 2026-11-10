@@ -128,27 +128,27 @@ export default function PickingList({clientSlug}){
     <strong>{row.name||"Producto sin descripción"}</strong>
     <span>{productCodes(row)}</span></div>,
    exportValue:row=>productCodes(row)+" · "+(row.name||"")},
-  {key:"required",label:"Unidades totales",value:row=>row.required,
-   render:row=><strong>{integer(row.required)}</strong>},
+  {key:"required",label:"Unidades totales",align:"center",value:row=>row.required,
+   render:row=><strong className="fm-picking-number">{integer(row.required)}</strong>},
   ...tableSites.map(site=>({
-   key:"stock-"+site.id,group:"Stock",label:siteShortCode(site),
+   key:"stock-"+site.id,group:"Stock",align:"center",label:siteShortCode(site),
    exportLabel:"Stock "+siteShortCode(site),
    value:row=>siteStock(row,site.id)?.stock??null,
    render:row=><span className="fm-picking-number">{integer(siteStock(row,site.id)?.stock)}</span>
   })),
   ...tableSites.map(site=>({
-   key:"units-"+site.id,group:"Unidades",label:siteShortCode(site),
+   key:"units-"+site.id,group:"Unidades",align:"center",label:siteShortCode(site),
    exportLabel:"Unidades "+siteShortCode(site),
    value:row=>siteStock(row,site.id)?.planned??0,
    render:row=><strong className="fm-picking-assigned">{integer(siteStock(row,site.id)?.planned)}</strong>
   })),
-  ...(selectedSite?[{key:"remaining",label:"Restante",value:row=>{
+  ...(selectedSite?[{key:"remaining",label:"Restante",align:"center",value:row=>{
    const item=siteStock(row,selectedSite.id);
    return item?.stock==null?null:Math.max(0,item.stock-item.planned);
   },render:row=>{
    const item=siteStock(row,selectedSite.id);
    return <span className="fm-picking-number">{integer(item?.stock==null?null:Math.max(0,item.stock-item.planned))}</span>
-  }}]:[{key:"pending",label:"Pendientes",value:row=>row.pending??Math.max(0,row.required-(row.allocated||0)),
+  }}]:[{key:"pending",label:"Pendientes",align:"center",value:row=>row.pending??Math.max(0,row.required-(row.allocated||0)),
    render:row=><span className="fm-picking-number">{integer(row.pending??Math.max(0,row.required-(row.allocated||0)))}</span>}]),
   {key:"status",label:"Situación",filterMode:"multi",value:row=>STATUS[row.status]||row.status,
    render:row=><><Status value={row.status}/>
@@ -303,8 +303,7 @@ export default function PickingList({clientSlug}){
      </label>}
     </div>
     <div className="fm-picking-list-head">
-     <div><h2>{selectedSite?"Preparación · "+selectedSite.name:"Distribución de pedidos pendientes"}</h2>
-      <span>{integer(filtered.length)} referencias · criterio: almacén primero, reparto proporcional después</span></div>
+     <h2>{selectedSite?"Preparación · "+selectedSite.name:"Distribución de pedidos pendientes"}</h2>
      {selectedSite&&<strong className="fm-picking-site-total">
       {integer(assignedToSite)} uds. propuestas en {selectedSite.name}</strong>}
     </div>

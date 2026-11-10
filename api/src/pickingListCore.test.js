@@ -116,6 +116,7 @@ test("Reporte sin almacén importado: propuesta provisional desde farmacias, sin
    {orderId:"1",orderName:"#1",channel:"web",sku:"123456",cn:"123456",quantity:2,title:"Crema"},
    {orderId:"1",orderName:"#1",channel:"web",sku:"123456",cn:"123456",quantity:1,title:"Crema"},
   ]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))return {rows:[{available:false}]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:false,
     key:"123456",stock:null,matched:false},
@@ -262,6 +263,7 @@ test("Los pedidos repetidos son varias líneas válidas aunque tengan el mismo I
    {orderId:"123",orderName:"#123",channel:"web",sku:"111111",cn:"111111",quantity:2,title:"A"},
    {orderId:"123",orderName:"#123",channel:"web",sku:"111111",cn:"111111",quantity:3,title:"A"}
   ]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))return {rows:[{available:false}]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
     key:"111111",stock:3,matched:true,name:"A"},
@@ -290,6 +292,7 @@ test("La antigüedad del timestamp del artículo no genera falso estado de stock
   if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[
    {orderId:"9",orderName:"#9",channel:"web",sku:"111111",cn:"111111",quantity:1,title:"A"}
   ]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))return {rows:[{available:false}]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
     key:"111111",stock:5,matched:true,stockAt:"2025-01-01T00:00:00Z"}
@@ -299,4 +302,57 @@ test("La antigüedad del timestamp del artículo no genera falso estado de stock
  const report=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
  assert.equal(report.rows[0].status,"cubierto");
  assert.equal(report.totals.incomplete,0);
+});
+
+
+test("Un pedido identificado por CN expone EAN importados por sinónimos sin variar el reparto",async()=>{
+ const pool={async query(sql){
+  if(sql.includes('ultima_importacion AS "lastImportedAt"'))return {rows:[{
+   lastImportedAt:new Date().toISOString(),lineCount:1,sourceConfigured:true
+  }]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[{
+   orderId:"409",orderName:"#409",channel:"web",sku:"123456",
+   cn:"123456",quantity:2,title:"Crema"
+  }]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:true}]};
+  if(sql.includes("WITH sources AS MATERIALIZED")){
+   assert.match(sql,/ean_aliases AS/);
+   assert.match(sql,/JOIN "ampedia"\.sinonimos si/);
+   assert.match(sql,/btrim\(si\.articulo_id\)=u\.article_id/);
+   assert.match(sql,/upper\(btrim\(si\.farmacia_codigo\)\)=s\.source_code/);
+   assert.ok(!sql.includes("__SYNONYM_EAN_"));
+   return {rows:[{
+    siteId:"6",siteName:"ALM",code:"ALMACEN",kind:"almacen",ready:true,
+    key:"123456",stock:5,matched:true,name:"Crema",
+    eans:["8437000001234","8437000009876"]
+   }]};
+  }
+  throw Error("SQL inesperado "+sql.slice(0,120));
+ }};
+ const report=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
+ assert.deepEqual(report.rows[0].eans,["8437000001234","8437000009876"]);
+ assert.equal(report.rows[0].cn,"123456");
+ assert.equal(report.rows[0].required,2);
+ assert.equal(report.rows[0].allocated,2);
+});
+test("Sin sinónimos instalados, el código EAN de origen se conserva",async()=>{
+ const pool={async query(sql){
+  if(sql.includes('ultima_importacion AS "lastImportedAt"'))
+   return {rows:[{lastImportedAt:new Date().toISOString(),lineCount:1,sourceConfigured:true}]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))
+   return {rows:[{orderId:"1",orderName:"#1",channel:"web",
+    sku:"8437000001234",cn:null,quantity:1,title:"A"}]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:false}]};
+  if(sql.includes("WITH sources AS MATERIALIZED")){
+   assert.match(sql,/ARRAY\[\]::text\[\] AS "eans"/);
+   assert.ok(!sql.includes("__SYNONYM_EAN_"));
+   return {rows:[{siteId:"1",siteName:"Abadía",code:"ABA",kind:"farmacia",
+    ready:true,key:"SKU:8437000001234",matched:true,stock:2}]};
+  }
+  throw Error("SQL inesperado "+sql.slice(0,100));
+ }};
+ const report=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
+ assert.deepEqual(report.rows[0].eans,["8437000001234"]);
 });

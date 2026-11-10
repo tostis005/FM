@@ -98,9 +98,10 @@ received_with_cn AS MATERIALIZED (
  ) AS cn, array_agg(DISTINCT p.pharmacy_id)::int[] AS blocked_pharmacy_ids
  FROM __SCHEMA__.articulos ar
  JOIN pharmacies p ON upper(btrim(ar.farmacia_codigo))=p.pharmacy_code
- WHERE (upper(coalesce(ar.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
-    OR EXISTS (SELECT 1 FROM unnest($2::text[]) AS exclude(cadena)
-      WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0))
+ WHERE EXISTS (SELECT 1 FROM unnest(
+   ARRAY['ZZZ','*BAJA','* BAJA']::text[] || $2::text[]
+  ) AS exclude(cadena)
+  WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0)
  GROUP BY 1
 ), scoped_cn AS MATERIALIZED (
  SELECT cn,array_agg(DISTINCT pharmacy_id)::int[] AS pharmacy_ids

@@ -23,7 +23,8 @@ await page.route("**/api/**",async route=>{
  else if(path==="/api/tenant/farmacias")body=pharmacies;
  else if(path==="/api/picking-list/report")
   body={meta:{sourceConfigured:true,lastImportedAt:"2026-11-10T10:00:00Z",lineCount:1,
-   origin:"dropbox"},sites:[],rows:[],channels:[],
+   origin:"dropbox",sourceState:"ok",skippedLines:1,importWarning:"Se ha omitido 1 línea."},
+   sites:[],rows:[],channels:[],
    totals:{orders:1,units:2,products:1,allocated:0,shortage:2,incomplete:0}};
  else if(path==="/api/picking-list/source"){
   if(method==="PUT"){
@@ -31,50 +32,45 @@ await page.route("**/api/**",async route=>{
    stored=value.url;
   }
   body={sourceConfigured:Boolean(stored),url:stored,
-   lastImportedAt:"2026-11-10T10:00:00Z",updatedAt:"2026-11-10T10:00:00Z"};
+   lastImportedAt:"2026-11-10T10:00:00Z",updatedAt:"2026-11-10T10:00:00Z",
+   skippedLines:1,importWarning:"Se ha omitido 1 línea."};
  }else if(path==="/api/tenant/pedidos/exclusiones")
   body={rules:[],automatic:["ZZZ","*BAJA","* BAJA"]};
  else if(path==="/api/tenant/stock-objetivo")body={days:20};
  else if(path==="/api/analytics/politica-precios")
   body={global:{percentile:20,months:6},overrides:[]};
- else if(path==="/api/picking-list/refresh"&&method==="POST"){
-  writes.push({method,path});body={ok:true,rows:1};
- }else if(path==="/api/picking-list/import"&&method==="POST"){
-  writes.push({method,path,contents:req.postData()});body={ok:true,rows:1};
+ else if(path.startsWith("/api/picking-list/")&&method==="POST"){
+  writes.push({method,path});
+  body={error:"El botón de importación ya no debe utilizarse"};
  }
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
 try{
  await page.goto("http://127.0.0.1:4175/picking-list",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor({timeout:15000});
- assert.equal(await page.getByText("Picking List · PharmaWow").count(),0);
  assert.equal(await page.getByRole("button",{name:"Configurar fuente"}).count(),0);
- assert.equal(await page.getByRole("button",{name:"Importar CSV"}).count(),0);
+ assert.equal(await page.getByRole("button",{name:/Leer pedidos de Dropbox|Actualizar Shopify|Importar CSV|Actualizar/}).count(),0);
  assert.equal(await page.locator('input[type="file"]').count(),0);
+ await page.getByText(/Se ha omitido 1 línea/).waitFor();
  assert.equal(stored,initial);
  await page.goto("http://127.0.0.1:4175/ajustes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor({timeout:15000});
  await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor();
- await page.getByText("Dropbox configurado:",{exact:false}).first().waitFor();
- assert.equal(stored,initial);
- assert.equal(writes.filter(x=>x.method==="PUT").length,0,
-  "Abrir Ajustes nunca modifica el enlace de Dropbox");
- await page.getByRole("button",{name:"Cambiar enlace de Dropbox"}).click();
- const field=page.getByLabel("Enlace actual del CSV en Dropbox");
- assert.equal(await field.inputValue(),initial,
-  "Ajustes recupera el enlace guardado y no exige volver a introducirlo");
- await page.getByRole("button",{name:"Cancelar"}).click();
- assert.equal(stored,initial);
- const csv="order_id,quantity,sku\n1000,2,123456\n";
- await page.locator('.fm-picking-settings input[type="file"]').setInputFiles({
-  name:"pedidospendientes.csv",mimeType:"text/csv",buffer:Buffer.from(csv)});
- await page.getByText(/Importadas 1 líneas del CSV/).waitFor();
- assert.ok(writes.some(w=>w.path==="/api/picking-list/import"&&w.contents===csv));
- assert.equal(stored,initial,"Importar un CSV manual no cambia la ruta permanente");
- await page.getByRole("button",{name:"Actualizar ahora desde Dropbox"}).click();
- await page.getByText(/Pedidos pendientes actualizados desde Dropbox/).waitFor();
- assert.ok(writes.some(w=>w.path==="/api/picking-list/refresh"));
- assert.equal(stored,initial);
+ const field=page.getByLabel("Enlace del CSV de pedidos en Dropbox");
+ await field.waitFor();
+ assert.equal(await field.inputValue(),initial);
+ assert.equal(await page.getByRole("button",{name:"Guardar",exact:true}).isDisabled(),true);
+ assert.equal(await page.locator('.fm-picking-settings input[type="file"]').count(),0);
+ assert.equal(await page.getByRole("button",{name:/Cambiar enlace|Actualizar ahora|Importar CSV|Leer pedidos/}).count(),0);
+ assert.equal(writes.length,0,"Consultar Ajustes no modifica ni descarga el origen");
+ const changed="https://www.dropbox.com/scl/fi/changed456/pedidospendientes.csv?rlkey=newkey&dl=1";
+ await field.fill(changed);
+ assert.equal(stored,initial,"Editar sin guardar no cambia la URL");
+ await page.getByRole("button",{name:"Guardar",exact:true}).click();
+ await page.getByText(/Ruta guardada/).waitFor();
+ assert.equal(stored,changed);
+ assert.equal(writes.filter(w=>w.method==="PUT").length,1);
+ assert.equal(writes.filter(w=>w.method==="POST").length,0);
  assert.equal(errors.length,0,errors.join("\n"));
- console.log("OK Picking List: nombre corto, fichero solo en Ajustes y Dropbox actual persistente");
+ console.log("OK Picking List: solo guardar enlace, sin subir CSV ni ejecutar importación manual");
 }finally{await browser.close();}

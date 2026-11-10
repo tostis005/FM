@@ -287,8 +287,8 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    </div>
    {mode==="search"?<div id="simulator-search-panel" role="tabpanel" aria-labelledby="simulator-search-tab">
     <div className="fm-objectives-search">
-     <label>Buscar por artículo, proveedor o CN
-      <input type="search" placeholder="Artículo, laboratorio, proveedor o CN (palabras en cualquier orden)…" value={search}
+     <label>Buscar por artículo, proveedor, CN o EAN
+      <input type="search" placeholder="Artículo, laboratorio, proveedor, CN o EAN…" value={search}
        onChange={e=>{setSearch(e.target.value);setSearchPage(0);}}
        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();setSearchNonce(n=>n+1);}}}/></label>
      <button className="btn btn-secondary" type="button" disabled={searchBusy||search.trim().length<2}

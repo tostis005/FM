@@ -76,8 +76,11 @@ try{
  await page.getByText("Unidades totales").first().waitFor();
  await page.getByText("Total unidades disponibles").waitFor();
  await page.getByText("Unidades pendientes").first().waitFor();
- await page.getByRole("columnheader",{name:"Stock ABA",exact:true}).waitFor();
- await page.getByRole("columnheader",{name:"Unidades ABA",exact:true}).waitFor();
+ const headers=await page.locator(".fm-picking-table thead th").allTextContents();
+ assert.ok(headers.some(x=>x.trim()==="Stock ABA"),
+  "Se esperaba la columna Stock ABA: "+JSON.stringify(headers));
+ assert.ok(headers.some(x=>x.trim()==="Unidades ABA"),
+  "Se esperaba la columna Unidades ABA: "+JSON.stringify(headers));
  await page.getByRole("button",{name:"Ver más"}).click();
  await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
  await page.getByRole("columnheader",{name:"Detalle CSV"}).waitFor();

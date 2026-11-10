@@ -47,7 +47,7 @@ test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=
  assert.ok(query.sql.includes("link.laboratory_key IN (SELECT key FROM lab_aliases)"));
  assert.ok(query.sql.includes("EXISTS (SELECT 1 FROM"));
  assert.doesNotMatch(query.sql,/movements AS MATERIALIZED/);
- assert.match(query.sql,/preparador_exclusiones|unnest\(\$8::text\[\]\)/);
+ assert.match(query.sql,/preparador_exclusiones|ARRAY\[\x27ZZZ\x27,\x27\*BAJA\x27,\x27\* BAJA\x27\]::text\[\] \|\| \$8::text\[\]/);
  assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);
  assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"]]);
 });

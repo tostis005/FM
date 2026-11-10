@@ -6,6 +6,8 @@ WITH sources AS MATERIALIZED (
    __PHARMACY_CODE__ AS source_code,
    coalesce(nullif(upper(btrim(f.codigo_visible)),''),
     CASE WHEN upper(btrim(f.codigo_origen))='ALMACEN' THEN 'ALM'
+     WHEN f.cliente_slug='ampedia' AND f.id=5
+      AND upper(btrim(f.codigo_origen)) IN ('POL','VAL') THEN 'POL'
      ELSE upper(btrim(f.codigo_origen)) END) AS display_code,
    CASE WHEN upper(btrim(f.codigo_origen))='ALMACEN' THEN 'almacen'
         ELSE 'farmacia' END AS kind

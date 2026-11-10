@@ -47,10 +47,10 @@ try{
  await page.getByRole("button",{name:"Editar"}).first().waitFor({timeout:15000});
  assert.equal(await page.getByText("Secciones y subsecciones autorizadas").count(),0);
  await page.locator("tbody tr").filter({hasText:"empleado@example.invalid"}).getByRole("button",{name:"Editar"}).click();
- assert.equal(await page.getByLabel("Perfil",{exact:true}).inputValue(),"2");
+ assert.equal(await page.locator(".fm-manage-form select").filter({has:page.locator('option[value="3"]')}).inputValue(),"2");
  assert.equal(await page.getByRole("checkbox",{name:"Abadía"}).isChecked(),true);
  assert.equal(await page.getByRole("checkbox",{name:"Europa"}).isChecked(),false);
- await page.getByLabel("Perfil",{exact:true}).selectOption("3");
+ await page.locator(".fm-manage-form select").filter({has:page.locator('option[value="3"]')}).selectOption("3");
  await page.getByRole("checkbox",{name:"Europa"}).check();
  await page.getByRole("checkbox",{name:"Abadía"}).uncheck();
  await page.getByRole("button",{name:"Guardar cambios"}).click();
@@ -62,11 +62,11 @@ try{
  assert.equal(writes.at(-1).authType,"google");
  // Copiar perfil y farmacias no cambia identidad ni guarda hasta confirmar.
  await page.locator("tbody tr").filter({hasText:"empleado@example.invalid"}).getByRole("button",{name:"Editar"}).click();
- const source=page.getByLabel("Copiar perfil y farmacias de otro usuario (opcional)");
+ const source=page.locator(".fm-manage-form select").filter({has:page.locator('option[value="plantilla@example.invalid"]')});
  const prior=writes.length;
  await source.selectOption("plantilla@example.invalid");
  assert.equal(writes.length,prior);
- assert.equal(await page.getByLabel("Perfil",{exact:true}).inputValue(),"3");
+ assert.equal(await page.locator(".fm-manage-form select").filter({has:page.locator('option[value="3"]')}).inputValue(),"3");
  assert.equal(await page.locator("input[type=email]").inputValue(),"empleado@example.invalid");
  await page.getByRole("button",{name:"Guardar cambios"}).click();
  assert.equal(writes.at(-1).email,"empleado@example.invalid");
@@ -74,7 +74,7 @@ try{
  // Alta nueva: sólo perfil/farmacias, nunca módulos y subsecciones individuales.
  await page.locator("input[type=email]").fill("nuevo@example.invalid");
  await page.locator('input[placeholder="Nombre y apellidos"]').fill("Nuevo");
- await page.getByLabel("Copiar perfil y farmacias de otro usuario (opcional)")
+ await page.locator(".fm-manage-form select").filter({has:page.locator('option[value="plantilla@example.invalid"]')})
   .selectOption("plantilla@example.invalid");
  await page.getByRole("button",{name:"Crear usuario"}).click();
  const created=writes.at(-1);

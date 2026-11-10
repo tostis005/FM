@@ -116,6 +116,9 @@ test("Reporte sin almacén importado: propuesta provisional desde farmacias, sin
    {orderId:"1",orderName:"#1",channel:"web",sku:"123456",cn:"123456",quantity:2,title:"Crema"},
    {orderId:"1",orderName:"#1",channel:"web",sku:"123456",cn:"123456",quantity:1,title:"Crema"},
   ]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:false}]};
+  if(sql.includes("WITH picking_ean_sites AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:false,
     key:"123456",stock:null,matched:false},
@@ -156,6 +159,9 @@ test("EAN Shopify asociado al artículo participa en el reparto, sin necesitar C
    cn:null,quantity:6,title:"Producto EAN"
   }]};
   if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))return {rows:[{available:true}]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:false}]};
+  if(sql.includes("WITH picking_ean_sites AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH sources AS MATERIALIZED")){
    assert.match(sql,/JOIN "ampedia"\.sinonimos si/);
    return {rows:[
@@ -262,6 +268,9 @@ test("Los pedidos repetidos son varias líneas válidas aunque tengan el mismo I
    {orderId:"123",orderName:"#123",channel:"web",sku:"111111",cn:"111111",quantity:2,title:"A"},
    {orderId:"123",orderName:"#123",channel:"web",sku:"111111",cn:"111111",quantity:3,title:"A"}
   ]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:false}]};
+  if(sql.includes("WITH picking_ean_sites AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
     key:"111111",stock:3,matched:true,name:"A"},
@@ -290,6 +299,9 @@ test("La antigüedad del timestamp del artículo no genera falso estado de stock
   if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[
    {orderId:"9",orderName:"#9",channel:"web",sku:"111111",cn:"111111",quantity:1,title:"A"}
   ]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:false}]};
+  if(sql.includes("WITH picking_ean_sites AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
     key:"111111",stock:5,matched:true,stockAt:"2025-01-01T00:00:00Z"}

@@ -174,6 +174,8 @@ test("EAN Shopify asociado al artículo participa en el reparto, sin necesitar C
  }};
  const result=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
  assert.equal(result.rows[0].required,6);
+ assert.deepEqual(result.rows[0].eans,["8720689021111"],
+  "Si el pedido ya lleva un EAN, aparece sin necesitar otra búsqueda");
  assert.equal(result.rows[0].allocated,6);
  assert.equal(result.rows[0].status,"cubierto");
  assert.equal(result.rows[0].stock.find(s=>s.kind==="almacen").planned,4);

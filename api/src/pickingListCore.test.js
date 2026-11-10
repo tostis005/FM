@@ -142,3 +142,29 @@ test("La matriz utiliza EAN sin confundir el SKU con un ID ERP local",async()=>{
  assert.match(sql,/c\.cn IS NULL AND c\.sku/);
  assert.match(sql,/jsonb_to_recordset\(\$2::jsonb\)/);
 });
+
+test("EAN Shopify asociado al artículo participa en el reparto, sin necesitar CN",async()=>{
+ const pool={async query(sql){
+  if(sql.includes("ultima_importacion AS"))return {rows:[{
+   lastImportedAt:"2026-11-10T10:00:00Z",lineCount:1,origin:"archivo",sourceConfigured:false
+  }]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[{
+   orderId:"501",orderName:"#501",channel:"web",sku:"8720689021111",
+   cn:null,quantity:6,title:"Producto EAN"
+  }]};
+  if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
+   {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
+    key:"SKU:8720689021111",stock:4,matched:true,name:"Producto EAN"},
+   {siteId:"1",siteName:"Abadía",code:"ABA",kind:"farmacia",ready:true,
+    key:"SKU:8720689021111",stock:7,matched:true,name:"Producto EAN"}
+  ]};
+  throw Error("SQL inesperado");
+ }};
+ const result=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
+ assert.equal(result.rows[0].required,6);
+ assert.equal(result.rows[0].allocated,6);
+ assert.equal(result.rows[0].status,"cubierto");
+ assert.equal(result.rows[0].stock.find(s=>s.kind==="almacen").planned,4);
+ assert.equal(result.rows[0].stock.find(s=>s.kind==="farmacia").planned,2);
+ assert.equal(result.rows[0].shortage,0);
+});

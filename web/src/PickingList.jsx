@@ -9,7 +9,7 @@ const integer=n=>n===null||n===undefined?"—":new Intl.NumberFormat("es-ES").fo
 const dateTime=t=>t?new Date(t).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"Pendiente";
 const STATUS={
  cubierto:"Cubierto",sin_stock:"Sin stock suficiente",
- sin_datos:"Stock pendiente de importar",sin_cn:"SKU sin CN",
+ sin_datos:"Stock pendiente de importar",sin_cn:"Código sin equivalencia",
  desactualizado:"Stock sin actualizar"
 };
 function csvValue(value){
@@ -214,7 +214,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
      <small>{integer(data?.totals.incomplete)} referencias por comprobar</small></div>
    </div>
    {data?.totals.incomplete>0&&<p className="fm-picking-warning" role="status">
-    <AlertTriangle size={17}/> Hay {integer(data.totals.incomplete)} productos con SKU sin CN,
+    <AlertTriangle size={17}/> Hay {integer(data.totals.incomplete)} productos con códigos sin equivalencia,
      algún origen sin sincronizar o existencias antiguas. Su asignación debe revisarse antes de preparar.
    </p>}
    <div className="fm-picking-tabs" role="tablist" aria-label="Ubicación de preparación">

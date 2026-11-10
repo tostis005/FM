@@ -46,7 +46,7 @@ try{
  await page.locator("h1").getByText("Usuarios",{exact:true}).waitFor({timeout:15000});
  await page.getByRole("button",{name:"Editar"}).first().waitFor({timeout:15000});
  assert.equal(await page.getByText("Secciones y subsecciones autorizadas").count(),0);
- await page.getByRole("button",{name:"Editar"}).first().click();
+ await page.locator("tbody tr").filter({hasText:"empleado@example.invalid"}).getByRole("button",{name:"Editar"}).click();
  assert.equal(await page.getByLabel("Perfil",{exact:true}).inputValue(),"2");
  assert.equal(await page.getByRole("checkbox",{name:"Abadía"}).isChecked(),true);
  assert.equal(await page.getByRole("checkbox",{name:"Europa"}).isChecked(),false);
@@ -61,7 +61,7 @@ try{
  assert.equal("sections" in writes.at(-1),false);
  assert.equal(writes.at(-1).authType,"google");
  // Copiar perfil y farmacias no cambia identidad ni guarda hasta confirmar.
- await page.getByRole("button",{name:"Editar"}).first().click();
+ await page.locator("tbody tr").filter({hasText:"empleado@example.invalid"}).getByRole("button",{name:"Editar"}).click();
  const source=page.getByLabel("Copiar perfil y farmacias de otro usuario (opcional)");
  const prior=writes.length;
  await source.selectOption("plantilla@example.invalid");

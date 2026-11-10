@@ -56,13 +56,19 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
       "SELECT email,nombre,rol,farmacias,activo FROM public.acceso_cuentas WHERE email=$1",[email]);
     if(!explicit.length || !explicit[0].activo) return null;
     const {rows:memberships}=await pool.query(
-      `SELECT uc.cliente_slug AS slug,uc.rol AS role,uc.farmacias::text[] AS pharmacies,
-         uc.activo AS active,uc.modulos AS module_grants,uc.secciones AS section_grants,uc.metodo_acceso AS login_method,
+      `SELECT uc.cliente_slug AS slug,coalesce(p.rol_base,uc.rol) AS role,uc.farmacias::text[] AS pharmacies,
+         uc.activo AS active,
+         CASE WHEN p.id IS NULL THEN uc.modulos ELSE p.modulos END AS module_grants,
+         CASE WHEN p.id IS NULL THEN uc.secciones ELSE p.secciones END AS section_grants,
+         p.permisos AS profile_permissions,p.id AS profile_id,p.nombre AS profile_name,
+         uc.metodo_acceso AS login_method,
          uc.google_invitado AS individually_invited,
          EXISTS(SELECT 1 FROM farmetrica.cliente_dominios d WHERE
            d.cliente_slug=uc.cliente_slug AND d.activo=true
            AND d.dominio=split_part(uc.email,'@',2)) AS domain_allowed
-         FROM farmetrica.usuario_clientes uc WHERE uc.email=$1`,[email]);
+         FROM farmetrica.usuario_clientes uc
+         LEFT JOIN farmetrica.perfiles p ON p.id=uc.perfil_id
+         WHERE uc.email=$1`,[email]);
     const {rows:superRows}=await pool.query(
       "SELECT 1 FROM farmetrica.superadministradores WHERE email=$1",[email]);
     // Una invitación Google explícita admite Gmail y no exige Workspace.
@@ -357,8 +363,9 @@ export function setupAccess(app, pool, legacyAdmin, legacyEnabled = false,{maile
          [email,String(payload.name||email.split("@")[0]).slice(0,150)]);
         await pool.query(`
          INSERT INTO farmetrica.usuario_clientes
-         (email,cliente_slug,rol,farmacias,activo,metodo_acceso,modulos)
-         VALUES($1,$2,'colaborador',$3,true,'google','{}'::text[])
+         (email,cliente_slug,rol,farmacias,activo,metodo_acceso,modulos,secciones,perfil_id)
+         VALUES($1,$2,'colaborador',$3,true,'google','{}'::text[],'{}'::text[],
+          (SELECT id FROM farmetrica.perfiles WHERE clave='colaborador'))
          ON CONFLICT(email,cliente_slug) DO NOTHING`,
          [email,domain.cliente_slug,domain.farmacia_id?[Number(domain.farmacia_id)]:[]]);
        }

@@ -126,9 +126,9 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
    <label className="fm-unified-filter"><span>Sin recepciones desde</span>
     <input type="date" aria-label="Sin recepciones desde" value={cutoff}
      max={allowedDate} onChange={e=>changeDate(e.target.value)}/></label>
-   <label className="fm-unified-filter fm-real-search"><span>Buscar artículo o CN</span>
+   <label className="fm-unified-filter fm-real-search"><span>Buscar artículo, CN o EAN</span>
     <div><Search size={16}/><input type="search" value={search}
-     placeholder="Nombre o código nacional…" onChange={e=>{setSearch(e.target.value);setPage(1);}}/></div>
+     placeholder="Nombre, CN o EAN…" onChange={e=>{setSearch(e.target.value);setPage(1);}}/></div>
    </label>
   </ReportFilterBar>
   <div className="fm-stale-presets" role="group" aria-label="Antigüedad sin recepciones">

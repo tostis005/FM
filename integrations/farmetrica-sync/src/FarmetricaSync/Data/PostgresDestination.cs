@@ -459,6 +459,55 @@ WHERE a."origen_id" IS NULL
         await ddl.CommitAsync(ct);
     }
 
+
+    // Maestro compartido entre farmacias. Las claves NO dependen de la farmacia:
+    // (articulo_id, codigo) conserva varias equivalencias por artículo y
+    // permite detectar un código ambiguo vinculado a artículos distintos.
+    private static async Task EnsureSynonymMasterAsync(
+        NpgsqlConnection conn, Destination dest, string source, CancellationToken ct)
+    {
+        string master = Validation.Q(dest.Schema) + "." + Validation.Q("sinonimos_maestro");
+        await ExecuteOutsideTransactionAsync(conn, $"""
+CREATE TABLE IF NOT EXISTS {master} (
+  articulo_id text NOT NULL,
+  codigo text NOT NULL,
+  creado_en timestamptz NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (articulo_id, codigo)
+)
+""", ct);
+        await ExecuteOutsideTransactionAsync(conn,
+            $"CREATE INDEX IF NOT EXISTS sinonimos_maestro_codigo_idx ON {master} (codigo)", ct);
+        await ExecuteOutsideTransactionAsync(conn,
+            $"CREATE INDEX IF NOT EXISTS sinonimos_articulo_codigo_idx ON {source} (articulo_id, codigo)", ct);
+        await ExecuteOutsideTransactionAsync(conn,
+            $"CREATE INDEX IF NOT EXISTS sinonimos_codigo_idx ON {source} (codigo)", ct);
+    }
+
+    // Se ejecuta en la MISMA transacción del snapshot ya confirmado en staging.
+    // Ninguna farmacia borra correspondencias que todavía aporta otra farmacia.
+    private static async Task ReconcileSynonymMasterAsync(
+        NpgsqlConnection conn, NpgsqlTransaction tx, Destination dest, string source,
+        CancellationToken ct)
+    {
+        string master = Validation.Q(dest.Schema) + "." + Validation.Q("sinonimos_maestro");
+        await ExecuteAsync(conn, tx, $"""
+INSERT INTO {master} (articulo_id, codigo)
+SELECT DISTINCT s.articulo_id, s.codigo
+FROM {source} s
+WHERE s.articulo_id IS NOT NULL AND s.articulo_id <> ''
+  AND s.codigo IS NOT NULL AND s.codigo <> ''
+ON CONFLICT (articulo_id, codigo) DO NOTHING
+""", ct);
+        await ExecuteAsync(conn, tx, $"""
+DELETE FROM {master} m
+WHERE NOT EXISTS (
+    SELECT 1 FROM {source} s
+    WHERE s.articulo_id = m.articulo_id
+      AND s.codigo = m.codigo
+)
+""", ct);
+    }
+
     public async Task<SyncWriteResult> WriteAsync(Destination dest, Pharmacy pharmacy, EntityDefinition entity,
         string mode, IAsyncEnumerable<IReadOnlyList<Dictionary<string, object?>>> rawBatches,
         Action<SyncWriteProgress>? onProgress, CancellationToken ct)
@@ -490,6 +539,8 @@ WHERE a."origen_id" IS NULL
         // Preparar estructura FUERA de la transacción que copia y sincroniza.
         // Ningún DDL se conserva bloqueando las lecturas durante la carga.
         await EnsureTableSchemaAsync(conn, dest, entity, target, ct);
+        if (entity.Name == "sinonimos" && mode == "snapshot")
+            await EnsureSynonymMasterAsync(conn, dest, target, ct);
         // Snapshot: leer Farmatic y llenar tablas temporales de esta conexión SIN
         // abrir la transacción de destino. Un lector de la web no queda afectado
         // durante la preparación de millones de filas. Las tablas temporales
@@ -654,6 +705,11 @@ WHERE a."origen_id" IS NULL
                 await delete.ExecuteNonQueryAsync(ct);
             }
             duplicates += totalRead - staged;
+
+            // Merge global idempotente: solo se publican códigos después de
+            // completar esta farmacia. Sin tabla temporal expuesta a consultas web.
+            if (entity.Name == "sinonimos")
+                await ReconcileSynonymMasterAsync(conn, tx, dest, target, ct);
 
             // Fotografía actual del stock, con fecha de captura incluso cuando
             // la cantidad no cambió. No se confunde con compras o ventas y no

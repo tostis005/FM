@@ -25,7 +25,8 @@ import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
 const FuentesMaestras=React.lazy(()=>import("./FuentesMaestras.jsx"));
-const EquipoCliente=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.EquipoCliente})));
+const EquipoCliente=React.lazy(()=>import("./EquipoPerfiles.jsx"));
+const PerfilesGlobales=React.lazy(()=>import("./Perfiles.jsx"));
 const DetalleVentas=React.lazy(()=>import("./DetalleVentas.jsx"));
 const SolicitudesDemo=React.lazy(()=>import("./SolicitudesDemo.jsx"));
 const AsistenteDemo=React.lazy(()=>import("./AsistenteDemo.jsx"));
@@ -190,6 +191,7 @@ const NAV=[
  {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
+ {id:"perfiles",label:"Perfiles",icon:ShieldCheck,super:true},
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
@@ -215,7 +217,7 @@ function AppBreadcrumbs({items,onNavigate}){
  </nav>;
 }
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","usuarios","estado","ajustes"]);
+const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
@@ -1645,6 +1647,7 @@ function App(){
     )}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
+    {page==="perfiles"&&sessionUser?.role==="superadministrador"&&<PerfilesGlobales/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       canEditMaster={["gestor","administrador","superadministrador"].includes(role)}
       canMergeMaster={["administrador","superadministrador"].includes(role)}/>}

@@ -179,13 +179,29 @@ export function setupPickingList(app,pool,{requireTenant}){
  const allowed=(req,res,next)=>managed(req.context)?next():res.status(403).json({
   error:"La Picking List requiere perfil gestor/administrador y acceso a Stock"});
  const write=(req,res,next)=>writable(req.context)?next():res.status(403).json({
-  error:"Tu perfil no permite importar o configurar la Picking List"});
+  error:"Tu perfil no permite importar o actualizar los pedidos de Picking List"});
+ const settingsAdmin=(req,res,next)=>
+  ["superadministrador","administrador","gestor"].includes(req.context?.role)?
+   next():res.status(403).json({error:"Solo los administradores y gestores pueden configurar la fuente de Picking List"});
  app.get("/api/picking-list/report",...guard,allowed,async(req,res,next)=>{
   try{res.json(await readPickingReport(pool,req.context,{
    channel:String(req.query.channel||"").slice(0,120)
   }));}catch(e){next(e);}
  });
- app.put("/api/picking-list/source",...guard,allowed,write,async(req,res,next)=>{
+ // La URL de Dropbox nunca forma parte del reporte. Solo se entrega
+ // al administrador/gestor en Ajustes, donde se conserva la ya guardada.
+ app.get("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
+  try{
+   const {rows}=await pool.query(
+    'SELECT csv_url,ultima_importacion AS "lastImportedAt",actualizado_en AS "updatedAt" '+
+    'FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1',
+    [req.context.client.slug]);
+   const row=rows[0];
+   res.json({url:row?.csv_url||"",sourceConfigured:Boolean(row?.csv_url),
+    lastImportedAt:row?.lastImportedAt||null,updatedAt:row?.updatedAt||null});
+  }catch(e){next(e);}
+ });
+ app.put("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
   try{
    const url=validateDropboxCsvUrl(req.body?.url);
    await pool.query("INSERT INTO farmetrica.picking_list_fuentes(cliente_slug,csv_url,actualizado_por) "+

@@ -28,6 +28,7 @@ test("Cambiar código visible no cambia ID, código origen ERP ni nombre públic
   displayCode:"ALM",sourceHost:"",sourceDatabase:"Farmatic"};
  const warehouse=decoratePharmacy("ampedia",base);
  assert.equal(warehouse.displayCode,"ALM");
+ assert.equal(decoratePharmacy("ampedia",{id:"6",name:"Almacén",sourceCode:"ALMACEN"}).displayCode,"ALM");
  assert.equal(warehouse.sourceCode,"ALMACEN");
  assert.equal(warehouse.databaseCode,"ALMACEN");
  assert.equal(warehouse.name,"Almacén central");

@@ -1,6 +1,6 @@
--- Matriz de existencias: los SKU cortos se cruzan por CN y los de
--- 8-14 dígitos por EAN del artículo, sin atribuir IDs ERP entre farmacias.
--- NULL indica que un origen todavía no tiene stock importado.
+-- Picking List: SKU de hasta 7 dígitos se cruza por CN, y un
+-- EAN Shopify de 8-14 dígitos por EAN del artículo sincronizado.
+-- No atribuir origen_id ERP de una farmacia a otra diferente.
 WITH sources AS MATERIALIZED (
  SELECT f.id::text AS site_id,f.nombre AS site_name,
    __PHARMACY_CODE__ AS source_code,
@@ -38,7 +38,8 @@ WITH sources AS MATERIALIZED (
  FROM sites s CROSS JOIN codes c JOIN __SCHEMA__.articulos a
   ON upper(btrim(a.farmacia_codigo))=s.source_code
    AND btrim(coalesce(to_jsonb(a)->>'ean',''))=c.sku
- WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}
+ WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}$'
+), unique_articles AS (
  SELECT DISTINCT ON (site_id,key,article_id)
   site_id,key,article_id,stock,nombre,stock_at
  FROM candidates ORDER BY site_id,key,article_id,stock_at DESC NULLS LAST
@@ -55,21 +56,3 @@ SELECT s.site_id AS "siteId",s.site_name AS "siteName",
 FROM sites s LEFT JOIN codes c ON true
  LEFT JOIN inventory i ON i.site_id=s.site_id AND i.key=c.key
 ORDER BY CASE WHEN s.kind='almacen' THEN 0 ELSE 1 END,s.site_id,c.key;
-
-), unique_articles AS (
- SELECT DISTINCT ON (site_id,key,article_id)
-  site_id,key,article_id,stock,nombre,stock_at
- FROM candidates ORDER BY site_id,key,article_id,stock_at DESC NULLS LAST
-), inventory AS (
- SELECT site_id,key,
-  CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
-  max(nombre) AS name,min(stock_at) AS stock_at
- FROM unique_articles GROUP BY site_id,key
-)
-SELECT s.site_id AS "siteId",s.site_name AS "siteName",
- s.source_code AS code,s.kind,s.ready,
- c.cn,i.stock,i.name,i.stock_at AS "stockAt",
- (i.cn IS NOT NULL) AS matched
-FROM sites s LEFT JOIN codes c ON true
- LEFT JOIN inventory i ON i.site_id=s.site_id AND i.cn=c.cn
-ORDER BY CASE WHEN s.kind='almacen' THEN 0 ELSE 1 END,s.site_id,c.cn;

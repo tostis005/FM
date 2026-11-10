@@ -286,7 +286,7 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
     allocationProvisional:Boolean(allocation)&&(warehouseUnknown||allocation.partial),
     exhausted:allocation?.zeroedSites||[]
    }];
-  ])):undefined;
+  })):undefined;
   return {
    key:entry.key,cn:entry.cn,sku:entry.sku,eans,channelSlices,
    name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.key)?.name).find(Boolean)||"",

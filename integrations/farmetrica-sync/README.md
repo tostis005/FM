@@ -5,6 +5,33 @@ Sincronizador configurable para el servidor Windows del cliente con Farmatic / S
 > **Estado de entrega:** código y compilación Windows automatizada mediante GitHub Actions. **No se ha validado con el SQL Server Farmatic ni con el PostgreSQL de Contabo reales**. Comprobar primero en preproducción; no incluye credenciales.
 
 
+## Nuevo origen Almacén desde Avadía
+
+Al actualizar una instalación con una única farmacia Farmatic de conexión
+directa identificada como Avadía o Navadía, se crea automáticamente
+Almacén (código ALMACEN; base SQL Server Almacen, sin tilde).
+Se utilizan el mismo servidor SQL, usuario, contraseña cifrada, autenticación,
+TLS, zona horaria y habilitación de Avadía, sin Linked Server.
+
+Se replican todas las fuentes realmente configuradas para Avadía:
+artículos/stock, ventas, recepciones/compras, proveedores, familias,
+vendedores y sinónimos, cuando existan. Cada consulta conserva SQL completo
+e incremental, periodicidad, modo, lote, alertas y activación originales;
+se le asignan IDs nuevos y no se copian historiales ni checkpoints.
+Las macros TABLE ya resuelven la base propia; los SQL con referencias
+explícitas Farmatic.dbo se adaptan a Almacen.dbo.
+
+La migración es aditiva y repetible: no modifica las farmacias originales,
+no sobrescribe fuentes del almacén ya existentes y solo añade las fuentes
+que falten en reinicios posteriores. Si Avadía no se reconoce de forma
+inequívoca o no utiliza conexión directa, no se crea el almacén automáticamente.
+
+Antes de actualizar, realizar copia segura de ProgramData/FarmetricaSync.
+Tras reiniciar, comprobar en Farmacias la conexión y en Consultas SQL
+las fuentes nuevas. Si estaban activas en Avadía también estarán activas
+en Almacén: validar acceso real a SQL Server y PostgreSQL antes de instalar
+en producción. No hay validación sobre las bases reales del cliente.
+
 ## Reejecución masiva y navegación con URL real (0.19)
 
 - En **Consultas SQL** aparece **Ejecutar todas**, junto a **Nueva consulta**.

@@ -95,7 +95,9 @@ public sealed class ConfigStore
         // La nueva fuente se añade una sola vez a las farmacias existentes.
         // No se modifican consultas ni parámetros guardados previamente.
         bool synonymJobsAdded = SynonymJobs.EnsureForFarmatic(_config) > 0;
-        if (retiredEntities || synonymJobsAdded)
+        // Registrar Almacén con las fuentes vigentes de Avadía; no altera los demás orígenes.
+        var warehouseSync = WarehouseSource.EnsureFromAvadia(_config);
+        if (retiredEntities || synonymJobsAdded || warehouseSync.Changed)
         {
             // Persistir la limpieza una única vez, sin guardar credenciales en logs.
             string tmp = _path + ".tmp";

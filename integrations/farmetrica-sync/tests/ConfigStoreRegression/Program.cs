@@ -130,6 +130,70 @@ try
         throw new Exception("La limpieza de ventas/compras antiguas debe conservar documentos e histórico.");
     if (new ConfigStore(path).Read(c => c.Entities.Any(e => e.Name is "ventas" or "compras")))
         throw new Exception("Las fuentes antiguas no deben recrearse.");
+
+    // Incorporación en reinicio desde un origen Navadía con conexión directa.
+    string warehousePath = Path.Combine(path, "warehouse-clone");
+    var seedWarehouse = new ConfigStore(warehousePath);
+    Guid avadiaId = Guid.NewGuid();
+    Guid articlesId = seedWarehouse.Read(c => c.Entities.Single(e => e.Name == "articulos").Id);
+    seedWarehouse.Change(c =>
+    {
+        c.Pharmacies.Add(new Pharmacy
+        {
+            Id = avadiaId, Code = "AVD", Name = "Farmacia Navadía",
+            ConnectionMode = "direct", Server = "SQL-CENTRAL", Database = "Farmatic",
+            AuthMode = "sql", Username = "lector", PasswordProtected = "cifrada",
+            TimeZoneId = "Europe/Madrid", TrustServerCertificate = true, Enabled = true
+        });
+        c.Jobs.Add(new SyncJob
+        {
+            PharmacyId = avadiaId, EntityId = articlesId, Mode = "snapshot",
+            Sql = "SELECT IdArticu AS origen_id FROM [Farmatic].[dbo].[Articu]",
+            FullSql = "SELECT IdArticu AS origen_id FROM Farmatic.dbo.Articu",
+            EveryMinutes = 720, BatchSize = 1200, ReplayMinutes = 250,
+            SafetyDelayMinutes = 3, AlertRecipients = "alertas@example.invalid",
+            Enabled = true
+        });
+    });
+    var loadedWarehouse = new ConfigStore(warehousePath);
+    var snapshot = loadedWarehouse.Read(c => c);
+    var source = snapshot.Pharmacies.Single(p => p.Id == avadiaId);
+    var target = snapshot.Pharmacies.Single(p => p.Code == "ALMACEN");
+    if (target.Name != "Almacén" || target.Database != "Almacen" ||
+        target.ConnectionMode != "direct" || target.LinkedServer != "" ||
+        target.Server != source.Server || target.Username != source.Username ||
+        target.PasswordProtected != source.PasswordProtected ||
+        target.TimeZoneId != source.TimeZoneId ||
+        target.TrustServerCertificate != source.TrustServerCertificate)
+        throw new Exception("Almacén debe compartir servidor y conexión directa con Navadía.");
+    var sourceJob = snapshot.Jobs.Single(j => j.PharmacyId == avadiaId && j.EntityId == articlesId);
+    var targetJob = snapshot.Jobs.Single(j => j.PharmacyId == target.Id && j.EntityId == articlesId);
+    if (targetJob.Id == sourceJob.Id || targetJob.Mode != sourceJob.Mode ||
+        targetJob.Enabled != sourceJob.Enabled ||
+        targetJob.EveryMinutes != sourceJob.EveryMinutes ||
+        targetJob.BatchSize != sourceJob.BatchSize ||
+        targetJob.ReplayMinutes != sourceJob.ReplayMinutes ||
+        targetJob.SafetyDelayMinutes != sourceJob.SafetyDelayMinutes ||
+        targetJob.AlertRecipients != sourceJob.AlertRecipients ||
+        !targetJob.Sql.Contains("[Almacen].[dbo].[Articu]") ||
+        !targetJob.FullSql.Contains("[Almacen].dbo.Articu") ||
+        sourceJob.Sql.Contains("[Almacen]"))
+        throw new Exception("La clonación no debe perder planificación ni leer Farmatic.");
+    var synonymId = snapshot.Entities.Single(e => e.Name == "sinonimos").Id;
+    if (!snapshot.Jobs.Any(j => j.PharmacyId == target.Id && j.EntityId == synonymId) ||
+        snapshot.States.Any(s => s.JobId == targetJob.Id))
+        throw new Exception("Se deben copiar sinónimos sin heredar estados de Avadía.");
+    int jobCount = snapshot.Jobs.Count(j => j.PharmacyId == target.Id);
+    loadedWarehouse.Change(c => c.Jobs.Single(j => j.Id == targetJob.Id).EveryMinutes = 360);
+    var restarted = new ConfigStore(warehousePath);
+    if (restarted.Read(c => c.Pharmacies.Count(p => p.Code == "ALMACEN")) != 1 ||
+        restarted.Read(c => c.Jobs.Count(j => j.PharmacyId == target.Id)) != jobCount ||
+        restarted.Read(c => c.Jobs.Single(j => j.Id == targetJob.Id).EveryMinutes) != 360)
+        throw new Exception("El reinicio no debe duplicar ni sobrescribir el almacén.");
+    if (WarehouseSource.RedirectDatabase("SELECT * FROM {{TABLE:dbo.Sinonimo}}", "Farmatic") !=
+        "SELECT * FROM {{TABLE:dbo.Sinonimo}}")
+        throw new Exception("No modificar las macros SQL comunes.");
+    Console.WriteLine("OK: almacén directo, fuentes reales, sinónimos, SQL y configuración idempotente.");
     Console.WriteLine("OK: caída VPN sin reintentos, horario diario, zona farmacia, DST y estado persistido.");
     Console.WriteLine("OK: /login and /config reads do not wait behind history writes; snapshot is atomic.");
 }

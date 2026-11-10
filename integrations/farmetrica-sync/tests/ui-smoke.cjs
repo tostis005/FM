@@ -49,6 +49,11 @@ assert.match(src,/updateAllPurchaseSchemas/);
 assert.match(backendCode,/\/jobs\/compras\/update-schema-all/);
 assert.match(backendCode,/\/jobs\/compras\/retry-failed/);
 assert.match(backendCode,/\/entities\/compras\/migrate-postgresql/);
+assert.match(src,/\/traslado/);
+assert.match(src,/\/api\/configuration\/export/);
+assert.match(src,/\/api\/configuration\/import/);
+assert.match(backendCode,/\/configuration\/export/);
+assert.match(backendCode,/\/configuration\/import/);
 const tunnelSource=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Data/SshForward.cs'),'utf8');
 const postgresSource=fs.readFileSync(path.join(__dirname,'../src/FarmetricaSync/Data/PostgresDestination.cs'),'utf8');
 assert.match(postgresSource,/DROP COLUMN IF EXISTS/);
@@ -173,7 +178,7 @@ function contains(value){assert.ok(dom['#app'].innerHTML.includes(value),`No apa
 contains('Panel de sincronización');
 for(const [id,label] of [
  ['pharmacies','Farmacias'],['jobs','Consultas SQL'],['entities','Entidades de datos'],
- ['destination','Destino PostgreSQL'],['mail','Avisos por correo'],['history','Historial de ejecuciones']
+ ['destination','Destino PostgreSQL'],['mail','Avisos por correo'],['history','Historial de ejecuciones'],['transfer','Exportar e importar configuración']
 ]){context.window.F.go(id);contains(label);}
 context.window.F.go('pharmacies');context.window.F.edit('pharmacy','new');contains('p_code');contains('p_trust');
 context.window.F.go('entities');context.window.F.edit('entity','new');contains('e_columns');

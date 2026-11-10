@@ -85,8 +85,8 @@ const nextSchedule = (j,s) => {
 };
 
 
-const nav = [['dashboard','◫','Resumen'],['pharmacies','▦','Farmacias'],['jobs','▤','Consultas SQL'],['entities','▧','Entidades'],['destination','◈','PostgreSQL'],['mail','✉','Alertas'],['history','◷','Historial']];
-const pageRoutes={dashboard:'/resumen',pharmacies:'/farmacias',jobs:'/consultas',entities:'/entidades',destination:'/postgresql',mail:'/alertas',history:'/historial'};
+const nav = [['dashboard','◫','Resumen'],['pharmacies','▦','Farmacias'],['jobs','▤','Consultas SQL'],['entities','▧','Entidades'],['destination','◈','PostgreSQL'],['mail','✉','Alertas'],['history','◷','Historial'],['transfer','⇄','Exportar / importar']];
+const pageRoutes={dashboard:'/resumen',pharmacies:'/farmacias',jobs:'/consultas',entities:'/entidades',destination:'/postgresql',mail:'/alertas',history:'/historial',transfer:'/traslado'};
 // URL real para cada sección. Los enlaces #/ antiguos se migran al abrir.
 const currentPageFromUrl=()=>{
  const path=window.location?.pathname?.replace(/\/$/,'') || '/';
@@ -101,7 +101,7 @@ if((window.location?.pathname?.replace(/\/$/,'') || '/')!==pageRoutes[state.page
 function shell(body){
   $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="${pageRoutes[id]}"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.19.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
 }
-function render(){ if(!cfg()) return; const pages={dashboard,pharmacies,jobs,entities,destination,mail,history}; shell((pages[state.page]||dashboard)()); }
+function render(){ if(!cfg()) return; const pages={dashboard,pharmacies,jobs,entities,destination,mail,history,transfer}; shell((pages[state.page]||dashboard)()); }
 function dashboard(){
   const c=cfg(), enabled=c.jobs.filter(j=>j.enabled).length;
   const errors=c.states.filter(s=>s.lastStatus==='error').length;
@@ -231,6 +231,40 @@ function history(){
  return head('Historial de ejecuciones','Consulta cada farmacia, entidad, registros importados e incidencias.',`<button class="btn secondary" onclick="F.loadRuns()">↻ Actualizar</button>`)+panel('Histórico por farmacia y fuente',filterControls+(runs.length?tableRuns(runs):'<div class="empty">No hay ejecuciones con estos filtros.</div>')+pager)+
  panel('Estado por consulta',`<div class="table-scroll"><table><thead><tr><th>Farmacia / Entidad</th><th>Último éxito</th><th>Registros leídos</th><th>Altas / cambios / bajas</th><th>Punto incremental</th><th>Última carga completa</th><th>Resultado</th></tr></thead><tbody>${c.jobs.map(j=>{let p=c.pharmacies.find(p=>p.id===j.pharmacyId),e=c.entities.find(e=>e.id===j.entityId),s=c.states.find(s=>s.jobId===j.id);return `<tr><td>${esc(p?.code||'—')} / ${esc(entityLabel(e?.name)||'—')}</td><td>${esc(date(s?.lastSuccessUtc))}</td><td>${esc(s?.lastRows??'—')}</td><td>${esc(s?.lastInserted??0)} / ${esc(s?.lastUpdated??0)} / ${esc(s?.lastDeleted??0)}</td><td>${esc(date(s?.watermarkUtc))}</td><td>${esc(date(s?.lastFullSuccessUtc))}</td><td>${status(s?.lastStatus||'pending')}<div class="muted">${esc(s?.lastError||'')}</div></td></tr>`}).join('')}</tbody></table></div>`);
 }
+
+function transfer(){
+ const c=cfg();
+ return head('Exportar e importar configuración',
+  'Traslada los mismos orígenes y ajustes a otro equipo Windows.')+
+ panel('Exportar copia cifrada',`
+ <p class="fm-transfer-explain">Un único fichero <b>.fmsyncbak</b> incluirá ${c.pharmacies.length}
+ orígenes, ${c.jobs.length} consultas SQL, conexiones SQL Server, configuración
+ PostgreSQL, alertas, horarios y puntos de sincronización. Las credenciales
+ se incluyen cifradas con la contraseña de traslado.</p>
+ <form class="fm-transfer-form" onsubmit="F.exportConfiguration(event)">
+ ${f('Contraseña de traslado','export_password','','required minlength="12" maxlength="256" autocomplete="new-password"','password')}
+ ${f('Repetir contraseña','export_repeat','','required minlength="12" maxlength="256" autocomplete="new-password"','password')}
+ <div class="field span2"><button type="submit" class="btn">Exportar toda la configuración</button></div>
+ </form>
+ <p class="fm-transfer-tip">Guarda el fichero y la contraseña en lugares seguros.
+ La contraseña del panel y el histórico de ejecuciones no se exportan.</p>`)+
+ panel('Importar copia de otro equipo',`
+ <p class="fm-transfer-explain">Restaura las conexiones, las consultas y sus
+ ajustes en esta instalación. La configuración existente se sustituirá.</p>
+ <form class="fm-transfer-form" onsubmit="F.importConfiguration(event)">
+ <div class="field span2"><label for="import_backup">Fichero de copia</label>
+ <input type="file" id="import_backup" accept=".fmsyncbak,application/octet-stream" required></div>
+ ${f('Contraseña de traslado','import_password','','required minlength="12" maxlength="256" autocomplete="off"','password')}
+ <div class="field span2"><label class="checkline"><input type="checkbox" id="import_accept" required>
+ Confirmo que la configuración actual se reemplazará y que el servicio anterior
+ estará detenido para evitar sincronizar desde dos equipos.</label></div>
+ <div class="field span2"><button class="btn secondary" type="submit">Importar y restaurar configuración</button></div>
+ </form>
+ <p class="fm-transfer-tip">Conserva las marcas incrementales confirmadas.
+ Tras importar, verifica la identidad del servicio Windows, el acceso SQL y,
+ si usas SSH con clave privada, copia la clave y adapta su ruta manualmente.</p>`);
+}
+
 async function showAuth(forceLogin=false){
  // Impide que la actualización periódica de Resumen siga solicitando /config
  // mientras se muestra el login de una sesión realmente caducada.
@@ -260,6 +294,56 @@ window.F={
  cancel(){state.editing=null;render();},
  refresh(){attempt(reload);},
  async logout(){await attempt(async()=>{await req('/logout','POST');state.config=null;await showAuth(true);});},
+
+ async exportConfiguration(event){
+  event.preventDefault();
+  await attempt(async()=>{
+   const password=val('export_password');
+   if(password.length<12||password!==val('export_repeat'))
+    throw new Error('Las contraseñas deben coincidir y tener al menos 12 caracteres.');
+   const response=await fetch('/api/configuration/export',{
+    method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json','X-Farmetrica-Request':'1'},
+    body:JSON.stringify({password})
+   });
+   if(!response.ok){
+    const data=await response.json().catch(()=>({}));
+    throw new Error(data.error||'No se pudo crear la copia.');
+   }
+   const blob=await response.blob();
+   const address=URL.createObjectURL(blob);
+   const link=document.createElement('a');
+   try{
+    link.href=address;
+    link.download='farmetrica-sync-config-'+new Date().toISOString().slice(0,10)+'.fmsyncbak';
+    document.body.appendChild(link);link.click();
+   }finally{link.remove();URL.revokeObjectURL(address);}
+   document.getElementById('export_password').value='';
+   document.getElementById('export_repeat').value='';
+   toast('Copia cifrada exportada correctamente.');
+  });
+ },
+ async importConfiguration(event){
+  event.preventDefault();
+  await attempt(async()=>{
+   const file=document.getElementById('import_backup')?.files?.[0];
+   if(!file||file.size>16*1024*1024)throw new Error('Selecciona un fichero válido de hasta 16 MB.');
+   if(!checked('import_accept'))throw new Error('Debes confirmar la sustitución.');
+   if(!confirm('¿Sustituir toda la configuración de esta máquina? Comprueba que el equipo antiguo no esté sincronizando.'))return;
+   const form=new FormData();
+   form.append('backup',file);
+   form.append('password',val('import_password'));
+   form.append('confirm','REEMPLAZAR');
+   const response=await fetch('/api/configuration/import',{
+    method:'POST',credentials:'same-origin',
+    headers:{'X-Farmetrica-Request':'1'},body:form
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(result.error||'La importación no se ha podido completar.');
+   await reload();
+   toast('Copia restaurada: '+result.origins+' orígenes y '+result.jobs+' consultas.');
+  });
+ },
  async saveDestination(ev){ev.preventDefault();await attempt(async()=>{await req('/destination','PUT',pgDraft());await reload();toast('Destino PostgreSQL guardado.');});},
  async testDestination(){await attempt(async()=>{let r=await req('/destination/test','POST');toast(r.message);});},
  async testDestinationDraft(){await attempt(async()=>{let r=await req('/destination/test-draft','POST',{destination:pgDraft()});toast(r.message);});},

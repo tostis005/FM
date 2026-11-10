@@ -72,7 +72,8 @@ BEGIN
    to_jsonb(CASE WHEN base.rol IN ('administrador','gestor')
     THEN ARRAY['ver','crear','editar','eliminar','importar','exportar']
     ELSE ARRAY['ver','exportar'] END)),'{}'::jsonb)
-  INTO profile_actions FROM farmetrica.modulos;
+  INTO profile_actions FROM farmetrica.modulos
+  WHERE profile_modules IS NULL OR clave=ANY(profile_modules);
   INSERT INTO farmetrica.perfiles(clave,nombre,rol_base,modulos,secciones,permisos,sistema)
   VALUES(base.clave,base.nombre,base.rol,profile_modules,profile_sections,profile_actions,true)
   ON CONFLICT(clave) DO NOTHING;
@@ -104,7 +105,8 @@ BEGIN
     to_jsonb(CASE WHEN existing.rol IN ('administrador','gestor')
      THEN ARRAY['ver','crear','editar','eliminar','importar','exportar']
      ELSE ARRAY['ver','exportar'] END)),'{}'::jsonb)
-    INTO profile_actions FROM farmetrica.modulos;
+    INTO profile_actions FROM farmetrica.modulos
+    WHERE existing.modulos IS NULL OR clave=ANY(existing.modulos);
    INSERT INTO farmetrica.perfiles(clave,nombre,rol_base,modulos,secciones,permisos)
    VALUES(variant_key,variant_label,existing.rol,existing.modulos,existing.secciones,profile_actions)
    ON CONFLICT(clave) DO NOTHING;

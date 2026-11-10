@@ -21,9 +21,9 @@ test("PostgreSQL: intersección de módulos por cliente/usuario y restricciones 
  app.get("/api/analytics/pedidos/qa",...requireTenant(),(_req,res)=>res.json({ok:true}));
  const slug="modqa"+randomBytes(5).toString("hex");
  const email="modules-"+slug+"@example.invalid";
- async function call(method,path,{body={},modules=["ventas"],role="administrador"}={}){
+ async function call(method,path,{body={},modules=["ventas"],role="administrador",profilePermissions=null}={}){
   const auth={email,role:"usuario",tenants:[{
-   slug,active:true,role,module_grants:modules,pharmacies:[]
+   slug,active:true,role,module_grants:modules,profile_permissions:profilePermissions,pharmacies:[]
   }]};
   const req={user:auth,path,method,body,query:{},
    get:key=>key==="x-farmetrica-cliente"?slug:""};
@@ -48,22 +48,35 @@ test("PostgreSQL: intersección de módulos por cliente/usuario y restricciones 
   assert.equal((await call("GET","/api/analytics/pedidos/qa",{modules:["compras"]})).statusCode,200);
   const list=await call("GET","/api/tenant/usuarios/modulos");
   assert.deepEqual(list.data.modules.map(m=>m.id).sort(),["compras","ventas"]);
-  const body={email,name:"QA módulos",role:"administrador",pharmacies:[],
-   active:true,authType:"google",modules:["ventas"]};
+  const {rows:profiles}=await pool.query(`
+   INSERT INTO farmetrica.perfiles(clave,nombre,rol_base,modulos,secciones,permisos)
+   VALUES($1,'QA sólo ventas','administrador',ARRAY['ventas'],ARRAY['ventas'],
+    '{"ventas":["ver"]}'::jsonb) RETURNING id`,["perfil-"+slug]);
+  const profileId=Number(profiles[0].id);
+  const body={email,name:"QA módulos",profileId,pharmacies:[],
+   active:true,authType:"google"};
   const saved=await call("PUT","/api/tenant/usuarios",{body});
   assert.equal(saved.statusCode,200);
-  let {rows}=await pool.query("SELECT modulos FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2",[email,slug]);
-  assert.deepEqual(rows[0].modulos,["ventas"]);
-  assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["promociones"]}})).statusCode,400);
-  assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["compras"]}})).statusCode,403);
-  assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["compras"]},role:"gestor"})).statusCode,403);
+  let {rows}=await pool.query(
+   "SELECT modulos,secciones,perfil_id FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2",[email,slug]);
+  assert.equal(rows[0].modulos,null,"no per-user module grants after profile assignment");
+  assert.equal(rows[0].secciones,null,"no per-user section grants after profile assignment");
+  assert.equal(Number(rows[0].perfil_id),profileId);
+  assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,modules:["ventas"]}})).statusCode,400);
+  assert.equal((await call("PUT","/api/tenant/usuarios",{body:{...body,profileId:999999999}})).statusCode,400);
+  assert.equal((await call("PUT","/api/tenant/usuarios",{body,role:"gestor"})).statusCode,403);
+  assert.equal((await call("GET","/api/analytics/pedidos/qa",{
+   modules:["compras"],profilePermissions:{compras:["ver"]}})).statusCode,200);
+  assert.equal((await call("GET","/api/analytics/pedidos/qa",{
+   modules:["compras"],profilePermissions:{compras:[]}})).statusCode,403);
   await pool.query("UPDATE farmetrica.cliente_modulos SET habilitado=false WHERE cliente_slug=$1 AND modulo_clave='ventas'",[slug]);
   response=await call("GET","/api/tenant/context");
   assert.equal(response.data.modules.ventas,false);
-  rows=(await pool.query("SELECT modulos FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2",[email,slug])).rows;
-  assert.deepEqual(rows[0].modulos,["ventas"]);
+  rows=(await pool.query("SELECT perfil_id FROM farmetrica.usuario_clientes WHERE email=$1 AND cliente_slug=$2",[email,slug])).rows;
+  assert.equal(Number(rows[0].perfil_id),profileId);
  }finally{
   await pool.query("DELETE FROM farmetrica.clientes WHERE slug=$1",[slug]).catch(()=>{});
+  await pool.query("DELETE FROM farmetrica.perfiles WHERE clave=$1",["perfil-"+slug]).catch(()=>{});
   await pool.query("DELETE FROM public.acceso_cuentas WHERE email=$1",[email]).catch(()=>{});
   await pool.end();
  }

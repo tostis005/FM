@@ -1,6 +1,5 @@
 import React,{useEffect,useState} from "react";
-import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Download,
- RefreshCcw,Warehouse,Store,CloudDownload} from "lucide-react";
+import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Download,Warehouse,Store} from "lucide-react";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
@@ -41,7 +40,7 @@ function Status({value}){return <span className={"fm-picking-status fm-picking-"
  {value==="cubierto"?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>}
  {STATUS[value]||value}
  </span>;}
-export default function PickingList({clientSlug,role,permissions=null}){
+export default function PickingList({clientSlug}){
  const [data,setData]=useState(null);
  const [channel,setChannel]=useState("");
  const [tab,setTab]=useState("general");
@@ -51,12 +50,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
  const [assignedOnly,setAssignedOnly]=useState(false);
  const [expanded,setExpanded]=useState("");
  const [loading,setLoading]=useState(true);
- const [busy,setBusy]=useState("");
  const [error,setError]=useState("");
- const [message,setMessage]=useState("");
- const canWrite=["administrador","gestor","superadministrador"].includes(role)&&
-  (role==="superadministrador"||permissions?.stock==null||
-   permissions.stock.includes("importar")||permissions.stock.includes("editar"));
  async function reload(nextChannel=channel){
   setLoading(true);setError("");
   try{
@@ -74,12 +68,6 @@ export default function PickingList({clientSlug,role,permissions=null}){
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[clientSlug,channel]);
- async function action(label,fn){
-  setBusy(label);setError("");setMessage("");
-  try{const result=await fn();if(result)setMessage(result);await reload();}
-  catch(e){setError(e.message)}
-  finally{setBusy("");}
- }
  const selectedSite=(data?.sites||[]).find(s=>s.id===tab);
  const all=data?.rows||[];
  const filtered=all.filter(row=>{
@@ -127,11 +115,11 @@ export default function PickingList({clientSlug,role,permissions=null}){
  const sourceConfigured=Boolean(data?.meta?.sourceConfigured);
  const sourceError=data?.meta?.sourceError;
  const sourceEmpty=ready&&data?.totals?.products===0;
+ const ageMinutes=ready?(Date.now()-new Date(data.meta.lastImportedAt).getTime())/60000:null;
+ const isStale=ready&&ageMinutes>30;
  return <div className="fm-picking-page">
   <ReportPageHeader title="Picking List"
-   updatedAt={data?.meta?.lastImportedAt}
-   refreshing={loading||Boolean(busy)}
-   onRefresh={()=>void reload()}
+   updatedAt={ready?new Date(data.meta.lastImportedAt):null}
    actions={<div className="fm-picking-header-buttons">
     <button type="button" className="btn btn-secondary" onClick={exportCurrent}
      disabled={!ready||loading}><Download size={16}/> Exportar preparación</button>
@@ -142,33 +130,29 @@ export default function PickingList({clientSlug,role,permissions=null}){
   </p>
   {error&&<div className="fm-picking-alert" role="alert"><AlertTriangle size={17}/>{error}
    <button className="btn btn-secondary btn-sm" onClick={()=>void reload()}>Reintentar</button></div>}
-  {message&&<div className="fm-picking-success" role="status"><CheckCircle2 size={17}/>{message}</div>}
   <section className="card fm-picking-source">
    <div className="fm-picking-source-details">
     <strong>Pedidos pendientes de Shopify</strong>
     <span>{ready?
-     "Última importación: "+dateTime(data.meta.lastImportedAt)+" · "+integer(data.meta.lineCount)+" líneas":
-     "Todavía no se ha importado el fichero de pedidos pendientes."}</span>
+     "Última lectura correcta: "+dateTime(data.meta.lastImportedAt)+" · "+integer(data.meta.lineCount)+" líneas":
+     "Todavía no hay ninguna lectura correcta del fichero."}</span>
     <small>{sourceConfigured?
-     data?.meta?.sourceState==="error"?"La última lectura de Dropbox ha fallado; se conservan los datos anteriores":
-     data?.meta?.sourceState==="pending"?"Conectado a Dropbox; primera descarga pendiente":
-     "Fuente Dropbox configurada · actualización automática cada 15 minutos":
-     "Origen de Dropbox pendiente de configurar en Ajustes."}</small>
+     "Farmétrica comprueba Dropbox automáticamente cada 15 minutos. No es necesario subir ni actualizar nada.":
+     "Configura el enlace permanente de Dropbox en Configuración → Ajustes."}</small>
+    {sourceConfigured&&<strong className={"fm-picking-freshness "+(sourceError?"error":isStale?"stale":"current")}>
+     {sourceError?"Error en la última comprobación":
+      !ready?"Pendiente de primera lectura":
+      isStale?"Datos desactualizados":"Datos actualizados"}</strong>}
    </div>
-   {canWrite&&<div className="fm-picking-source-actions">
-    <button className="btn btn-secondary btn-sm" type="button"
-     disabled={Boolean(busy)||!sourceConfigured}
-     onClick={()=>action("refresh",async()=>{
-      await callApi(clientSlug,"refresh","POST",{});
-      return "Pedidos pendientes actualizados desde Dropbox.";
-     })}><CloudDownload size={15}/> Leer pedidos de Dropbox</button>
-   </div>}
   </section>
   {sourceError&&<div className="fm-picking-alert" role="alert">
    <AlertTriangle size={17}/>
    <span><strong>Dropbox configurado, pero no se han podido importar los pedidos.</strong>
     {" "+sourceError} Se conservan los datos de la última importación válida.
-    Revisa el origen en Configuración → Ajustes y vuelve a leer los pedidos.</span>
+    La aplicación lo volverá a intentar automáticamente. Puedes revisar la ruta en Configuración → Ajustes.</span>
+  </div>}
+  {data?.meta?.skippedLines>0&&data?.meta?.importWarning&&<div className="fm-picking-warning" role="status">
+   <AlertTriangle size={17}/> {data.meta.importWarning} Los demás pedidos se han incluido.
   </div>}
   {data?.meta&&<div className="fm-picking-stock-summary" role="status">
    <Store size={15}/>
@@ -182,7 +166,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
     <h2>{sourceConfigured?"Aún no se han importado pedidos de Dropbox":
      "Conecta primero el fichero de pedidos"}</h2>
     <p>{sourceConfigured?
-     "El enlace está guardado, pero todavía no existe una importación correcta. Si la descarga falla, el motivo aparece arriba. Prueba «Leer pedidos de Dropbox» o revisa el fichero en Ajustes.":
+     "El enlace está guardado, pero todavía no existe una lectura correcta. Farmétrica reintenta automáticamente la descarga y muestra arriba cualquier error. Puedes revisar la ruta en Ajustes.":
      "La fuente de pedidos se establece en Configuración → Ajustes. Una vez conectada, se importarán los pendientes y se cruzarán con el stock de cada farmacia."}</p>
    </section>:<>
    {sourceEmpty&&<div className="fm-picking-success" role="status">

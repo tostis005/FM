@@ -140,7 +140,8 @@ async function getInventory(pool,ctx,codes){
  // Sinónimos importados por Farmétrica Sync: IDs ERP limitados a cada
  // establecimiento, nunca se cruzan IDs entre dos farmacias.
  const wantsEan=codes.some(x=>!x.cn&&/^\d{8,14}$/.test(x.sku));
- const synonymsAvailable=wantsEan?
+ const wantsCnAliases=codes.some(x=>Boolean(x.cn));
+ const synonymsAvailable=(wantsEan||wantsCnAliases)?
   (await pool.query("SELECT to_regclass($1) IS NOT NULL AS available",
    [schema+".sinonimos"])).rows[0]?.available===true:false;
  const synonymsSql=synonymsAvailable?[
@@ -171,7 +172,227 @@ async function getInventory(pool,ctx,codes){
    matched:row.matched===true,name:row.name,stockAt:row.stockAt
   });
  }
- return {sites:[...sites.values()],items};
+ // El CSV puede contener un CN y no su código de barras. Recuperar EAN
+ // de los sinónimos Farmatic, enlazados por artículo ERP y farmacia de origen.
+ const eans=new Map();
+ for(const c of codes){
+  if(!c.cn&&/^\d{8,14}$/.test(c.sku||""))eans.set(c.key,[c.sku]);
+ }
+ if(wantsCnAliases){
+  const locationsSQL=pharmacyDataCodeSQL("f");
+  const sqlEans=[
+   "WITH picking_ean_sites AS MATERIALIZED (",
+   " SELECT "+locationsSQL+" AS source_code FROM farmetrica.farmacias f",
+   " WHERE f.cliente_slug=$1 AND f.activo",
+   "  AND upper(btrim(f.codigo_origen))<>'AMP'",
+   "  AND (f.id=ANY($3::int[]) OR upper(btrim(f.codigo_origen))='ALMACEN')",
+   "  AND (coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'",
+   "   OR upper(btrim(f.codigo_origen))='ALMACEN')",
+   "), picking_ean_codes AS MATERIALIZED (",
+   " SELECT key,cn FROM jsonb_to_recordset($2::jsonb) AS c(key text,cn text,sku text)",
+   " WHERE nullif(c.cn,'') IS NOT NULL",
+   "), picking_ean_articles AS MATERIALIZED (",
+   " SELECT DISTINCT c.key,a.origen_id::text AS article_id,",
+   "  s.source_code,btrim(coalesce(to_jsonb(a)->>'ean','')) AS direct_ean",
+   " FROM picking_ean_codes c JOIN __SCHEMA__.articulos a",
+   "  ON btrim(a.codigo_nacional)=c.cn",
+   "   OR (nullif(btrim(a.codigo_nacional),'') IS NULL AND a.origen_id::text=c.cn)",
+   " JOIN picking_ean_sites s ON upper(btrim(a.farmacia_codigo))=s.source_code",
+   "), picking_ean_candidates AS (",
+   " SELECT key,direct_ean AS ean FROM picking_ean_articles",
+   ...(synonymsAvailable?[
+    " UNION ALL",
+    " SELECT p.key,btrim(si.codigo) AS ean FROM picking_ean_articles p",
+    " JOIN __SCHEMA__.sinonimos si ON upper(btrim(si.farmacia_codigo))=p.source_code",
+    "  AND btrim(si.articulo_id)=p.article_id"
+   ]:[]),
+   ") SELECT key,array_agg(DISTINCT ean ORDER BY ean) AS eans",
+   " FROM picking_ean_candidates WHERE ean ~ '^[0-9]{8,14}
+export async function readPickingReport(pool,ctx,{channel=""}={}){
+ const slug=ctx.client.slug,meta=await getMetadata(pool,slug);
+ const {rows}=await pool.query(
+  "SELECT order_id AS \"orderId\",order_name AS \"orderName\","+
+  "order_created_at AS \"createdAt\",order_source_name AS channel,"+
+  "quantity,sku,cn,title FROM farmetrica.picking_list_pendientes "+
+  "WHERE cliente_slug=$1 ORDER BY linea LIMIT 50001",[slug]);
+ if(rows.length>50000)throw new Error("Demasiadas líneas pendientes.");
+ const channels=[...new Set(rows.map(r=>r.channel||"Sin canal"))]
+  .sort((a,b)=>a.localeCompare(b,"es"));
+ const filtered=channel?rows.filter(r=>(r.channel||"Sin canal")===channel):rows;
+ const grouped=new Map();
+ for(const line of filtered){
+  const key=line.cn||"SKU:"+line.sku;
+  if(!grouped.has(key))grouped.set(key,{
+   key,cn:line.cn||null,sku:line.sku,name:line.title||"",
+   required:0,orderKeys:new Set(),channels:new Set(),details:[],lines:0
+  });
+  const row=grouped.get(key);
+  row.required+=Number(line.quantity);row.lines++;
+  row.orderKeys.add(line.orderId);row.channels.add(line.channel||"Sin canal");
+  if(!row.name&&line.title)row.name=line.title;
+  if(row.details.length<40)row.details.push({
+   orderId:line.orderId,orderName:line.orderName,
+   createdAt:line.createdAt,channel:line.channel||"Sin canal",
+   quantity:Number(line.quantity)
+  });
+ }
+ const entries=[...grouped.values()];
+ const {sites,items,eans}=await getInventory(pool,ctx,
+  entries.map(x=>({key:x.key,cn:x.cn,sku:x.sku})));
+ const report=entries.map(entry=>{
+  const stock=sites.map(s=>{
+   const inv=items.get(s.id+"|"+entry.key);
+   return {...s,stock:s.ready?(inv?.stock===null?null:inv?Math.max(0,inv.stock):0):null,
+    matched:Boolean(inv?.matched),stockAt:inv?.stockAt||null,planned:0};
+  });
+  const wh=stock.find(s=>s.kind==="almacen"&&s.code==="ALMACEN");
+  const pharm=stock.filter(s=>s.kind==="farmacia");
+  const matched=stock.some(s=>s.matched);
+  // Si el almacén aún no ha sincronizado, enseñar igualmente qué podría
+  // prepararse desde las farmacias, sin atribuir stock inexistente al almacén.
+  // La asignación se etiqueta como provisional y NO confirma cobertura.
+  const warehouseUnknown=!wh||wh.stock===null;
+  const proposal=matched?allocatePending(entry.required,
+   warehouseUnknown?0:wh.stock,pharm,{reserve:1}):null;
+  for(const s of stock)s.planned=proposal?
+   (s.kind==="almacen"?(warehouseUnknown?0:proposal.warehouse||0):proposal.bySite[s.code]||0):0;
+  const hasMissing=warehouseUnknown||stock.some(s=>!s.ready);
+  // No marcar un artículo como obsoleto solo por su fecha: la sincronización
+  // puede ejecutarse sin cambiar ese timestamp cuando no hay movimientos.
+  const shortage=proposal?.remaining??null;
+  const status=!matched?"sin_cn":hasMissing?"sin_datos":
+   shortage>0?"sin_stock":"cubierto";
+  return {
+   key:entry.key,cn:entry.cn,sku:entry.sku,eans:eans.get(entry.key)||[],
+   name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.key)?.name).find(Boolean)||"",
+   required:entry.required,orders:entry.orderKeys.size,
+   lines:entry.lines,channels:[...entry.channels],details:entry.details,
+   stock,allocated:proposal?.fulfilled??null,shortage,
+   pending:Math.max(0,entry.required-(proposal?.fulfilled||0)),status,
+   allocationProvisional:Boolean(proposal)&&(warehouseUnknown||proposal.partial),
+   stockTotal:stock.every(s=>s.stock!==null)?stock.reduce((sum,s)=>sum+s.stock,0):null,
+   exhausted:proposal?.zeroedSites||[]
+  };
+ }).sort((a,b)=>b.required-a.required||a.key.localeCompare(b.key));
+ return {
+  meta,channels,selectedChannel:channel,sites,rows:report,
+  totals:{orders:new Set(filtered.map(r=>r.orderId)).size,
+   lines:filtered.length,products:report.length,
+   units:report.reduce((n,r)=>n+r.required,0),
+   allocated:report.reduce((n,r)=>n+(r.allocated||0),0),
+   pending:report.reduce((n,r)=>n+r.pending,0),
+   shortage:report.reduce((n,r)=>n+(r.shortage||0),0),
+   incomplete:report.filter(r=>["sin_cn","sin_datos"].includes(r.status)).length}
+ };
+}
+export function setupPickingList(app,pool,{requireTenant}){
+ const guard=requireTenant();
+ const allowed=(req,res,next)=>managed(req.context)?next():res.status(403).json({
+  error:"La Picking List requiere perfil gestor/administrador y acceso a Stock"});
+ const write=(req,res,next)=>writable(req.context)?next():res.status(403).json({
+  error:"Tu perfil no permite importar o actualizar los pedidos de Picking List"});
+ const settingsAdmin=(req,res,next)=>
+  ["superadministrador","administrador","gestor"].includes(req.context?.role)?
+   next():res.status(403).json({error:"Solo los administradores y gestores pueden configurar la fuente de Picking List"});
+ app.get("/api/picking-list/report",...guard,allowed,async(req,res,next)=>{
+  try{res.json(await readReportWithCurrentSource(pool,req.context,{
+   channel:String(req.query.channel||"").slice(0,120)
+  }));}catch(e){next(e);}
+ });
+ // La URL de Dropbox nunca forma parte del reporte. Solo se entrega
+ // al administrador/gestor en Ajustes, donde se conserva la ya guardada.
+ // Las filas descartadas se cargan solo cuando se abre "Ver más".
+ // No exponer el enlace privado de Dropbox ni descargar todo el CSV al navegador.
+ app.get("/api/picking-list/issues",...guard,allowed,async(req,res,next)=>{
+  try{
+   const offset=Math.max(0,Math.min(50000,Math.trunc(Number(req.query?.offset)||0)));
+   const limit=25;
+   const {rows}=await pool.query(
+    "SELECT ultima_advertencia_detalle AS details,ultima_importacion AS imported_at "+
+    "FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",
+    [req.context.client.slug]);
+   const detail=rows[0]?.details||{},all=Array.isArray(detail.rows)?detail.rows:[];
+   res.json({headers:Array.isArray(detail.headers)?detail.headers:[],
+    rows:all.slice(offset,offset+limit),total:all.length,
+    offset,limit,lastImportedAt:rows[0]?.imported_at||null});
+  }catch(e){next(e);}
+ });
+ app.get("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
+  try{
+   const {rows}=await pool.query(
+    'SELECT csv_url,ultima_importacion AS "lastImportedAt",actualizado_en AS "updatedAt",'+
+    'ultima_comprobacion AS "lastCheckedAt",ultimo_error AS "lastError",'+
+    'ultima_advertencia AS "lastWarning" '+
+    'FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1',
+    [req.context.client.slug]);
+   const row=rows[0];
+   const diagnostic=sourceDiagnostics.get(req.context.client.slug);
+   res.json({url:row?.csv_url||"",sourceConfigured:Boolean(row?.csv_url),
+    lastImportedAt:row?.lastImportedAt||null,updatedAt:row?.updatedAt||null,
+    sourceError:diagnostic?.error||row?.lastError||null,
+    lastAttemptAt:diagnostic?.lastAttemptAt||null,
+    lastCheckedAt:row?.lastCheckedAt||null,lastWarning:row?.lastWarning||null});
+  }catch(e){next(e);}
+ });
+ app.put("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
+  try{
+   const url=validateDropboxCsvUrl(req.body?.url);
+   await pool.query("INSERT INTO farmetrica.picking_list_fuentes(cliente_slug,csv_url,actualizado_por) "+
+    "VALUES($1,$2,$3) ON CONFLICT(cliente_slug) DO UPDATE SET csv_url=EXCLUDED.csv_url,"+
+    "actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now(),"+
+    "ultima_comprobacion=NULL,ultimo_error=NULL,ultima_advertencia=NULL",
+    [req.context.client.slug,url,req.user.email]);
+   sourceDiagnostics.delete(req.context.client.slug);
+   res.json({ok:true,sourceConfigured:true});
+  }catch(e){if(e.message?.includes("Dropbox"))return res.status(400).json({error:e.message});
+   next(e);}
+ });
+ app.post("/api/picking-list/refresh",...guard,allowed,write,async(req,res,next)=>{
+  try{res.json({ok:true,...await monitoredRefresh(pool,req.context.client.slug)});}
+  catch(e){res.status(502).json({error:safeSourceError(e)+
+   " Se mantienen los pedidos anteriores."});}
+ });
+ app.post("/api/picking-list/import",...guard,allowed,write,
+  express.text({type:["text/csv","text/plain"],limit:"8mb"}),async(req,res,next)=>{
+   try{
+    if(typeof req.body!=="string")return res.status(400).json({error:"Selecciona un CSV."});
+    const imported=parsePendingCsv(req.body);
+    res.json({ok:true,...await savePendingSnapshot(pool,req.context.client.slug,imported,{
+     origin:"archivo",user:req.user.email})});
+   }catch(e){if(/CSV|Fila|columna|líneas|fichero|No hay/.test(e.message||""))
+    return res.status(400).json({error:e.message});next(e);}
+  });
+}
+export function startPickingListPolling(pool,interval=15*60*1000){
+ const tick=async()=>{
+  try{
+   const {rows}=await pool.query(
+    "SELECT f.cliente_slug FROM farmetrica.picking_list_fuentes f "+
+    "JOIN farmetrica.clientes c ON c.slug=f.cliente_slug WHERE c.activo "+
+    "AND nullif(f.csv_url,'') IS NOT NULL "+
+    "AND (f.ultima_importacion IS NULL OR f.actualizado_en>f.ultima_importacion "+
+    "OR f.ultima_importacion<now()-interval '15 minutes')");
+   await Promise.all(rows.slice(0,20).map(async r=>{
+    try{await monitoredRefresh(pool,r.cliente_slug);}
+    catch{ /* Se publica el fallo en la respuesta del reporte. */ }
+   }));
+  }catch{console.warn("Picking List: no se pudo verificar la programación remota.");}
+ };
+ const timer=setInterval(()=>void tick(),interval);
+ timer.unref?.();
+ void tick();
+ return ()=>clearInterval(timer);
+}
+ GROUP BY key"
+  ].join("\n").replaceAll("__SCHEMA__","\""+schema+"\"");
+  const {rows:aliases}=await pool.query(sqlEans,[ctx.client.slug,JSON.stringify(codes),
+   ctx.allowedPharmacyIds||[]]);
+  for(const alias of aliases){
+   const values=Array.isArray(alias.eans)?alias.eans.filter(e=>/^\d{8,14}$/.test(e)):[];
+   if(values.length)eans.set(alias.key,[...new Set([...(eans.get(alias.key)||[]),...values])]);
+  }
+ }
+ return {sites:[...sites.values()],items,eans};
 }
 export async function readPickingReport(pool,ctx,{channel=""}={}){
  const slug=ctx.client.slug,meta=await getMetadata(pool,slug);

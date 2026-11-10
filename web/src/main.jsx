@@ -31,7 +31,6 @@ const DetalleVentas=React.lazy(()=>import("./DetalleVentas.jsx"));
 const SolicitudesDemo=React.lazy(()=>import("./SolicitudesDemo.jsx"));
 const AsistenteDemo=React.lazy(()=>import("./AsistenteDemo.jsx"));
 const PharmacyState=React.lazy(()=>import("./PharmacyState.jsx"));
-const PoliticaReposicionFarmacia=React.lazy(()=>import("./PoliticaReposicionFarmacia.jsx"));
 const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
@@ -66,7 +65,7 @@ import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveWarehouseNameToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveWarehousePresentationToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -295,7 +294,7 @@ function App(){
  const [editingUser,setEditingUser]=useState(null);
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
  const [editingPharmacy,setEditingPharmacy]=useState(null);
- const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
+ const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState("cargando");
  const [pharmacyLastUpdated,setPharmacyLastUpdated]=useState(null);
   const [sessionUser,setSessionUser]=useState(null);
@@ -1154,41 +1153,46 @@ function App(){
   function startPharmacy(f){
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
     setEditingPharmacy(f?.id||"nuevo");
-    setPharmacyForm(f?{...f}:{id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
+    setPharmacyForm(f?{...f,displayCode:f.displayCode||f.sourceCode||""}:{id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
   }
   async function savePharmacy(e) {
-    e.preventDefault();const id=pharmacyForm.id.trim();
-    if((editingPharmacy!=="nuevo"&&!/^[1-9][0-9]{0,8}$/.test(id))||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
-    if(pharmacyForm.establishmentType==="almacen"){
-      if(pharmacyBackendConfigured&&pharmacyApiStatus!=="connected")
-        return setToast("Inicia sesión como administrador desde Accesos");
-      setSavingPharmacy(true);
-      try{
-        await saveWarehouseNameToServer(id,pharmacyForm.name.trim());
-        await refreshPharmacies();
-        setToast("Nombre público del almacén actualizado");
-        setEditingPharmacy(null);
-      }catch(err){setToast(err.message)}
-      finally{setSavingPharmacy(false)}
-      return;
-    }
-    if(!/^[A-Z0-9_-]{2,16}$/.test((pharmacyForm.sourceCode||"").trim().toUpperCase()))return setToast("Indica un código de origen válido");
-    if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
-    const f={...pharmacyForm,id,name:pharmacyForm.name.trim(),sourceCode:pharmacyForm.sourceCode.trim().toUpperCase(),sourceHost:pharmacyForm.sourceHost?.trim()||"",sourceDatabase:pharmacyForm.sourceDatabase?.trim()||"Farmatic"};
-    if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
+    e.preventDefault();
+    const id=String(pharmacyForm.id||"").trim();
+    const name=String(pharmacyForm.name||"").trim();
+    const displayCode=String(pharmacyForm.displayCode||"").trim().toUpperCase();
+    if((editingPharmacy!=="nuevo"&&!/^[1-9][0-9]{0,8}$/.test(id))||!name)
+      return setToast("Revisa el ID y el nombre");
+    if(!/^[A-Z0-9_-]{2,8}$/.test(displayCode))
+      return setToast("El código visible debe tener entre 2 y 8 caracteres");
+    if(pharmacyBackendConfigured&&pharmacyApiStatus!=="connected")
+      return setToast("Inicia sesión como administrador desde Accesos");
     setSavingPharmacy(true);
-    try {
-      if(pharmacyApiStatus==="connected"){
-        await savePharmacyToServer(f,editingPharmacy==="nuevo");
+    try{
+      if(pharmacyForm.establishmentType==="almacen"){
+        await saveWarehousePresentationToServer(id,name,displayCode);
         await refreshPharmacies();
-        setToast("Farmacia guardada en PostgreSQL");
-      } else {
-        setData(prev=>({...prev,pharmacies:prev.pharmacies.some(x=>x.id===id)?prev.pharmacies.map(x=>x.id===id?f:x):[...prev.pharmacies,f]}));
-        setToast("Cambios guardados");
+        setToast("Nombre y código visible del almacén actualizados");
+      }else{
+        // En ediciones el código origen, el host y la BD se preservan en backend.
+        // Para una nueva farmacia, el código inicial de origen coincide con su
+        // código visible hasta que se configure en el sincronizador.
+        const f={...pharmacyForm,id,name,displayCode,
+          sourceCode:editingPharmacy==="nuevo"?displayCode:pharmacyForm.sourceCode,
+          sourceHost:pharmacyForm.sourceHost||"",
+          sourceDatabase:pharmacyForm.sourceDatabase||"Farmatic"};
+        if(pharmacyApiStatus==="connected"){
+          await savePharmacyToServer(f,editingPharmacy==="nuevo");
+          await refreshPharmacies();
+          setToast("Farmacia actualizada en PostgreSQL");
+        }else{
+          setData(prev=>({...prev,pharmacies:prev.pharmacies.some(x=>x.id===id)?
+           prev.pharmacies.map(x=>x.id===id?f:x):[...prev.pharmacies,f]}));
+          setToast("Cambios guardados");
+        }
       }
       setEditingPharmacy(null);
-    } catch(err){setToast(err.message);}
-    finally{setSavingPharmacy(false);}
+    }catch(err){setToast(err.message)}
+    finally{setSavingPharmacy(false)}
   }
   const configuredDrawerMonths=Object.keys(promoForm.monthlyObjectives||{}).sort();
  const goalProposalMonths=promoForm.simulatorDraft?promotionDraftGoalMonths(promoForm):[];
@@ -1881,30 +1885,23 @@ function App(){
    <div className="drawer">
     <div className="drawer-top">
      <div><h2>{editingIsWarehouse?"Editar almacén":editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2>
-      <p>{editingIsWarehouse?"Cambia el nombre público sin modificar la vinculación del sincronizador.":
-       "El identificador se asigna automáticamente a las farmacias nuevas."}</p></div>
+      <p>Nombre y código visible para identificar el establecimiento en Farmétrica. No se modifica el código del sincronizador.</p></div>
      <button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button>
     </div>
     <form onSubmit={savePharmacy} className="drawer-content">
      {editingPharmacy!=="nuevo"&&<Field label={editingIsWarehouse?"ID del almacén":"ID de farmacia"}>
       <input disabled value={pharmacyForm.id}/></Field>}
-     <Field label="Nombre público"><input required placeholder={editingIsWarehouse?"ALM":"Farmacia Plaza Mayor"}
+     <Field label="Nombre público"><input required placeholder={editingIsWarehouse?"Almacén":"Farmacia Plaza Mayor"}
        value={pharmacyForm.name} onChange={e=>setPharmacyForm({...pharmacyForm,name:e.target.value})}/></Field>
+     <Field label="Código visible"><input required placeholder={editingIsWarehouse?"ALM":"ABA"}
+       maxLength={8} autoCapitalize="characters" value={pharmacyForm.displayCode||""}
+       onChange={e=>setPharmacyForm({...pharmacyForm,displayCode:e.target.value.toUpperCase()})}/></Field>
      {editingIsWarehouse?<div className="note small-note">
-      <ShieldCheck size={16}/> Código del sincronizador: <strong>{pharmacyForm.sourceCode||"ALMACEN"}</strong>.
-      El ID y la conexión SQL Server permanecen intactos.
+      <ShieldCheck size={16}/> El ID y el código de sincronización
+      <strong>{pharmacyForm.sourceCode||"ALMACEN"}</strong> permanecen intactos.
      </div>:<>
-      <Field label="Ciudad (opcional)"><input value={pharmacyForm.city}
+      <Field label="Ciudad (opcional)"><input value={pharmacyForm.city||""}
        onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field>
-      <Field label="Código de origen (ABA / EUR / BUE…)"><input required placeholder="ABA"
-       maxLength="16" value={pharmacyForm.sourceCode||""}
-       onChange={e=>setPharmacyForm({...pharmacyForm,sourceCode:e.target.value})}/></Field>
-      <Field label="Host/IP SQL Server"><input placeholder="Vacío para servidor local"
-       value={pharmacyForm.sourceHost||""}
-       onChange={e=>setPharmacyForm({...pharmacyForm,sourceHost:e.target.value})}/></Field>
-      <Field label="Base de datos de origen"><input required value={pharmacyForm.sourceDatabase||""}
-       onChange={e=>setPharmacyForm({...pharmacyForm,sourceDatabase:e.target.value})}/></Field>
-      <div className="note small-note"><ShieldCheck size={16}/> Guarda solo el servidor. No introduzcas contraseñas aquí.</div>
       <Field label="Estado"><select value={String(pharmacyForm.active)}
        onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}>
        <option value="true">Activa</option><option value="false">Inactiva</option>
@@ -1913,10 +1910,7 @@ function App(){
      <FormActions onCancel={()=>setEditingPharmacy(null)}
       label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/>
     </form>
-    {editingPharmacy!=="nuevo"&&!editingIsWarehouse&&<React.Suspense fallback={null}>
-     <PoliticaReposicionFarmacia clientSlug={tenantContext?.client?.slug||"ampedia"}
-      pharmacyId={pharmacyForm.id} canEdit={pharmacyApiStatus==="connected"}/>
-    </React.Suspense>}
+
    </div>
   </div>}
   {toast&&<div className="toast"><CheckCircle2 size={18}/>{toast}<button onClick={()=>setToast("")}><X size={16}/></button></div>}

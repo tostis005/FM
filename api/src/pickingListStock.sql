@@ -40,24 +40,7 @@ WITH sources AS MATERIALIZED (
  FROM sites s CROSS JOIN codes c JOIN __SCHEMA__.articulos a
   ON upper(btrim(a.farmacia_codigo))=s.source_code
    AND btrim(coalesce(to_jsonb(a)->>'ean',''))=c.sku
- WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}
- SELECT DISTINCT ON (site_id,key,article_id)
-  site_id,key,article_id,stock,nombre,stock_at
- FROM candidates ORDER BY site_id,key,article_id,stock_at DESC NULLS LAST
-), inventory AS (
- SELECT site_id,key,
-  CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
-  max(nombre) AS name,min(stock_at) AS stock_at
- FROM unique_articles GROUP BY site_id,key
-)
-SELECT s.site_id AS "siteId",s.site_name AS "siteName",
- s.source_code AS code,s.kind,s.ready,
- c.key,i.stock,i.name,i.stock_at AS "stockAt",
- (i.key IS NOT NULL) AS matched
-FROM sites s LEFT JOIN codes c ON true
- LEFT JOIN inventory i ON i.site_id=s.site_id AND i.key=c.key
-ORDER BY CASE WHEN s.kind='almacen' THEN 0 ELSE 1 END,s.site_id,c.key;
-
+ WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}$'
  __SYNONYM_EAN_MATCH__
 ), unique_articles AS (
  SELECT DISTINCT ON (site_id,key,article_id)

@@ -1684,8 +1684,7 @@ function App(){
       tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}/>}
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
-    {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}
-       stockEnabled={tenantContext.modules?.stock===true}/>} 
+    {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
@@ -1698,7 +1697,8 @@ function App(){
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
       <ConfiguracionDiasStock clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
       <ConfiguracionPickingList clientSlug={tenantContext.client.slug}
-       role={role} permissions={tenantContext.profile?.permissions}/>
+       role={role} permissions={tenantContext.profile?.permissions}
+       stockEnabled={tenantContext.modules?.stock===true}/>
        <ConfiguracionPreparador clientSlug={tenantContext.client.slug}/>
      </div>}
    </React.Suspense>

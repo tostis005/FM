@@ -199,6 +199,11 @@ export default function PickingList({clientSlug,role,permissions=null}){
     <div className="card"><span>Sin cobertura confirmada</span><strong>{integer(data?.totals.shortage)}</strong>
      <small>{integer(data?.totals.incomplete)} referencias por comprobar</small></div>
    </div>
+   {data?.rows?.some(row=>row.allocationProvisional)&&<p className="fm-picking-warning" role="status">
+    <AlertTriangle size={17}/> Hay propuestas provisionales: si falta stock del almacén
+    o de alguna farmacia, se calculan las unidades disponibles en los otros establecimientos,
+    pero no se confirma la cobertura hasta sincronizar todos los orígenes.
+   </p>}
    {data?.totals.incomplete>0&&<p className="fm-picking-warning" role="status">
     <AlertTriangle size={17}/> Hay {integer(data.totals.incomplete)} productos con códigos sin equivalencia,
      algún origen sin sincronizar o existencias antiguas. Su asignación debe revisarse antes de preparar.
@@ -275,7 +280,9 @@ export default function PickingList({clientSlug,role,permissions=null}){
            row.stock.map(s=><td key={s.id} className="fm-picking-site-cell">
             <strong>{integer(s.stock)}</strong><small>{integer(s.planned)} a preparar</small></td>)}
          {!selectedSite&&<td className="fm-picking-number">{integer(row.shortage)}</td>}
-         <td><Status value={row.status}/></td>
+         <td><Status value={row.status}/>
+          {row.allocationProvisional&&<small className="fm-picking-provisional-note">
+           Propuesta provisional</small>}</td>
          <td><button className="fm-picking-details-btn" type="button"
            aria-expanded={open} onClick={()=>setExpanded(open?"":row.key)}>
            {open?<ChevronUp size={15}/>:<ChevronDown size={15}/>} Detalle</button></td>

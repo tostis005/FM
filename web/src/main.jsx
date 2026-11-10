@@ -1283,7 +1283,8 @@ function App(){
  });
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
   {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
- const allowed=page==="proveedores"?canOpenSection(page):
+ const allowed=page==="picking-list"?visibleNav.some(item=>item.id==="picking-list")&&canOpenSection(page):
+   page==="proveedores"?canOpenSection(page):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
  // Durante la carga, el cliente puede estar listo antes que el usuario.

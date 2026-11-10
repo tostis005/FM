@@ -276,7 +276,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
       <tbody>{visible.map(row=>{
        const site=selectedSite?row.stock.find(s=>s.id===selectedSite.id):null;
        const open=expanded===row.key;
-       const colspan=(selectedSite?7:(data?.sites.length||0)+6);
+       const colspan=(selectedSite?8:(data?.sites.length||0)+6);
        return <React.Fragment key={row.key}>
         <tr>
          <td><div className="fm-picking-product"><strong>{row.name||"Producto sin descripción"}</strong>

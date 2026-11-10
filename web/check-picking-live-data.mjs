@@ -79,7 +79,7 @@ try{
  const groups=await page.locator(".fm-picking-grouped thead .fm-smart-group-row th").allTextContents();
  assert.ok(groups.some(x=>x.trim()==="Stock"),JSON.stringify(groups));
  assert.ok(groups.some(x=>x.trim()==="Unidades"),JSON.stringify(groups));
- const headers=await page.locator(".fm-picking-grouped thead th").allTextContents();
+ const headers=await page.locator(".fm-picking-grouped thead .smart-sort span:first-child").allTextContents();
  assert.ok(headers.some(x=>x.trim()==="ALM"),"Falta alias almacén: "+JSON.stringify(headers));
  assert.ok(headers.some(x=>x.trim()==="ABA"),"Falta farmacia ABA: "+JSON.stringify(headers));
  assert.equal(headers.some(x=>x.trim()==="Líneas"),false,"Se elimina columna Líneas");

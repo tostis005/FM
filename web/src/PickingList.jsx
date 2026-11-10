@@ -123,13 +123,13 @@ export default function PickingList({clientSlug}){
    });
    saveCsv("picking-"+selectedSite.code.toLowerCase(),[columns,...values]);
   }else{
-   const columns=[...base,...sites.flatMap(s=>["Stock "+s.code,"Unidades "+s.code]),
+   const columns=[...base,...sites.map(s=>"Stock "+s.code),
+    ...sites.map(s=>"Unidades "+s.code),
     "Stock total","Total unidades disponibles","Unidades pendientes","Estado","Pedidos Shopify"];
    const values=filtered.map(row=>[row.cn||row.sku,row.name,row.lines,row.required,
-    ...sites.flatMap(site=>{
-     const s=row.stock.find(x=>x.id===site.id);
-     return [s?.stock,s?.planned];
-    }),row.stockTotal,row.allocated,row.pending,STATUS[row.status],
+    ...sites.map(site=>row.stock.find(x=>x.id===site.id)?.stock),
+    ...sites.map(site=>row.stock.find(x=>x.id===site.id)?.planned),
+    row.stockTotal,row.allocated,row.pending,STATUS[row.status],
     row.details.map(d=>d.orderName).join(", ")]);
    saveCsv("picking-list",[columns,...values]);
   }
@@ -283,10 +283,12 @@ export default function PickingList({clientSlug}){
        {selectedSite?<><th className="fm-picking-number">Stock {selectedSite.code}</th>
         <th className="fm-picking-number">Unidades {selectedSite.code}</th>
         <th className="fm-picking-number">Stock restante</th></>:
-        (data?.sites||[]).flatMap(site=>[
-         <th key={site.id+"-stock"} className="fm-picking-number">Stock {site.code}</th>,
-         <th key={site.id+"-units"} className="fm-picking-number">Unidades {site.code}</th>
-        ])}
+        <>
+         {(data?.sites||[]).map(site=><th key={site.id+"-stock"}
+          className="fm-picking-number">Stock {site.code}</th>)}
+         {(data?.sites||[]).map(site=><th key={site.id+"-units"}
+          className="fm-picking-number">Unidades {site.code}</th>)}
+        </>}
        {!selectedSite&&<th className="fm-picking-number">Unidades pendientes</th>}
        <th>Situación</th><th>Pedidos</th>
       </tr></thead>
@@ -303,10 +305,12 @@ export default function PickingList({clientSlug}){
          {selectedSite?<><td className="fm-picking-number">{integer(site?.stock)}</td>
            <td className="fm-picking-number fm-picking-assigned">{integer(site?.planned)}</td>
            <td className="fm-picking-number">{site?.stock==null?"—":integer(Math.max(0,site.stock-site.planned))}</td></>:
-           row.stock.flatMap(s=>[
-            <td key={s.id+"-stock"} className="fm-picking-number">{integer(s.stock)}</td>,
-            <td key={s.id+"-units"} className="fm-picking-number fm-picking-assigned">{integer(s.planned)}</td>
-           ])}
+           <>
+            {row.stock.map(s=><td key={s.id+"-stock"}
+             className="fm-picking-number">{integer(s.stock)}</td>)}
+            {row.stock.map(s=><td key={s.id+"-units"}
+             className="fm-picking-number fm-picking-assigned">{integer(s.planned)}</td>)}
+           </>}
          {!selectedSite&&<td className="fm-picking-number">{integer(row.pending??Math.max(0,row.required-(row.allocated||0)))}</td>}
          <td><Status value={row.status}/>
           {row.allocationProvisional&&<small className="fm-picking-provisional-note">

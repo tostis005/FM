@@ -24,6 +24,27 @@ test("CSV Shopify de Power BI: SKU a CN de seis cifras, títulos y canal",()=>{
  assert.equal(skuToCn("0"),"000000");
  assert.equal(skuToCn("8720689021111"),null);
 });
+
+test("Shopify estándar: alias del exportador y filas de envío sin SKU",()=>{
+ const csv="Id,Name,Created at,Source,Lineitem quantity,Lineitem sku,Lineitem name\n"+
+  "889,#1001,2026-11-10T09:00:00Z,web,2,123456,Crema\n"+
+  "889,#1001,2026-11-10T09:00:00Z,web,1,,Envío\n"+
+  "890,#1002,2026-11-10T10:00:00Z,app,3,8720689021111,Champú\n";
+ const rows=parsePendingCsv(csv);
+ assert.equal(rows.length,2);
+ assert.equal(rows[0].orderId,"889");
+ assert.equal(rows[0].orderName,"#1001");
+ assert.equal(rows[0].quantity,2);
+ assert.equal(rows[1].sku,"8720689021111");
+});
+test("CSV separado por tabuladores se procesa sin perder códigos",()=>{
+ const csv="order_id\tquantity\tsku\ttitle\n"+
+  "77\t3\t001234\tProducto\n";
+ const rows=parsePendingCsv(csv);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].cn,"001234");
+ assert.equal(rows[0].quantity,3);
+});
 test("CSV semicolon y errores: no aceptar pedidos incompletos ni truncar",()=>{
  assert.equal(parsePendingCsv("order_id;quantity;sku;order_name\n77;2;123456;#77")[0].cn,"123456");
  assert.throws(()=>parsePendingCsv("order_id,quantity\n1,2"),/columna/);

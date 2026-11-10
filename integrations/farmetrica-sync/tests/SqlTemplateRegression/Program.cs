@@ -145,9 +145,9 @@ foreach (var (source, alias) in new[] {
 if (SqlTemplates.IsLegacyOptional("articulos", "stock_actual") ||
     SqlTemplates.IsLegacyOptional("articulos", "stock_minimo"))
     throw new Exception("Las cantidades de existencias son obligatorias en los SELECT de artículos, no se deben importar como NULL por omisión.");
-if (SqlTemplates.All.Count != 8 || entities.Count != 8 ||
+if (SqlTemplates.All.Count != 9 || entities.Count != 9 ||
     !entities.ContainsKey("ventas_completas") || !entities.ContainsKey("recepciones_completas"))
-    throw new Exception("Ocho plantillas Farmatic: seis catálogos/movimientos y dos JOIN documentales.");
+    throw new Exception("Nueve plantillas Farmatic: sinónimos, seis catálogos/movimientos y dos JOIN documentales.");
 
 var tickets = SqlTemplates.All.Single(t => t.Entity == "ventas_completas");
 var receipts = SqlTemplates.All.Single(t => t.Entity == "recepciones_completas");

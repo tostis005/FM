@@ -272,6 +272,23 @@ FROM {{TABLE:dbo.Recep}} AS r
 LEFT JOIN {{TABLE:dbo.LINEARECEP}} AS l ON l.IdRecepcion = r.IdRecepcion
 """;
 
+    // dbo.Sinonimo se extrae completo, sin TOP 1000. Las tres columnas son texto:
+    // se conservan ceros iniciales y relaciones múltiples de un artículo.
+    // IdAplicacion forma parte de la clave del origen para no perder equivalencias.
+    private const string SynonymsSnapshot = """
+SELECT DISTINCT
+    CONCAT(
+        LTRIM(RTRIM(CONVERT(varchar(100), s.IdArticu))), '|',
+        LTRIM(RTRIM(CONVERT(varchar(50), s.IdAplicacion))), '|',
+        LTRIM(RTRIM(CONVERT(varchar(200), s.Sinonimo)))) AS origen_id,
+    LTRIM(RTRIM(CONVERT(varchar(100), s.IdArticu))) AS articulo_id,
+    LTRIM(RTRIM(CONVERT(varchar(50), s.IdAplicacion))) AS aplicacion_id,
+    LTRIM(RTRIM(CONVERT(varchar(200), s.Sinonimo))) AS codigo
+FROM {{TABLE:dbo.Sinonimo}} AS s
+WHERE NULLIF(LTRIM(RTRIM(CONVERT(varchar(100), s.IdArticu))), '') IS NOT NULL
+  AND NULLIF(LTRIM(RTRIM(CONVERT(varchar(200), s.Sinonimo))), '') IS NOT NULL
+""";
+
     // Tabla confirmada Farmatic.dbo.Vendedor.
     // Sin marca temporal de actualización: fotografía completa diaria.
     // El color se conserva como entero origen, SIN suponer RGB/ARGB.
@@ -321,6 +338,10 @@ FROM {{TABLE:dbo.Vendedor}} AS v
         new("farmatic", "familias", "Farmatic · familias y superfamilias (Familia/FamiliaAux/SuperFamilia)",
             FamiliesSnapshot.TrimEnd(), FamiliesSnapshot.TrimEnd(), "snapshot",
             "Una única consulta completa diaria. Relación con articulos.familia mediante IdFamilia y farmacia_codigo. Permite familias sin superfamilia. Si un IdFamilia se duplica en una farmacia, se bloquea la importación para evitar asignaciones erróneas.", 180, 1440),
+        new("farmatic", "sinonimos", "Farmatic · sinónimos y códigos de barras (Sinonimo)",
+            SynonymsSnapshot.TrimEnd(), SynonymsSnapshot.TrimEnd(), "snapshot",
+            "Todas las equivalencias de dbo.Sinonimo, sin límite TOP; fotografía semanal de cada farmacia y maestro común sin duplicados. No se presupone que IdArticu sea CN oficial ni que todo Sinonimo sea EAN-13.",
+            0, 10080),
         new("farmatic", "vendedores", "Farmatic · vendedores (Vendedor)",
             VendorsSnapshot.TrimEnd(), VendorsSnapshot.TrimEnd(), "snapshot",
             "Catálogo completo diario por farmacia. IDVENDEDOR es la clave técnica, NOMBRE puede repetirse y ColorVentas se conserva como entero sin convertir colores. Se vincula por XVend_IdVendedor en ventas y recepciones; probar antes de activar.",

@@ -101,13 +101,14 @@ try{
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  const sort=page.getByRole("button",{name:"Ordenar Stock ABA"});
  await sort.click();
- await page.getByRole("button",{name:"Ordenar Producto / CN / EAN"}).click();
- const filter=page.getByLabel("Buscar en Producto / CN / EAN");
+ await page.getByRole("button",{name:"Ordenar Producto / CN"}).click();
+ const filter=page.getByLabel("Buscar en Producto / CN");
  await filter.fill("inexistente");
  await page.getByText("No hay productos con estos filtros").waitFor();
  await filter.fill("");
  await page.getByText("Producto A",{exact:true}).waitFor();
- await page.getByText(/EAN 8437000001234/).waitFor();
+ assert.equal((await page.locator(".fm-picking-page").innerText()).includes("EAN 8437000001234"),false,
+  "El EAN se busca pero no se muestra en la tabla");
  assert.equal((await page.locator(".fm-picking-page").innerText()).includes("SKU "),false);
  const globalSearch=page.getByRole("searchbox",{name:"Buscar CN, EAN, producto o pedido"});
  await globalSearch.fill("8437000001234");

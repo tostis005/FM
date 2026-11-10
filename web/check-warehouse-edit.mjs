@@ -39,12 +39,12 @@ try{
  await warehouseRow.click();
  await page.getByRole("heading",{name:"Editar almacén"}).waitFor();
  assert.equal(await page.getByLabel("ID del almacén").inputValue(),"6");
- assert.equal(await page.getByLabel("Nombre público").inputValue(),"Almacén central");
+ assert.equal(await page.getByRole("textbox",{name:"Nombre público",exact:true}).inputValue(),"Almacén central");
  assert.equal(await page.getByText(/Código del sincronizador:/).count(),1);
  assert.equal(await page.locator(".drawer input[value='ALMACEN']").count(),0,
   "No se puede modificar el código interno del almacén");
  assert.equal(await page.getByLabel("Host/IP SQL Server").count(),0);
- await page.getByLabel("Nombre público").fill("ALM");
+ await page.getByRole("textbox",{name:"Nombre público",exact:true}).fill("ALM");
  await page.getByRole("button",{name:"Guardar cambios"}).click();
  await page.getByText("Nombre público del almacén actualizado").waitFor();
  assert.deepEqual(saved,[{path:"/api/tenant/establecimientos/6",data:{name:"ALM"}}]);

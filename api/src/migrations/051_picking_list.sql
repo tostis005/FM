@@ -35,3 +35,8 @@ ALTER TABLE farmetrica.picking_list_fuentes
  ADD COLUMN IF NOT EXISTS ultima_comprobacion timestamptz,
  ADD COLUMN IF NOT EXISTS ultimo_error text,
  ADD COLUMN IF NOT EXISTS ultima_advertencia text;
+
+-- Conservar las filas completas descartadas por la importación para auditoría.
+-- El informe las recupera por páginas y solo con permisos para Picking List.
+ALTER TABLE farmetrica.picking_list_fuentes
+ ADD COLUMN IF NOT EXISTS ultima_advertencia_detalle jsonb;

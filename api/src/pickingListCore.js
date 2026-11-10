@@ -71,7 +71,7 @@ export function parsePendingCsv(text) {
    ". Cabeceras encontradas: "+headers.slice(0,14).join(", ")+".");
  }
  const get=(row,name)=>fields[name]<0?"":String(row[fields[name]]??"").trim();
- const lines=[],skipped=[];
+ const lines=[],skipped=[],invalidRows=[];
  for(let i=1;i<raw.length;i++){
   const row=raw[i],lineNumber=i+1;
   const orderId=get(row,"order")||get(row,"orderName");
@@ -88,6 +88,7 @@ export function parsePendingCsv(text) {
     !Number.isSafeInteger(quantity)||quantity<0||quantity>50000?"cantidad no válida":
     quantity===0?"cantidad cero": "código o pedido demasiado largo";
    skipped.push("Fila "+lineNumber+": "+cause);
+   invalidRows.push({line:lineNumber,reason:cause,cells:row.map(v=>String(v??""))});
    continue;
   }
   const date=get(row,"date");
@@ -112,6 +113,8 @@ export function parsePendingCsv(text) {
   skipped.slice(0,3).join("; ")+(skipped.length>3?"…":"")
  ]:[]});
  Object.defineProperty(lines,"skippedCount",{enumerable:false,value:skipped.length});
+ Object.defineProperty(lines,"invalidRows",{enumerable:false,value:invalidRows});
+ Object.defineProperty(lines,"csvHeaders",{enumerable:false,value:raw[0].map(v=>String(v??""))});
  return lines;
 }
 const n=value=>Number.isFinite(Number(value))?Math.max(0,Math.trunc(Number(value))):0;

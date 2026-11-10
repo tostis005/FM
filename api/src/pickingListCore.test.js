@@ -236,3 +236,67 @@ test("Dropbox: lee CSV UTF-16 de Excel sin dar error de cabeceras",async()=>{
  })});
  assert.equal(parsePendingCsv(csv)[0].cn,"000123");
 });
+
+
+test("Conserva cabeceras y columnas originales de todas las líneas omitidas",()=>{
+ const csv='order_id,quantity,sku,title,extra\n'+
+  '101,2,123456,Correcto,abc\n'+
+  '102,3,,Sin SKU,"texto, completo"\n'+
+  '103,abc,000123,Cantidad ilegible,def\n';
+ const lines=parsePendingCsv(csv);
+ assert.equal(lines.length,1);
+ assert.equal(lines.skippedCount,2);
+ assert.deepEqual(lines.csvHeaders,["order_id","quantity","sku","title","extra"]);
+ assert.deepEqual(lines.invalidRows,[
+  {line:3,reason:"producto sin SKU/CN",cells:["102","3","","Sin SKU","texto, completo"]},
+  {line:4,reason:"cantidad no válida",cells:["103","abc","000123","Cantidad ilegible","def"]}
+ ]);
+ assert.equal(Object.keys(lines).length,1,"Los metadatos no son filas válidas del CSV");
+});
+test("Los pedidos repetidos son varias líneas válidas aunque tengan el mismo ID",async()=>{
+ const calls=[];
+ const pool={async query(sql){
+  if(sql.includes('ultima_importacion AS "lastImportedAt"'))
+   return {rows:[{lastImportedAt:new Date().toISOString(),lineCount:2,sourceConfigured:true}]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[
+   {orderId:"123",orderName:"#123",channel:"web",sku:"111111",cn:"111111",quantity:2,title:"A"},
+   {orderId:"123",orderName:"#123",channel:"web",sku:"111111",cn:"111111",quantity:3,title:"A"}
+  ]};
+  if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
+   {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
+    key:"111111",stock:3,matched:true,name:"A"},
+   {siteId:"1",siteName:"Abadía",code:"ABA",kind:"farmacia",ready:true,
+    key:"111111",stock:1,matched:true,name:"A"}
+  ]};
+  throw Error("SQL inesperado "+sql.slice(0,100));
+ }};
+ const {readPickingReport}=await import("./pickingList.js");
+ const report=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1]});
+ assert.equal(report.totals.orders,1,"El número de pedidos únicos se conserva");
+ assert.equal(report.totals.lines,2,"El KPI contará las líneas válidas del CSV");
+ assert.equal(report.totals.units,5);
+ assert.equal(report.totals.allocated,4);
+ assert.equal(report.totals.pending,1);
+ assert.equal(report.rows[0].lines,2);
+ assert.equal(report.rows[0].pending,1);
+ assert.equal(report.rows[0].status,"sin_stock");
+});
+test("La antigüedad del timestamp del artículo no genera falso estado de stock sin actualizar",async()=>{
+ const {readPickingReport}=await import("./pickingList.js");
+ const pool={async query(sql){
+  if(sql.includes('ultima_importacion AS "lastImportedAt"'))return {rows:[{
+   lastImportedAt:new Date().toISOString(),lineCount:1,sourceConfigured:true
+  }]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[
+   {orderId:"9",orderName:"#9",channel:"web",sku:"111111",cn:"111111",quantity:1,title:"A"}
+  ]};
+  if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
+   {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
+    key:"111111",stock:5,matched:true,stockAt:"2025-01-01T00:00:00Z"}
+  ]};
+  throw Error("SQL inesperado "+sql.slice(0,100));
+ }};
+ const report=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
+ assert.equal(report.rows[0].status,"cubierto");
+ assert.equal(report.totals.incomplete,0);
+});

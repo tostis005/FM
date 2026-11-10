@@ -13,6 +13,12 @@ function fixture(){
  };
  const pool={async query(sql,params){
   queries.push({sql,params});
+  if(sql.includes("SELECT ultima_advertencia_detalle AS details")){
+   return {rows:[{details:{headers:["order_id","quantity","sku","title"],
+    rows:[{line:3,reason:"producto sin SKU/CN",cells:["15","2","","Producto A"]},
+     {line:5,reason:"cantidad no válida",cells:["16","abc","123456","Producto B"]}]},
+    imported_at:"2026-11-10T10:00:00Z"}]};
+  }
   if(sql.includes("SELECT csv_url,ultima_importacion")){
    return {rows:[{csv_url:url,lastImportedAt:"2026-11-10T10:00:00Z",
     updatedAt:"2026-11-10T09:00:00Z"}]};
@@ -66,4 +72,18 @@ test("Actualizar el origen únicamente en Ajustes conserva el nuevo enlace para 
  assert.match(getUrl(),/rlkey=newkey&dl=1/);
  const read=await call("GET","/api/picking-list/source","gestor");
  assert.equal(read.response.url,getUrl());
+});
+
+test("Detalle paginado de filas del CSV solo para gestor autorizado",async()=>{
+ const {call}=fixture();
+ const forbidden=await call("GET","/api/picking-list/issues","farmacia");
+ assert.equal(forbidden.status,403);
+ const allowed=await call("GET","/api/picking-list/issues","gestor");
+ assert.equal(allowed.status,200);
+ assert.equal(allowed.response.total,2);
+ assert.deepEqual(allowed.response.headers,["order_id","quantity","sku","title"]);
+ assert.equal(allowed.response.rows[0].line,3);
+ assert.deepEqual(allowed.response.rows[0].cells,["15","2","","Producto A"]);
+ assert.equal(allowed.response.rows[0].reason,"producto sin SKU/CN");
+ assert.ok(!JSON.stringify(allowed.response).includes("dropbox.com"));
 });

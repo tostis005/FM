@@ -22,6 +22,6 @@ export function decoratePharmacy(slug,pharmacy,{demo=false,ordinal=0}={}){
   sourceCode:isVal?"POL":master,
   databaseCode:isVal?"VAL":master,
   displayCode:visible||(isVal?"POL":master),
-  name:isVal?"Valdemarías":pharmacy.name
+  name:pharmacy.name
  };
 }

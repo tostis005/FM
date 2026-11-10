@@ -1,9 +1,38 @@
-# Farmétrica Sync · versión técnica 0.18
+# Farmétrica Sync · versión técnica 0.19
 
 Sincronizador configurable para el servidor Windows del cliente con Farmatic / SQL Server y conexiones a otras farmacias mediante Linked Servers. Procesa los cambios de ventas, compras, artículos (con existencias integradas), proveedores y entidades adicionales hacia **PostgreSQL**. Panel web local y servicio en segundo plano.
 
 > **Estado de entrega:** código y compilación Windows automatizada mediante GitHub Actions. **No se ha validado con el SQL Server Farmatic ni con el PostgreSQL de Contabo reales**. Comprobar primero en preproducción; no incluye credenciales.
 
+
+## Reejecución masiva y navegación con URL real (0.19)
+
+- En **Consultas SQL** aparece **Ejecutar todas**, junto a **Nueva consulta**.
+  Una confirmación muestra cuántas fuentes activas hay. La acción añade
+  todas las fuentes **activas** de farmacias **habilitadas** a la cola
+  exclusiva del servicio, sin cambiar su programación ni sus checkpoints.
+  Trabajos ya pendientes o ejecutándose **no se duplican**; el resultado
+  informa de los añadidos y de los que ya estaban pendientes.
+- Los incrementales con SELECT completo configurado y sin primera carga
+  confirmada se encolan como **carga inicial completa**, no como
+  incremental sin base. El resto ejecuta su política normal, respetando
+  el orden secuencial. La operación no activa consultas desactivadas.
+- El botón de ejecución masiva no hace conexiones SQL sincrónicas desde
+  el navegador: confirma el **encolado**, no la finalización de los
+  trabajos. Para ver resultados, errores y progreso se utiliza Historial.
+- Los enlaces del menú son ahora **navegaciones nativas** a
+  `/resumen`, `/farmacias`, `/consultas`, `/entidades`,
+  `/postgresql`, `/alertas` e `/historial`, no clics
+  interceptados por `pushState`. La ruta inicial `/` redirige
+  a `/resumen`; la ruta elegida se mantiene tras F5 y se sirve desde
+  `index.html` mediante el fallback del servicio. Se ha versionado
+  el JavaScript/CSS para evitar caché de una interfaz antigua.
+
+**Actualización:** extraer el ZIP completo y ejecutar
+`scripts/instalar-servicio.ps1` como administrador, conservando
+`ProgramData/FarmetricaSync`. La misma instalación mantiene las
+sincronizaciones y credenciales anteriores. Validar primero en el
+servidor de pruebas y comprobar el servicio Windows antes de operar.
 
 ## Sinónimos de Farmatic y URLs independientes (0.18)
 

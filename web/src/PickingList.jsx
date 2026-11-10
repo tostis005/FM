@@ -15,7 +15,11 @@ const eanCodes=row=>[...new Set([
  ...(/^\d{8,14}$/.test(String(row.sku||""))?[String(row.sku)]:[])
 ])].filter(value=>/^\d{8,14}$/.test(value));
 const productCodes=row=>row.cn?"CN "+row.cn:"—";
-const humanizeImportMessage=message=>String(message||"")
+// La marca del comercio no debe aparecer en la pantalla. El valor original
+// se conserva en el filtro y en las consultas para no alterar los pedidos.
+const displayChannel=value=>String(value||"")
+ .replace(/pharma[\\s-]?wow/gi,"Tienda online");
+const humanizeImportMessage=message=>displayChannel(message)
  .replace(/Dropbox/gi,"origen de pedidos")
  .replace(/SKU\/CN/gi,"CN/EAN");
 const STATUS={
@@ -162,7 +166,7 @@ export default function PickingList({clientSlug}){
    <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:"este producto"}</strong>
    <div className="fm-picking-details">
     {row.details.map((order,i)=><div key={order.orderId+"-"+i}>
-     <span>{order.orderName||order.orderId}</span><span>{order.channel}</span>
+     <span>{order.orderName||order.orderId}</span><span>{displayChannel(order.channel)}</span>
      <span>{dateTime(order.createdAt)}</span><strong>{integer(order.quantity)} uds.</strong>
     </div>)}
     {row.lines>row.details.length&&<small>Mostrando {integer(row.details.length)} de {integer(row.lines)} líneas de pedido.</small>}
@@ -213,11 +217,11 @@ export default function PickingList({clientSlug}){
        originales del CSV y el motivo por el que se omitió cada fila.</p>
       <div className="fm-picking-issues-scroll">
        <table><thead><tr><th>Fila CSV</th><th>Motivo</th>
-        {issueHeaders.map((name,i)=><th key={i}>{name}</th>)}
+        {issueHeaders.map((name,i)=><th key={i}>{displayChannel(name)}</th>)}
        </tr></thead><tbody>
         {issues.rows.map((issue,i)=><tr key={issue.line+"-"+i}>
          <td>{issue.line}</td><td>{humanizeImportMessage(issue.reason)}</td>
-         {issueHeaders.map((_,index)=><td key={index}>{issue.cells?.[index]??""}</td>)}
+         {issueHeaders.map((_,index)=><td key={index}>{displayChannel(issue.cells?.[index]??"")}</td>)}
         </tr>)}
        </tbody></table>
       </div>
@@ -278,7 +282,7 @@ export default function PickingList({clientSlug}){
      <label>Canal / origen del pedido
       <select value={channel} onChange={e=>{setChannel(e.target.value);setStatus("");setExpanded("")}}>
        <option value="">Todos los canales</option>
-       {(data?.channels||[]).map(x=><option key={x} value={x}>{x}</option>)}
+       {(data?.channels||[]).map(x=><option key={x} value={x}>{displayChannel(x)}</option>)}
       </select>
      </label>
      <label>Buscar CN, EAN, producto o pedido

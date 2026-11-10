@@ -63,6 +63,19 @@ builder.Services.AddHostedService<SyncWorker>(sp => sp.GetRequiredService<SyncWo
 var app = builder.Build();
 
 // El panel NO debe escucharse en interfaces públicas sin TLS/proxy/autenticación adicional.
+// La página de entrada canónica es /resumen, nunca una raíz que esconda
+// la sección seleccionada. La ruta /consultas y las demás sirven index.html
+// sin redirigir, mediante MapFallbackToFile al final.
+app.Use(async (ctx, next) =>
+{
+    if ((HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method))
+        && ctx.Request.Path.Value == "/")
+    {
+        ctx.Response.Redirect("/resumen" + ctx.Request.QueryString);
+        return;
+    }
+    await next();
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.Use(async (ctx, next) =>
@@ -109,14 +122,14 @@ app.UseAuthorization();
 
 // Liveness independiente de cualquier bloqueo PostgreSQL o del histórico.
 app.MapGet("/api/ping", () => Results.Ok(new {
-    ok = true, version = "0.18.0", atUtc = DateTimeOffset.UtcNow
+    ok = true, version = "0.19.0", atUtc = DateTimeOffset.UtcNow
 }));
 
 // El bootstrap solo se admite desde loopback, con una única contraseña admin.
 app.MapGet("/api/bootstrap-status", (ConfigStore store) => new
 {
     initialized = store.Read(c => c.AdminHash is not null),
-    version = "0.16.0"
+    version = "0.19.0"
 });
 app.MapPost("/api/bootstrap", (PasswordRequest r, HttpContext ctx, ConfigStore store) =>
 {
@@ -693,6 +706,39 @@ api.MapDelete("/jobs/{id:guid}", (Guid id, ConfigStore store) =>
     store.Change(c => { c.Jobs.RemoveAll(j => j.Id == id); c.States.RemoveAll(s => s.JobId == id); });
     return Results.Ok(new { ok = true });
 });
+// Reenvío manual de todas las consultas activas, usando la cola secuencial ya existente.
+// Una consulta en cola o ejecutándose no se encola de nuevo. La primera carga
+// incremental sin checkpoint se lanza como snapshot si tiene FullSql configurado.
+api.MapPost("/jobs/run-all", (ConfigStore store, SyncWorker worker) =>
+{
+    var config = store.Read(c => c);
+    var plan = BulkRunPlanner.Plan(config);
+    int queued = 0, alreadyPending = 0, initialFullQueued = 0;
+    foreach (var item in plan)
+    {
+        if (worker.IsPending(item.JobId))
+        {
+            alreadyPending++;
+            continue;
+        }
+        if (worker.Enqueue(item.JobId, full: item.NeedsInitialFull))
+        {
+            queued++;
+            if (item.NeedsInitialFull) initialFullQueued++;
+        }
+        else alreadyPending++; // evita duplicados incluso entre clics simultáneos
+    }
+    return Results.Ok(new
+    {
+        eligible = plan.Count, queued, alreadyPending, initialFullQueued,
+        message = plan.Count == 0
+            ? "No hay consultas activas en farmacias habilitadas."
+            : queued == 0
+                ? "Todas las consultas activas ya estaban en cola o en ejecución."
+                : $"{queued} consultas añadidas a la cola de ejecución."
+    });
+});
+
 api.MapPost("/jobs/{id:guid}/run-full", (Guid id, ConfigStore store, SyncWorker worker) =>
 {
     var job = store.Read(c => c.Jobs.FirstOrDefault(j => j.Id == id));

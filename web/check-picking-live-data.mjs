@@ -94,6 +94,7 @@ try{
  await page.getByText("Producto A",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ver más"}).click();
  await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
+ await page.locator(".fm-picking-issues thead th").filter({hasText:"Detalle CSV"}).waitFor();
  const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
  assert.ok(issueColumns.some(x=>x.trim()==="Detalle CSV"),JSON.stringify(issueColumns));
  const issueCells=await page.locator(".fm-picking-issues tbody td").allTextContents();

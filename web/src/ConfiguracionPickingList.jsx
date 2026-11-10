@@ -93,6 +93,10 @@ export default function ConfiguracionPickingList({clientSlug,role,permissions=nu
     <p><Link2 size={16}/> <strong>Dropbox configurado:</strong> {friendlyFile(source.url)}</p>
     <p>Ruta guardada para este cliente. No necesitas volver a introducirla.</p>
     <p>Última importación: <strong>{dateTime(source.lastImportedAt)}</strong></p>
+    {source.sourceError&&<p role="alert" className="fm-picking-source-error">
+     <strong>Última actualización fallida:</strong> {source.sourceError}
+     {" "}La ruta sigue configurada, pero no se han cargado nuevos pedidos.
+    </p>}
     <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busy)}
      onClick={()=>{setEditing(true);setError("");setNotice("");}}>
      Cambiar enlace de Dropbox</button>

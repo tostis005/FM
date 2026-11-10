@@ -36,8 +36,8 @@ export async function readRetirementPatterns(pool,slug){
   "SELECT cadena FROM farmetrica.preparador_exclusiones WHERE cliente_slug=$1 ORDER BY cadena",[slug]);
  return rows.map(r=>r.cadena);
 }
-export function setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantAdmin}){
- const admin=requireTenantAdmin();
+export function setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantManager}){
+ const admin=requireTenantManager();
  app.get("/api/tenant/pedidos/exclusiones",...admin,async(req,res,next)=>{
   try{
    const {rows}=await pool.query(`SELECT id::text, cadena AS text, creado_en AS "createdAt"

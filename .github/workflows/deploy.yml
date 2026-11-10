@@ -361,6 +361,10 @@ jobs:
       - name: Actualizar API y web en el VPS
         run: |
           set -euo pipefail
+          # Identificador de versión pública: permite comprobar que la web servida
+          # corresponde exactamente al commit y no a una imagen anterior.
+          mkdir -p web/public
+          printf '{"commit":"%s","built_at":"%s"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > web/public/fm-release.json
           tar -czf - -C api . | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'set -eu; cd /opt/farmawao; STAGING=$(mktemp -d); trap "rm -rf \"$STAGING\"" EXIT; tar -xzf - -C "$STAGING"; cp -r "$STAGING"/. api/'
           tar -czf - -C web --exclude=node_modules --exclude=dist . | \
@@ -432,6 +436,13 @@ jobs:
             echo "Falló la comprobación posterior del despliegue"
             exit 1
           '
+
+      - name: Comprobar que la versión publicada coincide con este commit
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'curl -fsS --max-time 10 http://127.0.0.1:18080/fm-release.json' > /tmp/farmetrica-release.json
+          grep -F "\"commit\":\"$GITHUB_SHA\"" /tmp/farmetrica-release.json
 
       - name: Reiniciar catálogo de promociones de Ampedia (solicitado, auditado)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'RESET_COMPLETO_PROMOCIONES_20261106')

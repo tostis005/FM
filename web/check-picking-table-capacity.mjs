@@ -39,14 +39,18 @@ try{
  await page.goto("http://127.0.0.1:4175/picking-list",{waitUntil:"domcontentloaded"});
  const entries=page.locator(".fm-picking-grouped tbody tr:not(.fm-expanded-row)");
  await page.getByRole("heading",{name:"Distribución de pedidos pendientes"}).waitFor({timeout:15000});
- await page.getByText("Referencia 0",{exact:true}).waitFor();
+ await page.getByText("Referencia 500",{exact:true}).waitFor();
+ // Por defecto la tabla ordena las unidades de mayor a menor.
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  assert.equal(await entries.count(),500,"La tabla muestra por defecto hasta 500 referencias");
  await page.locator(".list-pagination").getByRole("button",{name:"Siguiente"}).click();
+ await page.getByText("Referencia 0",{exact:true}).waitFor();
  assert.equal(await entries.count(),1,"La página siguiente muestra la referencia restante");
  await page.getByLabel("Registros por página de referencias").selectOption("100");
+ await page.waitForFunction(()=>document.querySelectorAll(".fm-picking-grouped tbody tr:not(.fm-expanded-row)").length===100);
  assert.equal(await entries.count(),100,"El usuario puede cambiar el tamaño de página");
  await page.getByLabel("Buscar en Producto / CN").fill("Referencia 499");
+ await page.getByText("Referencia 499",{exact:true}).waitFor();
  assert.equal(await entries.count(),1,"El filtro busca sobre los 501 registros, no solo los visibles");
  await page.getByText("Referencia 499",{exact:true}).waitFor();
  await page.getByLabel("Buscar en Producto / CN").fill("");

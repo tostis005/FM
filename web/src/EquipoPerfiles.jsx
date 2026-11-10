@@ -3,6 +3,7 @@ import {CheckCircle2,Copy,Users} from "lucide-react";
 import SortableDataTable from "./SortableDataTable.jsx";
 import {LoadingPanel,LoadingStatus} from "./LoadingState.jsx";
 import "./moduleDemo.css";
+import "./perfiles.css";
 const newUser=()=>({email:"",name:"",profileId:"",pharmacies:[],active:true,authType:"google"});
 async function api(path,options={}){
  const response=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
@@ -53,7 +54,7 @@ export default function EquipoPerfiles({client,pharmacies=[],managerRole="admini
   event.preventDefault();setBusy(true);setFeedback("");
   try{
    const saved=await api("/api/tenant/usuarios",{method:"PUT",headers,
-    body:JSON.stringify({...form,profileId:Number(form.profileId)})});
+    body:JSON.stringify({...form,profileId:Number(form.profileId||initialProfile?.profileId)})});
    await refresh();reset();
    setFeedback(saved.invitationRequired?
     saved.invitationSent?

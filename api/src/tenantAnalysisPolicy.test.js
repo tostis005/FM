@@ -62,8 +62,13 @@ test("ABCD del cliente inicia en 12 meses y lo puede actualizar un administrador
  assert.equal(reloaded.response.client.analysisMonths,24);
 });
 
-test("gestor y personal de farmacia no pueden modificar el período",async()=>{
- for(const role of ["gestor","farmacia","colaborador"]){
+test("gestor puede configurar análisis del cliente, pero farmacia y colaborador no",async()=>{
+ const manager=fixture("gestor");
+ const updated=await manager.request("PUT","/api/tenant/configuracion-ventas",{analysisMonths:3});
+ assert.equal(updated.status,200);
+ assert.equal(manager.getMonths(),3);
+ assert.equal(manager.calls.filter(c=>c.sql.includes("UPDATE farmetrica.clientes")).length,1);
+ for(const role of ["farmacia","colaborador"]){
   const {request,calls}=fixture(role);
   const denied=await request("PUT","/api/tenant/configuracion-ventas",{analysisMonths:3});
   assert.equal(denied.status,403);

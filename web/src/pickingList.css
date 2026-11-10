@@ -130,3 +130,54 @@
  .fm-picking-list-table{padding:0 5px 10px}
  .fm-picking-list-table .smart-table th,.fm-picking-list-table .smart-table td{padding:7px 6px}
 }
+
+/* Picking List — separar visualmente la matriz de STOCK y UNIDADES.
+   Tonos suaves para facilitar el seguimiento horizontal de 500 referencias;
+   se aplica también a filtros y cabeceras que permanecen pegadas al hacer scroll. */
+.fm-picking-list-table .fm-picking-grouped{
+ --fm-pl-stock-bg:#f0f5fb;
+ --fm-pl-stock-alt:#eaf1f9;
+ --fm-pl-stock-head:#e0ebf8;
+ --fm-pl-stock-border:#a6c2e0;
+ --fm-pl-units-bg:#ecf8f0;
+ --fm-pl-units-alt:#e5f4ea;
+ --fm-pl-units-head:#d8eee0;
+ --fm-pl-units-border:#93c7aa;
+}
+.fm-picking-list-table .fm-picking-grouped thead th.fm-section-stock{
+ background:var(--fm-pl-stock-head)!important;
+ color:#254e74;
+}
+.fm-picking-list-table .fm-picking-grouped thead th.fm-section-units{
+ background:var(--fm-pl-units-head)!important;
+ color:#256443;
+}
+.fm-picking-list-table .fm-picking-grouped thead .fm-smart-group-row th.fm-section-stock{
+ background:#d4e3f5!important;
+ border-bottom:2px solid var(--fm-pl-stock-border);
+}
+.fm-picking-list-table .fm-picking-grouped thead .fm-smart-group-row th.fm-section-units{
+ background:#cfead9!important;
+ border-bottom:2px solid var(--fm-pl-units-border);
+}
+.fm-picking-list-table .fm-picking-grouped tbody tr:not(.fm-expanded-row) td.fm-section-stock{
+ background:var(--fm-pl-stock-bg)!important;
+}
+.fm-picking-list-table .fm-picking-grouped tbody tr:not(.fm-expanded-row) td.fm-section-units{
+ background:var(--fm-pl-units-bg)!important;
+}
+.fm-picking-list-table .fm-picking-grouped tbody tr:nth-child(even):not(.fm-expanded-row) td.fm-section-stock{
+ background:var(--fm-pl-stock-alt)!important;
+}
+.fm-picking-list-table .fm-picking-grouped tbody tr:nth-child(even):not(.fm-expanded-row) td.fm-section-units{
+ background:var(--fm-pl-units-alt)!important;
+}
+/* Delimitar también la primera columna de cada grupo, no solo la cabecera. */
+.fm-picking-list-table .fm-picking-grouped thead th:not(.fm-section-stock)+th.fm-section-stock,
+.fm-picking-list-table .fm-picking-grouped tbody td:not(.fm-section-stock)+td.fm-section-stock{
+ box-shadow:inset 3px 0 var(--fm-pl-stock-border);
+}
+.fm-picking-list-table .fm-picking-grouped thead th:not(.fm-section-units)+th.fm-section-units,
+.fm-picking-list-table .fm-picking-grouped tbody td:not(.fm-section-units)+td.fm-section-units{
+ box-shadow:inset 3px 0 var(--fm-pl-units-border);
+}

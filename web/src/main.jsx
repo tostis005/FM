@@ -66,7 +66,7 @@ import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveWarehouseNameToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -699,6 +699,7 @@ function App(){
  // utilizando exclusivamente farmacias reales.
  const establishments=tenantContext?.establishments||pharmacies;
  const currentPharmacies=establishments.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
+ const editingIsWarehouse=pharmacyForm?.establishmentType==="almacen";
  function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
   if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
@@ -1151,10 +1152,6 @@ function App(){
     catch(err){setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
   }
   function startPharmacy(f){
-    if(f?.establishmentType==="almacen"){
-      setToast("Almacén central · ID "+f.id+" · código "+f.sourceCode+" · origen "+f.sourceDatabase+". Se configura desde el sincronizador.");
-      return;
-    }
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
     setEditingPharmacy(f?.id||"nuevo");
     setPharmacyForm(f?{...f}:{id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
@@ -1162,6 +1159,19 @@ function App(){
   async function savePharmacy(e) {
     e.preventDefault();const id=pharmacyForm.id.trim();
     if((editingPharmacy!=="nuevo"&&!/^[1-9][0-9]{0,8}$/.test(id))||!pharmacyForm.name.trim())return setToast("Revisa el código y el nombre");
+    if(pharmacyForm.establishmentType==="almacen"){
+      if(pharmacyBackendConfigured&&pharmacyApiStatus!=="connected")
+        return setToast("Inicia sesión como administrador desde Accesos");
+      setSavingPharmacy(true);
+      try{
+        await saveWarehouseNameToServer(id,pharmacyForm.name.trim());
+        await refreshPharmacies();
+        setToast("Nombre público del almacén actualizado");
+        setEditingPharmacy(null);
+      }catch(err){setToast(err.message)}
+      finally{setSavingPharmacy(false)}
+      return;
+    }
     if(!/^[A-Z0-9_-]{2,16}$/.test((pharmacyForm.sourceCode||"").trim().toUpperCase()))return setToast("Indica un código de origen válido");
     if(editingPharmacy==="nuevo"&&pharmacies.some(f=>f.id===id))return setToast("Ese código ya existe");
     const f={...pharmacyForm,id,name:pharmacyForm.name.trim(),sourceCode:pharmacyForm.sourceCode.trim().toUpperCase(),sourceHost:pharmacyForm.sourceHost?.trim()||"",sourceDatabase:pharmacyForm.sourceDatabase?.trim()||"Farmatic"};

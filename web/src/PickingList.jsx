@@ -18,7 +18,7 @@ const productCodes=row=>row.cn?"CN "+row.cn:"—";
 // La marca del comercio no debe aparecer en la pantalla. El valor original
 // se conserva en el filtro y en las consultas para no alterar los pedidos.
 const displayChannel=value=>String(value||"")
- .replace(/pharma[\\s-]?wow/gi,"Tienda online");
+ .replace(/pharma[\s-]?wow/gi,"Tienda online");
 const humanizeImportMessage=message=>displayChannel(message)
  .replace(/Dropbox/gi,"origen de pedidos")
  .replace(/SKU\/CN/gi,"CN/EAN");

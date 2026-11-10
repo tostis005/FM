@@ -44,7 +44,7 @@ try{
  await page.getByRole("heading",{name:"Artículos excluidos de nuevos pedidos"}).waitFor();
  assert.equal(await page.getByRole("heading",{name:"Frecuencia de pedidos"}).count(),0);
  assert.equal(await page.getByText("Revisar",{exact:true}).count(),0);
- assert.equal(await page.getByText("Ejemplos detectados en nombres de Farmatic"}).count(),0);
+ assert.equal(await page.getByText("Ejemplos detectados en nombres de Farmatic").count(),0);
  assert.equal(await page.getByText(/«Sonda vesical baja fricción»/).count(),1);
  await page.getByLabel("Nueva frase o cadena literal para excluir").fill("*BAJA*");
  await page.getByRole("button",{name:"Añadir regla"}).click();

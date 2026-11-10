@@ -31,7 +31,7 @@ export function validateProfileDefinition(body,availableModules){
  if(sections&&modules&&sections.some(id=>!modules.includes(sectionsById.get(id).module)))return null;
  const source=body?.permissions;
  if(!source||typeof source!=="object"||Array.isArray(source))return null;
- const permissions=Object.create(null);
+ const permissions={};
  const keys=Object.keys(source);
  if(keys.length>availableModules.length||keys.some(id=>!allowedModules.has(id)))return null;
  for(const module of keys){

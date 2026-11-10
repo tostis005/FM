@@ -246,7 +246,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  useEffect(()=>{
   const code=search.trim();
   setEanReferences([]);
-  if(!/^\\d{8,14}$/.test(code)||!scope)return;
+  if(!/^\d{8,14}$/.test(code)||!scope)return;
   const controller=new AbortController();
   const timer=setTimeout(()=>{
    const q=new URLSearchParams({codigo:code,farmacias:scope});

@@ -555,6 +555,16 @@ try {
   } else {
     console.info("Base de datos inicializada: omitiendo DDL histórico al arrancar la API.");
   }
+  // Cambio pequeño en el maestro: columna separada de codigo_origen.
+  // Solo ejecutar DDL cuando todavía no existe, sin repetir las migraciones
+  // pesadas de ventas en cada arranque.
+  const visibleCodeColumn=await pool.query(
+    "SELECT EXISTS(SELECT 1 FROM information_schema.columns "+
+    "WHERE table_schema='farmetrica' AND table_name='farmacias' "+
+    "AND column_name='codigo_visible') AS ready");
+  if(visibleCodeColumn.rows[0]?.ready!==true){
+    await pool.query(await readFile(new URL("./migrations/052_codigos_visibles.sql",import.meta.url),"utf8"));
+  }
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

@@ -116,7 +116,8 @@ export default function ConfiguracionPickingList({clientSlug,role,permissions=nu
     </div>
    </form>}
    <div className="fm-price-settings-actions" style={{marginTop:16}}>
-    <button type="button" className="btn btn-secondary" disabled={Boolean(busy)||!source?.sourceConfigured}
+    <button type="button" className="btn btn-secondary"
+     disabled={Boolean(busy)||!source?.sourceConfigured||!canImport}
      onClick={()=>void refresh()}><CloudDownload size={16}/>
      {busy==="refresh"?"Actualizando…":"Actualizar ahora desde Dropbox"}</button>
     {canImport&&<>

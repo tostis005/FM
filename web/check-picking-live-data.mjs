@@ -124,7 +124,7 @@ try{
  const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
  assert.ok(issueColumns.some(x=>x.trim()==="Detalle CSV"),JSON.stringify(issueColumns));
  const issueCells=await page.locator(".fm-picking-issues tbody td").allTextContents();
- assert.ok(issueCells.includes("producto sin SKU/CN"),JSON.stringify(issueCells));
+ assert.ok(issueCells.includes("producto sin CN/EAN"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("texto, completo"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("cantidad no válida"),JSON.stringify(issueCells));
  await page.getByRole("button",{name:"Ocultar",exact:true}).click();

@@ -104,11 +104,11 @@ export function parsePendingCsv(text) {
    (skipped.length>1?" ("+skipped.length+" filas con incidencias).":""));
  // No perder todos los pedidos por una fila sin referencia o con cantidad cero.
  // Advertir de la importación parcial: nunca declararla completa.
- lines.warnings=skipped.length?[
+ Object.defineProperty(lines,"warnings",{enumerable:false,value:skipped.length?[
   skipped.length+" filas no se han podido incluir en la preparación. "+
   skipped.slice(0,3).join("; ")+(skipped.length>3?"…":"")
- ]:[];
- lines.skippedCount=skipped.length;
+ ]:[]});
+ Object.defineProperty(lines,"skippedCount",{enumerable:false,value:skipped.length});
  return lines;
 }
 const n=value=>Number.isFinite(Number(value))?Math.max(0,Math.trunc(Number(value))):0;

@@ -41,6 +41,7 @@ WITH sources AS MATERIALIZED (
   ON upper(btrim(a.farmacia_codigo))=s.source_code
    AND btrim(coalesce(to_jsonb(a)->>'ean',''))=c.sku
  WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}$'
+ __SYNONYM_EAN_MATCH__
 ), unique_articles AS (
  SELECT DISTINCT ON (site_id,key,article_id)
   site_id,key,article_id,stock,nombre,stock_at

@@ -152,12 +152,15 @@ test("EAN Shopify asociado al artículo participa en el reparto, sin necesitar C
    orderId:"501",orderName:"#501",channel:"web",sku:"8720689021111",
    cn:null,quantity:6,title:"Producto EAN"
   }]};
-  if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))return {rows:[{available:true}]};
+  if(sql.includes("WITH sources AS MATERIALIZED")){
+   assert.match(sql,/JOIN "ampedia"\.sinonimos si/);
+   return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:true,
     key:"SKU:8720689021111",stock:4,matched:true,name:"Producto EAN"},
    {siteId:"1",siteName:"Abadía",code:"ABA",kind:"farmacia",ready:true,
     key:"SKU:8720689021111",stock:7,matched:true,name:"Producto EAN"}
-  ]};
+  ]};}
   throw Error("SQL inesperado");
  }};
  const result=await readPickingReport(pool,{client:{slug:"ampedia",schema:"ampedia"}});
@@ -174,4 +177,14 @@ test("La consulta de picking no expone otras farmacias y excluye AMP",async()=>{
  const sql=await readFile(new URL("./pickingListStock.sql",import.meta.url),"utf8");
  assert.match(sql,/f\.id=ANY\(\$3::int\[\]\)/);
  assert.match(sql,/<>\s*'AMP'/);
+});
+
+test("Sinónimos EAN opcionales y sin asociación entre farmacias",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./pickingListStock.sql",import.meta.url),"utf8");
+ assert.match(sql,/__SYNONYM_EAN_MATCH__/);
+ const source=await readFile(new URL("./pickingList.js",import.meta.url),"utf8");
+ assert.match(source,/to_regclass\(\$1\)/);
+ assert.match(source,/si\.farmacia_codigo/);
+ assert.match(source,/a\.origen_id::text=btrim\(si\.articulo_id\)/);
 });

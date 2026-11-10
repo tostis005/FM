@@ -68,8 +68,28 @@ async function getInventory(pool,ctx,codes){
  const schema=ctx.client.schema;
  if(!SCHEMA.test(schema))throw new Error("Esquema de cliente inválido.");
  const source=await readFile(new URL("./pickingListStock.sql",import.meta.url),"utf8");
+
+ // Sinónimos importados por Farmétrica Sync: IDs ERP limitados a cada
+ // establecimiento, nunca se cruzan IDs entre dos farmacias.
+ const wantsEan=codes.some(x=>!x.cn&&/^\d{8,14}$/.test(x.sku));
+ const synonymsAvailable=wantsEan?
+  (await pool.query("SELECT to_regclass($1) IS NOT NULL AS available",
+   [schema+".sinonimos"])).rows[0]?.available===true:false;
+ const synonymsSql=synonymsAvailable?[
+  " UNION ALL",
+  " SELECT s.site_id,c.key,a.origen_id::text AS article_id,",
+  "  a.stock_actual::float8 AS stock,a.nombre,a.sincronizado_en AS stock_at",
+  " FROM sites s CROSS JOIN codes c JOIN __SCHEMA__.sinonimos si",
+  "  ON upper(btrim(si.farmacia_codigo))=s.source_code",
+  "   AND btrim(si.codigo)=c.sku",
+  " JOIN __SCHEMA__.articulos a",
+  "  ON upper(btrim(a.farmacia_codigo))=s.source_code",
+  "   AND a.origen_id::text=btrim(si.articulo_id)",
+  " WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}$'"
+ ].join("\n"):"";
  const sql=source.replaceAll("__SCHEMA__","\""+schema+"\"")
-  .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"));
+  .replaceAll("__PHARMACY_CODE__",pharmacyDataCodeSQL("f"))
+  .replace("__SYNONYM_EAN_MATCH__",()=>synonymsSql.replaceAll("__SCHEMA__","\""+schema+"\""));
  const {rows}=await pool.query(sql,[ctx.client.slug,JSON.stringify(codes),
   ctx.allowedPharmacyIds||[]]);
  const sites=new Map(),items=new Map();

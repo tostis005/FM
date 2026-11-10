@@ -12,7 +12,7 @@ export function parseCsvRecords(text,{maxRows=50000}={}){
   throw new Error("El CSV supera el límite permitido (8 MB).");
  const stripped=text.replace(/^\uFEFF/,"");
  const firstLine=stripped.split(/\r?\n/,1)[0]||"";
- const sep=[",",";","\\t"].map(sep=>({sep,count:firstLine.split(sep).length-1}))
+ const sep=[",",";","\t"].map(sep=>({sep,count:firstLine.split(sep).length-1}))
   .sort((a,b)=>b.count-a.count)[0].sep;
  const rows=[];let field="",cells=[],quoted=false;
  function finishRow(){
@@ -71,7 +71,7 @@ export function parsePendingCsvDetailed(text) {
   // SKU y líneas vacías: no deben invalidar los productos preparados.
   if(!orderId&&!sku&&!qtyText)continue;
   const quantity=Number(qtyText);
-  if(!sku||!/^\\S/.test(sku)||!orderId||orderId.length>90||
+  if(!sku||!/^\S/.test(sku)||!orderId||orderId.length>90||
     sku.length>90||!Number.isSafeInteger(quantity)||quantity<=0||quantity>50000){
    invalid.push(lineNo);
    continue;

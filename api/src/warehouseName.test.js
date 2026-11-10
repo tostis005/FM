@@ -21,11 +21,12 @@ function fixture(){
    return {rows:[{id:"stock",enabled:true}]};
   if(sql.includes("FROM farmetrica.farmacias f WHERE f.cliente_slug"))
    return {rows:stores};
-  if(sql.includes("UPDATE farmetrica.farmacias SET nombre=$3,actualizado_en=now()")){
+  if(sql.includes("UPDATE farmetrica.farmacias SET nombre=$3,codigo_visible=$4,actualizado_en=now()")){
    updates.push({sql,args});
    const wh=stores.find(s=>s.id===String(args[0])&&s.sourceCode==="ALMACEN"&&args[1]==="ampedia");
    if(!wh)return {rows:[]};
-   wh.name=args[2];return {rows:[{id:wh.id,name:wh.name,sourceCode:wh.sourceCode}]};
+   wh.name=args[2];wh.displayCode=args[3];
+   return {rows:[{id:wh.id,name:wh.name,sourceCode:wh.sourceCode,displayCode:wh.displayCode}]};
   }
   return {rows:[]};
  }};
@@ -52,16 +53,16 @@ function fixture(){
 test("Renombra almacén a ALM sin alterar identificador, código, host ni base de datos",async()=>{
  const f=fixture();
  const r=await f.call("superadministrador","6",{
-  name:"  ALM  ",sourceCode:"OTRO",sourceHost:"intruso",sourceDatabase:"Otra"
+  name:"  ALM  ",displayCode:"ALM",sourceCode:"OTRO",sourceHost:"intruso",sourceDatabase:"Otra"
  });
  assert.equal(r.status,200);
- assert.deepEqual(r.response,{id:"6",name:"ALM",sourceCode:"ALMACEN",establishmentType:"almacen"});
+ assert.deepEqual(r.response,{id:"6",name:"ALM",sourceCode:"ALMACEN",displayCode:"ALM",establishmentType:"almacen"});
  assert.equal(f.stores[1].id,"6");
  assert.equal(f.stores[1].sourceCode,"ALMACEN");
  assert.equal(f.stores[1].sourceHost,"sql.internal");
  assert.equal(f.stores[1].sourceDatabase,"Farmatic");
  assert.equal(f.updates.length,1);
- assert.deepEqual(f.updates[0].args,[6,"ampedia","ALM"]);
+ assert.deepEqual(f.updates[0].args,[6,"ampedia","ALM","ALM"]);
  assert.match(f.updates[0].sql,/codigo_origen\)\)='ALMACEN'/);
 });
 test("Un gestor o un usuario farmacia no puede editar el almacén",async()=>{
@@ -72,7 +73,18 @@ test("Un gestor o un usuario farmacia no puede editar el almacén",async()=>{
 });
 test("La ruta no permite modificar nombres de farmacias ni campos vacíos",async()=>{
  const f=fixture();
- assert.equal((await f.call("superadministrador","6",{name:"  "})).status,400);
- assert.equal((await f.call("superadministrador","1",{name:"ALM"})).status,404);
+ assert.equal((await f.call("superadministrador","6",{name:"  ",displayCode:"ALM"})).status,400);
+ assert.equal((await f.call("superadministrador","1",{name:"ALM",displayCode:"ALM"})).status,404);
  assert.equal(f.stores[0].name,"Abadía");
+});
+
+test("El almacén permite cambiar su código visible sin alterar el código de origen",async()=>{
+ const f=fixture();
+ const updated=await f.call("superadministrador","6",{
+  name:"Almacén central",displayCode:"LOG"
+ });
+ assert.equal(updated.status,200);
+ assert.equal(f.stores[1].displayCode,"LOG");
+ assert.equal(f.stores[1].sourceCode,"ALMACEN");
+ assert.equal(updated.response.displayCode,"LOG");
 });

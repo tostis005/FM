@@ -1,6 +1,7 @@
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {retiredProductSQL} from "./laboratoryRetirements.js";
+import {resolveEANReferences} from "./synonymSearch.js";
 
 const validCN=e=>`CASE WHEN btrim(coalesce(${e}::text,'')) ~ '^[0-9]{6,7}$'
  THEN btrim(${e}::text) ELSE NULL::text END`;
@@ -16,6 +17,7 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_titula
 
 async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN,skipMovementCheck=false}){
  const schema='"'+ctx.client.schema+'"';
+ const eanRefs=await resolveEANReferences(pool,ctx,pharmacies,search);
  const blockedCN=`coalesce(${validCN("a.codigo_nacional")},
   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
   ${validCN("a.origen_id::text")})`;
@@ -35,12 +37,12 @@ async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,h
    (${retiredProductSQL("n.nombre","$7")} OR EXISTS(SELECT 1 FROM blocked b WHERE b.cn=n.cn)) AS excluded
   FROM farmetrica.nomenclator_presentaciones n
   WHERE ${officialMatch("n")}
-   AND ($4::text='' OR n.nombre ILIKE '%'||$4||'%' OR n.cn ILIKE '%'||$4||'%')
+   AND ($4::text='' OR n.nombre ILIKE '%'||$4||'%' OR n.cn ILIKE '%'||$4||'%' OR n.cn=ANY($8::text[]))
  )
  SELECT *,count(*) OVER()::int AS total FROM official
  ORDER BY nombre,referencia LIMIT $5 OFFSET $6`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns],
+  values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns,eanRefs],
   query_timeout:15000});
  const output=rows.map(({total,...rest})=>rest);
  if(output.length&&!skipMovementCheck){
@@ -76,6 +78,7 @@ async function readOfficial(pool,ctx,{key,pharmacies,search,page,size,patterns,h
 }
 
 export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,search,page,size,patterns,hasNativeCN,type="parafarmacia"}){
+ const eanRefs=await resolveEANReferences(pool,ctx,pharmacies,search);
  const schema='"'+ctx.client.schema+'"';
  const cn=`coalesce(${validCN("a.codigo_nacional")},
   ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
@@ -199,12 +202,12 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
   GROUP BY coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id)
  ), filtered AS (
   SELECT * FROM summarized
-  WHERE ($4::text='' OR nombre ILIKE '%'||$4||'%' OR referencia ILIKE '%'||$4||'%')
+  WHERE ($4::text='' OR nombre ILIKE '%'||$4||'%' OR referencia ILIKE '%'||$4||'%' OR referencia=ANY($9::text[]))
  )
  SELECT *,count(*) OVER()::int AS total FROM filtered
  ORDER BY nombre,referencia LIMIT $5 OFFSET $6`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns,type],
+  values:[key,pharmacies,ctx.client.slug,search,size,(page-1)*size,patterns,type,eanRefs],
   query_timeout:20000});
  return {rows:rows.map(({total,...rest})=>rest),total:rows[0]?.total||0,page,size};
 }

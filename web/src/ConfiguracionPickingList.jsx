@@ -1,141 +1,79 @@
-import React,{useEffect,useRef,useState} from "react";
-import {CloudDownload,FileSpreadsheet,Link2,Save,Upload} from "lucide-react";
+import React,{useEffect,useState} from "react";
+import {Link2,Save,CheckCircle2,AlertTriangle} from "lucide-react";
 import "./moduleDemo.css";
 import "./pickingList.css";
 
-const dateTime=t=>t?new Date(t).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"Sin importar";
+const dateTime=t=>t?new Date(t).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"Todavía no realizada";
 async function request(clientSlug,path,options={}){
  const response=await fetch("/api/picking-list/"+path,{
   credentials:"same-origin",cache:"no-store",...options,
   headers:{"X-Farmetrica-Cliente":clientSlug,...options.headers}});
  const result=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(result.error||"No se ha podido actualizar el origen de pedidos");
+ if(!response.ok)throw Error(result.error||"No se ha podido guardar la ruta de Dropbox");
  return result;
 }
-const friendlyFile=url=>{
- try{return decodeURIComponent(new URL(url).pathname.split("/").at(-1)||"CSV de Dropbox")}
- catch{return "CSV de Dropbox"}
-};
 
-export default function ConfiguracionPickingList({clientSlug,role,permissions=null,stockEnabled=false}){
+export default function ConfiguracionPickingList({clientSlug}){
  const [source,setSource]=useState(null),[url,setUrl]=useState("");
- const [editing,setEditing]=useState(false),[loading,setLoading]=useState(true);
- const [busy,setBusy]=useState(""),[notice,setNotice]=useState(""),[error,setError]=useState("");
- const fileRef=useRef(null);
- const canImport=(stockEnabled||role==="superadministrador")&&
-  ["administrador","gestor","superadministrador"].includes(role)&&
-  (role==="superadministrador"||permissions?.stock==null||
-   permissions.stock.includes("importar")||permissions.stock.includes("editar"));
+ const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
+ const [notice,setNotice]=useState(""),[error,setError]=useState("");
 
  useEffect(()=>{
   if(!clientSlug)return;
   const ac=new AbortController();
-  setLoading(true);setSource(null);setUrl("");setEditing(false);
-  setNotice("");setError("");
+  setLoading(true);setSource(null);setUrl("");setNotice("");setError("");
   request(clientSlug,"source",{signal:ac.signal})
-   .then(data=>{if(!ac.signal.aborted){
-    setSource(data);setUrl(data.url||"");
-   }})
+   .then(data=>{if(!ac.signal.aborted){setSource(data);setUrl(data.url||"");}})
    .catch(err=>{if(!ac.signal.aborted)setError(err.message)})
    .finally(()=>{if(!ac.signal.aborted)setLoading(false)});
   return ()=>ac.abort();
  },[clientSlug]);
 
- async function refresh(){
-  setBusy("refresh");setError("");setNotice("");
-  try{
-   const result=await request(clientSlug,"refresh",{method:"POST",
-    headers:{"Content-Type":"application/json"},body:"{}"});
-   setSource(s=>({...s,lastImportedAt:new Date().toISOString(),sourceError:null}));
-   setNotice("Pedidos pendientes actualizados desde Dropbox ("+result.rows+" líneas).");
-  }catch(e){setError(e.message)}finally{setBusy("")}
- }
- async function save(e){
-  e.preventDefault();
-  if(!url.trim())return;
-  setBusy("save");setError("");setNotice("");
+ async function save(event){
+  event.preventDefault();
+  const next=url.trim();
+  if(!next)return;
+  setSaving(true);setError("");setNotice("");
   try{
    await request(clientSlug,"source",{method:"PUT",
-    headers:{"Content-Type":"application/json"},body:JSON.stringify({url:url.trim()})});
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({url:next})});
    const current=await request(clientSlug,"source");
-   setSource(current);setUrl(current.url||"");setEditing(false);
-   setNotice("Ruta de Dropbox guardada para este cliente. Se conservará al actualizar los pedidos.");
-  }catch(e){setError(e.message)}finally{setBusy("")}
+   setSource(current);setUrl(current.url||"");
+   setNotice("Ruta guardada. Los pedidos se leerán automáticamente de este fichero de Dropbox.");
+  }catch(err){setError(err.message)}finally{setSaving(false)}
  }
- async function upload(e){
-  const file=e.target.files?.[0];
-  if(!file)return;
-  if(file.size>8*1024*1024){
-   setError("El CSV supera los 8 MB permitidos.");
-   if(fileRef.current)fileRef.current.value="";
-   return;
-  }
-  setBusy("upload");setError("");setNotice("");
-  try{
-   const contents=await file.text();
-   const result=await request(clientSlug,"import",{
-    method:"POST",headers:{"Content-Type":"text/csv"},body:contents});
-   setSource(s=>({...s,lastImportedAt:new Date().toISOString()}));
-   setNotice("Importadas "+result.rows+" líneas del CSV. El enlace permanente de Dropbox no se ha modificado.");
-  }catch(err){setError(err.message)}finally{
-   setBusy("");
-   if(fileRef.current)fileRef.current.value="";
-  }
- }
-
  return <section className="card fm-price-settings fm-picking-settings">
   <h2>Picking List</h2>
-  <p>Origen del Excel de pedidos pendientes de Shopify. La ruta compartida de Dropbox se
-   guarda en el servidor y se reutiliza para las actualizaciones automáticas,
-   sin tener que configurar el fichero desde la pantalla de preparación.</p>
-  {loading?<p role="status">Cargando origen de Dropbox…</p>:<>
-   {source?.sourceConfigured&&!editing&&<div className="fm-picking-configured">
-    <p><Link2 size={16}/> <strong>Dropbox configurado:</strong> {friendlyFile(source.url)}</p>
-    <p>Ruta guardada para este cliente. No necesitas volver a introducirla.</p>
-    <p>Última importación: <strong>{dateTime(source.lastImportedAt)}</strong></p>
-    {source.sourceError&&<p role="alert" className="fm-picking-source-error">
-     <strong>Última actualización fallida:</strong> {source.sourceError}
-     {" "}La ruta sigue configurada, pero no se han cargado nuevos pedidos.
-    </p>}
-    <button type="button" className="btn btn-secondary btn-sm" disabled={Boolean(busy)}
-     onClick={()=>{setEditing(true);setError("");setNotice("");}}>
-     Cambiar enlace de Dropbox</button>
-   </div>}
-   {(!source?.sourceConfigured||editing)&&<form onSubmit={save}>
+  <p>Introduce una sola vez el enlace permanente del CSV de pedidos pendientes.
+   El sistema que genera el fichero puede actualizar su contenido en Dropbox;
+   Farmétrica lo consultará automáticamente, sin subir archivos ni intervenir manualmente.</p>
+  {loading?<p role="status">Cargando configuración de Dropbox…</p>:<>
+   <form onSubmit={save}>
     <div className="fm-price-settings-grid">
-     <label>Enlace actual del CSV en Dropbox
-      <input type="url" required maxLength={1800}
-       placeholder="https://www.dropbox.com/scl/fi/.../pedidospendientes.csv?rlkey=..."
+     <label>Enlace del fichero de pedidos en Dropbox
+      <input type="url" required maxLength={1800} autoComplete="off"
+       placeholder="https://www.dropbox.com/scl/fi/.../pedidos.csv?rlkey=..."
        value={url} onChange={e=>setUrl(e.target.value)}/>
      </label>
     </div>
-    <p>Este es el único lugar para configurar el origen. Los enlaces existentes se conservan
-     hasta que guardes expresamente uno distinto.</p>
     <div className="fm-price-settings-actions">
-     <button type="submit" className="btn btn-primary" disabled={Boolean(busy)||!url.trim()||
-      (Boolean(source?.sourceConfigured)&&url===source.url)}>
-      <Save size={16}/>{busy==="save"?"Guardando…":"Guardar ruta de Dropbox"}</button>
-     {source?.sourceConfigured&&<button type="button" className="btn btn-secondary"
-      disabled={Boolean(busy)} onClick={()=>{setEditing(false);setUrl(source.url||"")}}>
-      Cancelar</button>}
+     <button type="submit" className="btn btn-primary"
+      disabled={saving||!url.trim()||url.trim()===source?.url}>
+      <Save size={16}/>{saving?"Guardando…":"Guardar ruta"}</button>
     </div>
-   </form>}
-   <div className="fm-price-settings-actions" style={{marginTop:16}}>
-    <button type="button" className="btn btn-secondary"
-     disabled={Boolean(busy)||!source?.sourceConfigured||!canImport}
-     onClick={()=>void refresh()}><CloudDownload size={16}/>
-     {busy==="refresh"?"Actualizando…":"Actualizar ahora desde Dropbox"}</button>
-    {canImport&&<>
-     <input ref={fileRef} hidden type="file" accept=".csv,text/csv" onChange={upload}/>
-     <button type="button" className="btn btn-secondary" disabled={Boolean(busy)}
-      onClick={()=>fileRef.current?.click()}><Upload size={16}/>
-      {busy==="upload"?"Importando…":"Importar CSV manualmente"}</button>
-    </>}
-   </div>
-   <p className="fm-picking-settings-hint"><FileSpreadsheet size={15}/> La importación manual
-    es opcional y no cambia el origen de Dropbox guardado.</p>
+   </form>
+   {source?.sourceConfigured&&<div className="fm-picking-configured" role="status">
+    <p><Link2 size={16}/> <strong>Dropbox conectado para este cliente</strong></p>
+    <p>Última lectura correcta: <strong>{dateTime(source.lastImportedAt)}</strong></p>
+    <p>Última comprobación: <strong>{dateTime(source.lastCheckedAt||source.lastAttemptAt)}</strong></p>
+    {source.lastWarning&&<p className="fm-picking-source-warning">
+     <AlertTriangle size={15}/> {source.lastWarning}</p>}
+    {source.sourceError&&<p className="fm-picking-source-error">
+     <AlertTriangle size={15}/> {source.sourceError}
+     {" "}Los pedidos de la última lectura válida se mantienen.</p>}
+   </div>}
   </>}
-  {notice&&<p role="status" className="fm-settings-success">{notice}</p>}
+  {notice&&<p role="status" className="fm-settings-success"><CheckCircle2 size={15}/>{notice}</p>}
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}
  </section>;
 }

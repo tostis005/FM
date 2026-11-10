@@ -11,6 +11,53 @@ const writable=ctx=>managed(ctx)&&(ctx.role==="superadministrador"||
   ctx.profilePermissions.stock.includes("importar") ||
   ctx.profilePermissions.stock.includes("editar"));
 const pendingFetch=new Map();
+// La presencia de una URL no implica que la descarga ni el parseo hayan tenido éxito.
+// Se registran los intentos sin almacenar ni exponer el enlace privado en el reporte.
+const sourceDiagnostics=new Map();
+const SOURCE_INTERVAL_MS=15*60*1000;
+const SOURCE_RETRY_MS=60*1000;
+function safeSourceError(error){
+ const message=String(error?.message||"").replace(/https?:\/\/\S+/g,"[enlace oculto]");
+ if(/^(?:Falta la columna|Fila \d+|El fichero|El CSV|CSV |Dropbox |No hay|Solo se aceptan|Introduce un enlace|Demasiadas redirecciones|El enlace)/i.test(message))
+  return message.slice(0,300);
+ return "No se ha podido descargar o interpretar el fichero de Dropbox. Comprueba el enlace y las columnas en Ajustes.";
+}
+async function monitoredRefresh(pool,slug,options={}){
+ const lastAttemptAt=new Date().toISOString();
+ sourceDiagnostics.set(slug,{state:"updating",lastAttemptAt,error:null});
+ try{
+  const result=await refreshPendingSource(pool,slug,options);
+  sourceDiagnostics.set(slug,{state:"ok",lastAttemptAt,error:null});
+  return result;
+ }catch(error){
+  const safe=safeSourceError(error);
+  sourceDiagnostics.set(slug,{state:"error",lastAttemptAt,error:safe});
+  console.warn("PICKING_LIST_SOURCE",JSON.stringify({client:slug,state:"error",reason:safe}));
+  throw error;
+ }
+}
+async function readReportWithCurrentSource(pool,ctx,options={}){
+ const slug=ctx.client.slug,meta=await getMetadata(pool,slug);
+ const previous=sourceDiagnostics.get(slug);
+ const lastSuccess=meta.lastImportedAt?new Date(meta.lastImportedAt).getTime():0;
+ const now=Date.now();
+ if(meta.sourceConfigured&&(!lastSuccess||now-lastSuccess>SOURCE_INTERVAL_MS)&&
+    (!previous?.lastAttemptAt||now-new Date(previous.lastAttemptAt).getTime()>SOURCE_RETRY_MS)){
+  try{await monitoredRefresh(pool,slug)}catch{ /* diagnóstico en meta; conservar snapshot */ }
+ }
+ const report=await readPickingReport(pool,ctx,options);
+ const current=sourceDiagnostics.get(slug);
+ report.meta={...report.meta,
+  sourceState:!report.meta.sourceConfigured?"not_configured":
+   current?.state==="error"?"error":
+   report.meta.lastImportedAt?(report.meta.lineCount===0?"empty":"ok"):"pending",
+  sourceError:current?.error||null,
+  lastAttemptAt:current?.lastAttemptAt||null,
+  stockLocations:report.sites.length,
+  stockLocationsReady:report.sites.filter(s=>s.ready).length,
+  unmatchedProducts:report.rows.filter(r=>r.status==="sin_cn").length};
+ return report;
+}
 
 export async function savePendingSnapshot(pool,slug,lines,{origin="archivo",user=""}={}){
  if(!SCHEMA.test(slug)||!Array.isArray(lines)||lines.length>50000)
@@ -136,7 +183,6 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
  const entries=[...grouped.values()];
  const {sites,items}=await getInventory(pool,ctx,
   entries.map(x=>({key:x.key,cn:x.cn,sku:x.sku})));
- const locations=sites.filter(s=>s.kind==="farmacia");
  const report=entries.map(entry=>{
   const stock=sites.map(s=>{
    const inv=items.get(s.id+"|"+entry.key);
@@ -145,7 +191,7 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   });
   const wh=stock.find(s=>s.kind==="almacen"&&s.code==="ALMACEN");
   const pharm=stock.filter(s=>s.kind==="farmacia");
-  const matched=entry.cn||stock.some(s=>s.matched);
+  const matched=stock.some(s=>s.matched);
   const proposal=matched&&wh?allocatePending(entry.required,wh.stock,pharm,{reserve:1}):null;
   for(const s of stock)s.planned=proposal?
    (s.kind==="almacen"?proposal.warehouse||0:proposal.bySite[s.code]||0):0;
@@ -184,7 +230,7 @@ export function setupPickingList(app,pool,{requireTenant}){
   ["superadministrador","administrador","gestor"].includes(req.context?.role)?
    next():res.status(403).json({error:"Solo los administradores y gestores pueden configurar la fuente de Picking List"});
  app.get("/api/picking-list/report",...guard,allowed,async(req,res,next)=>{
-  try{res.json(await readPickingReport(pool,req.context,{
+  try{res.json(await readReportWithCurrentSource(pool,req.context,{
    channel:String(req.query.channel||"").slice(0,120)
   }));}catch(e){next(e);}
  });
@@ -208,14 +254,15 @@ export function setupPickingList(app,pool,{requireTenant}){
     "VALUES($1,$2,$3) ON CONFLICT(cliente_slug) DO UPDATE SET csv_url=EXCLUDED.csv_url,"+
     "actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now()",
     [req.context.client.slug,url,req.user.email]);
+   sourceDiagnostics.delete(req.context.client.slug);
    res.json({ok:true,sourceConfigured:true});
   }catch(e){if(e.message?.includes("Dropbox"))return res.status(400).json({error:e.message});
    next(e);}
  });
  app.post("/api/picking-list/refresh",...guard,allowed,write,async(req,res,next)=>{
-  try{res.json({ok:true,...await refreshPendingSource(pool,req.context.client.slug)});}
-  catch(e){res.status(502).json({error:e.message?.includes("Configura")?e.message:
-   "No se ha podido obtener el CSV desde Dropbox. Se mantienen los pedidos anteriores."});}
+  try{res.json({ok:true,...await monitoredRefresh(pool,req.context.client.slug)});}
+  catch(e){res.status(502).json({error:safeSourceError(e)+
+   " Se mantienen los pedidos anteriores."});}
  });
  app.post("/api/picking-list/import",...guard,allowed,write,
   express.text({type:["text/csv","text/plain"],limit:"8mb"}),async(req,res,next)=>{
@@ -237,8 +284,8 @@ export function startPickingListPolling(pool,interval=15*60*1000){
     "AND nullif(f.csv_url,'') IS NOT NULL "+
     "AND (f.ultima_importacion IS NULL OR f.ultima_importacion<now()-interval '15 minutes')");
    await Promise.all(rows.slice(0,20).map(async r=>{
-    try{await refreshPendingSource(pool,r.cliente_slug);}
-    catch{console.warn("Picking List: no se pudo actualizar un origen remoto.");}
+    try{await monitoredRefresh(pool,r.cliente_slug);}
+    catch{ /* Se publica el fallo en la respuesta del reporte. */ }
    }));
   }catch{console.warn("Picking List: no se pudo verificar la programación remota.");}
  };

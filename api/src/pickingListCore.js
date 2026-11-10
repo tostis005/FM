@@ -79,6 +79,9 @@ export function parsePendingCsv(text) {
   const quantityText=get(row,"quantity").replace(",",".");
   if(!orderId&&!sku&&!quantityText)continue;
   const quantity=Number(quantityText);
+  // Una línea Shopify con cantidad pendiente cero no es un error ni un pedido a preparar.
+  // Si todas las líneas tienen cero, el snapshot válido debe quedar vacío.
+  if(quantityText&&Number.isSafeInteger(quantity)&&quantity===0)continue;
   if(!orderId||orderId.length>90||!sku||sku.length>90||
    !quantityText||!Number.isSafeInteger(quantity)||quantity<=0||quantity>50000){
    const cause=!orderId?"pedido sin identificador":!sku?"producto sin SKU/CN":

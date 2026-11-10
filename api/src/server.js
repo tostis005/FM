@@ -47,6 +47,7 @@ import {setupStockSinRecepciones} from "./stockSinRecepciones.js";
 import {setupMasterSources} from "./masterSources.js";
 import {nameCommercialRows} from "./commercialNames.js";
 import {nameTicketArticleRows} from "./articleNames.js";
+import {synonymsReady,synonymMatchSQL} from "./synonymSearch.js";
 
 const { Pool } = pg;
 const {
@@ -328,9 +329,12 @@ app.get("/api/analytics/ventas",...analyticsAccess,async(req,res,next)=>{
     return res.status(403).json({error:"Farmacia no autorizada"});
   const ids=[...new Set(requested)];
   if(!ids.length)return res.json({monthly:[],series:[],granularity,products:[],totalProducts:0,totalArticles:0,from,to});
+  const eanEnabled=await synonymsReady(pool,req.context.client.schema,search);
+  const eanSearch=eanEnabled?" OR "+synonymMatchSQL(req.context.client.schema,
+   {pharmacy:"v.farmacia_codigo",article:"v.articulo_id",term:"$4"}):"";
   const where=salesJoin(req)+" WHERE "+salesPeriod+
     " AND f.id=ANY($3::int[]) AND btrim(v.articulo_id::text) <> '' "+
-    " AND ($4::text='' OR btrim(v.articulo_id::text) ILIKE '%' || $4 || '%' OR v.articulo_id::text ILIKE '%' || $4 || '%')";
+    " AND ($4::text='' OR btrim(v.articulo_id::text) ILIKE '%' || $4 || '%' OR v.articulo_id::text ILIKE '%' || $4 || '%'"+eanSearch+")";
   const params=[from,to,ids,search];
   const {rows:monthly}=await pool.query(
     "SELECT to_char(date_trunc('month',v.fecha),'YYYY-MM') AS month, "+

@@ -305,7 +305,7 @@ export function setupGenericosReales(app,pool,{requireTenantModule}){
    let groups=[...sums.values()].filter(g=>!term||(g.principle+" "+g.name+" "+(g.officialDescription||"")).toLocaleLowerCase("es").includes(term));
    if(term){
     const references=await resolveEANReferences(pool,req.context,f.ids,f.search);
-    const codes=references.filter(code=>/^\\d{6,7}$/.test(code));
+    const codes=references.filter(code=>/^\d{6,7}$/.test(code));
     const {rows:matched}=await pool.query(`SELECT DISTINCT dcpf FROM farmetrica.nomenclator_presentaciones
      WHERE cn ILIKE '%'||$1||'%' OR nombre ILIKE '%'||$1||'%' OR cn=ANY($2::text[])`,[term,codes]);
     const ids=new Set(matched.map(x=>x.dcpf));

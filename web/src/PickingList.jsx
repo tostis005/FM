@@ -139,6 +139,9 @@ export default function PickingList({clientSlug}){
  const sourceConfigured=Boolean(data?.meta?.sourceConfigured);
  const sourceError=data?.meta?.sourceError;
  const sourceEmpty=ready&&data?.totals?.products===0;
+ const issueHeaders=issues?Array.from({
+  length:Math.max(issues.headers?.length||0,...(issues.rows||[]).map(row=>row.cells?.length||0))
+ },(_,index)=>issues.headers?.[index]||"Columna "+(index+1)):[];
  return <div className="fm-picking-page">
   <ReportPageHeader title="Picking List"
    actions={<div className="fm-picking-header-buttons">
@@ -177,11 +180,11 @@ export default function PickingList({clientSlug}){
        originales del CSV y el motivo por el que se omitió cada fila.</p>
       <div className="fm-picking-issues-scroll">
        <table><thead><tr><th>Fila CSV</th><th>Motivo</th>
-        {issues.headers.map((name,i)=><th key={i}>{name||"Columna "+(i+1)}</th>)}
+        {issueHeaders.map((name,i)=><th key={i}>{name}</th>)}
        </tr></thead><tbody>
         {issues.rows.map((issue,i)=><tr key={issue.line+"-"+i}>
          <td>{issue.line}</td><td>{issue.reason}</td>
-         {issues.headers.map((_,index)=><td key={index}>{issue.cells?.[index]??""}</td>)}
+         {issueHeaders.map((_,index)=><td key={index}>{issue.cells?.[index]??""}</td>)}
         </tr>)}
        </tbody></table>
       </div>

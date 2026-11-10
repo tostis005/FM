@@ -50,7 +50,7 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/supplierWorkspace.js
           node --test api/src/supplierWorkspace.test.js
-          node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js api/src/profilePolicy.test.js
+          node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js api/src/profilePolicy.test.js api/src/profileManagementPolicy.test.js
           node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js
           node --check api/src/savingsAnalysis.js
           node --test api/src/savingsAnalysis.test.js

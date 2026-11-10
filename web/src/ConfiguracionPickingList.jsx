@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from "react";
 import {CloudDownload,FileSpreadsheet,Link2,Save,Upload} from "lucide-react";
 import "./moduleDemo.css";
+import "./pickingList.css";
 
 const dateTime=t=>t?new Date(t).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"Sin importar";
 async function request(clientSlug,path,options={}){
@@ -125,7 +126,7 @@ export default function ConfiguracionPickingList({clientSlug,role,permissions=nu
       {busy==="upload"?"Importando…":"Importar CSV manualmente"}</button>
     </>}
    </div>
-   <p className="fm-profile-hint"><FileSpreadsheet size={15}/> La importación manual
+   <p className="fm-picking-settings-hint"><FileSpreadsheet size={15}/> La importación manual
     es opcional y no cambia el origen de Dropbox guardado.</p>
   </>}
   {notice&&<p role="status" className="fm-settings-success">{notice}</p>}

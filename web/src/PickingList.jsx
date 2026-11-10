@@ -23,6 +23,17 @@ async function callApi(clientSlug,path,method="GET",data,contentType="applicatio
  return result;
 }
 function LocationIcon({kind}){return kind==="almacen"?<Warehouse size={15}/>:<Store size={15}/>;}
+const looksLikeEan=value=>/^\d{8,14}$/.test(String(value||""));
+const eansFor=row=>[...new Set([...(row.eans||[]),
+ ...(looksLikeEan(row.sku)?[row.sku]:[])])];
+function publicError(error){
+ const message=String(error||"");
+ if(/Falta la columna|cabeceras|columnas obligatorias/i.test(message))
+  return "El fichero de pedidos tiene columnas pendientes de revisar. Consulta Ajustes.";
+ if(/No hay líneas válidas|Fila \d+|cantidad no válida/i.test(message))
+  return "Algunos registros del fichero de pedidos necesitan revisión. Consulta los detalles en Ajustes.";
+ return "No se ha podido actualizar la información de los pedidos. Se conservan los datos anteriores.";
+}
 function Status({value}){return <span className={"fm-picking-status fm-picking-"+value}>
  {value==="cubierto"?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>}
  {STATUS[value]||value}
@@ -84,7 +95,7 @@ export default function PickingList({clientSlug}){
  const filtered=all.filter(row=>{
   if(status&&row.status!==status)return false;
   const term=search.trim().toLocaleLowerCase("es");
-  if(term&&!([row.cn,row.sku,row.name,...row.details.map(d=>d.orderName)]
+  if(term&&!([row.cn,row.sku,row.name,...eansFor(row),...row.details.map(d=>d.orderName)]
    .join(" ").toLocaleLowerCase("es").includes(term)))return false;
   if(selectedSite&&assignedOnly&&!row.stock.some(s=>s.id===selectedSite.id&&s.planned>0))
    return false;
@@ -98,11 +109,16 @@ export default function PickingList({clientSlug}){
  const tableSites=selectedSite?[selectedSite]:(data?.sites||[]);
  const siteStock=(row,id)=>row.stock.find(s=>String(s.id)===String(id));
  const columns=[
-  {key:"product",label:"Producto / CN",value:row=>[row.name,row.cn,row.sku].filter(Boolean).join(" "),
+  {key:"product",label:"Producto / CN / EAN",
+   value:row=>[row.name,row.cn,...eansFor(row),row.sku].filter(Boolean).join(" "),
    render:row=><div className="fm-picking-product">
     <strong>{row.name||"Producto sin descripción"}</strong>
-    <span>{row.cn?"CN "+row.cn:"SKU "+row.sku}</span></div>,
-   exportValue:row=>(row.cn||row.sku)+" · "+(row.name||"")},
+    {row.cn&&<span>CN {row.cn}</span>}
+    {eansFor(row).map(ean=><span key={ean}>EAN {ean}</span>)}
+    {!row.cn&&!eansFor(row).length&&<span>Código {row.sku}</span>}
+   </div>,
+   exportValue:row=>[row.cn?"CN "+row.cn:"",
+    ...eansFor(row).map(ean=>"EAN "+ean),row.name].filter(Boolean).join(" · ")},
   {key:"required",label:"Unidades totales",value:row=>row.required,
    render:row=><strong>{integer(row.required)}</strong>},
   ...tableSites.map(site=>({
@@ -138,7 +154,8 @@ export default function PickingList({clientSlug}){
  ];
  function expandedDetails(row){
   return <div className="fm-picking-details-panel">
-   <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:"el SKU "+row.sku}</strong>
+   <strong>Pedidos que contienen {row.cn?"el CN "+row.cn:
+    eansFor(row).length?"el EAN "+eansFor(row)[0]:"el código "+row.sku}</strong>
    <div className="fm-picking-details">
     {row.details.map((order,i)=><div key={order.orderId+"-"+i}>
      <span>{order.orderName||order.orderId}</span><span>{order.channel}</span>
@@ -161,19 +178,20 @@ export default function PickingList({clientSlug}){
  return <div className="fm-picking-page">
   <ReportPageHeader title="Picking List"/>
   {error&&<div className="fm-picking-alert" role="alert">
-   <AlertTriangle size={17}/>{error}
+   <AlertTriangle size={17}/>{publicError(error)}
    {" "}La aplicación volverá a comprobarlo automáticamente.
   </div>}
   {sourceError&&<div className="fm-picking-alert" role="alert">
    <AlertTriangle size={17}/>
-   <span><strong>Dropbox configurado, pero no se han podido importar los pedidos.</strong>
-    {" "+sourceError} Se conservan los datos de la última importación válida.
-    Revisa la incidencia en Configuración → Ajustes. El sistema volverá a intentarlo automáticamente.</span>
+   <span><strong>No se han podido actualizar los pedidos pendientes.</strong>
+    {" "+publicError(sourceError)}
+    {" "}Puedes revisar el origen de pedidos en Ajustes. Se mantendrán los datos anteriores
+    y el sistema volverá a intentarlo automáticamente.</span>
   </div>}
   {data?.meta?.lastWarning&&<section className="fm-picking-warning-block">
    <div className="fm-picking-warning" role="alert">
     <AlertTriangle size={17}/>
-    <span>{data.meta.lastWarning}
+    <span>{String(data.meta.lastWarning).replaceAll("SKU/CN","CN/EAN")}
      {" "}Los indicadores incluyen únicamente las líneas válidas.</span>
     <button type="button" className="btn btn-secondary btn-sm"
      aria-expanded={issuesOpen} onClick={toggleIssues}>
@@ -184,7 +202,7 @@ export default function PickingList({clientSlug}){
    {issuesOpen&&<div className="card fm-picking-issues">
     <h2>Filas del CSV que no se han importado</h2>
     {issuesError&&<p role="alert">{issuesError}</p>}
-    {issuesBusy&&<LoadingStatus label="Cargando filas del CSV…"/>}
+    {issuesBusy&&<LoadingStatus label="Cargando registros con incidencias…"/>}
     {!issuesBusy&&issues&&<>
      {issues.total===0?<p>El detalle de esta importación anterior no está disponible.
       Se conservará a partir de la próxima lectura automática del fichero.</p>:<>
@@ -195,7 +213,7 @@ export default function PickingList({clientSlug}){
         {issueHeaders.map((name,i)=><th key={i}>{name}</th>)}
        </tr></thead><tbody>
         {issues.rows.map((issue,i)=><tr key={issue.line+"-"+i}>
-         <td>{issue.line}</td><td>{issue.reason}</td>
+         <td>{issue.line}</td><td>{String(issue.reason).replaceAll("SKU/CN","CN/EAN")}</td>
          {issueHeaders.map((_,index)=><td key={index}>{issue.cells?.[index]??""}</td>)}
         </tr>)}
        </tbody></table>
@@ -214,17 +232,16 @@ export default function PickingList({clientSlug}){
     </>}
    </div>}
   </section>}
-  {loading&&!data?<LoadingStatus label="Leyendo pedidos de Dropbox y comprobando existencias…"/>:
+  {loading&&!data?<LoadingStatus label="Cargando pedidos pendientes y existencias…"/>:
    !ready?<section className="card fm-picking-empty"><Warehouse size={28}/>
-    <h2>{sourceConfigured?"Aún no se han importado pedidos de Dropbox":
-     "Conecta primero el fichero de pedidos"}</h2>
+    <h2>{sourceConfigured?"Aún no se han cargado pedidos pendientes":
+     "No hay una fuente de pedidos configurada"}</h2>
     <p>{sourceConfigured?
      "El enlace está guardado, pero todavía no existe una importación correcta. Consulta el motivo indicado arriba. Farmétrica reintentará la lectura automáticamente.":
      "La fuente de pedidos se establece en Configuración → Ajustes. Después, la importación se realiza automáticamente, sin subir archivos."}</p>
    </section>:<>
    {sourceEmpty&&<div className="fm-picking-success" role="status">
-    <CheckCircle2 size={17}/> El fichero de Dropbox se ha leído correctamente,
-    pero no contiene pedidos pendientes. No hay unidades que preparar.
+    <CheckCircle2 size={17}/> No hay pedidos pendientes para preparar.
    </div>}
    <div className="fm-picking-kpis">
     <div className="card"><span>Pedidos totales</span><strong>{integer(data?.totals.lines??data?.meta?.lineCount)}</strong>
@@ -261,8 +278,8 @@ export default function PickingList({clientSlug}){
        {(data?.channels||[]).map(x=><option key={x} value={x}>{x}</option>)}
       </select>
      </label>
-     <label>Buscar CN, SKU, producto o pedido
-      <input type="search" value={search} placeholder="Código nacional, descripción, #pedido…"
+     <label>Buscar CN, EAN, producto o pedido
+      <input type="search" value={search} placeholder="Código nacional, EAN, descripción, #pedido…"
        onChange={e=>setSearch(e.target.value)}/>
      </label>
      <label>Estado de la propuesta

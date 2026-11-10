@@ -76,15 +76,22 @@ try{
  await page.getByText("Unidades totales").first().waitFor();
  await page.getByText("Total unidades disponibles").waitFor();
  await page.getByText("Unidades pendientes").first().waitFor();
- const headers=await page.locator(".fm-picking-table thead th").allTextContents();
- assert.ok(headers.some(x=>x.trim()==="Stock ABA"),
-  "Se esperaba la columna Stock ABA: "+JSON.stringify(headers));
- assert.ok(headers.some(x=>x.trim()==="Unidades ABA"),
-  "Se esperaba la columna Unidades ABA: "+JSON.stringify(headers));
- const lastStockIndex=headers.findLastIndex(x=>x.trim().startsWith("Stock "));
- const firstUnitsIndex=headers.findIndex(x=>x.trim().startsWith("Unidades ")&&x.trim()!=="Unidades totales");
- assert.ok(firstUnitsIndex>lastStockIndex,
-  "Se esperaba agrupar stocks antes de unidades: "+JSON.stringify(headers));
+ const groups=await page.locator(".fm-picking-grouped thead .fm-smart-group-row th").allTextContents();
+ assert.ok(groups.some(x=>x.trim()==="Stock"),JSON.stringify(groups));
+ assert.ok(groups.some(x=>x.trim()==="Unidades"),JSON.stringify(groups));
+ const headers=await page.locator(".fm-picking-grouped thead th").allTextContents();
+ assert.ok(headers.some(x=>x.trim()==="ALM"),"Falta alias almacén: "+JSON.stringify(headers));
+ assert.ok(headers.some(x=>x.trim()==="ABA"),"Falta farmacia ABA: "+JSON.stringify(headers));
+ assert.equal(headers.some(x=>x.trim()==="Líneas"),false,"Se elimina columna Líneas");
+ assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
+ const sort=page.getByRole("button",{name:"Ordenar Stock ABA"});
+ await sort.click();
+ await page.getByRole("button",{name:"Ordenar Producto / CN"}).click();
+ const filter=page.getByLabel("Buscar en Producto / CN");
+ await filter.fill("inexistente");
+ await page.getByText("No hay productos con estos filtros").waitFor();
+ await filter.fill("");
+ await page.getByText("Producto A",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ver más"}).click();
  await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
  const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
@@ -100,6 +107,8 @@ try{
  await page.getByRole("tab",{name:"Farmacia Abadía"}).click();
  await page.getByRole("heading",{name:"Preparación · Farmacia Abadía"}).waitFor();
  await page.getByText("3 uds. propuestas en Farmacia Abadía").waitFor();
+ assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
+ assert.equal(await page.locator(".fm-picking-grouped thead th").allTextContents().then(x=>x.includes("Líneas")),false);
  assert.equal(jsErrors.length,0,jsErrors.join("\n"));
  console.log("OK Picking List: indicadores por línea, columnas separadas y filas CSV originales visibles");
 }finally{await browser.close();}

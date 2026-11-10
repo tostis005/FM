@@ -193,6 +193,20 @@ try
     if (WarehouseSource.RedirectDatabase("SELECT * FROM {{TABLE:dbo.Sinonimo}}", "Farmatic") !=
         "SELECT * FROM {{TABLE:dbo.Sinonimo}}")
         throw new Exception("No modificar las macros SQL comunes.");
+    var fallbackConfig = new AppConfig();
+    fallbackConfig.Pharmacies.Add(new Pharmacy
+    {
+        Code = "F001", Name = "Farmacia Central", ConnectionMode = "direct", Database = "Farmatic"
+    });
+    if (!WarehouseSource.EnsureFromAvadia(fallbackConfig).Created ||
+        fallbackConfig.Pharmacies.Count(p => p.Code == "ALMACEN") != 1)
+        throw new Exception("Un único origen directo Farmatic también debe reconocerse sin nombre Avadía.");
+    var ambiguousConfig = new AppConfig();
+    ambiguousConfig.Pharmacies.Add(new Pharmacy { Code = "F001", ConnectionMode = "direct", Database = "Farmatic" });
+    ambiguousConfig.Pharmacies.Add(new Pharmacy { Code = "F002", ConnectionMode = "direct", Database = "Farmatic" });
+    if (WarehouseSource.EnsureFromAvadia(ambiguousConfig).Changed ||
+        ambiguousConfig.Pharmacies.Count != 2)
+        throw new Exception("No adivinar cuál es Avadía cuando hay dos orígenes directos.");
     Console.WriteLine("OK: almacén directo, fuentes reales, sinónimos, SQL y configuración idempotente.");
     Console.WriteLine("OK: caída VPN sin reintentos, horario diario, zona farmacia, DST y estado persistido.");
     Console.WriteLine("OK: /login and /config reads do not wait behind history writes; snapshot is atomic.");

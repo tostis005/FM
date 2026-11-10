@@ -23,8 +23,9 @@ explícitas Farmatic.dbo se adaptan a Almacen.dbo.
 
 La migración es aditiva y repetible: no modifica las farmacias originales,
 no sobrescribe fuentes del almacén ya existentes y solo añade las fuentes
-que falten en reinicios posteriores. Si Avadía no se reconoce de forma
-inequívoca o no utiliza conexión directa, no se crea el almacén automáticamente.
+que falten en reinicios posteriores. Si no coincide el nombre, también se reconoce el único origen
+Farmatic directo con base Farmatic. Si existen varios candidatos o falta
+la conexión directa, no se crea el almacén automáticamente.
 
 Antes de actualizar, realizar copia segura de ProgramData/FarmetricaSync.
 Tras reiniciar, comprobar en Farmacias la conexión y en Consultas SQL

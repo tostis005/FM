@@ -18,14 +18,21 @@ public static class WarehouseSource
 
     public static Result EnsureFromAvadia(AppConfig config)
     {
-        var sources = config.Pharmacies.Where(p =>
+        var direct = config.Pharmacies.Where(p =>
             p.SystemType.Equals("farmatic", StringComparison.OrdinalIgnoreCase) &&
             p.ConnectionMode.Equals("direct", StringComparison.OrdinalIgnoreCase) &&
-            (Fold(p.Code).Contains("avadia", StringComparison.Ordinal) ||
-             Fold(p.Name).Contains("avadia", StringComparison.Ordinal))).ToList();
-        // Evitar adivinar qué instalación se debe clonar.
-        if (sources.Count != 1) return default;
-        var avadia = sources[0];
+            !p.Code.Equals(Code, StringComparison.OrdinalIgnoreCase) &&
+            !Fold(p.Name).Equals("almacen", StringComparison.Ordinal)).ToList();
+        var named = direct.Where(p =>
+            Fold(p.Code).Contains("avadia", StringComparison.Ordinal) ||
+            Fold(p.Name).Contains("avadia", StringComparison.Ordinal)).ToList();
+        // Si el nombre local es distinto, solo aceptar el único origen directo
+        // con base Farmatic; nunca seleccionar entre varias conexiones.
+        Pharmacy? avadia = named.Count == 1 ? named[0] :
+            named.Count == 0 && direct.Count == 1 &&
+            direct[0].Database.Equals("Farmatic", StringComparison.OrdinalIgnoreCase)
+                ? direct[0] : null;
+        if (avadia is null) return default;
 
         var targets = config.Pharmacies.Where(p =>
             p.Code.Equals(Code, StringComparison.OrdinalIgnoreCase) ||

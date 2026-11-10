@@ -93,7 +93,7 @@ try{
  assert.ok(issueCells.includes("producto sin SKU/CN"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("texto, completo"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("cantidad no válida"),JSON.stringify(issueCells));
- await page.getByRole("button",{name:"Ocultar"}).click();
+ await page.getByRole("button",{name:"Ocultar",exact:true}).click();
  await page.getByRole("button",{name:"Detalle"}).click();
  await page.getByText("#1001").waitFor();
  await page.getByText("#1002").waitFor();

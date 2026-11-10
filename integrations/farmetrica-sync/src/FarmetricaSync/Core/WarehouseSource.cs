@@ -24,8 +24,10 @@ public static class WarehouseSource
             !p.Code.Equals(Code, StringComparison.OrdinalIgnoreCase) &&
             !Fold(p.Name).Equals("almacen", StringComparison.Ordinal)).ToList();
         var named = direct.Where(p =>
+            p.Code.Equals("ABA", StringComparison.OrdinalIgnoreCase) ||
             Fold(p.Code).Contains("avadia", StringComparison.Ordinal) ||
-            Fold(p.Name).Contains("avadia", StringComparison.Ordinal)).ToList();
+            Fold(p.Name).Contains("avadia", StringComparison.Ordinal) ||
+            Fold(p.Name).Contains("abadia", StringComparison.Ordinal)).ToList();
         // Si el nombre local es distinto, solo aceptar el único origen directo
         // con base Farmatic; nunca seleccionar entre varias conexiones.
         Pharmacy? avadia = named.Count == 1 ? named[0] :

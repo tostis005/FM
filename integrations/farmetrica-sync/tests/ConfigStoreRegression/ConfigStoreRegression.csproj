@@ -13,5 +13,7 @@
     <Compile Include="../../src/FarmetricaSync/Core/Validation.cs" Link="Validation.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/SynonymJobs.cs" Link="SynonymJobs.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/WarehouseSource.cs" Link="WarehouseSource.cs" />
+    <Compile Include="../../src/FarmetricaSync/Core/UnusedAmpSource.cs" Link="UnusedAmpSource.cs" />
+    <Compile Include="../../src/FarmetricaSync/Core/PortableConfigTransfer.cs" Link="PortableConfigTransfer.cs" />
   </ItemGroup>
 </Project>

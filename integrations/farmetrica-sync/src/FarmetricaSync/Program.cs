@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FarmetricaSync.Connectors;
 using FarmetricaSync.Core;
@@ -166,6 +167,46 @@ app.MapPost("/api/login", async (PasswordRequest r, HttpContext ctx, ConfigStore
 
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapPost("/logout", async (HttpContext ctx) => { await ctx.SignOutAsync(); return Results.Ok(new { ok = true }); });
+
+// Copia completa portable: credenciales descifradas solamente en memoria y
+// cifradas en el fichero final con una contraseña que el usuario conserva.
+api.MapPost("/configuration/export", (TransferPasswordRequest r, ConfigStore store, Secrets secrets) =>
+{
+    var bytes = PortableConfigTransfer.Export(store.Read(c => c), r.Password, secrets.Decrypt);
+    string name = "farmetrica-sync-config-" +
+        DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + ".fmsyncbak";
+    return Results.File(bytes, "application/octet-stream", name);
+});
+api.MapPost("/configuration/import", async (HttpRequest request, ConfigStore store,
+    Secrets secrets, SyncWorker worker, CancellationToken ct) =>
+{
+    if (!request.HasFormContentType || request.ContentLength > 17 * 1024 * 1024)
+        return Results.BadRequest(new { error = "Selecciona un fichero de copia válido (máximo 16 MB)." });
+    var form = await request.ReadFormAsync(ct);
+    var file = form.Files.GetFile("backup");
+    string password = form["password"].ToString();
+    if (file is null || file.Length < 54 || file.Length > 16 * 1024 * 1024)
+        return Results.BadRequest(new { error = "Selecciona un fichero de copia válido (máximo 16 MB)." });
+    if (!string.Equals(form["confirm"].ToString(), "REEMPLAZAR", StringComparison.Ordinal))
+        return Results.BadRequest(new { error = "Debes confirmar que se sustituirá la configuración actual." });
+    byte[] bytes;
+    await using (var ms = new MemoryStream((int)file.Length))
+    {
+        await file.CopyToAsync(ms, ct);
+        bytes = ms.ToArray();
+    }
+    var incoming = PortableConfigTransfer.Import(bytes, password, secrets.Encrypt);
+    using var hold = worker.TryPauseForRestore();
+    if (hold is null)
+        return Results.Conflict(new { error = "Hay consultas en ejecución o pendientes. Termínalas antes de importar la copia." });
+    store.Change(c => PortableConfigTransfer.RestoreInto(c, incoming));
+    return Results.Ok(new {
+        ok = true, origins = incoming.Pharmacies.Count(p => !p.Code.Equals("AMP", StringComparison.OrdinalIgnoreCase)),
+        jobs = incoming.Jobs.Count, includesCheckpoints = true,
+        note = "Configuración restaurada. Revisa conexiones y rutas SSH antes de sincronizar; no dejes dos equipos activos a la vez."
+    });
+});
+
 api.MapGet("/config", (ConfigStore store, SyncWorker worker) =>
 {
     var c = store.Read(x => x);
@@ -320,6 +361,8 @@ api.MapPut("/mail", (MailRequest r, ConfigStore store, Secrets secrets) =>
 
 static void ValidatePharmacy(PharmacyRequest r)
 {
+    if (string.Equals(r.Code?.Trim(), "AMP", StringComparison.OrdinalIgnoreCase))
+        throw new ArgumentException("El origen AMP está retirado y no se puede volver a crear.");
     if (!Regex.IsMatch(r.Code ?? "", "^[a-zA-Z0-9_-]{1,40}$") || string.IsNullOrWhiteSpace(r.Name))
         throw new ArgumentException("Código (hasta 40 letras/números/_/-) y nombre son obligatorios.");
     if (!Regex.IsMatch(r.CountryCode ?? "", "^[A-Z]{2}$", RegexOptions.IgnoreCase))
@@ -768,3 +811,6 @@ api.MapPost("/jobs/{id:guid}/run", (Guid id, ConfigStore store, SyncWorker worke
 // Recarga de pestañas con URL propia sin perder la sección activa.
 app.MapFallbackToFile("index.html");
 app.Run();
+
+// Petición protegida por sesión y cabecera CSRF; no almacenar la clave de traslado.
+public sealed record TransferPasswordRequest(string Password);

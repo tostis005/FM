@@ -55,26 +55,26 @@ try{
  await page.goto("http://127.0.0.1:4175/ajustes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor({timeout:15000});
  await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor();
- await page.getByText("Dropbox configurado:",{exact:false}).first().waitFor();
+ await page.getByText("Dropbox conectado para este cliente").waitFor();
  assert.equal(stored,initial);
  assert.equal(writes.filter(x=>x.method==="PUT").length,0,
-  "Abrir Ajustes nunca modifica el enlace de Dropbox");
- await page.getByRole("button",{name:"Cambiar enlace de Dropbox"}).click();
- const field=page.getByLabel("Enlace actual del CSV en Dropbox");
- assert.equal(await field.inputValue(),initial,
-  "Ajustes recupera el enlace guardado y no exige volver a introducirlo");
- await page.getByRole("button",{name:"Cancelar"}).click();
- assert.equal(stored,initial);
- const csv="order_id,quantity,sku\n1000,2,123456\n";
- await page.locator('.fm-picking-settings input[type="file"]').setInputFiles({
-  name:"pedidospendientes.csv",mimeType:"text/csv",buffer:Buffer.from(csv)});
- await page.getByText(/Importadas 1 líneas del CSV/).waitFor();
- assert.ok(writes.some(w=>w.path==="/api/picking-list/import"&&w.contents===csv));
- assert.equal(stored,initial,"Importar un CSV manual no cambia la ruta permanente");
- await page.getByRole("button",{name:"Actualizar ahora desde Dropbox"}).click();
- await page.getByText(/Pedidos pendientes actualizados desde Dropbox/).waitFor();
- assert.ok(writes.some(w=>w.path==="/api/picking-list/refresh"));
- assert.equal(stored,initial);
+  "Abrir Ajustes no cambia el enlace");
+ const field=page.getByLabel("Enlace del fichero de pedidos en Dropbox");
+ assert.equal(await field.inputValue(),initial);
+ assert.equal(await page.locator('.fm-picking-settings input[type="file"]').count(),0);
+ assert.equal(await page.getByRole("button",{name:"Actualizar ahora desde Dropbox"}).count(),0);
+ assert.equal(await page.getByRole("button",{name:"Importar CSV manualmente"}).count(),0);
+ assert.equal(await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).count(),0);
+ assert.equal(await page.getByRole("button",{name:"Actualizar",exact:true}).count(),0);
+ const changed="https://www.dropbox.com/scl/fi/new123/pedidos.csv?rlkey=new&dl=1";
+ await field.fill(changed);
+ await page.getByRole("button",{name:"Guardar ruta"}).click();
+ await page.getByText(/Ruta guardada/).waitFor();
+ assert.equal(stored,changed);
+ assert.equal(writes.filter(w=>w.method==="PUT").length,1);
+ assert.equal(writes.filter(w=>w.path==="/api/picking-list/refresh"||
+  w.path==="/api/picking-list/import").length,0,
+  "Solo debe guardarse la URL; sin subidas ni lecturas manuales");
  assert.equal(errors.length,0,errors.join("\n"));
- console.log("OK Picking List: nombre corto, fichero solo en Ajustes y Dropbox actual persistente");
+ console.log("OK Picking List: solo ruta y guardar; sin botones de importación ni refresco manual");
 }finally{await browser.close();}

@@ -1,7 +1,7 @@
 // Picking List PharmaWow: la fuente externa es un snapshot CSV, no una
 // contabilidad ni una confirmación de preparación física de pedidos.
 export function normalizeSku(value) {
- return String(value??"").replace(/^\uFEFF/,"").trim().replace(/^["']|["']$/g,"");
+ return String(value??"").replace(/^\uFEFF/,"").trim().replace(/^["']|["']$/g,"").replace(/^(\d+)\.0+$/, "$1");
 }
 export function skuToCn(value) {
  const sku=normalizeSku(value);
@@ -12,7 +12,16 @@ export function parseCsvRecords(text,{maxRows=50000}={}){
   throw new Error("El CSV supera el límite permitido (8 MB).");
  const stripped=text.replace(/^\uFEFF/,"");
  const firstLine=stripped.split(/\r?\n/,1)[0]||"";
- const sep=(firstLine.match(/;/g)||[]).length>(firstLine.match(/,/g)||[]).length?";":",";
+ // Las comas entrecomilladas no cuentan como delimitadores.
+ const delimiters=[",",";","\t"],counts=Object.fromEntries([",",";","\t"].map(d=>[d,0]));
+ let inside=false;
+ for(let i=0;i<firstLine.length;i++){
+  if(firstLine[i]==='"'){
+   if(inside&&firstLine[i+1]==='"'){i++;continue;}
+   inside=!inside;
+  }else if(!inside&&Object.hasOwn(counts,firstLine[i]))counts[firstLine[i]]++;
+ }
+ const sep=delimiters.sort((a,b)=>counts[b]-counts[a])[0];
  const rows=[];let field="",cells=[],quoted=false;
  function finishRow(){
   cells.push(field);field="";
@@ -42,35 +51,67 @@ export function parsePendingCsv(text) {
  const raw=parseCsvRecords(text);
  if(!raw.length)throw new Error("El fichero no contiene cabeceras.");
  const headers=raw[0].map(key);
- const col=name=>headers.indexOf(name);
- for(const required of ["order_id","quantity","sku"]){
-  if(col(required)<0)throw new Error("Falta la columna obligatoria "+required+".");
+ const col=(...names)=>names.map(x=>headers.indexOf(x)).find(x=>x>=0)??-1;
+ const fields={
+  order:col("order_id","id_pedido","pedido_id","id_orden","order_number","numero_pedido","numero_de_pedido","order","name","pedido"),
+  orderName:col("order_name","nombre_pedido","nombre_del_pedido","numero_pedido","order_number","name"),
+  quantity:col("quantity","lineitem_quantity","line_item_quantity","line_items_quantity",
+   "pending_quantity","remaining_quantity","fulfillable_quantity","cantidad","unidades","cantidad_pendiente","unidades_pendientes"),
+  sku:col("sku","lineitem_sku","line_item_sku","line_items_sku","codigo_nacional","codigo",
+   "product_sku","variant_sku","referencia","ean","codigo_ean"),
+  date:col("order_created_at","created_at","fecha_pedido","fecha_de_pedido","created"),
+  channel:col("order_source_name","source_name","source","canal","origen","origen_pedido","sales_channel"),
+  title:col("title","product_title","item_name","lineitem_name","line_item_name","product_name",
+   "descripcion","description","producto","nombre_producto"),
+  variant:col("variant_id","variant","id_variante")
+ };
+ for(const [name,label] of [["order","order_id / nombre del pedido"],["quantity","quantity / cantidad"],
+  ["sku","sku / código de producto"]]){
+  if(fields[name]<0)throw new Error("Falta la columna obligatoria "+label+
+   ". Cabeceras encontradas: "+headers.slice(0,14).join(", ")+".");
  }
- const get=(row,name)=>col(name)<0?"":String(row[col(name)]??"").trim();
- const lines=[];
+ const get=(row,name)=>fields[name]<0?"":String(row[fields[name]]??"").trim();
+ const lines=[],skipped=[];
  for(let i=1;i<raw.length;i++){
-  const row=raw[i];
-  const orderId=get(row,"order_id");
+  const row=raw[i],lineNumber=i+1;
+  const orderId=get(row,"order")||get(row,"orderName");
   const sku=normalizeSku(get(row,"sku"));
   const quantityText=get(row,"quantity").replace(",",".");
   if(!orderId&&!sku&&!quantityText)continue;
   const quantity=Number(quantityText);
+  // Una línea Shopify con cantidad pendiente cero no es un error ni un pedido a preparar.
+  // Si todas las líneas tienen cero, el snapshot válido debe quedar vacío.
+  if(quantityText&&Number.isSafeInteger(quantity)&&quantity===0)continue;
   if(!orderId||orderId.length>90||!sku||sku.length>90||
-   !Number.isSafeInteger(quantity)||quantity<=0||quantity>50000)
-   throw new Error("Fila "+(i+1)+": pedido, SKU o cantidad incorrectos.");
-  const date=get(row,"order_created_at");
+   !quantityText||!Number.isSafeInteger(quantity)||quantity<=0||quantity>50000){
+   const cause=!orderId?"pedido sin identificador":!sku?"producto sin SKU/CN":
+    !Number.isSafeInteger(quantity)||quantity<0||quantity>50000?"cantidad no válida":
+    quantity===0?"cantidad cero": "código o pedido demasiado largo";
+   skipped.push("Fila "+lineNumber+": "+cause);
+   continue;
+  }
+  const date=get(row,"date");
   const parsedDate=date&&Number.isFinite(Date.parse(date))?new Date(date).toISOString():null;
-  const source=get(row,"order_source_name");
-  const name=get(row,"title")||get(row,"product_title")||get(row,"item_name");
+  const source=get(row,"channel");
+  const name=get(row,"title");
   lines.push({
-   orderId,orderName:get(row,"order_name").slice(0,120),
+   orderId,orderName:get(row,"orderName").slice(0,120)||orderId.slice(0,120),
    createdAt:parsedDate,channel:source.slice(0,120),
    quantity,sku,cn:skuToCn(sku),
-   variantId:get(row,"variant_id").slice(0,90),
+   variantId:get(row,"variant").slice(0,90),
    title:name.slice(0,300)
   });
  }
- // Un CSV con cabecera válida y sin líneas borra los pendientes antiguos.
+ if(skipped.length&&lines.length===0)
+  throw new Error("No hay líneas válidas para importar. "+skipped[0]+
+   (skipped.length>1?" ("+skipped.length+" filas con incidencias).":""));
+ // No perder todos los pedidos por una fila sin referencia o con cantidad cero.
+ // Advertir de la importación parcial: nunca declararla completa.
+ Object.defineProperty(lines,"warnings",{enumerable:false,value:skipped.length?[
+  skipped.length+" filas no se han podido incluir en la preparación. "+
+  skipped.slice(0,3).join("; ")+(skipped.length>3?"…":"")
+ ]:[]});
+ Object.defineProperty(lines,"skippedCount",{enumerable:false,value:skipped.length});
  return lines;
 }
 const n=value=>Number.isFinite(Number(value))?Math.max(0,Math.trunc(Number(value))):0;
@@ -181,7 +222,15 @@ export async function downloadDropboxCsv(raw,{fetchFn=fetch}={}){
     chunks.push(value);
    }
   }finally{reader.releaseLock();}
-  const result=Buffer.concat(chunks,bytes).toString("utf8");
+  const binary=Buffer.concat(chunks,bytes);
+  let result;
+  if(binary[0]===0xff&&binary[1]===0xfe)result=new TextDecoder("utf-16le").decode(binary);
+  else if(binary[0]===0xfe&&binary[1]===0xff)
+   result=new TextDecoder("utf-16be").decode(binary);
+  else{
+   result=new TextDecoder("utf-8").decode(binary);
+   if(result.includes("\uFFFD"))result=new TextDecoder("windows-1252").decode(binary);
+  }
   if(/^\s*<(?:!doctype|html|head)\b/i.test(result))
    throw new Error("Dropbox ha devuelto una página HTML en lugar del CSV.");
   return result;

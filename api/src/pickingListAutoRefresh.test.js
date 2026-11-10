@@ -7,7 +7,7 @@ const realCsv="order_id,order_name,order_created_at,order_source_name,quantity,s
  "1001,#1001,2026-11-09T12:00:00Z,web,5,123456,Producto A\n"+
  "1002,#1002,2026-11-09T13:00:00Z,web,3,123456,Producto A\n";
 
-function fixture({initial=[],configured=true,importedAt=null,warehouse=4,matched=true}={}){
+function fixture({initial=[],configured=true,importedAt=null,sourceUpdatedAt=null,warehouse=4,matched=true}={}){
  let sourceImportedAt=importedAt,snapshot=initial.slice(),sourceLineCount=initial.length;
  let nWrites=0,nFetch=0;
  const tx={
@@ -41,7 +41,8 @@ function fixture({initial=[],configured=true,importedAt=null,warehouse=4,matched
    if(sql.includes('SELECT ultima_importacion AS "lastImportedAt"'))
     return {rows:configured||sourceImportedAt?[{
      sourceConfigured:configured,lastImportedAt:sourceImportedAt,
-     lineCount:sourceLineCount,origin:sourceImportedAt?"dropbox":null}]:[]};
+     lineCount:sourceLineCount,origin:sourceImportedAt?"dropbox":null,
+     sourceUpdatedAt:sourceUpdatedAt||sourceImportedAt}]:[]};
    if(sql==="SELECT csv_url FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1")
     return {rows:[{csv_url:configured?url:null}]};
    if(sql.includes("FROM farmetrica.picking_list_pendientes")&&sql.includes("ORDER BY linea"))
@@ -127,4 +128,17 @@ test("Un CN sin equivalencia Farmatic no se marca falsamente como asignable",asy
  assert.equal(report.rows[0].status,"sin_cn");
  assert.equal(report.rows[0].allocated,null);
  assert.equal(report.rows[0].stock.every(s=>s.planned===0),true);
+});
+
+
+test("Al cambiar la URL guardada, la próxima visita relee Dropbox aunque el snapshot sea reciente",async()=>{
+ const previous=[{orderId:"501",orderName:"#501",createdAt:null,channel:"web",
+  quantity:2,sku:"123456",cn:"123456",title:"Pedido anterior"}];
+ const f=fixture({initial:previous,importedAt:"2026-11-10T15:00:00Z",
+  sourceUpdatedAt:"2026-11-10T15:10:00Z"});
+ // Fecha de importación en el futuro del fixture para evitar depender del reloj.
+ const report=await readReportWithCurrentSource(f.pool,f.ctx,{fetchFn:f.fetchCsv});
+ assert.equal(f.getFetch(),1);
+ assert.equal(report.rows[0].required,8);
+ assert.equal(report.meta.sourceState,"ok");
 });

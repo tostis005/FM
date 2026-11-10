@@ -1,6 +1,5 @@
 import React,{useEffect,useState} from "react";
-import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Download,
- RefreshCcw,Warehouse,Store,CloudDownload} from "lucide-react";
+import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Download,Warehouse,Store} from "lucide-react";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
@@ -41,7 +40,7 @@ function Status({value}){return <span className={"fm-picking-status fm-picking-"
  {value==="cubierto"?<CheckCircle2 size={13}/>:<AlertTriangle size={13}/>}
  {STATUS[value]||value}
  </span>;}
-export default function PickingList({clientSlug,role,permissions=null}){
+export default function PickingList({clientSlug}){
  const [data,setData]=useState(null);
  const [channel,setChannel]=useState("");
  const [tab,setTab]=useState("general");
@@ -51,20 +50,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
  const [assignedOnly,setAssignedOnly]=useState(false);
  const [expanded,setExpanded]=useState("");
  const [loading,setLoading]=useState(true);
- const [busy,setBusy]=useState("");
  const [error,setError]=useState("");
- const [message,setMessage]=useState("");
- const canWrite=["administrador","gestor","superadministrador"].includes(role)&&
-  (role==="superadministrador"||permissions?.stock==null||
-   permissions.stock.includes("importar")||permissions.stock.includes("editar"));
- async function reload(nextChannel=channel){
-  setLoading(true);setError("");
-  try{
-   const path="report"+(nextChannel?"?channel="+encodeURIComponent(nextChannel):"");
-   setData(await callApi(clientSlug,path));
-  }catch(e){setError(e.message)}
-  finally{setLoading(false);}
- }
  useEffect(()=>{
   let alive=true;
   setLoading(true);setError("");
@@ -74,12 +60,24 @@ export default function PickingList({clientSlug,role,permissions=null}){
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[clientSlug,channel]);
- async function action(label,fn){
-  setBusy(label);setError("");setMessage("");
-  try{const result=await fn();if(result)setMessage(result);await reload();}
-  catch(e){setError(e.message)}
-  finally{setBusy("");}
- }
+ // Actualización silenciosa: conserva pestaña, filtros, scroll y selección del usuario.
+ // El servidor evita descargar Dropbox en cada consulta (TTL de 15 minutos).
+ useEffect(()=>{
+  if(!clientSlug)return;
+  let alive=true,inFlight=false;
+  const poll=async()=>{
+   if(!alive||inFlight||document.visibilityState==="hidden")return;
+   inFlight=true;
+   try{
+    const result=await callApi(clientSlug,"report"+
+     (channel?"?channel="+encodeURIComponent(channel):""));
+    if(alive){setData(result);setError("");}
+   }catch(e){if(alive)setError(e.message)}
+   finally{inFlight=false}
+  };
+  const timer=setInterval(()=>void poll(),2*60*1000);
+  return()=>{alive=false;clearInterval(timer)};
+ },[clientSlug,channel]);
  const selectedSite=(data?.sites||[]).find(s=>s.id===tab);
  const all=data?.rows||[];
  const filtered=all.filter(row=>{
@@ -129,9 +127,6 @@ export default function PickingList({clientSlug,role,permissions=null}){
  const sourceEmpty=ready&&data?.totals?.products===0;
  return <div className="fm-picking-page">
   <ReportPageHeader title="Picking List"
-   updatedAt={data?.meta?.lastImportedAt}
-   refreshing={loading||Boolean(busy)}
-   onRefresh={()=>void reload()}
    actions={<div className="fm-picking-header-buttons">
     <button type="button" className="btn btn-secondary" onClick={exportCurrent}
      disabled={!ready||loading}><Download size={16}/> Exportar preparación</button>
@@ -141,8 +136,7 @@ export default function PickingList({clientSlug,role,permissions=null}){
    El reparto es informativo: no reserva artículos ni modifica pedidos en Shopify o Farmatic.
   </p>
   {error&&<div className="fm-picking-alert" role="alert"><AlertTriangle size={17}/>{error}
-   <button className="btn btn-secondary btn-sm" onClick={()=>void reload()}>Reintentar</button></div>}
-  {message&&<div className="fm-picking-success" role="status"><CheckCircle2 size={17}/>{message}</div>}
+   {" "}La aplicación volverá a comprobarlo automáticamente.</div>}
   <section className="card fm-picking-source">
    <div className="fm-picking-source-details">
     <strong>Pedidos pendientes de Shopify</strong>
@@ -150,26 +144,27 @@ export default function PickingList({clientSlug,role,permissions=null}){
      "Última importación: "+dateTime(data.meta.lastImportedAt)+" · "+integer(data.meta.lineCount)+" líneas":
      "Todavía no se ha importado el fichero de pedidos pendientes."}</span>
     <small>{sourceConfigured?
-     data?.meta?.sourceState==="error"?"La última lectura de Dropbox ha fallado; se conservan los datos anteriores":
-     data?.meta?.sourceState==="pending"?"Conectado a Dropbox; primera descarga pendiente":
-     "Fuente Dropbox configurada · actualización automática cada 15 minutos":
-     "Origen de Dropbox pendiente de configurar en Ajustes."}</small>
+     data?.meta?.sourceState==="error"?"Dropbox: última lectura fallida; se conservan los datos anteriores":
+     data?.meta?.sourceState==="stale"?"Pedidos desactualizados; reintento automático pendiente":
+     data?.meta?.sourceState==="pending"?"Primera lectura de Dropbox pendiente":
+     "Dropbox conectado · comprobación del fichero automática cada 15 minutos":
+     "Configura el enlace de Dropbox en Ajustes."}</small>
+    {data?.meta?.lastCheckedAt&&<small>
+     Última comprobación: {dateTime(data.meta.lastCheckedAt)}
+    </small>}
+    <small>Esta pantalla consulta los datos automáticamente cada 2 minutos sin recargarse.</small>
    </div>
-   {canWrite&&<div className="fm-picking-source-actions">
-    <button className="btn btn-secondary btn-sm" type="button"
-     disabled={Boolean(busy)||!sourceConfigured}
-     onClick={()=>action("refresh",async()=>{
-      await callApi(clientSlug,"refresh","POST",{});
-      return "Pedidos pendientes actualizados desde Dropbox.";
-     })}><CloudDownload size={15}/> Leer pedidos de Dropbox</button>
-   </div>}
+
   </section>
   {sourceError&&<div className="fm-picking-alert" role="alert">
    <AlertTriangle size={17}/>
    <span><strong>Dropbox configurado, pero no se han podido importar los pedidos.</strong>
     {" "+sourceError} Se conservan los datos de la última importación válida.
-    Revisa el origen en Configuración → Ajustes y vuelve a leer los pedidos.</span>
+    Revisa la incidencia en Configuración → Ajustes. El sistema volverá a intentarlo automáticamente.</span>
   </div>}
+  {data?.meta?.lastWarning&&<div className="fm-picking-warning" role="alert">
+   <AlertTriangle size={17}/>{data.meta.lastWarning}
+   {" "}Los totales solo incluyen las líneas válidas.</div>}
   {data?.meta&&<div className="fm-picking-stock-summary" role="status">
    <Store size={15}/>
    {integer(data.meta.stockLocationsReady??0)} de {integer(data.meta.stockLocations??0)}
@@ -182,8 +177,8 @@ export default function PickingList({clientSlug,role,permissions=null}){
     <h2>{sourceConfigured?"Aún no se han importado pedidos de Dropbox":
      "Conecta primero el fichero de pedidos"}</h2>
     <p>{sourceConfigured?
-     "El enlace está guardado, pero todavía no existe una importación correcta. Si la descarga falla, el motivo aparece arriba. Prueba «Leer pedidos de Dropbox» o revisa el fichero en Ajustes.":
-     "La fuente de pedidos se establece en Configuración → Ajustes. Una vez conectada, se importarán los pendientes y se cruzarán con el stock de cada farmacia."}</p>
+     "El enlace está guardado, pero todavía no existe una importación correcta. Consulta el motivo indicado arriba. Farmétrica reintentará la lectura automáticamente.":
+     "La fuente de pedidos se establece en Configuración → Ajustes. Después, la importación se realiza automáticamente, sin subir archivos."}</p>
    </section>:<>
    {sourceEmpty&&<div className="fm-picking-success" role="status">
     <CheckCircle2 size={17}/> El fichero de Dropbox se ha leído correctamente,

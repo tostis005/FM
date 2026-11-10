@@ -28,3 +28,10 @@ CREATE INDEX IF NOT EXISTS picking_list_pendientes_cn_idx
  ON farmetrica.picking_list_pendientes(cliente_slug,cn);
 CREATE INDEX IF NOT EXISTS picking_list_pendientes_canal_idx
  ON farmetrica.picking_list_pendientes(cliente_slug,order_source_name);
+
+-- Registrar el estado de las lecturas automáticas, incluso entre reinicios de API.
+-- Los errores no modifican ni borran el último snapshot válido.
+ALTER TABLE farmetrica.picking_list_fuentes
+ ADD COLUMN IF NOT EXISTS ultima_comprobacion timestamptz,
+ ADD COLUMN IF NOT EXISTS ultimo_error text,
+ ADD COLUMN IF NOT EXISTS ultima_advertencia text;

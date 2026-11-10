@@ -18,7 +18,7 @@ const SOURCE_INTERVAL_MS=15*60*1000;
 const SOURCE_RETRY_MS=60*1000;
 function safeSourceError(error){
  const message=String(error?.message||"").replace(/https?:\/\/\S+/g,"[enlace oculto]");
- if(/^(?:Falta la columna|Fila \d+|El fichero|El CSV|CSV |Dropbox |No hay|Solo se aceptan|Introduce un enlace|Demasiadas redirecciones|El enlace)/i.test(message))
+ if(/^(?:Falta la columna|Fila \d+|El fichero|El CSV|CSV |Dropbox |No hay|No hay líneas|Solo se aceptan|Introduce un enlace|Demasiadas redirecciones|El enlace)/i.test(message))
   return message.slice(0,300);
  return "No se ha podido descargar o interpretar el fichero de Dropbox. Comprueba el enlace y las columnas en Ajustes.";
 }
@@ -32,6 +32,10 @@ async function monitoredRefresh(pool,slug,options={}){
  }catch(error){
   const safe=safeSourceError(error);
   sourceDiagnostics.set(slug,{state:"error",lastAttemptAt,error:safe});
+  try{
+   await pool.query("UPDATE farmetrica.picking_list_fuentes "+
+    "SET ultima_comprobacion=now(),ultimo_error=$2 WHERE cliente_slug=$1",[slug,safe]);
+  }catch{console.warn("PICKING_LIST_SOURCE_DIAGNOSTIC",JSON.stringify({client:slug,state:"write_failed"}));}
   console.warn("PICKING_LIST_SOURCE",JSON.stringify({client:slug,state:"error",reason:safe}));
   throw error;
  }
@@ -40,14 +44,18 @@ export async function readReportWithCurrentSource(pool,ctx,{fetchFn,...options}=
  const slug=ctx.client.slug,meta=await getMetadata(pool,slug);
  const previous=sourceDiagnostics.get(slug);
  const lastSuccess=meta.lastImportedAt?new Date(meta.lastImportedAt).getTime():0;
+ const lastCheck=meta.lastCheckedAt?new Date(meta.lastCheckedAt).getTime():0;
+ const sourceModified=meta.sourceUpdatedAt?new Date(meta.sourceUpdatedAt).getTime():0;
+ const needsRefresh=!lastSuccess||Date.now()-lastSuccess>SOURCE_INTERVAL_MS||
+  sourceModified>lastSuccess;
  const now=Date.now();
- if(meta.sourceConfigured&&(!lastSuccess||now-lastSuccess>SOURCE_INTERVAL_MS)){
+ if(meta.sourceConfigured&&needsRefresh){
   // En el arranque ya puede haber una descarga programada en curso.
   // Esperar ese mismo intento evita responder con la tabla vacía mientras carga.
   if(pendingFetch.has(slug)){
    try{await pendingFetch.get(slug)}catch{ /* conservar último snapshot y diagnóstico */ }
-  }else if(!previous?.lastAttemptAt||
-    now-new Date(previous.lastAttemptAt).getTime()>SOURCE_RETRY_MS){
+  }else if(now-Math.max(lastCheck,previous?.lastAttemptAt?
+     new Date(previous.lastAttemptAt).getTime():0)>SOURCE_RETRY_MS){
    try{await monitoredRefresh(pool,slug,{fetchFn})}catch{ /* conservar snapshot */ }
   }
  }
@@ -55,10 +63,12 @@ export async function readReportWithCurrentSource(pool,ctx,{fetchFn,...options}=
  const current=sourceDiagnostics.get(slug);
  report.meta={...report.meta,
   sourceState:!report.meta.sourceConfigured?"not_configured":
-   current?.state==="error"?"error":
-   report.meta.lastImportedAt?(report.meta.lineCount===0?"empty":"ok"):"pending",
-  sourceError:current?.error||null,
-  lastAttemptAt:current?.lastAttemptAt||null,
+   current?.state==="error"||report.meta.lastError?"error":
+   !report.meta.lastImportedAt?"pending":
+   report.meta.lineCount===0?"empty":
+   Date.now()-new Date(report.meta.lastImportedAt).getTime()>30*60*1000?"stale":"ok",
+  sourceError:current?.error||report.meta.lastError||null,
+  lastAttemptAt:report.meta.lastCheckedAt||current?.lastAttemptAt||null,
   stockLocations:report.sites.length,
   stockLocationsReady:report.sites.filter(s=>s.ready).length,
   unmatchedProducts:report.rows.filter(r=>r.status==="sin_cn").length};
@@ -91,10 +101,11 @@ export async function savePendingSnapshot(pool,slug,lines,{origin="archivo",user
   }
   await tx.query(
    "UPDATE farmetrica.picking_list_fuentes SET ultimo_origen=$2,ultima_importacion=now(),"+
-   "ultima_fila=$3,actualizado_por=$4,actualizado_en=now() WHERE cliente_slug=$1",
-   [slug,origin,lines.length,user]);
+   "ultima_fila=$3,actualizado_por=$4,actualizado_en=now(),"+
+   "ultima_comprobacion=now(),ultimo_error=NULL,ultima_advertencia=$5 WHERE cliente_slug=$1",
+   [slug,origin,lines.length,user,(lines.warnings||[]).join(" ").slice(0,600)]);
   await tx.query("COMMIT");
-  return {rows:lines.length};
+  return {rows:lines.length,skipped:lines.skippedCount||0,warning:(lines.warnings||[]).join(" ")};
  }catch(e){await tx.query("ROLLBACK");throw e}
  finally{tx.release();}
 }
@@ -113,7 +124,9 @@ export async function refreshPendingSource(pool,slug,{fetchFn}={}){
 async function getMetadata(pool,slug){
  const {rows}=await pool.query(
   "SELECT ultima_importacion AS \"lastImportedAt\",ultima_fila AS \"lineCount\","+
-  "ultimo_origen AS origin,(nullif(csv_url,'') IS NOT NULL) AS \"sourceConfigured\" "+
+  "ultimo_origen AS origin,(nullif(csv_url,'') IS NOT NULL) AS \"sourceConfigured\","+
+  "actualizado_en AS \"sourceUpdatedAt\",ultima_comprobacion AS \"lastCheckedAt\","+
+  "ultimo_error AS \"lastError\",ultima_advertencia AS \"lastWarning\" "+
   "FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",[slug]);
  return rows[0]||{lastImportedAt:null,lineCount:0,origin:null,sourceConfigured:false};
 }
@@ -251,14 +264,18 @@ export function setupPickingList(app,pool,{requireTenant}){
  app.get("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
   try{
    const {rows}=await pool.query(
-    'SELECT csv_url,ultima_importacion AS "lastImportedAt",actualizado_en AS "updatedAt" '+
+    'SELECT csv_url,ultima_importacion AS "lastImportedAt",actualizado_en AS "updatedAt",'+
+    'ultima_comprobacion AS "lastCheckedAt",ultimo_error AS "lastError",'+
+    'ultima_advertencia AS "lastWarning" '+
     'FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1',
     [req.context.client.slug]);
    const row=rows[0];
    const diagnostic=sourceDiagnostics.get(req.context.client.slug);
    res.json({url:row?.csv_url||"",sourceConfigured:Boolean(row?.csv_url),
     lastImportedAt:row?.lastImportedAt||null,updatedAt:row?.updatedAt||null,
-    sourceError:diagnostic?.error||null,lastAttemptAt:diagnostic?.lastAttemptAt||null});
+    sourceError:diagnostic?.error||row?.lastError||null,
+    lastAttemptAt:diagnostic?.lastAttemptAt||null,
+    lastCheckedAt:row?.lastCheckedAt||null,lastWarning:row?.lastWarning||null});
   }catch(e){next(e);}
  });
  app.put("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
@@ -266,7 +283,8 @@ export function setupPickingList(app,pool,{requireTenant}){
    const url=validateDropboxCsvUrl(req.body?.url);
    await pool.query("INSERT INTO farmetrica.picking_list_fuentes(cliente_slug,csv_url,actualizado_por) "+
     "VALUES($1,$2,$3) ON CONFLICT(cliente_slug) DO UPDATE SET csv_url=EXCLUDED.csv_url,"+
-    "actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now()",
+    "actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now(),"+
+    "ultima_comprobacion=NULL,ultimo_error=NULL,ultima_advertencia=NULL",
     [req.context.client.slug,url,req.user.email]);
    sourceDiagnostics.delete(req.context.client.slug);
    res.json({ok:true,sourceConfigured:true});
@@ -296,7 +314,8 @@ export function startPickingListPolling(pool,interval=15*60*1000){
     "SELECT f.cliente_slug FROM farmetrica.picking_list_fuentes f "+
     "JOIN farmetrica.clientes c ON c.slug=f.cliente_slug WHERE c.activo "+
     "AND nullif(f.csv_url,'') IS NOT NULL "+
-    "AND (f.ultima_importacion IS NULL OR f.ultima_importacion<now()-interval '15 minutes')");
+    "AND (f.ultima_importacion IS NULL OR f.actualizado_en>f.ultima_importacion "+
+    "OR f.ultima_importacion<now()-interval '15 minutes')");
    await Promise.all(rows.slice(0,20).map(async r=>{
     try{await monitoredRefresh(pool,r.cliente_slug);}
     catch{ /* Se publica el fallo en la respuesta del reporte. */ }

@@ -1,6 +1,6 @@
-import React,{useEffect,useRef,useState} from "react";
+import React,{useEffect,useState} from "react";
 import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Download,
- RefreshCcw,Upload,Warehouse,Store,Link2,CloudDownload} from "lucide-react";
+ RefreshCcw,Warehouse,Store,CloudDownload} from "lucide-react";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
@@ -54,9 +54,6 @@ export default function PickingList({clientSlug,role,permissions=null}){
  const [busy,setBusy]=useState("");
  const [error,setError]=useState("");
  const [message,setMessage]=useState("");
- const [configOpen,setConfigOpen]=useState(false);
- const [url,setUrl]=useState("");
- const fileRef=useRef(null);
  const canWrite=["administrador","gestor","superadministrador"].includes(role)&&
   (role==="superadministrador"||permissions?.stock==null||
    permissions.stock.includes("importar")||permissions.stock.includes("editar"));
@@ -82,26 +79,6 @@ export default function PickingList({clientSlug,role,permissions=null}){
   try{const result=await fn();if(result)setMessage(result);await reload();}
   catch(e){setError(e.message)}
   finally{setBusy("");}
- }
- function saveSource(e){
-  e.preventDefault();
-  action("save",async()=>{
-   await callApi(clientSlug,"source","PUT",{url:url.trim()});
-   await callApi(clientSlug,"refresh","POST",{});
-   setConfigOpen(false);setUrl("");
-   return "Fuente Dropbox configurada y pedidos pendientes actualizados.";
-  });
- }
- async function upload(e){
-  const file=e.target.files?.[0];
-  if(!file)return;
-  if(file.size>8*1024*1024){setError("El archivo supera los 8 MB.");return;}
-  await action("upload",async()=>{
-   const content=await file.text();
-   const result=await callApi(clientSlug,"import","POST",content,"text/csv");
-   return "Importadas "+integer(result.rows)+" líneas pendientes del CSV.";
-  });
-  if(fileRef.current)fileRef.current.value="";
  }
  const selectedSite=(data?.sites||[]).find(s=>s.id===tab);
  const all=data?.rows||[];
@@ -142,13 +119,13 @@ export default function PickingList({clientSlug,role,permissions=null}){
      return [s?.stock,s?.planned];
     }),row.stockTotal,row.allocated,row.shortage,STATUS[row.status],
     row.details.map(d=>d.orderName).join(", ")]);
-   saveCsv("picking-list-pharmawow",[columns,...values]);
+   saveCsv("picking-list",[columns,...values]);
   }
  }
  function changeTab(id){setTab(id);setPage(0);setExpanded("");setAssignedOnly(false);}
  const ready=Boolean(data?.meta?.lastImportedAt);
  return <div className="fm-picking-page">
-  <ReportPageHeader title="Picking List · PharmaWow"
+  <ReportPageHeader title="Picking List"
    updatedAt={data?.meta?.lastImportedAt}
    refreshing={loading||Boolean(busy)}
    onRefresh={()=>void reload()}
@@ -171,37 +148,22 @@ export default function PickingList({clientSlug,role,permissions=null}){
      "Todavía no se ha importado el fichero de pedidos pendientes."}</span>
     <small>{data?.meta?.sourceConfigured?
      "Fuente de Dropbox configurada · actualización automática cada 15 minutos":
-     "Conecta el CSV de Dropbox que utiliza Power BI o importa el fichero manualmente."}</small>
+     "Origen de Dropbox pendiente de configurar en Ajustes."}</small>
    </div>
    {canWrite&&<div className="fm-picking-source-actions">
-    <input ref={fileRef} hidden type="file" accept=".csv,text/csv" onChange={upload}/>
-    <button className="btn btn-secondary btn-sm" type="button" disabled={Boolean(busy)}
-     onClick={()=>fileRef.current?.click()}><Upload size={15}/> Importar CSV</button>
-    <button className="btn btn-secondary btn-sm" type="button" disabled={Boolean(busy)||!data?.meta?.sourceConfigured}
+    <button className="btn btn-secondary btn-sm" type="button"
+     disabled={Boolean(busy)||!data?.meta?.sourceConfigured}
      onClick={()=>action("refresh",async()=>{
       await callApi(clientSlug,"refresh","POST",{});
       return "Pedidos pendientes actualizados desde Dropbox.";
      })}><CloudDownload size={15}/> Actualizar Shopify</button>
-    <button className="btn btn-secondary btn-sm" type="button" onClick={()=>setConfigOpen(x=>!x)}>
-     <Link2 size={15}/> {configOpen?"Cerrar":"Configurar fuente"}</button>
    </div>}
-   {configOpen&&canWrite&&<form onSubmit={saveSource} className="fm-picking-config">
-    <label>Enlace compartido al CSV de pedidos pendientes (Dropbox)
-     <input type="url" required placeholder="https://www.dropbox.com/scl/fi/.../pedidospendientes.csv?rlkey=..."
-      value={url} onChange={e=>setUrl(e.target.value)}/>
-    </label>
-    <p>El enlace solo se guarda en el servidor y nunca se muestra a usuarios del reporte.
-     Se sustituye por completo el listado de pedidos en cada actualización correcta.</p>
-    <button type="submit" className="btn btn-primary btn-sm" disabled={Boolean(busy)}>
-     Guardar fuente y actualizar
-    </button>
-   </form>}
   </section>
   {loading&&!data?<LoadingStatus label="Cargando pedidos pendientes y existencias…"/>:
    !ready?<section className="card fm-picking-empty"><Warehouse size={28}/>
     <h2>La picking list está lista para recibir pedidos</h2>
-    <p>Importa el CSV de Shopify o configura su enlace de Dropbox. Después podrás
-     ver los stocks y la propuesta por almacén y farmacia.</p>
+    <p>El origen de pedidos se establece en Configuración → Ajustes.
+     Al estar configurado, los pendientes se actualizarán automáticamente desde Dropbox.</p>
    </section>:<>
    <div className="fm-picking-kpis">
     <div className="card"><span>Pedidos pendientes</span><strong>{integer(data?.totals.orders)}</strong>

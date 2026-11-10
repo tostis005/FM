@@ -77,7 +77,7 @@ async function getInventory(pool,ctx,codes){
    id:row.siteId,code:row.code,name:row.siteName,kind:row.kind,
    ready:row.ready===true
   });
-  if(row.cn)items.set(row.siteId+"|"+row.cn,{
+  if(row.key)items.set(row.siteId+"|"+row.key,{
    stock:row.stock===null?null:Number(row.stock),
    matched:row.matched===true,name:row.name,stockAt:row.stockAt
   });
@@ -114,28 +114,29 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
  }
  const entries=[...grouped.values()];
  const {sites,items}=await getInventory(pool,ctx,
-  [...new Set(entries.map(x=>x.cn).filter(Boolean))]);
+  entries.map(x=>({key:x.key,cn:x.cn,sku:x.sku})));
  const locations=sites.filter(s=>s.kind==="farmacia");
  const report=entries.map(entry=>{
   const stock=sites.map(s=>{
-   const inv=entry.cn?items.get(s.id+"|"+entry.cn):null;
+   const inv=items.get(s.id+"|"+entry.key);
    return {...s,stock:s.ready?(inv?.stock===null?null:inv?Math.max(0,inv.stock):0):null,
     matched:Boolean(inv?.matched),stockAt:inv?.stockAt||null,planned:0};
   });
   const wh=stock.find(s=>s.kind==="almacen"&&s.code==="ALMACEN");
   const pharm=stock.filter(s=>s.kind==="farmacia");
-  const proposal=entry.cn&&wh?allocatePending(entry.required,wh.stock,pharm,{reserve:1}):null;
+  const matched=entry.cn||stock.some(s=>s.matched);
+  const proposal=matched&&wh?allocatePending(entry.required,wh.stock,pharm,{reserve:1}):null;
   for(const s of stock)s.planned=proposal?
    (s.kind==="almacen"?proposal.warehouse||0:proposal.bySite[s.code]||0):0;
   const hasMissing=!wh||stock.some(s=>!s.ready);
   const old=stock.some(s=>s.stockAt&&
    Date.now()-new Date(s.stockAt).getTime()>48*60*60*1000);
   const shortage=proposal?.remaining??null;
-  const status=!entry.cn?"sin_cn":hasMissing?"sin_datos":old?"desactualizado":
+  const status=!matched?"sin_cn":hasMissing?"sin_datos":old?"desactualizado":
    shortage>0?"sin_stock":"cubierto";
   return {
    key:entry.key,cn:entry.cn,sku:entry.sku,
-   name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.cn)?.name).find(Boolean)||"",
+   name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.key)?.name).find(Boolean)||"",
    required:entry.required,orders:entry.orderKeys.size,
    lines:entry.lines,channels:[...entry.channels],details:entry.details,
    stock,allocated:proposal?.fulfilled??null,shortage,status,

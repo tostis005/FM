@@ -1,6 +1,6 @@
--- Matriz de existencias: el SKU Shopify de hasta 7 cifras se normaliza
--- como CN (mínimo 6 cifras, como en el Power BI original).
--- NULL cuando un origen no tiene importación de artículos aún.
+-- Matriz de existencias: los SKU cortos se cruzan por CN y los de
+-- 8-14 dígitos por EAN del artículo, sin atribuir IDs ERP entre farmacias.
+-- NULL indica que un origen todavía no tiene stock importado.
 WITH sources AS MATERIALIZED (
  SELECT f.id::text AS site_id,f.nombre AS site_name,
    __PHARMACY_CODE__ AS source_code,
@@ -16,29 +16,55 @@ WITH sources AS MATERIALIZED (
    WHERE upper(btrim(a.farmacia_codigo))=s.source_code LIMIT 1) AS ready
  FROM sources s
 ), codes AS MATERIALIZED (
- SELECT DISTINCT value AS cn FROM jsonb_array_elements_text($2::jsonb)
+ SELECT DISTINCT r.key,r.cn,r.sku
+ FROM jsonb_to_recordset($2::jsonb) AS r(key text,cn text,sku text)
 ), candidates AS (
- SELECT s.site_id,c.cn,a.origen_id::text AS article_id,
+ SELECT s.site_id,c.key,a.origen_id::text AS article_id,
   a.stock_actual::float8 AS stock,a.nombre,a.sincronizado_en AS stock_at
  FROM sites s CROSS JOIN codes c JOIN __SCHEMA__.articulos a
   ON upper(btrim(a.farmacia_codigo))=s.source_code
    AND btrim(a.codigo_nacional)=c.cn
+ WHERE c.cn IS NOT NULL
  UNION ALL
- SELECT s.site_id,c.cn,a.origen_id::text AS article_id,
+ SELECT s.site_id,c.key,a.origen_id::text AS article_id,
   a.stock_actual::float8 AS stock,a.nombre,a.sincronizado_en AS stock_at
  FROM sites s CROSS JOIN codes c JOIN __SCHEMA__.articulos a
   ON upper(btrim(a.farmacia_codigo))=s.source_code
    AND a.origen_id::text=c.cn
- WHERE nullif(btrim(a.codigo_nacional),'') IS NULL
-), unique_articles AS (
- SELECT DISTINCT ON (site_id,cn,article_id)
-  site_id,cn,article_id,stock,nombre,stock_at
- FROM candidates ORDER BY site_id,cn,article_id,stock_at DESC NULLS LAST
+ WHERE c.cn IS NOT NULL AND nullif(btrim(a.codigo_nacional),'') IS NULL
+ UNION ALL
+ SELECT s.site_id,c.key,a.origen_id::text AS article_id,
+  a.stock_actual::float8 AS stock,a.nombre,a.sincronizado_en AS stock_at
+ FROM sites s CROSS JOIN codes c JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=s.source_code
+   AND btrim(coalesce(to_jsonb(a)->>'ean',''))=c.sku
+ WHERE c.cn IS NULL AND c.sku ~ '^[0-9]{8,14}
+ SELECT DISTINCT ON (site_id,key,article_id)
+  site_id,key,article_id,stock,nombre,stock_at
+ FROM candidates ORDER BY site_id,key,article_id,stock_at DESC NULLS LAST
 ), inventory AS (
- SELECT site_id,cn,
+ SELECT site_id,key,
   CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
   max(nombre) AS name,min(stock_at) AS stock_at
- FROM unique_articles GROUP BY site_id,cn
+ FROM unique_articles GROUP BY site_id,key
+)
+SELECT s.site_id AS "siteId",s.site_name AS "siteName",
+ s.source_code AS code,s.kind,s.ready,
+ c.key,i.stock,i.name,i.stock_at AS "stockAt",
+ (i.key IS NOT NULL) AS matched
+FROM sites s LEFT JOIN codes c ON true
+ LEFT JOIN inventory i ON i.site_id=s.site_id AND i.key=c.key
+ORDER BY CASE WHEN s.kind='almacen' THEN 0 ELSE 1 END,s.site_id,c.key;
+
+), unique_articles AS (
+ SELECT DISTINCT ON (site_id,key,article_id)
+  site_id,key,article_id,stock,nombre,stock_at
+ FROM candidates ORDER BY site_id,key,article_id,stock_at DESC NULLS LAST
+), inventory AS (
+ SELECT site_id,key,
+  CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
+  max(nombre) AS name,min(stock_at) AS stock_at
+ FROM unique_articles GROUP BY site_id,key
 )
 SELECT s.site_id AS "siteId",s.site_name AS "siteName",
  s.source_code AS code,s.kind,s.ready,

@@ -118,9 +118,9 @@ test("Reporte sin almacén importado: no inventar stocks ni pedidos asignados",a
   ]};
   if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[
    {siteId:"6",siteName:"Almacén",code:"ALMACEN",kind:"almacen",ready:false,
-    cn:"123456",stock:null,matched:false},
+    key:"123456",stock:null,matched:false},
    {siteId:"1",siteName:"Abadía",code:"ABA",kind:"farmacia",ready:true,
-    cn:"123456",stock:7,matched:true,name:"Crema"}
+    key:"123456",stock:7,matched:true,name:"Crema"}
   ]};
   throw Error("SQL inesperado: "+sql.slice(0,100));
  }};
@@ -133,4 +133,12 @@ test("Reporte sin almacén importado: no inventar stocks ni pedidos asignados",a
  assert.equal(report.rows[0].status,"sin_datos");
  assert.equal(report.rows[0].allocated,null);
  assert.equal(report.rows[0].stock.find(s=>s.code==="ALMACEN").stock,null);
+});
+
+test("La matriz utiliza EAN sin confundir el SKU con un ID ERP local",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./pickingListStock.sql",import.meta.url),"utf8");
+ assert.match(sql,/to_jsonb\(a\)->>'ean'/);
+ assert.match(sql,/c\.cn IS NULL AND c\.sku/);
+ assert.match(sql,/jsonb_to_recordset\(\$2::jsonb\)/);
 });

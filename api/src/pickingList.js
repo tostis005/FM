@@ -41,9 +41,15 @@ export async function readReportWithCurrentSource(pool,ctx,{fetchFn,...options}=
  const previous=sourceDiagnostics.get(slug);
  const lastSuccess=meta.lastImportedAt?new Date(meta.lastImportedAt).getTime():0;
  const now=Date.now();
- if(meta.sourceConfigured&&(!lastSuccess||now-lastSuccess>SOURCE_INTERVAL_MS)&&
-    (!previous?.lastAttemptAt||now-new Date(previous.lastAttemptAt).getTime()>SOURCE_RETRY_MS)){
-  try{await monitoredRefresh(pool,slug,{fetchFn})}catch{ /* diagnóstico en meta; conservar snapshot */ }
+ if(meta.sourceConfigured&&(!lastSuccess||now-lastSuccess>SOURCE_INTERVAL_MS)){
+  // En el arranque ya puede haber una descarga programada en curso.
+  // Esperar ese mismo intento evita responder con la tabla vacía mientras carga.
+  if(pendingFetch.has(slug)){
+   try{await pendingFetch.get(slug)}catch{ /* conservar último snapshot y diagnóstico */ }
+  }else if(!previous?.lastAttemptAt||
+    now-new Date(previous.lastAttemptAt).getTime()>SOURCE_RETRY_MS){
+   try{await monitoredRefresh(pool,slug,{fetchFn})}catch{ /* conservar snapshot */ }
+  }
  }
  const report=await readPickingReport(pool,ctx,options);
  const current=sourceDiagnostics.get(slug);

@@ -42,12 +42,12 @@ await page.route("**/api/**",async route=>{
    sourceError:refreshed?null:"Dropbox no ha permitido descargar el CSV.",
    stockLocations:3,stockLocationsReady:3,unmatchedProducts:0,
    lastWarning:refreshed?"2 filas no se han podido incluir en la preparación.":null};
-  json={meta,sites,channels:refreshed?["web"]:[],selectedChannel:"",
+  json={meta,sites,channels:refreshed?["PharmaWow"]:[],selectedChannel:"",
    rows:refreshed?[{key:"123456",cn:"123456",sku:"123456",name:"Producto A",
     required:8,orders:2,lines:2,eans:["8437000001234"],stock,allocated:8,shortage:0,
     status:"cubierto",stockTotal:12,exhausted:[],
-    details:[{orderId:"1001",orderName:"#1001",channel:"web",createdAt:null,quantity:5},
-     {orderId:"1002",orderName:"#1002",channel:"web",createdAt:null,quantity:3}]}]:[],
+    details:[{orderId:"1001",orderName:"#1001",channel:"PharmaWow",createdAt:null,quantity:5},
+     {orderId:"1002",orderName:"#1002",channel:"PharmaWow",createdAt:null,quantity:3}]}]:[],
    totals:{orders:refreshed?1:0,lines:refreshed?2:0,
     units:refreshed?8:0,products:refreshed?1:0,
     allocated:refreshed?8:0,pending:0,shortage:0,incomplete:0}};
@@ -71,6 +71,9 @@ try{
  await page.getByRole("heading",{name:"Distribución de pedidos pendientes"}).waitFor();
  assert.equal(refreshCalls,0,"La UI no necesita invocar endpoints manuales");
  await page.getByText("Producto A",{exact:true}).waitFor();
+ await page.getByRole("option",{name:"Tienda online"}).waitFor();
+ assert.equal(await page.getByRole("option",{name:"PharmaWow"}).count(),0,
+  "La marca debe ocultarse del selector sin eliminar el valor del canal");
  assert.equal(await page.getByText("Pedidos online pendientes").count(),0);
  assert.equal(await page.getByText("Pedidos pendientes de Shopify").count(),0);
  assert.equal(await page.getByText("Stock sin actualizar").count(),0);
@@ -101,13 +104,14 @@ try{
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  const sort=page.getByRole("button",{name:"Ordenar Stock ABA"});
  await sort.click();
- await page.getByRole("button",{name:"Ordenar Producto / CN / EAN"}).click();
- const filter=page.getByLabel("Buscar en Producto / CN / EAN");
+ await page.getByRole("button",{name:"Ordenar Producto / CN"}).click();
+ const filter=page.getByLabel("Buscar en Producto / CN");
  await filter.fill("inexistente");
  await page.getByText("No hay productos con estos filtros").waitFor();
  await filter.fill("");
  await page.getByText("Producto A",{exact:true}).waitFor();
- await page.getByText(/EAN 8437000001234/).waitFor();
+ assert.equal(await page.getByText(/EAN 8437000001234/).count(),0,
+  "El EAN se usa para buscar, no se muestra en la tabla");
  assert.equal((await page.locator(".fm-picking-page").innerText()).includes("SKU "),false);
  const globalSearch=page.getByRole("searchbox",{name:"Buscar CN, EAN, producto o pedido"});
  await globalSearch.fill("8437000001234");
@@ -131,6 +135,9 @@ try{
  await page.getByRole("button",{name:"Detalle"}).click();
  await page.getByText("#1001").waitFor();
  await page.getByText("#1002").waitFor();
+ assert.ok((await page.locator(".fm-picking-details").innerText()).includes("Tienda online"),
+  "El detalle usa el nombre genérico del canal");
+ assert.equal((await page.locator(".fm-picking-details").innerText()).includes("PharmaWow"),false);
  await page.getByRole("tab",{name:"Farmacia Abadía"}).click();
  await page.getByRole("heading",{name:"Preparación · Farmacia Abadía"}).waitFor();
  await page.getByText("3 uds. propuestas en Farmacia Abadía").waitFor();

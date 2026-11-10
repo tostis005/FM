@@ -191,7 +191,7 @@ const NAV=[
  {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
- {id:"perfiles",label:"Perfiles",icon:ShieldCheck,super:true},
+ {id:"perfiles",label:"Perfiles",icon:ShieldCheck,admin:true},
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
@@ -1271,7 +1271,7 @@ function App(){
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
-   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado"].includes(item.id)&&role==="gestor");
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
      NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||
@@ -1656,7 +1656,8 @@ function App(){
     )}
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
-    {page==="perfiles"&&sessionUser?.role==="superadministrador"&&<PerfilesGlobales/>}
+    {page==="perfiles"&&["gestor","administrador","superadministrador"].includes(role)&&
+      <PerfilesGlobales client={tenantContext.client.slug} role={role}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       canEditMaster={["gestor","administrador","superadministrador"].includes(role)}
       canMergeMaster={["administrador","superadministrador"].includes(role)}/>}

@@ -94,7 +94,7 @@ jobs:
           node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/internalPassword.test.js
           node --test api/src/accessPolicy.test.js
-          node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js
+          node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js api/src/profileManagementPolicy.test.js
           node --test api/src/operativaRules.test.js
           node --check api/src/workDigests.js
           node --test api/src/workDigests.test.js
@@ -359,6 +359,7 @@ jobs:
           done
           node check-master-sources.mjs
           node check-user-modules.mjs
+          node check-profiles-manager.mjs
           node check-laboratory-orders.mjs
           node check-supplier-laboratory-map.mjs
           node check-supplier-views.mjs

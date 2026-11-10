@@ -1147,7 +1147,7 @@ function App(){
   }
   function startPharmacy(f){
     if(f?.establishmentType==="almacen"){
-      setToast("Almacén central · ID "+f.id+" · código "+f.sourceCode+" · origen "+f.sourceDatabase+". Se configura desde Farmétrica Sync.");
+      setToast("Almacén central · ID "+f.id+" · código "+f.sourceCode+" · origen "+f.sourceDatabase+". Se configura desde el sincronizador.");
       return;
     }
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");

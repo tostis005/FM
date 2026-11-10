@@ -229,7 +229,7 @@ test("almacén solo descuenta del pedido conjunto de parafarmacia, sin alterar l
 test("SQL consulta el almacén por código de sincronización y solo en parafarmacia",async()=>{
  const {readFile}=await import("node:fs/promises");
  const text=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
- assert.match(text,/tipo_establecimiento='almacen'/);
+ assert.match(text,/tipo_establecimiento'.*'almacen'/);
  assert.match(text,/codigo_origen\)\)='ALMACEN'/);
  assert.match(text,/\$6::text='parafarmacia'/);
  assert.match(text,/warehouse_inventory AS/);

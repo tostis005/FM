@@ -53,7 +53,8 @@ WITH refs AS MATERIALIZED (
  -- Solo el establecimiento central del cliente, nunca una farmacia comercial.
  SELECT upper(btrim(f.codigo_origen)) AS source_code
  FROM farmetrica.farmacias f
- WHERE f.cliente_slug=$3 AND f.tipo_establecimiento='almacen'
+ WHERE f.cliente_slug=$3
+   AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='almacen'
    AND f.activo=true AND upper(btrim(f.codigo_origen))='ALMACEN'
 ), warehouse_ready AS MATERIALIZED (
  -- Sin primera importación no se puede interpretar ausencia de artículo como stock 0.

@@ -37,7 +37,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
       [slug]);
     const {rows:pharmacies}=await pool.query(
-      "SELECT id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS \"sourceCode\",host_origen AS \"sourceHost\",bd_origen AS \"sourceDatabase\",tipo_establecimiento AS \"establishmentType\" FROM farmetrica.farmacias WHERE cliente_slug=$1 ORDER BY id",
+      "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
       [slug]);
     const all = role==="superadministrador"||role==="administrador";
     const ids = all ? pharmacies.map(p=>Number(p.id)):

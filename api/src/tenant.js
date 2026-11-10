@@ -90,7 +90,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   setupProfiles(app,pool,{requireTenantManager,requireSuperadmin});
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.
-  app.put("/api/tenant/configuracion-ventas",...requireTenantAdmin(),async(req,res,next)=>{
+  app.put("/api/tenant/configuracion-ventas",...requireTenantManager(),async(req,res,next)=>{
     try{
       const months=req.body?.analysisMonths;
       if(!Number.isInteger(months)||![3,6,12,24,36].includes(months))
@@ -104,7 +104,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   });
   // Objetivo global de cobertura del cliente. No mezcla periodicidad ni plazo
   // de entrega con el número máximo de días de stock que se desea mantener.
-  app.get("/api/tenant/stock-objetivo",...requireTenantAdmin(),async(req,res,next)=>{
+  app.get("/api/tenant/stock-objetivo",...requireTenantManager(),async(req,res,next)=>{
     try{
       const {rows}=await pool.query(
         'SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1',
@@ -112,7 +112,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       res.json({days:Number(rows[0]?.days??20),defaultDays:20});
     }catch(e){next(e)}
   });
-  app.put("/api/tenant/stock-objetivo",...requireTenantAdmin(),async(req,res,next)=>{
+  app.put("/api/tenant/stock-objetivo",...requireTenantManager(),async(req,res,next)=>{
     const days=req.body?.days;
     if(!Number.isSafeInteger(days)||days<1||days>365)
       return res.status(400).json({error:"Elige entre 1 y 365 días de cobertura global"});
@@ -763,7 +763,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "Ya se ha enviado un enlace recientemente. Comprueba el correo."});
     }catch(e){next(e)}
   });
-  return {requireTenant,requireTenantAdmin,requireTenantModule,resolveTenant:resolve};
+  return {requireTenant,requireTenantAdmin,requireTenantManager,requireTenantModule,resolveTenant:resolve};
 }
 function validatePharmacy(body){
   const name=String(body?.name||"").trim(),city=String(body?.city||"").trim();

@@ -1274,7 +1274,7 @@ function App(){
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
-   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles"].includes(item.id)&&role==="gestor");
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles","ajustes"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
      NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||

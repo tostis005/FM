@@ -97,9 +97,10 @@ received_with_cn AS MATERIALIZED (
  FROM __SCHEMA__.articulos ar
  JOIN pharmacies p ON upper(btrim(ar.farmacia_codigo))=p.pharmacy_code
  WHERE p.pharmacy_id=ANY($2::int[])
-  AND (upper(coalesce(ar.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
-    OR EXISTS (SELECT 1 FROM unnest($3::text[]) AS exclude(cadena)
-      WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0))
+  AND EXISTS (SELECT 1 FROM unnest(
+    ARRAY['ZZZ','*BAJA','* BAJA']::text[] || $3::text[]
+   ) AS exclude(cadena)
+   WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0)
 ), scoped_cn AS MATERIALIZED (
  SELECT DISTINCT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
 ), latest AS MATERIALIZED (
@@ -109,9 +110,10 @@ received_with_cn AS MATERIALIZED (
 )
 SELECT l.lab_id::text AS lab_id,l.cn,l.nombre,
  (EXISTS(SELECT 1 FROM excluded_cn b WHERE b.cn=l.cn)
-  OR upper(coalesce(l.nombre,'')) ~ '^[[:space:]]*(ZZZ|[*]+[[:space:]]*BAJA)'
-  OR EXISTS (SELECT 1 FROM unnest($3::text[]) AS exclude(cadena)
-    WHERE position(upper(exclude.cadena) in upper(coalesce(l.nombre,'')))>0)
+  OR EXISTS (SELECT 1 FROM unnest(
+    ARRAY['ZZZ','*BAJA','* BAJA']::text[] || $3::text[]
+   ) AS exclude(cadena)
+   WHERE position(upper(exclude.cadena) in upper(coalesce(l.nombre,'')))>0)
  ) AS excluded
 FROM latest l JOIN scoped_cn s USING(cn)
 ORDER BY l.lab_id,l.cn;

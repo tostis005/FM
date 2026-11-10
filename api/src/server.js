@@ -116,11 +116,11 @@ async function requireEntraAdmin(req, res, next) {
 
 const { requireAdmin, requireUser, requireSuperadmin, bootstrapAdmins,
   sendLocalInvitation,localInvitationsReady,sessionUser,resolveAccess } = setupAccess(app, pool, requireEntraAdmin, azureEnabled);
-const { requireTenantModule,requireTenant,requireTenantAdmin,resolveTenant } = setupTenant(app, pool, {
+const { requireTenantModule,requireTenant,requireTenantAdmin,requireTenantManager,resolveTenant } = setupTenant(app, pool, {
   requireUser,requireSuperadmin,sendLocalInvitation,localInvitationsReady,
 });
 setupMasterSources(app,pool,{requireSuperadmin});
-setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantAdmin});
+setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantManager});
 setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin});
 setupPreparadorAgenda(app,pool,{requireTenant});
 // El puente MCP se registra antes de las restricciones de escrituras operativas.
@@ -172,7 +172,7 @@ setupSalesInsights(app,pool,{requireTenant});
 setupHistoryCoverage(app,pool,{requireTenant});
 const salesCache=createSalesCache(pool);
 setupSalesDetail(app,pool,{requireTenant,cache:salesCache});
-setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin});
+setupPricePolicy(app,pool,{requireTenant,requireTenantManager});
 setupOperativa(app,pool,{requireTenant});
 setupWorkDigestPreferences(app,pool,{requireTenant});
 setupGenericosReales(app,pool,{requireTenantModule});

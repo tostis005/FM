@@ -33,12 +33,16 @@ export async function readPricePolicy(pool,slug){
     .map(r=>({pharmacyId:Number(r.farmacia_id),percentile:Number(r.percentil),months:Number(r.meses)}))
  };
 }
-export function setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmin}){
- const guard=requireTenantModule("genericos");
- app.get("/api/analytics/politica-precios",...guard,async(req,res,next)=>{
+export function setupPricePolicy(app,pool,{requireTenant,requireTenantManager,requireTenantModule,requireTenantAdmin}){
+ const viewGuard=requireTenant?requireTenant():requireTenantModule("genericos");
+ const writeGuard=(requireTenantManager||requireTenantAdmin)();
+ app.get("/api/analytics/politica-precios",...viewGuard,async(req,res,next)=>{
+  if(!["gestor","administrador","superadministrador"].includes(req.context.role)&&
+   req.context.modules?.genericos!==true)
+   return res.status(403).json({error:"No tienes acceso a la política de precios"});
   try{res.json(await readPricePolicy(pool,req.context.client.slug))}catch(e){next(e)}
  });
- app.put("/api/analytics/politica-precios",...requireTenantAdmin(),async(req,res,next)=>{
+ app.put("/api/analytics/politica-precios",...writeGuard,async(req,res,next)=>{
   const config=validatePolicy(req.body);
   const raw=req.body?.pharmacyId;
   const pharmacyId=raw==null||raw===""?0:Number(raw);
@@ -57,7 +61,7 @@ export function setupPricePolicy(app,pool,{requireTenantModule,requireTenantAdmi
    res.json(await readPricePolicy(pool,req.context.client.slug));
   }catch(e){next(e)}
  });
- app.delete("/api/analytics/politica-precios/:pharmacyId",...requireTenantAdmin(),async(req,res,next)=>{
+ app.delete("/api/analytics/politica-precios/:pharmacyId",...writeGuard,async(req,res,next)=>{
   const id=Number(req.params.pharmacyId);
   if(!Number.isSafeInteger(id)||id<=0||!req.context.allowedPharmacyIds.includes(id))
    return res.status(403).json({error:"Farmacia no autorizada"});

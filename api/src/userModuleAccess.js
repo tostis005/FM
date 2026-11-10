@@ -31,8 +31,10 @@ export function requestModules(req){
  if(path==="/api/analytics/reportes"||path==="/api/analytics/reportes/opciones")
   return [String(req.query?.modulo||"dashboard")];
  if(path.startsWith("/api/analytics/stock/"))return ["stock"];
-  if(path.startsWith("/api/analytics/politica-precios"))return ["genericos"];
- if(path==="/api/tenant/configuracion-ventas")return ["ventas"];
+  // Ajustes se autentica por rol gestor/administrador en el endpoint, no por un módulo de análisis.
+ if(path.startsWith("/api/analytics/politica-precios")||
+    path==="/api/tenant/configuracion-ventas"||
+    path.startsWith("/api/tenant/stock-objetivo"))return [];
  if(path.startsWith("/api/analytics/ventas/")||path==="/api/analytics/ventas")
   return ["ventas","dashboard"];
  if(path.startsWith("/api/analytics/compras/")||path.startsWith("/api/analytics/pedidos/"))

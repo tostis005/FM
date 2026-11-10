@@ -763,7 +763,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "Ya se ha enviado un enlace recientemente. Comprueba el correo."});
     }catch(e){next(e)}
   });
-  return {requireTenant,requireTenantAdmin,requireTenantModule,resolveTenant:resolve};
+  return {requireTenant,requireTenantAdmin,requireTenantManager,requireTenantModule,resolveTenant:resolve};
 }
 function validatePharmacy(body){
   const name=String(body?.name||"").trim(),city=String(body?.city||"").trim();

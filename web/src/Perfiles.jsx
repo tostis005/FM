@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Copy,Plus,ShieldCheck,Trash2} from "lucide-react";
+import {ArrowLeft,CheckCircle2,Copy,Layers3,LockKeyhole,Plus,Settings2,ShieldCheck,Trash2,UsersRound} from "lucide-react";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./perfiles.css";
 const OPERATIONS=[["ver","Ver"],["crear","Crear"],["editar","Editar"],["eliminar","Eliminar"],
@@ -103,41 +103,80 @@ export default function Perfiles({client,role="superadministrador"}){
    await load();setFeedback("Perfil eliminado.");
   }catch(e){setError(e.message)}finally{setBusy(false);}
  }
+ const assignedUsers=profiles.reduce((total,p)=>total+Number(p.userCount||0),0);
  return <div className="fm-management fm-profiles">
-  <div className="page-header"><h1>Perfiles de usuario</h1>
-   <button className="btn btn-primary" type="button" onClick={()=>edit(null)}>
-    <Plus size={16}/> Nuevo perfil</button></div>
-  <p className="fm-profile-intro">Los perfiles son comunes a todas las farmacias.
-   Los perfiles base Administrador y Gestor son permanentes y no pueden eliminarse.
-   Los cambios afectan a sus usuarios asignados, pero nunca modifican sus farmacias.</p>
-  {scope&&<p className="fm-profile-hint">Puedes configurar perfiles de personal dentro
-   de tus accesos. Los perfiles administrativos protegidos o utilizados por otros
-   clientes requieren superadministración.</p>}
+  <div className="page-header fm-profile-page-header">
+   <div className="fm-profile-page-title">
+    <span className="fm-profile-title-icon" aria-hidden="true"><ShieldCheck size={23}/></span>
+    <div><h1>Perfiles de usuario</h1>
+     <p>Organiza los accesos y permisos de tu equipo desde un único lugar.</p></div>
+   </div>
+   <button className="btn btn-primary" type="button" onClick={()=>edit(null)} disabled={busy}>
+    <Plus size={16}/> Nuevo perfil</button>
+  </div>
+  <div className="fm-profile-intro">
+   <CheckCircle2 size={17} aria-hidden="true"/>
+   <span>Los perfiles se comparten entre farmacias. Los cambios se aplican a los usuarios
+    asignados sin modificar sus farmacias. Administrador y Gestor son perfiles base protegidos.</span>
+  </div>
+  {scope&&<div className="fm-profile-hint fm-profile-notice">
+   <LockKeyhole size={17} aria-hidden="true"/>
+   <span>Puedes gestionar los perfiles de personal dentro de tus permisos.
+    Los perfiles administrativos protegidos o utilizados por otros clientes requieren superadministración.</span>
+  </div>}
+  {!loading&&<div className="fm-profile-stats" aria-label="Resumen de perfiles">
+   <div className="fm-profile-stat"><span className="fm-profile-stat-icon"><Layers3 size={19}/></span>
+    <div><small>Perfiles disponibles</small><strong>{profiles.length}</strong></div></div>
+   <div className="fm-profile-stat"><span className="fm-profile-stat-icon"><UsersRound size={19}/></span>
+    <div><small>Asignaciones de usuarios</small><strong>{assignedUsers}</strong></div></div>
+   <div className="fm-profile-stat"><span className="fm-profile-stat-icon"><ShieldCheck size={19}/></span>
+    <div><small>Perfiles base protegidos</small><strong>{profiles.filter(p=>p.system).length}</strong></div></div>
+  </div>}
   {loading&&<LoadingStatus label="Cargando perfiles globales…"/>}
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
   {feedback&&<div className="fm-manage-feedback" role="status">{feedback}</div>}
-  <section className="card fm-manage-client">
-   <div className="section-heading"><h2>Perfiles disponibles</h2><ShieldCheck size={20}/></div>
+  <div className={"fm-profile-workspace"+(editing!==null?" is-editing":"")}>
+  <section className="card fm-manage-client fm-profile-catalog">
+   <div className="section-heading fm-profile-section-heading">
+    <div><h2>Perfiles disponibles</h2>
+     <p>Consulta cada perfil o selecciónalo para editar sus permisos.</p></div>
+    <span className="fm-profile-section-count">{profiles.length}</span>
+   </div>
    <div className="fm-profile-list">
-    {profiles.map(p=><div className="fm-profile-card" key={p.profileId}>
-     <div><strong>{p.name}</strong>
-      <small>{ROLE_NAMES[p.baseRole]||p.baseRole} · {p.userCount} asignación(es)
-       {p.system?" · Perfil fijo, no eliminable":""}</small></div>
+    {profiles.length===0&&!loading&&<p className="fm-profile-empty">Todavía no hay perfiles disponibles.</p>}
+    {profiles.map(p=><div className={"fm-profile-card"+(editing===p.profileId?" is-active":"")} key={p.profileId}>
+     <div className="fm-profile-card-main">
+      <div className="fm-profile-card-title">
+       <strong>{p.name}</strong>
+       <span className={"fm-profile-tag"+(p.system?" is-system":"")}>{p.system?"Base":"Personalizado"}</span>
+      </div>
+      <small>{ROLE_NAMES[p.baseRole]||p.baseRole} · {Number(p.userCount||0)} {Number(p.userCount||0)===1?"usuario asignado":"usuarios asignados"}</small>
+      <div className="fm-profile-card-scope">
+       <span>{p.modules===null?"Todos los módulos":(p.modules||[]).length+" módulos"}</span>
+       <span>{p.sections===null?"Todas las páginas":(p.sections||[]).length+" páginas"}</span>
+      </div>
+     </div>
      <div className="fm-profile-actions">
       {p.editable!==false?<button className="btn btn-secondary btn-sm" type="button" disabled={busy}
-       onClick={()=>edit(p)}>Configurar</button>:
-       <span className="fm-profile-readonly">Solo lectura</span>}
+       onClick={()=>edit(p)}><Settings2 size={14}/> Configurar</button>:
+       <span className="fm-profile-readonly"><LockKeyhole size={13}/> Solo lectura</span>}
       {canCreateRole(p.baseRole)&&<button className="btn btn-secondary btn-sm" type="button" disabled={busy}
        onClick={()=>duplicate(p)}><Copy size={14}/> Duplicar</button>}
-      {p.deletable!==false&&!p.system&&p.userCount===0&&<button className="btn btn-secondary btn-sm" type="button"
+      {p.deletable!==false&&!p.system&&p.userCount===0&&<button className="btn btn-secondary btn-sm fm-profile-delete" type="button"
        disabled={busy} onClick={()=>remove(p)}><Trash2 size={14}/> Eliminar</button>}
      </div>
     </div>)}
    </div>
   </section>
-  {editing!==null&&<section className="card fm-manage-client" id="editar-perfil">
-   <div className="section-heading"><h2>{editing==="new"?"Crear perfil":"Configurar perfil"}</h2></div>
+  {editing!==null&&<section className="card fm-manage-client fm-profile-editor-panel" id="editar-perfil">
+   <div className="section-heading fm-profile-section-heading">
+    <div><h2>{editing==="new"?"Crear perfil":"Configurar perfil"}</h2>
+     <p>Define el nivel funcional, las páginas visibles y las acciones permitidas.</p></div>
+    <button className="btn btn-secondary btn-sm" type="button" disabled={busy}
+     onClick={()=>setEditing(null)}><ArrowLeft size={14}/> Cerrar</button>
+   </div>
    <form className="fm-profile-editor" onSubmit={save}>
+    <div className="fm-profile-subheading"><strong>Información general</strong><span>Nombre y nivel de acceso</span></div>
     <div className="fm-profile-identity">
      <label>Nombre del perfil
       <input required maxLength={120} value={draft.name}
@@ -152,6 +191,7 @@ export default function Perfiles({client,role="superadministrador"}){
     <p className="fm-profile-hint">Los módulos habilitados para cada cliente siguen siendo el límite.
      El nivel funcional conserva las restricciones existentes de la aplicación.
      Aquí se configura qué páginas y operaciones autoriza el perfil.</p>
+    <div className="fm-profile-subheading"><strong>Alcance del perfil</strong><span>Selecciona si hereda accesos nuevos automáticamente</span></div>
     <div className="fm-profile-inherit">
      <label><input type="checkbox" checked={draft.modules===null}
       disabled={busy||(scope!==null&&draft.modules!==null)}
@@ -165,6 +205,7 @@ export default function Perfiles({client,role="superadministrador"}){
         (scope===null||scope.sections.includes(s.id))).map(s=>s.id)}))}/>
       Heredar todas las páginas de los módulos autorizados</label>
     </div>
+    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Marca las operaciones y las páginas autorizadas en cada módulo</span></div>
     <div className="fm-profile-matrix" role="group" aria-label="Permisos por módulo">
      <div className="fm-profile-matrix-header"><span>Módulo / pantallas</span>
       {OPERATIONS.map(([key,label])=><span key={key}>{label}</span>)}</div>
@@ -206,5 +247,6 @@ export default function Perfiles({client,role="superadministrador"}){
     </div>
    </form>
   </section>}
+  </div>
  </div>;
 }

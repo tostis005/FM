@@ -144,3 +144,28 @@ test("Al cambiar la URL guardada, la próxima visita relee Dropbox aunque el sna
  assert.equal(report.rows[0].required,8);
  assert.equal(report.meta.sourceState,"ok");
 });
+
+test("Cada canal usa su propia demanda y propuesta sin mezclar líneas de otros canales",async()=>{
+ const initial=[
+  {orderId:"101",orderName:"#101",createdAt:null,channel:"web",quantity:5,
+   sku:"123456",cn:"123456",title:"Producto A"},
+  {orderId:"102",orderName:"#102",createdAt:null,channel:"app",quantity:2,
+   sku:"123456",cn:"123456",title:"Producto A"}
+ ];
+ const f=fixture({initial,importedAt:new Date().toISOString()});
+ const total=await readPickingReport(f.pool,f.ctx);
+ assert.equal(total.totals.units,7);
+ assert.equal(total.channelTotals.web.units,5);
+ assert.equal(total.channelTotals.app.units,2);
+ assert.equal(total.channelTotals.web.orders,1);
+ const row=total.rows[0];
+ assert.equal(row.channelSlices.web.required,5);
+ assert.equal(row.channelSlices.app.required,2);
+ assert.equal(row.channelSlices.web.planned[0],4);
+ assert.equal(row.channelSlices.app.planned[0],2);
+ const web=await readPickingReport(f.pool,f.ctx,{channel:"web"});
+ assert.equal(row.channelSlices.web.allocated,web.rows[0].allocated);
+ assert.equal(row.channelSlices.web.pending,web.rows[0].pending);
+ assert.deepEqual(row.channelSlices.web.planned,web.rows[0].stock.map(s=>s.planned));
+ assert.deepEqual(row.channelSlices.web.details,web.rows[0].details);
+});

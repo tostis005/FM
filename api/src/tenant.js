@@ -37,7 +37,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       "SELECT modulo_clave AS id,habilitado AS enabled FROM farmetrica.cliente_modulos WHERE cliente_slug=$1",
       [slug]);
     const {rows:pharmacies}=await pool.query(
-      "SELECT id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS \"sourceCode\",host_origen AS \"sourceHost\",bd_origen AS \"sourceDatabase\" FROM farmetrica.farmacias WHERE cliente_slug=$1 ORDER BY id",
+      "SELECT id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS \"sourceCode\",host_origen AS \"sourceHost\",bd_origen AS \"sourceDatabase\",tipo_establecimiento AS \"establishmentType\" FROM farmetrica.farmacias WHERE cliente_slug=$1 ORDER BY id",
       [slug]);
     const all = role==="superadministrador"||role==="administrador";
     const ids = all ? pharmacies.map(p=>Number(p.id)):
@@ -47,7 +47,11 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug)},
       role, modules:effectiveModules,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user)),
-      pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))).map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})), allowedPharmacyIds:ids};
+      pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))&&p.establishmentType!=="almacen")
+        .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
+      establishments:pharmacies.filter(p=>ids.includes(Number(p.id)))
+        .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
+      allowedPharmacyIds:ids.filter(id=>pharmacies.some(p=>Number(p.id)===id&&p.establishmentType!=="almacen"))};
   }
   function middleware(predicate=()=>true) {
     return [requireUser,async(req,res,next)=>{
@@ -481,6 +485,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       res.json(rows[0]);
     }catch(e){next(e)}
   });
+  // Maestro completo para administración; no se mezcla el almacén con los
+  // filtros comerciales ni se ofrece como farmacia para asignación de usuarios.
+  app.get("/api/tenant/establecimientos",...requireTenantManager(),
+    (req,res)=>res.json(req.context.establishments));
   app.get("/api/tenant/farmacias",...requireTenant(),(req,res)=>res.json(req.context.pharmacies));
   app.post("/api/tenant/farmacias",...requireTenantAdmin(),async(req,res,next)=>{
     try{

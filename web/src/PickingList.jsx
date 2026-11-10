@@ -51,14 +51,11 @@ export default function PickingList({clientSlug}){
  const [expanded,setExpanded]=useState("");
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
- async function reload(nextChannel=channel){
-  setLoading(true);setError("");
-  try{
-   const path="report"+(nextChannel?"?channel="+encodeURIComponent(nextChannel):"");
-   setData(await callApi(clientSlug,path));
-  }catch(e){setError(e.message)}
-  finally{setLoading(false);}
- }
+ const [clock,setClock]=useState(Date.now());
+ useEffect(()=>{
+  const timer=setInterval(()=>setClock(Date.now()),60000);
+  return ()=>clearInterval(timer);
+ },[]);
  useEffect(()=>{
   let alive=true;
   setLoading(true);setError("");
@@ -115,7 +112,7 @@ export default function PickingList({clientSlug}){
  const sourceConfigured=Boolean(data?.meta?.sourceConfigured);
  const sourceError=data?.meta?.sourceError;
  const sourceEmpty=ready&&data?.totals?.products===0;
- const ageMinutes=ready?(Date.now()-new Date(data.meta.lastImportedAt).getTime())/60000:null;
+ const ageMinutes=ready?(clock-new Date(data.meta.lastImportedAt).getTime())/60000:null;
  const isStale=ready&&ageMinutes>30;
  return <div className="fm-picking-page">
   <ReportPageHeader title="Picking List"
@@ -128,8 +125,7 @@ export default function PickingList({clientSlug}){
    Pedidos online pendientes, existencias por ubicación y propuesta de preparación.
    El reparto es informativo: no reserva artículos ni modifica pedidos en Shopify o Farmatic.
   </p>
-  {error&&<div className="fm-picking-alert" role="alert"><AlertTriangle size={17}/>{error}
-   <button className="btn btn-secondary btn-sm" onClick={()=>void reload()}>Reintentar</button></div>}
+  {error&&<div className="fm-picking-alert" role="alert"><AlertTriangle size={17}/>{error}</div>}
   <section className="card fm-picking-source">
    <div className="fm-picking-source-details">
     <strong>Pedidos pendientes de Shopify</strong>

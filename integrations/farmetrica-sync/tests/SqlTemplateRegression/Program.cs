@@ -283,5 +283,31 @@ if (!family.FullSql.Contains("fa.IdFamilia = f.IdFamilia", StringComparison.Ordi
     throw new Exception("Relaciones Familia-FamiliaAux-SuperFamilia incorrectas.");
 if (!family.FullSql.Contains("f.XGrup_IdGrupoIva) AS grupo_iva_id", StringComparison.Ordinal))
     throw new Exception("Conservar el código de grupo de IVA en texto, por ejemplo 02.");
-Console.WriteLine("OK: 8 plantillas Farmatic, vendedores por ID, JOIN documentales y catálogos.");
+// Sinónimos: varios códigos por artículo, fotografía completa semanal y alta idempotente.
+var aliases = SqlTemplates.All.Single(x => x.SystemType == "farmatic" && x.Entity == "sinonimos");
+if (aliases.PreferredMode != "snapshot" || aliases.SuggestedEveryMinutes != 10080 ||
+    aliases.Sql != aliases.FullSql || aliases.FullSql.Contains("TOP (1000)") ||
+    aliases.FullSql.Contains("@desde") || aliases.FullSql.Contains("@hasta") ||
+    !aliases.FullSql.Contains("{{TABLE:dbo.Sinonimo}}"))
+    throw new Exception("Sinónimos debe leer todas las filas de dbo.Sinonimo semanalmente.");
+foreach (var col in new[] { "origen_id", "articulo_id", "aplicacion_id", "codigo" })
+    if (!entities["sinonimos"].Columns.Any(c => c.Name == col && c.Type == "text"))
+        throw new Exception("El código no puede convertirse a número ni perder ceros: " + col);
+if (!aliases.FullSql.Contains("s.IdArticu") ||
+    !aliases.FullSql.Contains("s.IdAplicacion") ||
+    !aliases.FullSql.Contains("s.Sinonimo") ||
+    !aliases.FullSql.Contains("SELECT DISTINCT"))
+    throw new Exception("La clave debe mantener IdArticu + IdAplicacion + Sinonimo.");
+var config = new AppConfig();
+config.Pharmacies.Add(new Pharmacy { Code = "ABA", SystemType = "farmatic" });
+config.Pharmacies.Add(new Pharmacy { Code = "EUR", SystemType = "farmatic" });
+if (SynonymJobs.EnsureForFarmatic(config) != 2 || SynonymJobs.EnsureForFarmatic(config) != 0)
+    throw new Exception("Crear exactamente una fuente por farmacia y no duplicarlas.");
+if (config.Jobs.Count != 2 || config.Jobs.Any(j => !j.Enabled ||
+    j.Mode != "snapshot" || j.EveryMinutes != 10080))
+    throw new Exception("La fuente nueva debe quedar activa por defecto, semanal y snapshot.");
+config.Jobs[0].Enabled = false;
+if (SynonymJobs.EnsureForFarmatic(config) != 0 || config.Jobs[0].Enabled)
+    throw new Exception("No reactivar una fuente que un administrador desactivó.");
+Console.WriteLine("OK: 9 plantillas Farmatic, sinónimos semanales, JOIN documentales y catálogos.");
 

@@ -1,15 +1,10 @@
-import express from "express";
 import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {allocatePending,downloadDropboxCsv,parsePendingCsv,validateDropboxCsvUrl} from "./pickingListCore.js";
+import {allocatePending,downloadDropboxCsv,parsePendingCsvDetailed,validateDropboxCsvUrl} from "./pickingListCore.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const managed=ctx=>["superadministrador","administrador","gestor"].includes(ctx?.role)&&
  (ctx.role==="superadministrador"||ctx.modules?.stock===true);
-const writable=ctx=>managed(ctx)&&(ctx.role==="superadministrador"||
-  ctx.profilePermissions?.stock==null ||
-  ctx.profilePermissions.stock.includes("importar") ||
-  ctx.profilePermissions.stock.includes("editar"));
 const pendingFetch=new Map();
 // La presencia de una URL no implica que la descarga ni el parseo hayan tenido éxito.
 // Se registran los intentos sin almacenar ni exponer el enlace privado en el reporte.
@@ -65,7 +60,9 @@ export async function readReportWithCurrentSource(pool,ctx,{fetchFn,...options}=
  return report;
 }
 
-export async function savePendingSnapshot(pool,slug,lines,{origin="archivo",user=""}={}){
+export async function savePendingSnapshot(pool,slug,lines,{
+ origin="dropbox",user="",omitted=0,warning=""
+}={}){
  if(!SCHEMA.test(slug)||!Array.isArray(lines)||lines.length>50000)
   throw new Error("El CSV puede contener hasta 50.000 líneas.");
  const tx=await pool.connect();
@@ -91,8 +88,9 @@ export async function savePendingSnapshot(pool,slug,lines,{origin="archivo",user
   }
   await tx.query(
    "UPDATE farmetrica.picking_list_fuentes SET ultimo_origen=$2,ultima_importacion=now(),"+
-   "ultima_fila=$3,actualizado_por=$4,actualizado_en=now() WHERE cliente_slug=$1",
-   [slug,origin,lines.length,user]);
+   "ultima_fila=$3,actualizado_por=$4,lineas_omitidas=$5,aviso_importacion=$6,"+
+   "actualizado_en=now() WHERE cliente_slug=$1",
+   [slug,origin,lines.length,user,omitted,warning]);
   await tx.query("COMMIT");
   return {rows:lines.length};
  }catch(e){await tx.query("ROLLBACK");throw e}
@@ -105,7 +103,10 @@ export async function refreshPendingSource(pool,slug,{fetchFn}={}){
    "SELECT csv_url FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",[slug]);
   if(!rows[0]?.csv_url)throw new Error("Configura primero el enlace de Dropbox al CSV pendiente.");
   const csv=await downloadDropboxCsv(rows[0].csv_url,{fetchFn});
-  return savePendingSnapshot(pool,slug,parsePendingCsv(csv),{origin:"dropbox",user:"actualización programada"});
+  const {lines,omitted,warning}=parsePendingCsvDetailed(csv);
+  return savePendingSnapshot(pool,slug,lines,{
+   origin:"dropbox",user:"actualización programada",omitted,warning
+  });
  })();
  pendingFetch.set(slug,pending);
  try{return await pending}finally{pendingFetch.delete(slug);}
@@ -113,9 +114,11 @@ export async function refreshPendingSource(pool,slug,{fetchFn}={}){
 async function getMetadata(pool,slug){
  const {rows}=await pool.query(
   "SELECT ultima_importacion AS \"lastImportedAt\",ultima_fila AS \"lineCount\","+
-  "ultimo_origen AS origin,(nullif(csv_url,'') IS NOT NULL) AS \"sourceConfigured\" "+
+  "ultimo_origen AS origin,(nullif(csv_url,'') IS NOT NULL) AS \"sourceConfigured\","+
+  "lineas_omitidas AS \"skippedLines\",aviso_importacion AS \"importWarning\" "+
   "FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",[slug]);
- return rows[0]||{lastImportedAt:null,lineCount:0,origin:null,sourceConfigured:false};
+ return rows[0]||{lastImportedAt:null,lineCount:0,origin:null,
+  sourceConfigured:false,skippedLines:0,importWarning:""};
 }
 async function getInventory(pool,ctx,codes){
  const schema=ctx.client.schema;
@@ -236,8 +239,6 @@ export function setupPickingList(app,pool,{requireTenant}){
  const guard=requireTenant();
  const allowed=(req,res,next)=>managed(req.context)?next():res.status(403).json({
   error:"La Picking List requiere perfil gestor/administrador y acceso a Stock"});
- const write=(req,res,next)=>writable(req.context)?next():res.status(403).json({
-  error:"Tu perfil no permite importar o actualizar los pedidos de Picking List"});
  const settingsAdmin=(req,res,next)=>
   ["superadministrador","administrador","gestor"].includes(req.context?.role)?
    next():res.status(403).json({error:"Solo los administradores y gestores pueden configurar la fuente de Picking List"});
@@ -251,13 +252,15 @@ export function setupPickingList(app,pool,{requireTenant}){
  app.get("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
   try{
    const {rows}=await pool.query(
-    'SELECT csv_url,ultima_importacion AS "lastImportedAt",actualizado_en AS "updatedAt" '+
+    'SELECT csv_url,ultima_importacion AS "lastImportedAt",actualizado_en AS "updatedAt",'+
+    'lineas_omitidas AS "skippedLines",aviso_importacion AS "importWarning" '+
     'FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1',
     [req.context.client.slug]);
    const row=rows[0];
    const diagnostic=sourceDiagnostics.get(req.context.client.slug);
    res.json({url:row?.csv_url||"",sourceConfigured:Boolean(row?.csv_url),
     lastImportedAt:row?.lastImportedAt||null,updatedAt:row?.updatedAt||null,
+    skippedLines:row?.skippedLines||0,importWarning:row?.importWarning||"",
     sourceError:diagnostic?.error||null,lastAttemptAt:diagnostic?.lastAttemptAt||null});
   }catch(e){next(e);}
  });
@@ -269,25 +272,14 @@ export function setupPickingList(app,pool,{requireTenant}){
     "actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now()",
     [req.context.client.slug,url,req.user.email]);
    sourceDiagnostics.delete(req.context.client.slug);
+   // Guardar es suficiente: la fuente se lee en servidor, sin intervención
+   // del usuario. Si falla, la última lectura válida permanece visible.
+   void monitoredRefresh(pool,req.context.client.slug).catch(()=>{});
    res.json({ok:true,sourceConfigured:true});
   }catch(e){if(e.message?.includes("Dropbox"))return res.status(400).json({error:e.message});
    next(e);}
  });
- app.post("/api/picking-list/refresh",...guard,allowed,write,async(req,res,next)=>{
-  try{res.json({ok:true,...await monitoredRefresh(pool,req.context.client.slug)});}
-  catch(e){res.status(502).json({error:safeSourceError(e)+
-   " Se mantienen los pedidos anteriores."});}
- });
- app.post("/api/picking-list/import",...guard,allowed,write,
-  express.text({type:["text/csv","text/plain"],limit:"8mb"}),async(req,res,next)=>{
-   try{
-    if(typeof req.body!=="string")return res.status(400).json({error:"Selecciona un CSV."});
-    const imported=parsePendingCsv(req.body);
-    res.json({ok:true,...await savePendingSnapshot(pool,req.context.client.slug,imported,{
-     origin:"archivo",user:req.user.email})});
-   }catch(e){if(/CSV|Fila|columna|líneas|fichero|No hay/.test(e.message||""))
-    return res.status(400).json({error:e.message});next(e);}
-  });
+
 }
 export function startPickingListPolling(pool,interval=15*60*1000){
  const tick=async()=>{

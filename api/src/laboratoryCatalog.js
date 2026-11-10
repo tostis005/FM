@@ -1,6 +1,6 @@
 import {canonicalSupplierCode} from "./purchasePlannerSuppliers.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {resolveEANReferences} from "./synonymSearch.js";
+import {resolveEANReferences,isBarcodeSearch} from "./synonymSearch.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {normalizedLabSQL} from "./laboratoryIdentity.js";
 import {readDirectLaboratoryCatalog,diagnosticLaboratorySources} from "./laboratoryFastCatalog.js";
@@ -214,6 +214,19 @@ export function setupLaboratoryCatalog(app,pool,{requireTenant}){
  const auth=requireTenant();
  const access=(req,res)=>req.context.role==="superadministrador"||
   req.context.modules?.compras===true;
+ // El preparador filtra una tabla ya cargada: exponer solo las referencias
+ // equivalentes al EAN dentro de las farmacias autorizadas.
+ if(typeof app.get==="function")app.get("/api/analytics/pedidos/resolver-ean",...auth,async(req,res,next)=>{
+  if(!access(req,res))return res.status(403).json({error:"Compras no habilitado"});
+  const pharmacies=selectedPharmacies(req.context,req.query.farmacias);
+  const codigo=String(req.query.codigo||"").trim();
+  if(!pharmacies||codigo.length>20)return res.status(400).json({error:"Consulta EAN inválida"});
+  if(!isBarcodeSearch(codigo))return res.json({references:[]});
+  try{
+   const references=await resolveEANReferences(pool,req.context,pharmacies,codigo);
+   res.json({references});
+  }catch(e){next(e)}
+ });
  if(typeof app.get==="function")app.get("/api/analytics/pedidos/catalogo-laboratorios",...auth,async(req,res,next)=>{
   if(!access(req,res)&&req.context.modules?.proveedores!==true)
    return res.status(403).json({error:"Catálogo no habilitado"});

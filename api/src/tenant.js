@@ -125,7 +125,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const ctx=req.context;
     res.json({user:{email:req.user.email,name:req.user.name,role:req.user.role},
       clients,client:ctx.client,role:ctx.role,modules:ctx.modules,sections:ctx.sections,
-      pharmacies:ctx.pharmacies});
+      pharmacies:ctx.pharmacies,establishments:ctx.establishments});
     }catch(e){next(e)}
   });
   app.get("/api/admin/clientes",requireSuperadmin,async(_req,res,next)=>{

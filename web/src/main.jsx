@@ -690,7 +690,10 @@ function App(){
  const orderedCNs=searchedCNs.sort((a,b)=>cnSort==="asc"?a.localeCompare(b,"es",{numeric:true}):b.localeCompare(a,"es",{numeric:true}));
  const safeCNPage=Math.min(cnPage,Math.max(0,Math.ceil(orderedCNs.length/cnPageSize)-1));
  const currentUsers=users.filter(u=>(u.name+" "+u.email+" "+ROLES[u.role]).toLocaleLowerCase("es").includes(filterText));
- const currentPharmacies=pharmacies.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
+ // El almacén solo aparece en el maestro: los informes y permisos continúan
+ // utilizando exclusivamente farmacias reales.
+ const establishments=tenantContext?.establishments||pharmacies;
+ const currentPharmacies=establishments.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
   if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
@@ -1124,6 +1127,17 @@ function App(){
       if (!(await hasPharmacySession())) {setPharmacyApiStatus("sin_sesion");return;}
       const records=await loadPharmacies();
       setData(prev=>({...prev,pharmacies:records}));
+      // Solo el maestro administrativo ve almacenes; no entran en los
+      // selectores de ventas, promociones, medicamentos ni usuarios.
+      if(tenantContext?.client?.slug){
+       const response=await fetch("/api/tenant/establecimientos",{
+        credentials:"same-origin",cache:"no-store",
+        headers:{"X-Farmetrica-Cliente":tenantContext.client.slug}});
+       if(response.ok){
+        const all=await response.json();
+        if(Array.isArray(all))setTenantContext(c=>c?{...c,establishments:all}:c);
+       }
+      }
       setPharmacyApiStatus("connected");setPharmacyApiError("");setPharmacyLastUpdated(new Date());
     } catch(err) {setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
   }
@@ -1132,6 +1146,10 @@ function App(){
     catch(err){setPharmacyApiStatus("error");setPharmacyApiError(err.message);}
   }
   function startPharmacy(f){
+    if(f?.establishmentType==="almacen"){
+      setToast("Almacén central · ID "+f.id+" · código "+f.sourceCode+" · origen "+f.sourceDatabase+". Se configura desde Farmétrica Sync.");
+      return;
+    }
     if(pharmacyBackendConfigured && pharmacyApiStatus!=="connected")return setToast("Inicia sesión como administrador desde Accesos");
     setEditingPharmacy(f?.id||"nuevo");
     setPharmacyForm(f?{...f}:{id:"",name:"",city:"",active:true,sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
@@ -1572,7 +1590,7 @@ function App(){
   {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
 </>}
 {page==="farmacias"&&<>
- <ReportPageHeader title="Maestro de farmacias" updatedAt={pharmacyLastUpdated}
+ <ReportPageHeader title="Maestro de establecimientos" updatedAt={pharmacyLastUpdated}
    onRefresh={()=>void refreshPharmacies()} refreshing={pharmacyApiStatus==="cargando"}
    actions={<div className="pharmacy-header-actions">
      {pharmacyBackendConfigured&&pharmacyApiStatus!=="connected"&&
@@ -1584,13 +1602,17 @@ function App(){
   <label className="fm-unified-filter"><span>Buscar farmacia</span>
    <input type="search" placeholder="Código, nombre o ciudad…" value={search}
     onChange={e=>setSearch(e.target.value)}/></label>
- </ReportFilterBar><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" loading={pharmacyApiStatus==="cargando"} value={pharmacies.length} caption="Total en el maestro"/><Kpi icon={CheckCircle2} title="Activas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Listado de farmacias</h2></div></div><ListTable rows={pharmacyApiStatus==="cargando"?[]:currentPharmacies} rowKey={f=>f.id} label="farmacias" defaultSort={{key:"name",direction:"asc"}} loading={pharmacyApiStatus==="cargando"} loadingLabel="Sincronizando maestro de farmacias…"
+ </ReportFilterBar><div className="kpi-grid small-kpis"><Kpi icon={Store} title="Farmacias" loading={pharmacyApiStatus==="cargando"} value={pharmacies.length} caption="Farmacias operativas"/><Kpi icon={CheckCircle2} title="Activas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>f.active).length} caption="En funcionamiento"/><Kpi icon={Users} title="Inactivas" loading={pharmacyApiStatus==="cargando"} value={pharmacies.filter(f=>!f.active).length} caption=""/></div><div className="full-width-grid"><div className="card list-card"><div className="section-heading"><div><h2>Farmacias y almacén central</h2></div></div><ListTable rows={pharmacyApiStatus==="cargando"?[]:currentPharmacies} rowKey={f=>f.id} label="farmacias" defaultSort={{key:"name",direction:"asc"}} loading={pharmacyApiStatus==="cargando"} loadingLabel="Sincronizando maestro de farmacias…"
   onRowClick={startPharmacy} emptyText="No hay farmacias con esos filtros"
   columns={[
     {key:"name",label:"Nombre público",filterMode:"multi",value:f=>f.name,render:f=><div className="pharma-cell"><span className="store-mini"><Store size={16}/></span><strong>{f.name}</strong></div>},
+    {key:"id",label:"ID",value:f=>Number(f.id),render:f=><span className="id-code">{f.id}</span>},
+    {key:"type",label:"Tipo",filterMode:"multi",value:f=>f.establishmentType==="almacen"?"Almacén":"Farmacia",
+     render:f=><strong>{f.establishmentType==="almacen"?"Almacén":"Farmacia"}</strong>},
     {key:"code",label:"Código visible",filterMode:"multi",value:f=>f.displayCode||f.sourceCode||"",render:f=><span className="id-code">{f.displayCode||f.sourceCode||"—"}</span>},
+    {key:"database",label:"Base de datos",value:f=>f.sourceDatabase||"",render:f=>f.sourceDatabase||"—"},
     {key:"active",label:"Estado",filterMode:"multi",value:f=>f.active?"Activa":"Inactiva",render:f=><Pill status={f.active?"Activa":"Inactiva"}/>},
-    {key:"users",label:"Usuarios",value:f=>users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
+    {key:"users",label:"Usuarios",value:f=>f.establishmentType==="almacen"?"—":users.filter(u=>u.role==="superadmin"||u.pharmacies.includes(f.id)).length},
     {key:"actions",label:"",value:()=>"",sortable:false,searchable:false,render:()=> <Pencil size={16} className="muted"/>}
   ]}/></div></div></>}
     {page==="promociones-objetivos"&&(

@@ -3,6 +3,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 import {readQuickLaboratoryCatalog} from "./laboratoryQuickCatalog.js";
 import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
+import {resolveEANReferences} from "./synonymSearch.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const validCN=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
@@ -37,6 +38,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
   key,pharmacies,type,search,page,size,patterns,hasNativeCN,skipMovementCheck
  });
  if(quick?.total>0)return quick;
+ const eanRefs=await resolveEANReferences(pool,context,pharmacies,search);
  const cn= `coalesce(${validCN("a.codigo_nacional")},
    ${validCN(hasNativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'")},
    CASE WHEN EXISTS(SELECT 1 FROM farmetrica.nomenclator_presentaciones verified
@@ -244,12 +246,12 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  ), filtered AS (
   SELECT *,("inReceipts" AND NOT "inMaster" AND cn IS NULL) AS provisional
   FROM summarized WHERE tipo=$4 AND
-   ($5::text='' OR nombre ILIKE '%'||$5||'%' OR referencia ILIKE '%'||$5||'%')
+   ($5::text='' OR nombre ILIKE '%'||$5||'%' OR referencia ILIKE '%'||$5||'%' OR referencia=ANY($9::text[]))
  )
  SELECT *,count(*) OVER()::int AS total
  FROM filtered ORDER BY nombre,referencia LIMIT $6 OFFSET $7`;
  const {rows}=await pool.query({text:sql,
-  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size,patterns],
+  values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size,patterns,eanRefs],
   query_timeout:30000});
  return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
 }

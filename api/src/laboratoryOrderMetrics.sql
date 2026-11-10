@@ -48,6 +48,54 @@ WITH refs AS MATERIALIZED (
   CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
   min(stock_at) AS stock_at
  FROM articles GROUP BY pharmacy_id,reference
+
+), warehouse_scope AS (
+ -- Solo el establecimiento central del cliente, nunca una farmacia comercial.
+ SELECT upper(btrim(f.codigo_origen)) AS source_code
+ FROM farmetrica.farmacias f
+ WHERE f.cliente_slug=$3 AND f.tipo_establecimiento='almacen'
+   AND f.activo=true AND upper(btrim(f.codigo_origen))='ALMACEN'
+), warehouse_ready AS MATERIALIZED (
+ -- Sin primera importación no se puede interpretar ausencia de artículo como stock 0.
+ SELECT EXISTS (
+  SELECT 1 FROM __SCHEMA__.articulos a JOIN warehouse_scope w
+   ON upper(btrim(a.farmacia_codigo))=w.source_code
+ ) AS ready
+), warehouse_matches AS (
+ -- Identificar por CN verificado igual que en la matriz de farmacias.
+ -- No asociar IDs ERP arbitrariamente entre bases de datos diferentes.
+ SELECT x.reference,a.origen_id::text AS article_id,
+   a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
+ FROM refs x CROSS JOIN warehouse_scope w
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=w.source_code
+   AND a.origen_id::text=x.cn
+ WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
+ UNION ALL
+ SELECT x.reference,a.origen_id::text,a.stock_actual::float8,a.sincronizado_en
+ FROM refs x CROSS JOIN warehouse_scope w
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=w.source_code
+   AND btrim(a.codigo_nacional)=x.cn
+ WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
+   AND nullif(btrim(a.codigo_nacional),'') IS NOT NULL
+ UNION ALL
+ SELECT x.reference,a.origen_id::text,a.stock_actual::float8,a.sincronizado_en
+ FROM refs x CROSS JOIN warehouse_scope w
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=w.source_code
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
+ WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
+), warehouse_distinct AS MATERIALIZED (
+ SELECT DISTINCT ON (reference,article_id)
+   reference,article_id,stock,stock_at
+ FROM warehouse_matches
+ ORDER BY reference,article_id,stock_at DESC NULLS LAST
+), warehouse_inventory AS (
+ SELECT reference,
+  CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
+  min(stock_at) AS stock_at
+ FROM warehouse_distinct GROUP BY reference
 ), eligible_articles AS MATERIALIZED (
  -- La misma referencia/CN puede tener varios registros ERP. Identificar
  -- cada pareja farmacia+artículo una sola vez antes de leer sus ventas.
@@ -117,6 +165,9 @@ WITH refs AS MATERIALIZED (
 )
 SELECT x.reference,f.id::text AS "pharmacyId",
  i.stock,i.stock_at AS "stockAt",
+ wi.stock AS "warehouseStock",
+ wi.stock_at AS "warehouseStockAt",
+ wr.ready AS "warehouseReady",
  coalesce(m.sold,0)::float8 AS "unitsPeriod",
  coalesce(m.v3,0)::float8 AS "units3",
  coalesce(m.v12,0)::float8 AS "units12",
@@ -127,6 +178,8 @@ SELECT x.reference,f.id::text AS "pharmacyId",
    coalesce(policy.cobertura_dias,20)
    -i.stock-coalesce(pending.qty,0)-1e-9)))::int END AS suggested
 FROM refs x CROSS JOIN pharmacies f
+CROSS JOIN warehouse_ready wr
+LEFT JOIN warehouse_inventory wi ON wi.reference=x.reference
 LEFT JOIN inventory i ON i.pharmacy_id=f.id AND i.reference=x.reference
 LEFT JOIN movements m ON m.pharmacy_id=f.id AND m.reference=x.reference
 LEFT JOIN pending ON pending.pharmacy_id=f.id AND pending.reference=x.reference

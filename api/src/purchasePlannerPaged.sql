@@ -58,7 +58,7 @@ catalogo_sin_ventas AS MATERIALIZED (
   AND upper(btrim(a.farmacia_codigo))=__FARMACIA_CODE__
  WHERE $5::text<>'' AND
   (upper(a.origen_id) LIKE '%'||$5||'%' OR upper(a.nombre) LIKE '%'||$5||'%'
-   OR upper(coalesce(a.codigo_nacional,'')) LIKE '%'||$5||'%')
+   OR upper(coalesce(a.codigo_nacional,'')) LIKE '%'||$5||'%' __EAN_CATALOG__)
   AND NOT EXISTS(SELECT 1 FROM catalogo c WHERE c.fid=f.id AND c.articulo=a.origen_id)
 ),
 articulos AS MATERIALIZED (
@@ -182,8 +182,8 @@ filtrados AS MATERIALIZED (
    OR EXISTS(SELECT 1 FROM clasificados c WHERE c.grupo=g.key AND
     (upper(c.articulo) LIKE '%'||$5||'%'
       OR upper(c.nombre) LIKE '%'||$5||'%'
-      OR upper(coalesce(c.cn,'')) LIKE '%'||$5||'%')))
-  AND ($8::text='' OR g."articleName" ILIKE '%'||$8||'%' OR g.cn ILIKE '%'||$8||'%')
+      OR upper(coalesce(c.cn,'')) LIKE '%'||$5||'%' __EAN_CLASSIFIED__)))
+  AND ($8::text='' OR g."articleName" ILIKE '%'||$8||'%' OR g.cn ILIKE '%'||$8||'%' __EAN_COLUMN__)
   AND ($9::text='' OR coalesce(g.stock::text,'') ILIKE '%'||$9||'%')
   AND ($10::text='' OR g."unitsPeriod"::text ILIKE '%'||$10||'%')
   AND ($11::text='' OR g."units3"::text ILIKE '%'||$11||'%')

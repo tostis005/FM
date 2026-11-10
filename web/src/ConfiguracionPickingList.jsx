@@ -46,7 +46,7 @@ export default function ConfiguracionPickingList({clientSlug,role,permissions=nu
   try{
    const result=await request(clientSlug,"refresh",{method:"POST",
     headers:{"Content-Type":"application/json"},body:"{}"});
-   setSource(s=>({...s,lastImportedAt:new Date().toISOString()}));
+   setSource(s=>({...s,lastImportedAt:new Date().toISOString(),sourceError:null}));
    setNotice("Pedidos pendientes actualizados desde Dropbox ("+result.rows+" líneas).");
   }catch(e){setError(e.message)}finally{setBusy("")}
  }

@@ -312,3 +312,40 @@ test("La antigüedad del timestamp del artículo no genera falso estado de stock
  assert.equal(report.rows[0].status,"cubierto");
  assert.equal(report.totals.incomplete,0);
 });
+
+test("Picking List localiza EAN real de los sinónimos Farmatic aunque el CSV contenga el CN",async()=>{
+ const pool={async query(sql,args=[]){
+  if(sql.includes('ultima_importacion AS "lastImportedAt"'))return {rows:[{
+   lastImportedAt:new Date().toISOString(),lineCount:1,sourceConfigured:true
+  }]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[{
+   orderId:"505",orderName:"#505",channel:"web",sku:"217800",cn:"217800",
+   quantity:2,title:"Producto de prueba"
+  }]};
+  if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+   return {rows:[{available:true}]};
+  if(sql.includes("WITH sources AS MATERIALIZED"))return {rows:[{
+   siteId:"1",siteName:"Farmacia Abadía",code:"ABA",kind:"farmacia",
+   ready:true,key:"217800",stock:5,matched:true,name:"Producto de prueba"
+  },{
+   siteId:"6",siteName:"ALM",code:"ALMACEN",kind:"almacen",
+   ready:true,key:"217800",stock:4,matched:true,name:"Producto de prueba"
+  }]};
+  if(sql.includes("WITH picking_ean_sites AS MATERIALIZED")){
+   assert.match(sql,/JOIN "ampedia"\.sinonimos si/);
+   assert.match(sql,/btrim\(si\.articulo_id\)=p\.article_id/);
+   assert.match(sql,/f\.id=ANY\(\$3::int\[\]\)/);
+   assert.match(sql,/codigo_origen\)\)<>'AMP'/);
+   assert.equal(args[0],"ampedia");
+   assert.deepEqual(args[2],[1]);
+   return {rows:[{key:"217800",eans:["8720689021111","8720689021111"]}]};
+  }
+  throw Error("SQL inesperado: "+sql.slice(0,120));
+ }};
+ const report=await readPickingReport(pool,{
+  client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1]});
+ assert.deepEqual(report.rows[0].eans,["8720689021111"]);
+ assert.equal(report.rows[0].cn,"217800");
+ assert.equal(report.rows[0].required,2);
+ assert.equal(report.rows[0].allocated,2);
+});

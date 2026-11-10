@@ -192,10 +192,15 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   const wh=stock.find(s=>s.kind==="almacen"&&s.code==="ALMACEN");
   const pharm=stock.filter(s=>s.kind==="farmacia");
   const matched=stock.some(s=>s.matched);
-  const proposal=matched&&wh?allocatePending(entry.required,wh.stock,pharm,{reserve:1}):null;
+  // Si el almacén aún no ha sincronizado, enseñar igualmente qué podría
+  // prepararse desde las farmacias, sin atribuir stock inexistente al almacén.
+  // La asignación se etiqueta como provisional y NO confirma cobertura.
+  const warehouseUnknown=!wh||wh.stock===null;
+  const proposal=matched?allocatePending(entry.required,
+   warehouseUnknown?0:wh.stock,pharm,{reserve:1}):null;
   for(const s of stock)s.planned=proposal?
-   (s.kind==="almacen"?proposal.warehouse||0:proposal.bySite[s.code]||0):0;
-  const hasMissing=!wh||stock.some(s=>!s.ready);
+   (s.kind==="almacen"?(warehouseUnknown?0:proposal.warehouse||0):proposal.bySite[s.code]||0):0;
+  const hasMissing=warehouseUnknown||stock.some(s=>!s.ready);
   const old=stock.some(s=>s.stockAt&&
    Date.now()-new Date(s.stockAt).getTime()>48*60*60*1000);
   const shortage=proposal?.remaining??null;
@@ -207,6 +212,7 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
    required:entry.required,orders:entry.orderKeys.size,
    lines:entry.lines,channels:[...entry.channels],details:entry.details,
    stock,allocated:proposal?.fulfilled??null,shortage,status,
+   allocationProvisional:Boolean(proposal)&&(warehouseUnknown||proposal.partial),
    stockTotal:stock.every(s=>s.stock!==null)?stock.reduce((sum,s)=>sum+s.stock,0):null,
    exhausted:proposal?.zeroedSites||[]
   };

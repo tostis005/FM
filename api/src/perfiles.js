@@ -1,5 +1,5 @@
 import {randomBytes} from "node:crypto";
-import {validateProfileDefinition} from "./profilePolicy.js";
+import {PROFILE_ACTIONS,profileAllows,validateProfileDefinition} from "./profilePolicy.js";
 import {canEditGlobalProfile,canManageProfileRole,profileWithinManagerScope} from "./profileManagementPolicy.js";
 import {USER_SECTIONS} from "./userSectionAccess.js";
 
@@ -51,11 +51,17 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
    const [profiles,{rows:modules}]=await Promise.all([catalogue(clientSlug),
     pool.query("SELECT clave AS id,nombre AS name FROM farmetrica.modulos ORDER BY nombre")]);
    const role=managerRole(req),context=req.context||{role};
+   const scope=role==="superadministrador"?null:{
+    modules:Object.keys(context.modules||{}).filter(id=>context.modules[id]===true),
+    sections:USER_SECTIONS.filter(s=>context.sections?.[s.id]===true).map(s=>s.id),
+    operations:Object.fromEntries(modules.map(m=>[m.id,PROFILE_ACTIONS.filter(op=>
+     context.modules?.[m.id]===true&&profileAllows(context.profilePermissions,m.id,op))]))
+   };
    res.json({profiles:profiles.map(p=>({
     ...p,editable:canEditGlobalProfile(context,p),
     deletable:!p.system&&p.userCount===0&&canEditGlobalProfile(context,p)
    })),modules,sections:USER_SECTIONS,
-    level:role});
+    level:role,scope});
   }catch(e){next(e);}
  }
  async function create(req,res,next){

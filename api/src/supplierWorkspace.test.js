@@ -33,21 +33,21 @@ test("tenant and section grants cover every shared supplier endpoint",()=>{
   "/api/tenant/proveedores-unificados/14/contactos",
   "/api/tenant/proveedores-unificados/14/documentos/17/descargar",
   "/api/tenant/proveedor-documento-categorias"]){
-  assert.deepEqual(requestModules({path}),[]);
+  assert.deepEqual(requestModules({path}),["proveedores"]);
   assert.deepEqual(requestSections({path}),["proveedores"]);
  }
 });
-test("pharmacy and collaborator can read categories with module disabled",async()=>{
+test("con módulo autorizado, farmacia y colaborador consultan categorías en solo lectura",async()=>{
  const {app,routes}=makeApp(),queries=[];
  const pool={query:async(sql,args)=>{
   queries.push({sql,args});return {rows:[{id:"7",name:"Tarifas",active:true}]};
  }};
  setupSupplierWorkspace(app,pool,{requireTenant:()=>[]});
  const path="/api/tenant/proveedor-documento-categorias";
- const reader=await call(routes,"GET",path,{role:"farmacia",moduleEnabled:false,slug:"grupo_farmacias"});
+ const reader=await call(routes,"GET",path,{role:"farmacia",moduleEnabled:true,slug:"grupo_farmacias"});
  assert.equal(reader.status,200);
  assert.equal(reader.data[0].name,"Tarifas");
- const collaborator=await call(routes,"GET",path,{role:"colaborador",moduleEnabled:false,slug:"grupo_farmacias"});
+ const collaborator=await call(routes,"GET",path,{role:"colaborador",moduleEnabled:true,slug:"grupo_farmacias"});
  assert.equal(collaborator.status,200);
  assert.deepEqual(queries[0].args,["grupo_farmacias"]);
  assert.match(queries[0].sql,/WHERE cliente_slug=\$1/);

@@ -10,9 +10,9 @@ function fixture(){
   {id:"6",name:"Almacén central",city:"",active:true,sourceCode:"ALMACEN",
    sourceHost:"sql.internal",sourceDatabase:"Farmatic",establishmentType:"almacen"}
  ];
- const app=new Proxy({}, {get(_,method)=> (path,...handlers)=>{
+ const app=new Proxy({}, {get(_target,method){return (path,...handlers)=>{
   if(typeof path==="string")routes.set(String(method).toUpperCase()+" "+path,handlers);
- }});
+ };}});
  const pool={async query(sql,args=[]){
   if(sql.includes("SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses"))
    return {rows:[{slug:"ampedia",nombre:"Ampedia",esquema_datos:"ampedia",

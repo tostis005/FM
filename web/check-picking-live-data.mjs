@@ -79,7 +79,20 @@ try{
  const groups=await page.locator(".fm-picking-grouped thead .fm-smart-group-row th").allTextContents();
  assert.ok(groups.some(x=>x.trim()==="Stock"),JSON.stringify(groups));
  assert.ok(groups.some(x=>x.trim()==="Unidades"),JSON.stringify(groups));
- const headers=await page.locator(".fm-picking-grouped thead th").allTextContents();
+ // Diferenciación visual también en filas, no solo en las cabeceras.
+ const palette=await page.evaluate(()=>{
+  const css=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
+  return {
+   stockHeader:css(".fm-picking-grouped thead .fm-smart-group-row th.fm-section-stock"),
+   unitsHeader:css(".fm-picking-grouped thead .fm-smart-group-row th.fm-section-units"),
+   stockCell:css(".fm-picking-grouped tbody td.fm-section-stock"),
+   unitsCell:css(".fm-picking-grouped tbody td.fm-section-units")
+  };
+ });
+ assert.notEqual(palette.stockHeader,palette.unitsHeader,"Stock y Unidades deben tener cabeceras diferenciadas");
+ assert.notEqual(palette.stockCell,palette.unitsCell,"Las filas deben conservar fondos distintos");
+
+ const headers=await page.locator(".fm-picking-grouped thead .smart-sort span:first-child").allTextContents();
  assert.ok(headers.some(x=>x.trim()==="ALM"),"Falta alias almacén: "+JSON.stringify(headers));
  assert.ok(headers.some(x=>x.trim()==="ABA"),"Falta farmacia ABA: "+JSON.stringify(headers));
  assert.equal(headers.some(x=>x.trim()==="Líneas"),false,"Se elimina columna Líneas");
@@ -94,6 +107,7 @@ try{
  await page.getByText("Producto A",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ver más"}).click();
  await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
+ await page.locator(".fm-picking-issues thead th").filter({hasText:"Detalle CSV"}).waitFor();
  const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
  assert.ok(issueColumns.some(x=>x.trim()==="Detalle CSV"),JSON.stringify(issueColumns));
  const issueCells=await page.locator(".fm-picking-issues tbody td").allTextContents();

@@ -37,7 +37,7 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
   assert.match(sql,/FROM latest l JOIN scoped_cn s USING\(cn\)/);
   assert.match(sql,/excluded_cn AS MATERIALIZED/);
   assert.match(sql,/position\(upper\(exclude.cadena\) in upper\(coalesce\(ar.nombre/);
-  assert.match(sql,/unnest\(\$3::text\[\]\)/);
+  assert.match(sql,/ARRAY\[\x27ZZZ\x27,\x27\*BAJA\x27,\x27\* BAJA\x27\]::text\[\] \|\| \$3::text\[\]/);
   assert.deepEqual(calls.find(q=>(q.text||"").includes("DISTINCT ON (cn)")).values,
    ["ampedia",[1,2],["*BAJA*"]]);
   invalidateLastReceiptCache(pool,"ampedia");

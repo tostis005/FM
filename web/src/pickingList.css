@@ -67,3 +67,12 @@
 .fm-picking-pagination>div{display:flex;align-items:center;gap:10px}
 @media(max-width:950px){.fm-picking-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-picking-controls{gap:10px}}
 @media(max-width:550px){.fm-picking-kpis{grid-template-columns:1fr}.fm-picking-source{align-items:stretch}.fm-picking-source-actions{justify-content:flex-start}.fm-picking-list-head{align-items:flex-start}.fm-picking-table{font-size:11px}.fm-picking-details>div{grid-template-columns:1fr 1fr}.fm-picking-pagination>div{width:100%;justify-content:space-between}}
+
+.fm-picking-settings .fm-picking-configured{border:1px solid #dce8df;background:#f8fbf9;border-radius:11px;padding:14px 16px;display:grid;gap:7px}
+.fm-picking-settings .fm-picking-configured p{margin:0;line-height:1.6;color:#4d6959;font-size:13px}
+.fm-picking-settings .fm-picking-configured p:first-child{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#255841}
+.fm-picking-settings .fm-picking-configured button{justify-self:start;margin-top:5px}
+.fm-picking-settings .fm-price-settings-grid input[type=url]{width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.fm-picking-settings .fm-price-settings-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.fm-picking-settings-hint{display:flex;align-items:center;gap:7px;font-size:12px;color:#6c7f73;line-height:1.5}
+.fm-picking-settings-hint svg{flex-shrink:0}

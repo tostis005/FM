@@ -83,6 +83,10 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
     if(remote)onSortChange(next);else setLocalSort(next);
     if(!externalPage)setPage(0);
   };
+  // Los grupos admiten una clase visual por sección sin afectar a ordenación,
+  // filtros, paginado ni a las tablas que no utilizan cabeceras agrupadas.
+  const sectionClass=group=>group==="Stock"?"fm-section-stock":
+   group==="Unidades"?"fm-section-units":"";
   const hasGroups=columns.some(col=>Boolean(col.group));
   const groups=columns.reduce((all,col)=>{
    const id=col.group||null,last=all[all.length-1];
@@ -115,7 +119,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           {hasGroups&&<tr className="fm-smart-group-row">
            {selection&&<th className="fm-selection-column" aria-hidden="true"/>}
            {groups.map((g,i)=>g.id?<th key={i} scope="colgroup"
-             colSpan={g.columns.length} className="fm-smart-group-title">{g.label}</th>:
+             colSpan={g.columns.length} className={"fm-smart-group-title "+sectionClass(g.id)}>{g.label}</th>:
              g.columns.map(col=><th key={col.key} scope="col" rowSpan={2}
               aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
               {col.sortable===false?<span className="smart-th-label">{col.label}</span>:
@@ -127,14 +131,14 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           <tr>{selection&&<th scope="col" className="fm-selection-column">
             <input type="checkbox" aria-label={"Seleccionar todas las "+label+" filtradas"}
              checked={allSelected} disabled={Boolean(selection.disabled)||!allFilteredKeys.length}
-             onChange={e=>selectFiltered(e.target.checked)}/></th>}{columns.filter(col=>!hasGroups||col.group).map(col=><th key={col.key} scope="col" aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
+             onChange={e=>selectFiltered(e.target.checked)}/></th>}{columns.filter(col=>!hasGroups||col.group).map(col=><th key={col.key} scope="col" className={sectionClass(col.group)} aria-sort={sort?.key===col.key?(sort.direction==="asc"?"ascending":"descending"):"none"}>
             {col.sortable===false?<span className="smart-th-label">{col.label}</span>:
               <button className="smart-sort" type="button" onClick={()=>changeSort(col.key)} aria-label={"Ordenar "+(col.group?col.group+" ":"")+col.label}>
                 <span>{col.label}</span><span aria-hidden="true" className="smart-sort-arrow">{sort?.key===col.key?(sort.direction==="asc"?"▲":"▼"):"↕"}</span>
               </button>}
           </th>)}</tr>
           <tr className="smart-filter-row">{selection&&<th className="fm-selection-column">
-            <span className="smart-filter-blank"/></th>}{columns.map(col=><th key={col.key}>
+            <span className="smart-filter-blank"/></th>}{columns.map(col=><th key={col.key} className={sectionClass(col.group)}>
             {col.searchable===false?<span className="smart-filter-blank"/>:
               (col.filterMode==="multi"||(!externalPage&&col.filterMode!=="text"&&/farmacia|\babcd\b|clasificaci[oó]n|estado|\btipo\b|prioridad|categor[ií]a/i.test(col.label)))?<MultiSelectFilter label={col.label}
                 options={filterOptions?.[col.key]||
@@ -157,7 +161,7 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
              onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}
              onChange={e=>{e.stopPropagation();toggleSelection(String(rowKey(row)))}}/>
            </td>}
-          {columns.map(col=><td key={col.key}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
+          {columns.map(col=><td key={col.key} className={sectionClass(col.group)}>{col.render?col.render(row):String(col.value(row)??"—")}</td>)}
         </tr>
         {renderExpandedRow&&expandedRowKeys.includes(String(rowKey(row)))&&<tr className="fm-expanded-row">
          <td colSpan={columns.length+(selection?1:0)}>{renderExpandedRow(row)}</td>

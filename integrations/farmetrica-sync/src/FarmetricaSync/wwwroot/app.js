@@ -2,7 +2,7 @@
 const state = { config: null, page: 'dashboard', editing: null, runFilters: {pharmacyId:'', entityId:'', status:''}, runPage:0, runResults:null };
 const $ = sel => document.querySelector(sel);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-const entityLabel = name => ({ventas_completas:'Ventas',recepciones_completas:'Compras'})[String(name||'').toLowerCase()] || String(name||'');
+const entityLabel = name => ({ventas_completas:'Ventas',recepciones_completas:'Compras',sinonimos:'Sinónimos / EAN'})[String(name||'').toLowerCase()] || String(name||'');
 const date = v => v ? new Date(v).toLocaleString('es-ES', {dateStyle:'short',timeStyle:'short'}) : '—';
 const status = v => `<span class="pill ${v==='ok'?'good':v==='error'?'bad':'wait'}">${esc(({ok:'Correcto',error:'Error',running:'Ejecutando',pending:'Pendiente'})[v] || v || 'Pendiente')}</span>`;
 // El panel web tiene su propia ruta de API; nunca espera a las conexiones
@@ -87,18 +87,18 @@ const nextSchedule = (j,s) => {
 
 const nav = [['dashboard','◫','Resumen'],['pharmacies','▦','Farmacias'],['jobs','▤','Consultas SQL'],['entities','▧','Entidades'],['destination','◈','PostgreSQL'],['mail','✉','Alertas'],['history','◷','Historial']];
 const pageRoutes={dashboard:'/resumen',pharmacies:'/farmacias',jobs:'/consultas',entities:'/entidades',destination:'/postgresql',mail:'/alertas',history:'/historial'};
-// Rutas hash: al actualizar siempre se carga / y se conserva la sección activa.
+// URL real para cada sección. Los enlaces #/ antiguos se migran al abrir.
 const currentPageFromUrl=()=>{
+ const path=window.location?.pathname?.replace(/\/$/,'') || '/';
  const hash=window.location?.hash?.replace(/^#/,'').replace(/\/$/,'');
- const path=window.location?.pathname?.replace(/\/$/,'');
- return Object.keys(pageRoutes).find(p=>pageRoutes[p]===hash) ||
-   Object.keys(pageRoutes).find(p=>pageRoutes[p]===path) || 'dashboard';
+ return Object.keys(pageRoutes).find(p=>pageRoutes[p]===path) ||
+   Object.keys(pageRoutes).find(p=>pageRoutes[p]===hash) || 'dashboard';
 };
 state.page=currentPageFromUrl();
-if(window.location?.hash!=='#'+pageRoutes[state.page])
- window.history?.replaceState?.({},'','#'+pageRoutes[state.page]);
+if((window.location?.pathname?.replace(/\/$/,'') || '/')!==pageRoutes[state.page] || window.location?.hash)
+ window.history?.replaceState?.({},'',pageRoutes[state.page]+(window.location?.search||''));
 function shell(body){
-  $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="#${pageRoutes[id]}" onclick="F.go('${id}',event)"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.15.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
+  $('#app').innerHTML = `<div class="shell"><aside class="sidebar"><div class="logo"><img class="brand-icon" src="/assets/farmetrica-icon-64.png" alt="" width="40" height="40"><div><span class="logo-text">farmétrica</span><span class="logo-tag">SYNC CONNECTOR</span></div></div><nav class="nav">${nav.map(([id,icon,name])=>`<a class="nav-button ${state.page===id?'active':''}" href="${pageRoutes[id]}" onclick="F.go('${id}',event)"><span class="nav-icon">${icon}</span>${name}</a>`).join('')}</nav><div class="sidebar-foot"><span>Servicio de integración · v0.18.0</span><button onclick="F.logout()">Cerrar sesión ↗</button></div></aside><main class="page">${body}</main></div>`;
 }
 function render(){ if(!cfg()) return; const pages={dashboard,pharmacies,jobs,entities,destination,mail,history}; shell((pages[state.page]||dashboard)()); }
 function dashboard(){
@@ -250,7 +250,7 @@ window.F={
   state.loginPending=false;
   if(submit)submit.disabled=false;
  },
- go(page,event){if(!pageRoutes[page])return;event?.preventDefault?.();if(window.location?.hash!=='#'+pageRoutes[page])window.history?.pushState?.({},'','#'+pageRoutes[page]);state.page=page;state.editing=null;render();window.scrollTo(0,0);if(page==='history')this.loadRuns();},
+ go(page,event){if(!pageRoutes[page])return;event?.preventDefault?.();if(window.location?.pathname!==pageRoutes[page])window.history?.pushState?.({},'',pageRoutes[page]);state.page=page;state.editing=null;render();window.scrollTo(0,0);if(page==='history')this.loadRuns();},
  edit(kind,id){state.editing={kind,id};render();setTimeout(()=>document.querySelector('.panel form input')?.focus(),0);},
  cancel(){state.editing=null;render();},
  refresh(){attempt(reload);},

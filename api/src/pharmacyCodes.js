@@ -15,12 +15,13 @@ export function decoratePharmacy(slug,pharmacy,{demo=false,ordinal=0}={}){
     databaseCode:master,sourceHost:"",sourceDatabase:"",
     name:pharmacy.name};
  }
+ const visible=String(pharmacy.displayCode||"").trim().toUpperCase();
  const isVal=slug==="ampedia"&&Number(pharmacy.id)===5&&["POL","VAL"].includes(master);
  return {
   ...pharmacy,
   sourceCode:isVal?"POL":master,
   databaseCode:isVal?"VAL":master,
-  displayCode:isVal?"POL":master,
+  displayCode:visible||(isVal?"POL":master),
   name:isVal?"Valdemarías":pharmacy.name
  };
 }

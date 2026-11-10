@@ -270,7 +270,7 @@ export function setupPickingList(app,pool,{requireTenant}){
  // No exponer el enlace privado de Dropbox ni descargar todo el CSV al navegador.
  app.get("/api/picking-list/issues",...guard,allowed,async(req,res,next)=>{
   try{
-   const offset=Math.max(0,Math.min(50000,Math.trunc(Number(req.query.offset)||0)));
+   const offset=Math.max(0,Math.min(50000,Math.trunc(Number(req.query?.offset)||0)));
    const limit=25;
    const {rows}=await pool.query(
     "SELECT ultima_advertencia_detalle AS details,ultima_importacion AS imported_at "+

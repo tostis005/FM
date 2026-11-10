@@ -102,16 +102,18 @@ export default function PickingList({clientSlug}){
    render:row=><div className="fm-picking-product">
     <strong>{row.name||"Producto sin descripción"}</strong>
     <span>{row.cn?"CN "+row.cn:"SKU "+row.sku}</span></div>,
-   exportValue:row=>row.cn||row.sku},
+   exportValue:row=>(row.cn||row.sku)+" · "+(row.name||"")},
   {key:"required",label:"Unidades totales",value:row=>row.required,
    render:row=><strong>{integer(row.required)}</strong>},
   ...tableSites.map(site=>({
    key:"stock-"+site.id,group:"Stock",label:siteShortCode(site),
+   exportLabel:"Stock "+siteShortCode(site),
    value:row=>siteStock(row,site.id)?.stock??null,
    render:row=><span className="fm-picking-number">{integer(siteStock(row,site.id)?.stock)}</span>
   })),
   ...tableSites.map(site=>({
    key:"units-"+site.id,group:"Unidades",label:siteShortCode(site),
+   exportLabel:"Unidades "+siteShortCode(site),
    value:row=>siteStock(row,site.id)?.planned??0,
    render:row=><strong className="fm-picking-assigned">{integer(siteStock(row,site.id)?.planned)}</strong>
   })),
@@ -126,7 +128,9 @@ export default function PickingList({clientSlug}){
   {key:"status",label:"Situación",filterMode:"multi",value:row=>STATUS[row.status]||row.status,
    render:row=><><Status value={row.status}/>
     {row.allocationProvisional&&<small className="fm-picking-provisional-note">Propuesta provisional</small>}</>},
-  {key:"details",label:"Pedidos",sortable:false,searchable:false,exportable:false,value:()=>"",
+  {key:"details",label:"Pedidos",sortable:false,searchable:false,
+   exportLabel:"Pedidos Shopify",exportValue:row=>row.details.map(d=>d.orderName||d.orderId).join(", "),
+   value:()=>"",
    render:row=><button className="fm-picking-details-btn" type="button"
     aria-expanded={expanded===row.key} onClick={()=>setExpanded(expanded===row.key?"":row.key)}>
     {expanded===row.key?<ChevronUp size={15}/>:<ChevronDown size={15}/>} Detalle
@@ -284,7 +288,7 @@ export default function PickingList({clientSlug}){
      el stock total sincronizado del almacén; el desglose robot requiere incorporar
      las columnas de la vista específica de Farmatic.</p>}
     <div className="fm-picking-list-table">
-     <ListTable rows={filtered} columns={columns} rowKey={row=>row.key}
+     <ListTable key={tab} rows={filtered} columns={columns} rowKey={row=>row.key}
       tableClass="fm-picking-grouped" label="referencias"
       defaultSort={{key:"required",direction:"desc"}}
       initialPageSize={500} pageSizes={[50,100,250,500]}

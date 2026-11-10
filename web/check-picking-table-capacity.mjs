@@ -49,11 +49,11 @@ try{
  await page.getByLabel("Registros por página de referencias").selectOption("100");
  await page.waitForFunction(()=>document.querySelectorAll(".fm-picking-grouped tbody tr:not(.fm-expanded-row)").length===100);
  assert.equal(await entries.count(),100,"El usuario puede cambiar el tamaño de página");
- await page.getByLabel("Buscar en Producto / CN").fill("Referencia 499");
+ await page.getByLabel("Buscar en Producto / CN / EAN").fill("Referencia 499");
  await page.getByText("Referencia 499",{exact:true}).waitFor();
  assert.equal(await entries.count(),1,"El filtro busca sobre los 501 registros, no solo los visibles");
  await page.getByText("Referencia 499",{exact:true}).waitFor();
- await page.getByLabel("Buscar en Producto / CN").fill("");
+ await page.getByLabel("Buscar en Producto / CN / EAN").fill("");
  await page.getByRole("button",{name:"Ordenar Stock ABA"}).click();
  assert.equal(await entries.count(),100);
  const grouped=await page.locator(".fm-picking-grouped .fm-smart-group-row th").allTextContents();

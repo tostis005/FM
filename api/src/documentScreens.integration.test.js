@@ -15,7 +15,7 @@ test("consulta documental sólo acepta esquemas y apartados permitidos",()=>{
  assert.ok(!buildDocumentScreenSQL("productos","ampedia",new Set(["farmacia_codigo","origen_id","nombre"])).includes(".ventas "));
  assert.match(buildDocumentScreenSQL("productos","ampedia",new Set(["origen_id","nombre"])),
   /position\(upper\(exclude.cadena\) in upper\(coalesce\(a.nombre/);
- assert.match(buildDocumentScreenSQL("productos","ampedia"),/unnest\(\$8::text\[\]\)/);
+ assert.match(buildDocumentScreenSQL("productos","ampedia"),/ARRAY\[\x27ZZZ\x27,\x27\*BAJA\x27,\x27\* BAJA\x27\]::text\[\] \|\| \$8::text\[\]/);
  assert.doesNotMatch(buildDocumentScreenSQL("stock-historico","ampedia"),/unnest\(\$8::text/);
  assert.ok(Object.hasOwn(DOCUMENT_SORT["productos"],"sourceId"));
  assert.ok(buildDocumentScreenSQL("stock-historico","ampedia").includes("fm_ventas_analitica"));

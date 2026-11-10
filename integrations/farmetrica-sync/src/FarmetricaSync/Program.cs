@@ -109,7 +109,7 @@ app.UseAuthorization();
 
 // Liveness independiente de cualquier bloqueo PostgreSQL o del histórico.
 app.MapGet("/api/ping", () => Results.Ok(new {
-    ok = true, version = "0.16.0", atUtc = DateTimeOffset.UtcNow
+    ok = true, version = "0.18.0", atUtc = DateTimeOffset.UtcNow
 }));
 
 // El bootstrap solo se admite desde loopback, con una única contraseña admin.
@@ -340,6 +340,7 @@ api.MapPost("/pharmacies", (PharmacyRequest r, ConfigStore store, Secrets secret
         if (c.Pharmacies.Any(x => x.Code.Equals(p.Code, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Ya existe una farmacia con ese código.");
         c.Pharmacies.Add(p);
+        SynonymJobs.EnsureForFarmatic(c);
     });
     return Results.Ok(new { p.Id });
 });
@@ -351,6 +352,7 @@ api.MapPut("/pharmacies/{id:guid}", (Guid id, PharmacyRequest r, ConfigStore sto
         var existing = c.Pharmacies.SingleOrDefault(p => p.Id == id) ?? throw new ArgumentException("Farmacia no encontrada.");
         if (existing.Code != r.Code) throw new ArgumentException("El código de farmacia es inmutable: para cambiarlo hay que migrar antes las filas de destino.");
         Apply(existing, r, secrets);
+        SynonymJobs.EnsureForFarmatic(c);
     });
     return Results.Ok(new { ok = true });
 });

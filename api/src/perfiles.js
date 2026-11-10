@@ -1,5 +1,6 @@
 import {randomBytes} from "node:crypto";
-import {PROFILE_ROLES,validateProfileDefinition} from "./profilePolicy.js";
+import {validateProfileDefinition} from "./profilePolicy.js";
+import {USER_SECTIONS} from "./userSectionAccess.js";
 export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin}){
  async function catalogue(){
   const {rows}=await pool.query(`
@@ -18,7 +19,7 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
   try{
    const [profiles,{rows:modules}]=await Promise.all([catalogue(),
     pool.query("SELECT clave AS id,nombre AS name FROM farmetrica.modulos ORDER BY nombre")]);
-   res.json({profiles,modules});
+   res.json({profiles,modules,sections:USER_SECTIONS});
   }catch(e){next(e);}
  });
  app.post("/api/admin/perfiles",requireSuperadmin,async(req,res,next)=>{

@@ -20,7 +20,9 @@ const stock=[
  {...sites[1],stock:5,planned:3,matched:true,stockAt:new Date().toISOString()},
  {...sites[2],stock:3,planned:1,matched:true,stockAt:new Date().toISOString()}
 ];
-let refreshed=false,refreshCalls=0;
+let refreshed=false,refreshCalls=0,firstReportRequested=false;
+let releaseFirstReport;
+const firstReportGate=new Promise(resolve=>{releaseFirstReport=resolve;});
 const jsErrors=[];
 page.on("pageerror",error=>jsErrors.push(error.message));
 await page.route("**/api/**",async route=>{
@@ -37,6 +39,10 @@ await page.route("**/api/**",async route=>{
     {line:8,reason:"cantidad no válida",cells:["1004","xyz","123456","Producto C","observación"]}],
    total:2,offset:0,limit:25};
  }else if(pathname==="/api/picking-list/report"){
+  if(!firstReportRequested){
+   firstReportRequested=true;
+   await firstReportGate;
+  }
   const meta={sourceConfigured:true,lastImportedAt:refreshed?new Date().toISOString():null,
    lineCount:refreshed?2:0,sourceState:refreshed?"ok":"error",
    sourceError:refreshed?null:"Dropbox no ha permitido descargar el CSV.",
@@ -57,6 +63,10 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto("http://127.0.0.1:4175/picking-list",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor({timeout:15000});
+ await page.getByText("Cargando pedidos pendientes y existencias…").waitFor();
+ assert.equal(await page.locator(".fm-picking-page").getByText(/Dropbox/i).count(),0,
+  "La carga no debe mencionar el proveedor de archivos");
+ releaseFirstReport();
  await page.getByText(/No se han podido actualizar los pedidos pendientes/).first().waitFor();
  assert.equal(await page.getByText(/ubicaciones con artículos sincronizados/).count(),0);
  await page.getByRole("heading",{name:"Aún no se han cargado pedidos pendientes"}).waitFor();

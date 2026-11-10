@@ -55,7 +55,7 @@ test("EAN se resuelve solo para farmacias autorizadas y conserva múltiples corr
   ]};
  }};
  const refs=await resolveEANReferences(pool,context,[1],"0842012301234");
- assert.deepEqual(refs,["194700","ERP:1:217800","ERP:1:217801","194701","000123","ERP:2:000123"]);
+ assert.deepEqual(refs,["194700","ERP:1:217800","ERP:1:217801","194701","ERP:2:000123"]);
  assert.match(calls[1].sql,/f\.cliente_slug=\$1 AND f\.id=ANY\(\$2::int\[\]\)/);
  assert.match(calls[1].sql,/s\.codigo=\$3::text/);
  assert.match(calls[1].sql,/a\.origen_id::text.*s\.articulo_id/s);

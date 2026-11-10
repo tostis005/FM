@@ -539,7 +539,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean")
           return res.status(400).json({error:"Datos de farmacia demo inválidos"});
         const {rows}=await pool.query(
-          'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>'ALMACEN' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
+          'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
           [Number(req.params.id),req.context.client.slug,name,city,req.body.active]);
         if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
         return res.json(decoratePharmacy(req.context.client.slug,rows[0],
@@ -547,7 +547,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       }
       const f=validatePharmacy(req.body);
       const {rows}=await pool.query(
-        'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_origen=$6,host_origen=$7,bd_origen=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>'ALMACEN' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
+        'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_origen=$6,host_origen=$7,bd_origen=$8,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
         [Number(req.params.id),req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase]);
       if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
       res.json(decoratePharmacy(req.context.client.slug,rows[0]));

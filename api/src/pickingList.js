@@ -36,14 +36,14 @@ async function monitoredRefresh(pool,slug,options={}){
   throw error;
  }
 }
-async function readReportWithCurrentSource(pool,ctx,options={}){
+export async function readReportWithCurrentSource(pool,ctx,{fetchFn,...options}={}){
  const slug=ctx.client.slug,meta=await getMetadata(pool,slug);
  const previous=sourceDiagnostics.get(slug);
  const lastSuccess=meta.lastImportedAt?new Date(meta.lastImportedAt).getTime():0;
  const now=Date.now();
  if(meta.sourceConfigured&&(!lastSuccess||now-lastSuccess>SOURCE_INTERVAL_MS)&&
     (!previous?.lastAttemptAt||now-new Date(previous.lastAttemptAt).getTime()>SOURCE_RETRY_MS)){
-  try{await monitoredRefresh(pool,slug)}catch{ /* diagnóstico en meta; conservar snapshot */ }
+  try{await monitoredRefresh(pool,slug,{fetchFn})}catch{ /* diagnóstico en meta; conservar snapshot */ }
  }
  const report=await readPickingReport(pool,ctx,options);
  const current=sourceDiagnostics.get(slug);

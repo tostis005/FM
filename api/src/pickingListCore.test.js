@@ -220,9 +220,11 @@ test("Una fila con SKU vacío no destruye los pedidos válidos y muestra su núm
  const lines=parsePendingCsv(csv);
  assert.equal(lines.length,1);
  assert.equal(lines[0].orderId,"77");
- assert.equal(lines.skippedCount,2);
+ assert.equal(lines.skippedCount,1);
  assert.match(lines.warnings[0],/Fila 3: producto sin SKU\/CN/);
- assert.match(lines.warnings[0],/Fila 4: cantidad cero/);
+ assert.doesNotMatch(lines.warnings[0],/Fila 4/);
+ assert.deepEqual(parsePendingCsv("order_id,quantity,sku\n80,0,123456\n"),[],
+  "Las cantidades cero no son pedidos pendientes, y pueden vaciar el snapshot");
  assert.throws(()=>parsePendingCsv("order_id,quantity,sku\n77,1,\n"),/No hay líneas válidas.*Fila 2/);
 });
 test("Dropbox: lee CSV UTF-16 de Excel sin dar error de cabeceras",async()=>{

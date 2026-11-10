@@ -9,6 +9,7 @@ const realCsv="order_id,order_name,order_created_at,order_source_name,quantity,s
 
 function fixture({initial=[],configured=true,importedAt=null,warehouse=4,matched=true}={}){
  let sourceImportedAt=importedAt,snapshot=initial.slice(),sourceLineCount=initial.length;
+ let fingerprint=null,skippedLines=0,importWarning="";
  let nWrites=0,nFetch=0;
  const tx={
   async query(sql,args=[]){
@@ -26,7 +27,9 @@ function fixture({initial=[],configured=true,importedAt=null,warehouse=4,matched
    }
    if(sql.startsWith("UPDATE farmetrica.picking_list_fuentes SET ultimo_origen=")){
     sourceImportedAt=new Date().toISOString();
-    sourceLineCount=args[2];return {rows:[]};
+    sourceLineCount=args[2];skippedLines=args[4]||0;
+    importWarning=args[5]||"";fingerprint=args[6]||null;
+    return {rows:[]};
    }
    throw Error("SQL transaccional inesperado "+sql);
   },release(){}
@@ -41,9 +44,14 @@ function fixture({initial=[],configured=true,importedAt=null,warehouse=4,matched
    if(sql.includes('SELECT ultima_importacion AS "lastImportedAt"'))
     return {rows:configured||sourceImportedAt?[{
      sourceConfigured:configured,lastImportedAt:sourceImportedAt,
-     lineCount:sourceLineCount,origin:sourceImportedAt?"dropbox":null}]:[]};
-   if(sql==="SELECT csv_url FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1")
-    return {rows:[{csv_url:configured?url:null}]};
+     lineCount:sourceLineCount,origin:sourceImportedAt?"dropbox":null,
+     skippedLines,importWarning}]:[]};
+   if(sql==="SELECT csv_url,contenido_sha256 FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1")
+    return {rows:[{csv_url:configured?url:null,contenido_sha256:fingerprint}]};
+   if(sql.startsWith("UPDATE farmetrica.picking_list_fuentes SET ultima_importacion=now()")){
+    sourceImportedAt=new Date().toISOString();
+    return {rows:[{rows:sourceLineCount}]};
+   }
    if(sql.includes("FROM farmetrica.picking_list_pendientes")&&sql.includes("ORDER BY linea"))
     return {rows:snapshot};
    if(sql.includes("WITH sources AS MATERIALIZED"))
@@ -86,7 +94,7 @@ test("La primera visita descarga el Dropbox ya configurado, importa y cruza stoc
  assert.equal(report.rows[0].status,"cubierto");
  assert.ok(!JSON.stringify(report).includes("privatekey"),"No filtrar URL ni rlkey al reporte");
  await readReportWithCurrentSource(f.pool,f.ctx,{fetchFn:f.fetchCsv});
- assert.equal(f.getFetch(),1,"Sin volver a descargar el fichero recién importado");
+ assert.equal(f.getFetch(),1,"No se descarga de nuevo antes de los 15 minutos");
 });
 test("Si falla Dropbox se conserva lo anterior y el reporte explica la incidencia",async()=>{
  const previous=[{orderId:"501",orderName:"#501",createdAt:null,channel:"web",quantity:2,
@@ -127,4 +135,32 @@ test("Un CN sin equivalencia Farmatic no se marca falsamente como asignable",asy
  assert.equal(report.rows[0].status,"sin_cn");
  assert.equal(report.rows[0].allocated,null);
  assert.equal(report.rows[0].stock.every(s=>s.planned===0),true);
+});
+
+test("Con CSV sin cambios se actualiza la comprobación sin reinsertar pedidos",async()=>{
+ const f=fixture();
+ await readReportWithCurrentSource(f.pool,f.ctx,{fetchFn:f.fetchCsv});
+ assert.equal(f.getWrites(),1);
+ // El polling programado puede volver a comprobar aunque la vista no lo solicite.
+ const {refreshPendingSource}=await import("./pickingList.js");
+ const second=await refreshPendingSource(f.pool,f.ctx.client.slug,{fetchFn:f.fetchCsv});
+ assert.equal(second.unchanged,true);
+ assert.equal(second.rows,2);
+ assert.equal(f.getWrites(),1,"No borrar/reinsertar un CSV idéntico");
+ assert.equal(f.getFetch(),2);
+});
+
+test("CSV con una fila incorrecta importa las válidas y muestra advertencia",async()=>{
+ const f=fixture();
+ const csv="order_id,quantity,sku,title\\n"+
+  "1001,2,123456,Producto A\\n"+
+  "1002,1,,Envío sin SKU\\n"+
+  "1003,3,123456,Producto A\\n";
+ const response=await readReportWithCurrentSource(f.pool,f.ctx,{
+  fetchFn:async()=>new Response(csv,{status:200})});
+ assert.equal(response.meta.sourceState,"ok");
+ assert.equal(response.meta.skippedLines,1);
+ assert.match(response.meta.importWarning,/omitido/);
+ assert.equal(response.totals.units,5);
+ assert.equal(f.getWrites(),1);
 });

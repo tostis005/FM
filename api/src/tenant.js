@@ -640,7 +640,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       req.body?.modules!==undefined||req.body?.sections!==undefined||
       (req.body?.password!==undefined&&req.body.password!=="")||
       typeof active!=="boolean"||!Array.isArray(pharmacies)||pharmacies.length>100||
-      pharmacies.some(id=>!/^[1-9]\\d{0,8}$/.test(String(id))))
+      pharmacies.some(id=>!/^[1-9]\d{0,8}$/.test(String(id))))
       return res.status(400).json({error:"Datos de usuario o perfil inválidos"});
     try{
       const {rows:profiles}=await pool.query(

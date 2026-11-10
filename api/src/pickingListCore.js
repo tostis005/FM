@@ -12,7 +12,8 @@ export function parseCsvRecords(text,{maxRows=50000}={}){
   throw new Error("El CSV supera el límite permitido (8 MB).");
  const stripped=text.replace(/^\uFEFF/,"");
  const firstLine=stripped.split(/\r?\n/,1)[0]||"";
- const sep=(firstLine.match(/;/g)||[]).length>(firstLine.match(/,/g)||[]).length?";":",";
+ const sep=[",",";","\\t"].map(sep=>({sep,count:firstLine.split(sep).length-1}))
+  .sort((a,b)=>b.count-a.count)[0].sep;
  const rows=[];let field="",cells=[],quoted=false;
  function finishRow(){
   cells.push(field);field="";
@@ -38,41 +39,67 @@ export function parseCsvRecords(text,{maxRows=50000}={}){
 }
 const key = value=>String(value||"").toLowerCase().normalize("NFD")
  .replace(/[\u0300-\u036f]/g,"").replace(/[\s-]+/g,"_").replace(/[^\w]/g,"");
-export function parsePendingCsv(text) {
+// Acepta tanto el CSV preparado para Power BI como columnas del CSV estándar
+// exportado de Shopify; nunca interpreta una página HTML como pedidos.
+const aliases={
+ order_id:["order_id","id_pedido","id","order_number","numero_de_pedido"],
+ order_name:["order_name","name","nombre_pedido","pedido"],
+ quantity:["quantity","lineitem_quantity","line_item_quantity","cantidad","unidades"],
+ sku:["sku","lineitem_sku","line_item_sku","product_sku","codigo_nacional","codigo"],
+ order_created_at:["order_created_at","created_at","fecha_pedido"],
+ order_source_name:["order_source_name","source_name","source","canal"],
+ variant_id:["variant_id","lineitem_variant_id"],
+ title:["title","product_title","item_name","lineitem_name","line_item_name","producto","descripcion"]
+};
+export function parsePendingCsvDetailed(text) {
  const raw=parseCsvRecords(text);
  if(!raw.length)throw new Error("El fichero no contiene cabeceras.");
  const headers=raw[0].map(key);
- const col=name=>headers.indexOf(name);
+ const column=name=>(aliases[name]||[name]).map(x=>headers.indexOf(x)).find(i=>i>=0)??-1;
  for(const required of ["order_id","quantity","sku"]){
-  if(col(required)<0)throw new Error("Falta la columna obligatoria "+required+".");
+  if(column(required)<0)throw new Error("Falta la columna obligatoria "+required+
+   ". Revisa que la ruta apunte al CSV de pedidos pendientes.");
  }
- const get=(row,name)=>col(name)<0?"":String(row[col(name)]??"").trim();
- const lines=[];
+ const get=(row,name)=>column(name)<0?"":String(row[column(name)]??"").trim();
+ const lines=[],invalid=[];
  for(let i=1;i<raw.length;i++){
-  const row=raw[i];
-  const orderId=get(row,"order_id");
+  const row=raw[i],lineNo=i+1;
+  const orderId=get(row,"order_id")||get(row,"order_name");
   const sku=normalizeSku(get(row,"sku"));
-  const quantityText=get(row,"quantity").replace(",",".");
-  if(!orderId&&!sku&&!quantityText)continue;
-  const quantity=Number(quantityText);
-  if(!orderId||orderId.length>90||!sku||sku.length>90||
-   !Number.isSafeInteger(quantity)||quantity<=0||quantity>50000)
-   throw new Error("Fila "+(i+1)+": pedido, SKU o cantidad incorrectos.");
+  const qtyText=get(row,"quantity").replace(",",".");
+  // Shopify y algunas exportaciones incluyen filas de envío/descuentos sin
+  // SKU y líneas vacías: no deben invalidar los productos preparados.
+  if(!orderId&&!sku&&!qtyText)continue;
+  const quantity=Number(qtyText);
+  if(!sku||!/^\\S/.test(sku)||!orderId||orderId.length>90||
+    sku.length>90||!Number.isSafeInteger(quantity)||quantity<=0||quantity>50000){
+   invalid.push(lineNo);
+   continue;
+  }
   const date=get(row,"order_created_at");
   const parsedDate=date&&Number.isFinite(Date.parse(date))?new Date(date).toISOString():null;
   const source=get(row,"order_source_name");
-  const name=get(row,"title")||get(row,"product_title")||get(row,"item_name");
   lines.push({
    orderId,orderName:get(row,"order_name").slice(0,120),
    createdAt:parsedDate,channel:source.slice(0,120),
    quantity,sku,cn:skuToCn(sku),
    variantId:get(row,"variant_id").slice(0,90),
-   title:name.slice(0,300)
+   title:get(row,"title").slice(0,300)
   });
  }
- // Un CSV con cabecera válida y sin líneas borra los pendientes antiguos.
- return lines;
+ // Nunca sustituir un snapshot válido por uno vacío si el archivo contiene
+ // líneas que no se pueden interpretar. Un CSV solo con cabecera sí significa
+ // legítimamente que ya no hay pedidos pendientes.
+ if(invalid.length&&lines.length===0)
+  throw new Error("Fila "+invalid.slice(0,4).join(", ")+
+   ": pedido, SKU o cantidad incorrectos. No se ha sustituido la última lectura.");
+ const omitted=invalid.length;
+ const warning=omitted?
+  "Se han omitido "+omitted+" líneas no preparables del CSV (filas "+
+   invalid.slice(0,8).join(", ")+(omitted>8?", …":"")+").":"";
+ return {lines,omitted,warning};
 }
+export function parsePendingCsv(text){return parsePendingCsvDetailed(text).lines;}
 const n=value=>Number.isFinite(Number(value))?Math.max(0,Math.trunc(Number(value))):0;
 
 /**

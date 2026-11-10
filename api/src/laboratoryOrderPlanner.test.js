@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {cnCategory,isOrderQuantity,validPlannerDate,pharmacyScope,
- normalizeDraftItems,readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner} from "./laboratoryOrderPlanner.js";
+ normalizeDraftItems,readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner,
+ applyWarehouseToOrder} from "./laboratoryOrderPlanner.js";
 
 test("rango CN por los seis dígitos significativos (incluye variante de siete)",()=>{
  for(const cn of ["000000","399999","0000000","3999999"])
@@ -60,7 +61,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  assert.equal(d.rows[0].totalSold,12);
  assert.equal(d.rows[0].totalSuggested,7);
  assert.equal(d.rows[0].byPharmacy["1"].suggested,4);
- assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24"]);
+ assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24","medicacion"]);
  assert.equal(d.frequencyDays,3);
 });
 test("matriz directa sobre CN suministrados evita releer catálogo del laboratorio",async()=>{
@@ -200,4 +201,38 @@ test("ventas fijas de 90/365 días hasta hoy; fechas históricas solo para V. pe
  assert.match(sql,/FILTER \(WHERE h\.fecha >= \$4::date AND h\.fecha < \$5::date/);
  assert.match(sql,/OR \(h\.fecha >= d\.today-interval '364 days'/);
  assert.doesNotMatch(sql,/h\.fecha >= \$5::date-interval '89 days'/);
+});
+
+test("almacén solo descuenta del pedido conjunto de parafarmacia, sin alterar las farmacias",()=>{
+ const byPharmacy={"1":{stock:100,suggested:35},"2":{stock:20,suggested:15}};
+ const article={cn:"123456"};
+ const warehouse={warehouseReady:true,warehouseStock:1000,warehouseStockAt:"2026-11-10T08:00Z"};
+ const result=applyWarehouseToOrder(article,byPharmacy,"parafarmacia",warehouse);
+ assert.equal(result.pharmacyStock,120);
+ assert.equal(result.warehouseStock,1000);
+ assert.equal(result.globalStock,1120);
+ assert.equal(result.totalSuggested,0);
+ assert.equal(byPharmacy["1"].suggested,35);
+ assert.equal(applyWarehouseToOrder(article,byPharmacy,"parafarmacia",
+  {...warehouse,warehouseStock:10}).totalSuggested,40);
+ assert.equal(applyWarehouseToOrder(article,byPharmacy,"medicacion",warehouse).totalSuggested,50);
+ assert.equal(applyWarehouseToOrder(article,byPharmacy,"medicacion",warehouse).warehouseStock,null);
+ assert.equal(applyWarehouseToOrder(article,byPharmacy,"parafarmacia",
+  {warehouseReady:false,warehouseStock:null}).totalSuggested,50);
+ assert.equal(applyWarehouseToOrder({cn:null},byPharmacy,"parafarmacia",warehouse).totalSuggested,50);
+ assert.equal(applyWarehouseToOrder(article,byPharmacy,"parafarmacia",
+  {warehouseReady:true,warehouseStock:null}).warehouseStock,0);
+ assert.equal(applyWarehouseToOrder(article,{"1":{stock:null,suggested:null}},
+  "parafarmacia",warehouse).totalSuggested,null);
+});
+
+test("SQL consulta el almacén por código de sincronización y solo en parafarmacia",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const text=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ assert.match(text,/tipo_establecimiento'.*'almacen'/);
+ assert.match(text,/codigo_origen\)\)='ALMACEN'/);
+ assert.match(text,/\$6::text='parafarmacia'/);
+ assert.match(text,/warehouse_inventory AS/);
+ assert.match(text,/warehouse_ready AS/);
+ assert.doesNotMatch(text,/JOIN __SCHEMA__\.fm_ventas_lineas l\s+ON l\.farmacia_codigo=w\.source_code/);
 });

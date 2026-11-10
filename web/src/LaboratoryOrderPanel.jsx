@@ -253,6 +253,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
  const pageTotalStock=stocks.every(value=>value!==null)?
   stocks.reduce((sum,value)=>sum+value,0):null;
+ const globalStocks=currentRows.map(row=>tab==="medicacion"?
+  row.metricsReady?totalStockFor(row,ids):null:
+  row.metricsReady?row.globalStock??null:null);
+ const pageGlobalStock=globalStocks.every(value=>value!==null)?
+  globalStocks.reduce((n,value)=>n+Number(value),0):null;
+ const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
+  row.metricsReady&&row.warehouseReady!==true);
+
  const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
  const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
  const pageTotalOrder=currentRows.reduce((sum,row)=>{
@@ -328,7 +336,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    const matrix=savedLines.map(line=>{
     const active=activeCatalog.get(line.reference);
     const row={referencia:line.reference,cn:line.cn,nombre:line.name,
-     byPharmacy:line.metrics||{},excluded:active?.excluded===true||line.excluded===true};
+     byPharmacy:line.metrics||{},excluded:active?.excluded===true||line.excluded===true,
+     warehouseStock:active?.warehouseStock??null,globalStock:active?.globalStock??null,
+     totalSuggested:active?.totalSuggested??null};
     return {row,line:orderLineFor(row,tab,ids,{[line.reference]:line})};
    });
    const ordered=matrix.filter(item=>!isExcludedOrderRow(item.row)&&(
@@ -412,10 +422,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      </div>}
     <div className="fm-lab-order-summary">
      <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias</span>
-     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock conjunto</span>
+     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
+     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
      <span><strong>{data.frequencyDays>0?data.frequencyDays+" días":"Bajo demanda"}</strong> · frecuencia de planificación</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
+     {warehousePending&&<span className="fm-lab-warehouse-pending">
+      Almacén pendiente de importar: propuesta provisional</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
      {loading&&<span role="status" className="fm-lab-loading-label">
       <LoaderCircle size={15} className="fm-lab-spinner"/>
@@ -433,12 +446,15 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
        <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       <th colSpan={5} className="fm-lab-order-total-group">Totales</th>
+       <th colSpan={7} className="fm-lab-order-total-group">Stock y propuesta conjunta</th>
       </tr><tr>
        {chosen.flatMap((p,i)=>["Stock","V. 12m","V. 3m","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       <th>Stock</th><th>Vendido</th><th>Propuesta</th>
+       <th title="Existencias de las farmacias">Total farmacias</th>
+       <th title="Existencias del almacén, solo parafarmacia">Almacén</th>
+       <th title="Farmacias más almacén">Stock global</th>
+       <th>Vendido</th><th title="Necesidad del grupo descontando el almacén en parafarmacia">Propuesta</th>
        <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
       </tr></thead>
       <tbody>{currentRows.map(row=>{
@@ -460,6 +476,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
            </td>);
         })}
         <td className="fm-lab-order-total">{row.metricsReady?fmt(totalStockFor(row,ids)):"—"}</td>
+        <td className="fm-lab-order-warehouse" title={tab==="medicacion"?
+         "Los medicamentos no se abastecen desde el almacén":row.warehouseStock===null?
+         "Pendiente de importación o referencia sin CN identificable":"Stock del almacén"}>
+         {tab==="medicacion"?"—":row.metricsReady?row.warehouseStock===null?"—":fmt(row.warehouseStock):"—"}</td>
+        <td className="fm-lab-order-global">{row.metricsReady?
+         tab==="medicacion"?fmt(totalStockFor(row,ids)):fmt(row.globalStock):"—"}</td>
          <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSold):"—"}</td>
         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
         <td className="fm-lab-order-editcol">
@@ -479,8 +501,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          </td>
        </tr>;
       })}
-      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+7}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
-      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+7}>
+      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+9}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
+      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+9}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":

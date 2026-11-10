@@ -22,6 +22,36 @@ export function validPlannerDate(date){
 }
 export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).join(",");
 
+/** No mezclar necesidades de farmacias con una venta del almacén.
+ * El stock central se descuenta UNA sola vez, del pedido conjunto y solo
+ * para parafarmacia. Si aún no está importado se mantiene la estimación actual.
+ */
+export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
+ const measures=Object.values(byPharmacy);
+ const allStock=measures.every(m=>m.stock!==null&&m.stock!==undefined);
+ const pharmacyStock=allStock?measures.reduce((n,m)=>n+Number(m.stock),0):null;
+ const allSuggested=measures.every(m=>m.suggested!==null&&m.suggested!==undefined);
+ const pharmacySuggested=allSuggested?
+  measures.reduce((n,m)=>n+Number(m.suggested),0):null;
+ const isPara=type==="parafarmacia";
+ const ready=isPara && warehouseMetric?.warehouseReady===true;
+ // Sin CN fiable no extrapolar la misma referencia ERP a otra base de datos.
+ const hasIdentity=Boolean(String(row.cn||"").trim());
+ const sourceStock=warehouseMetric?.warehouseStock;
+ const warehouseStock=ready&&hasIdentity?
+  sourceStock===null||sourceStock===undefined?0:
+   Number.isFinite(Number(sourceStock))?Number(sourceStock):null:null;
+ const globalStock=pharmacyStock!==null&&warehouseStock!==null?
+  pharmacyStock+warehouseStock:null;
+ const totalSuggested=pharmacySuggested===null?null:
+  isPara&&warehouseStock!==null?
+   Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
+ return {pharmacyStock,warehouseStock,globalStock,
+  warehouseReady:ready,warehouseStockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
+  totalSuggested};
+}
+
+
 export async function readLaboratoryOrderMatrix(pool,ctx,options){
  const [base,frequencyDays]=await Promise.all([
   options.prefetchedRows?
@@ -48,7 +78,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  const started=Date.now();
  try{
   const result=await pool.query({text:sql,
-   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to],
+   values:[JSON.stringify(selected),options.pharmacies,ctx.client.slug,options.from,options.to,options.type],
    query_timeout:30000});
   rows=result.rows;
   if(selected.length>=100)console.info("PREPARADOR_METRICAS",JSON.stringify({
@@ -66,8 +96,11 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
   return {...fallback,metricsErrorCode:e.code||"QUERY_ERROR",
    warning:"Se han recuperado los artículos, pero no sus métricas de stock y ventas. "+(e.code||"Error de consulta")};
  }
- const byRef=new Map();
+
+
+ const byRef=new Map(),warehouseMetrics=new Map();
  for(const row of rows){
+  if(!warehouseMetrics.has(row.reference))warehouseMetrics.set(row.reference,row);
   if(!byRef.has(row.reference))byRef.set(row.reference,{});
   byRef.get(row.reference)[String(row.pharmacyId)]={
    pharmacyId:String(row.pharmacyId),stock:row.stock===null?null:Number(row.stock),
@@ -81,8 +114,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    const byPharmacy=byRef.get(row.referencia)||{};
    return {...row,byPharmacy,
     totalSold:Object.values(byPharmacy).reduce((sum,m)=>sum+m.unitsPeriod,0),
-    totalSuggested:Object.values(byPharmacy).some(m=>m.suggested===null)?null:
-     Object.values(byPharmacy).reduce((sum,m)=>sum+m.suggested,0)};
+    ...applyWarehouseToOrder(row,byPharmacy,options.type,warehouseMetrics.get(row.referencia))};
   })
  };
 }

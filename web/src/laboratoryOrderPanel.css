@@ -136,3 +136,9 @@
 .fm-lab-comment-dialog small{font-size:11px;color:#60756a;text-align:right}
 .fm-lab-comment-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px}
 @media(max-width:720px){.fm-lab-comment-dialog{padding:16px}}
+
+/* Central: stock separado sin simular una sexta farmacia. */
+.fm-lab-order-table thead th.fm-lab-order-total-group{background:#dbe9e2}
+.fm-lab-order-table .fm-lab-order-warehouse{background:#eef1fb;font-weight:700;color:#364a6e}
+.fm-lab-order-table .fm-lab-order-global{background:#e0f0e7;font-weight:750;color:#24583b}
+.fm-lab-order-summary .fm-lab-warehouse-pending{background:#fff3df;color:#795a22}

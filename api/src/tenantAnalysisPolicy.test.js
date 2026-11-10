@@ -17,7 +17,7 @@ function fixture(role="administrador"){
      activo:true,analisis_abcd_meses:persistedMonths}]};
   if(sql.includes("FROM farmetrica.cliente_modulos"))
    return {rows:[{id:"ventas",enabled:true}]};
-  if(sql.includes("FROM farmetrica.farmacias WHERE cliente_slug"))
+  if(sql.includes("FROM farmetrica.farmacias") && sql.includes("cliente_slug"))
    return {rows:[{id:"5",name:"Valdemarías",active:true,sourceCode:"POL"}]};
   if(sql.includes("UPDATE farmetrica.clientes SET analisis_abcd_meses=$1")){
    persistedMonths=params[0];

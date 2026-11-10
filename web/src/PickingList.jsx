@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Warehouse,Store} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {pickingListChannelView} from "./pickingListChannelView.js";
@@ -90,7 +90,7 @@ export default function PickingList({clientSlug}){
  }
  useEffect(()=>{setIssuesOpen(false);setIssues(null);},[clientSlug,data?.meta?.lastImportedAt]);
  // Los datos por canal ya vienen precalculados: cambiar el selector es local.
- const visibleData=pickingListChannelView(data,channel);
+ const visibleData=useMemo(()=>pickingListChannelView(data,channel),[data,channel]);
  const selectedSite=(visibleData?.sites||[]).find(s=>s.id===tab);
  const all=visibleData?.rows||[];
  const matching=all.filter(row=>{

@@ -368,6 +368,7 @@ jobs:
           node check-ajustes-gestor.mjs
           node check-picking-settings.mjs
           node check-picking-live-data.mjs
+          node check-picking-table-capacity.mjs
           node check-warehouse-edit.mjs
           node check-laboratory-orders.mjs
           node check-supplier-laboratory-map.mjs

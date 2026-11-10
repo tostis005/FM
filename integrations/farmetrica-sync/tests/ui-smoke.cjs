@@ -166,6 +166,7 @@ const context={
 };
 vm.createContext(context);
 vm.runInContext(src,context);
+context.F=context.window.F; // window y ámbito global son el mismo objeto en el navegador.
 async function run(){
 await new Promise(resolve=>setImmediate(resolve));
 function contains(value){assert.ok(dom['#app'].innerHTML.includes(value),`No aparece: ${value}`);}
@@ -200,6 +201,7 @@ const freshDom={'#app':{innerHTML:''},'#toast':{textContent:'',className:'',styl
 historyContext.document={...fakeDoc,querySelector(s){return freshDom[s]||{focus(){}};}};
 vm.createContext(historyContext);
 vm.runInContext(src,historyContext);
+historyContext.F=historyContext.window.F;
 await new Promise(resolve=>setImmediate(resolve));
 assert.match(freshDom['#app'].innerHTML,/Historial de ejecuciones/);
 console.log('OK: navegación por rutas, recarga de historial y progreso real en tablas.');

@@ -64,6 +64,8 @@ jobs:
           node --test api/src/stockTargetDays.test.js
           node --check api/src/stockSinRecepciones.js
           node --test api/src/stockSinRecepciones.test.js
+          node --check api/src/pickingList.js
+          node --test api/src/pickingListCore.test.js
           node --test api/src/outgoingTransfersRules.test.js
           node --test api/src/commercialNames.test.js
           node --check api/src/syncStatus.js
@@ -186,7 +188,9 @@ jobs:
           psql_test --single-transaction < api/src/migrations/028_modulos_usuario.sql
           psql_test --single-transaction < api/src/migrations/040_secciones_usuario.sql
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
+          psql_test --single-transaction < api/src/migrations/051_picking_list.sql
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
+          psql_test --single-transaction < api/src/migrations/051_picking_list.sql
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql
           psql_test --single-transaction < api/src/migrations/017_proveedores_visibilidad.sql

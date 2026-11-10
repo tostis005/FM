@@ -145,11 +145,11 @@ try{
  assert.equal(await page.getByRole("group",{name:"Períodos rápidos"}).count(),0);
  // Filtrar referencias nunca debe provocar nueva consulta de catálogo ni ventas.
  const beforeSearch=catalogCalls.length,beforeSales=matrices.length;
- await page.getByRole("searchbox",{name:"Buscar artículo o CN"}).fill("crema");
+ await page.getByRole("searchbox",{name:"Buscar artículo, CN o EAN"}).fill("crema");
  await page.waitForTimeout(450);
  assert.equal(catalogCalls.length,beforeSearch);
  assert.equal(matrices.length,beforeSales);
- await page.getByRole("searchbox",{name:"Buscar artículo o CN"}).fill("");
+ await page.getByRole("searchbox",{name:"Buscar artículo, CN o EAN"}).fill("");
  // Rango elegido para V. período incluso cuando el preset era "Este mes".
  await page.getByLabel("Desde",{exact:true}).fill("2025-06-01");
  await page.getByLabel("Hasta",{exact:true}).fill("2025-08-31");

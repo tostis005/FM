@@ -264,9 +264,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
      <option value="all">Todas</option><option value="A">A · Principal</option><option value="B">B · Relevante</option>
      <option value="C">C · Menor</option><option value="D">D · Sin ventas</option>
     </select></label>
-   <label className="fm-unified-filter">Molécula, presentación o CN
+   <label className="fm-unified-filter">Molécula, presentación, CN o EAN
     <div className="fm-generic-search"><Search size={16}/>
-     <input placeholder="Buscar conjunto…" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
+     <input placeholder="Buscar por molécula, CN o EAN…" value={search} onChange={e=>setSearch(e.target.value)}/></div></label>
   </ReportFilterBar>
   {!range.valid&&<p role="alert" className="fm-generic-detail-error">{range.reason}</p>}
   {error&&<p role="alert" className="fm-generic-detail-error">{error}</p>}

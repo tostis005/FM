@@ -44,7 +44,7 @@ await page.route("**/api/**",async route=>{
    lastWarning:refreshed?"2 filas no se han podido incluir en la preparación.":null};
   json={meta,sites,channels:refreshed?["web"]:[],selectedChannel:"",
    rows:refreshed?[{key:"123456",cn:"123456",sku:"123456",name:"Producto A",
-    required:8,orders:2,lines:2,stock,allocated:8,shortage:0,
+    required:8,orders:2,lines:2,eans:["8437000001234"],stock,allocated:8,shortage:0,
     status:"cubierto",stockTotal:12,exhausted:[],
     details:[{orderId:"1001",orderName:"#1001",channel:"web",createdAt:null,quantity:5},
      {orderId:"1002",orderName:"#1002",channel:"web",createdAt:null,quantity:3}]}]:[],
@@ -57,9 +57,11 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto("http://127.0.0.1:4175/picking-list",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor({timeout:15000});
- await page.getByText(/Dropbox configurado, pero no se han podido importar los pedidos/).waitFor();
+ await page.getByText(/No se han podido actualizar los pedidos pendientes/).waitFor();
+ assert.equal((await page.locator(".fm-picking-page").innerText()).includes("Dropbox"),false,
+  "La pantalla de usuario no muestra el origen técnico del fichero");
  assert.equal(await page.getByText(/ubicaciones con artículos sincronizados/).count(),0);
- await page.getByRole("heading",{name:"Aún no se han importado pedidos de Dropbox"}).waitFor();
+ await page.getByRole("heading",{name:"Aún no se han cargado pedidos pendientes"}).waitFor();
  assert.equal(await page.getByRole("button",{name:"Leer pedidos de Dropbox"}).count(),0);
  assert.equal(await page.getByRole("button",{name:"Actualizar",exact:true}).count(),0);
  // El sistema externo cambia el CSV. En la siguiente visita la API ya lo habrá
@@ -99,19 +101,30 @@ try{
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  const sort=page.getByRole("button",{name:"Ordenar Stock ABA"});
  await sort.click();
- await page.getByRole("button",{name:"Ordenar Producto / CN"}).click();
- const filter=page.getByLabel("Buscar en Producto / CN");
+ await page.getByRole("button",{name:"Ordenar Producto / CN / EAN"}).click();
+ const filter=page.getByLabel("Buscar en Producto / CN / EAN");
  await filter.fill("inexistente");
  await page.getByText("No hay productos con estos filtros").waitFor();
  await filter.fill("");
  await page.getByText("Producto A",{exact:true}).waitFor();
+ await page.getByText(/EAN 8437000001234/).waitFor();
+ assert.equal((await page.locator(".fm-picking-page").innerText()).includes("SKU "),false);
+ const globalSearch=page.getByRole("searchbox",{name:"Buscar CN, EAN, producto o pedido"});
+ await globalSearch.fill("8437000001234");
+ await page.getByText("Producto A",{exact:true}).waitFor();
+ await globalSearch.fill("9999999999999");
+ await page.getByText("No hay productos con estos filtros").waitFor();
+ await globalSearch.fill("");
+ await filter.fill("8437000001234");
+ await page.getByText("Producto A",{exact:true}).waitFor();
+ await filter.fill("");
  await page.getByRole("button",{name:"Ver más"}).click();
- await page.getByRole("heading",{name:"Filas del CSV que no se han importado"}).waitFor();
+ await page.getByRole("heading",{name:"Filas de pedidos que no se han importado"}).waitFor();
  await page.locator(".fm-picking-issues thead th").filter({hasText:"Detalle CSV"}).waitFor();
  const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
  assert.ok(issueColumns.some(x=>x.trim()==="Detalle CSV"),JSON.stringify(issueColumns));
  const issueCells=await page.locator(".fm-picking-issues tbody td").allTextContents();
- assert.ok(issueCells.includes("producto sin SKU/CN"),JSON.stringify(issueCells));
+ assert.ok(issueCells.includes("producto sin CN/EAN"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("texto, completo"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("cantidad no válida"),JSON.stringify(issueCells));
  await page.getByRole("button",{name:"Ocultar",exact:true}).click();

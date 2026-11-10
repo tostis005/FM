@@ -52,10 +52,13 @@ WITH sources AS MATERIALIZED (
   max(nombre) AS name,min(stock_at) AS stock_at
  FROM unique_articles GROUP BY site_id,key
 )
+__SYNONYM_EAN_ALIASES__
 SELECT s.site_id AS "siteId",s.site_name AS "siteName",
  s.source_code AS code,s.kind,s.ready,
  c.key,i.stock,i.name,i.stock_at AS "stockAt",
- (i.key IS NOT NULL) AS matched
+ (i.key IS NOT NULL) AS matched,
+ __SYNONYM_EAN_SELECT__
 FROM sites s LEFT JOIN codes c ON true
  LEFT JOIN inventory i ON i.site_id=s.site_id AND i.key=c.key
+ __SYNONYM_EAN_JOIN__
 ORDER BY CASE WHEN s.kind='almacen' THEN 0 ELSE 1 END,s.site_id,c.key;

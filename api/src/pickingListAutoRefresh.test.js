@@ -47,6 +47,8 @@ function fixture({initial=[],configured=true,importedAt=null,sourceUpdatedAt=nul
     return {rows:[{csv_url:configured?url:null}]};
    if(sql.includes("FROM farmetrica.picking_list_pendientes")&&sql.includes("ORDER BY linea"))
     return {rows:snapshot};
+   if(sql.includes("SELECT to_regclass($1) IS NOT NULL AS available"))
+    return {rows:[{available:false}]};
    if(sql.includes("WITH sources AS MATERIALIZED"))
     return {rows:sites.map(s=>({
      ...s,key:snapshot.length?"123456":null,

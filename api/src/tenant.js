@@ -527,7 +527,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   const visibleCodeValid=code=>/^[A-Z0-9_-]{2,8}$/.test(code);
   app.patch("/api/tenant/establecimientos/:id",...requireTenantAdmin(),async(req,res,next)=>{
     try{
-      if(!/^[1-9]\\d{0,8}$/.test(req.params.id))
+      if(!/^[1-9]\d{0,8}$/.test(req.params.id))
         return res.status(400).json({error:"Establecimiento inválido"});
       const name=String(req.body?.name||"").trim();
       const displayCode=String(req.body?.displayCode||"").trim().toUpperCase();

@@ -8,5 +8,7 @@
   <ItemGroup>
     <Compile Include="../../src/FarmetricaSync/Core/SqlTemplates.cs" Link="SqlTemplates.cs" />
     <Compile Include="../../src/FarmetricaSync/Core/Models.cs" Link="Models.cs" />
+    <Compile Include="../../src/FarmetricaSync/Core/Validation.cs" Link="Validation.cs" />
+    <Compile Include="../../src/FarmetricaSync/Core/SynonymJobs.cs" Link="SynonymJobs.cs" />
   </ItemGroup>
 </Project>

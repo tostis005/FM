@@ -1,0 +1,47 @@
+name: Ampedia onboarding certificate (temporary)
+on:
+  push:
+    branches: [ops/ampedia-users-20261110]
+    paths: [.github/workflows/ampedia-users-bootstrap.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Setup SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Create ephemeral encryption certificate ON VPS (public only in logs)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            umask 077
+            dir=/tmp/fm-ampedia-onboarding-20261110
+            if [ ! -d "$dir" ]; then mkdir -m 700 "$dir"; fi
+            if [ ! -s "$dir/cert.pem" ]; then
+              openssl req -x509 -newkey rsa:3072 -keyout "$dir/private.pem" -out "$dir/cert.pem" -days 2 -nodes -subj "/CN=Farmetrica-Ampedia-Onboarding" >/dev/null 2>&1
+            fi
+            echo START_PUBLIC_CERTIFICATE
+            cat "$dir/cert.pem"
+            echo END_PUBLIC_CERTIFICATE
+            echo START_AMPEDIA_ACTIVE_PHARMACIES
+            cd /opt/farmawao
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='\''ampedia'\'' AND activo=true;"
+            echo END_AMPEDIA_ACTIVE_PHARMACIES
+          '

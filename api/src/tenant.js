@@ -516,7 +516,11 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   async function visibleCodeAvailable(req,res,code,id){
     const {rows}=await pool.query(
       "SELECT id FROM farmetrica.farmacias WHERE cliente_slug=$1 AND id<>$2 "+
-      "AND upper(btrim(coalesce(nullif(codigo_visible,''),codigo_origen)))=$3 LIMIT 1",
+      "AND upper(btrim(coalesce(nullif(codigo_visible,''),"+
+      "CASE WHEN upper(btrim(codigo_origen))='ALMACEN' THEN 'ALM' "+
+      "WHEN cliente_slug='ampedia' AND id=5 "+
+      "AND upper(btrim(codigo_origen)) IN ('POL','VAL') THEN 'POL' "+
+      "ELSE codigo_origen END)))=$3 LIMIT 1",
       [req.context.client.slug,Number(id)||0,code]);
     if(rows.length){
       res.status(409).json({error:"Otro establecimiento ya utiliza ese código visible"});

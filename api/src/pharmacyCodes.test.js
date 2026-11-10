@@ -22,3 +22,19 @@ test("SQL relaciona VAL exclusivamente en Ampedia farmacia 5 sin modificar DB",(
  assert.match(sql,/ELSE upper\(btrim\(f\.codigo_origen\)\)/);
  assert.throws(()=>pharmacyDataCodeSQL("f;DROP TABLE"),/Alias SQL inválido/);
 });
+
+test("Cambiar código visible no cambia ID, código origen ERP ni nombre público",()=>{
+ const base={id:"6",name:"Almacén central",sourceCode:"ALMACEN",
+  displayCode:"ALM",sourceHost:"",sourceDatabase:"Farmatic"};
+ const warehouse=decoratePharmacy("ampedia",base);
+ assert.equal(warehouse.displayCode,"ALM");
+ assert.equal(warehouse.sourceCode,"ALMACEN");
+ assert.equal(warehouse.databaseCode,"ALMACEN");
+ assert.equal(warehouse.name,"Almacén central");
+ const customized=decoratePharmacy("ampedia",{
+  id:"5",name:"Farmacia Plaza",sourceCode:"VAL",displayCode:"PLZ"
+ });
+ assert.equal(customized.displayCode,"PLZ");
+ assert.equal(customized.databaseCode,"VAL");
+ assert.equal(customized.name,"Farmacia Plaza");
+});

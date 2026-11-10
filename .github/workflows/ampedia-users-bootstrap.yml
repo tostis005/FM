@@ -1,4 +1,4 @@
-name: Ampedia onboarding certificate (temporary)
+name: Apply Ampedia promotion-only users (one-time)
 on:
   push:
     branches: [ops/ampedia-users-20261110]
@@ -6,14 +6,15 @@ on:
 permissions:
   contents: read
 jobs:
-  prepare:
+  onboard:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
       VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
       VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
     steps:
+      - uses: actions/checkout@v4
       - name: Setup SSH
         shell: bash
         run: |
@@ -25,7 +26,15 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
           test -s ~/.ssh/known_hosts
-      - name: Create ephemeral encryption certificate ON VPS (public only in logs)
+      - name: Transfer encrypted payload (never transfers plaintext)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d ops/ampedia-users-bootstrap.enc.b64 > /tmp/ampedia-users.cms
+          scp -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            /tmp/ampedia-users.cms "$VPS_USER@$VPS_HOST:/tmp/fm-ampedia-onboarding-20261110/users.cms"
+          rm -f /tmp/ampedia-users.cms
+      - name: Decrypt on VPS, validate checksum, import and verify aggregate count
         shell: bash
         run: |
           set -euo pipefail
@@ -33,15 +42,26 @@ jobs:
             set -eu
             umask 077
             dir=/tmp/fm-ampedia-onboarding-20261110
-            if [ ! -d "$dir" ]; then mkdir -m 700 "$dir"; fi
-            if [ ! -s "$dir/cert.pem" ]; then
-              openssl req -x509 -newkey rsa:3072 -keyout "$dir/private.pem" -out "$dir/cert.pem" -days 2 -nodes -subj "/CN=Farmetrica-Ampedia-Onboarding" >/dev/null 2>&1
+            test -s "$dir/private.pem" && test -s "$dir/cert.pem" && test -s "$dir/users.cms"
+            cleanup() {
+              rm -f "$dir/private.pem" "$dir/cert.pem" "$dir/users.cms" "$dir/users.sql.gz" "$dir/users.sql" "$dir/output.log"
+              rmdir "$dir" || true
+            }
+            trap cleanup EXIT
+            if ! openssl cms -decrypt -binary -inform DER -in "$dir/users.cms" -recip "$dir/cert.pem" -inkey "$dir/private.pem" -out "$dir/users.sql.gz" >/dev/null 2>&1; then
+              echo "Decryption failed; no database changes made"; exit 1
             fi
-            echo START_PUBLIC_CERTIFICATE
-            cat "$dir/cert.pem"
-            echo END_PUBLIC_CERTIFICATE
-            echo START_AMPEDIA_ACTIVE_PHARMACIES
+            if ! gzip -dc "$dir/users.sql.gz" > "$dir/users.sql"; then
+              echo "Decompression failed; no database changes made"; exit 1
+            fi
+            sum=$(sha256sum "$dir/users.sql" | cut -d " " -f1)
+            if [ "$sum" != "b333df2051105e2b78e5001c648d517d88f160ba47e6141c914e742b0cce49c4" ]; then
+              echo "SQL integrity mismatch; no database changes made"; exit 1
+            fi
             cd /opt/farmawao
-            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='\''ampedia'\'' AND activo=true;"
-            echo END_AMPEDIA_ACTIVE_PHARMACIES
+            if ! docker compose exec -T db psql -X -q -v ON_ERROR_STOP=1 -U farmawao -d farmawao < "$dir/users.sql" > "$dir/output.log" 2>&1; then
+              echo "Import failed (private diagnostic log not exposed); see VPS audit"; exit 1
+            fi
+            echo "IMPORT_TRANSACTION_COMPLETED"
+            docker compose exec -T db psql -X -At -v ON_ERROR_STOP=1 -U farmawao -d farmawao -c "SELECT '\''candidates='\''||candidatos||'\'',configured='\''||configurados||'\'',skipped='\''||omitidos FROM farmetrica.lotes_altas_usuarios WHERE clave='\''ampedia-promociones-2026-11-10-lote-completo'\'';"
           '

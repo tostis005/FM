@@ -255,8 +255,10 @@ export function setupPickingList(app,pool,{requireTenant}){
     'FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1',
     [req.context.client.slug]);
    const row=rows[0];
+   const diagnostic=sourceDiagnostics.get(req.context.client.slug);
    res.json({url:row?.csv_url||"",sourceConfigured:Boolean(row?.csv_url),
-    lastImportedAt:row?.lastImportedAt||null,updatedAt:row?.updatedAt||null});
+    lastImportedAt:row?.lastImportedAt||null,updatedAt:row?.updatedAt||null,
+    sourceError:diagnostic?.error||null,lastAttemptAt:diagnostic?.lastAttemptAt||null});
   }catch(e){next(e);}
  });
  app.put("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{

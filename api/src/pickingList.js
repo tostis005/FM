@@ -102,8 +102,10 @@ export async function savePendingSnapshot(pool,slug,lines,{origin="archivo",user
   await tx.query(
    "UPDATE farmetrica.picking_list_fuentes SET ultimo_origen=$2,ultima_importacion=now(),"+
    "ultima_fila=$3,actualizado_por=$4,actualizado_en=now(),"+
-   "ultima_comprobacion=now(),ultimo_error=NULL,ultima_advertencia=$5 WHERE cliente_slug=$1",
-   [slug,origin,lines.length,user,(lines.warnings||[]).join(" ").slice(0,600)]);
+   "ultima_comprobacion=now(),ultimo_error=NULL,ultima_advertencia=$5,"+
+   "ultima_advertencia_detalle=$6::jsonb WHERE cliente_slug=$1",
+   [slug,origin,lines.length,user,(lines.warnings||[]).join(" ").slice(0,600),
+    JSON.stringify({headers:lines.csvHeaders||[],rows:lines.invalidRows||[]})]);
   await tx.query("COMMIT");
   return {rows:lines.length,skipped:lines.skippedCount||0,warning:(lines.warnings||[]).join(" ")};
  }catch(e){await tx.query("ROLLBACK");throw e}
@@ -220,17 +222,18 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
   for(const s of stock)s.planned=proposal?
    (s.kind==="almacen"?(warehouseUnknown?0:proposal.warehouse||0):proposal.bySite[s.code]||0):0;
   const hasMissing=warehouseUnknown||stock.some(s=>!s.ready);
-  const old=stock.some(s=>s.stockAt&&
-   Date.now()-new Date(s.stockAt).getTime()>48*60*60*1000);
+  // No marcar un artículo como obsoleto solo por su fecha: la sincronización
+  // puede ejecutarse sin cambiar ese timestamp cuando no hay movimientos.
   const shortage=proposal?.remaining??null;
-  const status=!matched?"sin_cn":hasMissing?"sin_datos":old?"desactualizado":
+  const status=!matched?"sin_cn":hasMissing?"sin_datos":
    shortage>0?"sin_stock":"cubierto";
   return {
    key:entry.key,cn:entry.cn,sku:entry.sku,
    name:entry.name||stock.map(s=>items.get(s.id+"|"+entry.key)?.name).find(Boolean)||"",
    required:entry.required,orders:entry.orderKeys.size,
    lines:entry.lines,channels:[...entry.channels],details:entry.details,
-   stock,allocated:proposal?.fulfilled??null,shortage,status,
+   stock,allocated:proposal?.fulfilled??null,shortage,
+   pending:Math.max(0,entry.required-(proposal?.fulfilled||0)),status,
    allocationProvisional:Boolean(proposal)&&(warehouseUnknown||proposal.partial),
    stockTotal:stock.every(s=>s.stock!==null)?stock.reduce((sum,s)=>sum+s.stock,0):null,
    exhausted:proposal?.zeroedSites||[]
@@ -239,10 +242,12 @@ export async function readPickingReport(pool,ctx,{channel=""}={}){
  return {
   meta,channels,selectedChannel:channel,sites,rows:report,
   totals:{orders:new Set(filtered.map(r=>r.orderId)).size,
-   products:report.length,units:report.reduce((n,r)=>n+r.required,0),
+   lines:filtered.length,products:report.length,
+   units:report.reduce((n,r)=>n+r.required,0),
    allocated:report.reduce((n,r)=>n+(r.allocated||0),0),
+   pending:report.reduce((n,r)=>n+r.pending,0),
    shortage:report.reduce((n,r)=>n+(r.shortage||0),0),
-   incomplete:report.filter(r=>["sin_cn","sin_datos","desactualizado"].includes(r.status)).length}
+   incomplete:report.filter(r=>["sin_cn","sin_datos"].includes(r.status)).length}
  };
 }
 export function setupPickingList(app,pool,{requireTenant}){
@@ -261,6 +266,22 @@ export function setupPickingList(app,pool,{requireTenant}){
  });
  // La URL de Dropbox nunca forma parte del reporte. Solo se entrega
  // al administrador/gestor en Ajustes, donde se conserva la ya guardada.
+ // Las filas descartadas se cargan solo cuando se abre "Ver más".
+ // No exponer el enlace privado de Dropbox ni descargar todo el CSV al navegador.
+ app.get("/api/picking-list/issues",...guard,allowed,async(req,res,next)=>{
+  try{
+   const offset=Math.max(0,Math.min(50000,Math.trunc(Number(req.query.offset)||0)));
+   const limit=25;
+   const {rows}=await pool.query(
+    "SELECT ultima_advertencia_detalle AS details,ultima_importacion AS imported_at "+
+    "FROM farmetrica.picking_list_fuentes WHERE cliente_slug=$1",
+    [req.context.client.slug]);
+   const detail=rows[0]?.details||{},all=Array.isArray(detail.rows)?detail.rows:[];
+   res.json({headers:Array.isArray(detail.headers)?detail.headers:[],
+    rows:all.slice(offset,offset+limit),total:all.length,
+    offset,limit,lastImportedAt:rows[0]?.imported_at||null});
+  }catch(e){next(e);}
+ });
  app.get("/api/picking-list/source",...guard,settingsAdmin,async(req,res,next)=>{
   try{
    const {rows}=await pool.query(

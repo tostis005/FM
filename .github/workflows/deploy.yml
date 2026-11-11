@@ -625,6 +625,15 @@ jobs:
             timeout 130 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_PREPARADOR_ULTIMA_RECEPCION=1 node src/checkPreparadorCN151130.mjs
           '
 
+      - name: Diagnosticar asignación real del CN 003652 (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '003652')
+        continue-on-error: false
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 130 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_PREPARADOR_ULTIMA_RECEPCION=1 FM_PREPARADOR_CN=003652 node src/checkPreparadorCN151130.mjs
+          '
+
       - name: Verificar origen de artículos Cinfa en PostgreSQL real (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Cinfa')
         continue-on-error: true

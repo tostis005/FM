@@ -33,5 +33,5 @@ test("una familia mixta no es apta para la fusión",()=>{
  const mixed=new Map([["21",new Set([...cns.get("21"),"000101","000102","000103"])],
   ["22",cns.get("22")]]);
  assert.throws(()=>validateApprovedFamilyPair(score,approval,[],mixed),
-  /Mezcla/);
+  /productos de ambos segmentos/);
 });

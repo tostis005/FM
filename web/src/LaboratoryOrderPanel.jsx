@@ -420,11 +420,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          Comprueba el código del error y las migraciones y sincronizaciones.</p>}
       </div>}
      </div>}
-    {tab==="parafarmacia"&&<p className="fm-op-fine">
-     La propuesta de cada farmacia muestra su necesidad local, antes de compensar excedentes.
-     La propuesta conjunta calcula la compra con el stock de todas las farmacias y, cuando está
-     importado, el del almacén. No se suman necesidades locales sin descontar el stock del grupo.
-    </p>}
     <div className="fm-lab-order-summary">
      <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>

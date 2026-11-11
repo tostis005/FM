@@ -153,3 +153,53 @@
 .fm-lab-sort-head span{font-size:10px;opacity:.85}
 .fm-lab-order .list-pagination{border-radius:0 0 12px 12px}
 @media(max-width:620px){.fm-lab-order-table-toolbar label{max-width:none;flex-basis:100%}.fm-lab-order-table-toolbar>span{width:100%}}
+
+/* Almacén: último bloque idéntico en columnas a cada farmacia, sin fingir
+ * una necesidad independiente de reposición ni alterar la lógica de stock. */
+.fm-lab-order-table th.fm-lab-order-warehouse-group,
+.fm-lab-order-table thead th.fm-lab-order-warehouse-head{
+ border-left:1px solid #b0cdd0;
+ background:#dcecef;
+ color:#244c53;
+}
+.fm-lab-order-table .fm-lab-order-warehouse-col{
+ background:#f0f7f8;
+ color:#275461;
+ font-weight:700;
+}
+.fm-lab-order-table .fm-lab-order-warehouse-col.fm-lab-order-ordercol{
+ border-right:2px solid #74a4aa;
+}
+.fm-lab-order-table .fm-lab-order-global{
+ background:#e0f0e7;font-weight:750;color:#24583b;
+}
+/* Familias visuales: la línea raíz y sus regalos/Dúplo siempre contiguos.
+ * El rojo de baja tiene prioridad y no bloquea inputs editables. */
+.fm-lab-order-table tbody tr.fm-lab-family-row:not(.fm-lab-order-excluded) td{
+ background:#edf8f5!important;
+ border-bottom-color:#c3ddd4;
+}
+.fm-lab-order-table tbody tr.fm-lab-family-row:not(.fm-lab-order-excluded) td.fm-lab-order-warehouse-col{
+ background:#e3f2f1!important;
+}
+.fm-lab-order-table tbody tr.fm-lab-family-first td{
+ border-top:2px solid #5b9a91;
+}
+.fm-lab-order-table tbody tr.fm-lab-family-last td{
+ border-bottom:2px solid #5b9a91!important;
+}
+.fm-lab-order-table tbody tr.fm-lab-family-row td:first-child{
+ box-shadow:inset 4px 0 #5b9a91;
+}
+.fm-lab-family-badge{
+ display:inline-flex;align-items:center;gap:4px;
+ margin:4px 0 0;padding:3px 7px;border-radius:5px;
+ background:#d3e9e3;color:#245f55;font-size:9px;
+ font-weight:800;white-space:nowrap;
+}
+.fm-lab-family-badge.fm-lab-family-regalo{background:#d1e8f6;color:#225672}
+.fm-lab-family-badge.fm-lab-family-duplo{background:#fbe5ca;color:#825117}
+.fm-lab-order-table tbody tr.fm-lab-order-excluded td{background:#fbecec!important;color:#6d3c42}
+.fm-lab-order-table tbody tr.fm-lab-order-excluded input:not(:disabled){
+ background:#fff;color:#513c43;border-color:#b57f88;cursor:text;
+}

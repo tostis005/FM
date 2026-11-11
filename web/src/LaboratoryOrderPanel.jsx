@@ -4,6 +4,7 @@ import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import PreparadorAgenda from "./PreparadorAgenda.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
+import {ALL_LAB_ROWS,LAB_VIRTUAL_ROW_HEIGHT,laboratoryTablePage,laboratoryTableViewport} from "./laboratoryTableWindow.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -38,9 +39,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [tab,setTab]=useState("parafarmacia");
  const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
  const [tableSort,setTableSort]=useState("original"),[tablePage,setTablePage]=useState(0),
-  [tablePageSize,setTablePageSize]=useState(50);
+  [tablePageSize,setTablePageSize]=useState(ALL_LAB_ROWS);
  const [data,setData]=useState(empty);
  const catalogueCache=useRef(new Map());
+ const tableScrollRef=useRef(null);
+ const [virtualRow,setVirtualRow]=useState(0);
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
@@ -121,6 +124,15 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   const controller=new AbortController();
   setLoading(true);setLoadStage("catalog");setError("");
   setData({...empty,metricsUnavailable:true,loaded:0,metricsLoaded:0});
+  // No ocultar el spinner al recibir HTTP: esperar a pintar la matriz y sus totales.
+  const finishRendering=()=>{
+   if(controller.signal.aborted)return;
+   setLoadStage("render");
+   requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(controller.signal.aborted)return;
+    setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());
+   }));
+  };
   const timer=setTimeout(async()=>{
    const base=new URLSearchParams({laboratorio:laboratory,tipo:tab,farmacias:scope});
    const tooLong=range.valid&&(Date.parse(range.to)-Date.parse(range.from)>5*366*86400000);
@@ -215,7 +227,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     setLoadStage("fallback");
    }
    if(bulkComplete){
-    setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());return;
+    finishRendering();return;
    }
    }
    // Lotes acotados, hasta dos consultas simultáneas: no saturar PostgreSQL
@@ -242,7 +254,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     setLoading(false);setLoadStage("idle");
     return;
    }
-   if(!controller.signal.aborted){setLoading(false);setLoadStage("idle");setUpdatedAt(new Date())}
+   if(!controller.signal.aborted)finishRendering();
   },250);
   return()=>{clearTimeout(timer);controller.abort()};
  },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,reload]);

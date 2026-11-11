@@ -114,8 +114,13 @@ function inventorySql(schema,nativeCN=false){
   ${cn} AS cn
  FROM chosen f JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
  WHERE ${cn} ~ '^[0-9]{6,7}$'
+), candidates AS MATERIALIZED (
+ -- Solo referencias en más de una farmacia y con existencias para transferir.
+ SELECT cn FROM articles GROUP BY cn
+ HAVING count(DISTINCT fid)>1 AND bool_or(stock>0)
 ), eligible AS MATERIALIZED (
- SELECT * FROM articles WHERE substring(cn from 1 for 6)::int<400000
+ SELECT a.* FROM articles a JOIN candidates c ON c.cn=a.cn
+ WHERE substring(a.cn from 1 for 6)::int<400000
 ), sales AS MATERIALIZED (
  SELECT a.fid,a.article_id,
   coalesce(sum(v.unidades) FILTER (WHERE v.fecha >= current_date-interval '89 days'),0)::float8 AS units3,

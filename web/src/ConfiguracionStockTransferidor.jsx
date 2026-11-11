@@ -10,6 +10,8 @@ async function request(slug,path,options={}){
  return result;
 }
 const number=n=>new Intl.NumberFormat("es-ES").format(Number(n)||0);
+const normalizePolicy=p=>({minDays:p?.minDays??4,targetDays:p?.targetDays??7,
+ families:Array.isArray(p?.families)?p.families:[],articles:Array.isArray(p?.articles)?p.articles:[]});
 export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]}){
  const [policy,setPolicy]=useState({minDays:4,targetDays:7,families:[],articles:[]});
  const [names,setNames]=useState([]);
@@ -25,13 +27,13 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
   const [p,f]=await Promise.all([
    request(clientSlug,"/api/tenant/transferidor-politica"),
    request(clientSlug,"/api/tenant/familias-globales")]);
-  setPolicy(p);setNames(f.items||[]);
+  setPolicy(normalizePolicy(p));setNames(Array.isArray(f?.items)?f.items:[]);
  }
  useEffect(()=>{
   let alive=true;setLoading(true);setError("");setNotice("");
   Promise.all([request(clientSlug,"/api/tenant/transferidor-politica"),
    request(clientSlug,"/api/tenant/familias-globales")])
-  .then(([p,f])=>{if(alive){setPolicy(p);setNames(f.items||[])}})
+  .then(([p,f])=>{if(alive){setPolicy(normalizePolicy(p));setNames(Array.isArray(f?.items)?f.items:[])}})
   .catch(e=>{if(alive)setError(e.message)})
   .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};

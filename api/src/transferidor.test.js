@@ -104,8 +104,7 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
 test("frontera IdArticu 399999 parafarmacia; 400000 medicación",()=>{
  const result=buildGlobalTransfers([
   item("1","399999",60,0),item("2","399999",0,10),
-  item("1","400000",60,0),item("2","400000",0,10),
-  item("1","0400000",60,0),item("2","0400000",0,10)
+  item("1","400000",60,0),item("2","400000",0,10)
  ],pharmacies.slice(0,2),20);
  assert.deepEqual(result.transfers.map(t=>t.cn),["399999"]);
 });

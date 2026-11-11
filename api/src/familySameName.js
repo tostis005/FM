@@ -16,7 +16,7 @@ const canonicalOrder=(a,b)=>
  Number(Boolean(b.customName))-Number(Boolean(a.customName))||
  weight(b)-weight(a)||
  num(a.id)-num(b.id);
-const preferredTitle=(items,canonical)=>{
+export const preferredFamilyTitle=(items,canonical)=>{
  // Respetar un nombre editado por una persona; los nombres generados
  // automáticamente por fusiones previas pueden corregirse si faltan tildes.
  if(canonical.customName&&!canonical.machineNamed)
@@ -85,7 +85,7 @@ export function planSameNameMerges(families){
  for(const [key,items] of groups){
   if(items.length<=1)continue;
   const ranked=[...items].sort(canonicalOrder),keeper=ranked[0];
-  const canonicalName=preferredTitle(items,keeper);
+  const canonicalName=preferredFamilyTitle(items,keeper);
   nameGroups.push({key,slug:keeper.normalized,segment:segment(keeper),
    destinationId:keeper.id,members:items.length,name:canonicalName});
   for(const source of ranked.slice(1)){

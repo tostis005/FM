@@ -8,7 +8,7 @@ test("los clientes sin apariencia conservan los colores por defecto",()=>{
 });
 test("mapea las columnas de PostgreSQL al contrato de interfaz",()=>{
  assert.deepEqual(appearanceFromDatabase({nombre_marca:"Farmacia Abadía",color_primario:"#087f79",color_secundario:"#145853",estilo_menu:"oscuro"}),{
-  brandName:"Farmacia Abadía",logoUrl:"",primaryColor:"#087F79",secondaryColor:"#145853",menuMode:"oscuro"
+  brandName:"Farmacia Abadía",logoUrl:"",primaryColor:"#087F79",secondaryColor:"#145853",pageColor:"",menuMode:"oscuro"
  });
 });
 test("rechaza esquemas inseguros para los logos",()=>{
@@ -21,4 +21,12 @@ test("rechaza esquemas inseguros para los logos",()=>{
 test("la actualización no acepta propiedades no autorizadas",()=>{
  const payload={brandName:"A",logoUrl:"",primaryColor:"#087F79",secondaryColor:"#145853",menuMode:"claro",slug:"otro"};
  assert.ok(validateAppearance(payload).error);
+});
+
+test("el fondo de página se valida sin afectar al tema de otros clientes",()=>{
+ const base={brandName:"Ampedia",logoUrl:"",primaryColor:"#087F79",secondaryColor:"#145853",menuMode:"claro"};
+ assert.equal(validateAppearance({...base,pageColor:"#EFF8F6"}).appearance.pageColor,"#EFF8F6");
+ assert.ok(validateAppearance({...base,pageColor:"transparent"}).error);
+ assert.ok(validateAppearance({...base,pageColor:"#FFF"}).error);
+ assert.equal(validateAppearance(base).appearance.pageColor,"");
 });

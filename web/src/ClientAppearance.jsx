@@ -8,7 +8,7 @@ export default function ClientAppearance({client,initial,onSaved}){
  const [open,setOpen]=useState(false);
  const [form,setForm]=useState(()=>normalizeClientAppearance(initial));
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[success,setSuccess]=useState("");
- useEffect(()=>setForm(normalizeClientAppearance(initial)),[initial?.brandName,initial?.logoUrl,initial?.primaryColor,initial?.secondaryColor,initial?.menuMode]);
+ useEffect(()=>setForm(normalizeClientAppearance(initial)),[initial?.brandName,initial?.logoUrl,initial?.primaryColor,initial?.secondaryColor,initial?.pageColor,initial?.menuMode]);
  const customLogo=Boolean(form.logoUrl);
  const previewStyle=clientAppearanceStyle(form);
  const field=(name,value)=>{setForm(prev=>({...prev,[name]:value}));setSuccess("");};
@@ -44,12 +44,12 @@ export default function ClientAppearance({client,initial,onSaved}){
    aria-expanded={open} aria-controls={"fm-appearance-"+client}>
    <Palette size={17}/><span>Identidad visual y colores</span>
    <span className="fm-appearance-swatches" aria-hidden="true">
-    <i style={{background:form.primaryColor}}/><i style={{background:form.secondaryColor}}/>
+    <i style={{background:form.primaryColor}}/><i style={{background:form.secondaryColor}}/><i style={{background:form.pageColor||"#F5F8F7"}}/>
    </span><ChevronDown className={open?"expanded":""} size={17}/>
   </button>
   {open&&<div id={"fm-appearance-"+client} className="fm-appearance-layout">
    <form className="fm-appearance-form" onSubmit={save}>
-    <p>Personaliza el logotipo y dos colores de marca. El resto de tonos se adapta automáticamente; las demás empresas mantienen su propio tema.</p>
+    <p>Personaliza el logo, los colores del menú, las cabeceras de tablas y el fondo de las páginas. Los cambios afectan solo a este cliente.</p>
     <label>Nombre visible en la aplicación
      <input maxLength={80} value={form.brandName} placeholder="Farmetrica (por defecto)"
       onChange={e=>field("brandName",e.target.value)}/>
@@ -80,6 +80,19 @@ export default function ClientAppearance({client,initial,onSaved}){
         onChange={e=>field("secondaryColor",e.target.value)}/>
       </div>
      </label>
+    </div>
+    <div className="fm-appearance-background-field">
+     <label>Color de fondo de las páginas
+      <div className="fm-appearance-color-input">
+       <input type="color" aria-label="Seleccionar color de fondo" value={form.pageColor||"#F5F8F7"}
+        onChange={e=>field("pageColor",e.target.value.toUpperCase())}/>
+       <input aria-label="Hexadecimal del fondo (opcional)" value={form.pageColor}
+        placeholder="#F5F8F7" maxLength={7} pattern="(#([0-9a-fA-F]{6}))?"
+        onChange={e=>field("pageColor",e.target.value)}/>
+      </div>
+     </label>
+     <button type="button" className="btn btn-secondary btn-sm"
+      onClick={()=>field("pageColor","")}>Fondo original</button>
     </div>
     <label>Estilo del menú lateral
      <select value={form.menuMode} onChange={e=>field("menuMode",e.target.value)}>

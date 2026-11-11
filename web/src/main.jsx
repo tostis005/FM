@@ -1353,7 +1353,7 @@ function App(){
        aria-label={sidebarCollapsed?item.label:undefined} aria-current={page===item.id?"page":undefined}>
         <item.icon size={19}/><span>{item.label}</span>
         {item.preview&&<small className="side-preview-badge">Demo</small>}
-        {page===item.id&&<span className="active-dot"/>}
+        
        </button>
        {hasChildren&&<button className="side-nav-caret" type="button"
         aria-label={(expanded?"Ocultar":"Mostrar")+" subopciones de "+item.label}
@@ -1369,13 +1369,13 @@ function App(){
         type="button" onClick={()=>nav(child.id)} aria-current={page===child.id?"page":undefined}>
         <child.icon size={16}/><span>{child.label}</span>
         {child.preview&&<small className="side-preview-badge">Demo</small>}
-        {page===child.id&&<span className="active-dot"/>}</button>)}
+        </button>)}
        {item.id==="promociones"&&canOpenSection("seguimiento-global")&&<button
         className={"side-link side-sublink "+(page==="seguimiento-global"?"active":"")}
         type="button" onClick={()=>nav("seguimiento-global")}
         aria-current={page==="seguimiento-global"?"page":undefined}>
          <BarChart3 size={16}/><span>Seguimiento</span>
-         {page==="seguimiento-global"&&<span className="active-dot"/>}
+         
         </button>}
       </div>}
      </React.Fragment>;
@@ -1391,7 +1391,7 @@ function App(){
       {visibleNav.filter(item=>CONFIG_IDS.has(item.id)).map(item=>
        <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
         onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
-        {page===item.id&&<span className="active-dot"/>}</button>)}
+        </button>)}
      </div>}
     </>}
     {visibleNav.some(item=>ADMIN_IDS.has(item.id))&&<>
@@ -1405,7 +1405,7 @@ function App(){
       {visibleNav.filter(item=>ADMIN_IDS.has(item.id)).map(item=>
        <button key={item.id} type="button" className={"side-link "+(page===item.id?"active":"")}
         onClick={()=>nav(item.id)}><item.icon size={16}/><span>{item.label}</span>
-        {page===item.id&&<span className="active-dot"/>}</button>)}
+        </button>)}
      </div>}
     </>}
    </nav>
@@ -1414,7 +1414,7 @@ function App(){
      aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}
      aria-controls="farmetrica-sidebar-navigation" aria-expanded={!sidebarCollapsed}
      title={sidebarCollapsed?"Desplegar menú":"Plegar menú"} onClick={()=>setSidebarCollapsed(v=>!v)}>
-     <span className="fm-sidebar-toggle-label">{sidebarCollapsed?"":"Plegar menú"}</span>
+     
      {sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
     </button>
    </div>

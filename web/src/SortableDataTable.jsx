@@ -43,7 +43,7 @@ export function compareTableValues(a,b){
 // paginación incluso para tablas con celdas React (selectores y acciones).
 export default function SortableDataTable({
  headers,rows=[],empty="No hay resultados para esta selección.",
- label="registros",tableClass="fm-preview-table",filterModes={},showExport=true
+ label="registros",tableClass="fm-preview-table",filterModes={},showExport=true,showPagination=true
 }){
  const [sort,setSort]=useState(null),[page,setPage]=useState(0);
  const [pageSize,setPageSize]=useState(50),[filters,setFilters]=useState({});
@@ -66,7 +66,7 @@ export default function SortableDataTable({
   });
  },[filtered,sort]);
  const pages=Math.max(1,Math.ceil(sorted.length/pageSize)),safePage=Math.min(page,pages-1);
- const shown=sorted.slice(safePage*pageSize,(safePage+1)*pageSize);
+ const shown=showPagination?sorted.slice(safePage*pageSize,(safePage+1)*pageSize):sorted;
  const changeSort=index=>{
   setSort(old=>old?.index===index?{index,direction:old.direction==="asc"?"desc":"asc"}:{index,direction:"asc"});
   setPage(0);
@@ -107,7 +107,7 @@ export default function SortableDataTable({
      <tr><td colSpan={headers.length}>{empty}</td></tr>}</tbody>
    </table>
   </HorizontalTableScroll>
-  <ListPagination total={sorted.length} page={safePage} pageSize={pageSize}
-   label={label} onPageChange={toPage} onPageSizeChange={n=>{setPageSize(n);setPage(0)}}/>
+  {showPagination&&<ListPagination total={sorted.length} page={safePage} pageSize={pageSize}
+   label={label} onPageChange={toPage} onPageSizeChange={n=>{setPageSize(n);setPage(0)}}/>}
  </>;
 }

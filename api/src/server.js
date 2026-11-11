@@ -571,6 +571,8 @@ try {
   // CREATE TABLE IF NOT EXISTS y ON CONFLICT DO NOTHING preservan personalizaciones.
   await pool.query(await readFile(new URL(
     "./migrations/053_apariencia_clientes.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL(
+    "./migrations/054_fondo_clientes.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

@@ -195,6 +195,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/052_codigos_visibles.sql
           psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql
           psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql
+          psql_test --single-transaction < api/src/migrations/054_fondo_clientes.sql
+          psql_test --single-transaction < api/src/migrations/054_fondo_clientes.sql
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
           psql_test --single-transaction < api/src/migrations/051_picking_list.sql
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql

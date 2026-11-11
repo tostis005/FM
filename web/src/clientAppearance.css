@@ -38,3 +38,10 @@
 .fm-appearance-preview>small{color:#70847e;display:block;line-height:1.5;font-size:11px;margin-top:10px}
 @media(max-width:900px){.fm-appearance-layout{grid-template-columns:1fr}.fm-appearance-preview{position:static}}
 @media(max-width:420px){.fm-appearance-colors{grid-template-columns:1fr}}
+
+/* Tercer color de la paleta: fondo propio de las páginas. */
+.fm-appearance-background-field{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+.fm-appearance-background-field>label{display:flex;flex:1 1 220px;flex-direction:column;gap:6px;font-weight:750;color:#3a5853;font-size:12px}
+.fm-appearance-background-field .fm-appearance-color-input{max-width:260px}
+.fm-appearance-mini-main{background:var(--fm-page-background,#F5F8F7)}
+.fm-appearance-mini-header{background:var(--fm-table-header)!important;color:#fff!important}

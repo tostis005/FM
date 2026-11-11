@@ -152,7 +152,7 @@ test("la última recepción usa solo alias con identidad unívoca por farmacia",
   const sql=await readFile(new URL("./"+name,import.meta.url),"utf8");
   assert.match(sql,/GROUP BY pharmacy_code,supplier_code/);
   assert.match(sql,/SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code/);
-  assert.match(sql,/f.cliente_slug='ampedia' AND f.activo/);
+  assert.match(sql,/f.cliente_slug=\$1 AND f.cliente_slug='ampedia' AND f.activo/);
   assert.match(sql,/f.tipo_establecimiento='almacen'/);
   assert.match(sql,/JOIN __SCHEMA__\.fm_recepciones_cabeceras h/);
   assert.match(sql,/HAVING count\(DISTINCT lab_id\)=1/);

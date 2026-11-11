@@ -52,3 +52,32 @@ test("no fusiona la misma familia dos veces en una pasada",()=>{
  const score=scoreFamilyPair(pair,sets,new Map());
  assert.equal(planFamilyMerges([score,score]).length,1);
 });
+
+test("familias sin clasificar con mismo nombre y >70 % de CN solapados pueden fusionarse",()=>{
+ const groups=[
+  {id:"10",name:"Dietoterápicos",segment:"SIN_DETERMINAR",referencePharmacy:null,customName:false},
+  {id:"11",name:"Dietoterapicos",segment:"SIN_DETERMINAR",referencePharmacy:null,customName:false}
+ ];
+ const pair=groupFamilyDuplicates(groups,[])[0];
+ const a=new Set(Array.from({length:30},(_,i)=>String(504000+i)));
+ const b=new Set([...a].slice(0,24));
+ const score=scoreFamilyPair(pair,new Map([["10",a],["11",b]]),new Map([["10",30],["11",24]]));
+ assert.equal(score.shared,24);
+ assert.equal(score.ratio,1);
+ assert.equal(score.safe,true);
+ assert.equal(score.segment,"SIN_DETERMINAR");
+});
+test("prohíbe mezclar dominios CN aunque el nombre coincida",()=>{
+ const groups=[
+  {id:"10",name:"Dietoterápicos",segment:"SIN_DETERMINAR"},
+  {id:"11",name:"Dietoterapicos",segment:"SIN_DETERMINAR"}];
+ const pair=groupFamilyDuplicates(groups,[])[0];
+ const a=new Set([...Array.from({length:15},(_,i)=>String(100000+i)),
+  ...Array.from({length:15},(_,i)=>String(504000+i))]);
+ const b=new Set([...a].slice(0,25));
+ assert.equal(scoreFamilyPair(pair,new Map([["10",a],["11",b]]),new Map()).safe,false);
+});
+test("etiquetas administrativas genéricas no son familias deduplicables",()=>{
+ for(const name of ["Sin Categoria","A Revisar","Especialidades","Genericos"])
+  assert.equal(dedupFamilySlug(name),"");
+});

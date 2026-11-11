@@ -1,0 +1,80 @@
+name: Auditar propuestas del Transferidor
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/audit-transferidor.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Configurar acceso protegido
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Diagnóstico agregado de las fuentes en producción (solo lectura)
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout='65000ms';
+          SELECT 'FARMACIAS_ACTIVAS' AS tipo, count(*)::int AS cantidad
+           FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND activo=true
+            AND coalesce(to_jsonb(farmetrica.farmacias)->>'tipo_establecimiento','farmacia')='farmacia';
+          SELECT 'STOCK_POR_FARMACIA' AS tipo, upper(btrim(a.farmacia_codigo)) AS codigo,
+           count(*)::int AS fichas,
+           count(*) FILTER(WHERE a.stock_actual>0)::int AS fichas_stock,
+           count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{6,7}$')::int AS stock_con_cn,
+           count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(to_jsonb(a)->>'cn_normalizado',''))~'^[0-9]{6,7}$')::int AS stock_cn_normalizado,
+           count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{6,7}$'
+               AND left(btrim(a.codigo_nacional),6)::int<400000)::int AS stock_parafarmacia
+          FROM ampedia.articulos a
+          GROUP BY 2 ORDER BY 2;
+          SELECT 'CORRESPONDENCIAS' AS tipo,
+           count(*)::int AS filas,
+           count(*) FILTER(WHERE nullif(btrim(codigo_nacional_normalizado),'') IS NOT NULL)::int AS cn,
+           count(*) FILTER(WHERE nullif(btrim(ean_gtin),'') IS NOT NULL)::int AS ean
+          FROM ampedia.fm_producto_correspondencias;
+          SELECT 'COLUMNAS_CORRESPONDENCIAS' AS tipo,string_agg(column_name,', ' ORDER BY ordinal_position) AS columnas
+          FROM information_schema.columns WHERE table_schema='ampedia'
+           AND table_name='fm_producto_correspondencias';
+          SELECT 'SINONIMOS_EXISTEN' AS tipo,to_regclass('ampedia.sinonimos')::text AS tabla;
+          SELECT 'COBERTURA_CNN_PARA' AS tipo,count(DISTINCT upper(btrim(farmacia_codigo))||':'||btrim(codigo_nacional))::int AS pares_farmacia_cn,
+           count(DISTINCT btrim(codigo_nacional))::int AS referencias
+          FROM ampedia.articulos
+          WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))~'^[0-9]{6,7}$'
+           AND left(btrim(codigo_nacional),6)::int<400000;
+          ROLLBACK;
+          SQL
+      - name: Comprobar versión y errores del servicio sin volcar datos personales
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            echo "VERSION_TRANSFERIDOR:"
+            if test -f api/src/transferidor.js; then
+              grep -c "const emptyReason" api/src/transferidor.js || true
+            else
+              echo "archivo no encontrado"
+            fi
+            echo "SERVICIOS:"
+            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
+            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
+            docker compose logs --tail=200 --no-color api 2>&1 |
+              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
+              tail -n 10 || true
+          '

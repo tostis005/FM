@@ -173,6 +173,9 @@ SELECT x.reference,f.id::text AS "pharmacyId",
  coalesce(m.v3,0)::float8 AS "units3",
  coalesce(m.v12,0)::float8 AS "units12",
  coalesce(pending.qty,0)::float8 AS ordered,
+ -- Objetivo bruto para compensar excedentes entre farmacias en parafarmacia.
+ greatest(coalesce(m.v3,0)/90.0,coalesce(m.v12,0)/365.0)*
+  coalesce(policy.cobertura_dias,20) AS "targetUnits",
  CASE WHEN i.stock IS NULL THEN NULL::int
  ELSE greatest(0,least(999999,ceil(
   greatest(coalesce(m.v3,0)/90.0,coalesce(m.v12,0)/365.0)*

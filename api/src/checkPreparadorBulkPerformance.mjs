@@ -75,5 +75,44 @@ try{
   WHERE n.nspname='ampedia'
    AND c.relname LIKE 'fm_preparador_%' AND i.indisvalid AND i.indisready`);
  output.preparadorIndexes=idx.length;
+ // Traza real de Cantabria (003652): catálogo separado de métricas. Nunca
+ // registra importes, unidades concretas ni documentos de ningún cliente.
+ const {rows:cantabria}=await pool.query({
+  text:`SELECT id::text FROM farmetrica.proveedores_unificados
+   WHERE cliente_slug='ampedia' AND activo=true AND nombre='CANTABRIA'
+    AND clase IN ('DIRECTO','VACUNAS','FÓRMULAS') ORDER BY id LIMIT 1`,
+  query_timeout:4000});
+ if(cantabria.length){
+  const key="P:"+cantabria[0].id;
+  const para=await timed("cantabriaCatalog",()=>
+   readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type:"parafarmacia"}));
+  if(para){
+   output.cantabriaTotal=para.total;
+   output.cantabriaTargetPresent=para.rows.some(r=>r.cn==="003652");
+   const target=para.rows.find(r=>r.cn==="003652");
+   const candidates=[...(target?[target]:[]),
+    ...para.rows.filter(r=>r.cn!=="003652")];
+   const now=new Date(),to=now.toISOString().slice(0,10);
+   const from=new Date(now.getTime()-30*86400000).toISOString().slice(0,10);
+   const uniqueSizes=[...new Set([1,Math.min(50,candidates.length),
+    Math.min(200,candidates.length),candidates.length])].filter(x=>x>0);
+   for(const n of uniqueSizes){
+    const matrix=await timed("cantabriaMatrix"+n,()=>
+     readLaboratoryOrderMatrix(pool,ctx,{key,pharmacies,type:"parafarmacia",
+      from,to,prefetchedRows:candidates.slice(0,n)}));
+    if(matrix){
+     output["cantabriaMatrix"+n+"Complete"]=matrix.metricsUnavailable===false;
+     output["cantabriaMatrix"+n+"Error"]=matrix.metricsErrorCode||null;
+     output["cantabriaMatrix"+n+"MetricsRows"]=matrix.rows.filter(r=>
+      Object.keys(r.byPharmacy||{}).length>0).length;
+     output["cantabriaMatrix"+n+"StockPresent"]=matrix.rows.filter(r=>
+      Object.values(r.byPharmacy||{}).some(m=>m.stock!==null)).length;
+     output["cantabriaMatrix"+n+"SalesPresent"]=matrix.rows.filter(r=>
+      Object.values(r.byPharmacy||{}).some(m=>m.units12!==null&&m.units12!==undefined)).length;
+    }
+   }
+  }
+ }
+
 }catch(e){output.code=e.code||e.name||"error"}
 finally{console.log("PREPARADOR_UNIFICADO_PERF",JSON.stringify(output));await pool.end()}

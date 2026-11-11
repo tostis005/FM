@@ -103,7 +103,7 @@ test("el preparador devuelve productos del catálogo aunque nunca se hayan compr
 test("no mezcla proveedores homónimos de otras farmacias ni duplica CN entre fuentes",async()=>{
  const pool={async query(q){
   const sql=typeof q==="string"?q:q.text;
-  assert.match(sql,/c\\.code=upper\\(btrim\\(ua\\.farmacia_codigo\\)\\)/);
+  assert.ok(sql.includes("c.code=upper(btrim(ua.farmacia_codigo))"));
   return {rows:[]};
  }};
  await readSupplierMasterCatalogue(pool,ctx,{

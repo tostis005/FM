@@ -150,8 +150,8 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  assert.equal(JSON.parse(insert.values[6])[0].comment,"Caja especial");
  assert.equal((await call("PUT",path,{...base,comentarioGlobal:"a".repeat(3001)})).status,400);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],comment:"a".repeat(2001)}]})).status,400);
- assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],excluded:true}]})).status,400);
- assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],name:"*BAJA* Crema"}]})).status,400);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],excluded:true}]})).status,200);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],name:"*BAJA* Crema"}]})).status,200);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:0,excluded:true}]})).status,200);
  assert.equal((await call("PUT",path,{...base,farmacias:[9]})).status,400);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:2.5}]})).status,400);

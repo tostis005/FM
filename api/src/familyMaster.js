@@ -159,6 +159,10 @@ export async function reconcileFamilies(pool,ctx){
     " key text,pharmacy text,code text,name text,method text,matches int,confidence numeric)"+
     " JOIN farmetrica.familias_globales g ON g.cliente_slug=$1 AND g.clave=j.key"+
     " ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO UPDATE SET"+
+    " familia_id=CASE WHEN familias_globales_alias.metodo='manual'"+
+    " THEN familias_globales_alias.familia_id ELSE EXCLUDED.familia_id END,"+
+    " metodo=CASE WHEN familias_globales_alias.metodo='manual' THEN 'manual' ELSE EXCLUDED.metodo END,"+
+    " coincidencias=EXCLUDED.coincidencias,confianza=EXCLUDED.confianza,"+
     " nombre_origen=EXCLUDED.nombre_origen,actualizado_en=now()",
     [slug,JSON.stringify(planned.origins)]);
   }

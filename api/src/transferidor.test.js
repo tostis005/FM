@@ -42,3 +42,18 @@ test("filtra todos, envío, recepción y farmacia de origen/destino sobre plan g
  assert.throws(()=>opts({origen:"9"}),/filtros|farmacia/);
  assert.throws(()=>opts({filtros:'{"__proto__":"x"}'}),/filtros|farmacia/);
 });
+
+test("dos donantes y dos receptores mantienen saldos globales coherentes",()=>{
+ const rows=[item("1","123459",6,1),item("2","123459",7,2),
+  item("3","123459",0,8),item("4","123459",1,7)];
+ const plan=buildGlobalTransfers(rows,pharmacies,20).transfers;
+ assert.equal(plan.reduce((n,r)=>n+r.units,0),10);
+ for(const [id,available] of [["1",5],["2",5]]){
+  assert.ok(plan.filter(r=>r.originId===id).reduce((n,r)=>n+r.units,0)<=available);
+ }
+ assert.equal(plan.filter(r=>r.destinationId==="3").reduce((n,r)=>n+r.units,0),8);
+ assert.equal(plan.filter(r=>r.destinationId==="4").reduce((n,r)=>n+r.units,0),2);
+ const page=filterTransferPlan(plan,parseTransferFilters({pagina:"2",tamano:"10",
+  orden:"units",direccion:"desc"},pharmacies));
+ assert.equal(page.total,plan.length,"El total se cuenta antes de paginar");
+});

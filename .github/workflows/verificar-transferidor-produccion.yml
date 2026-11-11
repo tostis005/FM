@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           {
-            # Ejecutar el código de ESTE commit sin alterar la API ni el catálogo desplegados.
+            # Verificar IdArticu (CN 1..399999) y cobertura de 30 días sin alterar datos.
             sed 's#"./pharmacyCodes.js"#"./src/pharmacyCodes.js"#' api/src/transferidor.js
             cat <<'JS'
           import pg from "pg";

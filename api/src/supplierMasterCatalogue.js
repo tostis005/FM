@@ -5,12 +5,42 @@ const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
  ELSE upper(btrim(coalesce(${expr}::text,''))) END`;
 
+const supplierColumns=["proveedor_habitual_id","proveedor_id","proveedor_codigo","proveedor"];
+const supplierFields=new WeakMap();
+export async function readArticleSupplierField(pool,schema){
+ if(!SCHEMA.test(schema))throw Error("Esquema inválido");
+ let cache=supplierFields.get(pool);
+ if(!cache){cache=new Map();supplierFields.set(pool,cache)}
+ const current=cache.get(schema);
+ if(current?.pending)return current.pending;
+ if(current&&current.expires>Date.now())return current.value;
+ const pending=pool.query({text:`SELECT column_name
+  FROM information_schema.columns
+  WHERE table_schema=$1 AND table_name='articulos'
+   AND column_name=ANY($2::text[])`,
+  values:[schema,supplierColumns],query_timeout:2000}).then(({rows})=>{
+   const present=new Set(rows.map(r=>r.column_name));
+   const value=supplierColumns.find(column=>present.has(column))||null;
+   if(cache.get(schema)?.pending===pending)
+    cache.set(schema,{value,expires:Date.now()+300000});
+   return value;
+  }).catch(error=>{
+   if(cache.get(schema)?.pending===pending)cache.delete(schema);
+   throw error;
+  });
+ cache.set(schema,{pending});
+ return pending;
+}
+
 /** Maestro ERP completo por proveedor habitual de la misma farmacia.
  * Este origen complementa las recepciones y no requiere ventas previas.
  * No extrapolar IDs ERP de una farmacia a otra. */
 export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,search="",patterns=[]}){
  if(!SCHEMA.test(ctx.client.schema)||!(/^[1-9][0-9]{0,17}$/.test(String(id))))
   throw Error("Proveedor inválido");
+ const field=await readArticleSupplierField(pool,ctx.client.schema);
+ // El catálogo de últimas recepciones cubre orígenes sin proveedor habitual.
+ if(!field)return [];
  const q='"'+ctx.client.schema+'"';
  const sql=`
  WITH chosen AS (
@@ -18,7 +48,7 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
  ), aliases AS (
-  SELECT c.id AS pharmacy_id,c.code,${normalizeCode("ua.codigo_origen")} AS supplier
+  SELECT DISTINCT c.id AS pharmacy_id,c.code,${normalizeCode("ua.codigo_origen")} AS supplier
   FROM farmetrica.proveedores_unificados_alias ua
   JOIN chosen c ON c.code=upper(btrim(ua.farmacia_codigo))
   WHERE ua.cliente_slug=$1 AND ua.proveedor_id=$3
@@ -36,7 +66,7 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
    ${retiredProductSQL("a.nombre","$6")} AS inactive
   FROM aliases c JOIN ${q}.articulos a
    ON upper(btrim(a.farmacia_codigo))=c.code
-   AND ${normalizeCode("to_jsonb(a)->>'proveedor_habitual_id'")}=c.supplier
+   AND ${normalizeCode("a."+field)}=c.supplier
   WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
  )
  SELECT coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id) AS referencia,
@@ -51,10 +81,10 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
    THEN 'medicacion' ELSE 'parafarmacia' END)=$4
   AND (coalesce($5::text,'')='' OR cn ILIKE '%'||$5||'%'
    OR nombre ILIKE '%'||$5||'%')
- GROUP BY coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id),cn,pharmacy_id
+ GROUP BY coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id),cn
  ORDER BY min(nombre),referencia LIMIT 5001`;
  const {rows}=await pool.query({text:sql,
-  values:[ctx.client.slug,pharmacies,id,type,search,patterns],query_timeout:25000});
+  values:[ctx.client.slug,pharmacies,id,type,search,patterns],query_timeout:15000});
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias de catálogo"),{code:"TOO_MANY"});
  return rows;
 }

@@ -37,7 +37,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   return()=>{clearTimeout(delay);controller.abort()};
  },[clientSlug,vista,pharmacy,origin,destination,search,page,pageSize,sort.key,
   sort.direction,JSON.stringify(filters),revision]);
- const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"),[pharmacies]);
+ const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
  const columns=useMemo(()=>[
   {key:"cn",label:"CN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
   {key:"name",label:"Producto",value:r=>r.name,render:r=><span title={r.name}>{r.name}</span>},
@@ -128,8 +128,10 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    </>}
    <p className="fm-transfer-explainer">
     El Transferidor no confirma envíos ni recepciones. Las propuestas se recalculan al consultar
-    la pantalla con el stock sincronizado de Farmatic. Un movimiento en tránsito puede seguir
-    apareciendo hasta que ambos establecimientos hayan actualizado su inventario.
+    la pantalla con el stock sincronizado de Farmatic. Esta primera versión incluye únicamente
+    referencias identificables como parafarmacia mediante CN; los códigos sin equivalencia fiable
+    quedan pendientes. Un movimiento en tránsito puede seguir apareciendo hasta que ambos
+    establecimientos hayan actualizado su inventario.
    </p>
   </section>
  </div>;

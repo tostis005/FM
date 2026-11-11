@@ -10,7 +10,7 @@ function preferAccents(destination,source,origins,normalized){
  items.sort((a,b)=>accentCount(b)-accentCount(a));
  return accentCount(items[0])>accentCount(destination)?items[0]:null;
 }
-export function validateApprovedFamilyPair(scored,approval,aliases,cnById){
+export function validateApprovedFamilyPair(scored,approval,aliases,cnById,auditedDestinations=new Set()){
  const sourceId=String(approval.sourceId),destinationId=String(approval.destinationId);
  const samePair=scored&&new Set([scored.a,scored.b]).has(sourceId)&&
   new Set([scored.a,scored.b]).has(destinationId);
@@ -26,12 +26,14 @@ export function validateApprovedFamilyPair(scored,approval,aliases,cnById){
     scored.shared<Number(approval.minimumShared||3))
   throw Error("Evidencia insuficiente para fusión "+sourceId+" → "+destinationId);
  const ids=new Set([sourceId,destinationId]);
- if(aliases.some(a=>ids.has(String(a.familyId))&&a.method==="manual"))
+ if(aliases.some(a=>ids.has(String(a.familyId))&&a.method==="manual"&&
+   !(special&&String(a.familyId)===destinationId&&auditedDestinations.has(destinationId))))
   throw Error("Hay equivalencias corregidas manualmente; no fusionar "+sourceId);
  const selected=[scored.left,scored.right];
  const source=selected.find(g=>String(g.id)===sourceId);
  const dest=selected.find(g=>String(g.id)===destinationId);
- if(!source||!dest||source.referencePharmacy||dest.customName||source.customName||
+ if(!source||!dest||source.referencePharmacy||
+    (dest.customName&&!(special&&auditedDestinations.has(destinationId)))||source.customName||
     (special&&dest.referencePharmacy))
   throw Error("La referencia o nombre editado impide esta fusión");
  for(const f of [source,dest]){
@@ -69,7 +71,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
   await db.query("SELECT id FROM farmetrica.familias_globales"+
    " WHERE cliente_slug=$1 AND id=ANY($2::bigint[]) FOR UPDATE",
    [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]]);
-  const [groups,aliases,countRows]=await Promise.all([
+  const [groups,aliases,countRows,auditRows]=await Promise.all([
    // No lanzar consultas simultáneas sobre el mismo cliente PostgreSQL.
    db.query("SELECT id::text AS id,nombre AS name,segmento AS segment,"+
     " referencia_farmacia AS \"referencePharmacy\",nombre_manual AS \"customName\","+
@@ -81,7 +83,11 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
    db.query("SELECT familia_id::text AS id,count(*)::int AS n"+
     " FROM farmetrica.familias_globales_articulos WHERE cliente_slug=$1"+
     " AND familia_id=ANY($2::bigint[]) GROUP BY familia_id",
-    [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]])
+    [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]]),
+   db.query("SELECT DISTINCT familia_destino::text AS id"+
+    " FROM farmetrica.familias_globales_fusiones"+
+    " WHERE cliente_slug=$1 AND familia_destino=ANY($2::bigint[])",
+    [slug,[...new Set(approvals.map(a=>a.destinationId))]])
   ]);
   const all=groups.rows,allAliases=aliases.rows,
    byId=new Map(all.map(g=>[g.id,g]));
@@ -107,6 +113,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
   const sets=new Map(pending.flatMap(a=>[a.sourceId,a.destinationId]).map(id=>[String(id),new Set()]));
   for(const row of cnRows)sets.get(row.id)?.add(row.cn);
   const totals=new Map(countRows.rows.map(r=>[r.id,Number(r.n)]));
+  const auditedDestinations=new Set(auditRows.rows.map(r=>r.id));
   const pairs=groupFamilyDuplicates(all.filter(f=>f.active),allAliases);
   for(const a of pending){
    const item=pairs.find(p=>
@@ -118,7 +125,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
     continue;
    }
    const scored=scoreFamilyPair(item,sets,totals);
-   try{validateApprovedFamilyPair(scored,a,allAliases,sets)}
+   try{validateApprovedFamilyPair(scored,a,allAliases,sets,auditedDestinations)}
    catch(e){
     result.push({sourceId:a.sourceId,destinationId:a.destinationId,status:"omitido",
      reason:String(e.message).slice(0,200),sharedCn:scored.shared,ratio:scored.ratio});

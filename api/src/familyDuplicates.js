@@ -7,7 +7,7 @@ export function dedupFamilySlug(name){
  const lower=clean.toLocaleLowerCase("es").replace(/ñ/g,"\u0001")
   .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\u0001/g,"ñ");
  const slug=lower.replace(/[^a-z0-9ñ]+/g," ").trim().replace(/\s+/g," ");
- if(slug.length<5||/^(otros?|varios?|general|resto|sin clasificar|sin asignar|sin familia|sin categoria|a revisar|especialidades|genericos|miscelanea|familia \d+)$/.test(slug))
+ if(slug.length<5||/^(otros?|varios?|general|resto|sin clasificar|sin asignar|sin familia|sin categoria|a revisar|articulos inactivos|miscelanea|familia \d+)$/.test(slug))
   return "";
  return slug;
 }

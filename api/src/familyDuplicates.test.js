@@ -78,6 +78,11 @@ test("prohíbe mezclar dominios CN aunque el nombre coincida",()=>{
  assert.equal(scoreFamilyPair(pair,new Map([["10",a],["11",b]]),new Map()).safe,false);
 });
 test("etiquetas administrativas genéricas no son familias deduplicables",()=>{
- for(const name of ["Sin Categoria","A Revisar","Especialidades","Genericos"])
+ for(const name of ["Sin Categoria","A Revisar","Artículos Inactivos"])
   assert.equal(dedupFamilySlug(name),"");
+});
+
+test("familias reales como Genéricos y Especialidades son categorías unificables",()=>{
+ assert.equal(dedupFamilySlug("Genéricos"),dedupFamilySlug("Genericos"));
+ assert.equal(dedupFamilySlug("Especialidades"),"especialidades");
 });

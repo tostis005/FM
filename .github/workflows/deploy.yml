@@ -55,6 +55,11 @@ jobs:
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js
           node --test api/src/familyDuplicates.test.js
+          node --check api/src/familySameName.js
+          node --test api/src/familySameName.test.js
+          node --check api/src/familyNameMerge.js
+          node --test api/src/familyNameMerge.test.js
+          node --check api/src/runFamilyNameMerges.mjs
           node --check api/src/familyDuplicateMerge.js
           node --check api/src/applyFamilyDuplicates.mjs
           node --test api/src/familyDuplicateMerge.test.js
@@ -846,4 +851,15 @@ jobs:
             cd /opt/farmawao
             timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/applyFamilyDuplicates.mjs --cliente ampedia
             timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/applyFamilyDuplicates.mjs --cliente ampedia --apply
+          '
+
+      - name: Unificar familias por nombre normalizado sin exigir CN compartidos
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'UNIFICAR_FAMILIAS_NOMBRE')
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 180 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/runFamilyNameMerges.mjs --cliente ampedia
+            timeout 240 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/runFamilyNameMerges.mjs --cliente ampedia --apply
+            timeout 180 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/runFamilyNameMerges.mjs --cliente ampedia
           '

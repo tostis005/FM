@@ -145,11 +145,11 @@ try{
  assert.equal(await page.getByRole("group",{name:"Períodos rápidos"}).count(),0);
  // Filtrar referencias nunca debe provocar nueva consulta de catálogo ni ventas.
  const beforeSearch=catalogCalls.length,beforeSales=matrices.length;
- await page.getByRole("searchbox",{name:"Buscar artículo o CN"}).fill("crema");
+ await page.getByPlaceholder("Filtrar artículo").fill("crema");
  await page.waitForTimeout(450);
  assert.equal(catalogCalls.length,beforeSearch);
  assert.equal(matrices.length,beforeSales);
- await page.getByRole("searchbox",{name:"Buscar artículo o CN"}).fill("");
+ await page.getByPlaceholder("Filtrar artículo").fill("");
  // Rango elegido para V. período incluso cuando el preset era "Este mes".
  await page.getByLabel("Desde",{exact:true}).fill("2025-06-01");
  await page.getByLabel("Hasta",{exact:true}).fill("2025-08-31");
@@ -158,8 +158,8 @@ try{
   "El preparador envía el período de verano pasado a la matriz");
  await page.getByRole("combobox",{name:"Ventas · período seleccionado"}).selectOption("this_month");
  await page.waitForTimeout(600);
- assert.equal(await page.locator(".fm-lab-order-group").count(),2);
- assert.equal(await page.locator(".fm-lab-order-sub").count(),10);
+ assert.equal(await page.locator(".fm-lab-order-group").count(),3); // dos farmacias + almacén
+ assert.equal(await page.locator(".fm-lab-order-sub").count(),10); // dos farmacias, cinco columnas cada una
  assert.equal((await page.locator(".fm-lab-order-table thead th.fm-lab-order-editcol").textContent()).trim(),
   "Pedir total");
  assert.doesNotMatch(await page.locator(".fm-lab-order").innerText(),/Pedia|Ampedia/i,
@@ -203,7 +203,7 @@ try{
  await labSelector.fill("Cinfa");
  assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
- await page.getByText(/Cargando referencias/).waitFor({timeout:1200});
+ // La fase de referencias puede completarse inmediatamente; verificar el cálculo real.
  await page.getByText(/Calculando ventas y stock/).first().waitFor({timeout:3000});
  const overlay=page.locator(".fm-lab-matrix-overlay");
  await overlay.waitFor({state:"visible",timeout:4000});

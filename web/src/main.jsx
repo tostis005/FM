@@ -5,8 +5,8 @@ import {
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,
-  PanelLeftClose, PanelLeftOpen
-, Layers3} from "lucide-react";
+  PanelLeftClose, PanelLeftOpen, Layers3
+} from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
 // Base visual de tarjetas de stock y operativa: se carga en el primer acceso.

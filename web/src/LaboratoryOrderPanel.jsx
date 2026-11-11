@@ -465,12 +465,36 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         "Calculando ventas y stock de "+(data.total??0)+" referencias en una consulta…"}
      </span>}
     </div>
+    <div className="fm-lab-order-table-toolbar" aria-label="Herramientas de la tabla del preparador">
+      <label>Filtrar CN
+       <input type="search" value={columnFilter.cn} placeholder="Código nacional…"
+        onChange={e=>{setColumnFilter(prev=>({...prev,cn:e.target.value}));setTablePage(0)}}/>
+      </label>
+      <label>Filtrar artículo
+       <input type="search" value={columnFilter.article} placeholder="Descripción…"
+        onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
+      </label>
+      <label>Ordenación
+       <select value={tableSort} onChange={e=>{setTableSort(e.target.value);setTablePage(0)}}>
+        <option value="original">Orden original</option>
+        <option value="cn:asc">CN ascendente</option><option value="cn:desc">CN descendente</option>
+        <option value="article:asc">Artículo A–Z</option><option value="article:desc">Artículo Z–A</option>
+       </select>
+      </label>
+      <span>{tableVisibleRows.length} referencias coincidentes</span>
+     </div>
     <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
      <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
       aria-busy={metricsLoading}>
      <table className="fm-lab-order-table">
-      <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>CN</th>
-       <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>Artículo</th>
+      <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>
+         <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("cn")}
+          aria-label="Ordenar por CN">CN <span aria-hidden="true">{tableSort==="cn:asc"?"▲":tableSort==="cn:desc"?"▼":"↕"}</span></button>
+        </th>
+       <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>
+         <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("article")}
+          aria-label="Ordenar por artículo">Artículo <span aria-hidden="true">{tableSort==="article:asc"?"▲":tableSort==="article:desc"?"▼":"↕"}</span></button>
+        </th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        <th colSpan={7} className="fm-lab-order-total-group">Stock y propuesta conjunta</th>
       </tr><tr>
@@ -483,7 +507,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        <th>Vendido</th><th title={tab==="parafarmacia"?"Compra calculada con las existencias de todas las farmacias y del almacén cuando está disponible":"Suma de recomendaciones individuales por farmacia"}>Propuesta</th>
        <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
       </tr></thead>
-      <tbody>{currentRows.map(row=>{
+      <tbody>{tablePageRows.map(row=>{
        const line=showLine(row);
        return <tr key={row.referencia} className={isExcludedOrderRow(row)?"fm-lab-order-excluded":""}>
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
@@ -528,7 +552,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        </tr>;
       })}
       {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+9}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
-      {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+9}>
+      {!loading&&currentRows.length>0&&!tableVisibleRows.length&&<tr>
+        <td colSpan={chosen.length*5+9}>Ningún artículo coincide con los filtros de columna.</td>
+       </tr>}
+       {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+9}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":
@@ -544,6 +571,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </HorizontalTableScroll>
+    <ListPagination total={tableVisibleRows.length} page={safePage} pageSize={tablePageSize}
+     pageSizes={[25,50,100,250]} label="referencias"
+     onPageChange={setTablePage}
+     onPageSizeChange={n=>{setTablePageSize(n);setTablePage(0)}}/>
     {metricsLoading&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
      <div className="fm-lab-matrix-loading">
       <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>

@@ -88,6 +88,7 @@ test("el preparador devuelve productos del catálogo aunque nunca se hayan compr
  const pool={async query(q){
   const sql=typeof q==="string"?q:q.text;queries.push(sql);
   if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
+  if(sql.includes("information_schema.columns"))return {rows:[{column_name:"proveedor_habitual_id"}]};
   if(sql.includes("FROM matched"))return {rows:[stockOnly]};
   return {rows:[]}; // Ninguna recepción histórica
  }};
@@ -103,7 +104,11 @@ test("el preparador devuelve productos del catálogo aunque nunca se hayan compr
 test("no mezcla proveedores homónimos de otras farmacias ni duplica CN entre fuentes",async()=>{
  const pool={async query(q){
   const sql=typeof q==="string"?q:q.text;
+  if(sql.includes("information_schema.columns"))
+   return {rows:[{column_name:"proveedor_habitual_id"}]};
   assert.ok(sql.includes("c.code=upper(btrim(ua.farmacia_codigo))"));
+  assert.ok(sql.includes("a.proveedor_habitual_id"));
+  assert.ok(!sql.includes("to_jsonb(a)->>'proveedor_habitual_id'"));
   return {rows:[]};
  }};
  await readSupplierMasterCatalogue(pool,ctx,{

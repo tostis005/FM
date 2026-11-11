@@ -3,6 +3,7 @@ import {GitMerge,RefreshCcw,Search,Save,ChevronDown,ChevronUp,Link2,Layers3} fro
 import "./familiasMaestro.css";
 
 const METHODS={referencia:"Referencia principal",coincidencia_cn:"Coincidencia por CN",
+ coincidencia_nombre:"Nombre exacto de referencia",nombre_compartido:"Nombre compartido entre farmacias",
  sin_referencia:"Pendiente de unificar",manual:"Vinculación manual"};
 const SEGMENTS={MEDICACION:"Medicación",PARAFARMACIA:"Parafarmacia",SIN_DETERMINAR:"Por revisar"};
 const count=n=>new Intl.NumberFormat("es-ES").format(Number(n)||0);

@@ -70,98 +70,10 @@ try{
     a.procedencia AS procedencia_alias,a.vigencia AS vigencia_alias,
     (SELECT min(sp.nombre) FROM "${schema}".proveedores sp
       WHERE upper(btrim(sp.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
-       AND (CASE WHEN btrim(sp.origen_id::text) ~ '^[0-9]+
-   FROM own_receipts r
-   LEFT JOIN farmetrica.proveedores_unificados_alias a
-    ON a.cliente_slug=$2 AND upper(btrim(a.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
-     AND (CASE WHEN btrim(a.codigo_origen) ~ '^[0-9]+$'
-      THEN coalesce(nullif(ltrim(btrim(a.codigo_origen),'0'),''),'0')
-      ELSE upper(btrim(a.codigo_origen)) END)=r.provider_code
-   LEFT JOIN farmetrica.proveedores_unificados p
-    ON p.cliente_slug=$2 AND p.id=a.proveedor_id
-   LEFT JOIN farmetrica.farmacias f
-    ON f.cliente_slug=$2 AND ${pharmacyDataCodeSQL("f")}=upper(btrim(r.farmacia_codigo))
-   GROUP BY r.farmacia_codigo,f.id,f.activo,p.id,p.nombre,p.clase,
-    r.provider_code,a.nombre_origen,a.procedencia,a.vigencia
-   ORDER BY ultima DESC LIMIT 50`,
-    values:[CN,SLUG],query_timeout:22000});
-  out.ownReceiptEvidence=receiptEvidence.map(r=>({
-   farmacia:r.farmacia,farmacia_id:r.farmacia_id,farmacia_activa:r.farmacia_activa,
-   proveedor_id:r.proveedor_id,proveedor:r.nombre,clase:r.clase,
-   lineas:r.lineas,ultima:r.ultima,
-   codigoProveedor:r.codigo_proveedor,nombreERP:r.nombre_erp,
-   nombreAlias:r.nombre_alias,origenAlias:r.procedencia_alias,
-   vigenciaAlias:r.vigencia_alias}));
- }catch(e){out.ownReceiptError=e.code||e.name||"QUERY_ERROR"}
-
- const labCodes=[...new Set(article.map(r=>String(r.laboratorio||"").trim()).filter(Boolean))];
- const {rows:erpSuppliers}=await pool.query({text:`
-  SELECT farmacia_codigo,origen_id::text AS code,nombre
-  FROM "${schema}".proveedores
-  WHERE upper(btrim(origen_id::text))=ANY($1::text[])
-  LIMIT 40`,values:[labCodes.map(c=>c.toUpperCase())],query_timeout:10000});
- const {rows:aliasesForLab}=await pool.query({text:`
-  SELECT ua.farmacia_codigo,ua.codigo_origen,
-   p.id::text AS id,p.nombre
-  FROM farmetrica.proveedores_unificados_alias ua
-  JOIN farmetrica.proveedores_unificados p ON p.cliente_slug=ua.cliente_slug
-   AND p.id=ua.proveedor_id
-  WHERE ua.cliente_slug=$1 AND upper(btrim(ua.codigo_origen))=ANY($2::text[])
-  LIMIT 40`,values:[SLUG,labCodes.map(c=>c.toUpperCase())],query_timeout:10000});
- out.labCodeLinks={codes:labCodes,erpSuppliers:erpSuppliers.map(r=>({farmacia:r.farmacia_codigo,nombre:r.nombre})),
-  unified:aliasesForLab.map(r=>({farmacia:r.farmacia_codigo,id:r.id,nombre:r.nombre}))};
- const {rows:labColumns}=await pool.query({text:`
-  SELECT table_name,column_name FROM information_schema.columns
-  WHERE table_schema=$1 AND table_name IN ('laboratorios','articulos')
-   AND column_name IN ('laboratorio','laboratorio_id','codigo','origen_id','nombre',
-    'proveedor_habitual_id','proveedor_id','codigo_nacional','cn_normalizado')`,
-  values:[schema],query_timeout:5000});
- out.availableLabColumns=labColumns;
- out.snapshotLab=snap.map(x=>({id:x.lab,
-  nombre:allSuppliers.find(s=>s.id===x.lab)?.nombre||"Otro"}));
- const {rows:aliases}=selected.length?await pool.query({
-  text:`SELECT proveedor_id::text AS id,farmacia_codigo,codigo_origen
-  FROM farmetrica.proveedores_unificados_alias
-  WHERE cliente_slug=$1 AND proveedor_id=ANY($2::bigint[])`,
-  values:[SLUG,selected.map(s=>s.id)],query_timeout:7000}):{rows:[]};
- out.erp=article.map(row=>{
-  const mapped=aliases.filter(a=>a.farmacia_codigo.trim().toUpperCase()===
-   String(row.farmacia_codigo||"").trim().toUpperCase());
-  const suppliers=[row.habitual,row.proveedor,row.proveedor_codigo]
-   .filter(v=>v!==null&&v!==undefined&&String(v).trim()!=="");
-  return {farmacia:row.farmacia_codigo,nombre:row.nombre,
-   codigoOriginal:row.codigo_nacional,codigoNormalizado:row.normalizado,
-   laboratorioERP:row.laboratorio,
-   tieneProveedorHabitual:!!row.habitual,
-   proveedorHabitualEsLoreal:mapped.some(a=>supplier(a.codigo_origen)===supplier(row.habitual)),
-   algunProveedorEsLoreal:mapped.some(a=>suppliers.some(v=>supplier(a.codigo_origen)===supplier(v))),
-   nombreLaboratorioEsLoreal:normalized(row.laboratorio).includes("LOREAL"),
-   equivalenciasProveedor:selected.map(s=>({id:s.id,
-    asociado:mapped.some(a=>suppliers.some(v=>supplier(a.codigo_origen)===supplier(v)))}))};
- });
- const catalogs=[];
- for(const s of selected.slice(0,6)){
-  try{
-   const start=Date.now();
-   const data=await readUnifiedSupplierCN(pool,ctx,{key:"P:"+s.id,pharmacies:ids,
-    type:"parafarmacia",search:CN});
-   catalogs.push({id:s.id,name:s.nombre,items:data.rows.slice(0,3).map(r=>({
-    referencia:r.referencia,cn:r.cn,nombre:r.nombre,provisional:r.provisional,
-    fuenteRecepciones:r.inReceipts,fuenteERP:!!r.pharmacyIds
-   })),cnPresente:data.rows.some(r=>r.cn===CN),
-    totalFiltrado:data.total,warning:!!data.warning,elapsedMs:Date.now()-start});
-  }catch(e){catalogs.push({id:s.id,name:s.nombre,error:e.code||e.name})}
- }
- out.catalogs=catalogs;
-}catch(e){out.error=e.code||e.name||"QUERY_ERROR";out.detail=String(e.message||"").slice(0,120)}
-finally{
- console.info("PREPARADOR_CN_DIAGNOSTICO",JSON.stringify(out));
- await pool.end();
-}
-
-          THEN coalesce(nullif(ltrim(btrim(sp.origen_id::text),'0'),''),'0')
-          ELSE upper(btrim(sp.origen_id::text)) END)=r.provider_code
-    ) AS nombre_erp,
+       AND (CASE WHEN btrim(sp.origen_id::text) ~ '^[0-9]+$'
+        THEN coalesce(nullif(ltrim(btrim(sp.origen_id::text),'0'),''),'0')
+        ELSE upper(btrim(sp.origen_id::text)) END)=r.provider_code
+     ) AS nombre_erp,
      sum(r.lineas)::int AS lineas,max(r.ultima) AS ultima
    FROM own_receipts r
    LEFT JOIN farmetrica.proveedores_unificados_alias a

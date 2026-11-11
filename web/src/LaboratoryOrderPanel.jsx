@@ -317,7 +317,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setDirty(true);setNotice("");setCommentRow(null);
  }
  function updateLine(row,newQty,pharmacyId=null){
-  if(isExcludedOrderRow(row))return;
+  
   const amount=newQty===""?0:Number(newQty);
   setDrafts(current=>{
    const previous=orderLineFor(row,tab,ids,current);
@@ -367,7 +367,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      totalSuggested:active?.totalSuggested??null};
     return {row,line:orderLineFor(row,tab,ids,{[line.reference]:line})};
    });
-   const ordered=matrix.filter(item=>!isExcludedOrderRow(item.row)&&(
+   const ordered=matrix.filter(item=>(
     tab==="parafarmacia"?Number(item.line.units)>0:
     Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0)));
    if(!ordered.length){setError("El borrador no contiene cantidades positivas para exportar.");return}
@@ -513,7 +513,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
          {row.provisional&&<small>CN pendiente</small>}</td>
         <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>
-          {row.nombre}{isExcludedOrderRow(row)&&<small>Excluido de pedidos</small>}</td>
+          {row.nombre}{isExcludedOrderRow(row)&&<small>Baja · pedido manual permitido</small>}</td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [row.metricsReady?m.stock??null:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,
@@ -521,7 +521,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
-             disabled={!canEdit||loading||!row.metricsReady||isExcludedOrderRow(row)} value={line.unitsByPharmacy?.[String(p.id)]??0}
+             disabled={!canEdit||loading||!row.metricsReady} value={line.unitsByPharmacy?.[String(p.id)]??0}
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
@@ -536,7 +536,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
         <td className="fm-lab-order-editcol">
          <input type="number" min="0" max="999999" step="1"
-          disabled={!canEdit||loading||!row.metricsReady||isExcludedOrderRow(row)}
+          disabled={!canEdit||loading||!row.metricsReady}
           title={tab==="medicacion"?"Reparte el total proporcionalmente entre las farmacias; después puedes ajustar cada una.":"Unidades totales a pedir"}
           aria-label={tab==="medicacion"?"Pedir total de "+row.nombre:"Pedir "+row.nombre+" para el laboratorio"}
           value={tab==="medicacion"?medicationOrderTotal(line,ids):line.units??0}

@@ -3,6 +3,7 @@ import {Download,Save,AlertTriangle,LoaderCircle,MessageSquareText} from "lucide
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import PreparadorAgenda from "./PreparadorAgenda.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import {ListPagination} from "./ListTable.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -35,6 +36,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
+ const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
+ const [tableSort,setTableSort]=useState("original"),[tablePage,setTablePage]=useState(0),
+  [tablePageSize,setTablePageSize]=useState(50);
  const [data,setData]=useState(empty);
  const catalogueCache=useRef(new Map());
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
@@ -53,7 +57,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
-  setSearch("");setError("");
+  setSearch("");setError("");setColumnFilter({cn:"",article:""});setTablePage(0);
   setNotice("");
   // Pulsar un laboratorio de la agenda vuelve a lanzar la consulta incluso
   // si ya estaba seleccionado (p. ej. tras registrar pedidos/stock).
@@ -248,6 +252,28 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(term)||
    String(row.nombre||"").toLocaleLowerCase("es").includes(term));
  },[data.rows,search]);
+ // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
+ const tableVisibleRows=useMemo(()=>{
+  const cn=columnFilter.cn.trim().toLocaleLowerCase("es"),
+   article=columnFilter.article.trim().toLocaleLowerCase("es");
+  const list=currentRows.filter(row=>
+   (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
+   (!article||String(row.nombre||"").toLocaleLowerCase("es").includes(article)));
+  if(tableSort==="original")return list;
+  const [field,direction]=tableSort.split(":");
+  const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
+  return [...list].sort((a,b)=>{
+   const left=field==="cn"?String(a.cn||a.referencia||""):String(a.nombre||"");
+   const right=field==="cn"?String(b.cn||b.referencia||""):String(b.nombre||"");
+   const compare=collator.compare(left,right);
+   return direction==="desc"?-compare:compare;
+  });
+ },[currentRows,columnFilter,tableSort]);
+ const totalPages=Math.max(1,Math.ceil(tableVisibleRows.length/tablePageSize));
+ const safePage=Math.min(tablePage,totalPages-1);
+ const tablePageRows=tableVisibleRows.slice(safePage*tablePageSize,(safePage+1)*tablePageSize);
+ const toggleTableSort=field=>{setTableSort(current=>
+  current===field+":asc"?field+":desc":field+":asc");setTablePage(0)};
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&(loadStage==="metrics"||loadStage==="fallback")&&Boolean(data.rows?.length);
  const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);

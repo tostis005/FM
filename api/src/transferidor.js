@@ -1,6 +1,7 @@
 // Transferidor (solo lectura). Ninguna propuesta modifica el stock ni ejecuta movimientos.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {cnCategory} from "./laboratoryOrderPlanner.js";
+import {readTransferidorPolicy} from "./transferidorPolicy.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","targetOrigin","targetDestination"]);
 const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination"]);
@@ -12,7 +13,14 @@ const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 
 // El plan se calcula de una vez, antes de filtrar o paginar. Cada donante
 // dispone de un saldo restante que se reduce tras CADA propuesta: no hay doble asignación.
-export function buildGlobalTransfers(rows,pharmacies,coverageDays=30){
+// Sin parámetro: política nueva de transferencias 4/7.
+// Se conserva el argumento numérico histórico para pruebas y clientes antiguos.
+export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDays:7,families:[],articles:[]}){
+ const config=typeof policy==="number"?{minDays:policy,targetDays:policy,families:[],articles:[]}:
+  {minDays:Number(policy?.minDays??4),targetDays:Number(policy?.targetDays??7),
+   families:policy?.families||[],articles:policy?.articles||[]};
+ const familyReserve=new Map(config.families.map(x=>[String(x.pharmacyId)+"|"+String(x.familyId),Number(x.days)]));
+ const articleReserve=new Map(config.articles.map(x=>[String(x.pharmacyId)+"|"+String(x.cn),Number(x.units)]));
  const validSites=new Map(pharmacies.map(p=>[String(p.id),p]));
  const products=new Map();
  for(const r of rows||[]){
@@ -32,11 +40,21 @@ export function buildGlobalTransfers(rows,pharmacies,coverageDays=30){
    const stock=Math.max(0,asNumber(rawStock));
    const sold3=Math.max(0,asNumber(src?.units3));
    const sold12=Math.max(0,asNumber(src?.units12));
-   const target=whole(Math.max(sold3/90,sold12/365)*coverageDays);
+   const daily=Math.max(sold3/90,sold12/365);
+   const id=String(p.id),familyId=String(src?.familyId||"");
+   const byArticle=articleReserve.get(id+"|"+product.cn);
+   const byFamily=familyReserve.get(id+"|"+familyId);
+   // La reserva de CN sustituye la reserva de familia, no se suma dos veces.
+   const extra=byArticle!=null?whole(byArticle):byFamily!=null?whole(daily*byFamily):0;
+   const source=byArticle!=null?"articulo":byFamily!=null?"familia":"global";
+   const threshold=whole(daily*config.minDays)+extra;
+   const target=whole(daily*config.targetDays)+extra;
    const ordered=Math.max(0,asNumber(src?.ordered));
-   return {id:String(p.id),name:p.name||String(p.id),stock,target,ordered,
-    need:whole(Math.max(0,target-stock-ordered)),
-    surplus:Math.max(0,Math.floor(stock-target+1e-9)),
+   // No se transfiere mientras se conserve el mínimo de rotación + exposición.
+   const need=stock+ordered<threshold?whole(target-stock-ordered):0;
+   // Nunca desvestir un expositor donante ni agotar sus 7 días de rotación.
+   const surplus=Math.max(0,Math.floor(stock-target+1e-9));
+   return {id,name:p.name||id,stock,target,threshold,extra,source,ordered,need,surplus,
     stockAt:src?.stockAt||null};
   });
   if(sites.some(s=>s.invalid)){skipped++;continue;}
@@ -55,6 +73,8 @@ export function buildGlobalTransfers(rows,pharmacies,coverageDays=30){
      destinationId:target.id,destinationName:target.name,units,
      stockOrigin:source.stock,targetOrigin:source.target,
      stockDestination:target.stock,targetDestination:target.target,
+     triggerDestination:target.threshold,extraDestination:target.extra,
+     reserveSource:target.source,minDays:config.minDays,targetDays:config.targetDays,
      stockAt:source.stockAt&&target.stockAt?
       (source.stockAt<target.stockAt?source.stockAt:target.stockAt):source.stockAt||target.stockAt});
     source.surplus-=units;pending-=units;
@@ -121,10 +141,13 @@ function inventorySql(schema){
 ), eligible AS MATERIALIZED (
  SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
  a.origen_id::text AS cn,a.nombre,
- a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
+ a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at,
+ g.familia_id AS family_id
  FROM chosen f
  JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
  JOIN candidates c ON c.cn=a.origen_id::text
+ LEFT JOIN farmetrica.familias_globales_articulos g ON g.cliente_slug=$1
+  AND g.farmacia_codigo=f.source_code AND g.articulo_origen_id=a.origen_id::text
 ), sales_per_article AS MATERIALIZED (
  -- Igual que el Preparador: líneas documentales por artículo ERP y farmacia,
  -- unidas a las cabeceras válidas, con fecha España.
@@ -154,6 +177,7 @@ function inventorySql(schema){
  GROUP BY p.farmacia_id,l.line->>'articulo'
 )
 SELECT a.fid::text AS "pharmacyId",a.cn,max(a.nombre) AS name,
+ max(a.family_id)::text AS "familyId",
  CASE WHEN count(a.stock)=count(*) THEN sum(a.stock)::float8 ELSE NULL END AS stock,
  min(a.stock_at) AS "stockAt",
  sum(coalesce(s.units3,0))::float8 AS "units3",
@@ -232,9 +256,8 @@ export function setupTransferidor(app,pool,{requireTenant}){
    // y filtros reutilizan los mismos datos, sin recalcular cada movimiento.
    const rows=await getTransferRows(pool,schema,ctx.client.slug,
     available.map(p=>Number(p.id)),String(req.query.recalcular||""));
-   const {rows:settings}=await pool.query("SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1",[ctx.client.slug]);
-   const coverageDays=Math.max(1,Math.min(365,Number(settings[0]?.days)||30));
-   const plan=buildGlobalTransfers(rows,available,coverageDays);
+   const policy=await readTransferidorPolicy(pool,ctx.client.slug,available.map(p=>Number(p.id)));
+   const plan=buildGlobalTransfers(rows,available,policy);
    const filtered=filterTransferPlan(plan.transfers,opts);
    const uniqueProducts=new Set(plan.transfers.map(r=>r.cn)).size;
    const emptyReason=!plan.products?"No hay artículos de parafarmacia con código IdArticu y stock.":
@@ -244,7 +267,8 @@ export function setupTransferidor(app,pool,{requireTenant}){
    res.json({available:true,rows:filtered.rows,total:filtered.total,page:opts.page,pageSize:opts.size,
     emptyReason,
     summary:{movements:plan.transfers.length,units:plan.transfers.reduce((sum,r)=>sum+r.units,0),
-     products:uniqueProducts,filteredUnits:filtered.units,coverageDays,skipped:plan.skipped,
+     products:uniqueProducts,filteredUnits:filtered.units,coverageDays:policy.targetDays,
+     minimumDays:policy.minDays,targetDays:policy.targetDays,skipped:plan.skipped,
      analyzed:plan.products,withNeed:plan.withNeed,withSurplus:plan.withSurplus},
     calculatedAt:new Date().toISOString(),
     warning:missing.length?"Stock pendiente en "+missing.map(p=>p.name).join(", ")+

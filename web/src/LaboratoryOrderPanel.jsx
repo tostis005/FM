@@ -278,7 +278,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&Boolean(laboratory);
  const firstMetricsReady=Number(data.metricsLoaded||0)>0;
- const showMatrixOverlay=metricsLoading&&!firstMetricsReady;
+ const showMatrixOverlay=metricsLoading&&!tablePageRows.some(row=>row.metricsReady);
  const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
  const pageTotalStock=stocks.every(value=>value!==null)?
   stocks.reduce((sum,value)=>sum+value,0):null;

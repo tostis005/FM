@@ -226,9 +226,9 @@ try{
  await page.getByRole("option",{name:"Laboratorio con 125 referencias"}).click();
  await page.getByText("Referencia lote 125").waitFor({timeout:25000});
  await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:15000});
- await page.waitForFunction(()=>document.querySelectorAll(
-  ".fm-lab-order-table tbody tr td.fm-lab-order-cell"
- ).length>0);
+ await page.waitForFunction(()=>
+  document.querySelector(".fm-lab-order-table tbody tr td.fm-lab-order-cell")
+   ?.textContent?.trim()==="4",null,{timeout:15000});
  assert.equal((await page.locator(".fm-lab-order-table tbody tr").first()
   .locator("td.fm-lab-order-cell").first().innerText()).trim(),"4",
   "Las primeras existencias se muestran sin esperar a un cálculo global");

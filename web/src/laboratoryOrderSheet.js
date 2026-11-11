@@ -67,25 +67,27 @@ export function laboratoryExcelRows(lines,pharmacies,type,globalComment=""){
  const isMedication=type==="medicacion";
  const ids=pharmacies.map(p=>String(p.id));
  const grouping=["CN","Artículo",...pharmacies.flatMap(p=>
-  [p.name,"","","",""]), "Total farmacias","Almacén","Stock total","Total vendido","Propuesta total","Pedir total","Comentarios"];
+  [p.name,"","","",""]),"Almacén","","","","",
+  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"];
  const headings=["CN","Artículo",...pharmacies.flatMap(()=>
   ["Stock","Ventas 12m","Ventas 3m","Vendido período",isMedication?"Pedir":"Propuesta"]),
-  "Total farmacias","Almacén","Stock total","Total vendido","Propuesta total","Pedir total","Comentarios"];
+  "Stock","Ventas 12m","Ventas 3m","Vendido período",isMedication?"Pedir":"Propuesta",
+  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"];
  const rows=lines.map(({row,line})=>{
   const measures=ids.map(id=>row.byPharmacy?.[id]||{});
-  const sold=measures.reduce((n,v)=>n+Number(v.unitsPeriod||0),0);
   const proposals=row.totalSuggested!==undefined?row.totalSuggested:
    measures.some(v=>v.suggested===null||v.suggested===undefined)?null:
     measures.reduce((n,v)=>n+Number(v.suggested),0);
+  const warehouse=!isMedication?row.warehouse||null:null;
   return [row.cn||"",row.nombre,...measures.flatMap((m,i)=>[
    m.stock,Number(m.units12||0),Number(m.units3||0),
    Number(m.unitsPeriod||0),isMedication?line.unitsByPharmacy?.[ids[i]]??0:m.suggested
-  ]),totalStockFor(row,ids),
-   isMedication?null:row.warehouseStock??null,
-   isMedication?totalStockFor(row,ids):row.globalStock??null,
-   sold,proposals,
+  ]),warehouse?.stock??null,warehouse?.units12??null,
+   warehouse?.units3??null,warehouse?.unitsPeriod??null,null,
+   totalStockFor(row,ids),isMedication?null:row.globalStock??null,proposals,
    isMedication?ids.reduce((sum,id)=>sum+Number(line.unitsByPharmacy?.[id]||0),0):line.units,
    line.comment||""];
+
  });
  return appendOrderGlobalComment([grouping,headings,...rows],globalComment);
 }

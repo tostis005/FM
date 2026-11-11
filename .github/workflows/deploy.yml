@@ -25,26 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Inspeccionar logo publicado de Farmacia Abadía (diagnóstico temporal)
-        continue-on-error: true
-        run: |
-          node --input-type=module <<'NODE'
-          try {
-            const resp=await fetch("https://farmaciaabadia.com/",{headers:{"User-Agent":"Mozilla/5.0"}});
-            const html=await resp.text();
-            console.log("FARMACIA_HTML_STATUS",resp.status,html.length);
-            const all=[...html.matchAll(/<img\\b[^>]*>/gi)].map(m=>m[0]);
-            const selected=all.filter(t=>/logo|header|brand|abadia/i.test(t)).slice(0,20);
-            console.log("FARMACIA_LOGO_TAGS",JSON.stringify(selected.map(t=>t.slice(0,900))));
-            const meta=[...html.matchAll(/<(?:link|meta)\\b[^>]*(?:icon|image|logo)[^>]*>/gi)].slice(0,12).map(m=>m[0].slice(0,600));
-            console.log("FARMACIA_META",JSON.stringify(meta));
-            for(const name of ["logo","Logo","header__","site-header","brand-logo","favicon","shop/files"]){
-              const matches=[...html.matchAll(new RegExp(name,"gi"))].slice(0,10);
-              console.log("FARMACIA_TERM",name,JSON.stringify(matches.map(m=>html.slice(Math.max(0,m.index-180),m.index+380).replace(/\\s+/g," ")).slice(0,10)));
-            }
-            console.log("FARMACIA_FIRST_IMGS",JSON.stringify(all.slice(0,8).map(t=>t.slice(0,350))));
-          } catch(e) { console.log("FARMACIA_PROBE_ERROR",e.message); }
-          NODE
       - name: Validar API
         run: |
           npm install --prefix api --no-audit --no-fund

@@ -64,11 +64,11 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
  const {rowCount:stockRulesMoved}=await db.query(
   "INSERT INTO farmetrica.transferidor_exposicion_familias"+
   " (cliente_slug,farmacia_id,familia_id,exposicion_dias,actualizado_por,actualizado_en)"+
-  " SELECT e.cliente_slug,e.farmacia_id,m.destination::bigint,e.exposicion_dias,"+
-  " e.actualizado_por,now() FROM farmetrica.transferidor_exposicion_familias e"+
+  " SELECT e.cliente_slug,e.farmacia_id,m.destination::bigint,MAX(e.exposicion_dias),"+
+  " MAX(e.actualizado_por),now() FROM farmetrica.transferidor_exposicion_familias e"+
   " JOIN jsonb_to_recordset($2::jsonb) AS m(source text,destination text)"+
   " ON e.familia_id=m.source::bigint"+
-  " WHERE e.cliente_slug=$1"+
+  " WHERE e.cliente_slug=$1 GROUP BY e.cliente_slug,e.farmacia_id,m.destination"+
   " ON CONFLICT(cliente_slug,farmacia_id,familia_id) DO UPDATE SET"+
   " exposicion_dias=GREATEST(farmetrica.transferidor_exposicion_familias.exposicion_dias,EXCLUDED.exposicion_dias),"+
   " actualizado_en=now()",param);

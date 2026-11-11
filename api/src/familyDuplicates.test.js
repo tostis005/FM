@@ -34,7 +34,7 @@ test("requiere suficientes CN comunes para fusionar",()=>{
  assert.equal(score.shared,3);
  assert.equal(score.destinationId,"1");
  assert.equal(planFamilyMerges([score]).length,1);
- assert.equal(scoreFamilyPair(pair,new Map([["1",sets.get("1")],["2",new Set(["000010"])]),
+ assert.equal(scoreFamilyPair(pair,new Map([["1",sets.get("1")],["2",new Set(["000010"])] ]),
   new Map()).safe,false);
 });
 test("preserva referencias diferentes y nombres corregidos manualmente",()=>{

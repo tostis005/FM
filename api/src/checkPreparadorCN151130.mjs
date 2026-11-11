@@ -2,6 +2,7 @@
 // personales, documentos, stock, ventas ni códigos de proveedor locales.
 // Se ejecuta bajo control de CI en el VPS del cliente.
 import pg from "pg";
+import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 const CN="151130",SLUG="ampedia";
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,
@@ -59,7 +60,9 @@ try{
      AND NOT l.eliminada_logicamente AND l.cantidad>0 AND l.devuelta IS NOT TRUE
     GROUP BY h.farmacia_codigo,provider_code
    )
-   SELECT coalesce(p.nombre,'SIN_PROVEEDOR_UNIFICADO') AS nombre,
+   SELECT r.farmacia_codigo AS farmacia, f.id::text AS farmacia_id,
+    coalesce(f.activo,false) AS farmacia_activa,p.id::text AS proveedor_id,
+    coalesce(p.nombre,'SIN_PROVEEDOR_UNIFICADO') AS nombre,
     coalesce(p.clase,'SIN_CLASIFICAR') AS clase,
     sum(r.lineas)::int AS lineas,max(r.ultima) AS ultima
    FROM own_receipts r
@@ -70,10 +73,15 @@ try{
       ELSE upper(btrim(a.codigo_origen)) END)=r.provider_code
    LEFT JOIN farmetrica.proveedores_unificados p
     ON p.cliente_slug=$2 AND p.id=a.proveedor_id
-   GROUP BY p.id,p.nombre,p.clase ORDER BY ultima DESC LIMIT 15`,
+   LEFT JOIN farmetrica.farmacias f
+    ON f.cliente_slug=$2 AND ${pharmacyDataCodeSQL("f")}=upper(btrim(r.farmacia_codigo))
+   GROUP BY r.farmacia_codigo,f.id,f.activo,p.id,p.nombre,p.clase
+   ORDER BY ultima DESC LIMIT 50`,
     values:[CN,SLUG],query_timeout:22000});
   out.ownReceiptEvidence=receiptEvidence.map(r=>({
-   proveedor:r.nombre,clase:r.clase,lineas:r.lineas,ultima:r.ultima}));
+   farmacia:r.farmacia,farmacia_id:r.farmacia_id,farmacia_activa:r.farmacia_activa,
+   proveedor_id:r.proveedor_id,proveedor:r.nombre,clase:r.clase,
+   lineas:r.lineas,ultima:r.ultima}));
  }catch(e){out.ownReceiptError=e.code||e.name||"QUERY_ERROR"}
  // A qué proveedor real corresponde el código de laboratorio Farmatic.
  const labCodes=[...new Set(article.map(r=>String(r.laboratorio||"").trim()).filter(Boolean))];

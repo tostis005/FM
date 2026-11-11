@@ -95,9 +95,9 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
  assert.match(res.body.warning,/Centro/);
  const selected=queries.find(x=>x.q.includes("WITH chosen AS MATERIALIZED"));
  assert.deepEqual(selected.values[1],[1,2]);
- assert.match(selected.q,/JOIN "ampedia"\\.articulos/);
- assert.match(selected.q,/a\\.origen_id::text AS article_id/);
- assert.match(selected.q,/BETWEEN \\$3::int AND \\$4::int/);
+ assert.ok(selected.q.includes('JOIN "ampedia".articulos'),"lee artículos Farmatic");
+ assert.ok(selected.q.includes("a.origen_id::text AS article_id"),"agrupa por IdArticu");
+ assert.ok(selected.q.includes("BETWEEN $3::int AND $4::int"),"particiona IdArticu");
  assert.doesNotMatch(selected.q,/sinonimos|ean/);
 });
 

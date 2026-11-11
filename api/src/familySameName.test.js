@@ -38,7 +38,7 @@ test("separación estricta entre medicación y parafarmacia",()=>{
 test("una familia sin clasificar se incorpora a categoría única solo si los CN indican el mismo tipo",()=>{
  const data=planSameNameMerges([
   f(4,"Protección Solar","PARAFARMACIA",{referencePharmacy:"ALMACEN",para:80}),
-  f(5,"Proteccion Solar","SIN_DETERMINAR",{para:34,med:1}),
+  f(5,"Proteccion Solar","SIN_DETERMINAR",{linked:35,para:35,med:0}),
   f(6,"Proteccion Solar","SIN_DETERMINAR",{para:10,med:20}),
   f(7,"Proteccion Solar","SIN_DETERMINAR",{linked:0,para:0,med:0})
  ]);

@@ -38,7 +38,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   sort.direction,JSON.stringify(filters),revision]);
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
  const columns=useMemo(()=>[
-  {key:"cn",label:"CN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
+  {key:"cn",label:"EAN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
   {key:"name",label:"Producto",value:r=>r.name,render:r=><span title={r.name}>{r.name}</span>},
   {key:"originName",label:"Origen",filterMode:"text",value:r=>r.originName,
    render:r=><strong>{r.originName}</strong>},
@@ -84,9 +84,9 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
       {sites.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
      </select>
     </label>
-    <label>Buscar CN o producto
+    <label>Buscar EAN o producto
      <input type="search" value={search} onChange={e=>{setSearch(e.target.value);reset()}}
-      placeholder="Nombre o código nacional"/>
+      placeholder="Nombre o EAN"/>
     </label>
    </div>
    <div className="fm-transfer-filter-foot">

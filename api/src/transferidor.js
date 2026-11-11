@@ -22,7 +22,7 @@ export function buildGlobalTransfers(rows,pharmacies,coverageDays=20){
   const group=products.get(cn);
   if(!group.sites.has(id))group.sites.set(id,r);
  }
- const transfers=[];let skipped=0;
+ const transfers=[];let skipped=0,withNeed=0,withSurplus=0;
  for(const product of products.values()){
   const sites=[...validSites.values()].map(p=>{
    const src=product.sites.get(String(p.id));
@@ -40,6 +40,8 @@ export function buildGlobalTransfers(rows,pharmacies,coverageDays=20){
     stockAt:src?.stockAt||null};
   });
   if(sites.some(s=>s.invalid)){skipped++;continue;}
+  if(sites.some(s=>s.need>0))withNeed++;
+  if(sites.some(s=>s.surplus>0))withSurplus++;
   const sources=sites.filter(s=>s.surplus>0).sort((a,b)=>b.surplus-a.surplus||stable(a.id,b.id));
   const targets=sites.filter(s=>s.need>0).sort((a,b)=>b.need-a.need||stable(a.id,b.id));
   for(const target of targets){
@@ -59,7 +61,7 @@ export function buildGlobalTransfers(rows,pharmacies,coverageDays=20){
    }
   }
  }
- return {transfers,skipped,products:products.size};
+ return {transfers,skipped,products:products.size,withNeed,withSurplus};
 }
 export function parseTransferFilters(query={},pharmacies=[]){
  const allowed=new Set(pharmacies.map(p=>String(p.id)));
@@ -102,7 +104,12 @@ export function filterTransferPlan(plan,options){
 }
 function inventorySql(schema,nativeCN=false){
  const q='"'+schema+'"',source=pharmacyDataCodeSQL("f");
- const cn=nativeCN?"coalesce(nullif(btrim(a.codigo_nacional),''),nullif(btrim(a.cn_normalizado),''))":"nullif(btrim(a.codigo_nacional),'')";
+ // El CN puede estar en codigo_nacional o cn_normalizado: validar antes de
+ // combinar para que un EAN no oculte el CN válido.
+ const valid=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
+  THEN btrim(${expr}::text) ELSE NULL::text END`;
+ const local=nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'";
+ const cn=`coalesce(${valid("a.codigo_nacional")},${valid(local)})`;
  return `WITH chosen AS MATERIALIZED (
  SELECT f.id, ${source} AS source_code
  FROM farmetrica.farmacias f
@@ -115,12 +122,11 @@ function inventorySql(schema,nativeCN=false){
  FROM chosen f JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
  WHERE ${cn} ~ '^[0-9]{6,7}$'
 ), candidates AS MATERIALIZED (
- -- Solo referencias en más de una farmacia y con existencias para transferir.
- SELECT cn FROM articles GROUP BY cn
- HAVING count(DISTINCT fid)>1 AND bool_or(stock>0)
+ -- Basta con stock en una farmacia: la receptora puede tener cero.
+ SELECT DISTINCT cn FROM articles WHERE stock>0
+  AND substring(cn from 1 for 6)::int<400000
 ), eligible AS MATERIALIZED (
  SELECT a.* FROM articles a JOIN candidates c ON c.cn=a.cn
- WHERE substring(a.cn from 1 for 6)::int<400000
 ), sales AS MATERIALIZED (
  SELECT a.fid,a.article_id,
   coalesce(sum(v.unidades) FILTER (WHERE v.fecha >= current_date-interval '89 days'),0)::float8 AS units3,
@@ -173,21 +179,26 @@ export function setupTransferidor(app,pool,{requireTenant}){
     WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])`,
     values:[ctx.client.slug,ids],query_timeout:10000});
    const missing=pharmacies.filter(p=>!ready.find(r=>r.id===String(p.id)&&r.ready));
-   if(missing.length)return res.json({available:false,rows:[],total:0,page:opts.page,pageSize:opts.size,
+   const available=pharmacies.filter(p=>!missing.includes(p));
+   if(available.length<2)return res.json({available:false,rows:[],total:0,page:opts.page,pageSize:opts.size,
     summary:{movements:0,units:0,products:0},
-    warning:"No hay stock sincronizado en: "+missing.map(p=>p.name).join(", ")+". No se proponen movimientos sin inventario completo."});
+    warning:"No hay dos farmacias con inventario importado para comparar."});
    const nativeCN=await hasNativeNormalizedCN(pool,schema).catch(()=>false);
-   const {rows}=await pool.query({text:inventorySql(schema,nativeCN),values:[ctx.client.slug,ids],query_timeout:30000});
+   const {rows}=await pool.query({text:inventorySql(schema,nativeCN),
+    values:[ctx.client.slug,available.map(p=>Number(p.id))],query_timeout:30000});
    const {rows:settings}=await pool.query("SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1",[ctx.client.slug]);
    const coverageDays=Math.max(1,Math.min(365,Number(settings[0]?.days)||20));
-   const plan=buildGlobalTransfers(rows,pharmacies,coverageDays);
+   const plan=buildGlobalTransfers(rows,available,coverageDays);
    const filtered=filterTransferPlan(plan.transfers,opts);
    const uniqueProducts=new Set(plan.transfers.map(r=>r.cn)).size;
    res.json({available:true,rows:filtered.rows,total:filtered.total,page:opts.page,pageSize:opts.size,
     summary:{movements:plan.transfers.length,units:plan.transfers.reduce((sum,r)=>sum+r.units,0),
-     products:uniqueProducts,filteredUnits:filtered.units,coverageDays,skipped:plan.skipped},
+     products:uniqueProducts,filteredUnits:filtered.units,coverageDays,skipped:plan.skipped,
+     analyzed:plan.products,withNeed:plan.withNeed,withSurplus:plan.withSurplus},
     calculatedAt:new Date().toISOString(),
-    warning:plan.skipped?"Hay "+plan.skipped+" referencias sin stock fiable; se han omitido.":null});
+    warning:missing.length?"Stock pendiente en "+missing.map(p=>p.name).join(", ")+
+     ". Se han calculado las otras farmacias.":plan.skipped?
+     plan.skipped+" referencias sin stock fiable omitidas.":null});
   }catch(e){
    if(["57014","53300"].includes(e.code))return res.status(504).json({error:"El cálculo de transferencias ha superado el tiempo disponible. Inténtalo más tarde."});
    next(e);

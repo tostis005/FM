@@ -182,7 +182,6 @@ const NAV=[
  {id:"picking-list",label:"Picking List",icon:ClipboardList,module:"stock",childOf:"stock"},
  {id:"productos",label:"Productos",icon:Package,module:"stock"},
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
- {id:"proveedores-condiciones",label:"Análisis de proveedores",icon:ClipboardList,module:"proveedores",childOf:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
  {id:"rentabilidad-segmentos",label:"Por familia",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
@@ -253,7 +252,7 @@ function pageFromUrl(){
  const path=window.location.pathname.replace(/^\/+|\/+$/g,"");
  if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
  if(path==="promociones/nueva"||path==="promociones/simulador")return "promociones-objetivos";
- if(path==="proveedores-maestro")return "proveedores";
+ if(path==="proveedores-maestro"||path==="proveedores-condiciones")return "proveedores";
  return ROUTES.has(path)?path:"dashboard";
 }
 
@@ -1326,12 +1325,6 @@ function App(){
      onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}>
      <span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span>
     </button>
-    <button className="fm-sidebar-collapse-toggle" type="button"
-     aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}
-     aria-controls="farmetrica-sidebar-navigation" aria-expanded={!sidebarCollapsed}
-     title={sidebarCollapsed?"Desplegar menú":"Plegar menú"} onClick={()=>setSidebarCollapsed(v=>!v)}>
-     {sidebarCollapsed?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}
-    </button>
    </div>
    <nav id="farmetrica-sidebar-navigation" className="side-nav" aria-label="Módulos">
     {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)&&DEMO_NAV_IDS.has(item.id)).map(item=>{
@@ -1402,6 +1395,15 @@ function App(){
      </div>}
     </>}
    </nav>
+   <div className="fm-sidebar-footer">
+    <button className="fm-sidebar-collapse-toggle" type="button"
+     aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}
+     aria-controls="farmetrica-sidebar-navigation" aria-expanded={!sidebarCollapsed}
+     title={sidebarCollapsed?"Desplegar menú":"Plegar menú"} onClick={()=>setSidebarCollapsed(v=>!v)}>
+     <span className="fm-sidebar-toggle-label">{sidebarCollapsed?"":"Plegar menú"}</span>
+     {sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
+    </button>
+   </div>
   </aside>
   {mobileMenu&&<button className="mobile-scrim" type="button" onClick={()=>setMobileMenu(false)} aria-label="Cerrar navegación"/>}
   <div className="workspace">
@@ -1689,7 +1691,11 @@ function App(){
       <PerfilesGlobales client={tenantContext.client.slug} role={role}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       canEditMaster={["gestor","administrador","superadministrador"].includes(role)}
-      canMergeMaster={["administrador","superadministrador"].includes(role)}/>}
+      canMergeMaster={["administrador","superadministrador"].includes(role)||
+       (role==="gestor"&&(!tenantContext.profilePermissions||
+         tenantContext.profilePermissions?.proveedores?.includes("crear")))}
+      canConfigureFrequency={["administrador","superadministrador"].includes(role)}
+      canImportMaster={["administrador","superadministrador"].includes(role)}/>}
     {page==="clientes"&&<ClientesPanel onUpdated={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="fuentes"&&<FuentesMaestras/>}
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}

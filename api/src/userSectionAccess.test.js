@@ -62,7 +62,7 @@ test("el catálogo de perfiles muestra solo rutas operativas y conserva las hist
  const visible=USER_SECTIONS.filter(s=>s.profileVisible).map(s=>s.id);
  assert.deepEqual(visible,[
   "dashboard","ventas","compras","compras-preparador","stock",
-  "stock-sin-recepciones","picking-list","proveedores","genericos",
+  "stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos",
   "rentabilidad-retorno","promociones","seguimiento-global",
   "promociones-objetivos","acciones","oportunidades-seguimiento",
   "alertas","mi-trabajo"
@@ -75,4 +75,11 @@ test("el catálogo de perfiles muestra solo rutas operativas y conserva las hist
   {compras:true}),["compras-recepciones"]);
  assert.equal(USER_SECTIONS.find(s=>s.id==="acciones")?.name,"Trabajo y ahorro");
  assert.equal(USER_SECTIONS.find(s=>s.id==="rentabilidad-retorno")?.name,"Ahorro verificado");
+ assert.deepEqual(requestSections({path:"/api/analytics/stock/transferidor"}),["stock-transferidor"]);
+ const auto=effectiveUserSections({stock:true},null);
+ assert.equal(auto["stock-transferidor"],false,"sin permiso explícito nadie hereda Transferidor");
+ assert.equal(effectiveUserSections({stock:true},["stock-transferidor"])["stock-transferidor"],true);
+ assert.equal(effectiveUserSections({stock:false},["stock-transferidor"])["stock-transferidor"],false);
+ assert.equal(effectiveUserSections({stock:true},null,true)["stock-transferidor"],true);
+
 });

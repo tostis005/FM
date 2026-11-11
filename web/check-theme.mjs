@@ -9,6 +9,8 @@ const index=read("./index.html");
 const styles=read("./src/styles.css");
 const dashboardStyles=read("./src/moduleDemo.css");
 const pharmacyApi=read("./src/farmaciasApi.js");
+const preparadorStyles=read("./src/laboratoryOrderPanel.css");
+const tenantStyles=read("./src/tenantAppearance.css");
 
 assert.match(app,/import "\.\/styles\.css";\s*import "\.\/loginTheme\.css";/,
   "El tema debe importarse después de los estilos existentes");
@@ -48,4 +50,11 @@ assert.doesNotMatch(pharmacyApi,/^import\s+\{[^}]*PublicClientApplication[^}]*\}
 assert.doesNotMatch(pharmacyApi,/const googleSession = await hasGoogleAdminSession\(\)/);
 assert.match(app,/Promise\.all\(\[userRequest,contextRequest\]\)/);
 
+// Los campos de filtro se encuentran dentro de cabeceras oscuras:
+ // un color heredado blanco haría ilegible el valor sobre el input blanco.
+assert.match(preparadorStyles,/\.fm-lab-order-table \.fm-lab-column-filter\{/);
+assert.match(preparadorStyles,/color:#214b48!important/);
+assert.match(preparadorStyles,/background:#fff!important/);
+assert.match(preparadorStyles,/\.fm-lab-column-filter::placeholder/);
+assert.match(tenantStyles,/background:var\(--fm-page-background/);
 console.log("Identidad visual Farmetrica: paleta, navegación, diseño móvil y accesibilidad correctos.");

@@ -95,6 +95,7 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
  assert.match(res.body.warning,/Centro/);
  const selected=queries.find(x=>x.q.includes("WITH chosen AS MATERIALIZED"));
  assert.deepEqual(selected.values[1],[1,2]);
- assert.doesNotMatch(selected.q,/HAVING count\(DISTINCT fid\)>1/);
- assert.match(selected.q,/cn_normalizado/);
+ assert.match(selected.q,/JOIN "ampedia"\.sinonimos/);
+ assert.match(selected.q,/HAVING count\(DISTINCT article_id\)=1/);
+ assert.match(selected.q,/HAVING count\(DISTINCT fid\)>1/);
 });

@@ -13,7 +13,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: farmawao-api-production-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+  # El grupo anterior quedó retenido por un run con todos los pasos completados
+  # pero estado GitHub in_progress; recuperación sin permitir dos despliegues nuevos a la vez.
+  group: farmawao-api-production-v2-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
   cancel-in-progress: false
 
 jobs:

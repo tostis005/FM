@@ -48,7 +48,7 @@ const Frequency=({value,onChange,disabled,name})=><select aria-label={"Frecuenci
  {[14,21,30].map(x=><option key={x} value={x}>Cada {x} días</option>)}
  </select>;
 
-export default function ProveedoresUnificados({clientSlug,canEditMaster=false,canMergeMaster=false}){
+export default function ProveedoresUnificados({clientSlug,canEditMaster=false,canMergeMaster=false,canConfigureFrequency=false,canImportMaster=false}){
  const [suppliers,setSuppliers]=useState([]),[sources,setSources]=useState([]),
   [pharmacies,setPharmacies]=useState([]),[frequencies,setFrequencies]=useState([]);
  const [tab,setTab]=useState("todos"),[search,setSearch]=useState(""),
@@ -215,7 +215,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     </div>)}</div></details>},
   ...(canMerge?[{key:"frequency",label:"Frecuencia de pedido",value:p=>frequenciesByKey.get("P:"+p.id)||"demanda",
    searchable:false,render:p=><div onClick={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()}>
-    <Frequency value={frequenciesByKey.get("P:"+p.id)} name={p.name} disabled={busy||!canEditMaster} onChange={v=>void saveFrequency(p,v)}/></div>}]:[]),
+    <Frequency value={frequenciesByKey.get("P:"+p.id)} name={p.name} disabled={busy||!canConfigureFrequency} onChange={v=>void saveFrequency(p,v)}/></div>}]:[]),
   {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
    render:p=><div className="fm-workspace-actions" onClick={e=>e.stopPropagation()}>
     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setSelectedSupplier(p.id)}>Ver ficha y documentos</button>
@@ -286,7 +286,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
     <label className="fm-master-search"><span><Search size={15}/> Buscar proveedor o código</span>
      <input type="search" value={search} placeholder="Nombre, código, farmacia…" onChange={e=>{setSearch(e.target.value);setLimit(60)}}/>
     </label>
-    {nPending&&canMergeMaster&&<label className="fm-master-upload">Importar CSV
+    {nPending&&canImportMaster&&<label className="fm-master-upload">Importar CSV
       <input aria-label="Importar equivalencias desde CSV" type="file" accept=".csv,text/csv" disabled={busy}
        onChange={e=>{void importFile(e.target.files?.[0]);e.target.value=""}}/>
     </label>}

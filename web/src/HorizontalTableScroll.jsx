@@ -2,8 +2,12 @@ import React,{useEffect,useRef,useState} from "react";
 
 // Barra horizontal arriba Y abajo: ambas controlan exactamente la misma tabla.
 // No duplica la tabla ni sus filas y funciona con filtros y columnas dinámicas.
-export default function HorizontalTableScroll({children,className="table-scroll",label="tabla",...rest}){
+export default function HorizontalTableScroll({children,className="table-scroll",label="tabla",scrollRef,...rest}){
  const content=useRef(null),top=useRef(null);
+ useEffect(()=>{
+  if(scrollRef)scrollRef.current=content.current;
+  return()=>{if(scrollRef)scrollRef.current=null};
+ },[scrollRef]);
  const [{width,overflow},setMetrics]=useState({width:1,overflow:false});
  useEffect(()=>{
   const root=content.current;

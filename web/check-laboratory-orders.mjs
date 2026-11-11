@@ -231,7 +231,6 @@ try{
  assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
  // La fase de referencias puede completarse inmediatamente; verificar el cálculo real.
- await page.getByText(/Calculando ventas y stock/).first().waitFor({timeout:3000});
  const overlay=page.locator(".fm-lab-matrix-overlay");
  await overlay.waitFor({state:"visible",timeout:4000});
  const loadingState=await overlay.evaluate(node=>({
@@ -239,7 +238,7 @@ try{
   busy:node.parentElement.querySelector(".fm-lab-order-scroll")?.getAttribute("aria-busy"),
   disabled:node.parentElement.querySelector("input[aria-label='Pedir total de Medicamento']")?.disabled
  }));
- assert.match(loadingState.message,/Calculando ventas y stock por farmacia/);
+ assert.match(loadingState.message,/Cargando artículos, ventas y stock/);
  assert.equal(loadingState.busy,"true");
  assert.equal(loadingState.disabled,true,
   "Las cantidades no se modifican mientras se muestran cálculos pendientes");
@@ -337,6 +336,27 @@ try{
  assert.ok(matrices.filter(m=>m.laboratorio==="P:12").reduce((n,m)=>n+(m.referencias?.length||0),0)>=125);
  assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
  assert.equal(saved.at(-1).lineas.find(l=>l.name==="Referencia lote 125")?.units,9);
+ // La opción Todos también recorre 600 referencias sin montar las 600 filas.
+ await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("600 referencias");
+ await page.getByRole("option",{name:"Laboratorio con 600 referencias"}).click();
+ await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:30000});
+ const largeTable=page.locator(".fm-lab-order-scroll");
+ assert.equal(await largeTable.getAttribute("data-virtualized"),"true");
+ assert.ok(await page.locator(".fm-lab-order-table tbody tr").count()<=70);
+ const largePager=page.locator(".fm-lab-order-pager");
+ assert.equal(await largePager.getByRole("combobox",{name:"Artículos por página"}).inputValue(),"0");
+ assert.match(await largePager.innerText(),/Mostrando los 600 artículos/);
+ await largeTable.evaluate(node=>{node.scrollTop=node.scrollHeight;
+  node.dispatchEvent(new Event("scroll",{bubbles:true}));});
+ await page.getByText("Referencia volumen 600",{exact:true}).waitFor({timeout:10000});
+ assert.ok(await page.locator(".fm-lab-order-table tbody tr").count()<=70,
+  "La vista Todos virtualiza el DOM pero conserva el último artículo");
+ await largePager.getByRole("combobox",{name:"Artículos por página"}).selectOption("250");
+ await page.waitForFunction(()=>
+  document.querySelector(".fm-lab-order-scroll")?.getAttribute("data-virtualized")==="false");
+ assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),250);
+ await largePager.getByRole("combobox",{name:"Artículos por página"}).selectOption("0");
+ assert.equal(await largeTable.getAttribute("data-virtualized"),"true");
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
  await page.getByRole("option",{name:"Laboratorio con ventas inaccesibles"}).click();
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});

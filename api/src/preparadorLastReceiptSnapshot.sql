@@ -46,14 +46,13 @@ WITH eligible_labs AS MATERIALIZED (
  )
 ),
 supplier_links AS MATERIALIZED (
- -- En Farmatic un código de proveedor solo tiene significado dentro de su farmacia.
- -- Ante un alias duplicado tras quitar ceros se utiliza una elección estable.
- SELECT DISTINCT ON (pharmacy_id,supplier_code)
-  pharmacy_id,pharmacy_code,supplier_code,lab_id
+ -- Cada código ERP es local a una farmacia. Si tras normalizar ceros
+ -- apunta a laboratorios distintos, la identidad NO es unívoca.
+ -- No elegir uno arbitrariamente por vigencia o fecha de actualización.
+ SELECT pharmacy_id,pharmacy_code,supplier_code,min(lab_id) AS lab_id
  FROM eligible_aliases
- ORDER BY pharmacy_id,supplier_code,
-  (vigencia='ACTUAL') DESC,(procedencia='manual') DESC,
-  actualizado_en DESC,lab_id
+ GROUP BY pharmacy_id,pharmacy_code,supplier_code
+ HAVING count(DISTINCT lab_id)=1
 ), received AS MATERIALIZED (
  SELECT k.lab_id,k.pharmacy_id,k.pharmacy_code,h.fecha,
   h.sistema_origen,h.documento_id,l.linea_id,

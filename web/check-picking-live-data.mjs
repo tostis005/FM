@@ -47,7 +47,22 @@ await page.route("**/api/**",async route=>{
     required:8,orders:2,lines:2,eans:["8437000001234"],stock,allocated:8,shortage:0,
     status:"cubierto",stockTotal:12,exhausted:[],
     details:[{orderId:"1001",orderName:"#1001",channel:"web",createdAt:null,quantity:5},
-     {orderId:"1002",orderName:"#1002",channel:"web",createdAt:null,quantity:3}]}]:[],
+     {orderId:"1002",orderName:"#1002",channel:"web",createdAt:null,quantity:3}]},
+    {key:"654321",cn:"654321",sku:"654321",name:"Producto exclusivo almacén",
+     required:2,orders:1,lines:1,eans:[],allocated:2,shortage:0,
+     status:"cubierto",stockTotal:12,exhausted:[],
+     stock:stock.map(site=>({...site,planned:site.id==="6"?2:0})),
+     details:[{orderId:"1005",orderName:"#1005",channel:"web",createdAt:null,quantity:2}]},
+    {key:"777777",cn:"777777",sku:"777777",name:"Producto exclusivo Buñol",
+     required:1,orders:1,lines:1,eans:[],allocated:1,shortage:0,
+     status:"cubierto",stockTotal:12,exhausted:[],
+     stock:stock.map(site=>({...site,planned:site.id==="2"?1:0})),
+     details:[{orderId:"1006",orderName:"#1006",channel:"web",createdAt:null,quantity:1}]},
+    {key:"888888",cn:"888888",sku:"888888",name:"Producto sin unidades asignadas",
+     required:1,orders:1,lines:1,eans:[],allocated:0,shortage:1,
+     status:"sin_stock",stockTotal:0,exhausted:[],
+     stock:stock.map(site=>({...site,stock:0,planned:0})),
+     details:[{orderId:"1007",orderName:"#1007",channel:"web",createdAt:null,quantity:1}]}]:[],
    totals:{orders:refreshed?1:0,lines:refreshed?2:0,
     units:refreshed?8:0,products:refreshed?1:0,
     allocated:refreshed?8:0,pending:0,shortage:0,incomplete:0}};
@@ -132,9 +147,28 @@ try{
  await page.getByRole("button",{name:"Detalle"}).click();
  await page.getByText("#1001").waitFor();
  await page.getByText("#1002").waitFor();
+ // La vista general conserva todas las referencias pendientes.
+ await page.getByText("Producto exclusivo almacén",{exact:true}).waitFor();
+ await page.getByText("Producto exclusivo Buñol",{exact:true}).waitFor();
+ await page.getByText("Producto sin unidades asignadas",{exact:true}).waitFor();
  await page.getByRole("tab",{name:"Farmacia Abadía"}).click();
  await page.getByRole("heading",{name:"Preparación · Farmacia Abadía"}).waitFor();
  await page.getByText("3 uds. propuestas en Farmacia Abadía").waitFor();
+ await page.getByText("Producto A",{exact:true}).waitFor();
+ assert.equal(await page.getByText("Producto exclusivo almacén",{exact:true}).count(),0);
+ assert.equal(await page.getByText("Producto exclusivo Buñol",{exact:true}).count(),0);
+ assert.equal(await page.getByText("Producto sin unidades asignadas",{exact:true}).count(),0);
+ assert.equal(await page.getByText("Solo unidades asignadas a esta ubicación").count(),0);
+ assert.equal(await page.locator(".fm-picking-grouped tbody tr:not(.fm-expanded-row)").count(),1);
+ await page.getByRole("tab",{name:"Almacén central"}).click();
+ await page.getByText("Producto exclusivo almacén",{exact:true}).waitFor();
+ assert.equal(await page.getByText("Producto exclusivo Buñol",{exact:true}).count(),0);
+ await page.getByRole("tab",{name:"Farmacia Buñol"}).click();
+ await page.getByText("Producto exclusivo Buñol",{exact:true}).waitFor();
+ assert.equal(await page.getByText("Producto exclusivo almacén",{exact:true}).count(),0);
+ await page.getByRole("tab",{name:"Vista general"}).click();
+ await page.getByText("Producto sin unidades asignadas",{exact:true}).waitFor();
+ await page.getByRole("tab",{name:"Farmacia Abadía"}).click();
  assert.equal(await page.getByLabel("Registros por página de referencias").inputValue(),"500");
  assert.equal(await page.locator(".fm-picking-grouped thead th").allTextContents().then(x=>x.includes("Líneas")),false);
  assert.equal(jsErrors.length,0,jsErrors.join("\n"));

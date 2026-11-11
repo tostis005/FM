@@ -17,7 +17,7 @@ function refPharmacies(ctx){
  return {para:"ALMACEN",
   med:code(sites.find(p=>code(p)==="ABA"||/abad[ií]a/i.test(p.name)))||"ABA"};
 }
-async function readSourceFamilies(db,schema,refs){
+async function readSourceFamilies(db,schema,refs,slug){
  const q=Q(schema);
  const {rows:articleFamilies}=await db.query({
   text:"SELECT upper(btrim(farmacia_codigo)) AS pharmacy,btrim(familia) AS code,"+
@@ -31,7 +31,7 @@ async function readSourceFamilies(db,schema,refs){
  // En otros clientes solo se busca dentro de su propio esquema para no
  // atribuirles familias ajenas del ERP de Ampedia.
  const candidates=schema==="farmetrica"?[schema]:
-  schema==="ampedia"||schema==="farmatic"?["farmetrica",schema]:[schema];
+  slug==="ampedia"?["farmetrica",schema]:[schema];
  let available=false;
  for(const candidate of candidates){
   const {rows:fields}=await db.query(
@@ -137,7 +137,7 @@ export async function reconcileFamilies(pool,ctx){
  try{
   await db.query("BEGIN");
   await db.query("SELECT pg_advisory_xact_lock(hashtext('familias:' || $1))",[slug]);
-  const data=await readSourceFamilies(db,schema,refs);
+  const data=await readSourceFamilies(db,schema,refs,slug);
   const planned=planMappings(data);
   if(planned.groups.length){
    await db.query(

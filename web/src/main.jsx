@@ -1707,7 +1707,7 @@ function App(){
     {page==="perfiles"&&["gestor","administrador","superadministrador"].includes(role)&&
       <PerfilesGlobales client={tenantContext.client.slug} role={role}/>}
     {page==="familias-maestro"&&["gestor","administrador","superadministrador"].includes(role)&&
-      <FamiliasMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
+      <FamiliasMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       canEditMaster={["gestor","administrador","superadministrador"].includes(role)}
       canMergeMaster={["administrador","superadministrador"].includes(role)||

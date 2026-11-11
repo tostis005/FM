@@ -70,7 +70,11 @@ try{
     a.procedencia AS procedencia_alias,a.vigencia AS vigencia_alias,
     (SELECT min(sp.nombre) FROM "${schema}".proveedores sp
       WHERE upper(btrim(sp.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
-       AND (CASE WHEN btrim(sp.origen_id::text) ~ '^[0-9]+ AS lineas,max(r.ultima) AS ultima
+       AND (CASE WHEN btrim(sp.origen_id::text) ~ '^[0-9]+$'
+        THEN coalesce(nullif(ltrim(btrim(sp.origen_id::text),'0'),''),'0')
+        ELSE upper(btrim(sp.origen_id::text)) END)=r.provider_code
+     ) AS nombre_erp,
+     sum(r.lineas)::int AS lineas,max(r.ultima) AS ultima
    FROM own_receipts r
    LEFT JOIN farmetrica.proveedores_unificados_alias a
     ON a.cliente_slug=$2 AND upper(btrim(a.farmacia_codigo))=upper(btrim(r.farmacia_codigo))

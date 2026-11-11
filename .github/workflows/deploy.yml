@@ -53,6 +53,8 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
+          node --test api/src/familyMaster.test.js
+          node --check api/src/checkFamilyMasterPerformance.mjs
           node --check api/src/transferidorPolicy.js
           node --check api/src/reconcileFamilyMaster.mjs
           node --test api/src/transferidorPolicy.test.js
@@ -803,6 +805,14 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             timeout 130 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditLaboratoryMerges.mjs
+          '
+
+      - name: Medir listado de familias sin cargar artículos
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 30 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkFamilyMasterPerformance.mjs
           '
 
       - name: Inicializar una vez el maestro de familias desde Almacén y Abadía

@@ -13,7 +13,7 @@ function refPharmacies(ctx){
  // Solo Ampedia tiene esta correspondencia validada: no se infiere de los IDs
  // de otras empresas ni se supone que sus códigos signifiquen lo mismo.
  if(ctx.client.slug!=="ampedia")return {para:null,med:null};
- const code=p=>String(p.databaseCode||p.sourceCode||"").toUpperCase();
+ const code=p=>String(p?.databaseCode||p?.sourceCode||"").toUpperCase();
  return {para:"ALMACEN",
   med:code(sites.find(p=>code(p)==="ABA"||/abad[ií]a/i.test(p.name)))||"ABA"};
 }
@@ -221,24 +221,57 @@ export async function reconcileFamilies(pool,ctx){
  finally{db.release();}
 }
 export function setupFamilyMaster(app,pool,{requireTenantManager}){
+ // Vista ligera: 65 familias maestras de referencia, no miles de fichas CN.
+ // Las equivalencias de cada farmacia se consultan solo al desplegar la fila.
  app.get("/api/tenant/familias-globales",...requireTenantManager(),async(req,res,next)=>{
+  const view=String(req.query?.view||"maestro");
+  const search=String(req.query?.q||"").trim();
+  const page=Number(req.query?.page||1);
+  if(!["maestro","pendientes"].includes(view)||search.length>100||
+    !Number.isSafeInteger(page)||page<1||page>10000)
+   return res.status(400).json({error:"Filtros de familias incorrectos"});
+  const slug=req.context.client.slug;
+  const confirmed="(g.referencia_farmacia IS NOT NULL OR g.nombre_manual)";
+  const predicate=view==="maestro"?confirmed:"NOT "+confirmed;
   try{
-   const {rows}=await pool.query(
-    "SELECT g.id::text,g.clave AS key,g.nombre AS name,g.segmento AS segment,"+
-    " g.referencia_farmacia AS \"referencePharmacy\",g.referencia_codigo AS \"referenceCode\","+
-    " g.nombre_manual AS \"customName\",g.activo AS active,"+
-    " coalesce((SELECT count(*)::int FROM farmetrica.familias_globales_articulos l"+
-    " WHERE l.cliente_slug=g.cliente_slug AND l.familia_id=g.id),0) AS articles,"+
-    " coalesce((SELECT json_agg(json_build_object("+
-    " 'pharmacyCode',a.farmacia_codigo,'sourceCode',a.codigo_origen,"+
-    " 'sourceName',a.nombre_origen,'method',a.metodo,"+
-    " 'matches',a.coincidencias,'confidence',a.confianza)"+
-    " ORDER BY a.farmacia_codigo,a.codigo_origen)"+
-    " FROM farmetrica.familias_globales_alias a"+
-    " WHERE a.cliente_slug=g.cliente_slug AND a.familia_id=g.id),'[]'::json) AS origins"+
-    " FROM farmetrica.familias_globales g WHERE g.cliente_slug=$1 AND g.activo"+
-    " ORDER BY g.segmento,g.nombre,g.id",[req.context.client.slug]);
-   res.json({items:rows,referencePharmacies:refPharmacies(req.context)});
+   const [counts,records]=await Promise.all([
+    pool.query("SELECT count(*) FILTER(WHERE "+confirmed+")::int AS maestros,"+
+     " count(*) FILTER(WHERE "+confirmed+" AND g.segmento='MEDICACION')::int AS medicacion,"+
+     " count(*) FILTER(WHERE "+confirmed+" AND g.segmento='PARAFARMACIA')::int AS parafarmacia,"+
+     " count(*) FILTER(WHERE NOT "+confirmed+")::int AS pendientes"+
+     " FROM farmetrica.familias_globales g WHERE g.cliente_slug=$1 AND g.activo",[slug]),
+    pool.query({
+     text:"SELECT g.id::text AS id,g.nombre AS name,g.segmento AS segment,"+
+      " g.referencia_farmacia AS \"referencePharmacy\",g.referencia_codigo AS \"referenceCode\","+
+      " g.nombre_manual AS \"customName\""+
+      " FROM farmetrica.familias_globales g WHERE g.cliente_slug=$1 AND g.activo AND "+predicate+
+      " AND ($2::text='' OR g.nombre ILIKE '%' || $2 || '%' OR"+
+      " coalesce(g.referencia_codigo,'') ILIKE '%' || $2 || '%')"+
+      " ORDER BY g.segmento,g.nombre,g.id"+
+      (view==="pendientes"?" LIMIT 30 OFFSET $3":""),
+     values:view==="pendientes"?[slug,search,(page-1)*30]:[slug,search],
+     query_timeout:12000
+    })
+   ]);
+   res.json({items:records.rows,summary:counts.rows[0]||{},
+    view,page,pageSize:view==="pendientes"?30:null,
+    referencePharmacies:refPharmacies(req.context)});
+  }catch(e){next(e);}
+ });
+ app.get("/api/tenant/familias-globales/:id/origenes",...requireTenantManager(),async(req,res,next)=>{
+  if(!validId(req.params.id))return res.status(400).json({error:"Familia incorrecta"});
+  try{
+   const {rows}=await pool.query({
+    text:"SELECT a.farmacia_codigo AS \"pharmacyCode\","+
+     " a.codigo_origen AS \"sourceCode\",a.nombre_origen AS \"sourceName\","+
+     " a.metodo AS method FROM farmetrica.familias_globales_alias a"+
+     " JOIN farmetrica.familias_globales g ON g.id=a.familia_id"+
+     " AND g.cliente_slug=a.cliente_slug AND g.activo"+
+     " WHERE a.cliente_slug=$1 AND a.familia_id=$2"+
+     " ORDER BY a.farmacia_codigo,a.nombre_origen,a.codigo_origen",
+    values:[req.context.client.slug,req.params.id],query_timeout:12000
+   });
+   res.json({items:rows});
   }catch(e){next(e);}
  });
  app.post("/api/tenant/familias-globales/reconciliar",...requireTenantManager(),async(req,res,next)=>{

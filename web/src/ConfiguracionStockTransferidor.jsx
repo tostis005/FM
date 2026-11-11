@@ -80,7 +80,7 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
     <p>Reglas para reposición entre farmacias, independientes de los 30 días de compras del preparador.</p>
    </div>
    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>act(async()=>reload(),"Configuración actualizada")} disabled={busy}>
-    <RefreshCcw size={15}/> Actualizar</button>
+    <RefreshCcw size={15}/> Actualizar configuración del transferidor</button>
   </div>
   {loading?<p role="status">Cargando reglas de stock…</p>:<>
    <form className="fm-transfer-settings-global" onSubmit={submitGlobal}>

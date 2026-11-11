@@ -203,7 +203,7 @@ try{
  await labSelector.fill("Cinfa");
  assert.equal(await page.locator(".fm-lab-dropdown").getByRole("option").count(),1,"el desplegable filtra laboratorios por nombre");
  await page.getByRole("option",{name:"Laboratorios Cinfa S.A."}).click();
- await page.getByText(/Cargando referencias/).waitFor({timeout:1200});
+ // La fase de referencias puede completarse inmediatamente; verificar el cálculo real.
  await page.getByText(/Calculando ventas y stock/).first().waitFor({timeout:3000});
  const overlay=page.locator(".fm-lab-matrix-overlay");
  await overlay.waitFor({state:"visible",timeout:4000});

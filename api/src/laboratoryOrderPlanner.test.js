@@ -150,8 +150,8 @@ test("API matriz y guardado solo dentro del tenant",async()=>{
  assert.equal(JSON.parse(insert.values[6])[0].comment,"Caja especial");
  assert.equal((await call("PUT",path,{...base,comentarioGlobal:"a".repeat(3001)})).status,400);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],comment:"a".repeat(2001)}]})).status,400);
- assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],excluded:true}]})).status,400);
- assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],name:"*BAJA* Crema"}]})).status,400);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],excluded:true}]})).status,200);
+ assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],name:"*BAJA* Crema"}]})).status,200);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:0,excluded:true}]})).status,200);
  assert.equal((await call("PUT",path,{...base,farmacias:[9]})).status,400);
  assert.equal((await call("PUT",path,{...base,lineas:[{...base.lineas[0],units:2.5}]})).status,400);
@@ -208,6 +208,19 @@ test("almacén solo descuenta del pedido conjunto de parafarmacia, sin alterar l
  const article={cn:"123456"};
  const warehouse={warehouseReady:true,warehouseStock:1000,warehouseStockAt:"2026-11-10T08:00Z"};
  const result=applyWarehouseToOrder(article,byPharmacy,"parafarmacia",warehouse);
+ assert.deepEqual(result.warehouse,{
+  stock:1000,stockAt:"2026-11-10T08:00Z",units12:null,units3:null,
+  unitsPeriod:null,suggested:null,ready:true,salesReady:false
+ });
+ const sales=applyWarehouseToOrder(article,byPharmacy,"parafarmacia",{
+  ...warehouse,warehouseSalesReady:true,warehouseUnits12:50,
+  warehouseUnits3:10,warehouseUnitsPeriod:4
+ });
+ assert.equal(sales.warehouse.units12,50);
+ assert.equal(sales.warehouse.units3,10);
+ assert.equal(sales.warehouse.unitsPeriod,4);
+ assert.equal(sales.totalSuggested,result.totalSuggested,
+  "Las ventas del almacén nunca generan demanda duplicada.");
  assert.equal(result.pharmacyStock,120);
  assert.equal(result.warehouseStock,1000);
  assert.equal(result.globalStock,1120);
@@ -234,7 +247,10 @@ test("SQL consulta el almacén por código de sincronización y solo en parafarm
  assert.match(text,/\$6::text='parafarmacia'/);
  assert.match(text,/warehouse_inventory AS/);
  assert.match(text,/warehouse_ready AS/);
- assert.doesNotMatch(text,/JOIN __SCHEMA__\.fm_ventas_lineas l\s+ON l\.farmacia_codigo=w\.source_code/);
+ assert.match(text,/warehouse_sales_ready AS MATERIALIZED/);
+ assert.match(text,/warehouse_sales AS MATERIALIZED/);
+ assert.ok(text.includes("JOIN __SCHEMA__.fm_ventas_lineas l"));
+ assert.match(text,/warehouseUnits12/);
 });
 
 test("parafarmacia utiliza objetivos y stock global, medicación suma necesidades locales",()=>{

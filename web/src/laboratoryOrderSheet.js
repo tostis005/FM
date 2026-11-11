@@ -26,12 +26,10 @@ export function totalStockFor(row,pharmacyIds){
  return values.some(v=>v===null||v===undefined||!Number.isFinite(Number(v)))?
   null:values.reduce((sum,v)=>sum+Number(v),0);
 }
+// Las referencias dadas de baja son editables: el color rojo solo advierte.
+// No poner unidades a cero al leer borradores antiguos ni cambiar de pestaña.
 export function sanitizeExcludedOrderLine(row,line,type,pharmacyIds){
- if(!isExcludedOrderRow(row))return line;
- const common={...line,excluded:true};
- if(type==="parafarmacia")return {...common,units:0};
- return {...common,unitsByPharmacy:{...line.unitsByPharmacy,
-  ...Object.fromEntries(pharmacyIds.map(id=>[String(id),0]))}};
+ return line;
 }
 export function defaultLaboratoryLine(row,type,pharmacyIds){
  const common={reference:row.referencia,cn:row.cn||null,name:row.nombre,
@@ -39,13 +37,13 @@ export function defaultLaboratoryLine(row,type,pharmacyIds){
  const pharmacies=pharmacyIds.map(String);
  if(type==="parafarmacia"){
   const values=pharmacies.map(id=>row.byPharmacy?.[id]?.suggested);
-  return {...common,units:isExcludedOrderRow(row)||row.totalSuggested===null||
+  return {...common,units:row.totalSuggested===null||
    (row.totalSuggested===undefined&&values.some(v=>v===null||v===undefined))?
    0:row.totalSuggested!==undefined?
     Math.max(0,Number(row.totalSuggested)):values.reduce((sum,v)=>sum+Number(v),0)};
  }
  return {...common,unitsByPharmacy:Object.fromEntries(pharmacies.map(id=>
-  [id,isExcludedOrderRow(row)?0:row.byPharmacy?.[id]?.suggested??0]))};
+  [id,row.byPharmacy?.[id]?.suggested??0]))};
 }
 export function orderLineFor(row,type,ids,drafts={}){
  const previous=drafts[row.referencia]||defaultLaboratoryLine(row,type,ids);
@@ -69,25 +67,27 @@ export function laboratoryExcelRows(lines,pharmacies,type,globalComment=""){
  const isMedication=type==="medicacion";
  const ids=pharmacies.map(p=>String(p.id));
  const grouping=["CN","Artículo",...pharmacies.flatMap(p=>
-  [p.name,"","","",""]), "Total farmacias","Almacén","Stock total","Total vendido","Propuesta total","Pedir total","Comentarios"];
+  [p.name,"","","",""]),"Almacén","","","","",
+  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"];
  const headings=["CN","Artículo",...pharmacies.flatMap(()=>
   ["Stock","Ventas 12m","Ventas 3m","Vendido período",isMedication?"Pedir":"Propuesta"]),
-  "Total farmacias","Almacén","Stock total","Total vendido","Propuesta total","Pedir total","Comentarios"];
+  "Stock","Ventas 12m","Ventas 3m","Vendido período",isMedication?"Pedir":"Propuesta",
+  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"];
  const rows=lines.map(({row,line})=>{
   const measures=ids.map(id=>row.byPharmacy?.[id]||{});
-  const sold=measures.reduce((n,v)=>n+Number(v.unitsPeriod||0),0);
   const proposals=row.totalSuggested!==undefined?row.totalSuggested:
    measures.some(v=>v.suggested===null||v.suggested===undefined)?null:
     measures.reduce((n,v)=>n+Number(v.suggested),0);
+  const warehouse=!isMedication?row.warehouse||null:null;
   return [row.cn||"",row.nombre,...measures.flatMap((m,i)=>[
    m.stock,Number(m.units12||0),Number(m.units3||0),
    Number(m.unitsPeriod||0),isMedication?line.unitsByPharmacy?.[ids[i]]??0:m.suggested
-  ]),totalStockFor(row,ids),
-   isMedication?null:row.warehouseStock??null,
-   isMedication?totalStockFor(row,ids):row.globalStock??null,
-   sold,proposals,
+  ]),warehouse?.stock??null,warehouse?.units12??null,
+   warehouse?.units3??null,warehouse?.unitsPeriod??null,null,
+   totalStockFor(row,ids),isMedication?null:row.globalStock??null,proposals,
    isMedication?ids.reduce((sum,id)=>sum+Number(line.unitsByPharmacy?.[id]||0),0):line.units,
    line.comment||""];
+
  });
  return appendOrderGlobalComment([grouping,headings,...rows],globalComment);
 }

@@ -5,7 +5,7 @@ import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readUnifiedLaboratoryCatalog} from "./laboratoryUnionCatalog.js";
 import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
 import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
-import {readRetirementPatterns,isRetiredProductName} from "./laboratoryRetirements.js";
+
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -58,8 +58,18 @@ export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
   pharmacySuggested===null?null:
    isPara&&warehouseStock!==null?
     Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
- return {pharmacyStock,warehouseStock,globalStock,
-  warehouseReady:ready,warehouseStockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
+ const warehouseSalesReady=ready&&warehouseMetric?.warehouseSalesReady===true;
+ const warehouse={
+  stock:warehouseStock,
+  stockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
+  units12:warehouseSalesReady?Number(warehouseMetric?.warehouseUnits12||0):null,
+  units3:warehouseSalesReady?Number(warehouseMetric?.warehouseUnits3||0):null,
+  unitsPeriod:warehouseSalesReady?Number(warehouseMetric?.warehouseUnitsPeriod||0):null,
+  suggested:null, // El almacén distribuye existencias; no tiene demanda propia.
+  ready,salesReady:warehouseSalesReady
+ };
+ return {pharmacyStock,warehouseStock,globalStock,warehouse,
+  warehouseReady:ready,warehouseStockAt:warehouse.stockAt,
   totalSuggested};
 }
 
@@ -159,7 +169,7 @@ export function normalizeDraftItems(items,type,pharmacies){
    }
   }
   if(type==="parafarmacia"){
-   if(!isOrderQuantity(row.units)||(excluded&&row.units!==0))return null;
+   if(!isOrderQuantity(row.units))return null;
    output.push({reference:row.reference,cn:row.cn||null,name:row.name,units:row.units,metrics,comment,excluded});
   }else{
    if(!row.unitsByPharmacy||typeof row.unitsByPharmacy!=="object"||
@@ -169,7 +179,7 @@ export function normalizeDraftItems(items,type,pharmacies){
     if(!allowed.has(String(id))||!isOrderQuantity(count))return null;
     units[String(id)]=count;
    }
-   if(excluded&&Object.values(units).some(n=>n!==0))return null;
+   
    output.push({reference:row.reference,cn:row.cn||null,name:row.name,unitsByPharmacy:units,metrics,comment,excluded});
   }
  }
@@ -327,14 +337,7 @@ export function setupLaboratoryOrderPlanner(app,pool,{requireTenant}){
    typeof comment!=="string"||comment.length>3000)
    return res.status(400).json({error:"No se pueden guardar cantidades, comentarios o fechas inválidas"});
   try{
-   const patterns=await readRetirementPatterns(pool,req.context.client.slug);
-   const hasRetiredOrder=items.some(item=>{
-    const amount=type==="parafarmacia"?item.units:
-     Object.values(item.unitsByPharmacy).reduce((sum,n)=>sum+n,0);
-    return amount>0&&(item.excluded||isRetiredProductName(item.name,patterns));
-   });
-   if(hasRetiredOrder)return res.status(400).json({
-    error:"Las referencias marcadas como baja no admiten unidades a pedir."});
+   // El marcado de baja es informativo, no bloquea pedidos manuales.
    const {rows}=await pool.query(
     "INSERT INTO farmetrica.pedidos_laboratorio_borradores (cliente_slug,laboratorio_clave,tipo,farmacias_clave,desde,hasta,lineas,comentario_global) VALUES ($1,$2,$3,$4,$5::date,$6::date,$7::jsonb,$8) ON CONFLICT(cliente_slug,laboratorio_clave,tipo,farmacias_clave) DO UPDATE SET desde=EXCLUDED.desde,hasta=EXCLUDED.hasta,lineas=EXCLUDED.lineas,comentario_global=EXCLUDED.comentario_global,actualizado_en=now() RETURNING actualizado_en AS \"updatedAt\"",
     [req.context.client.slug,common.laboratory,type,pharmacyScope(common.pharmacies),

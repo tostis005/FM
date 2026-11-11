@@ -18,10 +18,8 @@ const officialMatch=alias=>`('N:'||${normalizedLabSQL(alias+".laboratorio_comerc
  OR ('C:'||upper(btrim(coalesce(${alias}.laboratorio_codigo,'')))=$1))`;
 
 /**
- * ÚNICO universo: presentaciones del Nomenclátor + artículos que figuran en
- * alguna venta o recepción de una farmacia seleccionada.
- * Farmatic se usa para interpretar identificador, nombre, laboratorio y stock,
- * NUNCA para aportar artículos que no tengan movimientos.
+ * El catálogo incluye presentaciones del Nomenclátor y productos ERP asignados
+ * a los laboratorios seleccionados, también sin ventas ni recepciones.
  * Tampoco se incorpora el catálogo externo/Vademécum.
  */
 export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,type,search="",page=1,size=40,skipMovementCheck=false}){
@@ -149,8 +147,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
      AND ${normalizedLabSQL("excluded.nombre")}=
        ${normalizedLabSQL("coalesce(nullif(btrim(r.proveedor_nombre),''),sp.nombre)")})
  ), relevant_articles AS MATERIALIZED (
-  -- Desde Farmatic obtener solo artículos del laboratorio que han tenido
-  -- al menos una venta o recepción. EXISTS usa el índice ERP por producto.
+  -- Incluir todos los artículos del laboratorio sin exigir movimientos.
   SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
   FROM pharmacies p JOIN ${schema}.articulos a
    ON upper(btrim(a.farmacia_codigo))=p.code
@@ -167,10 +164,7 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
        OR (link.laboratory_key LIKE 'N:%'
         AND 'N:'||${normalizedLabSQL("substring(link.laboratory_key from 3)")}
          IN (SELECT key FROM lab_aliases)))))
-   AND (EXISTS (SELECT 1 FROM ${schema}.fm_ventas_analitica v
-     WHERE v.farmacia_codigo=p.code AND v.articulo_id=a.origen_id::text)
-    OR EXISTS (SELECT 1 FROM ${schema}.fm_recepciones_analitica r
-     WHERE r.farmacia_codigo=p.code AND r.articulo_id=a.origen_id::text))
+
  ), candidates AS MATERIALIZED (
   SELECT pharmacy_id,code,article_id FROM relevant_receipts
   UNION SELECT pharmacy_id,code,article_id FROM relevant_articles

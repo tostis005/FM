@@ -97,6 +97,43 @@ WITH refs AS MATERIALIZED (
   CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
   min(stock_at) AS stock_at
  FROM warehouse_distinct GROUP BY reference
+), warehouse_sales_ready AS MATERIALIZED (
+ -- El almacén no necesariamente dispone de un origen de ventas: nunca
+ -- mostrar cero como "venta" si no se han importado movimientos de caja.
+ SELECT EXISTS (
+  SELECT 1 FROM __SCHEMA__.fm_ventas_cabeceras h
+  JOIN warehouse_scope w ON h.farmacia_codigo=w.source_code
+  WHERE h.lineas_completas AND NOT h.eliminado_logicamente
+ ) AS ready
+), warehouse_sales AS MATERIALIZED (
+ -- Son ventas REALES del origen ALMACEN, si existen. No inventar demanda
+ -- replicando la de otras farmacias. Se agrupan por artículo y luego por CN.
+ SELECT wa.reference,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+   FILTER (WHERE h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day'),0)::float8 AS sold,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+   FILTER (WHERE h.fecha >= d.today-interval '89 days'
+      AND h.fecha < d.today+interval '1 day'),0)::float8 AS v3,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+   FILTER (WHERE h.fecha >= d.today-interval '364 days'
+      AND h.fecha < d.today+interval '1 day'),0)::float8 AS v12
+ FROM warehouse_distinct wa
+ JOIN warehouse_scope w ON true
+ CROSS JOIN (SELECT (now() AT TIME ZONE 'Europe/Madrid')::date AS today) d
+ JOIN __SCHEMA__.fm_ventas_lineas l
+  ON l.farmacia_codigo=w.source_code AND l.articulo_origen_id=wa.article_id
+   AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
+ JOIN __SCHEMA__.fm_ventas_cabeceras h
+  ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen
+   AND h.documento_id=l.documento_id
+   AND h.lineas_completas AND NOT h.eliminado_logicamente
+   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   AND (
+    (h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day')
+    OR (h.fecha >= d.today-interval '364 days' AND h.fecha < d.today+interval '1 day')
+   )
+ WHERE $6::text='parafarmacia'
+ GROUP BY wa.reference
 ), eligible_articles AS MATERIALIZED (
  -- La misma referencia/CN puede tener varios registros ERP. Identificar
  -- cada pareja farmacia+artículo una sola vez antes de leer sus ventas.
@@ -169,6 +206,10 @@ SELECT x.reference,f.id::text AS "pharmacyId",
  wi.stock AS "warehouseStock",
  wi.stock_at AS "warehouseStockAt",
  wr.ready AS "warehouseReady",
+ wsr.ready AS "warehouseSalesReady",
+ CASE WHEN wsr.ready THEN coalesce(ws.sold,0) ELSE NULL END AS "warehouseUnitsPeriod",
+ CASE WHEN wsr.ready THEN coalesce(ws.v3,0) ELSE NULL END AS "warehouseUnits3",
+ CASE WHEN wsr.ready THEN coalesce(ws.v12,0) ELSE NULL END AS "warehouseUnits12",
  coalesce(m.sold,0)::float8 AS "unitsPeriod",
  coalesce(m.v3,0)::float8 AS "units3",
  coalesce(m.v12,0)::float8 AS "units12",
@@ -183,7 +224,9 @@ SELECT x.reference,f.id::text AS "pharmacyId",
    -i.stock-coalesce(pending.qty,0)-1e-9)))::int END AS suggested
 FROM refs x CROSS JOIN pharmacies f
 CROSS JOIN warehouse_ready wr
+CROSS JOIN warehouse_sales_ready wsr
 LEFT JOIN warehouse_inventory wi ON wi.reference=x.reference
+LEFT JOIN warehouse_sales ws ON ws.reference=x.reference
 LEFT JOIN inventory i ON i.pharmacy_id=f.id AND i.reference=x.reference
 LEFT JOIN movements m ON m.pharmacy_id=f.id AND m.reference=x.reference
 LEFT JOIN pending ON pending.pharmacy_id=f.id AND pending.reference=x.reference

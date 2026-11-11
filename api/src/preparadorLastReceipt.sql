@@ -12,6 +12,15 @@ WITH eligible_labs AS MATERIALIZED (
 ), pharmacies AS MATERIALIZED (
  SELECT f.id AS pharmacy_id,__PHARMACY_CODE__ AS pharmacy_code
  FROM farmetrica.farmacias f WHERE f.cliente_slug=$1
+ UNION ALL
+ -- AMP era el código del mismo almacén que ahora se llama ALMACEN.
+ -- Conservar AMP en los JOIN contra documentos ERP; compartir únicamente el
+ -- ID de establecimiento para el ámbito de catálogo y las bajas.
+ SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code
+ FROM farmetrica.farmacias f
+ WHERE f.cliente_slug='ampedia' AND f.activo
+  AND upper(btrim(f.codigo_origen))='ALMACEN'
+  AND f.tipo_establecimiento='almacen'
 ), alias_candidates AS MATERIALIZED (
  SELECT f.pharmacy_id,upper(btrim(a.farmacia_codigo)) AS pharmacy_code,p.id AS lab_id,
   CASE WHEN btrim(a.codigo_origen)~'^[0-9]+$'

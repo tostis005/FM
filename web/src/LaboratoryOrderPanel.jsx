@@ -368,15 +368,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     const active=activeCatalog.get(line.reference);
     const row={referencia:line.reference,cn:line.cn,nombre:line.name,
      byPharmacy:line.metrics||{},excluded:active?.excluded===true||line.excluded===true,
-     warehouseStock:active?.warehouseStock??null,globalStock:active?.globalStock??null,
+     warehouseStock:active?.warehouseStock??null,warehouse:active?.warehouse||null,
+     globalStock:active?.globalStock??null,
      totalSuggested:active?.totalSuggested??null};
     return {row,line:orderLineFor(row,tab,ids,{[line.reference]:line})};
    });
-   const ordered=matrix.filter(item=>(
+   const matrixByReference=new Map(matrix.map(item=>[item.row.referencia,item]));
+   const sortedMatrix=groupedLaboratoryRows(matrix.map(item=>item.row))
+    .flatMap(group=>group.rows.map(row=>matrixByReference.get(row.referencia)));
+   const ordered=sortedMatrix.filter(item=>(
     tab==="parafarmacia"?Number(item.line.units)>0:
     Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0)));
    if(!ordered.length){setError("El borrador no contiene cantidades positivas para exportar.");return}
-   const rows=laboratoryExcelRows(matrix,chosen,tab,savedGlobalComment);
+   const rows=laboratoryExcelRows(sortedMatrix,chosen,tab,savedGlobalComment);
    const orderRows=laboratoryOrderListRows(ordered,chosen,tab,savedGlobalComment);
    await exportLaboratoryOrderWorkbook(rows,laboratoryExportName(labName,tab),orderRows,tab);
    setNotice("Excel generado desde el último borrador guardado. No se ha enviado ningún pedido.");

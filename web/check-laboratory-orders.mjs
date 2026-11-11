@@ -158,8 +158,8 @@ try{
   "El preparador envía el período de verano pasado a la matriz");
  await page.getByRole("combobox",{name:"Ventas · período seleccionado"}).selectOption("this_month");
  await page.waitForTimeout(600);
- assert.equal(await page.locator(".fm-lab-order-group").count(),2);
- assert.equal(await page.locator(".fm-lab-order-sub").count(),10);
+ assert.equal(await page.locator(".fm-lab-order-group").count(),3); // dos farmacias + almacén
+ assert.equal(await page.locator(".fm-lab-order-sub").count(),10); // dos farmacias, cinco columnas cada una
  assert.equal((await page.locator(".fm-lab-order-table thead th.fm-lab-order-editcol").textContent()).trim(),
   "Pedir total");
  assert.doesNotMatch(await page.locator(".fm-lab-order").innerText(),/Pedia|Ampedia/i,

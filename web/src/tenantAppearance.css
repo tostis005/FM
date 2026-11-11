@@ -204,10 +204,10 @@
  background:var(--fm-table-header)!important;
 }
 .app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.shade-1 {
- background:color-mix(in srgb,var(--fm-table-header) 94%,#fff)!important;
+ background:color-mix(in srgb,var(--fm-table-header) 95%,#000)!important;
 }
 .app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.shade-2 {
- background:color-mix(in srgb,var(--fm-table-header) 88%,#fff)!important;
+ background:color-mix(in srgb,var(--fm-table-header) 90%,#000)!important;
 }
 .app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.fm-lab-order-editcol {
  background:var(--fm-table-header)!important;
@@ -216,5 +216,5 @@
  background:var(--fm-table-header)!important;
 }
 .app-shell[data-tenant-theme="custom"] .workspace table>thead th.fm-section-units {
- background:color-mix(in srgb,var(--fm-table-header) 91%,#fff)!important;
+ background:color-mix(in srgb,var(--fm-table-header) 93%,#000)!important;
 }

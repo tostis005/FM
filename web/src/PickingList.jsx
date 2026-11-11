@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Warehouse,Store} from "lucide-react";
 import ListTable from "./ListTable.jsx";
-import {pickingListChannelView} from "./pickingListChannelView.js";
+import {pickingListChannelView,pickingListRowsForSite} from "./pickingListChannelView.js";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./pickingList.css";
@@ -48,7 +48,6 @@ export default function PickingList({clientSlug}){
  const [tab,setTab]=useState("general");
  const [search,setSearch]=useState("");
  const [status,setStatus]=useState("");
- const [assignedOnly,setAssignedOnly]=useState(false);
  const [expanded,setExpanded]=useState("");
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
@@ -97,13 +96,13 @@ export default function PickingList({clientSlug}){
  const visibleData=useMemo(()=>pickingListChannelView(data,channel),[data,channel]);
  const selectedSite=(visibleData?.sites||[]).find(s=>s.id===tab);
  const all=visibleData?.rows||[];
- const matching=all.filter(row=>{
+ // Cada ubicación funciona como lista de recogida, no como catálogo de existencias.
+ const siteRows=pickingListRowsForSite(all,selectedSite?.id);
+ const matching=siteRows.filter(row=>{
   const term=search.trim().toLocaleLowerCase("es");
   if(term&&!([row.cn,row.sku,...eanCodes(row),row.name,
     ...row.details.map(d=>d.orderName)]
    .join(" ").toLocaleLowerCase("es").includes(term)))return false;
-  if(selectedSite&&assignedOnly&&!row.stock.some(s=>s.id===selectedSite.id&&s.planned>0))
-   return false;
   return true;
  });
  const availableStatuses=new Set(matching.map(row=>row.status));
@@ -111,12 +110,12 @@ export default function PickingList({clientSlug}){
   matching.filter(row=>row.status===status):matching;
  useEffect(()=>{
   if(status&&!availableStatuses.has(status))setStatus("");
- },[status,channel,tab,search,assignedOnly,data]);
+ },[status,channel,tab,search,data]);
  useEffect(()=>{
   if(channel&&data&&!data.channels?.includes(channel))setChannel("");
  },[channel,data]);
- const assignedToSite=selectedSite?all.reduce((sum,r)=>
-  sum+(r.stock.find(s=>s.id===selectedSite.id)?.planned||0),0):0;
+ const assignedToSite=selectedSite?siteRows.reduce((sum,r)=>
+  sum+Number(r.stock.find(s=>String(s.id)===String(selectedSite.id))?.planned||0),0):0;
  const siteShortCode=site=>String(site.displayCode||
   (site.kind==="almacen"?"ALM":site.code)||"").trim().toUpperCase();
  const tableSites=selectedSite?[selectedSite]:(visibleData?.sites||[]);
@@ -175,7 +174,7 @@ export default function PickingList({clientSlug}){
     La propuesta dejaría sin unidades a: {row.exhausted.join(", ")}.</p>}
   </div>;
  }
- function changeTab(id){setTab(id);setExpanded("");setAssignedOnly(false);}
+ function changeTab(id){setTab(id);setExpanded("");}
  const ready=Boolean(data?.meta?.lastImportedAt);
  const sourceConfigured=Boolean(data?.meta?.sourceConfigured);
  const sourceError=data?.meta?.sourceError;
@@ -296,11 +295,6 @@ export default function PickingList({clientSlug}){
          .map(([id,label])=><option key={id} value={id}>{label}</option>)}
       </select>
      </label>
-     {selectedSite&&<label className="fm-picking-only">
-      <input type="checkbox" checked={assignedOnly}
-       onChange={e=>setAssignedOnly(e.target.checked)}/>
-      Solo unidades asignadas a esta ubicación
-     </label>}
     </div>
     <div className="fm-picking-list-head">
      <h2>{selectedSite?"Preparación · "+selectedSite.name:"Distribución de pedidos pendientes"}</h2>
@@ -314,10 +308,11 @@ export default function PickingList({clientSlug}){
     <div className="fm-picking-list-table">
      <ListTable key={tab} rows={filtered} columns={columns} rowKey={row=>row.key}
       tableClass="fm-picking-grouped" label="referencias"
-      defaultSort={{key:"required",direction:"desc"}}
+      defaultSort={{key:selectedSite?"units-"+selectedSite.id:"required",direction:"desc"}}
       initialPageSize={500} pageSizes={[50,100,250,500]}
       exportFileName={selectedSite?"picking-"+siteShortCode(selectedSite).toLowerCase():"picking-list"}
-      emptyText="No hay productos con estos filtros"
+      emptyText={selectedSite&&!siteRows.length?"No hay unidades asignadas a esta ubicación":
+       "No hay productos con estos filtros"}
       expandedRowKeys={expanded?[expanded]:[]}
       renderExpandedRow={expandedDetails}/>
     </div>

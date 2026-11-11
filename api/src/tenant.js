@@ -152,13 +152,14 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "coalesce(jsonb_object_agg(m.modulo_clave,m.habilitado) FILTER (WHERE m.modulo_clave IS NOT NULL),'{}'::jsonb) AS modules, "+
         "max(a.nombre_marca) AS \"brandName\",max(a.logo_url) AS \"logoUrl\", "+
         "max(a.color_primario) AS \"primaryColor\",max(a.color_secundario) AS \"secondaryColor\", "+
+        "max(a.color_fondo) AS \"pageColor\", "+
         "max(a.estilo_menu) AS \"menuMode\" "+
         "FROM farmetrica.clientes c "+
         "LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug "+
         "LEFT JOIN farmetrica.cliente_apariencia a ON a.cliente_slug=c.slug "+
         "GROUP BY c.slug ORDER BY c.nombre");
-      res.json(rows.map(({brandName,logoUrl,primaryColor,secondaryColor,menuMode,...client})=>({
-        ...client,appearance:appearanceFromDatabase({brandName,logoUrl,primaryColor,secondaryColor,menuMode})
+      res.json(rows.map(({brandName,logoUrl,primaryColor,secondaryColor,pageColor,menuMode,...client})=>({
+        ...client,appearance:appearanceFromDatabase({brandName,logoUrl,primaryColor,secondaryColor,pageColor,menuMode})
       })));
     }catch(e){next(e);}
   });
@@ -171,16 +172,16 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     try{
       const {rows}=await pool.query(`
         INSERT INTO farmetrica.cliente_apariencia
-          (cliente_slug,nombre_marca,logo_url,color_primario,color_secundario,estilo_menu,actualizado_por)
-        SELECT slug,$2,$3,$4,$5,$6,$7 FROM farmetrica.clientes WHERE slug=$1
+          (cliente_slug,nombre_marca,logo_url,color_primario,color_secundario,color_fondo,estilo_menu,actualizado_por)
+        SELECT slug,$2,$3,$4,$5,$6,$7,$8 FROM farmetrica.clientes WHERE slug=$1
         ON CONFLICT(cliente_slug) DO UPDATE SET
           nombre_marca=EXCLUDED.nombre_marca,logo_url=EXCLUDED.logo_url,
           color_primario=EXCLUDED.color_primario,color_secundario=EXCLUDED.color_secundario,
-          estilo_menu=EXCLUDED.estilo_menu,actualizado_por=EXCLUDED.actualizado_por,
+          color_fondo=EXCLUDED.color_fondo,estilo_menu=EXCLUDED.estilo_menu,actualizado_por=EXCLUDED.actualizado_por,
           actualizado_en=now()
-        RETURNING nombre_marca,logo_url,color_primario,color_secundario,estilo_menu`,
+        RETURNING nombre_marca,logo_url,color_primario,color_secundario,color_fondo,estilo_menu`,
         [slug,appearance.brandName,appearance.logoUrl,appearance.primaryColor,
-         appearance.secondaryColor,appearance.menuMode,req.user.email]);
+         appearance.secondaryColor,appearance.pageColor,appearance.menuMode,req.user.email]);
       if(!rows.length)return res.status(404).json({error:"Cliente no encontrado"});
       res.json({appearance:appearanceFromDatabase(rows[0])});
     }catch(e){next(e)}

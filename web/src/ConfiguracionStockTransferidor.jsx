@@ -154,3 +154,4 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
   {notice&&<p className="fm-settings-success" role="status">{notice}</p>}
   {error&&<p className="fm-generic-detail-error" role="alert">{error}</p>}
  </section>;
+}

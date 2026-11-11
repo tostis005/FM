@@ -55,7 +55,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug),
         appearance:appearanceFromDatabase(cliente.appearance)},
       role, modules:effectiveModules,
-      sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user)),
+      sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user),role),
       profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,
       profilePermissions:membership?.profile_permissions??null,
       pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))&&p.establishmentType!=="almacen")

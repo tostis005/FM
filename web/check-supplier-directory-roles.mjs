@@ -85,6 +85,14 @@ try{
  await superadmin.page.getByRole("heading",{name:"Laboratorio Demo"}).waitFor();
  assert.equal(await superadmin.page.getByRole("button",{name:"Nuevo contacto"}).count(),1);
  await superadmin.page.setViewportSize({width:1366,height:850});
+ const footerPosition=await superadmin.page.evaluate(()=>{
+  const brand=document.querySelector("#farmetrica-sidebar .brand").getBoundingClientRect();
+  const sidebar=document.querySelector("#farmetrica-sidebar").getBoundingClientRect();
+  const toggle=document.querySelector(".fm-sidebar-collapse-toggle").getBoundingClientRect();
+  return {separated:toggle.top-brand.bottom,bottom:sidebar.bottom-toggle.bottom};
+ });
+ assert.ok(footerPosition.separated>100,"El plegado no debe cubrir el logotipo");
+ assert.ok(footerPosition.bottom>=0&&footerPosition.bottom<65,"El control debe estar anclado al pie derecho: "+JSON.stringify(footerPosition));
  await superadmin.page.getByRole("button",{name:"Plegar menú lateral"}).click();
  assert.equal(await superadmin.page.locator("#farmetrica-sidebar").evaluate(node=>Math.round(node.getBoundingClientRect().width)),72);
  await superadmin.page.reload({waitUntil:"domcontentloaded"});
@@ -95,8 +103,15 @@ try{
  await superadmin.page.close();
  
  const manager=await setup("gestor",true,true);
- await manager.page.goto(base+"/proveedores-maestro",{waitUntil:"domcontentloaded"});
+ await manager.page.goto(base+"/proveedores-condiciones",{waitUntil:"domcontentloaded"});
  await manager.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
+ assert.equal(await manager.page.getByRole("button",{name:"Análisis de proveedores"}).count(),0,
+  "La pantalla antigua ya no debe aparecer en el menú");
+ await manager.page.getByRole("tab",{name:/Laboratorios/}).click();
+ await manager.page.getByText("Unificación de laboratorios").waitFor();
+ assert.equal(await manager.page.getByRole("combobox",{name:/Frecuencia de/}).isDisabled(),true,
+  "Las frecuencias de compra continúan reservadas a administración");
+ await manager.page.getByRole("tab",{name:/Todos/}).click();
  const categoryButton=manager.page.getByRole("button",{name:"Configurar categorías documentales"});
  await categoryButton.waitFor();
  assert.equal(await manager.page.getByRole("button",{name:"Nuevo proveedor"}).count(),1);

@@ -51,11 +51,15 @@ export const USER_SECTIONS=[
 const byId=new Map(USER_SECTIONS.map(s=>[s.id,s]));
 // Todas las secciones, incluido el directorio de proveedores, requieren
 // módulo habilitado y concesión individual cuando las secciones están definidas.
-export function effectiveUserSections(modules,selected,superadmin=false){
+export function effectiveUserSections(modules,selected,superadmin=false,role=""){
  const grants=Array.isArray(selected)?new Set(selected):null;
  return Object.fromEntries(USER_SECTIONS.map(s=>[s.id,
   Boolean(modules?.[s.module])&&(superadmin||
-   (s.id==="stock-transferidor"?grants!==null&&grants.has(s.id):grants===null||grants.has(s.id)))]));
+   (s.id==="stock-transferidor"?grants!==null&&grants.has(s.id):
+    grants===null||grants.has(s.id)||
+    // Los gestores que solo tenían Análisis de proveedores conservan acceso
+    // al maestro unificado al sustituir la antigua pantalla.
+    (role==="gestor"&&s.id==="proveedores"&&grants.has("proveedores-condiciones"))))]));
 }
 export function validateSectionGrants(sections,modules){
  if(!Array.isArray(sections)||sections.length>USER_SECTIONS.length)return null;

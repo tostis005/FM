@@ -46,6 +46,13 @@ test("Proveedores sigue exactamente los módulos y secciones asignados",()=>{
  const partial=effectiveUserSections({proveedores:true},["proveedores-condiciones"]);
  assert.equal(partial.proveedores,false);
  assert.equal(partial["proveedores-condiciones"],true);
+ const oldManager=effectiveUserSections({proveedores:true},["proveedores-condiciones"],false,"gestor");
+ assert.equal(oldManager.proveedores,true,"un gestor antiguo debe entrar al nuevo maestro");
+ assert.equal(oldManager["proveedores-condiciones"],true);
+ const oldReader=effectiveUserSections({proveedores:true},["proveedores-condiciones"],false,"farmacia");
+ assert.equal(oldReader.proveedores,false,"no ampliar permisos del personal de farmacia");
+ const disabled=effectiveUserSections({proveedores:false},["proveedores-condiciones"],false,"gestor");
+ assert.equal(disabled.proveedores,false,"nunca eludir el módulo deshabilitado");
  const directoryOnly=effectiveUserSections({proveedores:true},["proveedores"]);
  assert.equal(directoryOnly.proveedores,true);
  assert.equal(directoryOnly["proveedores-condiciones"],false);

@@ -99,7 +99,7 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
  const titles=planned.groups.map(g=>({id:g.destinationId,name:g.name}));
  const machineIds=audits.rows.map(x=>x.id);
  await db.query(
-  "UPDATE farmetrica.familias_globales g SET nombre=m.name,nombre_manual=true,actualizado_en=now()"+
+  "UPDATE farmetrica.familias_globales g SET nombre=m.name,actualizado_en=now()"+
   " FROM jsonb_to_recordset($2::jsonb) AS m(id text,name text)"+
   " WHERE g.cliente_slug=$1 AND g.id=m.id::bigint AND g.nombre<>m.name"+
   " AND (NOT g.nombre_manual OR g.id=ANY($3::bigint[]))",
@@ -137,13 +137,14 @@ export async function consolidateFamilyNamesUntilStable(db,slug,{
  if(!Number.isInteger(maxPasses)||maxPasses<1||maxPasses>16)
   throw Error("Número de pasadas incorrecto");
  const sum={actions:[],groups:[],activeFamilies:0,uniqueFamilies:0,
-  ambiguousCrossSegment:0,merged:0,aliasesMoved:0,
+  ambiguousCrossSegment:0,ambiguousExamples:[],merged:0,aliasesMoved:0,
   articlesMoved:0,stockRulesMoved:0,passes:0};
  for(let i=0;i<maxPasses;i++){
   const step=await execute(db,slug);
   if(!i)sum.activeFamilies=step.activeFamilies;
   sum.uniqueFamilies=step.uniqueFamilies;
   sum.ambiguousCrossSegment=step.ambiguousCrossSegment;
+  sum.ambiguousExamples=step.ambiguousExamples||[];
   sum.merged+=step.merged;sum.aliasesMoved+=step.aliasesMoved;
   sum.articlesMoved+=step.articlesMoved;sum.stockRulesMoved+=step.stockRulesMoved;
   sum.actions.push(...step.actions);

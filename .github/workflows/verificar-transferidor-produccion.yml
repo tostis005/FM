@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           {
             # Verificar IdArticu (CN 1..399999) y cobertura de 30 días sin alterar datos.
-            sed 's#"./pharmacyCodes.js"#"./src/pharmacyCodes.js"#' api/src/transferidor.js
+            sed -e 's#"./pharmacyCodes.js"#"./src/pharmacyCodes.js"#' -e 's#"./laboratoryOrderPlanner.js"#"./src/laboratoryOrderPlanner.js"#' api/src/transferidor.js
             cat <<'JS'
           import pg from "pg";
           const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,

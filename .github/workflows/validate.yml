@@ -290,6 +290,11 @@ jobs:
           test "$(psql_test -At -c "SELECT cooperativa=false AND ignorar_informes=true FROM farmetrica.proveedores_maestro WHERE cliente_slug='ampedia' AND codigo_origen='COOP01'")" = t
           psql_test --single-transaction < api/src/migrations/test_operational_reports_fixture.sql
           psql_test -At -c "ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS proveedor_habitual_id text;" >/dev/null
+          # La tabla de artículos ya existe después del fixture de datos.
+          # Crear el índice dos veces valida sintaxis, seguridad e idempotencia.
+          psql_test < api/src/migrations/055_preparador_proveedor_idx.psql
+          psql_test < api/src/migrations/055_preparador_proveedor_idx.psql
+          test "$(psql_test -At -c "SELECT to_regclass('ampedia.articulos_fm_prep_proveedor_idx') IS NOT NULL")" = t
           # CONCURRENTLY no puede ejecutarse con --single-transaction.
           psql_test < api/src/migrations/045_promociones_busqueda_indices.psql
           psql_test < api/src/migrations/045_promociones_busqueda_indices.psql

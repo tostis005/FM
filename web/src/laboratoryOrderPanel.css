@@ -1,8 +1,8 @@
 .fm-lab-order{display:grid;gap:14px;min-width:0;margin:12px 0;padding:16px}
-.fm-lab-order-top{display:flex;align-items:end;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.fm-lab-order-top{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:11px}
 .fm-lab-order-top h2{font-size:16px;margin:0 0 4px;color:#24543f}
 .fm-lab-order-top p{font-size:12px;margin:0;color:#65786f}
-.fm-lab-order-chooser{width:min(100%,520px);flex:1 1 320px;min-width:0}
+.fm-lab-order-chooser{width:min(100%,620px);min-width:0}
 .fm-lab-order-chooser input,.fm-lab-order-chooser select{width:100%;min-width:0;background:var(--surface,#fff);color:inherit;border:1px solid #cdd8d2;border-radius:var(--fm-control-radius,10px);padding:9px}
 .fm-lab-order-placeholder{background:#f5f8f6;border-radius:9px;padding:22px;text-align:center;color:#5b7065}
 .fm-lab-order-tabs{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:2px 0}
@@ -83,8 +83,8 @@
 .fm-lab-matrix-frame[data-metrics-loading="true"] .fm-lab-order-table tbody td:not(.fm-lab-order-sticky){visibility:hidden}
 .fm-lab-matrix-overlay{
  position:absolute;inset:16px 0 0;z-index:20;
- display:flex;justify-content:center;align-items:center;
- padding:12px;border-radius:8px;
+ display:flex;justify-content:center;align-items:flex-start;
+ padding:22px 12px 12px;border-radius:8px;
  background:rgba(245,249,247,.77);backdrop-filter:blur(1px);
  pointer-events:auto;
 }
@@ -203,3 +203,11 @@
 .fm-lab-order-table tbody tr.fm-lab-order-excluded input:not(:disabled){
  background:#fff;color:#513c43;border-color:#b57f88;cursor:text;
 }
+
+/* El paginado solo se muestra si hay varias páginas de artículos. */
+.fm-lab-order-pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:9px 0}
+.fm-lab-order-pager label{display:inline-flex;align-items:center;gap:7px;color:#536e60;font-size:12px}
+.fm-lab-order-pager select{background:var(--surface,#fff);color:inherit;border:1px solid #cdd8d2;border-radius:7px;padding:6px 9px}
+.fm-lab-order-pager span{font-size:12px;color:#536e60;white-space:nowrap}
+.fm-lab-order-pager .btn{font-size:11px;min-height:32px}
+@media(max-width:620px){.fm-lab-order-pager{justify-content:center}.fm-lab-order-chooser{width:100%}}

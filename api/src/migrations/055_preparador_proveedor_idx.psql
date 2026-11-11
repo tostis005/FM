@@ -1,0 +1,30 @@
+-- Índice online del proveedor habitual del catálogo Farmatic.
+-- No modifica artículos ni albaranes. Se instala fuera de transacción con
+-- CREATE INDEX CONCURRENTLY para no bloquear la sincronización.
+SET statement_timeout='8min';
+SET lock_timeout='5s';
+WITH targets AS (
+ SELECT DISTINCT c.esquema_datos AS schema_name,
+  (SELECT x.column_name FROM information_schema.columns x
+   WHERE x.table_schema=c.esquema_datos AND x.table_name='articulos'
+    AND x.column_name IN ('proveedor_habitual_id','proveedor_id','proveedor_codigo','proveedor')
+   ORDER BY array_position(ARRAY['proveedor_habitual_id','proveedor_id',
+    'proveedor_codigo','proveedor'],x.column_name)
+   LIMIT 1) AS supplier
+ FROM farmetrica.clientes c
+ JOIN pg_namespace ns ON ns.nspname=c.esquema_datos
+ JOIN pg_class t ON t.relnamespace=ns.oid AND t.relname='articulos'
+  AND t.relkind='r'
+ WHERE c.esquema_datos ~ '^[a-z][a-z0-9_]{1,62}$'
+)
+SELECT format($sql$
+ CREATE INDEX CONCURRENTLY IF NOT EXISTS articulos_fm_prep_proveedor_idx
+ ON %I.articulos (
+  (upper(btrim(farmacia_codigo))),
+  (CASE WHEN btrim(coalesce(%I::text,'')) ~ '^[0-9]+$'
+   THEN coalesce(nullif(ltrim(btrim(coalesce(%I::text,'')),'0'),''),'0')
+   ELSE upper(btrim(coalesce(%I::text,''))) END)
+ )
+$sql$,schema_name,supplier,supplier,supplier)
+FROM targets WHERE supplier IS NOT NULL
+\gexec

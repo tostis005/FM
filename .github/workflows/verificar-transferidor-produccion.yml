@@ -57,12 +57,14 @@ jobs:
             modules:{stock:true},pharmacies},query:{pagina:"1",tamano:"50",vista:"todos"}};
            const res={statusCode:200,status(n){this.statusCode=n;return this;},
             json(v){this.body=v;return this;}};
+           const startedAt=Date.now();
            let failure=null;
            await handler(req,res,e=>{failure=e});
            if(failure)throw failure;
            const body=res.body||{};
            console.log("TRANSFERIDOR_AUDITORIA",JSON.stringify({
             status:res.statusCode,available:body.available,total:body.total,
+            elapsedMs:Date.now()-startedAt,
             summary:body.summary,emptyReason:body.emptyReason,warning:body.warning,
             pageRows:body.rows?.length||0,
             firstMovement:body.rows?.[0]?{

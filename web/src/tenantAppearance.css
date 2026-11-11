@@ -125,3 +125,96 @@
   display:block;width:100%;height:100%;object-fit:contain;object-position:center;
  }
 }
+
+/* Identidad SaaS aplicada a TODAS las rutas de la sesión, también las
+ * cargadas bajo demanda. No cambia datos, categorías de estado ni permisos. */
+.app-shell[data-tenant-theme="custom"]>.workspace {
+ background:var(--fm-page-background,#F5F8F7);
+}
+.app-shell[data-tenant-theme="custom"]>.workspace>.main-content {
+ background:transparent;
+}
+.app-shell[data-tenant-theme="custom"] .workspace :is(.card,.fm-manage-client){
+ border-color:color-mix(in srgb,var(--fm-brand-secondary) 12%,#fff);
+}
+/* La selección se reconoce por el sombreado y la barra lateral, sin punto. */
+.app-shell .sidebar .active-dot{display:none!important}
+/* Icono de plegado aislado al pie del menú, sin texto redundante. */
+.app-shell .sidebar .fm-sidebar-footer{justify-content:flex-end}
+.app-shell .sidebar .fm-sidebar-collapse-toggle{
+ width:38px;min-width:38px;min-height:38px;height:38px;
+ padding:0;display:grid;place-items:center;justify-content:center;
+ border-radius:10px;
+}
+@media(min-width:791px){
+ .app-shell.fm-sidebar-is-collapsed .sidebar .fm-sidebar-footer{justify-content:center}
+ .app-shell.fm-sidebar-is-collapsed .sidebar .fm-sidebar-collapse-toggle{width:38px}
+}
+
+/* Estándar visual de cabeceras para todas las tablas (incluidas las
+ * matrices de picking, stocks, proveedores, informes y diálogos).
+ * --fm-table-header se oscurece automáticamente para contraste blanco AA. */
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>th,
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>td {
+ background:var(--fm-table-header,var(--fm-brand-secondary))!important;
+ color:#fff!important;
+ border-color:color-mix(in srgb,#fff 17%,var(--fm-table-header))!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>th
+ :is(.smart-sort,.smart-sort-arrow,.smart-th-label,small),
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>th>.fm-objectives-base,
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>th>.fm-objectives-base :is(span,small) {
+ color:#fff!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>th .smart-sort:hover,
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr:not(.smart-filter-row)>th .smart-sort:focus-visible {
+ color:#fff!important;text-decoration:underline;text-underline-offset:3px;
+}
+.app-shell[data-tenant-theme="custom"] .workspace .smart-filter-row {
+ background:var(--fm-brand-subtle)!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace table>thead>tr.smart-filter-row>th {
+ background:var(--fm-brand-subtle)!important;
+ color:var(--fm-brand-secondary)!important;
+ border-bottom:1px solid var(--fm-brand-border);
+}
+.app-shell[data-tenant-theme="custom"] .workspace .smart-filter-row
+ :is(input[type=search],input[type=text],select,.multi-filter-trigger) {
+ background:#fff;color:#254D45;
+ border-color:var(--fm-brand-border);
+}
+.app-shell[data-tenant-theme="custom"] .workspace table>tbody>tr>td,
+.app-shell[data-tenant-theme="custom"] .workspace table>tbody>tr>th {
+ border-bottom-color:color-mix(in srgb,var(--fm-brand-secondary) 12%,#fff);
+}
+.app-shell[data-tenant-theme="custom"] .workspace .smart-table tbody tr:hover {
+ background:var(--fm-brand-subtle);
+}
+.app-shell[data-tenant-theme="custom"] .workspace
+ :is(.list-pagination,.fm-table-toolbar) {
+ border-color:var(--fm-brand-border);color:var(--fm-brand-secondary);
+}
+.app-shell[data-tenant-theme="custom"] .workspace
+ :is(.list-page-buttons button,.list-page-size select) {
+ accent-color:var(--fm-brand-primary);
+}
+/* Separaciones de farmacias visibles pero siempre dentro de la gama OSCURA.
+ * Las celdas del cuerpo mantienen sus colores de stock/medicación. */
+.app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.shade-0 {
+ background:var(--fm-table-header)!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.shade-1 {
+ background:color-mix(in srgb,var(--fm-table-header) 94%,#fff)!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.shade-2 {
+ background:color-mix(in srgb,var(--fm-table-header) 88%,#fff)!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace .fm-lab-order-table>thead th.fm-lab-order-editcol {
+ background:var(--fm-table-header)!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace table>thead th.fm-section-stock {
+ background:var(--fm-table-header)!important;
+}
+.app-shell[data-tenant-theme="custom"] .workspace table>thead th.fm-section-units {
+ background:color-mix(in srgb,var(--fm-table-header) 91%,#fff)!important;
+}

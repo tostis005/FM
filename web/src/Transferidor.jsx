@@ -6,7 +6,6 @@ import {LoadingPanel} from "./LoadingState.jsx";
 import "./transferidor.css";
 
 const number=n=>n==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(n);
-const date=n=>n?new Date(n).toLocaleString("es-ES",{dateStyle:"short",timeStyle:"short"}):"—";
 
 export default function Transferidor({clientSlug,pharmacies=[]}){
  const [vista,setVista]=useState("todos"),[pharmacy,setPharmacy]=useState("");
@@ -57,7 +56,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    render:r=>number(r.targetDestination)}
  ],[]);
  return <div className="fm-transferidor">
-  <ReportPageHeader title="Transferidor" description="Propuesta global de movimientos de parafarmacia entre farmacias. Solo consulta, sin procesar transferencias."
+  <ReportPageHeader title="Transferidor"
    updatedAt={data?.calculatedAt||null} refreshing={loading}
    onRefresh={()=>setRevision(n=>n+1)}/>
   <section className="card fm-transfer-controls" aria-label="Filtros del transferidor">
@@ -91,7 +90,6 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     </label>
    </div>
    <div className="fm-transfer-filter-foot">
-    <span>Los filtros se aplican sobre el plan completo, no sobre la página visible.</span>
     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
      setVista("todos");setPharmacy("");setOrigin("");setDestination("");
      setSearch("");setFilters({});setSort({key:"units",direction:"desc"});reset();
@@ -105,15 +103,13 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   {data?.available&&<div className="fm-transfer-summary" aria-label="Resumen global">
     <div><ArrowLeftRight size={19}/><span>Movimientos propuestos</span><strong>{number(data.summary?.movements)}</strong></div>
     <div><ArrowRight size={19}/><span>Unidades a redistribuir</span><strong>{number(data.summary?.units)}</strong></div>
-    <div><span>Productos implicados</span><strong>{number(data.summary?.products)}</strong></div>
+    <div><span>Productos analizados</span><strong>{number(data.summary?.analyzed)}</strong></div>
     <div><span>Resultados filtrados</span><strong>{number(data.total)}</strong>
      <small>{number(data.summary?.filteredUnits)} unidades</small></div>
    </div>}
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
-    <div><h2>Propuestas entre farmacias</h2>
-     <p>{loading?"Recalculando con el stock y las ventas actuales…":
-      "Una misma unidad no se propone a dos destinos. Los valores son orientativos."}</p></div>
+    <h2>Propuestas entre farmacias</h2>
     <span>Objetivo: {number(data?.summary?.coverageDays??20)} días</span>
    </div>
    {!data&&loading?<LoadingPanel kind="table" label="Calculando movimientos globales…" rows={5}/>:<>
@@ -124,15 +120,9 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
      serverPagination={{page,pageSize,total:data?.total||0,
       onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);reset()}}}
      showExport={false} loading={loading} loadingLabel="Recalculando transferencias…"
-     emptyText={data?.available===false?"Todavía no hay inventario suficiente para calcular propuestas.":"No hay transferencias para los filtros seleccionados."}/>
+     emptyText={data?.available===false?"Sin inventario suficiente.":"Sin transferencias para estos filtros."}/>
    </>}
-   <p className="fm-transfer-explainer">
-    El Transferidor no confirma envíos ni recepciones. Las propuestas se recalculan al consultar
-    la pantalla con el stock sincronizado de Farmatic. Esta primera versión incluye únicamente
-    referencias identificables como parafarmacia mediante CN; los códigos sin equivalencia fiable
-    quedan pendientes. Un movimiento en tránsito puede seguir apareciendo hasta que ambos
-    establecimientos hayan actualizado su inventario.
-   </p>
+
   </section>
  </div>;
 }

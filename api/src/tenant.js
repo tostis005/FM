@@ -109,7 +109,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       const {rows}=await pool.query(
         'SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1',
         [req.context.client.slug]);
-      res.json({days:Number(rows[0]?.days??20),defaultDays:20});
+      res.json({days:Number(rows[0]?.days??30),defaultDays:30});
     }catch(e){next(e)}
   });
   app.put("/api/tenant/stock-objetivo",...requireTenantManager(),async(req,res,next)=>{

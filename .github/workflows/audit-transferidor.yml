@@ -19,65 +19,45 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
-          [[ "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ && "$VPS_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
           chmod 600 ~/.ssh/id_fm
           ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
           ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
           test -s ~/.ssh/known_hosts
-      - name: Diagnóstico agregado de las fuentes en producción (solo lectura)
+      - name: Auditoría agregada y de solo lectura del stock y los sinónimos en producción
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -P pager=off -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
           BEGIN READ ONLY;
           SET LOCAL statement_timeout='65000ms';
-          SELECT 'FARMACIAS_ACTIVAS' AS tipo, count(*)::int AS cantidad
-           FROM farmetrica.farmacias f WHERE f.cliente_slug='ampedia' AND f.activo=true
+          SELECT 'FARMACIAS_ACTIVAS' AS tipo, count(*)::int AS cantidad FROM farmetrica.farmacias f
+           WHERE f.cliente_slug='ampedia' AND f.activo=true
             AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia';
           SELECT 'STOCK_POR_FARMACIA' AS tipo, upper(btrim(a.farmacia_codigo)) AS codigo,
            count(*)::int AS fichas,
            count(*) FILTER(WHERE a.stock_actual>0)::int AS fichas_stock,
            count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{6,7}$')::int AS stock_con_cn,
-           count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(to_jsonb(a)->>'cn_normalizado',''))~'^[0-9]{6,7}$')::int AS stock_cn_normalizado,
-           count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{6,7}$'
-               AND left(btrim(a.codigo_nacional),6)::int<400000)::int AS stock_parafarmacia
-          FROM ampedia.articulos a
-          GROUP BY 2 ORDER BY 2;
-          SELECT 'CORRESPONDENCIAS' AS tipo,
-           count(*)::int AS filas,
-           count(*) FILTER(WHERE nullif(btrim(codigo_nacional_normalizado),'') IS NOT NULL)::int AS cn,
-           count(*) FILTER(WHERE nullif(btrim(ean_gtin),'') IS NOT NULL)::int AS ean
-          FROM ampedia.fm_producto_correspondencias;
-          SELECT 'COLUMNAS_CORRESPONDENCIAS' AS tipo,string_agg(column_name,', ' ORDER BY ordinal_position) AS columnas
-          FROM information_schema.columns WHERE table_schema='ampedia'
-           AND table_name='fm_producto_correspondencias';
-          SELECT 'SINONIMOS_EXISTEN' AS tipo,to_regclass('ampedia.sinonimos')::text AS tabla;
-          SELECT 'COBERTURA_CNN_PARA' AS tipo,count(DISTINCT upper(btrim(farmacia_codigo))||':'||btrim(codigo_nacional))::int AS pares_farmacia_cn,
-           count(DISTINCT btrim(codigo_nacional))::int AS referencias
-          FROM ampedia.articulos
-          WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))~'^[0-9]{6,7}$'
-           AND left(btrim(codigo_nacional),6)::int<400000;
-          SELECT 'COLUMNAS_SINONIMOS' AS tipo,string_agg(column_name,', ' ORDER BY ordinal_position) AS columnas
-           FROM information_schema.columns WHERE table_schema='ampedia' AND table_name='sinonimos';
+           count(*) FILTER(WHERE a.stock_actual>0 AND btrim(coalesce(to_jsonb(a)->>'cn_normalizado',''))~'^[0-9]{6,7}$')::int AS stock_cn_normalizado
+          FROM ampedia.articulos a GROUP BY 2 ORDER BY 2;
           SELECT 'FICHAS_FORMATO' AS tipo,
            count(*) FILTER(WHERE stock_actual>0 AND codigo_nacional IS NULL)::int AS cn_nulos,
            count(*) FILTER(WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))='')::int AS cn_vacios,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))~'^[0-9]{8,14}::int AS cn_formato_ean,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{6,7}::int AS erp_seis_siete,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14})::int AS erp_ean
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))~'^[0-9]{8,14}$')::int AS cn_ean,
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{6,7}$')::int AS id_erp_seis_siete,
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14}$')::int AS id_erp_ean
           FROM ampedia.articulos;
           SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
+           count(*) FILTER(WHERE btrim(s.codigo)~'^[0-9]{8,14}$')::int AS ean_validos,
+           count(*) FILTER(WHERE btrim(s.codigo)~'^[0-9]{6,7}$')::int AS cn_validos
           FROM ampedia.sinonimos s;
           SELECT 'SINONIMOS_POR_FARMACIA' AS tipo,upper(btrim(s.farmacia_codigo)) AS farmacia,
            count(*)::int AS filas,
            count(*) FILTER(WHERE btrim(s.codigo)~'^[0-9]{8,14}$')::int AS ean_validos,
            count(DISTINCT btrim(s.codigo))::int AS codigos
           FROM ampedia.sinonimos s GROUP BY 2 ORDER BY 2;
-          SELECT 'IDENTIFICADORES_CRUZADOS' AS tipo,upper(btrim(a.farmacia_codigo)) AS farmacia,
-           count(*)::int AS articulos_con_codigo_ean,
+          SELECT 'EAN_EN_STOCK' AS tipo,upper(btrim(a.farmacia_codigo)) AS farmacia,
+           count(*)::int AS articulos_con_ean,
            count(*) FILTER(WHERE a.stock_actual>0)::int AS con_stock_positivo
           FROM ampedia.articulos a JOIN ampedia.sinonimos s
            ON upper(btrim(a.farmacia_codigo))=upper(btrim(s.farmacia_codigo))
@@ -93,244 +73,16 @@ jobs:
            WHERE btrim(s.codigo)~'^[0-9]{8,14}$'
            GROUP BY 1,2
           )
-          SELECT 'EAN_COMPARTIDOS' AS tipo,
-           count(*)::int AS referencias_en_varias_farmacias,
-           count(*) FILTER(WHERE hay_stock)::int AS con_stock_para_transferir
+          SELECT 'EAN_COMPARTIDOS' AS tipo,count(*)::int AS referencias_en_varias,
+           count(*) FILTER(WHERE hay_stock)::int AS con_stock
           FROM (SELECT ean,bool_or(stock>0) AS hay_stock FROM linked
            GROUP BY ean HAVING count(DISTINCT farmacia)>1) x;
           ROLLBACK;
           SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
+      - name: Confirmar versión de API desplegada
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
             cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS cn_formato_ean,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{6,7})::int AS erp_seis_siete,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14}::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS erp_seis_siete,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14})::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS cn_formato_ean,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{6,7}::int AS erp_seis_siete,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14}::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS erp_seis_siete,
-           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14}::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
-          '
-)::int AS erp_ean
-          FROM ampedia.articulos;
-          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{8,14})::int AS ean_validos,
-           count(*) FILTER(WHERE to_jsonb(s)->>'codigo' ~ '^[0-9]{6,7})::int AS cn_validos
-          FROM ampedia.sinonimos s;
-          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
-           count(*)::int AS filas
-          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
-          GROUP BY key ORDER BY key;
-          ROLLBACK;
-          SQL
-      - name: Comprobar versión y errores del servicio sin volcar datos personales
-        run: |
-          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
-            set -eu
-            cd /opt/farmawao
-            echo "VERSION_TRANSFERIDOR:"
-            if test -f api/src/transferidor.js; then
-              grep -c "const emptyReason" api/src/transferidor.js || true
-            else
-              echo "archivo no encontrado"
-            fi
-            echo "SERVICIOS:"
-            docker compose ps --status running --services | grep -E "^(api|db|web)$" || true
-            echo "ERROR_HTTP_TRANSFERIDOR_RECIENTE:"
-            docker compose logs --tail=200 --no-color api 2>&1 |
-              grep -Ei "transferidor|invalid input|column.*does not exist|statement timeout" |
-              tail -n 10 || true
+            echo VERSION_TRANSFERIDOR
+            test -f api/src/transferidor.js && grep -c "const emptyReason" api/src/transferidor.js || true
           '

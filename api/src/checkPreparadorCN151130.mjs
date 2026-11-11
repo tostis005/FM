@@ -39,6 +39,42 @@ try{
  const selected=allSuppliers.filter(s=>normalized(s.nombre).includes("LOREAL"));
  out.laboratorios=selected.map(s=>({id:s.id,name:s.nombre}));
  out.erpRows=article.length;
+ // Evidencia propia del artículo: recepciones por ID ERP exacto y proveedor
+ // local de la misma farmacia. No se deduce ningún dato desde otros artículos.
+ try{
+  const {rows:receiptEvidence}=await pool.query({text:`
+   WITH own_receipts AS (
+    SELECT h.farmacia_codigo,
+     CASE WHEN btrim(coalesce(h.proveedor_origen_id::text,'')) ~ '^[0-9]+$'
+      THEN coalesce(nullif(ltrim(btrim(h.proveedor_origen_id::text),'0'),''),'0')
+      ELSE upper(btrim(coalesce(h.proveedor_origen_id::text,''))) END AS provider_code,
+     count(*)::int AS lineas,max(h.fecha) AS ultima
+    FROM "${schema}".fm_recepciones_lineas l
+    JOIN "${schema}".fm_recepciones_cabeceras h
+     ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen
+      AND h.documento_id=l.documento_id
+    WHERE l.articulo_origen_id::text=$1
+     AND h.lineas_completas AND NOT h.eliminada_logicamente
+     AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+     AND NOT l.eliminada_logicamente AND l.cantidad>0 AND l.devuelta IS NOT TRUE
+    GROUP BY h.farmacia_codigo,provider_code
+   )
+   SELECT coalesce(p.nombre,'SIN_PROVEEDOR_UNIFICADO') AS nombre,
+    coalesce(p.clase,'SIN_CLASIFICAR') AS clase,
+    sum(r.lineas)::int AS lineas,max(r.ultima) AS ultima
+   FROM own_receipts r
+   LEFT JOIN farmetrica.proveedores_unificados_alias a
+    ON a.cliente_slug=$2 AND upper(btrim(a.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
+     AND (CASE WHEN btrim(a.codigo_origen) ~ '^[0-9]+$'
+      THEN coalesce(nullif(ltrim(btrim(a.codigo_origen),'0'),''),'0')
+      ELSE upper(btrim(a.codigo_origen)) END)=r.provider_code
+   LEFT JOIN farmetrica.proveedores_unificados p
+    ON p.cliente_slug=$2 AND p.id=a.proveedor_id
+   GROUP BY p.id,p.nombre,p.clase ORDER BY ultima DESC LIMIT 15`,
+    values:[CN,SLUG],query_timeout:22000});
+  out.ownReceiptEvidence=receiptEvidence.map(r=>({
+   proveedor:r.nombre,clase:r.clase,lineas:r.lineas,ultima:r.ultima}));
+ }catch(e){out.ownReceiptError=e.code||e.name||"QUERY_ERROR"}
  // A qué proveedor real corresponde el código de laboratorio Farmatic.
  const labCodes=[...new Set(article.map(r=>String(r.laboratorio||"").trim()).filter(Boolean))];
  const {rows:erpSuppliers}=await pool.query({text:`

@@ -501,24 +501,36 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           aria-label="Ordenar por artículo">Artículo <span aria-hidden="true">{tableSort==="article:asc"?"▲":tableSort==="article:desc"?"▼":"↕"}</span></button>
         </th>
        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       <th colSpan={7} className="fm-lab-order-total-group">Stock y propuesta conjunta</th>
+       <th className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>Almacén</th>
+       <th colSpan={5} className="fm-lab-order-total-group">Totales y pedido</th>
       </tr><tr>
        {chosen.flatMap((p,i)=>["Stock","V. 12m","V. 3m","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
         .map((name,k)=><th key={p.id+"-"+k} title={name}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       <th title="Existencias de las farmacias">Total farmacias</th>
-       <th title="Existencias del almacén, solo parafarmacia">Almacén</th>
-       <th title="Farmacias más almacén">Stock global</th>
-       <th>Vendido</th><th title={tab==="parafarmacia"?"Compra calculada con las existencias de todas las farmacias y del almacén cuando está disponible":"Suma de recomendaciones individuales por farmacia"}>Propuesta</th>
+       {["Stock","V. 12m","V. 3m","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
+        .map((name,k)=><th key={"alm-"+k} className="fm-lab-order-warehouse-head"
+         title={k===0?"Existencias reales del almacén":k<4?"Ventas registradas en el origen ALMACEN, si existen":"El almacén no genera propuestas de compra independientes"}>{name}</th>)}
+       <th title="Unidades en las farmacias, sin contar el almacén">Total farm.</th>
+       <th title="Unidades de farmacias más almacén, solo en parafarmacia">Total + ALM</th>
+       <th title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>Propuesta</th>
        <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
       </tr></thead>
       <tbody>{tablePageRows.map(row=>{
        const line=showLine(row);
-       return <tr key={row.referencia} className={isExcludedOrderRow(row)?"fm-lab-order-excluded":""}>
+       return <tr key={row.referencia}
+         className={[
+          isExcludedOrderRow(row)?"fm-lab-order-excluded":"",
+          row._visualGroupSize>1?"fm-lab-family-row":"",
+          row._visualGroupFirst&&row._visualGroupSize>1?"fm-lab-family-first":"",
+          row._visualGroupLast&&row._visualGroupSize>1?"fm-lab-family-last":""
+         ].filter(Boolean).join(" ")}>
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
          {row.provisional&&<small>CN pendiente</small>}</td>
         <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>
-          {row.nombre}{isExcludedOrderRow(row)&&<small>Baja · pedido manual permitido</small>}</td>
+          {row.nombre}
+           {row._visualGroupSize>1&&<span className={"fm-lab-family-badge fm-lab-family-"+row._visualKind}
+            title="Referencias relacionadas visualmente; cada CN se compra y contabiliza por separado">{row._visualLabel}</span>}
+           {isExcludedOrderRow(row)&&<small>Baja · pedido manual permitido</small>}</td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [row.metricsReady?m.stock??null:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,
@@ -556,11 +568,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          </td>
        </tr>;
       })}
-      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+9}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
+      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+12}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
       {!loading&&currentRows.length>0&&!tableVisibleRows.length&&<tr>
-        <td colSpan={chosen.length*5+9}>Ningún artículo coincide con los filtros de columna.</td>
+        <td colSpan={chosen.length*5+12}>Ningún artículo coincide con los filtros de columna.</td>
        </tr>}
-       {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+9}>
+       {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+12}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":

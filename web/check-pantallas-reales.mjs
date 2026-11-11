@@ -16,6 +16,9 @@ await page.route("**/api/**",async route=>{
    clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules};
  else if(path==="/api/tenant/promociones")body={promotions:[]};
  else if(path==="/api/tenant/farmacias")body=pharmacies;
+ else if(path==="/api/tenant/proveedores-unificados")body=[{id:"1",key:"P:1",name:"Proveedor de prueba",class:"DIRECTO",origins:[]}];
+ else if(path==="/api/tenant/proveedores")body=[];
+ else if(path==="/api/tenant/pedidos/frecuencias")body={items:[]};
  else if(path==="/api/analytics/pantallas/ventas-tickets/lineas"){
   body={lines:[
     {lineId:"1",articleId:"ART-01",units:2,unitPrice:6,discount:5,discountType:"porcentaje",amount:12,historicalCost:2},
@@ -35,9 +38,6 @@ await page.route("**/api/**",async route=>{
    "productos":{cn:"654321",sourceId:"ART-01",name:"Omeprazol real",
      family:"Digestivo",laboratory:"Lab A",pharmacyName:"Farmacia Centro",
      pvp:8,pmc:2.5,stock:4},
-   "proveedores-condiciones":{supplierCode:"PR1",supplierName:"Proveedor de prueba",
-     pharmacyName:"Farmacia Centro",products:2,units:12,receipts:3,
-     amount:30,lastAt:"2026-10-18T00:00:00Z"},
    "rentabilidad-segmentos":{family:"Digestivo",sales:32,units:4,coveredSales:32,
      margin:12,costedReferences:2,references:2},
    "stock-historico":{at:"2026-10-17",pharmacyName:"Farmacia Centro",
@@ -55,7 +55,6 @@ try{
   ["ventas-devoluciones","DEV-REAL"],
   ["compras-devoluciones","ALB-REAL"],
   ["productos","Omeprazol real"],
-  ["proveedores-condiciones","Proveedor de prueba"],
   ["rentabilidad-segmentos","Digestivo"]
  ]){
   await page.goto(BASE+"/"+path,{waitUntil:"domcontentloaded"});
@@ -64,6 +63,12 @@ try{
   assert.equal(await page.getByText("Ver ejemplo de demo").count(),0,path);
   assert.ok(requests.some(r=>r.section===path),path+" debe consultar la API real");
  }
+ // La URL histórica ya no enseña indicadores de compras netas y recepciones.
+ await page.goto(BASE+"/proveedores-condiciones",{waitUntil:"domcontentloaded"});
+ await page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
+ await page.getByText("Proveedor de prueba").first().waitFor({timeout:15000});
+ assert.ok(!requests.some(r=>r.section==="proveedores-condiciones"),
+  "No debe volver a solicitar el análisis antiguo de proveedores");
  await page.goto(BASE+"/compras-devoluciones",{waitUntil:"domcontentloaded"});
  await page.getByText("Cooperativa Centro",{exact:true}).waitFor();
  await page.goto(BASE+"/ventas-tickets",{waitUntil:"domcontentloaded"});

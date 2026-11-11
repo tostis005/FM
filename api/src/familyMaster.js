@@ -1,6 +1,7 @@
 // Maestro de familias: reconciliación por IdArticu/CN entre Farmatic de referencia
 // y códigos locales, sin alterar ningún maestro ni artículo sincronizado del ERP.
 import {randomUUID} from "node:crypto";
+import {consolidateFamiliesByName} from "./familyNameMerge.js";
 import {familyKey,referenceKey,cleanFamilyName,selectFamilyDestination,familyNameSlug,selectNamedDestination} from "./familyMatching.js";
 
 const validId=x=>/^[1-9]\d*$/.test(String(x||""));
@@ -191,6 +192,7 @@ export async function reconcileFamilies(pool,ctx){
     [slug,JSON.stringify(planned.origins)]);
   }
   const links=await linkArticles(db,schema,slug,refs);
+  const nameConsolidation=await consolidateFamiliesByName(db,slug);
   // La nueva conciliación puede sustituir una familia local provisional
   // por otra global; retirar únicamente los grupos vacíos no editados.
   await db.query(
@@ -216,6 +218,7 @@ export async function reconcileFamilies(pool,ctx){
    methods:Object.fromEntries(counts.map(x=>[x.metodo,Number(x.n)])),
    linked:links.linked,totalArticles:Number(coverage[0]?.all_articles||0),
    unresolved:Number(coverage[0]?.all_articles||0)-Number(coverage[0]?.linked||0),
+   mergedSameName:nameConsolidation.merged,
    referencePharmacies:refs};
  }catch(e){await db.query("ROLLBACK");throw e;}
  finally{db.release();}

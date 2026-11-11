@@ -29,10 +29,15 @@ export function validateApprovedFamilyPair(scored,approval,aliases,cnById){
  for(const f of [source,dest]){
   const cns=cnById.get(String(f.id))||new Set();
   if(cns.size===0)throw Error("Familia sin CN contrastables");
-  const compatible=[...cns].filter(cn=>approval.segment==="PARAFARMACIA"?
-    Number(cn)<400000:Number(cn)>=400000).length;
-  if(compatible/cns.size<0.95)
-   throw Error("Mezcla de medicamentos/parafarmacia en familia "+f.id);
+  const below=[...cns].filter(cn=>Number(cn)<400000).length/cns.size;
+  if(approval.segment==="SIN_DETERMINAR"){
+   if(below>0.05&&below<0.95)
+    throw Error("Familia sin clasificar con productos de ambos segmentos: "+f.id);
+  }else{
+   const compatible=approval.segment==="PARAFARMACIA"?below:1-below;
+   if(compatible<0.95)
+    throw Error("Mezcla de medicamentos/parafarmacia en familia "+f.id);
+  }
  }
  return true;
 }
@@ -43,7 +48,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
  const seenSources=new Set(),seenTargets=new Set();
  for(const a of approvals){
   if(!id(a.sourceId)||!id(a.destinationId)||a.sourceId===a.destinationId||
-     typeof a.slug!=="string"||!["MEDICACION","PARAFARMACIA"].includes(a.segment)||
+     typeof a.slug!=="string"||!["MEDICACION","PARAFARMACIA","SIN_DETERMINAR"].includes(a.segment)||
      seenSources.has(a.sourceId)||seenSources.has(a.destinationId)||seenTargets.has(a.sourceId))
    throw Error("Lista de fusiones inválida o con cadenas conflictivas");
   seenSources.add(a.sourceId);seenTargets.add(a.destinationId);
@@ -126,13 +131,12 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
     "UPDATE farmetrica.familias_globales_articulos"+
     " SET familia_id=$3,actualizado_en=now()"+
     " WHERE cliente_slug=$1 AND familia_id=$2",[slug,source.id,dest.id]);
-   if(rename){
-    await db.query(
-     "UPDATE farmetrica.familias_globales SET nombre=$3,nombre_manual=true,"+
-     " actualizado_en=now() WHERE cliente_slug=$1 AND id=$2"+
-     " AND NOT nombre_manual",[slug,dest.id,rename]);
-    dest.name=rename;
-   }
+   await db.query(
+    "UPDATE farmetrica.familias_globales SET"+
+    " nombre=coalesce($3,nombre),nombre_manual=true,actualizado_en=now()"+
+    " WHERE cliente_slug=$1 AND id=$2 AND NOT nombre_manual",
+    [slug,dest.id,rename]);
+   if(rename)dest.name=rename;
    await db.query("UPDATE farmetrica.familias_globales SET activo=false,"+
     " fusionado_a=$3,actualizado_en=now()"+
     " WHERE cliente_slug=$1 AND id=$2 AND activo",[slug,source.id,dest.id]);

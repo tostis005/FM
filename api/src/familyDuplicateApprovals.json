@@ -1,0 +1,58 @@
+[
+  {
+    "sourceId": "1146",
+    "destinationId": "847",
+    "slug": "homeopatia",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 300
+  },
+  {
+    "sourceId": "845",
+    "destinationId": "1154",
+    "slug": "dietoterapicos",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 100
+  },
+  {
+    "sourceId": "846",
+    "destinationId": "1157",
+    "slug": "efectos y accesorios",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 280
+  },
+  {
+    "sourceId": "1081",
+    "destinationId": "1157",
+    "slug": "efectos y accesorios",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 210
+  },
+  {
+    "sourceId": "900",
+    "destinationId": "1157",
+    "slug": "efectos y accesorios",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 45
+  },
+  {
+    "sourceId": "965",
+    "destinationId": "1130",
+    "slug": "gafas",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 19
+  },
+  {
+    "sourceId": "877",
+    "destinationId": "1130",
+    "slug": "gafas",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 18
+  },
+  {
+    "sourceId": "1056",
+    "destinationId": "1130",
+    "slug": "gafas",
+    "segment": "SIN_DETERMINAR",
+    "minimumShared": 17
+  }
+]

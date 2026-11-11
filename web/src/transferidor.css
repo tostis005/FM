@@ -1,0 +1,25 @@
+.fm-transferidor{display:flex;flex-direction:column;gap:16px}
+.fm-transfer-controls{display:flex;flex-direction:column;gap:14px;padding:18px}
+.fm-transfer-tabs{display:flex;gap:8px;flex-wrap:wrap}
+.fm-transfer-tabs .btn{min-width:115px}
+.fm-transfer-filters{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:14px}
+.fm-transfer-filters label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:600;color:var(--text-secondary,#52655c);min-width:0}
+.fm-transfer-filters input,.fm-transfer-filters select{width:100%;height:39px;min-width:0;border-radius:8px;border:1px solid #ccd9d0;padding:0 10px;background:var(--surface,#fff);color:var(--text,#27392f);font:inherit;font-weight:400}
+.fm-transfer-filter-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary,#64746b)}
+.fm-transfer-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.fm-transfer-summary>div{border:1px solid #dce7de;border-radius:11px;background:var(--surface,#fff);padding:15px;display:flex;flex-direction:column;gap:7px}
+.fm-transfer-summary svg{color:#267e51}
+.fm-transfer-summary span{color:var(--text-secondary,#5f6e66);font-size:12px}
+.fm-transfer-summary strong{font-size:22px;font-variant-numeric:tabular-nums}
+.fm-transfer-summary small{font-size:11px;color:var(--text-secondary,#5f6e66)}
+.fm-transfer-table{padding:16px;min-width:0}
+.fm-transfer-table-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.fm-transfer-table-title h2{margin:0 0 5px;font-size:17px}
+.fm-transfer-table-title p{margin:0;color:var(--text-secondary,#5f6e66);font-size:12px}
+.fm-transfer-table-title>span{white-space:nowrap;color:#237049;font-size:12px;font-weight:700}
+.fm-transfer-main-table td,.fm-transfer-main-table th{white-space:nowrap}
+.fm-transfer-main-table td:nth-child(2){max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.fm-transfer-units{color:#237049;font-variant-numeric:tabular-nums}
+.fm-transfer-explainer{margin:14px 0 0;color:var(--text-secondary,#5f6e66);font-size:12px;line-height:1.6}
+@media(max-width:1050px){.fm-transfer-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-transfer-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:570px){.fm-transfer-filters{grid-template-columns:1fr}.fm-transfer-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-transfer-controls,.fm-transfer-table{padding:12px}.fm-transfer-table-title{flex-direction:column}.fm-transfer-tabs .btn{min-width:0;flex:1}}

@@ -6,6 +6,7 @@ const OPERATIONS=[["ver","Ver"],["crear","Crear"],["editar","Editar"],["eliminar
  ["importar","Importar"],["exportar","Exportar"]];
 const ROLE_NAMES={administrador:"Administrador",gestor:"Gestor",
  farmacia:"Personal de farmacia",colaborador:"Colaborador"};
+const MODULE_NAMES={dashboard:"Inicio",acciones:"Trabajo y ahorro",asistente:"Asistente IA"};
 const empty=()=>({name:"",baseRole:"farmacia",modules:[],sections:[],permissions:{}});
 async function api(path,options={}){
  const response=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
@@ -44,6 +45,10 @@ export default function Perfiles({client,role="superadministrador"}){
   load().catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});
   return ()=>{active=false};
  },[client,role]);
+ const visibleSections=useMemo(()=>sections.filter(s=>s.profileVisible!==false),[sections]);
+ const visibleModuleIds=useMemo(()=>new Set([...visibleSections.map(s=>s.module),"asistente"]),[visibleSections]);
+ const visibleSectionIds=useMemo(()=>new Set(visibleSections.map(s=>s.id)),[visibleSections]);
+ const visibleModules=useMemo(()=>modules.filter(m=>visibleModuleIds.has(m.id)),[modules,visibleModuleIds]);
  const activeIds=useMemo(()=>new Set(draft.modules===null?modules.map(m=>m.id):draft.modules||[]),
   [draft.modules,modules]);
  function edit(profile){
@@ -152,8 +157,8 @@ export default function Perfiles({client,role="superadministrador"}){
       </div>
       <small>{ROLE_NAMES[p.baseRole]||p.baseRole} · {Number(p.userCount||0)} {Number(p.userCount||0)===1?"usuario asignado":"usuarios asignados"}</small>
       <div className="fm-profile-card-scope">
-       <span>{p.modules===null?"Todos los módulos":(p.modules||[]).length+" módulos"}</span>
-       <span>{p.sections===null?"Todas las páginas":(p.sections||[]).length+" páginas"}</span>
+       <span>{p.modules===null?"Todos los módulos":(p.modules||[]).filter(id=>visibleModuleIds.has(id)).length+" módulos"}</span>
+       <span>{p.sections===null?"Todas las páginas":(p.sections||[]).filter(id=>visibleSectionIds.has(id)).length+" páginas"}</span>
       </div>
      </div>
      <div className="fm-profile-actions">
@@ -205,21 +210,21 @@ export default function Perfiles({client,role="superadministrador"}){
         (scope===null||scope.sections.includes(s.id))).map(s=>s.id)}))}/>
       Heredar todas las páginas de los módulos autorizados</label>
     </div>
-    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Marca las operaciones y las páginas autorizadas en cada módulo</span></div>
+    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Solo se muestran páginas actuales; los accesos históricos se conservan</span></div>
     <div className="fm-profile-matrix" role="group" aria-label="Permisos por módulo">
      <div className="fm-profile-matrix-header"><span>Módulo / pantallas</span>
       {OPERATIONS.map(([key,label])=><span key={key}>{label}</span>)}</div>
-     {modules.map(m=>{
+     {visibleModules.map(m=>{
       const active=activeIds.has(m.id);
       const operations=draft.permissions[m.id]||[];
-      const children=sections.filter(s=>s.module===m.id);
+      const children=visibleSections.filter(s=>s.module===m.id);
       return <div className="fm-profile-module" key={m.id}>
        <div className="fm-profile-matrix-row">
         <label className="fm-profile-module-name">
          <input type="checkbox" checked={active}
           disabled={draft.modules===null||busy||Boolean(scope&&!scope.modules.includes(m.id)&&!active)}
           onChange={e=>toggleModule(m.id,e.target.checked)}/>
-         <strong>{m.name}</strong>
+         <strong>{MODULE_NAMES[m.id]||m.name}</strong>
         </label>
         {OPERATIONS.map(([op,label])=><label key={op} className="fm-profile-operation"
          title={label+" · "+m.name}><input type="checkbox" checked={active&&operations.includes(op)}

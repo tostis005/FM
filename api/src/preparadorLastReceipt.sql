@@ -115,7 +115,9 @@ received_with_cn AS MATERIALIZED (
  -- proceda de una farmacia histórica. El ámbito visible se determina por
  -- el catálogo del propio artículo en las farmacias actuales autorizadas.
  SELECT cn FROM (
-  SELECT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
+  SELECT cn FROM received_with_cn
+  WHERE pharmacy_id=ANY($2::int[])
+   OR ($1='ampedia' AND pharmacy_code IN ('AMP','ALMACEN'))
   UNION
   SELECT coalesce(
    CASE WHEN btrim(coalesce(ar.codigo_nacional,'')) ~ '^[0-9]{6,7}$'

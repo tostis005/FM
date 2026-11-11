@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {pickingListChannelView} from "./pickingListChannelView.js";
+import {pickingListChannelView,pickingListRowsForSite} from "./pickingListChannelView.js";
 
 const report={
  channels:["web","app"],totals:{units:8,lines:3},channelTotals:{
@@ -35,4 +35,35 @@ test("Si un canal desaparece, no se mezclan datos de otros canales",()=>{
  const unknown=pickingListChannelView(report,"missing");
  assert.deepEqual(unknown.rows,[]);
  assert.equal(unknown.totals.units,0);
+});
+
+test("La vista de cada farmacia solo incluye referencias con unidades para recoger",()=>{
+ const rows=[
+  {key:"A",stock:[{id:"6",stock:10,planned:3},{id:"1",stock:7,planned:2}]},
+  {key:"B",stock:[{id:"6",stock:6,planned:4},{id:"1",stock:8,planned:0}]},
+  {key:"C",stock:[{id:"6",stock:4,planned:0},{id:"1",stock:10,planned:1}]},
+  {key:"D",stock:[{id:"6",stock:5,planned:0},{id:"1",stock:9,planned:0}]}
+ ];
+ assert.deepEqual(pickingListRowsForSite(rows,"1").map(r=>r.key),["A","C"]);
+ assert.deepEqual(pickingListRowsForSite(rows,6).map(r=>r.key),["A","B"]);
+ assert.deepEqual(pickingListRowsForSite(rows,"nueva"),[]);
+ assert.equal(pickingListRowsForSite(rows,undefined),rows);
+ assert.deepEqual(rows[1].stock[1].planned,0,"La selección no modifica asignaciones");
+});
+
+test("Filtra según las unidades del canal seleccionado, no las del total general",()=>{
+ const source={rows:[
+  {key:"A",stock:[{id:"1",planned:2},{id:"6",planned:0}],channelSlices:{
+   web:{required:2,planned:[0,2]},app:{required:1,planned:[1,0]}
+  }},
+  {key:"B",stock:[{id:"1",planned:1},{id:"6",planned:0}],channelSlices:{
+   web:{required:1,planned:[1,0]}
+  }}
+ ]};
+ const web=pickingListChannelView(source,"web");
+ assert.deepEqual(pickingListRowsForSite(web.rows,"1").map(r=>r.key),["B"]);
+ assert.deepEqual(pickingListRowsForSite(web.rows,"6").map(r=>r.key),["A"]);
+ const app=pickingListChannelView(source,"app");
+ assert.deepEqual(pickingListRowsForSite(app.rows,"1").map(r=>r.key),["A"]);
+ assert.deepEqual(pickingListRowsForSite(app.rows,"6"),[]);
 });

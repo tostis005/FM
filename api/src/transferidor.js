@@ -1,12 +1,13 @@
 // Transferidor (solo lectura). Ninguna propuesta modifica el stock ni ejecuta movimientos.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {cnCategory} from "./laboratoryOrderPlanner.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","targetOrigin","targetDestination"]);
 const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination"]);
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
-const identity=cn=>/^\d{6,7}$/.test(String(cn||""))&&Number(cn)>=1&&Number(cn)<400000;
+const identity=cn=>cnCategory(cn)==="parafarmacia";
 const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 
 // El plan se calcula de una vez, antes de filtrar o paginar. Cada donante
@@ -101,67 +102,69 @@ export function filterTransferPlan(plan,options){
  return {rows:result.slice((options.page-1)*options.size,options.page*options.size),
   total:result.length,units:result.reduce((sum,r)=>sum+r.units,0)};
 }
+// La misma clave que en el Preparador: IdArticu = articulos.origen_id.
+// Segmento parafarmacia: seis primeros dígitos menores que 400000.
 function inventorySql(schema){
- const q='"'+schema+'"',source=pharmacyDataCodeSQL("f");
+ const q='"'+schema+'"',code=pharmacyDataCodeSQL("f");
  return `WITH chosen AS MATERIALIZED (
- SELECT f.id,${source} AS source_code
+ SELECT f.id,${code} AS source_code
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND f.activo=true
-  AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
-), stock_articles AS MATERIALIZED (
- -- IdArticu (origen_id) es el código nacional compartido en Farmatic y Preparador.
- -- Parafarmacia: 1..399999; medicación: a partir de 400000.
- -- No depender de articulos.codigo_nacional ni de los sinónimos EAN.
- SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
-  a.nombre,a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
+ AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
+), candidates AS MATERIALIZED (
+ SELECT DISTINCT a.origen_id::text AS cn
  FROM chosen f JOIN ${q}.articulos a
-   ON upper(btrim(a.farmacia_codigo))=f.source_code
- WHERE btrim(a.origen_id::text)~'^[0-9]{6,7}$'
-  AND btrim(a.origen_id::text)::bigint BETWEEN 1 AND 399999
-), donors AS MATERIALIZED (
- SELECT DISTINCT article_id FROM stock_articles WHERE stock>0
+  ON upper(btrim(a.farmacia_codigo))=f.source_code
+ WHERE a.stock_actual>0
+  AND a.origen_id::text~'^[0-9]{6,7}$'
+  AND left(a.origen_id::text,6)::int BETWEEN $3::int AND $4::int
+  AND left(a.origen_id::text,6)::int<400000
 ), eligible AS MATERIALIZED (
- SELECT a.* FROM stock_articles a JOIN donors d ON d.article_id=a.article_id
-), sales AS MATERIALIZED (
- SELECT a.fid,a.article_id,coalesce(v.units3,0)::float8 AS units3,
-  coalesce(v.units12,0)::float8 AS units12
+ SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
+ a.origen_id::text AS cn,a.nombre,
+ a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
+ FROM chosen f
+ JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
+ JOIN candidates c ON c.cn=a.origen_id::text
+), sales_per_article AS MATERIALIZED (
+ -- Igual que el Preparador: líneas documentales por artículo ERP y farmacia,
+ -- unidas a las cabeceras válidas, con fecha España.
+ SELECT a.fid,a.article_id,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+   FILTER(WHERE h.fecha>=(now() AT TIME ZONE 'Europe/Madrid')::date-interval '89 days'),0)::float8 AS units3,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END),0)::float8 AS units12
  FROM eligible a
- CROSS JOIN LATERAL (
-  SELECT sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
-   FILTER(WHERE h.fecha>=current_date-interval '89 days') AS units3,
-   sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END) AS units12
-  FROM ${q}.fm_ventas_lineas l
-  JOIN ${q}.fm_ventas_cabeceras h
-   ON h.farmacia_codigo=l.farmacia_codigo
-   AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
-   AND h.lineas_completas AND NOT h.eliminado_logicamente
-   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
-   AND h.fecha>=current_date-interval '364 days'
-   AND h.fecha<current_date+interval '1 day'
-  WHERE l.farmacia_codigo=a.source_code AND l.articulo_origen_id=a.article_id
-   AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
- ) v
+ JOIN ${q}.fm_ventas_lineas l ON l.farmacia_codigo=a.source_code
+  AND l.articulo_origen_id=a.article_id AND NOT l.eliminada_logicamente
+  AND coalesce(l.anulada,false)=false
+ JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
+  AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
+  AND h.lineas_completas AND NOT h.eliminado_logicamente
+  AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+  AND h.fecha>=(now() AT TIME ZONE 'Europe/Madrid')::date-interval '364 days'
+  AND h.fecha<(now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
+ GROUP BY a.fid,a.article_id
 ), pending AS MATERIALIZED (
  SELECT p.farmacia_id AS fid,l.line->>'articulo' AS article_id,
-  coalesce(sum((assign.item->>'unidades')::float8),0)::float8 AS ordered
+  coalesce(sum((assignment.item->>'unidades')::float8),0)::float8 AS ordered
  FROM farmetrica.op_pedidos p
  CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.lineas,'[]'::jsonb)) AS l(line)
- CROSS JOIN LATERAL jsonb_array_elements(coalesce(l.line->'asignaciones','[]'::jsonb)) AS assign(item)
+ CROSS JOIN LATERAL jsonb_array_elements(coalesce(l.line->'asignaciones','[]'::jsonb)) AS assignment(item)
  WHERE p.cliente_slug=$1 AND p.farmacia_id=ANY($2::int[])
- AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
+  AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
  GROUP BY p.farmacia_id,l.line->>'articulo'
 )
-SELECT a.fid::text AS "pharmacyId",a.article_id AS cn,max(a.nombre) AS name,
+SELECT a.fid::text AS "pharmacyId",a.cn,max(a.nombre) AS name,
  CASE WHEN count(a.stock)=count(*) THEN sum(a.stock)::float8 ELSE NULL END AS stock,
  min(a.stock_at) AS "stockAt",
  sum(coalesce(s.units3,0))::float8 AS "units3",
  sum(coalesce(s.units12,0))::float8 AS "units12",
  sum(coalesce(p.ordered,0))::float8 AS ordered
 FROM eligible a
-LEFT JOIN sales s ON s.fid=a.fid AND s.article_id=a.article_id
+LEFT JOIN sales_per_article s ON s.fid=a.fid AND s.article_id=a.article_id
 LEFT JOIN pending p ON p.fid=a.fid AND p.article_id=a.article_id
-GROUP BY a.fid,a.article_id
-ORDER BY a.article_id,a.fid`;
+GROUP BY a.fid,a.cn
+ORDER BY a.cn,a.fid`;
 }
 export function setupTransferidor(app,pool,{requireTenant}){
  app.get("/api/analytics/stock/transferidor",...requireTenant(),async(req,res,next)=>{
@@ -189,8 +192,15 @@ export function setupTransferidor(app,pool,{requireTenant}){
    if(available.length<2)return res.json({available:false,rows:[],total:0,page:opts.page,pageSize:opts.size,
     summary:{movements:0,units:0,products:0},
     warning:"No hay dos farmacias con inventario importado para comparar."});
-   const {rows}=await pool.query({text:inventorySql(schema),
-    values:[ctx.client.slug,available.map(p=>Number(p.id))],query_timeout:30000});
+   // Trocear el catálogo por IdArticu. Cada producto se calcula con TODAS
+   // las farmacias en su bloque; ningún movimiento puede duplicar existencias.
+   const rows=[];
+   for(let start=0;start<400000;start+=25000){
+    const part=await pool.query({text:inventorySql(schema),
+     values:[ctx.client.slug,available.map(p=>Number(p.id)),start,start+24999],
+     query_timeout:30000});
+    rows.push(...part.rows);
+   }
    const {rows:settings}=await pool.query("SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1",[ctx.client.slug]);
    const coverageDays=Math.max(1,Math.min(365,Number(settings[0]?.days)||30));
    const plan=buildGlobalTransfers(rows,available,coverageDays);

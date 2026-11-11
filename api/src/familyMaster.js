@@ -27,19 +27,26 @@ async function readSourceFamilies(db,schema,refs){
  const map=new Map();
  for(const s of articleFamilies)map.set(familyKey(s.pharmacy,s.code),
   {pharmacyCode:s.pharmacy,code:s.code,name:"",articles:Number(s.articles)});
- const {rows:fields}=await db.query(
-  "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='familias'",
-  [schema]);
- const available=["farmacia_codigo","origen_id","nombre"].every(x=>fields.some(f=>f.column_name===x));
- if(available){
+ // El sincronizador deposita el catálogo completo en farmetrica.familias.
+ // En otros clientes solo se busca dentro de su propio esquema para no
+ // atribuirles familias ajenas del ERP de Ampedia.
+ const candidates=schema==="farmetrica"?[schema]:
+  schema==="ampedia"||schema==="farmatic"?["farmetrica",schema]:[schema];
+ let available=false;
+ for(const candidate of candidates){
+  const {rows:fields}=await db.query(
+   "SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name='familias'",
+   [candidate]);
+  if(!["farmacia_codigo","origen_id","nombre"].every(x=>fields.some(f=>f.column_name===x)))continue;
+  available=true;
   const {rows:names}=await db.query({text:
    "SELECT upper(btrim(farmacia_codigo)) AS pharmacy,btrim(origen_id) AS code,"+
-   " btrim(nombre) AS name FROM "+q+".familias"+
+   " btrim(nombre) AS name FROM "+Q(candidate)+".familias"+
    " WHERE nullif(btrim(origen_id),'') IS NOT NULL",query_timeout:60000});
   for(const s of names){
    const k=familyKey(s.pharmacy,s.code);
-   const old=map.get(k)||{pharmacyCode:s.pharmacy,code:s.code,articles:0};
-   old.name=String(s.name||"");
+   const old=map.get(k)||{pharmacyCode:s.pharmacy,code:s.code,articles:0,name:""};
+   if(!old.name)old.name=String(s.name||"");
    map.set(k,old);
   }
  }

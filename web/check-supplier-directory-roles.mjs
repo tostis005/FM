@@ -6,7 +6,7 @@ const base=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const supplier={id:"1",key:"P:1",name:"Laboratorio Demo",class:"DIRECTO",origins:[
  {pharmacyCode:"ABA",sourceCode:"L1",sourceName:"Laboratorio Demo"}]};
 const pharmacies=[{id:"1",name:"Farmacia Demo",sourceCode:"ABA",databaseCode:"ABA",active:true}];
-async function setup(role,moduleEnabled=true){
+async function setup(role,moduleEnabled=true,failedAuxiliary=false){
  const page=await browser.newPage({viewport:{width:375,height:800}});
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
  const user={email:"test-"+role+"@example.invalid",name:"Pruebas",role};
@@ -19,8 +19,8 @@ async function setup(role,moduleEnabled=true){
    clients:[{slug:"ampedia",name:"Ampedia"}],
    modules:{proveedores:moduleEnabled},sections:{proveedores:role==="superadministrador"||moduleEnabled,"proveedores-condiciones":moduleEnabled},pharmacies,allowedPharmacyIds:[1]};
   else if(path==="/api/tenant/proveedores-unificados")body=[supplier];
-  else if(path==="/api/tenant/proveedores")body=[{sourceCode:"L1",name:"Laboratorio Demo",
-   origins:[{pharmacyId:"1",name:"Laboratorio Demo",source:"farmatic"}]}];
+  else if(path==="/api/tenant/proveedores"){if(failedAuxiliary){status=403;body={error:"Origen ERP no disponible"}}else body=[{sourceCode:"L1",name:"Laboratorio Demo",
+   origins:[{pharmacyId:"1",name:"Laboratorio Demo",source:"farmatic"}]}];}
   else if(path==="/api/tenant/farmacias")body=pharmacies;
   else if(path==="/api/tenant/pedidos/frecuencias")body={items:[]};
   else if(path==="/api/tenant/proveedor-documento-categorias")body=[{id:"1",name:"Tarifas",active:true}];
@@ -84,10 +84,17 @@ try{
  await superadmin.page.getByRole("button",{name:"Ver ficha y documentos"}).click();
  await superadmin.page.getByRole("heading",{name:"Laboratorio Demo"}).waitFor();
  assert.equal(await superadmin.page.getByRole("button",{name:"Nuevo contacto"}).count(),1);
+ await superadmin.page.setViewportSize({width:1366,height:850});
+ await superadmin.page.getByRole("button",{name:"Plegar menú lateral"}).click();
+ assert.equal(await superadmin.page.locator("#farmetrica-sidebar").evaluate(node=>Math.round(node.getBoundingClientRect().width)),72);
+ await superadmin.page.reload({waitUntil:"domcontentloaded"});
+ await superadmin.page.getByRole("button",{name:"Desplegar menú lateral"}).waitFor();
+ await superadmin.page.getByRole("button",{name:"Desplegar menú lateral"}).click();
+ assert.ok(await superadmin.page.locator("#farmetrica-sidebar").evaluate(node=>node.getBoundingClientRect().width)>180);
  assert.deepEqual(superadmin.errors,[]);
  await superadmin.page.close();
  
- const manager=await setup("gestor",true);
+ const manager=await setup("gestor",true,true);
  await manager.page.goto(base+"/proveedores-maestro",{waitUntil:"domcontentloaded"});
  await manager.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor({timeout:15000});
  const categoryButton=manager.page.getByRole("button",{name:"Configurar categorías documentales"});

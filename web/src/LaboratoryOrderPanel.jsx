@@ -35,7 +35,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
- const [tab,setTab]=useState("parafarmacia"),[search,setSearch]=useState("");
+ const [tab,setTab]=useState("parafarmacia");
  const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
  const [tableSort,setTableSort]=useState("original"),[tablePage,setTablePage]=useState(0),
   [tablePageSize,setTablePageSize]=useState(50);
@@ -57,7 +57,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   const next=labs.find(l=>l.key===key);
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
-  setSearch("");setError("");setColumnFilter({cn:"",article:""});setTablePage(0);
+  setError("");setColumnFilter({cn:"",article:""});setTablePage(0);
   setNotice("");
   // Pulsar un laboratorio de la agenda vuelve a lanzar la consulta incluso
   // si ya estaba seleccionado (p. ej. tras registrar pedidos/stock).
@@ -244,14 +244,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   return()=>{clearTimeout(timer);controller.abort()};
  },[clientSlug,laboratory,tab,scope,range.from,range.to,range.valid,reload]);
  const labName=labs.find(l=>l.key===laboratory)?.name||"laboratorio";
- // Buscar por CN no reejecuta el histórico: filtrar solo la tabla cargada.
- const currentRows=useMemo(()=>{
-  const term=search.trim().toLocaleLowerCase("es");
-  if(!term)return data.rows||[];
-  return (data.rows||[]).filter(row=>
-   String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(term)||
-   String(row.nombre||"").toLocaleLowerCase("es").includes(term));
- },[data.rows,search]);
+ // Búsqueda y ordenación locales: no recalcular el histórico.
+ const currentRows=data.rows||[];
  // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
  const tableVisibleRows=useMemo(()=>{
   const cn=columnFilter.cn.trim().toLocaleLowerCase("es"),
@@ -416,11 +410,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      customFrom={period==="custom"?customFrom:range.from||""}
      customTo={period==="custom"?customTo:range.to||""}
      onCustomFromChange={v=>changeDate("from",v)}
-     onCustomToChange={v=>changeDate("to",v)}>
-     <label className="fm-unified-filter"><span>Buscar artículo o CN</span>
-      <input type="search" placeholder="Artículo o CN…" value={search}
-       onChange={e=>{setSearch(e.target.value)}}/></label>
-    </ReportFilterBar>
+     onCustomToChange={v=>changeDate("to",v)}/>
     {!range.valid&&<p role="alert" className="fm-op-message fm-op-error">Selecciona un período válido y comprueba las fechas desde/hasta.</p>}
     {data.warning&&<p role="status" className="fm-lab-order-warning">
      <AlertTriangle size={15}/> {data.warning}
@@ -455,7 +445,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </div>}
      </div>}
     <div className="fm-lab-order-summary">
-     {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{currentRows.length}</strong> artículos</span>}
+     {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
@@ -466,37 +456,31 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
 
     </div>
-    <div className="fm-lab-order-table-toolbar" aria-label="Herramientas de la tabla del preparador">
-      <label>Filtrar CN
-       <input type="search" value={columnFilter.cn} placeholder="Código nacional…"
-        onChange={e=>{setColumnFilter(prev=>({...prev,cn:e.target.value}));setTablePage(0)}}/>
-      </label>
-      <label>Filtrar artículo
-       <input type="search" value={columnFilter.article} placeholder="Descripción…"
-        onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
-      </label>
-      <label>Ordenación
-       <select value={tableSort} onChange={e=>{setTableSort(e.target.value);setTablePage(0)}}>
-        <option value="original">Orden original</option>
-        <option value="cn:asc">CN ascendente</option><option value="cn:desc">CN descendente</option>
-        <option value="article:asc">Artículo A–Z</option><option value="article:desc">Artículo Z–A</option>
-       </select>
-      </label>
-
-     </div>
     <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
      <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
       aria-busy={metricsLoading}>
      <table className="fm-lab-order-table">
-      <thead><tr><th className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}>
-         <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("cn")}
-          aria-label="Ordenar por CN">CN <span aria-hidden="true">{tableSort==="cn:asc"?"▲":tableSort==="cn:desc"?"▼":"↕"}</span></button>
-        </th>
-       <th className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}>
-         <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("article")}
-          aria-label="Ordenar por artículo">Artículo <span aria-hidden="true">{tableSort==="article:asc"?"▲":tableSort==="article:desc"?"▼":"↕"}</span></button>
-        </th>
-       {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
+      <thead><tr><th scope="col" className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}
+          aria-sort={tableSort.startsWith("cn:")?(tableSort.endsWith("asc")?"ascending":"descending"):"none"}>
+          <div className="fm-lab-column-head">
+           <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("cn")}
+            aria-label="Ordenar por CN">CN <span aria-hidden="true">{tableSort==="cn:asc"?"▲":tableSort==="cn:desc"?"▼":"↕"}</span></button>
+           <input type="search" className="fm-lab-column-filter" value={columnFilter.cn} placeholder="Filtrar"
+            aria-label="Filtrar por código nacional" title="Filtrar por código nacional"
+            onChange={e=>{setColumnFilter(prev=>({...prev,cn:e.target.value}));setTablePage(0)}}/>
+          </div>
+         </th>
+        <th scope="col" className="fm-lab-order-sticky fm-lab-order-name" rowSpan={2}
+          aria-sort={tableSort.startsWith("article:")?(tableSort.endsWith("asc")?"ascending":"descending"):"none"}>
+          <div className="fm-lab-column-head">
+           <button type="button" className="fm-lab-sort-head" onClick={()=>toggleTableSort("article")}
+            aria-label="Ordenar por artículo">Artículo <span aria-hidden="true">{tableSort==="article:asc"?"▲":tableSort==="article:desc"?"▼":"↕"}</span></button>
+           <input type="search" className="fm-lab-column-filter" value={columnFilter.article} placeholder="Filtrar artículo"
+            aria-label="Filtrar por artículo" title="Filtrar por artículo"
+            onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
+          </div>
+         </th>
+        {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        <th className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>Almacén</th>
        <th colSpan={5} className="fm-lab-order-total-group">Totales y pedido</th>
       </tr><tr>

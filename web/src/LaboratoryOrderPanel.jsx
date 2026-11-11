@@ -524,7 +524,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           {row.nombre}
            {row._visualGroupSize>1&&<span className={"fm-lab-family-badge fm-lab-family-"+row._visualKind}
             title="Referencias relacionadas visualmente; cada CN se compra y contabiliza por separado">{row._visualLabel}</span>}
-           {isExcludedOrderRow(row)&&<small>Baja · pedido manual permitido</small>}</td>
+          </td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [row.metricsReady?m.stock??null:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,

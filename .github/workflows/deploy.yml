@@ -13,10 +13,11 @@ permissions:
   contents: read
 
 concurrency:
-  # El grupo anterior quedó retenido por un run con todos los pasos completados
-  # pero estado GitHub in_progress; recuperación sin permitir dos despliegues nuevos a la vez.
-  group: farmawao-api-production-v2-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
-  cancel-in-progress: false
+  # Mantener una sola cola de producción. Si un run quedó huérfano en
+  # in_progress con todos sus pasos completados, solo el commit de recuperación
+  # puede cancelarlo y liberar la cola; los siguientes nunca cancelan despliegues.
+  group: farmawao-api-production-${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, 'RECUPERAR_DESPLIEGUE_BLOQUEADO') }}
 
 jobs:
   build:

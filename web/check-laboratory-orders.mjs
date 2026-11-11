@@ -76,7 +76,7 @@ await page.route("**/api/**",async route=>{
     tipo:"parafarmacia",inMaster:false,inReceipts:true}));
   else if(lab==="N:ERROR")
    rows=[{referencia:"790321",cn:"790321",nombre:"Producto recuperado del maestro",
-    tipo:"medicacion",inMaster:true,inReceipts:false}];
+    tipo:"medicacion",inMaster:true,inReceipts:false,excluded:true}];
   else{
    const med=type==="medicacion";
    rows=[{referencia:med?"400123":"000123",cn:med?"400123":"000123",
@@ -320,6 +320,10 @@ try{
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");
  await page.getByRole("option",{name:"Laboratorio con ventas inaccesibles"}).click();
  await page.getByText("Producto recuperado del maestro").first().waitFor({timeout:15000});
+ assert.equal(await page.locator(".fm-lab-order-excluded").count(),1,
+  "El artículo de baja conserva su marcado y su tratamiento operativo");
+ assert.equal(await page.getByText("Baja · pedido manual permitido").count(),0,
+  "No mostrar el comentario de baja debajo del artículo");
  await page.getByText(/no se pudieron completar las ventas y el stock/).waitFor();
  assert.equal(await page.getByRole("button",{name:"Guardar borrador"}).isDisabled(),true,
    "No se deben guardar propuestas sin stock y ventas verificadas");

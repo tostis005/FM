@@ -120,7 +120,8 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
      serverPagination={{page,pageSize,total:data?.total||0,
       onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);reset()}}}
      showExport={false} loading={loading} loadingLabel="Recalculando transferencias…"
-     emptyText={data?.available===false?"Sin inventario suficiente.":"Sin transferencias para estos filtros."}/>
+     emptyText={data?.available===false?"Sin inventario suficiente.":data?.summary?.movements===0?
+      data?.emptyReason||"Sin transferencias propuestas.":"Sin transferencias para estos filtros."}/>
    </>}
 
   </section>

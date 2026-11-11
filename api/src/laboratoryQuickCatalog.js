@@ -152,25 +152,31 @@ export async function readPurchasedLaboratoryCatalog(pool,ctx,{key,pharmacies,se
    AND NOT l.eliminada_logicamente
    AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
    AND l.articulo_origen_id IS NOT NULL
- ), sales_lab AS MATERIALIZED (
+ ), catalog_lab AS MATERIALIZED (
+  -- Catálogo ERP COMPLETO del laboratorio, aunque no haya ventas ni
+  -- recepciones. Se aceptan coincidencias exactas de laboratorio o el
+  -- proveedor habitual vinculado a ESTE cliente y ESTA farmacia.
   SELECT p.id AS pharmacy_id,p.code,a.origen_id::text AS article_id
   FROM pharmacies p JOIN ${schema}.articulos a
    ON upper(btrim(a.farmacia_codigo))=p.code
-  WHERE $8::text='parafarmacia'
-   AND 'N:'||${normalizedLabSQL("a.laboratorio")} IN (
-   -- Resolver los alias UNA vez por consulta, sin una búsqueda correlacionada
-   -- al maestro por cada artículo de Farmatic.
-   SELECT key FROM lab_aliases WHERE key LIKE 'N:%'
-   UNION SELECT 'N:'||${normalizedLabSQL("pm.nombre")}
-   FROM farmetrica.proveedores_maestro pm
-   WHERE pm.cliente_slug=$3
-    AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
-    AND pm.cooperativa IS NOT TRUE AND coalesce(pm.tipo,'')<>'cooperativa' AND pm.ignorar_informes IS NOT TRUE)
-   AND EXISTS(SELECT 1 FROM ${schema}.fm_ventas_analitica v
-    WHERE v.farmacia_codigo=p.code AND v.articulo_id=a.origen_id::text)
+  WHERE nullif(btrim(a.origen_id::text),'') IS NOT NULL
+   AND (
+    'N:'||${normalizedLabSQL("a.laboratorio")} IN (
+     SELECT key FROM lab_aliases WHERE key LIKE 'N:%'
+     UNION
+     SELECT 'N:'||${normalizedLabSQL("pm.nombre")}
+     FROM farmetrica.proveedores_maestro pm
+     WHERE pm.cliente_slug=$3
+      AND pm.laboratorio_clave IN (SELECT key FROM lab_aliases)
+      AND pm.cooperativa IS NOT TRUE AND coalesce(pm.tipo,'')<>'cooperativa'
+      AND pm.ignorar_informes IS NOT TRUE
+    )
+    OR EXISTS (SELECT 1 FROM links k WHERE k.pharmacy_id=p.id
+     AND k.supplier_code=${supplierCode("to_jsonb(a)->>'proveedor_habitual_id'")})
+   )
  ), candidates AS MATERIALIZED (
   SELECT pharmacy_id,code,article_id FROM purchased
-  UNION SELECT pharmacy_id,code,article_id FROM sales_lab
+  UNION SELECT pharmacy_id,code,article_id FROM catalog_lab
  ), activity AS (
   SELECT c.pharmacy_id,c.code,c.article_id,
    ${cn} AS cn,coalesce(nullif(btrim(a.nombre),''),n.nombre,c.article_id) AS nombre,

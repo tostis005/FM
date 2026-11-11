@@ -58,8 +58,18 @@ export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
   pharmacySuggested===null?null:
    isPara&&warehouseStock!==null?
     Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
- return {pharmacyStock,warehouseStock,globalStock,
-  warehouseReady:ready,warehouseStockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
+ const warehouseSalesReady=ready&&warehouseMetric?.warehouseSalesReady===true;
+ const warehouse={
+  stock:warehouseStock,
+  stockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
+  units12:warehouseSalesReady?Number(warehouseMetric?.warehouseUnits12||0):null,
+  units3:warehouseSalesReady?Number(warehouseMetric?.warehouseUnits3||0):null,
+  unitsPeriod:warehouseSalesReady?Number(warehouseMetric?.warehouseUnitsPeriod||0):null,
+  suggested:null, // El almacén distribuye existencias; no tiene demanda propia.
+  ready,salesReady:warehouseSalesReady
+ };
+ return {pharmacyStock,warehouseStock,globalStock,warehouse,
+  warehouseReady:ready,warehouseStockAt:warehouse.stockAt,
   totalSuggested};
 }
 

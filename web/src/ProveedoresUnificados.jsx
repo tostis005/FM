@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import {Check,ChevronRight,GitMerge,RefreshCcw,Search,SlidersHorizontal,Users,FlaskConical,Truck,Building2,Link2,Plus,FolderOpen} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import ListTable from "./ListTable.jsx";
@@ -57,22 +57,38 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   [limit,setLimit]=useState(60),[showSuggestions,setShowSuggestions]=useState(false),
   [newOriginType,setNewOriginType]=useState("DIRECTO"),
   [selectedSupplier,setSelectedSupplier]=useState(null),[categoryView,setCategoryView]=useState(false);
+ const requestVersion=useRef(0);
  const [loading,setLoading]=useState(true),[loadedOnce,setLoadedOnce]=useState(false),
   [busy,setBusy]=useState(false),
   [error,setError]=useState(""),[notice,setNotice]=useState("");
  async function refresh(){
-  setLoading(true);setError("");
+  const version=++requestVersion.current;
+  setLoading(true);setError("");setNotice("");
+  // El directorio compartido y sus documentos no dependen de las consultas
+  // adicionales del ERP (que pueden ser más lentas o tener otros permisos).
+  const secondary=Promise.allSettled([
+   canEditMaster?api(clientSlug,"/api/tenant/proveedores"):Promise.resolve([]),
+   canEditMaster?api(clientSlug,"/api/tenant/farmacias"):Promise.resolve([]),
+   canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias"):Promise.resolve({items:[]})
+  ]);
   try{
-   const [p,s,f,q]=await Promise.all([
-    api(clientSlug,"/api/tenant/proveedores-unificados"),
-    canEditMaster?api(clientSlug,"/api/tenant/proveedores"):Promise.resolve([]),
-    canEditMaster?api(clientSlug,"/api/tenant/farmacias"):Promise.resolve([]),
-    canMergeMaster?api(clientSlug,"/api/tenant/pedidos/frecuencias").catch(()=>({items:[]})):Promise.resolve({items:[]})]);
-   setSuppliers(Array.isArray(p)?p:[]);setSources(Array.isArray(s)?s:[]);
-   setPharmacies(Array.isArray(f)?f:[]);setFrequencies(q.items||[]);
-   setLoadedOnce(true);
-  }catch(e){setError(e.message)}
-  finally{setLoading(false)}
+   const suppliersResult=await api(clientSlug,"/api/tenant/proveedores-unificados");
+   if(version!==requestVersion.current)return;
+   if(!Array.isArray(suppliersResult))throw Error("El directorio no devolvió una lista válida");
+   setSuppliers(suppliersResult);setLoadedOnce(true);
+  }catch(e){
+   if(version===requestVersion.current)setError(e.message);
+   return;
+  }finally{
+   if(version===requestVersion.current)setLoading(false);
+  }
+  const [sourcesResult,pharmaciesResult,frequencyResult]=await secondary;
+  if(version!==requestVersion.current)return;
+  setSources(sourcesResult.status==="fulfilled"&&Array.isArray(sourcesResult.value)?sourcesResult.value:[]);
+  setPharmacies(pharmaciesResult.status==="fulfilled"&&Array.isArray(pharmaciesResult.value)?pharmaciesResult.value:[]);
+  setFrequencies(frequencyResult.status==="fulfilled"?frequencyResult.value?.items||[]:[]);
+  if(sourcesResult.status==="rejected"||pharmaciesResult.status==="rejected")
+   setNotice("Directorio, fichas y documentos disponibles. No se han podido consultar algunos códigos de origen para vinculación.");
  }
  useEffect(()=>{void refresh()},[clientSlug,canEditMaster,canMergeMaster]);
  const linked=useMemo(()=>new Set(suppliers.flatMap(p=>(p.origins||[]).map(o=>

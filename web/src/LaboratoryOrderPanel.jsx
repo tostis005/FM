@@ -481,7 +481,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
      {warehousePending&&<span className="fm-lab-warehouse-pending">
       Almacén pendiente de importar: propuesta provisional</span>}
-     {metricsLoading&&firstMetricsReady&&<span role="status">
+     {metricsLoading&&Number(data.metricsLoaded||0)>0&&<span role="status">
       Stock y ventas: {data.metricsLoaded} de {data.total} artículos calculados
      </span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
@@ -489,8 +489,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     </div>
     <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
      <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
-      aria-busy={metricsLoading}>
-     <table className="fm-lab-order-table">
+      scrollRef={tableScrollRef} aria-busy={metricsLoading}
+      data-virtualized={viewport.virtualized?"true":"false"}
+      onScrollCapture={event=>{
+       if(!viewport.virtualized||event.target!==event.currentTarget)return;
+       const next=Math.floor(Math.max(0,event.currentTarget.scrollTop-95)/LAB_VIRTUAL_ROW_HEIGHT);
+       setVirtualRow(previous=>previous===next?previous:next);
+      }}>
+     <table className={"fm-lab-order-table"+(viewport.virtualized?" fm-lab-order-virtual":"")}>
       <thead><tr><th scope="col" className="fm-lab-order-sticky fm-lab-order-cn" rowSpan={2}
           aria-sort={tableSort.startsWith("cn:")?(tableSort.endsWith("asc")?"ascending":"descending"):"none"}>
           <div className="fm-lab-column-head">
@@ -532,7 +538,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        <th className="fm-lab-order-total-head" title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>Propuesta</th>
        <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
       </tr></thead>
-      <tbody>{tablePageRows.map(row=>{
+      <tbody>
+      {viewport.virtualized&&viewport.top>0&&<tr className="fm-lab-virtual-spacer" aria-hidden="true"
+        style={{height:viewport.top}}><td colSpan={chosen.length*5+12}
+         style={{height:viewport.top}}/></tr>}
+      {renderedRows.map(row=>{
        const line=showLine(row);
        return <tr key={row.referencia}
          className={[
@@ -591,6 +601,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          </td>
        </tr>;
       })}
+      {viewport.virtualized&&viewport.bottom>0&&<tr className="fm-lab-virtual-spacer" aria-hidden="true"
+       style={{height:viewport.bottom}}><td colSpan={chosen.length*5+12}
+         style={{height:viewport.bottom}}/></tr>}
       {!loading&&currentRows.length>0&&!tableVisibleRows.length&&<tr>
         <td colSpan={chosen.length*5+12}>Ningún artículo coincide con los filtros de columna.</td>
        </tr>}
@@ -613,12 +626,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     {tableGroups.length>50&&<nav className="fm-lab-order-pager" aria-label="Páginas del preparador">
      <label>Artículos por página
       <select value={tablePageSize} onChange={e=>{setTablePageSize(Number(e.target.value));setTablePage(0)}}>
-       {[25,50,100,250].map(n=><option key={n} value={n}>{n}</option>)}
+       <option value={ALL_LAB_ROWS}>Todos ({tableVisibleRows.length})</option>
+       {[25,50,100,250,500,1000,2000,5000].map(n=><option key={n} value={n}>{n}</option>)}
       </select>
      </label>
      <button type="button" className="btn btn-secondary" disabled={safePage===0}
       onClick={()=>setTablePage(n=>Math.max(0,n-1))}>Anterior</button>
-     <span>Página {safePage+1} de {totalPages}</span>
+     <span>{tablePageSize===ALL_LAB_ROWS?("Mostrando los "+tablePageRows.length+" artículos"):("Página "+(safePage+1)+" de "+totalPages)}</span>
      <button type="button" className="btn btn-secondary" disabled={safePage>=totalPages-1}
       onClick={()=>setTablePage(n=>Math.min(totalPages-1,n+1))}>Siguiente</button>
     </nav>}
@@ -627,9 +641,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
       <strong>Cargando artículos, ventas y stock…</strong>
       <span>{data.rows?.length?
-       (loadStage==="catalog"?"Los códigos nacionales ya se muestran en la tabla":
-        loadStage==="fallback"?"Completando métricas de "+(data.metricsLoaded??0)+" artículos":
-         "Calculando los totales de "+data.rows.length+" artículos"):
+       (loadStage==="catalog"?"Preparando los artículos del laboratorio":
+        loadStage==="render"?"Preparando la tabla y los totales finales":
+        "Calculando stock, ventas y totales: "+(data.metricsLoaded??0)+" de "+data.rows.length+" artículos"):
        "Preparando los códigos nacionales del laboratorio"}</span>
      </div>
     </div>}

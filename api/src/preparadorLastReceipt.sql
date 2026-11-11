@@ -13,7 +13,7 @@ WITH eligible_labs AS MATERIALIZED (
  SELECT f.id AS pharmacy_id,__PHARMACY_CODE__ AS pharmacy_code
  FROM farmetrica.farmacias f WHERE f.cliente_slug=$1
 ), alias_candidates AS MATERIALIZED (
- SELECT f.pharmacy_id,f.pharmacy_code,p.id AS lab_id,
+ SELECT f.pharmacy_id,upper(btrim(a.farmacia_codigo)) AS pharmacy_code,p.id AS lab_id,
   CASE WHEN btrim(a.codigo_origen)~'^[0-9]+$'
     THEN coalesce(nullif(ltrim(btrim(a.codigo_origen),'0'),''),'0')
     ELSE upper(btrim(a.codigo_origen)) END AS supplier_code,
@@ -21,7 +21,7 @@ WITH eligible_labs AS MATERIALIZED (
  FROM eligible_labs p
  JOIN farmetrica.proveedores_unificados_alias a
   ON a.cliente_slug=$1 AND a.proveedor_id=p.id
- JOIN pharmacies f ON f.pharmacy_code=upper(btrim(a.farmacia_codigo))
+ LEFT JOIN pharmacies f ON f.pharmacy_code=upper(btrim(a.farmacia_codigo))
 ), eligible_aliases AS MATERIALIZED (
  SELECT c.* FROM alias_candidates c
  WHERE NOT EXISTS (
@@ -44,12 +44,13 @@ WITH eligible_labs AS MATERIALIZED (
  )
 ),
 supplier_links AS MATERIALIZED (
- -- Cada código ERP es local a una farmacia. Si tras normalizar ceros
- -- apunta a laboratorios distintos, la identidad NO es unívoca.
- -- No elegir uno arbitrariamente por vigencia o fecha de actualización.
- SELECT pharmacy_id,pharmacy_code,supplier_code,min(lab_id) AS lab_id
+ -- La identidad del proveedor se confirma por código de farmacia y código
+ -- de origen, también cuando la farmacia histórica ya no está activa.
+ -- Una colisión con laboratorios distintos queda sin clasificar.
+ SELECT min(pharmacy_id) AS pharmacy_id,pharmacy_code,supplier_code,
+  min(lab_id) AS lab_id
  FROM eligible_aliases
- GROUP BY pharmacy_id,pharmacy_code,supplier_code
+ GROUP BY pharmacy_code,supplier_code
  HAVING count(DISTINCT lab_id)=1
 ), received AS MATERIALIZED (
  SELECT k.lab_id,k.pharmacy_id,k.pharmacy_code,h.fecha,
@@ -101,7 +102,25 @@ received_with_cn AS MATERIALIZED (
    ) AS exclude(cadena)
    WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0)
 ), scoped_cn AS MATERIALIZED (
- SELECT DISTINCT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
+ -- El laboratorio lo determina la última recepción directa del CN, aunque
+ -- proceda de una farmacia histórica. El ámbito visible se determina por
+ -- el catálogo del propio artículo en las farmacias actuales autorizadas.
+ SELECT cn FROM (
+  SELECT cn FROM received_with_cn WHERE pharmacy_id=ANY($2::int[])
+  UNION
+  SELECT coalesce(
+   CASE WHEN btrim(coalesce(ar.codigo_nacional,'')) ~ '^[0-9]{6,7}$'
+    THEN btrim(ar.codigo_nacional) END,
+   CASE WHEN btrim(coalesce(to_jsonb(ar)->>'cn_normalizado','')) ~ '^[0-9]{6,7}$'
+    THEN btrim(to_jsonb(ar)->>'cn_normalizado') END,
+   CASE WHEN btrim(ar.origen_id::text) ~ '^[0-9]{6,7}$'
+    THEN btrim(ar.origen_id::text) END
+  ) AS cn
+  FROM __SCHEMA__.articulos ar
+  JOIN pharmacies f ON upper(btrim(ar.farmacia_codigo))=f.pharmacy_code
+  WHERE f.pharmacy_id=ANY($2::int[])
+ ) observed
+ WHERE cn IN (SELECT cn FROM received_with_cn)
 ), latest AS MATERIALIZED (
  SELECT DISTINCT ON (cn) cn,lab_id,nombre
  FROM received_with_cn

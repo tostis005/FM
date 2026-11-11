@@ -47,6 +47,14 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
+  UNION ALL
+  -- AMP: código histórico del almacén central ALMACEN para recepciones y ERP.
+  SELECT f.id,'AMP'::text AS code
+  FROM farmetrica.farmacias f
+  WHERE f.cliente_slug='ampedia' AND f.activo
+   AND f.tipo_establecimiento='almacen'
+   AND upper(btrim(f.codigo_origen))='ALMACEN'
+   AND cardinality($2::int[])>0
  ), aliases AS (
   -- Identidad: código proveedor de Farmatic + farmacia, no nombre comercial.
   SELECT DISTINCT c.id AS pharmacy_id,c.code,${normalizeCode("ua.codigo_origen")} AS supplier

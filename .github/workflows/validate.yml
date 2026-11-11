@@ -40,6 +40,7 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --test api/src/clientAppearance.test.js
           node --check api/src/supplierWorkspace.js
           node --test api/src/supplierWorkspace.test.js
           node --check api/src/savingsAnalysis.js
@@ -147,6 +148,7 @@ jobs:
           node generate-seo.mjs
           node check-marketing.mjs
           node check-theme.mjs
+          node --test src/tenantAppearance.test.js
           npm run build
 
   validar_postgresql:
@@ -191,6 +193,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
           psql_test --single-transaction < api/src/migrations/051_picking_list.sql
           psql_test --single-transaction < api/src/migrations/052_codigos_visibles.sql
+          psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql
+          psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
           psql_test --single-transaction < api/src/migrations/051_picking_list.sql
           psql_test --single-transaction < api/src/migrations/005_proveedores.sql

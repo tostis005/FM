@@ -1,0 +1,40 @@
+/* Editor de apariencia: exclusivo de Administración > Clientes. */
+.fm-client-appearance{margin:2px 0 16px;border:1px solid #dfeae5;border-radius:12px;overflow:hidden}
+.fm-appearance-toggle{width:100%;display:flex;align-items:center;gap:9px;padding:15px 17px;border:0;background:#f8fbfa;color:#304e49;font-weight:800;text-align:left;font-size:12px}
+.fm-appearance-toggle>span:first-of-type{flex:1}
+.fm-appearance-toggle svg:last-child{transition:transform .2s ease}
+.fm-appearance-toggle svg.expanded{transform:rotate(180deg)}
+.fm-appearance-swatches{display:flex;gap:4px}
+.fm-appearance-swatches i{display:block;width:15px;height:15px;border:1px solid #0001;border-radius:5px}
+.fm-appearance-layout{padding:18px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(250px,1fr);gap:24px;align-items:start}
+.fm-appearance-form{display:flex;flex-direction:column;gap:14px;min-width:0}
+.fm-appearance-form>p{margin:0;color:#6d8580;font-size:12px;line-height:1.6}
+.fm-appearance-form>label,.fm-appearance-colors label{display:flex;flex-direction:column;gap:6px;font-weight:750;color:#3a5853;font-size:12px}
+.fm-appearance-form input:not([type=file]):not([type=color]),.fm-appearance-form select{width:100%;min-width:0;height:39px;border:1px solid #d8e5df;border-radius:9px;padding:8px 10px;background:#fff;color:#213e3b;font-size:12px}
+.fm-appearance-form input:focus-visible,.fm-appearance-form select:focus-visible{outline:2px solid #25958b;outline-offset:1px}
+.fm-appearance-colors{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fm-appearance-color-input{display:flex;align-items:center;gap:7px;min-width:0}
+.fm-appearance-color-input input[type=color]{height:39px;width:43px;flex:0 0 43px;border:1px solid #d8e5df;border-radius:8px;padding:3px;cursor:pointer;background:#fff}
+.fm-appearance-upload,.fm-appearance-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.fm-appearance-actions{justify-content:flex-end;border-top:1px solid #e2eeea;padding-top:14px}
+.fm-appearance-error{color:#ad2e32!important}.fm-appearance-success{color:#17705d!important}
+.fm-appearance-preview{position:sticky;top:12px;min-width:0}
+.fm-appearance-preview-title{font-size:12px;color:#3f5752;display:block;margin-bottom:10px}
+.fm-appearance-mini-app{height:245px;display:grid;grid-template-columns:35% 65%;border:1px solid #e3eae6;border-radius:12px;overflow:hidden;background:#f3f7f5;font-size:10px;box-shadow:0 8px 24px #143b3310}
+.fm-appearance-mini-sidebar{padding:14px 7px;display:flex;flex-direction:column;gap:7px}
+.fm-appearance-mini-sidebar.light{background:#fff;color:#35554e;border-right:1px solid #e5edea}
+.fm-appearance-mini-sidebar.dark{background:var(--fm-brand-secondary);color:var(--fm-brand-on-secondary)}
+.fm-appearance-mini-logo{display:flex;gap:5px;align-items:center;margin:0 4px 10px;min-height:28px;word-break:break-word}
+.fm-appearance-mini-logo img{height:24px;width:24px;object-fit:contain}
+.fm-appearance-mini-nav{padding:8px;border-radius:7px;opacity:.83}
+.fm-appearance-mini-sidebar.light .fm-appearance-mini-nav.selected{background:color-mix(in srgb,var(--fm-brand-primary) 13%,white);color:var(--fm-brand-primary);opacity:1;font-weight:800}
+.fm-appearance-mini-sidebar.dark .fm-appearance-mini-nav.selected{background:#ffffff26;opacity:1;font-weight:800}
+.fm-appearance-mini-main{padding:16px 11px}
+.fm-appearance-mini-top{font-weight:800;font-size:14px;color:#29443f;margin-bottom:17px}
+.fm-appearance-mini-card{background:#fff;border:1px solid #e5eae8;border-radius:7px;overflow:hidden;margin-bottom:15px}
+.fm-appearance-mini-header{background:var(--fm-brand-secondary);color:var(--fm-brand-on-secondary);padding:11px;font-weight:800}
+.fm-appearance-mini-row{display:flex;justify-content:space-between;gap:4px;padding:9px;border-top:1px solid #eef3f0;color:#516861;font-size:9px}
+.fm-appearance-mini-button{display:inline-block;background:var(--fm-brand-primary);padding:9px 12px;border-radius:7px;font-weight:800}
+.fm-appearance-preview>small{color:#70847e;display:block;line-height:1.5;font-size:11px;margin-top:10px}
+@media(max-width:900px){.fm-appearance-layout{grid-template-columns:1fr}.fm-appearance-preview{position:static}}
+@media(max-width:420px){.fm-appearance-colors{grid-template-columns:1fr}}

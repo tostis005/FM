@@ -567,6 +567,10 @@ try {
   if(visibleCodeColumn.rows[0]?.ready!==true){
     await pool.query(await readFile(new URL("./migrations/052_codigos_visibles.sql",import.meta.url),"utf8"));
   }
+  // Apariencia SaaS: migración aditiva y semilla visual de Ampedia.
+  // CREATE TABLE IF NOT EXISTS y ON CONFLICT DO NOTHING preservan personalizaciones.
+  await pool.query(await readFile(new URL(
+    "./migrations/053_apariencia_clientes.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

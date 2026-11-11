@@ -12,8 +12,12 @@ const pharmacyApi=read("./src/farmaciasApi.js");
 
 assert.match(app,/import "\.\/styles\.css";\s*import "\.\/loginTheme\.css";/,
   "El tema debe importarse después de los estilos existentes");
-assert.match(app,/className="brand-mark" aria-hidden="true"><img className="fm-emblem"/,
-  "La marca interior debe mostrar el nuevo icono vectorial");
+assert.match(app,/className="fm-emblem"/,
+  "La marca interior debe conservar el elemento gráfico de Farmetrica como valor por defecto");
+assert.match(app,/fm-brand-image-only/,
+  "Los clientes con logotipo propio deben mostrar su imagen sin nombre duplicado");
+assert.match(app, /!appearance\.logoUrl&&<span>/,
+  "El texto escrito junto al logo solo debe aparecer cuando no hay imagen personalizada");
 assert.match(theme,/\.fm-emblem/,"El tema interior usa el logo de Farmetrica");
 assert.match(login,/<img class="fm-emblem" src="\/brand-logo\.webp\?v=4"/,"El acceso usa el mismo logotipo");
 assert.doesNotMatch(app,/✳/,"No se muestra el icono anterior en la aplicación");

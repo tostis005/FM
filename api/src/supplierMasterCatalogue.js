@@ -48,7 +48,7 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
  ), aliases AS (
-  -- Identidad: código proveedor de Farmatic + farmacia, nunca semejanza de nombres.
+  -- Identidad: código proveedor de Farmatic + farmacia, no nombre comercial.
   SELECT DISTINCT c.id AS pharmacy_id,c.code,${normalizeCode("ua.codigo_origen")} AS supplier
   FROM farmetrica.proveedores_unificados_alias ua
   JOIN chosen c ON c.code=upper(btrim(ua.farmacia_codigo))
@@ -80,45 +80,8 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
   bool_or(inactive) AS excluded,
   string_agg(DISTINCT pharmacy_id::text,',' ORDER BY pharmacy_id::text) AS "pharmacyIds"
  FROM matched
- WHERE (cn IS NOT NULL OR article_id ~ '^[A-Za-z0-9._:-]{1,90}
-  AND (CASE WHEN cn IS NOT NULL AND left(cn,6)::integer>=400000
-   THEN 'medicacion' ELSE 'parafarmacia' END)=$4
-  AND (coalesce($5::text,'')='' OR cn ILIKE '%'||$5||'%'
-   OR nombre ILIKE '%'||$5||'%')
- GROUP BY coalesce(cn,'ERP:'||pharmacy_id::text||':'||article_id),cn
- ORDER BY min(nombre),referencia LIMIT 5001`;
- const {rows}=await pool.query({text:sql,
-  values:[ctx.client.slug,pharmacies,id,type,search,patterns],query_timeout:15000});
- if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias de catálogo"),{code:"TOO_MANY"});
- // No atribuir productos por las variantes R1/R2 ni por otros artículos.
- return rows;
-}
-/** Fusionar por CN sin mezclar referencias ni perder la evidencia de compra. */
-export function mergeSupplierCatalogReferences(purchased,master,search="",type="parafarmacia"){
- const joined=new Map(),term=String(search||"").trim().toLocaleLowerCase("es");
- for(const row of [...master,...purchased]){
-  if(!row?.referencia||row.tipo!==type)continue;
-  const key=String(row.referencia),previous=joined.get(key);
-  if(previous)joined.set(key,{
-   ...previous,...row,excluded:Boolean(previous.excluded||row.excluded),
-   inPurchases:Boolean(previous.inPurchases||row.inPurchases),
-   inReceipts:Boolean(previous.inReceipts||row.inReceipts),
-   inSales:Boolean(previous.inSales||row.inSales),
-   pharmacyIds:[...new Set([previous.pharmacyIds,row.pharmacyIds]
-    .filter(Boolean).flatMap(v=>String(v).split(",")))].sort().join(",")||null
-  });
-  else joined.set(key,{...row});
- }
- const rows=[...joined.values()].filter(row=>!term||
-  String(row.nombre||"").toLocaleLowerCase("es").includes(term)||
-  String(row.referencia).includes(term))
-  .sort((a,b)=>String(a.nombre||"").localeCompare(String(b.nombre||""),"es")||
-   String(a.referencia).localeCompare(String(b.referencia)));
- if(rows.length>5000)throw Object.assign(Error("Demasiadas referencias de catálogo"),{code:"TOO_MANY"});
- return {rows,total:rows.length,metricsUnavailable:true};
-}
-)
-  -- La última recepción directa válida prevalece sobre la ficha de proveedor habitual.
+ WHERE (cn IS NOT NULL OR article_id ~ '^[A-Za-z0-9._:-]{1,90}$')
+  -- La última recepción directa válida prevalece sobre la ficha habitual.
   AND NOT EXISTS (
    SELECT 1 FROM farmetrica.preparador_ultima_recepcion_cache winner
    WHERE winner.cliente_slug=$1 AND winner.cn=matched.cn
@@ -133,7 +96,8 @@ export function mergeSupplierCatalogReferences(purchased,master,search="",type="
  const {rows}=await pool.query({text:sql,
   values:[ctx.client.slug,pharmacies,id,type,search,patterns],query_timeout:15000});
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias de catálogo"),{code:"TOO_MANY"});
- return recoverSupplierVariantRoots(pool,ctx,{rows,pharmacies,type,patterns});
+ // No atribuir productos a partir de regalos, variantes ni otros artículos.
+ return rows;
 }
 /** Fusionar por CN sin mezclar referencias ni perder la evidencia de compra. */
 export function mergeSupplierCatalogReferences(purchased,master,search="",type="parafarmacia"){

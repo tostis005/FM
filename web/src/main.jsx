@@ -1327,6 +1327,9 @@ function App(){
  if(!tenantContext||!sessionUser||!allowed)return <StartupScreen error={authError}/>;
  const appearance=normalizeClientAppearance(tenantContext.client.appearance);
  const customAppearance=isCustomAppearance(appearance);
+ const officialAbadiaLogo="https://farmaciaabadia.com/cdn/shop/files/Logo_400x120px-03_235x@2x.jpg?v=1694444207";
+ const officialAbadiaIcon="https://farmaciaabadia.com/cdn/shop/files/Favicon_96x96px_02_96x96.jpg?v=1692622834";
+ const useAbadiaCompactIcon=tenantContext.client.slug==="ampedia"&&appearance.logoUrl===officialAbadiaLogo;
  return <div className={"app-shell"+(sidebarCollapsed?" fm-sidebar-is-collapsed":"")}
   data-tenant-theme={customAppearance?"custom":"default"} data-menu-mode={appearance.menuMode}
   style={clientAppearanceStyle(appearance)}>
@@ -1334,7 +1337,7 @@ function App(){
    <div className="fm-sidebar-top">
     <button className={"brand"+(appearance.logoUrl?" fm-brand-image-only":"")} title="Ir al inicio" aria-label={(appearance.brandName||"Farmetrica")+" — inicio"}
      onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}>
-     <span className="brand-mark" aria-hidden="true"><img className="fm-emblem" key={appearance.logoUrl} src={appearance.logoUrl||"/brand-logo.webp?v=4"} alt="" referrerPolicy="no-referrer" onError={e=>{if(appearance.logoUrl){e.currentTarget.hidden=true;e.currentTarget.parentElement.dataset.logoFailed="1";}else if(e.currentTarget.dataset.fallback!=="1"){e.currentTarget.dataset.fallback="1";e.currentTarget.src="/brand-logo.webp?v=4";}}}/>{appearance.logoUrl&&<span className="fm-logo-error-text">{appearance.brandName||tenantContext.client.name}</span>}</span>{!appearance.logoUrl&&<span>{appearance.brandName||"Farmetrica"}</span>}
+     <span className={"brand-mark"+(useAbadiaCompactIcon?" fm-brand-has-compact":"")} aria-hidden="true"><img className="fm-emblem" key={appearance.logoUrl} src={appearance.logoUrl||"/brand-logo.webp?v=4"} alt="" referrerPolicy="no-referrer" onError={e=>{if(appearance.logoUrl){e.currentTarget.style.display="none";e.currentTarget.parentElement.dataset.logoFailed="1";}else if(e.currentTarget.dataset.fallback!=="1"){e.currentTarget.dataset.fallback="1";e.currentTarget.src="/brand-logo.webp?v=4";}}}/>{useAbadiaCompactIcon&&<img className="fm-compact-emblem" src={officialAbadiaIcon} alt="" referrerPolicy="no-referrer" onError={e=>{e.currentTarget.style.display="none";}}/>}{appearance.logoUrl&&<span className="fm-logo-error-text">{appearance.brandName||tenantContext.client.name}</span>}</span>{!appearance.logoUrl&&<span>{appearance.brandName||"Farmetrica"}</span>}
     </button>
     <button className="fm-sidebar-collapse-toggle" type="button"
      aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}

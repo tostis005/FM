@@ -95,7 +95,24 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
  assert.match(res.body.warning,/Centro/);
  const selected=queries.find(x=>x.q.includes("WITH chosen AS MATERIALIZED"));
  assert.deepEqual(selected.values[1],[1,2]);
- assert.match(selected.q,/JOIN "ampedia"\.sinonimos/);
- assert.match(selected.q,/HAVING count\(DISTINCT article_id\)=1/);
- assert.match(selected.q,/HAVING count\(DISTINCT fid\)>1/);
+ assert.match(selected.q,/JOIN "ampedia"\\.articulos/);
+ assert.match(selected.q,/a\\.origen_id::text AS article_id/);
+ assert.match(selected.q,/BETWEEN 1 AND 399999/);
+ assert.doesNotMatch(selected.q,/sinonimos|ean/);
+});
+
+test("frontera IdArticu 399999 parafarmacia; 400000 medicación",()=>{
+ const result=buildGlobalTransfers([
+  item("1","399999",60,0),item("2","399999",0,10),
+  item("1","400000",60,0),item("2","400000",0,10),
+  item("1","0400000",60,0),item("2","0400000",0,10)
+ ],pharmacies.slice(0,2),20);
+ assert.deepEqual(result.transfers.map(t=>t.cn),["399999"]);
+});
+test("objetivo predeterminado 30 días",()=>{
+ const records=[{pharmacyId:"1",cn:"123456",name:"Crema",stock:40,units3:0,units12:0},
+ {pharmacyId:"2",cn:"123456",name:"Crema",stock:0,units3:90,units12:90}];
+ const plan=buildGlobalTransfers(records,pharmacies.slice(0,2));
+ assert.equal(plan.transfers.length,1);
+ assert.equal(plan.transfers[0].units,30);
 });

@@ -94,6 +94,14 @@ try{
  await categoryButton.waitFor();
  assert.equal(await manager.page.getByRole("button",{name:"Nuevo proveedor"}).count(),1);
  assert.equal(await manager.page.getByRole("combobox",{name:/Tipo de Laboratorio Demo/}).count(),1);
+ // Gestores y administradores comparten la ficha y las acciones documentales.
+ await manager.page.getByRole("button",{name:"Ver ficha y documentos"}).click();
+ await manager.page.getByRole("heading",{name:"Laboratorio Demo"}).waitFor();
+ assert.equal(await manager.page.getByRole("button",{name:"Subir documento"}).count(),1);
+ assert.equal(await manager.page.getByRole("button",{name:"Descargar"}).count(),1);
+ await manager.page.getByRole("button",{name:"Volver a proveedores"}).click();
+ await manager.page.getByRole("heading",{name:"Maestro de proveedores"}).waitFor();
+
  const bounds=await categoryButton.evaluate(button=>{
   const span=button.querySelector("span"),outer=button.getBoundingClientRect(),inner=span.getBoundingClientRect();
   return {outerWidth:button.clientWidth,scrollWidth:button.scrollWidth,left:inner.left-outer.left,

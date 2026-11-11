@@ -11,25 +11,16 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
  const db=await pool.connect();
  try{
   await db.query("BEGIN");
-  // La tabla de sinónimos la crea el sincronizador en producción, no el fixture base CI.
-  await db.query(`CREATE TABLE IF NOT EXISTS ampedia.sinonimos (
-   farmacia_codigo text NOT NULL,origen_id text NOT NULL,articulo_id text NOT NULL,
-   aplicacion_id text,codigo text NOT NULL,sincronizado_en timestamptz DEFAULT now()
-  )`);
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,stock_actual,sincronizado_en)
    VALUES ('ABA','123478','Crema transferencia',NULL,40,now()),
-          ('EUR','123479','Crema transferencia',NULL,0,now())`);
-  await db.query(`INSERT INTO ampedia.sinonimos
-   (farmacia_codigo,origen_id,articulo_id,aplicacion_id,codigo,sincronizado_en)
-   VALUES ('ABA','TRANSF-SYN-01','123478','00000','8410000000123',now()),
-          ('EUR','TRANSF-SYN-02','123479','00000','8410000000123',now())`);
+          ('EUR','123478','Crema transferencia',NULL,0,now())`);
   await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
    (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
    VALUES ('EUR','farmatic','TRANSF-VALIDAR-01',now(),true)`);
   await db.query(`INSERT INTO ampedia.fm_ventas_lineas
    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
-   VALUES ('EUR','farmatic','TRANSF-VALIDAR-01','1','123479',100,500)`);
+   VALUES ('EUR','farmatic','TRANSF-VALIDAR-01','1','123478',100,500)`);
   let handler=null;
   setupTransferidor({get(path,...handlers){
    if(path==="/api/analytics/stock/transferidor")handler=handlers.at(-1);
@@ -47,7 +38,7 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
   if(error)throw error;
   assert.equal(res.statusCode,200);
   assert.equal(res.body.available,true);
-  const line=res.body.rows.find(x=>x.cn==="8410000000123");
+  const line=res.body.rows.find(x=>x.cn==="123478");
   assert.ok(line,"No debe aparecer una tabla vacía si hay exceso y necesidad");
   assert.equal(line.originId,"1");
   assert.equal(line.destinationId,"2");

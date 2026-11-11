@@ -71,7 +71,8 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
    {pharmacyId:"1",cn:"123456",name:"Crema",stock:20,units3:0,units12:0},
    {pharmacyId:"2",cn:"123456",name:"Crema",stock:0,units3:90,units12:90}
   ]};
-  if(q.includes("preparador_configuracion_cliente"))return {rows:[{days:20}]};
+  if(q.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:1,targetDays:20}]};
+  if(q.includes("transferidor_exposicion_"))return {rows:[]};
   throw Error("Consulta imprevista: "+q.slice(0,100));
  }};
  let handler;
@@ -108,10 +109,60 @@ test("frontera IdArticu 399999 parafarmacia; 400000 medicación",()=>{
  ],pharmacies.slice(0,2),20);
  assert.deepEqual(result.transfers.map(t=>t.cn),["399999"]);
 });
-test("objetivo predeterminado 30 días",()=>{
+test("objetivo predeterminado de 7 días para el transferidor",()=>{
  const records=[{pharmacyId:"1",cn:"123456",name:"Crema",stock:40,units3:0,units12:0},
  {pharmacyId:"2",cn:"123456",name:"Crema",stock:0,units3:90,units12:90}];
  const plan=buildGlobalTransfers(records,pharmacies.slice(0,2));
  assert.equal(plan.transfers.length,1);
- assert.equal(plan.transfers[0].units,30);
+ assert.equal(plan.transfers[0].units,7);
+});
+
+
+test("dispara con menos de 4 días y repone hasta 7, sin microtransferencias",()=>{
+ const all=[
+  {pharmacyId:"1",cn:"123456",stock:4,units12:365,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:40,units12:0,name:"Crema"}
+ ];
+ assert.equal(buildGlobalTransfers(all,pharmacies.slice(0,2)).transfers.length,0);
+ all[0].stock=3;
+ const plan=buildGlobalTransfers(all,pharmacies.slice(0,2));
+ assert.equal(plan.transfers.length,1);
+ assert.equal(plan.transfers[0].units,4);
+ assert.equal(plan.transfers[0].triggerDestination,4);
+ assert.equal(plan.transfers[0].targetDestination,7);
+});
+test("30 días de exposición se añaden a 4/7 días; no se quitan del donante",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"123456",stock:33,units12:365,name:"Crema",familyId:"5"},
+  {pharmacyId:"2",cn:"123456",stock:150,units12:0,name:"Crema",familyId:"5"}
+ ];
+ const plan=buildGlobalTransfers(rows,pharmacies.slice(0,2),{
+  minDays:4,targetDays:7,
+  families:[{pharmacyId:"1",familyId:"5",days:30},{pharmacyId:"2",familyId:"5",days:30}],
+  articles:[{pharmacyId:"2",cn:"123456",units:100}]
+ });
+ assert.equal(plan.transfers.length,1);
+ assert.equal(plan.transfers[0].triggerDestination,34);
+ assert.equal(plan.transfers[0].targetDestination,37);
+ assert.equal(plan.transfers[0].extraDestination,30);
+ assert.equal(plan.transfers[0].units,4);
+ // La farmacia 2 mantiene sus 100 unidades de exposición: sólo dona 50.
+ rows[0].stock=0;
+ assert.equal(buildGlobalTransfers(rows,pharmacies.slice(0,2),{
+  minDays:4,targetDays:7,families:[{pharmacyId:"1",familyId:"5",days:30}],
+  articles:[{pharmacyId:"2",cn:"123456",units:100}]
+ }).transfers[0].units,37);
+});
+test("una reserva de CN reemplaza la reserva de familia y sirve sin ventas",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"123456",stock:99,units12:0,name:"Crema",familyId:"5"},
+  {pharmacyId:"2",cn:"123456",stock:105,units12:0,name:"Crema",familyId:"5"}
+ ];
+ const plan=buildGlobalTransfers(rows,pharmacies.slice(0,2),{
+  minDays:4,targetDays:7,families:[{pharmacyId:"1",familyId:"5",days:30}],
+  articles:[{pharmacyId:"1",cn:"123456",units:100}]
+ });
+ assert.equal(plan.transfers[0].units,1);
+ assert.equal(plan.transfers[0].extraDestination,100);
+ assert.equal(plan.transfers[0].reserveSource,"articulo");
 });

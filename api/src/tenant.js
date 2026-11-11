@@ -17,6 +17,7 @@ import {randomBytes} from "node:crypto";
 import {normalizeDomain,emailDomain,validClientDomain} from "./accessPolicy.js";
 import {sourceSupplierRows} from "./supplierReporting.js";
 import {setupUnifiedSuppliers} from "./unifiedSuppliers.js";
+import {setupTransferidorPolicy} from "./transferidorPolicy.js";
 import {effectiveUserModules,validateModuleGrants,requestModules} from "./userModuleAccess.js";
 import {USER_SECTIONS,effectiveUserSections,validateSectionGrants,requestSections} from "./userSectionAccess.js";
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
@@ -92,6 +93,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   const requireTenantModule=module=>middleware((ctx,user)=>isSuper(user)||ctx.modules[module]===true);
   setupOutgoingTransfers(app,pool,{requireTenantAdmin});
   setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager});
+  setupTransferidorPolicy(app,pool,{requireTenantManager});
   setupProfiles(app,pool,{requireTenantManager,requireSuperadmin});
   // Política de ABCD y márgenes persistida para todo el cliente.
   // Únicamente administrador o superadministrador pueden cambiarla.

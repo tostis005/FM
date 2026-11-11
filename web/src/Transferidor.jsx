@@ -53,6 +53,10 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    render:r=>number(r.targetOrigin)},
   {key:"stockDestination",label:"Stock destino",align:"center",value:r=>r.stockDestination,
    render:r=>number(r.stockDestination)},
+  {key:"triggerDestination",label:"Disparador destino",align:"center",value:r=>r.triggerDestination,
+   render:r=>number(r.triggerDestination)},
+  {key:"extraDestination",label:"Exposición extra",align:"center",value:r=>r.extraDestination,
+   render:r=><span title={r.reserveSource==="articulo"?"Regla específica por CN":r.reserveSource==="familia"?"Regla por familia":"Sin exposición adicional"}>{number(r.extraDestination)}</span>},
   {key:"targetDestination",label:"Objetivo destino",align:"center",searchable:false,value:r=>r.targetDestination,
    render:r=>number(r.targetDestination)}
  ],[]);
@@ -111,7 +115,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
     <h2>Propuestas entre farmacias</h2>
-    <span>Objetivo: {number(data?.summary?.coverageDays??30)} días</span>
+    <span>Activación: {number(data?.summary?.minimumDays??4)} días · Objetivo: {number(data?.summary?.targetDays??7)} días + exposición</span>
    </div>
    {!data&&loading?<LoadingPanel kind="table" label="Calculando movimientos globales…" rows={5}/>:<>
     <ListTable rows={data?.rows||[]} columns={columns} rowKey={r=>r.id}

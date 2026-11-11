@@ -21,6 +21,7 @@ const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
 const Genericos=React.lazy(()=>import("./Genericos.jsx"));
 const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
 const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
+const ConfiguracionStockTransferidor=React.lazy(()=>import("./ConfiguracionStockTransferidor.jsx"));
 const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.jsx"));
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
 import {promotionMetrics,promotionAverageCompletion,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
@@ -1745,6 +1746,7 @@ function App(){
        onSaved={()=>loadContext(tenantContext.client.slug)}/>
       <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
       <ConfiguracionDiasStock clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
+      <ConfiguracionStockTransferidor clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
       <ConfiguracionPickingList clientSlug={tenantContext.client.slug}
        role={role} permissions={tenantContext.profile?.permissions}
        stockEnabled={tenantContext.modules?.stock===true}/>

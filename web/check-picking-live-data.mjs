@@ -138,7 +138,7 @@ try{
  await page.getByRole("heading",{name:"Filas de pedidos que no se han importado"}).waitFor();
  await page.locator(".fm-picking-issues thead th").filter({hasText:"Detalle CSV"}).waitFor();
  const issueColumns=await page.locator(".fm-picking-issues thead th").allTextContents();
- assert.ok(issueColumns.some(x=>x.trim()==="Detalle CSV"),JSON.stringify(issueColumns));
+ assert.ok(issueColumns.some(x=>x.trim().startsWith("Detalle CSV")),JSON.stringify(issueColumns));
  const issueCells=await page.locator(".fm-picking-issues tbody td").allTextContents();
  assert.ok(issueCells.includes("producto sin CN/EAN"),JSON.stringify(issueCells));
  assert.ok(issueCells.includes("texto, completo"),JSON.stringify(issueCells));

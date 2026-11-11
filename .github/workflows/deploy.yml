@@ -53,6 +53,9 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
+          node --check api/src/transferidorPolicy.js
+          node --check api/src/reconcileFamilyMaster.mjs
+          node --test api/src/transferidorPolicy.test.js
           node --check api/src/supplierWorkspace.js
           node --test api/src/supplierWorkspace.test.js
           node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js api/src/profilePolicy.test.js api/src/profileManagementPolicy.test.js
@@ -791,4 +794,13 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             timeout 130 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditLaboratoryMerges.mjs
+          '
+
+      - name: Inicializar una vez el maestro de familias desde Almacén y Abadía
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 480 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/reconcileFamilyMaster.mjs --cliente ampedia
           '

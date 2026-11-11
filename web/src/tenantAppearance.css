@@ -107,3 +107,9 @@
   height:56px;max-width:194px;
  }
 }
+
+.app-shell[data-tenant-theme="custom"] .fm-brand-image-only .fm-logo-error-text{display:none}
+.app-shell[data-tenant-theme="custom"] .fm-brand-image-only .brand-mark[data-logo-failed="1"] .fm-logo-error-text{
+ display:block;font-size:14px;font-weight:800;line-height:1.2;white-space:normal;
+ color:var(--fm-brand-secondary);overflow-wrap:anywhere;
+}

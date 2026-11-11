@@ -708,6 +708,7 @@ function App(){
  const currentPharmacies=establishments.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  const editingIsWarehouse=pharmacyForm?.establishmentType==="almacen";
  function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
+  if(id==="proveedores-condiciones")id="proveedores";
   if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
   }

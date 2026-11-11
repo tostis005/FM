@@ -44,6 +44,11 @@ jobs:
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js
           node --test api/src/familyDuplicates.test.js
+          node --check api/src/familySameName.js
+          node --test api/src/familySameName.test.js
+          node --check api/src/familyNameMerge.js
+          node --test api/src/familyNameMerge.test.js
+          node --check api/src/runFamilyNameMerges.mjs
           node --check api/src/familyDuplicateMerge.js
           node --check api/src/applyFamilyDuplicates.mjs
           node --test api/src/familyDuplicateMerge.test.js

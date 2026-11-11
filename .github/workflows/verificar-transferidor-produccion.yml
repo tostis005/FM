@@ -1,5 +1,6 @@
 name: Verificar propuestas reales del Transferidor
 # Contraste IdArticu 1-399999 y objetivo de 30 dias sobre todas las farmacias.
+# Incluye comprobación del cálculo por bloques en paralelo con caché.
 on:
   push:
     branches: [main]

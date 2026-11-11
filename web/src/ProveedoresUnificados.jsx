@@ -63,7 +63,7 @@ export default function ProveedoresUnificados({clientSlug,canEditMaster=false,ca
   [error,setError]=useState(""),[notice,setNotice]=useState("");
  async function refresh(){
   const version=++requestVersion.current;
-  setLoading(true);setError("");setNotice("");
+  setLoading(true);setError("");
   // El directorio compartido y sus documentos no dependen de las consultas
   // adicionales del ERP (que pueden ser más lentas o tener otros permisos).
   const secondary=Promise.allSettled([

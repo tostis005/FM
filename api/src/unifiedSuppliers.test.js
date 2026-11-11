@@ -1,6 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {listUnifiedSuppliers,readUnifiedSupplierCN,setupUnifiedSuppliers} from "./unifiedSuppliers.js";
+import {listUnifiedSuppliers,readUnifiedSupplierCN,readSupplierMasterCatalogue,mergeSupplierCatalogReferences,setupUnifiedSuppliers} from "./unifiedSuppliers.js";
 // Comprobar que el modo clásico sigue intacto y puede restaurarse de inmediato.
 process.env.FM_PREPARADOR_ULTIMA_RECEPCION="0";
 const ctx={client:{slug:"ampedia",schema:"ampedia"}};
@@ -79,4 +79,44 @@ test("el gestor puede unificar laboratorios, pero el CSV sigue siendo exclusivo 
  });
  assert.equal(routes["/api/tenant/proveedores-unificados/fusionar"][0],managerGuard);
  assert.equal(routes["/api/tenant/proveedores-unificados/importar"][0],adminGuard);
+});
+
+test("el preparador devuelve productos del catálogo aunque nunca se hayan comprado",async()=>{
+ const queries=[];
+ const stockOnly={referencia:"000125",cn:"000125",nombre:"Crema sin ventas",
+  tipo:"parafarmacia",inPurchases:false,inReceipts:false};
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;queries.push(sql);
+  if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
+  if(sql.includes("FROM matched"))return {rows:[stockOnly]};
+  return {rows:[]}; // Ninguna recepción histórica
+ }};
+ const catalog=await readUnifiedSupplierCN(pool,ctx,{
+  key:"P:88",pharmacies:[1],type:"parafarmacia"
+ });
+ assert.equal(catalog.total,1);
+ assert.equal(catalog.rows[0].cn,"000125");
+ assert.equal(catalog.rows[0].inPurchases,false);
+ assert.match(queries.find(q=>q.includes("FROM matched")),/proveedor_habitual_id/);
+ assert.match(queries.find(q=>q.includes("FROM matched")),/proveedores_unificados_alias/);
+});
+test("no mezcla proveedores homónimos de otras farmacias ni duplica CN entre fuentes",async()=>{
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;
+  assert.match(sql,/c\\.code=upper\\(btrim\\(ua\\.farmacia_codigo\\)\\)/);
+  return {rows:[]};
+ }};
+ await readSupplierMasterCatalogue(pool,ctx,{
+  id:"88",pharmacies:[1,2],type:"parafarmacia",patterns:[]
+ });
+ const common={referencia:"012345",cn:"012345",nombre:"Producto",
+  tipo:"parafarmacia"};
+ const merged=mergeSupplierCatalogReferences(
+  [{...common,inPurchases:true,inReceipts:true}],
+  [{...common,inPurchases:false,inReceipts:false},
+   {referencia:"ERP:1:ABC",cn:null,nombre:"Sin CN",tipo:"parafarmacia"}],
+  "","parafarmacia");
+ assert.equal(merged.total,2);
+ assert.equal(merged.rows.find(r=>r.cn==="012345").inPurchases,true);
+ assert.ok(merged.rows.some(r=>r.referencia==="ERP:1:ABC"));
 });

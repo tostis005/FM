@@ -1,4 +1,5 @@
 name: Verificar propuestas reales del Transferidor
+# Contraste IdArticu 1-399999 y objetivo de 30 dias sobre todas las farmacias.
 on:
   push:
     branches: [main]

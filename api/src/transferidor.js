@@ -128,12 +128,21 @@ function inventorySql(schema,nativeCN=false){
 ), eligible AS MATERIALIZED (
  SELECT a.* FROM articles a JOIN candidates c ON c.cn=a.cn
 ), sales AS MATERIALIZED (
+ -- Mismas líneas y cabeceras documentales que utiliza el Preparador.
+ -- Índice (farmacia, artículo, sistema, documento): evita barrer toda la vista de ventas.
  SELECT a.fid,a.article_id,
-  coalesce(sum(v.unidades) FILTER (WHERE v.fecha >= current_date-interval '89 days'),0)::float8 AS units3,
-  coalesce(sum(v.unidades),0)::float8 AS units12
- FROM eligible a JOIN ${q}.fm_ventas_analitica v
-  ON upper(btrim(v.farmacia_codigo))=a.source_code AND v.articulo_id::text=a.article_id
-  AND v.fecha>=current_date-interval '364 days'
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+   FILTER(WHERE h.fecha>=current_date-interval '89 days'),0)::float8 AS units3,
+  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END),0)::float8 AS units12
+ FROM eligible a
+ JOIN ${q}.fm_ventas_lineas l ON l.farmacia_codigo=a.source_code
+  AND l.articulo_origen_id=a.article_id
+  AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
+ JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
+  AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
+  AND h.lineas_completas AND NOT h.eliminado_logicamente
+  AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+ WHERE h.fecha>=current_date-interval '364 days' AND h.fecha<current_date+interval '1 day'
  GROUP BY a.fid,a.article_id
 ), pending AS MATERIALIZED (
  SELECT p.farmacia_id AS fid,l.line->>'articulo' AS article_id,

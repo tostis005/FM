@@ -1,6 +1,6 @@
 // Unifica nombres equivalentes dentro del cliente, conserva CN y auditoría.
 // No depende de compartir productos: el CN solo resuelve tipo desconocido.
-import {planSameNameMerges} from "./familySameName.js";
+import {planSameNameMerges,preferredFamilyTitle} from "./familySameName.js";
 
 const selectFamilies="SELECT id::text AS id,nombre AS name,segmento AS segment,"+
  " referencia_farmacia AS \"referencePharmacy\",nombre_manual AS \"customName\","+
@@ -48,9 +48,19 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
   }
  }
  const planned=planSameNameMerges([...byId.values()]);
- if(!planned.actions.length)
-  return {...planned,merged:0,aliasesMoved:0,articlesMoved:0,stockRulesMoved:0,dryRun};
- if(dryRun)return {...planned,merged:0,aliasesMoved:0,articlesMoved:0,stockRulesMoved:0,dryRun};
+ // Corregir también la escritura de las familias que no necesitan fusión.
+ // No se altera ningún nombre editado manualmente.
+ const sourceIds=new Set(planned.actions.map(x=>x.sourceId));
+ const groupedTitles=new Map(planned.groups.map(g=>[g.destinationId,g.name]));
+ const renameOnly=[...byId.values()].filter(f=>!sourceIds.has(f.id)&&
+   (!f.customName||f.machineNamed)).map(f=>({
+    id:f.id,name:groupedTitles.get(f.id)||preferredFamilyTitle([f],f),
+    previous:f.name
+   })).filter(f=>f.name!==f.previous);
+ const resultBase={...planned,renamesSuggested:renameOnly.length};
+ if(!planned.actions.length&&!renameOnly.length)
+  return {...resultBase,merged:0,namesUpdated:0,aliasesMoved:0,articlesMoved:0,stockRulesMoved:0,dryRun};
+ if(dryRun)return {...resultBase,merged:0,namesUpdated:0,aliasesMoved:0,articlesMoved:0,stockRulesMoved:0,dryRun};
  // La función debe ejecutarse dentro de una transacción con bloqueo del cliente.
  const mapping=JSON.stringify(planned.actions.map(a=>({
   source:a.sourceId,destination:a.destinationId,
@@ -96,10 +106,11 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
  });
  // No cambiar nombres editados por el usuario. Solo títulos no manuales
  // (o creados automáticamente por fusiones anteriores).
- const titles=planned.groups.map(g=>({id:g.destinationId,name:g.name}));
- const machineIds=audits.rows.map(x=>x.id);
- await db.query(
-  "UPDATE farmetrica.familias_globales g SET nombre=m.name,nombre_manual=true,actualizado_en=now()"+
+ const titles=[...planned.groups.map(g=>({id:g.destinationId,name:g.name})),
+  ...renameOnly.filter(x=>!groupedTitles.has(x.id)).map(x=>({id:x.id,name:x.name}))];
+ const machineIds=[...byId.values()].filter(f=>f.machineNamed).map(f=>f.id);
+ const {rowCount:namesUpdated}=await db.query(
+  "UPDATE farmetrica.familias_globales g SET nombre=m.name,actualizado_en=now()"+
   " FROM jsonb_to_recordset($2::jsonb) AS m(id text,name text)"+
   " WHERE g.cliente_slug=$1 AND g.id=m.id::bigint AND g.nombre<>m.name"+
   " AND (NOT g.nombre_manual OR g.id=ANY($3::bigint[]))",
@@ -124,7 +135,7 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
   " ON CONFLICT(cliente_slug,familia_origen) DO NOTHING",param);
  if(merged!==planned.actions.length)
   throw Error("No se pudieron fusionar todas las familias planeadas");
- return {...planned,merged,aliasesMoved,articlesMoved,stockRulesMoved,dryRun};
+ return {...resultBase,merged,namesUpdated,aliasesMoved,articlesMoved,stockRulesMoved,dryRun};
 }
 
 
@@ -137,15 +148,17 @@ export async function consolidateFamilyNamesUntilStable(db,slug,{
  if(!Number.isInteger(maxPasses)||maxPasses<1||maxPasses>16)
   throw Error("Número de pasadas incorrecto");
  const sum={actions:[],groups:[],activeFamilies:0,uniqueFamilies:0,
-  ambiguousCrossSegment:0,merged:0,aliasesMoved:0,
-  articlesMoved:0,stockRulesMoved:0,passes:0};
+  ambiguousCrossSegment:0,ambiguousExamples:[],merged:0,aliasesMoved:0,
+  articlesMoved:0,stockRulesMoved:0,namesUpdated:0,renamesSuggested:0,passes:0};
  for(let i=0;i<maxPasses;i++){
   const step=await execute(db,slug);
   if(!i)sum.activeFamilies=step.activeFamilies;
   sum.uniqueFamilies=step.uniqueFamilies;
   sum.ambiguousCrossSegment=step.ambiguousCrossSegment;
+  sum.ambiguousExamples=step.ambiguousExamples||[];
   sum.merged+=step.merged;sum.aliasesMoved+=step.aliasesMoved;
   sum.articlesMoved+=step.articlesMoved;sum.stockRulesMoved+=step.stockRulesMoved;
+  sum.namesUpdated+=step.namesUpdated||0;sum.renamesSuggested+=step.renamesSuggested||0;
   sum.actions.push(...step.actions);
   sum.groups.push(...step.groups);
   sum.passes++;

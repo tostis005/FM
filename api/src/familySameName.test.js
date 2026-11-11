@@ -46,9 +46,10 @@ test("una familia sin clasificar se incorpora a categoría única solo si los CN
  const attached=data.actions.find(x=>x.sourceId==="5");
  assert.equal(attached.destinationId,"4");
  assert.equal(attached.reason,"mismo_nombre_segmento_validado_cn");
- // Las dos restantes, aún sin clasificar, se consolidan entre sí.
- assert.ok(data.actions.some(x=>x.sourceId==="7"&&x.destinationId==="6"));
- assert.equal(data.ambiguousCrossSegment,2);
+ // Sin artículos contradictores, el nombre inequívoco puede vincularse
+ // al maestro. La familia mixta permanece sin clasificar.
+ assert.ok(data.actions.some(x=>x.sourceId==="7"&&x.destinationId==="4"));
+ assert.equal(data.ambiguousCrossSegment,1);
 });
 test("categorías administrativas no se fusionan por etiqueta repetida",()=>{
  const data=planSameNameMerges([
@@ -81,4 +82,29 @@ test("Especialidades y Genéricos sí se unifican por nombre aunque no compartan
   f(3,"Genéricos","SIN_DETERMINAR",{linked:150}),f(4,"Genericos","SIN_DETERMINAR",{linked:20})
  ]);
  assert.equal(p.actions.length,2);
+});
+
+test("familia sin clasificar con CN no identificables se unifica por nombre inequívoco",()=>{
+ const p=planSameNameMerges([
+  f(1,"PIES","PARAFARMACIA",{referencePharmacy:"ALMACEN",linked:100}),
+  f(2,"pies","SIN_DETERMINAR",{linked:20,para:10,med:0}),
+  f(3,"Pies","SIN_DETERMINAR",{linked:0,para:0,med:0})
+ ]);
+ assert.deepEqual(p.actions.map(x=>x.destinationId),["1","1"]);
+ assert.equal(p.ambiguousCrossSegment,0);
+});
+test("dos referencias del mismo nombre y distinto segmento solo reciben CN compatibles",()=>{
+ const p=planSameNameMerges([
+  f(1,"Protección","PARAFARMACIA",{referencePharmacy:"ALMACEN",linked:100}),
+  f(2,"Proteccion","MEDICACION",{referencePharmacy:"ABA",linked:50}),
+  f(3,"PROTECCION","SIN_DETERMINAR",{linked:20,para:10,med:0}),
+  f(4,"Protección","SIN_DETERMINAR",{linked:15,para:0,med:8}),
+  f(5,"Protección","SIN_DETERMINAR",{linked:5,para:1,med:1}),
+  f(6,"Protección","SIN_DETERMINAR",{linked:0,para:0,med:0})
+ ]);
+ assert.equal(p.actions.filter(x=>x.destinationId==="1").length,1);
+ assert.equal(p.actions.filter(x=>x.destinationId==="2").length,1);
+ assert.equal(p.ambiguousCrossSegment,2);
+ assert.ok(!p.actions.some(x=>x.sourceId==="5"&&x.destinationId==="1"));
+ assert.ok(!p.actions.some(x=>x.sourceId==="5"&&x.destinationId==="2"));
 });

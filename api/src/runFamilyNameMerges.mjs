@@ -40,8 +40,10 @@ try{
   activasAntes:result.activeFamilies,unificaciones:result.actions.length,
   familiasEsperadas:result.uniqueFamilies,fusionadas:result.merged,
   nombresLocalesMovidos:result.aliasesMoved,articulosMovidos:result.articlesMoved,
+  nombresNormalizados:result.namesUpdated||0,nombresPorNormalizar:result.renamesSuggested||0,
   exposicionesMigradas:result.stockRulesMoved,
   ambiguasEntreSegmentos:result.ambiguousCrossSegment,
+  casosQueRequierenRevision:(result.ambiguousExamples||[]).slice(0,20),
   pasadas:result.passes||0,
   muestras:result.actions.slice(0,20).map(a=>({nombre:a.canonicalName,
    origen:a.sourceId,destino:a.destinationId,segmento:a.toSegment,razon:a.reason}))

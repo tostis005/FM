@@ -16,7 +16,7 @@ const canonicalOrder=(a,b)=>
  Number(Boolean(b.customName))-Number(Boolean(a.customName))||
  weight(b)-weight(a)||
  num(a.id)-num(b.id);
-const preferredTitle=(items,canonical)=>{
+export const preferredFamilyTitle=(items,canonical)=>{
  // Respetar un nombre editado por una persona; los nombres generados
  // automáticamente por fusiones previas pueden corregirse si faltan tildes.
  if(canonical.customName&&!canonical.machineNamed)
@@ -26,7 +26,7 @@ const preferredTitle=(items,canonical)=>{
   .map(x=>cleanFamilyName(x,canonical.id));
  const accents=x=>(x.match(/[áéíóúÁÉÍÓÚ]/g)||[]).length;
  candidates.sort((a,b)=>accents(b)-accents(a)||
-  a.length-b.length||a.localeCompare(b,"es"));
+  b.length-a.length||a.localeCompare(b,"es"));
  return candidates[0]||cleanFamilyName(canonical.name,canonical.id);
 }
 export function planSameNameMerges(families){
@@ -40,41 +40,52 @@ export function planSameNameMerges(families){
   if(!groups.has(key))groups.set(key,[]);
   groups.get(key).push(f);
  }
- // Los mixtos sin clasificar solo se relacionan con un segmento conocido
- // si ese segmento es único para ese nombre y los CN lo corroboran.
+ // Un nombre puede llegar sin segmento desde Farmatic. Usar los CN
+ // disponibles para elegir una única categoría conocida, aunque existan
+ // referencias distintas (de parafarmacia y medicación) con el mismo nombre.
+ // Si no hay evidencia o es contradictoria, conservar SIN_DETERMINAR.
  const knownByName=new Map();
- for(const [key,items] of groups){
+ for(const key of groups.keys()){
   const [seg,slug]=key.split("|");
   if(seg==="SIN_DETERMINAR")continue;
   if(!knownByName.has(slug))knownByName.set(slug,new Set());
   knownByName.get(slug).add(seg);
  }
  let ambiguousCrossSegment=0;
+ const examples=[];
  for(const [key,items] of [...groups]){
   const [seg,slug]=key.split("|");
   if(seg!=="SIN_DETERMINAR")continue;
-  const possibilities=knownByName.get(slug)||new Set();
-  if(possibilities.size>1){ambiguousCrossSegment+=items.length;continue}
-  if(possibilities.size!==1)continue;
-  const targetSegment=[...possibilities][0],target=targetSegment+"|"+slug;
-  const typed=groups.get(target);
-  if(!typed)continue;
+  const available=knownByName.get(slug)||new Set();
+  if(!available.size)continue;
   const unresolved=[];
   for(const f of items){
    const para=num(f.para),med=num(f.med);
-   const total=para+med,compatible=targetSegment==="PARAFARMACIA"?para:med;
-   // No exige CN compartidos: solo evita mezclar medicamento y parafarmacia.
-   if(total>=1&&total===num(f.linked)&&compatible===total)typed.push(f);
+   let target=null;
+   if(available.size===1){
+    const only=[...available][0];
+    if((only==="PARAFARMACIA"&&med===0)||
+       (only==="MEDICACION"&&para===0))target=only;
+   }else if(para>0&&med===0&&available.has("PARAFARMACIA"))
+    target="PARAFARMACIA";
+   else if(med>0&&para===0&&available.has("MEDICACION"))
+    target="MEDICACION";
+   if(!target){unresolved.push(f);continue}
+   const destination=target+"|"+slug;
+   if(groups.has(destination))groups.get(destination).push(f);
    else unresolved.push(f);
   }
   groups.set(key,unresolved);
   ambiguousCrossSegment+=unresolved.length;
+  for(const f of unresolved.slice(0,3))
+   examples.push({id:f.id,name:f.name,para:num(f.para),med:num(f.med),
+    referencedSegments:[...available]});
  }
  const actions=[],nameGroups=[];
  for(const [key,items] of groups){
   if(items.length<=1)continue;
   const ranked=[...items].sort(canonicalOrder),keeper=ranked[0];
-  const canonicalName=preferredTitle(items,keeper);
+  const canonicalName=preferredFamilyTitle(items,keeper);
   nameGroups.push({key,slug:keeper.normalized,segment:segment(keeper),
    destinationId:keeper.id,members:items.length,name:canonicalName});
   for(const source of ranked.slice(1)){
@@ -90,5 +101,6 @@ export function planSameNameMerges(families){
   }
  }
  return {actions,groups:nameGroups,activeFamilies:eligible.length,
-  uniqueFamilies:eligible.length-actions.length,ambiguousCrossSegment};
+  uniqueFamilies:eligible.length-actions.length,ambiguousCrossSegment,
+  ambiguousExamples:examples.slice(0,30)};
 }

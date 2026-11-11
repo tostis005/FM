@@ -35,7 +35,7 @@ async function readSourceFamilies(db,schema,refs,slug){
   const para=Number(item.para),med=Number(item.med);
   const segment=para>0&&med===0?"PARAFARMACIA":med>0&&para===0?"MEDICACION":"SIN_DETERMINAR";
   map.set(familyKey(item.pharmacy,item.code),
-   {pharmacyCode:item.pharmacy,code:item.code,name:"",articles:Number(item.articles),segment});
+   {pharmacyCode:item.pharmacy,code:item.code,name:"",articles:Number(item.articles),segment,para,med});
  }
  // El sincronizador deposita el catálogo completo en farmetrica.familias.
  // En otros clientes solo se busca dentro de su propio esquema para no
@@ -300,13 +300,22 @@ export function setupFamilyMaster(app,pool,{requireTenantManager}){
   const name=String(req.body?.name||"").trim();
   if(!validId(req.params.id)||name.length<2||name.length>200)
    return res.status(400).json({error:"Nombre o familia incorrectos"});
+  const slug=req.context.client.slug,db=await pool.connect();
   try{
-   const {rows}=await pool.query(
+   await db.query("BEGIN");
+   await db.query("SELECT pg_advisory_xact_lock(hashtext('familias:' || $1))",[slug]);
+   const {rows}=await db.query(
     "UPDATE farmetrica.familias_globales SET nombre=$3,nombre_manual=true,actualizado_en=now()"+
     " WHERE cliente_slug=$1 AND id=$2 AND activo RETURNING id",
-    [req.context.client.slug,req.params.id,name]);
-   res.status(rows.length?200:404).json(rows.length?{ok:true}:{error:"Familia no encontrada"});
-  }catch(e){next(e);}
+    [slug,req.params.id,name]);
+   if(!rows.length){await db.query("ROLLBACK");return res.status(404).json({error:"Familia no encontrada"})}
+   // El nuevo nombre puede coincidir con otro ya existente: la clasificación
+   // debe quedar consolidada inmediatamente, no esperar al siguiente despliegue.
+   const result=await consolidateFamilyNamesUntilStable(db,slug);
+   await db.query("COMMIT");
+   res.json({ok:true,mergedSameName:result.merged});
+  }catch(e){await db.query("ROLLBACK");next(e)}
+  finally{db.release()}
  });
  app.put("/api/tenant/familias-globales/:id/origen",...requireTenantManager(),async(req,res,next)=>{
   const id=req.params.id,pharmacy=String(req.body?.pharmacyCode||"").trim().toUpperCase(),

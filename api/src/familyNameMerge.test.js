@@ -95,3 +95,51 @@ test("si no converge se rechaza la transacción en vez de dejar duplicados",asyn
   })
  }),/Quedan duplicados/);
 });
+
+test("normaliza el nombre de una familia única aunque no haya ninguna fusión",async()=>{
+ const statements=[];
+ const db={async query(q,values){
+  const sql=typeof q==="string"?q:q.text;
+  statements.push(sql);
+  if(sql.startsWith("SELECT id::text AS id,nombre AS name"))
+   return {rows:[{id:"14",name:"BEBE",segment:"PARAFARMACIA",
+    referencePharmacy:"ALMACEN",customName:false,active:true}]};
+  if(sql.startsWith("SELECT familia_id::text AS id,nombre_origen"))
+   return {rows:[{id:"14",name:"Bebé"}]};
+  if(sql.startsWith("SELECT familia_id::text AS id,count"))
+   return {rows:[{id:"14",linked:20,para:20,med:0}]};
+  if(sql.startsWith("SELECT g.id::text AS id FROM"))return {rows:[]};
+  if(sql.startsWith("UPDATE farmetrica.familias_globales g SET nombre=m.name"))
+   return {rowCount:1};
+  return {rows:[],rowCount:0};
+ }};
+ const dry=await consolidateFamiliesByName(db,"ampedia",{dryRun:true});
+ assert.equal(dry.actions.length,0);
+ assert.equal(dry.renamesSuggested,1);
+ assert.equal(dry.namesUpdated,0);
+ assert.ok(statements.every(s=>s.trim().startsWith("SELECT")));
+ statements.length=0;
+ const applied=await consolidateFamiliesByName(db,"ampedia");
+ assert.equal(applied.merged,0);
+ assert.equal(applied.namesUpdated,1);
+ const update=statements.find(x=>x.startsWith("UPDATE farmetrica.familias_globales g SET nombre=m.name"));
+ assert.ok(update);
+ assert.ok(update.includes("NOT g.nombre_manual"));
+});
+test("conserva el formato del nombre que haya personalizado el usuario",async()=>{
+ const statements=[];
+ const db={async query(q){
+  const sql=typeof q==="string"?q:q.text;
+  statements.push(sql);
+  if(sql.startsWith("SELECT id::text AS id,nombre AS name"))
+   return {rows:[{id:"14",name:"BEBE",segment:"PARAFARMACIA",
+    referencePharmacy:"ALMACEN",customName:true,active:true}]};
+  if(sql.startsWith("SELECT familia_id::text AS id,nombre_origen"))
+   return {rows:[{id:"14",name:"Bebé"}]};
+  return {rows:[],rowCount:0};
+ }};
+ const result=await consolidateFamiliesByName(db,"ampedia");
+ assert.equal(result.renamesSuggested,0);
+ assert.equal(result.namesUpdated,0);
+ assert.ok(statements.every(x=>x.trim().startsWith("SELECT")));
+});

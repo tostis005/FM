@@ -1,16 +1,9 @@
-import {cleanFamilyName} from "./familyMatching.js";
+import {familyNameSlug} from "./familyMatching.js";
 
-// Sólo se neutralizan las tildes vocálicas. «Año» y «ano» no son equivalentes.
-export function dedupFamilySlug(name){
- const clean=cleanFamilyName(name,"").trim();
- if(!name||/^Familia\s*(?:\d+)?$/i.test(clean))return "";
- const lower=clean.toLocaleLowerCase("es").replace(/ñ/g,"\u0001")
-  .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\u0001/g,"ñ");
- const slug=lower.replace(/[^a-z0-9ñ]+/g," ").trim().replace(/\s+/g," ");
- if(slug.length<5||/^(otros?|varios?|general|resto|sin clasificar|sin asignar|sin familia|sin categoria|a revisar|articulos inactivos|miscelanea|familia \d+)$/.test(slug))
-  return "";
- return slug;
-}
+// El auditor, el reconciliador y el maestro comparten una única
+// definición de nombre equivalente, sin reglas diferentes por pantalla.
+export const dedupFamilySlug=name=>familyNameSlug(name,"");
+
 function field(row,...names){
  for(const key of names)if(row?.[key]!==undefined&&row[key]!==null)return row[key];
  return "";

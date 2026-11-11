@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan} from "./transferidor.js";
+import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan,setupTransferidor} from "./transferidor.js";
 
 const pharmacies=[{id:"1",name:"Abadía"},{id:"2",name:"Europa"},{id:"3",name:"Centro"},{id:"4",name:"Norte"}];
 const item=(pharmacyId,cn,stock,target)=>({
@@ -56,4 +56,45 @@ test("dos donantes y dos receptores mantienen saldos globales coherentes",()=>{
  const page=filterTransferPlan(plan,parseTransferFilters({pagina:"2",tamano:"10",
   orden:"units",direccion:"desc"},pharmacies));
  assert.equal(page.total,plan.length,"El total se cuenta antes de paginar");
+});
+
+test("la API mantiene el plan si falta la importación de una tercera farmacia",async()=>{
+ const queries=[];
+ const db={async query(arg){
+  const q=typeof arg==="string"?arg:arg.text;
+  queries.push({q,values:typeof arg==="string"?[]:arg.values});
+  if(q.includes("AS ready FROM farmetrica.farmacias"))return {rows:[
+   {id:"1",ready:true},{id:"2",ready:true},{id:"3",ready:false}
+  ]};
+  if(q.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(q.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"1",cn:"123456",name:"Crema",stock:20,units3:0,units12:0},
+   {pharmacyId:"2",cn:"123456",name:"Crema",stock:0,units3:90,units12:90}
+  ]};
+  if(q.includes("preparador_configuracion_cliente"))return {rows:[{days:20}]};
+  throw Error("Consulta imprevista: "+q.slice(0,100));
+ }};
+ let handler;
+ setupTransferidor({get(path,...stack){
+  assert.equal(path,"/api/analytics/stock/transferidor");
+  handler=stack.at(-1);
+ }},db,{requireTenant:()=>[]});
+ const req={context:{role:"superadministrador",client:{slug:"ampedia",schema:"ampedia"},
+  pharmacies:pharmacies.slice(0,3)},query:{vista:"todos",pagina:"1",tamano:"50"}};
+ const res={statusCode:200,status(n){this.statusCode=n;return this;},
+  json(value){this.body=value;return this;}};
+ let err=null;
+ await handler(req,res,e=>{err=e});
+ if(err)throw err;
+ assert.equal(res.statusCode,200);
+ assert.equal(res.body.available,true);
+ assert.equal(res.body.total,1);
+ assert.equal(res.body.rows[0].originName,"Abadía");
+ assert.equal(res.body.rows[0].destinationName,"Europa");
+ assert.equal(res.body.rows[0].units,20);
+ assert.match(res.body.warning,/Centro/);
+ const selected=queries.find(x=>x.q.includes("WITH chosen AS MATERIALIZED"));
+ assert.deepEqual(selected.values[1],[1,2]);
+ assert.doesNotMatch(selected.q,/HAVING count\(DISTINCT fid\)>1/);
+ assert.match(selected.q,/cn_normalizado/);
 });

@@ -107,7 +107,7 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   -- AMP: código histórico del almacén central ALMACEN para recepciones y ERP.
   SELECT f.id,'AMP'::text AS code
   FROM farmetrica.farmacias f
-  WHERE f.cliente_slug='ampedia' AND f.activo
+  WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.activo
    AND f.tipo_establecimiento='almacen'
    AND upper(btrim(f.codigo_origen))='ALMACEN'
    AND cardinality($2::int[])>0

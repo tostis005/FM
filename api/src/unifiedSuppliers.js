@@ -103,6 +103,14 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
+  UNION ALL
+  -- AMP: código histórico del almacén central ALMACEN para recepciones y ERP.
+  SELECT f.id,'AMP'::text AS code
+  FROM farmetrica.farmacias f
+  WHERE f.cliente_slug='ampedia' AND f.activo
+   AND f.tipo_establecimiento='almacen'
+   AND upper(btrim(f.codigo_origen))='ALMACEN'
+   AND cardinality($2::int[])>0
  ), aliases AS MATERIALIZED (
   SELECT DISTINCT c.code,${normalizeCode("a.codigo_origen")} AS supplier
   FROM farmetrica.proveedores_unificados_alias a

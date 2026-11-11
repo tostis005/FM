@@ -23,7 +23,8 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    try{
     const query=new URLSearchParams({vista,farmacia:pharmacy,origen:origin,destino:destination,
      buscar:search,orden:sort.key,direccion:sort.direction,pagina:String(page),
-     tamano:String(pageSize),filtros:JSON.stringify(filters)});
+     tamano:String(pageSize),filtros:JSON.stringify(filters),
+     recalcular:revision?String(revision):""});
     const response=await fetch("/api/analytics/stock/transferidor?"+query,{
      credentials:"same-origin",cache:"no-store",signal:controller.signal,
      headers:{"X-Farmetrica-Cliente":clientSlug}});
@@ -58,7 +59,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  return <div className="fm-transferidor">
   <ReportPageHeader title="Transferidor"
    updatedAt={data?.calculatedAt||null} refreshing={loading}
-   onRefresh={()=>setRevision(n=>n+1)}/>
+   onRefresh={()=>setRevision(Date.now())}/>
   <section className="card fm-transfer-controls" aria-label="Filtros del transferidor">
    <div className="fm-transfer-tabs" role="group" aria-label="Tipo de movimiento">
     {[["todos","Todos"],["envio","Lo que se envía"],["recibo","Lo que se recibe"]].map(([id,label])=>
@@ -97,7 +98,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    </div>
   </section>
   {error&&<p className="fm-op-message fm-op-error" role="alert">{error}
-   <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRevision(n=>n+1)}>
+   <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRevision(Date.now())}>
     <RefreshCcw size={14}/> Reintentar</button></p>}
   {data?.warning&&<p role="status" className="fm-op-message fm-op-warning">{data.warning}</p>}
   {data?.available&&<div className="fm-transfer-summary" aria-label="Resumen global">

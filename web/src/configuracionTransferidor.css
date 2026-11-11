@@ -1,0 +1,22 @@
+.fm-transfer-settings{display:grid;gap:16px;padding:20px}
+.fm-transfer-settings-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.fm-transfer-settings-heading h2{margin:0 0 5px;font-size:1.15rem}
+.fm-transfer-settings-heading p{margin:0;color:var(--muted,#66766d);font-size:.89rem}
+.fm-transfer-settings-heading button,.fm-transfer-settings form button{display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.fm-transfer-settings-global,.fm-transfer-settings-form{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.fm-transfer-settings-global{padding:14px;background:#f3f9f6;border:1px solid #dcece4;border-radius:12px}
+.fm-transfer-settings-title{display:flex;gap:8px;flex-direction:column;font-size:.94rem}
+.fm-transfer-settings-title small{color:#5f7668;font-weight:400;font-size:.81rem}
+.fm-transfer-settings-global .fm-transfer-settings-title{flex-basis:100%}
+.fm-transfer-settings label{display:grid;gap:5px;flex:1 1 170px;font-size:.83rem;color:inherit;min-width:150px}
+.fm-transfer-settings input,.fm-transfer-settings select{min-height:39px;border:1px solid #cedcd3;border-radius:8px;background:#fff;color:#213f34;font:inherit;padding:7px 10px;width:100%;min-width:0}
+.fm-transfer-settings select:focus,.fm-transfer-settings input:focus{outline:2px solid #2f9073;outline-offset:1px}
+.fm-transfer-settings-example{margin:0;background:#f8fbf9;color:#4c6c5b;font-size:.86rem;padding:10px 13px;border-left:3px solid #79b99d}
+.fm-transfer-settings-section{border-top:1px solid #e1ebe4;padding-top:18px;display:grid;gap:13px}
+.fm-transfer-settings-form>button{align-self:end;min-height:39px}
+.fm-transfer-settings-records{display:grid;gap:7px}
+.fm-transfer-settings-records>p{color:#64766b;margin:0;font-size:.84rem}
+.fm-transfer-settings-records>div{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;border:1px solid #e0e9e2;border-radius:8px;padding:8px 11px;font-size:.82rem}
+.fm-transfer-settings-records>div>strong{white-space:nowrap;font-variant-numeric:tabular-nums}
+.fm-transfer-settings-records>div>span{overflow-wrap:anywhere}
+@media(max-width:720px){.fm-transfer-settings{padding:14px}.fm-transfer-settings-form>button{width:100%}.fm-transfer-settings-records>div{grid-template-columns:minmax(0,1fr) auto}.fm-transfer-settings-records>div>strong{grid-column:1}.fm-transfer-settings-records>div>button{grid-column:2;grid-row:1/3}}

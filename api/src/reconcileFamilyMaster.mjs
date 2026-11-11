@@ -4,7 +4,7 @@ import pg from "pg";
 import {reconcileFamilies} from "./familyMaster.js";
 
 const slug=process.argv.includes("--cliente")?process.argv[process.argv.indexOf("--cliente")+1]:"ampedia";
-const version="familias-ampedia-20261111-v2";
+const version="familias-ampedia-20261111-v3";
 const force=process.argv.includes("--force");
 if(!/^[a-z][a-z0-9_]{1,62}$/.test(slug))throw Error("Cliente incorrecto");
 if(!process.env.DATABASE_URL)throw Error("DATABASE_URL no disponible");

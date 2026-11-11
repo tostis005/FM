@@ -35,7 +35,7 @@ async function readSourceFamilies(db,schema,refs,slug){
   const para=Number(item.para),med=Number(item.med);
   const segment=para>0&&med===0?"PARAFARMACIA":med>0&&para===0?"MEDICACION":"SIN_DETERMINAR";
   map.set(familyKey(item.pharmacy,item.code),
-   {pharmacyCode:item.pharmacy,code:item.code,name:"",articles:Number(item.articles),segment});
+   {pharmacyCode:item.pharmacy,code:item.code,name:"",articles:Number(item.articles),segment,para,med});
  }
  // El sincronizador deposita el catálogo completo en farmetrica.familias.
  // En otros clientes solo se busca dentro de su propio esquema para no

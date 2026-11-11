@@ -144,3 +144,17 @@ test("sin snapshot la consulta específica permite el fallback del histórico",a
  const pool={query:async()=>({rows:[]})};
  assert.equal(await latestSupplierCN(pool,ctx,[1],"42"),null);
 });
+
+test("la última recepción usa solo alias con identidad unívoca por farmacia",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ for(const name of ["preparadorLastReceipt.sql","preparadorLastReceiptSnapshot.sql"]){
+  const sql=await readFile(new URL("./"+name,import.meta.url),"utf8");
+  assert.match(sql,/GROUP BY pharmacy_id,pharmacy_code,supplier_code/);
+  assert.match(sql,/HAVING count\(DISTINCT lab_id\)=1/);
+  assert.doesNotMatch(sql,/SELECT DISTINCT ON \(pharmacy_id,supplier_code\)/);
+  assert.match(sql,/SELECT DISTINCT ON \(cn\)/);
+  assert.match(sql,/ORDER BY cn,fecha DESC/);
+  assert.match(sql,/l\.articulo_origen_id/);
+  assert.match(sql,/h\.lineas_completas AND NOT h\.eliminada_logicamente/);
+ }
+});

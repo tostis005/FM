@@ -42,6 +42,7 @@ try{
   nombresLocalesMovidos:result.aliasesMoved,articulosMovidos:result.articlesMoved,
   exposicionesMigradas:result.stockRulesMoved,
   ambiguasEntreSegmentos:result.ambiguousCrossSegment,
+  casosQueRequierenRevision:(result.ambiguousExamples||[]).slice(0,20),
   pasadas:result.passes||0,
   muestras:result.actions.slice(0,20).map(a=>({nombre:a.canonicalName,
    origen:a.sourceId,destino:a.destinationId,segmento:a.toSegment,razon:a.reason}))

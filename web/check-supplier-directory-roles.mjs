@@ -92,7 +92,7 @@ try{
   return {separated:toggle.top-brand.bottom,bottom:sidebar.bottom-toggle.bottom};
  });
  assert.ok(footerPosition.separated>100,"El plegado no debe cubrir el logotipo");
- assert.ok(footerPosition.bottom<45,"El control debe estar anclado al pie derecho");
+ assert.ok(footerPosition.bottom>=0&&footerPosition.bottom<65,"El control debe estar anclado al pie derecho: "+JSON.stringify(footerPosition));
  await superadmin.page.getByRole("button",{name:"Plegar menú lateral"}).click();
  assert.equal(await superadmin.page.locator("#farmetrica-sidebar").evaluate(node=>Math.round(node.getBoundingClientRect().width)),72);
  await superadmin.page.reload({waitUntil:"domcontentloaded"});

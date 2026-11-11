@@ -57,3 +57,22 @@ test("Proveedores sigue exactamente los módulos y secciones asignados",()=>{
  assert.deepEqual(requestSections({path:"/api/tenant/proveedores-unificados/17/ficha"}),["proveedores"]);
  assert.deepEqual(requestSections({path:"/api/tenant/proveedor-documento-categorias"}),["proveedores"]);
 });
+
+test("el catálogo de perfiles muestra solo rutas operativas y conserva las históricas",()=>{
+ const visible=USER_SECTIONS.filter(s=>s.profileVisible).map(s=>s.id);
+ assert.deepEqual(visible,[
+  "dashboard","ventas","compras","compras-preparador","stock",
+  "stock-sin-recepciones","picking-list","proveedores","genericos",
+  "rentabilidad-retorno","promociones","seguimiento-global",
+  "promociones-objetivos","acciones","oportunidades-seguimiento",
+  "alertas","mi-trabajo"
+ ]);
+ for(const obsolete of ["reposicion","informes","ventas-tickets",
+  "compras-recepciones","stock-historico","proveedores-condiciones"]){
+  assert.equal(USER_SECTIONS.find(s=>s.id===obsolete)?.profileVisible,false);
+ }
+ assert.deepEqual(validateSectionGrants(["compras-recepciones"],
+  {compras:true}),["compras-recepciones"]);
+ assert.equal(USER_SECTIONS.find(s=>s.id==="acciones")?.name,"Trabajo y ahorro");
+ assert.equal(USER_SECTIONS.find(s=>s.id==="rentabilidad-retorno")?.name,"Ahorro verificado");
+});

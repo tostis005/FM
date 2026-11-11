@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from "react";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
-import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./laboratoryCatalog.css";
 import {collectLaboratoryCatalog,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";
@@ -81,18 +81,18 @@ export default function LaboratoryCatalogPanel({clientSlug,pharmacyIds=[]}){
      placeholder="Artículo o CN…" /></label>
     <span>{(result.rows||[]).length+" de "+result.total+" artículos"+(loading?" · cargando…":"")}</span>
    </div>
-   <HorizontalTableScroll className="fm-laboratory-scroll" label="catálogo de laboratorio" role="tabpanel">
-    <table><thead><tr><th>CN</th><th>Artículo</th><th>Origen</th><th>Farmacias con movimientos</th></tr></thead>
-     <tbody>{(result.rows||[]).map(r=><tr key={r.referencia}>
-      <td><strong>{r.cn||(/^[0-9]{6,7}$/.test(String(r.referencia||""))?r.referencia:"CN no disponible")}</strong></td>
-      <td>{r.nombre}{r.provisional&&<small className="fm-laboratory-provisional"> · Clasificación provisional (no figura en el maestro)</small>}</td>
-      <td>{r.inMaster&&r.inReceipts?"Nomenclátor + movimientos":r.inMaster?"Nomenclátor":"Ventas o recepciones"}</td>
-      <td>{r.pharmacyIds||"—"}</td>
-     </tr>)}
-     {!loading&&!(result.rows||[]).length&&<tr><td colSpan={4}>No se han encontrado artículos en esta categoría para el laboratorio seleccionado.</td></tr>}
-     </tbody>
-    </table>
-   </HorizontalTableScroll>
+   <div role="tabpanel" className="fm-laboratory-scroll" aria-label="Catálogo de laboratorio">
+    <SortableDataTable
+     headers={["CN","Artículo","Origen","Farmacias con movimientos"]}
+     rows={(result.rows||[]).map(r=>[
+      <strong>{r.cn||(/^[0-9]{6,7}$/.test(String(r.referencia||""))?r.referencia:"CN no disponible")}</strong>,
+      <span>{r.nombre}{r.provisional&&<small className="fm-laboratory-provisional"> · Clasificación provisional (no figura en el maestro)</small>}</span>,
+      r.inMaster&&r.inReceipts?"Nomenclátor + movimientos":r.inMaster?"Nomenclátor":"Ventas o recepciones",
+      r.pharmacyIds||"—"
+     ])}
+     label="artículos del laboratorio"
+     empty="No se han encontrado artículos para el laboratorio seleccionado." />
+   </div>
    <small className="fm-op-fine">Fuente de los medicamentos: Agencia Española de Medicamentos y Productos Sanitarios (AEMPS). Las ventas y recepciones se asocian mediante sus códigos nacionales y las correspondencias configuradas por farmacia. Un proveedor puede no ser el fabricante físico.</small>
   </>}
  </section>;

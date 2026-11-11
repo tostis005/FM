@@ -160,7 +160,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       catalogueCache.current.delete(catalogueCache.current.keys().next().value);
     }
     if(!controller.signal.aborted)setData({rows:catalog.rows,total:catalog.total,
-     loaded:catalog.total,metricsLoaded:0,metricsUnavailable:true,frequencyDays:0});
+     loaded:catalog.total,metricsLoaded:0,metricsUnavailable:true,frequencyDays:0,warning:catalog.warning||null});
    }catch(e){
     if(!controller.signal.aborted){
      setError("No se pudieron cargar todas las referencias: "+e.message);
@@ -204,7 +204,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     });
     setData({rows:completed,total:catalog.total,loaded:catalog.total,
      metricsLoaded:catalog.total,frequencyDays:result.frequencyDays??0,
-     metricsUnavailable:false});
+     metricsUnavailable:false,warning:catalog.warning||null});
     bulkComplete=true;
    }catch(e){
     if(controller.signal.aborted)return;
@@ -229,7 +229,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        }))}
      }),{signal:controller.signal,onBatch:({rows,loaded,frequencyDays})=>{
       if(!controller.signal.aborted)setData({rows,total:catalog.total,loaded:catalog.total,
-       metricsLoaded:loaded,frequencyDays,metricsUnavailable:loaded<catalog.total});
+       metricsLoaded:loaded,frequencyDays,metricsUnavailable:loaded<catalog.total,warning:catalog.warning||null});
      }});
    }catch(e){
     if(controller.signal.aborted)return;
@@ -455,7 +455,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </div>}
      </div>}
     <div className="fm-lab-order-summary">
-     <span className="fm-lab-order-article-count"><strong>{currentRows.length}</strong> artículos</span>
+     {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{currentRows.length}</strong> artículos</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>

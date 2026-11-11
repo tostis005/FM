@@ -30,9 +30,10 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
     if(!SLUG.test(slug)) return null;
     const {rows} = await pool.query(
-      "SELECT c.slug,c.nombre,c.esquema_datos,c.activo,c.analisis_abcd_meses,c.demo_origen_slug, "+
-      "a.nombre_marca,a.logo_url,a.color_primario,a.color_secundario,a.estilo_menu "+
-      "FROM farmetrica.clientes c LEFT JOIN farmetrica.cliente_apariencia a ON a.cliente_slug=c.slug WHERE c.slug=$1",[slug]);
+      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses,demo_origen_slug, "+
+      "(SELECT row_to_json(a) FROM farmetrica.cliente_apariencia a "+
+      "WHERE a.cliente_slug=farmetrica.clientes.slug) AS appearance "+
+      "FROM farmetrica.clientes WHERE slug=$1",[slug]);
     const cliente = rows[0];
     if(!cliente || !cliente.activo || !SLUG.test(cliente.esquema_datos)) return null;
     const membership=req.user?.tenants?.find(item=>item.slug===slug && item.active);
@@ -52,7 +53,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       membership?.profile_permissions,isSuper(req.user));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
         analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug),
-        appearance:appearanceFromDatabase(cliente)},
+        appearance:appearanceFromDatabase(cliente.appearance)},
       role, modules:effectiveModules,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user)),
       profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,

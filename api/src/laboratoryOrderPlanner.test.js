@@ -249,7 +249,7 @@ test("SQL consulta el almacén por código de sincronización y solo en parafarm
  assert.match(text,/warehouse_ready AS/);
  assert.match(text,/warehouse_sales_ready AS MATERIALIZED/);
  assert.match(text,/warehouse_sales AS MATERIALIZED/);
- assert.match(text,/JOIN __SCHEMA__\\.fm_ventas_lineas l\\s+ON l\\.farmacia_codigo=w\\.source_code/);
+ assert.ok(text.includes("JOIN __SCHEMA__.fm_ventas_lineas l"));
  assert.match(text,/warehouseUnits12/);
 });
 

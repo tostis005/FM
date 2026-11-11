@@ -281,34 +281,45 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  // Paginar por familias: nunca separar una raíz de regalos R1/R2 o dúplos.
  const tableGroups=useMemo(()=>groupedLaboratoryRows(tableVisibleRows,tableSort),
   [tableVisibleRows,tableSort]);
- const totalPages=Math.max(1,Math.ceil(tableGroups.length/tablePageSize));
- const safePage=Math.min(tablePage,totalPages-1);
- const tablePageRows=tableGroups.slice(safePage*tablePageSize,(safePage+1)*tablePageSize)
-  .flatMap(group=>group.rows);
+ const {totalPages,safePage,rows:tablePageRows}=useMemo(
+  ()=>laboratoryTablePage(tableGroups,tablePageSize,tablePage),
+  [tableGroups,tablePageSize,tablePage]);
+ const viewport=laboratoryTableViewport(tablePageRows.length,virtualRow);
+ const renderedRows=viewport.virtualized?
+  tablePageRows.slice(viewport.start,viewport.end):tablePageRows;
+ // Al cambiar filtros o página, comenzar por las primeras referencias.
+ useEffect(()=>{
+  setVirtualRow(0);
+  if(tableScrollRef.current)tableScrollRef.current.scrollTop=0;
+ },[laboratory,tab,tablePage,tablePageSize,tableSort,columnFilter.cn,columnFilter.article]);
  const toggleTableSort=field=>{setTableSort(current=>
   current===field+":asc"?field+":desc":field+":asc");setTablePage(0)};
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&Boolean(laboratory);
- const firstMetricsReady=Number(data.metricsLoaded||0)>0;
- const showMatrixOverlay=metricsLoading&&!tablePageRows.some(row=>row.metricsReady);
- const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
- const pageTotalStock=stocks.every(value=>value!==null)?
-  stocks.reduce((sum,value)=>sum+value,0):null;
- const globalStocks=currentRows.map(row=>tab==="medicacion"?
-  row.metricsReady?totalStockFor(row,ids):null:
-  row.metricsReady?row.globalStock??null:null);
- const pageGlobalStock=globalStocks.every(value=>value!==null)?
-  globalStocks.reduce((n,value)=>n+Number(value),0):null;
- const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
-  row.metricsReady&&row.warehouseReady!==true);
-
- const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
- const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
- const pageTotalOrder=currentRows.reduce((sum,row)=>{
-  const line=showLine(row);
-  return sum+(tab==="parafarmacia"?Number(line.units||0):
-   medicationOrderTotal(line,ids));
- },0);
+ // No ocultar al llegar el primer bloque: esperar a los totales completos.
+ const showMatrixOverlay=metricsLoading;
+ const {pageTotalStock,pageGlobalStock,pageTotalSold,pageTotalSuggested,
+  pageTotalOrder,warehousePending}=useMemo(()=>{
+   const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
+   const pageTotalStock=stocks.every(value=>value!==null)?
+    stocks.reduce((sum,value)=>sum+value,0):null;
+   const globalStocks=currentRows.map(row=>tab==="medicacion"?
+    row.metricsReady?totalStockFor(row,ids):null:
+    row.metricsReady?row.globalStock??null:null);
+   const pageGlobalStock=globalStocks.every(value=>value!==null)?
+    globalStocks.reduce((n,value)=>n+Number(value),0):null;
+   const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
+    row.metricsReady&&row.warehouseReady!==true);
+   const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
+   const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
+   const pageTotalOrder=currentRows.reduce((sum,row)=>{
+    const line=orderLineFor(row,tab,ids,drafts);
+    return sum+(tab==="parafarmacia"?Number(line.units||0):
+     medicationOrderTotal(line,ids));
+   },0);
+   return {pageTotalStock,pageGlobalStock,pageTotalSold,pageTotalSuggested,
+    pageTotalOrder,warehousePending};
+  },[currentRows,scope,tab,drafts]);
  const hasInvalid=Object.values(drafts).some(line=>tab==="parafarmacia"?qty(line.units)===null:
   Object.values(line.unitsByPharmacy||{}).some(value=>qty(value)===null));
  function choosePeriod(value){setPeriod(value);

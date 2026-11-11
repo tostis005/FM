@@ -169,7 +169,7 @@ try{
  assert.equal(await page.getByRole("button",{name:"Nueva promoción"}).count(),0);
  assert.equal(await page.getByRole("button",{name:"Importar Excel"}).count(),0);
  assert.equal(await page.getByRole("button",{name:"Editar Campaña de verificación"}).count(),0);
- assert.ok(await page.getByRole("button",{name:"Seguimiento"}).count()>0);
+ assert.ok(await page.getByRole("button",{name:/seguimiento de/i}).count()>0);
  assert.deepEqual(pageErrors,[],"Sin excepciones del frontend");
  console.log("OK: sin falsas promociones locales; alta atómica; reintento; permisos de solo lectura");
 }finally{await browser.close()}

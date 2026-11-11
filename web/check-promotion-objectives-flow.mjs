@@ -8,6 +8,7 @@ const context=await browser.newContext({viewport:{width:390,height:844},
  deviceScaleFactor:2,isMobile:true,hasTouch:true});
 const page=await context.newPage();
 const errors=[],writes=[],created=[];
+let salesRequests=0;
 const pharmacy={id:"1",name:"Abadía",sourceCode:"ABA",active:true};
 const user={email:"admin@example.invalid",role:"superadministrador",name:"Administrador"};
 let campaign={id:"X-NOV-1",name:"Gama nueva · 20% DTO",laboratory:"LAB",
@@ -28,7 +29,7 @@ await page.route("**/api/**",async route=>{
   modules:{promociones:true},pharmacies:[pharmacy],allowedPharmacyIds:[1]};
  else if(path==="/api/tenant/farmacias")response=[pharmacy];
  else if(path==="/api/tenant/promociones")response={promotions:[campaign,...created],deletedIds:[]};
- else if(path==="/api/ventas/seguimiento")response={sales:{},totalSales:{}};
+ else if(path==="/api/ventas/seguimiento"){salesRequests++;response={sales:{},totalSales:{}};}
  else if(path==="/api/ventas/objetivos/buscar"){
   const body=route.request().postDataJSON();
   response={products:(body.cns||[]).map(cn=>({cn,description:cn==="123456"?"Producto A":"Producto B"})),hasMore:false};
@@ -49,6 +50,9 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  await page.getByRole("button",{name:"Asignar objetivos",exact:true}).waitFor({timeout:15000});
+  assert.equal(salesRequests,0,"La pantalla de gestión no debe consultar ventas de Seguimiento");
+  assert.equal(await page.locator(".campaign-metrics").count(),0,"Los KPI se muestran en Seguimiento, no en gestión");
+  assert.equal(await page.locator(".fm-campaign-management-table").count(),1);
  assert.equal(await page.getByRole("combobox",{name:"Estado"}).inputValue(),"Todos");
  assert.equal(await page.getByLabel("Seleccionar mes y año de promociones").inputValue(),"2026-11");
  await page.getByRole("button",{name:"Asignar objetivos",exact:true}).click();

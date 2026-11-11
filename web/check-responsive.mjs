@@ -442,15 +442,11 @@ try{
          if(!paired.ok)throw Error("El scroll superior e inferior debe estar sincronizado: "+paired.reason);
        }
        if(path==="promociones"&&viewport.width===375){
-         const metrics=page.locator(".campaign-metrics .campaign-metric strong");
-         await metrics.first().waitFor({state:"visible",timeout:10000});
-         const count=Number((await metrics.nth(0).textContent()).replace(/\D/g,""));
-         const cn=Number((await metrics.nth(1).textContent()).replace(/\D/g,""));
-         const targets=Number((await metrics.nth(2).textContent()).replace(/\D/g,""));
-         // Un cliente sin promociones es válido: no crear campañas ficticias
-         // solo para que los KPI tengan números mayores que cero.
-         if(![count,cn,targets].every(Number.isFinite))
-           throw Error("KPI de promociones no numéricos: "+count+"/"+cn+"/"+targets);
+         // Los KPI pertenecen a Seguimiento, no al listado de trabajo.
+         if(await page.locator(".campaign-metrics").count()!==0)
+           throw Error("Gestión de promociones no debe mostrar los KPI de Seguimiento");
+         if(await page.locator(".fm-campaign-management-table thead th").filter({hasText:"Acciones"}).count()!==1)
+           throw Error("La gestión de promociones debe mantener sus acciones");
        }
        if(path==="promociones"&&viewport.width===375){
          const quick=page.getByRole("group",{name:"Períodos rápidos"});

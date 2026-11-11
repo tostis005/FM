@@ -114,6 +114,40 @@ export async function laboratoryIdsFromSnapshot(pool,ctx,pharmacies){
   void refreshLastReceiptSnapshot(pool,ctx).catch(()=>{});
  return rows.map(row=>String(row.lab_id));
 }
+/** Solo los CN del laboratorio elegido. Aprovecha el índice
+ * (cliente_slug,lab_id) del snapshot y evita descargar todos los laboratorios.
+ * null indica que la tabla de snapshot todavía no está disponible. */
+export async function latestSupplierCN(pool,ctx,pharmacies,labId){
+ const {slug,schema}=ctx.client;
+ if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||
+  !/^[1-9][0-9]{0,17}$/.test(String(labId)))throw Error("Laboratorio inválido");
+ const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);
+ if(!ids.length)return [];
+ let state;
+ try{
+  state=await pool.query({text:`
+   SELECT actualizado_en FROM farmetrica.preparador_ultima_recepcion_estado
+   WHERE cliente_slug=$1`,values:[slug],query_timeout:2000});
+ }catch(error){
+  if(error.code==="42P01")return null;
+  throw error;
+ }
+ if(!state.rows.length)return null;
+ const {rows}=await pool.query({text:`
+  SELECT cn,nombre,(blocked_pharmacy_ids && $3::int[]) AS excluded
+  FROM farmetrica.preparador_ultima_recepcion_cache
+  WHERE cliente_slug=$1 AND lab_id=$2::bigint
+   AND pharmacy_ids && $3::int[]
+  ORDER BY cn`,values:[slug,labId,ids],query_timeout:6000});
+ if(Date.now()-new Date(state.rows[0].actualizado_en).getTime()>STALE_MS)
+  void refreshLastReceiptSnapshot(pool,ctx).catch(()=>{});
+ return rows.map(r=>({
+  referencia:String(r.cn),cn:String(r.cn),nombre:r.nombre||String(r.cn),
+  tipo:Number(String(r.cn).slice(0,6))>=400000?"medicacion":"parafarmacia",
+  inMaster:false,inReceipts:true,inPurchases:true,inSales:false,
+  generic:false,provisional:false,pharmacyIds:null,excluded:r.excluded===true
+ }));
+}
 export async function latestLaboratoryCN(pool,ctx,pharmacies){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(ctx.client.schema))throw Error("Esquema inválido");
  const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);

@@ -7,7 +7,7 @@ export function dedupFamilySlug(name){
  const lower=clean.toLocaleLowerCase("es").replace(/ñ/g,"\u0001")
   .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\u0001/g,"ñ");
  const slug=lower.replace(/[^a-z0-9ñ]+/g," ").trim().replace(/\s+/g," ");
- if(slug.length<5||/^(otros?|varios?|general|resto|sin clasificar|sin asignar|sin familia|miscelanea|familia \d+)$/.test(slug))
+ if(slug.length<5||/^(otros?|varios?|general|resto|sin clasificar|sin asignar|sin familia|sin categoria|a revisar|especialidades|genericos|miscelanea|familia \d+)$/.test(slug))
   return "";
  return slug;
 }
@@ -67,12 +67,25 @@ export function scoreFamilyPair(pair,cnById,linkTotals){
  const ratio=smaller?shared/smaller:0;
  const refs=[fa,fb].filter(f=>field(f,"referencePharmacy","referencia_farmacia"));
  const bothManual=!!field(fa,"customName","nombre_manual")||!!field(fb,"customName","nombre_manual");
- const sameSegment=pair.segment!=="SIN_DETERMINAR"&&
-  field(fa,"segment","segmento")===field(fb,"segment","segmento");
+ const sameSegment=field(fa,"segment","segmento")===
+  field(fb,"segment","segmento");
  const exact=pair.proof==="nombre_global";
- const sufficient=exact?shared>=3&&ratio>=0.2:shared>=6&&ratio>=0.35;
- // Referencias independientes nunca se colapsan automáticamente, aunque
- // algunos CN aparezcan en ambas por diferencias históricas.
+ // Si Farmatic no clasificó el segmento, sólo la evidencia de productos
+ // equivalentes y una composición homogénea permite deduplicar SIN asignar
+ // artificialmente medicación o parafarmacia.
+ const productMix=cns=>{
+  if(!cns.size)return null;
+  return [...cns].filter(cn=>Number(cn)<400000).length/cns.size;
+ };
+ const paraA=productMix(a),paraB=productMix(b);
+ const consistentDomain=paraA!=null&&paraB!=null&&
+  ((paraA>=0.95&&paraB>=0.95)||(paraA<=0.05&&paraB<=0.05));
+ const unclassified=pair.segment==="SIN_DETERMINAR";
+ const sufficient=unclassified?
+  exact&&shared>=10&&ratio>=0.70&&consistentDomain:
+  exact?shared>=3&&ratio>=0.2:shared>=6&&ratio>=0.35;
+ // Dos referencias distintas o cualquier etiqueta ajustada manualmente
+ // siempre exigen una revisión explícita adicional.
  const safe=sameSegment&&refs.length<=1&&!bothManual&&sufficient;
  const rank=f=>[
   !!field(f,"referencePharmacy","referencia_farmacia")?1:0,
@@ -85,13 +98,18 @@ export function scoreFamilyPair(pair,cnById,linkTotals){
  const destination=aWins?fa:fb,source=aWins?fb:fa;
  return {...pair,shared,smaller,ratio:Number(ratio.toFixed(3)),samples,
   countA:a.size,countB:b.size,sourceId:String(source.id),destinationId:String(destination.id),
-  safe,reason:!sameSegment?"segmento_no_validado":refs.length>1?"doble_referencia":
+  safe,paraFractionA:paraA==null?null:Number(paraA.toFixed(3)),
+  paraFractionB:paraB==null?null:Number(paraB.toFixed(3)),
+  reason:!sameSegment?"segmentos_distintos":refs.length>1?"doble_referencia":
    bothManual?"nombre_editado":!sufficient?"sin_solapamiento_suficiente":"evidencia_cn",
   accentedVariants:field(fa,"name","nombre")!==field(fb,"name","nombre")};
 }
 export function planFamilyMerges(scored){
  const usedSources=new Set(),usedTargets=new Set(),actions=[];
- for(const p of scored.filter(x=>x.safe).sort((a,b)=>b.shared-a.shared||b.ratio-a.ratio)){
+ for(const p of scored.filter(x=>x.safe).sort((a,b)=>{
+  const destSize=x=>x.destinationId===x.a?x.countA:x.countB;
+  return destSize(b)-destSize(a)||b.shared-a.shared||b.ratio-a.ratio;
+ })){
   if(usedSources.has(p.sourceId)||usedSources.has(p.destinationId)||
    usedTargets.has(p.sourceId))continue;
   actions.push(p);usedSources.add(p.sourceId);usedTargets.add(p.destinationId);

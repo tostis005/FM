@@ -1,4 +1,4 @@
--- Una sola asignación por código nacional entre todas las farmacias del cliente.
+-- Una sola asignación por código nacional: solo almacén para parafarmacia.
 -- Primero descartar mayoristas, cooperativas e ignorados; DESPUÉS ordenar recepciones.
 -- Solo las referencias vistas en las farmacias solicitadas llegan al catálogo.
 WITH eligible_labs AS MATERIALIZED (
@@ -10,13 +10,15 @@ WITH eligible_labs AS MATERIALIZED (
   -- Los proveedores con nombre de farmacia no son laboratorios del pedido.
   AND upper(p.nombre) !~ '(^|[^A-Z])FARMACIAS?([^A-Z]|$)'
 ), pharmacies AS MATERIALIZED (
- SELECT f.id AS pharmacy_id,__PHARMACY_CODE__ AS pharmacy_code
+ SELECT f.id AS pharmacy_id,__PHARMACY_CODE__ AS pharmacy_code,
+  (f.tipo_establecimiento='almacen') AS is_warehouse
  FROM farmetrica.farmacias f WHERE f.cliente_slug=$1
  UNION ALL
  -- AMP era el código del mismo almacén que ahora se llama ALMACEN.
  -- Conservar AMP en los JOIN contra documentos ERP; compartir únicamente el
  -- ID de establecimiento para el ámbito de catálogo y las bajas.
- SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code
+ SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code,
+  true AS is_warehouse
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.activo
   AND upper(btrim(f.codigo_origen))='ALMACEN'
@@ -92,7 +94,19 @@ supplier_links AS MATERIALIZED (
    AND ar.origen_id::text=l.articulo_origen_id::text
 ),
 received_with_cn AS MATERIALIZED (
- SELECT * FROM received WHERE cn IS NOT NULL
+ -- Parafarmacia: usar EXCLUSIVAMENTE las recepciones del almacén
+ -- (ALMACEN y su código histórico AMP). Una recepción de una farmacia
+ -- nunca determina el laboratorio de un artículo de parafarmacia.
+ -- Medicación conserva la regla anterior sin restringir farmacias.
+ SELECT r.* FROM received r
+ WHERE r.cn IS NOT NULL AND (
+  left(r.cn,6)::integer >= 400000
+  OR EXISTS (
+   SELECT 1 FROM pharmacies p
+   WHERE p.pharmacy_code=r.pharmacy_code
+    AND p.is_warehouse IS TRUE
+  )
+ )
 ), excluded_cn AS MATERIALIZED (
  -- Las reglas guardadas son SUBCADENAS LITERALES: '*BAJA*' exige ambos asteriscos.
  SELECT DISTINCT coalesce(
@@ -111,8 +125,8 @@ received_with_cn AS MATERIALIZED (
    ) AS exclude(cadena)
    WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0)
 ), scoped_cn AS MATERIALIZED (
- -- El laboratorio lo determina la última recepción directa del CN, aunque
- -- proceda de una farmacia histórica. El ámbito visible se determina por
+ -- El laboratorio se determina desde el almacén para parafarmacia;
+ -- para medicación sigue valiendo la última recepción de cualquier farmacia. El ámbito visible se determina por
  -- el catálogo del propio artículo en las farmacias actuales autorizadas.
  SELECT cn FROM (
   SELECT cn FROM received_with_cn

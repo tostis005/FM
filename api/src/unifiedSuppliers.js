@@ -100,12 +100,13 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
  const sql=`
  WITH chosen AS MATERIALIZED (
-  SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
+  SELECT f.id,${pharmacyDataCodeSQL("f")} AS code,
+   (f.tipo_establecimiento='almacen') AS is_warehouse
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
   UNION ALL
   -- AMP: código histórico del almacén central ALMACEN para recepciones y ERP.
-  SELECT f.id,'AMP'::text AS code
+  SELECT f.id,'AMP'::text AS code,true AS is_warehouse
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.activo
    AND f.tipo_establecimiento='almacen'
@@ -116,6 +117,8 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   FROM farmetrica.proveedores_unificados_alias a
   JOIN chosen c ON c.code=upper(btrim(a.farmacia_codigo))
   WHERE a.cliente_slug=$1 AND a.proveedor_id=$3
+   -- Mismo criterio también al desactivar el modo de última recepción.
+   AND ($4::text='medicacion' OR c.is_warehouse IS TRUE)
  ), bought AS MATERIALIZED (
   -- Buscar primero las cabeceras del proveedor con índice compuesto,
   -- después únicamente las líneas de esos documentos por su PK.

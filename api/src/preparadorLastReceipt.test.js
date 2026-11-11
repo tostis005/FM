@@ -165,3 +165,18 @@ test("la última recepción usa solo alias con identidad unívoca por farmacia",
   assert.match(sql,/h\.lineas_completas AND NOT h\.eliminada_logicamente/);
  }
 });
+
+test("parafarmacia solo se atribuye por recepciones del almacén, medicación mantiene el histórico",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ for(const name of ["preparadorLastReceipt.sql","preparadorLastReceiptSnapshot.sql"]){
+  const sql=await readFile(new URL("./"+name,import.meta.url),"utf8");
+  assert.match(sql,/f\.tipo_establecimiento='almacen'\) AS is_warehouse/);
+  assert.match(sql,/SELECT f\.id AS pharmacy_id,'AMP'::text AS pharmacy_code,\s*true AS is_warehouse/);
+  assert.match(sql,/received_with_cn AS MATERIALIZED \(\s*--[^]*?SELECT r\.\* FROM received r/);
+  assert.match(sql,/left\(r\.cn,6\)::integer >= 400000/);
+  assert.match(sql,/p\.pharmacy_code=r\.pharmacy_code\s+AND p\.is_warehouse IS TRUE/);
+  assert.match(sql,/FROM latest l JOIN scoped_cn s USING\(cn\)/);
+ }
+ const unified=await readFile(new URL("./unifiedSuppliers.js",import.meta.url),"utf8");
+ assert.match(unified,/AND \(\$4::text='medicacion' OR c\.is_warehouse IS TRUE\)/);
+});

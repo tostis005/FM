@@ -11,6 +11,13 @@ const STALE_MS=15*60*1000;
 const refreshes=new WeakMap();
 const CACHE_MS=120_000;
 const caches=new WeakMap();
+const WAREHOUSE_SCOPE_SQL=`ARRAY(
+ SELECT id FROM farmetrica.farmacias
+ WHERE cliente_slug=$1 AND cliente_slug='ampedia'
+  AND tipo_establecimiento='almacen'
+  AND upper(btrim(codigo_origen))='ALMACEN'
+)`;
+
 export const lastReceiptMode=()=>process.env.FM_PREPARADOR_ULTIMA_RECEPCION!=="0";
 export function invalidateLastReceiptCache(pool,slug){
  const cache=caches.get(pool);
@@ -107,7 +114,8 @@ export async function laboratoryIdsFromSnapshot(pool,ctx,pharmacies){
  const {rows}=await pool.query({text:`
   SELECT DISTINCT lab_id::text AS lab_id
   FROM farmetrica.preparador_ultima_recepcion_cache
-  WHERE cliente_slug=$1 AND pharmacy_ids && $2::int[]
+  WHERE cliente_slug=$1 AND (pharmacy_ids && $2::int[]
+    OR pharmacy_ids && ${WAREHOUSE_SCOPE_SQL})
 `,
   values:[ctx.client.slug,ids],query_timeout:6000});
  if(Date.now()-new Date(state[0].actualizado_en).getTime()>STALE_MS)
@@ -137,7 +145,8 @@ export async function latestSupplierCN(pool,ctx,pharmacies,labId){
   SELECT cn,nombre,(blocked_pharmacy_ids && $3::int[]) AS excluded
   FROM farmetrica.preparador_ultima_recepcion_cache
   WHERE cliente_slug=$1 AND lab_id=$2::bigint
-   AND pharmacy_ids && $3::int[]
+   AND (pharmacy_ids && $3::int[]
+     OR pharmacy_ids && ${WAREHOUSE_SCOPE_SQL})
   ORDER BY cn`,values:[slug,labId,ids],query_timeout:6000});
  if(Date.now()-new Date(state.rows[0].actualizado_en).getTime()>STALE_MS)
   void refreshLastReceiptSnapshot(pool,ctx).catch(()=>{});
@@ -175,7 +184,8 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
      const response=await pool.query({text:`
       SELECT lab_id::text AS lab_id,cn,nombre,(blocked_pharmacy_ids && $2::int[]) AS excluded
       FROM farmetrica.preparador_ultima_recepcion_cache
-      WHERE cliente_slug=$1 AND pharmacy_ids && $2::int[]
+      WHERE cliente_slug=$1 AND (pharmacy_ids && $2::int[]
+    OR pharmacy_ids && ${WAREHOUSE_SCOPE_SQL})
 
       ORDER BY lab_id,cn`,values:[ctx.client.slug,ids],query_timeout:6000});
      rows=response.rows;

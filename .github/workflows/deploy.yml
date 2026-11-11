@@ -856,8 +856,8 @@ jobs:
             timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/applyFamilyDuplicates.mjs --cliente ampedia --apply
           '
 
-      - name: Unificar familias por nombre normalizado sin exigir CN compartidos
-        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'UNIFICAR_FAMILIAS_NOMBRE')
+      - name: Mantener clasificación única de familias tras cada publicación
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '

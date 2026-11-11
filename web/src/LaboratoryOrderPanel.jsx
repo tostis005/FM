@@ -490,17 +490,23 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          </th>
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        <th className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>Almacén</th>
-       <th colSpan={5} className="fm-lab-order-total-group">Totales y pedido</th>
+       <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
+       <th colSpan={2} className="fm-lab-order-order-group">Pedido</th>
       </tr><tr>
-       {chosen.flatMap((p,i)=>["Stock","V. 12m","V. 3m","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
-        .map((name,k)=><th key={p.id+"-"+k} title={name}
+       {chosen.flatMap((p,i)=>["STOCK","12M","3M","UDS","PEDIDO"]
+        .map((name,k)=><th key={p.id+"-"+k}
+         title={["Existencias actuales de la farmacia","Unidades vendidas en los últimos 12 meses",
+          "Unidades vendidas en los últimos 3 meses","Unidades vendidas en el período seleccionado",
+          tab==="medicacion"?"Unidades del pedido para esta farmacia":"Propuesta de pedido para esta farmacia"][k]}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       {["Stock","V. 12m","V. 3m","V. período",tab==="medicacion"?"Pedir":"Propuesta"]
+       {["STOCK","12M","3M","UDS","PEDIDO"]
         .map((name,k)=><th key={"alm-"+k} className="fm-lab-order-warehouse-head"
-         title={k===0?"Existencias reales del almacén":k<4?"Ventas registradas en el origen ALMACEN, si existen":"El almacén no genera propuestas de compra independientes"}>{name}</th>)}
-       <th title="Unidades en las farmacias, sin contar el almacén">Total farm.</th>
-       <th title="Unidades de farmacias más almacén, solo en parafarmacia">Total + ALM</th>
-       <th title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>Propuesta</th>
+         title={k===0?"Existencias reales del almacén":k===1?"Ventas del almacén en los últimos 12 meses":
+          k===2?"Ventas del almacén en los últimos 3 meses":k===3?"Ventas del almacén en el período seleccionado":
+          "El almacén no genera una propuesta independiente"}>{name}</th>)}
+       <th className="fm-lab-order-total-head" title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">STOCK</th>
+       <th className="fm-lab-order-total-head" title="Unidades vendidas en el período seleccionado por las farmacias">UDS</th>
+       <th className="fm-lab-order-total-head" title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>Propuesta</th>
        <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
       </tr></thead>
       <tbody>{tablePageRows.map(row=>{
@@ -537,9 +543,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
             title={k===4?"El almacén no emite propuestas propias":!available?"No hay datos del almacén para esta categoría":value===null||value===undefined?"Dato aún no importado":"Dato real del almacén"}>
             {value===null||value===undefined?"—":fmt(value)}</td>;
          })}
-         <td className="fm-lab-order-total" title="Stock en farmacias">{row.metricsReady?fmt(totalStockFor(row,ids)):"—"}</td>
-         <td className="fm-lab-order-global" title="Stock conjunto de farmacias y almacén">{row.metricsReady&&tab==="parafarmacia"?fmt(row.globalStock):"—"}</td>
-         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
+         <td className="fm-lab-order-total" title={tab==="parafarmacia"&&row.globalStock!=null?
+          "Stock global de farmacias y almacén":"Stock de todas las farmacias"}>
+          {row.metricsReady?fmt(tab==="parafarmacia"&&row.globalStock!=null?
+           row.globalStock:totalStockFor(row,ids)):"—"}</td>
+         <td className="fm-lab-order-total" title="Unidades vendidas por todas las farmacias en el período seleccionado">
+          {row.metricsReady?fmt(row.totalSold):"—"}</td>
+         <td className="fm-lab-order-total" title="Propuesta total de unidades a pedir">
+          {row.metricsReady?fmt(row.totalSuggested):"—"}</td>
          <td className="fm-lab-order-editcol">
          <input type="number" min="0" max="999999" step="1"
           disabled={!canEdit||loading||!row.metricsReady}

@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,CheckCircle2,ChevronDown,ChevronUp,Warehouse,Store} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import {pickingListChannelView,pickingListRowsForSite} from "./pickingListChannelView.js";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingStatus} from "./LoadingState.jsx";
@@ -215,15 +216,17 @@ export default function PickingList({clientSlug}){
       <p>{integer(issues.total)} filas con incidencias. Se muestran las columnas
        originales del CSV y el motivo por el que se omitió cada fila.</p>
       <div className="fm-picking-issues-scroll">
-       <table><thead><tr><th>Fila CSV</th><th>Motivo</th>
-        {issueHeaders.map((name,i)=><th key={i}>{displayChannel(name)}</th>)}
-       </tr></thead><tbody>
-        {issues.rows.map((issue,i)=><tr key={issue.line+"-"+i}>
-         <td>{issue.line}</td><td>{humanizeImportMessage(issue.reason)}</td>
-         {issueHeaders.map((_,index)=><td key={index}>{displayChannel(issue.cells?.[index]??"")}</td>)}
-        </tr>)}
-       </tbody></table>
+       <SortableDataTable
+        label="incidencias de esta página"
+        headers={["Fila CSV","Motivo",...issueHeaders.map(displayChannel)]}
+        rows={issues.rows.map(issue=>[
+         issue.line,humanizeImportMessage(issue.reason),
+         ...issueHeaders.map((_,index)=>displayChannel(issue.cells?.[index]??""))
+        ])}
+        showPagination={false}
+        empty="No hay incidencias que coincidan con los filtros de esta página."/>
       </div>
+      <p className="fm-picking-issues-scope">La ordenación y los filtros se aplican a la página de incidencias cargada.</p>
       <div className="fm-picking-issues-footer">
        <span>Filas {issues.offset+1}–{Math.min(issues.total,issues.offset+issues.rows.length)} de {integer(issues.total)}</span>
        <div>

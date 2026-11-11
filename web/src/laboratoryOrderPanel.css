@@ -148,7 +148,15 @@
 .fm-lab-order-table .fm-lab-column-head .fm-lab-sort-head{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:inherit;font:inherit;font-weight:800;cursor:pointer;padding:0;align-self:flex-start}
 .fm-lab-order-table .fm-lab-sort-head:hover,.fm-lab-order-table .fm-lab-sort-head:focus-visible{text-decoration:underline;text-underline-offset:3px}
 .fm-lab-order-table .fm-lab-sort-head span{font-size:10px;opacity:.85}
-.fm-lab-order-table .fm-lab-column-filter{box-sizing:border-box;width:100%;min-width:0;min-height:29px;padding:5px 5px;border:1px solid #c4d5cd;border-radius:5px;background:var(--surface,#fff);color:inherit;font-size:10px;font-weight:500}
+.fm-lab-order-table .fm-lab-column-filter{
+ box-sizing:border-box;width:100%;min-width:0;min-height:29px;padding:5px 5px;
+ border:1px solid #b9d0ca;border-radius:5px;background:#fff!important;
+ color:#214b48!important;-webkit-text-fill-color:#214b48;
+ caret-color:#087f79;font-size:10px;font-weight:500;color-scheme:light;
+}
+.fm-lab-order-table .fm-lab-column-filter::placeholder{
+ color:#637d78!important;-webkit-text-fill-color:#637d78;opacity:1;
+}
 .fm-lab-order-table .fm-lab-column-filter:focus-visible{outline:2px solid #258e80;outline-offset:1px}
 .fm-lab-order-table .fm-lab-order-cn .fm-lab-column-filter{font-size:10px}
 @media(max-width:720px){.fm-lab-order-table .fm-lab-column-filter{font-size:10px;padding:5px 4px}}

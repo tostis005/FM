@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {ShoppingCart,Download,Save,ChevronDown,AlertTriangle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ReportFilterBar,ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
@@ -326,22 +327,21 @@ function LegacyPurchasePlanner({clientSlug,pharmacies=[],canEdit=false,onCreated
       </HorizontalTableScroll>
       {g.kind==="generico"&&<details className="fm-planner-presentations">
        <summary>CN y laboratorios del conjunto genérico ({(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).length} presentaciones oficiales)</summary>
-       <HorizontalTableScroll className="fm-planner-table-scroll" label="detalle del preparador">
-        <table className="fm-planner-breakdown"><thead><tr><th>CN</th><th>Presentación AEMPS</th>
-         <th>Titular de autorización (AEMPS)</th><th>Laboratorio comercializador (AEMPS)</th>
-         <th>Proveedor / PUC observado</th></tr></thead>
-         <tbody>{(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).map(v=><tr key={v.cn}>
-          <td>{v.cn}</td><td>{v.name}</td>
-          <td>{labOfficial(v.titular||v.laboratory,v.titularCode||v.laboratoryCode)}</td>
-          <td>{labOfficial(v.commercializer,v.commercializerCode)}</td>
-          <td>{(labData?.recommendations||[]).find(r=>r.groupKey===g.key)?.options
-           ?.filter(o=>String(o.cn)===String(v.cn)).slice(0,3)
-           .map(o=>o.supplierName+" · "+euro(o.puc)+
-             " ("+o.sampleLines+" compra"+(o.sampleLines===1?"":"s")+")")
-           .join("; ")||"Sin compras con precio en los últimos 12 meses"}</td>
-         </tr>)}</tbody>
-        </table>
-       </HorizontalTableScroll>
+       <SortableDataTable
+        tableClass="fm-planner-breakdown"
+        label="presentaciones oficiales"
+        headers={["CN","Presentación AEMPS","Titular de autorización (AEMPS)","Laboratorio comercializador (AEMPS)","Proveedor / PUC observado"]}
+        rows={(labData?.presentations||[]).filter(v=>String(v.dcpf)===String(g.dcpf)).map(v=>[
+         v.cn,v.name,
+         labOfficial(v.titular||v.laboratory,v.titularCode||v.laboratoryCode),
+         labOfficial(v.commercializer,v.commercializerCode),
+         (labData?.recommendations||[]).find(r=>r.groupKey===g.key)?.options
+          ?.filter(o=>String(o.cn)===String(v.cn)).slice(0,3)
+          .map(o=>o.supplierName+" · "+euro(o.puc)+
+            " ("+o.sampleLines+" compra"+(o.sampleLines===1?"":"s")+")")
+          .join("; ")||"Sin compras con precio en los últimos 12 meses"
+        ])}
+        empty="Sin presentaciones oficiales para este conjunto." />
        <small>El titular de autorización y el comercializador constan en el nomenclátor AEMPS por CN. No equivalen necesariamente al fabricante físico ni al proveedor de la farmacia; los PUC proceden de compras históricas verificadas.</small>
       </details>}
      </div>;

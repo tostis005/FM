@@ -53,7 +53,7 @@ test("una familia sin clasificar se incorpora a categoría única solo si los CN
 test("categorías administrativas no se fusionan por etiqueta repetida",()=>{
  const data=planSameNameMerges([
   f(1,"Otros"),f(2,"OTROS"),f(3,"Sin Categoria"),f(4,"Sin categoría"),
-  f(5,"A Revisar"),f(6,"A REVISAR"),f(7,"Especialidades"),f(8,"especialidades")
+  f(5,"A Revisar"),f(6,"A REVISAR"),f(7,"Artículos Inactivos"),f(8,"Articulos inactivos")
  ]);
  assert.equal(data.actions.length,0);
 });
@@ -73,4 +73,12 @@ test("no confunde ñ y n; ni vuelve a fusionar filas inactivas",()=>{
   f(1,"Año escolar"),f(2,"Ano escolar"),
   f(3,"Año escolar","SIN_DETERMINAR",{active:false})
  ]).actions.length,0);
+});
+
+test("Especialidades y Genéricos sí se unifican por nombre aunque no compartan artículos",()=>{
+ const p=planSameNameMerges([
+  f(1,"Especialidades","SIN_DETERMINAR",{linked:1000}),f(2,"ESPECIALIDADES","SIN_DETERMINAR",{linked:900}),
+  f(3,"Genéricos","SIN_DETERMINAR",{linked:150}),f(4,"Genericos","SIN_DETERMINAR",{linked:20})
+ ]);
+ assert.equal(p.actions.length,2);
 });

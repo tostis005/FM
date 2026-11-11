@@ -2,7 +2,7 @@
 -- No se modifican recepciones, pedidos ERP ni el histórico de movimientos.
 CREATE TABLE IF NOT EXISTS farmetrica.preparador_configuracion_cliente (
  cliente_slug text PRIMARY KEY REFERENCES farmetrica.clientes(slug) ON DELETE CASCADE,
- cobertura_dias integer NOT NULL DEFAULT 20 CHECK(cobertura_dias BETWEEN 1 AND 365),
+ cobertura_dias integer NOT NULL DEFAULT 30 CHECK(cobertura_dias BETWEEN 1 AND 365),
  actualizado_por text NOT NULL DEFAULT 'sistema',
  actualizado_en timestamptz NOT NULL DEFAULT now()
 );

@@ -4,6 +4,7 @@ import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import PreparadorAgenda from "./PreparadorAgenda.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
+import {groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -269,9 +270,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    return direction==="desc"?-compare:compare;
   });
  },[currentRows,columnFilter,tableSort]);
- const totalPages=Math.max(1,Math.ceil(tableVisibleRows.length/tablePageSize));
+ // Paginar por familias: nunca separar una raíz de regalos R1/R2 o dúplos.
+ const tableGroups=useMemo(()=>groupedLaboratoryRows(tableVisibleRows,tableSort),
+  [tableVisibleRows,tableSort]);
+ const totalPages=Math.max(1,Math.ceil(tableGroups.length/tablePageSize));
  const safePage=Math.min(tablePage,totalPages-1);
- const tablePageRows=tableVisibleRows.slice(safePage*tablePageSize,(safePage+1)*tablePageSize);
+ const tablePageRows=tableGroups.slice(safePage*tablePageSize,(safePage+1)*tablePageSize)
+  .flatMap(group=>group.rows);
  const toggleTableSort=field=>{setTableSort(current=>
   current===field+":asc"?field+":desc":field+":asc");setTablePage(0)};
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
@@ -481,7 +486,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         <option value="article:asc">Artículo A–Z</option><option value="article:desc">Artículo Z–A</option>
        </select>
       </label>
-      <span>{tableVisibleRows.length} referencias coincidentes</span>
+      <span>{tableVisibleRows.length} referencias · {tableGroups.length} familias</span>
      </div>
     <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
      <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
@@ -571,8 +576,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </HorizontalTableScroll>
-    <ListPagination total={tableVisibleRows.length} page={safePage} pageSize={tablePageSize}
-     pageSizes={[25,50,100,250]} label="referencias"
+    <ListPagination total={tableGroups.length} page={safePage} pageSize={tablePageSize}
+     pageSizes={[25,50,100,250]} label="familias de artículos"
      onPageChange={setTablePage}
      onPageSizeChange={n=>{setTablePageSize(n);setTablePage(0)}}/>
     {metricsLoading&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">

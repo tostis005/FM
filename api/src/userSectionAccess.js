@@ -1,5 +1,14 @@
 // Catálogo autorizado del menú SPA. Cada ruta tiene un módulo de plan y
 // una asignación individual opcional. NULL en BD hereda los permisos históricos.
+// Las pantallas documentales y rutas avanzadas siguen autorizadas por URL, pero
+// no se muestran en el editor: aquí solo aparece la navegación operativa actual.
+// Mantener el catálogo completo evita revocar permisos históricos al editar perfiles.
+export const PROFILE_EDITOR_SECTION_IDS=new Set([
+ "dashboard","ventas","compras","compras-preparador","stock",
+ "stock-sin-recepciones","picking-list","proveedores","genericos",
+ "promociones","promociones-objetivos","seguimiento-global","acciones",
+ "oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"
+]);
 export const USER_SECTIONS=[
  ["dashboard","Inicio","dashboard"],
  ["ventas","Ventas (resumen)","ventas"],
@@ -23,16 +32,17 @@ export const USER_SECTIONS=[
  ["genericos","Genéricos","genericos"],
  ["rentabilidad","Rentabilidad (resumen)","rentabilidad"],
  ["rentabilidad-segmentos","Por familia","rentabilidad"],
- ["rentabilidad-retorno","Retorno económico","rentabilidad"],
+ ["rentabilidad-retorno","Ahorro verificado","rentabilidad"],
  ["informes","Informes","informes"],
  ["promociones","Promociones","promociones"],
- ["seguimiento-global","Seguimiento de promociones","promociones"],
- ["promociones-objetivos","Simulador de promociones","promociones"],
- ["acciones","Oportunidades","acciones"],
- ["oportunidades-seguimiento","Seguimiento de oportunidades","acciones"],
+ ["seguimiento-global","Seguimiento","promociones"],
+ ["promociones-objetivos","Nueva campaña","promociones"],
+ ["acciones","Trabajo y ahorro","acciones"],
+ ["oportunidades-seguimiento","Oportunidades","acciones"],
  ["alertas","Alertas","acciones"],
- ["mi-trabajo","Mi trabajo","acciones"]
+ ["mi-trabajo","Mis tareas","acciones"]
 ].map(([id,name,module])=>({id,name,module,
+ profileVisible:PROFILE_EDITOR_SECTION_IDS.has(id),
  // Estas rutas todavía utilizan ModuloDemo en la SPA.
  demo:new Set(["dashboard","ventas","compras","stock","reposicion",
    "rentabilidad","acciones","informes"]).has(id)

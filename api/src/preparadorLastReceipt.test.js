@@ -138,6 +138,7 @@ test("al abrir un proveedor usa el índice por laboratorio sin descargar los CN 
  assert.equal(queries.length,2);
  assert.match(queries[1].text,/lab_id=\$2::bigint/);
  assert.match(queries[1].text,/pharmacy_ids && \$3::int\[\]/);
+ assert.match(queries[1].text,/OR pharmacy_ids && ARRAY\(/);
  assert.deepEqual(queries[1].values,["ampedia","42",[1,2]]);
 });
 test("sin snapshot la consulta específica permite el fallback del histórico",async()=>{
@@ -149,7 +150,11 @@ test("la última recepción usa solo alias con identidad unívoca por farmacia",
  const {readFile}=await import("node:fs/promises");
  for(const name of ["preparadorLastReceipt.sql","preparadorLastReceiptSnapshot.sql"]){
   const sql=await readFile(new URL("./"+name,import.meta.url),"utf8");
-  assert.match(sql,/GROUP BY pharmacy_id,pharmacy_code,supplier_code/);
+  assert.match(sql,/GROUP BY pharmacy_code,supplier_code/);
+  assert.match(sql,/SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code/);
+  assert.match(sql,/f.cliente_slug='ampedia' AND f.activo/);
+  assert.match(sql,/f.tipo_establecimiento='almacen'/);
+  assert.match(sql,/JOIN __SCHEMA__\.fm_recepciones_cabeceras h/);
   assert.match(sql,/HAVING count\(DISTINCT lab_id\)=1/);
   assert.doesNotMatch(sql,/SELECT DISTINCT ON \(pharmacy_id,supplier_code\)/);
   assert.match(sql,/SELECT DISTINCT ON \(cn\)/);

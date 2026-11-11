@@ -58,25 +58,23 @@ test("PostgreSQL: la raíz sin proveedor habitual y sin CN aparece mediante R2",
  }finally{await db.query("ROLLBACK").catch(()=>{});await db.end()}
 });
 
-test("catálogo incluye raíces de regalos aportados por otro proveedor con idéntico nombre",async()=>{
+test("el catálogo no atribuye la raíz a partir de un regalo o un proveedor homónimo",async()=>{
  const seen=[];
  const pool={async query(q){
   seen.push(q);
   if(q.text?.includes("information_schema.columns"))
    return {rows:[{column_name:"proveedor_habitual_id"}]};
-  if(q.text?.includes("FROM matched"))
-   return {rows:[gift]};
-  if(q.text?.includes("jsonb_to_recordset($3::jsonb)"))
-   return {rows:[{cn:"151130",base:"LA ROCHE POSAY MELA B3 SERUM 30 ML",
-    nombre:"LA ROCHE POSAY MELA B3 SERUM 30 ML",declared_cn:null,pharmacy_id:1,excluded:false}]};
-  throw Error("Consulta no esperada");
+  if(q.text?.includes("FROM matched"))return {rows:[gift]};
+  throw Error("No debe buscar otro artículo ni inferir su laboratorio");
  }};
  const rows=await readSupplierMasterCatalogue(pool,ctx,{id:"1162",pharmacies:[1],
   type:"parafarmacia",search:"151130",patterns:[]});
- assert.deepEqual(rows.map(r=>r.cn),["002853","151130"]);
+ assert.deepEqual(rows.map(r=>r.cn),["002853"]);
+ assert.ok(!seen.some(q=>q.text?.includes("jsonb_to_recordset($3::jsonb)")));
  const catalogSQL=seen.find(q=>q.text?.includes("FROM matched")).text;
- assert.match(catalogSQL,/upper\(btrim\(other.nombre\)\)=upper\(btrim\(selected.nombre\)\)/);
- assert.match(catalogSQL,/ua.proveedor_id IN \(SELECT id FROM equivalent\)/);
+ assert.match(catalogSQL,/ua\.proveedor_id=\$3/);
+ assert.match(catalogSQL,/winner\.lab_id<>\$3::bigint/);
+ assert.doesNotMatch(catalogSQL,/other\.nombre/);
  assert.deepEqual(seen.find(q=>q.text?.includes("FROM matched")).values.slice(0,3),
   ["ampedia",[1],"1162"]);
 });

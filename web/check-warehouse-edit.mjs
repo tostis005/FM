@@ -40,14 +40,15 @@ try{
  await page.getByRole("heading",{name:"Editar almacén"}).waitFor();
  assert.equal(await page.getByLabel("ID del almacén").inputValue(),"6");
  assert.equal(await page.getByRole("textbox",{name:"Nombre público",exact:true}).inputValue(),"Almacén central");
- assert.equal(await page.getByText(/Código del sincronizador:/).count(),1);
+ assert.equal(await page.getByRole("textbox",{name:"Código visible",exact:true}).inputValue(),"ALM");
+ assert.equal(await page.getByText(/El ID y el código de sincronización/).count(),1);
  assert.equal(await page.locator(".drawer input[value='ALMACEN']").count(),0,
   "No se puede modificar el código interno del almacén");
  assert.equal(await page.getByLabel("Host/IP SQL Server").count(),0);
  await page.getByRole("textbox",{name:"Nombre público",exact:true}).fill("ALM");
  await page.getByRole("button",{name:"Guardar cambios"}).click();
- await page.getByText("Nombre público del almacén actualizado").waitFor();
- assert.deepEqual(saved,[{path:"/api/tenant/establecimientos/6",data:{name:"ALM"}}]);
+ await page.getByText("Nombre y código visible del almacén actualizados").waitFor();
+ assert.deepEqual(saved,[{path:"/api/tenant/establecimientos/6",data:{name:"ALM",displayCode:"ALM"}}]);
  assert.equal(warehouse.sourceCode,"ALMACEN","El sincronizador mantiene su origen");
  assert.equal(warehouse.sourceHost,"10.1.2.3","No cambia el servidor SQL");
  await page.locator(".list-card tbody tr").filter({hasText:"ALM"}).first().waitFor();

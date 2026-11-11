@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY} from "./laboratoryLoadAll.js";
 
-test("dos mil CN se calculan en diez lotes, máximo tres consultas simultáneas",async()=>{
+test("dos mil CN se calculan en veinte lotes, máximo dos consultas simultáneas",async()=>{
  const initial=Array.from({length:2000},(_,i)=>({
   referencia:String(400000+i),cn:String(400000+i),nombre:"Artículo "+i
  }));
@@ -18,11 +18,11 @@ test("dos mil CN se calculan en diez lotes, máximo tres consultas simultáneas"
     unitsPeriod:5,suggested:1}},totalSold:5,totalSuggested:1
   }))};
  },{onBatch:x=>progress.push(x.loaded)});
- assert.equal(LAB_METRICS_BATCH,200);
- assert.equal(LAB_METRICS_CONCURRENCY,3);
- assert.equal(sizes.length,10,"2.000 referencias no generan cincuenta consultas");
- assert.ok(sizes.every(n=>n===200));
- assert.ok(maxConcurrent<=3);
+ assert.equal(LAB_METRICS_BATCH,100);
+ assert.equal(LAB_METRICS_CONCURRENCY,2);
+ assert.equal(sizes.length,20,"2.000 referencias se calculan sin un lote global bloqueante");
+ assert.ok(sizes.every(n=>n===100));
+ assert.ok(maxConcurrent<=2);
  assert.ok(maxConcurrent>=2);
  assert.equal(result.rows.length,2000);
  assert.ok(result.rows.every(x=>x.metricsReady===true));

@@ -225,6 +225,16 @@ try{
  await multiSelector.fill("125 referencias");
  await page.getByRole("option",{name:"Laboratorio con 125 referencias"}).click();
  await page.getByText("Referencia lote 125").waitFor({timeout:25000});
+ await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:15000});
+ await page.waitForFunction(()=>document.querySelectorAll(
+  ".fm-lab-order-table tbody tr td.fm-lab-order-cell"
+ ).length>0);
+ assert.equal((await page.locator(".fm-lab-order-table tbody tr").first()
+  .locator("td.fm-lab-order-cell").first().innerText()).trim(),"4",
+  "Las primeras existencias se muestran sin esperar a un cálculo global");
+ assert.ok(matrices.filter(m=>m.laboratorio==="P:12")
+  .every(m=>m.referencias?.length<=100),
+  "El laboratorio grande no debe enviarse en una sola matriz de stock y ventas");
  assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),125,
   "Todas las 125 referencias se ven a la vez, también las de otros lotes");
  // Los textos explicativos han desaparecido sin quitar funcionalidades.

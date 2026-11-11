@@ -1,7 +1,7 @@
 // Se mantiene una única tabla visible. La API conserva lotes de 100
 // para no saturar PostgreSQL, pero se pueden leer 3 páginas en paralelo.
 export const LAB_CATALOG_BATCH=250;
-export const LAB_METRICS_BATCH=200;
+export const LAB_METRICS_BATCH=100;
 export const LAB_CATALOG_CONCURRENCY=3;
 
 export async function collectLaboratoryCatalog(fetchPage,{
@@ -66,7 +66,7 @@ export async function collectLaboratoryCatalog(fetchPage,{
  return {rows,total};
 }
 
-export const LAB_METRICS_CONCURRENCY=3;
+export const LAB_METRICS_CONCURRENCY=2;
 const MIN_METRICS_BATCH=25;
 // Algunos laboratorios concentran muchas líneas históricas: si PostgreSQL no
 // puede agregar 200 referencias, dividir solo ese lote, sin perder ni limitar

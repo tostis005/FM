@@ -10,7 +10,7 @@ import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportF
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
-import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH} from "./laboratoryLoadAll.js";
+import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BATCH} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -181,8 +181,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     return;
    }
    setLoadStage("metrics");
-   // Un solo conjunto de CN para agrupar las ventas de 3m, 12m y período;
-   // el servidor también devuelve stock y sugerencias de todas las farmacias.
+   // Los catálogos grandes no esperan al cálculo global: calcular lotes
+   // independientes y mostrar stock/ventas en cuanto termine cada uno.
+   // La consulta conjunta se conserva solo para los laboratorios pequeños.
+   if(catalog.rows.length<=LAB_METRICS_BATCH){
    let bulkComplete=false;
    try{
     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-conjunta",{
@@ -215,9 +217,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    if(bulkComplete){
     setLoading(false);setLoadStage("idle");setUpdatedAt(new Date());return;
    }
-   // Solo si falla el cálculo conjunto: lotes de 200 CN en paralelo.
-   // Con 2.000 artículos son 10 lotes, no las 50 consultas anteriores.
-   // No se reconstruye el catálogo ni se pierden artículos.
+   }
+   // Lotes acotados, hasta dos consultas simultáneas: no saturar PostgreSQL
+   // ni dejar 367 artículos sin cifras esperando una sola consulta grande.
+   setLoadStage("progress");
    try{
     await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{
@@ -274,6 +277,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   current===field+":asc"?field+":desc":field+":asc");setTablePage(0)};
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&Boolean(laboratory);
+ const firstMetricsReady=Number(data.metricsLoaded||0)>0;
+ const showMatrixOverlay=metricsLoading&&!firstMetricsReady;
  const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
  const pageTotalStock=stocks.every(value=>value!==null)?
   stocks.reduce((sum,value)=>sum+value,0):null;
@@ -453,6 +458,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
      {warehousePending&&<span className="fm-lab-warehouse-pending">
       Almacén pendiente de importar: propuesta provisional</span>}
+     {metricsLoading&&firstMetricsReady&&<span role="status">
+      Stock y ventas: {data.metricsLoaded} de {data.total} artículos calculados
+     </span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
 
     </div>
@@ -580,7 +588,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <button type="button" className="btn btn-secondary" disabled={safePage>=totalPages-1}
       onClick={()=>setTablePage(n=>Math.min(totalPages-1,n+1))}>Siguiente</button>
     </nav>}
-    {metricsLoading&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
+    {showMatrixOverlay&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
      <div className="fm-lab-matrix-loading">
       <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
       <strong>Cargando artículos, ventas y stock…</strong>

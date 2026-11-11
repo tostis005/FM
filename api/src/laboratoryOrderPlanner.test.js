@@ -236,3 +236,25 @@ test("SQL consulta el almacén por código de sincronización y solo en parafarm
  assert.match(text,/warehouse_ready AS/);
  assert.doesNotMatch(text,/JOIN __SCHEMA__\.fm_ventas_lineas l\s+ON l\.farmacia_codigo=w\.source_code/);
 });
+
+test("parafarmacia utiliza objetivos y stock global, medicación suma necesidades locales",()=>{
+ const sites={
+  "1":{stock:2,ordered:0,targetUnits:5,suggested:3},
+  "2":{stock:8,ordered:0,targetUnits:2,suggested:0},
+  "3":{stock:1,ordered:0,targetUnits:4,suggested:3}
+ };
+ const article={cn:"123456"};
+ const para=applyWarehouseToOrder(article,sites,"parafarmacia",
+  {warehouseReady:true,warehouseStock:0});
+ assert.equal(para.pharmacyStock,11);
+ assert.equal(para.totalSuggested,0,"El stock sobrante evita comprar 6 unidades");
+ const withWarehouse=applyWarehouseToOrder(article,
+  {"1":{stock:1,ordered:0,targetUnits:7,suggested:6},
+   "2":{stock:2,ordered:1,targetUnits:4,suggested:1}},
+  "parafarmacia",{warehouseReady:true,warehouseStock:3});
+ assert.equal(withWarehouse.totalSuggested,4);
+ assert.equal(applyWarehouseToOrder(article,sites,"medicacion",null).totalSuggested,6);
+ assert.equal(applyWarehouseToOrder(article,sites,"parafarmacia",
+  {warehouseReady:false}).totalSuggested,0,
+  "Sin almacén importado se sigue usando el stock total de las farmacias");
+});

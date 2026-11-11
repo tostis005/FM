@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {latestLaboratoryCN,invalidateLastReceiptCache,lastReceiptMode} from "./preparadorLastReceipt.js";
+import {latestLaboratoryCN,latestSupplierCN,invalidateLastReceiptCache,lastReceiptMode} from "./preparadorLastReceipt.js";
 import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 const ctx={client:{slug:"ampedia",schema:"ampedia"}};
 test("selector y catálogo comparten única fuente por CN, sin laboratorios vacíos",async()=>{
@@ -118,4 +118,29 @@ test("snapshot SQL mantiene última recepción global y exclusiones por farmacia
  assert.match(snapshot,/position\(upper\(exclude\.cadena\) in upper\(coalesce\(ar\.nombre/);
  assert.doesNotMatch(snapshot,/WHERE\s+AND/);
  assert.doesNotMatch(snapshot,/WHERE NOT \(upper\(coalesce\(l.nombre/);
+});
+
+test("al abrir un proveedor usa el índice por laboratorio sin descargar los CN de otros",async()=>{
+ const queries=[];
+ const pool={async query(q){
+  queries.push(q);
+  const sql=typeof q==="string"?q:q.text;
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))
+   return {rows:[{actualizado_en:new Date()}]};
+  if(sql.includes("FROM farmetrica.preparador_ultima_recepcion_cache"))
+   return {rows:[{cn:"001234",nombre:"Crema base",excluded:true}]};
+  throw Error("No debe leer el histórico completo");
+ }};
+ const rows=await latestSupplierCN(pool,ctx,[2,1],"42");
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].cn,"001234");
+ assert.equal(rows[0].excluded,true);
+ assert.equal(queries.length,2);
+ assert.match(queries[1].text,/lab_id=\$2::bigint/);
+ assert.match(queries[1].text,/pharmacy_ids && \$3::int\[\]/);
+ assert.deepEqual(queries[1].values,["ampedia","42",[1,2]]);
+});
+test("sin snapshot la consulta específica permite el fallback del histórico",async()=>{
+ const pool={query:async()=>({rows:[]})};
+ assert.equal(await latestSupplierCN(pool,ctx,[1],"42"),null);
 });

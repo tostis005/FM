@@ -11,14 +11,15 @@ const profiles=[
   permissions:{promociones:["ver","crear","editar","exportar"]},
   system:true,userCount:1,usedOtherClient:false,editable:false,deletable:false},
  {profileId:3,key:"farmacia",name:"Personal de farmacia",baseRole:"farmacia",
-  modules:["promociones"],sections:["promociones","seguimiento-global"],
-  permissions:{promociones:["ver","exportar"]},
+  modules:["promociones","reposicion"],sections:["promociones","seguimiento-global","reposicion"],
+  permissions:{promociones:["ver","exportar"],reposicion:["ver"]},
   system:true,userCount:2,usedOtherClient:false,editable:true,deletable:false}
 ];
-const modules=[{id:"promociones",name:"Promociones"}];
+const modules=[{id:"promociones",name:"Promociones"},{id:"reposicion",name:"Reposición"}];
 const sections=[
- {id:"promociones",name:"Promociones",module:"promociones"},
- {id:"seguimiento-global",name:"Seguimiento",module:"promociones"}
+ {id:"promociones",name:"Promociones",module:"promociones",profileVisible:true},
+ {id:"seguimiento-global",name:"Seguimiento",module:"promociones",profileVisible:true},
+ {id:"reposicion",name:"Reposición",module:"reposicion",profileVisible:false}
 ];
 const scope={modules:["promociones"],sections:["promociones","seguimiento-global"],
  operations:{promociones:["ver","crear","editar","exportar"]}};
@@ -59,12 +60,15 @@ async function checkRole(role){
   assert.equal(await page.locator(".fm-profile-card").getByRole("button",{name:"Eliminar"}).count(),0);
   await page.locator(".fm-profile-card").filter({hasText:"Personal de farmacia"})
    .getByRole("button",{name:"Configurar"}).click();
+  assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Reposición"}).count(),0);
   await page.locator("#editar-perfil input").first().fill("Personal actualizado");
   await page.getByRole("button",{name:"Guardar perfil"}).click();
   await page.getByText("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.").waitFor();
   assert.equal(writes.at(-1).role,role);
   assert.equal(writes.at(-1).path,"/api/tenant/perfiles/gestion/3");
   assert.equal(writes.at(-1).body.name,"Personal actualizado");
+  assert.deepEqual(writes.at(-1).body.modules,["promociones","reposicion"]);
+  assert.deepEqual(writes.at(-1).body.sections,["promociones","seguimiento-global","reposicion"]);
  }finally{await page.close();}
 }
 

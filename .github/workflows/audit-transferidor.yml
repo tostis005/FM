@@ -58,6 +58,23 @@ jobs:
           FROM ampedia.articulos
           WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))~'^[0-9]{6,7}$'
            AND left(btrim(codigo_nacional),6)::int<400000;
+          SELECT 'COLUMNAS_SINONIMOS' AS tipo,string_agg(column_name,', ' ORDER BY ordinal_position) AS columnas
+           FROM information_schema.columns WHERE table_schema='ampedia' AND table_name='sinonimos';
+          SELECT 'FICHAS_FORMATO' AS tipo,
+           count(*) FILTER(WHERE stock_actual>0 AND codigo_nacional IS NULL)::int AS cn_nulos,
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))='')::int AS cn_vacios,
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(coalesce(codigo_nacional,''))~'^[0-9]{8,14})::int AS cn_formato_ean,
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{6,7})::int AS erp_seis_siete,
+           count(*) FILTER(WHERE stock_actual>0 AND btrim(origen_id::text)~'^[0-9]{8,14})::int AS erp_ean
+          FROM ampedia.articulos;
+          SELECT 'SINONIMOS_TOTALES' AS tipo,count(*)::int AS filas,
+           count(*) FILTER(WHERE to_jsonb(s)->>'sinonimo' ~ '^[0-9]{8,14})::int AS ean_validos,
+           count(*) FILTER(WHERE to_jsonb(s)->>'sinonimo' ~ '^[0-9]{6,7})::int AS cn_validos
+          FROM ampedia.sinonimos s;
+          SELECT 'FORMATO_SINONIMOS' AS tipo, key,
+           count(*)::int AS filas
+          FROM ampedia.sinonimos s CROSS JOIN LATERAL jsonb_object_keys(to_jsonb(s)) key
+          GROUP BY key ORDER BY key;
           ROLLBACK;
           SQL
       - name: Comprobar versión y errores del servicio sin volcar datos personales

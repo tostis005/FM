@@ -29,12 +29,12 @@ function harness(){
  }
  return {call,calls};
 }
-test("cobertura compartida de 20 días por defecto y valor único persistido",async()=>{
+test("cobertura compartida de 30 días por defecto y valor único persistido",async()=>{
  const {call,calls}=harness();
  const r=await call("get","/api/tenant/stock-objetivo");
  assert.equal(r.status,200);
  assert.equal(r.payload.days,28);
- assert.equal(r.payload.defaultDays,20);
+ assert.equal(r.payload.defaultDays,30);
  assert.deepEqual(calls[0].values,["ampedia"]);
 });
 test("guardar cobertura global no mezcla frecuencia, plazos ni compras de Farmatic",async()=>{

@@ -38,7 +38,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   sort.direction,JSON.stringify(filters),revision]);
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
  const columns=useMemo(()=>[
-  {key:"cn",label:"EAN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
+  {key:"cn",label:"CN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
   {key:"name",label:"Producto",value:r=>r.name,render:r=><span title={r.name}>{r.name}</span>},
   {key:"originName",label:"Origen",filterMode:"text",value:r=>r.originName,
    render:r=><strong>{r.originName}</strong>},
@@ -84,9 +84,9 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
       {sites.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
      </select>
     </label>
-    <label>Buscar EAN o producto
+    <label>Buscar CN o producto
      <input type="search" value={search} onChange={e=>{setSearch(e.target.value);reset()}}
-      placeholder="Nombre o EAN"/>
+      placeholder="Nombre o código nacional"/>
     </label>
    </div>
    <div className="fm-transfer-filter-foot">
@@ -110,7 +110,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
     <h2>Propuestas entre farmacias</h2>
-    <span>Objetivo: {number(data?.summary?.coverageDays??20)} días</span>
+    <span>Objetivo: {number(data?.summary?.coverageDays??30)} días</span>
    </div>
    {!data&&loading?<LoadingPanel kind="table" label="Calculando movimientos globales…" rows={5}/>:<>
     <ListTable rows={data?.rows||[]} columns={columns} rowKey={r=>r.id}

@@ -1,5 +1,6 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {retiredProductSQL} from "./laboratoryRetirements.js";
+import {recoverSupplierVariantRoots} from "./supplierVariantRoots.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]+$'
  THEN coalesce(nullif(ltrim(btrim(${expr}::text),'0'),''),'0')
@@ -47,11 +48,21 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
   SELECT f.id,${pharmacyDataCodeSQL("f")} AS code
   FROM farmetrica.farmacias f
   WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[])
+ ), equivalent AS MATERIALIZED (
+  -- Dos proveedores activos con nombre exactamente igual representan el
+  -- mismo laboratorio comercial (p. ej. dos entradas L'OREAL ESPAÑA).
+  -- No unificar por coincidencias parciales ni incorporar mayoristas.
+  SELECT other.id FROM farmetrica.proveedores_unificados selected
+  JOIN farmetrica.proveedores_unificados other
+   ON other.cliente_slug=selected.cliente_slug
+    AND upper(btrim(other.nombre))=upper(btrim(selected.nombre))
+    AND other.activo AND other.clase NOT IN ('MAYORISTA','INTERNO')
+  WHERE selected.cliente_slug=$1 AND selected.id=$3 AND selected.activo
  ), aliases AS (
   SELECT DISTINCT c.id AS pharmacy_id,c.code,${normalizeCode("ua.codigo_origen")} AS supplier
   FROM farmetrica.proveedores_unificados_alias ua
   JOIN chosen c ON c.code=upper(btrim(ua.farmacia_codigo))
-  WHERE ua.cliente_slug=$1 AND ua.proveedor_id=$3
+  WHERE ua.cliente_slug=$1 AND ua.proveedor_id IN (SELECT id FROM equivalent)
  ), matched AS MATERIALIZED (
   SELECT DISTINCT c.pharmacy_id,a.origen_id::text AS article_id,
    coalesce(
@@ -86,7 +97,7 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
  const {rows}=await pool.query({text:sql,
   values:[ctx.client.slug,pharmacies,id,type,search,patterns],query_timeout:15000});
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias de catálogo"),{code:"TOO_MANY"});
- return rows;
+ return recoverSupplierVariantRoots(pool,ctx,{rows,pharmacies,type,patterns});
 }
 /** Fusionar por CN sin mezclar referencias ni perder la evidencia de compra. */
 export function mergeSupplierCatalogReferences(purchased,master,search="",type="parafarmacia"){

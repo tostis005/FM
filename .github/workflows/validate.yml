@@ -49,7 +49,7 @@ jobs:
           node --test api/src/laboratoryOptionCache.test.js
           node --check api/src/preparadorLastReceipt.js
           node --check api/src/refreshPreparadorLastReceipt.mjs
-          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js api/src/laboratoryAdditionalVerified.test.js api/src/preparadorAgenda.test.js api/src/laboratoryFrequencyPolicy.test.js api/src/supplierClassificationPolicy.test.js
+          node --test api/src/supplierReporting.test.js api/src/unifiedSuppliers.test.js api/src/supplierVariantRoots.test.js api/src/laboratoryOrderPlanner.test.js api/src/preparadorLastReceipt.test.js api/src/laboratoryMergeCandidates.test.js api/src/laboratoryMergeEvidence.test.js api/src/laboratoryNameMatching.test.js api/src/laboratoryReviewedMerges.test.js api/src/laboratoryUnclassifiedReconcile.test.js api/src/laboratoryNonLabExclusions.test.js api/src/laboratoryAdditionalVerified.test.js api/src/preparadorAgenda.test.js api/src/laboratoryFrequencyPolicy.test.js api/src/supplierClassificationPolicy.test.js
           node --test api/src/purchasePlanner.test.js
           node --test api/src/purchasePlannerSuppliers.test.js
           node --check api/src/laboratoryCatalog.js
@@ -348,6 +348,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/customSupplierIdentity.integration.test.js
            TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryMerge.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierMasterCatalog.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/supplierVariantRoots.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/masterSources.integration.test.js
 
 

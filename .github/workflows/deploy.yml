@@ -603,6 +603,16 @@ jobs:
             docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkOperationalLabs.mjs
           '
 
+      - name: Recalcular una vez las recepciones históricas AMP del preparador
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'AMP_ALMACEN_RECALC_20261111')
+        timeout-minutes: 9
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            timeout 440 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/refreshPreparadorLastReceipt.mjs
+          '
+
       - name: Diagnosticar CN 151130 y vinculación real con L’Oréal (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '151130')
         continue-on-error: true

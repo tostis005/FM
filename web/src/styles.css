@@ -1258,8 +1258,8 @@ html,body{overflow-x:clip}
 /* Control de plegado en el pie del menú oscuro, separado del logotipo.
    El tema histórico hacía scroll sobre TODO el aside y forzaba side-nav
    a flex:0. Ahora solo la navegación se desplaza; el pie permanece fijo. */
-.sidebar{overflow:hidden;scrollbar-gutter:auto}
-.sidebar .side-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+.app-shell .sidebar{overflow:hidden;scrollbar-gutter:auto}
+.app-shell .sidebar .side-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
  overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#659d80 transparent}
 .fm-sidebar-top{display:flex;flex:0 0 auto;min-width:0;align-items:center;padding:0 4px 22px}
 .sidebar .fm-sidebar-top .brand{min-width:0;width:100%;margin:0;padding:0;gap:9px;

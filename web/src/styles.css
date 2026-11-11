@@ -1277,6 +1277,14 @@ html,body{overflow-x:clip}
 .fm-sidebar-collapse-toggle svg{flex:0 0 18px}
 .sidebar .fm-sidebar-collapse-toggle:hover{color:#fff;background:rgba(183,236,201,.18)}
 .fm-sidebar-collapse-toggle:focus-visible{outline:2px solid #b7ecc9;outline-offset:2px}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .fm-sidebar-top .brand{color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .fm-sidebar-footer{border-top-color:var(--fm-brand-border)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .fm-sidebar-collapse-toggle{
+ background:var(--fm-brand-subtle);color:var(--fm-brand-secondary);border-color:var(--fm-brand-border)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .fm-sidebar-collapse-toggle:hover{
+ background:var(--fm-brand-soft);color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .fm-sidebar-collapse-toggle{color:var(--fm-brand-on-secondary)}
+
 @media(min-width:791px){
  .app-shell.fm-sidebar-is-collapsed .sidebar{flex:0 0 72px;width:72px;padding-inline:9px}
  .app-shell.fm-sidebar-is-collapsed .main-content{max-width:100%}

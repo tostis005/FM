@@ -68,3 +68,15 @@ test("no es posible fusionar cooperativas ni proveedores internos desde la API",
  assert.match(response.error,/Solo se pueden unificar laboratorios/);
  assert.ok(!statements.some(sql=>String(sql).startsWith("UPDATE farmetrica.proveedores_unificados_alias")));
 });
+
+test("el gestor puede unificar laboratorios, pero el CSV sigue siendo exclusivo del administrador",()=>{
+ const routes={};
+ const app={get(){},put(){},post(path,...handlers){routes[path]=handlers}};
+ const managerGuard=(_req,_res,next)=>next(),adminGuard=(_req,_res,next)=>next();
+ setupUnifiedSuppliers(app,{},{
+  requireTenant:()=>[],requireTenantAdmin:()=>[adminGuard],
+  requireTenantManager:()=>[managerGuard]
+ });
+ assert.equal(routes["/api/tenant/proveedores-unificados/fusionar"][0],managerGuard);
+ assert.equal(routes["/api/tenant/proveedores-unificados/importar"][0],adminGuard);
+});

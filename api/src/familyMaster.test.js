@@ -1,0 +1,72 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {setupFamilyMaster} from "./familyMaster.js";
+
+function harness(){
+ const routes=new Map(),queries=[];
+ const app=Object.fromEntries(["get","post","put"].map(method=>[method,(path,...stack)=>
+  routes.set(method+" "+path,stack.at(-1))]));
+ const pool={async query(sql,values){
+  const text=typeof sql==="string"?sql:sql.text;
+  const params=typeof sql==="string"?values:sql.values;
+  queries.push({text,params});
+  if(text.includes("count(*) FILTER(WHERE"))return {rows:[{
+   maestros:65,medicacion:57,parafarmacia:8,pendientes:560
+  }]};
+  if(text.includes("FROM farmetrica.familias_globales g")){
+   return {rows:[{id:"5",name:"Dermocosmética",segment:"PARAFARMACIA",
+    referencePharmacy:"ALMACEN",referenceCode:"11",customName:false}]};
+  }
+  if(text.includes("FROM farmetrica.familias_globales_alias a")){
+   return {rows:[
+    {pharmacyCode:"ALMACEN",sourceCode:"11",sourceName:"DERMOCOSMETICA",method:"referencia"},
+    {pharmacyCode:"ABA",sourceCode:"2022",sourceName:"2022 - Dermocosmética",method:"coincidencia_cn"}
+   ]};
+  }
+  throw Error("Consulta inesperada: "+text);
+ }};
+ setupFamilyMaster(app,pool,{requireTenantManager:()=>[]});
+ async function get(path,query={},id){
+  const h=routes.get("get "+path);assert.ok(h);
+  let status=200,result,error;
+  const req={query,params:{id},context:{client:{slug:"ampedia",schema:"ampedia"},pharmacies:[]}};
+  const res={status(n){status=n;return this},json(v){result=v;return this}};
+  await h(req,res,e=>{error=e});
+  if(error)throw error;
+  return {status,result};
+ }
+ return {get,queries};
+}
+test("el listado inicial consulta únicamente el maestro, sin contar CN",async()=>{
+ const {get,queries}=harness();
+ const r=await get("/api/tenant/familias-globales");
+ assert.equal(r.status,200);
+ assert.equal(r.result.summary.maestros,65);
+ assert.equal(r.result.summary.medicacion,57);
+ assert.equal(r.result.items.length,1);
+ assert.ok(queries.every(q=>!q.text.includes("familias_globales_articulos")));
+ assert.ok(queries.every(q=>!q.text.includes(".articulos")));
+ assert.ok(queries.every(q=>!q.text.includes("json_agg")));
+});
+test("las familias por revisar quedan fuera del listado y paginadas",async()=>{
+ const {get,queries}=harness();
+ await get("/api/tenant/familias-globales",{view:"pendientes",page:"3",q:"solar"});
+ const list=queries.find(q=>q.text.includes("LIMIT 30 OFFSET $3"));
+ assert.deepEqual(list.params,["ampedia","solar",60]);
+ assert.match(list.text,/NOT \(g.referencia_farmacia IS NOT NULL OR g.nombre_manual\)/);
+});
+test("nombres locales de farmacias se consultan sólo al desplegar",async()=>{
+ const {get,queries}=harness();
+ const r=await get("/api/tenant/familias-globales/:id/origenes",{},"5");
+ assert.equal(r.result.items.length,2);
+ assert.equal(r.result.items[1].sourceName,"2022 - Dermocosmética");
+ assert.ok(queries.every(q=>!q.text.includes("familias_globales_articulos")));
+ assert.deepEqual(queries[0].params,["ampedia","5"]);
+});
+test("rechaza filtros excesivos y IDs inválidos",async()=>{
+ const {get,queries}=harness();
+ assert.equal((await get("/api/tenant/familias-globales",{q:"X".repeat(101)})).status,400);
+ assert.equal((await get("/api/tenant/familias-globales",{view:"otras"})).status,400);
+ assert.equal((await get("/api/tenant/familias-globales/:id/origenes",{},"../../x")).status,400);
+ assert.equal(queries.length,0);
+});

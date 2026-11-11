@@ -85,9 +85,9 @@ try{
  assert.equal(await page.getByRole("button",{name:"Cerrar aviso de importación"}).count(),1);
  assert.equal(await page.locator(".campaign-table thead th").filter({hasText:"Acciones"}).count(),1);
  const firstRow=page.locator(".campaign-table tbody tr").first();
- assert.equal(await firstRow.getByRole("button",{name:"Editar",exact:true}).count(),1);
+ assert.equal(await firstRow.getByRole("button",{name:/^Editar /}).count(),1);
  assert.equal(await firstRow.getByRole("button",{name:"Asignar objetivos"}).count(),1);
- assert.equal(await firstRow.getByRole("button",{name:"Seguimiento"}).count(),1);
+ assert.equal(await firstRow.getByRole("button",{name:/seguimiento de/i}).count(),1);
  assert.equal(await firstRow.getByRole("button",{name:/Eliminar/}).count(),1);
  assert.match(await page.locator(".fm-promotions-bulk-actions .count-label").last().innerText(),/51 promociones/);
  assert.ok(await page.locator(".campaign-table tbody tr").count()>0,

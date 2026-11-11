@@ -331,6 +331,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/056_maestro_familias.sql
           psql_test --single-transaction < api/src/migrations/057_politica_stock_transferidor.sql
           psql_test --single-transaction < api/src/migrations/058_inicializacion_familias.sql
+          psql_test --single-transaction < api/src/migrations/059_equivalencias_nombre_familias.sql
           psql_test --single-transaction < api/src/migrations/057_politica_stock_transferidor.sql
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js

@@ -85,33 +85,6 @@ try{
    equivalenciasProveedor:selected.map(s=>({id:s.id,
     asociado:mapped.some(a=>suppliers.some(v=>supplier(a.codigo_origen)===supplier(v)))}))};
  });
- // Determinar si P0508 pertenece a un proveedor concreto o a otra entidad
- // ERP. Relación exacta y por farmacia, nunca por parecido del nombre.
- const labCodes=[...new Set(article.map(row=>String(row.laboratorio||"").trim()).filter(Boolean))];
- const {rows:labSourceLinks}=labCodes.length?await pool.query({text:`
-  SELECT a.codigo_origen AS code,p.id::text AS id,p.nombre,
-   count(DISTINCT a.farmacia_codigo)::int AS pharmacies
-  FROM farmetrica.proveedores_unificados_alias a
-  JOIN farmetrica.proveedores_unificados p ON p.id=a.proveedor_id
-   AND p.cliente_slug=a.cliente_slug
-  WHERE a.cliente_slug=$1 AND upper(btrim(a.codigo_origen))=ANY($2::text[])
-  GROUP BY a.codigo_origen,p.id,p.nombre ORDER BY pharmacies DESC,p.nombre LIMIT 35`,
-  values:[SLUG,labCodes],query_timeout:7000}):{rows:[]};
- out.labCodeAliases=labSourceLinks;
- const {rows:labProviders}=labCodes.length?await pool.query({text:`
-  SELECT btrim(origen_id::text) AS code,nombre,
-   count(DISTINCT farmacia_codigo)::int AS pharmacies
-  FROM "${schema}".proveedores
-  WHERE upper(btrim(origen_id::text))=ANY($1::text[])
-  GROUP BY 1,2 ORDER BY pharmacies DESC,nombre LIMIT 20`,
-  values:[labCodes],query_timeout:7000}):{rows:[]};
- out.labCodeSuppliers=labProviders;
- const {rows:labTables}=await pool.query({text:`
-  SELECT table_name FROM information_schema.tables
-  WHERE table_schema=$1 AND table_name ILIKE '%laborator%'
-  ORDER BY table_name LIMIT 15`,
-  values:[schema],query_timeout:7000});
- out.erpLabTables=labTables.map(r=>r.table_name);
  const catalogs=[];
  for(const s of selected.slice(0,6)){
   try{

@@ -63,6 +63,18 @@ export async function listUnifiedSuppliers(pool,ctx,pharmacies,forOrders=false){
  return (await supplierQuery).rows;
 }
 
+async function readMasterWithoutBlockingOrders(pool,ctx,opts){
+ try{return {rows:await readSupplierMasterCatalogue(pool,ctx,opts),warning:null}}
+ catch(error){
+  // El histórico de CN sigue siendo consultable si el ERP adicional está
+  // temporalmente saturado. No aparentar que se recuperó el catálogo entero.
+  console.warn("PREPARADOR_CATALOGO_ADICIONAL",JSON.stringify({
+   status:"partial",code:error.code||error.name||"QUERY_ERROR"
+  }));
+  return {rows:[],warning:"No se pudo completar el catálogo de artículos sin movimientos. "+
+   "Se muestran los CN recuperados de las recepciones; vuelve a actualizar para reintentarlo."};
+ }
+}
 /** Universo del preparador: histórico de recepciones + catálogo ERP de los
  * proveedores habituales, incluyendo referencias con stock suficiente. */
 export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search=""}){
@@ -80,9 +92,10 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   const [historic,master]=await Promise.all([
    targeted===null?latestLaboratoryCN(pool,ctx,pharmacies).then(
     result=>result.byLab.get(id)||[]):Promise.resolve(targeted),
-   readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,search,patterns})
+   readMasterWithoutBlockingOrders(pool,ctx,{id,pharmacies,type,search,patterns})
   ]);
-  return mergeSupplierCatalogReferences(historic,master,search,type);
+  return {...mergeSupplierCatalogReferences(historic,master.rows,search,type),
+   warning:master.warning};
  }
  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
  const sql=`
@@ -137,11 +150,12 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  const [historical,master]=await Promise.all([
   pool.query({text:sql,values:[ctx.client.slug,pharmacies,id,type,search,patterns],
    query_timeout:25000}),
-  readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,search,patterns})
+  readMasterWithoutBlockingOrders(pool,ctx,{id,pharmacies,type,search,patterns})
  ]);
  const rows=historical.rows;
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
- return mergeSupplierCatalogReferences(rows,master,search,type);
+ return {...mergeSupplierCatalogReferences(rows,master.rows,search,type),
+  warning:master.warning};
 }
 export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager=requireTenantAdmin}){
  const permitted=req=>req.context.role==="superadministrador"||req.context.modules?.compras===true;

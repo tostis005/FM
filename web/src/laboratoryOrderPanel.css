@@ -28,6 +28,8 @@
 .fm-lab-order-table th.fm-lab-order-sub{font-size:10px;font-weight:600}
 .fm-lab-order-table .fm-lab-order-ordercol{font-weight:700;border-right:2px solid #b7c4b9}
 .fm-lab-order-table .fm-lab-order-total-group,.fm-lab-order-table .fm-lab-order-total{background:#e9f3ec;font-weight:700}
+.fm-lab-order-table thead th.fm-lab-order-total-head{background:#e9f3ec;color:#24583b;font-weight:800}
+.fm-lab-order-table thead th.fm-lab-order-order-group{background:#eaf4ee;color:#24583b;font-weight:800;border-left:2px solid #7eac8f}
 .fm-lab-order-table .fm-lab-order-editcol{background:#eaf4ee!important;border-left:2px solid #7eac8f;min-width:80px}
 .fm-lab-order-table input[type=number]{width:62px;max-width:62px;min-width:0;text-align:right;background:#fff;border:1px solid #aac8b6;border-radius:5px;padding:5px 4px;color:#1f4833;font-size:12px;font-weight:700}
 .fm-lab-order-table input:disabled{opacity:.7;background:#f3f6f4}

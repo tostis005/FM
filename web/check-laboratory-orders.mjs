@@ -54,7 +54,8 @@ await page.route("**/api/**",async route=>{
   body={laboratories:[{key:"P:10",name:"Laboratorio Ejemplo",class:"DIRECTO"},
    {key:"P:11",name:"Laboratorios Cinfa S.A.",class:"DIRECTO",hasMedication:true,hasParapharmacy:false},
    {key:"P:12",name:"Laboratorio con 125 referencias",class:"DIRECTO"},
-   {key:"P:13",name:"Laboratorio con ventas inaccesibles",class:"DIRECTO",hasMedication:true,hasParapharmacy:false}]};
+   {key:"P:13",name:"Laboratorio con ventas inaccesibles",class:"DIRECTO",hasMedication:true,hasParapharmacy:false},
+   {key:"P:14",name:"Laboratorio con 600 referencias",class:"DIRECTO",hasMedication:false,hasParapharmacy:true}]};
  }
  else if(path==="/api/analytics/pedidos/borrador-laboratorio"){
   if(request.method()==="PUT"){
@@ -65,7 +66,7 @@ await page.route("**/api/**",async route=>{
   path==="/api/analytics/pedidos/catalogo-unificado"){
   const requestedLab=url.searchParams.get("laboratorio"),type=url.searchParams.get("tipo");
   catalogCalls.push({lab:requestedLab,type});
-  const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR"}[requestedLab]||requestedLab;
+  const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR","P:14":"N:VOLUME"}[requestedLab]||requestedLab;
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,300));
   const pageNumber=Number(url.searchParams.get("pagina")||1);
   const limit=Number(url.searchParams.get("tamano")||40);
@@ -73,6 +74,10 @@ await page.route("**/api/**",async route=>{
   if(lab==="N:MULTI")
    rows=Array.from({length:125},(_,i)=>({referencia:String(1000+i).padStart(6,"0"),
     cn:String(1000+i).padStart(6,"0"),nombre:"Referencia lote "+String(i+1).padStart(3,"0"),
+    tipo:"parafarmacia",inMaster:false,inReceipts:true}));
+  else if(lab==="N:VOLUME")
+   rows=Array.from({length:600},(_,i)=>({referencia:String(2000+i).padStart(6,"0"),
+    cn:String(2000+i).padStart(6,"0"),nombre:"Referencia volumen "+String(i+1),
     tipo:"parafarmacia",inMaster:false,inReceipts:true}));
   else if(lab==="N:ERROR")
    rows=[{referencia:"790321",cn:"790321",nombre:"Producto recuperado del maestro",
@@ -93,8 +98,10 @@ await page.route("**/api/**",async route=>{
   path==="/api/analytics/pedidos/matriz-conjunta"){
   const incoming=request.method()==="POST"?request.postDataJSON():null;
   const requestedLab=incoming?.laboratorio||url.searchParams.get("laboratorio");
-  const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR"}[requestedLab]||requestedLab;
+  const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR","P:14":"N:VOLUME"}[requestedLab]||requestedLab;
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,850));
+  if(lab==="N:MULTI" && incoming?.referencias?.[0]?.referencia==="001100")
+   await new Promise(resolve=>setTimeout(resolve,1100));
   if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
     body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
@@ -244,6 +251,10 @@ try{
  const multiSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});
  await multiSelector.fill("125 referencias");
  await page.getByRole("option",{name:"Laboratorio con 125 referencias"}).click();
+ await page.waitForFunction(()=>document.querySelector(".fm-lab-order-summary [role='status']")
+  ?.textContent?.includes("100 de 125"),null,{timeout:15000});
+ assert.equal(await page.locator(".fm-lab-matrix-overlay").isVisible(),true,
+  "El spinner sigue visible con 100 de 125 artículos calculados");
  await page.getByText("Referencia lote 125").waitFor({timeout:25000});
  await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:15000});
  await page.waitForFunction(()=>
@@ -303,18 +314,27 @@ try{
  });
  assert.ok(Math.abs(reverse[0]-reverse[1])<=2,
   "Mover barra superior mueve las mismas columnas que el pie");
- assert.equal(await page.locator(".fm-lab-order-pager").count(),0);
- assert.equal(await page.getByRole("button",{name:"Siguiente",exact:true}).count(),0);
+ const pager=page.locator(".fm-lab-order-pager");
+ await pager.waitFor();
+ const pageSize=pager.getByRole("combobox",{name:"Artículos por página"});
+ assert.equal(await pageSize.inputValue(),"0","Todos es el tamaño por defecto");
+ assert.match(await pager.innerText(),/Mostrando los 125 artículos/);
+ await pageSize.selectOption("100");
+ assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),100);
+ await pager.getByRole("button",{name:"Siguiente"}).click();
+ assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),25);
+ await pageSize.selectOption("0");
+ assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),125);
  const last=page.getByRole("spinbutton",{name:"Pedir Referencia lote 125 para el laboratorio"});
  await last.fill("9");
  const saveMulti=page.getByRole("button",{name:"Guardar borrador"});
  await saveMulti.waitFor({state:"visible"});
  await page.waitForFunction(()=>!document.querySelector(".fm-lab-order-actions button").disabled,{timeout:25000});
- assert.ok(matrices.some(m=>m.laboratorio==="P:12"&&m.referencias?.length===125),
-  "Todas las referencias se calculan en una sola agregación");
+ assert.ok(matrices.filter(m=>m.laboratorio==="P:12").reduce((n,m)=>n+(m.referencias?.length||0),0)>=125,
+  "Las referencias se calculan por lotes sin perder ninguna");
  await saveMulti.click();
  await page.getByText(/Borrador guardado/).waitFor();
- assert.ok(matrices.some(m=>m.laboratorio==="P:12"&&m.referencias?.length===125));
+ assert.ok(matrices.filter(m=>m.laboratorio==="P:12").reduce((n,m)=>n+(m.referencias?.length||0),0)>=125);
  assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
  assert.equal(saved.at(-1).lineas.find(l=>l.name==="Referencia lote 125")?.units,9);
   await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("ventas inaccesibles");

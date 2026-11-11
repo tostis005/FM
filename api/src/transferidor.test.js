@@ -97,7 +97,7 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
  assert.deepEqual(selected.values[1],[1,2]);
  assert.match(selected.q,/JOIN "ampedia"\\.articulos/);
  assert.match(selected.q,/a\\.origen_id::text AS article_id/);
- assert.match(selected.q,/BETWEEN 1 AND 399999/);
+ assert.match(selected.q,/BETWEEN \\$3::int AND \\$4::int/);
  assert.doesNotMatch(selected.q,/sinonimos|ean/);
 });
 

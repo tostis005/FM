@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY} from "./laboratoryLoadAll.js";
+import {ALL_LAB_ROWS,laboratoryTablePage,laboratoryTableViewport,LAB_VIRTUAL_ROW_HEIGHT} from "./laboratoryTableWindow.js";
 
 test("dos mil CN se calculan en veinte lotes, máximo dos consultas simultáneas",async()=>{
  const initial=Array.from({length:2000},(_,i)=>({
@@ -84,4 +85,33 @@ test("métricas: cancelar al dividir evita consultas posteriores",async()=>{
    return {metricsUnavailable:true,metricsErrorCode:"57014"};
   },{signal:controller.signal}),{name:"AbortError"});
  assert.equal(calls,1);
+});
+
+test("Todos muestra 5000 CN por defecto, aunque se puedan paginar 250, 500 o 1000",()=>{
+ const groups=Array.from({length:5000},(_,i)=>({rows:[{
+  referencia:String(i).padStart(6,"0"),cn:String(i).padStart(6,"0")
+ }]}));
+ const all=laboratoryTablePage(groups,ALL_LAB_ROWS,0);
+ assert.equal(all.totalPages,1);
+ assert.equal(all.rows.length,5000);
+ assert.equal(all.rows[4999].cn,"004999");
+ assert.equal(laboratoryTablePage(groups,250,0).rows.length,250);
+ assert.equal(laboratoryTablePage(groups,250,1).rows[0].cn,"000250");
+ assert.equal(laboratoryTablePage(groups,500,0).totalPages,10);
+ assert.equal(laboratoryTablePage(groups,1000,0).rows.length,1000);
+ assert.equal(laboratoryTablePage(groups,1000,0).totalPages,5);
+ assert.equal(laboratoryTablePage(groups,500,99).safePage,9);
+});
+
+test("5000 CN tienen scroll completo y render acotado sin truncar datos",()=>{
+ const first=laboratoryTableViewport(5000,0);
+ assert.equal(first.virtualized,true);
+ assert.equal(first.start,0);
+ assert.ok(first.end<=70);
+ const last=laboratoryTableViewport(5000,4999);
+ assert.equal(last.end,5000);
+ assert.ok(last.start>=4900);
+ assert.equal(last.top+last.bottom+(last.end-last.start)*LAB_VIRTUAL_ROW_HEIGHT,
+  5000*LAB_VIRTUAL_ROW_HEIGHT);
+ assert.equal(laboratoryTableViewport(125,20).virtualized,false);
 });

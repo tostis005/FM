@@ -191,7 +191,12 @@ export function setupTransferidor(app,pool,{requireTenant}){
    const plan=buildGlobalTransfers(rows,available,coverageDays);
    const filtered=filterTransferPlan(plan.transfers,opts);
    const uniqueProducts=new Set(plan.transfers.map(r=>r.cn)).size;
+   const emptyReason=!plan.products?"No hay referencias de parafarmacia con CN y stock identificable.":
+    !plan.withSurplus?"No hay existencias sobrantes para redistribuir.":
+    !plan.withNeed?"No hay necesidades de reposición que cubrir con transferencias.":
+    !plan.transfers.length?"No coinciden los excedentes con las necesidades del mismo producto.":null;
    res.json({available:true,rows:filtered.rows,total:filtered.total,page:opts.page,pageSize:opts.size,
+    emptyReason,
     summary:{movements:plan.transfers.length,units:plan.transfers.reduce((sum,r)=>sum+r.units,0),
      products:uniqueProducts,filteredUnits:filtered.units,coverageDays,skipped:plan.skipped,
      analyzed:plan.products,withNeed:plan.withNeed,withSurplus:plan.withSurplus},

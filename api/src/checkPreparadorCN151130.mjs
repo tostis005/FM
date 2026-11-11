@@ -131,6 +131,142 @@ try{
    out.aliases3MYCantabria=alias;
   }catch(e){out.codigoTraceError={code:e.code||e.name,message:String(e.message||"").slice(0,140)}}
  }
+
+ // Diagnóstico documental profundo, centrado en el proveedor real de Farmatic
+ // y en la relación cabecera -> línea -> ficha histórica actual. Solo SELECT.
+ if(CN==="003652"){
+  try{
+   const {rows:originalSuppliers}=await pool.query({text:`
+    SELECT farmacia_codigo,origen_id::text AS codigo,nombre
+    FROM "${schema}".proveedores
+    WHERE upper(btrim(farmacia_codigo)) IN ('BUE','AMP','ALMACEN')
+      AND (CASE WHEN btrim(origen_id::text) ~ '^[0-9]+
+ const {rows:erpSuppliers}=await pool.query({text:`
+  SELECT farmacia_codigo,origen_id::text AS code,nombre
+  FROM "${schema}".proveedores
+  WHERE upper(btrim(origen_id::text))=ANY($1::text[])
+  LIMIT 40`,values:[labCodes.map(c=>c.toUpperCase())],query_timeout:10000});
+ const {rows:aliasesForLab}=await pool.query({text:`
+  SELECT ua.farmacia_codigo,ua.codigo_origen,
+   p.id::text AS id,p.nombre
+  FROM farmetrica.proveedores_unificados_alias ua
+  JOIN farmetrica.proveedores_unificados p ON p.cliente_slug=ua.cliente_slug
+   AND p.id=ua.proveedor_id
+  WHERE ua.cliente_slug=$1 AND upper(btrim(ua.codigo_origen))=ANY($2::text[])
+  LIMIT 40`,values:[SLUG,labCodes.map(c=>c.toUpperCase())],query_timeout:10000});
+ out.labCodeLinks={codes:labCodes,erpSuppliers:erpSuppliers.map(r=>({farmacia:r.farmacia_codigo,nombre:r.nombre})),
+  unified:aliasesForLab.map(r=>({farmacia:r.farmacia_codigo,id:r.id,nombre:r.nombre}))};
+ const {rows:labColumns}=await pool.query({text:`
+  SELECT table_name,column_name FROM information_schema.columns
+  WHERE table_schema=$1 AND table_name IN ('laboratorios','articulos')
+   AND column_name IN ('laboratorio','laboratorio_id','codigo','origen_id','nombre',
+    'proveedor_habitual_id','proveedor_id','codigo_nacional','cn_normalizado')`,
+  values:[schema],query_timeout:5000});
+ out.availableLabColumns=labColumns;
+ out.snapshotLab=snap.map(x=>({id:x.lab,
+  nombre:allSuppliers.find(s=>s.id===x.lab)?.nombre||"Otro"}));
+ const {rows:aliases}=selected.length?await pool.query({
+  text:`SELECT proveedor_id::text AS id,farmacia_codigo,codigo_origen
+  FROM farmetrica.proveedores_unificados_alias
+  WHERE cliente_slug=$1 AND proveedor_id=ANY($2::bigint[])`,
+  values:[SLUG,selected.map(s=>s.id)],query_timeout:7000}):{rows:[]};
+ out.erp=article.map(row=>{
+  const mapped=aliases.filter(a=>a.farmacia_codigo.trim().toUpperCase()===
+   String(row.farmacia_codigo||"").trim().toUpperCase());
+  const suppliers=[row.habitual,row.proveedor,row.proveedor_codigo]
+   .filter(v=>v!==null&&v!==undefined&&String(v).trim()!=="");
+  return {farmacia:row.farmacia_codigo,nombre:row.nombre,
+   codigoOriginal:row.codigo_nacional,codigoNormalizado:row.normalizado,
+   laboratorioERP:row.laboratorio,
+   tieneProveedorHabitual:!!row.habitual,
+   proveedorHabitualEsLoreal:mapped.some(a=>supplier(a.codigo_origen)===supplier(row.habitual)),
+   algunProveedorEsLoreal:mapped.some(a=>suppliers.some(v=>supplier(a.codigo_origen)===supplier(v))),
+   nombreLaboratorioEsLoreal:normalized(row.laboratorio).includes("LOREAL"),
+   equivalenciasProveedor:selected.map(s=>({id:s.id,
+    asociado:mapped.some(a=>suppliers.some(v=>supplier(a.codigo_origen)===supplier(v)))}))};
+ });
+ const catalogs=[];
+ for(const s of selected.slice(0,6)){
+  try{
+   const start=Date.now();
+   const data=await readUnifiedSupplierCN(pool,ctx,{key:"P:"+s.id,pharmacies:ids,
+    type:"parafarmacia",search:CN});
+   catalogs.push({id:s.id,name:s.nombre,items:data.rows.slice(0,3).map(r=>({
+    referencia:r.referencia,cn:r.cn,nombre:r.nombre,provisional:r.provisional,
+    fuenteRecepciones:r.inReceipts,fuenteERP:!!r.pharmacyIds
+   })),cnPresente:data.rows.some(r=>r.cn===CN),
+    totalFiltrado:data.total,warning:!!data.warning,elapsedMs:Date.now()-start});
+  }catch(e){catalogs.push({id:s.id,name:s.nombre,error:e.code||e.name})}
+ }
+ out.catalogs=catalogs;
+}catch(e){out.error=e.code||e.name||"QUERY_ERROR";out.detail=String(e.message||"").slice(0,120)}
+finally{
+ console.info("PREPARADOR_CN_DIAGNOSTICO",JSON.stringify(out));
+ await pool.end();
+}
+
+       THEN coalesce(nullif(ltrim(btrim(origen_id::text),'0'),''),'0')
+       ELSE upper(btrim(origen_id::text)) END) IN ('63','4094','40')
+    ORDER BY farmacia_codigo,codigo LIMIT 35`,query_timeout:10000});
+   out.proveedoresOriginalesPorCodigo=originalSuppliers;
+   const {rows:targetDocs}=await pool.query({text:`
+    SELECT h.farmacia_codigo AS farmacia,h.sistema_origen,
+      h.documento_id,h.numero_albaran,h.numero_pedido,h.proveedor_origen_id,
+      h.fecha,h.estado,h.recibido_en,h.lineas_completas,
+      l.linea_id AS linea_articulo,l.articulo_origen_id,l.cantidad,
+      l.precio_unitario_bruto,l.coste_neto,l.bonificacion_unidades,
+      l.devuelta,l.eliminada_logicamente AS linea_eliminada
+    FROM "${schema}".fm_recepciones_lineas l
+    JOIN "${schema}".fm_recepciones_cabeceras h
+     ON h.farmacia_codigo=l.farmacia_codigo
+      AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
+    WHERE l.articulo_origen_id::text=$1
+      AND (
+       (h.farmacia_codigo='BUE' AND
+        btrim(h.proveedor_origen_id::text) IN ('0063','63'))
+       OR (h.farmacia_codigo IN ('AMP','ALMACEN') AND
+        btrim(h.proveedor_origen_id::text) IN ('4094'))
+      )
+    ORDER BY h.fecha DESC LIMIT 15`,values:[CN],query_timeout:20000});
+   out.documentosClave=targetDocs;
+   const detailed=[];
+   for(const doc of targetDocs.filter(d=>d.farmacia==='BUE').slice(0,3)){
+    const {rows:docLines}=await pool.query({text:`
+     SELECT l.linea_id,l.articulo_origen_id,
+       l.cantidad,l.coste_neto,l.precio_unitario_bruto,l.bonificacion_unidades,
+       ar.nombre AS nombre_ficha_actual,ar.laboratorio AS laboratorio_ficha,
+       ar.codigo_nacional AS cn_ficha,
+       to_jsonb(ar)->>'cn_normalizado' AS cn_normalizado
+     FROM "${schema}".fm_recepciones_lineas l
+     LEFT JOIN "${schema}".articulos ar
+       ON upper(btrim(ar.farmacia_codigo))=upper(btrim(l.farmacia_codigo))
+        AND ar.origen_id::text=l.articulo_origen_id::text
+     WHERE l.farmacia_codigo=$1 AND l.sistema_origen=$2 AND l.documento_id=$3
+     ORDER BY l.linea_id LIMIT 40`,
+     values:[doc.farmacia,doc.sistema_origen,doc.documento_id],query_timeout:10000});
+    detailed.push({documento_id:doc.documento_id,farmacia:doc.farmacia,
+     linea_articulo:doc.linea_articulo,lineas:docLines});
+   }
+   out.lineasEnDocumentos3M=detailed;
+   const {rows:otherProducts}=await pool.query({text:`
+    SELECT h.farmacia_codigo AS farmacia,h.proveedor_origen_id AS codigo_proveedor,
+     count(DISTINCT h.documento_id)::int AS documentos,
+     count(*)::int AS lineas,count(DISTINCT l.articulo_origen_id)::int AS articulos_distintos,
+     min(h.fecha) AS primera,max(h.fecha) AS ultima
+    FROM "${schema}".fm_recepciones_cabeceras h
+    JOIN "${schema}".fm_recepciones_lineas l
+     ON l.farmacia_codigo=h.farmacia_codigo
+      AND l.sistema_origen=h.sistema_origen AND l.documento_id=h.documento_id
+    WHERE h.farmacia_codigo='BUE'
+     AND btrim(h.proveedor_origen_id::text) IN ('0063','63')
+     AND h.lineas_completas AND NOT h.eliminada_logicamente
+     AND NOT l.eliminada_logicamente
+    GROUP BY h.farmacia_codigo,h.proveedor_origen_id LIMIT 5`,
+    query_timeout:15000});
+   out.actividadReal3MBuenavista=otherProducts;
+  }catch(e){out.profundidadError={code:e.code||e.name,
+    detalle:String(e.message||'').slice(0,160)}}
+ }
  const labCodes=[...new Set(article.map(r=>String(r.laboratorio||"").trim()).filter(Boolean))];
  const {rows:erpSuppliers}=await pool.query({text:`
   SELECT farmacia_codigo,origen_id::text AS code,nombre

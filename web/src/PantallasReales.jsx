@@ -9,7 +9,7 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {ListPagination} from "./ListTable.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {downloadTableCSV} from "./tableExport.js";
-import {readableCell} from "./SortableDataTable.jsx";
+import SortableDataTable,{readableCell} from "./SortableDataTable.jsx";
 import {searchText} from "./listLogic.js";
 import "./operativaPreview.css";
 import "./pantallasReales.css";
@@ -306,15 +306,17 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
        <div className="fm-preview-panel-head"><h3>Ticket {TXT(ticketDetail.ticket.ticket)} · Líneas</h3>
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setTicketDetail(null)}>Cerrar detalle</button></div>
        {ticketDetail.loading?<LoadingPanel kind="table" label="Cargando detalle de líneas…" rows={5}/>:ticketDetail.error?<p role="alert">{ticketDetail.error}</p>:
-        <HorizontalTableScroll className="fm-preview-scroll" label="líneas del ticket"><table className="fm-real-screen-table"><thead><tr>
-         {["Línea","CN · Artículo","Unidades","Precio unidad","Descuento aplicado","Tipo descuento","Importe neto","Coste histórico"].map(v=><th key={v}>{v}</th>)}
-        </tr></thead><tbody>{ticketDetail.lines.map(line=><tr key={line.lineId}>
-         <td>{TXT(line.lineId)}</td><td><ArticleIdentification cn={line.cn}
-          name={line.articleName} sourceId={line.articleId}/></td><td>{UNITS(line.units)}</td>
-         <td>{EUR(line.unitPrice)}</td><td>{DECIMAL(line.discount)}</td><td>{TXT(line.discountType)}</td><td>{EUR(line.amount)}</td>
-         <td>{EUR(line.historicalCost)}</td></tr>)}
-         {!ticketDetail.lines.length&&<tr><td colSpan="8">El documento no tiene líneas visibles.</td></tr>}
-        </tbody></table></HorizontalTableScroll>}
+        <SortableDataTable
+         label="líneas del ticket"
+         tableClass="fm-real-screen-table"
+         headers={["Línea","CN · Artículo","Unidades","Precio unidad","Descuento aplicado","Tipo descuento","Importe neto","Coste histórico"]}
+         rows={ticketDetail.lines.map(line=>[
+          TXT(line.lineId),
+          <ArticleIdentification cn={line.cn} name={line.articleName} sourceId={line.articleId}/>,
+          UNITS(line.units),EUR(line.unitPrice),DECIMAL(line.discount),TXT(line.discountType),
+          EUR(line.amount),EUR(line.historicalCost)
+         ])}
+         empty="El documento no tiene líneas visibles." />}
        {ticketDetail.truncated&&<p role="status">El ticket tiene más de 500 líneas; se muestran las primeras 500.</p>}
       </section>}
      {section==="compras-recepciones"&&receiptDetail&&<section className="fm-ticket-detail"
@@ -322,16 +324,16 @@ export default function PantallasReales({section,pharmacies=[],clientSlug="amped
        <div className="fm-preview-panel-head"><h3>Recepción {TXT(receiptDetail.receipt.reference)} · Líneas</h3>
         <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setReceiptDetail(null)}>Cerrar detalle</button></div>
        {receiptDetail.loading?<LoadingPanel kind="table" label="Cargando detalle de líneas…" rows={5}/>:receiptDetail.error?<p role="alert">{receiptDetail.error}</p>:
-        <HorizontalTableScroll className="fm-preview-scroll" label="líneas de la recepción">
-         <table className="fm-unified-table fm-real-screen-table"><thead><tr>
-          {["Línea","CN · Artículo","Unidades netas","Precio bruto/ud.","Coste neto/ud.","Importe neto"].map(v=><th key={v}>{v}</th>)}
-         </tr></thead><tbody>{receiptDetail.lines.map(line=><tr key={line.lineId}>
-          <td>{TXT(line.lineId)}</td><td><ArticleIdentification cn={line.cn}
-           name={line.articleName} sourceId={line.articleId}/></td>
-          <td>{UNITS(line.units)}</td><td>{EUR(line.unitPrice)}</td>
-          <td>{EUR(line.netUnitCost)}</td><td>{EUR(line.amount)}</td></tr>)}
-          {!receiptDetail.lines.length&&<tr><td colSpan="6">El documento no tiene líneas visibles.</td></tr>}
-         </tbody></table></HorizontalTableScroll>}
+        <SortableDataTable
+          label="líneas de la recepción"
+          tableClass="fm-real-screen-table"
+          headers={["Línea","CN · Artículo","Unidades netas","Precio bruto/ud.","Coste neto/ud.","Importe neto"]}
+          rows={receiptDetail.lines.map(line=>[
+           TXT(line.lineId),
+           <ArticleIdentification cn={line.cn} name={line.articleName} sourceId={line.articleId}/>,
+           UNITS(line.units),EUR(line.unitPrice),EUR(line.netUnitCost),EUR(line.amount)
+          ])}
+          empty="El documento no tiene líneas visibles." />}
        {receiptDetail.truncated&&<p role="status">Se muestran las primeras 500 líneas de la recepción.</p>}
       </section>}
      <ListPagination total={count} page={page-1} pageSize={size} pageSizes={[25,50,100]} loading={loading}

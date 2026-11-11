@@ -25,7 +25,7 @@
 .fm-appearance-mini-sidebar.light{background:#fff;color:#35554e;border-right:1px solid #e5edea}
 .fm-appearance-mini-sidebar.dark{background:var(--fm-brand-secondary);color:var(--fm-brand-on-secondary)}
 .fm-appearance-mini-logo{display:flex;gap:5px;align-items:center;margin:0 4px 10px;min-height:28px;word-break:break-word}
-.fm-appearance-mini-logo img{height:24px;width:24px;object-fit:contain}
+.fm-appearance-mini-logo img{height:42px;width:min(100%,135px);object-fit:contain;object-position:left center}
 .fm-appearance-mini-nav{padding:8px;border-radius:7px;opacity:.83}
 .fm-appearance-mini-sidebar.light .fm-appearance-mini-nav.selected{background:color-mix(in srgb,var(--fm-brand-primary) 13%,white);color:var(--fm-brand-primary);opacity:1;font-weight:800}
 .fm-appearance-mini-sidebar.dark .fm-appearance-mini-nav.selected{background:#ffffff26;opacity:1;font-weight:800}

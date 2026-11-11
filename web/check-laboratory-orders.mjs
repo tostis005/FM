@@ -233,6 +233,11 @@ try{
  // La fase de referencias puede completarse inmediatamente; verificar el cálculo real.
  const overlay=page.locator(".fm-lab-matrix-overlay");
  await overlay.waitFor({state:"visible",timeout:4000});
+ // El spinner aparece también durante el catálogo: esperar a que la matriz
+ // exista para comprobar que sus inputs siguen bloqueados hasta los totales.
+ await page.waitForFunction(()=>
+  !!document.querySelector("input[aria-label='Pedir total de Medicamento']"),
+  null,{timeout:10000});
  const loadingState=await overlay.evaluate(node=>({
   message:node.innerText,
   busy:node.parentElement.querySelector(".fm-lab-order-scroll")?.getAttribute("aria-busy"),

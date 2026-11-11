@@ -55,6 +55,9 @@ jobs:
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js
           node --test api/src/familyDuplicates.test.js
+          node --check api/src/familyDuplicateMerge.js
+          node --check api/src/applyFamilyDuplicates.mjs
+          node --test api/src/familyDuplicateMerge.test.js
           node --check api/src/auditFamilyDuplicates.mjs
           node --test api/src/familyMaster.test.js
           node --check api/src/checkFamilyMasterPerformance.mjs
@@ -833,4 +836,14 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
             cd /opt/farmawao
             timeout 135 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/auditFamilyDuplicates.mjs --cliente ampedia
+          '
+
+      - name: Fusionar familias duplicadas con evidencia real validada
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'FUSION_FAMILIAS_20261111')
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/applyFamilyDuplicates.mjs --cliente ampedia
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/applyFamilyDuplicates.mjs --cliente ampedia --apply
           '

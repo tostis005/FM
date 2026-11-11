@@ -13,6 +13,8 @@ import "./loginTheme.css";
 import "./operativaPreview.css";
 import "./settingsLayout.css";
 import "./navigationBreadcrumbs.css";
+import "./tenantAppearance.css";
+import {normalizeClientAppearance,clientAppearanceStyle,isCustomAppearance} from "./tenantAppearance.js";
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
@@ -303,6 +305,10 @@ function App(){
   const [sessionUser,setSessionUser]=useState(null);
   const [passwordModal,setPasswordModal]=useState(false);
   const [tenantContext,setTenantContext]=useState(null);
+  useEffect(()=>{
+   const name=tenantContext?.client?.appearance?.brandName;
+   document.title=name?name+" · Farmetrica":"Farmetrica";
+  },[tenantContext?.client?.appearance?.brandName]);
   const [authError,setAuthError]=useState("");
   const [promotionStoreStatus,setPromotionStoreStatus]=useState("checking");
   async function tenantState(ctx,email){
@@ -1319,12 +1325,16 @@ function App(){
        (canOpenSection("seguimiento-global")?"seguimiento-global":visibleNav[0]?.id)||"dashboard");
  },[tenantContext,sessionUser,page,allowed]);
  if(!tenantContext||!sessionUser||!allowed)return <StartupScreen error={authError}/>;
- return <div className={"app-shell"+(sidebarCollapsed?" fm-sidebar-is-collapsed":"")}>
+ const appearance=normalizeClientAppearance(tenantContext.client.appearance);
+ const customAppearance=isCustomAppearance(appearance);
+ return <div className={"app-shell"+(sidebarCollapsed?" fm-sidebar-is-collapsed":"")}
+  data-tenant-theme={customAppearance?"custom":"default"} data-menu-mode={appearance.menuMode}
+  style={clientAppearanceStyle(appearance)}>
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
    <div className="fm-sidebar-top">
-    <button className="brand" title="Ir al inicio" aria-label="Farmetrica — inicio"
+    <button className="brand" title="Ir al inicio" aria-label={(appearance.brandName||"Farmetrica")+" — inicio"}
      onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}>
-     <span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span>
+     <span className="brand-mark" aria-hidden="true"><img key={appearance.logoUrl} className="fm-emblem" src={appearance.logoUrl||"/brand-logo.webp?v=4"} alt="" referrerPolicy="no-referrer" onError={e=>{if(e.currentTarget.dataset.fallback!=="1"){e.currentTarget.dataset.fallback="1";e.currentTarget.src="/brand-logo.webp?v=4";}}}/></span><span>{appearance.brandName||"Farmetrica"}</span>
     </button>
     <button className="fm-sidebar-collapse-toggle" type="button"
      aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}
@@ -1407,7 +1417,7 @@ function App(){
   <div className="workspace">
    <header className="topbar">
     <button className="mobile-toggle icon-btn" type="button" aria-controls="farmetrica-sidebar" aria-expanded={mobileMenu} onClick={()=>setMobileMenu(v=>!v)} aria-label={mobileMenu?"Cerrar menú":"Abrir menú"}><LayoutDashboard size={20}/></button>
-    <div className="topbar-title"><strong className="topbar-wordmark">Farmetrica</strong></div>
+    <div className="topbar-title"><strong className="topbar-wordmark">{appearance.brandName||"Farmetrica"}</strong></div>
     <div className="topbar-right">{tenantContext.clients.length>1&&<select className="fm-client-selector" aria-label="Cambiar de cliente" value={tenantContext.client.slug} onChange={e=>activateClient(e.target.value)}>{tenantContext.clients.map(c=><option key={c.slug} value={c.slug}>{c.name}</option>)}</select>}<button className="icon-btn" title="Sin notificaciones por ahora" onClick={()=>setToast("Sin notificaciones nuevas")}><Bell size={19}/></button><span className="topbar-divider"/><span className="avatar avatar-green">{(sessionUser?.email||"FM").slice(0,2).toUpperCase()}</span>
        {(sessionUser?.source==="local"||sessionUser?.source==="interno")&&<button type="button" className="btn btn-secondary btn-sm"
         onClick={()=>setPasswordModal(true)} aria-label="Cambiar contraseña">

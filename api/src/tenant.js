@@ -21,6 +21,7 @@ import {effectiveUserModules,validateModuleGrants,requestModules} from "./userMo
 import {USER_SECTIONS,effectiveUserSections,validateSectionGrants,requestSections} from "./userSectionAccess.js";
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 import {setupProfiles} from "./perfiles.js";
+import {appearanceFromDatabase,validateAppearance} from "./clientAppearance.js";
 import {effectiveProfileModules,profileAllows,requestProfileOperation} from "./profilePolicy.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
@@ -29,7 +30,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       req.user?.tenants?.find(t=>t.active)?.slug || "ampedia").toLowerCase();
     if(!SLUG.test(slug)) return null;
     const {rows} = await pool.query(
-      "SELECT slug,nombre,esquema_datos,activo,analisis_abcd_meses,demo_origen_slug FROM farmetrica.clientes WHERE slug=$1",[slug]);
+      "SELECT c.slug,c.nombre,c.esquema_datos,c.activo,c.analisis_abcd_meses,c.demo_origen_slug, "+
+      "a.nombre_marca,a.logo_url,a.color_primario,a.color_secundario,a.estilo_menu "+
+      "FROM farmetrica.clientes c LEFT JOIN farmetrica.cliente_apariencia a ON a.cliente_slug=c.slug WHERE c.slug=$1",[slug]);
     const cliente = rows[0];
     if(!cliente || !cliente.activo || !SLUG.test(cliente.esquema_datos)) return null;
     const membership=req.user?.tenants?.find(item=>item.slug===slug && item.active);
@@ -48,7 +51,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
       membership?.profile_permissions,isSuper(req.user));
     return {client: {slug:cliente.slug,name:cliente.nombre,schema:cliente.esquema_datos,
-        analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug)},
+        analysisMonths:Number(cliente.analisis_abcd_meses),demo:Boolean(cliente.demo_origen_slug),
+        appearance:appearanceFromDatabase(cliente)},
       role, modules:effectiveModules,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user)),
       profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,
@@ -143,9 +147,42 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   app.get("/api/admin/clientes",requireSuperadmin,async(_req,res,next)=>{
     try{
       const {rows}=await pool.query(
-        "SELECT c.slug,c.nombre AS name,c.esquema_datos AS schema,c.activo AS active,c.demo_origen_slug AS \"demoSourceSlug\",coalesce(jsonb_object_agg(m.modulo_clave,m.habilitado) FILTER (WHERE m.modulo_clave IS NOT NULL),'{}'::jsonb) AS modules FROM farmetrica.clientes c LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug GROUP BY c.slug ORDER BY c.nombre");
-      res.json(rows);
+        "SELECT c.slug,c.nombre AS name,c.esquema_datos AS schema,c.activo AS active,c.demo_origen_slug AS \"demoSourceSlug\", "+
+        "coalesce(jsonb_object_agg(m.modulo_clave,m.habilitado) FILTER (WHERE m.modulo_clave IS NOT NULL),'{}'::jsonb) AS modules, "+
+        "max(a.nombre_marca) AS \"brandName\",max(a.logo_url) AS \"logoUrl\", "+
+        "max(a.color_primario) AS \"primaryColor\",max(a.color_secundario) AS \"secondaryColor\", "+
+        "max(a.estilo_menu) AS \"menuMode\" "+
+        "FROM farmetrica.clientes c "+
+        "LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug "+
+        "LEFT JOIN farmetrica.cliente_apariencia a ON a.cliente_slug=c.slug "+
+        "GROUP BY c.slug ORDER BY c.nombre");
+      res.json(rows.map(({brandName,logoUrl,primaryColor,secondaryColor,menuMode,...client})=>({
+        ...client,appearance:appearanceFromDatabase({brandName,logoUrl,primaryColor,secondaryColor,menuMode})
+      })));
     }catch(e){next(e);}
+  });
+  // Solo el superadministrador modifica la identidad visual de cada tenant.
+  app.put("/api/admin/clientes/:slug/apariencia",requireSuperadmin,async(req,res,next)=>{
+    const slug=String(req.params.slug||"").toLowerCase();
+    if(!SLUG.test(slug))return res.status(400).json({error:"Cliente inválido"});
+    const {error,appearance}=validateAppearance(req.body);
+    if(error)return res.status(400).json({error});
+    try{
+      const {rows}=await pool.query(`
+        INSERT INTO farmetrica.cliente_apariencia
+          (cliente_slug,nombre_marca,logo_url,color_primario,color_secundario,estilo_menu,actualizado_por)
+        SELECT slug,$2,$3,$4,$5,$6,$7 FROM farmetrica.clientes WHERE slug=$1
+        ON CONFLICT(cliente_slug) DO UPDATE SET
+          nombre_marca=EXCLUDED.nombre_marca,logo_url=EXCLUDED.logo_url,
+          color_primario=EXCLUDED.color_primario,color_secundario=EXCLUDED.color_secundario,
+          estilo_menu=EXCLUDED.estilo_menu,actualizado_por=EXCLUDED.actualizado_por,
+          actualizado_en=now()
+        RETURNING nombre_marca,logo_url,color_primario,color_secundario,estilo_menu`,
+        [slug,appearance.brandName,appearance.logoUrl,appearance.primaryColor,
+         appearance.secondaryColor,appearance.menuMode,req.user.email]);
+      if(!rows.length)return res.status(404).json({error:"Cliente no encontrado"});
+      res.json({appearance:appearanceFromDatabase(rows[0])});
+    }catch(e){next(e)}
   });
   // Alta real de un cliente SaaS con su propio esquema PostgreSQL.
   app.post("/api/admin/clientes",requireSuperadmin,async(req,res,next)=>{

@@ -1,0 +1,47 @@
+/*
+ * Temas de cliente. Reglas opt-in: Farmétrica y los clientes sin personalizar
+ * conservan los estilos originales. Los colores semánticos (errores, avisos,
+ * estados de stock) y las secciones codificadas por farmacia no se recolorean.
+ */
+.app-shell[data-tenant-theme="custom"]{
+ --fm-brand-soft:color-mix(in srgb,var(--fm-brand-primary) 11%,#ffffff);
+ --fm-brand-subtle:color-mix(in srgb,var(--fm-brand-primary) 5%,#ffffff);
+ --fm-brand-border:color-mix(in srgb,var(--fm-brand-primary) 24%,#ffffff);
+}
+.app-shell[data-tenant-theme="custom"] .sidebar{background:#fff;border-right:1px solid var(--fm-brand-border)}
+.app-shell[data-tenant-theme="custom"] .brand{color:var(--fm-brand-secondary);letter-spacing:-.5px;font-size:18px}
+.app-shell[data-tenant-theme="custom"] .brand-mark{background:transparent}
+.app-shell[data-tenant-theme="custom"] .brand-mark .fm-emblem{width:100%;height:100%;object-fit:contain}
+.app-shell[data-tenant-theme="custom"] .side-link:hover{background:var(--fm-brand-subtle);color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .side-link.active{background:var(--fm-brand-soft);color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .active-dot{background:var(--fm-brand-primary)}
+.app-shell[data-tenant-theme="custom"] .btn-primary,
+.app-shell[data-tenant-theme="custom"] .main-cta{background:var(--fm-brand-primary);color:var(--fm-brand-on-primary);border-color:transparent}
+.app-shell[data-tenant-theme="custom"] .btn-primary:hover:not(:disabled){background:var(--fm-brand-secondary);color:var(--fm-brand-on-secondary)}
+.app-shell[data-tenant-theme="custom"] .btn-secondary:hover{border-color:var(--fm-brand-border);background:var(--fm-brand-subtle)}
+.app-shell[data-tenant-theme="custom"] .data-table thead{background:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .data-table thead th{color:var(--fm-brand-on-secondary)}
+.app-shell[data-tenant-theme="custom"] .table-scroll:focus-visible{outline-color:var(--fm-brand-primary)}
+.app-shell[data-tenant-theme="custom"] .count-label,
+.app-shell[data-tenant-theme="custom"] .id-code{background:var(--fm-brand-soft);color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .kpi-mint,
+.app-shell[data-tenant-theme="custom"] .settings-icon,
+.app-shell[data-tenant-theme="custom"] .info-icon{background:var(--fm-brand-soft);color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .topbar{border-bottom-color:var(--fm-brand-border)}
+.app-shell[data-tenant-theme="custom"] .topbar-wordmark{color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .fm-client-selector:focus,
+.app-shell[data-tenant-theme="custom"] input:focus-visible,
+.app-shell[data-tenant-theme="custom"] select:focus-visible{outline-color:var(--fm-brand-primary)}
+.app-shell[data-tenant-theme="custom"] .side-settings-chevron.open{color:var(--fm-brand-primary)}
+.app-shell[data-tenant-theme="custom"] .page-header h1{color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .avatar-green{background:var(--fm-brand-soft);color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"] .fm-breadcrumb-label.is-current{color:var(--fm-brand-secondary)}
+/* Modo oscuro opcional sin interferir con el contenido principal de tablas. */
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar{background:var(--fm-brand-secondary);border-right-color:var(--fm-brand-secondary)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .brand,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .side-link,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .side-settings-chevron{color:var(--fm-brand-on-secondary)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .side-link:hover{background:#ffffff18;color:var(--fm-brand-on-secondary)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .side-link.active{background:#ffffff2a;color:var(--fm-brand-on-secondary)}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .active-dot{background:var(--fm-brand-on-secondary)}
+@media(prefers-reduced-motion:reduce){.app-shell[data-tenant-theme="custom"] .side-link{transition:none}}

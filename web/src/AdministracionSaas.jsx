@@ -2,6 +2,7 @@ import React,{useEffect,useRef,useState} from "react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
 import AIShareLinks from "./AIShareLinks.jsx";
+import ClientAppearance from "./ClientAppearance.jsx";
 import {Building2,CheckCircle2,Copy,Users} from "lucide-react";
 import "./moduleDemo.css";
 import {copyUserPermissions} from "./userPermissionCopy.js";
@@ -166,6 +167,7 @@ export function ClientesPanel({onUpdated}){
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
+   <ClientAppearance client={c.slug} initial={c.appearance} onSaved={()=>{void refresh();onUpdated?.();}}/>
    <ClientDomains key={c.slug} client={c.slug}/>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{id==="proveedores"?"El directorio de consulta siempre está disponible":c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>
     <input type="checkbox" disabled={Boolean(busy)} checked={Boolean(c.modules?.[id])}

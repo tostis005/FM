@@ -4,7 +4,7 @@ import {planSameNameMerges} from "./familySameName.js";
 
 const selectFamilies="SELECT id::text AS id,nombre AS name,segmento AS segment,"+
  " referencia_farmacia AS \"referencePharmacy\",nombre_manual AS \"customName\","+
- " activo AS active,clave AS key"+
+ " activo AS active,clave AS key,actualizado_en AS \"updatedAt\""+
  " FROM farmetrica.familias_globales WHERE cliente_slug=$1 AND activo";
 const safeSlug=x=>/^[a-z][a-z0-9_]{1,62}$/.test(String(x));
 export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
@@ -29,7 +29,8 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
     " AND familia_id=ANY($2::bigint[]) GROUP BY familia_id",
    values:[slug,ids],query_timeout:50000
   }),
-  db.query("SELECT DISTINCT familia_destino::text AS id FROM farmetrica.familias_globales_fusiones WHERE cliente_slug=$1",[slug])
+  db.query("SELECT familia_destino::text AS id,max(aplicado_en) AS \"mergedAt\""+
+   " FROM farmetrica.familias_globales_fusiones WHERE cliente_slug=$1 GROUP BY familia_destino",[slug])
  ]);
  const byId=new Map(families.map(f=>[f.id,{...f,localNames:[],aliases:0,
   linked:0,para:0,med:0,machineNamed:false}]));
@@ -39,7 +40,13 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
  for(const a of articles.rows){
   const f=byId.get(a.id);if(f){f.linked=Number(a.linked);f.para=Number(a.para);f.med=Number(a.med)}
  }
- for(const a of audits.rows){const f=byId.get(a.id);if(f)f.machineNamed=true}
+ for(const a of audits.rows){
+  const f=byId.get(a.id);
+  if(f&&f.updatedAt&&a.mergedAt){
+   const delta=Date.parse(f.updatedAt)-Date.parse(a.mergedAt);
+   f.machineNamed=Number.isFinite(delta)&&Math.abs(delta)<3000;
+  }
+ }
  const planned=planSameNameMerges([...byId.values()]);
  if(!planned.actions.length)
   return {...planned,merged:0,aliasesMoved:0,articlesMoved:0,stockRulesMoved:0,dryRun};

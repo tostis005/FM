@@ -4,7 +4,8 @@
 import pg from "pg";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
-const CN="151130",SLUG="ampedia";
+const CN=String(process.env.FM_PREPARADOR_CN||"151130").trim(),SLUG="ampedia";
+if(!/^[0-9]{6,7}$/.test(CN))throw Error("CN inválido");
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:2,
  connectionTimeoutMillis:5000,statement_timeout:40000,query_timeout:42000});
 const normalized=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
@@ -37,7 +38,8 @@ try{
     FROM farmetrica.preparador_ultima_recepcion_cache
     WHERE cliente_slug=$1 AND cn=$2`,values:[SLUG,CN],query_timeout:7000})
  ]);
- const selected=allSuppliers.filter(s=>normalized(s.nombre).includes("LOREAL"));
+ const selected=allSuppliers.filter(s=>snap.some(row=>String(row.lab)===String(s.id)) ||
+ (CN==="151130"&&normalized(s.nombre).includes("LOREAL")));
  out.laboratorios=selected.map(s=>({id:s.id,name:s.nombre}));
  out.erpRows=article.length;
  // Evidencia propia del artículo: recepciones por ID ERP exacto y proveedor
@@ -145,6 +147,6 @@ try{
  out.catalogs=catalogs;
 }catch(e){out.error=e.code||e.name||"QUERY_ERROR";out.detail=String(e.message||"").slice(0,120)}
 finally{
- console.info("PREPARADOR_CN_151130",JSON.stringify(out));
+ console.info("PREPARADOR_CN_DIAGNOSTICO",JSON.stringify(out));
  await pool.end();
 }

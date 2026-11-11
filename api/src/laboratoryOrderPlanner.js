@@ -43,9 +43,21 @@ export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
    Number.isFinite(Number(sourceStock))?Number(sourceStock):null:null;
  const globalStock=pharmacyStock!==null&&warehouseStock!==null?
   pharmacyStock+warehouseStock:null;
- const totalSuggested=pharmacySuggested===null?null:
-  isPara&&warehouseStock!==null?
-   Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
+ // Parafarmacia: sumar objetivos brutos antes de restar todo el stock.
+ // El excedente de una farmacia compensa el déficit de otra; medicación no cambia.
+ const completeTarget=measures.length>0&&measures.every(m=>
+  m.targetUnits!==null&&m.targetUnits!==undefined&&
+  Number.isFinite(Number(m.targetUnits))&&Number.isFinite(Number(m.ordered||0)));
+ const groupTarget=completeTarget?
+  measures.reduce((sum,m)=>sum+Number(m.targetUnits),0):null;
+ const groupOrdered=measures.reduce((sum,m)=>sum+Number(m.ordered||0),0);
+ const canPool=isPara&&hasIdentity&&pharmacyStock!==null&&completeTarget;
+ const totalSuggested=canPool?
+  Math.max(0,Math.min(999999,Math.ceil(groupTarget-pharmacyStock-groupOrdered-
+   Math.max(0,warehouseStock??0)-1e-9))):
+  pharmacySuggested===null?null:
+   isPara&&warehouseStock!==null?
+    Math.max(0,Math.ceil(pharmacySuggested-Math.max(0,warehouseStock))):pharmacySuggested;
  return {pharmacyStock,warehouseStock,globalStock,
   warehouseReady:ready,warehouseStockAt:ready?warehouseMetric?.warehouseStockAt||null:null,
   totalSuggested};
@@ -106,7 +118,8 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    pharmacyId:String(row.pharmacyId),stock:row.stock===null?null:Number(row.stock),
    stockAt:row.stockAt,unitsPeriod:Number(row.unitsPeriod||0),
    units3:Number(row.units3||0),units12:Number(row.units12||0),
-   ordered:Number(row.ordered||0),suggested:row.suggested===null?null:Number(row.suggested)
+   ordered:Number(row.ordered||0),targetUnits:row.targetUnits==null?null:Number(row.targetUnits),
+   suggested:row.suggested===null?null:Number(row.suggested)
   };
  }
  return {...base,from:options.from,to:options.to,frequencyDays,warning,metricsUnavailable:false,

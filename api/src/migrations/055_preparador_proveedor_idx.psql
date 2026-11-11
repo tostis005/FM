@@ -14,7 +14,7 @@ WITH targets AS (
  FROM farmetrica.clientes c
  JOIN pg_namespace ns ON ns.nspname=c.esquema_datos
  JOIN pg_class t ON t.relnamespace=ns.oid AND t.relname='articulos'
-  AND t.relkind IN ('r','p')
+  AND t.relkind='r'
  WHERE c.esquema_datos ~ '^[a-z][a-z0-9_]{1,62}$'
 )
 SELECT format($sql$

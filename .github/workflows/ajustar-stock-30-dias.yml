@@ -1,0 +1,52 @@
+name: Aplicar cobertura de 30 dias al Preparador
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ajustar-stock-30-dias.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cobertura:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Preparar SSH
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Establecer 30 dias para ampedia en produccion
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" 'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN;
+          SET LOCAL lock_timeout='3000ms';
+          ALTER TABLE farmetrica.preparador_configuracion_cliente
+            ALTER COLUMN cobertura_dias SET DEFAULT 30;
+          INSERT INTO farmetrica.preparador_configuracion_cliente
+           (cliente_slug,cobertura_dias,actualizado_por,actualizado_en)
+          SELECT slug,30,'configuracion_administrador',now()
+          FROM farmetrica.clientes WHERE slug='ampedia'
+          ON CONFLICT (cliente_slug) DO UPDATE
+           SET cobertura_dias=30,actualizado_por='configuracion_administrador',
+            actualizado_en=now();
+          DO $$
+          BEGIN
+           IF (SELECT cobertura_dias FROM farmetrica.preparador_configuracion_cliente
+            WHERE cliente_slug='ampedia') IS DISTINCT FROM 30
+           THEN RAISE EXCEPTION 'No se ha aplicado cobertura 30 dias'; END IF;
+          END $$;
+          COMMIT;
+          SELECT cliente_slug,cobertura_dias FROM farmetrica.preparador_configuracion_cliente
+           WHERE cliente_slug='ampedia';
+          SQL

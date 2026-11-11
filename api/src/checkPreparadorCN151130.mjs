@@ -68,13 +68,8 @@ try{
     coalesce(p.clase,'SIN_CLASIFICAR') AS clase,
     r.provider_code AS codigo_proveedor,a.nombre_origen AS nombre_alias,
     a.procedencia AS procedencia_alias,a.vigencia AS vigencia_alias,
-    (SELECT min(sp.nombre) FROM "${schema}".proveedores sp
-      WHERE upper(btrim(sp.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
-       AND (CASE WHEN btrim(sp.origen_id::text) ~ '^[0-9]+$'
-        THEN coalesce(nullif(ltrim(btrim(sp.origen_id::text),'0'),''),'0')
-        ELSE upper(btrim(sp.origen_id::text)) END)=r.provider_code
-     ) AS nombre_erp,
-     sum(r.lineas)::int AS lineas,max(r.ultima) AS ultima
+    NULL::text AS nombre_erp,
+    sum(r.lineas)::int AS lineas,max(r.ultima) AS ultima
    FROM own_receipts r
    LEFT JOIN farmetrica.proveedores_unificados_alias a
     ON a.cliente_slug=$2 AND upper(btrim(a.farmacia_codigo))=upper(btrim(r.farmacia_codigo))
@@ -96,8 +91,46 @@ try{
    codigoProveedor:r.codigo_proveedor,nombreERP:r.nombre_erp,
    nombreAlias:r.nombre_alias,origenAlias:r.procedencia_alias,
    vigenciaAlias:r.vigencia_alias}));
- }catch(e){out.ownReceiptError=e.code||e.name||"QUERY_ERROR"}
+ }catch(e){out.ownReceiptError={code:e.code||e.name||"QUERY_ERROR",message:String(e.message||"").slice(0,140)}}
 
+ if(CN==="003652"){
+  try{
+   const {rows:codes}=await pool.query({text:`
+    SELECT h.farmacia_codigo AS farmacia,
+      h.proveedor_origen_id::text AS codigo_proveedor,
+      count(*)::int AS lineas, max(h.fecha) AS ultima
+    FROM "${schema}".fm_recepciones_cabeceras h
+    JOIN "${schema}".fm_recepciones_lineas l
+     ON h.farmacia_codigo=l.farmacia_codigo
+       AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
+    WHERE l.articulo_origen_id::text=$1
+     AND upper(btrim(h.farmacia_codigo)) IN ('BUE','AMP','ALMACEN')
+     AND h.lineas_completas AND NOT h.eliminada_logicamente
+     AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+     AND NOT l.eliminada_logicamente AND l.cantidad>0 AND l.devuelta IS NOT TRUE
+    GROUP BY h.farmacia_codigo,h.proveedor_origen_id::text
+    ORDER BY ultima DESC LIMIT 30`,values:[CN],query_timeout:22000});
+   out.codigosEnRecepcion=codes;
+   const {rows:erp}=await pool.query({text:`
+    SELECT farmacia_codigo,origen_id::text AS codigo,nombre
+    FROM "${schema}".proveedores
+    WHERE upper(btrim(farmacia_codigo)) IN ('BUE','AMP','ALMACEN')
+      AND origen_id::text=ANY($1::text[]) LIMIT 40`,
+    values:[codes.map(x=>x.codigo_proveedor)],query_timeout:10000});
+   out.proveedoresFarmatic=erp;
+   const {rows:alias}=await pool.query({text:`
+    SELECT a.farmacia_codigo,a.codigo_origen,a.nombre_origen,a.procedencia,a.vigencia,
+      p.id::text AS proveedor_id,p.nombre,p.clase
+    FROM farmetrica.proveedores_unificados_alias a
+    JOIN farmetrica.proveedores_unificados p
+      ON p.cliente_slug=a.cliente_slug AND p.id=a.proveedor_id
+    WHERE a.cliente_slug=$1 AND upper(btrim(a.farmacia_codigo)) IN ('BUE','AMP','ALMACEN')
+      AND (p.id IN (1083,1146) OR upper(p.nombre) LIKE '%CANTABRIA%')
+    ORDER BY a.farmacia_codigo,p.nombre,a.codigo_origen LIMIT 80`,
+    values:[SLUG],query_timeout:10000});
+   out.aliases3MYCantabria=alias;
+  }catch(e){out.codigoTraceError={code:e.code||e.name,message:String(e.message||"").slice(0,140)}}
+ }
  const labCodes=[...new Set(article.map(r=>String(r.laboratorio||"").trim()).filter(Boolean))];
  const {rows:erpSuppliers}=await pool.query({text:`
   SELECT farmacia_codigo,origen_id::text AS code,nombre

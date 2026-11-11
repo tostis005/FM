@@ -77,6 +77,28 @@ jobs:
            count(*) FILTER(WHERE hay_stock)::int AS con_stock
           FROM (SELECT ean,bool_or(stock>0) AS hay_stock FROM linked
            GROUP BY ean HAVING count(DISTINCT farmacia)>1) x;
+          SELECT 'TIPO_STOCK_ORIGEN' AS tipo,upper(btrim(f.codigo_origen)) AS farmacia,
+           count(*) FILTER(WHERE a.stock_actual>0 AND a.origen_id::text~'^[0-9]{6,7}$'
+             AND left(a.origen_id::text,6)::int<400000)::int AS para_posible,
+           count(*) FILTER(WHERE a.stock_actual>0 AND a.origen_id::text~'^[0-9]{6,7}$'
+             AND left(a.origen_id::text,6)::int>=400000)::int AS medicacion_posible
+          FROM farmetrica.farmacias f JOIN ampedia.articulos a
+           ON upper(btrim(a.farmacia_codigo))=
+             CASE WHEN f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+              THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END
+          WHERE f.cliente_slug='ampedia' AND f.activo=true
+           AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
+          GROUP BY 2 ORDER BY 2;
+          WITH s AS MATERIALIZED(
+           SELECT upper(btrim(farmacia_codigo)) AS farmacia,articulo_id::text AS articulo,
+            count(DISTINCT btrim(codigo)) FILTER(WHERE btrim(codigo)~'^[0-9]{8,14}$') AS eans
+           FROM ampedia.sinonimos
+           GROUP BY 1,2
+          )
+          SELECT 'MULTIPLES_EAN' AS tipo,
+           count(*) FILTER(WHERE eans>0)::int AS articulos_con_ean,
+           count(*) FILTER(WHERE eans>1)::int AS articulos_con_varios_ean
+          FROM s;
           ROLLBACK;
           SQL
       - name: Confirmar versión de API desplegada

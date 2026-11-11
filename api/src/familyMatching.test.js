@@ -49,7 +49,7 @@ test("nombre común agrupa solo varias farmacias del mismo segmento",()=>{
  assert.equal(decision.method,"nombre_compartido");
  assert.equal(decision.key,"NAME:PARAFARMACIA:solares");
  assert.equal(selectNamedDestination({pharmacyCode:"ABA",code:"22",name:"Solares",
-  segment:"MEDICACION"},new Map(),shared,new Map(),new Map()),null);
+  segment:"MEDICACION"},new Map(),shared,new Map(),new Map()).key,"NAME:MEDICACION:solares");
 });
 test("ambigüedad o referencias CN contradictorias impiden unificación por nombre",()=>{
  const refs=new Map([
@@ -58,5 +58,33 @@ test("ambigüedad o referencias CN contradictorias impiden unificación por nomb
  const names=new Map([["solares",new Set(["REF:PARAFARMACIA:10","REF:PARAFARMACIA:11"])]]);
  const shared=new Map([["solares|PARAFARMACIA",new Set(["EUR","ABA"])]]);
  assert.equal(selectNamedDestination({pharmacyCode:"EUR",code:"55",name:"Solares",
-  segment:"PARAFARMACIA"},names,shared,new Map(),refs),null);
+  segment:"PARAFARMACIA"},names,shared,new Map(),refs).key,"NAME:PARAFARMACIA:solares");
+});
+
+test("reconciliador y maestro admiten nombres cortos, tildes, signos y abreviaturas",()=>{
+ assert.equal(familyNameSlug("o.t.c.","1"),familyNameSlug("OTC","22"));
+ assert.equal(familyNameSlug("PIES","1"),familyNameSlug("Pies","7"));
+ assert.equal(familyNameSlug("Familia: Dermo Cosmética","1"),
+  familyNameSlug("2022 - Dermocosmetica","8"));
+ assert.equal(familyNameSlug("Higiene/Cosmética Infanti","1"),
+  familyNameSlug("Higiene y Cosmética Infantil","2"));
+ assert.notEqual(familyNameSlug("Año","1"),familyNameSlug("Ano","1"));
+ assert.equal(familyNameSlug("2022 - Otros","9"),"");
+});
+test("sin CN coincidentes dos farmacias reciben la misma familia provisional por nombre",()=>{
+ const source={pharmacyCode:"ABA",code:"8",name:"PIES",segment:"SIN_DETERMINAR"};
+ const other={...source,pharmacyCode:"EUR",code:"123",name:"Pies"};
+ const a=selectNamedDestination(source,new Map(),new Map(),new Map(),new Map());
+ const b=selectNamedDestination(other,new Map(),new Map(),new Map(),new Map());
+ assert.equal(a.key,"NAME:SIN_DETERMINAR:pies");
+ assert.equal(a.key,b.key);
+});
+test("no asignar una familia sin clasificar con medicamentos a parafarmacia por mera coincidencia de nombre",()=>{
+ const ref={key:"REF:PARAFARMACIA:8",segment:"PARAFARMACIA"};
+ const refs=new Map([[familyKey("ALMACEN","8"),ref]]);
+ const names=new Map([["homeopatia",new Set([ref.key])]]);
+ const a=selectNamedDestination({pharmacyCode:"EUR",code:"2",
+  name:"Homeopatía",segment:"SIN_DETERMINAR",para:3,med:4},
+  names,new Map(),new Map(),refs);
+ assert.equal(a.key,"NAME:SIN_DETERMINAR:homeopatia");
 });

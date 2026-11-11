@@ -26,12 +26,10 @@ export function totalStockFor(row,pharmacyIds){
  return values.some(v=>v===null||v===undefined||!Number.isFinite(Number(v)))?
   null:values.reduce((sum,v)=>sum+Number(v),0);
 }
+// Las referencias dadas de baja son editables: el color rojo solo advierte.
+// No poner unidades a cero al leer borradores antiguos ni cambiar de pestaña.
 export function sanitizeExcludedOrderLine(row,line,type,pharmacyIds){
- if(!isExcludedOrderRow(row))return line;
- const common={...line,excluded:true};
- if(type==="parafarmacia")return {...common,units:0};
- return {...common,unitsByPharmacy:{...line.unitsByPharmacy,
-  ...Object.fromEntries(pharmacyIds.map(id=>[String(id),0]))}};
+ return line;
 }
 export function defaultLaboratoryLine(row,type,pharmacyIds){
  const common={reference:row.referencia,cn:row.cn||null,name:row.nombre,
@@ -39,13 +37,13 @@ export function defaultLaboratoryLine(row,type,pharmacyIds){
  const pharmacies=pharmacyIds.map(String);
  if(type==="parafarmacia"){
   const values=pharmacies.map(id=>row.byPharmacy?.[id]?.suggested);
-  return {...common,units:isExcludedOrderRow(row)||row.totalSuggested===null||
+  return {...common,units:row.totalSuggested===null||
    (row.totalSuggested===undefined&&values.some(v=>v===null||v===undefined))?
    0:row.totalSuggested!==undefined?
     Math.max(0,Number(row.totalSuggested)):values.reduce((sum,v)=>sum+Number(v),0)};
  }
  return {...common,unitsByPharmacy:Object.fromEntries(pharmacies.map(id=>
-  [id,isExcludedOrderRow(row)?0:row.byPharmacy?.[id]?.suggested??0]))};
+  [id,row.byPharmacy?.[id]?.suggested??0]))};
 }
 export function orderLineFor(row,type,ids,drafts={}){
  const previous=drafts[row.referencia]||defaultLaboratoryLine(row,type,ids);

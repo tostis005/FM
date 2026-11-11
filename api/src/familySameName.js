@@ -64,7 +64,7 @@ export function planSameNameMerges(families){
    const para=num(f.para),med=num(f.med);
    const total=para+med,compatible=targetSegment==="PARAFARMACIA"?para:med;
    // No exige CN compartidos: solo evita mezclar medicamento y parafarmacia.
-   if(total>=1&&compatible/total>=0.95)typed.push(f);
+   if(total>=1&&total===num(f.linked)&&compatible===total)typed.push(f);
    else unresolved.push(f);
   }
   groups.set(key,unresolved);

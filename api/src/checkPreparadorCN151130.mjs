@@ -39,6 +39,30 @@ try{
  const selected=allSuppliers.filter(s=>normalized(s.nombre).includes("LOREAL"));
  out.laboratorios=selected.map(s=>({id:s.id,name:s.nombre}));
  out.erpRows=article.length;
+ // A qué proveedor real corresponde el código de laboratorio Farmatic.
+ const labCodes=[...new Set(article.map(r=>String(r.laboratorio||"").trim()).filter(Boolean))];
+ const {rows:erpSuppliers}=await pool.query({text:`
+  SELECT farmacia_codigo,origen_id::text AS code,nombre
+  FROM "${schema}".proveedores
+  WHERE upper(btrim(origen_id::text))=ANY($1::text[])
+  LIMIT 40`,values:[labCodes.map(c=>c.toUpperCase())],query_timeout:10000});
+ const {rows:aliasesForLab}=await pool.query({text:`
+  SELECT ua.farmacia_codigo,ua.codigo_origen,
+   p.id::text AS id,p.nombre
+  FROM farmetrica.proveedores_unificados_alias ua
+  JOIN farmetrica.proveedores_unificados p ON p.cliente_slug=ua.cliente_slug
+   AND p.id=ua.proveedor_id
+  WHERE ua.cliente_slug=$1 AND upper(btrim(ua.codigo_origen))=ANY($2::text[])
+  LIMIT 40`,values:[SLUG,labCodes.map(c=>c.toUpperCase())],query_timeout:10000});
+ out.labCodeLinks={codes:labCodes,erpSuppliers:erpSuppliers.map(r=>({farmacia:r.farmacia_codigo,nombre:r.nombre})),
+  unified:aliasesForLab.map(r=>({farmacia:r.farmacia_codigo,id:r.id,nombre:r.nombre}))};
+ const {rows:labColumns}=await pool.query({text:`
+  SELECT table_name,column_name FROM information_schema.columns
+  WHERE table_schema=$1 AND table_name IN ('laboratorios','articulos')
+   AND column_name IN ('laboratorio','laboratorio_id','codigo','origen_id','nombre',
+    'proveedor_habitual_id','proveedor_id','codigo_nacional','cn_normalizado')`,
+  values:[schema],query_timeout:5000});
+ out.availableLabColumns=labColumns;
  out.snapshotLab=snap.map(x=>({id:x.lab,
   nombre:allSuppliers.find(s=>s.id===x.lab)?.nombre||"Otro"}));
  const {rows:aliases}=selected.length?await pool.query({
@@ -67,7 +91,10 @@ try{
    const start=Date.now();
    const data=await readUnifiedSupplierCN(pool,ctx,{key:"P:"+s.id,pharmacies:ids,
     type:"parafarmacia",search:CN});
-   catalogs.push({id:s.id,name:s.nombre,cnPresente:data.rows.some(r=>r.cn===CN),
+   catalogs.push({id:s.id,name:s.nombre,items:data.rows.slice(0,3).map(r=>({
+    referencia:r.referencia,cn:r.cn,nombre:r.nombre,provisional:r.provisional,
+    fuenteRecepciones:r.inReceipts,fuenteERP:!!r.pharmacyIds
+   })),cnPresente:data.rows.some(r=>r.cn===CN),
     totalFiltrado:data.total,warning:!!data.warning,elapsedMs:Date.now()-start});
   }catch(e){catalogs.push({id:s.id,name:s.nombre,error:e.code||e.name})}
  }

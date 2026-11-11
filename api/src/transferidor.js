@@ -1,13 +1,12 @@
 // Transferidor (solo lectura). Ninguna propuesta modifica el stock ni ejecuta movimientos.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","targetOrigin","targetDestination"]);
 const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination"]);
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
-const identity=cn=>/^\d{6,7}$/.test(String(cn||""))&&Number(String(cn).slice(0,6))<400000;
+const identity=cn=>/^\d{8,14}$/.test(String(cn||""))||(/^\d{6,7}$/.test(String(cn||""))&&Number(String(cn).slice(0,6))<400000);
 const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 
 // El plan se calcula de una vez, antes de filtrar o paginar. Cada donante
@@ -102,37 +101,55 @@ export function filterTransferPlan(plan,options){
  return {rows:result.slice((options.page-1)*options.size,options.page*options.size),
   total:result.length,units:result.reduce((sum,r)=>sum+r.units,0)};
 }
-function inventorySql(schema,nativeCN=false){
+function inventorySql(schema){
  const q='"'+schema+'"',source=pharmacyDataCodeSQL("f");
- // El CN puede estar en codigo_nacional o cn_normalizado: validar antes de
- // combinar para que un EAN no oculte el CN válido.
- const valid=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]{6,7}$'
-  THEN btrim(${expr}::text) ELSE NULL::text END`;
- const local=nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'";
- const cn=`coalesce(${valid("a.codigo_nacional")},${valid(local)})`;
  return `WITH chosen AS MATERIALIZED (
- SELECT f.id, ${source} AS source_code
+ SELECT f.id,${source} AS source_code
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND f.activo=true
- AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
-), articles AS MATERIALIZED (
- SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
-  a.nombre,a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at,
-  ${cn} AS cn
- FROM chosen f JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
- WHERE ${cn} ~ '^[0-9]{6,7}$'
-), candidates AS MATERIALIZED (
- -- Basta con stock en una farmacia: la receptora puede tener cero.
- SELECT DISTINCT cn FROM articles WHERE stock>0
-  AND substring(cn from 1 for 6)::int<400000
+  AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
+), aliases AS MATERIALIZED (
+ -- Los CN de articulos están vacíos en la fuente actual: usar los sinónimos
+ -- vinculados por farmacia + artículo ERP, NUNCA un ID ERP de otra farmacia.
+ SELECT f.id AS fid,f.source_code,s.articulo_id::text AS article_id,
+  btrim(s.codigo) AS ean
+ FROM chosen f
+ JOIN ${q}.sinonimos s ON upper(btrim(s.farmacia_codigo))=f.source_code
+ JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
+  AND a.origen_id::text=s.articulo_id::text
+ WHERE btrim(s.codigo)~'^[0-9]{8,14}$'
+  -- Misma separación provisional de parafarmacia que el Preparador.
+  AND a.origen_id::text~'^[0-9]{6,7}$'
+  AND left(a.origen_id::text,6)::int<400000
+), safe_eans AS MATERIALIZED (
+ -- Un EAN que identifica dos artículos distintos en la MISMA farmacia es ambiguo.
+ SELECT fid,source_code,ean,max(article_id) AS article_id
+ FROM aliases GROUP BY fid,source_code,ean
+ HAVING count(DISTINCT article_id)=1
+), shared AS MATERIALIZED (
+ SELECT ean,count(DISTINCT fid)::int AS site_count
+ FROM safe_eans GROUP BY ean HAVING count(DISTINCT fid)>1
+), canonical AS MATERIALIZED (
+ -- Elegir un EAN común por ficha, con preferencia por el que comparten
+ -- más farmacias. Previene duplicar stock de artículos con varios sinónimos.
+ SELECT DISTINCT ON (s.fid,s.article_id)
+  s.fid,s.source_code,s.article_id,s.ean
+ FROM safe_eans s JOIN shared sh ON sh.ean=s.ean
+ ORDER BY s.fid,s.article_id,sh.site_count DESC,s.ean
+), selected AS MATERIALIZED (
+ SELECT c.fid,c.source_code,c.article_id,c.ean,a.nombre,
+  a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at
+ FROM canonical c JOIN ${q}.articulos a
+ ON upper(btrim(a.farmacia_codigo))=c.source_code
+  AND a.origen_id::text=c.article_id
+), donors AS MATERIALIZED (
+ SELECT DISTINCT ean FROM selected WHERE stock>0
 ), eligible AS MATERIALIZED (
- SELECT a.* FROM articles a JOIN candidates c ON c.cn=a.cn
+ SELECT a.* FROM selected a JOIN donors d ON d.ean=a.ean
 ), sales AS MATERIALIZED (
- -- Mismas líneas y cabeceras documentales que utiliza el Preparador.
- -- Índice (farmacia, artículo, sistema, documento): evita barrer toda la vista de ventas.
  SELECT a.fid,a.article_id,
   coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
-   FILTER(WHERE h.fecha>=current_date-interval '89 days'),0)::float8 AS units3,
+   FILTER(WHERE h.fecha >= (now() AT TIME ZONE 'Europe/Madrid')::date-interval '89 days'),0)::float8 AS units3,
   coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END),0)::float8 AS units12
  FROM eligible a
  JOIN ${q}.fm_ventas_lineas l ON l.farmacia_codigo=a.source_code
@@ -142,7 +159,8 @@ function inventorySql(schema,nativeCN=false){
   AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
   AND h.lineas_completas AND NOT h.eliminado_logicamente
   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
- WHERE h.fecha>=current_date-interval '364 days' AND h.fecha<current_date+interval '1 day'
+ WHERE h.fecha >= (now() AT TIME ZONE 'Europe/Madrid')::date-interval '364 days'
+  AND h.fecha < (now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
  GROUP BY a.fid,a.article_id
 ), pending AS MATERIALIZED (
  SELECT p.farmacia_id AS fid,l.line->>'articulo' AS article_id,
@@ -154,7 +172,7 @@ function inventorySql(schema,nativeCN=false){
  AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
  GROUP BY p.farmacia_id,l.line->>'articulo'
 )
-SELECT a.fid::text AS "pharmacyId",a.cn,max(a.nombre) AS name,
+SELECT a.fid::text AS "pharmacyId",a.ean AS cn,max(a.nombre) AS name,
  CASE WHEN count(a.stock)=count(*) THEN sum(a.stock)::float8 ELSE NULL END AS stock,
  min(a.stock_at) AS "stockAt",
  sum(coalesce(s.units3,0))::float8 AS "units3",
@@ -163,8 +181,8 @@ SELECT a.fid::text AS "pharmacyId",a.cn,max(a.nombre) AS name,
 FROM eligible a
 LEFT JOIN sales s ON s.fid=a.fid AND s.article_id=a.article_id
 LEFT JOIN pending p ON p.fid=a.fid AND p.article_id=a.article_id
-GROUP BY a.fid,a.cn
-ORDER BY a.cn,a.fid`;
+GROUP BY a.fid,a.ean
+ORDER BY a.ean,a.fid`;
 }
 export function setupTransferidor(app,pool,{requireTenant}){
  app.get("/api/analytics/stock/transferidor",...requireTenant(),async(req,res,next)=>{
@@ -192,15 +210,14 @@ export function setupTransferidor(app,pool,{requireTenant}){
    if(available.length<2)return res.json({available:false,rows:[],total:0,page:opts.page,pageSize:opts.size,
     summary:{movements:0,units:0,products:0},
     warning:"No hay dos farmacias con inventario importado para comparar."});
-   const nativeCN=await hasNativeNormalizedCN(pool,schema).catch(()=>false);
-   const {rows}=await pool.query({text:inventorySql(schema,nativeCN),
+   const {rows}=await pool.query({text:inventorySql(schema),
     values:[ctx.client.slug,available.map(p=>Number(p.id))],query_timeout:30000});
    const {rows:settings}=await pool.query("SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1",[ctx.client.slug]);
    const coverageDays=Math.max(1,Math.min(365,Number(settings[0]?.days)||20));
    const plan=buildGlobalTransfers(rows,available,coverageDays);
    const filtered=filterTransferPlan(plan.transfers,opts);
    const uniqueProducts=new Set(plan.transfers.map(r=>r.cn)).size;
-   const emptyReason=!plan.products?"No hay referencias de parafarmacia con CN y stock identificable.":
+   const emptyReason=!plan.products?"No hay artículos de parafarmacia con EAN común y stock.":
     !plan.withSurplus?"No hay existencias sobrantes para redistribuir.":
     !plan.withNeed?"No hay necesidades de reposición que cubrir con transferencias.":
     !plan.transfers.length?"No coinciden los excedentes con las necesidades del mismo producto.":null;

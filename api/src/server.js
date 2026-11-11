@@ -584,6 +584,8 @@ try {
     "./migrations/058_inicializacion_familias.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
     "./migrations/059_equivalencias_nombre_familias.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL(
+    "./migrations/060_fusiones_familias_auditadas.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

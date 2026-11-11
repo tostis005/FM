@@ -34,3 +34,38 @@ export function selectFamilyDestination(source,votes,refs,{minimum=3,ratio=0.95}
  }
  return {key:provisionalKey(ph,code),method:"sin_referencia",matches:total,confidence:total?first.count/total:null};
 }
+
+
+// El nombre compartido es evidencia secundaria: jamás se basa sólo en ID de ERP.
+export function familyNameSlug(name,code){
+ const label=cleanFamilyName(name,code);
+ if(!name||/^familia\s+\S+$/iu.test(label)||/^(otros?|varios?|sin clasificar|sin asignar|general|resto|otros productos)$/iu.test(label))
+  return "";
+ const slug=label.normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .toLocaleLowerCase("es").replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");
+ return slug.length>=4?slug:"";
+}
+export function selectNamedDestination(source,referenceNames,sharedNames,votes,refs){
+ const slug=familyNameSlug(source.name,source.code);
+ if(!slug)return null;
+ const segment=source.segment||"SIN_DETERMINAR",key=slug+"|"+segment;
+ const refKeys=referenceNames.get(slug)||new Set();
+ // No cruzar categorías con evidencia CN contradictoria.
+ const evidence=(votes.get(familyKey(source.pharmacyCode,source.code))||[])
+  .filter(v=>refs.has(familyKey(v.referencePharmacy,v.referenceCode)));
+ const supported=new Set(evidence.map(v=>refs.get(familyKey(v.referencePharmacy,v.referenceCode)).key));
+ if(supported.size>1)return null;
+ if(refKeys.size===1){
+  const destination=[...refKeys][0];
+  const matchedRef=[...refs.values()].find(r=>r.key===destination);
+  if((segment==="SIN_DETERMINAR"||segment===matchedRef?.segment)&&
+   (!supported.size||supported.has(destination)))
+   return {key:destination,method:"coincidencia_nombre",matches:evidence.reduce((n,v)=>n+v.count,0),confidence:0.95};
+ }
+ // Las etiquetas genéricas, las mixtas y los nombres que colisionan con dos
+ // referencias nunca se unifican automáticamente.
+ if(refKeys.size===0&&["PARAFARMACIA","MEDICACION"].includes(segment)
+  &&(sharedNames.get(key)?.size||0)>=2&&supported.size===0)
+  return {key:"NAME:"+segment+":"+slug,method:"nombre_compartido",matches:0,confidence:0.8};
+ return null;
+}

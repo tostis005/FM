@@ -1,7 +1,7 @@
 // Maestro de familias: reconciliación por IdArticu/CN entre Farmatic de referencia
 // y códigos locales, sin alterar ningún maestro ni artículo sincronizado del ERP.
 import {randomUUID} from "node:crypto";
-import {familyKey,referenceKey,provisionalKey,cleanFamilyName,selectFamilyDestination} from "./familyMatching.js";
+import {familyKey,referenceKey,cleanFamilyName,selectFamilyDestination,familyNameSlug,selectNamedDestination} from "./familyMatching.js";
 
 const validId=x=>/^[1-9]\d*$/.test(String(x||""));
 const validCode=x=>typeof x==="string"&&x.trim().length>0&&x.trim().length<=120;
@@ -21,12 +21,21 @@ async function readSourceFamilies(db,schema,refs,slug){
  const q=Q(schema);
  const {rows:articleFamilies}=await db.query({
   text:"SELECT upper(btrim(farmacia_codigo)) AS pharmacy,btrim(familia) AS code,"+
-   " count(*)::int AS articles FROM "+q+".articulos"+
+   " count(*)::int AS articles,"+
+   " count(*) FILTER(WHERE origen_id ~ '^[0-9]{6}$' AND"+
+   " (CASE WHEN origen_id ~ '^[0-9]{6}$' THEN origen_id::int<400000 ELSE false END))::int AS para,"+
+   " count(*) FILTER(WHERE origen_id ~ '^[0-9]{6}$' AND"+
+   " (CASE WHEN origen_id ~ '^[0-9]{6}$' THEN origen_id::int>=400000 ELSE false END))::int AS med"+
+   " FROM "+q+".articulos"+
    " WHERE nullif(btrim(familia),'') IS NOT NULL GROUP BY 1,2",
   query_timeout:90000});
  const map=new Map();
- for(const s of articleFamilies)map.set(familyKey(s.pharmacy,s.code),
-  {pharmacyCode:s.pharmacy,code:s.code,name:"",articles:Number(s.articles)});
+ for(const item of articleFamilies){
+  const para=Number(item.para),med=Number(item.med);
+  const segment=para>0&&med===0?"PARAFARMACIA":med>0&&para===0?"MEDICACION":"SIN_DETERMINAR";
+  map.set(familyKey(item.pharmacy,item.code),
+   {pharmacyCode:item.pharmacy,code:item.code,name:"",articles:Number(item.articles),segment});
+ }
  // El sincronizador deposita el catálogo completo en farmetrica.familias.
  // En otros clientes solo se busca dentro de su propio esquema para no
  // atribuirles familias ajenas del ERP de Ampedia.
@@ -86,16 +95,31 @@ async function readSourceFamilies(db,schema,refs,slug){
 function planMappings({sources,references,votes}){
  const groups=new Map(),origins=[];
  const sourceByKey=new Map(sources.map(s=>[familyKey(s.pharmacyCode,s.code),s]));
+ const referenceNames=new Map(),sharedNames=new Map();
  for(const ref of references.values()){
   const source=sourceByKey.get(familyKey(ref.pharmacy,ref.code));
   groups.set(ref.key,{key:ref.key,name:cleanFamilyName(source?.name,ref.code),
    segment:ref.segment,referencePharmacy:ref.pharmacy,referenceCode:ref.code});
+  const name=familyNameSlug(source?.name,ref.code);
+  if(name){
+   if(!referenceNames.has(name))referenceNames.set(name,new Set());
+   referenceNames.get(name).add(ref.key);
+  }
  }
  for(const source of sources){
-  const decision=selectFamilyDestination(source,votes,references);
+  const name=familyNameSlug(source.name,source.code),segment=source.segment||"SIN_DETERMINAR";
+  if(!name)continue;
+  const key=name+"|"+segment;
+  if(!sharedNames.has(key))sharedNames.set(key,new Set());
+  sharedNames.get(key).add(source.pharmacyCode);
+ }
+ for(const source of sources){
+  let decision=selectFamilyDestination(source,votes,references);
+  if(decision.method==="sin_referencia")
+   decision=selectNamedDestination(source,referenceNames,sharedNames,votes,references)||decision;
   if(!groups.has(decision.key)){
    groups.set(decision.key,{key:decision.key,name:cleanFamilyName(source.name,source.code),
-    segment:"SIN_DETERMINAR",referencePharmacy:null,referenceCode:null});
+    segment:source.segment||"SIN_DETERMINAR",referencePharmacy:null,referenceCode:null});
   }
   origins.push({key:decision.key,pharmacy:source.pharmacyCode,code:source.code,
    name:source.name||"",method:decision.method,
@@ -167,6 +191,16 @@ export async function reconcileFamilies(pool,ctx){
     [slug,JSON.stringify(planned.origins)]);
   }
   const links=await linkArticles(db,schema,slug,refs);
+  // La nueva conciliación puede sustituir una familia local provisional
+  // por otra global; retirar únicamente los grupos vacíos no editados.
+  await db.query(
+   "UPDATE farmetrica.familias_globales g SET activo=false,actualizado_en=now()"+
+   " WHERE g.cliente_slug=$1 AND (g.clave LIKE 'LOCAL:%' OR g.clave LIKE 'NAME:%')"+
+   " AND NOT g.nombre_manual AND NOT EXISTS("+
+   " SELECT 1 FROM farmetrica.familias_globales_alias a"+
+   " WHERE a.cliente_slug=g.cliente_slug AND a.familia_id=g.id)"+
+   " AND NOT EXISTS(SELECT 1 FROM farmetrica.familias_globales_articulos x"+
+   " WHERE x.cliente_slug=g.cliente_slug AND x.familia_id=g.id)",[slug]);
   const {rows:counts}=await db.query(
    "SELECT metodo,count(*)::int AS n FROM farmetrica.familias_globales_alias"+
    " WHERE cliente_slug=$1 GROUP BY metodo",[slug]);

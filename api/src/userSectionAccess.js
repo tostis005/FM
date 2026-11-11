@@ -16,7 +16,7 @@ export const USER_SECTIONS=[
  ["stock-historico","Histórico de stock","stock"],
  ["stock-sin-recepciones","Stock sin recepciones","stock"],
  ["stock-traspasos","Traspasos entre farmacias","stock"],
- ["picking-list","Picking List PharmaWow","stock"],
+ ["picking-list","Picking List","stock"],
  ["productos","Productos","stock"],
  ["proveedores","Proveedores","proveedores"],
  ["proveedores-condiciones","Análisis de proveedores","proveedores"],

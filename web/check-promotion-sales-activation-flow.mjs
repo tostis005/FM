@@ -52,18 +52,12 @@ await page.route("**/api/**",async route=>{
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(response)});
 });
 const row=()=>page.locator(".campaign-table tbody tr").filter({hasText:campaign.name}).first();
-const waitTotal=async()=>{await page.waitForFunction(name=>{
- const tr=[...document.querySelectorAll(".campaign-table tbody tr")]
-  .find(el=>el.textContent.includes(name));
- return tr?.textContent?.includes("22");
-},campaign.name,{timeout:25000});};
 try{
  await page.goto(BASE+"/promociones",{waitUntil:"domcontentloaded"});
  await row().waitFor({timeout:20000});
- await waitTotal();
- assert.ok(requests.length>0,"Se consultan ventas incluso con targets vacíos");
+ assert.equal(requests.length,0,"Gestión no debe consultar ventas antes de Seguimiento");
  assert.equal(campaign.status,"Borrador");
- assert.ok((await row().innerText()).includes("22"),"Las unidades totales son 13 + 9");
+ assert.ok(!(await row().innerText()).includes("22"),"Las unidades vendidas pertenecen a Seguimiento");
  await row().getByRole("button",{name:"Asignar objetivos"}).click();
  await page.getByRole("heading",{name:"Asignar objetivos"}).waitFor({timeout:20000});
  await page.getByRole("spinbutton",{name:"Objetivo Abadía"}).fill("10");
@@ -78,7 +72,7 @@ try{
  assert.equal(writes[0].status,"Borrador");
  assert.deepEqual(writes[0].targets,{"1":10,"2":0});
  await page.getByRole("button",{name:"Volver a promociones"}).click();
- await row().getByRole("button",{name:"Editar",exact:true}).click();
+ await row().getByRole("button",{name:"Editar "+campaign.name}).click();
  await page.getByRole("heading",{name:"Editar promoción"}).waitFor({timeout:20000});
  await page.locator(".drawer").getByLabel("Estado").selectOption("Activa");
  await page.getByRole("button",{name:"Guardar cambios"}).click();
@@ -86,15 +80,14 @@ try{
  assert.equal(writes.length,2);
  assert.equal(writes[1].status,"Activa");
  assert.equal(writes[1].statusSource,"manual");
- await waitTotal();
  assert.match(await row().innerText(),/Activa/);
  await page.reload({waitUntil:"domcontentloaded"});
  await row().waitFor({timeout:20000});
- await waitTotal();
  assert.match(await row().innerText(),/Activa/);
- await row().getByRole("button",{name:"Seguimiento"}).click();
+ await row().getByRole("button",{name:"Ver seguimiento de "+campaign.name}).click();
  await page.locator(".campaign-metrics").getByText("Unidades totales",{exact:true}).waitFor({timeout:20000});
  await page.waitForFunction(()=>document.body.textContent.includes("22"),null,{timeout:20000});
+ assert.ok(requests.length>0,"Seguimiento sí debe consultar ventas");
  assert.equal(errors.length,0,errors.join(" | "));
  console.log("PROMO_E2E_MOBILE_OK: borrador 22 unidades totales, objetivos 10+0, activación manual persistente, 0 por mecánica 2x1 y seguimiento tras recarga");
 }finally{await browser.close();}

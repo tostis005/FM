@@ -165,6 +165,43 @@ LEFT JOIN pending p ON p.fid=a.fid AND p.article_id=a.article_id
 GROUP BY a.fid,a.cn
 ORDER BY a.cn,a.fid`;
 }
+// Compartir un único cálculo global para filtros y paginación.
+const PLAN_CACHE_MS=180000;
+const globalRowsCache=new Map();
+async function loadTransferRows(pool,schema,slug,ids){
+ const starts=Array.from({length:16},(_,i)=>i*25000);
+ const segments=new Array(starts.length);
+ let cursor=0;
+ // Dos fragmentos en paralelo: menos espera sin cargar todo el histórico en RAM.
+ await Promise.all(Array.from({length:2},async()=>{
+  while(cursor<starts.length){
+   const index=cursor++;
+   const start=starts[index];
+   const part=await pool.query({text:inventorySql(schema),
+    values:[slug,ids,start,start+24999],query_timeout:30000});
+   segments[index]=part.rows;
+  }
+ }));
+ return segments.flat();
+}
+function getTransferRows(pool,schema,slug,ids,forceToken=""){
+ const key=[slug,schema,...ids].join("|");
+ const current=globalRowsCache.get(key);
+ const now=Date.now();
+ if(current&&(current.expires>now||current.expires===0)&&
+  (!forceToken||current.forceToken===forceToken))return current.promise;
+ const entry={expires:0,forceToken,promise:null};
+ entry.promise=loadTransferRows(pool,schema,slug,ids).then(rows=>{
+  entry.expires=Date.now()+PLAN_CACHE_MS;
+  return rows;
+ }).catch(error=>{
+  if(globalRowsCache.get(key)===entry)globalRowsCache.delete(key);
+  throw error;
+ });
+ globalRowsCache.set(key,entry);
+ if(globalRowsCache.size>16)globalRowsCache.delete(globalRowsCache.keys().next().value);
+ return entry.promise;
+}
 export function setupTransferidor(app,pool,{requireTenant}){
  app.get("/api/analytics/stock/transferidor",...requireTenant(),async(req,res,next)=>{
   const ctx=req.context,pharmacies=(ctx.pharmacies||[]).filter(p=>p.active!==false);
@@ -191,15 +228,10 @@ export function setupTransferidor(app,pool,{requireTenant}){
    if(available.length<2)return res.json({available:false,rows:[],total:0,page:opts.page,pageSize:opts.size,
     summary:{movements:0,units:0,products:0},
     warning:"No hay dos farmacias con inventario importado para comparar."});
-   // Trocear el catálogo por IdArticu. Cada producto se calcula con TODAS
-   // las farmacias en su bloque; ningún movimiento puede duplicar existencias.
-   const rows=[];
-   for(let start=0;start<400000;start+=25000){
-    const part=await pool.query({text:inventorySql(schema),
-     values:[ctx.client.slug,available.map(p=>Number(p.id)),start,start+24999],
-     query_timeout:30000});
-    rows.push(...part.rows);
-   }
+   // Siempre se construye un único plan con todas las farmacias. Las vistas
+   // y filtros reutilizan los mismos datos, sin recalcular cada movimiento.
+   const rows=await getTransferRows(pool,schema,ctx.client.slug,
+    available.map(p=>Number(p.id)),String(req.query.recalcular||""));
    const {rows:settings}=await pool.query("SELECT cobertura_dias AS days FROM farmetrica.preparador_configuracion_cliente WHERE cliente_slug=$1",[ctx.client.slug]);
    const coverageDays=Math.max(1,Math.min(365,Number(settings[0]?.days)||30));
    const plan=buildGlobalTransfers(rows,available,coverageDays);

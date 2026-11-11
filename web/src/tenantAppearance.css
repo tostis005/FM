@@ -113,3 +113,15 @@
  display:block;font-size:14px;font-weight:800;line-height:1.2;white-space:normal;
  color:var(--fm-brand-secondary);overflow-wrap:anywhere;
 }
+
+/* El menú desplegado muestra la marca completa; el contraído, su isotipo
+ * oficial cuando el cliente dispone de una versión compacta. */
+.app-shell[data-tenant-theme="custom"] .fm-brand-image-only .fm-compact-emblem{display:none}
+@media(min-width:791px){
+ .app-shell[data-tenant-theme="custom"].fm-sidebar-is-collapsed
+ .fm-brand-image-only .brand-mark.fm-brand-has-compact .fm-emblem{display:none}
+ .app-shell[data-tenant-theme="custom"].fm-sidebar-is-collapsed
+ .fm-brand-image-only .brand-mark.fm-brand-has-compact .fm-compact-emblem{
+  display:block;width:100%;height:100%;object-fit:contain;object-position:center;
+ }
+}

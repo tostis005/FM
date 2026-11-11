@@ -246,6 +246,11 @@ jobs:
           psql_test --single-transaction < api/src/migrations/016_modelo_documental.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/021_traspasos_salientes.sql
+          # Verificar en PostgreSQL real que el índice online es válido e idempotente.
+          psql_test -c "ALTER TABLE ampedia.articulos ADD COLUMN IF NOT EXISTS proveedor_habitual_id text;"
+          psql_test < api/src/migrations/055_preparador_proveedor_idx.psql
+          psql_test < api/src/migrations/055_preparador_proveedor_idx.psql
+          test "$(psql_test -At -c "SELECT to_regclass('ampedia.articulos_fm_prep_proveedor_idx') IS NOT NULL")" = t
           psql_test --single-transaction < api/src/migrations/022_ai_mcp.sql
           psql_test --single-transaction < api/src/migrations/022_ai_mcp.sql
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql

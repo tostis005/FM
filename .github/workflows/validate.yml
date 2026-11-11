@@ -64,6 +64,7 @@ jobs:
           node --test api/src/stockTargetDays.test.js
           node --check api/src/stockSinRecepciones.js
           node --test api/src/stockSinRecepciones.test.js
+          node --test api/src/transferidor.test.js
           node --check api/src/pickingList.js
           node --test api/src/pickingListCore.test.js api/src/pickingListSettings.test.js api/src/pickingListAutoRefresh.test.js api/src/warehouseName.test.js
           node --test api/src/outgoingTransfersRules.test.js
@@ -328,6 +329,7 @@ jobs:
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/preparadorLastReceipt.integration.test.js
            TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryOrderPlanner.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/pickingList.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/transferidor.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCatalog.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/laboratoryCnRecovery.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/promotionCatalogSearch.integration.test.js

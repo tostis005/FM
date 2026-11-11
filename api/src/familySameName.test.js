@@ -42,10 +42,12 @@ test("una familia sin clasificar se incorpora a categoría única solo si los CN
   f(6,"Proteccion Solar","SIN_DETERMINAR",{para:10,med:20}),
   f(7,"Proteccion Solar","SIN_DETERMINAR",{linked:0,para:0,med:0})
  ]);
- assert.equal(data.actions.length,1);
- assert.equal(data.actions[0].sourceId,"5");
- assert.equal(data.actions[0].destinationId,"4");
- assert.equal(data.actions[0].reason,"mismo_nombre_segmento_validado_cn");
+ assert.equal(data.actions.length,2);
+ const attached=data.actions.find(x=>x.sourceId==="5");
+ assert.equal(attached.destinationId,"4");
+ assert.equal(attached.reason,"mismo_nombre_segmento_validado_cn");
+ // Las dos restantes, aún sin clasificar, se consolidan entre sí.
+ assert.ok(data.actions.some(x=>x.sourceId==="7"&&x.destinationId==="6"));
  assert.equal(data.ambiguousCrossSegment,2);
 });
 test("categorías administrativas no se fusionan por etiqueta repetida",()=>{

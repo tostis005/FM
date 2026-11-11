@@ -76,6 +76,8 @@ test("selector evita agrupar todos los alias después de resolver CN",async()=>{
   const rows=await listUnifiedSuppliers(pool,ctx,[1],true);
   assert.deepEqual(rows.map(r=>r.key),["P:5"]);
   assert.equal(queries.length,3);
+  assert.ok(queries.some(sql=>sql.includes("OR pharmacy_ids && ARRAY(")),
+   "El selector debe incluir los CN recibidos solo en el almacén");
   assert.ok(queries.every(sql=>!sql.includes("json_agg(json_build_object")));
   assert.ok(queries.every(sql=>!sql.includes("DISTINCT ON (cn)")));
  }finally{

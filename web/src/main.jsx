@@ -4,7 +4,8 @@ import {
   Activity, ArrowDownToLine, ArrowRight, ArrowRightLeft, Bell, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
-  Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail
+  Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,
+  PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
@@ -439,6 +440,12 @@ function App(){
  const [activationError,setActivationError]=useState("");
  useEffect(()=>setSelectedPromotionIds([]),[tenantContext?.client?.slug]);
  const [mobileMenu,setMobileMenu]=useState(false);
+ const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{
+  try{return localStorage.getItem("fm-sidebar-collapsed")==="1"}catch{return false}
+ });
+ useEffect(()=>{
+  try{localStorage.setItem("fm-sidebar-collapsed",sidebarCollapsed?"1":"0")}catch{}
+ },[sidebarCollapsed]);
  const [settingsOpen,setSettingsOpen]=useState(()=>CONFIG_IDS.has(pageFromUrl()));
  const [adminOpen,setAdminOpen]=useState(()=>ADMIN_IDS.has(pageFromUrl()));
  // Un menú móvil largo debe desplazarse sin mover la página de fondo.
@@ -473,7 +480,7 @@ function App(){
     return () => window.removeEventListener("farmawao-auth-changed", onAuth);
   },[tenantContext?.client?.slug]);
    useEffect(()=>{
-     if(!["promociones","seguimiento-global"].includes(page)||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setGoalSalesByPromotion({});setTotalSalesByPromotion({});return;}
+     if(page!=="seguimiento-global"||!tenantContext||!sessionUser||promotionStoreStatus!=="connected"||(tenantContext.modules?.promociones!==true && sessionUser.role!=="superadministrador")){setSalesStatus("sin_conexion");setSalesByPromotion({});setGoalSalesByPromotion({});setTotalSalesByPromotion({});return;}
      let cancelled=false;
      setSalesStatus("cargando");
      const sync=async()=>{
@@ -1312,10 +1319,21 @@ function App(){
        (canOpenSection("seguimiento-global")?"seguimiento-global":visibleNav[0]?.id)||"dashboard");
  },[tenantContext,sessionUser,page,allowed]);
  if(!tenantContext||!sessionUser||!allowed)return <StartupScreen error={authError}/>;
- return <div className="app-shell">
+ return <div className={"app-shell"+(sidebarCollapsed?" fm-sidebar-is-collapsed":"")}>
   <aside id="farmetrica-sidebar" aria-label="Navegación principal" className={"sidebar "+(mobileMenu?"sidebar-open":"")}>
-   <button className="brand" onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}><span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span></button>
-   <nav className="side-nav" aria-label="Módulos">
+   <div className="fm-sidebar-top">
+    <button className="brand" title="Ir al inicio" aria-label="Farmetrica — inicio"
+     onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}>
+     <span className="brand-mark" aria-hidden="true"><img className="fm-emblem" src="/brand-logo.webp?v=4" alt="" /></span><span>Farmetrica</span>
+    </button>
+    <button className="fm-sidebar-collapse-toggle" type="button"
+     aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}
+     aria-controls="farmetrica-sidebar-navigation" aria-expanded={!sidebarCollapsed}
+     title={sidebarCollapsed?"Desplegar menú":"Plegar menú"} onClick={()=>setSidebarCollapsed(v=>!v)}>
+     {sidebarCollapsed?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}
+    </button>
+   </div>
+   <nav id="farmetrica-sidebar-navigation" className="side-nav" aria-label="Módulos">
     {visibleNav.filter(item=>!item.childOf&&!CONFIG_IDS.has(item.id)&&!ADMIN_IDS.has(item.id)&&DEMO_NAV_IDS.has(item.id)).map(item=>{
      const children=visibleNav.filter(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id));
      const hasChildren=children.length>0||(item.id==="promociones"&&canOpenSection("seguimiento-global"));
@@ -1324,7 +1342,8 @@ function App(){
      return <React.Fragment key={item.id}>
       <div className={hasChildren?"side-nav-parent has-submenu":"side-nav-parent"}>
        <button className={"side-link "+(page===item.id?"active":"")} type="button"
-        onClick={()=>nav(item.id)} aria-current={page===item.id?"page":undefined}>
+        onClick={()=>nav(item.id)} title={sidebarCollapsed?item.label:undefined}
+       aria-label={sidebarCollapsed?item.label:undefined} aria-current={page===item.id?"page":undefined}>
         <item.icon size={19}/><span>{item.label}</span>
         {item.preview&&<small className="side-preview-badge">Demo</small>}
         {page===item.id&&<span className="active-dot"/>}
@@ -1356,7 +1375,8 @@ function App(){
     })}
     {visibleNav.some(item=>CONFIG_IDS.has(item.id))&&<>
      <button className={"side-link "+(CONFIG_IDS.has(page)?"active":"")} type="button"
-      aria-expanded={settingsOpen} aria-controls="fm-settings-nav" onClick={()=>setSettingsOpen(v=>!v)}>
+      aria-expanded={settingsOpen} aria-controls="fm-settings-nav" title={sidebarCollapsed?"Configuración":undefined}
+      onClick={()=>{if(sidebarCollapsed){setSidebarCollapsed(false);setSettingsOpen(true)}else setSettingsOpen(v=>!v)}}>
       <Settings2 size={19}/><span>Configuración</span>
       <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(settingsOpen?" open":"")}/>
      </button>
@@ -1369,7 +1389,8 @@ function App(){
     </>}
     {visibleNav.some(item=>ADMIN_IDS.has(item.id))&&<>
      <button className={"side-link "+(ADMIN_IDS.has(page)?"active":"")} type="button"
-      aria-expanded={adminOpen} aria-controls="fm-admin-nav" onClick={()=>setAdminOpen(v=>!v)}>
+      aria-expanded={adminOpen} aria-controls="fm-admin-nav" title={sidebarCollapsed?"Administración":undefined}
+      onClick={()=>{if(sidebarCollapsed){setSidebarCollapsed(false);setAdminOpen(true)}else setAdminOpen(v=>!v)}}>
       <ShieldCheck size={19}/><span>Administración</span>
       <ChevronDown size={20} strokeWidth={3} className={"side-settings-chevron"+(adminOpen?" open":"")}/>
      </button>
@@ -1407,8 +1428,8 @@ function App(){
        onClick={()=>void retryPromotions()}>Reintentar</button>}
      </section>}
     {page==="promociones"&&promotionStoreStatus==="connected"&&<>
- <ReportPageHeader title="Promociones" updatedAt={salesLastUpdated}
-  onRefresh={()=>void retryPromotions()} refreshing={promotionStoreStatus==="checking"||salesStatus==="cargando"}
+ <ReportPageHeader title="Promociones"
+  onRefresh={()=>void retryPromotions()} refreshing={promotionStoreStatus==="checking"}
   period={from&&to&&from<=to?{valid:true,from,to}:null}
   actions={<div className="campaign-header-actions">
    <input ref={importFileRef} type="file" accept=".xlsx" hidden onChange={importPromotionFile}/>
@@ -1448,10 +1469,7 @@ function App(){
   <button type="button" className="fm-promotion-all-periods" aria-pressed={!from&&!to}
    onClick={()=>{setImportViewIds(null);setFrom("");setTo("");setSelectedPromotionIds([])}}>Ver todos los meses</button>
  </ReportFilterBar>
-  {salesStatus==="cargando"&&<div className="fm-loading-message"><LoadingStatus label="Calculando ventas y objetivos de las promociones…"/></div>}
-  {salesStatus==="error"&&<p role="alert" className="fm-inline-status">{salesError||"No se pudieron consultar las ventas"}</p>}
- <CampaignMetrics campaigns={scopedFilteredPromos} heading="Resumen de promociones" salesAvailable={salesStatus==="real"} salesLoading={salesStatus==="cargando"}/>
- <section className="card list-card full-table-card">
+  <section className="card list-card full-table-card">
   <div className="section-heading"><div><h2>Listado de promociones</h2>
     {importViewIds&&<div className="fm-imported-view">
       <span>Promociones del Excel</span>
@@ -1486,50 +1504,41 @@ function App(){
    <button type="button" className="btn btn-secondary btn-sm"
     onClick={()=>setActivationError("")}>Cerrar aviso</button>
   </div>}
-  <ListTable rows={scopedFilteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} loading={salesStatus==="cargando"} loadingLabel="Calculando ventas de las promociones…"
-    tableClass="campaign-table"
+  <ListTable rows={scopedFilteredPromos} rowKey={p=>p.id} label="promociones" defaultSort={{key:"start",direction:"desc"}} tableClass="campaign-table fm-campaign-management-table"
      selection={(canEditPromotions||canDeletePromotions)?{
       selectedKeys:selectedPromotionIds,onChange:setSelectedPromotionIds,
       disabled:deletingSelected||Boolean(deletingPromoId)}:null}
      onRowClick={canEditPromotions?p=>startPromo(promos.find(original=>original.id===p.id)||p):undefined} emptyText="No hay promociones con estos filtros"
     columns={[
-      {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
-      {key:"type",label:"Tipo",filterMode:"multi",value:p=>PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar",render:p=><span className="id-code">{PROMOTION_TYPES.find(t=>t.id===p.type)?.name||"Por revisar"}</span>},
+      {key:"name",label:"Promoción",value:p=>p.name+" "+(p.subtitle||""),render:p=><div className="promotion-cell"><span className="promotion-icon"><Tag size={17}/></span><div><strong title={p.name}>{p.name}</strong><small>{p.subtitle||"Promoción"}</small></div></div>},
       {key:"status",label:"Estado",filterMode:"multi",value:p=>p.status,render:p=><Pill status={p.status}/>},
-      {key:"start",label:"Periodo",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{p.end?dateES(p.end):promotionDurationMode(p)==="stock"?"Hasta agotar stock":"Sin fecha de fin"}</small></div>},
-      {key:"cns",label:"CN",filterMode:"multi",filterValues:p=>p.cns||[],
-  options:items=>[...new Set(items.flatMap(p=>p.cns||[]))].map(cn=>({value:cn,label:cn})),
-  value:p=>p.cns.length,render:p=><span className="td-number">{p.cns.length}</span>},
-      {key:"pharmacies",label:"Farmacias",filterMode:"multi",
-  filterValues:p=>Object.keys(p.targets||{}),
-  options:items=>pharmacies.filter(f=>items.some(p=>Object.hasOwn(p.targets||{},f.id)))
-    .map(f=>({value:f.id,label:f.name})),
-  value:p=>Object.keys(p.targets||{}).length,render:p=><span className="td-number">{Object.keys(p.targets||{}).length}</span>},
-      {key:"goal",label:"Objetivo",value:p=>sum(p.targets),render:p=><span className="td-number">{quantity(sum(p.targets))}</span>},
-      {key:"sales",label:"Uds. en promoción",value:p=>salesStatus==="real"?sum(p.sales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.sales)):"—"}</span>},
-      {key:"totalSales",label:"Uds. totales",value:p=>salesStatus==="real"?sum(p.totalSales):null,render:p=><span className="td-number">{salesStatus==="cargando"?<SkeletonLine width="64px" height="17px"/>:salesStatus==="real"?quantity(sum(p.totalSales)):"—"}</span>},
-       {key:"advance",label:"Avance",value:p=>salesStatus==="real"&&sum(p.targets)>0?percent(sum(p.sales),sum(p.targets)):null,render:p=>salesStatus==="cargando"?<SkeletonLine width="95px" height="15px"/>:salesStatus==="real"&&sum(p.targets)>0?<div className="table-progress"><Progress value={percent(sum(p.sales),sum(p.targets))}/><span>{percent(sum(p.sales),sum(p.targets))}%</span></div>:<span className="td-number">—</span>},
+      {key:"start",label:"Fechas",value:p=>p.start,render:p=><div className="small-stack">{dateES(p.start)}<small>{p.end?dateES(p.end):promotionDurationMode(p)==="stock"?"Hasta agotar stock":"Sin fecha de fin"}</small></div>},
+      {key:"cns",label:"CN",value:p=>(p.cns||[]).length,render:p=><span className="td-number">{(p.cns||[]).length}</span>},
       {key:"actions",label:"Acciones",value:()=>"",sortable:false,searchable:false,
        render:p=><div className="campaign-row-actions fm-promotion-unified-actions">
-        {canEditPromotions&&p.managerCanEdit!==false&&<button type="button" className="btn btn-secondary btn-sm"
-         onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p);}}>
-         <Pencil size={14}/> Editar</button>}
-        {canEditPromotions&&objectivePromotionIsEditable(p)&&<button type="button" className="btn btn-secondary btn-sm"
+        {canEditPromotions&&objectivePromotionIsEditable(p)&&<button type="button"
+         className="btn btn-secondary btn-sm fm-promotion-objective-action"
          onClick={e=>{e.stopPropagation();openObjectivePlanner(promos.find(original=>original.id===p.id)||p);}}>
          <Target size={14}/> {hasMonthlyObjectives(p)?"Editar objetivos":"Asignar objetivos"}</button>}
-        <button type="button" className="btn btn-secondary btn-sm"
+        {canEditPromotions&&p.managerCanEdit!==false&&<button type="button"
+         className="icon-btn fm-promotion-icon-action" aria-label={"Editar "+p.name} title="Editar promoción"
+         onClick={e=>{e.stopPropagation();startPromo(promos.find(original=>original.id===p.id)||p);}}>
+         <Pencil size={16}/></button>}
+        <button type="button" className="icon-btn fm-promotion-icon-action"
+         aria-label={"Ver seguimiento de "+p.name} title="Ver seguimiento"
          onClick={e=>{e.stopPropagation();nav("seguimiento-campana",p.id);}}>
-         <BarChart3 size={14}/> Seguimiento</button>
+         <BarChart3 size={16}/></button>
         {canEditPromotions&&p.managerCanEdit!==false&&p.status!=="Finalizada"&&p.start<=civilToday(new Date(),reportTimeZone)&&
-         <button type="button" className="btn btn-secondary btn-sm"
+         <button type="button" className="icon-btn fm-promotion-icon-action"
+          aria-label={"Finalizar "+p.name} title="Finalizar promoción"
           onClick={e=>{e.stopPropagation();const original=promos.find(x=>x.id===p.id)||p;
            startPromo({...original,status:"Finalizada",closedOn:civilToday(new Date(),reportTimeZone)});}}>
-          Finalizar</button>}
+          <CheckCircle2 size={16}/></button>}
         {canDeletePromotions&&p.managerCanEdit!==false&&<button type="button"
-         className="btn btn-secondary btn-sm fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected}
-         aria-label={"Eliminar "+p.name}
+         className="icon-btn fm-promotion-icon-action fm-delete-promo" disabled={Boolean(deletingPromoId)||deletingSelected}
+         aria-label={"Eliminar "+p.name} title="Eliminar promoción"
          onClick={e=>{e.stopPropagation();void removePromotion(promos.find(original=>original.id===p.id)||p);}}>
-         <Trash2 size={14}/> Eliminar</button>}
+         <Trash2 size={16}/></button>}
        </div>}
     ]}/>
  </section>

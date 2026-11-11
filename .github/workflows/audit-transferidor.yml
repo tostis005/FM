@@ -33,8 +33,8 @@ jobs:
           BEGIN READ ONLY;
           SET LOCAL statement_timeout='65000ms';
           SELECT 'FARMACIAS_ACTIVAS' AS tipo, count(*)::int AS cantidad
-           FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND activo=true
-            AND coalesce(to_jsonb(farmetrica.farmacias)->>'tipo_establecimiento','farmacia')='farmacia';
+           FROM farmetrica.farmacias f WHERE f.cliente_slug='ampedia' AND f.activo=true
+            AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia';
           SELECT 'STOCK_POR_FARMACIA' AS tipo, upper(btrim(a.farmacia_codigo)) AS codigo,
            count(*)::int AS fichas,
            count(*) FILTER(WHERE a.stock_actual>0)::int AS fichas_stock,

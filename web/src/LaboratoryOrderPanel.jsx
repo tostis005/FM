@@ -542,16 +542,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
-        <td className="fm-lab-order-total">{row.metricsReady?fmt(totalStockFor(row,ids)):"—"}</td>
-        <td className="fm-lab-order-warehouse" title={tab==="medicacion"?
-         "Los medicamentos no se abastecen desde el almacén":row.warehouseStock===null?
-         "Pendiente de importación o referencia sin CN identificable":"Stock del almacén"}>
-         {tab==="medicacion"?"—":row.metricsReady?row.warehouseStock===null?"—":fmt(row.warehouseStock):"—"}</td>
-        <td className="fm-lab-order-global">{row.metricsReady?
-         tab==="medicacion"?fmt(totalStockFor(row,ids)):fmt(row.globalStock):"—"}</td>
-         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSold):"—"}</td>
-        <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
-        <td className="fm-lab-order-editcol">
+        {["stock","units12","units3","unitsPeriod","suggested"].map((key,k)=>{
+          const available=tab==="parafarmacia"&&row.metricsReady;
+          const value=k===4?null:available?row.warehouse?.[key]:null;
+          return <td key={"alm-"+key} className={"fm-lab-order-warehouse-col"+(k===4?" fm-lab-order-ordercol":"")}
+            title={k===4?"El almacén no emite propuestas propias":!available?"No hay datos del almacén para esta categoría":value===null||value===undefined?"Dato aún no importado":"Dato real del almacén"}>
+            {value===null||value===undefined?"—":fmt(value)}</td>;
+         })}
+         <td className="fm-lab-order-total" title="Stock en farmacias">{row.metricsReady?fmt(totalStockFor(row,ids)):"—"}</td>
+         <td className="fm-lab-order-global" title="Stock conjunto de farmacias y almacén">{row.metricsReady&&tab==="parafarmacia"?fmt(row.globalStock):"—"}</td>
+         <td className="fm-lab-order-total">{row.metricsReady?fmt(row.totalSuggested):"—"}</td>
+         <td className="fm-lab-order-editcol">
          <input type="number" min="0" max="999999" step="1"
           disabled={!canEdit||loading||!row.metricsReady}
           title={tab==="medicacion"?"Reparte el total proporcionalmente entre las farmacias; después puedes ajustar cada una.":"Unidades totales a pedir"}
@@ -578,7 +579,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          "Sin referencias de parafarmacia en este laboratorio":
          "Sin medicamentos asociados a este laboratorio"}</strong>
         <span>{tab==="parafarmacia"?
-         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Parafarmacia necesita ventas o recepciones de artículos asociados al laboratorio.":
+         "Los medicamentos del nomenclátor AEMPS aparecen en la pestaña Medicación. Se incluyen artículos del catálogo del laboratorio incluso si no han tenido ventas.":
          "Comprueba que el nomenclátor AEMPS esté cargado y que el laboratorio aparezca asociado a sus presentaciones."}</span>
         <button type="button" className="btn btn-secondary" onClick={()=>{setTab(tab==="parafarmacia"?"medicacion":"parafarmacia");setError("")}}>
          Ver {tab==="parafarmacia"?"Medicación":"Parafarmacia"}

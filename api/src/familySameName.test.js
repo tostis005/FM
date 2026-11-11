@@ -68,7 +68,7 @@ test("nombres personalizados prevalecen como destino salvo referencia consolidad
 test("no confunde ñ y n; ni vuelve a fusionar filas inactivas",()=>{
  assert.notEqual(normalizedFamilyLabel("Año escolar"),normalizedFamilyLabel("Ano escolar"));
  assert.equal(planSameNameMerges([
-  f(1,"Bebé"),f(2,"Bebe",{...{}},"unused"),
-  f(3,"Bebé","SIN_DETERMINAR",{active:false})
+  f(1,"Año escolar"),f(2,"Ano escolar"),
+  f(3,"Año escolar","SIN_DETERMINAR",{active:false})
  ]).actions.length,0);
 });

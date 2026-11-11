@@ -147,21 +147,25 @@ function inventorySql(schema){
 ), eligible AS MATERIALIZED (
  SELECT a.* FROM selected a JOIN donors d ON d.ean=a.ean
 ), sales AS MATERIALIZED (
- SELECT a.fid,a.article_id,
-  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
-   FILTER(WHERE h.fecha >= (now() AT TIME ZONE 'Europe/Madrid')::date-interval '89 days'),0)::float8 AS units3,
-  coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END),0)::float8 AS units12
+ -- Correlacionar cada artículo para forzar búsquedas por índice de línea.
+ -- Un hash join global de TODO el histórico provoca consumo excesivo de RAM.
+ SELECT a.fid,a.article_id,coalesce(v.units3,0)::float8 AS units3,
+  coalesce(v.units12,0)::float8 AS units12
  FROM eligible a
- JOIN ${q}.fm_ventas_lineas l ON l.farmacia_codigo=a.source_code
-  AND l.articulo_origen_id=a.article_id
-  AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
- JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
-  AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
-  AND h.lineas_completas AND NOT h.eliminado_logicamente
-  AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
- WHERE h.fecha >= (now() AT TIME ZONE 'Europe/Madrid')::date-interval '364 days'
-  AND h.fecha < (now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
- GROUP BY a.fid,a.article_id
+ CROSS JOIN LATERAL (
+  SELECT sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END)
+    FILTER(WHERE h.fecha >= (now() AT TIME ZONE 'Europe/Madrid')::date-interval '89 days') AS units3,
+   sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END) AS units12
+  FROM ${q}.fm_ventas_lineas l
+  JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
+   AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
+   AND h.lineas_completas AND NOT h.eliminado_logicamente
+   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   AND h.fecha >= (now() AT TIME ZONE 'Europe/Madrid')::date-interval '364 days'
+   AND h.fecha < (now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
+  WHERE l.farmacia_codigo=a.source_code AND l.articulo_origen_id=a.article_id
+   AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
+ ) v
 ), pending AS MATERIALIZED (
  SELECT p.farmacia_id AS fid,l.line->>'articulo' AS article_id,
   coalesce(sum((assign.item->>'unidades')::float8),0)::float8 AS ordered

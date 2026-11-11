@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1280,height:820}});
 const user={email:"warehouse-ci@example.invalid",name:"Administrador",role:"superadministrador"};
-const warehouse={id:"6",name:"Almacén central",city:"",active:true,sourceCode:"ALMACEN",
+const warehouse={id:"6",name:"Almacén central",city:"",active:true,sourceCode:"ALMACEN",displayCode:"ALM",
  sourceHost:"10.1.2.3",sourceDatabase:"Farmatic",establishmentType:"almacen"};
 const pharmacy={id:"1",name:"Farmacia Abadía",city:"",active:true,sourceCode:"ABA",
  sourceHost:"",sourceDatabase:"Farmatic",establishmentType:"farmacia"};

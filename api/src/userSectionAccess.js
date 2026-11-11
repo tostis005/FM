@@ -5,7 +5,7 @@
 // Mantener el catálogo completo evita revocar permisos históricos al editar perfiles.
 export const PROFILE_EDITOR_SECTION_IDS=new Set([
  "dashboard","ventas","compras","compras-preparador","stock",
- "stock-sin-recepciones","picking-list","proveedores","genericos",
+ "stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos",
  "promociones","promociones-objetivos","seguimiento-global","acciones",
  "oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"
 ]);
@@ -25,6 +25,7 @@ export const USER_SECTIONS=[
  ["stock-historico","Histórico de stock","stock"],
  ["stock-sin-recepciones","Stock sin recepciones","stock"],
  ["stock-traspasos","Traspasos entre farmacias","stock"],
+ ["stock-transferidor","Transferidor","stock"],
  ["picking-list","Picking List","stock"],
  ["productos","Productos","stock"],
  ["proveedores","Proveedores","proveedores"],
@@ -53,7 +54,8 @@ const byId=new Map(USER_SECTIONS.map(s=>[s.id,s]));
 export function effectiveUserSections(modules,selected,superadmin=false){
  const grants=Array.isArray(selected)?new Set(selected):null;
  return Object.fromEntries(USER_SECTIONS.map(s=>[s.id,
-  Boolean(modules?.[s.module])&&(superadmin||grants===null||grants.has(s.id))]));
+  Boolean(modules?.[s.module])&&(superadmin||
+   (s.id==="stock-transferidor"?grants!==null&&grants.has(s.id):grants===null||grants.has(s.id)))]));
 }
 export function validateSectionGrants(sections,modules){
  if(!Array.isArray(sections)||sections.length>USER_SECTIONS.length)return null;
@@ -72,6 +74,7 @@ export function requestSections(req){
  if(path.startsWith("/api/ventas/objetivos/"))return ["promociones-objetivos"];
  if(path==="/api/ventas/detalle")return ["seguimiento-global","promociones-objetivos"];
  if(path.startsWith("/api/analytics/stock/sin-recepciones"))return ["stock-sin-recepciones"];
+ if(path.startsWith("/api/analytics/stock/transferidor"))return ["stock-transferidor"];
  if(path.startsWith("/api/analytics/stock/traspasos"))return ["stock-traspasos"];
  if(path.startsWith("/api/picking-list/"))return ["picking-list"];
  if(path.startsWith("/api/tenant/proveedores/traspasos-salidas"))return ["stock-traspasos"];

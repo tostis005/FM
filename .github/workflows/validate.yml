@@ -40,6 +40,8 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --check api/src/familyMaster.js
+          node --test api/src/familyMatching.test.js
           node --test api/src/clientAppearance.test.js
           node --check api/src/supplierWorkspace.js
           node --test api/src/supplierWorkspace.test.js

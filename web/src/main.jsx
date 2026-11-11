@@ -5,7 +5,7 @@ import {
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,
-  PanelLeftClose, PanelLeftOpen
+  PanelLeftClose, PanelLeftOpen, Layers3
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
@@ -26,6 +26,7 @@ const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisis
 import {promotionMetrics,promotionAverageCompletion,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
+const FamiliasMaestro=React.lazy(()=>import("./FamiliasMaestro.jsx"));
 const ClientesPanel=React.lazy(()=>import("./AdministracionSaas.jsx").then(m=>({default:m.ClientesPanel})));
 const FuentesMaestras=React.lazy(()=>import("./FuentesMaestras.jsx"));
 const EquipoCliente=React.lazy(()=>import("./EquipoPerfiles.jsx"));
@@ -198,6 +199,7 @@ const NAV=[
  {id:"farmacias",label:"Farmacias",icon:Store,admin:true},
  {id:"usuarios",label:"Usuarios",icon:Users,admin:true},
  {id:"perfiles",label:"Perfiles",icon:ShieldCheck,admin:true},
+ {id:"familias-maestro",label:"Maestro de familias",icon:Layers3,admin:true},
  {id:"estado",label:"Estado",icon:Activity,admin:true},
  {id:"ajustes",label:"Ajustes",icon:Settings2,admin:true},
  {id:"clientes",label:"Clientes",icon:Database,super:true},
@@ -223,7 +225,7 @@ function AppBreadcrumbs({items,onNavigate}){
  </nav>;
 }
 const ADMIN_IDS=new Set(["clientes","fuentes","solicitudes","accesos"]);
-const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","estado","ajustes"]);
+const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","familias-maestro","estado","ajustes"]);
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
@@ -1304,7 +1306,7 @@ function App(){
  const visibleNav=NAV.filter(item=>{
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
-   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles","ajustes"].includes(item.id)&&role==="gestor");
+   if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles","familias-maestro","ajustes"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
      NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||
@@ -1703,6 +1705,8 @@ function App(){
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
     {page==="perfiles"&&["gestor","administrador","superadministrador"].includes(role)&&
       <PerfilesGlobales client={tenantContext.client.slug} role={role}/>}
+    {page==="familias-maestro"&&["gestor","administrador","superadministrador"].includes(role)&&
+      <FamiliasMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       canEditMaster={["gestor","administrador","superadministrador"].includes(role)}
       canMergeMaster={["administrador","superadministrador"].includes(role)||

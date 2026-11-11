@@ -47,6 +47,7 @@ import {setupWorkDigestPreferences,startWorkDigestNotifications} from "./workDig
 import {setupDocumentScreens} from "./documentScreens.js";
 import {setupStockSinRecepciones} from "./stockSinRecepciones.js";
 import {setupMasterSources} from "./masterSources.js";
+import {setupFamilyMaster} from "./familyMaster.js";
 import {nameCommercialRows} from "./commercialNames.js";
 import {nameTicketArticleRows} from "./articleNames.js";
 
@@ -121,6 +122,7 @@ const { requireTenantModule,requireTenant,requireTenantAdmin,requireTenantManage
   requireUser,requireSuperadmin,sendLocalInvitation,localInvitationsReady,
 });
 setupMasterSources(app,pool,{requireSuperadmin});
+setupFamilyMaster(app,pool,{requireTenantManager});
 setupLaboratoryRetirements(app,pool,{requireTenant,requireTenantManager});
 setupLaboratoryOrderSettings(app,pool,{requireTenant,requireTenantAdmin});
 setupPreparadorAgenda(app,pool,{requireTenant});
@@ -573,6 +575,9 @@ try {
     "./migrations/053_apariencia_clientes.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
     "./migrations/054_fondo_clientes.sql",import.meta.url),"utf8"));
+  // Nuevo maestro aislado: sin reescrituras del inventario ERP.
+  await pool.query(await readFile(new URL(
+    "./migrations/056_maestro_familias.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

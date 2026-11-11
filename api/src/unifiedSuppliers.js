@@ -91,13 +91,19 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   !["medicacion","parafarmacia"].includes(type))throw Error("Proveedor o categoría inválidos");
  const q='"'+ctx.client.schema+'"',id=key.slice(2);
  if(lastReceiptMode()){
-  const latest=await latestLaboratoryCN(pool,ctx,pharmacies);
-  const term=String(search||"").trim().toLocaleLowerCase("es");
-  const rows=(latest.byLab.get(id)||[]).filter(r=>r.tipo===type&&
-   (!term||r.cn.includes(term)||r.nombre.toLocaleLowerCase("es").includes(term)));
-  if(rows.length>5000)
-   throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
-  return {rows,total:rows.length,metricsUnavailable:true};
+  const [latest,patterns]=await Promise.all([
+   latestLaboratoryCN(pool,ctx,pharmacies),
+   readRetirementPatterns(pool,ctx.client.slug)
+  ]);
+  const master=await readSupplierMasterCatalogue(pool,ctx,{
+   id,pharmacies,type,search,patterns
+  });
+  return mergeSupplierCatalogReferences(
+   (latest.byLab.get(id)||[]).map(row=>({...row,
+    referencia:row.referencia||row.cn,
+    inPurchases:true,inReceipts:true})),
+   master,search,type
+  );
  }
  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
  const sql=`
@@ -149,10 +155,14 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   AND (coalesce($5::text,'')='' OR cn ILIKE '%'||$5||'%'
      OR nombre ILIKE '%'||$5||'%')
  GROUP BY cn ORDER BY min(nombre),cn LIMIT 5001`;
- const {rows}=await pool.query({text:sql,values:[ctx.client.slug,pharmacies,id,type,search,patterns],
-  query_timeout:25000});
+ const [historical,master]=await Promise.all([
+  pool.query({text:sql,values:[ctx.client.slug,pharmacies,id,type,search,patterns],
+   query_timeout:25000}),
+  readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,search,patterns})
+ ]);
+ const rows=historical.rows;
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
- return {rows,total:rows.length,metricsUnavailable:true};
+ return mergeSupplierCatalogReferences(rows,master,search,type);
 }
 export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager=requireTenantAdmin}){
  const permitted=req=>req.context.role==="superadministrador"||req.context.modules?.compras===true;

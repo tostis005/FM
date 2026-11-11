@@ -58,6 +58,9 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
   await db.query("BEGIN");
   await db.query("SET LOCAL statement_timeout = '155s'");
   await db.query("SELECT pg_advisory_xact_lock(hashtext('familias:' || $1))",[slug]);
+  await db.query("SELECT id FROM farmetrica.familias_globales"+
+   " WHERE cliente_slug=$1 AND id=ANY($2::bigint[]) FOR UPDATE",
+   [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]]);
   const [groups,aliases,countRows]=await Promise.all([
    // No lanzar consultas simultáneas sobre el mismo cliente PostgreSQL.
    db.query("SELECT id::text AS id,nombre AS name,segmento AS segment,"+
@@ -101,9 +104,18 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
    const item=pairs.find(p=>
     (p.a===String(a.sourceId)&&p.b===String(a.destinationId))||
     (p.b===String(a.sourceId)&&p.a===String(a.destinationId)));
-   if(!item)throw Error("No hay coincidencia de nombre para "+a.sourceId);
+   if(!item){
+    result.push({sourceId:a.sourceId,destinationId:a.destinationId,status:"omitido",
+     reason:"Las denominaciones ya no son equivalentes"});
+    continue;
+   }
    const scored=scoreFamilyPair(item,sets,totals);
-   validateApprovedFamilyPair(scored,a,allAliases,sets);
+   try{validateApprovedFamilyPair(scored,a,allAliases,sets)}
+   catch(e){
+    result.push({sourceId:a.sourceId,destinationId:a.destinationId,status:"omitido",
+     reason:String(e.message).slice(0,200),sharedCn:scored.shared,ratio:scored.ratio});
+    continue;
+   }
    const source=byId.get(String(a.sourceId)),dest=byId.get(String(a.destinationId));
    const rename=preferAccents(dest.name,source.name,
     allAliases.filter(o=>o.familyId===source.id||o.familyId===dest.id),a.slug);

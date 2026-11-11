@@ -5,7 +5,7 @@ import "./genericos.css";
 // Objetivo común para todas las farmacias del cliente.
 // La frecuencia de pedido por laboratorio no aumenta los días de cobertura.
 export default function ConfiguracionDiasStock({clientSlug}){
- const [days,setDays]=useState("20"),[loading,setLoading]=useState(true),
+ const [days,setDays]=useState("30"),[loading,setLoading]=useState(true),
   [saving,setSaving]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  useEffect(()=>{
   if(!clientSlug)return;
@@ -15,7 +15,7 @@ export default function ConfiguracionDiasStock({clientSlug}){
    .then(async r=>{const data=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(data.error||"No se pudo cargar el objetivo de stock");return data;
    })
-   .then(data=>{if(!ac.signal.aborted)setDays(String(data.days??20))})
+   .then(data=>{if(!ac.signal.aborted)setDays(String(data.days??30))})
    .catch(e=>{if(!ac.signal.aborted)setError(e.message)})
    .finally(()=>{if(!ac.signal.aborted)setLoading(false)});
   return()=>ac.abort();
@@ -36,7 +36,7 @@ export default function ConfiguracionDiasStock({clientSlug}){
  }
  return <section className="card fm-price-settings fm-stock-days-settings">
   <h2>Cobertura de stock global</h2>
-  <p>Un objetivo único para las farmacias del grupo, por defecto 20 días. El preparador recomienda las unidades necesarias para alcanzar esta cobertura de ventas, descontando existencias y pedidos pendientes. La periodicidad de cada laboratorio solo organiza el calendario: no aumenta este objetivo ni modifica el stock real.</p>
+  <p>Un objetivo único para las farmacias del grupo, por defecto 30 días. El preparador recomienda las unidades necesarias para alcanzar esta cobertura de ventas, descontando existencias y pedidos pendientes. La periodicidad de cada laboratorio solo organiza el calendario: no aumenta este objetivo ni modifica el stock real.</p>
   {loading?<p role="status">Cargando cobertura común…</p>:
    <form onSubmit={save}><div className="fm-price-settings-grid">
     <label>Días de cobertura para todas las farmacias

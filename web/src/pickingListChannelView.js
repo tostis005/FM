@@ -16,3 +16,11 @@ export function pickingListChannelView(report,channel){
  };
  return {...report,selectedChannel:channel,rows,totals};
 }
+
+/* En las pestañas de establecimientos se preparan únicamente artículos
+   con al menos una unidad propuesta en esa ubicación. No basta tener stock. */
+export function pickingListRowsForSite(rows,siteId){
+ if(siteId===null||siteId===undefined||siteId==="")return rows||[];
+ return (rows||[]).filter(row=>(row.stock||[]).some(site=>
+  String(site.id)===String(siteId)&&Number(site.planned)>0));
+}

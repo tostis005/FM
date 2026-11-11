@@ -16,17 +16,9 @@ try{
   [slug]);
  const client=clients[0];
  if(!client||!/^[a-z][a-z0-9_]{1,62}$/.test(client.schema))throw Error("No existe un cliente activo");
- if(!force){
-  const {rows:already}=await pool.query("SELECT version FROM farmetrica.familias_reconciliaciones_iniciales WHERE cliente_slug=$1",[slug]);
-  if(already[0]?.version===version){
-   console.log("FAMILIAS_INICIALIZADAS",JSON.stringify({cliente:slug,version,estado:"ya_aplicado"}));
-   process.exitCode=0;
-  }
- }
- if(process.exitCode!==0&&process.exitCode!==undefined)throw Error("Código de salida inesperado");
  const {rows:already}=await pool.query("SELECT version FROM farmetrica.familias_reconciliaciones_iniciales WHERE cliente_slug=$1",[slug]);
  if(!force&&already[0]?.version===version){
-  // Estado confirmado antes de consultar datos. Los botones manuales siguen disponibles.
+  console.log("FAMILIAS_INICIALIZADAS",JSON.stringify({cliente:slug,version,estado:"ya_aplicado"}));
  }else{
   const {rows:sites}=await pool.query(
    "SELECT id::text AS id,nombre AS name,codigo_origen AS \"sourceCode\" "+

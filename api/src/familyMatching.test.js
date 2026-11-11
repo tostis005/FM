@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {familyKey,cleanFamilyName,referenceKey,selectFamilyDestination} from "./familyMatching.js";
+import {familyKey,cleanFamilyName,referenceKey,selectFamilyDestination,familyNameSlug,selectNamedDestination} from "./familyMatching.js";
 
 test("limpia prefijos de año sin inventar un nombre inexistente",()=>{
  assert.equal(cleanFamilyName("2022 - DERMOCOSMETICA","37"),"Dermocosmética");
@@ -26,4 +26,37 @@ test("no fusiona familias con evidencia mixta o insuficiente",()=>{
  ]);
  assert.equal(selectFamilyDestination({pharmacyCode:"EUR",code:"4"},votes,refs).method,"sin_referencia");
  assert.equal(selectFamilyDestination({pharmacyCode:"EUR",code:"5"},votes,refs).method,"sin_referencia");
+});
+
+
+test("identifica etiquetas equivalentes sin usar el número de familia ERP",()=>{
+ assert.equal(familyNameSlug("2022 - DERMOCOSMETICA","17"),"dermocosmetica");
+ assert.equal(familyNameSlug("Dermocosmética","88"),"dermocosmetica");
+ assert.equal(familyNameSlug("Otros","77"),"");
+ const refs=new Map([[familyKey("ALMACEN","17"),
+  {key:"REF:PARAFARMACIA:17",segment:"PARAFARMACIA"}]]);
+ const names=new Map([["dermocosmetica",new Set(["REF:PARAFARMACIA:17"])]]);
+ const shared=new Map();
+ const decision=selectNamedDestination({pharmacyCode:"EUR",code:"51",
+  name:"2022 - DERMOCOSMETICA",segment:"PARAFARMACIA"},names,shared,new Map(),refs);
+ assert.equal(decision.key,"REF:PARAFARMACIA:17");
+ assert.equal(decision.method,"coincidencia_nombre");
+});
+test("nombre común agrupa solo varias farmacias del mismo segmento",()=>{
+ const shared=new Map([["solares|PARAFARMACIA",new Set(["EUR","ABA"])]]);
+ const decision=selectNamedDestination({pharmacyCode:"EUR",code:"22",name:"Solares",
+  segment:"PARAFARMACIA"},new Map(),shared,new Map(),new Map());
+ assert.equal(decision.method,"nombre_compartido");
+ assert.equal(decision.key,"NAME:PARAFARMACIA:solares");
+ assert.equal(selectNamedDestination({pharmacyCode:"ABA",code:"22",name:"Solares",
+  segment:"MEDICACION"},new Map(),shared,new Map(),new Map()),null);
+});
+test("ambigüedad o referencias CN contradictorias impiden unificación por nombre",()=>{
+ const refs=new Map([
+  [familyKey("ALMACEN","10"),{key:"REF:PARAFARMACIA:10",segment:"PARAFARMACIA"}],
+  [familyKey("ALMACEN","11"),{key:"REF:PARAFARMACIA:11",segment:"PARAFARMACIA"}]]);
+ const names=new Map([["solares",new Set(["REF:PARAFARMACIA:10","REF:PARAFARMACIA:11"])]]);
+ const shared=new Map([["solares|PARAFARMACIA",new Set(["EUR","ABA"])]]);
+ assert.equal(selectNamedDestination({pharmacyCode:"EUR",code:"55",name:"Solares",
+  segment:"PARAFARMACIA"},names,shared,new Map(),refs),null);
 });

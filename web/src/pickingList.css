@@ -181,6 +181,17 @@
 .fm-picking-list-table .fm-picking-grouped tbody td:not(.fm-section-units)+td.fm-section-units{
  box-shadow:inset 3px 0 var(--fm-pl-units-border);
 }
+/* La segunda fila de cabeceras comienza directamente por Stock ALM:
+   no tiene una celda anterior sobre la que actúe el selector de arriba. */
+.fm-picking-list-table .fm-picking-grouped thead .fm-smart-group-row+tr>th.fm-section-stock:first-child{
+ box-shadow:inset 3px 0 var(--fm-pl-stock-border);
+}
+/* Cerrar la última columna de Unidades también por la derecha.
+   Borde físico para conservar su sombra izquierda si solo hay una farmacia. */
+.fm-picking-list-table .fm-picking-grouped thead th.fm-section-units:not(:has(+th.fm-section-units)),
+.fm-picking-list-table .fm-picking-grouped tbody tr:not(.fm-expanded-row) td.fm-section-units:not(:has(+td.fm-section-units)){
+ border-right:3px solid var(--fm-pl-units-border);
+}
 
 /* Picking List — columnas por farmacia deliberadamente estrechas.
    El filtro global mantiene el mínimo de 76px; aquí se anula exclusivamente

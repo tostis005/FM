@@ -268,7 +268,7 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
  });
  // Fusiona identidades canónicas: la clasificación pertenece solo al destino.
  // Conserva los proveedores origen como inactivos para trazabilidad y rollback.
- app.post("/api/tenant/proveedores-unificados/fusionar",...requireTenantAdmin(),async(req,res,next)=>{
+ app.post("/api/tenant/proveedores-unificados/fusionar",...requireTenantManager(),async(req,res,next)=>{
   const destination=String(req.body?.destino||"");
   const sources=Array.isArray(req.body?.origenes)?[...new Set(req.body.origenes.map(String))]:[];
   if(!validId(destination)||!sources.length||sources.length>100||

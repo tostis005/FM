@@ -53,6 +53,9 @@ jobs:
           node --check api/src/tenant.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
+          node --check api/src/transferidorPolicy.js
+          node --check api/src/reconcileFamilyMaster.mjs
+          node --test api/src/transferidorPolicy.test.js
           node --check api/src/supplierWorkspace.js
           node --test api/src/supplierWorkspace.test.js
           node --test api/src/userModuleAccess.test.js api/src/userSectionAccess.test.js api/src/profilePolicy.test.js api/src/profileManagementPolicy.test.js

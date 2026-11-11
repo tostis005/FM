@@ -10,6 +10,7 @@ import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import {searchText} from "./listLogic.js";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
@@ -123,23 +124,19 @@ function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
    <button className="btn btn-secondary btn-sm" type="button"
     onClick={()=>setRetry(n=>n+1)}>Reintentar movimientos</button>
   </div>}
-  <table className="fm-generic-articles-table" aria-label={"Artículos del conjunto "+group.dcpf}>
-   <thead><tr>
-    <th scope="col">CN</th><th scope="col">Artículo</th><th scope="col">Laboratorio</th>
-    <th scope="col">Vendidas</th><th scope="col">Ventas</th>
-    <th scope="col">Compradas</th><th scope="col">Compras</th><th scope="col">PUC medio</th>
-   </tr></thead>
-   <tbody>{products.map(p=><tr key={p.cn}>
-    <td><strong className="fm-generic-code">{p.cn}</strong></td>
-    <td className="fm-generic-article-name">{p.nombre||"Sin descripción"}</td>
-    <td>{p.laboratorio||"—"}</td>
-    <td className="fm-generic-number">{data.salesAvailable?quantity(p.soldUnits):"—"}</td>
-    <td className="fm-generic-number">{data.salesAvailable?money(p.soldAmount):"—"}</td>
-    <td className="fm-generic-number">{data.purchasesAvailable?quantity(p.buyUnits):"—"}</td>
-    <td className="fm-generic-number">{data.purchasesAvailable?money(p.buyAmount):"—"}</td>
-    <td className="fm-generic-number">{data.purchasesAvailable?unitPrice(p.puc):"—"}</td>
-   </tr>)}</tbody>
-  </table>
+  <SortableDataTable
+   label={"artículos del conjunto "+group.dcpf}
+   tableClass="fm-generic-articles-table"
+   headers={["CN","Artículo","Laboratorio","Vendidas","Ventas","Compradas","Compras","PUC medio"]}
+   rows={products.map(p=>[
+    <strong className="fm-generic-code">{p.cn}</strong>,
+    p.nombre||"Sin descripción",p.laboratorio||"—",
+    data.salesAvailable?quantity(p.soldUnits):"—",
+    data.salesAvailable?money(p.soldAmount):"—",
+    data.purchasesAvailable?quantity(p.buyUnits):"—",
+    data.purchasesAvailable?money(p.buyAmount):"—",
+    data.purchasesAvailable?unitPrice(p.puc):"—"
+   ])}/>
  </div>;
 }
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id])=>id));

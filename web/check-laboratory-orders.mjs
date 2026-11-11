@@ -276,7 +276,7 @@ try{
  assert.equal(await page.locator(".fm-lab-order-period-help").count(),0);
  assert.equal(await page.locator(".fm-lab-order-top").getByText(/Nomenclátor por sí solo/i).count(),0);
  assert.equal(await page.locator(".fm-lab-order-summary").getByText(/en una sola tabla/i).count(),0);
- assert.match(await page.locator(".fm-lab-order-summary > span").first().innerText(),/referencias/);
+ assert.match(await page.locator(".fm-lab-order-summary > span").first().innerText(),/artículos/);
  assert.equal(await page.locator(".fm-lab-order-table td.fm-lab-order-name small").count(),0);
  assert.equal((await page.locator(".fm-lab-order-actions").innerText()).trim()
   .replace(/\s+/g," "),"Guardar borrador Generar Excel Marcar pedido realizado");

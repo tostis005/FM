@@ -1,0 +1,78 @@
+name: Verificar propuestas reales del Transferidor
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verificar-transferidor-produccion.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar SSH del auditor
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Ejecutar motor de transferencias contra datos de producción en transacción de solo lectura
+        run: |
+          set -euo pipefail
+          {
+            # Ejecutar el código de ESTE commit sin alterar la API ni el catálogo desplegados.
+            sed 's#"./pharmacyCodes.js"#"./src/pharmacyCodes.js"#' api/src/transferidor.js
+            cat <<'JS'
+          import pg from "pg";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,
+           connectionTimeoutMillis:5000,query_timeout:90000,statement_timeout:90000,max:1});
+          const db=await pool.connect();
+          try{
+           await db.query("BEGIN READ ONLY");
+           const {rows:pharmacies}=await db.query(`SELECT f.id::text AS id,f.nombre AS name,
+            f.activo AS active FROM farmetrica.farmacias f
+            WHERE f.cliente_slug='ampedia' AND f.activo=true
+             AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
+            ORDER BY f.id`);
+           console.log("FARMACIAS_COMPARADAS",pharmacies.length);
+           let handler=null;
+           setupTransferidor({get(path,...stack){
+            if(path==="/api/analytics/stock/transferidor")handler=stack.at(-1);
+           }},db,{requireTenant:()=>[]});
+           if(!handler)throw Error("Ruta del Transferidor ausente");
+           const req={context:{role:"superadministrador",client:{slug:"ampedia",schema:"ampedia"},
+            modules:{stock:true},pharmacies},query:{pagina:"1",tamano:"50",vista:"todos"}};
+           const res={statusCode:200,status(n){this.statusCode=n;return this;},
+            json(v){this.body=v;return this;}};
+           let failure=null;
+           await handler(req,res,e=>{failure=e});
+           if(failure)throw failure;
+           const body=res.body||{};
+           console.log("TRANSFERIDOR_AUDITORIA",JSON.stringify({
+            status:res.statusCode,available:body.available,total:body.total,
+            summary:body.summary,emptyReason:body.emptyReason,warning:body.warning,
+            pageRows:body.rows?.length||0,
+            firstMovement:body.rows?.[0]?{
+             units:body.rows[0].units,
+             originId:body.rows[0].originId,destinationId:body.rows[0].destinationId}:null
+           }));
+           if(res.statusCode!==200||body.available!==true||!(body.total>0))
+            throw Error("El motor no está proponiendo transferencias en producción");
+          }finally{
+           await db.query("ROLLBACK").catch(()=>{});
+           db.release();
+           await pool.end();
+          }
+          JS
+          } | ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+           'cd /opt/farmawao && docker compose exec -T api node --input-type=module -'

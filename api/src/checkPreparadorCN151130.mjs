@@ -139,9 +139,7 @@ try{
     SELECT farmacia_codigo,origen_id::text AS codigo,nombre
     FROM "${schema}".proveedores
     WHERE upper(btrim(farmacia_codigo)) IN ('BUE','AMP','ALMACEN')
-      AND (CASE WHEN btrim(origen_id::text) ~ '^[0-9]+
-$'
-
+      AND (CASE WHEN btrim(origen_id::text) ~ '^[0-9]+$'
        THEN coalesce(nullif(ltrim(btrim(origen_id::text),'0'),''),'0')
        ELSE upper(btrim(origen_id::text)) END) IN ('63','4094','40')
     ORDER BY farmacia_codigo,codigo LIMIT 35`,query_timeout:10000});

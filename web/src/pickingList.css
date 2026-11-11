@@ -111,9 +111,9 @@
 .fm-picking-list-table .smart-table{width:100%;white-space:nowrap;font-size:12px}
 .fm-picking-list-table .smart-table th,.fm-picking-list-table .smart-table td{padding:8px 9px}
 .fm-picking-list-table .smart-table thead th{position:sticky;background:#f5f8f6;z-index:2}
-.fm-picking-list-table .smart-table thead .fm-smart-group-row th{top:0;border-bottom:1px solid #d8e9df}
-.fm-picking-list-table .smart-table thead .fm-smart-group-row~tr th{top:37px}
-.fm-picking-list-table .smart-table thead .smart-filter-row th{top:74px;z-index:3}
+.fm-picking-list-table .smart-table thead .fm-smart-group-row th{top:0;height:28px;box-sizing:border-box;padding-top:3px;padding-bottom:3px;vertical-align:middle;border-bottom:0}
+.fm-picking-list-table .smart-table thead .fm-smart-group-row+tr th{top:28px;height:30px;box-sizing:border-box;padding-top:4px;padding-bottom:4px;vertical-align:middle}
+.fm-picking-list-table .smart-table thead .smart-filter-row th{top:58px;z-index:3}
 .fm-picking-list-table .fm-smart-group-title{text-align:center!important;background:#e4f1e9!important;color:#24573c!important;font-weight:800!important;letter-spacing:.02em}
 .fm-picking-list-table .fm-picking-grouped td{font-variant-numeric:tabular-nums}
 /* Solo la Picking List: números y cabeceras centrados; descripciones alineadas a la izquierda. */
@@ -199,7 +199,10 @@
 }
 .fm-picking-list-table .fm-picking-grouped thead th:is(.fm-section-stock,.fm-section-units) .smart-sort{
  display:flex;
- justify-content:center;
+ width:100%;
+ align-items:center;
+ justify-content:center!important;
+ text-align:center;
  gap:2px;
 }
 .fm-picking-list-table .fm-picking-grouped thead .smart-filter-row > th:is(.fm-section-stock,.fm-section-units){

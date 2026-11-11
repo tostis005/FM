@@ -20,7 +20,7 @@ WITH eligible_labs AS MATERIALIZED (
  -- ID de establecimiento para el ámbito de catálogo y las bajas.
  SELECT f.id AS pharmacy_id,'AMP'::text AS pharmacy_code
  FROM farmetrica.farmacias f
- WHERE f.cliente_slug='ampedia' AND f.activo
+ WHERE f.cliente_slug=$1 AND f.cliente_slug='ampedia' AND f.activo
   AND upper(btrim(f.codigo_origen))='ALMACEN'
   AND f.tipo_establecimiento='almacen'
 ), alias_candidates AS MATERIALIZED (

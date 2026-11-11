@@ -1334,7 +1334,7 @@ function App(){
    <div className="fm-sidebar-top">
     <button className="brand" title="Ir al inicio" aria-label={(appearance.brandName||"Farmetrica")+" — inicio"}
      onClick={()=>nav(visibleNav.find(item=>item.module&&canOpenSection(item.id))?.id||visibleNav[0]?.id||"dashboard")}>
-     <span className="brand-mark" aria-hidden="true"><img key={appearance.logoUrl} className="fm-emblem" src={appearance.logoUrl||"/brand-logo.webp?v=4"} alt="" referrerPolicy="no-referrer" onError={e=>{if(e.currentTarget.dataset.fallback!=="1"){e.currentTarget.dataset.fallback="1";e.currentTarget.src="/brand-logo.webp?v=4";}}}/></span><span>{appearance.brandName||"Farmetrica"}</span>
+     <span className="brand-mark" aria-hidden="true"><img className="fm-emblem" key={appearance.logoUrl} src={appearance.logoUrl||"/brand-logo.webp?v=4"} alt="" referrerPolicy="no-referrer" onError={e=>{if(e.currentTarget.dataset.fallback!=="1"){e.currentTarget.dataset.fallback="1";e.currentTarget.src="/brand-logo.webp?v=4";}}}/></span><span>{appearance.brandName||"Farmetrica"}</span>
     </button>
     <button className="fm-sidebar-collapse-toggle" type="button"
      aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}

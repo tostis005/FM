@@ -70,7 +70,7 @@ export default function Perfiles({client,role="superadministrador"}){
    const moduleSections=new Set(sections.filter(s=>s.module===id).map(s=>s.id));
    return {...previous,modules:updated,
     sections:checked?previous.sections:previous.sections===null?
-     sections.map(s=>s.id).filter(x=>!moduleSections.has(x)):
+     sections.map(s=>s.id).filter(x=>x!=="stock-transferidor"&&!moduleSections.has(x)):
      previous.sections.filter(x=>!moduleSections.has(x)),
     permissions:checked?{...previous.permissions,[id]:previous.permissions[id]||["ver"]}:
      {...previous.permissions,[id]:[]}};
@@ -79,7 +79,7 @@ export default function Perfiles({client,role="superadministrador"}){
  function toggleSection(id,checked){
   setDraft(previous=>{
    const selected=previous.sections===null?sections.map(s=>s.id)
-    .filter(key=>activeIds.has(sections.find(row=>row.id===key)?.module)):previous.sections||[];
+    .filter(key=>key!=="stock-transferidor"&&activeIds.has(sections.find(row=>row.id===key)?.module)):previous.sections||[];
    return {...previous,sections:checked?[...new Set([...selected,id])]:selected.filter(x=>x!==id)};
   });
  }
@@ -206,9 +206,9 @@ export default function Perfiles({client,role="superadministrador"}){
      <label><input type="checkbox" checked={draft.sections===null}
       disabled={busy||(scope!==null&&draft.sections!==null)}
       onChange={e=>setDraft(v=>({...v,sections:e.target.checked?null:
-       sections.filter(s=>activeIds.has(s.module)&&
+       sections.filter(s=>s.id!=="stock-transferidor"&&activeIds.has(s.module)&&
         (scope===null||scope.sections.includes(s.id))).map(s=>s.id)}))}/>
-      Heredar todas las páginas de los módulos autorizados</label>
+      Heredar todas las páginas de los módulos autorizados (Transferidor requiere permiso explícito)</label>
     </div>
     <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Solo se muestran páginas actuales; los accesos históricos se conservan</span></div>
     <div className="fm-profile-matrix" role="group" aria-label="Permisos por módulo">
@@ -237,7 +237,7 @@ export default function Perfiles({client,role="superadministrador"}){
         {children.map(child=><label key={child.id}>
          <input type="checkbox" disabled={draft.sections===null||busy||
           Boolean(scope&&!draft.sections?.includes(child.id)&&!scope.sections.includes(child.id))}
-          checked={draft.sections===null||draft.sections.includes(child.id)}
+          checked={draft.sections===null?child.id!=="stock-transferidor":draft.sections.includes(child.id)}
           onChange={e=>toggleSection(child.id,e.target.checked)}/>
          {child.name}</label>)}
        </div>}

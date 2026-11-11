@@ -45,3 +45,83 @@
 .app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .side-link.active{background:#ffffff2a;color:var(--fm-brand-on-secondary)}
 .app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .active-dot{background:var(--fm-brand-on-secondary)}
 @media(prefers-reduced-motion:reduce){.app-shell[data-tenant-theme="custom"] .side-link{transition:none}}
+
+/* Modo claro: todos los elementos del menú usan el color fuerte del cliente,
+ * no el verde pálido heredado del tema oscuro original. */
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-link,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-link svg,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-settings-chevron,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-nav-caret {
+ color:var(--fm-brand-secondary);
+}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-link:hover {
+ background:var(--fm-brand-subtle);
+ color:var(--fm-brand-secondary);
+}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-link.active {
+ background:var(--fm-brand-soft);
+ border-color:var(--fm-brand-border);
+ box-shadow:inset 3px 0 0 var(--fm-brand-secondary);
+ color:var(--fm-brand-secondary);
+ font-weight:750;
+}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-link:is(:hover,.active) svg,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-nav-caret:hover,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .side-nav-parent:has(.side-link.active) .side-nav-caret,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-link[aria-expanded="true"] .side-settings-chevron {
+ color:var(--fm-brand-secondary);
+}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .side-nav-caret:hover,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .fm-sidebar-collapse-toggle:hover {
+ background:var(--fm-brand-soft);
+}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar .fm-sidebar-collapse-toggle {
+ color:var(--fm-brand-secondary);
+ border-color:var(--fm-brand-border);
+}
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar:before,
+.app-shell[data-tenant-theme="custom"][data-menu-mode="claro"] .sidebar:after {
+ display:none;
+}
+/* El logo del cliente sustituye al isotipo y al texto de Farmétrica. */
+.app-shell[data-tenant-theme="custom"] .fm-sidebar-top .brand.fm-brand-image-only {
+ display:flex;justify-content:flex-start;min-width:0;
+}
+.app-shell[data-tenant-theme="custom"] .fm-sidebar-top .fm-brand-image-only .brand-mark {
+ width:min(100%,172px);height:60px;min-width:0;flex:1 1 auto;
+ background:transparent;box-shadow:none;border-radius:0;overflow:hidden;
+}
+.app-shell[data-tenant-theme="custom"] .fm-sidebar-top .fm-brand-image-only .fm-emblem {
+ width:100%;height:100%;display:block;object-fit:contain;object-position:left center;
+}
+@media(min-width:791px){
+ .app-shell[data-tenant-theme="custom"].fm-sidebar-is-collapsed .fm-sidebar-top .fm-brand-image-only .brand-mark {
+  width:38px;height:38px;flex:0 0 38px;
+ }
+ .app-shell[data-tenant-theme="custom"].fm-sidebar-is-collapsed .fm-sidebar-top .fm-brand-image-only .fm-emblem {
+  object-position:center;
+ }
+}
+@media(max-width:790px){
+ .app-shell[data-tenant-theme="custom"] .fm-sidebar-top .fm-brand-image-only .brand-mark {
+  height:56px;max-width:194px;
+ }
+}
+
+.app-shell[data-tenant-theme="custom"] .fm-brand-image-only .fm-logo-error-text{display:none}
+.app-shell[data-tenant-theme="custom"] .fm-brand-image-only .brand-mark[data-logo-failed="1"] .fm-logo-error-text{
+ display:block;font-size:14px;font-weight:800;line-height:1.2;white-space:normal;
+ color:var(--fm-brand-secondary);overflow-wrap:anywhere;
+}
+
+/* El menú desplegado muestra la marca completa; el contraído, su isotipo
+ * oficial cuando el cliente dispone de una versión compacta. */
+.app-shell[data-tenant-theme="custom"] .fm-brand-image-only .fm-compact-emblem{display:none}
+@media(min-width:791px){
+ .app-shell[data-tenant-theme="custom"].fm-sidebar-is-collapsed
+ .fm-brand-image-only .brand-mark.fm-brand-has-compact .fm-emblem{display:none}
+ .app-shell[data-tenant-theme="custom"].fm-sidebar-is-collapsed
+ .fm-brand-image-only .brand-mark.fm-brand-has-compact .fm-compact-emblem{
+  display:block;width:100%;height:100%;object-fit:contain;object-position:center;
+ }
+}

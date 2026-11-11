@@ -99,8 +99,8 @@ export default function ClientAppearance({client,initial,onSaved}){
     <div className="fm-appearance-mini-app">
      <div className={"fm-appearance-mini-sidebar "+(form.menuMode==="oscuro"?"dark":"light")}>
       <div className="fm-appearance-mini-logo">
-       {customLogo&&<img src={form.logoUrl} alt="" onError={e=>{e.currentTarget.style.visibility="hidden"}}/>}
-       <strong>{form.brandName||"Farmetrica"}</strong>
+       {customLogo?<img src={form.logoUrl} alt="" onError={e=>{e.currentTarget.style.visibility="hidden"}}/>:
+        <strong>{form.brandName||"Farmetrica"}</strong>}
       </div>
       <div className="fm-appearance-mini-nav">Inicio</div>
       <div className="fm-appearance-mini-nav selected">Promociones</div>

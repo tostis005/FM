@@ -14,7 +14,7 @@
 .fm-lab-order-summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;color:#46574c;font-size:12px}
 .fm-lab-order-summary span{background:#f4f7f5;border-radius:6px;padding:8px 10px}
 .fm-lab-order-summary strong{font-size:15px;color:#204d39}
-.fm-lab-order-scroll{overflow-x:auto;max-width:100%;border:1px solid #dde4df;border-radius:8px;position:relative}
+.fm-lab-order-scroll{overflow-x:auto;overflow-y:auto;max-height:min(72vh,720px);max-width:100%;border:1px solid #dde4df;border-radius:8px;position:relative}
 .fm-lab-order-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:11px;font-variant-numeric:tabular-nums}
 .fm-lab-order-table th,.fm-lab-order-table td{padding:7px 5px;line-height:1.15;border-right:1px solid #e2e6e3;border-bottom:1px solid #e4e8e5;text-align:center;white-space:nowrap;min-width:52px;box-sizing:border-box}
 .fm-lab-order-table thead th{font-weight:700;background:#e6ece8;color:#304739}
@@ -81,13 +81,23 @@
 /* La carga de artículos es rápida; mantener una señal clara sobre la matriz
    hasta que el cálculo de ventas, stock y propuestas esté completo. */
 .fm-lab-matrix-frame{position:relative;min-width:0;width:100%}
-/* Los resultados parciales del fallback no deben parecer definitivos. */
-.fm-lab-matrix-frame[data-metrics-loading="true"] .fm-lab-order-table tbody td:not(.fm-lab-order-sticky){visibility:hidden}
+/* La tabla y los totales solo se muestran cuando toda la matriz está lista.
+   Las filas virtuales permiten desplazarse por todos los 5000 CN sin crear
+   decenas de miles de celdas invisibles en el navegador. */
+.fm-lab-matrix-frame[data-metrics-loading="true"] .fm-lab-order-scroll{visibility:hidden}
+.fm-lab-order-table.fm-lab-order-virtual tbody tr:not(.fm-lab-virtual-spacer){height:38px}
+.fm-lab-order-table.fm-lab-order-virtual tbody tr:not(.fm-lab-virtual-spacer)>td{
+ height:38px;padding-top:4px;padding-bottom:4px
+}
+.fm-lab-order-table tbody tr.fm-lab-virtual-spacer>td{
+ padding:0!important;border:0!important;line-height:0!important;
+ background:transparent!important;pointer-events:none
+}
 .fm-lab-matrix-overlay{
  position:absolute;inset:16px 0 0;z-index:20;
  display:flex;justify-content:center;align-items:flex-start;
  padding:22px 12px 12px;border-radius:8px;
- background:rgba(245,249,247,.77);backdrop-filter:blur(1px);
+ background:rgba(245,249,247,.96);
  pointer-events:auto;
 }
 .fm-lab-matrix-loading{

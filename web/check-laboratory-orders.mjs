@@ -160,6 +160,26 @@ try{
  await page.waitForTimeout(600);
  assert.equal(await page.locator(".fm-lab-order-group").count(),3); // dos farmacias + almacén
  assert.equal(await page.locator(".fm-lab-order-sub").count(),10); // dos farmacias, cinco columnas cada una
+ // Mantener exactamente las etiquetas del preparador original, sin alterar
+ // el significado de cada dato mostrado en las farmacias y en los totales.
+ const groupNames=(await page.locator(".fm-lab-order-table thead tr:first-child th")
+  .allTextContents()).map(x=>x.trim());
+ assert.deepEqual(groupNames.slice(2),["Abadía","Europa","Almacén","Totales","Pedido"]);
+ const pharmacyHeadings=(await page.locator(".fm-lab-order-table th.fm-lab-order-sub")
+  .allTextContents()).map(x=>x.trim());
+ assert.deepEqual(pharmacyHeadings,[...Array(2)].flatMap(()=>["STOCK","12M","3M","UDS","PEDIDO"]));
+ const warehouseHeadings=(await page.locator(".fm-lab-order-table th.fm-lab-order-warehouse-head")
+  .allTextContents()).map(x=>x.trim());
+ assert.deepEqual(warehouseHeadings,["STOCK","12M","3M","UDS","PEDIDO"]);
+ const totalHeadings=(await page.locator(".fm-lab-order-table th.fm-lab-order-total-head")
+  .allTextContents()).map(x=>x.trim());
+ assert.deepEqual(totalHeadings,["STOCK","UDS","Propuesta"]);
+ await page.waitForFunction(()=>
+  [...document.querySelectorAll(".fm-lab-order-table tbody tr:first-child td.fm-lab-order-total")]
+   .map(x=>x.textContent.trim()).join(",")==="10,13,10",{timeout:7000});
+ assert.deepEqual((await page.locator(".fm-lab-order-table tbody tr:first-child td.fm-lab-order-total")
+  .allTextContents()).map(x=>x.trim()),["10","13","10"],
+  "Los totales corresponden a stock, ventas del período y propuesta, no a dos columnas de stock");
  assert.equal((await page.locator(".fm-lab-order-table thead th.fm-lab-order-editcol").textContent()).trim(),
   "Pedir total");
  assert.doesNotMatch(await page.locator(".fm-lab-order").innerText(),/Pedia|Ampedia/i,

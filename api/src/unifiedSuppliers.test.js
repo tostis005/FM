@@ -109,6 +109,9 @@ test("no mezcla proveedores homónimos de otras farmacias ni duplica CN entre fu
   assert.ok(sql.includes("c.code=upper(btrim(ua.farmacia_codigo))"));
   assert.ok(sql.includes("a.proveedor_habitual_id"));
   assert.ok(!sql.includes("to_jsonb(a)->>'proveedor_habitual_id'"));
+  assert.match(sql,/ua\.proveedor_id=\$3/);
+  assert.match(sql,/winner\.lab_id<>\$3::bigint/);
+  assert.doesNotMatch(sql,/other\.nombre|equivalent AS MATERIALIZED/);
   return {rows:[]};
  }};
  await readSupplierMasterCatalogue(pool,ctx,{

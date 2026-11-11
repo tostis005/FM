@@ -10,28 +10,38 @@ function preferAccents(destination,source,origins,normalized){
  items.sort((a,b)=>accentCount(b)-accentCount(a));
  return accentCount(items[0])>accentCount(destination)?items[0]:null;
 }
-export function validateApprovedFamilyPair(scored,approval,aliases,cnById){
- if(!scored?.safe||scored.sourceId!==String(approval.sourceId)||
-    scored.destinationId!==String(approval.destinationId)||
-    scored.normalized!==approval.slug||
-    scored.segment!==approval.segment||
+export function validateApprovedFamilyPair(scored,approval,aliases,cnById,auditedDestinations=new Set()){
+ const sourceId=String(approval.sourceId),destinationId=String(approval.destinationId);
+ const samePair=scored&&new Set([scored.a,scored.b]).has(sourceId)&&
+  new Set([scored.a,scored.b]).has(destinationId);
+ const specialRequested=approval.allowMixedRange===true;
+ // Dos excepciones de categoría no determinada contrastadas por artículo,
+ // sin inferir ni cambiar su clasificación medicación/parafarmacia.
+ const special=specialRequested&&samePair&&scored.proof==="nombre_global"&&
+  scored.segment==="SIN_DETERMINAR"&&scored.shared>=15&&scored.ratio>=0.8;
+ if(!samePair||(specialRequested&&!special)||
+    (!specialRequested&&(!scored.safe||scored.sourceId!==sourceId||
+      scored.destinationId!==destinationId))||
+    scored.normalized!==approval.slug||scored.segment!==approval.segment||
     scored.shared<Number(approval.minimumShared||3))
-  throw Error("Evidencia insuficiente para fusión "+approval.sourceId+" → "+approval.destinationId);
- const ids=new Set([String(approval.sourceId),String(approval.destinationId)]);
- if(aliases.some(a=>ids.has(String(a.familyId))&&a.method==="manual"))
-  throw Error("Hay equivalencias corregidas manualmente; no fusionar "+approval.sourceId);
+  throw Error("Evidencia insuficiente para fusión "+sourceId+" → "+destinationId);
+ const ids=new Set([sourceId,destinationId]);
+ if(aliases.some(a=>ids.has(String(a.familyId))&&a.method==="manual"&&
+   !(special&&String(a.familyId)===destinationId&&auditedDestinations.has(destinationId))))
+  throw Error("Hay equivalencias corregidas manualmente; no fusionar "+sourceId);
  const selected=[scored.left,scored.right];
- const source=selected.find(g=>String(g.id)===String(approval.sourceId));
- const dest=selected.find(g=>String(g.id)===String(approval.destinationId));
- if(!source||!dest||source.referencePharmacy||dest.customName||source.customName)
+ const source=selected.find(g=>String(g.id)===sourceId);
+ const dest=selected.find(g=>String(g.id)===destinationId);
+ if(!source||!dest||source.referencePharmacy||
+    (dest.customName&&!(special&&auditedDestinations.has(destinationId)))||source.customName||
+    (special&&dest.referencePharmacy))
   throw Error("La referencia o nombre editado impide esta fusión");
- // Cada grupo debe contener al menos 95% de CN del segmento correspondiente.
  for(const f of [source,dest]){
   const cns=cnById.get(String(f.id))||new Set();
   if(cns.size===0)throw Error("Familia sin CN contrastables");
   const below=[...cns].filter(cn=>Number(cn)<400000).length/cns.size;
   if(approval.segment==="SIN_DETERMINAR"){
-   if(below>0.05&&below<0.95)
+   if(!special&&below>0.05&&below<0.95)
     throw Error("Familia sin clasificar con productos de ambos segmentos: "+f.id);
   }else{
    const compatible=approval.segment==="PARAFARMACIA"?below:1-below;
@@ -61,7 +71,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
   await db.query("SELECT id FROM farmetrica.familias_globales"+
    " WHERE cliente_slug=$1 AND id=ANY($2::bigint[]) FOR UPDATE",
    [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]]);
-  const [groups,aliases,countRows]=await Promise.all([
+  const [groups,aliases,countRows,auditRows]=await Promise.all([
    // No lanzar consultas simultáneas sobre el mismo cliente PostgreSQL.
    db.query("SELECT id::text AS id,nombre AS name,segmento AS segment,"+
     " referencia_farmacia AS \"referencePharmacy\",nombre_manual AS \"customName\","+
@@ -73,7 +83,11 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
    db.query("SELECT familia_id::text AS id,count(*)::int AS n"+
     " FROM farmetrica.familias_globales_articulos WHERE cliente_slug=$1"+
     " AND familia_id=ANY($2::bigint[]) GROUP BY familia_id",
-    [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]])
+    [slug,[...new Set(approvals.flatMap(a=>[a.sourceId,a.destinationId]))]]),
+   db.query("SELECT DISTINCT familia_destino::text AS id"+
+    " FROM farmetrica.familias_globales_fusiones"+
+    " WHERE cliente_slug=$1 AND familia_destino=ANY($2::bigint[])",
+    [slug,[...new Set(approvals.map(a=>a.destinationId))]])
   ]);
   const all=groups.rows,allAliases=aliases.rows,
    byId=new Map(all.map(g=>[g.id,g]));
@@ -99,6 +113,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
   const sets=new Map(pending.flatMap(a=>[a.sourceId,a.destinationId]).map(id=>[String(id),new Set()]));
   for(const row of cnRows)sets.get(row.id)?.add(row.cn);
   const totals=new Map(countRows.rows.map(r=>[r.id,Number(r.n)]));
+  const auditedDestinations=new Set(auditRows.rows.map(r=>r.id));
   const pairs=groupFamilyDuplicates(all.filter(f=>f.active),allAliases);
   for(const a of pending){
    const item=pairs.find(p=>
@@ -110,7 +125,7 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
     continue;
    }
    const scored=scoreFamilyPair(item,sets,totals);
-   try{validateApprovedFamilyPair(scored,a,allAliases,sets)}
+   try{validateApprovedFamilyPair(scored,a,allAliases,sets,auditedDestinations)}
    catch(e){
     result.push({sourceId:a.sourceId,destinationId:a.destinationId,status:"omitido",
      reason:String(e.message).slice(0,200),sharedCn:scored.shared,ratio:scored.ratio});
@@ -155,9 +170,10 @@ export async function applyApprovedFamilyMerges(pool,slug,approvals,{apply=false
    await db.query("INSERT INTO farmetrica.familias_globales_fusiones"+
     " (cliente_slug,familia_origen,familia_destino,nombre_origen,nombre_destino,"+
     " nombre_normalizado,cn_compartidos,ratio_familia_menor,criterio)"+
-    " VALUES($1,$2,$3,$4,$5,$6,$7,$8,'nombre_equivalente_y_cn_compartidos')"+
+    " VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)"+
     " ON CONFLICT(cliente_slug,familia_origen) DO NOTHING",
-    [slug,source.id,dest.id,source.name,dest.name,a.slug,scored.shared,scored.ratio]);
+    [slug,source.id,dest.id,source.name,dest.name,a.slug,scored.shared,scored.ratio,
+     a.allowMixedRange===true?"solapamiento_cn_mayor_80_rangos_mixtos_aprobados":"nombre_equivalente_y_cn_compartidos"]);
    result.push({sourceId:source.id,destinationId:dest.id,status:"fusionado",
     sharedCn:scored.shared,ratio:scored.ratio,
     aliases:aliasChange.rowCount,articles:articleChange.rowCount,newName:dest.name});

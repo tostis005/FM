@@ -11,7 +11,8 @@
     "destinationId": "1154",
     "slug": "dietoterapicos",
     "segment": "SIN_DETERMINAR",
-    "minimumShared": 100
+    "minimumShared": 100,
+    "allowMixedRange": true
   },
   {
     "sourceId": "846",
@@ -53,6 +54,7 @@
     "destinationId": "1130",
     "slug": "gafas",
     "segment": "SIN_DETERMINAR",
-    "minimumShared": 17
+    "minimumShared": 17,
+    "allowMixedRange": true
   }
 ]

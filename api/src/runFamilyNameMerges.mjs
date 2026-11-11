@@ -2,7 +2,7 @@
 // node src/runFamilyNameMerges.mjs --cliente ampedia          (solo lectura)
 // node src/runFamilyNameMerges.mjs --cliente ampedia --apply  (atómico)
 import pg from "pg";
-import {consolidateFamiliesByName} from "./familyNameMerge.js";
+import {consolidateFamiliesByName,consolidateFamilyNamesUntilStable} from "./familyNameMerge.js";
 const args=process.argv;
 const slug=args.includes("--cliente")?args[args.indexOf("--cliente")+1]:"ampedia";
 const apply=args.includes("--apply");
@@ -19,7 +19,8 @@ try{
   "SELECT (SELECT count(*)::int FROM farmetrica.familias_globales_articulos WHERE cliente_slug=$1) AS articulos,"+
   " (SELECT count(*)::int FROM farmetrica.familias_globales_alias WHERE cliente_slug=$1) AS alias",
   [slug])).rows[0]:null;
- const result=await consolidateFamiliesByName(db,slug,{dryRun:!apply});
+ const result=apply?await consolidateFamilyNamesUntilStable(db,slug):
+  await consolidateFamiliesByName(db,slug,{dryRun:true});
  if(apply){
   const {rows:after}=await db.query(
    "SELECT (SELECT count(*)::int FROM farmetrica.familias_globales_articulos WHERE cliente_slug=$1) AS articulos,"+
@@ -41,6 +42,7 @@ try{
   nombresLocalesMovidos:result.aliasesMoved,articulosMovidos:result.articlesMoved,
   exposicionesMigradas:result.stockRulesMoved,
   ambiguasEntreSegmentos:result.ambiguousCrossSegment,
+  pasadas:result.passes||0,
   muestras:result.actions.slice(0,20).map(a=>({nombre:a.canonicalName,
    origen:a.sourceId,destino:a.destinationId,segmento:a.toSegment,razon:a.reason}))
  }));

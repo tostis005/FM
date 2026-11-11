@@ -126,3 +126,36 @@ export async function consolidateFamiliesByName(db,slug,{dryRun=false}={}){
   throw Error("No se pudieron fusionar todas las familias planeadas");
  return {...planned,merged,aliasesMoved,articlesMoved,stockRulesMoved,dryRun};
 }
+
+
+// La primera fusión puede convertir una familia SIN_DETERMINAR en asignable
+// a una referencia conocida. Repetir hasta punto fijo; nunca dejar una
+// reconciliación parcialmente terminada por culpa de una sola pasada.
+export async function consolidateFamilyNamesUntilStable(db,slug,{
+ maxPasses=8,execute=consolidateFamiliesByName
+}={}){
+ if(!Number.isInteger(maxPasses)||maxPasses<1||maxPasses>16)
+  throw Error("Número de pasadas incorrecto");
+ const sum={actions:[],groups:[],activeFamilies:0,uniqueFamilies:0,
+  ambiguousCrossSegment:0,merged:0,aliasesMoved:0,
+  articlesMoved:0,stockRulesMoved:0,passes:0};
+ for(let i=0;i<maxPasses;i++){
+  const step=await execute(db,slug);
+  if(!i)sum.activeFamilies=step.activeFamilies;
+  sum.uniqueFamilies=step.uniqueFamilies;
+  sum.ambiguousCrossSegment=step.ambiguousCrossSegment;
+  sum.merged+=step.merged;sum.aliasesMoved+=step.aliasesMoved;
+  sum.articlesMoved+=step.articlesMoved;sum.stockRulesMoved+=step.stockRulesMoved;
+  sum.actions.push(...step.actions);
+  sum.groups.push(...step.groups);
+  sum.passes++;
+  if(!step.actions.length){
+   if(sum.merged!==sum.activeFamilies-sum.uniqueFamilies)
+    throw Error("La unificación no conserva el número de familias");
+   return sum;
+  }
+  if(step.merged!==step.actions.length)
+   throw Error("Una pasada no fusionó todos sus duplicados");
+ }
+ throw Error("Quedan duplicados tras "+maxPasses+" pasadas; se cancela toda la transacción");
+}

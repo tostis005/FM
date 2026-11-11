@@ -1,5 +1,5 @@
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {latestLaboratoryCN,laboratoryIdsFromSnapshot,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
+import {latestLaboratoryCN,latestSupplierCN,laboratoryIdsFromSnapshot,lastReceiptMode,invalidateLastReceiptCache} from "./preparadorLastReceipt.js";
 import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 import {readSupplierMasterCatalogue,mergeSupplierCatalogReferences} from "./supplierMasterCatalogue.js";
@@ -71,19 +71,18 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
   !["medicacion","parafarmacia"].includes(type))throw Error("Proveedor o categoría inválidos");
  const q='"'+ctx.client.schema+'"',id=key.slice(2);
  if(lastReceiptMode()){
-  const [latest,patterns]=await Promise.all([
-   latestLaboratoryCN(pool,ctx,pharmacies),
+  // La caché consolidada tiene índice por laboratorio: no descargar ni
+  // agrupar todos los CN de todos los proveedores al abrir uno solo.
+  const [targeted,patterns]=await Promise.all([
+   latestSupplierCN(pool,ctx,pharmacies,id),
    readRetirementPatterns(pool,ctx.client.slug)
   ]);
-  const master=await readSupplierMasterCatalogue(pool,ctx,{
-   id,pharmacies,type,search,patterns
-  });
-  return mergeSupplierCatalogReferences(
-   (latest.byLab.get(id)||[]).map(row=>({...row,
-    referencia:row.referencia||row.cn,
-    inPurchases:true,inReceipts:true})),
-   master,search,type
-  );
+  const [historic,master]=await Promise.all([
+   targeted===null?latestLaboratoryCN(pool,ctx,pharmacies).then(
+    result=>result.byLab.get(id)||[]):Promise.resolve(targeted),
+   readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,search,patterns})
+  ]);
+  return mergeSupplierCatalogReferences(historic,master,search,type);
  }
  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
  const sql=`

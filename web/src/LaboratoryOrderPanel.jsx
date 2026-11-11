@@ -3,7 +3,6 @@ import {Download,Save,AlertTriangle,LoaderCircle,MessageSquareText} from "lucide
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import PreparadorAgenda from "./PreparadorAgenda.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
-import {ListPagination} from "./ListTable.jsx";
 import {groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
@@ -280,7 +279,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const toggleTableSort=field=>{setTableSort(current=>
   current===field+":asc"?field+":desc":field+":asc");setTablePage(0)};
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
- const metricsLoading=loading&&(loadStage==="metrics"||loadStage==="fallback")&&Boolean(data.rows?.length);
+ const metricsLoading=loading&&Boolean(laboratory);
  const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
  const pageTotalStock=stocks.every(value=>value!==null)?
   stocks.reduce((sum,value)=>sum+value,0):null;
@@ -456,7 +455,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </div>}
      </div>}
     <div className="fm-lab-order-summary">
-     <span><strong>{search?currentRows.length:(data.loaded??0)} / {data.total??0}</strong> referencias</span>
+     <span className="fm-lab-order-article-count"><strong>{currentRows.length}</strong> artículos</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
@@ -465,14 +464,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      {warehousePending&&<span className="fm-lab-warehouse-pending">
       Almacén pendiente de importar: propuesta provisional</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
-     {loading&&<span role="status" className="fm-lab-loading-label">
-      <LoaderCircle size={15} className="fm-lab-spinner"/>
-      {loadStage==="catalog"?
-       "Cargando referencias "+(data.loaded??0)+" de "+(data.total||"…")+"…":
-       loadStage==="fallback"?
-        "Calculando ventas y stock por lotes "+(data.metricsLoaded??0)+" de "+(data.total??0)+"…":
-        "Calculando ventas y stock de "+(data.total??0)+" referencias en una consulta…"}
-     </span>}
+
     </div>
     <div className="fm-lab-order-table-toolbar" aria-label="Herramientas de la tabla del preparador">
       <label>Filtrar CN
@@ -490,7 +482,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         <option value="article:asc">Artículo A–Z</option><option value="article:desc">Artículo Z–A</option>
        </select>
       </label>
-      <span>{tableVisibleRows.length} referencias · {tableGroups.length} familias</span>
+
      </div>
     <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
      <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
@@ -573,7 +565,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          </td>
        </tr>;
       })}
-      {loading&&loadStage==="catalog"&&!currentRows.length&&<tr><td className="fm-lab-table-loading" colSpan={chosen.length*5+12}><LoaderCircle className="fm-lab-spinner" size={18}/> Consultando artículos y códigos nacionales…</td></tr>}
       {!loading&&currentRows.length>0&&!tableVisibleRows.length&&<tr>
         <td colSpan={chosen.length*5+12}>Ningún artículo coincide con los filtros de columna.</td>
        </tr>}
@@ -593,17 +584,27 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </HorizontalTableScroll>
-    <ListPagination total={tableGroups.length} page={safePage} pageSize={tablePageSize}
-     pageSizes={[25,50,100,250]} label="familias de artículos"
-     onPageChange={setTablePage}
-     onPageSizeChange={n=>{setTablePageSize(n);setTablePage(0)}}/>
+    {tableGroups.length>50&&<nav className="fm-lab-order-pager" aria-label="Páginas del preparador">
+     <label>Artículos por página
+      <select value={tablePageSize} onChange={e=>{setTablePageSize(Number(e.target.value));setTablePage(0)}}>
+       {[25,50,100,250].map(n=><option key={n} value={n}>{n}</option>)}
+      </select>
+     </label>
+     <button type="button" className="btn btn-secondary" disabled={safePage===0}
+      onClick={()=>setTablePage(n=>Math.max(0,n-1))}>Anterior</button>
+     <span>Página {safePage+1} de {totalPages}</span>
+     <button type="button" className="btn btn-secondary" disabled={safePage>=totalPages-1}
+      onClick={()=>setTablePage(n=>Math.min(totalPages-1,n+1))}>Siguiente</button>
+    </nav>}
     {metricsLoading&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
      <div className="fm-lab-matrix-loading">
       <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
-      <strong>Calculando ventas y stock por farmacia…</strong>
-      <span>{loadStage==="fallback"?
-       "Procesando "+(data.metricsLoaded??0)+" de "+(data.total??0)+" referencias":
-       "Completando las métricas y los totales de los artículos"}</span>
+      <strong>Cargando artículos, ventas y stock…</strong>
+      <span>{data.rows?.length?
+       (loadStage==="catalog"?"Los códigos nacionales ya se muestran en la tabla":
+        loadStage==="fallback"?"Completando métricas de "+(data.metricsLoaded??0)+" artículos":
+         "Calculando los totales de "+data.rows.length+" artículos"):
+       "Preparando los códigos nacionales del laboratorio"}</span>
      </div>
     </div>}
    </div>

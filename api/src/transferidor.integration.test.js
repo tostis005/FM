@@ -11,6 +11,11 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
  const db=await pool.connect();
  try{
   await db.query("BEGIN");
+  // La tabla de sinónimos la crea el sincronizador en producción, no el fixture base CI.
+  await db.query(`CREATE TABLE IF NOT EXISTS ampedia.sinonimos (
+   farmacia_codigo text NOT NULL,origen_id text NOT NULL,articulo_id text NOT NULL,
+   aplicacion_id text,codigo text NOT NULL,sincronizado_en timestamptz DEFAULT now()
+  )`);
   await db.query(`INSERT INTO ampedia.articulos
    (farmacia_codigo,origen_id,nombre,codigo_nacional,stock_actual,sincronizado_en)
    VALUES ('ABA','123478','Crema transferencia',NULL,40,now()),

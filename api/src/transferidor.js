@@ -7,7 +7,7 @@ const FILTERS=new Set(["cn","name","originName","destinationName","units","stock
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
-const identity=cn=>cnCategory(cn)==="parafarmacia";
+const identity=cn=>cnCategory(cn)==="parafarmacia"&&Number(cn)>=1&&Number(cn)<400000;
 const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 
 // El plan se calcula de una vez, antes de filtrar o paginar. Cada donante
@@ -116,9 +116,8 @@ function inventorySql(schema){
  FROM chosen f JOIN ${q}.articulos a
   ON upper(btrim(a.farmacia_codigo))=f.source_code
  WHERE a.stock_actual>0
-  AND a.origen_id::text~'^[0-9]{6,7}$'
-  AND left(a.origen_id::text,6)::int BETWEEN $3::int AND $4::int
-  AND left(a.origen_id::text,6)::int<400000
+  AND (CASE WHEN a.origen_id::text~'^[0-9]{6,7}$'
+   THEN a.origen_id::int ELSE NULL END) BETWEEN $3::int AND $4::int
 ), eligible AS MATERIALIZED (
  SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
  a.origen_id::text AS cn,a.nombre,

@@ -102,12 +102,15 @@ export function setupSalesTotals(app,pool,{requireTenant,consolidations=null}){
    if(granularity==="month"&&consolidations?.read){
     const farms=ids.map(id=>({id,code:codeById.get(id)}));
     try{
-     const result=await consolidations.read({slug:req.context.client.slug,
+     const readSales=consolidations.readSales||consolidations.read;
+     const result=await readSales({slug:req.context.client.slug,
       schema,ids,farms,from,to,granularity:"month"});
      if(result.available&&result.sales?.monthly?.length){
       return res.json({...result.sales,from,to,granularity:"month",
        consolidation:{cachedMonths:result.cachedMonths||0,
-        liveRanges:result.liveRanges||0,immutable:true}});
+        liveRanges:result.liveRanges||0,
+        missingLiveMonths:result.missingLiveMonths||0,
+        immutable:result.immutable!==false}});
      }
     }catch(error){
      // Disponibilidad degradada: nunca ocultar cifras por un fallo de caché.

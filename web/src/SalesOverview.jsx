@@ -78,7 +78,7 @@ function FamilyRanking({result}){
    (Number(b[mode]||0)-Number(a[mode]||0))||String(a.name).localeCompare(String(b.name),"es")),
   [families,mode,search]);
  const maximum=Math.max(1,...rows.map(r=>Math.max(0,Number(r[mode])||0)));
- const shareTotal=Number(data.totalSales)||0;
+ const shareTotal=mode==="sales"?Number(data.totalSales)||0:Number(data.totalUnits)||0;
  return <section className="card fm-so-family" aria-busy={result.status==="loading"}>
   <SalesCardHeading icon={Layers3} title="Ventas por familias"/>
   <div className="fm-so-controls">
@@ -95,13 +95,11 @@ function FamilyRanking({result}){
    !families.length?<Status result={{status:"empty"}} empty="No hay ventas registradas para estos filtros."/>:
    !rows.length?<Status result={{status:"empty"}} empty="No hay familias que coincidan con la búsqueda."/>:
    <>
-    <div className="fm-so-list-meta"><span>{number(rows.length)} familias</span>
-     <span title="Porcentaje de líneas vinculadas al maestro de familias">
-      {percent(data.coveragePct||0)} de líneas clasificadas</span></div>
+    <div className="fm-so-list-meta"><span>{number(rows.length)} familias</span></div>
     <div className="fm-so-rank-scroll" role="region" tabIndex={0} aria-label="Ranking de familias con desplazamiento vertical">
      <ol className="fm-so-rank-list">{rows.map((family,index)=>{
       const value=Number(family[mode])||0;
-      const ratio=mode==="sales"&&shareTotal>0?value/shareTotal*100:null;
+      const ratio=shareTotal>0?value/shareTotal*100:null;
       return <li key={family.key} className={"fm-so-rank-row"+(!family.classified?" is-pending":"")}>
        <span className="fm-so-rank-index">{family.classified?String(index+1).padStart(2,"0"):"—"}</span>
        <div className="fm-so-rank-main">

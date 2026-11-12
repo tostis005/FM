@@ -148,7 +148,10 @@ test("los cuatro totales ordenan numéricamente en ascendente y descendente",()=
   assert.ok(compareLaboratoryOrderRows(one,two,field+":asc","parafarmacia",["1","2"])<0);
   assert.ok(compareLaboratoryOrderRows(one,missing,field+":desc","parafarmacia",["1","2"])<0,
    "El dato desconocido queda al final");
-  assert.ok(compareLaboratoryOrderRows(one,missing,field+":asc","parafarmacia",["1","2"])<0);
+  assert.ok(field==="totalStock"?
+   compareLaboratoryOrderRows(one,missing,field+":asc","parafarmacia",["1","2"])>0:
+   compareLaboratoryOrderRows(one,missing,field+":asc","parafarmacia",["1","2"])<0,
+   "Stock NULL ahora es cero y se ordena como 0; ventas y propuestas NULL siguen sin datos");
  }
  assert.equal(laboratoryOrderSortValue({...one,metricsReady:false},"totalStock","parafarmacia",["1","2"]),null);
 });

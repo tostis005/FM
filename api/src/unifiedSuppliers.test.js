@@ -128,3 +128,38 @@ test("no mezcla proveedores homónimos de otras farmacias ni duplica CN entre fu
  assert.equal(merged.rows.find(r=>r.cn==="012345").inPurchases,true);
  assert.ok(merged.rows.some(r=>r.referencia==="ERP:1:ABC"));
 });
+
+test("catálogo: CN nativo evita JSON y el esquema antiguo mantiene el mismo universo",async()=>{
+ for(const native of [true,false]){
+  const statements=[];
+  const expected=[
+   {referencia:"012345",cn:"012345",nombre:"Producto con CN",tipo:"parafarmacia"},
+   {referencia:"ERP:1:XYZ",cn:null,nombre:"Producto sin CN",tipo:"parafarmacia"}
+  ];
+  const pool={async query(query){
+   const sql=typeof query==="string"?query:query.text;
+   statements.push(sql);
+   if(sql.includes("SELECT column_name")&&sql.includes("information_schema.columns"))
+    return {rows:[{column_name:"proveedor_habitual_id"}]};
+   if(sql.includes("SELECT EXISTS")&&sql.includes("information_schema.columns"))
+    return {rows:[{available:native}]};
+   if(sql.includes("FROM matched"))return {rows:expected};
+   throw Error("Consulta inesperada: "+sql.slice(0,50));
+  }};
+  const rows=await readSupplierMasterCatalogue(pool,ctx,{
+   id:"88",pharmacies:[1],type:"parafarmacia",patterns:[]
+  });
+  assert.deepEqual(rows,expected);
+  const sql=statements.find(q=>q.includes("FROM matched"));
+  assert.ok(sql);
+  assert.match(sql,/a\.codigo_nacional/);
+  assert.match(sql,/a\.origen_id::text/);
+  if(native){
+   assert.match(sql,/btrim\(a\.cn_normalizado\)/);
+   assert.doesNotMatch(sql,/to_jsonb\(a\)/,
+    "La columna física debe leerse sin convertir cada ficha a JSON");
+  }else assert.match(sql,/to_jsonb\(a\)->>'cn_normalizado'/);
+  assert.match(sql,/WHERE \(cn IS NOT NULL OR article_id/);
+  assert.match(sql,/winner\.lab_id<>\$3::bigint/);
+ }
+});

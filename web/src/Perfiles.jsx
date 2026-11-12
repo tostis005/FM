@@ -25,7 +25,8 @@ function normalize(profile){
 }
 export default function Perfiles({client,role="superadministrador",onSaved}){
  const [profiles,setProfiles]=useState([]),[modules,setModules]=useState([]),
-  [sections,setSections]=useState([]),[scope,setScope]=useState(null),
+  [sections,setSections]=useState([]),[enabledModuleIds,setEnabledModuleIds]=useState([]),
+  [scope,setScope]=useState(null),
   [editing,setEditing]=useState(null),
   [draft,setDraft]=useState(empty),[loading,setLoading]=useState(true),
   [busy,setBusy]=useState(false),[feedback,setFeedback]=useState(""),
@@ -39,15 +40,23 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
  async function load(){
   const info=await request(endpoint);
   setProfiles(info.profiles||[]);setModules(info.modules||[]);
-  setSections(info.sections||[]);setScope(info.scope||null);
+  setSections(info.sections||[]);setEnabledModuleIds(info.enabledModuleIds||[]);
+  setScope(info.scope||null);
  }
  useEffect(()=>{
   let active=true;
   load().catch(e=>{if(active)setError(e.message)}).finally(()=>{if(active)setLoading(false)});
   return ()=>{active=false};
  },[client,role]);
- const visibleSections=useMemo(()=>sections.filter(s=>s.profileVisible!==false),[sections]);
- const visibleModuleIds=useMemo(()=>new Set([...visibleSections.map(s=>s.module),"asistente"]),[visibleSections]);
+ // La habilitación del cliente en Administración es la fuente de verdad.
+ // Filtrar solo la presentación: no borrar permisos globales al abrir/guardar.
+ const enabledIds=useMemo(()=>new Set(enabledModuleIds),[enabledModuleIds]);
+ const visibleSections=useMemo(()=>sections.filter(s=>
+  s.profileVisible!==false&&enabledIds.has(s.module)),[sections,enabledIds]);
+ const visibleModuleIds=useMemo(()=>new Set([
+  ...visibleSections.map(s=>s.module),
+  ...(enabledIds.has("asistente")?["asistente"]:[])
+ ]),[visibleSections,enabledIds]);
  const visibleSectionIds=useMemo(()=>new Set(visibleSections.map(s=>s.id)),[visibleSections]);
  const visibleModules=useMemo(()=>modules.filter(m=>visibleModuleIds.has(m.id)),[modules,visibleModuleIds]);
  const activeIds=useMemo(()=>new Set(draft.modules===null?modules.map(m=>m.id):draft.modules||[]),
@@ -165,8 +174,8 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
       </div>
       <small>{ROLE_NAMES[p.baseRole]||p.baseRole} · {Number(p.userCount||0)} {Number(p.userCount||0)===1?"usuario asignado":"usuarios asignados"}</small>
       <div className="fm-profile-card-scope">
-       <span>{p.modules===null?"Todos los módulos":(p.modules||[]).filter(id=>visibleModuleIds.has(id)).length+" módulos"}</span>
-       <span>{p.sections===null?"Todas las páginas":(p.sections||[]).filter(id=>visibleSectionIds.has(id)).length+" páginas"}</span>
+       <span>{p.modules===null?"Todos los habilitados":(p.modules||[]).filter(id=>visibleModuleIds.has(id)).length+" módulos"}</span>
+       <span>{p.sections===null?"Todas las páginas habilitadas":(p.sections||[]).filter(id=>visibleSectionIds.has(id)).length+" páginas"}</span>
       </div>
      </div>
      <div className="fm-profile-actions">
@@ -218,7 +227,8 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
         (scope===null||scope.sections.includes(s.id))).map(s=>s.id)}))}/>
       Heredar todas las páginas de los módulos autorizados (Transferidor requiere permiso explícito)</label>
     </div>
-    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Seleccionar un módulo activa Ver; las páginas determinan qué se muestra</span></div>
+    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Solo módulos habilitados en Administración para este cliente</span></div>
+    {!visibleModules.length&&!loading&&<p className="fm-profile-hint">No hay módulos habilitados para este cliente.</p>}
     <div className="fm-profile-matrix" role="group" aria-label="Permisos por módulo">
      <div className="fm-profile-matrix-header"><span>Módulo / pantallas</span>
       {OPERATIONS.map(([key,label])=><span key={key}>{label}</span>)}</div>

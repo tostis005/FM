@@ -95,8 +95,9 @@ export const pharmacyScope=ids=>[...new Set(ids.map(Number))].sort((a,b)=>a-b).j
  */
 export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
  const measures=Object.values(byPharmacy);
- const allStock=measures.every(m=>m.stock!==null&&m.stock!==undefined);
- const pharmacyStock=allStock?measures.reduce((n,m)=>n+Number(m.stock),0):null;
+ // Si una ficha no trae stock, se considera 0 para este preparador.
+ const pharmacyStock=measures.reduce((n,m)=>n+
+  (Number.isFinite(Number(m.stock))?Number(m.stock):0),0);
  const allSuggested=measures.every(m=>m.suggested!==null&&m.suggested!==undefined);
  const pharmacySuggested=allSuggested?
   measures.reduce((n,m)=>n+Number(m.suggested),0):null;
@@ -105,11 +106,10 @@ export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
  // Sin CN fiable no extrapolar la misma referencia ERP a otra base de datos.
  const hasIdentity=Boolean(String(row.cn||"").trim());
  const sourceStock=warehouseMetric?.warehouseStock;
- const warehouseStock=ready&&hasIdentity?
-  sourceStock===null||sourceStock===undefined?0:
-   Number.isFinite(Number(sourceStock))?Number(sourceStock):null:null;
- const globalStock=pharmacyStock!==null&&warehouseStock!==null?
-  pharmacyStock+warehouseStock:null;
+ const warehouseStock=isPara?
+  ready&&hasIdentity&&Number.isFinite(Number(sourceStock))?
+   Number(sourceStock):0:null;
+ const globalStock=isPara?pharmacyStock+warehouseStock:null;
  // Parafarmacia: sumar objetivos brutos antes de restar todo el stock.
  // El excedente de una farmacia compensa el déficit de otra; medicación no cambia.
  const completeTarget=measures.length>0&&measures.every(m=>
@@ -118,7 +118,7 @@ export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
  const groupTarget=completeTarget?
   measures.reduce((sum,m)=>sum+Number(m.targetUnits),0):null;
  const groupOrdered=measures.reduce((sum,m)=>sum+Number(m.ordered||0),0);
- const canPool=isPara&&hasIdentity&&pharmacyStock!==null&&completeTarget;
+ const canPool=isPara&&hasIdentity&&completeTarget;
  const totalSuggested=canPool?
   Math.max(0,Math.min(999999,Math.ceil(groupTarget-pharmacyStock-groupOrdered-
    Math.max(0,warehouseStock??0)-1e-9))):
@@ -202,7 +202,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
   if(!warehouseMetrics.has(row.reference))warehouseMetrics.set(row.reference,row);
   if(!byRef.has(row.reference))byRef.set(row.reference,{});
   byRef.get(row.reference)[String(row.pharmacyId)]={
-   pharmacyId:String(row.pharmacyId),stock:row.stock===null?null:Number(row.stock),
+   pharmacyId:String(row.pharmacyId),stock:row.stock==null?0:Number(row.stock),
    stockInferredZero:row.stockInferredZero===true,
    stockAt:row.stockAt,unitsPeriod:Number(row.unitsPeriod||0),
    units3:Number(row.units3||0),units12:Number(row.units12||0),

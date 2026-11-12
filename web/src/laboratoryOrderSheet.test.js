@@ -113,7 +113,7 @@ test("las bajas conservan cantidades, comentarios y CN por separado",()=>{
  assert.equal(mergeVisibleOrderLines([excluded],"parafarmacia",["1","2"],draft)["000123"].units,25);
  const medication=defaultLaboratoryLine({...excluded,cn:"400123"},"medicacion",["1","2"]);
  assert.deepEqual(medication.unitsByPharmacy,{"1":10,"2":7});
- assert.equal(totalStockFor({...row,byPharmacy:{"1":{stock:4},"2":{stock:null}}},["1","2"]),null);
+ assert.equal(totalStockFor({...row,byPharmacy:{"1":{stock:4},"2":{stock:null}}},["1","2"]),4);
 });
 
 test("el Excel incluye bloque Almacén y totales compactos sin duplicar stock",()=>{
@@ -237,7 +237,7 @@ test("los grupos sin métricas completas se ordenan al final, no como 0",()=>{
  assert.equal(sorted[1].representative.cn,"234567");
 });
 
-test("los KPI de stock conservan sumas conocidas si falta una ficha o almacén",()=>{
+test("Cinfa parafarmacia: NULL o artículo ausente cuentan 0, sin parcial",()=>{
  const rows=[
   {metricsReady:true,byPharmacy:{"1":{stock:4},"2":{stock:3}},
    warehouseReady:true,warehouse:{stock:2},globalStock:9},
@@ -245,25 +245,23 @@ test("los KPI de stock conservan sumas conocidas si falta una ficha o almacén",
    warehouseReady:false,warehouse:{stock:null},globalStock:null}
  ];
  const para=laboratoryStockTotals(rows,[1,2],true);
- assert.equal(para.pharmacyStock,7);
- assert.equal(para.globalStock,9);
- assert.equal(para.missingPharmacy,1);
- assert.equal(para.missingWarehouse,1);
- assert.equal(para.pharmacyPartial,true);
- assert.equal(para.globalPartial,true);
+ assert.deepEqual(para,{pharmacyStock:7,globalStock:9});
  const med=laboratoryStockTotals(rows,[1,2],false);
- assert.equal(med.pharmacyStock,7);
- assert.equal(med.globalStock,7);
- assert.equal(med.missingWarehouse,0);
+ assert.deepEqual(med,{pharmacyStock:7,globalStock:7});
+ assert.equal(totalStockFor(rows[1],[1,2]),0);
 });
 
-test("stock cero validado no es una ausencia de datos",()=>{
+test("sin existencia informada el resultado real cero es válido",()=>{
  const rows=[{metricsReady:true,byPharmacy:{"1":{stock:0},"2":{stock:0}},
   warehouseReady:true,warehouse:{stock:0}}];
- const totals=laboratoryStockTotals(rows,[1,2],true);
- assert.deepEqual(totals,{pharmacyStock:0,globalStock:0,
-  missingPharmacy:0,missingWarehouse:0,pharmacyPartial:false,globalPartial:false});
- const incomplete=laboratoryStockTotals([{metricsReady:false}], [1,2],true);
- assert.equal(incomplete.missingPharmacy,2);
- assert.equal(incomplete.missingWarehouse,1);
+ assert.deepEqual(laboratoryStockTotals(rows,[1,2],true),
+  {pharmacyStock:0,globalStock:0});
+ assert.deepEqual(laboratoryStockTotals([{metricsReady:true,byPharmacy:{},warehouse:{}}],
+  [1,2],true),{pharmacyStock:0,globalStock:0});
+});
+
+test("sin métricas terminadas, un error de carga no se convierte en existencias 0",()=>{
+ const rows=[{metricsReady:true,byPharmacy:{"1":{stock:5}}},{metricsReady:false}];
+ assert.deepEqual(laboratoryStockTotals(rows,[1],true),
+  {pharmacyStock:null,globalStock:null});
 });

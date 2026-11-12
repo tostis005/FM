@@ -1,5 +1,6 @@
 // Una sola lectura de ventas para horarios, vendedores y tickets completos.
-// GROUPING SETS evita tres escaneos de la misma vista documental.
+// Primero agregar líneas por documento; después reutilizar cada ticket para
+// tres visuales con GROUPING SETS. Importes siempre numéricos hasta el final.
 import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 import {nameCommercialRows} from "./commercialNames.js";
 import {summarizeSalesTickets} from "./salesOverview.js";
@@ -10,25 +11,28 @@ export function buildSalesActivitySQL(schema){
  if(!SCHEMA.test(schema))throw Error("Esquema de ventas inválido");
  const q='"'+schema+'"';
  return [
-  "WITH movements AS (",
-  " SELECT v.farmacia_codigo AS code,v.vendedor_id::text AS seller_id,",
-  " extract(isodow FROM v.fecha)::int AS weekday,",
-  " extract(hour FROM v.fecha)::int AS hour,",
+  "WITH documents AS MATERIALIZED (",
+  " SELECT v.farmacia_codigo AS code,",
   " v.sistema_origen AS sale_source,v.documento_id AS sale_document_id,",
-  " v.importe AS amount,v.unidades AS units,",
-  " CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL",
-  " THEN v.unidades ELSE 0 END AS product_units",
+  " min(v.vendedor_id::text) AS seller_id,",
+  " extract(isodow FROM min(v.fecha))::int AS weekday,",
+  " extract(hour FROM min(v.fecha))::int AS hour,",
+  " sum(v.importe) AS amount,sum(v.unidades) AS units,",
+  " sum(CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL",
+  " THEN v.unidades ELSE 0 END) AS product_units,",
+  " count(*)::bigint AS lines",
   " FROM "+q+".fm_ventas_analitica v",
   " WHERE v.farmacia_codigo=ANY($3::text[])",
   " AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
+  " GROUP BY 1,2,3",
   ") SELECT CASE WHEN GROUPING(weekday)=0 THEN 'horario'",
   " WHEN GROUPING(seller_id)=0 THEN 'vendedor' ELSE 'farmacia' END AS kind,",
   " code,seller_id AS \"sellerId\",weekday,hour,",
   " sum(amount)::float8 AS sales,sum(units)::float8 AS units,",
-  " sum(product_units)::float8 AS \"productUnits\",count(*)::bigint AS lines,",
+  " sum(product_units)::float8 AS \"productUnits\",sum(lines)::bigint AS lines,",
   " CASE WHEN GROUPING(weekday)=1 AND GROUPING(seller_id)=1",
-  " THEN count(DISTINCT (sale_source,sale_document_id))::bigint ELSE NULL::bigint END AS tickets",
-  " FROM movements",
+  " THEN count(*)::bigint ELSE NULL::bigint END AS tickets",
+  " FROM documents",
   " GROUP BY GROUPING SETS ((code),(code,seller_id),(weekday,hour))",
   " ORDER BY kind,code,weekday,hour"
  ].join("\n");

@@ -64,6 +64,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setLaboratory(key);
   setTab(next?.hasMedication===true?"medicacion":"parafarmacia");
   setError("");setColumnFilter({cn:"",article:""});setTablePage(0);
+  setTablePageSize(ALL_LAB_ROWS);
   setNotice("");
   // Pulsar un laboratorio de la agenda vuelve a lanzar la consulta incluso
   // si ya estaba seleccionado (p. ej. tras registrar pedidos/stock).
@@ -296,6 +297,9 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const viewport=laboratoryTableViewport(tablePageRows.length,virtualRow);
  const renderedRows=viewport.virtualized?
   tablePageRows.slice(viewport.start,viewport.end):tablePageRows;
+ // Un límite de página anterior nunca debe esconder artículos de otro laboratorio
+ // ni de otra pestaña. Cada nueva consulta comienza mostrando todos.
+ useEffect(()=>{setTablePageSize(ALL_LAB_ROWS);setTablePage(0)},[laboratory,tab]);
  // Al cambiar filtros o página, comenzar por las primeras referencias.
  useEffect(()=>{
   setVirtualRow(0);
@@ -495,7 +499,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      </div>}
     <div className="fm-lab-order-lower" aria-busy={metricsLoading}>
     <div className="fm-lab-order-summary">
-     {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos</span>}
+     {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos{tableVisibleRows.length!==currentRows.length?" de "+currentRows.length+" del catálogo":""}</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
      {tab==="parafarmacia"&&<span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>}
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
@@ -677,7 +681,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tbody>
      </table>
     </HorizontalTableScroll>
-    {tableGroups.length>50&&<nav className="fm-lab-order-pager" aria-label="Páginas del preparador">
+    {(tableGroups.length>50||tablePageSize!==ALL_LAB_ROWS)&&<nav className="fm-lab-order-pager" aria-label="Páginas del preparador">
      <label>Artículos por página
       <select value={tablePageSize} disabled={loading} onChange={e=>{setTablePageSize(Number(e.target.value));setTablePage(0)}}>
        <option value={ALL_LAB_ROWS}>Todos ({tableVisibleRows.length})</option>
@@ -686,7 +690,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      </label>
      <button type="button" className="btn btn-secondary" disabled={loading||safePage===0}
       onClick={()=>setTablePage(n=>Math.max(0,n-1))}>Anterior</button>
-     <span>{tablePageSize===ALL_LAB_ROWS?("Mostrando los "+tablePageRows.length+" artículos"):("Página "+(safePage+1)+" de "+totalPages)}</span>
+     <span>{tablePageSize===ALL_LAB_ROWS?("Mostrando los "+tablePageRows.length+" artículos"):("Página "+(safePage+1)+" de "+totalPages+" · "+tablePageRows.length+" de "+tableVisibleRows.length+" artículos")}</span>
      <button type="button" className="btn btn-secondary" disabled={loading||safePage>=totalPages-1}
       onClick={()=>setTablePage(n=>Math.min(totalPages-1,n+1))}>Siguiente</button>
     </nav>}

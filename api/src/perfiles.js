@@ -47,9 +47,15 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
  }
  async function listForEditor(req,res,next){
   try{
-   const clientSlug=req.context?.client?.slug||null;
-   const [profiles,{rows:modules}]=await Promise.all([catalogue(clientSlug),
-    pool.query("SELECT clave AS id,nombre AS name FROM farmetrica.modulos ORDER BY nombre")]);
+   const clientSlug=req.context?.client?.slug||String(req.get("x-farmetrica-cliente")||"").trim().toLowerCase();
+   const [profiles,{rows:modules},{rows:enabledRows}]=await Promise.all([
+    catalogue(clientSlug||null),
+    pool.query("SELECT clave AS id,nombre AS name FROM farmetrica.modulos ORDER BY nombre"),
+    pool.query("SELECT modulo_clave AS id FROM farmetrica.cliente_modulos WHERE cliente_slug=$1 AND habilitado=true",[clientSlug])
+   ]);
+   // El catálogo de perfiles es global, pero el editor solo ofrece módulos
+   // contratados/habilitados en el cliente seleccionado en Administración.
+   const enabledModuleIds=enabledRows.map(row=>row.id);
    const role=managerRole(req),context=req.context||{role};
    const scope=role==="superadministrador"?null:{
     modules:Object.keys(context.modules||{}).filter(id=>context.modules[id]===true),
@@ -60,7 +66,7 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
    res.json({profiles:profiles.map(p=>({
     ...p,editable:canEditGlobalProfile(context,p),
     deletable:!p.system&&p.userCount===0&&canEditGlobalProfile(context,p)
-   })),modules,sections:USER_SECTIONS,
+   })),modules,sections:USER_SECTIONS,enabledModuleIds,
     level:role,scope});
   }catch(e){next(e);}
  }

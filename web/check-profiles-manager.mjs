@@ -16,6 +16,7 @@ const profiles=[
   system:true,userCount:2,usedOtherClient:false,editable:true,deletable:false}
 ];
 const modules=[{id:"promociones",name:"Promociones"},{id:"reposicion",name:"Reposición"},{id:"ventas",name:"Ventas"}];
+const enabledModuleIds=["promociones","ventas"]; // Reposición existe, pero Administración la deshabilitó.
 const sections=[
  {id:"ventas",name:"Ventas (resumen)",module:"ventas",profileVisible:true},
  {id:"promociones",name:"Promociones",module:"promociones",profileVisible:true},
@@ -43,7 +44,7 @@ async function checkRole(role){
   else if(path==="/api/tenant/farmacias")body=pharmacies;
   else if(path==="/api/tenant/perfiles/gestion"){
    body={profiles:profiles.map(p=>({...p,editable:role==="administrador"&&p.key==="gestor"?true:p.editable})),
-    modules,sections,scope,level:role};
+    modules,sections,enabledModuleIds,scope,level:role};
   }else if((path==="/api/tenant/perfiles/gestion/3"||path==="/api/tenant/perfiles/gestion/2")&&req.method()==="PUT"){
    writes.push({role,path,body:req.postDataJSON()});
    body={profileId:3,name:req.postDataJSON().name};
@@ -62,6 +63,10 @@ async function checkRole(role){
   await page.locator(".fm-profile-card").filter({hasText:"Personal de farmacia"})
    .getByRole("button",{name:"Configurar"}).click();
   assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Reposición"}).count(),0);
+  assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Promociones"}).count(),1,
+   "los módulos activos del cliente siguen visibles");
+  assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Ventas"}).count(),1,
+   "Ventas aparece cuando está habilitado a nivel de cliente");
   await page.locator("#editar-perfil input").first().fill("Personal actualizado");
   await page.getByRole("button",{name:"Guardar perfil"}).click();
   await page.getByText("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.").waitFor();
@@ -70,6 +75,8 @@ async function checkRole(role){
   assert.equal(writes.at(-1).body.name,"Personal actualizado");
   assert.deepEqual(writes.at(-1).body.modules,["promociones","reposicion"]);
   assert.deepEqual(writes.at(-1).body.sections,["promociones","seguimiento-global","reposicion"]);
+  assert.deepEqual(writes.at(-1).body.permissions.reposicion,["ver"],
+   "ocultar un módulo del editor no borra los permisos históricos del perfil global");
   if(role==="administrador"){
    await manager.getByRole("button",{name:"Configurar"}).click();
    const salesRow=page.locator(".fm-profile-module").filter({hasText:"Ventas"});

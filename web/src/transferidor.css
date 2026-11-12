@@ -16,11 +16,11 @@
 .fm-transfer-table{padding:16px;min-width:0}
 .fm-transfer-table-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
 .fm-transfer-table-title h2{margin:0 0 5px;font-size:17px}
-.fm-transfer-table-title>span{white-space:nowrap;color:#237049;font-size:12px;font-weight:700}
+.fm-transfer-table-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}.fm-transfer-table-meta span{color:#237049;font-size:12px;font-weight:700}.fm-transfer-table-meta small{font-size:11px;color:#64776b}
 .fm-transfer-main-table td,.fm-transfer-main-table th{white-space:nowrap}
 .fm-transfer-main-table td:nth-child(2){max-width:340px;overflow:hidden;text-overflow:ellipsis}
 .fm-transfer-main-table thead .fm-smart-group-title{font-weight:700;font-size:12px;letter-spacing:.015em}
-.fm-transfer-main-table thead .fm-smart-group-title:nth-child(2){background:color-mix(in srgb,var(--surface,#fff) 92%,#6f9b80)}
+
 .fm-transfer-main-table td.fm-table-col-center{font-variant-numeric:tabular-nums}
 .fm-transfer-target{display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.25}
 .fm-transfer-target strong{font-weight:650;font-variant-numeric:tabular-nums}
@@ -28,3 +28,26 @@
 .fm-transfer-units{color:#237049;font-variant-numeric:tabular-nums;font-weight:750}
 @media(max-width:1050px){.fm-transfer-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-transfer-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){.fm-transfer-filters{grid-template-columns:1fr}.fm-transfer-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.fm-transfer-kpi{padding:12px;min-height:136px;grid-template-rows:minmax(50px,auto) 1fr 16px}.fm-transfer-kpi-value{font-size:22px}.fm-transfer-controls,.fm-transfer-table{padding:12px}.fm-transfer-table-title{flex-direction:column}.fm-transfer-tabs .btn{min-width:0;flex:1}}
+
+/* Preparador: bloques diferenciados por farmacia, columna de propuesta destacada. */
+.fm-transfer-main-table{border-collapse:separate;border-spacing:0;font-size:12px;font-variant-numeric:tabular-nums}
+.fm-transfer-main-table th,.fm-transfer-main-table td{padding:9px 10px;border-right:1px solid #e1e9e4}
+.fm-transfer-main-table thead tr.fm-smart-group-row th{padding:10px 12px;font-weight:800;text-align:center;border-bottom:2px solid #bdcfbf}
+.fm-transfer-main-table thead tr.fm-smart-group-row th:nth-child(1){background:#e9eeeb;color:#45594d}
+.fm-transfer-main-table thead tr.fm-smart-group-row th:nth-child(2){background:#deebf7;color:#28577c;border-left:2px solid #acc8d9}
+.fm-transfer-main-table thead tr.fm-smart-group-row th:nth-child(3){background:#def1ed;color:#20664f;border-left:2px solid #9dc9bc}
+.fm-transfer-main-table thead tr.fm-smart-group-row th:nth-child(4){background:#d4eedf;color:#16683a;border-left:2px solid #8abd99}
+.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(n+3):nth-child(-n+7),.fm-transfer-main-table tbody td:nth-child(n+3):nth-child(-n+7){background:#f1f6fc}
+.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(n+8):nth-child(-n+14),.fm-transfer-main-table tbody td:nth-child(n+8):nth-child(-n+14){background:#edf8f4}
+.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(15),.fm-transfer-main-table tbody td:nth-child(15){background:#e1f3e7}
+.fm-transfer-main-table tbody tr:nth-child(even) td:nth-child(n+3):nth-child(-n+7){background:#eaf2fa}
+.fm-transfer-main-table tbody tr:nth-child(even) td:nth-child(n+8):nth-child(-n+14){background:#e4f2ed}
+.fm-transfer-main-table tbody tr:nth-child(even) td:nth-child(15){background:#d6eddc}
+.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(3),.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(8),.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(15),.fm-transfer-main-table tbody td:nth-child(3),.fm-transfer-main-table tbody td:nth-child(8),.fm-transfer-main-table tbody td:nth-child(15){border-left:2px solid #abc4b6}
+.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(1),.fm-transfer-main-table tbody td:nth-child(1){position:sticky;left:0;min-width:85px;width:85px;z-index:3;background:#f5f9f6}
+.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(2),.fm-transfer-main-table tbody td:nth-child(2){position:sticky;left:85px;min-width:220px;width:220px;max-width:220px;z-index:3;background:#f5f9f6;border-right:2px solid #aebfb3}
+.fm-transfer-main-table tbody tr:nth-child(even) td:nth-child(-n+2){background:#eff5f1}
+.fm-transfer-main-table thead tr.fm-smart-group-row th:first-child{position:sticky;left:0;z-index:4}
+.fm-transfer-sales-reference{font-weight:750;color:#25604e}
+.fm-transfer-units{display:inline-block;min-width:35px;padding:4px 8px;border-radius:6px;background:#cbe9d5;color:#166439;font-size:13px;font-weight:800}
+@media(max-width:570px){.fm-transfer-table-meta{align-items:flex-start;text-align:left}.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(1),.fm-transfer-main-table tbody td:nth-child(1){min-width:76px;width:76px}.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(2),.fm-transfer-main-table tbody td:nth-child(2){left:76px;min-width:165px;width:165px;max-width:165px}.fm-transfer-main-table th,.fm-transfer-main-table td{padding:8px 7px}}

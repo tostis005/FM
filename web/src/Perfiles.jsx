@@ -23,7 +23,7 @@ function normalize(profile){
   permissions:Object.fromEntries(Object.entries(profile.permissions||{})
    .map(([key,items])=>[key,[...items]]))});
 }
-export default function Perfiles({client,role="superadministrador"}){
+export default function Perfiles({client,role="superadministrador",onSaved}){
  const [profiles,setProfiles]=useState([]),[modules,setModules]=useState([]),
   [sections,setSections]=useState([]),[scope,setScope]=useState(null),
   [editing,setEditing]=useState(null),
@@ -103,7 +103,9 @@ export default function Perfiles({client,role="superadministrador"}){
    const url=editing==="new"?endpoint:endpoint+"/"+editing;
    await request(url,{method:editing==="new"?"POST":"PUT",
     body:JSON.stringify(normalizeExplicitModuleViews(draft))});
-   await load();setEditing(null);setFeedback("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.");
+   await load();
+   try{await onSaved?.();}catch{} // El perfil ya está guardado aunque falle la recarga del contexto.
+   setEditing(null);setFeedback("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.");
   }catch(e){setError(e.message)}finally{setBusy(false);}
  }
  async function remove(profile){

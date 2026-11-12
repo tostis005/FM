@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {ArrowLeft,CheckCircle2,Copy,Layers3,LockKeyhole,Plus,Settings2,ShieldCheck,Trash2,UsersRound} from "lucide-react";
 import {LoadingStatus} from "./LoadingState.jsx";
 import "./perfiles.css";
+import {normalizeExplicitModuleViews,withModuleView} from "./profileDraftAccess.js";
 const OPERATIONS=[["ver","Ver"],["crear","Crear"],["editar","Editar"],["eliminar","Eliminar"],
  ["importar","Importar"],["exportar","Exportar"]];
 const ROLE_NAMES={administrador:"Administrador",gestor:"Gestor",
@@ -16,11 +17,11 @@ async function api(path,options={}){
  return result;
 }
 function normalize(profile){
- return {name:profile.name,baseRole:profile.baseRole,
+ return normalizeExplicitModuleViews({name:profile.name,baseRole:profile.baseRole,
   modules:profile.modules===null?null:[...(profile.modules||[])],
   sections:profile.sections===null?null:[...(profile.sections||[])],
   permissions:Object.fromEntries(Object.entries(profile.permissions||{})
-   .map(([key,items])=>[key,[...items]]))};
+   .map(([key,items])=>[key,[...items]]))});
 }
 export default function Perfiles({client,role="superadministrador"}){
  const [profiles,setProfiles]=useState([]),[modules,setModules]=useState([]),
@@ -72,7 +73,7 @@ export default function Perfiles({client,role="superadministrador"}){
     sections:checked?previous.sections:previous.sections===null?
      sections.map(s=>s.id).filter(x=>x!=="stock-transferidor"&&!moduleSections.has(x)):
      previous.sections.filter(x=>!moduleSections.has(x)),
-    permissions:checked?{...previous.permissions,[id]:previous.permissions[id]||["ver"]}:
+    permissions:checked?withModuleView(previous.permissions,id):
      {...previous.permissions,[id]:[]}};
   });
  }
@@ -80,10 +81,14 @@ export default function Perfiles({client,role="superadministrador"}){
   setDraft(previous=>{
    const selected=previous.sections===null?sections.map(s=>s.id)
     .filter(key=>key!=="stock-transferidor"&&activeIds.has(sections.find(row=>row.id===key)?.module)):previous.sections||[];
-   return {...previous,sections:checked?[...new Set([...selected,id])]:selected.filter(x=>x!==id)};
+   const module=sections.find(section=>section.id===id)?.module;
+   return {...previous,sections:checked?[...new Set([...selected,id])]:selected.filter(x=>x!==id),
+    permissions:checked&&module?withModuleView(previous.permissions,module):previous.permissions};
   });
  }
  function toggleOperation(module,operation,checked){
+  // Para revocar Ver se desmarca el módulo; no dejar un módulo seleccionado e invisible.
+  if(operation==="ver"&&!checked&&Array.isArray(draft.modules)&&draft.modules.includes(module))return;
   setDraft(previous=>{
    const current=previous.permissions[module]||[];
    const next=operation==="ver"&&!checked?[]:
@@ -96,7 +101,8 @@ export default function Perfiles({client,role="superadministrador"}){
   setBusy(true);setError("");setFeedback("");
   try{
    const url=editing==="new"?endpoint:endpoint+"/"+editing;
-   await request(url,{method:editing==="new"?"POST":"PUT",body:JSON.stringify(draft)});
+   await request(url,{method:editing==="new"?"POST":"PUT",
+    body:JSON.stringify(normalizeExplicitModuleViews(draft))});
    await load();setEditing(null);setFeedback("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.");
   }catch(e){setError(e.message)}finally{setBusy(false);}
  }
@@ -210,7 +216,7 @@ export default function Perfiles({client,role="superadministrador"}){
         (scope===null||scope.sections.includes(s.id))).map(s=>s.id)}))}/>
       Heredar todas las páginas de los módulos autorizados (Transferidor requiere permiso explícito)</label>
     </div>
-    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Solo se muestran páginas actuales; los accesos históricos se conservan</span></div>
+    <div className="fm-profile-subheading"><strong>Permisos por módulo</strong><span>Seleccionar un módulo activa Ver; las páginas determinan qué se muestra</span></div>
     <div className="fm-profile-matrix" role="group" aria-label="Permisos por módulo">
      <div className="fm-profile-matrix-header"><span>Módulo / pantallas</span>
       {OPERATIONS.map(([key,label])=><span key={key}>{label}</span>)}</div>
@@ -228,7 +234,8 @@ export default function Perfiles({client,role="superadministrador"}){
         </label>
         {OPERATIONS.map(([op,label])=><label key={op} className="fm-profile-operation"
          title={label+" · "+m.name}><input type="checkbox" checked={active&&operations.includes(op)}
-          disabled={!active||busy||Boolean(scope&&!operations.includes(op)&&
+          disabled={!active||busy||(op==="ver"&&Array.isArray(draft.modules))||
+           Boolean(scope&&!operations.includes(op)&&
            !scope.operations[m.id]?.includes(op))}
            onChange={e=>toggleOperation(m.id,op,e.target.checked)}/>
          <span>{label}</span></label>)}

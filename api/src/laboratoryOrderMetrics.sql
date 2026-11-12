@@ -62,7 +62,8 @@ WITH refs AS MATERIALIZED (
    AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='almacen'
    AND f.activo=true AND upper(btrim(f.codigo_origen))='ALMACEN'
 ), warehouse_ready AS MATERIALIZED (
- -- Sin primera importación no se puede interpretar ausencia de artículo como stock 0.
+ -- Conserva la señal de sincronización del almacén. Para el pedido, las
+ -- existencias no informadas se consideran 0, incluso sin importación.
  SELECT EXISTS (
   SELECT 1 FROM __SCHEMA__.articulos a JOIN warehouse_scope w
    ON upper(btrim(a.farmacia_codigo))=w.source_code

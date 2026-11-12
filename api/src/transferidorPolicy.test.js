@@ -64,6 +64,9 @@ test("30 días de familia y 100 unidades de CN se almacenan por separado",async(
   {pharmacyId:"1",cn:"151130",units:100})).status,200);
  assert.ok(calls.some(x=>x.text.includes("transferidor_exposicion_familias")&&x.values[3]===30));
  assert.ok(calls.some(x=>x.text.includes("transferidor_exposicion_articulos")&&x.values[3]===100));
+ const articleSql=calls.find(x=>x.text.includes("INSERT INTO farmetrica.transferidor_exposicion_articulos"))?.text;
+ assert.match(articleSql,/a\.codigo_nacional/,"La configuración debe aceptar el CN comercial");
+ assert.match(articleSql,/a\.origen_id::text/,"Mantener respaldo de identificador ERP");
 });
 
 test("un mismo nombre de familia admite ramas mixtas y se guarda de forma atómica",async()=>{

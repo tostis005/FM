@@ -272,3 +272,26 @@ test("si falla PostgreSQL devuelve un error explícito, no una tabla vacía",asy
  assert.match(res.body.error,/tiempo/);
  assert.equal(released,true);
 });
+
+test("sin tablas sincronizadas devuelve causa clara y no un 500 opaco",async()=>{
+ const query=async arg=>{
+  const sql=typeof arg==="string"?arg:arg.text;
+  if(sql.includes("AS ready FROM farmetrica.farmacias"))
+   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
+  if(sql.includes("WITH chosen AS MATERIALIZED"))
+   throw Object.assign(Error("relation not found"),{code:"42P01"});
+  return {rows:[]};
+ };
+ const pool={query,connect:async()=>({query,release(){}})};
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},pool,{requireTenant:()=>[]});
+ const res={statusCode:200,status(n){this.statusCode=n;return this},
+  json(value){this.body=value;return this}};
+ let failure;
+ await handler({query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testmissing",schema:"testmissing"},
+   pharmacies:pharmacies.slice(0,2)}},res,e=>{failure=e});
+ if(failure)throw failure;
+ assert.equal(res.statusCode,503);
+ assert.match(res.body.error,/sincronización/);
+});

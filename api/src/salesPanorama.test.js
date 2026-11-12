@@ -144,3 +144,72 @@ test("dos años: encola los meses pendientes en una lectura, sin 24 sondeos HTTP
  await new Promise(resolve=>setTimeout(resolve,30));
  assert.equal(attempts,46,"los 46 cierres se encolan sin esperar 10 recargas");
 });
+
+test("lote de dos farmacias crea ambos cierres con un único escaneo mensual",async()=>{
+ const calls=[];
+ const conn={
+  async query(input,values){
+   const sql=typeof input==="string"?input:input.text;
+   const args=typeof input==="string"?values:input.values;
+   calls.push({sql,args});
+   if(sql.includes("pg_try_advisory_xact_lock"))return {rows:[{ok:true}]};
+   return {rows:[]};
+  },
+  release(){}
+ };
+ const pool={
+  async query(sql){
+   if(String(sql).includes("clock_timestamp"))return {rows:[{today:"2026-11-12"}]};
+   throw Error("Consulta no prevista");
+  },
+  async connect(){return conn}
+ };
+ const cache=createSalesPanoramaCache(pool,{logger:{info(){},error(){}}});
+ const ok=await cache.refreshMonthBatch({slug:"ampedia",schema:"ampedia",
+  month:"2026-10-01",farms:[{id:1,code:"ABA"},{id:2,code:"NOR"}]});
+ assert.equal(ok,true);
+ const scans=calls.filter(c=>c.sql.includes("fm_ventas_analitica"));
+ assert.equal(scans.length,1,"dos farmacias usan una sola agrupación original");
+ assert.deepEqual(scans[0].args.slice(0,3),["2026-10-01","2026-11-01",["ABA","NOR"]]);
+ assert.deepEqual(JSON.parse(scans[0].args[4]),[{id:1,code:"ABA"},{id:2,code:"NOR"}]);
+ assert.match(scans[0].sql,/GROUP BY f\.id,g\.kind,g\.key/);
+ assert.match(scans[0].sql,/upper\(btrim\(g\.code\)\)=upper\(btrim\(f\.code\)\)/);
+ const closes=calls.filter(c=>c.sql.includes("INSERT INTO farmetrica.ventas_panorama_meses_cerrados"));
+ assert.equal(closes.length,1);
+ assert.deepEqual(JSON.parse(closes[0].args[2]),[{id:1,code:"ABA"},{id:2,code:"NOR"}]);
+ assert.equal(calls.filter(c=>c.sql==="COMMIT").length,1);
+ assert.equal(calls.filter(c=>c.sql.includes("pg_try_advisory_xact_lock")).length,2,
+  "se mantiene un bloqueo por farmacia para impedir escrituras concurrentes");
+});
+test("el lote no modifica el cierre ya guardado de una farmacia",async()=>{
+ const calls=[];
+ const conn={
+  async query(input,values){
+   const sql=typeof input==="string"?input:input.text;
+   const args=typeof input==="string"?values:input.values;
+   calls.push({sql,args});
+   if(sql.includes("pg_try_advisory_xact_lock"))return {rows:[{ok:true}]};
+   if(sql.includes("SELECT farmacia_id FROM farmetrica.ventas_panorama_meses_cerrados"))
+    return {rows:[{farmacia_id:1}]};
+   return {rows:[]};
+  },release(){}
+ };
+ const pool={async query(){return {rows:[{today:"2026-11-12"}]}},
+  async connect(){return conn}};
+ const cache=createSalesPanoramaCache(pool,{logger:{info(){},error(){}}});
+ assert.equal(await cache.refreshMonthBatch({slug:"ampedia",schema:"ampedia",
+  month:"2026-10-01",farms:[{id:1,code:"ABA"},{id:2,code:"NOR"}]}),true);
+ const scan=calls.find(c=>c.sql.includes("fm_ventas_analitica"));
+ assert.deepEqual(scan.args[2],["NOR"]);
+ const closes=calls.find(c=>c.sql.includes("INSERT INTO farmetrica.ventas_panorama_meses_cerrados"));
+ assert.deepEqual(JSON.parse(closes.args[2]),[{id:2,code:"NOR"}]);
+});
+test("los cierres del mes actual nunca se consolidan en lotes",async()=>{
+ const calls=[];
+ const pool={async query(){return {rows:[{today:"2026-11-12"}]}},
+  async connect(){calls.push("connect");throw Error("No debe acceder")}};
+ const cache=createSalesPanoramaCache(pool,{logger:{info(){},error(){}}});
+ assert.equal(await cache.refreshMonthBatch({slug:"ampedia",schema:"ampedia",
+  month:"2026-11-01",farms:[{id:1,code:"ABA"}]}),false);
+ assert.deepEqual(calls,[]);
+});

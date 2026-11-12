@@ -133,13 +133,16 @@ export function buildSalesTicketHeatmapSQL(schema){
  return [
   "SELECT extract(isodow FROM h.fecha)::int AS weekday,",
   " extract(hour FROM h.fecha)::int AS hour,count(*)::bigint AS tickets,",
-  " coalesce(sum(valid_lines.units),0)::float8 AS units",
+  " coalesce(sum(valid_lines.units),0)::float8 AS units,",
+  " coalesce(sum(valid_lines.sales),0)::float8 AS sales",
   " FROM "+q+".fm_ventas_cabeceras h",
   " JOIN LATERAL (",
   " SELECT count(*)::bigint AS count,",
   " coalesce(sum(CASE WHEN nullif(btrim(l.articulo_origen_id),'') IS NOT NULL",
   " THEN CASE WHEN l.devuelta IS TRUE THEN -abs(l.cantidad) ELSE l.cantidad END",
-  " ELSE 0 END),0)::numeric AS units",
+  " ELSE 0 END),0)::numeric AS units,",
+  " coalesce(sum(CASE WHEN l.devuelta IS TRUE THEN -abs(l.importe_neto)",
+  " ELSE l.importe_neto END),0)::numeric AS sales",
   " FROM "+q+".fm_ventas_lineas l",
   " WHERE l.farmacia_codigo=h.farmacia_codigo AND l.sistema_origen=h.sistema_origen",
   " AND l.documento_id=h.documento_id AND NOT l.eliminada_logicamente",
@@ -155,11 +158,12 @@ export function buildSalesTicketHeatmapSQL(schema){
 export function summarizeSalesTicketHeatmap(rows){
  const cells=(rows||[]).map(r=>({
   weekday:numeric(r.weekday),hour:numeric(r.hour),
-  tickets:numeric(r.tickets),units:numeric(r.units)
+  tickets:numeric(r.tickets),units:numeric(r.units),sales:numeric(r.sales)
  })).filter(r=>Number.isInteger(r.weekday)&&r.weekday>=1&&r.weekday<=7&&
   Number.isInteger(r.hour)&&r.hour>=0&&r.hour<=23&&r.tickets>=0);
  return {cells,total:cells.reduce((sum,r)=>sum+r.tickets,0),
-  totalUnits:cells.reduce((sum,r)=>sum+r.units,0)};
+  totalUnits:cells.reduce((sum,r)=>sum+r.units,0),
+  totalSales:cells.reduce((sum,r)=>sum+r.sales,0)};
 }
 
 // Recuento independiente de cabeceras por vendedor y franja de evolución.

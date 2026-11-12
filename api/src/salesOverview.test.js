@@ -36,7 +36,6 @@ test("el ticket medio se calcula por documento, no por línea o media de farmaci
  assert.match(sql,/v\.sistema_origen,v\.documento_id/);
  assert.match(sql,/GROUP BY 1,2,3/);
  assert.match(sql,/count\(\*\)::bigint AS tickets/);
- assert.match(sql,/coalesce\(sum\(valid_lines\.sales\),0\)::float8 AS sales/);
  const data=summarizeSalesTickets([
   {code:"ABA",tickets:2,sales:50,units:4},{code:"EUR",tickets:8,sales:350,units:20}
  ],[{id:"1",name:"Abadía",sourceCode:"ABA"},
@@ -96,6 +95,7 @@ test("el mapa cuenta una cabecera por ticket y suma unidades reales de sus líne
  assert.match(sql,/FROM "ampedia"\.fm_ventas_cabeceras h/);
  assert.match(sql,/count\(\*\)::bigint AS tickets/);
  assert.match(sql,/coalesce\(sum\(valid_lines\.units\),0\)::float8 AS units/);
+ assert.match(sql,/coalesce\(sum\(valid_lines\.sales\),0\)::float8 AS sales/);
  assert.match(sql,/extract\(isodow FROM h\.fecha\)/);
  assert.match(sql,/extract\(hour FROM h\.fecha\)/);
  assert.match(sql,/h\.lineas_completas AND NOT h\.eliminado_logicamente/);

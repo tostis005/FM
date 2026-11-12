@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Layers3,ReceiptText,Search,Store,ChartBar} from "lucide-react";
+import {Layers3,Search,Store,ChartBar} from "lucide-react";
 import {euro,integer} from "./localeES.js";
 import DashboardInsights from "./DashboardInsights.jsx";
 import "./salesOverview.css";
@@ -9,7 +9,7 @@ const number=value=>integer(Number(value)||0);
 const percent=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(value)+" %";
 const normalize=value=>String(value||"").toLocaleLowerCase("es")
  .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey,enabled=true}){
+export function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey,enabled=true}){
  const token=[clientSlug,period.from,period.to,pharmacyIds.join(","),reloadKey].join("|");
  const [result,setResult]=useState(null);
  useEffect(()=>{
@@ -100,60 +100,55 @@ function FamilyRanking({result}){
    </>}
  </section>;
 }
-function TicketAverage({result,activity,salesTotal}){
- const ticketCount=Number(result.data?.tickets)||0;
- const available=result.status==="ready"&&Number.isFinite(Number(salesTotal));
- const average=available&&ticketCount>0?Number(salesTotal)/ticketCount:null;
- const sellers=activity.status==="ready"&&Array.isArray(activity.data?.vendedores?.sellers)?
+function PharmacySales({activity,tickets,selectedPharmacies}){
+ // No consultar nada adicional: el agregado por vendedor ya contiene
+ // las ventas de cada farmacia, incluso cuando el vendedor no tiene nombre.
+ const sellers=Array.isArray(activity.data?.vendedores?.sellers)?
   activity.data.vendedores.sellers:[];
  const salesBySite=new Map();
  for(const seller of sellers){
   const id=String(seller.pharmacyId);
   salesBySite.set(id,(salesBySite.get(id)||0)+(Number(seller.sales)||0));
  }
- const sites=(result.data?.pharmacies||[]).filter(p=>salesBySite.has(String(p.id)));
- const maximum=Math.max(1,...sites.map(p=>Math.max(0,salesBySite.get(String(p.id))||0)));
- return <section className="card fm-so-ticket" aria-busy={result.status==="loading"}>
+ const ticketsBySite=new Map((tickets.data?.pharmacies||[]).map(p=>[
+  String(p.id),Number(p.tickets)||0
+ ]));
+ const sites=selectedPharmacies.map(p=>({
+  id:String(p.id),name:p.name,
+  sales:salesBySite.get(String(p.id))||0,
+  tickets:ticketsBySite.get(String(p.id))
+ })).sort((a,b)=>b.sales-a.sales);
+ const maximum=Math.max(1,...sites.map(p=>Math.max(0,p.sales)));
+ return <section className="card fm-so-pharmacies" aria-busy={activity.status==="loading"}>
   <div className="fm-so-heading">
-   <div className="fm-so-heading-icon fm-so-icon-ticket"><ReceiptText size={19}/></div>
-   <div className="fm-so-heading-text"><h2>Ticket medio</h2>
-    <p>Venta neta media por operación</p></div>
+   <div className="fm-so-heading-icon fm-so-icon-pharmacy"><Store size={19}/></div>
+   <div className="fm-so-heading-text"><h2>Ventas por farmacia</h2></div>
   </div>
-  {result.status!=="ready"?<Status result={result} empty="Selecciona un período válido."/>:
-   !ticketCount?<Status result={{status:"empty"}} empty="Sin operaciones para estos filtros."/>:
-   <>
-    <div className="fm-so-ticket-kpis">
-     <div className="fm-so-ticket-highlight"><span>Ticket medio neto</span>
-      <strong>{average==null?"—":money(average)}</strong>
-      <small>Calculado con la venta neta del período y las operaciones válidas</small>
-     </div>
-    </div>
-    {sites.length>1&&<><div className="fm-so-site-title"><Store size={16}/><h3>Ventas por farmacia</h3></div>
-     <div className="fm-so-sites">{sites.map(p=>{
-      const sales=salesBySite.get(String(p.id))||0;
-      return <div className="fm-so-site" key={p.id}>
-       <div className="fm-so-site-name"><span>{p.name}</span><strong>{money(sales)}</strong></div>
-       <div className="fm-so-track"><div style={{width:Math.max(0,sales)/maximum*100+"%"}}/></div>
-       <small>Ticket medio {p.tickets?money(sales/p.tickets):"—"}</small>
-      </div>;
-     })}</div></>}
-   </>}
+  {activity.status!=="ready"?
+   <Status result={activity} empty="Selecciona un período válido."/>:
+   <div className="fm-so-sites">{sites.map(p=><div className="fm-so-site" key={p.id}>
+    <div className="fm-so-site-name"><span>{p.name}</span><strong>{money(p.sales)}</strong></div>
+    <div className="fm-so-track"><div style={{width:Math.max(0,p.sales)/maximum*100+"%"}}/></div>
+    {tickets.status==="ready"&&<small>Ticket medio {p.tickets?money(p.sales/p.tickets):"—"}</small>}
+   </div>)}</div>}
  </section>;
 }
 export default function SalesOverview({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,
- enabled=true,salesTotal=null,onNavigate=()=>{},canNavigate=()=>false}){
+ enabled=true,tickets,onNavigate=()=>{},canNavigate=()=>false}){
  const scope={clientSlug,period,pharmacyIds,reloadKey,enabled};
- // Cada análisis carga independientemente: si falla el ticket medio,
- // los vendedores y las familias siguen funcionando y viceversa.
  const families=useSalesOverviewData("familias-ranking",scope);
  const activity=useSalesOverviewData("actividad",scope);
- const tickets=useSalesOverviewData("ticket-medio-rapido",scope);
+ const selectedPharmacies=pharmacyIds.length?
+  pharmacies.filter(p=>pharmacyIds.map(String).includes(String(p.id))):pharmacies;
+ const showPharmacySales=selectedPharmacies.length>1;
  return <>
   <div className="fm-so-overview" aria-label="Análisis global de ventas">
-   <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2>
-    <p>Familias, ticket medio y actividad comercial</p></div>
-   <div className="fm-so-grid"><FamilyRanking result={families}/><TicketAverage result={tickets}
-    activity={activity} salesTotal={salesTotal}/></div>
+   <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2></div>
+   <div className={"fm-so-grid"+(!showPharmacySales?" fm-so-grid-single":"")}>
+    <FamilyRanking result={families}/>
+    {showPharmacySales&&<PharmacySales activity={activity} tickets={tickets||{status:"loading"}}
+     selectedPharmacies={selectedPharmacies}/>}
+   </div>
   </div>
   <DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
    pharmacyIds={pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}

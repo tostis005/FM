@@ -188,7 +188,7 @@ function inventorySql(schema){
 )
 SELECT a.fid::text AS "pharmacyId",a.cn,max(a.nombre) AS name,
  max(a.family_id)::text AS "familyId",
- CASE WHEN count(a.stock)=count(*) THEN sum(a.stock)::float8 ELSE NULL END AS stock,
+ sum(coalesce(a.stock,0))::float8 AS stock,
  min(a.stock_at) AS "stockAt",
  sum(coalesce(s.units3,0))::float8 AS "units3",
  sum(coalesce(s.units12,0))::float8 AS "units12",

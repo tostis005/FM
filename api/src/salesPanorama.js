@@ -185,7 +185,7 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
   const keys=ordered.map(f=>keyOf({slug,id:f.id,month}));
   if(keys.some(key=>running.has(key)))return false;
   keys.forEach(key=>running.add(key));
-  let conn;
+  let conn,fallbackSingles=false;
   try{
    if(month>=(await clock()).slice(0,7)+"-01")return false;
    conn=await pool.connect();
@@ -238,12 +238,18 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
    return true;
   }catch(error){
    if(conn)await conn.query("ROLLBACK").catch(()=>{});
-   for(const key of keys)failures.set(key,(failures.get(key)||0)+1);
+   // Si la agrupación doble excede recursos, recuperar el camino anterior
+   // para cada farmacia sin marcar como incorrecto un cierre ya existente.
+   fallbackSingles=ordered.length>1;
+   if(!fallbackSingles)
+    for(const key of keys)failures.set(key,(failures.get(key)||0)+1);
    logger.error?.("FM_PANORAMA_LOTE_ERROR",slug,month,error.code||error.name);
    return false;
   }finally{
    conn?.release();
    keys.forEach(key=>running.delete(key));
+   if(fallbackSingles)for(const f of ordered)
+    schedule({slug,schema,id:f.id,code:f.code,month});
   }
  }
  const scheduleBatches=items=>{
@@ -259,7 +265,8 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
     const batch=ordered.slice(index,index+2);
     const slug=items[0].slug,schema=items[0].schema;
     const key="batch:"+slug+":"+month+":"+batch.map(f=>f.id).join(",");
-    if(queued.has(key)||batch.some(f=>running.has(keyOf({slug,id:f.id,month}))||
+    if(queued.has(key)||batch.some(f=>queued.has(keyOf({slug,id:f.id,month}))||
+     running.has(keyOf({slug,id:f.id,month}))||
      Number(failures.get(keyOf({slug,id:f.id,month}))||0)>=3))continue;
     queued.add(key);
     tail=tail.then(()=>refreshMonthBatch({slug,schema,month,farms:batch}))

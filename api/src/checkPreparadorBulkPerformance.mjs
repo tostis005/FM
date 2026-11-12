@@ -6,11 +6,21 @@ import pg from "pg";
 import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
-import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
+import {readLaboratoryOrderMatrix,datePrefilterLaboratoryMetricsSQL,skipWarehouseForMedication} from "./laboratoryOrderPlanner.js";
 
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,
  connectionTimeoutMillis:5000,query_timeout:32000,statement_timeout:32000});
 const output={};
+function sameMetrics(a,b){
+ if(!a||!b||a.metricsUnavailable||b.metricsUnavailable||a.rows.length!==b.rows.length)return null;
+ const measure=rows=>rows.map(r=>JSON.stringify({
+  reference:r.referencia,cn:r.cn,stock:r.pharmacyStock,warehouse:r.warehouseStock,
+  global:r.globalStock,sold:r.totalSold,suggested:r.totalSuggested,
+  warehouseMetrics:r.warehouse,
+  pharmacies:Object.fromEntries(Object.entries(r.byPharmacy||{}).sort(([a],[b])=>a.localeCompare(b)))
+ })).join("\n");
+ return measure(a.rows)===measure(b.rows);
+}
 async function timed(name,fn){
  const start=Date.now();
  try{const result=await fn();output[name+"Ms"]=Date.now()-start;return result}
@@ -54,6 +64,14 @@ try{
     const plan=explain[0]?.["QUERY PLAN"]?.[0]?.Plan;
     if(!plan)return null;
     output.estimatedCost=Math.round(Number(plan["Total Cost"]||0));
+    output.nativeCN=columns[0]?.native===true;
+    const dateSQL=datePrefilterLaboratoryMetricsSQL(skipWarehouseForMedication(raw))
+     .replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
+     .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
+     .replaceAll("__CN_NORMALIZED__",columns[0]?.native?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
+    const datePlan=await pool.query({text:"EXPLAIN (FORMAT JSON) "+dateSQL,
+     values:[JSON.stringify(selected),pharmacies,ctx.client.slug,from,to,"medicacion"],query_timeout:10000});
+    output.prefilterCost=Math.round(Number(datePlan.rows[0]?.["QUERY PLAN"]?.[0]?.Plan?.["Total Cost"]||0));
     const scans=[];
     const visit=p=>{if(/Scan/.test(p["Node Type"]||""))
      scans.push({node:p["Node Type"],table:p["Relation Name"]||"",
@@ -63,11 +81,21 @@ try{
     output.planScans=scans.slice(0,15);
     return true;
    });
+   let baseline200=null;
    for(const count of [Math.min(200,best.rows.length),best.rows.length].filter((x,i,a)=>a.indexOf(x)===i)){
     const res=await timed("matrix"+count,()=>readLaboratoryOrderMatrix(pool,ctx,{
      key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows.slice(0,count)
     }));
     if(res)output["matrix"+count+"Complete"]=res.metricsUnavailable===false;
+    if(count===200)baseline200=res;
+   }
+   const candidate=await timed("datePrefilter200",()=>readLaboratoryOrderMatrix(pool,ctx,{
+    key,pharmacies,type:best.type,from,to,
+    prefetchedRows:best.rows.slice(0,200),datePrefilter:true
+   }));
+   if(candidate){
+    output.datePrefilter200Complete=candidate.metricsUnavailable===false;
+    output.datePrefilter200EqualsBaseline=sameMetrics(baseline200,candidate);
    }
   }
  }
@@ -98,10 +126,12 @@ try{
    const from=new Date(now.getTime()-30*86400000).toISOString().slice(0,10);
    const uniqueSizes=[...new Set([1,Math.min(50,candidates.length),
     Math.min(200,candidates.length),candidates.length])].filter(x=>x>0);
+   let cantabriaBaseline200=null;
    for(const n of uniqueSizes){
     const matrix=await timed("cantabriaMatrix"+n,()=>
      readLaboratoryOrderMatrix(pool,ctx,{key,pharmacies,type:"parafarmacia",
       from,to,prefetchedRows:candidates.slice(0,n)}));
+    if(n===200)cantabriaBaseline200=matrix;
     if(matrix){
      output["cantabriaMatrix"+n+"Complete"]=matrix.metricsUnavailable===false;
      output["cantabriaMatrix"+n+"Error"]=matrix.metricsErrorCode||null;
@@ -112,6 +142,13 @@ try{
      output["cantabriaMatrix"+n+"SalesPresent"]=matrix.rows.filter(r=>
       Object.values(r.byPharmacy||{}).some(m=>m.units12!==null&&m.units12!==undefined)).length;
     }
+   }
+   const date200=await timed("cantabriaDatePrefilter200",()=>readLaboratoryOrderMatrix(
+    pool,ctx,{key,pharmacies,type:"parafarmacia",from,to,
+     prefetchedRows:candidates.slice(0,200),datePrefilter:true}));
+   if(date200){
+    output.cantabriaDatePrefilter200Complete=date200.metricsUnavailable===false;
+    output.cantabriaDatePrefilter200EqualsBaseline=sameMetrics(cantabriaBaseline200,date200);
    }
   }
  }

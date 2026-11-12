@@ -113,7 +113,11 @@ export async function summarizePanoramaGroups(pool,context,ids,groups){
   const p=byHour.get(k)||{weekday:cell.weekday,hour:cell.hour,sales:0,lines:0};
   p.sales+=cell.sales;p.lines+=cell.lines;byHour.set(k,p);
  }
- const named=await nameCommercialRows(pool,context,sellers);
+ // Una incidencia en el catálogo de nombres no debe inutilizar ni el mapa
+ // ni los importes. Los IDs de vendedor son una alternativa válida.
+ let named=sellers;
+ try{named=await nameCommercialRows(pool,context,sellers)}
+ catch(error){console.warn("FM_PANORAMA_NOMBRES_FALLBACK",error.code||error.name)}
  const activity=summarizeSalesActivityRows([],chosen,ids,named);
  activity.horarios={cells:[...byHour.values()].sort((a,b)=>a.weekday-b.weekday||a.hour-b.hour),
   total:[...byHour.values()].reduce((n,r)=>n+r.sales,0)};

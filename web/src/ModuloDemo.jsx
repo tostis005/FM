@@ -87,7 +87,7 @@ function metricCards(module,k,analysisMonths=12){
  const map={
   dashboard:[shared[0],shared[1],shared[3],
    CARD("Diferencia ventas − compras","resultadoComercial","€")],
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Referencias por farmacia","productosFarmacia","n"),CARD("Artículos diferentes","articulosVendidos","n")],
+  ventas:[shared[0],CARD("Unidades vendidas","unidades","n")],
   compras:[shared[1],CARD("Recepciones registradas","recepciones","n"),
    CARD("Unidades compradas","unidadesCompradas","n"),
    CARD("Proveedores","proveedores","n","proveedores"),
@@ -215,16 +215,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  // La lectura rápida del total se muestra antes que la tabla pesada.
  const [fastResult,setFastResult]=useState(null);
  const [fastFailure,setFastFailure]=useState(null);
- const [insightResult,setInsightResult]=useState(null);
- const [insightFailure,setInsightFailure]=useState(null);
- const [familyResult,setFamilyResult]=useState(null);
  const [tableSort,setTableSort]=useState(()=>TABLE_DEFAULTS[module]||{key:"value",direction:"desc"});
  useEffect(()=>{setTableSort(TABLE_DEFAULTS[module]||{key:"value",direction:"desc"})},[module]);
  const remoteFields=REMOTE_FIELDS[module];
  const remoteSort=remoteFields?tableSort:undefined;
  const changeTableSort=next=>{setTableSort(next);setDetailPage(1);};
  const [detailPage,setDetailPage]=useState(1);
- const [detailFallbackScope,setDetailFallbackScope]=useState(null);
  const [tableFilters,setTableFilters]=useState({});
  const [globalFamilyResult,setGlobalFamilyResult]=useState(null);
  useEffect(()=>{setTableFilters({});setTableFiltersReady({})},[module,clientSlug]);
@@ -323,13 +319,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
  const fastLoading=fastEligible&&!fastSales&&!fastFailed;
- // Sólo activar la carga independiente si el resumen no ha llegado a tiempo.
- // Cancelar este temporizador en cuanto llegue evita consultas duplicadas.
- useEffect(()=>{
-  if(module!=="ventas"||!period.valid||fastSales||fastFailed)return;
-  const timer=setTimeout(()=>setDetailFallbackScope(fastScope),1600);
-  return()=>clearTimeout(timer);
- },[module,period.valid,fastScope,fastSales,fastFailed]);
  useEffect(()=>{
   if(!fastEligible)return;
   if(dashboardCacheEligible&&dashboardCacheStatus!=="miss")return;
@@ -373,35 +362,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   })});
   return ()=>controller.abort();
  },[fastEligible,fastScope,dashboardCacheEligible,dashboardCacheStatus]);
- const insightScope=[clientSlug,period.from,period.to,filters.pharmacyIds.join(","),ids,reloadKey].join("|");
- const insightData=insightResult?.scope===insightScope?insightResult.data:null;
- const insightFailureMessage=insightFailure?.scope===insightScope?insightFailure.message:null;
- const insightLoading=module==="ventas"&&period.valid&&!insightData&&!insightFailureMessage;
- useEffect(()=>{
-  if(module!=="ventas"||!period.valid||(!fastSales&&!fastFailed))return;
-  const controller=new AbortController();
-  const params=new URLSearchParams({desde:period.from,hasta:period.to});
-  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
-  fetch("/api/analytics/ventas/recuento?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
-   .then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||"Error al contar artículos");return data})
-   .then(data=>{if(!controller.signal.aborted)setInsightResult({scope:insightScope,data})})
-   .catch(e=>{if(!controller.signal.aborted)setInsightFailure({scope:insightScope,message:e.message})});
-  return()=>controller.abort();
- },[module,insightScope,period.valid,fastSales,fastFailed]);
- const singleFamilyPharmacy=module==="ventas"&&filters.pharmacyIds.length===1;
- const familyScope=[clientSlug,filters.pharmacyIds.join(","),ids].join("|");
- const familyData=familyResult?.scope===familyScope?familyResult.data:null;
- useEffect(()=>{
-  if(!singleFamilyPharmacy)return;
-  const controller=new AbortController();
-  fetch("/api/analytics/ventas/familias?farmacias="+encodeURIComponent(filters.pharmacyIds[0]),{
-   credentials:"same-origin",cache:"no-store",headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
-   .then(async r=>{const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||"Error al consultar familias");return data})
-   .then(data=>{if(!controller.signal.aborted)setFamilyResult({scope:familyScope,data})})
-   .catch(()=>{if(!controller.signal.aborted)setFamilyResult({scope:familyScope,data:{families:[]}})});
-  return()=>controller.abort();
- },[singleFamilyPharmacy,familyScope]);
  useEffect(()=>{setDetailPage(1);setDetailHasMore(false)},[
    module,clientSlug,filters.pharmacyIds.join(","),filters.families.join(","),
    searchReady,period.from,period.to,reloadKey,tableSort.key,tableSort.direction,activeTableFilters
@@ -410,14 +370,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
  useEffect(()=>{
   const controller=new AbortController();
-  if(!salesModule||module==="dashboard"){setRealSales(null);setLoading(false);return ()=>controller.abort()}
-  if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
-  // Prioridad al SUM histórico: no competir con el trabajo pesado hasta
-  // que el total y gráfico estén listos; después detalle y recuento van EN PARALELO.
-  if(module==="ventas"&&fastEligible&&!fastSales&&!fastFailed&&detailFallbackScope!==fastScope){
-   setLoading(true);setRealReport(null);
+  if(!salesModule||module==="dashboard"||module==="ventas"){
+   setRealSales(null);setRealReport(null);setLoading(false);setReportLoading(false);
    return ()=>controller.abort();
   }
+  if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
   const params=new URLSearchParams();
   params.set("desde",period.from);
   params.set("hasta",period.to);
@@ -459,7 +416,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    }})
    .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
   return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters,detailFallbackScope]);
+ },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters]);
 
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
  const fastPurchase=["compras","dashboard"].includes(module)&&
@@ -624,7 +581,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    .catch(()=>{if(!controller.signal.aborted)setGlobalFamilyResult({scope:optionScope,data:[]})});
   return()=>controller.abort();
  },[optionScope,period.valid]);
- const familyOptions=singleFamilyPharmacy?(familyData?.families||[]).map(v=>({label:v.label,value:v.code})):[];
+ const singleFamilyPharmacy=false;
+ const familyOptions=[];
  const pharmacyOptions=pharmacies.map(p=>({label:p.name,value:String(p.id)}));
  const change=(field,value)=>{
   setFilters(f=>({...f,[field]:value}));
@@ -651,9 +609,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const canShowKpi=key=>realKpis[key]!=null;
  const realRevenue=hasSales?(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.ventas||0),0)??0:null;
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
- const realKpis={...realReport?.kpis,...(insightData?{
-   productosFarmacia:insightData.totalProducts,articulosVendidos:insightData.totalArticles
-  }:{}),...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
+ const realKpis={...realReport?.kpis,...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
  if(!realReport?.kpis&&hasSales&&(!fastSales?.kpis||!Object.hasOwn(fastSales.kpis,"ventas"))){
   realKpis.ventas=realRevenue;realKpis.unidades=realUnits;
  }
@@ -762,11 +718,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    customFrom={filters.customFrom} customTo={filters.customTo}
    onCustomFromChange={value=>change("customFrom",value)}
    onCustomToChange={value=>change("customTo",value)}>
-   {singleFamilyPharmacy&&familyOptions.length>0&&<div className="fm-unified-filter">
+   {module!=="ventas"&&singleFamilyPharmacy&&familyOptions.length>0&&<div className="fm-unified-filter">
     <span>Familias</span><MultiSelectFilter label="Familias" placeholder="Todas las familias"
      options={familyOptions} value={filters.families} onChange={v=>change("families",v)}/></div>}
-   <label className="fm-demo-search fm-unified-filter"><span>{receiptMode?"Recepción, proveedor o documento":"Artículo o CN"}</span>
-    <div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>
+   {module!=="ventas"&&<label className="fm-demo-search fm-unified-filter"><span>{receiptMode?"Recepción, proveedor o documento":"Artículo o CN"}</span>
+    <div><Search size={15}/><input value={filters.search} onChange={e=>change("search",e.target.value)} placeholder="Buscar…" /></div></label>}
   </ReportFilterBar>
   {!period.valid&&<p role="alert" className="fm-inline-status">{period.reason}</p>}
   {module==="dashboard"&&<p className="fm-dashboard-reconciliation-note">
@@ -775,7 +731,6 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    posibles movimientos internos; la comparabilidad fiscal necesita verificarse.
   </p>}
 
-  {module==="ventas"&&insightFailureMessage&&<p role="alert" className="fm-inline-status">No se pudieron calcular los recuentos: {insightFailureMessage}</p>}
   <div className="fm-demo-kpis">{cards.map(c=>{
    const active=Boolean(c.link&&canNavigate(c.link));
    const kpiLoading=isDashboard?(["resultadoComercial","resultadoComercialPct"].includes(c.key)?
@@ -783,10 +738,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      ["ventas","unidades","margen","margenPct"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
     module==="compras"&&shouldLoadPurchaseSummary?
      (!fastPurchase&&!purchaseSummaryError):
-    module==="ventas"&&fastEligible&&["ventas","unidades"].includes(c.key)?
-     (fastLoading||(!fastSales&&isFetchingSales)):
-     (module==="ventas"&&["productosFarmacia","articulosVendidos"].includes(c.key)?
-        insightLoading:isFetchingSales);
+    module==="ventas"&&fastEligible?fastLoading:isFetchingSales;
    const isMargin=["margen","margenPct"].includes(c.key);
    const isCommercial=["resultadoComercial","resultadoComercialPct"].includes(c.key);
    const isSaleMetric=["ventas","unidades","margen","margenPct"].includes(c.key);
@@ -935,7 +887,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    <div className="section-heading"><h2>Consultas de análisis</h2></div>
    <div className="fm-link-list">{QUESTIONS.filter(([,id])=>canNavigate(id)).map(([question,id])=>
     <button key={question} className="fm-report-link" onClick={()=>go(id)}><strong>{question}</strong><ArrowRight size={18}/></button>)}</div>
-  </section>:isDashboard?null:<section className="card fm-demo-table" id={module==="ventas"?"fm-sales-articles":undefined}>
+  </section>:isDashboard||module==="ventas"?null:<section className="card fm-demo-table">
    <div className="section-heading"><h2>{receiptMode?"Recepciones":module==="ventas"?"Artículos vendidos":TITLES[module]+" por artículo"}</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length} onClick={()=>csvExport(module,columns,rows)}><ArrowDownToLine size={16}/> CSV</button></div>
    {isDashboard&&!showDashboardDetail?<div className="fm-dashboard-lazy-detail"><p>El detalle completo de artículos se consulta cuando lo necesitas para que Inicio abra sin esperar el análisis pesado.</p><button type="button" className="btn btn-secondary" onClick={()=>setShowDashboardDetail(true)}>Consultar artículos del período</button></div>:<ListTable key={[module,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,period.from,period.to].join("|")}

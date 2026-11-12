@@ -14,7 +14,7 @@ export function buildSalesActivitySQL(schema){
   " SELECT v.farmacia_codigo AS code,v.vendedor_id::text AS seller_id,",
   " extract(isodow FROM v.fecha)::int AS weekday,",
   " extract(hour FROM v.fecha)::int AS hour,",
-  " v.sistema_origen AS source,v.documento_id AS document,",
+  " v.sistema_origen AS sale_source,v.documento_id AS sale_document_id,",
   " v.importe AS amount,v.unidades AS units,",
   " CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL",
   " THEN v.unidades ELSE 0 END AS product_units",
@@ -27,7 +27,7 @@ export function buildSalesActivitySQL(schema){
   " sum(amount)::float8 AS sales,sum(units)::float8 AS units,",
   " sum(product_units)::float8 AS \"productUnits\",count(*)::bigint AS lines,",
   " CASE WHEN GROUPING(weekday)=1 AND GROUPING(seller_id)=1",
-  " THEN count(DISTINCT (source,document))::bigint ELSE NULL::bigint END AS tickets",
+  " THEN count(DISTINCT (sale_source,sale_document_id))::bigint ELSE NULL::bigint END AS tickets",
   " FROM movements",
   " GROUP BY GROUPING SETS ((code),(code,seller_id),(weekday,hour))",
   " ORDER BY kind,code,weekday,hour"

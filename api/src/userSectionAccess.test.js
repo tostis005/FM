@@ -90,3 +90,15 @@ test("el catálogo de perfiles muestra solo rutas operativas y conserva las hist
  assert.equal(effectiveUserSections({stock:true},null,true)["stock-transferidor"],true);
 
 });
+
+test("un gestor con acceso previo a Inicio o Tickets puede consultar Ventas sin habilitar el resto",()=>{
+ const modules={ventas:true,dashboard:true};
+ for(const grants of [["dashboard"],["ventas-tickets"]]){
+  const effective=effectiveUserSections(modules,grants,false,"gestor");
+  assert.equal(effective.ventas,true);
+  assert.equal(effective["ventas-devoluciones"],false);
+ }
+ assert.equal(effectiveUserSections(modules,[],false,"gestor").ventas,false);
+ assert.equal(effectiveUserSections({ventas:false,dashboard:true},["dashboard"],false,"gestor").ventas,false);
+ assert.equal(effectiveUserSections(modules,["dashboard"],false,"farmacia").ventas,false);
+});

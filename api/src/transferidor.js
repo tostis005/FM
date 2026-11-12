@@ -3,8 +3,8 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {cnCategory} from "./laboratoryOrderPlanner.js";
 import {readTransferidorPolicy} from "./transferidorPolicy.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
-const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","targetOrigin","targetDestination","triggerDestination","extraDestination"]);
-const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","triggerDestination","extraDestination"]);
+const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","targetOrigin","targetDestination","triggerDestination","extraDestination"]);
+const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","triggerDestination","extraDestination"]);
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
@@ -80,7 +80,8 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
      name:product.name,originId:source.id,originName:source.name,
      destinationId:target.id,destinationName:target.name,units,
      stockOrigin:source.stock,targetOrigin:source.target,
-     stockDestination:target.stock,targetDestination:target.target,
+     stockDestination:target.stock,pendingDestination:target.ordered,
+     targetDestination:target.target,
      triggerDestination:target.threshold,extraDestination:target.extra,
      reserveSource:target.source,minDays:config.minDays,targetDays:config.targetDays,
      stockAt:source.stockAt&&target.stockAt?

@@ -329,7 +329,7 @@ test("CN indexado: un lote de 200 referencias no dispara un scan global y conser
  const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
  for(const original of [sql,skipWarehouseForMedication(sql)]){
   const indexed=indexedNormalizedCNMetricsSQL(original);
-  assert.equal((indexed.match(/JOIN LATERAL \(/g)||[]).length,
+  assert.equal((indexed.match(/JOIN LATERAL \(\s+SELECT a\.origen_id,a\.stock_actual,a\.sincronizado_en/g)||[]).length,
    original===sql?2:1,"LATERAL para farmacias y, solo si existe, almacén");
   assert.match(indexed,/OFFSET 0\s+\) a ON true/);
   assert.match(indexed,/nullif\(btrim\(__CN_NORMALIZED__\),''\)=x\.cn/);

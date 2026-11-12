@@ -160,7 +160,7 @@ jobs:
           node check-seo.mjs
           node check-marketing.mjs
           node check-public-links.mjs
-          node --test src/assistantStreamClient.test.js
+          node --test src/assistantStreamClient.test.js src/profileDraftAccess.test.js
           npm run build
 
   deploy:

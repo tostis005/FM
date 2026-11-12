@@ -174,6 +174,101 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
    return false;
   }finally{conn?.release();running.delete(key)}
  }
+
+ // Procesar como máximo dos farmacias por mes en una única agrupación SQL.
+ // Las claves, cierres y bloqueos siguen siendo individuales e inmutables.
+ async function refreshMonthBatch({slug,schema,month,farms}){
+  if(!IDENT.test(slug)||!IDENT.test(schema)||!/^\d{4}-\d{2}-01$/.test(month)||
+   !Array.isArray(farms)||!farms.length||farms.length>2||
+   farms.some(f=>!Number.isSafeInteger(Number(f.id))||Number(f.id)<1||!String(f.code||"").trim()))return false;
+  const ordered=[...farms].sort((a,b)=>Number(a.id)-Number(b.id));
+  const keys=ordered.map(f=>keyOf({slug,id:f.id,month}));
+  if(keys.some(key=>running.has(key)))return false;
+  keys.forEach(key=>running.add(key));
+  let conn;
+  try{
+   if(month>=(await clock()).slice(0,7)+"-01")return false;
+   conn=await pool.connect();
+   await conn.query("BEGIN");
+   await conn.query("SET LOCAL statement_timeout='115s'");
+   await conn.query("SET LOCAL lock_timeout='5s'");
+   await conn.query("SET LOCAL work_mem='16MB'");
+   await conn.query("SET LOCAL max_parallel_workers_per_gather=1");
+   for(const f of ordered){
+    const {rows:[lock]}=await conn.query(
+     "SELECT pg_try_advisory_xact_lock(hashtext($1),$2::int) AS ok",
+     ["fm-panorama-"+slug+"-"+month,Number(f.id)]);
+    if(!lock?.ok){await conn.query("ROLLBACK");return false}
+   }
+   const {rows:ready}=await conn.query(
+    "SELECT farmacia_id FROM farmetrica.ventas_panorama_meses_cerrados"+
+    " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) AND mes=$3::date",
+    [slug,ordered.map(f=>Number(f.id)),month]);
+   const present=new Set(ready.map(r=>Number(r.farmacia_id)));
+   const pending=ordered.filter(f=>!present.has(Number(f.id)));
+   if(!pending.length){
+    await conn.query("COMMIT");
+    keys.forEach(key=>failures.delete(key));
+    return true;
+   }
+   // La vista agrupa por código de farmacia: unir por código antes de
+   // asignar el ID interno mantiene intactas las cifras de cada farmacia.
+   const insert="INSERT INTO farmetrica.ventas_panorama_mensual"+
+    " (cliente_slug,farmacia_id,mes,dimension,clave,importe,unidades,lineas)"+
+    " SELECT $4::text,f.id,$1::date,g.kind,g.key,"+
+    " sum(g.sales),sum(g.units),sum(g.lines)"+
+    " FROM ("+buildSalesPanoramaGroupSQL(schema)+") g"+
+    " JOIN jsonb_to_recordset($5::jsonb) AS f(id integer,code text)"+
+    " ON upper(btrim(g.code))=upper(btrim(f.code))"+
+    " GROUP BY f.id,g.kind,g.key"+
+    " ON CONFLICT(cliente_slug,farmacia_id,mes,dimension,clave) DO NOTHING";
+   await conn.query({text:insert,values:[
+    month,nextMonth(month),pending.map(f=>f.code),slug,JSON.stringify(pending)],
+    query_timeout:120000});
+   await conn.query(
+    "INSERT INTO farmetrica.ventas_panorama_meses_cerrados"+
+    " (cliente_slug,farmacia_id,mes)"+
+    " SELECT $1::text,f.id,$2::date"+
+    " FROM jsonb_to_recordset($3::jsonb) AS f(id integer)"+
+    " ON CONFLICT(cliente_slug,farmacia_id,mes) DO NOTHING",
+    [slug,month,JSON.stringify(pending)]);
+   await conn.query("COMMIT");
+   keys.forEach(key=>failures.delete(key));
+   logger.info?.("FM_PANORAMA_LOTE_CERRADO",slug,month,pending.length);
+   return true;
+  }catch(error){
+   if(conn)await conn.query("ROLLBACK").catch(()=>{});
+   for(const key of keys)failures.set(key,(failures.get(key)||0)+1);
+   logger.error?.("FM_PANORAMA_LOTE_ERROR",slug,month,error.code||error.name);
+   return false;
+  }finally{
+   conn?.release();
+   keys.forEach(key=>running.delete(key));
+  }
+ }
+ const scheduleBatches=items=>{
+  const byMonth=new Map();
+  for(const item of items){
+   const current=byMonth.get(item.month)||[];
+   current.push({id:item.id,code:item.code});
+   byMonth.set(item.month,current);
+  }
+  for(const [month,farms] of byMonth){
+   const ordered=[...farms].sort((a,b)=>Number(a.id)-Number(b.id));
+   for(let index=0;index<ordered.length;index+=2){
+    const batch=ordered.slice(index,index+2);
+    const slug=items[0].slug,schema=items[0].schema;
+    const key="batch:"+slug+":"+month+":"+batch.map(f=>f.id).join(",");
+    if(queued.has(key)||batch.some(f=>running.has(keyOf({slug,id:f.id,month}))||
+     Number(failures.get(keyOf({slug,id:f.id,month}))||0)>=3))continue;
+    queued.add(key);
+    tail=tail.then(()=>refreshMonthBatch({slug,schema,month,farms:batch}))
+     .catch(error=>logger.error?.("FM_PANORAMA_COLA_LOTE",error.code||error.name))
+     .finally(()=>queued.delete(key));
+   }
+  }
+ };
+
  const schedule=(args)=>{
   const key=keyOf(args);
   if(queued.has(key)||running.has(key)||Number(failures.get(key)||0)>=3)return;
@@ -215,7 +310,7 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
     // aunque PostgreSQL terminara cada mes enseguida. Encolar el histórico
     // completo evita huecos ociosos entre sondeos, sin aumentar concurrencia.
     // El límite mantiene la memoria acotada en rangos/hospitales extremos.
-    for(const item of missing.slice(0,300))schedule(item);
+    scheduleBatches(missing.slice(0,300));
     const permanentlyFailed=missing.find(x=>Number(failures.get(keyOf(x))||0)>=3);
     if(permanentlyFailed)return {status:"error",
      error:"No se pudo preparar un mes del histórico. Revisa el registro de consultas."};
@@ -251,7 +346,7 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
   const groups=mergePanoramaGroups([...fromCache,...raw.flat()]);
   return {status:"ready",data:await summarizePanoramaGroups(pool,context,ids,groups)};
  }
- return {read,refreshMonth,schedule};
+ return {read,refreshMonth,refreshMonthBatch,schedule,scheduleBatches};
 }
 export function setupSalesPanorama(app,pool,{requireTenant}){
  const cache=createSalesPanoramaCache(pool);

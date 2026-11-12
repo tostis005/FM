@@ -912,13 +912,10 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      </BarChart>
     </ResponsiveContainer></div>}
    </section>}
-  {module==="ventas"&&<>
-    <SalesOverview clientSlug={clientSlug} period={period}
-     pharmacyIds={filters.pharmacyIds} reloadKey={reloadKey}/>
-    <DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
-     pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
-     onNavigate={onNavigate} canNavigate={canNavigate}/>
-   </>}
+  {module==="ventas"&&<SalesOverview clientSlug={clientSlug} period={period}
+   pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
+   enabled={Boolean(fastSales||fastFailed)}
+   onNavigate={onNavigate} canNavigate={canNavigate}/>} 
   {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
    pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}
   {module==="compras"&&<DashboardInsights mode="compras" clientSlug={clientSlug} period={period}

@@ -8,7 +8,7 @@ import {ALL_LAB_ROWS,LAB_VIRTUAL_ROW_HEIGHT,laboratoryTablePage,laboratoryTableV
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow} from "./laboratoryOrderSheet.js";
+import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow,compareLaboratoryOrderGroups,laboratoryOrderGroupValue} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
 import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BULK_LIMIT} from "./laboratoryLoadAll.js";
@@ -40,6 +40,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
  const [tableSort,setTableSort]=useState("original"),[tablePage,setTablePage]=useState(0),
   [tablePageSize,setTablePageSize]=useState(ALL_LAB_ROWS);
+ // Mientras se edita Pedir total, no mover de sitio el campo con cada pulsación.
+ const [frozenSortDrafts,setFrozenSortDrafts]=useState(null);
  const [data,setData]=useState(empty);
  const catalogueCache=useRef(new Map());
  const tableScrollRef=useRef(null);
@@ -275,22 +277,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const tableVisibleRows=useMemo(()=>{
   const cn=columnFilter.cn.trim().toLocaleLowerCase("es"),
    article=columnFilter.article.trim().toLocaleLowerCase("es");
-  const list=currentRows.filter(row=>
+  return currentRows.filter(row=>
    (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
    (!article||String(row.nombre||"").toLocaleLowerCase("es").includes(article)));
-  if(tableSort==="original")return list;
-  const [field,direction]=tableSort.split(":");
-  const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
-  return [...list].sort((a,b)=>{
-   const left=field==="cn"?String(a.cn||a.referencia||""):String(a.nombre||"");
-   const right=field==="cn"?String(b.cn||b.referencia||""):String(b.nombre||"");
-   const compare=collator.compare(left,right);
-   return direction==="desc"?-compare:compare;
-  });
- },[currentRows,columnFilter,tableSort]);
- // Paginar por familias: nunca separar una raíz de regalos R1/R2 o dúplos.
- const tableGroups=useMemo(()=>groupedLaboratoryRows(tableVisibleRows,tableSort),
-  [tableVisibleRows,tableSort]);
+ },[currentRows,columnFilter]);
+ // Ordenar por la suma de TODAS las referencias de cada grupo, pero mantener
+ // los campos y CN individuales para editar, guardar y exportar.
+ const orderSortDrafts=frozenSortDrafts??drafts;
+ const tableGroups=useMemo(()=>groupedLaboratoryRows(tableVisibleRows,tableSort,
+  (a,b)=>compareLaboratoryOrderGroups(a,b,tableSort,tab,ids,orderSortDrafts)),
+  [tableVisibleRows,tableSort,tab,scope,orderSortDrafts]);
+ const groupOrderTotals=useMemo(()=>new Map(tableGroups.filter(group=>group.rows.length>1)
+  .map(group=>[group.id,laboratoryOrderGroupValue(group,"totalOrder",tab,ids,drafts)])),
+  [tableGroups,tab,scope,drafts]);
  const {totalPages,safePage,rows:tablePageRows}=useMemo(
   ()=>laboratoryTablePage(tableGroups,tablePageSize,tablePage),
   [tableGroups,tablePageSize,tablePage]);
@@ -302,8 +301,21 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
   setVirtualRow(0);
   if(tableScrollRef.current)tableScrollRef.current.scrollTop=0;
  },[laboratory,tab,tablePage,tablePageSize,tableSort,columnFilter.cn,columnFilter.article]);
- const toggleTableSort=field=>{setTableSort(current=>
-  current===field+":asc"?field+":desc":field+":asc");setTablePage(0)};
+ const toggleTableSort=field=>{
+  setFrozenSortDrafts(null);
+  setTableSort(current=>current===field+":desc"?field+":asc":
+   current===field+":asc"?field+":desc":
+   field==="cn"||field==="article"?field+":asc":field+":desc");
+  setTablePage(0);
+ };
+ const sortDirection=field=>tableSort===field+":asc"?"ascending":
+  tableSort===field+":desc"?"descending":"none";
+ const sortIndicator=field=>tableSort===field+":asc"?"▲":
+  tableSort===field+":desc"?"▼":"↕";
+ const pauseOrderSorting=()=>{
+  if(tableSort.startsWith("totalOrder:"))setFrozenSortDrafts(drafts);
+ };
+ const resumeOrderSorting=()=>setFrozenSortDrafts(null);
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&Boolean(laboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
@@ -545,10 +557,25 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          title={k===0?"Existencias reales del almacén":k===1?"Ventas del almacén en los últimos 12 meses":
           k===2?"Ventas del almacén en los últimos 3 meses":k===3?"Ventas del almacén en el período seleccionado":
           "El almacén no genera una propuesta independiente"}>{name}</th>)}
-       <th className="fm-lab-order-total-head" title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">STOCK</th>
-       <th className="fm-lab-order-total-head" title="Unidades vendidas en el período seleccionado por las farmacias">UDS</th>
-       <th className="fm-lab-order-total-head" title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>Propuesta</th>
-       <th className="fm-lab-order-editcol">Pedir total</th><th>Comentarios</th>
+       <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalStock")}
+        title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">
+        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalStock")}
+         aria-label="Ordenar por stock total">STOCK <span aria-hidden="true">{sortIndicator("totalStock")}</span></button>
+       </th>
+       <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalUnits")}
+        title="Unidades vendidas en el período seleccionado por las farmacias">
+        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalUnits")}
+         aria-label="Ordenar por unidades vendidas totales">UDS <span aria-hidden="true">{sortIndicator("totalUnits")}</span></button>
+       </th>
+       <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalSuggested")}
+        title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>
+        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalSuggested")}
+         aria-label="Ordenar por propuesta total">Propuesta <span aria-hidden="true">{sortIndicator("totalSuggested")}</span></button>
+       </th>
+       <th className="fm-lab-order-editcol" aria-sort={sortDirection("totalOrder")}>
+        <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalOrder")}
+         aria-label="Ordenar por unidades a pedir en total">Pedir total <span aria-hidden="true">{sortIndicator("totalOrder")}</span></button>
+       </th><th>Comentarios</th>
       </tr></thead>
       <tbody>
       {viewport.virtualized&&viewport.top>0&&<tr className="fm-lab-virtual-spacer" aria-hidden="true"
@@ -585,6 +612,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
              disabled={!canEdit||loading||!row.metricsReady} value={line.unitsByPharmacy?.[String(p.id)]??0}
+             onFocus={pauseOrderSorting} onBlur={resumeOrderSorting}
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
@@ -604,12 +632,21 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          <td className="fm-lab-order-total" title="Propuesta total de unidades a pedir">
           {row.metricsReady?fmt(row.totalSuggested):"—"}</td>
          <td className="fm-lab-order-editcol">
-         <input type="number" min="0" max="999999" step="1"
-          disabled={!canEdit||loading||!row.metricsReady}
-          title={tab==="medicacion"?"Reparte el total proporcionalmente entre las farmacias; después puedes ajustar cada una.":"Unidades totales a pedir"}
-          aria-label={tab==="medicacion"?"Pedir total de "+row.nombre:"Pedir "+row.nombre+" para el laboratorio"}
-          value={tab==="medicacion"?medicationOrderTotal(line,ids):line.units??0}
-          onChange={e=>updateLine(row,e.target.value,tab==="medicacion"?"total":null)}/></td>
+          <div className="fm-lab-order-total-input">
+           <input type="number" min="0" max="999999" step="1"
+            disabled={!canEdit||loading||!row.metricsReady}
+            title={tab==="medicacion"?"Reparte el total proporcionalmente entre las farmacias; después puedes ajustar cada una.":"Unidades totales a pedir"}
+            aria-label={tab==="medicacion"?"Pedir total de "+row.nombre:"Pedir "+row.nombre+" para el laboratorio"}
+            value={tab==="medicacion"?medicationOrderTotal(line,ids):line.units??0}
+            onFocus={pauseOrderSorting} onBlur={resumeOrderSorting}
+            onChange={e=>updateLine(row,e.target.value,tab==="medicacion"?"total":null)}/>
+           {row._visualGroupFirst&&row._visualGroupSize>1&&groupOrderTotals.get(row._visualGroup)!=null&&
+            <small className="fm-lab-order-group-sum"
+             title="Suma de las unidades a pedir de todas las referencias del grupo, incluidas R1/R2 y dúplos. Cada CN conserva su cantidad individual.">
+             Grupo: {fmt(groupOrderTotals.get(row._visualGroup))}
+            </small>}
+          </div>
+         </td>
          <td className="fm-lab-order-commentcol">
           <button type="button" disabled={loading} onClick={()=>openComment(row)}
            className={"fm-lab-comment-link"+(line.comment?.trim()?" has-comment":"")}

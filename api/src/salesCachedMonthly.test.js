@@ -42,7 +42,7 @@ test("24 meses completos: consulta caché de Ventas y solo el mes abierto, sin c
  assert.equal(result.available,true);
  assert.equal(result.cachedMonths,23);
  assert.equal(result.missingLiveMonths,0);
- assert.equal(result.immutable,true);
+ assert.equal(result.immutable,false,"un mes abierto no constituye un cierre inmutable");
  assert.equal(f.queries.length,1);
  assert.equal(f.scans.length,1);
  assert.deepEqual(f.scans[0].slice(1,4),["2026-11-01","2026-11-13","2026-11-01"]);

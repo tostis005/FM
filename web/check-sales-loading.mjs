@@ -152,6 +152,29 @@ try{
  await page.getByRole("heading",{name:"Ventas por farmacia"}).waitFor();
  if(await pharmacyPanel.locator(".fm-so-site").count()!==2)
   throw Error("Deben aparecer dos farmacias cuando el filtro incluye ambas");
+ await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor();
+ const headings=await page.locator(".fm-sales-card-heading").evaluateAll(nodes=>nodes.map(node=>({
+  title:node.querySelector("h2")?.textContent?.trim(),
+  size:window.getComputedStyle(node.querySelector("h2")).fontSize,
+  icon:node.querySelector(".fm-sales-card-heading-icon")?.getBoundingClientRect().width,
+  description:node.querySelector("p")?.textContent||""
+ })));
+ if(headings.length!==5||headings.some(h=>h.icon!==38||h.size!==headings[0].size||h.description))
+  throw Error("Los cinco bloques de Ventas deben usar títulos e iconos homogéneos: "+JSON.stringify(headings));
+ const familyTitle=await page.locator(".fm-so-family .fm-sales-card-heading").innerText();
+ if(familyTitle.trim()!=="Ventas por familias")
+  throw Error("El título de familias no debe tener información superpuesta");
+ if(!(await page.locator(".fm-so-family .fm-so-list-meta").innerText()).includes("líneas clasificadas"))
+  throw Error("El dato de clasificación debe permanecer visible, debajo del encabezado");
+ for(const removed of [
+  "Las barras muestran diferencias",
+  "Ordenadas de mayor a menor",
+  "El ranking se calcula con el importe neto",
+  "Escala relativa a las franjas"
+ ]){
+  if(await page.getByText(removed,{exact:false}).count())
+   throw Error("Texto explicativo redundante en Ventas: "+removed);
+ }
  const initialTicketCalls=requests.filter(r=>r.path==="/api/analytics/ventas/ticket-medio-rapido").length;
  if(initialTicketCalls!==1)
   throw Error("El KPI y la comparación deben compartir una sola consulta de tickets");

@@ -16,12 +16,12 @@ async function api(path,options={}){
  if(!response.ok)throw Error(result.error||"No se pudo completar la operación");
  return result;
 }
-function normalize(profile){
+function normalize(profile,enabledModuleIds){
  return normalizeExplicitModuleViews({name:profile.name,baseRole:profile.baseRole,
   modules:profile.modules===null?null:[...(profile.modules||[])],
   sections:profile.sections===null?null:[...(profile.sections||[])],
   permissions:Object.fromEntries(Object.entries(profile.permissions||{})
-   .map(([key,items])=>[key,[...items]]))});
+   .map(([key,items])=>[key,[...items]]))},enabledModuleIds);
 }
 export default function Perfiles({client,role="superadministrador",onSaved}){
  const [profiles,setProfiles]=useState([]),[modules,setModules]=useState([]),
@@ -64,13 +64,13 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
  function edit(profile){
   if(profile&&profile.editable===false)return;
   setEditing(profile?.profileId||"new");
-  setDraft(profile?normalize(profile):empty());
+  setDraft(profile?normalize(profile,enabledModuleIds):empty());
   setError("");setFeedback("");
  }
  function duplicate(profile){
   if(!canCreateRole(profile.baseRole))return;
   setEditing("new");
-  setDraft({...normalize(profile),name:profile.name+" (copia)"});
+  setDraft({...normalize(profile,enabledModuleIds),name:profile.name+" (copia)"});
   setError("");setFeedback("");
  }
  function toggleModule(id,checked){
@@ -111,7 +111,7 @@ export default function Perfiles({client,role="superadministrador",onSaved}){
   try{
    const url=editing==="new"?endpoint:endpoint+"/"+editing;
    await request(url,{method:editing==="new"?"POST":"PUT",
-    body:JSON.stringify(normalizeExplicitModuleViews(draft))});
+    body:JSON.stringify(normalizeExplicitModuleViews(draft,enabledModuleIds))});
    await load();
    try{await onSaved?.();}catch{} // El perfil ya está guardado aunque falle la recarga del contexto.
    setEditing(null);setFeedback("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.");

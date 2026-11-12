@@ -71,3 +71,9 @@
  .fm-heat-scroll{scrollbar-color:#a8bfb3 #eef4f0;scrollbar-width:thin}
  .fm-heat-scroll::after{content:"";display:block;height:1px}
 }
+
+/* Ventas: la cabecera de cada tarjeta usa la misma escala y espacio. */
+.fm-dashboard-insights-sales .fm-insight-panel{padding:21px}
+.fm-sales-heat-total{margin:12px 0 0;text-align:right;color:#698379;font-size:11px;font-variant-numeric:tabular-nums}
+.fm-sales-heat-total strong{color:#244e3c}
+@media(max-width:650px){.fm-dashboard-insights-sales .fm-insight-panel{padding:14px}}

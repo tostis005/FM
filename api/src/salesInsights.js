@@ -8,10 +8,10 @@ export function buildRecentProductCountSQL(schema){
  const t='"'+schema+'"';
  return `
  WITH sold AS MATERIALIZED (
-   SELECT upper(btrim(v.farmacia_codigo)) AS source_code,v.articulo_id,
+   SELECT v.farmacia_codigo AS source_code,v.articulo_id,
      sum(v.unidades)::float8 AS net_units
    FROM ${t}.fm_ventas_analitica v
-   WHERE upper(btrim(v.farmacia_codigo))=ANY($1::text[])
+   WHERE v.farmacia_codigo=ANY($1::text[])
      AND v.fecha >= $2::date AND v.fecha < $3::date+interval '1 day'
      AND nullif(btrim(v.articulo_id),'') IS NOT NULL
    GROUP BY 1,2

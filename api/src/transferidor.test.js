@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan,setupTransferidor,
- transferidorInventorySQL,transferidorSalesSQL,transferidorCNChunks,mergeTransferBatch} from "./transferidor.js";
+ transferidorInventorySQL,transferidorSalesSQL,transferidorSales30SQL,
+ transferidorCNChunks,mergeTransferBatch} from "./transferidor.js";
 
 const pharmacies=[{id:"1",name:"Abadía"},{id:"2",name:"Europa"},{id:"3",name:"Centro"},{id:"4",name:"Norte"}];
 
@@ -10,7 +11,7 @@ async function awaitTransferResult(handler,req,res){
   let error;
   await handler(req,res,e=>{error=e});
   if(error)throw error;
-  if(!["queued","inventory","calculating"].includes(res.body?.status))return res.body;
+  if(!["queued","inventory","calculating","enriching"].includes(res.body?.status))return res.body;
   await new Promise(resolve=>setTimeout(resolve,2));
  }
  throw Error("El cálculo de prueba no terminó");
@@ -81,6 +82,10 @@ test("la API permite leer resultados de dos farmacias aunque falte una tercera",
    {pharmacyId:"1",sourceCode:"ABA",articleId:"123456",cn:"123456",name:"Crema",stock:20},
    {pharmacyId:"2",sourceCode:"EUR",articleId:"123456",cn:"123456",name:"Crema",stock:0}
   ]};
+  if(sql.includes('AS "units30"'))return {rows:[
+   {pharmacyId:"1",articleId:"123456",units30:3},
+   {pharmacyId:"2",articleId:"123456",units30:25}
+  ]};
   if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
    {pharmacyId:"2",articleId:"123456",units7:7}
   ]};
@@ -105,9 +110,14 @@ test("la API permite leer resultados de dos farmacias aunque falte una tercera",
  assert.equal(body.rows[0].originName,"Abadía");
  assert.equal(body.rows[0].destinationName,"Europa");
  assert.equal(body.rows[0].units,20);
+ assert.equal(body.rows[0].sales7Origin,0);
+ assert.equal(body.rows[0].sales7Destination,7);
+ assert.equal(body.rows[0].sales30Origin,3);
+ assert.equal(body.rows[0].sales30Destination,25);
  assert.match(body.warning,/Centro/);
  assert.equal(queries.filter(q=>q.sql.includes("WITH chosen AS MATERIALIZED")).length,1);
- assert.equal(queries.filter(q=>q.sql.includes("WITH refs AS MATERIALIZED")).length,1);
+ assert.equal(queries.filter(q=>q.sql.includes("WITH refs AS MATERIALIZED")).length,2);
+ assert.equal(queries.filter(q=>q.sql.includes('AS "units30"')).length,1);
 });
 
 test("la propuesta expone pedidos pendientes del destino para explicar unidades a enviar",()=>{
@@ -319,6 +329,88 @@ test("siete ventas en una semana equivalen a una unidad diaria",()=>{
  assert.equal(plan.transfers.length,1);
  assert.equal(plan.transfers[0].units,7);
 });
+
+test("ventas 30d: solo 29 días previos más hoy y sin ampliar la previsión de 7d",()=>{
+ const week=transferidorSalesSQL("ampedia");
+ const month=transferidorSales30SQL("ampedia");
+ assert.match(week,/interval '6 days'/);
+ assert.match(month,/interval '29 days'/);
+ assert.ok(!month.includes("364 days"));
+ assert.ok(!month.includes("interval '6 days'"));
+ assert.ok(month.includes('AS "units30"'));
+ assert.ok(month.includes("l.articulo_origen_id=r.article_id"));
+});
+
+test("la previsión usa solo la semana aunque las ventas del mes sean muy superiores",()=>{
+ const plan=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:40,units7:0,units30:190,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:1,units7:7,units30:120,name:"Crema"}
+ ],pharmacies.slice(0,2)).transfers;
+ assert.equal(plan.length,1);
+ assert.equal(plan[0].units,6,"7 días de objetivo menos 1 de stock");
+ assert.equal(plan[0].sales7Origin,0);
+ assert.equal(plan[0].sales30Origin,190);
+ assert.equal(plan[0].sales7Destination,7);
+ assert.equal(plan[0].sales30Destination,120);
+});
+
+test("los datos de 30d no se consultan si no hay transferencias propuestas",async()=>{
+ let monthQueries=0;
+ const db={async query(arg){
+  const sql=typeof arg==="string"?arg:arg.text;
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {cn:"123456",pharmacyId:"1",sourceCode:"ABA",articleId:"1",stock:30},
+   {cn:"123456",pharmacyId:"2",sourceCode:"EUR",articleId:"2",stock:9}
+  ]};
+  if(sql.includes('AS "units30"')){monthQueries++;return {rows:[]}}
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"2",articleId:"2",units7:7}]};
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("Inesperado "+sql.slice(0,100));
+ }};
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},db,{requireTenant:()=>[]});
+ const req={query:{pagina:1,tamano:50},context:{role:"superadministrador",
+  client:{slug:"testnomonth",schema:"ampedia"},pharmacies:pharmacies.slice(0,2)}};
+ const res={statusCode:200,status(code){this.statusCode=code;return this},
+  json(body){this.body=body;return this}};
+ const body=await awaitTransferResult(handler,req,res);
+ assert.equal(body.status,"complete");
+ assert.equal(body.total,0);
+ assert.equal(monthQueries,0);
+});
+
+test("fallo del histórico 30d no oculta transferencias ni muestra falsos ceros",async()=>{
+ const db={async query(arg){
+  const sql=typeof arg==="string"?arg:arg.text;
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {cn:"123456",pharmacyId:"1",sourceCode:"ABA",articleId:"11",stock:30},
+   {cn:"123456",pharmacyId:"2",sourceCode:"EUR",articleId:"22",stock:0}
+  ]};
+  if(sql.includes('AS "units30"'))throw Object.assign(Error("timeout"),{code:"57014"});
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"2",articleId:"22",units7:7}]};
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("Inesperado "+sql.slice(0,100));
+ }};
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},db,{requireTenant:()=>[]});
+ const req={query:{pagina:1,tamano:50},context:{role:"superadministrador",
+  client:{slug:"testmonthfailure",schema:"ampedia"},pharmacies:pharmacies.slice(0,2)}};
+ const res={statusCode:200,status(code){this.statusCode=code;return this},
+  json(body){this.body=body;return this}};
+ const body=await awaitTransferResult(handler,req,res);
+ assert.equal(body.status,"partial");
+ assert.equal(body.total,1);
+ assert.equal(body.rows[0].units,7);
+ assert.equal(body.rows[0].sales30Destination,null);
+ assert.match(body.warning,/Ventas de 30 días no disponibles/);
+});
+
 test("progreso: no repite el inventario y devuelve los movimientos al finalizar",async()=>{
  const calls=[];
  const query=async arg=>{
@@ -328,6 +420,7 @@ test("progreso: no repite el inventario y devuelve los movimientos al finalizar"
    {pharmacyId:"1",cn:"123456",sourceCode:"ABA",articleId:"123456",stock:30,name:"Crema"},
    {pharmacyId:"2",cn:"123456",sourceCode:"EUR",articleId:"123456",stock:0,name:"Crema"}
   ]};
+  if(sql.includes('AS "units30"'))return {rows:[{pharmacyId:"2",articleId:"123456",units30:24}]};
   if(sql.includes("WITH refs AS MATERIALIZED"))
    return {rows:[{pharmacyId:"2",articleId:"123456",units7:7}]};
   if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
@@ -352,7 +445,8 @@ test("progreso: no repite el inventario y devuelve los movimientos al finalizar"
  assert.equal(body.total,1);
  assert.equal(body.rows[0].units,7);
  assert.equal(calls.filter(x=>x.includes("WITH chosen AS MATERIALIZED")).length,1);
- assert.equal(calls.filter(x=>x.includes("WITH refs AS MATERIALIZED")).length,1);
+ assert.equal(calls.filter(x=>x.includes("WITH refs AS MATERIALIZED")).length,2);
+ assert.equal(body.rows[0].sales30Destination,24);
  assert.ok(calls.includes("BEGIN READ ONLY"));
  assert.ok(calls.includes("SET LOCAL statement_timeout='60s'"));
  assert.ok(calls.includes("COMMIT"));
@@ -419,6 +513,8 @@ test("el cliente recibe propuestas parciales antes de terminar todos los lotes",
  const query=async arg=>{
   const sql=typeof arg==="string"?arg:arg.text;
   if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:articles};
+  if(sql.includes('AS "units30"'))return {rows:JSON.parse(arg.values[0])
+   .filter(r=>r.fid==="2").map(r=>({pharmacyId:"2",articleId:r.article_id,units30:30}))};
   if(sql.includes("WITH refs AS MATERIALIZED")){
    salesCount++;
    if(salesCount===2)await gate;
@@ -454,4 +550,5 @@ test("el cliente recibe propuestas parciales antes de terminar todos los lotes",
  assert.equal(body.status,"complete");
  assert.equal(body.total,351);
  assert.equal(salesCount,2);
+ assert.equal(body.rows[0].sales30Destination,30);
 });

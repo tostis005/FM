@@ -3,6 +3,7 @@ import {Layers3,Search,Store} from "lucide-react";
 import SalesCardHeading from "./SalesCardHeading.jsx";
 import {euro,integer} from "./localeES.js";
 import DashboardInsights from "./DashboardInsights.jsx";
+import {salesTicketWindows,mergeSalesTicketCounts,mapTicketWindows} from "./salesTicketWindows.js";
 import "./salesOverview.css";
 
 const money=value=>euro(Number(value)||0);
@@ -25,13 +26,40 @@ export function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,rel
     {token,status:"loading"});
    // El primer cierre mensual puede tardar en prepararse. No interrumpir
    // consultas válidas a los 40 s; la API tiene un límite mayor y controlado.
+   const windows=resource==="ticket-medio-rapido"?
+    salesTicketWindows(period.from,period.to):null;
+   // Cada tramo anual conserva el timeout del servidor. La consulta completa
+   // de varios años ya no queda cortada por el plazo de una sola petición.
+   const maxWait=windows?.length>1?
+    Math.min(360000,Math.max(135000,Math.ceil(windows.length/2)*105000)):135000;
    timeout=setTimeout(()=>{
     if(controller.signal.aborted)return;
     setResult({token,status:"error",
      error:"La consulta superó el tiempo máximo. Prueba un período menor o vuelve a actualizar."});
     controller.abort();
-   },135000);
+   },maxWait);
    try{
+    if(windows?.length>1){
+     const parts=await mapTicketWindows(windows,async window=>{
+      const query=new URLSearchParams(params);
+      query.set("desde",window.from);query.set("hasta",window.to);
+      const response=await fetch("/api/analytics/ventas/"+resource+"?"+query,{
+       credentials:"same-origin",cache:"no-store",
+       headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal});
+      const part=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(part.error||"No se pudieron consultar los tickets");
+      if(!Array.isArray(part.pharmacies)||!Number.isFinite(Number(part.tickets)))
+       throw Error("Respuesta de tickets incompleta");
+      return part;
+     },{onProgress:(done,total)=>{
+      if(!controller.signal.aborted)setResult({token,status:"loading",
+       message:"Consultando tickets históricos ("+done+" de "+total+" tramos)…"});
+     }});
+     clearTimeout(timeout);
+     if(!controller.signal.aborted)setResult({token,status:"ready",
+      data:mergeSalesTicketCounts(parts)});
+     return;
+    }
     const response=await fetch("/api/analytics/ventas/"+resource+"?"+params,{
      credentials:"same-origin",cache:"no-store",
      headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal

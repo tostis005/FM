@@ -652,6 +652,15 @@ jobs:
             timeout 130 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_PREPARADOR_ULTIMA_RECEPCION=1 FM_PREPARADOR_CN=003652 node src/checkPreparadorCN151130.mjs
           '
 
+      - name: Verificar el CN 722077 y sus stocks ausentes por farmacia (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '722077')
+        continue-on-error: true
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 100 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api node src/checkPreparadorMissingStock.mjs
+          '
+
       - name: Verificar origen de artículos Cinfa en PostgreSQL real (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Cinfa')
         continue-on-error: true

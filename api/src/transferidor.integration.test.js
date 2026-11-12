@@ -44,10 +44,20 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
       {id:"2",name:"Europa",active:true}]}};
   const res={statusCode:200,status(code){this.statusCode=code;return this;},
    json(data){this.body=data;return this;}};
-  let error;
-  await handler(req,res,e=>{error=e});
-  if(error)throw error;
+  // El cálculo se ejecuta por lotes; la primera respuesta no bloquea HTTP.
+  // Esperar a la finalización sin iniciar otro cálculo de inventario.
+  let error,complete=false;
+  for(let i=0;i<1200;i++){
+   await handler(req,res,e=>{error=e});
+   if(error)throw error;
+   if(!["queued","inventory","calculating"].includes(res.body?.status)){
+    complete=true;break;
+   }
+   await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  assert.ok(complete,"El cálculo del Transferidor debe completar en el CI");
   assert.equal(res.statusCode,200);
+  assert.equal(res.body.status,"complete");
   assert.equal(res.body.available,true);
   const line=res.body.rows.find(x=>x.cn==="123478");
   assert.ok(line,"No debe aparecer una tabla vacía si hay exceso y necesidad");

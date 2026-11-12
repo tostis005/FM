@@ -456,3 +456,8 @@
 .fm-report-data-error .btn{flex:none;white-space:normal}
 @media(max-width:650px){.fm-report-data-warning{padding:12px 14px}
  .fm-report-data-error .btn{width:100%}}
+
+/* Evolución de Ventas: misma separación y cabecera que familias y vendedores. */
+.fm-demo-v2 .fm-demo-graph.fm-sales-graph{padding:21px!important}
+.fm-demo-v2 .fm-demo-graph.fm-sales-graph .fm-demo-chart{margin-top:0}
+@media(max-width:650px){.fm-demo-v2 .fm-demo-graph.fm-sales-graph{padding:14px!important}}

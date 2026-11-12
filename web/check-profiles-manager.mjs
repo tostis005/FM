@@ -83,7 +83,7 @@ async function checkRole(role,enabledModules=enabledModuleIds){
    const salesRow=page.locator(".fm-profile-module").filter({hasText:"Ventas"});
    if(enabledModules.includes("ventas")){
     assert.equal(await salesRow.getByRole("checkbox").first().isChecked(),true);
-    assert.equal(await salesRow.getByRole("checkbox",{name:"Ver"}).isChecked(),true,
+    assert.equal(await salesRow.locator(".fm-profile-operation input[type=checkbox]").first().isChecked(),true,
      "un módulo marcado no debe conservar Ver desactivado");
    }else assert.equal(await salesRow.count(),0,
     "no mostrar Ventas cuando Administración la deshabilitó");

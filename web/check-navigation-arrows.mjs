@@ -34,6 +34,26 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto(BASE+"/dashboard",{waitUntil:"domcontentloaded"});
  await page.locator("#farmetrica-sidebar .side-nav").waitFor({state:"visible",timeout:15000});
+ const sidebarStructure=await page.locator("#farmetrica-sidebar").evaluate(aside=>{
+  const menu=aside.querySelector(".side-nav"),top=aside.querySelector(".fm-sidebar-top");
+  const footer=aside.querySelector(".fm-sidebar-footer"),button=footer.querySelector("button");
+  return {
+   overflow:getComputedStyle(aside).overflowY,
+   menuOverflow:getComputedStyle(menu).overflowY,
+   rightPadding:parseFloat(getComputedStyle(aside).paddingRight),
+   logoInPanel:top.parentElement===aside,footerInPanel:footer.parentElement===aside,
+   toggleLabel:button.textContent.trim()
+  };
+ });
+ assert.equal(sidebarStructure.overflow,"auto","La barra debe pertenecer a todo el panel");
+ assert.equal(sidebarStructure.menuOverflow,"visible","La navegación no debe tener scroll independiente");
+ assert.equal(sidebarStructure.rightPadding,0,"La barra debe quedar junto a la divisoria derecha");
+ assert.ok(sidebarStructure.logoInPanel&&sidebarStructure.footerInPanel);
+ assert.equal(sidebarStructure.toggleLabel,"Plegar menú");
+ await page.getByRole("button",{name:"Plegar menú"}).click();
+ assert.equal(await page.locator("#farmetrica-sidebar .brand-mark").isVisible(),true,
+  "El isotipo debe permanecer visible al plegar el lateral");
+ await page.getByRole("button",{name:"Desplegar menú"}).click();
  for(const group of ["Compras","Stock","Promociones"]){
   const caret=page.getByRole("button",{name:"Mostrar subopciones de "+group,exact:true});
   assert.equal(await caret.count(),1,group+" necesita flecha desplegable");

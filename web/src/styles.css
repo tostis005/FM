@@ -1255,24 +1255,30 @@ html,body{overflow-x:clip}
  .fm-promotion-activation-error .btn{align-self:flex-end;min-height:38px}
 }
 
-/* Control de plegado en el pie del menú oscuro, separado del logotipo.
-   El tema histórico hacía scroll sobre TODO el aside y forzaba side-nav
-   a flex:0. Ahora solo la navegación se desplaza; el pie permanece fijo. */
-.app-shell .sidebar{overflow:hidden;scrollbar-gutter:auto}
-.app-shell .sidebar .side-nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
- overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#659d80 transparent}
-.fm-sidebar-top{display:flex;flex:0 0 auto;min-width:0;align-items:center;padding:0 4px 22px}
+/* Un único scroll para todo el lateral: logo, navegación y botón de plegado.
+ * El scrollbar se sitúa en el borde derecho, junto a la división de paneles. */
+.app-shell .sidebar{
+ overflow-y:auto;overflow-x:hidden;scrollbar-gutter:auto;
+ overscroll-behavior-y:contain;scrollbar-width:thin;
+ scrollbar-color:#A3BAB5 transparent;padding-right:0;
+}
+.app-shell .sidebar::-webkit-scrollbar{width:7px}
+.app-shell .sidebar::-webkit-scrollbar-thumb{background:#A3BAB5;border-radius:10px}
+.app-shell .sidebar::-webkit-scrollbar-track{background:transparent}
+.app-shell .sidebar .side-nav{
+ flex:0 0 auto;min-height:0;overflow:visible;padding-right:10px;
+}
+.fm-sidebar-top{display:flex;flex:0 0 auto;min-width:0;align-items:center;padding:0 10px 22px 4px}
 .sidebar .fm-sidebar-top .brand{min-width:0;width:100%;margin:0;padding:0;gap:9px;
  font-size:17px;letter-spacing:-.6px;white-space:nowrap;color:#fff}
 .fm-sidebar-top .brand>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sidebar .fm-sidebar-top .brand-mark{width:36px;height:36px;flex:0 0 36px}
-.fm-sidebar-footer{display:flex;flex:0 0 auto;justify-content:flex-end;align-items:center;
- border-top:1px solid rgba(183,236,201,.19);padding:12px 3px 2px;margin-top:auto;
- position:relative;background:transparent;z-index:2}
-.sidebar .fm-sidebar-collapse-toggle{width:100%;min-height:38px;display:inline-flex;align-items:center;
- justify-content:flex-end;gap:9px;cursor:pointer;padding:8px 10px;
- border:1px solid rgba(183,236,201,.15);border-radius:9px;
- background:rgba(183,236,201,.09);color:#d6f2e6;font-size:11px;font-weight:750}
+.fm-sidebar-footer{display:flex;flex:0 0 auto;justify-content:stretch;align-items:center;
+ border:0;padding:7px 10px 4px 0;margin:7px 0 0;
+ position:relative;background:transparent}
+.sidebar .fm-sidebar-collapse-toggle{width:100%;min-height:40px;display:inline-flex;align-items:center;
+ justify-content:flex-start;gap:12px;cursor:pointer;padding:10px 12px;
+ border:0;border-radius:10px;background:transparent;color:#d6f2e6;font-size:12px;font-weight:700}
 .fm-sidebar-toggle-label{white-space:nowrap}
 .fm-sidebar-collapse-toggle svg{flex:0 0 18px}
 .sidebar .fm-sidebar-collapse-toggle:hover{color:#fff;background:rgba(183,236,201,.18)}
@@ -1286,13 +1292,14 @@ html,body{overflow-x:clip}
 .app-shell[data-tenant-theme="custom"][data-menu-mode="oscuro"] .sidebar .fm-sidebar-collapse-toggle{color:var(--fm-brand-on-secondary)}
 
 @media(min-width:791px){
- .app-shell.fm-sidebar-is-collapsed .sidebar{flex:0 0 72px;width:72px;padding-inline:9px}
+ .app-shell.fm-sidebar-is-collapsed .sidebar{flex:0 0 72px;width:72px;padding-left:9px;padding-right:0}
  .app-shell.fm-sidebar-is-collapsed .main-content{max-width:100%}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top{justify-content:center;padding:0 0 22px}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top{justify-content:center;padding:0 9px 22px 0}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand{justify-content:center;padding:0}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand>span:last-child{display:none}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-footer{justify-content:center;padding-inline:0}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-collapse-toggle{justify-content:center;padding:8px;width:100%}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand>span:last-child:not(:first-child){display:none}
+ .app-shell.fm-sidebar-is-collapsed .sidebar .side-nav{padding-right:9px}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-footer{justify-content:center;padding:7px 9px 4px 0}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-collapse-toggle{justify-content:center;padding:10px 0;width:100%}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-toggle-label{display:none}
  .app-shell.fm-sidebar-is-collapsed .side-nav>.side-link,
  .app-shell.fm-sidebar-is-collapsed .side-nav-parent>.side-link{justify-content:center;padding:11px 0;gap:0}

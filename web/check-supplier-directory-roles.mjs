@@ -86,13 +86,20 @@ try{
  assert.equal(await superadmin.page.getByRole("button",{name:"Nuevo contacto"}).count(),1);
  await superadmin.page.setViewportSize({width:1366,height:850});
  const footerPosition=await superadmin.page.evaluate(()=>{
-  const brand=document.querySelector("#farmetrica-sidebar .brand").getBoundingClientRect();
-  const sidebar=document.querySelector("#farmetrica-sidebar").getBoundingClientRect();
-  const toggle=document.querySelector(".fm-sidebar-collapse-toggle").getBoundingClientRect();
-  return {separated:toggle.top-brand.bottom,bottom:sidebar.bottom-toggle.bottom};
+  const aside=document.querySelector("#farmetrica-sidebar");
+  const brand=aside.querySelector(".brand").getBoundingClientRect();
+  const sidebar=aside.getBoundingClientRect();
+  const nav=aside.querySelector(".side-nav").getBoundingClientRect();
+  const toggle=aside.querySelector(".fm-sidebar-collapse-toggle").getBoundingClientRect();
+  return {separated:toggle.top-brand.bottom,afterNav:toggle.top-nav.bottom,
+   rightGap:sidebar.right-toggle.right,scrollMode:getComputedStyle(aside).overflowY};
  });
  assert.ok(footerPosition.separated>100,"El plegado no debe cubrir el logotipo");
- assert.ok(footerPosition.bottom>=0&&footerPosition.bottom<65,"El control debe estar anclado al pie derecho: "+JSON.stringify(footerPosition));
+ assert.ok(footerPosition.afterNav>=0&&footerPosition.afterNav<36,
+  "El plegado debe ser la última fila del menú: "+JSON.stringify(footerPosition));
+ assert.ok(footerPosition.rightGap>=0&&footerPosition.rightGap<60,
+  "El control debe seguir integrado en el ancho del lateral: "+JSON.stringify(footerPosition));
+ assert.equal(footerPosition.scrollMode,"auto","El panel completo comparte una barra de desplazamiento");
  await superadmin.page.getByRole("button",{name:"Plegar menú lateral"}).click();
  assert.equal(await superadmin.page.locator("#farmetrica-sidebar").evaluate(node=>Math.round(node.getBoundingClientRect().width)),72);
  await superadmin.page.reload({waitUntil:"domcontentloaded"});

@@ -487,10 +487,15 @@ try{
          const toggle=page.locator(".mobile-toggle");
          await toggle.click();
          await page.locator(".sidebar.sidebar-open").waitFor({state:"visible"});
-         const scroll=await page.locator(".side-nav").evaluate(el=>({
-           scrollHeight:el.scrollHeight,clientHeight:el.clientHeight}));
+         // Logo y navegación comparten el scroll del propio panel.
+         const scroll=await page.locator("#farmetrica-sidebar").evaluate(el=>({
+           scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,
+           overflow:getComputedStyle(el).overflowY,
+           menuOverflow:getComputedStyle(el.querySelector(".side-nav")).overflowY}));
+         if(scroll.overflow!=="auto"||scroll.menuOverflow!=="visible")
+           throw Error("El scroll debe pertenecer a todo el panel lateral");
          if(scroll.scrollHeight>scroll.clientHeight){
-           await page.locator(".side-nav").evaluate(el=>el.scrollTop=el.scrollHeight);
+           await page.locator("#farmetrica-sidebar").evaluate(el=>el.scrollTop=el.scrollHeight);
          }
          await page.keyboard.press("Escape");
          if(await page.locator(".sidebar.sidebar-open").count())

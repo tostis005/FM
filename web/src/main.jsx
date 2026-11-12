@@ -1457,6 +1457,7 @@ function App(){
      title={sidebarCollapsed?"Desplegar menú":"Plegar menú"} onClick={()=>setSidebarCollapsed(v=>!v)}>
      
      {sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
+     <span className="fm-sidebar-toggle-label">{sidebarCollapsed?"Desplegar menú":"Plegar menú"}</span>
     </button>
    </div>
   </aside>

@@ -36,6 +36,7 @@ test("el ticket medio se calcula por documento, no por línea o media de farmaci
  assert.match(sql,/v\.sistema_origen,v\.documento_id/);
  assert.match(sql,/GROUP BY 1,2,3/);
  assert.match(sql,/count\(\*\)::bigint AS tickets/);
+ assert.match(sql,/coalesce\(sum\(valid_lines\.sales\),0\)::float8 AS sales/);
  const data=summarizeSalesTickets([
   {code:"ABA",tickets:2,sales:50,units:4},{code:"EUR",tickets:8,sales:350,units:20}
  ],[{id:"1",name:"Abadía",sourceCode:"ABA"},
@@ -109,11 +110,12 @@ test("el mapa cuenta una cabecera por ticket y suma unidades reales de sus líne
  assert.doesNotMatch(sql,/fm_ventas_analitica|count\(DISTINCT/);
  assert.throws(()=>buildSalesTicketHeatmapSQL('bad";drop table x;--'));
  const result=summarizeSalesTicketHeatmap([
-  {weekday:1,hour:9,tickets:"3",units:"8"},
-  {weekday:2,hour:11,tickets:"4",units:"-2"}
+  {weekday:1,hour:9,tickets:"3",units:"8",sales:"81.5"},
+  {weekday:2,hour:11,tickets:"4",units:"-2",sales:"-10.25"}
  ]);
- assert.deepEqual(result,{cells:[{weekday:1,hour:9,tickets:3,units:8},
-  {weekday:2,hour:11,tickets:4,units:-2}],total:7,totalUnits:6});
+ assert.deepEqual(result,{cells:[{weekday:1,hour:9,tickets:3,units:8,sales:81.5},
+  {weekday:2,hour:11,tickets:4,units:-2,sales:-10.25}],
+  total:7,totalUnits:6,totalSales:71.25});
 });
 
 test("endpoint horario aplica permisos y devuelve operaciones por franja",async()=>{
@@ -121,8 +123,8 @@ test("endpoint horario aplica permisos y devuelve operaciones por franja",async(
  const app={get(path,...args){routes.set(path,args.at(-1))}};
  const conn={async query(arg){
   calls.push(arg);
-  if(typeof arg==="object")return {rows:[{weekday:1,hour:9,tickets:"2",units:"6"},
-   {weekday:7,hour:21,tickets:"5",units:"11"}]};
+  if(typeof arg==="object")return {rows:[{weekday:1,hour:9,tickets:"2",units:"6",sales:"120.25"},
+   {weekday:7,hour:21,tickets:"5",units:"11",sales:"340.50"}]};
   return {rows:[]};
  },release(){}};
  setupSalesOverview(app,{connect:async()=>conn},{requireTenant:()=>[]});
@@ -141,6 +143,7 @@ test("endpoint horario aplica permisos y devuelve operaciones por franja",async(
  assert.equal(ok.code,200);
  assert.equal(ok.data.total,7);
  assert.equal(ok.data.totalUnits,17);
+ assert.equal(ok.data.totalSales,460.75);
  assert.deepEqual(ok.data.cells.map(c=>c.units),[6,11]);
  assert.deepEqual(ok.data.cells.map(c=>c.tickets),[2,5]);
  assert.deepEqual(calls.find(x=>typeof x==="object").values,

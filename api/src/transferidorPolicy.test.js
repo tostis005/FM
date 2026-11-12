@@ -12,7 +12,7 @@ const setup=()=>{
   calls.push({text,values:typeof sql==="string"?values:sql.values});
   if(text.includes("FROM farmetrica.transferidor_configuracion_cliente"))
    return {rows:[{minDays:4,targetDays:7}]};
-  if(text.includes("FROM farmetrica.transferidor_exposicion_familias"))
+  if(text.startsWith("SELECT")&&text.includes("FROM farmetrica.transferidor_exposicion_familias"))
    return {rows:[]};
   if(text.includes("FROM farmetrica.transferidor_exposicion_articulos"))
    return {rows:[]};

@@ -4,16 +4,15 @@ import {readFile} from "node:fs/promises";
 import {automaticRetirementPrefixes,normalizedRetirementPattern,
  matchesRetirementRule,isRetiredProductName,retiredProductSQL} from "./laboratoryRetirements.js";
 
-test("Las cadenas automáticas se buscan literalmente y no se confunde BAJA con *BAJA*",()=>{
- assert.deepEqual(automaticRetirementPrefixes,["ZZZ","*BAJA","* BAJA"]);
+test("Solo se excluye por las reglas guardadas: no existen prefijos automáticos",()=>{
+ assert.deepEqual(automaticRetirementPrefixes,[]);
  for(const name of ["ZZZ Aspirina"," ZZZPRODUCTO","**BAJA Paracetamol",
-  "* BAJA Producto","*** BAJA 002","zzzbaja antiguo","Jarabe *BAJA final"])
-  assert.equal(isRetiredProductName(name),true,name);
- for(const name of ["Comprimidos baja concentración","Aspirina","ZZ Mineral",
-  "Sonda vesical baja fricción","SONDA VESICAL BAJA FRICCIÓN",
-  "Este artículo baja la tensión"])
+  "* BAJA Producto","*** BAJA 002","zzzbaja antiguo","Jarabe *BAJA final",
+  "IBUPROFENO (ARGININA) CINFA 400 MG 30 SOBRES",
+  "PARACETAMOL CINFA EFG 1 G 40 SOBRES EFERVESCE*C*"])
   assert.equal(isRetiredProductName(name),false,name);
- assert.equal(isRetiredProductName("Ibuprofeno DESCATALOGADO",["DESCATALOGADO"]),true);
+ assert.equal(isRetiredProductName("Jarabe *BAJA* final",["*BAJA*"]),true);
+ assert.equal(isRetiredProductName("IBUPROFENO DESCATALOGADO",["DESCATALOGADO"]),true);
  assert.equal(isRetiredProductName("IBUPROFENO xyz",["DESCATALOGADO"]),false);
 });
 test("Los asteriscos no son comodines: cada regla exige TODOS sus caracteres",()=>{
@@ -38,14 +37,16 @@ test("Los asteriscos no son comodines: cada regla exige TODOS sus caracteres",()
 });
 test("SQL dinámico y snapshots usan exactamente cadenas literales, nunca regex para bajas",async()=>{
  const clause=retiredProductSQL("a.nombre");
- assert.match(clause,/ARRAY\['ZZZ','\*BAJA','\* BAJA'\]::text\[\]/);
+ assert.doesNotMatch(clause,/ZZZ|\*BAJA|\* BAJA/);
+ assert.match(clause,/unnest\(\s*\$8::text\[\]/);
  assert.match(clause,/unnest\(/);
  assert.match(clause,/\$8::text\[\]/);
  assert.match(clause,/position\(upper\(exclude.cadena\)/);
  assert.doesNotMatch(clause,/\s~\s|LIKE|SIMILAR/);
  for(const file of ["preparadorLastReceipt.sql","preparadorLastReceiptSnapshot.sql"]){
   const sql=await readFile(new URL("./"+file,import.meta.url),"utf8");
-  assert.match(sql,/ARRAY\['ZZZ','\*BAJA','\* BAJA'\]::text\[\]/,file);
+  assert.doesNotMatch(sql,/ARRAY\['ZZZ'|'\*BAJA'|'\* BAJA'/,file);
+  assert.match(sql,/unnest\(\s*\$[23]::text\[\]/,file);
   assert.doesNotMatch(sql,/coalesce\((?:ar|l)\.nombre,''\)\)\s*~/,file);
   assert.doesNotMatch(sql,/LIKE '%BAJA%'/,file);
  }

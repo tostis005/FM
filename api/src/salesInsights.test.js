@@ -32,7 +32,9 @@ test("recuento 12 meses usa DISTINCT, índices y código ERP VAL autorizado",asy
  assert.equal(calls.length,1);
  assert.deepEqual(calls[0].params,[["VAL"],"2025-11-01","2026-10-18"]);
  assert.match(calls[0].sql,/GROUP BY 1,2/);
- assert.match(calls[0].sql,/fm_placeholder_does_not_exist|upper\(btrim\(v.farmacia_codigo\)\)=ANY/);
+ assert.match(calls[0].sql,/v\.farmacia_codigo=ANY\(\$1::text\[\]\)/);
+ assert.doesNotMatch(calls[0].sql,/WHERE upper\(btrim\(v\.farmacia_codigo\)\)/,
+  "no inutilizar el índice por farmacia y fecha antes de agrupar");
  assert.doesNotMatch(calls[0].sql,/\.compras|sum\(importe\)/);
 });
 test("familias se limitan a una sola farmacia y sus identificadores ERP",async()=>{

@@ -122,7 +122,7 @@ export async function fetchLaboratoryMetricsAdaptive(items,fetchBatch,{signal}={
   // Errores de estructura/autorización no mejoran partiendo los lotes.
   const definitive=new Set(["42P01","42703","42883","42601","42501","22P02","23502"]);
   if(items.length<=MIN_METRICS_BATCH||definitive.has(error?.code)||
-   (Number(error?.status)>=400&&Number(error?.status)<500&&Number(error?.status)!==429))
+   (Number(error?.status)>=400&&Number(error?.status)<500))
    throw error;
   const middle=Math.ceil(items.length/2);
   const first=await fetchLaboratoryMetricsAdaptive(items.slice(0,middle),fetchBatch,{signal});

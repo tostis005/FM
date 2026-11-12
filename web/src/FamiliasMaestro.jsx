@@ -1,10 +1,9 @@
-import React,{useCallback,useEffect,useMemo,useState} from "react";
+import React,{useCallback,useEffect,useState} from "react";
 import {ChevronDown,ChevronRight,Check,RefreshCcw,Search} from "lucide-react";
 import "./familiasMaestro.css";
 
-const SEGMENTS={MEDICACION:"Medicación",PARAFARMACIA:"Parafarmacia",SIN_DETERMINAR:"Sin clasificar"};
 const count=n=>new Intl.NumberFormat("es-ES").format(Number(n)||0);
-const EMPTY={unicas:0,maestros:0,medicacion:0,parafarmacia:0,pendientes:0};
+const EMPTY={unicas:0,maestros:0,pendientes:0};
 async function api(slug,path,options={}){
  const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
   headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":slug,...options.headers}});
@@ -24,7 +23,6 @@ const groupOrigins=origins=>{
 
 export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
  const view="todas";
- const [category,setCategory]=useState("todos");
  const [search,setSearch]=useState(""),[query,setQuery]=useState(""),[page,setPage]=useState(1);
  const [records,setRecords]=useState([]),[masterItems,setMasterItems]=useState([]);
  const [summary,setSummary]=useState(EMPTY),[total,setTotal]=useState(0);
@@ -41,8 +39,8 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
   return found?.name||({ABA:"Abadía",EUR:"Europa",GRA:"Graneros"}[code]||code);
  },[pharmacies]);
 
- // Un único listado ligero de 65 referencias, sin JOIN ni COUNT sobre artículos.
- // Las categorías y los nombres locales se consultan independientemente.
+ // Listado único de familias, sin clasificaciones visibles ni consultas a artículos.
+ // Los nombres locales se consultan solo al desplegar.
  const load=useCallback(async(which=view,filter=query,currentPage=page)=>{
   const params=new URLSearchParams({view:which});
   if(filter)params.set("q",filter);
@@ -74,10 +72,8 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[clientSlug,view,query,page]);
- const visible=useMemo(()=>records.filter(g=>category==="todos"||g.segments.includes(category)),
-  [records,category]);
- const options=masterItems.filter(g=>g.confirmed).flatMap(g=>g.members)
-  .filter(g=>g.segment!=="SIN_DETERMINAR");
+ const visible=records;
+ const options=masterItems.filter(g=>g.confirmed).flatMap(g=>g.members);
  async function act(action,success){
   setBusy(true);setError("");setMessage("");
   try{
@@ -133,31 +129,24 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
  return <div className="fm-families">
   <header className="fm-families-heading">
    <div><h1>Maestro de familias</h1>
-    <p>Todos los nombres de familia, de la A a la Z, sin entradas duplicadas. Las clasificaciones de medicación y parafarmacia se conservan en el detalle.</p></div>
+    <p>Todas las familias, de la A a la Z y sin nombres duplicados. Consulta sus denominaciones locales y edita sus vínculos.</p></div>
    <button className="btn btn-secondary btn-sm fm-families-reconcile" onClick={reconcile} disabled={busy||loading}>
     <RefreshCcw size={15} className={busy?"fm-families-spin":""}/>
     {busy?"Reconciliando…":"Volver a unificar"}</button>
   </header>
   <div className="fm-families-kpis">
    <div><span>Familias únicas</span><strong>{count(summary.unicas)}</strong></div>
-   <div><span>Medicación</span><strong>{count(summary.medicacion)}</strong></div>
-   <div><span>Parafarmacia</span><strong>{count(summary.parafarmacia)}</strong></div>
+   <div><span>Pendientes de vincular</span><strong>{count(summary.pendientes)}</strong></div>
   </div>
   <section className="card fm-families-directory">
    <div className="fm-families-filters">
     <label className="fm-families-search"><Search size={17}/>
      <input type="search" placeholder="Buscar familia…" value={search} onChange={e=>setSearch(e.target.value)}
       aria-label="Buscar familia global"/></label>
-    <select aria-label="Tipo de producto" value={category} onChange={e=>setCategory(e.target.value)}>
-     <option value="todos">Todas las categorías</option>
-     <option value="MEDICACION">Medicación</option>
-     <option value="PARAFARMACIA">Parafarmacia</option>
-     <option value="SIN_DETERMINAR">Sin clasificar</option>
-    </select>
     <small>{count(visible.length)} familias únicas</small>
    </div>
    <p className="fm-families-note">
-    Cada denominación equivalente aparece una sola vez, aunque exista en varias farmacias o tipos de producto. Las familias pendientes de validar también están incluidas y se identifican en el listado.</p>
+    Cada nombre aparece una sola vez, aunque tenga varios vínculos de origen o exista en varias farmacias. Las familias pendientes de vincular también se muestran.</p>
    {message&&<p className="fm-families-notice" role="status">{message}</p>}
    {error&&<p className="fm-families-error" role="alert">{error}</p>}
    {loading?<p className="fm-families-empty">Cargando familias…</p>:
@@ -178,8 +167,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
          </form>:
          <strong>{g.name}</strong>}
         <div className="fm-family-meta">
-         {g.segments.map(segment=><span key={segment}>{SEGMENTS[segment]||segment}</span>)}
-         {g.members.length>1&&<span>{g.members.length} clasificaciones agrupadas</span>}
+         {g.members.length>1&&<span>{g.members.length} vínculos internos</span>}
          {!g.confirmed&&<span>Pendiente de validar</span>}
          {g.members.length===1&&g.referencePharmacy&&<span>Referencia: {pharmacyName(g.referencePharmacy)}</span>}
         </div>
@@ -188,20 +176,20 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
         <button className="fm-family-link" disabled={busy}
          onClick={()=>{setEditing(g.members[0].id);setNewName(g.members[0].name)}}>Editar nombre</button>:
         g.members.length>1&&<button className="fm-family-link"
-         onClick={()=>expand(g)}>{expanded===g.id?"Ocultar detalle":"Ver clasificaciones"}</button>}
+         onClick={()=>expand(g)}>{expanded===g.id?"Ocultar detalle":"Ver detalles"}</button>}
       </div>
       {expanded===g.id&&<div className="fm-family-origins">
        <div className="fm-family-origins-title">Nombre de esta familia en cada farmacia</div>
-       {g.members.map(member=><section className="fm-family-variant" key={member.id}>
+       {g.members.map((member,index)=><section className="fm-family-variant" key={member.id}>
         {g.members.length>1&&<div className="fm-family-variant-head">
          <div className="fm-family-variant-label">
-          <strong>{SEGMENTS[member.segment]||member.segment}</strong>
+          <strong>Vínculo {index+1}</strong>
           <span>{member.name}</span>
           {member.referencePharmacy&&<small>Referencia: {pharmacyName(member.referencePharmacy)}</small>}
          </div>
          {editing===member.id?
           <form onSubmit={e=>{e.preventDefault();saveName(member)}} className="fm-family-rename">
-           <input aria-label={"Nombre de "+(SEGMENTS[member.segment]||"familia")} autoFocus
+           <input aria-label={"Nombre de la familia, vínculo "+(index+1)} autoFocus
             maxLength={200} value={newName} onChange={e=>setNewName(e.target.value)}/>
            <button className="btn btn-primary btn-sm" disabled={busy} type="submit"><Check size={15}/>Guardar</button>
            <button className="btn btn-secondary btn-sm" type="button" onClick={()=>setEditing(null)}>Cancelar</button>
@@ -222,7 +210,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
               value={destinations[code+"|"+origin.sourceCode]||""}
               disabled={busy} onChange={e=>setDestinations(old=>({...old,[code+"|"+origin.sourceCode]:e.target.value}))}>
               <option value="">Elegir familia global</option>
-              {options.map(target=><option key={target.id} value={target.id}>{target.name} · {SEGMENTS[target.segment]}</option>)}
+              {options.map(target=><option key={target.id} value={target.id}>{target.name}{target.referencePharmacy?" · "+pharmacyName(target.referencePharmacy):""}</option>)}
              </select>
              <button type="button" className="btn btn-primary btn-sm"
               disabled={busy||!destinations[code+"|"+origin.sourceCode]}

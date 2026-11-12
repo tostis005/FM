@@ -52,7 +52,9 @@ try{
  assert.deepEqual((await page.locator(".fm-family-title > strong").allTextContents())
   .map(x=>x.trim()),["Analgésicos","Dermocosmética","Pendiente local"],
   "Una fila por nombre, orden alfabético español, sin separar primero por segmento");
- assert.equal(await page.getByText("2 clasificaciones agrupadas").count(),1);
+ assert.equal(await page.getByText("2 vínculos internos").count(),1);
+ assert.equal(await page.getByRole("combobox",{name:"Tipo de producto"}).count(),0,
+  "el maestro no expone divisiones artificiales de medicación o parafarmacia");
  assert.equal(calls.filter(x=>x.includes("/api/tenant/familias-globales/1/origenes")).length,0,
   "no deben cargarse los orígenes al entrar");
  assert.equal(calls.filter(x=>x.includes("/articulos")).length,0,
@@ -63,10 +65,12 @@ try{
  assert.equal(calls.filter(x=>x.includes("/1/origenes")).length,1);
  assert.equal(await page.getByText("Pendiente de validar").count(),1);
  assert.ok(calls.some(x=>x.includes("view=todas")));
- await page.getByRole("combobox",{name:"Tipo de producto"}).selectOption("SIN_DETERMINAR");
- assert.equal(await page.locator(".fm-family-row").count(),1);
- await page.getByRole("combobox",{name:"Tipo de producto"}).selectOption("todos");
- assert.equal(await page.locator(".fm-family-row").count(),3);
+ assert.equal(await page.locator(".fm-family-row").count(),3,
+  "todas las familias siguen visibles sin elegir un tipo de producto");
+ const familyPanel=page.locator(".fm-families");
+ for(const label of ["Medicación","Parafarmacia","Sin clasificar"])
+  assert.equal(await familyPanel.getByText(label,{exact:true}).count(),0,
+   "sin categorías visibles en el maestro: "+label);
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK maestro familias: lista alfabética, variantes agrupadas y orígenes bajo demanda");
 }finally{await browser.close()}

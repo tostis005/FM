@@ -3,7 +3,7 @@
 .fm-families-heading h1{margin:0 0 5px;font-size:1.6rem}
 .fm-families-heading p{margin:0;color:var(--muted,#617469);font-size:.9rem}
 .fm-families-reconcile{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
-.fm-families-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fm-families-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .fm-families-kpis>div{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;border:1px solid #dfece6;border-radius:11px;background:var(--surface,#fff)}
 .fm-families-kpis span{font-size:.86rem;color:var(--muted,#65766c)}
 .fm-families-kpis strong{font-size:1.2rem;line-height:1.2;font-variant-numeric:tabular-nums}
@@ -62,7 +62,7 @@
 @keyframes fm-families-rotate{to{transform:rotate(360deg)}}
 .fm-families-spin{animation:fm-families-rotate .9s linear infinite}
 @media(max-width:700px){
- .fm-families-kpis{grid-template-columns:1fr 1fr 1fr;gap:6px}
+ .fm-families-kpis{grid-template-columns:1fr 1fr;gap:6px}
  .fm-families-kpis>div{display:grid;gap:5px;padding:10px}
  .fm-families-kpis span{font-size:.7rem}
  .fm-families-kpis strong{font-size:1.1rem}

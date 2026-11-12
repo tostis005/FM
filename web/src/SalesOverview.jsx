@@ -17,7 +17,10 @@ function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey}
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
   setResult({token,status:"loading"});
-  const timer=setTimeout(()=>controller.abort(),40000);
+  const timer=setTimeout(()=>{
+   setResult({token,status:"error",error:"La consulta tarda demasiado. Reduce el período o selecciona menos farmacias."});
+   controller.abort();
+  },40000);
   fetch("/api/analytics/ventas/"+resource+"?"+params,{
    credentials:"same-origin",cache:"no-store",
    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal

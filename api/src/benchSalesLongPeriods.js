@@ -62,7 +62,10 @@ try{
    }
    await conn.query("ROLLBACK");
   }finally{conn.release();}
-  if(old){
+  if(old&&fast.sales.kpis.ventas==null){
+   console.log("FM_VENTAS_24M",JSON.stringify({...summary,
+    consultaOriginalMs:oldMs,resultado:"importes_incompletos_no_comparables"}));
+  }else if(old){
    const equalSales=same(old.total_ventas,fast.sales.kpis.ventas);
    const equalUnits=same(old.total_unidades,fast.sales.kpis.unidades);
    const equalMargin=fast.sales.kpis.margen===null?true:

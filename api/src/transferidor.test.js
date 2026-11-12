@@ -140,7 +140,7 @@ test("dispara con menos de 4 días y repone hasta 7, sin microtransferencias",()
 });
 test("30 días de exposición se añaden a 4/7 días; no se quitan del donante",()=>{
  const rows=[
-  {pharmacyId:"1",cn:"123456",stock:33,units12:365,name:"Crema",familyId:"5"},
+  {pharmacyId:"1",cn:"123456",stock:3,units12:365,name:"Crema",familyId:"5"},
   {pharmacyId:"2",cn:"123456",stock:150,units12:0,name:"Crema",familyId:"5"}
  ];
  const plan=buildGlobalTransfers(rows,pharmacies.slice(0,2),{
@@ -149,10 +149,10 @@ test("30 días de exposición se añaden a 4/7 días; no se quitan del donante",
   articles:[{pharmacyId:"2",cn:"123456",units:100}]
  });
  assert.equal(plan.transfers.length,1);
- assert.equal(plan.transfers[0].triggerDestination,34);
+ assert.equal(plan.transfers[0].triggerDestination,4);
  assert.equal(plan.transfers[0].targetDestination,37);
  assert.equal(plan.transfers[0].extraDestination,30);
- assert.equal(plan.transfers[0].units,4);
+ assert.equal(plan.transfers[0].units,34);
  // La farmacia 2 mantiene sus 100 unidades de exposición: sólo dona 50.
  rows[0].stock=0;
  assert.equal(buildGlobalTransfers(rows,pharmacies.slice(0,2),{
@@ -160,18 +160,77 @@ test("30 días de exposición se añaden a 4/7 días; no se quitan del donante",
   articles:[{pharmacyId:"2",cn:"123456",units:100}]
  }).transfers[0].units,37);
 });
-test("una reserva de CN reemplaza la reserva de familia y sirve sin ventas",()=>{
+test("exposición por CN nunca genera transferencia sin déficit por ventas",()=>{
  const rows=[
-  {pharmacyId:"1",cn:"123456",stock:99,units12:0,name:"Crema",familyId:"5"},
-  {pharmacyId:"2",cn:"123456",stock:105,units12:0,name:"Crema",familyId:"5"}
+  {pharmacyId:"1",cn:"123456",stock:99,units7:0,name:"Crema",familyId:"5"},
+  {pharmacyId:"2",cn:"123456",stock:150,units7:0,name:"Crema",familyId:"5"}
  ];
- const plan=buildGlobalTransfers(rows,pharmacies.slice(0,2),{
+ const policy={
   minDays:4,targetDays:7,families:[{pharmacyId:"1",familyId:"5",days:30}],
   articles:[{pharmacyId:"1",cn:"123456",units:100}]
+ };
+ const withoutSales=buildGlobalTransfers(rows,pharmacies.slice(0,2),policy);
+ assert.equal(withoutSales.transfers.length,0);
+ assert.equal(withoutSales.withNeed,0);
+ // Una vez que el destino realmente necesita stock, se respeta la reserva.
+ rows[0].stock=0;
+ rows[0].units7=7;
+ const withSales=buildGlobalTransfers(rows,pharmacies.slice(0,2),policy);
+ assert.equal(withSales.transfers.length,1);
+ assert.equal(withSales.transfers[0].units,107);
+ assert.equal(withSales.transfers[0].extraDestination,100);
+ assert.equal(withSales.transfers[0].reserveSource,"articulo");
+});
+
+test("excedente en origen no basta para proponer un envío",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"123456",stock:500,units7:0,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:12,units7:7,name:"Crema"}
+ ];
+ const result=buildGlobalTransfers(rows,pharmacies.slice(0,2));
+ assert.equal(result.withSurplus,1);
+ assert.equal(result.withNeed,0);
+ assert.equal(result.transfers.length,0);
+});
+
+test("si el destino cubre el mínimo de ventas no se transfiere para rellenar exposición",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"123456",stock:150,units7:0,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:5,units7:7,name:"Crema",familyId:"10"}
+ ];
+ const result=buildGlobalTransfers(rows,pharmacies.slice(0,2),{
+  minDays:4,targetDays:7,
+  families:[{pharmacyId:"2",familyId:"10",days:20}],articles:[]
  });
- assert.equal(plan.transfers[0].units,1);
- assert.equal(plan.transfers[0].extraDestination,100);
- assert.equal(plan.transfers[0].reserveSource,"articulo");
+ assert.equal(result.transfers.length,0);
+ assert.equal(result.withNeed,0);
+});
+
+test("las ventas previstas y los pedidos pendientes determinan la necesidad real",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"123456",stock:30,units7:0,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:3,units7:7,ordered:1,name:"Crema"}
+ ];
+ assert.equal(buildGlobalTransfers(rows,pharmacies.slice(0,2)).transfers.length,0,
+  "Tres unidades más una pendiente cubren cuatro días de ventas");
+ rows[1].ordered=0;
+ const result=buildGlobalTransfers(rows,pharmacies.slice(0,2));
+ assert.equal(result.transfers.length,1);
+ assert.equal(result.transfers[0].units,4);
+ assert.equal(result.transfers[0].triggerDestination,4);
+ assert.equal(result.transfers[0].targetDestination,7);
+});
+
+test("el stock de seguridad del donante limita las unidades propuestas",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"123456",stock:8,units7:7,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:0,units7:14,name:"Crema"}
+ ];
+ const result=buildGlobalTransfers(rows,pharmacies.slice(0,2));
+ assert.equal(result.withNeed,1);
+ assert.equal(result.withSurplus,1);
+ assert.equal(result.transfers[0].units,1,
+  "Donante mantiene siete unidades para siete días de sus propias ventas");
 });
 
 test("acepta CN de siete dígitos, normaliza a seis y agrupa la misma referencia",()=>{

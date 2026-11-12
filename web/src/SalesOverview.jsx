@@ -100,56 +100,60 @@ function FamilyRanking({result}){
    </>}
  </section>;
 }
-function TicketsAndPharmacies({result}){
- const kpis=result.data?.kpis;
- const pharmacies=Array.isArray(result.data?.pharmacies)?result.data.pharmacies:[];
- const maximum=Math.max(1,...pharmacies.map(p=>Math.max(0,p.sales)));
+function TicketAverage({result,activity,salesTotal}){
+ const ticketCount=Number(result.data?.tickets)||0;
+ const available=result.status==="ready"&&Number.isFinite(Number(salesTotal));
+ const average=available&&ticketCount>0?Number(salesTotal)/ticketCount:null;
+ const sellers=activity.status==="ready"&&Array.isArray(activity.data?.vendedores?.sellers)?
+  activity.data.vendedores.sellers:[];
+ const salesBySite=new Map();
+ for(const seller of sellers){
+  const id=String(seller.pharmacyId);
+  salesBySite.set(id,(salesBySite.get(id)||0)+(Number(seller.sales)||0));
+ }
+ const sites=(result.data?.pharmacies||[]).filter(p=>salesBySite.has(String(p.id)));
+ const maximum=Math.max(1,...sites.map(p=>Math.max(0,salesBySite.get(String(p.id))||0)));
  return <section className="card fm-so-ticket" aria-busy={result.status==="loading"}>
   <div className="fm-so-heading">
    <div className="fm-so-heading-icon fm-so-icon-ticket"><ReceiptText size={19}/></div>
-   <div className="fm-so-heading-text"><h2>Ticket y farmacias</h2>
-    <p>Indicadores de tickets completos del período</p></div>
+   <div className="fm-so-heading-text"><h2>Ticket medio</h2>
+    <p>Venta neta media por operación</p></div>
   </div>
   {result.status!=="ready"?<Status result={result} empty="Selecciona un período válido."/>:
-   !kpis?.tickets?<Status result={{status:"empty"}} empty="No hay tickets completos para la selección."/>:
+   !ticketCount?<Status result={{status:"empty"}} empty="Sin operaciones para estos filtros."/>:
    <>
     <div className="fm-so-ticket-kpis">
      <div className="fm-so-ticket-highlight"><span>Ticket medio neto</span>
-      <strong>{money(kpis.ticketMedio)}</strong><small>Ventas netas / tickets</small></div>
-     <div className="fm-so-ticket-substats">
-      <div><span>Tickets</span><strong>{number(kpis.tickets)}</strong></div>
-      <div><span>Uds. / ticket</span><strong>{new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(kpis.unidadesPorTicket)}</strong></div>
+      <strong>{average==null?"—":money(average)}</strong>
+      <small>Calculado con la venta neta del período y las operaciones válidas</small>
      </div>
     </div>
-    <div className="fm-so-site-title"><Store size={16}/><h3>Ventas por farmacia</h3></div>
-    <div className="fm-so-sites">{pharmacies.map(p=><div className="fm-so-site" key={p.id}>
-     <div className="fm-so-site-name"><span>{p.name}</span><strong>{money(p.sales)}</strong></div>
-     <div className="fm-so-track"><div style={{width:Math.max(0,p.sales)/maximum*100+"%"}}/></div>
-     <small>{number(p.tickets)} tickets · ticket medio {money(p.ticketMedio)}</small>
-    </div>)}</div>
-    <p className="fm-so-foot">Cada ticket se cuenta una sola vez por farmacia, sistema de origen y documento. El ticket medio de la red se calcula con la suma de ventas y tickets, no con la media simple de las farmacias. Incluye devoluciones en el importe neto.</p>
+    {sites.length>1&&<><div className="fm-so-site-title"><Store size={16}/><h3>Ventas por farmacia</h3></div>
+     <div className="fm-so-sites">{sites.map(p=>{
+      const sales=salesBySite.get(String(p.id))||0;
+      return <div className="fm-so-site" key={p.id}>
+       <div className="fm-so-site-name"><span>{p.name}</span><strong>{money(sales)}</strong></div>
+       <div className="fm-so-track"><div style={{width:Math.max(0,sales)/maximum*100+"%"}}/></div>
+       <small>Ticket medio {p.tickets?money(sales/p.tickets):"—"}</small>
+      </div>;
+     })}</div></>}
    </>}
  </section>;
 }
 export default function SalesOverview({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,
- enabled=true,onNavigate=()=>{},canNavigate=()=>false}){
+ enabled=true,salesTotal=null,onNavigate=()=>{},canNavigate=()=>false}){
  const scope={clientSlug,period,pharmacyIds,reloadKey,enabled};
- // Dos lecturas en total: familias (consulta específica) y actividad (tres visuales).
- // Los resúmenes empiezan después de los totales para no bloquear el KPI principal.
+ // Cada análisis carga independientemente: si falla el ticket medio,
+ // los vendedores y las familias siguen funcionando y viceversa.
  const families=useSalesOverviewData("familias-ranking",scope);
  const activity=useSalesOverviewData("actividad",scope);
- // Si un cliente antiguo no admite la consulta conjunta, recuperar el
- // endpoint documental de ticket sin perder el resto de la pantalla.
- const ticketFallback=useSalesOverviewData("ticket-medio",{
-  ...scope,enabled:enabled&&activity.status==="error"
- });
- const tickets=activity.status==="error"?ticketFallback:
-  activity.status==="ready"?{...activity,data:activity.data?.tickets}:activity;
+ const tickets=useSalesOverviewData("ticket-medio-rapido",scope);
  return <>
   <div className="fm-so-overview" aria-label="Análisis global de ventas">
    <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2>
-    <p>Familias, ticket medio y evolución por establecimiento</p></div>
-   <div className="fm-so-grid"><FamilyRanking result={families}/><TicketsAndPharmacies result={tickets}/></div>
+    <p>Familias, ticket medio y actividad comercial</p></div>
+   <div className="fm-so-grid"><FamilyRanking result={families}/><TicketAverage result={tickets}
+    activity={activity} salesTotal={salesTotal}/></div>
   </div>
   <DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
    pharmacyIds={pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}

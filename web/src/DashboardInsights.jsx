@@ -1,5 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import ListTable from "./ListTable.jsx";
+import {Clock3,UsersRound} from "lucide-react";
+import SalesCardHeading from "./SalesCardHeading.jsx";
 import {putPurchaseLink} from "./PurchasePlanner.jsx";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
 import {euro,integer,percentage} from "./localeES.js";
@@ -65,9 +67,10 @@ function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},sh
  // visualizaciones conservan su endpoint previo en lugar de quedarse vacías.
  return result?.scope===scope?result:{status:"loading"};
 }
-function Panel({title,subtitle,insight,children,empty="Sin movimientos en este período"}){
+function Panel({title,subtitle,icon,insight,children,empty="Sin movimientos en este período"}){
  return <section className="card fm-insight-panel" aria-busy={insight.status==="loading"}>
-  <div className="fm-insight-head"><h2>{title}</h2><p>{subtitle}</p></div>
+  {icon?<SalesCardHeading icon={icon} title={title}/>:
+   <div className="fm-insight-head"><h2>{title}</h2><p>{subtitle}</p></div>}
   {insight.status==="loading"?<p className="fm-insight-status" role="status">Cargando {title.toLowerCase()}…</p>:
    insight.status==="error"?<p className="fm-insight-status" role="alert">{insight.error}</p>:
    insight.status==="empty"?<p className="fm-insight-status">{empty}</p>:children}
@@ -92,7 +95,7 @@ function Heatmap({scope,shared}){
  const levels=[...new Set([...grid.values()].map(x=>x.value).filter(v=>v>0))].sort((a,b)=>a-b);
  const colorFor=value=>value<0?"#a32339":value===0?"#edf2ef":
   heatColor(levels.length===1?1:levels.indexOf(value)/Math.max(1,levels.length-1));
- return <Panel title="Mapa de calor de ventas" subtitle="Ventas netas por día y hora · rojo = menor actividad, verde oscuro = mayor actividad" insight={insight}>
+ return <Panel title="Mapa de calor de ventas" icon={Clock3} insight={insight}>
   {cells.length===0?<p className="fm-insight-status">No hay ventas registradas para la selección.</p>:
    <><div className="fm-heat-scroll"><div className="fm-heat-grid" role="table" aria-label="Importe de ventas según día y horario" style={{gridTemplateColumns:"98px repeat("+HOURS.length+", minmax(75px,1fr))"}}>
     <div className="fm-heat-axis" role="columnheader">Día</div>
@@ -116,7 +119,7 @@ function Heatmap({scope,shared}){
     {HEAT_STOPS.map(color=><span key={color} className="fm-heat-legend-swatch" style={{backgroundColor:color}} aria-hidden="true"/>)}
     <span>Más ventas</span><span className="fm-heat-legend-empty" aria-hidden="true"/><span>Sin ventas</span>
    </div>
-   <p className="fm-insight-foot">Escala relativa a las franjas con ventas del período; los importes se muestran en cada celda y al pasar el cursor. Total: <strong>{euro(total)}</strong>.</p></>}
+   <p className="fm-sales-heat-total">Total: <strong>{euro(total)}</strong></p></>}
  </Panel>;
 }
 function Sellers({scope,shared}){
@@ -124,7 +127,7 @@ function Sellers({scope,shared}){
  const [showAll,setShowAll]=useState(false);
  const sellers=Array.isArray(insight.data?.sellers)?insight.data.sellers:EMPTY;
  const maximum=Math.max(1,...sellers.map(x=>Math.max(0,x.sales)));
- return <Panel title="Ventas por vendedor" subtitle="Comparación de ventas netas · vendedores de las farmacias seleccionadas" insight={insight}>
+ return <Panel title="Ventas por vendedor" icon={UsersRound} insight={insight}>
   {!sellers.length?<p className="fm-insight-status">No hay vendedores con ventas para la selección.</p>:
    <><div className="fm-seller-list">
     {(showAll?sellers:sellers.slice(0,12)).map((s,i)=><div className="fm-seller-row" key={s.name+"|"+i}>
@@ -133,7 +136,7 @@ function Sellers({scope,shared}){
     </div>)}
    </div>{sellers.length>12&&<button type="button" className="btn btn-secondary fm-seller-more"
      onClick={()=>setShowAll(!showAll)}>{showAll?"Ver los 12 primeros":"Ver todos ("+sellers.length+")"}</button>}
-   <p className="fm-insight-foot">El ranking se calcula con el importe neto, incluyendo devoluciones. Se resuelve el nombre del vendedor por farmacia.</p></>}
+   </>}
  </Panel>;
 }
 function useComparator(scope,{page,pageSize,sort,filters}){
@@ -289,7 +292,7 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
 export default function DashboardInsights({mode="dashboard",clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false,salesActivity=null}){
  const scope={clientSlug,from:period.from,to:period.to,valid:period.valid,
   pharmacyIds,reloadKey};
- return <div className="fm-dashboard-insights">
+ return <div className={"fm-dashboard-insights"+(mode==="ventas"?" fm-dashboard-insights-sales":"")}>
   {mode==="ventas"&&<><Heatmap scope={scope} shared={salesActivity}/><Sellers scope={scope} shared={salesActivity}/></>}
   {mode==="compras"&&<Purchases scope={scope} pharmacies={pharmacies}
    onNavigate={onNavigate} canNavigate={canNavigate}/>}

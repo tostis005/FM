@@ -5,6 +5,7 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {createDashboardDailyService} from "./dashboardDailyService.js";
 
 const IDENT=/^[a-z][a-z0-9_]{1,62}$/;
+const DEFAULT_NOW=()=>new Date();
 const prevMonth=iso=>{
  const d=new Date(iso.slice(0,7)+"-01T00:00:00Z");
  d.setUTCMonth(d.getUTCMonth()-1);return d.toISOString().slice(0,10);
@@ -15,8 +16,19 @@ const nextMonth=iso=>{
 };
 const dayAfter=iso=>new Date(Date.parse(iso+"T00:00:00Z")+86400000).toISOString().slice(0,10);
 
-export function createDashboardConsolidationService(pool,{now=()=>new Date(),logger=console}={}){
+export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger=console}={}){
  const localToday=()=>madridDay(now()),running=new Set();
+ // Producción: PostgreSQL fija el cierre con su propio reloj y la zona
+ // Europe/Madrid; el reloj del navegador/VPS no determina meses cerrados.
+ const dbClock=async()=>{
+  if(now!==DEFAULT_NOW)return {today:localToday(),hour:Number(new Intl.DateTimeFormat("en-GB",{
+   timeZone:"Europe/Madrid",hour:"2-digit",hourCycle:"h23"}).format(now()))};
+  const {rows}=await pool.query("SELECT to_char(c.t AT TIME ZONE 'Europe/Madrid','YYYY-MM-DD') AS today,"+
+   " extract(hour FROM c.t AT TIME ZONE 'Europe/Madrid')::int AS hour"+
+   " FROM (SELECT clock_timestamp() AS t) c");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(rows[0]?.today||"")))throw Error("Reloj PostgreSQL inválido");
+  return {today:rows[0].today,hour:Number(rows[0].hour)};
+ };
  const monthParams=(farms,month)=>[JSON.stringify(farms),month,nextMonth(month),month];
  async function sourceScopes(){
   const {rows}=await pool.query(
@@ -30,7 +42,8 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
  }
  async function refreshMonth({slug,schema,farms,month},force=false){
   if(!IDENT.test(slug)||!IDENT.test(schema)||!Array.isArray(farms)||!farms.length||
-   !/^\d{4}-\d{2}-01$/.test(month)||month>=localToday().slice(0,7)+"-01")return false;
+   !/^\d{4}-\d{2}-01$/.test(month))return false;
+  if(month>=(await dbClock()).today.slice(0,7)+"-01")return false;
   const key=slug+"|"+month;
   if(running.has(key))return false;
   running.add(key);
@@ -46,7 +59,7 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
     "SELECT pg_try_advisory_xact_lock(hashtext($1),$2::int) AS ok",
     ["fm-dashboard-"+slug,Number(month.slice(0,4)+month.slice(5,7))]);
    if(!lock[0]?.ok){await conn.query("ROLLBACK");return false}
-   if(!force){
+   {
     const {rows:exists}=await conn.query(
      "SELECT count(*)::int AS n FROM farmetrica.dashboard_consolidados_mensuales"+
      " WHERE cliente_slug=$1 AND mes=$2::date",[slug,month]);
@@ -61,12 +74,7 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
      " SELECT $5::text,x.farmacia_id,x.mes,x.fuente,x.importe,x.unidades,x.filas,"+
      " x.filas_importe,x.filas_unidades,x.filas_producto,x.documentos,x.filas_coste,"+
      " x.ventas_con_coste,x.margen_coste,now() FROM ("+q+") x"+
-     " ON CONFLICT (cliente_slug,farmacia_id,mes,fuente) DO UPDATE SET"+
-     " importe=EXCLUDED.importe,unidades=EXCLUDED.unidades,filas=EXCLUDED.filas,"+
-     " filas_importe=EXCLUDED.filas_importe,filas_unidades=EXCLUDED.filas_unidades,"+
-     " filas_producto=EXCLUDED.filas_producto,documentos=EXCLUDED.documentos,"+
-     " filas_coste=EXCLUDED.filas_coste,ventas_con_coste=EXCLUDED.ventas_con_coste,"+
-     " margen_coste=EXCLUDED.margen_coste,actualizado_en=now()",
+     " ON CONFLICT (cliente_slug,farmacia_id,mes,fuente) DO NOTHING",
      [...monthParams(farms,month),slug]);
    }
    await conn.query("COMMIT");
@@ -79,7 +87,7 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
  }
  async function backfill({months=40,maxMs=540000,onMonth}={}){
   const started=Date.now(),status={processed:0,newMonths:0,alreadyReady:0,failures:0};
-  const latest=prevMonth(localToday());
+  const latest=prevMonth((await dbClock()).today);
   for(const scope of await sourceScopes()){
    let month=latest;
    for(let i=0;i<months&&Date.now()-started<maxMs;i++,month=prevMonth(month)){
@@ -99,16 +107,16 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
  const daily=createDashboardDailyService(pool,{sourceScopes,now,logger});
  let lastNight="";
  async function runNightly(){
-  const local=localToday(),hour=Number(new Intl.DateTimeFormat("en-GB",{
-   timeZone:"Europe/Madrid",hour:"2-digit",hourCycle:"h23"}).format(now()));
+  const {today:local,hour}=await dbClock();
   if(hour!==3||lastNight===local)return;
   lastNight=local;
   try{
    for(const scope of await sourceScopes()){
     const previous=prevMonth(local);
-    // Corregir recepciones tardías y retroactivas recientes.
-    await refreshMonth({...scope,month:previous},true);
-    await refreshMonth({...scope,month:prevMonth(previous)},true);
+    // El cierre es irreversible: generar ausentes, nunca recalcular
+    // consolidados existentes aunque lleguen más documentos o devoluciones.
+    await refreshMonth({...scope,month:previous});
+    await refreshMonth({...scope,month:prevMonth(previous)});
     await daily.refreshDays({...scope,month:local.slice(0,7)+"-01"},true);
     await daily.refreshDays({...scope,month:previous},true);
    }
@@ -123,7 +131,7 @@ export function createDashboardConsolidationService(pool,{now=()=>new Date(),log
  async function read({slug,schema,ids,farms,from,to,granularity="month"}){
   if(!IDENT.test(slug)||!IDENT.test(schema)||!ids.length)return {available:false,reason:"scope"};
   if(granularity==="day")return daily.readDays({slug,schema,ids,farms,from,to});
-  const range=compatibleConsolidatedRange(from,to,localToday());
+  const range=compatibleConsolidatedRange(from,to,(await dbClock()).today);
   if(!range)return {available:false,reason:"range"};
   const rows=[];
   if(range.months.length){

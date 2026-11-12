@@ -1,7 +1,7 @@
 // Diagnóstico sin lecturas de datos sensibles en logs. Se ejecuta solo bajo
 // despliegue solicitado: CI no recibe credenciales de PostgreSQL de producción.
-// Medición puntual solicitada: mismo conjunto de pruebas para comparar con
-// PREPARADOR_UNIFICADO_PERF anterior, sin cambiar consultas ni datos de pedidos.
+// Medición puntual solicitada: comparar 75 CN por petición con 2 y 3 workers
+// y verificar las 686 referencias, manteniendo intactos los datos de pedidos.
 import pg from "pg";
 import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";

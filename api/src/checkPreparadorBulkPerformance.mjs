@@ -144,6 +144,29 @@ try{
    output.batched75FullComplete=batched?.rows?.length===best.rows.length;
    output.batched75FullUnique=batched?new Set(batched.rows.map(row=>row.referencia)).size:0;
    output.batched75MatchesSingleSQL=sameMetrics(indexedFull,batched);
+   // Comparar 2 frente a 3 workers con los mismos CN: no variar la configuración
+   // de producción sin una medición que justifique más conexiones a PostgreSQL.
+   const batched3=await timed("batched75ThreeWorkers",async()=>{
+    const blocks=Array.from({length:Math.ceil(best.rows.length/75)},(_,i)=>
+     best.rows.slice(i*75,(i+1)*75));
+    const chunks=Array(blocks.length);
+    let next=0;
+    await Promise.all(Array.from({length:3},async()=>{
+     while(next<blocks.length){
+      const index=next++;
+      const part=await readLaboratoryOrderMatrix(pool,ctx,{
+       key,pharmacies,type:best.type,from,to,prefetchedRows:blocks[index]
+      });
+      if(part.metricsUnavailable)throw Error(part.metricsErrorCode||"Métricas incompletas");
+      chunks[index]=part.rows;
+     }
+    }));
+    return {rows:chunks.flat(),metricsUnavailable:false};
+   });
+   output.batched75ThreeWorkersComplete=batched3?.rows?.length===best.rows.length;
+   output.batched75ThreeWorkersUnique=batched3?
+    new Set(batched3.rows.map(row=>row.referencia)).size:0;
+   output.batched75ThreeWorkersEqualsTwo=sameMetrics(batched,batched3);
   }
  }
  const {rows:idx}=await pool.query(`SELECT c.relname

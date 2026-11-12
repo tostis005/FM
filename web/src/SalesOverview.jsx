@@ -17,28 +17,53 @@ export function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,rel
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
-  setResult({token,status:"loading"});
-  const timer=setTimeout(()=>{
-   setResult({token,status:"error",error:"La consulta tarda demasiado. Reduce el período o selecciona menos farmacias."});
-   controller.abort();
-  },40000);
-  fetch("/api/analytics/ventas/"+resource+"?"+params,{
-   credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
-  }).then(async response=>{
-   const data=await response.json().catch(()=>({}));
-   if(!response.ok)throw Error(data.error||"No se pudo consultar el análisis");
-   return data;
-  }).then(data=>{if(!controller.signal.aborted)setResult({token,status:"ready",data})})
-   .catch(error=>{if(!controller.signal.aborted)setResult({token,status:"error",error:error.message})})
-   .finally(()=>clearTimeout(timer));
-  return()=>{clearTimeout(timer);controller.abort()};
+  let retryTimer=null,timeout=null;
+  const load=async()=>{
+   if(controller.signal.aborted)return;
+   setResult(previous=>previous?.token===token&&previous.status==="loading"?previous:
+    {token,status:"loading"});
+   // El primer cierre mensual puede tardar en prepararse. No interrumpir
+   // consultas válidas a los 40 s; la API tiene un límite mayor y controlado.
+   timeout=setTimeout(()=>{
+    if(controller.signal.aborted)return;
+    setResult({token,status:"error",
+     error:"La consulta superó el tiempo máximo. Prueba un período menor o vuelve a actualizar."});
+    controller.abort();
+   },135000);
+   try{
+    const response=await fetch("/api/analytics/ventas/"+resource+"?"+params,{
+     credentials:"same-origin",cache:"no-store",
+     headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+    });
+    const data=await response.json().catch(()=>({}));
+    clearTimeout(timeout);
+    if(controller.signal.aborted)return;
+    if(response.status===202&&data.status==="preparing"){
+     setResult({token,status:"loading",
+      message:"Preparando histórico de ventas ("+Number(data.missing||0)+
+       " cierres pendientes). Las próximas consultas reutilizarán estos datos."});
+     retryTimer=setTimeout(()=>void load(),Math.max(2000,Math.min(12000,
+      Number(data.retryAfterMs)||6000)));
+     return;
+    }
+    if(!response.ok)throw Error(data.error||"No se pudo consultar el análisis");
+    setResult({token,status:"ready",data});
+   }catch(error){
+    clearTimeout(timeout);
+    if(!controller.signal.aborted)
+     setResult({token,status:"error",error:error.message});
+   }
+  };
+  void load();
+  return()=>{clearTimeout(retryTimer);clearTimeout(timeout);controller.abort()};
  },[token,period.valid,enabled,resource,clientSlug]);
  return !period.valid?{status:"empty"}:!enabled?{status:"loading"}:
   result?.token===token?result:{status:"loading"};
 }
 function Status({result,empty}){
- if(result.status==="loading")return <p className="fm-so-status" role="status">Consultando ventas documentadas…</p>;
+ if(result.status==="loading")return <p className="fm-so-status" role="status">
+  {result.message||"Consultando ventas documentadas…"}
+ </p>;
  if(result.status==="error")return <p className="fm-so-status fm-so-error" role="alert">{result.error}</p>;
  return <p className="fm-so-status">{empty}</p>;
 }
@@ -136,8 +161,12 @@ function PharmacySales({activity,tickets,selectedPharmacies}){
 export default function SalesOverview({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,
  enabled=true,tickets,onNavigate=()=>{},canNavigate=()=>false}){
  const scope={clientSlug,period,pharmacyIds,reloadKey,enabled};
- const families=useSalesOverviewData("familias-ranking",scope);
- const activity=useSalesOverviewData("actividad",scope);
+ // Una sola solicitud y un único escaneo diferencial para todas las gráficas.
+ const panorama=useSalesOverviewData("panorama",scope);
+ const families=panorama.status==="ready"?
+  {status:"ready",data:panorama.data?.familias}:panorama;
+ const activity=panorama.status==="ready"?
+  {status:"ready",data:panorama.data?.actividad}:panorama;
  const selectedPharmacies=pharmacyIds.length?
   pharmacies.filter(p=>pharmacyIds.map(String).includes(String(p.id))):pharmacies;
  const showPharmacySales=selectedPharmacies.length>1;

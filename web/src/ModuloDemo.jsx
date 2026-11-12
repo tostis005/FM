@@ -1,6 +1,6 @@
 import React,{useMemo,useState,useEffect} from "react";
 import {BarChart,Bar,XAxis,YAxis,Tooltip,ResponsiveContainer,CartesianGrid} from "recharts";
-import {ArrowDownToLine,ArrowRight,Search,X,RefreshCw} from "lucide-react";
+import {ArrowDownToLine,ArrowRight,Search,X,RefreshCw,TrendingUp} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {LoadingPanel,SkeletonLine,KpiValue} from "./LoadingState.jsx";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
@@ -16,6 +16,7 @@ import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import DashboardInsights from "./DashboardInsights.jsx";
 import SalesOverview,{useSalesOverviewData} from "./SalesOverview.jsx";
+import SalesCardHeading from "./SalesCardHeading.jsx";
 import SavingsAnalysis from "./SavingsAnalysis.jsx";
 import ImpactoVerificado from "./ImpactoVerificado.jsx";
 import "./centroTrabajo.css";
@@ -821,8 +822,9 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       <button type="button" className="btn btn-secondary btn-sm" onClick={()=>go("stock-sin-recepciones")}>Consultar stock sin recepciones</button>}
     </div>}
 
-  {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className="card fm-demo-graph" aria-busy={chartLoading}>
-    <div className="section-heading"><h2>{chartSeries[2]}</h2></div>
+  {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className={"card fm-demo-graph"+(module==="ventas"?" fm-sales-graph":"")} aria-busy={chartLoading}>
+    {module==="ventas"?<SalesCardHeading icon={TrendingUp} title={chartSeries[2]}/>:
+     <div className="section-heading"><h2>{chartSeries[2]}</h2></div>}
     {chartLoading?<LoadingPanel kind="chart" label={userLoadingText(isDashboard?combinedPercent([saleProgress,buyProgress]):
       module==="ventas"?taskPercent(fastProgress,fastScope,Boolean(fastSales)):
       module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):null,

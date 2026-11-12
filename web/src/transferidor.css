@@ -19,6 +19,12 @@
 .fm-transfer-table-title>span{white-space:nowrap;color:#237049;font-size:12px;font-weight:700}
 .fm-transfer-main-table td,.fm-transfer-main-table th{white-space:nowrap}
 .fm-transfer-main-table td:nth-child(2){max-width:340px;overflow:hidden;text-overflow:ellipsis}
-.fm-transfer-units{color:#237049;font-variant-numeric:tabular-nums}
+.fm-transfer-main-table thead .fm-smart-group-title{font-weight:700;font-size:12px;letter-spacing:.015em}
+.fm-transfer-main-table thead .fm-smart-group-title:nth-child(2){background:color-mix(in srgb,var(--surface,#fff) 92%,#6f9b80)}
+.fm-transfer-main-table td.fm-table-col-center{font-variant-numeric:tabular-nums}
+.fm-transfer-target{display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.25}
+.fm-transfer-target strong{font-weight:650;font-variant-numeric:tabular-nums}
+.fm-transfer-target small{font-size:10px;color:var(--text-secondary,#64746d);white-space:nowrap}
+.fm-transfer-units{color:#237049;font-variant-numeric:tabular-nums;font-weight:750}
 @media(max-width:1050px){.fm-transfer-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-transfer-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){.fm-transfer-filters{grid-template-columns:1fr}.fm-transfer-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.fm-transfer-kpi{padding:12px;min-height:136px;grid-template-rows:minmax(50px,auto) 1fr 16px}.fm-transfer-kpi-value{font-size:22px}.fm-transfer-controls,.fm-transfer-table{padding:12px}.fm-transfer-table-title{flex-direction:column}.fm-transfer-tabs .btn{min-width:0;flex:1}}

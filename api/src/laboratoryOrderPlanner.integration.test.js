@@ -28,7 +28,7 @@ test("PostgreSQL real: matriz de cinco métricas identifica CN y farmacia autori
  }finally{await pool.end();}
 });
 
-test("PostgreSQL real: farmacia sin ficha de CN muestra 0, ficha con stock nulo conserva desconocido",{
+test("PostgreSQL real: sin ficha y ficha con stock NULL se contabilizan como cero",{
  skip:!process.env.TEST_DB_URL
 },async()=>{
  const pool=new pg.Pool({connectionString:process.env.TEST_DB_URL});
@@ -48,8 +48,10 @@ test("PostgreSQL real: farmacia sin ficha de CN muestra 0, ficha con stock nulo 
   assert.equal(item.byPharmacy["2"].stock,0,"Sin ficha ERP, pero inventario de EUR cargado");
   assert.equal(item.byPharmacy["2"].stockInferredZero,true);
   assert.equal(item.byPharmacy["2"].suggested,0,"Sin ventas del CN, no propone comprar");
-  assert.equal(item.byPharmacy["1"].stock,null,"Ficha ERP existente con dato nulo no se inventa");
-  assert.equal(item.byPharmacy["1"].stockInferredZero,false);
-  assert.equal(item.byPharmacy["1"].suggested,null,"Propuesta insegura sigue no disponible");
+  assert.equal(item.byPharmacy["1"].stock,0,"La ficha con stock NULL cuenta como cero");
+  assert.equal(item.byPharmacy["1"].stockInferredZero,true,
+   "Se identifica el cero asumido sin modificar Farmatic");
+  assert.equal(typeof item.byPharmacy["1"].suggested,"number",
+   "La propuesta se calcula con stock cero tras obtener las ventas");
  }finally{await pool.end();}
 });

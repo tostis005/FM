@@ -240,13 +240,20 @@ test("almacén solo descuenta del pedido conjunto de parafarmacia, sin alterar l
   {...warehouse,warehouseStock:10}).totalSuggested,40);
  assert.equal(applyWarehouseToOrder(article,byPharmacy,"medicacion",warehouse).totalSuggested,50);
  assert.equal(applyWarehouseToOrder(article,byPharmacy,"medicacion",warehouse).warehouseStock,null);
- assert.equal(applyWarehouseToOrder(article,byPharmacy,"parafarmacia",
-  {warehouseReady:false,warehouseStock:null}).totalSuggested,50);
+ const missingWarehouse=applyWarehouseToOrder(article,byPharmacy,"parafarmacia",
+  {warehouseReady:false,warehouseStock:null});
+ assert.equal(missingWarehouse.totalSuggested,50);
+ assert.equal(missingWarehouse.warehouseStock,0);
+ assert.equal(missingWarehouse.globalStock,120);
  assert.equal(applyWarehouseToOrder({cn:null},byPharmacy,"parafarmacia",warehouse).totalSuggested,50);
  assert.equal(applyWarehouseToOrder(article,byPharmacy,"parafarmacia",
   {warehouseReady:true,warehouseStock:null}).warehouseStock,0);
- assert.equal(applyWarehouseToOrder(article,{"1":{stock:null,suggested:null}},
-  "parafarmacia",warehouse).totalSuggested,null);
+ const missingPharmacy=applyWarehouseToOrder(article,
+  {"1":{stock:null,suggested:null}},"parafarmacia",warehouse);
+ assert.equal(missingPharmacy.pharmacyStock,0);
+ assert.equal(missingPharmacy.globalStock,1000);
+ assert.equal(missingPharmacy.totalSuggested,null,
+  "Sin cálculo de demanda no se inventa una propuesta");
 });
 
 test("SQL consulta el almacén por código de sincronización y solo en parafarmacia",async()=>{
@@ -303,17 +310,17 @@ test("medicación evita por completo el SQL de almacén sin alterar farmacias y 
  assert.match(sql,/eligible\.article_id=order_line\.elem->>'articulo'/);
 });
 
-test("un CN sin ficha en una farmacia importada es stock 0; ficha con NULL sigue desconocida",async()=>{
+test("CN ausente o con stock NULL en farmacia o almacén se calcula como 0",async()=>{
  const {readFile}=await import("node:fs/promises");
  const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
- assert.match(sql,/pharmacy_inventory_ready AS MATERIALIZED/);
- assert.match(sql,/EXISTS \(\s+SELECT 1 FROM __SCHEMA__\.articulos a\s+WHERE upper\(btrim\(a\.farmacia_codigo\)\)=f\.source_code/);
- assert.match(sql,/i\.reference IS NULL AND pir\.ready IS TRUE THEN 0::float8/);
- assert.match(sql,/ELSE i\.stock/);
- assert.match(sql,/resolved_stock\.stock IS NULL THEN NULL::int/);
+ assert.match(sql,/sum\(coalesce\(stock,0\)\)::float8 AS stock/);
+ assert.match(sql,/coalesce\(i\.stock,0\)::float8 AS stock/);
+ assert.match(sql,/bool_or\(stock IS NULL\) AS stock_missing/);
+ assert.match(sql,/i\.reference IS NULL OR \(i\.stock=0 AND coalesce\(i\.stock_missing,false\)\)/);
  assert.match(sql,/resolved_stock\.stock-coalesce\(pending\.qty,0\)/);
  assert.match(sql,/resolved_stock\.inferred AS "stockInferredZero"/);
- assert.doesNotMatch(sql,/coalesce\(i\.stock,0\) AS stock/);
+ assert.doesNotMatch(sql,/resolved_stock\.stock IS NULL THEN NULL/);
+ assert.doesNotMatch(sql,/pharmacy_inventory_ready AS MATERIALIZED/);
 });
 
 test("CN normalizado: el predicado del índice parcial no filtra referencias adicionales",async()=>{

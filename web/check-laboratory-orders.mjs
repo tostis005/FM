@@ -100,8 +100,10 @@ await page.route("**/api/**",async route=>{
   const requestedLab=incoming?.laboratorio||url.searchParams.get("laboratorio");
   const lab={"P:10":"C:LAB","P:11":"N:CINFA","P:12":"N:MULTI","P:13":"N:ERROR","P:14":"N:VOLUME"}[requestedLab]||requestedLab;
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,850));
-  if(lab==="N:MULTI" && incoming?.referencias?.[0]?.referencia==="001100")
-   await new Promise(resolve=>setTimeout(resolve,1100));
+  if(lab==="N:MULTI" && incoming?.referencias?.length===125)
+   await new Promise(resolve=>setTimeout(resolve,900));
+  if(lab==="N:VOLUME" && incoming?.referencias?.[0]?.referencia==="002400")
+   await new Promise(resolve=>setTimeout(resolve,1000));
   if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
     body:JSON.stringify({error:"El cálculo de ventas no está disponible"})});return;
@@ -255,10 +257,20 @@ try{
  const multiSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});
  await multiSelector.fill("125 referencias");
  await page.getByRole("option",{name:"Laboratorio con 125 referencias"}).click();
- await page.waitForFunction(()=>document.querySelector(".fm-lab-order-summary [role='status']")
-  ?.textContent?.includes("100 de 125"),null,{timeout:15000});
- assert.equal(await page.locator(".fm-lab-matrix-overlay").isVisible(),true,
-  "El spinner sigue visible con 100 de 125 artículos calculados");
+ const completeOverlay=page.locator(".fm-lab-matrix-overlay");
+ await completeOverlay.waitFor({state:"visible",timeout:5000});
+ assert.equal(await page.locator(".fm-lab-order-lower").getAttribute("aria-busy"),"true");
+ assert.equal(await page.locator("#fm-lab-order-global-notes").isDisabled(),true,
+  "Los comentarios generales están bloqueados durante todos los cálculos");
+ assert.equal(await page.getByRole("button",{name:"Marcar pedido realizado"}).isDisabled(),true);
+ const curtain=await completeOverlay.evaluate(node=>{
+  const cover=node.getBoundingClientRect();
+  const summary=node.parentElement.querySelector(".fm-lab-order-summary").getBoundingClientRect();
+  const actions=node.parentElement.querySelector(".fm-lab-order-actions").getBoundingClientRect();
+  return {top:cover.top,summary:summary.top,bottom:cover.bottom,actions:actions.bottom};
+ });
+ assert.ok(curtain.top<=curtain.summary+3&&curtain.bottom>=curtain.actions-3,
+  "La cortinilla cubre desde los totales hasta los comentarios y botones: "+JSON.stringify(curtain));
  await page.getByText("Referencia lote 125").waitFor({timeout:25000});
  await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:15000});
  await page.waitForFunction(()=>
@@ -267,9 +279,8 @@ try{
  assert.equal((await page.locator(".fm-lab-order-table tbody tr").first()
   .locator("td.fm-lab-order-cell").first().innerText()).trim(),"4",
   "Las primeras existencias se muestran sin esperar a un cálculo global");
- assert.ok(matrices.filter(m=>m.laboratorio==="P:12")
-  .every(m=>m.referencias?.length<=100),
-  "El laboratorio grande no debe enviarse en una sola matriz de stock y ventas");
+ assert.ok(matrices.some(m=>m.laboratorio==="P:12"&&m.referencias?.length===125),
+  "125 referencias utilizan un único cálculo optimizado");
  assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),125,
   "Todas las 125 referencias se ven a la vez, también las de otros lotes");
  // Los textos explicativos han desaparecido sin quitar funcionalidades.
@@ -323,6 +334,8 @@ try{
  const pageSize=pager.getByRole("combobox",{name:"Artículos por página"});
  assert.equal(await pageSize.inputValue(),"0","Todos es el tamaño por defecto");
  assert.match(await pager.innerText(),/Mostrando los 125 artículos/);
+ assert.deepEqual(await pageSize.locator("option").evaluateAll(items=>items.map(option=>Number(option.value))),
+  [0,25,50,100,250,500,1000],"Todos y tamaños hasta 1000, sin 2000 ni 5000");
  await pageSize.selectOption("100");
  assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),100);
  await pager.getByRole("button",{name:"Siguiente"}).click();
@@ -334,8 +347,8 @@ try{
  const saveMulti=page.getByRole("button",{name:"Guardar borrador"});
  await saveMulti.waitFor({state:"visible"});
  await page.waitForFunction(()=>!document.querySelector(".fm-lab-order-actions button").disabled,{timeout:25000});
- assert.ok(matrices.filter(m=>m.laboratorio==="P:12").reduce((n,m)=>n+(m.referencias?.length||0),0)>=125,
-  "Las referencias se calculan por lotes sin perder ninguna");
+ assert.ok(matrices.some(m=>m.laboratorio==="P:12"&&m.referencias?.length===125),
+  "Las 125 referencias se calculan en una única consulta");
  await saveMulti.click();
  await page.getByText(/Borrador guardado/).waitFor();
  assert.ok(matrices.filter(m=>m.laboratorio==="P:12").reduce((n,m)=>n+(m.referencias?.length||0),0)>=125);
@@ -344,6 +357,11 @@ try{
  // La opción Todos también recorre 600 referencias sin montar las 600 filas.
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("600 referencias");
  await page.getByRole("option",{name:"Laboratorio con 600 referencias"}).click();
+ await page.waitForFunction(()=>/\b(200|400) de 600\b/.test(
+  document.querySelector(".fm-lab-order-summary [role='status']")?.textContent||""),
+  null,{timeout:15000});
+ assert.equal(await page.locator(".fm-lab-matrix-overlay").isVisible(),true,
+  "La carga progresiva no debe ocultar la cortinilla hasta terminar las 600 métricas");
  await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:30000});
  const largeTable=page.locator(".fm-lab-order-scroll");
  assert.equal(await largeTable.getAttribute("data-virtualized"),"true");

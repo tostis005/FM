@@ -138,7 +138,13 @@ export default function SalesOverview({clientSlug,period,pharmacyIds=[],pharmaci
  // Los resúmenes empiezan después de los totales para no bloquear el KPI principal.
  const families=useSalesOverviewData("familias-ranking",scope);
  const activity=useSalesOverviewData("actividad",scope);
- const tickets=activity.status==="ready"?{...activity,data:activity.data?.tickets}:activity;
+ // Si un cliente antiguo no admite la consulta conjunta, recuperar el
+ // endpoint documental de ticket sin perder el resto de la pantalla.
+ const ticketFallback=useSalesOverviewData("ticket-medio",{
+  ...scope,enabled:enabled&&activity.status==="error"
+ });
+ const tickets=activity.status==="error"?ticketFallback:
+  activity.status==="ready"?{...activity,data:activity.data?.tickets}:activity;
  return <>
   <div className="fm-so-overview" aria-label="Análisis global de ventas">
    <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2>

@@ -162,6 +162,71 @@ export function summarizeSalesTicketHeatmap(rows){
   totalUnits:cells.reduce((sum,r)=>sum+r.units,0)};
 }
 
+// Recuento independiente de cabeceras por vendedor y franja de evolución.
+// Sólo se consulta al seleccionar "Ventas (tickets)": no se recuentan líneas.
+export function buildSalesTicketActivitySQL(schema){
+ if(!SCHEMA.test(schema))throw Error("Esquema SQL no permitido");
+ const q='"'+schema+'"';
+ return [
+  "SELECT CASE WHEN GROUPING(h.empleado_id)=0 THEN 'seller' ELSE 'period' END AS kind,",
+  " h.farmacia_codigo AS code,h.empleado_id::text AS \"sellerId\",",
+  " to_char(date_trunc($4::text,h.fecha),'YYYY-MM-DD\"T\"HH24:MI') AS bucket,",
+  " count(*)::bigint AS tickets",
+  " FROM "+q+".fm_ventas_cabeceras h",
+  " WHERE h.farmacia_codigo=ANY($3::text[])",
+  " AND h.fecha >= $1::date AND h.fecha < $2::date+interval '1 day'",
+  " AND h.lineas_completas AND NOT h.eliminado_logicamente",
+  " AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')",
+  " AND EXISTS(SELECT 1 FROM "+q+".fm_ventas_lineas l",
+  " WHERE l.farmacia_codigo=h.farmacia_codigo AND l.sistema_origen=h.sistema_origen",
+  " AND l.documento_id=h.documento_id AND NOT l.eliminada_logicamente",
+  " AND coalesce(l.anulada,false)=false)",
+  " GROUP BY GROUPING SETS ((h.farmacia_codigo,h.empleado_id),",
+  " (date_trunc($4::text,h.fecha)))"
+ ].join("\n");
+}
+export function summarizeSalesTicketActivity(rows,pharmacies,ids,granularity){
+ const codes=new Map((pharmacies||[]).filter(p=>ids.includes(Number(p.id))).map(p=>[
+  String(p.databaseCode||p.sourceCode||"").trim().toUpperCase(),String(p.id)]));
+ const width={hour:16,day:10,month:7,year:4}[granularity]||7;
+ const sellers=[],series=[];
+ for(const r of rows||[]){
+  if(r.kind==="seller"){
+   const pharmacyId=codes.get(String(r.code||"").trim().toUpperCase());
+   if(pharmacyId)sellers.push({pharmacyId,sellerId:r.sellerId??null,tickets:numeric(r.tickets)});
+  }else if(r.kind==="period"){
+   series.push({bucket:String(r.bucket||"").slice(0,width),tickets:numeric(r.tickets)});
+  }
+ }
+ return {sellers,series};
+}
+// Cada documento cuenta una sola vez EN CADA familia presente, aunque tenga
+// cinco líneas de esa misma familia. Un ticket mixto aparece en dos familias.
+export function buildSalesFamilyTicketSQL(schema){
+ if(!SCHEMA.test(schema))throw Error("Esquema SQL no permitido");
+ const q='"'+schema+'"';
+ return [
+  "WITH ticket_families AS (",
+  " SELECT DISTINCT v.farmacia_codigo,v.sistema_origen,v.documento_id,",
+  " coalesce(nullif(regexp_replace(",
+  " translate(lower(btrim(g.nombre)),'áàäéèëíìïóòöúùüñ','aaaeeeiiiooouuun'),",
+  " '[[:space:]]+',' ','g'),''),'sin clasificar') AS family",
+  " FROM "+q+".fm_ventas_analitica v",
+  " LEFT JOIN farmetrica.familias_globales_articulos a",
+  " ON a.cliente_slug=$4 AND a.farmacia_codigo=v.farmacia_codigo",
+  " AND a.articulo_origen_id=v.articulo_id",
+  " LEFT JOIN farmetrica.familias_globales g",
+  " ON g.cliente_slug=a.cliente_slug AND g.id=a.familia_id AND g.activo",
+  " WHERE v.farmacia_codigo=ANY($3::text[])",
+  " AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
+  ") SELECT family AS key,count(*)::bigint AS tickets",
+  " FROM ticket_families GROUP BY family"
+ ].join("\n");
+}
+export function summarizeSalesFamilyTicketRows(rows){
+ return {families:(rows||[]).map(r=>({key:String(r.key||""),tickets:numeric(r.tickets)}))};
+}
+
 export function summarizeSalesTicketCounts(rows,pharmacies,ids){
  const codes=new Map((pharmacies||[]).filter(p=>ids.includes(Number(p.id))).map(p=>[
   String(p.databaseCode||p.sourceCode||"").trim().toUpperCase(),{id:String(p.id),name:p.name}
@@ -198,6 +263,41 @@ export function setupSalesOverview(app,pool,{requireTenant}){
     values:[s.from,s.to,s.codes,s.tenant],query_timeout:22000});
    res.json(mergeSalesFamilyRows(rows));
   }catch(e){next(e)}
+ });
+ app.get("/api/analytics/ventas/ticket-actividad",...requireTenant(),async(req,res,next)=>{
+  const scope=salesScope(req,res);if(!scope)return;
+  const granularity=String(req.query.granularidad||"month");
+  if(!["hour","day","month","year"].includes(granularity))
+   return res.status(400).json({error:"Granularidad no válida"});
+  if(!scope.ids.length)return res.json({sellers:[],series:[]});
+  let conn;
+  try{
+   conn=await pool.connect();
+   await conn.query("BEGIN READ ONLY");
+   await conn.query("SET LOCAL statement_timeout='90s'");
+   const {rows}=await conn.query({text:buildSalesTicketActivitySQL(scope.schema),
+    values:[scope.from,scope.to,scope.codes,granularity],query_timeout:98000});
+   await conn.query("ROLLBACK");
+   res.setHeader?.("Cache-Control","private, no-store");
+   res.json(summarizeSalesTicketActivity(rows,req.context.pharmacies,scope.ids,granularity));
+  }catch(error){if(conn)await conn.query("ROLLBACK").catch(()=>{});next(error)}
+  finally{conn?.release()}
+ });
+ app.get("/api/analytics/ventas/ticket-familias",...requireTenant(),async(req,res,next)=>{
+  const scope=salesScope(req,res);if(!scope)return;
+  if(!scope.ids.length)return res.json({families:[]});
+  let conn;
+  try{
+   conn=await pool.connect();
+   await conn.query("BEGIN READ ONLY");
+   await conn.query("SET LOCAL statement_timeout='95s'");
+   const {rows}=await conn.query({text:buildSalesFamilyTicketSQL(scope.schema),
+    values:[scope.from,scope.to,scope.codes,scope.tenant],query_timeout:103000});
+   await conn.query("ROLLBACK");
+   res.setHeader?.("Cache-Control","private, no-store");
+   res.json(summarizeSalesFamilyTicketRows(rows));
+  }catch(error){if(conn)await conn.query("ROLLBACK").catch(()=>{});next(error)}
+  finally{conn?.release()}
  });
  app.get("/api/analytics/ventas/horarios-tickets",...requireTenant(),async(req,res,next)=>{
   const s=salesScope(req,res);if(!s)return;

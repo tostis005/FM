@@ -88,9 +88,16 @@ await page.route("**/api/**",async route=>{
  }
  else if(p==="/api/analytics/ventas/horarios-tickets"){
   body={cells:[10,30,75,230,500].map((tickets,i)=>({
-   weekday:1,hour:9+i,tickets,units:[1,3,9,30,60][i]
-  })),total:845,totalUnits:103};
+   weekday:1,hour:9+i,tickets,units:[1,3,9,30,60][i],sales:10*(i+1)
+  })),total:845,totalUnits:103,totalSales:150};
  }
+ else if(p==="/api/analytics/ventas/ticket-familias")body={
+  families:[{key:"dermocosmetica",tickets:6},{key:"sin clasificar",tickets:2}]
+ };
+ else if(p==="/api/analytics/ventas/ticket-actividad")body={
+  sellers:[{pharmacyId:"1",sellerId:null,tickets:5},{pharmacyId:"2",sellerId:null,tickets:3}],
+  series:[{bucket:"2026-11",tickets:8}]
+ };
  else if(["/api/analytics/dashboard/horarios","/api/analytics/dashboard/vendedores",
   "/api/analytics/ventas/ticket-medio"].includes(p)){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
@@ -197,13 +204,13 @@ try{
  await page.getByRole("button",{name:"Listo"}).click();
  await pharmacyPanel.waitFor({state:"visible",timeout:12000});
  await page.getByRole("group",{name:"Indicador de familias"})
-  .getByRole("button",{name:"Unidades",exact:true}).click();
- await page.getByText("9 uds.",{exact:true}).waitFor();
- const unitShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
- if(!unitShares.includes("75 %")||!unitShares.includes("25 %"))
-  throw Error("En unidades deben mostrarse las cuotas sobre las 12 unidades: "+JSON.stringify(unitShares));
+  .getByRole("button",{name:"Ventas (tickets)",exact:true}).click();
+ await page.getByText("6 tickets",{exact:true}).waitFor();
+ const ticketShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
+ if(!ticketShares.includes("75 %")||!ticketShares.includes("25 %"))
+  throw Error("Las cuotas deben calcularse sobre los 8 tickets: "+JSON.stringify(ticketShares));
  await page.getByRole("group",{name:"Indicador de familias"})
-  .getByRole("button",{name:"Ventas €",exact:true}).click();
+  .getByRole("button",{name:"Importe (€)",exact:true}).click();
  const salesShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
  if(!salesShares.some(value=>value.includes("76,8")))
   throw Error("La cuota por importe debe conservarse: "+JSON.stringify(salesShares));

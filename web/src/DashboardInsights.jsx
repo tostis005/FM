@@ -6,7 +6,7 @@ import {putPurchaseLink} from "./PurchasePlanner.jsx";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
 import {euro,integer,percentage} from "./localeES.js";
 import {salesTicketWindows,mapTicketWindows} from "./salesTicketWindows.js";
-import {HEAT_STOPS,HEAT_DAYS,heatColor,heatmapHours,mergeSalesHeatmap} from "./salesHeatmap.js";
+import {HEAT_STOPS,HEAT_DAYS,heatColor,heatmapHours,mergeSalesHeatmap,formatHeatAmount} from "./salesHeatmap.js";
 import "./dashboardInsights.css";
 import "./salesOverview.css";
 
@@ -113,16 +113,15 @@ function Heatmap({scope}){
  const [mode,setMode]=useState("sales");
  const insight=useTicketHeatmap(scope);
  const cells=Array.isArray(insight.data?.cells)?insight.data.cells:EMPTY;
- const metric=mode==="sales"?"tickets":"units";
- const unitLabel=mode==="sales"?"tickets":"unidades";
- const total=Number(mode==="sales"?insight.data?.total:insight.data?.totalUnits)||0;
+ const metric=mode==="sales"?"sales":"tickets";
+ const total=Number(mode==="sales"?insight.data?.totalSales:insight.data?.total)||0;
  const grid=useMemo(()=>{
   const map=new Map();
   for(const cell of cells){
    const key=String(cell.weekday)+"|"+String(cell.hour);
-   const current=map.get(key)||{tickets:0,units:0};
+   const current=map.get(key)||{sales:0,tickets:0};
+   current.sales+=Number(cell.sales)||0;
    current.tickets+=Number(cell.tickets)||0;
-   current.units+=Number(cell.units)||0;
    map.set(key,current);
   }
   return map;
@@ -134,9 +133,9 @@ function Heatmap({scope}){
  const controls=<div className="fm-so-controls fm-heat-controls">
   <div className="fm-so-segment" role="group" aria-label="Indicador del mapa de calor">
    <button type="button" aria-pressed={mode==="sales"} className={mode==="sales"?"is-active":""}
-    onClick={()=>setMode("sales")}>Ventas</button>
-   <button type="button" aria-pressed={mode==="units"} className={mode==="units"?"is-active":""}
-    onClick={()=>setMode("units")}>Unidades</button>
+    onClick={()=>setMode("sales")}>Importe (€)</button>
+   <button type="button" aria-pressed={mode==="tickets"} className={mode==="tickets"?"is-active":""}
+    onClick={()=>setMode("tickets")}>Ventas (tickets)</button>
   </div>
  </div>;
  return <Panel title="Mapa de calor de ventas" icon={Clock3} insight={insight} controls={controls}>
@@ -144,9 +143,9 @@ function Heatmap({scope}){
    <p className="fm-insight-status">No hay ventas registradas para la selección.</p>:
    <><div className="fm-heat-scroll">
     <div className="fm-heat-grid" role="table"
-     aria-label={(mode==="sales"?"Número de tickets":"Unidades vendidas")+
+     aria-label={(mode==="sales"?"Importe vendido":"Tickets realizados")+
       " por día de la semana y franja horaria"}
-     style={{gridTemplateColumns:"112px repeat(7,minmax(76px,1fr))"}}>
+     style={{gridTemplateColumns:"112px repeat(7,minmax(98px,1fr))"}}>
      <div className="fm-heat-row" role="row">
       <div className="fm-heat-axis" role="columnheader">Horario</div>
       {HEAT_DAYS.map(day=><div key={day} className="fm-heat-axis" role="columnheader">{day}</div>)}
@@ -156,58 +155,64 @@ function Heatmap({scope}){
       {HEAT_DAYS.map((day,index)=>{
        const value=grid.get(String(index+1)+"|"+String(hour))?.[metric]||0;
        const rank=value>0&&levels.length>1?levels.indexOf(value)/(levels.length-1):0;
-       const background=value===0?"#eef2eb":heatColor(rank);
+       const background=value<=0?"#eef2eb":heatColor(rank);
        return <div key={day} role="cell"
         className={"fm-heat-cell"+(value>0&&rank>=0.7?" fm-heat-cell-strong":"")}
         style={{backgroundColor:background}}
-        title={day+" "+label+": "+integer(value)+" "+unitLabel}
-        aria-label={day+" de "+label+": "+integer(value)+" "+unitLabel}>
-        {integer(value)}
+        title={day+" "+label+": "+(mode==="sales"?euro(value):integer(value)+" tickets")}
+        aria-label={day+" de "+label+": "+(mode==="sales"?euro(value):integer(value)+" tickets")}>
+        {mode==="sales"?formatHeatAmount(value):integer(value)}
        </div>;
       })}
      </div>)}
     </div>
    </div>
-   <div className="fm-heat-legend" aria-label={"Leyenda de "+unitLabel+" por franja"}>
-    <span>{"Menos "+(mode==="sales"?"ventas":"unidades")}</span>
+   <div className="fm-heat-legend" aria-label={"Leyenda de "+(mode==="sales"?"importe":"tickets")+" por franja"}>
+    <span>{mode==="sales"?"Menor importe":"Menos ventas"}</span>
     {HEAT_STOPS.map(color=><span key={color} className="fm-heat-legend-swatch"
      style={{backgroundColor:color}} aria-hidden="true"/>)}
-    <span>{"Más "+(mode==="sales"?"ventas":"unidades")}</span>
+    <span>{mode==="sales"?"Mayor importe":"Más ventas"}</span>
     <span className="fm-heat-legend-empty" aria-hidden="true"/>
-    <span>{"Sin "+(mode==="sales"?"ventas":"unidades")}</span>
+    <span>{mode==="sales"?"Sin importe":"Sin ventas"}</span>
    </div>
    <p className="fm-sales-heat-total">
-    {mode==="sales"?"Total de ventas: ":"Total de unidades: "}
-    <strong>{integer(total)} {mode==="sales"?"tickets":"uds."}</strong>
+    {mode==="sales"?"Importe total: ":"Ventas realizadas: "}
+    <strong>{mode==="sales"?euro(total):integer(total)+" tickets"}</strong>
    </p></>}
  </Panel>;
 }
-function Sellers({scope,shared}){
+function Sellers({scope,shared,ticketActivity,onRequestTickets}){
  const insight=useInsight("vendedores",scope,shared);
  const [showAll,setShowAll]=useState(false);
  const [mode,setMode]=useState("sales");
  const sellers=Array.isArray(insight.data?.sellers)?insight.data.sellers:EMPTY;
+ const counts=new Map((ticketActivity?.data?.sellers||[]).map(s=>[
+  String(s.pharmacyId)+"|"+String(s.sellerId??""),Number(s.tickets)||0]));
+ const metric=s=>mode==="sales"?Number(s.sales)||0:
+  counts.get(String(s.pharmacyId)+"|"+String(s.sellerId??""))||0;
  const ordered=useMemo(()=>[...sellers].sort((a,b)=>
-  (Number(b[mode])||0)-(Number(a[mode])||0)),[sellers,mode]);
- const maximum=Math.max(1,...ordered.map(x=>Math.max(0,Number(x[mode])||0)));
+  metric(b)-metric(a)),[sellers,mode,ticketActivity?.data]);
+ const maximum=Math.max(1,...ordered.map(x=>Math.max(0,metric(x))));
  const controls=<div className="fm-so-controls fm-heat-controls">
   <div className="fm-so-segment" role="group" aria-label="Indicador por vendedor">
    <button type="button" aria-pressed={mode==="sales"} className={mode==="sales"?"is-active":""}
-    onClick={()=>setMode("sales")}>Ventas €</button>
-   <button type="button" aria-pressed={mode==="units"} className={mode==="units"?"is-active":""}
-    onClick={()=>setMode("units")}>Unidades</button>
+    onClick={()=>setMode("sales")}>Importe (€)</button>
+   <button type="button" aria-pressed={mode==="tickets"} className={mode==="tickets"?"is-active":""}
+    onClick={()=>{setMode("tickets");onRequestTickets?.()}}>Ventas (tickets)</button>
   </div>
  </div>;
- return <Panel title="Ventas por vendedor" icon={UsersRound} insight={insight} controls={controls}>
+ const activeInsight=mode==="tickets"&&ticketActivity?.status!=="ready"?
+  ticketActivity||{status:"loading"}:insight;
+ return <Panel title="Ventas por vendedor" icon={UsersRound} insight={activeInsight} controls={controls}>
   {!ordered.length?<p className="fm-insight-status">No hay vendedores con ventas para la selección.</p>:
    <><div className="fm-seller-list">
     {(showAll?ordered:ordered.slice(0,12)).map((s,i)=><div className="fm-seller-row" key={s.pharmacyId+"|"+s.sellerId+"|"+i}>
      <div className="fm-seller-label">
       <span title={s.name}>{s.name}</span>
-      <strong>{mode==="sales"?euro(s.sales):integer(s.units)+" uds."}</strong>
+      <strong>{mode==="sales"?euro(s.sales):integer(metric(s))+" tickets"}</strong>
      </div>
      <div className="fm-seller-track">
-      <div style={{width:Math.max(0,Number(s[mode])||0)/maximum*100+"%"}}/>
+      <div style={{width:Math.max(0,metric(s))/maximum*100+"%"}}/>
      </div>
     </div>)}
    </div>{ordered.length>12&&<button type="button" className="btn btn-secondary fm-seller-more"
@@ -365,11 +370,11 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
    </>}
  </Panel>;
 }
-export default function DashboardInsights({mode="dashboard",clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false,salesActivity=null}){
+export default function DashboardInsights({mode="dashboard",clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false,salesActivity=null,ticketActivity=null,onRequestTickets=()=>{}}){
  const scope={clientSlug,from:period.from,to:period.to,valid:period.valid,
   pharmacyIds,reloadKey};
  return <div className={"fm-dashboard-insights"+(mode==="ventas"?" fm-dashboard-insights-sales":"")}>
-  {mode==="ventas"&&<><Heatmap scope={scope} shared={salesActivity}/><Sellers scope={scope} shared={salesActivity}/></>}
+  {mode==="ventas"&&<><Heatmap scope={scope} shared={salesActivity}/><Sellers scope={scope} shared={salesActivity} ticketActivity={ticketActivity} onRequestTickets={onRequestTickets}/></>}
   {mode==="compras"&&<Purchases scope={scope} pharmacies={pharmacies}
    onNavigate={onNavigate} canNavigate={canNavigate}/>}
  </div>;

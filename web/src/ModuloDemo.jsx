@@ -88,7 +88,7 @@ function metricCards(module,k,analysisMonths=12){
  const map={
   dashboard:[shared[0],shared[1],shared[3],
    CARD("Diferencia ventas − compras","resultadoComercial","€")],
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Ticket medio","ticketMedio","€")],
+  ventas:[{...shared[0],label:"Importe vendido"},CARD("Ventas realizadas","tickets","n"),CARD("Ticket medio","ticketMedio","€")],
   compras:[shared[1],CARD("Recepciones registradas","recepciones","n"),
    CARD("Unidades compradas","unidadesCompradas","n"),
    CARD("Proveedores","proveedores","n","proveedores"),
@@ -212,6 +212,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const [searchReady,setSearchReady]=useState(()=>readFilters(storageKey).search);
  useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [salesChartMode,setSalesChartMode]=useState("sales");
+ const [needTicketActivity,setNeedTicketActivity]=useState(false);
  const [detail,setDetail]=useState(null);
  const [realSales,setRealSales]=useState(null);
  // La lectura rápida del total se muestra antes que la tabla pesada.
@@ -322,6 +323,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
  const fastLoading=fastEligible&&!fastSales&&!fastFailed;
  // Una sola consulta de tickets para el KPI superior y las farmacias.
+ const ticketGranularity=filters.period==="all"?"year":period.granularity;
+ const ticketActivity=useSalesOverviewData("ticket-actividad",{
+  clientSlug,period,pharmacyIds:filters.pharmacyIds,reloadKey,
+  enabled:module==="ventas"&&needTicketActivity,granularity:ticketGranularity
+ });
  const salesTickets=useSalesOverviewData("ticket-medio-rapido",{
   clientSlug,period,pharmacyIds:filters.pharmacyIds,reloadKey,
   enabled:module==="ventas"&&Boolean(fastSales||fastFailed)
@@ -576,6 +582,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...realReport?.kpis,...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
  const ticketsCount=Number(salesTickets.data?.tickets);
+ realKpis.tickets=salesTickets.status==="ready"&&Number.isFinite(ticketsCount)?ticketsCount:null;
  const salesAmount=fastSales?.kpis?.ventas;
  realKpis.ticketMedio=salesTickets.status==="ready"&&
   salesAmount!=null&&Number.isFinite(Number(salesAmount))&&
@@ -649,11 +656,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   module==="compras"&&shouldLoadPurchaseSummary?
    (!fastPurchase&&!purchaseSummaryError):
    module==="ventas"&&fastEligible?
-    (fastLoading||(!fastSales&&isFetchingSales)):isFetchingSales;
+    (fastLoading||(!fastSales&&isFetchingSales)||salesChartMode==="tickets"&&ticketActivity.status==="loading"):isFetchingSales;
  const dashboardMonths=isDashboard?[...new Set([
     ...(fastSales?.monthly||[]).map(x=>x.month),
     ...(fastPurchase?.monthly||[]).map(x=>x.month)])].sort():[];
- const chart=isDashboard?dashboardMonths.map(month=>({
+ let chart=isDashboard?dashboardMonths.map(month=>({
    month:formatSalesBucket(month,"month"),
    ventas:fastSales?.monthly?.find(x=>x.month===month)?.ventas??null,
    compras:fastPurchase?.monthly?.find(x=>x.month===month)?.compras??null
@@ -672,9 +679,15 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      ventas:r.ventas==null?null:Number(r.ventas),unidades:Number(r.unidades)||0
     }))):
    (module==="compras"&&fastPurchase?.monthly||realReport?.monthly||[]).map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
+ if(module==="ventas"&&salesChartMode==="tickets"&&ticketActivity.status==="ready"){
+  const byBucket=new Map((ticketActivity.data?.series||[]).map(row=>[
+   ticketGranularity==="year"?String(row.bucket):
+    formatSalesBucket(String(row.bucket),ticketGranularity),Number(row.tickets)||0]));
+  chart=chart.map(row=>({...row,tickets:byBucket.get(row.month)||0}));
+ }
  const available=Boolean(realReport?.available||(["dashboard","ventas"].includes(module)&&hasSales));
  const chartSeries=isDashboard?["ventas","compras","Ventas y compras"]:
-  module==="ventas"&&salesChartMode==="units"?["unidades",null,"Evolución de ventas"]:chartConfig;
+  module==="ventas"&&salesChartMode==="tickets"?["tickets",null,"Evolución de ventas"]:chartConfig;
 
  return <div className="fm-demo fm-demo-v2">
   <ReportPageHeader title={TITLES[module]||"Dashboard"} period={period} updatedAt={lastUpdated}
@@ -710,7 +723,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      ["ventas","unidades","margen","margenPct"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
     module==="compras"&&shouldLoadPurchaseSummary?
      (!fastPurchase&&!purchaseSummaryError):
-    module==="ventas"&&c.key==="ticketMedio"?
+    module==="ventas"&&["ticketMedio","tickets"].includes(c.key)?
      (fastLoading||salesTickets.status==="loading"):
     module==="ventas"&&fastEligible?fastLoading:isFetchingSales;
    const isMargin=["margen","margenPct"].includes(c.key);
@@ -831,13 +844,15 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      <div className="fm-so-segment" role="group" aria-label="Indicador de evolución de ventas">
       <button type="button" aria-pressed={salesChartMode==="sales"}
        className={salesChartMode==="sales"?"is-active":""}
-       onClick={()=>setSalesChartMode("sales")}>Ventas €</button>
-      <button type="button" aria-pressed={salesChartMode==="units"}
-       className={salesChartMode==="units"?"is-active":""}
-       onClick={()=>setSalesChartMode("units")}>Unidades</button>
+       onClick={()=>setSalesChartMode("sales")}>Importe (€)</button>
+      <button type="button" aria-pressed={salesChartMode==="tickets"}
+       className={salesChartMode==="tickets"?"is-active":""}
+       onClick={()=>{setSalesChartMode("tickets");setNeedTicketActivity(true)}}>Ventas (tickets)</button>
      </div>
     </div>}
-    {chartLoading?<LoadingPanel kind="chart" label={userLoadingText(isDashboard?combinedPercent([saleProgress,buyProgress]):
+    {module==="ventas"&&salesChartMode==="tickets"&&ticketActivity.status==="error"?
+     <p className="fm-inline-status" role="alert">{ticketActivity.error}</p>:
+     chartLoading?<LoadingPanel kind="chart" label={userLoadingText(isDashboard?combinedPercent([saleProgress,buyProgress]):
       module==="ventas"?taskPercent(fastProgress,fastScope,Boolean(fastSales)):
       module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):null,
       isDashboard?"Cargando evolución":
@@ -846,8 +861,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf2ef"/>
       <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11}/>
       <YAxis tickLine={false} axisLine={false} width={92} fontSize={10}
-       tickFormatter={v=>chartSeries[0]==="recepciones"?integer(v):chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
-      <Tooltip formatter={(v,key)=>[key==="recepciones"?integer(v):key==="unidades"?quantity(v):money(v),TITLES[key]||key]}/>
+       tickFormatter={v=>chartSeries[0]==="recepciones"||chartSeries[0]==="tickets"?integer(v):chartSeries[0]==="unidades"?quantity(v):euro(v)}/>
+      <Tooltip formatter={(v,key)=>[key==="recepciones"||key==="tickets"?integer(v):key==="unidades"?quantity(v):money(v),key==="tickets"?"Ventas (tickets)":TITLES[key]||key]}/>
       <Bar dataKey={chartSeries[0]} name={chartSeries[0]} fill="#159c70" radius={[5,5,0,0]}/>
       {chartSeries[1]&&<Bar dataKey={chartSeries[1]} name={chartSeries[1]} fill="#b4ddcd" radius={[5,5,0,0]}/>}
      </BarChart>
@@ -856,6 +871,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {module==="ventas"&&<SalesOverview clientSlug={clientSlug} period={period}
    pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
    enabled={Boolean(fastSales||fastFailed)} tickets={salesTickets}
+   ticketActivity={ticketActivity} onRequestTickets={()=>setNeedTicketActivity(true)}
    onNavigate={onNavigate} canNavigate={canNavigate}/>} 
   {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
    pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}

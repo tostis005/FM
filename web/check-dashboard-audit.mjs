@@ -71,10 +71,19 @@ await page.route("**/api/**",async route=>{
   }
  };
  else if(p==="/api/analytics/ventas/horarios-tickets")body={
-  cells:[{weekday:1,hour:9,tickets:2,units:7},
-   {weekday:5,hour:12,tickets:3,units:10}],
-  total:5,totalUnits:17
+  cells:[{weekday:1,hour:9,tickets:2,units:7,sales:81.5},
+   {weekday:5,hour:12,tickets:3,units:10,sales:120.25}],
+  total:5,totalUnits:17,totalSales:201.75
  };
+ else if(p==="/api/analytics/ventas/ticket-medio-rapido")body={
+  tickets:5,pharmacies:[{id:"1",name:"Farmacia Centro",tickets:3},
+   {id:"2",name:"Farmacia Europa",tickets:2}]
+ };
+ else if(p==="/api/analytics/ventas/ticket-actividad")body={
+  sellers:[{pharmacyId:"1",sellerId:null,tickets:2}],
+  series:[{bucket:"2026-11",tickets:2}]
+ };
+ else if(p==="/api/analytics/ventas/ticket-familias")body={families:[]};
  else if(p==="/api/analytics/dashboard/canales-compra")body={
   available:true,channels:[
    {channel:"cooperativa",value:180,units:10,lines:1},
@@ -172,25 +181,25 @@ try{
  await page.locator(".fm-heat-cell").first().waitFor({timeout:12000});
 
  const evolutionToggle=page.getByRole("group",{name:"Indicador de evolución de ventas"});
- await evolutionToggle.getByRole("button",{name:"Unidades",exact:true}).click();
- assert.equal(await evolutionToggle.getByRole("button",{name:"Unidades"}).getAttribute("aria-pressed"),
-  "true","La evolución debe alternar a unidades sin volver a consultar");
- await evolutionToggle.getByRole("button",{name:"Ventas €",exact:true}).click();
+ await evolutionToggle.getByRole("button",{name:"Ventas (tickets)",exact:true}).click();
+ assert.equal(await evolutionToggle.getByRole("button",{name:"Ventas (tickets)"}).getAttribute("aria-pressed"),
+  "true","La evolución debe alternar a tickets sin volver a consultar");
+ await evolutionToggle.getByRole("button",{name:"Importe (€)",exact:true}).click();
  const heatToggle=page.getByRole("group",{name:"Indicador del mapa de calor"});
- await heatToggle.getByRole("button",{name:"Unidades",exact:true}).click();
- await page.getByRole("cell",{name:/Lunes de 09:00–10:00: 7 unidades/}).waitFor({timeout:12000});
- assert.equal(await heatToggle.getByRole("button",{name:"Unidades"}).getAttribute("aria-pressed"),"true");
- await heatToggle.getByRole("button",{name:"Ventas",exact:true}).click();
+ await heatToggle.getByRole("button",{name:"Ventas (tickets)",exact:true}).click();
  await page.getByRole("cell",{name:/Lunes de 09:00–10:00: 2 tickets/}).waitFor({timeout:12000});
+ assert.equal(await heatToggle.getByRole("button",{name:"Ventas (tickets)"}).getAttribute("aria-pressed"),"true");
+ await heatToggle.getByRole("button",{name:"Importe (€)",exact:true}).click();
+ await page.getByRole("cell",{name:/Lunes de 09:00–10:00: .*81,50/}).waitFor({timeout:12000});
  const sellerToggle=page.getByRole("group",{name:"Indicador por vendedor"});
- await sellerToggle.getByRole("button",{name:"Unidades",exact:true}).click();
- assert.ok((await page.locator(".fm-seller-label strong").first().textContent()).includes("uds."),
-  "El ranking por vendedor debe alternar entre importes y unidades");
+ await sellerToggle.getByRole("button",{name:"Ventas (tickets)",exact:true}).click();
+ assert.ok((await page.locator(".fm-seller-label strong").first().textContent()).includes("tickets"),
+  "El ranking por vendedor debe alternar entre importes y tickets");
  const pharmacyToggle=page.getByRole("group",{name:"Indicador por farmacia"});
- await pharmacyToggle.getByRole("button",{name:"Unidades",exact:true}).click();
- assert.ok((await page.locator(".fm-so-site-name strong").first().textContent()).includes("uds."),
-  "Las farmacias deben alternar entre ventas en euros y unidades");
- assert.equal(await pharmacyToggle.getByRole("button",{name:"Unidades"}).getAttribute("aria-pressed"),"true");
+ await pharmacyToggle.getByRole("button",{name:"Ventas (tickets)",exact:true}).click();
+ assert.ok((await page.locator(".fm-so-site-name strong").first().textContent()).includes("tickets"),
+  "Las farmacias deben alternar entre importes y tickets");
+ assert.equal(await pharmacyToggle.getByRole("button",{name:"Ventas (tickets)"}).getAttribute("aria-pressed"),"true");
 
  await page.goto(BASE+"/compras",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).waitFor({timeout:12000});

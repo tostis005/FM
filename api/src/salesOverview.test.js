@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {buildSalesFamilyRankingSQL,mergeSalesFamilyRows,buildSalesTicketsSQL,
  buildSalesTicketCountsSQL,summarizeSalesTicketCounts,summarizeSalesTickets,
- buildSalesTicketHeatmapSQL,summarizeSalesTicketHeatmap,setupSalesOverview} from "./salesOverview.js";
+ buildSalesTicketHeatmapSQL,summarizeSalesTicketHeatmap,
+ buildSalesTicketActivitySQL,summarizeSalesTicketActivity,buildSalesFamilyTicketSQL,
+ summarizeSalesFamilyTicketRows,setupSalesOverview} from "./salesOverview.js";
 test("agrupa nombres equivalentes, respeta segmentos y conserva la facturación",()=>{
  const result=mergeSalesFamilyRows([
   {familyId:"1",name:"Dermocosmetica",segment:"PARAFARMACIA",sales:100,units:8,lines:4},
@@ -146,4 +148,62 @@ test("endpoint horario aplica permisos y devuelve operaciones por franja",async(
  assert.equal((await run({...q,farmacias:"2"})).code,403);
  assert.equal((await run(q,{...context,modules:{ventas:false}})).code,403);
  assert.equal(calls.filter(x=>typeof x==="object").length,1);
+});
+
+test("agrega tickets de vendedor y evolución por cabecera válida",()=>{
+ const sql=buildSalesTicketActivitySQL("ampedia");
+ assert.match(sql,/GROUP BY GROUPING SETS/);
+ assert.match(sql,/h\.empleado_id/);
+ assert.match(sql,/date_trunc\(\$4::text,h\.fecha\)/);
+ assert.match(sql,/EXISTS\(SELECT 1 FROM "ampedia"\.fm_ventas_lineas/);
+ assert.doesNotMatch(sql,/count\(DISTINCT|fm_ventas_analitica/);
+ const data=summarizeSalesTicketActivity([
+  {kind:"seller",code:"ABA",sellerId:"12",tickets:"3"},
+  {kind:"seller",code:"EUR",sellerId:"12",tickets:"2"},
+  {kind:"period",bucket:"2026-11-12T11:00",tickets:"5"}
+ ],[{id:"1",sourceCode:"ABA"},{id:"2",sourceCode:"EUR"}],[1,2],"hour");
+ assert.equal(data.sellers.length,2);
+ assert.deepEqual(data.series,[{bucket:"2026-11-12T11:00",tickets:5}]);
+});
+test("familias: un documento cuenta una sola vez por cada familia",()=>{
+ const sql=buildSalesFamilyTicketSQL("ampedia");
+ assert.match(sql,/SELECT DISTINCT v\.farmacia_codigo,v\.sistema_origen,v\.documento_id/);
+ assert.match(sql,/familias_globales_articulos/);
+ assert.match(sql,/v\.fecha >= \$1::date/);
+ assert.match(sql,/a\.cliente_slug=\$4/);
+ assert.doesNotMatch(sql,/count\(DISTINCT|sum\(v\.unidades\)/i);
+ const summary=summarizeSalesFamilyTicketRows([
+  {key:"dermocosmetica",tickets:"7"},{key:"sin clasificar",tickets:"2"}
+ ]);
+ assert.deepEqual(summary,{families:[
+  {key:"dermocosmetica",tickets:7},{key:"sin clasificar",tickets:2}
+ ]});
+});
+test("nuevos recuentos mantienen aislamiento del tenant y validan granularidad",async()=>{
+ const routes=new Map();
+ const app={get(path,...args){routes.set(path,args.at(-1))}};
+ const conn={async query(input){
+  if(typeof input==="object"){
+   return input.text.includes("ticket_families")?{rows:[{key:"higiene",tickets:"3"}]}:
+    {rows:[{kind:"seller",code:"ABA",sellerId:"12",tickets:"4"},
+      {kind:"period",bucket:"2026-11-01T00:00",tickets:"4"}]};
+  }
+  return {rows:[]};
+ },release(){}};
+ setupSalesOverview(app,{connect:async()=>conn},{requireTenant:()=>[]});
+ const ctx={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},
+  modules:{ventas:true},allowedPharmacyIds:[1],
+  pharmacies:[{id:"1",name:"Abadía",databaseCode:"ABA"}]};
+ const run=async(name,query,context=ctx)=>{
+  const res={statusCode:200,status(n){this.statusCode=n;return this},
+   json(body){this.body=body;return this},setHeader(){}};
+  let error;await routes.get("/api/analytics/ventas/"+name)({context,query},res,e=>{error=e});
+  if(error)throw error;return res;
+ };
+ const q={desde:"2026-11-01",hasta:"2026-11-12",farmacias:"1",granularidad:"month"};
+ assert.equal((await run("ticket-actividad",q)).body.sellers[0].tickets,4);
+ assert.equal((await run("ticket-familias",q)).body.families[0].tickets,3);
+ assert.equal((await run("ticket-actividad",{...q,granularidad:"invalid"})).statusCode,400);
+ assert.equal((await run("ticket-actividad",{...q,farmacias:"2"})).statusCode,403);
+ assert.equal((await run("ticket-familias",q,{...ctx,modules:{ventas:false}})).statusCode,403);
 });

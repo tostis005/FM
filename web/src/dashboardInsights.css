@@ -7,7 +7,7 @@
 .fm-insight-foot{color:#698379;font-size:11px;line-height:1.5;margin:13px 0 0}
 .fm-heat-controls{justify-content:flex-end;margin-top:-4px;margin-bottom:14px}
 .fm-heat-scroll,.fm-purchase-scroll{width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
-.fm-heat-grid{display:grid;gap:3px;min-width:690px;align-items:stretch}
+.fm-heat-grid{display:grid;gap:3px;min-width:800px;align-items:stretch}
 .fm-heat-axis,.fm-heat-day{font-size:11px;font-weight:750;color:#587568;min-width:0;display:flex;align-items:center;justify-content:center;padding:8px 2px}
 .fm-heat-day{justify-content:flex-start}
 .fm-heat-cell{min-height:35px;border-radius:3px;display:flex;align-items:center;justify-content:center;padding:6px 2px;font-size:12px;font-variant-numeric:tabular-nums;font-weight:750;color:#3c3221;white-space:nowrap}

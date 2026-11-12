@@ -13,26 +13,35 @@ export function heatColor(rank){
 // Mantener la jornada 09:00–22:00 como referencia y añadir cualquier hora
 // de fuera de ese horario que realmente haya registrado operaciones.
 export function heatmapHours(cells=[]){
- const active=new Set(cells.filter(c=>Number(c.tickets)>0).map(c=>Number(c.hour)));
+ const active=new Set(cells.filter(c=>Number(c.tickets)>0||Number(c.units)!==0||Number(c.sales)!==0).map(c=>Number(c.hour)));
  return Array.from({length:24},(_,hour)=>({
   hour,label:String(hour).padStart(2,"0")+":00–"+
    String((hour+1)%24).padStart(2,"0")+":00"
  })).filter(h=>(h.hour>=9&&h.hour<=21)||active.has(h.hour));
 }
+// Cantidades monetarias legibles en celdas estrechas; el título ofrece el valor exacto.
+export function formatHeatAmount(value){
+ const amount=Number(value)||0;
+ if(Math.abs(amount)>=10000)return new Intl.NumberFormat("es-ES",{
+  notation:"compact",maximumFractionDigits:1}).format(amount)+" €";
+ return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(amount)+" €";
+}
 // Las consultas de históricos largos se dividen por años y deben fusionarse
-// sumando tickets del mismo día de la semana y la misma hora.
+// sumando importe, unidades y tickets del mismo día y hora.
 export function mergeSalesHeatmap(parts=[]){
  const counts=new Map();
  for(const part of parts){
   for(const cell of part.cells||[]){
    const weekday=Number(cell.weekday),hour=Number(cell.hour),
-    tickets=Number(cell.tickets),units=Number(cell.units||0);
+    tickets=Number(cell.tickets),units=Number(cell.units||0),
+    sales=Number(cell.sales||0);
    if(!Number.isInteger(weekday)||weekday<1||weekday>7||
     !Number.isInteger(hour)||hour<0||hour>23||
-    !Number.isSafeInteger(tickets)||tickets<0||!Number.isFinite(units))continue;
+    !Number.isSafeInteger(tickets)||tickets<0||!Number.isFinite(units)||!Number.isFinite(sales))continue;
    const key=weekday+"|"+hour;
-   const previous=counts.get(key)||{tickets:0,units:0};
-   counts.set(key,{tickets:previous.tickets+tickets,units:previous.units+units});
+   const previous=counts.get(key)||{tickets:0,units:0,sales:0};
+   counts.set(key,{tickets:previous.tickets+tickets,units:previous.units+units,
+    sales:previous.sales+sales});
   }
  }
  const cells=[...counts].map(([key,values])=>{
@@ -40,5 +49,6 @@ export function mergeSalesHeatmap(parts=[]){
   return {weekday,hour,...values};
  }).sort((a,b)=>a.hour-b.hour||a.weekday-b.weekday);
  return {cells,total:cells.reduce((sum,cell)=>sum+cell.tickets,0),
-  totalUnits:cells.reduce((sum,cell)=>sum+cell.units,0)};
+  totalUnits:cells.reduce((sum,cell)=>sum+cell.units,0),
+  totalSales:cells.reduce((sum,cell)=>sum+cell.sales,0)};
 }

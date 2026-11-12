@@ -74,3 +74,11 @@ test("rechaza filtros excesivos y IDs inválidos",async()=>{
  assert.equal((await get("/api/tenant/familias-globales/:id/origenes",{},"../../x")).status,400);
  assert.equal(queries.length,0);
 });
+
+test("la vista única devuelve también las familias pendientes, sin dividir el directorio",async()=>{
+ const {get}=harness();
+ const r=await get("/api/tenant/familias-globales",{view:"todas"});
+ assert.equal(r.status,200);
+ assert.equal(r.result.groups.length,1);
+ assert.equal(r.result.summary.unicas,1);
+});

@@ -79,3 +79,22 @@ test("buscar ignora tildes, mayúsculas y prefijos sin confundir ñ con n",()=>{
  const years=groupFamilyDirectory(rows).filter(x=>["Año","Ano"].includes(x.name));
  assert.equal(years.length,2);
 });
+
+test("el maestro completo reúne confirmadas y pendientes en una sola lista alfabética, sin duplicados",()=>{
+ const rows=[
+  f(1,"ZAPATOS","PARAFARMACIA",{referencePharmacy:"ALMACEN"}),
+  f(2,"2022 - DERMOCOSMETICA","PARAFARMACIA",{referencePharmacy:"ALMACEN"}),
+  f(3,"Dermocosmética","SIN_DETERMINAR"),
+  f(4,"Ácidos","MEDICACION"),
+  f(5,"ACIDOS","MEDICACION"),
+  f(6,"Bebé","SIN_DETERMINAR")
+ ];
+ const result=selectFamilyDirectory(rows,{view:"todas"});
+ assert.deepEqual(result.groups.map(g=>g.name),["Ácidos","Bebé","Dermocosmética","Zapatos"]);
+ assert.equal(result.total,4);
+ assert.equal(result.summary.unicas,4);
+ assert.equal(result.summary.maestros,2);
+ assert.equal(result.summary.pendientes,2);
+ assert.deepEqual(result.groups.map(g=>g.members.length),[2,1,2,1]);
+ assert.equal(new Set(result.groups.map(g=>g.key)).size,result.groups.length);
+});

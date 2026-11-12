@@ -59,7 +59,7 @@ export function selectFamilyDirectory(records,{
  const groups=groupFamilyDirectory(records);
  const masters=groups.filter(g=>g.confirmed);
  const pendings=groups.filter(g=>!g.confirmed);
- const entries=view==="maestro"?masters:pendings;
+ const entries=view==="maestro"?masters:view==="pendientes"?pendings:groups;
  const needle=normalizeText(search),normalizedNeedle=familyNameSlug(search,"");
  const matching=needle?entries.filter(g=>normalizeText(g.name).includes(needle)||
   Boolean(normalizedNeedle&&g.key.includes(normalizedNeedle))||
@@ -68,9 +68,9 @@ export function selectFamilyDirectory(records,{
  const selected=view==="pendientes"?matching.slice((page-1)*pageSize,page*pageSize):matching;
  return {
   groups:selected,
-  summary:{maestros:masters.length,
-   medicacion:masters.filter(g=>g.segments.includes("MEDICACION")).length,
-   parafarmacia:masters.filter(g=>g.segments.includes("PARAFARMACIA")).length,
+  summary:{unicas:groups.length,maestros:masters.length,
+   medicacion:groups.filter(g=>g.segments.includes("MEDICACION")).length,
+   parafarmacia:groups.filter(g=>g.segments.includes("PARAFARMACIA")).length,
    pendientes:pendings.length},
   total:matching.length,
   pageSize:view==="pendientes"?pageSize:null

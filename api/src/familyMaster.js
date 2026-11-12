@@ -225,18 +225,16 @@ export async function reconcileFamilies(pool,ctx){
  finally{db.release();}
 }
 export function setupFamilyMaster(app,pool,{requireTenantManager}){
- // Vista ligera: 65 familias maestras de referencia, no miles de fichas CN.
+ // Vista ligera de todas las denominaciones normalizadas del cliente.
  // Las equivalencias de cada farmacia se consultan solo al desplegar la fila.
  app.get("/api/tenant/familias-globales",...requireTenantManager(),async(req,res,next)=>{
   const view=String(req.query?.view||"maestro");
   const search=String(req.query?.q||"").trim();
   const page=Number(req.query?.page||1);
-  if(!["maestro","pendientes"].includes(view)||search.length>100||
+  if(!["maestro","pendientes","todas"].includes(view)||search.length>100||
     !Number.isSafeInteger(page)||page<1||page>10000)
    return res.status(400).json({error:"Filtros de familias incorrectos"});
   const slug=req.context.client.slug;
-  const confirmed="(g.referencia_farmacia IS NOT NULL OR g.nombre_manual)";
-  const predicate=view==="maestro"?confirmed:"NOT "+confirmed;
   try{
    // Solo una lectura ligera de las familias activas (sin JOIN a CN o
    // artículos). Agrupar antes de paginar evita que un mismo nombre

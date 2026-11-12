@@ -4,7 +4,7 @@ import "./familiasMaestro.css";
 
 const SEGMENTS={MEDICACION:"Medicación",PARAFARMACIA:"Parafarmacia",SIN_DETERMINAR:"Sin clasificar"};
 const count=n=>new Intl.NumberFormat("es-ES").format(Number(n)||0);
-const EMPTY={maestros:0,medicacion:0,parafarmacia:0,pendientes:0};
+const EMPTY={unicas:0,maestros:0,medicacion:0,parafarmacia:0,pendientes:0};
 async function api(slug,path,options={}){
  const r=await fetch(path,{credentials:"same-origin",cache:"no-store",...options,
   headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":slug,...options.headers}});
@@ -23,7 +23,8 @@ const groupOrigins=origins=>{
 };
 
 export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
- const [view,setView]=useState("maestro"),[category,setCategory]=useState("todos");
+ const view="todas";
+ const [category,setCategory]=useState("todos");
  const [search,setSearch]=useState(""),[query,setQuery]=useState(""),[page,setPage]=useState(1);
  const [records,setRecords]=useState([]),[masterItems,setMasterItems]=useState([]);
  const [summary,setSummary]=useState(EMPTY),[total,setTotal]=useState(0);
@@ -50,7 +51,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
   setRecords(result.groups||[]);
   setSummary(result.summary||EMPTY);
   setTotal(Number(result.total)||0);
-  if(which==="maestro"&&!filter)setMasterItems(result.groups||[]);
+  if(which==="todas"&&!filter)setMasterItems(result.groups||[]);
  },[clientSlug,view,query,page]);
  useEffect(()=>{
   const token=setTimeout(()=>{setQuery(search.trim());setPage(1)},220);
@@ -68,14 +69,15 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
     setRecords(result.groups||[]);
     setSummary(result.summary||EMPTY);
     setTotal(Number(result.total)||0);
-    if(view==="maestro"&&!query)setMasterItems(result.groups||[]);
+    if(view==="todas"&&!query)setMasterItems(result.groups||[]);
    }).catch(err=>{if(alive)setError(err.message)})
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[clientSlug,view,query,page]);
  const visible=useMemo(()=>records.filter(g=>category==="todos"||g.segments.includes(category)),
   [records,category]);
- const options=masterItems.flatMap(g=>g.members).filter(g=>g.segment!=="SIN_DETERMINAR");
+ const options=masterItems.filter(g=>g.confirmed).flatMap(g=>g.members)
+  .filter(g=>g.segment!=="SIN_DETERMINAR");
  async function act(action,success){
   setBusy(true);setError("");setMessage("");
   try{
@@ -128,30 +130,20 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
    {method:"POST"}),"Conciliación completada. Los cambios manuales se han conservado.");
   if(result)setOrigins({});
  }
- function switchView(next){
-  setView(next);setSearch("");setQuery("");setPage(1);setCategory("todos");setExpanded(null);
- }
  return <div className="fm-families">
   <header className="fm-families-heading">
    <div><h1>Maestro de familias</h1>
-    <p>Una sola entrada por nombre, en orden alfabético, con cada tipo de producto en su detalle.</p></div>
+    <p>Todos los nombres de familia, de la A a la Z, sin entradas duplicadas. Las clasificaciones de medicación y parafarmacia se conservan en el detalle.</p></div>
    <button className="btn btn-secondary btn-sm fm-families-reconcile" onClick={reconcile} disabled={busy||loading}>
     <RefreshCcw size={15} className={busy?"fm-families-spin":""}/>
     {busy?"Reconciliando…":"Volver a unificar"}</button>
   </header>
   <div className="fm-families-kpis">
-   <div><span>Familias del maestro</span><strong>{count(summary.maestros)}</strong></div>
+   <div><span>Familias únicas</span><strong>{count(summary.unicas)}</strong></div>
    <div><span>Medicación</span><strong>{count(summary.medicacion)}</strong></div>
    <div><span>Parafarmacia</span><strong>{count(summary.parafarmacia)}</strong></div>
   </div>
   <section className="card fm-families-directory">
-   <div className="fm-families-tabs" role="tablist" aria-label="Tipo de familia">
-    <button role="tab" aria-selected={view==="maestro"} className={view==="maestro"?"is-active":""}
-     onClick={()=>switchView("maestro")}>Familias unificadas</button>
-    <button role="tab" aria-selected={view==="pendientes"} className={view==="pendientes"?"is-active":""}
-     onClick={()=>switchView("pendientes")}>
-     Por revisar <span>{count(summary.pendientes)}</span></button>
-   </div>
    <div className="fm-families-filters">
     <label className="fm-families-search"><Search size={17}/>
      <input type="search" placeholder="Buscar familia…" value={search} onChange={e=>setSearch(e.target.value)}
@@ -160,14 +152,12 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
      <option value="todos">Todas las categorías</option>
      <option value="MEDICACION">Medicación</option>
      <option value="PARAFARMACIA">Parafarmacia</option>
-     {view==="pendientes"&&<option value="SIN_DETERMINAR">Sin clasificar</option>}
+     <option value="SIN_DETERMINAR">Sin clasificar</option>
     </select>
-    <small>{count(visible.length)} en esta vista</small>
+    <small>{count(visible.length)} familias únicas</small>
    </div>
-   {view==="maestro"&&<p className="fm-families-note">
-    Los nombres equivalentes aparecen una sola vez. Si una familia pertenece a medicación y parafarmacia, se muestran sus clasificaciones al desplegarla sin mezclar sus artículos.</p>}
-   {view==="pendientes"&&<p className="fm-families-note">
-    Estas categorías locales todavía no tienen una equivalencia segura con el maestro. Se muestran aparte para no duplicar familias ni asignar artículos incorrectamente.</p>}
+   <p className="fm-families-note">
+    Cada denominación equivalente aparece una sola vez, aunque exista en varias farmacias o tipos de producto. Las familias pendientes de validar también están incluidas y se identifican en el listado.</p>
    {message&&<p className="fm-families-notice" role="status">{message}</p>}
    {error&&<p className="fm-families-error" role="alert">{error}</p>}
    {loading?<p className="fm-families-empty">Cargando familias…</p>:
@@ -190,6 +180,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
         <div className="fm-family-meta">
          {g.segments.map(segment=><span key={segment}>{SEGMENTS[segment]||segment}</span>)}
          {g.members.length>1&&<span>{g.members.length} clasificaciones agrupadas</span>}
+         {!g.confirmed&&<span>Pendiente de validar</span>}
          {g.members.length===1&&g.referencePharmacy&&<span>Referencia: {pharmacyName(g.referencePharmacy)}</span>}
         </div>
        </div>
@@ -243,17 +234,6 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
       </div>}
      </article>)}
     </div>}
-   {view==="pendientes"&&page*30<total&&<div className="fm-families-pages">
-    <button className="btn btn-secondary btn-sm" disabled={page===1||loading}
-     onClick={()=>{setPage(p=>Math.max(1,p-1));setExpanded(null)}}>Anterior</button>
-    <span>Página {page}</span>
-    <button className="btn btn-secondary btn-sm" disabled={loading}
-     onClick={()=>{setPage(p=>p+1);setExpanded(null)}}>Siguiente</button>
-   </div>}
-   {view==="pendientes"&&page>1&&page*30>=total&&<div className="fm-families-pages">
-    <button className="btn btn-secondary btn-sm" onClick={()=>setPage(p=>p-1)}>Anterior</button>
-    <span>Página {page}</span>
-   </div>}
   </section>
  </div>;
 }

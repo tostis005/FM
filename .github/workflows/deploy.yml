@@ -128,6 +128,7 @@ jobs:
           node --test api/src/salesSummary.test.js
           node --test api/src/salesTotals.test.js
           node --test api/src/salesInsights.test.js
+          node --test api/src/salesOverview.test.js
           node --test api/src/salesAnalysisPeriod.test.js
           node --test api/src/tenantAnalysisPolicy.test.js
           node --test api/src/internalPassword.test.js

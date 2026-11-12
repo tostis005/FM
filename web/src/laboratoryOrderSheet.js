@@ -39,6 +39,28 @@ export function laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts={}){
  }
  return null;
 }
+// Las familias R1/R2 y dúplos tienen varias referencias reales: el grupo se
+// ordena por la SUMA de sus artículos, sin duplicar líneas ni mezclar sus CN.
+export function laboratoryOrderGroupValue(group,field,type,pharmacyIds,drafts={}){
+ const rows=group?.rows||[];
+ if(!rows.length)return null;
+ const values=rows.map(row=>laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts));
+ if(values.some(value=>value===null||value===undefined||!Number.isFinite(Number(value))))
+  return null;
+ return values.reduce((sum,value)=>sum+Number(value),0);
+}
+export function compareLaboratoryOrderGroups(a,b,sort,type,pharmacyIds,drafts={}){
+ if(!sort||sort==="original")return 0;
+ const [field,direction]=sort.split(":");
+ if(["totalStock","totalUnits","totalSuggested","totalOrder"].includes(field)){
+  const left=laboratoryOrderGroupValue(a,field,type,pharmacyIds,drafts);
+  const right=laboratoryOrderGroupValue(b,field,type,pharmacyIds,drafts);
+  if(left===null||right===null)return left===right?0:left===null?1:-1;
+  const difference=left-right;
+  return direction==="desc"?-difference:difference;
+ }
+ return compareLaboratoryOrderRows(a.representative,b.representative,sort,type,pharmacyIds,drafts);
+}
 const numericalSortFields=new Set(["totalStock","totalUnits","totalSuggested","totalOrder"]);
 export function compareLaboratoryOrderRows(a,b,sort,type,pharmacyIds,drafts={}){
  if(!sort||sort==="original")return 0;

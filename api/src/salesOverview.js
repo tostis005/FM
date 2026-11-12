@@ -40,7 +40,7 @@ export function buildSalesFamilyRankingSQL(schema){
  const q='"'+schema+'"';
  return [
   "WITH sold AS MATERIALIZED (",
-  " SELECT upper(btrim(v.farmacia_codigo)) AS pharmacy_code,v.articulo_id,",
+  " SELECT v.farmacia_codigo AS pharmacy_code,v.articulo_id,",
   " sum(v.importe)::float8 AS sales,",
   " sum(CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL THEN v.unidades ELSE 0 END)::float8 AS units,",
   " count(*)::bigint AS lines",
@@ -53,7 +53,7 @@ export function buildSalesFamilyRankingSQL(schema){
   " sum(s.lines)::bigint AS lines",
   " FROM sold s",
   " LEFT JOIN farmetrica.familias_globales_articulos link",
-  " ON link.cliente_slug=$4 AND link.farmacia_codigo=s.pharmacy_code",
+  " ON link.cliente_slug=$4 AND link.farmacia_codigo=upper(btrim(s.pharmacy_code))",
   " AND link.articulo_origen_id=s.articulo_id",
   " LEFT JOIN farmetrica.familias_globales g",
   " ON g.cliente_slug=$4 AND g.id=link.familia_id AND g.activo",

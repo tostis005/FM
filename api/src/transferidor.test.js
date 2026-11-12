@@ -109,6 +109,39 @@ test("la API permite leer resultados de dos farmacias aunque falte una tercera",
  assert.equal(queries.filter(q=>q.sql.includes("WITH chosen AS MATERIALIZED")).length,1);
  assert.equal(queries.filter(q=>q.sql.includes("WITH refs AS MATERIALIZED")).length,1);
 });
+
+test("la propuesta expone pedidos pendientes del destino para explicar unidades a enviar",()=>{
+ const plan=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",name:"Crema",stock:28,units7:0},
+  {pharmacyId:"2",cn:"123456",name:"Crema",stock:1,ordered:2,units7:7}
+ ],pharmacies.slice(0,2));
+ assert.equal(plan.transfers.length,1);
+ const move=plan.transfers[0];
+ assert.equal(move.pendingDestination,2);
+ assert.equal(move.stockDestination,1);
+ assert.equal(move.triggerDestination,4);
+ assert.equal(move.targetDestination,7);
+ assert.equal(move.units,4,"Se envía objetivo 7 menos stock 1 y pedidos pendientes 2");
+ const filtered=filterTransferPlan(plan.transfers,
+  parseTransferFilters({orden:"pendingDestination",filtros:'{"pendingDestination":"2"}'},
+   pharmacies.slice(0,2)));
+ assert.equal(filtered.total,1,"Permite filtrar y ordenar por pendientes");
+});
+
+test("una exposición extra se muestra dentro del objetivo, sin variar la previsión mínima",()=>{
+ const plan=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",name:"Crema",stock:35,units7:0},
+  {pharmacyId:"2",cn:"123456",name:"Crema",stock:0,units7:7,ordered:0}
+ ],pharmacies.slice(0,2),{
+  minDays:4,targetDays:7,articles:[{pharmacyId:"2",cn:"123456",units:6}],families:[]
+ });
+ assert.equal(plan.transfers.length,1);
+ assert.equal(plan.transfers[0].triggerDestination,4);
+ assert.equal(plan.transfers[0].targetDestination,13);
+ assert.equal(plan.transfers[0].extraDestination,6);
+ assert.equal(plan.transfers[0].units,13);
+});
+
 test("frontera IdArticu 399999 parafarmacia; 400000 medicación",()=>{
  const result=buildGlobalTransfers([
   item("1","399999",60,0),item("2","399999",0,10),

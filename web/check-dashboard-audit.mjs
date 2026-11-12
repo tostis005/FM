@@ -60,12 +60,14 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/analytics/ventas/detalle")body={products:[],hasMore:false,totalFiltered:0};
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/analytics/compras/estado")body={hasPurchases:true,pharmacies:[]};
- else if(p==="/api/analytics/dashboard/horarios")body={cells:[
-  {weekday:1,hour:9,sales:123.45,lines:2},{weekday:5,hour:12,sales:345.67,lines:3}
- ],total:469.12};
- else if(p==="/api/analytics/dashboard/vendedores")body={sellers:[
-  {name:"Vendedor prueba",sales:469.12,units:5}
- ],total:469.12};
+ else if(p==="/api/analytics/ventas/actividad")body={
+  horarios:{cells:[
+   {weekday:1,hour:9,sales:123.45,lines:2},{weekday:5,hour:12,sales:345.67,lines:3}
+  ],total:469.12},
+  vendedores:{sellers:[{name:"Vendedor prueba",sales:469.12,units:5}],total:469.12},
+  tickets:{kpis:{tickets:20,sales:469.12,units:5,ticketMedio:23.456,unidadesPorTicket:0.25},
+   pharmacies:[{id:"1",name:"Farmacia Centro",tickets:20,sales:469.12,units:5,ticketMedio:23.456}]}
+ };
  else if(p==="/api/analytics/dashboard/canales-compra")body={
   available:true,channels:[
    {channel:"cooperativa",value:180,units:10,lines:1},
@@ -160,6 +162,7 @@ try{
   "Al navegar a Ventas debe conservarse el atajo activo");
  await page.getByRole("heading",{name:"Mapa de calor de ventas"}).waitFor({timeout:12000});
  await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor({timeout:12000});
+ await page.locator(".fm-heat-cell").first().waitFor({timeout:12000});
  await page.goto(BASE+"/compras",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).waitFor({timeout:12000});
  await page.waitForFunction(()=>document.body.textContent.includes("Artículo prueba"),null,{timeout:12000});
@@ -172,9 +175,15 @@ try{
   "La comparativa de costes pertenece a Compras, no a Inicio");
  assert.equal(await page.locator(".fm-dashboard-lazy-detail").count(),0,
   "Inicio no debe renderizar un detalle de artículos sin solicitar");
- for(const endpoint of ["horarios","vendedores","canales-compra","comparador-puc"]){
+ assert.ok(by("/api/analytics/ventas/actividad").length>0,
+  "Ventas debe cargar una sola respuesta para horarios, vendedores y tickets");
+ assert.equal(by("/api/analytics/dashboard/horarios").length,0,
+  "Ventas no debe volver a consultar el mapa de calor por separado");
+ assert.equal(by("/api/analytics/dashboard/vendedores").length,0,
+  "Ventas no debe volver a consultar vendedores por separado");
+ for(const endpoint of ["canales-compra","comparador-puc"]){
   assert.ok(by("/api/analytics/dashboard/"+endpoint).length>0,
-   "No se lanzó la consulta independiente de "+endpoint);
+   "No se lanzó la consulta de compras "+endpoint);
  }
  // Histórico de cinco años: cero llamadas monolíticas y todos los KPI terminan.
  const beforeSales=by("/api/analytics/ventas/totales").length;

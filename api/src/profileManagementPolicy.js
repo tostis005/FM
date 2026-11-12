@@ -17,17 +17,23 @@ export function canEditGlobalProfile(context,profile){
  return !profile?.usedOtherClient;
 }
 
-export function profileWithinManagerScope(context,value){
+export function profileWithinManagerScope(context,value,previous=null){
  if(context?.role==="superadministrador")return true;
  if(!canManageProfileRole(context?.role,value?.baseRole))return false;
- // Sin asignaciones abiertas: nunca permitir que un tenant asigne permisos
- // futuros aún no incluidos en el alcance de su administrador.
+ // Sin herencia abierta: nunca conceder acceso futuro por encima del gestor.
  if(!Array.isArray(value?.modules)||!Array.isArray(value?.sections))return false;
- if(value.modules.some(id=>context?.modules?.[id]!==true))return false;
- if(value.sections.some(id=>context?.sections?.[id]!==true||
-  !value.modules.includes(sections.get(id))))return false;
+ const previousModules=new Set(Array.isArray(previous?.modules)?previous.modules:[]);
+ const previousSections=new Set(Array.isArray(previous?.sections)?previous.sections:[]);
+ // Un módulo deshabilitado por el cliente puede seguir almacenado en un
+ // perfil histórico; permitir conservarlo, nunca concederlo de nuevo.
+ if(value.modules.some(id=>context?.modules?.[id]!==true&&!previousModules.has(id)))return false;
+ if(value.sections.some(id=>!value.modules.includes(sections.get(id))||
+  (context?.sections?.[id]!==true&&!previousSections.has(id))))return false;
  return Object.entries(value?.permissions||{}).every(([module,operations])=>
-  !operations.length||(value.modules.includes(module)&&
-   context?.modules?.[module]===true&&operations.every(op=>
-    profileAllows(context.profilePermissions,module,op))));
+  !operations.length||(value.modules.includes(module)&&operations.every(op=>
+   (context?.modules?.[module]===true&&
+    profileAllows(context.profilePermissions,module,op))||
+   (previousModules.has(module)&&
+    Array.isArray(previous?.permissions?.[module])&&
+    previous.permissions[module].includes(op)))));
 }

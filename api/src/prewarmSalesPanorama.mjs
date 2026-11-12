@@ -1,4 +1,5 @@
 // Precalentamiento auditado y de solo resumen; nunca modifica el ERP.
+// Diagnóstico activado por despliegue: cache mensual y EXPLAIN sin importes.
 import pg from "pg";
 import {createSalesPanoramaCache} from "./salesPanorama.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";

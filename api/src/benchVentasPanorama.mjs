@@ -1,5 +1,6 @@
 // Benchmark de solo lectura, opt-in, sobre el período real de tres meses.
 // No extrae CN, vendedores, importes ni datos comerciales en los logs.
+// Activación auditada: BENCH_VENTAS_PANORAMA (solo lecturas y tres vistas agregadas).
 import pg from "pg";
 import {buildSalesFamilyRankingSQL} from "./salesOverview.js";
 import {buildSalesActivitySQL} from "./salesActivity.js";

@@ -1,0 +1,142 @@
+// Panorama de ventas por familias del maestro y por tickets completos.
+import {validSalesDateRange} from "./salesAnalysisPeriod.js";
+import {familyNameSlug,cleanFamilyName} from "./familyMatching.js";
+
+const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
+const numeric=v=>Number.isFinite(Number(v))?Number(v):0;
+const fallback=name=>String(name||"").toLocaleLowerCase("es")
+ .replace(/ñ/g,"\u0001").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+ .replace(/\u0001/g,"ñ").replace(/\s+/g," ").trim();
+const accents=s=>(String(s).match(/[áéíóúÁÉÍÓÚ]/g)||[]).length;
+function salesScope(req,res){
+ const c=req.context;
+ if(c.role!=="superadministrador"&&!c.modules?.ventas&&!c.modules?.dashboard){
+  res.status(403).json({error:"Módulo de ventas no habilitado"});return null;
+ }
+ const from=String(req.query.desde||""),to=String(req.query.hasta||"");
+ const raw=String(req.query.farmacias||"");
+ if(!validSalesDateRange(from,to)||raw.length>2000||
+  (raw&&raw.split(",").some(x=>!/^[1-9]\d{0,8}$/.test(x)))){
+  res.status(400).json({error:"Período o farmacias no válidos"});return null;
+ }
+ const allowed=(c.allowedPharmacyIds||[]).map(Number);
+ const requested=raw?raw.split(",").map(Number):allowed;
+ if(requested.some(id=>!allowed.includes(id))){
+  res.status(403).json({error:"Farmacia no autorizada"});return null;
+ }
+ const ids=[...new Set(requested)];
+ const codesById=new Map((c.pharmacies||[]).map(p=>[
+  Number(p.id),String(p.databaseCode||p.sourceCode||"").trim().toUpperCase()]));
+ if(ids.some(id=>!codesById.get(id))){
+  res.status(503).json({error:"Falta correspondencia ERP de una farmacia"});return null;
+ }
+ const schema=String(c.client?.schema||"");
+ if(!SCHEMA.test(schema))throw Error("Esquema de cliente no válido");
+ return {from,to,ids,codes:[...new Set(ids.map(id=>codesById.get(id)))],
+  schema,tenant:c.client.slug};
+}
+export function buildSalesFamilyRankingSQL(schema){
+ if(!SCHEMA.test(schema))throw Error("Esquema SQL no permitido");
+ const q='"'+schema+'"';
+ return [
+  "WITH sold AS MATERIALIZED (",
+  " SELECT upper(btrim(v.farmacia_codigo)) AS pharmacy_code,v.articulo_id,",
+  " sum(v.importe)::float8 AS sales,",
+  " sum(CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL THEN v.unidades ELSE 0 END)::float8 AS units,",
+  " count(*)::bigint AS lines",
+  " FROM "+q+".fm_ventas_analitica v",
+  " WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
+  " AND v.farmacia_codigo=ANY($3::text[])",
+  " GROUP BY 1,2",
+  ") SELECT g.id::text AS \"familyId\",g.nombre AS name,g.segmento AS segment,",
+  " sum(s.sales)::float8 AS sales,sum(s.units)::float8 AS units,",
+  " sum(s.lines)::bigint AS lines",
+  " FROM sold s",
+  " LEFT JOIN farmetrica.familias_globales_articulos link",
+  " ON link.cliente_slug=$4 AND link.farmacia_codigo=s.pharmacy_code",
+  " AND link.articulo_origen_id=s.articulo_id",
+  " LEFT JOIN farmetrica.familias_globales g",
+  " ON g.cliente_slug=$4 AND g.id=link.familia_id AND g.activo",
+  " GROUP BY g.id,g.nombre,g.segmento",
+  " ORDER BY sales DESC NULLS LAST"
+ ].join("\n");
+}
+export function mergeSalesFamilyRows(rows=[]){
+ const groups=new Map();
+ let totalSales=0,totalUnits=0,totalLines=0,classifiedLines=0;
+ for(const r of rows){
+  const sales=numeric(r.sales),units=numeric(r.units),lines=numeric(r.lines);
+  totalSales+=sales;totalUnits+=units;totalLines+=lines;
+  const classified=r.familyId!=null;
+  if(classified)classifiedLines+=lines;
+  const original=classified?String(r.name||"").trim():"Sin clasificar";
+  const key=classified?(familyNameSlug(original,"")||"name:"+fallback(original)):"sin-clasificar";
+  const name=classified?cleanFamilyName(original,""):original;
+  const prev=groups.get(key)||{key,name,sales:0,units:0,lines:0,
+   classified,segments:[]};
+  if(accents(name)>accents(prev.name))prev.name=name;
+  prev.sales+=sales;prev.units+=units;prev.lines+=lines;
+  if(classified&&r.segment&&!prev.segments.includes(r.segment))
+   prev.segments.push(r.segment);
+  groups.set(key,prev);
+ }
+ const families=[...groups.values()].sort((a,b)=>
+  Number(b.classified)-Number(a.classified)||
+  b.sales-a.sales||a.name.localeCompare(b.name,"es"));
+ return {families,totalSales,totalUnits,totalLines,classifiedLines,
+  coveragePct:totalLines?Math.round(classifiedLines/totalLines*1000)/10:0};
+}
+export function buildSalesTicketsSQL(schema){
+ if(!SCHEMA.test(schema))throw Error("Esquema SQL no permitido");
+ const q='"'+schema+'"';
+ return [
+  "WITH documents AS MATERIALIZED (",
+  " SELECT upper(btrim(v.farmacia_codigo)) AS code,v.sistema_origen,v.documento_id,",
+  " sum(v.importe)::float8 AS sales,",
+  " sum(CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL THEN v.unidades ELSE 0 END)::float8 AS units",
+  " FROM "+q+".fm_ventas_analitica v",
+  " WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
+  " AND v.farmacia_codigo=ANY($3::text[])",
+  " GROUP BY 1,2,3",
+  ") SELECT code,count(*)::bigint AS tickets,",
+  " sum(sales)::float8 AS sales,sum(units)::float8 AS units",
+  " FROM documents GROUP BY code ORDER BY sales DESC"
+ ].join("\n");
+}
+export function summarizeSalesTickets(rows,pharmacies,ids){
+ const names=new Map((pharmacies||[]).filter(p=>ids.includes(Number(p.id))).map(p=>[
+  String(p.databaseCode||p.sourceCode||"").trim().toUpperCase(),
+  {id:String(p.id),name:p.name}
+ ]));
+ const result=rows.map(r=>{
+  const p=names.get(String(r.code||"").toUpperCase());
+  return {id:p?.id||null,name:p?.name||"Farmacia",
+   sales:numeric(r.sales),tickets:numeric(r.tickets),units:numeric(r.units),
+   ticketMedio:numeric(r.tickets)?numeric(r.sales)/numeric(r.tickets):0};
+ }).filter(r=>r.id).sort((a,b)=>b.sales-a.sales);
+ const tickets=result.reduce((n,r)=>n+r.tickets,0);
+ const sales=result.reduce((n,r)=>n+r.sales,0);
+ const units=result.reduce((n,r)=>n+r.units,0);
+ return {pharmacies:result,kpis:{tickets,sales,units,
+  ticketMedio:tickets?sales/tickets:0,unidadesPorTicket:tickets?units/tickets:0}};
+}
+export function setupSalesOverview(app,pool,{requireTenant}){
+ app.get("/api/analytics/ventas/familias-ranking",...requireTenant(),async(req,res,next)=>{
+  try{
+   const s=salesScope(req,res);if(!s)return;
+   if(!s.ids.length)return res.json(mergeSalesFamilyRows([]));
+   const {rows}=await pool.query({text:buildSalesFamilyRankingSQL(s.schema),
+    values:[s.from,s.to,s.codes,s.tenant],query_timeout:90000});
+   res.json(mergeSalesFamilyRows(rows));
+  }catch(e){next(e)}
+ });
+ app.get("/api/analytics/ventas/ticket-medio",...requireTenant(),async(req,res,next)=>{
+  try{
+   const s=salesScope(req,res);if(!s)return;
+   if(!s.ids.length)return res.json(summarizeSalesTickets([],[],[]));
+   const {rows}=await pool.query({text:buildSalesTicketsSQL(s.schema),
+    values:[s.from,s.to,s.codes],query_timeout:90000});
+   res.json(summarizeSalesTickets(rows,req.context.pharmacies,s.ids));
+  }catch(e){next(e)}
+ });
+}

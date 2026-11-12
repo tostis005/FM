@@ -177,8 +177,8 @@ try{
   "La comparativa de costes pertenece a Compras, no a Inicio");
  assert.equal(await page.locator(".fm-dashboard-lazy-detail").count(),0,
   "Inicio no debe renderizar un detalle de artículos sin solicitar");
- assert.ok(by("/api/analytics/ventas/actividad").length>0,
-  "Ventas debe cargar una sola respuesta para horarios, vendedores y tickets");
+ assert.ok(by("/api/analytics/ventas/panorama").length>0,
+  "Ventas debe compartir una respuesta de familias, horarios y vendedores");
  assert.equal(by("/api/analytics/dashboard/horarios").length,0,
   "Ventas no debe volver a consultar el mapa de calor por separado");
  assert.equal(by("/api/analytics/dashboard/vendedores").length,0,

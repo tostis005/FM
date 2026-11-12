@@ -137,7 +137,7 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
     await daily.refreshDays({...scope,month:previous});
     // A 1 de enero, generar el ejercicio anterior solo desde 12 meses
     // ya fijados. Nunca modificar un ejercicio existente.
-    if(local.slice(5,10)>="01-01")await annual.refreshYear({
+    if(local.slice(5,7)==="01")await annual.refreshYear({
      slug:scope.slug,farms:scope.farms,year:Number(local.slice(0,4))-1});
    }
    // Si el servidor estuvo apagado, completar los huecos sin otro escaneo masivo.

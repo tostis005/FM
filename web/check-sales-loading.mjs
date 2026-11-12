@@ -164,8 +164,8 @@ try{
  const familyTitle=await page.locator(".fm-so-family .fm-sales-card-heading").innerText();
  if(familyTitle.trim()!=="Ventas por familias")
   throw Error("El título de familias no debe tener información superpuesta");
- if(!(await page.locator(".fm-so-family .fm-so-list-meta").innerText()).includes("líneas clasificadas"))
-  throw Error("El dato de clasificación debe permanecer visible, debajo del encabezado");
+ if(await page.getByText("líneas clasificadas",{exact:false}).count())
+  throw Error("El porcentaje de líneas clasificadas no debe mostrarse en el ranking");
  for(const removed of [
   "Las barras muestran diferencias",
   "Ordenadas de mayor a menor",
@@ -193,7 +193,13 @@ try{
  await pharmacyPanel.waitFor({state:"visible",timeout:12000});
  await page.getByRole("button",{name:"Unidades",exact:true}).click();
  await page.getByText("9 uds.",{exact:true}).waitFor();
+ const unitShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
+ if(!unitShares.includes("75 %")||!unitShares.includes("25 %"))
+  throw Error("En unidades deben mostrarse las cuotas sobre las 12 unidades: "+JSON.stringify(unitShares));
  await page.getByRole("button",{name:"Ventas €",exact:true}).click();
+ const salesShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
+ if(!salesShares.some(value=>value.includes("76,8")))
+  throw Error("La cuota por importe debe conservarse: "+JSON.stringify(salesShares));
  if(await page.getByText("Artículos diferentes",{exact:true}).count()||
     await page.getByText("Referencias por farmacia",{exact:true}).count()||
     await page.getByRole("heading",{name:"Artículos vendidos"}).count()||

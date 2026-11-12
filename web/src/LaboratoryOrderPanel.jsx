@@ -577,7 +577,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          const m=row.byPharmacy?.[String(p.id)]||{};
          return [row.metricsReady?m.stock??null:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,
           tab==="medicacion"?"edit":row.metricsReady?m.suggested??null:null].map((value,k)=>
-           <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>
+           <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}
+            title={k===0?(m.stockInferredZero?
+              "Stock 0: no existe ficha de este CN en la farmacia, que sí tiene inventario sincronizado":
+              value===null?"Stock no disponible: ficha o importación de inventario incompleta":
+              "Existencias actuales de la farmacia"):undefined}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
              disabled={!canEdit||loading||!row.metricsReady} value={line.unitsByPharmacy?.[String(p.id)]??0}

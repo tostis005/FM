@@ -8,6 +8,7 @@ import "./salesOverview.css";
 
 const money=value=>euro(Number(value)||0);
 const number=value=>integer(Number(value)||0);
+const average=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:2}).format(Number(value)||0);
 const percent=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(value)+" %";
 const normalize=value=>String(value||"").toLocaleLowerCase("es")
  .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
@@ -147,32 +148,51 @@ function FamilyRanking({result}){
  </section>;
 }
 function PharmacySales({activity,tickets,selectedPharmacies}){
- // No consultar nada adicional: el agregado por vendedor ya contiene
- // las ventas de cada farmacia, incluso cuando el vendedor no tiene nombre.
+ const [mode,setMode]=useState("sales");
+ // Utilizar los agregados ya disponibles de vendedor sin nuevas consultas.
  const sellers=Array.isArray(activity.data?.vendedores?.sellers)?
   activity.data.vendedores.sellers:[];
- const salesBySite=new Map();
+ const totalsBySite=new Map();
  for(const seller of sellers){
   const id=String(seller.pharmacyId);
-  salesBySite.set(id,(salesBySite.get(id)||0)+(Number(seller.sales)||0));
+  const previous=totalsBySite.get(id)||{sales:0,units:0};
+  previous.sales+=Number(seller.sales)||0;
+  previous.units+=Number(seller.units)||0;
+  totalsBySite.set(id,previous);
  }
  const ticketsBySite=new Map((tickets.data?.pharmacies||[]).map(p=>[
   String(p.id),Number(p.tickets)||0
  ]));
  const sites=selectedPharmacies.map(p=>({
   id:String(p.id),name:p.name,
-  sales:salesBySite.get(String(p.id))||0,
+  sales:totalsBySite.get(String(p.id))?.sales||0,
+  units:totalsBySite.get(String(p.id))?.units||0,
   tickets:ticketsBySite.get(String(p.id))
- })).sort((a,b)=>b.sales-a.sales);
- const maximum=Math.max(1,...sites.map(p=>Math.max(0,p.sales)));
+ })).sort((a,b)=>(Number(b[mode])||0)-(Number(a[mode])||0));
+ const maximum=Math.max(1,...sites.map(p=>Math.max(0,Number(p[mode])||0)));
  return <section className="card fm-so-pharmacies" aria-busy={activity.status==="loading"}>
   <SalesCardHeading icon={Store} title="Ventas por farmacia"/>
+  <div className="fm-so-controls fm-heat-controls">
+   <div className="fm-so-segment" role="group" aria-label="Indicador por farmacia">
+    <button type="button" aria-pressed={mode==="sales"} className={mode==="sales"?"is-active":""}
+     onClick={()=>setMode("sales")}>Ventas €</button>
+    <button type="button" aria-pressed={mode==="units"} className={mode==="units"?"is-active":""}
+     onClick={()=>setMode("units")}>Unidades</button>
+   </div>
+  </div>
   {activity.status!=="ready"?
    <Status result={activity} empty="Selecciona un período válido."/>:
    <div className="fm-so-sites">{sites.map(p=><div className="fm-so-site" key={p.id}>
-    <div className="fm-so-site-name"><span>{p.name}</span><strong>{money(p.sales)}</strong></div>
-    <div className="fm-so-track"><div style={{width:Math.max(0,p.sales)/maximum*100+"%"}}/></div>
-    {tickets.status==="ready"&&<small>Ticket medio {p.tickets?money(p.sales/p.tickets):"—"}</small>}
+    <div className="fm-so-site-name">
+     <span>{p.name}</span>
+     <strong>{mode==="sales"?money(p.sales):number(p.units)+" uds."}</strong>
+    </div>
+    <div className="fm-so-track">
+     <div style={{width:Math.max(0,Number(p[mode])||0)/maximum*100+"%"}}/>
+    </div>
+    {tickets.status==="ready"&&<small>{mode==="sales"?"Ticket medio ":"Unidades por ticket "}
+     {p.tickets?(mode==="sales"?money(p.sales/p.tickets):
+      average(p.units/p.tickets)):"—"}</small>}
    </div>)}</div>}
  </section>;
 }

@@ -163,17 +163,33 @@ function Heatmap({scope}){
 function Sellers({scope,shared}){
  const insight=useInsight("vendedores",scope,shared);
  const [showAll,setShowAll]=useState(false);
+ const [mode,setMode]=useState("sales");
  const sellers=Array.isArray(insight.data?.sellers)?insight.data.sellers:EMPTY;
- const maximum=Math.max(1,...sellers.map(x=>Math.max(0,x.sales)));
- return <Panel title="Ventas por vendedor" icon={UsersRound} insight={insight}>
-  {!sellers.length?<p className="fm-insight-status">No hay vendedores con ventas para la selección.</p>:
+ const ordered=useMemo(()=>[...sellers].sort((a,b)=>
+  (Number(b[mode])||0)-(Number(a[mode])||0)),[sellers,mode]);
+ const maximum=Math.max(1,...ordered.map(x=>Math.max(0,Number(x[mode])||0)));
+ const controls=<div className="fm-so-controls fm-heat-controls">
+  <div className="fm-so-segment" role="group" aria-label="Indicador por vendedor">
+   <button type="button" aria-pressed={mode==="sales"} className={mode==="sales"?"is-active":""}
+    onClick={()=>setMode("sales")}>Ventas €</button>
+   <button type="button" aria-pressed={mode==="units"} className={mode==="units"?"is-active":""}
+    onClick={()=>setMode("units")}>Unidades</button>
+  </div>
+ </div>;
+ return <Panel title="Ventas por vendedor" icon={UsersRound} insight={insight} controls={controls}>
+  {!ordered.length?<p className="fm-insight-status">No hay vendedores con ventas para la selección.</p>:
    <><div className="fm-seller-list">
-    {(showAll?sellers:sellers.slice(0,12)).map((s,i)=><div className="fm-seller-row" key={s.name+"|"+i}>
-     <div className="fm-seller-label"><span title={s.name}>{s.name}</span><strong>{euro(s.sales)}</strong></div>
-     <div className="fm-seller-track"><div style={{width:Math.max(0,s.sales)/maximum*100+"%"}}/></div>
+    {(showAll?ordered:ordered.slice(0,12)).map((s,i)=><div className="fm-seller-row" key={s.pharmacyId+"|"+s.sellerId+"|"+i}>
+     <div className="fm-seller-label">
+      <span title={s.name}>{s.name}</span>
+      <strong>{mode==="sales"?euro(s.sales):integer(s.units)+" uds."}</strong>
+     </div>
+     <div className="fm-seller-track">
+      <div style={{width:Math.max(0,Number(s[mode])||0)/maximum*100+"%"}}/>
+     </div>
     </div>)}
-   </div>{sellers.length>12&&<button type="button" className="btn btn-secondary fm-seller-more"
-     onClick={()=>setShowAll(!showAll)}>{showAll?"Ver los 12 primeros":"Ver todos ("+sellers.length+")"}</button>}
+   </div>{ordered.length>12&&<button type="button" className="btn btn-secondary fm-seller-more"
+     onClick={()=>setShowAll(!showAll)}>{showAll?"Ver los 12 primeros":"Ver todos ("+ordered.length+")"}</button>}
    </>}
  </Panel>;
 }

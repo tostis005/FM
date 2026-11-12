@@ -9,18 +9,22 @@ test("los extremos cromáticos distinguen poco movimiento del pico rojo",()=>{
  assert.equal(heatColor(7),HEAT_STOPS.at(-1));
  assert.notEqual(heatColor(0.4),heatColor(0.8));
 });
-test("las celdas suman tickets, no las líneas, entre ventanas históricas",()=>{
+test("los tickets y las unidades se agregan de forma independiente por franja",()=>{
  const result=mergeSalesHeatmap([
-  {total:5,cells:[{weekday:1,hour:9,tickets:2},{weekday:2,hour:10,tickets:3}]},
-  {total:9,cells:[{weekday:1,hour:9,tickets:4},{weekday:7,hour:21,tickets:5}]}
+  {total:5,totalUnits:12,cells:[{weekday:1,hour:9,tickets:2,units:8},
+   {weekday:2,hour:10,tickets:3,units:4}]},
+  {total:9,totalUnits:11,cells:[{weekday:1,hour:9,tickets:4,units:14},
+   {weekday:7,hour:21,tickets:5,units:-3}]}
  ]);
  assert.equal(result.total,14);
+ assert.equal(result.totalUnits,23);
  assert.deepEqual(result.cells,[
-  {weekday:1,hour:9,tickets:6},
-  {weekday:2,hour:10,tickets:3},
-  {weekday:7,hour:21,tickets:5}
+  {weekday:1,hour:9,tickets:6,units:22},
+  {weekday:2,hour:10,tickets:3,units:4},
+  {weekday:7,hour:21,tickets:5,units:-3}
  ]);
 });
+
 test("el mapa muestra las horas de jornada y también actividad nocturna",()=>{
  const rows=heatmapHours([{weekday:1,hour:7,tickets:1},
   {weekday:2,hour:23,tickets:3}]);

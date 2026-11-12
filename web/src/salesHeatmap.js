@@ -25,17 +25,20 @@ export function mergeSalesHeatmap(parts=[]){
  const counts=new Map();
  for(const part of parts){
   for(const cell of part.cells||[]){
-   const weekday=Number(cell.weekday),hour=Number(cell.hour),tickets=Number(cell.tickets);
+   const weekday=Number(cell.weekday),hour=Number(cell.hour),
+    tickets=Number(cell.tickets),units=Number(cell.units||0);
    if(!Number.isInteger(weekday)||weekday<1||weekday>7||
     !Number.isInteger(hour)||hour<0||hour>23||
-    !Number.isSafeInteger(tickets)||tickets<0)continue;
+    !Number.isSafeInteger(tickets)||tickets<0||!Number.isFinite(units))continue;
    const key=weekday+"|"+hour;
-   counts.set(key,(counts.get(key)||0)+tickets);
+   const previous=counts.get(key)||{tickets:0,units:0};
+   counts.set(key,{tickets:previous.tickets+tickets,units:previous.units+units});
   }
  }
- const cells=[...counts].map(([key,tickets])=>{
+ const cells=[...counts].map(([key,values])=>{
   const [weekday,hour]=key.split("|").map(Number);
-  return {weekday,hour,tickets};
+  return {weekday,hour,...values};
  }).sort((a,b)=>a.hour-b.hour||a.weekday-b.weekday);
- return {cells,total:cells.reduce((sum,cell)=>sum+cell.tickets,0)};
+ return {cells,total:cells.reduce((sum,cell)=>sum+cell.tickets,0),
+  totalUnits:cells.reduce((sum,cell)=>sum+cell.units,0)};
 }

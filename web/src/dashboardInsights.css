@@ -5,6 +5,7 @@
 .fm-insight-head p,.fm-purchase-heading p{margin:6px 0 0;color:#698379;font-size:12px;line-height:1.5}
 .fm-insight-status{color:#799187;font-size:13px;padding:24px 8px;min-height:95px}
 .fm-insight-foot{color:#698379;font-size:11px;line-height:1.5;margin:13px 0 0}
+.fm-heat-controls{justify-content:flex-end;margin-top:-4px;margin-bottom:14px}
 .fm-heat-scroll,.fm-purchase-scroll{width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
 .fm-heat-grid{display:grid;gap:3px;min-width:690px;align-items:stretch}
 .fm-heat-axis,.fm-heat-day{font-size:11px;font-weight:750;color:#587568;min-width:0;display:flex;align-items:center;justify-content:center;padding:8px 2px}

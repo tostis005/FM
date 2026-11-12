@@ -88,30 +88,39 @@ test("ticket medio rápido cuenta cabeceras documentales válidas sin agrupar l�
  assert.deepEqual(result.pharmacies.map(p=>p.id),["1","2"]);
 });
 
-test("el mapa cuenta cabeceras válidas una vez por ticket, no artículos",()=>{
+test("el mapa cuenta una cabecera por ticket y suma unidades reales de sus líneas",()=>{
  const sql=buildSalesTicketHeatmapSQL("ampedia");
  assert.match(sql,/FROM "ampedia"\.fm_ventas_cabeceras h/);
  assert.match(sql,/count\(\*\)::bigint AS tickets/);
+ assert.match(sql,/coalesce\(sum\(valid_lines\.units\),0\)::float8 AS units/);
  assert.match(sql,/extract\(isodow FROM h\.fecha\)/);
  assert.match(sql,/extract\(hour FROM h\.fecha\)/);
  assert.match(sql,/h\.lineas_completas AND NOT h\.eliminado_logicamente/);
- assert.match(sql,/AND EXISTS\(SELECT 1 FROM "ampedia"\.fm_ventas_lineas l/);
+ assert.match(sql,/JOIN LATERAL/);
+ assert.match(sql,/FROM "ampedia"\.fm_ventas_lineas l/);
  assert.match(sql,/l\.documento_id=h\.documento_id/);
+ assert.match(sql,/valid_lines\.count>0/);
+ assert.match(sql,/NOT l\.eliminada_logicamente/);
+ assert.match(sql,/coalesce\(l\.anulada,false\)=false/);
+ assert.match(sql,/l\.devuelta IS TRUE THEN -abs\(l\.cantidad\)/);
+ assert.match(sql,/nullif\(btrim\(l\.articulo_origen_id\),'\'\)/);
  assert.doesNotMatch(sql,/fm_ventas_analitica|count\(DISTINCT/);
  assert.throws(()=>buildSalesTicketHeatmapSQL('bad";drop table x;--'));
  const result=summarizeSalesTicketHeatmap([
-  {weekday:1,hour:9,tickets:"3"},{weekday:2,hour:11,tickets:"4"}
+  {weekday:1,hour:9,tickets:"3",units:"8"},
+  {weekday:2,hour:11,tickets:"4",units:"-2"}
  ]);
- assert.deepEqual(result,{cells:[{weekday:1,hour:9,tickets:3},
-  {weekday:2,hour:11,tickets:4}],total:7});
+ assert.deepEqual(result,{cells:[{weekday:1,hour:9,tickets:3,units:8},
+  {weekday:2,hour:11,tickets:4,units:-2}],total:7,totalUnits:6});
 });
+
 test("endpoint horario aplica permisos y devuelve operaciones por franja",async()=>{
  const routes=new Map(),calls=[];
  const app={get(path,...args){routes.set(path,args.at(-1))}};
  const conn={async query(arg){
   calls.push(arg);
-  if(typeof arg==="object")return {rows:[{weekday:1,hour:9,tickets:"2"},
-   {weekday:7,hour:21,tickets:"5"}]};
+  if(typeof arg==="object")return {rows:[{weekday:1,hour:9,tickets:"2",units:"6"},
+   {weekday:7,hour:21,tickets:"5",units:"11"}]};
   return {rows:[]};
  },release(){}};
  setupSalesOverview(app,{connect:async()=>conn},{requireTenant:()=>[]});
@@ -129,6 +138,8 @@ test("endpoint horario aplica permisos y devuelve operaciones por franja",async(
  const ok=await run(q);
  assert.equal(ok.code,200);
  assert.equal(ok.data.total,7);
+ assert.equal(ok.data.totalUnits,17);
+ assert.deepEqual(ok.data.cells.map(c=>c.units),[6,11]);
  assert.deepEqual(ok.data.cells.map(c=>c.tickets),[2,5]);
  assert.deepEqual(calls.find(x=>typeof x==="object").values,
   ["2026-11-01","2026-11-12",["ABA"]]);

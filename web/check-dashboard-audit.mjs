@@ -70,6 +70,11 @@ await page.route("**/api/**",async route=>{
     total:469.12}
   }
  };
+ else if(p==="/api/analytics/ventas/horarios-tickets")body={
+  cells:[{weekday:1,hour:9,tickets:2,units:7},
+   {weekday:5,hour:12,tickets:3,units:10}],
+  total:5,totalUnits:17
+ };
  else if(p==="/api/analytics/dashboard/canales-compra")body={
   available:true,channels:[
    {channel:"cooperativa",value:180,units:10,lines:1},
@@ -165,6 +170,23 @@ try{
  await page.getByRole("heading",{name:"Mapa de calor de ventas"}).waitFor({timeout:12000});
  await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor({timeout:12000});
  await page.locator(".fm-heat-cell").first().waitFor({timeout:12000});
+
+ const heatToggle=page.getByRole("group",{name:"Indicador del mapa de calor"});
+ await heatToggle.getByRole("button",{name:"Unidades",exact:true}).click();
+ await page.getByRole("cell",{name:/Lunes de 09:00–10:00: 7 unidades/}).waitFor({timeout:12000});
+ assert.equal(await heatToggle.getByRole("button",{name:"Unidades"}).getAttribute("aria-pressed"),"true");
+ await heatToggle.getByRole("button",{name:"Ventas",exact:true}).click();
+ await page.getByRole("cell",{name:/Lunes de 09:00–10:00: 2 tickets/}).waitFor({timeout:12000});
+ const sellerToggle=page.getByRole("group",{name:"Indicador por vendedor"});
+ await sellerToggle.getByRole("button",{name:"Unidades",exact:true}).click();
+ assert.ok((await page.locator(".fm-seller-label strong").first().textContent()).includes("uds."),
+  "El ranking por vendedor debe alternar entre importes y unidades");
+ const pharmacyToggle=page.getByRole("group",{name:"Indicador por farmacia"});
+ await pharmacyToggle.getByRole("button",{name:"Unidades",exact:true}).click();
+ assert.ok((await page.locator(".fm-so-site-name strong").first().textContent()).includes("uds."),
+  "Las farmacias deben alternar entre ventas en euros y unidades");
+ assert.equal(await pharmacyToggle.getByRole("button",{name:"Unidades"}).getAttribute("aria-pressed"),"true");
+
  await page.goto(BASE+"/compras",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"¿Dónde estamos comprando mejor?"}).waitFor({timeout:12000});
  await page.waitForFunction(()=>document.body.textContent.includes("Artículo prueba"),null,{timeout:12000});

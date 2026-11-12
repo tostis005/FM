@@ -132,25 +132,34 @@ export function buildSalesTicketHeatmapSQL(schema){
  const q='"'+schema+'"';
  return [
   "SELECT extract(isodow FROM h.fecha)::int AS weekday,",
-  " extract(hour FROM h.fecha)::int AS hour,count(*)::bigint AS tickets",
+  " extract(hour FROM h.fecha)::int AS hour,count(*)::bigint AS tickets,",
+  " coalesce(sum(valid_lines.units),0)::float8 AS units",
   " FROM "+q+".fm_ventas_cabeceras h",
+  " JOIN LATERAL (",
+  " SELECT count(*)::bigint AS count,",
+  " coalesce(sum(CASE WHEN nullif(btrim(l.articulo_origen_id),'') IS NOT NULL",
+  " THEN CASE WHEN l.devuelta IS TRUE THEN -abs(l.cantidad) ELSE l.cantidad END",
+  " ELSE 0 END),0)::numeric AS units",
+  " FROM "+q+".fm_ventas_lineas l",
+  " WHERE l.farmacia_codigo=h.farmacia_codigo AND l.sistema_origen=h.sistema_origen",
+  " AND l.documento_id=h.documento_id AND NOT l.eliminada_logicamente",
+  " AND coalesce(l.anulada,false)=false",
+  " ) valid_lines ON valid_lines.count>0",
   " WHERE h.farmacia_codigo=ANY($3::text[])",
   " AND h.fecha >= $1::date AND h.fecha < $2::date+interval '1 day'",
   " AND h.lineas_completas AND NOT h.eliminado_logicamente",
   " AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')",
-  " AND EXISTS(SELECT 1 FROM "+q+".fm_ventas_lineas l",
-  " WHERE l.farmacia_codigo=h.farmacia_codigo AND l.sistema_origen=h.sistema_origen",
-  " AND l.documento_id=h.documento_id AND NOT l.eliminada_logicamente",
-  " AND coalesce(l.anulada,false)=false)",
   " GROUP BY 1,2 ORDER BY 1,2"
  ].join("\n");
 }
 export function summarizeSalesTicketHeatmap(rows){
  const cells=(rows||[]).map(r=>({
-  weekday:numeric(r.weekday),hour:numeric(r.hour),tickets:numeric(r.tickets)
+  weekday:numeric(r.weekday),hour:numeric(r.hour),
+  tickets:numeric(r.tickets),units:numeric(r.units)
  })).filter(r=>Number.isInteger(r.weekday)&&r.weekday>=1&&r.weekday<=7&&
   Number.isInteger(r.hour)&&r.hour>=0&&r.hour<=23&&r.tickets>=0);
- return {cells,total:cells.reduce((sum,r)=>sum+r.tickets,0)};
+ return {cells,total:cells.reduce((sum,r)=>sum+r.tickets,0),
+  totalUnits:cells.reduce((sum,r)=>sum+r.units,0)};
 }
 
 export function summarizeSalesTicketCounts(rows,pharmacies,ids){

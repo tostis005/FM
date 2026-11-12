@@ -136,6 +136,7 @@ jobs:
           node --test api/src/dashboardDailyService.test.js
           node --test api/src/salesInsights.test.js
           node --test api/src/salesDetail.test.js
+          node --test api/src/salesOverview.test.js
           node --test api/src/articleNames.test.js
           node --test api/src/genericos.test.js
           node --test api/src/genericArticleDetail.test.js
@@ -157,6 +158,7 @@ jobs:
           node --test src/sharedReportFilters.test.js
           node --test src/businessAnalytics.test.js
           node --test src/salesPeriods.test.js src/salesTicketWindows.test.js
+          node --test src/salesHeatmap.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js

@@ -310,3 +310,16 @@ test("un CN sin ficha en una farmacia importada es stock 0; ficha con NULL sigue
  assert.match(sql,/resolved_stock\.inferred AS "stockInferredZero"/);
  assert.doesNotMatch(sql,/coalesce\(i\.stock,0\) AS stock/);
 });
+
+test("CN normalizado: el predicado del índice parcial no filtra referencias adicionales",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ const clause="AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL";
+ // Farmacias y almacén: la condición es redundante con =x.cn (CN obligatorio),
+ // pero permite a PostgreSQL escoger el índice parcial en ambos recorridos.
+ assert.equal(sql.split(clause).length-1,2);
+ assert.match(sql,/nullif\(btrim\(__CN_NORMALIZED__\),''\)=x\.cn\s+WHERE x\.cn IS NOT NULL/);
+ assert.match(sql,/nullif\(btrim\(__CN_NORMALIZED__\),''\)=x\.cn\s+WHERE \$6::text='parafarmacia' AND x\.cn IS NOT NULL/);
+ assert.match(sql,/fm_ventas_lineas l/);
+ assert.match(sql,/FROM refs x CROSS JOIN pharmacies f/);
+});

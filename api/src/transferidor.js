@@ -3,8 +3,8 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {cnCategory} from "./laboratoryOrderPlanner.js";
 import {readTransferidorPolicy} from "./transferidorPolicy.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
-const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","targetOrigin","targetDestination","triggerDestination","extraDestination"]);
-const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","triggerDestination","extraDestination"]);
+const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","targetOrigin","targetDestination","triggerDestination","extraDestination","sales7Origin","sales7Destination","sales30Origin","sales30Destination"]);
+const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","triggerDestination","extraDestination","sales7Origin","sales7Destination","sales30Origin","sales30Destination"]);
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
@@ -41,6 +41,8 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
     return {invalid:true};
    const stock=rawStock==null?0:Math.max(0,Number(rawStock));
    const sold7=Math.max(0,asNumber(src?.units7));
+   const visible7=src?.units7==null?null:asNumber(src.units7);
+   const visible30=src?.units30==null?null:asNumber(src.units30);
    const sold3=Math.max(0,asNumber(src?.units3));
    const sold12=Math.max(0,asNumber(src?.units12));
    // Los datos nuevos del Transferidor usan solo siete días; las métricas
@@ -63,6 +65,7 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    // Proteger al donante: conserva previsión de ventas más su exposición.
    const surplus=Math.max(0,Math.floor(stock-target+1e-9));
    return {id,name:p.name||id,stock,target,threshold,extra,source,ordered,need,surplus,
+    visible7,visible30,
     stockAt:src?.stockAt||null};
   });
   if(sites.some(s=>s.invalid)){skipped++;continue;}
@@ -80,7 +83,9 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
      name:product.name,originId:source.id,originName:source.name,
      destinationId:target.id,destinationName:target.name,units,
      stockOrigin:source.stock,targetOrigin:source.target,
+     sales7Origin:source.visible7,sales30Origin:source.visible30,
      stockDestination:target.stock,pendingDestination:target.ordered,
+     sales7Destination:target.visible7,sales30Destination:target.visible30,
      targetDestination:target.target,
      triggerDestination:target.threshold,extraDestination:target.extra,
      reserveSource:target.source,minDays:config.minDays,targetDays:config.targetDays,
@@ -188,6 +193,29 @@ JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
  AND h.fecha<(now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
 GROUP BY r.fid,r.article_id`;
 }
+// Los 30 días son informativos: SOLO se calculan para las referencias con
+// transferencias propuestas, después de publicar el cálculo rápido de 7 días.
+export function transferidorSales30SQL(schema){
+ const q='"'+schema+'"';
+ return `WITH refs AS MATERIALIZED (
+ SELECT DISTINCT fid,source_code,article_id
+ FROM jsonb_to_recordset($1::jsonb)
+  AS r(fid text,source_code text,article_id text)
+)
+SELECT r.fid AS "pharmacyId",r.article_id AS "articleId",
+ coalesce(sum(CASE WHEN l.devuelta THEN -abs(l.cantidad) ELSE l.cantidad END),0)::float8 AS "units30"
+FROM refs r
+JOIN ${q}.fm_ventas_lineas l ON l.farmacia_codigo=r.source_code
+ AND l.articulo_origen_id=r.article_id
+ AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false
+JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
+ AND h.sistema_origen=l.sistema_origen AND h.documento_id=l.documento_id
+ AND h.lineas_completas AND NOT h.eliminado_logicamente
+ AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+ AND h.fecha>=(now() AT TIME ZONE 'Europe/Madrid')::date-interval '29 days'
+ AND h.fecha<(now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
+GROUP BY r.fid,r.article_id`;
+}
 function transferidorPendingSQL(){
  return `SELECT p.farmacia_id::text AS "pharmacyId",
  l.line->>'articulo' AS "articleId",
@@ -261,6 +289,52 @@ export function mergeTransferBatch(entries,metrics,pending){
   if(!item.familyId&&entry.familyId)item.familyId=entry.familyId;
  }
  return [...joined.values()];
+}
+async function readTransferSales30(pool,schema,entries){
+ const refs=entries.map(r=>({fid:String(r.pharmacyId),
+  source_code:String(r.sourceCode),article_id:String(r.articleId)}));
+ const {rows}=await pool.query({text:transferidorSales30SQL(schema),
+  values:[JSON.stringify(refs)],query_timeout:22000});
+ return rows;
+}
+async function enrichTransferSales30(pool,schema,inventory,job){
+ const bySite=new Set();
+ for(const move of job.plan.transfers){
+  bySite.add(move.cn+"|"+move.originId);
+  bySite.add(move.cn+"|"+move.destinationId);
+ }
+ if(!bySite.size)return;
+ const refs=inventory.filter(r=>bySite.has(String(r.cn)+"|"+String(r.pharmacyId)));
+ const totals=new Map();
+ const chunks=transferidorCNChunks(refs,450);
+ job.historyProgress={done:0,total:chunks.length};
+ job.status="enriching";
+ // La tabla conserva las propuestas mientras se consultan solo estas referencias.
+ for(const entries of chunks){
+  try{
+   const sales=await readTransferSales30(pool,schema,entries);
+   const byArticle=new Map(sales.map(m=>
+    [String(m.pharmacyId)+"|"+String(m.articleId),Number(m.units30)||0]));
+   for(const item of entries){
+    const key=String(item.cn)+"|"+String(item.pharmacyId);
+    totals.set(key,(totals.get(key)||0)+
+     (byArticle.get(String(item.pharmacyId)+"|"+String(item.articleId))||0));
+   }
+   for(const movement of job.plan.transfers){
+    const originKey=movement.cn+"|"+movement.originId;
+    const targetKey=movement.cn+"|"+movement.destinationId;
+    if(totals.has(originKey))movement.sales30Origin=totals.get(originKey);
+    if(totals.has(targetKey))movement.sales30Destination=totals.get(targetKey);
+   }
+  }catch(error){
+   // Un error del histórico informativo no oculta propuestas ya calculadas.
+   job.failedHistory+=new Set(entries.map(r=>r.cn)).size;
+   console.warn("TRANSFERIDOR_VENTAS30",JSON.stringify({
+    code:error.code||error.name||"QUERY_ERROR",articles:entries.length
+   }));
+  }
+  job.historyProgress.done++;
+ }
 }
 const TRANSFER_TTL=10*60*1000;
 const transferJobs=new Map();
@@ -340,7 +414,8 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
   job.status="calculating";
   for(const entries of chunks)
    await transferBatch(pool,schema,entries,pharmacies,policy,pending,job);
-  job.status=job.failed?"partial":"complete";
+  await enrichTransferSales30(pool,schema,inventory,job);
+  job.status=job.failed||job.failedHistory?"partial":"complete";
   if(job.failed&&!job.plan.products){
    job.status="error";
    job.error="No se han podido recuperar las ventas. Revisa la sincronización o los índices de ventas.";
@@ -371,7 +446,8 @@ function getTransferJob(pool,schema,slug,pharmacies,forceToken=""){
  }
  const job={status:"queued",available:true,plan:{transfers:[],
   skipped:0,products:0,withNeed:0,withSurplus:0},progress:{done:0,total:0},
-  policy:{minDays:4,targetDays:7},failed:0,warning:"",missing:[],analyzed:0,
+  policy:{minDays:4,targetDays:7},failed:0,failedHistory:0,historyProgress:{done:0,total:0},
+  warning:"",missing:[],analyzed:0,
   createdAt:now,expires:0,error:""};
  transferJobs.set(key,job);
  if(transferJobs.size>20){
@@ -400,16 +476,17 @@ export function setupTransferidor(app,pool,{requireTenant}){
    const job=getTransferJob(pool,schema,ctx.client.slug,pharmacies,String(req.query.recalcular||""));
    if(job.status==="error")return res.status(503).json({status:"error",error:job.error});
    const plan=job.plan,filtered=filterTransferPlan(plan.transfers,opts);
-   const pending=["queued","inventory","calculating"].includes(job.status);
+   const pending=["queued","inventory","calculating","enriching"].includes(job.status);
    const emptyReason=pending?null:!plan.products?"No hay referencias con stock y ventas para redistribuir.":
     !plan.withSurplus?"No hay excedentes disponibles.":
     !plan.withNeed?"No hay necesidades por debajo del mínimo configurado.":
     !plan.transfers.length?"No coinciden excedentes y necesidades del mismo artículo.":null;
    const warning=[job.warning,job.missing.length?
     "Sin referencias comparables en "+job.missing.map(p=>p.name).join(", "):"",
-    job.failed?"No se han podido analizar "+job.failed+" CN. Reintenta la carga.":""].filter(Boolean).join(". ")||null;
+    job.failed?"No se han podido analizar "+job.failed+" CN. Reintenta la carga.":"",
+    job.failedHistory?"Ventas de 30 días no disponibles para "+job.failedHistory+" referencias.":""].filter(Boolean).join(". ")||null;
    res.json({status:job.status,available:job.available,rows:filtered.rows,total:filtered.total,
-    page:opts.page,pageSize:opts.size,progress:job.progress,
+    page:opts.page,pageSize:opts.size,progress:job.progress,historyProgress:job.historyProgress,
     emptyReason,summary:{movements:plan.transfers.length,
      units:plan.transfers.reduce((sum,r)=>sum+r.units,0),
      filteredUnits:filtered.units,

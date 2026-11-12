@@ -2,6 +2,7 @@
 // y códigos locales, sin alterar ningún maestro ni artículo sincronizado del ERP.
 import {randomUUID} from "node:crypto";
 import {consolidateFamilyNamesUntilStable} from "./familyNameMerge.js";
+import {selectFamilyDirectory} from "./familyDirectory.js";
 import {familyKey,referenceKey,cleanFamilyName,selectFamilyDestination,familyNameSlug,selectNamedDestination} from "./familyMatching.js";
 
 const validId=x=>/^[1-9]\d*$/.test(String(x||""));
@@ -237,28 +238,27 @@ export function setupFamilyMaster(app,pool,{requireTenantManager}){
   const confirmed="(g.referencia_farmacia IS NOT NULL OR g.nombre_manual)";
   const predicate=view==="maestro"?confirmed:"NOT "+confirmed;
   try{
-   const [counts,records]=await Promise.all([
-    pool.query("SELECT count(*) FILTER(WHERE "+confirmed+")::int AS maestros,"+
-     " count(*) FILTER(WHERE "+confirmed+" AND g.segmento='MEDICACION')::int AS medicacion,"+
-     " count(*) FILTER(WHERE "+confirmed+" AND g.segmento='PARAFARMACIA')::int AS parafarmacia,"+
-     " count(*) FILTER(WHERE NOT "+confirmed+")::int AS pendientes"+
-     " FROM farmetrica.familias_globales g WHERE g.cliente_slug=$1 AND g.activo",[slug]),
-    pool.query({
-     text:"SELECT g.id::text AS id,g.nombre AS name,g.segmento AS segment,"+
-      " g.referencia_farmacia AS \"referencePharmacy\",g.referencia_codigo AS \"referenceCode\","+
-      " g.nombre_manual AS \"customName\""+
-      " FROM farmetrica.familias_globales g WHERE g.cliente_slug=$1 AND g.activo AND "+predicate+
-      " AND ($2::text='' OR g.nombre ILIKE '%' || $2 || '%' OR"+
-      " coalesce(g.referencia_codigo,'') ILIKE '%' || $2 || '%')"+
-      " ORDER BY g.segmento,g.nombre,g.id"+
-      (view==="pendientes"?" LIMIT 30 OFFSET $3":""),
-     values:view==="pendientes"?[slug,search,(page-1)*30]:[slug,search],
-     query_timeout:12000
-    })
-   ]);
-   res.json({items:records.rows,summary:counts.rows[0]||{},
-    view,page,pageSize:view==="pendientes"?30:null,
-    referencePharmacies:refPharmacies(req.context)});
+   // Solo una lectura ligera de las familias activas (sin JOIN a CN o
+   // artículos). Agrupar antes de paginar evita que un mismo nombre
+   // aparezca en páginas distintas o en «maestro» y «por revisar».
+   const {rows}=await pool.query({
+    text:"SELECT g.id::text AS id,g.nombre AS name,g.segmento AS segment,"+
+     " g.referencia_farmacia AS \"referencePharmacy\",g.referencia_codigo AS \"referenceCode\","+
+     " g.nombre_manual AS \"customName\""+
+     " FROM farmetrica.familias_globales g"+
+     " WHERE g.cliente_slug=$1 AND g.activo"+
+     " ORDER BY g.nombre COLLATE \"default\",g.id",
+    values:[slug],query_timeout:12000
+   });
+   const directory=selectFamilyDirectory(rows,{view,search,page});
+   res.json({
+    // Los consumidores antiguos continúan recibiendo filas reales.
+    items:directory.groups.flatMap(g=>g.members),
+    // La UI usa esta presentación única, sin alterar IDs ni segmentos.
+    groups:directory.groups,summary:directory.summary,
+    total:directory.total,view,page,pageSize:directory.pageSize,
+    referencePharmacies:refPharmacies(req.context)
+   });
   }catch(e){next(e);}
  });
  app.get("/api/tenant/familias-globales/:id/origenes",...requireTenantManager(),async(req,res,next)=>{

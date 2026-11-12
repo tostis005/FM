@@ -93,7 +93,7 @@ try{
      Math.min(100,best.rows.length),Math.min(200,best.rows.length)]
      .filter((x,i,a)=>a.indexOf(x)===i)){
     const res=await timed("matrix"+count,()=>readLaboratoryOrderMatrix(pool,ctx,{
-     key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows.slice(0,count)
+     key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows.slice(0,count),indexedCN:false
     }));
     if(res)output["matrix"+count+"Complete"]=res.metricsUnavailable===false;
     if(count===200)baseline200=res;
@@ -154,7 +154,7 @@ try{
    for(const n of uniqueSizes){
     const matrix=await timed("cantabriaMatrix"+n,()=>
      readLaboratoryOrderMatrix(pool,ctx,{key,pharmacies,type:"parafarmacia",
-      from,to,prefetchedRows:candidates.slice(0,n)}));
+      from,to,prefetchedRows:candidates.slice(0,n),indexedCN:false}));
     if(n===200)cantabriaBaseline200=matrix;
     if(matrix){
      output["cantabriaMatrix"+n+"Complete"]=matrix.metricsUnavailable===false;

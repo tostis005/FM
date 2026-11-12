@@ -12,6 +12,8 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
    calls.push(q);
    if(text.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))return {rows:[]};
    if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"*BAJA*"}]};
+   if(text.includes("WITH canonical_pharmacy AS MATERIALIZED"))return {rows:[]};
+   if(text.includes("information_schema.columns"))return {rows:[{available:true}]};
    if(text.includes("p.id=ANY($2::bigint[])"))return {rows:[
     {id:"2",key:"P:2",name:"Lab último"}
    ]};
@@ -26,8 +28,8 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
    type:"medicacion"})).total,0);
   assert.equal((await readUnifiedSupplierCN(pool,ctx,{key:"P:2",pharmacies:[1,2],
    type:"parafarmacia"})).rows[0].cn,"000123");
-  assert.equal(calls.filter(q=>(q.text||"").includes("DISTINCT ON (cn)")).length,1);
-  const sql=calls.find(q=>(q.text||"").includes("DISTINCT ON (cn)")).text;
+  assert.equal(calls.filter(q=>(q.text||"").includes("WITH eligible_labs AS MATERIALIZED")).length,1);
+  const sql=calls.find(q=>(q.text||"").includes("WITH eligible_labs AS MATERIALIZED")).text;
   assert.match(sql,/pm.ignorar_informes IS TRUE/);
   assert.match(sql,/pm.cooperativa IS TRUE/);
   assert.match(sql,/h.fecha/);
@@ -37,12 +39,13 @@ test("selector y catálogo comparten única fuente por CN, sin laboratorios vac�
   assert.match(sql,/FROM latest l JOIN scoped_cn s USING\(cn\)/);
   assert.match(sql,/excluded_cn AS MATERIALIZED/);
   assert.match(sql,/position\(upper\(exclude.cadena\) in upper\(coalesce\(ar.nombre/);
-  assert.match(sql,/ARRAY\[\x27ZZZ\x27,\x27\*BAJA\x27,\x27\* BAJA\x27\]::text\[\] \|\| \$3::text\[\]/);
-  assert.deepEqual(calls.find(q=>(q.text||"").includes("DISTINCT ON (cn)")).values,
+  assert.doesNotMatch(sql,/ARRAY\[\x27ZZZ\x27/);
+  assert.match(sql,/unnest\(\s*\$3::text\[\]/);
+  assert.deepEqual(calls.find(q=>(q.text||"").includes("WITH eligible_labs AS MATERIALIZED")).values,
    ["ampedia",[1,2],["*BAJA*"]]);
   invalidateLastReceiptCache(pool,"ampedia");
   await latestLaboratoryCN(pool,ctx,[1,2]);
-  assert.equal(calls.filter(q=>(q.text||"").includes("DISTINCT ON (cn)")).length,2);
+  assert.equal(calls.filter(q=>(q.text||"").includes("WITH eligible_labs AS MATERIALIZED")).length,2);
  }finally{
   if(old===undefined)delete process.env.FM_PREPARADOR_ULTIMA_RECEPCION;
   else process.env.FM_PREPARADOR_ULTIMA_RECEPCION=old;

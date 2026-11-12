@@ -8,6 +8,7 @@ import {euro,integer,percentage} from "./localeES.js";
 import {salesTicketWindows,mapTicketWindows} from "./salesTicketWindows.js";
 import {HEAT_STOPS,HEAT_DAYS,heatColor,heatmapHours,mergeSalesHeatmap} from "./salesHeatmap.js";
 import "./dashboardInsights.css";
+import "./salesOverview.css";
 
 const CHANNELS={cooperativa:"Mayorista*",laboratorio:"Laboratorio"};
 const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca"};
@@ -55,10 +56,11 @@ function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},sh
  // visualizaciones conservan su endpoint previo en lugar de quedarse vacías.
  return result?.scope===scope?result:{status:"loading"};
 }
-function Panel({title,subtitle,icon,insight,children,empty="Sin movimientos en este período"}){
+function Panel({title,subtitle,icon,insight,children,controls,empty="Sin movimientos en este período"}){
  return <section className="card fm-insight-panel" aria-busy={insight.status==="loading"}>
   {icon?<SalesCardHeading icon={icon} title={title}/>:
    <div className="fm-insight-head"><h2>{title}</h2><p>{subtitle}</p></div>}
+  {controls}
   {insight.status==="loading"?<p className="fm-insight-status" role="status">Cargando {title.toLowerCase()}…</p>:
    insight.status==="error"?<p className="fm-insight-status" role="alert">{insight.error}</p>:
    insight.status==="empty"?<p className="fm-insight-status">{empty}</p>:children}
@@ -108,26 +110,42 @@ function useTicketHeatmap({clientSlug,from,to,pharmacyIds,reloadKey,valid}){
  return !valid?{status:"empty"}:result?.token===token?result:{status:"loading"};
 }
 function Heatmap({scope}){
+ const [mode,setMode]=useState("sales");
  const insight=useTicketHeatmap(scope);
  const cells=Array.isArray(insight.data?.cells)?insight.data.cells:EMPTY;
- const total=Number(insight.data?.total)||0;
+ const metric=mode==="sales"?"tickets":"units";
+ const unitLabel=mode==="sales"?"tickets":"unidades";
+ const total=Number(mode==="sales"?insight.data?.total:insight.data?.totalUnits)||0;
  const grid=useMemo(()=>{
   const map=new Map();
   for(const cell of cells){
    const key=String(cell.weekday)+"|"+String(cell.hour);
-   map.set(key,(map.get(key)||0)+Number(cell.tickets||0));
+   const current=map.get(key)||{tickets:0,units:0};
+   current.tickets+=Number(cell.tickets)||0;
+   current.units+=Number(cell.units)||0;
+   map.set(key,current);
   }
   return map;
  },[cells]);
  const hours=useMemo(()=>heatmapHours(cells),[cells]);
- // Escala relativa a las franjas con actividad: rojo = más tickets.
- const levels=[...new Set([...grid.values()].filter(value=>value>0))].sort((a,b)=>a-b);
- return <Panel title="Mapa de calor de operaciones" icon={Clock3} insight={insight}>
+ // La escala se calcula siempre sobre la métrica que está seleccionada.
+ const levels=[...new Set([...grid.values()].map(cell=>cell[metric]).filter(value=>value>0))]
+  .sort((a,b)=>a-b);
+ const controls=<div className="fm-so-controls fm-heat-controls">
+  <div className="fm-so-segment" role="group" aria-label="Indicador del mapa de calor">
+   <button type="button" aria-pressed={mode==="sales"} className={mode==="sales"?"is-active":""}
+    onClick={()=>setMode("sales")}>Ventas</button>
+   <button type="button" aria-pressed={mode==="units"} className={mode==="units"?"is-active":""}
+    onClick={()=>setMode("units")}>Unidades</button>
+  </div>
+ </div>;
+ return <Panel title="Mapa de calor de ventas" icon={Clock3} insight={insight} controls={controls}>
   {insight.status==="ready"&&cells.length===0?
-   <p className="fm-insight-status">No hay tickets registrados para la selección.</p>:
+   <p className="fm-insight-status">No hay ventas registradas para la selección.</p>:
    <><div className="fm-heat-scroll">
     <div className="fm-heat-grid" role="table"
-     aria-label="Número de tickets por día de la semana y franja horaria"
+     aria-label={(mode==="sales"?"Número de tickets":"Unidades vendidas")+
+      " por día de la semana y franja horaria"}
      style={{gridTemplateColumns:"112px repeat(7,minmax(76px,1fr))"}}>
      <div className="fm-heat-row" role="row">
       <div className="fm-heat-axis" role="columnheader">Horario</div>
@@ -136,28 +154,32 @@ function Heatmap({scope}){
      {hours.map(({hour,label})=><div key={hour} className="fm-heat-row" role="row">
       <div className="fm-heat-day" role="rowheader">{label}</div>
       {HEAT_DAYS.map((day,index)=>{
-       const value=grid.get(String(index+1)+"|"+String(hour))||0;
+       const value=grid.get(String(index+1)+"|"+String(hour))?.[metric]||0;
        const rank=value>0&&levels.length>1?levels.indexOf(value)/(levels.length-1):0;
-       const background=value>0?heatColor(rank):"#eef2eb";
+       const background=value===0?"#eef2eb":heatColor(rank);
        return <div key={day} role="cell"
         className={"fm-heat-cell"+(value>0&&rank>=0.7?" fm-heat-cell-strong":"")}
         style={{backgroundColor:background}}
-        title={day+" "+label+": "+integer(value)+" operaciones"}
-        aria-label={day+" de "+label+": "+integer(value)+" tickets"}>
+        title={day+" "+label+": "+integer(value)+" "+unitLabel}
+        aria-label={day+" de "+label+": "+integer(value)+" "+unitLabel}>
         {integer(value)}
        </div>;
       })}
      </div>)}
     </div>
    </div>
-   <div className="fm-heat-legend" aria-label="Leyenda de operaciones por franja">
-    <span>Menos operaciones</span>
+   <div className="fm-heat-legend" aria-label={"Leyenda de "+unitLabel+" por franja"}>
+    <span>{"Menos "+(mode==="sales"?"ventas":"unidades")}</span>
     {HEAT_STOPS.map(color=><span key={color} className="fm-heat-legend-swatch"
      style={{backgroundColor:color}} aria-hidden="true"/>)}
-    <span>Más operaciones</span><span className="fm-heat-legend-empty"
-     aria-hidden="true"/><span>Sin operaciones</span>
+    <span>{"Más "+(mode==="sales"?"ventas":"unidades")}</span>
+    <span className="fm-heat-legend-empty" aria-hidden="true"/>
+    <span>{"Sin "+(mode==="sales"?"ventas":"unidades")}</span>
    </div>
-   <p className="fm-sales-heat-total">Total de operaciones: <strong>{integer(total)} tickets</strong></p></>}
+   <p className="fm-sales-heat-total">
+    {mode==="sales"?"Total de ventas: ":"Total de unidades: "}
+    <strong>{integer(total)} {mode==="sales"?"tickets":"uds."}</strong>
+   </p></>}
  </Panel>;
 }
 function Sellers({scope,shared}){

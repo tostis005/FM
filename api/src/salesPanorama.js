@@ -150,8 +150,9 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
    if(existing.length){await conn.query("COMMIT");failures.delete(key);return true}
    const insert="INSERT INTO farmetrica.ventas_panorama_mensual"+
     " (cliente_slug,farmacia_id,mes,dimension,clave,importe,unidades,lineas)"+
-    " SELECT $4,$5,$6::date,g.kind,g.key,g.sales,g.units,g.lines"+
-    " FROM ("+buildSalesPanoramaGroupSQL(schema)+") g WHERE true"+
+    " SELECT $4,$5,$6::date,g.kind,g.key,sum(g.sales),sum(g.units),sum(g.lines)"+
+    " FROM ("+buildSalesPanoramaGroupSQL(schema)+") g"+
+    " GROUP BY g.kind,g.key"+
     " ON CONFLICT(cliente_slug,farmacia_id,mes,dimension,clave) DO NOTHING";
    await conn.query({text:insert,
     values:[month,nextMonth(month),[code],slug,id,month],query_timeout:120000});

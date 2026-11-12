@@ -39,26 +39,30 @@ export function buildSalesFamilyRankingSQL(schema){
  if(!SCHEMA.test(schema))throw Error("Esquema SQL no permitido");
  const q='"'+schema+'"';
  return [
-  "WITH sold AS MATERIALIZED (",
-  " SELECT v.farmacia_codigo AS pharmacy_code,v.articulo_id,",
+  // Primero resolver familias -> identificadores ERP de producto, usando la
+  // PK del maestro. Luego agregar directamente por familia, no por cada CN.
+  "WITH mapped AS MATERIALIZED (",
+  " SELECT link.farmacia_codigo,link.articulo_origen_id,link.familia_id",
+  " FROM farmetrica.familias_globales_articulos link",
+  " JOIN farmetrica.familias_globales g",
+  " ON g.cliente_slug=link.cliente_slug AND g.id=link.familia_id AND g.activo",
+  " WHERE link.cliente_slug=$4 AND link.farmacia_codigo=ANY($3::text[])",
+  "), amounts AS (",
+  " SELECT link.familia_id,",
   " sum(v.importe)::float8 AS sales,",
   " sum(CASE WHEN nullif(btrim(v.articulo_id),'') IS NOT NULL THEN v.unidades ELSE 0 END)::float8 AS units,",
   " count(*)::bigint AS lines",
   " FROM "+q+".fm_ventas_analitica v",
-  " WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
-  " AND v.farmacia_codigo=ANY($3::text[])",
-  " GROUP BY 1,2",
+  " LEFT JOIN mapped link ON link.farmacia_codigo=v.farmacia_codigo",
+  " AND link.articulo_origen_id=v.articulo_id",
+  " WHERE v.farmacia_codigo=ANY($3::text[])",
+  " AND v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
+  " GROUP BY link.familia_id",
   ") SELECT g.id::text AS \"familyId\",g.nombre AS name,g.segmento AS segment,",
-  " sum(s.sales)::float8 AS sales,sum(s.units)::float8 AS units,",
-  " sum(s.lines)::bigint AS lines",
-  " FROM sold s",
-  " LEFT JOIN farmetrica.familias_globales_articulos link",
-  " ON link.cliente_slug=$4 AND link.farmacia_codigo=upper(btrim(s.pharmacy_code))",
-  " AND link.articulo_origen_id=s.articulo_id",
+  " a.sales,a.units,a.lines FROM amounts a",
   " LEFT JOIN farmetrica.familias_globales g",
-  " ON g.cliente_slug=$4 AND g.id=link.familia_id AND g.activo",
-  " GROUP BY g.id,g.nombre,g.segmento",
-  " ORDER BY sales DESC NULLS LAST"
+  " ON g.cliente_slug=$4 AND g.id=a.familia_id",
+  " ORDER BY a.sales DESC NULLS LAST"
  ].join("\n");
 }
 export function mergeSalesFamilyRows(rows=[]){
@@ -126,7 +130,7 @@ export function setupSalesOverview(app,pool,{requireTenant}){
    const s=salesScope(req,res);if(!s)return;
    if(!s.ids.length)return res.json(mergeSalesFamilyRows([]));
    const {rows}=await pool.query({text:buildSalesFamilyRankingSQL(s.schema),
-    values:[s.from,s.to,s.codes,s.tenant],query_timeout:90000});
+    values:[s.from,s.to,s.codes,s.tenant],query_timeout:22000});
    res.json(mergeSalesFamilyRows(rows));
   }catch(e){next(e)}
  });

@@ -61,6 +61,55 @@ export function datePrefilterLaboratoryMetricsSQL(sql){
  if(suffix.split(old).length!==2)throw Error("No se ha localizado el JOIN de ventas");
  return sql.slice(0,position)+docs+suffix.replace(old,replacement);
 }
+// Un único CN puede tener múltiples fichas ERP. El LATERAL no limita filas:
+// evita que PostgreSQL reordene este JOIN como un escaneo total de articulos
+// cuando ya existe un índice compuesto (farmacia, CN normalizado).
+export function indexedNormalizedCNMetricsSQL(sql){
+ const farm=` FROM refs x CROSS JOIN pharmacies f
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=f.source_code
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
+ WHERE x.cn IS NOT NULL
+  -- Predicado idéntico al del índice parcial de CN normalizado.
+   AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL
+ UNION ALL`;
+ const farmIndexed=` FROM refs x CROSS JOIN pharmacies f
+ JOIN LATERAL (
+  SELECT a.origen_id,a.stock_actual,a.sincronizado_en
+  FROM __SCHEMA__.articulos a
+  WHERE upper(btrim(a.farmacia_codigo))=f.source_code
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
+   AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL
+  OFFSET 0
+ ) a ON true
+ WHERE x.cn IS NOT NULL
+ UNION ALL`;
+ const warehouse=` FROM refs x CROSS JOIN warehouse_scope w
+ JOIN __SCHEMA__.articulos a
+  ON upper(btrim(a.farmacia_codigo))=w.source_code
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
+ WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
+   AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL
+), warehouse_distinct`;
+ const warehouseIndexed=` FROM refs x CROSS JOIN warehouse_scope w
+ JOIN LATERAL (
+  SELECT a.origen_id,a.stock_actual,a.sincronizado_en
+  FROM __SCHEMA__.articulos a
+  WHERE upper(btrim(a.farmacia_codigo))=w.source_code
+   AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
+   AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL
+  OFFSET 0
+ ) a ON true
+ WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
+), warehouse_distinct`;
+ if(sql.split(farm).length!==2)throw Error("No se encontró el JOIN de CN normalizado");
+ let result=sql.replace(farm,farmIndexed);
+ if(result.includes("warehouse_scope AS (")){
+  if(result.split(warehouse).length!==2)throw Error("No se encontró el JOIN CN del almacén");
+  result=result.replace(warehouse,warehouseIndexed);
+ }
+ return result;
+}
 const SQL_MEDICATION=skipWarehouseForMedication(SQL);
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -149,10 +198,13 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  // transformar cada fila a JSON en las búsquedas de stock y ventas.
  const nativeCN=await hasNativeNormalizedCN(pool,ctx.client.schema).catch(()=>false);
  const baseSQL=options.type==="medicacion"?SQL_MEDICATION:SQL;
- const sql=(options.datePrefilter===true?datePrefilterLaboratoryMetricsSQL(baseSQL):baseSQL)
+ const timedSQL=options.datePrefilter===true?datePrefilterLaboratoryMetricsSQL(baseSQL):baseSQL;
+ const sql=(options.indexedCN===true&&nativeCN?indexedNormalizedCNMetricsSQL(timedSQL):timedSQL)
   .replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
-  .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
+  // Sin columna nativa, el acceso JSON a una clave inexistente siempre era NULL.
+  // Sustituirlo por NULL constante permite al plan descartar esa rama completa.
+  .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"NULL::text");
  let rows;
  const started=Date.now();
  try{

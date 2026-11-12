@@ -1273,13 +1273,12 @@ html,body{overflow-x:clip}
  font-size:17px;letter-spacing:-.6px;white-space:nowrap;color:#fff}
 .fm-sidebar-top .brand>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sidebar .fm-sidebar-top .brand-mark{width:36px;height:36px;flex:0 0 36px}
-.fm-sidebar-footer{display:flex;flex:0 0 auto;justify-content:stretch;align-items:center;
- border:0;padding:7px 10px 4px 0;margin:7px 0 0;
+.fm-sidebar-footer{display:flex;flex:0 0 auto;justify-content:flex-end;align-items:center;
+ border:0;padding:7px 10px 4px 0;margin:auto 0 0;
  position:relative;background:transparent}
-.sidebar .fm-sidebar-collapse-toggle{width:100%;min-height:40px;display:inline-flex;align-items:center;
- justify-content:flex-start;gap:12px;cursor:pointer;padding:10px 12px;
- border:0;border-radius:10px;background:transparent;color:#d6f2e6;font-size:12px;font-weight:700}
-.fm-sidebar-toggle-label{white-space:nowrap}
+.sidebar .fm-sidebar-collapse-toggle{width:38px;min-width:38px;height:38px;min-height:38px;
+ display:grid;place-items:center;cursor:pointer;padding:0;
+ border:0;border-radius:10px;background:transparent;color:#d6f2e6}
 .fm-sidebar-collapse-toggle svg{flex:0 0 18px}
 .sidebar .fm-sidebar-collapse-toggle:hover{color:#fff;background:rgba(183,236,201,.18)}
 .fm-sidebar-collapse-toggle:focus-visible{outline:2px solid #b7ecc9;outline-offset:2px}
@@ -1298,9 +1297,8 @@ html,body{overflow-x:clip}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand{justify-content:center;padding:0}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand>span:last-child:not(:first-child){display:none}
  .app-shell.fm-sidebar-is-collapsed .sidebar .side-nav{padding-right:9px}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-footer{justify-content:center;padding:7px 9px 4px 0}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-collapse-toggle{justify-content:center;padding:10px 0;width:100%}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-toggle-label{display:none}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-footer{justify-content:flex-end;padding:7px 9px 4px 0}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-collapse-toggle{width:38px;padding:0}
  .app-shell.fm-sidebar-is-collapsed .side-nav>.side-link,
  .app-shell.fm-sidebar-is-collapsed .side-nav-parent>.side-link{justify-content:center;padding:11px 0;gap:0}
  .app-shell.fm-sidebar-is-collapsed .side-nav-parent.has-submenu>.side-link{padding-right:0}

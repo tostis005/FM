@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {buildSalesFamilyRankingSQL,mergeSalesFamilyRows,buildSalesTicketsSQL,
- summarizeSalesTickets,setupSalesOverview} from "./salesOverview.js";
+ buildSalesTicketCountsSQL,summarizeSalesTicketCounts,summarizeSalesTickets,setupSalesOverview} from "./salesOverview.js";
 test("agrupa nombres equivalentes, respeta segmentos y conserva la facturación",()=>{
  const result=mergeSalesFamilyRows([
   {familyId:"1",name:"Dermocosmetica",segment:"PARAFARMACIA",sales:100,units:8,lines:4},
@@ -19,9 +19,11 @@ test("agrupa nombres equivalentes, respeta segmentos y conserva la facturación"
 });
 test("la familia se deriva de una relación ERP única, filtrada por tenant",()=>{
  const sql=buildSalesFamilyRankingSQL("ampedia");
- assert.match(sql,/WITH sold AS MATERIALIZED/);
+ assert.match(sql,/WITH mapped AS MATERIALIZED/);
+ assert.match(sql,/GROUP BY link\.familia_id/);
+ assert.doesNotMatch(sql,/GROUP BY 1,2/);
  assert.match(sql,/link\.cliente_slug=\$4/);
- assert.match(sql,/link\.articulo_origen_id=s\.articulo_id/);
+ assert.match(sql,/link\.articulo_origen_id=v\.articulo_id/);
  assert.match(sql,/g\.activo/);
  assert.match(sql,/v\.farmacia_codigo=ANY\(\$3::text\[\]\)/);
  assert.throws(()=>buildSalesFamilyRankingSQL('bad";drop table z;--'));
@@ -69,4 +71,18 @@ test("endpoints no permiten consultar farmacias ajenas o módulos deshabilitados
  assert.equal((await invoke("ticket-medio",{...args,desde:"2026-12-01"})).code,400);
  assert.equal((await invoke("ticket-medio",args,{...ctx,modules:{ventas:false,dashboard:false}})).code,403);
  assert.equal(queries.length,2);
+});
+
+test("ticket medio rápido cuenta cabeceras documentales válidas sin agrupar líneas",()=>{
+ const sql=buildSalesTicketCountsSQL("ampedia");
+ assert.match(sql,/fm_ventas_cabeceras h/);
+ assert.match(sql,/EXISTS\(SELECT 1 FROM "ampedia"\.fm_ventas_lineas/);
+ assert.match(sql,/h\.farmacia_codigo=ANY\(\$3::text\[\]\)/);
+ assert.match(sql,/h\.lineas_completas/);
+ assert.doesNotMatch(sql,/GROUP BY.*documento_id|fm_ventas_analitica/);
+ const result=summarizeSalesTicketCounts([{code:"ABA",tickets:5},{code:"EUR",tickets:12}],
+  [{id:1,name:"Abadía",databaseCode:"ABA"},
+   {id:2,name:"Europa",databaseCode:"EUR"}],[1,2]);
+ assert.equal(result.tickets,17);
+ assert.deepEqual(result.pharmacies.map(p=>p.id),["1","2"]);
 });

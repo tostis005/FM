@@ -45,9 +45,9 @@ export default function ConfiguracionPreparador({clientSlug}){
  }
  return <section className="card fm-price-settings">
   <h2>Exclusiones de pedidos</h2>
-  <p>Los artículos cuyo nombre contenga el texto de una regla se excluyen automáticamente
-   de nuevos pedidos, sin distinguir mayúsculas y minúsculas. La coincidencia es literal,
-   incluidos los asteriscos. Los artículos siguen visibles en el preparador.</p>
+  <p>Solo se aplican estas reglas a la descripción mostrada en el preparador.
+   Las coincidencias se marcan en rojo, sin impedir pedidos manuales.
+   Los asteriscos se buscan literalmente.</p>
   <form onSubmit={add}>
    <div className="fm-price-settings-grid">
     <label>Texto a excluir

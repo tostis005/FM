@@ -14,7 +14,6 @@
 .fm-lab-order-summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;color:#46574c;font-size:12px}
 .fm-lab-order-summary span{background:#f4f7f5;border-radius:6px;padding:8px 10px}
 .fm-lab-order-summary strong{font-size:15px;color:#204d39}
-.fm-lab-order-summary .fm-lab-stock-partial{font-size:10px;color:#805c20;font-weight:600}
 .fm-lab-order-scroll{overflow-x:auto;overflow-y:auto;max-height:min(72vh,720px);max-width:100%;border:1px solid #dde4df;border-radius:8px;position:relative}
 .fm-lab-order-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:11px;font-variant-numeric:tabular-nums}
 .fm-lab-order-table th,.fm-lab-order-table td{padding:7px 5px;line-height:1.15;border-right:1px solid #e2e6e3;border-bottom:1px solid #e4e8e5;text-align:center;white-space:nowrap;min-width:52px;box-sizing:border-box}

@@ -40,9 +40,12 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    if(rawStock!=null&&(!Number.isFinite(Number(rawStock))||Number(rawStock)<0))
     return {invalid:true};
    const stock=rawStock==null?0:Math.max(0,Number(rawStock));
+   const sold7=Math.max(0,asNumber(src?.units7));
    const sold3=Math.max(0,asNumber(src?.units3));
    const sold12=Math.max(0,asNumber(src?.units12));
-   const daily=Math.max(sold3/90,sold12/365);
+   // Los datos nuevos del Transferidor usan solo siete días; las métricas
+   // históricas se admiten como respaldo para clientes/tests antiguos.
+   const daily=src?.units7!=null?sold7/7:Math.max(sold3/90,sold12/365);
    const id=String(p.id),familyId=String(src?.familyId||"");
    const byArticle=articleReserve.get(id+"|"+product.cn);
    const byFamily=familyReserve.get(id+"|"+familyId);

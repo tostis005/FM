@@ -28,8 +28,9 @@ const pct=v=>v==null?"—":percentage(v);
 function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},shared=null){
  const scope=[clientSlug,from,to,pharmacyIds.join(","),reloadKey].join("|");
  const [result,setResult]=useState(null);
+ const fallback=shared?.status==="error";
  useEffect(()=>{
-  if(!valid||shared)return;
+  if(!valid||(shared&&!fallback))return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:from,hasta:to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
@@ -52,13 +53,15 @@ function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},sh
    .catch(error=>{if(!controller.signal.aborted)setResult({scope,status:"error",error:error.message})})
    .finally(()=>clearTimeout(timeout));
   return()=>{clearTimeout(timeout);controller.abort()};
- },[endpoint,scope,valid,Boolean(shared)]);
+ },[endpoint,scope,valid,Boolean(shared),fallback]);
  if(!valid)return {status:"empty"};
  // En Ventas, el mapa y el ranking reutilizan una sola respuesta compartida.
  // Compras sigue usando su consulta independiente, sin alterar sus permisos.
- if(shared)return shared.status==="ready"?
+ if(shared&&!fallback)return shared.status==="ready"?
   {status:"ready",data:shared.data?.[endpoint]}:
   {status:shared.status,error:shared.error};
+ // Recuperación excepcional: si falla la consulta conjunta, estas dos
+ // visualizaciones conservan su endpoint previo en lugar de quedarse vacías.
  return result?.scope===scope?result:{status:"loading"};
 }
 function Panel({title,subtitle,insight,children,empty="Sin movimientos en este período"}){

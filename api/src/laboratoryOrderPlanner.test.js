@@ -47,7 +47,8 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
   assert.ok(!text.includes("__SCHEMA__"));
   return {rows:[
    {reference:"400001",pharmacyId:"1",stock:6,units3:90,units12:365,unitsPeriod:5,ordered:2,suggested:4},
-   {reference:"400001",pharmacyId:"2",stock:4,units3:45,units12:200,unitsPeriod:7,ordered:0,suggested:3}
+   {reference:"400001",pharmacyId:"2",stock:0,stockInferredZero:true,
+    units3:0,units12:0,unitsPeriod:0,ordered:0,suggested:0}
   ]};
  }};
  const context={client:{schema:"ampedia",slug:"ampedia"},pharmacies:[{id:1},{id:2}]};
@@ -58,9 +59,13 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
  assert.equal(queries.length,6);
  assert.equal(queries.filter(q=>q.text.includes("information_schema.columns")).length,1);
  assert.equal(d.rows.length,1);
- assert.equal(d.rows[0].totalSold,12);
- assert.equal(d.rows[0].totalSuggested,7);
+ assert.equal(d.rows[0].totalSold,5);
+ assert.equal(d.rows[0].totalSuggested,4);
  assert.equal(d.rows[0].byPharmacy["1"].suggested,4);
+ assert.equal(d.rows[0].byPharmacy["2"].stock,0);
+ assert.equal(d.rows[0].byPharmacy["2"].stockInferredZero,true);
+ assert.equal(d.rows[0].byPharmacy["2"].suggested,0);
+ assert.equal(d.rows[0].byPharmacy["1"].stockInferredZero,false);
  assert.deepEqual(queries.at(-1).values.slice(1),[[1,2],"ampedia","2026-09-01","2026-10-24","medicacion"]);
  assert.equal(d.frequencyDays,3);
 });
@@ -291,4 +296,17 @@ test("medicación evita por completo el SQL de almacén sin alterar farmacias y 
  assert.match(sql,/warehouse_matches AS/,"Parafarmacia conserva stock de almacén");
  assert.match(sql,/JOIN eligible_articles eligible\s+ON eligible\.pharmacy_id=p\.farmacia_id/);
  assert.match(sql,/eligible\.article_id=order_line\.elem->>'articulo'/);
+});
+
+test("un CN sin ficha en una farmacia importada es stock 0; ficha con NULL sigue desconocida",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ assert.match(sql,/pharmacy_inventory_ready AS MATERIALIZED/);
+ assert.match(sql,/EXISTS \(\s+SELECT 1 FROM __SCHEMA__\.articulos a\s+WHERE upper\(btrim\(a\.farmacia_codigo\)\)=f\.source_code/);
+ assert.match(sql,/i\.reference IS NULL AND pir\.ready IS TRUE THEN 0::float8/);
+ assert.match(sql,/ELSE i\.stock/);
+ assert.match(sql,/resolved_stock\.stock IS NULL THEN NULL::int/);
+ assert.match(sql,/resolved_stock\.stock-coalesce\(pending\.qty,0\)/);
+ assert.match(sql,/resolved_stock\.inferred AS "stockInferredZero"/);
+ assert.doesNotMatch(sql,/coalesce\(i\.stock,0\) AS stock/);
 });

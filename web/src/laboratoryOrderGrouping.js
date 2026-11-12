@@ -24,7 +24,7 @@ export function parseLaboratoryVariant(row){
  return null;
 }
 
-export function groupedLaboratoryRows(rows,sort="original"){
+export function groupedLaboratoryRows(rows,sort="original",compareGroups=null){
  const input=Array.isArray(rows)?rows:[];
  const parsed=input.map(parseLaboratoryVariant);
  const rootsByCN=new Map(),rootsByName=new Map();
@@ -90,12 +90,13 @@ export function groupedLaboratoryRows(rows,sort="original"){
  else{
   const [field,direction]=sort.split(":");
   groups.sort((a,b)=>{
+   if(compareGroups)return compareGroups(a,b)||a.firstIndex-b.firstIndex;
    const x=field==="cn"?String(a.representative.cn||a.representative.referencia||""):
     String(a.representative.nombre||"");
    const y=field==="cn"?String(b.representative.cn||b.representative.referencia||""):
     String(b.representative.nombre||"");
-   const diff=collator.compare(x,y)||a.firstIndex-b.firstIndex;
-   return direction==="desc"?-diff:diff;
+   const diff=collator.compare(x,y);
+   return (direction==="desc"?-diff:diff)||a.firstIndex-b.firstIndex;
   });
  }
  return groups;

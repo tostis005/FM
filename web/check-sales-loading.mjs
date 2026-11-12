@@ -5,7 +5,10 @@ const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1280,height:850}});
 const requests=[];
 const user={email:"admin@test.example",role:"superadministrador",name:"Administrador"};
-const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",databaseCode:"ABA",active:true}];
+const pharmacies=[
+ {id:"1",name:"Farmacia Centro",sourceCode:"ABA",databaseCode:"ABA",active:true},
+ {id:"2",name:"Farmacia Norte",sourceCode:"NOR",databaseCode:"NOR",active:true}
+];
 const modules=Object.fromEntries(["dashboard","ventas","promociones"].map(x=>[x,true]));
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
@@ -23,12 +26,16 @@ await page.route("**/api/**",async route=>{
   await delay(450);
   const granularity=url.searchParams.get("granularidad")||"month";
   const from=url.searchParams.get("desde");
+  const onlyCentro=url.searchParams.get("farmacias")==="1";
+  const onlyNorte=url.searchParams.get("farmacias")==="2";
+  const sales=onlyCentro?180:onlyNorte?54.5:234.5;
+  const units=onlyCentro?9:onlyNorte?3:12;
   const bucket=granularity==="hour"?from+"T12:00":
     granularity==="day"?from:from.slice(0,7);
   body={from,to:url.searchParams.get("hasta"),granularity,
-   monthly:[{month:from.slice(0,7),ventas:234.5,unidades:12}],
-   series:[{bucket,ventas:234.5,unidades:12}],
-   kpis:{ventas:234.5,unidades:12}};
+   monthly:[{month:from.slice(0,7),ventas:sales,unidades:units}],
+   series:[{bucket,ventas:sales,unidades:units}],
+   kpis:{ventas:sales,unidades:units}};
  }
  else if(p==="/api/analytics/ventas/recuento"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
@@ -47,13 +54,22 @@ await page.route("**/api/**",async route=>{
  }
  else if(p==="/api/analytics/ventas/ticket-medio-rapido"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
-  body={tickets:8,pharmacies:[{id:"1",name:"Farmacia Centro",tickets:8}]};
+  const ids=(url.searchParams.get("farmacias")||"1,2").split(",");
+  const pharmaciesTickets=[
+   {id:"1",name:"Farmacia Centro",tickets:5},
+   {id:"2",name:"Farmacia Norte",tickets:3}
+  ].filter(p=>ids.includes(p.id));
+  body={tickets:pharmaciesTickets.reduce((sum,p)=>sum+p.tickets,0),
+   pharmacies:pharmaciesTickets};
  }
  else if(p==="/api/analytics/ventas/actividad"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
   body={
    horarios:{total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))},
-   vendedores:{total:234.5,sellers:[{name:"Ana",sales:234.5,units:12}]},
+   vendedores:{total:234.5,sellers:[
+    {name:"Ana",pharmacyId:"1",sales:180,units:9},
+    {name:"Luis",pharmacyId:"2",sales:54.5,units:3}
+   ].filter(p=>(url.searchParams.get("farmacias")||"1,2").split(",").includes(p.pharmacyId))},
    tickets:{kpis:{tickets:8,sales:234.5,units:12,ticketMedio:29.3125,unidadesPorTicket:1.5},
     pharmacies:[{id:"1",name:"Farmacia Centro",sales:234.5,tickets:8,units:12,ticketMedio:29.3125}]}
   };
@@ -94,8 +110,9 @@ async function verifyPeriod(expected){
   "/api/analytics/ventas/ticket-medio-rapido"
  ]){
   await page.waitForFunction(([path,from,to])=>{
-   return [...document.querySelectorAll(".fm-so-family,.fm-so-ticket,.fm-dashboard-insights")]
-    .length>=3;
+   return Boolean(document.querySelector(".fm-so-family")&&
+    document.querySelector(".fm-dashboard-insights")&&
+    document.querySelector(".fm-demo-kpi[aria-label='Ticket medio']"));
   },[endpoint,current.desde,current.hasta],{timeout:12000});
   const hits=requests.filter(r=>r.path===endpoint&&
    r.query.desde===current.desde&&r.query.hasta===current.hasta);
@@ -122,7 +139,32 @@ try{
  await verifyPeriod("month");
  await page.getByText("Ventas por familias",{exact:true}).waitFor();
  await page.getByText("Dermocosmética",{exact:true}).waitFor();
- await page.getByText("Ticket medio neto",{exact:true}).waitFor();
+ const ticketKpi=page.locator(".fm-demo-kpi").filter({hasText:"Ticket medio"});
+ await ticketKpi.waitFor({state:"visible"});
+ await ticketKpi.locator("strong").getByText("29,31", {exact:false}).waitFor();
+ if(await page.locator(".fm-demo-kpi").count()!==3)
+  throw Error("Ventas debe mostrar tres KPI: ventas, unidades y ticket medio");
+ const pharmacyPanel=page.locator(".fm-so-pharmacies");
+ await pharmacyPanel.waitFor({state:"visible"});
+ await page.getByRole("heading",{name:"Ventas por farmacia"}).waitFor();
+ if(await pharmacyPanel.locator(".fm-so-site").count()!==2)
+  throw Error("Deben aparecer dos farmacias cuando el filtro incluye ambas");
+ const initialTicketCalls=requests.filter(r=>r.path==="/api/analytics/ventas/ticket-medio-rapido").length;
+ if(initialTicketCalls!==1)
+  throw Error("El KPI y la comparación deben compartir una sola consulta de tickets");
+ await page.getByRole("button",{name:"Filtrar por Farmacias"}).click();
+ await page.getByRole("dialog",{name:"Seleccionar Farmacias"}).getByRole("checkbox",{name:"Farmacia Centro"}).check();
+ await page.getByRole("button",{name:"Listo"}).click();
+ await page.waitForFunction(()=>!document.querySelector(".fm-so-pharmacies"),null,{timeout:10000});
+ await ticketKpi.locator("strong").getByText("36,00",{exact:false}).waitFor({timeout:12000});
+ if(await page.locator(".fm-so-grid-single").count()!==1)
+  throw Error("La clasificación debe ocupar todo el ancho con una sola farmacia");
+ if(requests.filter(r=>r.path==="/api/analytics/ventas/ticket-medio-rapido"&&r.query.farmacias==="1").length!==1)
+  throw Error("Filtrar una farmacia debe hacer una única consulta nueva de tickets");
+ await page.getByRole("button",{name:"Filtrar por Farmacias"}).click();
+ await page.getByRole("dialog",{name:"Seleccionar Farmacias"}).getByRole("button",{name:"Limpiar"}).click();
+ await page.getByRole("button",{name:"Listo"}).click();
+ await pharmacyPanel.waitFor({state:"visible",timeout:12000});
  await page.getByRole("button",{name:"Unidades",exact:true}).click();
  await page.getByText("9 uds.",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ventas €",exact:true}).click();
@@ -136,7 +178,7 @@ try{
   const map=document.querySelector(".fm-dashboard-insights .fm-insight-panel");
   return Boolean(overview&&map&&overview.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING);
  });
- if(!order)throw Error("Las familias y el ticket deben aparecer antes del mapa");
+ if(!order)throw Error("Las familias y la comparación deben aparecer antes del mapa");
  await page.locator(".fm-heat-legend-swatch").first().waitFor({state:"visible",timeout:12000});
  const heatColors=await page.locator(".fm-heat-cell").evaluateAll(cells=>
   [...new Set(cells.map(el=>getComputedStyle(el).backgroundColor))]);
@@ -169,5 +211,5 @@ try{
  await page.waitForTimeout(600);
  if(totals().length<=beforeTotals)throw Error("Actualizar debe recargar datos");
  noHeavyDetails();
- console.log("OK Ventas: resumen y tres análisis sin recuentos, tabla ni llamadas redundantes");
+ console.log("OK Ventas: tres KPI, ticket compartido y farmacias visibles solo al comparar varias");
 }finally{await browser.close()}

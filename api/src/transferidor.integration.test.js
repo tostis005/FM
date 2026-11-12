@@ -50,7 +50,7 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
   for(let i=0;i<1200;i++){
    await handler(req,res,e=>{error=e});
    if(error)throw error;
-   if(!["queued","inventory","calculating"].includes(res.body?.status)){
+   if(!["queued","inventory","calculating","enriching"].includes(res.body?.status)){
     complete=true;break;
    }
    await new Promise(resolve=>setTimeout(resolve,50));
@@ -64,6 +64,8 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
   assert.equal(line.originId,"1");
   assert.equal(line.destinationId,"2");
   assert.ok(line.units>0);
+  assert.ok(line.sales7Destination>=100,"Ventas última semana del destino");
+  assert.ok(line.sales30Destination>=100,"Ventas del último mes del destino");
   const common=res.body.rows.find(x=>x.cn==="123479");
   assert.ok(common,"El CN compartido debe unir distintos IdArticu");
   assert.equal(common.originId,"1");

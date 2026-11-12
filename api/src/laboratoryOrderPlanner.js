@@ -7,6 +7,24 @@ import {readLaboratoryOrderFrequency} from "./laboratoryOrderSettings.js";
 import {hasNativeNormalizedCN} from "./articleSchemaCache.js";
 
 const SQL=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+// Medicación no dispone de almacén: generar la consulta sin los CTE que
+// acceden a stock y ventas del almacén. Conserva los nombres y tipos de
+// columnas para que el cálculo de las farmacias sea idéntico.
+export function skipWarehouseForMedication(sql){
+ const start=sql.indexOf("), warehouse_scope AS (");
+ const end=sql.indexOf("), eligible_articles AS MATERIALIZED (",start+1);
+ if(start<0||end<=start)throw Error("No se han encontrado las CTE del almacén");
+ const noWarehouse=[
+  " warehouse_ready AS (SELECT false AS ready),",
+  " warehouse_sales_ready AS (SELECT false AS ready),",
+  " warehouse_inventory AS (SELECT NULL::text AS reference,",
+  "  NULL::float8 AS stock,NULL::timestamptz AS stock_at WHERE false),",
+  " warehouse_sales AS (SELECT NULL::text AS reference,",
+  "  NULL::float8 AS sold,NULL::float8 AS v3,NULL::float8 AS v12 WHERE false),",
+ ].join("\n");
+ return sql.slice(0,start+2)+"\n"+noWarehouse+"\n"+sql.slice(end+2);
+}
+const SQL_MEDICATION=skipWarehouseForMedication(SQL);
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
 export function cnCategory(cn){
@@ -93,7 +111,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  // La columna nativa cn_normalizado existe en Farmatic recientes y evita
  // transformar cada fila a JSON en las búsquedas de stock y ventas.
  const nativeCN=await hasNativeNormalizedCN(pool,ctx.client.schema).catch(()=>false);
- const sql=SQL.replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
+ const sql=(options.type==="medicacion"?SQL_MEDICATION:SQL).replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
   .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
  let rows;

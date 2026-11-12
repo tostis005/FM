@@ -213,3 +213,29 @@ test("los cierres del mes actual nunca se consolidan en lotes",async()=>{
   month:"2026-11-01",farms:[{id:1,code:"ABA"}]}),false);
  assert.deepEqual(calls,[]);
 });
+
+test("si falla un lote doble, reintenta ambas farmacias individualmente",async()=>{
+ const calls=[];
+ const pool={
+  async query(){return {rows:[{today:"2026-11-12"}]}},
+  async connect(){
+   return {
+    async query(input){
+     const sql=typeof input==="string"?input:input.text;
+     calls.push(sql);
+     if(sql.includes("pg_try_advisory_xact_lock"))return {rows:[{ok:true}]};
+     if(sql.includes("jsonb_to_recordset($5::jsonb)")&&sql.includes("fm_ventas_analitica"))
+      throw Error("El lote no cabe en memoria");
+     return {rows:[]};
+    },release(){}
+   };
+  }
+ };
+ const cache=createSalesPanoramaCache(pool,{logger:{info(){},error(){}}});
+ assert.equal(await cache.refreshMonthBatch({slug:"ampedia",schema:"ampedia",
+  month:"2026-10-01",farms:[{id:1,code:"ABA"},{id:2,code:"NOR"}]}),false);
+ await new Promise(resolve=>setTimeout(resolve,25));
+ assert.equal(calls.filter(sql=>sql.includes("fm_ventas_analitica")).length,3,
+  "tras un lote fallido los dos cierres se calculan con la ruta individual");
+ assert.equal(calls.filter(sql=>sql.includes("INSERT INTO farmetrica.ventas_panorama_meses_cerrados")).length,2);
+});

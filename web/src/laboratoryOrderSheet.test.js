@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {defaultLaboratoryLine,mergeVisibleOrderLines,orderLineFor,
  laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,
- medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor} from "./laboratoryOrderSheet.js";
+ medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,
+ laboratoryOrderSortValue,compareLaboratoryOrderRows,laboratoryOrderGroupValue,compareLaboratoryOrderGroups} from "./laboratoryOrderSheet.js";
+import {groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
 const pharmacies=[{id:"1",name:"Central"},{id:"2",name:"Norte"}];
 const row={referencia:"000123",cn:"000123",nombre:"Crema solar",
  byPharmacy:{"1":{stock:4,units3:33,units12:110,unitsPeriod:8,suggested:10},
@@ -129,4 +131,108 @@ test("el Excel incluye bloque Almacén y totales compactos sin duplicar stock",(
  assert.deepEqual(med.unitsByPharmacy,{"1":10,"2":7});
  const medication=laboratoryExcelRows([{row:{...item,cn:"400123"},line:med}],pharmacies,"medicacion");
  assert.deepEqual(medication[2].slice(-10),[null,null,null,null,null,7,null,0,17,""]);
+});
+
+
+test("los cuatro totales ordenan numéricamente en ascendente y descendente",()=>{
+ const one={...row,metricsReady:true,globalStock:12,totalSold:9,totalSuggested:8};
+ const two={...row,referencia:"000124",cn:"000124",metricsReady:true,globalStock:101,totalSold:100,totalSuggested:20};
+ const missing={...row,referencia:"000125",cn:"000125",metricsReady:true,
+  globalStock:null,totalSold:null,totalSuggested:null,
+  byPharmacy:{"1":{stock:null},"2":{stock:3}}};
+ assert.equal(laboratoryOrderSortValue(one,"totalStock","parafarmacia",["1","2"]),12);
+ assert.equal(laboratoryOrderSortValue(one,"totalStock","medicacion",["1","2"]),7,
+  "Medicación ignora el almacén");
+ for(const field of ["totalStock","totalUnits","totalSuggested"]){
+  assert.ok(compareLaboratoryOrderRows(two,one,field+":desc","parafarmacia",["1","2"])<0);
+  assert.ok(compareLaboratoryOrderRows(one,two,field+":asc","parafarmacia",["1","2"])<0);
+  assert.ok(compareLaboratoryOrderRows(one,missing,field+":desc","parafarmacia",["1","2"])<0,
+   "El dato desconocido queda al final");
+  assert.ok(compareLaboratoryOrderRows(one,missing,field+":asc","parafarmacia",["1","2"])<0);
+ }
+ assert.equal(laboratoryOrderSortValue({...one,metricsReady:false},"totalStock","parafarmacia",["1","2"]),null);
+});
+
+test("Pedir total ordena la cantidad editada, no la propuesta ni el texto del input",()=>{
+ const first={...row,metricsReady:true,totalSuggested:4};
+ const second={...row,referencia:"000124",cn:"000124",metricsReady:true,totalSuggested:40};
+ const drafts={
+  [first.referencia]:{...defaultLaboratoryLine(first,"parafarmacia",["1","2"]),units:75},
+  [second.referencia]:{...defaultLaboratoryLine(second,"parafarmacia",["1","2"]),units:2}
+ };
+ assert.equal(laboratoryOrderSortValue(first,"totalOrder","parafarmacia",["1","2"],drafts),75);
+ assert.ok(compareLaboratoryOrderRows(first,second,"totalOrder:desc","parafarmacia",["1","2"],drafts)<0);
+ assert.ok(compareLaboratoryOrderRows(first,second,"totalOrder:asc","parafarmacia",["1","2"],drafts)>0);
+ const medication={
+  [first.referencia]:{unitsByPharmacy:{"1":3,"2":4}},
+  [second.referencia]:{unitsByPharmacy:{"1":20,"2":12}}
+ };
+ assert.equal(laboratoryOrderSortValue(first,"totalOrder","medicacion",["1","2"],medication),7);
+ assert.ok(compareLaboratoryOrderRows(second,first,"totalOrder:desc","medicacion",["1","2"],medication)<0);
+});
+
+test("R1, R2 y dúplos suman Pedir total como UN grupo, preservando cada CN",()=>{
+ const items=[
+  {referencia:"234567",cn:"234567",nombre:"Crema Solar SPF 50",metricsReady:true,totalSold:4,
+   byPharmacy:{"1":{stock:2,suggested:2},"2":{stock:0,suggested:0}}},
+  {referencia:"111111",cn:"111111",nombre:"Crema Solar SPF 50 R2 234567",metricsReady:true,totalSold:7,
+   byPharmacy:{"1":{stock:0,suggested:5},"2":{stock:0,suggested:1}}},
+  {referencia:"888888",cn:"888888",nombre:"Crema Solar SPF 50 DUPLO 2",metricsReady:true,totalSold:3,
+   byPharmacy:{"1":{stock:0,suggested:2},"2":{stock:0,suggested:2}}},
+  {referencia:"999999",cn:"999999",nombre:"Otra loción",metricsReady:true,totalSold:10,
+   byPharmacy:{"1":{stock:3,suggested:10},"2":{stock:0,suggested:0}}}
+ ];
+ const drafts={
+  "234567":{units:5},
+  "111111":{units:8},
+  "888888":{units:10},
+  "999999":{units:20}
+ };
+ const groups=groupedLaboratoryRows(items);
+ const family=groups.find(g=>g.rows.length===3);
+ assert.deepEqual(family.rows.map(r=>r.cn),["234567","111111","888888"]);
+ assert.equal(laboratoryOrderGroupValue(family,"totalOrder","parafarmacia",["1","2"],drafts),23,
+  "5 + 8 + 10 = 23, y no solo 5 del artículo principal");
+ const sort="totalOrder:desc";
+ const sorted=groupedLaboratoryRows(items,sort,(a,b)=>
+  compareLaboratoryOrderGroups(a,b,sort,"parafarmacia",["1","2"],drafts));
+ assert.equal(sorted[0].rows.length,3,"La familia supera a la referencia independiente de 20 uds");
+ assert.deepEqual(sorted[0].rows.map(r=>r.cn),["234567","111111","888888"]);
+ assert.equal(sorted[1].rows[0].cn,"999999");
+ const changed={...drafts,"111111":{units:1}};
+ assert.equal(laboratoryOrderGroupValue(family,"totalOrder","parafarmacia",["1","2"],changed),16);
+ const reordered=groupedLaboratoryRows(items,sort,(a,b)=>
+  compareLaboratoryOrderGroups(a,b,sort,"parafarmacia",["1","2"],changed));
+ assert.equal(reordered[0].representative.cn,"999999","Se reordena por la suma editada");
+ assert.equal(Object.values(drafts).reduce((sum,line)=>sum+line.units,0),43,
+  "La suma global incluye cada CN una vez, sin sumar además el grupo");
+});
+
+test("Pedir total agrupado en medicación suma todas las farmacias de cada CN",()=>{
+ const items=[
+  {referencia:"234567",cn:"234567",nombre:"Crema Solar SPF 50",metricsReady:true},
+  {referencia:"111111",cn:"111111",nombre:"Crema Solar SPF 50 R1 234567",metricsReady:true}
+ ];
+ const family=groupedLaboratoryRows(items)[0];
+ const drafts={
+  "234567":{unitsByPharmacy:{"1":2,"2":3}},
+  "111111":{unitsByPharmacy:{"1":4,"2":5}}
+ };
+ assert.equal(laboratoryOrderGroupValue(family,"totalOrder","medicacion",["1","2"],drafts),14);
+ assert.deepEqual(items.map(item=>item.referencia),["234567","111111"]);
+});
+
+test("los grupos sin métricas completas se ordenan al final, no como 0",()=>{
+ const rows=[
+  {referencia:"234567",cn:"234567",nombre:"Crema Solar SPF 50",metricsReady:true,globalStock:10},
+  {referencia:"111111",cn:"111111",nombre:"Crema Solar SPF 50 R1 234567",metricsReady:false},
+  {referencia:"999999",cn:"999999",nombre:"Otra loción",metricsReady:true,globalStock:5}
+ ];
+ const groups=groupedLaboratoryRows(rows);
+ const family=groups.find(g=>g.rows.length===2);
+ assert.equal(laboratoryOrderGroupValue(family,"totalStock","parafarmacia",["1","2"]),null);
+ const sorted=groupedLaboratoryRows(rows,"totalStock:desc",(a,b)=>
+  compareLaboratoryOrderGroups(a,b,"totalStock:desc","parafarmacia",["1","2"]));
+ assert.equal(sorted[0].representative.cn,"999999");
+ assert.equal(sorted[1].representative.cn,"234567");
 });

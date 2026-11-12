@@ -1296,7 +1296,7 @@ html,body{overflow-x:clip}
  .app-shell.fm-sidebar-is-collapsed .main-content{max-width:100%}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top{justify-content:center;padding:0 9px 22px 0}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand{justify-content:center;padding:0}
- .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand>span:last-child{display:none}
+ .app-shell.fm-sidebar-is-collapsed .fm-sidebar-top .brand>span:last-child:not(:first-child){display:none}
  .app-shell.fm-sidebar-is-collapsed .sidebar .side-nav{padding-right:9px}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-footer{justify-content:center;padding:7px 9px 4px 0}
  .app-shell.fm-sidebar-is-collapsed .fm-sidebar-collapse-toggle{justify-content:center;padding:10px 0;width:100%}

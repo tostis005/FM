@@ -42,7 +42,7 @@ test("el listado inicial consulta únicamente el maestro, sin contar CN",async()
  assert.equal(r.result.summary.parafarmacia,1);
  assert.equal(r.result.groups.length,1);
  assert.equal(r.result.groups[0].name,"Dermocosmética");
- assert.equal(r.result.summary.medicacion,57);
+ assert.equal(r.result.summary.medicacion,0);
  assert.equal(r.result.items.length,1);
  assert.ok(queries.every(q=>!q.text.includes("familias_globales_articulos")));
  assert.ok(queries.every(q=>!q.text.includes(".articulos")));

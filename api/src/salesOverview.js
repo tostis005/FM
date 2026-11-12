@@ -163,13 +163,21 @@ export function setupSalesOverview(app,pool,{requireTenant}){
   }catch(e){next(e)}
  });
  app.get("/api/analytics/ventas/ticket-medio-rapido",...requireTenant(),async(req,res,next)=>{
+  const s=salesScope(req,res);if(!s)return;
+  if(!s.ids.length)return res.json(summarizeSalesTicketCounts([],[],[]));
+  let conn;
   try{
-   const s=salesScope(req,res);if(!s)return;
-   if(!s.ids.length)return res.json(summarizeSalesTicketCounts([],[],[]));
-   const {rows}=await pool.query({text:buildSalesTicketCountsSQL(s.schema),
-    values:[s.from,s.to,s.codes],query_timeout:18000});
+   conn=await pool.connect();
+   await conn.query("BEGIN READ ONLY");
+   await conn.query("SET LOCAL statement_timeout='90s'");
+   const {rows}=await conn.query({text:buildSalesTicketCountsSQL(s.schema),
+    values:[s.from,s.to,s.codes],query_timeout:98000});
+   await conn.query("ROLLBACK");
    res.json(summarizeSalesTicketCounts(rows,req.context.pharmacies,s.ids));
-  }catch(error){next(error)}
+  }catch(error){
+   if(conn)await conn.query("ROLLBACK").catch(()=>{});
+   next(error);
+  }finally{conn?.release()}
  });
  app.get("/api/analytics/ventas/ticket-medio",...requireTenant(),async(req,res,next)=>{
   try{

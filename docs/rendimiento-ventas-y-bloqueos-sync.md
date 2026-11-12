@@ -63,3 +63,33 @@ de esta pantalla: ambos cálculos eran innecesarios para la visión agregada.
 El benchmark de solo lectura `api/src/benchVentasPanorama.mjs` se activa
 explícitamente con `FM_BENCH_VENTAS_PANORAMA=1` y mide el período real
 de tres meses sin publicar importes ni referencias.
+
+## Caché dimensional de Ventas (noviembre de 2026)
+
+El benchmark real anterior detectó la cancelación PostgreSQL `57014` en
+familias tras 20 segundos para tres meses y seis farmacias. Las consultas
+directas no podían aprovechar los consolidados de Inicio por carecer de
+dimensiones de artículo, vendedor y hora.
+
+La ruta `/api/analytics/ventas/panorama` reúne familias, vendedores y mapa
+de calor en una sola respuesta. La tabla `farmetrica.ventas_panorama_mensual`
+almacena, por farmacia y mes natural cerrado, los importes y unidades agrupados
+por identificador ERP de artículo, vendedor y franja horaria. Su marcador de
+cierre se inserta al terminar la misma transacción. Ambos tienen triggers de
+inmutabilidad; no se reescriben cierres ni se trasladan devoluciones entre meses.
+
+Al leer, el maestro vigente clasifica los artículos guardados por familia, sin
+reescribir cifras. Las partes abiertas o los filtros parciales se consultan en
+el ERP; se comprueba la fecha con el reloj de PostgreSQL Europe/Madrid. Si
+faltan cierres, se programan secuencialmente, se responde HTTP 202 y el
+navegador vuelve a consultar; jamás se presenta un total parcial como definitivo.
+
+Los límites son independientes: unos 115 segundos de SQL por lote de cierre,
+105 segundos por segmento abierto, 135 segundos de espera de navegador y 150
+segundos de proxy solo para /api/analytics/ventas/. La API general mantiene
+sus límites actuales. El ticket medio conserva su consulta indexada de
+cabeceras con plazo ampliado y no se suma dos veces.
+
+Los pasos de CI `PRECALENTAR_VENTAS` y `BENCH_VENTAS_PANORAMA` activan la
+precarga limitada y el EXPLAIN de solo lectura sobre datos reales, sin
+publicar ventas, CN ni datos de empleados en los logs.

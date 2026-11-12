@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {hasIndexedNormalizedCN} from "./articleSchemaCache.js";
 import {cnCategory,isOrderQuantity,validPlannerDate,pharmacyScope,
  normalizeDraftItems,readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner,
  applyWarehouseToOrder,skipWarehouseForMedication,indexedNormalizedCNMetricsSQL} from "./laboratoryOrderPlanner.js";
@@ -37,6 +38,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
   if(text.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
   if(text.includes("SELECT intervalo_dias AS days"))return {rows:[{days:3}]};
   if(text.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(text.includes("FROM pg_index i"))return {rows:[{available:true}]};
   if(text.includes("WITH p AS ("))return {rows:[]};
   if(text.includes("FROM filtered ORDER BY"))
    return {rows:[{referencia:"400001",cn:"400001",nombre:"Med 1",
@@ -56,7 +58,7 @@ test("matriz consulta solo referencias paginadas y devuelve propuestas separadas
   {key:"C:LAB",pharmacies:[1,2],type:"medicacion",
    from:"2026-09-01",to:"2026-10-24",page:1,size:40});
  // La consulta de columnas del ERP se comparte entre catálogo y matriz.
- assert.equal(queries.length,6);
+ assert.equal(queries.length,7);
  assert.equal(queries.filter(q=>q.text.includes("information_schema.columns")).length,1);
  assert.equal(d.rows.length,1);
  assert.equal(d.rows[0].totalSold,5);
@@ -75,6 +77,7 @@ test("matriz directa sobre CN suministrados evita releer catálogo del laborator
   const sql=typeof q==="string"?q:q.text;statements.push(sql);
   if(sql.includes("SELECT intervalo_dias"))return {rows:[{days:7}]};
   if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("FROM pg_index i"))return {rows:[{available:true}]};
   if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
    {reference:"400321",pharmacyId:"1",stock:3,units3:20,units12:50,unitsPeriod:4,
     ordered:0,suggested:5}
@@ -89,7 +92,7 @@ test("matriz directa sobre CN suministrados evita releer catálogo del laborator
  });
  assert.equal(result.metricsUnavailable,false);
  assert.equal(result.rows[0].byPharmacy["1"].suggested,5);
- assert.equal(statements.length,3);
+ assert.equal(statements.length,4);
  assert.ok(statements.every(q=>!q.includes("preparador_exclusiones")));
 });
 test("consulta masiva agrupa 250 CN con un único SQL de ventas 3m, 12m y período",async()=>{
@@ -100,6 +103,7 @@ test("consulta masiva agrupa 250 CN con un único SQL de ventas 3m, 12m y perío
   const sql=typeof q==="string"?q:q.text;statements.push({sql,values:q.values});
   if(sql.includes("SELECT intervalo_dias"))return {rows:[{days:7}]};
   if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("FROM pg_index i"))return {rows:[{available:true}]};
   if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
    {reference:"400000",pharmacyId:"1",stock:4,unitsPeriod:9,units3:90,
     units12:360,suggested:20,ordered:0}
@@ -345,4 +349,22 @@ test("CN indexado: un lote de 200 referencias no dispara un scan global y conser
  // El reemplazo constante permite al plan suprimir la rama sin perder datos.
  assert.ok(!indexedNormalizedCNMetricsSQL(sql).includes("LIMIT 1"));
  assert.match(sql,/__CN_NORMALIZED__/);
+});
+
+test("caché del índice por esquema: solo se fuerza LATERAL con índice válido",async()=>{
+ let calls=0;
+ const pool={async query(q){
+  calls++;
+  assert.match(q.text,/FROM pg_index i/);
+  assert.deepEqual(q.values,["ampedia"]);
+  return {rows:[{available:true}]};
+ }};
+ const results=await Promise.all(Array.from({length:5},()=>hasIndexedNormalizedCN(pool,"ampedia")));
+ assert.deepEqual(results,[true,true,true,true,true]);
+ assert.equal(calls,1,"Una sola consulta de metadatos para cinco llamadas simultáneas");
+ assert.equal(await hasIndexedNormalizedCN(pool,"ampedia"),true);
+ assert.equal(calls,1,"La caché también se reutiliza en llamadas posteriores");
+ const missing={async query(){return {rows:[{available:false}]}}};
+ assert.equal(await hasIndexedNormalizedCN(missing,"tenant_demo"),false);
+ await assert.rejects(()=>hasIndexedNormalizedCN(pool,"a;DROP TABLE"),/Esquema no autorizado/);
 });

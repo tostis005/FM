@@ -207,6 +207,7 @@ test("SQL empareja por CN y conserva el IdArticu para unir las ventas",async()=>
  assert.match(sql,/catalog AS MATERIALIZED/);
  assert.match(sql,/a\.origen_id::text AS article_id/);
  assert.match(sql,/l\.articulo_origen_id=a\.article_id/);
+ assert.match(sql,/JOIN eligible_articles ea ON ea\.fid=p\.farmacia_id/);
  assert.ok(!sql.includes("a.origen_id::text AS cn"));
 });
 

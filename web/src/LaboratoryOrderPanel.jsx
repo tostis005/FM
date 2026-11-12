@@ -310,8 +310,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  };
  const sortDirection=field=>tableSort===field+":asc"?"ascending":
   tableSort===field+":desc"?"descending":"none";
- const sortIndicator=field=>tableSort===field+":asc"?"▲":
-  tableSort===field+":desc"?"▼":"↕";
  const pauseOrderSorting=()=>{
   if(tableSort.startsWith("totalOrder:"))setFrozenSortDrafts(drafts);
  };
@@ -560,21 +558,21 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalStock")}
         title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalStock")}
-         aria-label="Ordenar por stock total">STOCK <span aria-hidden="true">{sortIndicator("totalStock")}</span></button>
+         aria-label="Ordenar por stock total">STOCK <span aria-hidden="true" data-direction={sortDirection("totalStock")}/></button>
        </th>
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalUnits")}
         title="Unidades vendidas en el período seleccionado por las farmacias">
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalUnits")}
-         aria-label="Ordenar por unidades vendidas totales">UDS <span aria-hidden="true">{sortIndicator("totalUnits")}</span></button>
+         aria-label="Ordenar por unidades vendidas totales">UDS <span aria-hidden="true" data-direction={sortDirection("totalUnits")}/></button>
        </th>
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalSuggested")}
         title={tab==="parafarmacia"?"Propuesta descontando el stock global":"Suma de las propuestas individuales de farmacia"}>
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalSuggested")}
-         aria-label="Ordenar por propuesta total">Propuesta <span aria-hidden="true">{sortIndicator("totalSuggested")}</span></button>
+         aria-label="Ordenar por propuesta total">Propuesta <span aria-hidden="true" data-direction={sortDirection("totalSuggested")}/></button>
        </th>
        <th className="fm-lab-order-editcol" aria-sort={sortDirection("totalOrder")}>
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalOrder")}
-         aria-label="Ordenar por unidades a pedir en total">Pedir total <span aria-hidden="true">{sortIndicator("totalOrder")}</span></button>
+         aria-label="Ordenar por unidades a pedir en total">Pedir total <span aria-hidden="true" data-direction={sortDirection("totalOrder")}/></button>
        </th><th>Comentarios</th>
       </tr></thead>
       <tbody>

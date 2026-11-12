@@ -149,7 +149,7 @@ function inventorySql(schema){
   a.sincronizado_en AS stock_at
  FROM chosen f
  JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
- WHERE ${cn} IS NOT NULL AND ${cn}::int BETWEEN 1 AND 399999
+ WHERE ${cn}::int BETWEEN 1 AND 399999
 ), candidates AS MATERIALIZED (
  -- Solo analizar productos que existen con stock positivo en alguna farmacia.
  SELECT DISTINCT cn FROM catalog WHERE stock>0
@@ -177,11 +177,16 @@ function inventorySql(schema){
   AND h.fecha>=(now() AT TIME ZONE 'Europe/Madrid')::date-interval '364 days'
   AND h.fecha<(now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
  GROUP BY a.fid,a.article_id
+), eligible_articles AS MATERIALIZED (
+ -- Igual que el Preparador, cada par farmacia y artículo ERP se visita una vez.
+ SELECT DISTINCT fid,article_id FROM eligible
 ), pending AS MATERIALIZED (
  SELECT p.farmacia_id AS fid,l.line->>'articulo' AS article_id,
   coalesce(sum((assignment.item->>'unidades')::float8),0)::float8 AS ordered
  FROM farmetrica.op_pedidos p
  CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.lineas,'[]'::jsonb)) AS l(line)
+ JOIN eligible_articles ea ON ea.fid=p.farmacia_id
+  AND ea.article_id=l.line->>'articulo'
  CROSS JOIN LATERAL jsonb_array_elements(coalesce(l.line->'asignaciones','[]'::jsonb)) AS assignment(item)
  WHERE p.cliente_slug=$1 AND p.farmacia_id=ANY($2::int[])
   AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')

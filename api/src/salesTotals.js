@@ -63,7 +63,7 @@ export function buildSalesTotalsSql(schema,granularity,hasHistoricalCost=true){
  GROUP BY GROUPING SETS ${sets}
  ORDER BY tipo,mes${granularity==="month"?"":",periodo"}`;
 }
-export function setupSalesTotals(app,pool,{requireTenant}){
+export function setupSalesTotals(app,pool,{requireTenant,consolidations=null}){
  app.get("/api/analytics/ventas/totales",...requireTenant(),async(req,res,next)=>{
   try{
    if(req.context.role!=="superadministrador"&&
@@ -96,6 +96,24 @@ export function setupSalesTotals(app,pool,{requireTenant}){
    if(!ids.length)return res.json({from,to,granularity,monthly:[],series:[],
      costBasis:{products:0,priced:0,coveredSales:0,margin:0},
      kpis:{ventas:0,unidades:0,margen:null,margenPct:null,coberturaCostes:null}});
+   // Los meses naturales cerrados proceden del mismo histórico permanente
+   // que Inicio. El servicio suma solo extremos abiertos y genera los cierres
+   // ausentes sin bloquear esta respuesta. Si falta alguno, seguimos con SQL.
+   if(granularity==="month"&&consolidations?.read){
+    const farms=ids.map(id=>({id,code:codeById.get(id)}));
+    try{
+     const result=await consolidations.read({slug:req.context.client.slug,
+      schema,ids,farms,from,to,granularity:"month"});
+     if(result.available&&result.sales?.monthly?.length){
+      return res.json({...result.sales,from,to,granularity:"month",
+       consolidation:{cachedMonths:result.cachedMonths||0,
+        liveRanges:result.liveRanges||0,immutable:true}});
+     }
+    }catch(error){
+     // Disponibilidad degradada: nunca ocultar cifras por un fallo de caché.
+     console.warn("FM_VENTAS_CONSOLIDADOS_FALLBACK",error.code||error.name);
+    }
+   }
    // En algunos ERP no existe coste_historico: nunca permitir que una
    // columna opcional haga fallar también ventas y unidades. El margen se
    // publica sólo cuando el origen tiene costes históricos suficientes.

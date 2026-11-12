@@ -28,7 +28,7 @@ const scope={modules:["promociones"],sections:["promociones","seguimiento-global
 const pharmacies=[{id:"1",name:"Farmacia de prueba",sourceCode:"ABC"}];
 const errors=[],writes=[];
 
-async function checkRole(role){
+async function checkRole(role,enabledModules=enabledModuleIds){
  const page=await browser.newPage({viewport:{width:1260,height:820}});
  page.on("pageerror",e=>errors.push(e.message));
  const user={role,email:"perfil-"+role+"@example.invalid",name:"Perfil de pruebas"};
@@ -44,7 +44,7 @@ async function checkRole(role){
   else if(path==="/api/tenant/farmacias")body=pharmacies;
   else if(path==="/api/tenant/perfiles/gestion"){
    body={profiles:profiles.map(p=>({...p,editable:role==="administrador"&&p.key==="gestor"?true:p.editable})),
-    modules,sections,enabledModuleIds,scope,level:role};
+    modules,sections,enabledModuleIds:enabledModules,scope,level:role};
   }else if((path==="/api/tenant/perfiles/gestion/3"||path==="/api/tenant/perfiles/gestion/2")&&req.method()==="PUT"){
    writes.push({role,path,body:req.postDataJSON()});
    body={profileId:3,name:req.postDataJSON().name};
@@ -65,8 +65,9 @@ async function checkRole(role){
   assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Reposición"}).count(),0);
   assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Promociones"}).count(),1,
    "los módulos activos del cliente siguen visibles");
-  assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Ventas"}).count(),1,
-   "Ventas aparece cuando está habilitado a nivel de cliente");
+  assert.equal(await page.locator(".fm-profile-module").filter({hasText:"Ventas"}).count(),
+   enabledModules.includes("ventas")?1:0,
+   "Ventas solo aparece cuando el cliente la tiene habilitada en Administración");
   await page.locator("#editar-perfil input").first().fill("Personal actualizado");
   await page.getByRole("button",{name:"Guardar perfil"}).click();
   await page.getByText("Perfil guardado. Los usuarios asignados ya utilizan esta configuración.").waitFor();
@@ -80,13 +81,17 @@ async function checkRole(role){
   if(role==="administrador"){
    await manager.getByRole("button",{name:"Configurar"}).click();
    const salesRow=page.locator(".fm-profile-module").filter({hasText:"Ventas"});
-   assert.equal(await salesRow.getByRole("checkbox").first().isChecked(),true);
-   assert.equal(await salesRow.getByRole("checkbox",{name:"Ver"}).isChecked(),true,
-    "un módulo marcado nunca debe conservar Ver desactivado");
+   if(enabledModules.includes("ventas")){
+    assert.equal(await salesRow.getByRole("checkbox").first().isChecked(),true);
+    assert.equal(await salesRow.getByRole("checkbox",{name:"Ver"}).isChecked(),true,
+     "un módulo marcado no debe conservar Ver desactivado");
+   }else assert.equal(await salesRow.count(),0,
+    "no mostrar Ventas cuando Administración la deshabilitó");
    await page.getByRole("button",{name:"Guardar perfil"}).click();
-   const salesSave=writes.find(w=>w.path==="/api/tenant/perfiles/gestion/2");
-   assert.deepEqual(salesSave?.body.permissions.ventas,["ver"],
-    "guardar Gestor repara permisos de lectura antiguos sin habilitar otras acciones");
+   const salesSave=writes.filter(w=>w.path==="/api/tenant/perfiles/gestion/2").at(-1);
+   assert.deepEqual(salesSave?.body.permissions.ventas,
+    enabledModules.includes("ventas")?["ver"]:[],
+    "no modificar el permiso oculto al guardar otras opciones del perfil");
   }
  }finally{await page.close();}
 }
@@ -94,6 +99,7 @@ async function checkRole(role){
 try{
  await checkRole("gestor");
  await checkRole("administrador");
+ await checkRole("administrador",["promociones"]);
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK perfiles: Gestor y Administrador ven menú, editan personal y no eliminan perfiles base");
 }finally{await browser.close();}

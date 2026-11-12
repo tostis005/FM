@@ -283,7 +283,7 @@ test("medicación evita por completo el SQL de almacén sin alterar farmacias y 
  assert.doesNotMatch(med,/warehouse_matches AS/);
  assert.doesNotMatch(med,/warehouse_sales AS MATERIALIZED/);
  assert.doesNotMatch(med,/warehouse_distinct AS MATERIALIZED/);
- assert.match(med,/warehouse_ready AS \(SELECT false AS ready\)/);
+ assert.match(med,/warehouse_ready AS \(SELECT \(\$6::text='parafarmacia'\) AS ready\)/);
  assert.match(med,/warehouse_sales_ready AS \(SELECT false AS ready\)/);
  assert.match(med,/sales_per_article AS MATERIALIZED/);
  assert.match(med,/pending_orders AS MATERIALIZED/);

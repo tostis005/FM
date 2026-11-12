@@ -76,6 +76,16 @@ test("métricas: errores SQL permanentes no provocan más consultas",async()=>{
  assert.equal(calls,1);
 });
 
+test("métricas: un 429 tras reintento no debe generar nuevos lotes",async()=>{
+ let calls=0;
+ const error=Object.assign(new Error("Límite de consultas"),{status:429});
+ await assert.rejects(()=>fetchLaboratoryMetricsAdaptive(
+  Array.from({length:200},(_,i)=>({referencia:String(i)})),async()=>{
+   calls++;throw error;
+  }),{status:429});
+ assert.equal(calls,1);
+});
+
 test("métricas: cancelar al dividir evita consultas posteriores",async()=>{
  const controller=new AbortController();
  let calls=0;

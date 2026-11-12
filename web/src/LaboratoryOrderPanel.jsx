@@ -554,11 +554,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       {viewport.virtualized&&viewport.top>0&&<tr className="fm-lab-virtual-spacer" aria-hidden="true"
         style={{height:viewport.top}}><td colSpan={matrixColumnCount}
          style={{height:viewport.top}}/></tr>}
-      {renderedRows.map(row=>{
+      {renderedRows.map((row,index)=>{
        const line=showLine(row);
        return <tr key={row.referencia}
          className={[
           isExcludedOrderRow(row)?"fm-lab-order-excluded":"",
+          // La franja alterna depende de la posición REAL del artículo, no de
+          // su posición en la ventana virtual ni de las filas espaciadoras.
+          (viewport.start+index)%2===1?"fm-lab-row-even":"",
           row._visualGroupSize>1?"fm-lab-family-row":"",
           row._visualGroupFirst&&row._visualGroupSize>1?"fm-lab-family-first":"",
           row._visualGroupLast&&row._visualGroupSize>1?"fm-lab-family-last":""

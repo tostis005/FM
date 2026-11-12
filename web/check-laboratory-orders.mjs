@@ -381,6 +381,16 @@ try{
  await largeTable.evaluate(node=>{node.scrollTop=node.scrollHeight;
   node.dispatchEvent(new Event("scroll",{bubbles:true}));});
  await page.getByText("Referencia volumen 600",{exact:true}).waitFor({timeout:10000});
+ // Con el scroll virtual el color depende del índice completo (600º es par),
+ // aunque exista una fila espaciadora y se sustituyan filas al desplazarse.
+ const stripe=await page.getByText("Referencia volumen 600",{exact:true})
+  .locator("xpath=ancestor::tr[1]").evaluate(row=>({
+   even:row.classList.contains("fm-lab-row-even"),
+   background:getComputedStyle(row.querySelector(".shade-0")).backgroundColor
+  }));
+ assert.equal(stripe.even,true,"El color del CN 600 no cambia al virtualizar");
+ assert.equal(stripe.background,"rgb(237, 242, 239)",
+  "La fila 600 conserva su fondo alterno sin parpadeos");
  assert.ok(await page.locator(".fm-lab-order-table tbody tr").count()<=70,
   "La vista Todos virtualiza el DOM pero conserva el último artículo");
  await largePager.getByRole("combobox",{name:"Artículos por página"}).selectOption("250");

@@ -22,9 +22,9 @@
 .fm-lab-order-table .shade-0{background:#f4f6f5}
 .fm-lab-order-table .shade-1{background:#ebeff0}
 .fm-lab-order-table .shade-2{background:#e3e8e6}
-.fm-lab-order-table tbody tr:nth-child(even) .shade-0{background:#edf2ef}
-.fm-lab-order-table tbody tr:nth-child(even) .shade-1{background:#e5ebec}
-.fm-lab-order-table tbody tr:nth-child(even) .shade-2{background:#dae1de}
+.fm-lab-order-table tbody tr.fm-lab-row-even .shade-0{background:#edf2ef}
+.fm-lab-order-table tbody tr.fm-lab-row-even .shade-1{background:#e5ebec}
+.fm-lab-order-table tbody tr.fm-lab-row-even .shade-2{background:#dae1de}
 .fm-lab-order-table th.fm-lab-order-sub{font-size:10px;font-weight:600}
 .fm-lab-order-table .fm-lab-order-ordercol{font-weight:700;border-right:2px solid #b7c4b9}
 .fm-lab-order-table .fm-lab-order-total-group,.fm-lab-order-table .fm-lab-order-total{background:#e9f3ec;font-weight:700}

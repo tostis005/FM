@@ -340,6 +340,24 @@ function App(){
     setTenantContext(ctx);
     return ctx;
   }
+  // Los permisos del perfil se leen del servidor. Al volver a esta pestaña,
+  // actualizar el contexto para reflejar cambios realizados por otro administrador.
+  useEffect(()=>{
+    if(!tenantContext?.client?.slug||!sessionUser)return;
+    const slug=tenantContext.client.slug;
+    let lastRefresh=0;
+    const refreshPermissions=()=>{
+      if(document.visibilityState==="hidden"||Date.now()-lastRefresh<20000)return;
+      lastRefresh=Date.now();
+      void loadContext(slug).catch(()=>{});
+    };
+    window.addEventListener("focus",refreshPermissions);
+    document.addEventListener("visibilitychange",refreshPermissions);
+    return()=>{
+      window.removeEventListener("focus",refreshPermissions);
+      document.removeEventListener("visibilitychange",refreshPermissions);
+    };
+  },[tenantContext?.client?.slug,sessionUser?.email]);
   useEffect(()=>{
     let live=true;
     const selected=localStorage.getItem("fm_active_tenant")||"";

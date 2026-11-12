@@ -7,16 +7,17 @@ const profiles=[
   modules:null,sections:null,permissions:{promociones:["ver","editar"]},
   system:true,userCount:1,usedOtherClient:false,editable:false,deletable:false},
  {profileId:2,key:"gestor",name:"Gestor",baseRole:"gestor",
-  modules:["promociones"],sections:["promociones","seguimiento-global"],
-  permissions:{promociones:["ver","crear","editar","exportar"]},
+  modules:["promociones","ventas"],sections:["promociones","seguimiento-global","ventas"],
+  permissions:{promociones:["ver","crear","editar","exportar"],ventas:[]},
   system:true,userCount:1,usedOtherClient:false,editable:false,deletable:false},
  {profileId:3,key:"farmacia",name:"Personal de farmacia",baseRole:"farmacia",
   modules:["promociones","reposicion"],sections:["promociones","seguimiento-global","reposicion"],
   permissions:{promociones:["ver","exportar"],reposicion:["ver"]},
   system:true,userCount:2,usedOtherClient:false,editable:true,deletable:false}
 ];
-const modules=[{id:"promociones",name:"Promociones"},{id:"reposicion",name:"Reposición"}];
+const modules=[{id:"promociones",name:"Promociones"},{id:"reposicion",name:"Reposición"},{id:"ventas",name:"Ventas"}];
 const sections=[
+ {id:"ventas",name:"Ventas (resumen)",module:"ventas",profileVisible:true},
  {id:"promociones",name:"Promociones",module:"promociones",profileVisible:true},
  {id:"seguimiento-global",name:"Seguimiento",module:"promociones",profileVisible:true},
  {id:"reposicion",name:"Reposición",module:"reposicion",profileVisible:false}
@@ -43,7 +44,7 @@ async function checkRole(role){
   else if(path==="/api/tenant/perfiles/gestion"){
    body={profiles:profiles.map(p=>({...p,editable:role==="administrador"&&p.key==="gestor"?true:p.editable})),
     modules,sections,scope,level:role};
-  }else if(path==="/api/tenant/perfiles/gestion/3"&&req.method()==="PUT"){
+  }else if((path==="/api/tenant/perfiles/gestion/3"||path==="/api/tenant/perfiles/gestion/2")&&req.method()==="PUT"){
    writes.push({role,path,body:req.postDataJSON()});
    body={profileId:3,name:req.postDataJSON().name};
   }else if(path==="/api/tenant/perfiles")body=profiles;
@@ -69,6 +70,17 @@ async function checkRole(role){
   assert.equal(writes.at(-1).body.name,"Personal actualizado");
   assert.deepEqual(writes.at(-1).body.modules,["promociones","reposicion"]);
   assert.deepEqual(writes.at(-1).body.sections,["promociones","seguimiento-global","reposicion"]);
+  if(role==="administrador"){
+   await manager.getByRole("button",{name:"Configurar"}).click();
+   const salesRow=page.locator(".fm-profile-module").filter({hasText:"Ventas"});
+   assert.equal(await salesRow.getByRole("checkbox").first().isChecked(),true);
+   assert.equal(await salesRow.getByRole("checkbox",{name:"Ver"}).isChecked(),true,
+    "un módulo marcado nunca debe conservar Ver desactivado");
+   await page.getByRole("button",{name:"Guardar perfil"}).click();
+   const salesSave=writes.find(w=>w.path==="/api/tenant/perfiles/gestion/2");
+   assert.deepEqual(salesSave?.body.permissions.ventas,["ver"],
+    "guardar Gestor repara permisos de lectura antiguos sin habilitar otras acciones");
+  }
  }finally{await page.close();}
 }
 

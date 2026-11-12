@@ -40,8 +40,8 @@ export function buildSalesPanoramaGroupSQL(schema){
   " CASE WHEN GROUPING(v.articulo_id)=0 THEN coalesce(v.articulo_id,'')",
   " WHEN GROUPING(v.vendedor_id)=0 THEN coalesce(v.vendedor_id::text,'')",
   " ELSE (extract(isodow FROM v.fecha)::int::text || ':' || extract(hour FROM v.fecha)::int::text) END AS key,",
-  " coalesce(sum(v.importe),0)::float8 AS sales,",
-  " coalesce(sum(v.unidades),0)::float8 AS units,",
+  " coalesce(sum(v.importe),0)::numeric AS sales,",
+  " coalesce(sum(v.unidades),0)::numeric AS units,",
   " count(*)::bigint AS lines",
   " FROM "+q+".fm_ventas_analitica v",
   " WHERE v.farmacia_codigo=ANY($3::text[])",
@@ -151,7 +151,7 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
    const insert="INSERT INTO farmetrica.ventas_panorama_mensual"+
     " (cliente_slug,farmacia_id,mes,dimension,clave,importe,unidades,lineas)"+
     " SELECT $4,$5,$6::date,g.kind,g.key,g.sales,g.units,g.lines"+
-    " FROM ("+buildSalesPanoramaGroupSQL(schema)+") g"+
+    " FROM ("+buildSalesPanoramaGroupSQL(schema)+") g WHERE true"+
     " ON CONFLICT(cliente_slug,farmacia_id,mes,dimension,clave) DO NOTHING";
    await conn.query({text:insert,
     values:[month,nextMonth(month),[code],slug,id,month],query_timeout:120000});
@@ -229,9 +229,8 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
     await conn.query("SET LOCAL statement_timeout='105s'");
     await conn.query("SET LOCAL work_mem='16MB'");
     const result=await conn.query({text:buildSalesPanoramaGroupSQL(schema),
-     values:[range.from,nextMonth(range.to.slice(0,7)+"-01")>range.to?
-      new Date(Date.parse(range.to+"T00:00:00Z")+86400000).toISOString().slice(0,10):
-      range.to,codes],
+     values:[range.from,new Date(Date.parse(range.to+"T00:00:00Z")+86400000)
+      .toISOString().slice(0,10),codes],
      query_timeout:112000});
     await conn.query("ROLLBACK");
     return result.rows;

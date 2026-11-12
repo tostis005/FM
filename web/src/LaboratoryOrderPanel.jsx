@@ -335,8 +335,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const matrixColumnCount=chosen.length*5+(tab==="parafarmacia"?12:7);
  const stockTotals=useMemo(()=>laboratoryStockTotals(
    currentRows,ids,tab==="parafarmacia"),[currentRows,scope,tab]);
- const stockAvailable=!loading&&(currentRows.length===0||
-  currentRows.some(row=>row.metricsReady===true));
+ const stockAvailable=!loading&&!data.metricsUnavailable&&
+  stockTotals.pharmacyStock!==null;
  const {pageTotalSold,pageTotalSuggested,pageTotalOrder,warehousePending}=useMemo(()=>{
   const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
    row.metricsReady&&row.warehouseReady!==true);
@@ -504,13 +504,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <div className="fm-lab-order-lower" aria-busy={metricsLoading}>
     <div className="fm-lab-order-summary">
      {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos{tableVisibleRows.length!==currentRows.length?" de "+currentRows.length+" del catálogo":""}</span>}
-     <span title={stockTotals.pharmacyPartial?"Suma del stock conocido; algunas farmacias no tienen inventario disponible":"Stock total de las farmacias seleccionadas"}>
+     <span title="Stock de las farmacias seleccionadas; las existencias sin dato cuentan como cero">
       <strong>{loading?"Calculando…":stockAvailable?fmt(stockTotals.pharmacyStock):"Sin datos"}</strong> stock farmacias
-      {stockAvailable&&stockTotals.pharmacyPartial&&<small className="fm-lab-stock-partial"> · parcial</small>}
      </span>
-     {tab==="parafarmacia"&&<span title={stockTotals.globalPartial?"Farmacias y almacén: suma del stock conocido; faltan existencias por importar":"Stock de farmacias más almacén"}>
+     {tab==="parafarmacia"&&<span title="Stock de farmacias más almacén; las existencias sin dato cuentan como cero">
       <strong>{loading?"Calculando…":stockAvailable?fmt(stockTotals.globalStock):"Sin datos"}</strong> stock global
-      {stockAvailable&&stockTotals.globalPartial&&<small className="fm-lab-stock-partial"> · parcial</small>}
      </span>}
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
      <span><strong>{data.frequencyDays>0?data.frequencyDays+" días":"Bajo demanda"}</strong> · frecuencia de planificación</span>
@@ -614,12 +612,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           </td>
         {chosen.flatMap((p,i)=>{
          const m=row.byPharmacy?.[String(p.id)]||{};
-         return [row.metricsReady?m.stock??null:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,
+         return [row.metricsReady?m.stock??0:null,row.metricsReady?m.units12??0:null,row.metricsReady?m.units3??0:null,row.metricsReady?m.unitsPeriod??0:null,
           tab==="medicacion"?"edit":row.metricsReady?m.suggested??null:null].map((value,k)=>
            <td key={p.id+"-"+k} className={"fm-lab-order-cell shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}
             title={k===0?(m.stockInferredZero?
-              "Stock 0: no existe ficha de este CN en la farmacia, que sí tiene inventario sincronizado":
-              value===null?"Stock no disponible: ficha o importación de inventario incompleta":
+              "Stock 0 asumido: no existe existencia informada para este artículo":
+              value===null?"Stock no disponible: error o carga de métricas incompleta":
               "Existencias actuales de la farmacia"):undefined}>
             {value==="edit"?<input type="number" min="0" max="999999" step="1"
              aria-label={"Pedir "+row.nombre+" en "+p.name}
@@ -630,15 +628,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         })}
         {tab==="parafarmacia"&&["stock","units12","units3","unitsPeriod","suggested"].map((key,k)=>{
           const available=tab==="parafarmacia"&&row.metricsReady;
-          const value=k===4?null:available?row.warehouse?.[key]:null;
+          const value=k===4?null:available?
+            (key==="stock"?row.warehouse?.stock??0:row.warehouse?.[key]):null;
           return <td key={"alm-"+key} className={"fm-lab-order-warehouse-col"+(k===4?" fm-lab-order-ordercol":"")}
             title={k===4?"El almacén no emite propuestas propias":!available?"No hay datos del almacén para esta categoría":value===null||value===undefined?"Dato aún no importado":"Dato real del almacén"}>
             {value===null||value===undefined?"—":fmt(value)}</td>;
          })}
          <td className="fm-lab-order-total" title={tab==="parafarmacia"&&row.globalStock!=null?
           "Stock global de farmacias y almacén":"Stock de todas las farmacias"}>
-          {row.metricsReady?fmt(tab==="parafarmacia"&&row.globalStock!=null?
-           row.globalStock:totalStockFor(row,ids)):"—"}</td>
+          {row.metricsReady?fmt(tab==="parafarmacia"?
+           row.globalStock??totalStockFor(row,ids):
+           totalStockFor(row,ids)):"—"}</td>
          <td className="fm-lab-order-total" title="Unidades vendidas por todas las farmacias en el período seleccionado">
           {row.metricsReady?fmt(row.totalSold):"—"}</td>
          <td className="fm-lab-order-total" title="Propuesta total de unidades a pedir">

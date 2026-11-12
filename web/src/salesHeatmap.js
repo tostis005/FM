@@ -24,7 +24,7 @@ export function formatHeatAmount(value){
  const amount=Number(value)||0;
  if(Math.abs(amount)>=10000)return new Intl.NumberFormat("es-ES",{
   notation:"compact",maximumFractionDigits:1}).format(amount)+" €";
- return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(amount)+" €";
+ return new Intl.NumberFormat("es-ES",{maximumFractionDigits:0,useGrouping:"always"}).format(amount)+" €";
 }
 // Las consultas de históricos largos se dividen por años y deben fusionarse
 // sumando importe, unidades y tickets del mismo día y hora.

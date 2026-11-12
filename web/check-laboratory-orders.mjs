@@ -260,7 +260,7 @@ try{
   "Medicación oculta el bloque completo de almacén");
  assert.equal(await page.locator(".fm-lab-order-summary").getByText("stock global",{exact:false}).count(),0,
   "El stock global duplicado no aparece en medicación");
- assert.equal(await page.locator(".fm-lab-order-table thead tr").first().locator("th").count(),5,
+ assert.equal(await page.locator(".fm-lab-order-table thead tr").first().locator("th").count(),6,
   "Medicación solo muestra farmacias, totales y pedido");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
  const multiSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});

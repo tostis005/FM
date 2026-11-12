@@ -115,12 +115,35 @@ try{
     output.indexedCN200Complete=candidate.metricsUnavailable===false;
     output.indexedCN200EqualsBaseline=sameMetrics(baseline200,candidate);
    }
+   let indexedFull=null;
    if(candidate?.metricsUnavailable===false&&output.indexedCN200Ms<16000){
-    const full=await timed("indexedCNFull",()=>readLaboratoryOrderMatrix(pool,ctx,{
+    indexedFull=await timed("indexedCNFull",()=>readLaboratoryOrderMatrix(pool,ctx,{
       key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows,indexedCN:true
     }));
-    if(full)output.indexedCNFullComplete=full.metricsUnavailable===false;
+    if(indexedFull)output.indexedCNFullComplete=indexedFull.metricsUnavailable===false;
    }
+   // Simular exactamente el paginado productivo: 75 CN, dos solicitudes
+   // paralelas, sin cambiar conteos, propuestas ni datos del catálogo.
+   const batched=await timed("batched75Full",async()=>{
+    const blocks=Array.from({length:Math.ceil(best.rows.length/75)},(_,i)=>
+      best.rows.slice(i*75,(i+1)*75));
+    const chunks=Array(blocks.length);
+    let next=0;
+    await Promise.all(Array.from({length:2},async()=>{
+     while(next<blocks.length){
+      const index=next++;
+      const part=await readLaboratoryOrderMatrix(pool,ctx,{
+       key,pharmacies,type:best.type,from,to,prefetchedRows:blocks[index]
+      });
+      if(part.metricsUnavailable)throw Error(part.metricsErrorCode||"Métricas incompletas");
+      chunks[index]=part.rows;
+     }
+    }));
+    return {rows:chunks.flat(),metricsUnavailable:false};
+   });
+   output.batched75FullComplete=batched?.rows?.length===best.rows.length;
+   output.batched75FullUnique=batched?new Set(batched.rows.map(row=>row.referencia)).size:0;
+   output.batched75MatchesSingleSQL=sameMetrics(indexedFull,batched);
   }
  }
  const {rows:idx}=await pool.query(`SELECT c.relname

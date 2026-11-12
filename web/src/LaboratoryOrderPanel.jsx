@@ -11,7 +11,7 @@ import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportF
 import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
-import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BATCH} from "./laboratoryLoadAll.js";
+import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BULK_LIMIT} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
@@ -45,6 +45,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const tableScrollRef=useRef(null);
  const [virtualRow,setVirtualRow]=useState(0);
  const [loading,setLoading]=useState(false),[loadStage,setLoadStage]=useState("idle"),[labsLoading,setLabsLoading]=useState(true);
+ const [metricsProgress,setMetricsProgress]=useState(0);
  const [diagnostic,setDiagnostic]=useState(null),[diagnosticBusy,setDiagnosticBusy]=useState(false);
  const [drafts,setDrafts]=useState({}),[savedLines,setSavedLines]=useState([]);
  const [globalComment,setGlobalComment]=useState(""),[savedGlobalComment,setSavedGlobalComment]=useState("");
@@ -122,7 +123,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  useEffect(()=>{
   if(!laboratory){setData(empty);setLoading(false);setLoadStage("idle");return}
   const controller=new AbortController();
-  setLoading(true);setLoadStage("catalog");setError("");
+  setLoading(true);setLoadStage("catalog");setMetricsProgress(0);setError("");
   setData({...empty,metricsUnavailable:true,loaded:0,metricsLoaded:0});
   // No ocultar el spinner al recibir HTTP: esperar a pintar la matriz y sus totales.
   const finishRendering=()=>{
@@ -193,10 +194,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     return;
    }
    setLoadStage("metrics");
-   // Los catálogos grandes no esperan al cálculo global: calcular lotes
-   // independientes y mostrar stock/ventas en cuanto termine cada uno.
-   // La consulta conjunta se conserva solo para los laboratorios pequeños.
-   if(catalog.rows.length<=LAB_METRICS_BATCH){
+   // Mediciones reales: 367 CN se calculan en ~4-7 s de una sola vez.
+   // Repetir el mismo JOIN de stock y ventas 4 veces en lotes de 100
+   // introduce latencia y renderizados innecesarios. Agregar una vez
+   // hasta 450 CN; en catálogos grandes usar lotes de 200 adaptativos.
+   if(catalog.rows.length<=LAB_METRICS_BULK_LIMIT){
    let bulkComplete=false;
    try{
     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-conjunta",{
@@ -219,6 +221,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     setData({rows:completed,total:catalog.total,loaded:catalog.total,
      metricsLoaded:catalog.total,frequencyDays:result.frequencyDays??0,
      metricsUnavailable:false,warning:catalog.warning||null});
+    setMetricsProgress(catalog.total);
     bulkComplete=true;
    }catch(e){
     if(controller.signal.aborted)return;
@@ -230,11 +233,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     finishRendering();return;
    }
    }
-   // Lotes acotados, hasta dos consultas simultáneas: no saturar PostgreSQL
-   // ni dejar 367 artículos sin cifras esperando una sola consulta grande.
+   // Mientras el spinner tapa el pedido, no volver a pintar toda la tabla
+   // ni recalcular los totales por cada lote: actualizar solo el progreso.
+   // La matriz completa se publica en un único render al finalizar.
    setLoadStage("progress");
+   let lastPartial=null;
    try{
-    await collectLaboratoryMetrics(catalog.rows,items=>api(
+    const completed=await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{
       method:"POST",signal:controller.signal,
       body:{laboratorio:laboratory,tipo:tab,farmacias:ids.map(Number),
@@ -243,12 +248,17 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         referencia:item.referencia,cn:item.cn||null,nombre:item.nombre
        }))}
      }),{signal:controller.signal,onBatch:({rows,loaded,frequencyDays})=>{
-      if(!controller.signal.aborted)setData({rows,total:catalog.total,loaded:catalog.total,
-       metricsLoaded:loaded,frequencyDays,metricsUnavailable:loaded<catalog.total,warning:catalog.warning||null});
+      lastPartial={rows,loaded,frequencyDays};
+      if(!controller.signal.aborted)setMetricsProgress(loaded);
      }});
+    if(controller.signal.aborted)return;
+    setData({rows:completed.rows,total:catalog.total,loaded:catalog.total,
+     metricsLoaded:catalog.total,frequencyDays:completed.frequencyDays,
+     metricsUnavailable:false,warning:catalog.warning||null});
+    setMetricsProgress(catalog.total);
    }catch(e){
     if(controller.signal.aborted)return;
-    setData(current=>({...current,metricsUnavailable:true,
+    setData(current=>({...current,...(lastPartial||{}),metricsUnavailable:true,
      warning:"Se muestran todas las referencias, pero no se pudieron completar las ventas y el stock ("+
       e.message+"). Actualiza para volver a calcularlos."}));
     setLoading(false);setLoadStage("idle");
@@ -472,6 +482,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
          Comprueba el código del error y las migraciones y sincronizaciones.</p>}
       </div>}
      </div>}
+    <div className="fm-lab-order-lower" aria-busy={metricsLoading}>
     <div className="fm-lab-order-summary">
      {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
@@ -481,8 +492,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
      {warehousePending&&<span className="fm-lab-warehouse-pending">
       Almacén pendiente de importar: propuesta provisional</span>}
-     {metricsLoading&&Number(data.metricsLoaded||0)>0&&<span role="status">
-      Stock y ventas: {data.metricsLoaded} de {data.total} artículos calculados
+     {metricsLoading&&metricsProgress>0&&<span role="status">
+      Stock y ventas: {metricsProgress} de {data.total} artículos calculados
      </span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
 
@@ -592,7 +603,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           value={tab==="medicacion"?medicationOrderTotal(line,ids):line.units??0}
           onChange={e=>updateLine(row,e.target.value,tab==="medicacion"?"total":null)}/></td>
          <td className="fm-lab-order-commentcol">
-          <button type="button" onClick={()=>openComment(row)}
+          <button type="button" disabled={loading} onClick={()=>openComment(row)}
            className={"fm-lab-comment-link"+(line.comment?.trim()?" has-comment":"")}
            aria-label={(line.comment?.trim()?"Ver o editar":"Añadir")+" comentario para "+row.nombre}
            title={line.comment?.trim()?"Comentario guardado en esta línea":"Añadir comentario"}>
@@ -625,34 +636,23 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     </HorizontalTableScroll>
     {tableGroups.length>50&&<nav className="fm-lab-order-pager" aria-label="Páginas del preparador">
      <label>Artículos por página
-      <select value={tablePageSize} onChange={e=>{setTablePageSize(Number(e.target.value));setTablePage(0)}}>
+      <select value={tablePageSize} disabled={loading} onChange={e=>{setTablePageSize(Number(e.target.value));setTablePage(0)}}>
        <option value={ALL_LAB_ROWS}>Todos ({tableVisibleRows.length})</option>
-       {[25,50,100,250,500,1000,2000,5000].map(n=><option key={n} value={n}>{n}</option>)}
+       {[25,50,100,250,500,1000].map(n=><option key={n} value={n}>{n}</option>)}
       </select>
      </label>
-     <button type="button" className="btn btn-secondary" disabled={safePage===0}
+     <button type="button" className="btn btn-secondary" disabled={loading||safePage===0}
       onClick={()=>setTablePage(n=>Math.max(0,n-1))}>Anterior</button>
      <span>{tablePageSize===ALL_LAB_ROWS?("Mostrando los "+tablePageRows.length+" artículos"):("Página "+(safePage+1)+" de "+totalPages)}</span>
-     <button type="button" className="btn btn-secondary" disabled={safePage>=totalPages-1}
+     <button type="button" className="btn btn-secondary" disabled={loading||safePage>=totalPages-1}
       onClick={()=>setTablePage(n=>Math.min(totalPages-1,n+1))}>Siguiente</button>
     </nav>}
-    {showMatrixOverlay&&<div className="fm-lab-matrix-overlay" role="status" aria-live="polite">
-     <div className="fm-lab-matrix-loading">
-      <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
-      <strong>Cargando artículos, ventas y stock…</strong>
-      <span>{data.rows?.length?
-       (loadStage==="catalog"?"Preparando los artículos del laboratorio":
-        loadStage==="render"?"Preparando la tabla y los totales finales":
-        "Calculando stock, ventas y totales: "+(data.metricsLoaded??0)+" de "+data.rows.length+" artículos"):
-       "Preparando los códigos nacionales del laboratorio"}</span>
-     </div>
-    </div>}
    </div>
    <div className="fm-lab-order-global-comment">
      <label htmlFor="fm-lab-order-global-notes">Comentarios generales del pedido</label>
      <textarea id="fm-lab-order-global-notes" rows={3} maxLength={3000}
       placeholder="Observaciones para el laboratorio, condiciones o instrucciones del pedido…"
-      value={globalComment} disabled={!canEdit}
+      value={globalComment} disabled={!canEdit||loading}
       onChange={e=>{setGlobalComment(e.target.value);setDirty(true);setNotice("")}}/>
     </div>
     <div className="fm-lab-order-actions">
@@ -663,8 +663,21 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       disabled={busy||loading||data.metricsUnavailable||!persisted||dirty||!savedLines.length}>
       <Download size={16}/> Generar Excel</button>
      {canEdit&&<button className="btn btn-secondary" type="button"
-      onClick={()=>beginRecord(laboratory)} disabled={busy||!laboratory||!ids.length}>
+      onClick={()=>beginRecord(laboratory)} disabled={busy||loading||!laboratory||!ids.length}>
       Marcar pedido realizado</button>}
+    </div>
+    {showMatrixOverlay&&<div className="fm-lab-matrix-overlay fm-lab-order-full-overlay" role="status" aria-live="polite">
+     <div className="fm-lab-matrix-loading">
+      <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
+      <strong>Cargando artículos, ventas y stock…</strong>
+      <span>{data.rows?.length?
+       (loadStage==="catalog"?"Preparando los artículos del laboratorio":
+        loadStage==="render"?"Preparando la tabla y los totales finales":
+        "Calculando stock, ventas y totales: "+metricsProgress+" de "+data.rows.length+" artículos"):
+       "Preparando los códigos nacionales del laboratorio"}</span>
+     </div>
+    </div>}
+   </div>
     </div>
    </>}
   </section>

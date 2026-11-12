@@ -80,6 +80,7 @@
 
 /* La carga de artículos es rápida; mantener una señal clara sobre la matriz
    hasta que el cálculo de ventas, stock y propuestas esté completo. */
+.fm-lab-order-lower{display:grid;gap:14px;position:relative;min-width:0}
 .fm-lab-matrix-frame{position:relative;min-width:0;width:100%}
 /* La tabla y los totales solo se muestran cuando toda la matriz está lista.
    Las filas virtuales permiten desplazarse por todos los 5000 CN sin crear
@@ -99,6 +100,10 @@
  padding:22px 12px 12px;border-radius:8px;
  background:rgba(245,249,247,.96);
  pointer-events:auto;
+}
+.fm-lab-order-lower>.fm-lab-order-full-overlay{
+ inset:0;z-index:35;padding-top:30px;
+ background:rgba(245,249,247,.97)
 }
 .fm-lab-matrix-loading{
  display:flex;flex-direction:column;align-items:center;justify-content:center;

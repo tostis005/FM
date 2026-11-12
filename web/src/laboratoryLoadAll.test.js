@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY} from "./laboratoryLoadAll.js";
+import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY,LAB_METRICS_BULK_LIMIT} from "./laboratoryLoadAll.js";
 import {ALL_LAB_ROWS,laboratoryTablePage,laboratoryTableViewport,LAB_VIRTUAL_ROW_HEIGHT} from "./laboratoryTableWindow.js";
 
-test("dos mil CN se calculan en veinte lotes, máximo dos consultas simultáneas",async()=>{
+test("dos mil CN se calculan en diez lotes de 200, máximo dos consultas simultáneas",async()=>{
  const initial=Array.from({length:2000},(_,i)=>({
   referencia:String(400000+i),cn:String(400000+i),nombre:"Artículo "+i
  }));
@@ -19,10 +19,10 @@ test("dos mil CN se calculan en veinte lotes, máximo dos consultas simultáneas
     unitsPeriod:5,suggested:1}},totalSold:5,totalSuggested:1
   }))};
  },{onBatch:x=>progress.push(x.loaded)});
- assert.equal(LAB_METRICS_BATCH,100);
+ assert.equal(LAB_METRICS_BATCH,200);
  assert.equal(LAB_METRICS_CONCURRENCY,2);
- assert.equal(sizes.length,20,"2.000 referencias se calculan sin un lote global bloqueante");
- assert.ok(sizes.every(n=>n===100));
+ assert.equal(sizes.length,10,"2.000 referencias se calculan con diez lotes optimizados");
+ assert.ok(sizes.every(n=>n===200));
  assert.ok(maxConcurrent<=2);
  assert.ok(maxConcurrent>=2);
  assert.equal(result.rows.length,2000);
@@ -114,4 +114,10 @@ test("5000 CN tienen scroll completo y render acotado sin truncar datos",()=>{
  assert.equal(last.top+last.bottom+(last.end-last.start)*LAB_VIRTUAL_ROW_HEIGHT,
   5000*LAB_VIRTUAL_ROW_HEIGHT);
  assert.equal(laboratoryTableViewport(125,20).virtualized,false);
+});
+
+test("el umbral agregado evita consultas repetidas para 367 CN y divide mayores",()=>{
+ assert.ok(LAB_METRICS_BULK_LIMIT>=367);
+ assert.ok(LAB_METRICS_BULK_LIMIT<686);
+ assert.ok(LAB_METRICS_BATCH<=250);
 });

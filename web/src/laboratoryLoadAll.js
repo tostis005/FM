@@ -1,7 +1,10 @@
 // Se mantiene una única tabla visible. La API conserva lotes de 100
 // para no saturar PostgreSQL, pero se pueden leer 3 páginas en paralelo.
 export const LAB_CATALOG_BATCH=250;
-export const LAB_METRICS_BATCH=100;
+export const LAB_METRICS_BATCH=200;
+// Hasta este tamaño, una única agregación evita repetir JOINs e índices
+// de Farmatic; por encima, usar lotes paralelos y dividir si hay timeout.
+export const LAB_METRICS_BULK_LIMIT=450;
 export const LAB_CATALOG_CONCURRENCY=3;
 
 export async function collectLaboratoryCatalog(fetchPage,{

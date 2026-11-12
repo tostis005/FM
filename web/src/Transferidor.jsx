@@ -73,8 +73,8 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    value:r=>r.pendingDestination??0,render:r=>number(r.pendingDestination??0)},
   {key:"triggerDestination",group:"Destino",label:"Previsión "+minimumDays+" días",
    align:"center",value:r=>r.triggerDestination,
-   render:r=><span title="Unidades estimadas para cubrir los próximos "+minimumDays+
-    " días de ventas del destino">{number(r.triggerDestination)}</span>},
+   render:r=><span title={"Unidades estimadas para cubrir los próximos "+minimumDays+
+    " días de ventas del destino"}>{number(r.triggerDestination)}</span>},
   {key:"targetDestination",group:"Destino",label:"Objetivo "+targetDays+" días",
    align:"center",searchable:false,value:r=>r.targetDestination,
    render:r=><span className="fm-transfer-target" title={"Stock deseado para "+targetDays+

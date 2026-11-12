@@ -28,7 +28,8 @@ const pct=v=>v==null?"—":percentage(v);
 function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},shared=null){
  const scope=[clientSlug,from,to,pharmacyIds.join(","),reloadKey].join("|");
  const [result,setResult]=useState(null);
- const fallback=shared?.status==="error";
+ // No repetir dos consultas pesadas si falla la solicitud conjunta de Ventas.
+ const fallback=false;
  useEffect(()=>{
   if(!valid||(shared&&!fallback))return;
   const controller=new AbortController();

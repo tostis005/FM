@@ -123,3 +123,64 @@ test("sin columna coste_historico se siguen mostrando ventas y unidades sin inve
   assert.doesNotMatch(buildSalesTotalsSql("ampedia",granularity,false),/v\.coste_historico/);
  }
 });
+
+
+test("ventas mensuales reutilizan años y meses cerrados sin volver a sumar líneas",async()=>{
+ const routes=new Map(),sql=[];
+ const app={get(path,...handlers){routes.set(path,handlers.at(-1))}};
+ const pool={query:async(...args)=>{sql.push(args);return {rows:[]}}};
+ let cacheCalls=0;
+ const consolidations={read:async(args)=>{
+  cacheCalls++;
+  assert.equal(args.slug,"ampedia");
+  assert.deepEqual(args.ids,[1]);
+  assert.deepEqual(args.farms,[{id:1,code:"ABA"}]);
+  return {available:true,cachedMonths:12,liveRanges:1,sales:{
+   from:"2025-11-01",to:"2026-11-12",granularity:"month",
+   monthly:[{month:"2025-11",ventas:100,unidades:5},{month:"2026-11",ventas:20,unidades:1}],
+   series:[{bucket:"2025-11",ventas:100,unidades:5},{bucket:"2026-11",ventas:20,unidades:1}],
+   costBasis:{products:6,priced:6,coveredSales:120,margin:32},
+   kpis:{ventas:120,unidades:6,margen:32,margenPct:26.67,coberturaCostes:100}
+  }};
+ }};
+ setupSalesTotals(app,pool,{requireTenant:()=>[],consolidations});
+ const ctx={role:"gestor",modules:{ventas:true},
+  client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1],
+  pharmacies:[{id:1,databaseCode:"ABA"}]};
+ let response;
+ await routes.get("/api/analytics/ventas/totales")({
+  context:ctx,query:{desde:"2025-11-01",hasta:"2026-11-12",farmacias:"1",
+   granularidad:"month"}},{status(){return this},json(data){response=data;return this}},
+  error=>{if(error)throw error});
+ assert.equal(cacheCalls,1);
+ assert.equal(sql.length,0,"no volver a calcular un año que está consolidado");
+ assert.equal(response.kpis.ventas,120);
+ assert.equal(response.costBasis.margin,32);
+ assert.equal(response.consolidation.cachedMonths,12);
+ assert.equal(response.consolidation.immutable,true);
+});
+
+test("si falta un cierre mensual, Ventas sigue mostrando las cifras SQL originales",async()=>{
+ const routes=new Map(),queries=[];
+ const app={get(path,...handlers){routes.set(path,handlers.at(-1))}};
+ const pool={query:async(sql,values)=>{
+  queries.push(sql);
+  if(String(sql).includes("information_schema"))return {rows:[]};
+  return {rows:[{month:"2026-10",ventas:55,unidades:5,total_ventas:55,total_unidades:5,
+   total_margen:0,total_ventas_con_coste:0,total_lineas_con_coste:0,
+   total_lineas_producto:5}]};
+ }};
+ setupSalesTotals(app,pool,{requireTenant:()=>[],
+  consolidations:{read:async()=>({available:false,reason:"pending"})}});
+ const ctx={role:"gestor",modules:{ventas:true},
+  client:{slug:"ampedia",schema:"ampedia"},allowedPharmacyIds:[1],
+  pharmacies:[{id:1,databaseCode:"ABA"}]};
+ let response;
+ await routes.get("/api/analytics/ventas/totales")({
+  context:ctx,query:{desde:"2026-10-01",hasta:"2026-10-31",farmacias:"1",
+   granularidad:"month"}},{status(){return this},json(data){response=data;return this}},
+  error=>{if(error)throw error});
+ assert.equal(response.kpis.ventas,55);
+ assert.equal(response.consolidation,undefined);
+ assert.ok(queries.some(sql=>String(sql).includes("fm_ventas_analitica")));
+});

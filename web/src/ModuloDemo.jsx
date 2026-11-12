@@ -368,55 +368,13 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  ]);
  const tables=useMemo(()=>realTables?normalizeTables(realTables):
   {articulos:[],proveedores:[],ventas:[],compras:[],stock:[]},[realTables]);
+ // Ventas es exclusivamente una vista agregada: no necesita consultar
+ // detalle, recuentos ni informes de artículos. No alterar el estado de
+ // Compras y de otros módulos cuando se monta esta vista.
  useEffect(()=>{
-  const controller=new AbortController();
-  if(!salesModule||module==="dashboard"||module==="ventas"){
-   setRealSales(null);setRealReport(null);setLoading(false);setReportLoading(false);
-   return ()=>controller.abort();
-  }
-  if(!period.valid){setRealSales(null);setLoading(false);return ()=>controller.abort()}
-  const params=new URLSearchParams();
-  params.set("desde",period.from);
-  params.set("hasta",period.to);
-  params.set("granularidad",module==="ventas"?"month":period.granularity);
-  if(filters.pharmacyIds.length)params.set("farmacias",filters.pharmacyIds.join(","));
-  if(searchReady)params.set("buscar",searchReady);
-  if(module==="ventas"&&filters.families.length)params.set("familias",filters.families.join(","));
-  if(module==="ventas"&&Object.keys(tableFiltersReady).some(key=>
-   Array.isArray(tableFiltersReady[key])?tableFiltersReady[key].length:Boolean(tableFiltersReady[key])))
-   params.set("columnas",JSON.stringify(tableFiltersReady));
-  setLoading(true);setSalesError("");setRealSales(null);
-  if(module==="ventas"&&detailPage===1){setRealReport(null);setDetailPartial(false);}
-  // El detalle paginado no repite la agregación histórica ni los recuentos.
-  if(module==="ventas"){
-   params.set("pagina",String(detailPage));
-   params.set("orden",tableSort.key);
-   params.set("direccion",tableSort.direction);
-  }
-  const endpoint=module==="ventas"?"/api/analytics/ventas/detalle":"/api/analytics/ventas";
-  fetch(endpoint+"?"+params,{credentials:"same-origin",cache:"no-store",
-   headers:{"X-Farmetrica-Cliente":clientSlug},signal:boundedSignal(controller)})
-   .then(async r=>{const b=await r.json().catch(()=>({}));if(!r.ok)throw Error(b.error||"No se pueden consultar las ventas");return b})
-   .then(data=>{if(!controller.signal.aborted){
-    if(module==="ventas"){
-     setDetailHasMore(Boolean(data.hasMore));
-     setDetailPartial(Boolean(data.partialData));
-     setTotalFiltered(data.totalFiltered??null);
-     setRealReport(prev=>({available:true,
-      salesRows:detailPage===1?(data.products||[]):[...(prev?.salesRows||[]),...(data.products||[])],
-      kpis:{margen:null},
-      availability:{sales:true,rowsTruncated:Boolean(data.hasMore)}}));
-     setReportError("");
-    }else setRealSales(data);
-    setLastUpdated(new Date());
-   }})
-   .catch(e=>{if(!controller.signal.aborted){
-    setSalesError(e.message);
-    if(module==="ventas"&&detailPage===1)setRealReport(null);
-   }})
-   .finally(()=>{if(!controller.signal.aborted){setLoading(false);if(module==="ventas")setReportLoading(false)}});
-  return ()=>controller.abort();
- },[module,clientSlug,ids,period.from,period.to,period.granularity,period.valid,filters.pharmacyIds.join(","),filters.families.join(","),searchReady,reloadKey,detailPage,fastEligible,fastSales,fastFailed,tableSort.key,tableSort.direction,activeTableFilters]);
+  if(module!=="ventas")return;
+  setRealSales(null);setRealReport(null);setLoading(false);setReportLoading(false);
+ },[module,clientSlug]);
 
  // Totales y gráfica de compras independientes de los cálculos del catálogo.
  const fastPurchase=["compras","dashboard"].includes(module)&&

@@ -139,6 +139,9 @@ try{
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Laboratorio Ejemplo");
  await page.getByRole("option",{name:"Laboratorio Ejemplo"}).click();
  await page.getByRole("tab",{name:/Parafarmacia/}).waitFor();
+ assert.equal(await page.locator(".fm-lab-order-warehouse-group").count(),1,
+  "Parafarmacia conserva el bloque de almacén");
+ assert.equal(await page.locator(".fm-lab-order-warehouse-head").count(),5);
  try{await page.getByText("Crema solar").first().waitFor({timeout:9000})}
  catch(e){
   console.error("LAB ORDER DEBUG",JSON.stringify({matrices,errors,body:(await page.locator("body").innerText()).slice(0,2800)}));
@@ -253,6 +256,12 @@ try{
  assert.equal(await page.locator(".fm-lab-order-scroll").getAttribute("aria-busy"),"false");
  const medicineTab=page.getByRole("tab",{name:/Medicación/});
  assert.equal(await medicineTab.getAttribute("aria-selected"),"true","Cinfa solo con medicamentos abre Medicación");
+ assert.equal(await page.locator(".fm-lab-order-warehouse-group, .fm-lab-order-warehouse-head, .fm-lab-order-warehouse-col").count(),0,
+  "Medicación oculta el bloque completo de almacén");
+ assert.equal(await page.locator(".fm-lab-order-summary").getByText("stock global",{exact:false}).count(),0,
+  "El stock global duplicado no aparece en medicación");
+ assert.equal(await page.locator(".fm-lab-order-table thead tr").first().locator("th").count(),5,
+  "Medicación solo muestra farmacias, totales y pedido");
  await page.getByText("Medicamento").first().waitFor({timeout:15000});
  const multiSelector=page.getByRole("combobox",{name:"Seleccionar laboratorio"});
  await multiSelector.fill("125 referencias");

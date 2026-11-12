@@ -17,7 +17,7 @@ const sample=[
 test("GROUPING SETS agrupa en una consulta y cuenta tickets por sistema/documento",()=>{
  const sql=buildSalesActivitySQL("ampedia");
  assert.match(sql,/GROUP BY GROUPING SETS \(\(code\),\(code,seller_id\),\(weekday,hour\)\)/);
- assert.match(sql,/count\(DISTINCT \(source,document\)\)/);
+ assert.match(sql,/count\(DISTINCT \(sale_source,sale_document_id\)\)/);
  assert.match(sql,/v\.farmacia_codigo=ANY\(\$3::text\[\]\)/);
  assert.match(sql,/v\.fecha >= \$1::date/);
  assert.doesNotMatch(sql,/familias_globales|JOIN farmetrica\.farmacias/);

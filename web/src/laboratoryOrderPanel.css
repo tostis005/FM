@@ -14,6 +14,7 @@
 .fm-lab-order-summary{display:flex;align-items:center;flex-wrap:wrap;gap:7px;color:#46574c;font-size:12px}
 .fm-lab-order-summary span{background:#f4f7f5;border-radius:6px;padding:8px 10px}
 .fm-lab-order-summary strong{font-size:15px;color:#204d39}
+.fm-lab-order-summary .fm-lab-stock-partial{font-size:10px;color:#805c20;font-weight:600}
 .fm-lab-order-scroll{overflow-x:auto;overflow-y:auto;max-height:min(72vh,720px);max-width:100%;border:1px solid #dde4df;border-radius:8px;position:relative}
 .fm-lab-order-table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:11px;font-variant-numeric:tabular-nums}
 .fm-lab-order-table th,.fm-lab-order-table td{padding:7px 5px;line-height:1.15;border-right:1px solid #e2e6e3;border-bottom:1px solid #e4e8e5;text-align:center;white-space:nowrap;min-width:52px;box-sizing:border-box}
@@ -44,7 +45,8 @@
 .fm-lab-order-table .fm-lab-order-sticky{position:sticky;z-index:2;text-align:left;background:#fff}
 .fm-lab-order-table thead .fm-lab-order-sticky{z-index:4;background:#e6ece8}
 .fm-lab-order-table .fm-lab-order-cn{left:0;width:88px;max-width:88px;min-width:88px;overflow:hidden;text-overflow:ellipsis}
-.fm-lab-order-table .fm-lab-order-name{left:88px;width:240px;max-width:240px;min-width:240px;white-space:normal;border-right:2px solid #9db4a5;box-shadow:4px 0 5px -4px #88988c}
+.fm-lab-order-table .fm-lab-order-name{left:88px;width:240px;max-width:240px;min-width:240px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;border-right:2px solid #9db4a5;box-shadow:4px 0 5px -4px #88988c}
+.fm-lab-order-table .fm-lab-order-name-text{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .fm-lab-order-table td.fm-lab-order-cn{font-weight:700;color:#284e3a}
 .fm-lab-order-table td.fm-lab-order-name{font-size:11px}
 .fm-lab-order-table td.fm-lab-order-name small,.fm-lab-order-table td.fm-lab-order-cn small{display:block;font-size:9px;color:#7b847c;font-weight:400;margin-top:3px}
@@ -94,10 +96,16 @@
    Las filas virtuales permiten desplazarse por todos los 5000 CN sin crear
    decenas de miles de celdas invisibles en el navegador. */
 .fm-lab-matrix-frame[data-metrics-loading="true"] .fm-lab-order-scroll{visibility:hidden}
-.fm-lab-order-table.fm-lab-order-virtual tbody tr:not(.fm-lab-virtual-spacer){height:38px}
+.fm-lab-order-table.fm-lab-order-virtual tbody tr:not(.fm-lab-virtual-spacer){height:56px}
 .fm-lab-order-table.fm-lab-order-virtual tbody tr:not(.fm-lab-virtual-spacer)>td{
- height:38px;padding-top:4px;padding-bottom:4px
+ height:56px;padding-top:4px;padding-bottom:4px
 }
+/* En la ventana virtual mantener una altura estable y mostrar dos líneas.
+   El atributo title conserva la descripción completa para consulta. */
+.fm-lab-order-table.fm-lab-order-virtual .fm-lab-order-name-text{
+ display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden
+}
+.fm-lab-order-table.fm-lab-order-virtual .fm-lab-family-badge{margin-top:2px;padding:2px 6px}
 .fm-lab-order-table tbody tr.fm-lab-virtual-spacer>td{
  padding:0!important;border:0!important;line-height:0!important;
  background:transparent!important;pointer-events:none

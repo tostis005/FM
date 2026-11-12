@@ -14,13 +14,15 @@ const dayAfter=iso=>new Date(Date.parse(iso+"T00:00:00Z")+86400000).toISOString(
 const dayCount=(from,to)=>Math.round((Date.parse(to+"T00:00:00Z")-
  Date.parse(from+"T00:00:00Z"))/86400000);
 
-export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(),logger=console}={}){
- const today=()=>madridDay(now()),running=new Set();
+export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(),logger=console,dbClock}={}){
+ // En producción se inyecta el reloj de PostgreSQL desde el servicio mensual.
+ // Las pruebas aisladas pueden controlar la fecha con now().
+ const today=async()=>dbClock?(await dbClock()).today:madridDay(now()),running=new Set();
  async function refreshDays({slug,schema,farms,month},force=false){
-  const current=today().slice(0,7)+"-01";
+  const dbToday=await today(),current=dbToday.slice(0,7)+"-01";
   if(!IDENT.test(slug)||!IDENT.test(schema)||!Array.isArray(farms)||!farms.length||
    !/^\d{4}-\d{2}-01$/.test(month)||month>current)return false;
-  const end=month===current?today():nextMonth(month);
+  const end=month===current?dbToday:nextMonth(month);
   const days=dayCount(month,end);
   if(days<=0)return false;
   const key=slug+"|"+month;
@@ -38,7 +40,7 @@ export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(
     "SELECT pg_try_advisory_xact_lock(hashtext($1),$2::int) AS ok",
     ["fm-dashboard-daily-"+slug,Number(month.slice(0,4)+month.slice(5,7))]);
    if(!locks[0]?.ok){await conn.query("ROLLBACK");return false}
-   if(!force){
+   {
     const {rows:present}=await conn.query(
      "SELECT count(*)::int AS n FROM farmetrica.dashboard_consolidados_diarios"+
      " WHERE cliente_slug=$1 AND dia >= $2::date AND dia < $3::date",
@@ -56,12 +58,7 @@ export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(
      " x.filas_importe,x.filas_unidades,x.filas_producto,x.documentos,x.filas_coste,"+
      " x.ventas_con_coste,x.margen_coste,now() FROM ("+
      buildDashboardMonthSQL(schema,source,{daily:true})+") x"+
-     " ON CONFLICT(cliente_slug,farmacia_id,dia,fuente) DO UPDATE SET"+
-     " importe=EXCLUDED.importe,unidades=EXCLUDED.unidades,filas=EXCLUDED.filas,"+
-     " filas_importe=EXCLUDED.filas_importe,filas_unidades=EXCLUDED.filas_unidades,"+
-     " filas_producto=EXCLUDED.filas_producto,documentos=EXCLUDED.documentos,"+
-     " filas_coste=EXCLUDED.filas_coste,ventas_con_coste=EXCLUDED.ventas_con_coste,"+
-     " margen_coste=EXCLUDED.margen_coste,actualizado_en=now()",
+     " ON CONFLICT(cliente_slug,farmacia_id,dia,fuente) DO NOTHING",
      [JSON.stringify(farms),month,end,slug]);
    }
    await conn.query("COMMIT");
@@ -74,7 +71,7 @@ export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(
  }
  async function backfillDays({months=3,maxMs=180000,onMonth}={}){
   const start=Date.now(),status={processed:0,newMonths:0,alreadyReady:0,failures:0};
-  const reference=today(),latest=reference.slice(0,7)+"-01";
+  const reference=await today(),latest=reference.slice(0,7)+"-01";
   for(const scope of await sourceScopes()){
    let month=latest;
    for(let i=0;i<months&&Date.now()-start<maxMs;i++,month=prevMonth(month)){
@@ -97,7 +94,7 @@ export function createDashboardDailyService(pool,{sourceScopes,now=()=>new Date(
  async function readDays({slug,schema,ids,farms,from,to}){
   if(!IDENT.test(slug)||!IDENT.test(schema)||!ids?.length||!farms?.length)
    return {available:false,reason:"scope"};
-  const range=compatibleDailyRange(from,to,today());
+  const range=compatibleDailyRange(from,to,await today());
   if(!range)return {available:false,reason:"daily-range"};
   const rows=[];
   if(range.days>0){

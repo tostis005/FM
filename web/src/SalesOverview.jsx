@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {Layers3,Search,Store,ChartBar} from "lucide-react";
+import {Layers3,Search,Store} from "lucide-react";
+import SalesCardHeading from "./SalesCardHeading.jsx";
 import {euro,integer} from "./localeES.js";
 import DashboardInsights from "./DashboardInsights.jsx";
 import "./salesOverview.css";
@@ -79,13 +80,7 @@ function FamilyRanking({result}){
  const maximum=Math.max(1,...rows.map(r=>Math.max(0,Number(r[mode])||0)));
  const shareTotal=Number(data.totalSales)||0;
  return <section className="card fm-so-family" aria-busy={result.status==="loading"}>
-  <div className="fm-so-heading">
-   <div className="fm-so-heading-icon"><Layers3 size={19}/></div>
-   <div className="fm-so-heading-text"><h2>Ventas por familias</h2>
-    <p>Ranking según el maestro unificado · importe neto y unidades</p></div>
-   {result.status==="ready"&&<span className="fm-so-coverage" title="Porcentaje de líneas de venta vinculadas a una familia del maestro">
-    {percent(data.coveragePct||0)} de líneas clasificadas</span>}
-  </div>
+  <SalesCardHeading icon={Layers3} title="Ventas por familias"/>
   <div className="fm-so-controls">
    <label className="fm-so-search"><Search size={15}/><input type="search" value={search}
      onChange={e=>setSearch(e.target.value)} placeholder="Buscar familia…" aria-label="Buscar en ranking de familias"/></label>
@@ -101,7 +96,8 @@ function FamilyRanking({result}){
    !rows.length?<Status result={{status:"empty"}} empty="No hay familias que coincidan con la búsqueda."/>:
    <>
     <div className="fm-so-list-meta"><span>{number(rows.length)} familias</span>
-     <span>Ordenadas de mayor a menor · desplázate para ver todas</span></div>
+     <span title="Porcentaje de líneas vinculadas al maestro de familias">
+      {percent(data.coveragePct||0)} de líneas clasificadas</span></div>
     <div className="fm-so-rank-scroll" role="region" tabIndex={0} aria-label="Ranking de familias con desplazamiento vertical">
      <ol className="fm-so-rank-list">{rows.map((family,index)=>{
       const value=Number(family[mode])||0;
@@ -121,7 +117,6 @@ function FamilyRanking({result}){
       </li>;
      })}</ol>
     </div>
-    <p className="fm-so-foot">Las barras muestran diferencias de ventas entre familias. Se suman nombres equivalentes del maestro sin mezclar sus identificadores de origen. «Sin clasificar» incluye conceptos sin familia vinculada; las devoluciones se restan del importe.</p>
    </>}
  </section>;
 }
@@ -145,10 +140,7 @@ function PharmacySales({activity,tickets,selectedPharmacies}){
  })).sort((a,b)=>b.sales-a.sales);
  const maximum=Math.max(1,...sites.map(p=>Math.max(0,p.sales)));
  return <section className="card fm-so-pharmacies" aria-busy={activity.status==="loading"}>
-  <div className="fm-so-heading">
-   <div className="fm-so-heading-icon fm-so-icon-pharmacy"><Store size={19}/></div>
-   <div className="fm-so-heading-text"><h2>Ventas por farmacia</h2></div>
-  </div>
+  <SalesCardHeading icon={Store} title="Ventas por farmacia"/>
   {activity.status!=="ready"?
    <Status result={activity} empty="Selecciona un período válido."/>:
    <div className="fm-so-sites">{sites.map(p=><div className="fm-so-site" key={p.id}>
@@ -172,7 +164,6 @@ export default function SalesOverview({clientSlug,period,pharmacyIds=[],pharmaci
  const showPharmacySales=selectedPharmacies.length>1;
  return <>
   <div className="fm-so-overview" aria-label="Análisis global de ventas">
-   <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2></div>
    <div className={"fm-so-grid"+(!showPharmacySales?" fm-so-grid-single":"")}>
     <FamilyRanking result={families}/>
     {showPharmacySales&&<PharmacySales activity={activity} tickets={tickets||{status:"loading"}}

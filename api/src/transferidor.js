@@ -8,7 +8,7 @@ const FILTERS=new Set(["cn","name","originName","destinationName","units","stock
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
-const identity=cn=>cnCategory(cn)==="parafarmacia"&&Number(cn)>=1&&Number(cn)<400000;
+const identity=cn=>cnCategory(cn)==="parafarmacia"&&Number(String(cn).slice(0,6))>=1;
 const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 
 // El plan se calcula de una vez, antes de filtrar o paginar. Cada donante
@@ -24,8 +24,9 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
  const validSites=new Map(pharmacies.map(p=>[String(p.id),p]));
  const products=new Map();
  for(const r of rows||[]){
-  const id=String(r.pharmacyId||""),cn=String(r.cn||"").trim();
-  if(!validSites.has(id)||!identity(cn))continue;
+  const id=String(r.pharmacyId||""),rawCN=String(r.cn||"").trim();
+  if(!validSites.has(id)||!identity(rawCN))continue;
+  const cn=rawCN.slice(0,6);
   if(!products.has(cn))products.set(cn,{cn,name:String(r.name||cn),sites:new Map()});
   const group=products.get(cn);
   if(!group.sites.has(id))group.sites.set(id,r);
@@ -34,10 +35,11 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
  for(const product of products.values()){
   const sites=[...validSites.values()].map(p=>{
    const src=product.sites.get(String(p.id));
-   const rawStock=src?src.stock:0;
-   if(rawStock===null||rawStock===undefined||!Number.isFinite(Number(rawStock))||Number(rawStock)<0)
+   const rawStock=src?.stock;
+   // Stock sin informar: cero. Solo se descartan valores corruptos.
+   if(rawStock!=null&&(!Number.isFinite(Number(rawStock))||Number(rawStock)<0))
     return {invalid:true};
-   const stock=Math.max(0,asNumber(rawStock));
+   const stock=rawStock==null?0:Math.max(0,Number(rawStock));
    const sold3=Math.max(0,asNumber(src?.units3));
    const sold12=Math.max(0,asNumber(src?.units12));
    const daily=Math.max(sold3/90,sold12/365);
@@ -122,30 +124,38 @@ export function filterTransferPlan(plan,options){
  return {rows:result.slice((options.page-1)*options.size,options.page*options.size),
   total:result.length,units:result.reduce((sum,r)=>sum+r.units,0)};
 }
-// La misma clave que en el Preparador: IdArticu = articulos.origen_id.
-// Segmento parafarmacia: seis primeros dígitos menores que 400000.
+// Identidad entre farmacias por CN comercial. Ventas y pedidos usan el IdArticu local.
+// El dígito de control se elimina y, sin CN válido, se usa el código ERP.
 function inventorySql(schema){
  const q='"'+schema+'"',code=pharmacyDataCodeSQL("f");
+ const cn=`(CASE
+  WHEN btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{6}([.][0-9])?$'
+   THEN left(btrim(a.codigo_nacional),6)
+  WHEN btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{7}$'
+   THEN left(btrim(a.codigo_nacional),6)
+  WHEN btrim(a.origen_id::text)~'^[0-9]{6,7}$'
+   THEN left(btrim(a.origen_id::text),6)
+  ELSE NULL END)`;
  return `WITH chosen AS MATERIALIZED (
  SELECT f.id,${code} AS source_code
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND f.activo=true
  AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
 ), candidates AS MATERIALIZED (
- SELECT DISTINCT a.origen_id::text AS cn
+ SELECT DISTINCT ${cn} AS cn
  FROM chosen f JOIN ${q}.articulos a
   ON upper(btrim(a.farmacia_codigo))=f.source_code
  WHERE a.stock_actual>0
-  AND (CASE WHEN a.origen_id::text~'^[0-9]{6,7}$'
-   THEN a.origen_id::int ELSE NULL END) BETWEEN $3::int AND $4::int
+  AND ${cn} IS NOT NULL
+  AND ${cn}::int BETWEEN $3::int AND $4::int
 ), eligible AS MATERIALIZED (
  SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
- a.origen_id::text AS cn,a.nombre,
+ ${cn} AS cn,a.nombre,
  a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at,
  g.familia_id AS family_id
  FROM chosen f
  JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
- JOIN candidates c ON c.cn=a.origen_id::text
+ JOIN candidates c ON c.cn=${cn}
  LEFT JOIN farmetrica.familias_globales_articulos g ON g.cliente_slug=$1
   AND g.farmacia_codigo=f.source_code AND g.articulo_origen_id=a.origen_id::text
 ), sales_per_article AS MATERIALIZED (

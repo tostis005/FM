@@ -10,11 +10,9 @@ async function invalidateOrders(pool,slug){
  invalidateCachedLaboratoryOptions(pool,slug);
 }
 
-// Cada cadena se busca literalmente (incluidos los asteriscos) en cualquier
-// parte del nombre, sin convertirla en regex/LIKE ni en una propuesta a revisar.
-// "BAJA" sola no está configurada para evitar falsas exclusiones.
-export const automaticRetirementPrefixes=["ZZZ","*BAJA","* BAJA"];
-export const automaticRetirementRegex=/ZZZ|\*BAJA|\* BAJA/i;
+// Ninguna regla automática oculta. El cliente decide todas las coincidencias
+// desde Configuración: los asteriscos son caracteres literales, no comodines.
+export const automaticRetirementPrefixes=[];
 export function normalizedRetirementPattern(input){
  const value=String(input??"").trim().toLocaleUpperCase("es-ES");
  if(value.length<3||value.length>80||/[\r\n\x00-\x1f]/.test(value))return null;
@@ -25,14 +23,13 @@ export function matchesRetirementRule(name,rule){
  return needle.length>0&&String(name??"").toLocaleUpperCase("es-ES").includes(needle);
 }
 export function isRetiredProductName(name,patterns=[]){
- return [...automaticRetirementPrefixes,...patterns].some(pattern=>
-  matchesRetirementRule(name,pattern));
+ return patterns.some(pattern=>matchesRetirementRule(name,pattern));
 }
 // expr es una expresión SQL del servidor, nunca de un parámetro externo.
 // placeholder es un array de cadenas literal, no una expresión LIKE ni regex.
 export function retiredProductSQL(expr,placeholder="$8"){
  return `EXISTS (SELECT 1 FROM unnest(
-    ARRAY['ZZZ','*BAJA','* BAJA']::text[] || ${placeholder}::text[]
+    ${placeholder}::text[]
    ) AS exclude(cadena)
    WHERE position(upper(exclude.cadena) in upper(coalesce(${expr},'')))>0)`;
 }

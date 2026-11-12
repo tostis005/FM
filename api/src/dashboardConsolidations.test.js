@@ -107,7 +107,9 @@ test("sin todos los meses y farmacias no publica cifra parcial como total",async
  assert.equal(result.available,false);
  assert.equal(result.reason,"pending");
  assert.equal(result.expectedRows,48);
- assert.equal(statements.length,1);
+ assert.equal(statements.length,2,"un ejercicio completo intenta anual antes del respaldo mensual");
+ assert.match(statements[0].sql,/dashboard_consolidados_anuales/);
+ assert.match(statements[1].sql,/dashboard_consolidados_mensuales/);
 });
 test("un periodo histórico parcial suma doce meses cacheados y solo dos fragmentos vivos",async()=>{
  const today="2026-10-26",from="2025-09-17",to="2026-10-17";
@@ -143,7 +145,7 @@ test("un periodo histórico parcial suma doce meses cacheados y solo dos fragmen
  assert.equal(result.sales.kpis.ventas,1220);
  assert.equal(result.purchases.kpis.compras,610);
  assert.equal(result.sales.kpis.margen,244);
- assert.deepEqual(sqlCalls[0].params,["ampedia",[1],"2025-10-01","2026-10-01"]);
+ assert.deepEqual(sqlCalls[0].params,["ampedia",[1],months]);
  assert.equal(liveCalls.length,4);
  assert.deepEqual(liveCalls.map(c=>c.params.slice(1,4)),[
   ["2025-09-17","2025-10-01","2025-09-01"],
@@ -155,7 +157,12 @@ test("un periodo histórico parcial suma doce meses cacheados y solo dos fragmen
 });
 test("API aísla por tenant, farmacia autorizada y módulo dashboard",async()=>{
  const routes=new Map(),query=[];
- const pool={query:async(sql,params)=>{query.push({sql,params});return {rows:[]}}};
+ const pool={query:async(sql,params)=>{
+  query.push({sql,params});
+  if(sql.includes("clock_timestamp() AS t"))
+   return {rows:[{today:"2026-10-26",hour:12}]};
+  return {rows:[]};
+ }};
  setupDashboardConsolidations({get:(path,...m)=>routes.set(path,m.at(-1))},
   pool,{requireTenant:()=>[]});
  const call=async(farmacias,context)=>{
@@ -174,5 +181,5 @@ test("API aísla por tenant, farmacia autorizada y módulo dashboard",async()=>{
  const ok=await call("1",ctx);
  assert.equal(ok.status,200);
  assert.equal(ok.value.available,false);
- assert.ok(query[0].sql.includes("dashboard_consolidados_mensuales"));
+ assert.ok(query.some(x=>x.sql.includes("dashboard_consolidados_mensuales")));
 });

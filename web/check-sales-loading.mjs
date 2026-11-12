@@ -86,6 +86,11 @@ await page.route("**/api/**",async route=>{
    }
   };
  }
+ else if(p==="/api/analytics/ventas/horarios-tickets"){
+  body={cells:[10,30,75,230,500].map((tickets,i)=>({
+   weekday:1,hour:9+i,tickets,units:[1,3,9,30,60][i]
+  })),total:845,totalUnits:103};
+ }
  else if(["/api/analytics/dashboard/horarios","/api/analytics/dashboard/vendedores",
   "/api/analytics/ventas/ticket-medio"].includes(p)){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
@@ -191,12 +196,14 @@ try{
  await page.getByRole("dialog",{name:"Seleccionar Farmacias"}).getByRole("button",{name:"Limpiar"}).click();
  await page.getByRole("button",{name:"Listo"}).click();
  await pharmacyPanel.waitFor({state:"visible",timeout:12000});
- await page.getByRole("button",{name:"Unidades",exact:true}).click();
+ await page.getByRole("group",{name:"Indicador de familias"})
+  .getByRole("button",{name:"Unidades",exact:true}).click();
  await page.getByText("9 uds.",{exact:true}).waitFor();
  const unitShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
  if(!unitShares.includes("75 %")||!unitShares.includes("25 %"))
   throw Error("En unidades deben mostrarse las cuotas sobre las 12 unidades: "+JSON.stringify(unitShares));
- await page.getByRole("button",{name:"Ventas €",exact:true}).click();
+ await page.getByRole("group",{name:"Indicador de familias"})
+  .getByRole("button",{name:"Ventas €",exact:true}).click();
  const salesShares=await page.locator(".fm-so-family .fm-so-rank-share").allTextContents();
  if(!salesShares.some(value=>value.includes("76,8")))
   throw Error("La cuota por importe debe conservarse: "+JSON.stringify(salesShares));

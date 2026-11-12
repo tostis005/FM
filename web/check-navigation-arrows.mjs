@@ -42,18 +42,34 @@ try{
    menuOverflow:getComputedStyle(menu).overflowY,
    rightPadding:parseFloat(getComputedStyle(aside).paddingRight),
    logoInPanel:top.parentElement===aside,footerInPanel:footer.parentElement===aside,
-   toggleLabel:button.textContent.trim()
+   toggleLabel:button.textContent.trim(),
+   toggleIconCount:button.querySelectorAll("svg").length,
+   toggleRightGap:Math.round(aside.getBoundingClientRect().right-button.getBoundingClientRect().right),
+   bottomGap:Math.round(aside.getBoundingClientRect().bottom-button.getBoundingClientRect().bottom),
+   scrollable:aside.scrollHeight>aside.clientHeight
   };
  });
  assert.equal(sidebarStructure.overflow,"auto","La barra debe pertenecer a todo el panel");
  assert.equal(sidebarStructure.menuOverflow,"visible","La navegación no debe tener scroll independiente");
  assert.equal(sidebarStructure.rightPadding,0,"La barra debe quedar junto a la divisoria derecha");
  assert.ok(sidebarStructure.logoInPanel&&sidebarStructure.footerInPanel);
- assert.equal(sidebarStructure.toggleLabel,"Plegar menú");
- await page.getByRole("button",{name:"Plegar menú"}).click();
+ assert.equal(sidebarStructure.toggleLabel,"","El plegado no debe mostrar texto");
+ assert.equal(sidebarStructure.toggleIconCount,1,"El control debe tener solo un icono");
+ assert.ok(sidebarStructure.toggleRightGap>=0&&sidebarStructure.toggleRightGap<=32,
+  "El icono debe quedar pegado al borde derecho: "+JSON.stringify(sidebarStructure));
+ if(!sidebarStructure.scrollable){
+  assert.ok(sidebarStructure.bottomGap>=0&&sidebarStructure.bottomGap<=42,
+   "El icono debe quedar abajo: "+JSON.stringify(sidebarStructure));
+ }
+ await page.getByRole("button",{name:"Plegar menú lateral"}).click();
  assert.equal(await page.locator("#farmetrica-sidebar .brand-mark").isVisible(),true,
   "El isotipo debe permanecer visible al plegar el lateral");
- await page.getByRole("button",{name:"Desplegar menú"}).click();
+ const collapsedToggle=await page.getByRole("button",{name:"Desplegar menú lateral"}).evaluate(button=>({
+  text:button.textContent.trim(),rightGap:Math.round(button.closest(".sidebar").getBoundingClientRect().right-button.getBoundingClientRect().right)
+ }));
+ assert.equal(collapsedToggle.text,"");
+ assert.ok(collapsedToggle.rightGap>=0&&collapsedToggle.rightGap<=32);
+ await page.getByRole("button",{name:"Desplegar menú lateral"}).click();
  for(const group of ["Compras","Stock","Promociones"]){
   const caret=page.getByRole("button",{name:"Mostrar subopciones de "+group,exact:true});
   assert.equal(await caret.count(),1,group+" necesita flecha desplegable");

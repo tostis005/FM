@@ -62,16 +62,28 @@ await page.route("**/api/**",async route=>{
   body={tickets:pharmaciesTickets.reduce((sum,p)=>sum+p.tickets,0),
    pharmacies:pharmaciesTickets};
  }
- else if(p==="/api/analytics/ventas/actividad"){
+ else if(p==="/api/analytics/ventas/panorama"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  const ids=(url.searchParams.get("farmacias")||"1,2").split(",");
+  if(!requests.some(r=>r.path===p&&r.query.from==="prepared-once")){
+   requests.push({path:p,query:{from:"prepared-once"}});
+   await route.fulfill({status:202,contentType:"application/json",
+    body:JSON.stringify({status:"preparing",missing:1,retryAfterMs:200})});
+   return;
+  }
   body={
-   horarios:{total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))},
-   vendedores:{total:234.5,sellers:[
-    {name:"Ana",pharmacyId:"1",sales:180,units:9},
-    {name:"Luis",pharmacyId:"2",sales:54.5,units:3}
-   ].filter(p=>(url.searchParams.get("farmacias")||"1,2").split(",").includes(p.pharmacyId))},
-   tickets:{kpis:{tickets:8,sales:234.5,units:12,ticketMedio:29.3125,unidadesPorTicket:1.5},
-    pharmacies:[{id:"1",name:"Farmacia Centro",sales:234.5,tickets:8,units:12,ticketMedio:29.3125}]}
+   familias:{families:[
+    {key:"dermocosmetica",name:"Dermocosmética",classified:true,segments:["PARAFARMACIA"],
+     sales:180,units:9,lines:4},
+    {key:"sin-clasificar",name:"Sin clasificar",classified:false,segments:[],sales:54.5,units:3,lines:2}
+   ],totalSales:234.5,totalUnits:12,totalLines:6,classifiedLines:4,coveragePct:66.7},
+   actividad:{
+    horarios:{total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))},
+    vendedores:{total:234.5,sellers:[
+     {name:"Ana",pharmacyId:"1",sales:180,units:9},
+     {name:"Luis",pharmacyId:"2",sales:54.5,units:3}
+    ].filter(p=>ids.includes(p.pharmacyId))}
+   }
   };
  }
  else if(["/api/analytics/dashboard/horarios","/api/analytics/dashboard/vendedores",
@@ -80,15 +92,6 @@ await page.route("**/api/**",async route=>{
   body={error:"Endpoint independiente obsoleto en la pantalla Ventas"};
  }
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
- else if(p==="/api/analytics/ventas/familias-ranking"){
-  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
-  body={families:[
-   {key:"dermocosmetica",name:"Dermocosmética",classified:true,segments:["PARAFARMACIA"],
-    sales:180,units:9,lines:4},
-   {key:"sin-clasificar",name:"Sin clasificar",classified:false,segments:[],sales:54.5,units:3,lines:2}
-  ],totalSales:234.5,totalUnits:12,totalLines:6,classifiedLines:4,coveragePct:66.7};
- }
-
  else if(p==="/api/health/database")body={status:"ok",database:"connected"};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -105,8 +108,7 @@ async function verifyPeriod(expected){
   throw Error("Granularidad incorrecta: "+JSON.stringify(latest));
  const current=latest.query;
  for(const endpoint of [
-  "/api/analytics/ventas/familias-ranking",
-  "/api/analytics/ventas/actividad",
+  "/api/analytics/ventas/panorama",
   "/api/analytics/ventas/ticket-medio-rapido"
  ]){
   await page.waitForFunction(([path,from,to])=>{
@@ -126,7 +128,8 @@ async function verifyPeriod(expected){
 }
 const forbidden=[
  "/api/analytics/ventas/recuento","/api/analytics/ventas/detalle",
- "/api/analytics/ventas/ticket-medio","/api/analytics/dashboard/horarios",
+ "/api/analytics/ventas/ticket-medio","/api/analytics/ventas/familias-ranking",
+ "/api/analytics/ventas/actividad","/api/analytics/dashboard/horarios",
  "/api/analytics/dashboard/vendedores"
 ];
 const noHeavyDetails=()=>{

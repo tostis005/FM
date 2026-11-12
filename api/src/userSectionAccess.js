@@ -59,7 +59,11 @@ export function effectiveUserSections(modules,selected,superadmin=false,role="")
     grants===null||grants.has(s.id)||
     // Los gestores que solo tenían Análisis de proveedores conservan acceso
     // al maestro unificado al sustituir la antigua pantalla.
-    (role==="gestor"&&s.id==="proveedores"&&grants.has("proveedores-condiciones"))))]));
+    (role==="gestor"&&s.id==="proveedores"&&grants.has("proveedores-condiciones"))||
+    // El resumen de ventas sustituye la antigua visualización en Inicio/Tickets:
+    // solo para gestores y siempre dentro del módulo de Ventas contratado.
+    (role==="gestor"&&s.id==="ventas"&&
+     (grants.has("dashboard")||grants.has("ventas-tickets")))))]));
 }
 export function validateSectionGrants(sections,modules){
  if(!Array.isArray(sections)||sections.length>USER_SECTIONS.length)return null;

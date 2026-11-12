@@ -313,3 +313,53 @@ test("sin tablas de ventas no se muestra una tabla vacía sin explicar el error"
  assert.equal(body.status,"error");
  assert.match(body.error,/sincronización/);
 });
+
+test("el cliente recibe propuestas parciales antes de terminar todos los lotes",async()=>{
+ const articles=[];
+ for(let i=0;i<351;i++){
+  const cn=String(100000+i);
+  articles.push({cn,pharmacyId:"1",sourceCode:"ABA",articleId:cn,stock:30,name:"Crema"});
+  articles.push({cn,pharmacyId:"2",sourceCode:"EUR",articleId:cn,stock:0,name:"Crema"});
+ }
+ let unblock;
+ const gate=new Promise(resolve=>{unblock=resolve});
+ let salesCount=0;
+ const query=async arg=>{
+  const sql=typeof arg==="string"?arg:arg.text;
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:articles};
+  if(sql.includes("WITH refs AS MATERIALIZED")){
+   salesCount++;
+   if(salesCount===2)await gate;
+   return {rows:JSON.parse(arg.values[0]).filter(r=>r.fid==="2")
+    .map(r=>({pharmacyId:"2",articleId:r.article_id,units7:7}))};
+  }
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:4,targetDays:7}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("SQL inesperado: "+sql.slice(0,50));
+ };
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},{query},{requireTenant:()=>[]});
+ const req={query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testpartial",schema:"testpartial"},
+   pharmacies:pharmacies.slice(0,2)}};
+ const res={statusCode:200,status(n){this.statusCode=n;return this},
+  json(value){this.body=value;return this}};
+ try{
+  let observed=false;
+  for(let i=0;i<100;i++){
+   await handler(req,res,err=>{if(err)throw err});
+   if(res.body?.status==="calculating"&&res.body?.progress?.done===1){
+    observed=true;break;
+   }
+   await new Promise(resolve=>setTimeout(resolve,2));
+  }
+  assert.ok(observed,"Debe publicar el primer lote antes de completar el segundo");
+  assert.equal(res.body.progress.total,2);
+  assert.equal(res.body.total,350);
+ }finally{unblock()}
+ const body=await awaitTransferResult(handler,req,res);
+ assert.equal(body.status,"complete");
+ assert.equal(body.total,351);
+ assert.equal(salesCount,2);
+});

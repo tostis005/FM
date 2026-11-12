@@ -26,7 +26,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
  const [view,setView]=useState("maestro"),[category,setCategory]=useState("todos");
  const [search,setSearch]=useState(""),[query,setQuery]=useState(""),[page,setPage]=useState(1);
  const [records,setRecords]=useState([]),[masterItems,setMasterItems]=useState([]);
- const [summary,setSummary]=useState(EMPTY);
+ const [summary,setSummary]=useState(EMPTY),[total,setTotal]=useState(0);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
  const [error,setError]=useState(""),[message,setMessage]=useState("");
  const [expanded,setExpanded]=useState(null),[origins,setOrigins]=useState({});
@@ -47,9 +47,10 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
   if(filter)params.set("q",filter);
   if(which==="pendientes")params.set("page",String(currentPage));
   const result=await api(clientSlug,"/api/tenant/familias-globales?"+params.toString());
-  setRecords(result.items||[]);
+  setRecords(result.groups||[]);
   setSummary(result.summary||EMPTY);
-  if(which==="maestro"&&!filter)setMasterItems(result.items||[]);
+  setTotal(Number(result.total)||0);
+  if(which==="maestro"&&!filter)setMasterItems(result.groups||[]);
  },[clientSlug,view,query,page]);
  useEffect(()=>{
   const token=setTimeout(()=>{setQuery(search.trim());setPage(1)},220);
@@ -64,16 +65,17 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
   api(clientSlug,"/api/tenant/familias-globales?"+params.toString())
    .then(result=>{
     if(!alive)return;
-    setRecords(result.items||[]);
+    setRecords(result.groups||[]);
     setSummary(result.summary||EMPTY);
-    if(view==="maestro"&&!query)setMasterItems(result.items||[]);
+    setTotal(Number(result.total)||0);
+    if(view==="maestro"&&!query)setMasterItems(result.groups||[]);
    }).catch(err=>{if(alive)setError(err.message)})
    .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
  },[clientSlug,view,query,page]);
- const visible=useMemo(()=>records.filter(g=>category==="todos"||g.segment===category),
+ const visible=useMemo(()=>records.filter(g=>category==="todos"||g.segments.includes(category)),
   [records,category]);
- const options=masterItems.filter(g=>g.segment!=="SIN_DETERMINAR");
+ const options=masterItems.flatMap(g=>g.members).filter(g=>g.segment!=="SIN_DETERMINAR");
  async function act(action,success){
   setBusy(true);setError("");setMessage("");
   try{
@@ -87,11 +89,17 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
  async function expand(g){
   if(expanded===g.id){setExpanded(null);return}
   setExpanded(g.id);
-  if(origins[g.id])return;
+  const missing=g.members.filter(m=>!origins[m.id]);
+  if(!missing.length)return;
   setOriginsBusy(g.id);
   try{
-   const result=await api(clientSlug,"/api/tenant/familias-globales/"+g.id+"/origenes");
-   setOrigins(old=>({...old,[g.id]:result.items||[]}));
+   const replies=await Promise.all(missing.map(m=>api(clientSlug,
+    "/api/tenant/familias-globales/"+m.id+"/origenes")));
+   setOrigins(old=>{
+    const next={...old};
+    missing.forEach((m,i)=>{next[m.id]=replies[i].items||[]});
+    return next;
+   });
   }catch(err){setError(err.message)}
   finally{setOriginsBusy(null)}
  }
@@ -101,7 +109,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
   const result=await act(()=>api(clientSlug,"/api/tenant/familias-globales/"+g.id,{
    method:"PUT",body:JSON.stringify({name})
   }),"Nombre de familia actualizado.");
-  if(result){setEditing(null);setNewName("")}
+  if(result){setEditing(null);setNewName("");setExpanded(null);setOrigins({})}
  }
  async function relink(origin,destinationId){
   if(!destinationId)return;
@@ -109,7 +117,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
    method:"PUT",body:JSON.stringify({pharmacyCode:origin.pharmacyCode,sourceCode:origin.sourceCode})
   }),"La familia local se ha asignado al maestro.");
   if(result){
-   setOrigins(old=>{const copy={...old};delete copy[expanded];delete copy[destinationId];return copy});
+   setOrigins({});setExpanded(null);
    setDestinations(old=>({...old,[origin.pharmacyCode+"|"+origin.sourceCode]:""}));
   }
  }
@@ -126,7 +134,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
  return <div className="fm-families">
   <header className="fm-families-heading">
    <div><h1>Maestro de familias</h1>
-    <p>Familias unificadas y denominación local de cada farmacia.</p></div>
+    <p>Una sola entrada por nombre, en orden alfabético, con cada tipo de producto en su detalle.</p></div>
    <button className="btn btn-secondary btn-sm fm-families-reconcile" onClick={reconcile} disabled={busy||loading}>
     <RefreshCcw size={15} className={busy?"fm-families-spin":""}/>
     {busy?"Reconciliando…":"Volver a unificar"}</button>
@@ -156,6 +164,8 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
     </select>
     <small>{count(visible.length)} en esta vista</small>
    </div>
+   {view==="maestro"&&<p className="fm-families-note">
+    Los nombres equivalentes aparecen una sola vez. Si una familia pertenece a medicación y parafarmacia, se muestran sus clasificaciones al desplegarla sin mezclar sus artículos.</p>}
    {view==="pendientes"&&<p className="fm-families-note">
     Estas categorías locales todavía no tienen una equivalencia segura con el maestro. Se muestran aparte para no duplicar familias ni asignar artículos incorrectamente.</p>}
    {message&&<p className="fm-families-notice" role="status">{message}</p>}
@@ -163,61 +173,84 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
    {loading?<p className="fm-families-empty">Cargando familias…</p>:
     !visible.length?<p className="fm-families-empty">No hay familias con estos filtros.</p>:
     <div className="fm-families-list">
-     {visible.map(g=><article className="fm-family-row" key={g.id}>
+     {visible.map(g=><article className="fm-family-row" key={g.key}>
       <div className="fm-family-main">
        <button className="fm-family-expand" onClick={()=>expand(g)} aria-expanded={expanded===g.id}
         aria-label={(expanded===g.id?"Ocultar":"Ver")+" nombres locales de "+g.name}>
         {expanded===g.id?<ChevronDown size={17}/>:<ChevronRight size={17}/>}</button>
        <div className="fm-family-title">
-        {editing===g.id?
-         <form onSubmit={e=>{e.preventDefault();saveName(g)}} className="fm-family-rename">
+        {g.members.length===1&&editing===g.members[0].id?
+         <form onSubmit={e=>{e.preventDefault();saveName(g.members[0])}} className="fm-family-rename">
           <input aria-label="Nombre de familia" autoFocus maxLength={200} value={newName}
            onChange={e=>setNewName(e.target.value)}/>
           <button className="btn btn-primary btn-sm" disabled={busy} type="submit"><Check size={15}/>Guardar</button>
           <button className="btn btn-secondary btn-sm" type="button" onClick={()=>setEditing(null)}>Cancelar</button>
          </form>:
          <strong>{g.name}</strong>}
-        <div className="fm-family-meta"><span>{SEGMENTS[g.segment]||g.segment}</span>
-         {g.referencePharmacy&&<span>Referencia: {pharmacyName(g.referencePharmacy)}</span>}
+        <div className="fm-family-meta">
+         {g.segments.map(segment=><span key={segment}>{SEGMENTS[segment]||segment}</span>)}
+         {g.members.length>1&&<span>{g.members.length} clasificaciones agrupadas</span>}
+         {g.members.length===1&&g.referencePharmacy&&<span>Referencia: {pharmacyName(g.referencePharmacy)}</span>}
         </div>
        </div>
-       {editing!==g.id&&<button className="fm-family-link" disabled={busy}
-        onClick={()=>{setEditing(g.id);setNewName(g.name)}}>Editar nombre</button>}
+       {g.members.length===1&&editing!==g.members[0].id?
+        <button className="fm-family-link" disabled={busy}
+         onClick={()=>{setEditing(g.members[0].id);setNewName(g.members[0].name)}}>Editar nombre</button>:
+        g.members.length>1&&<button className="fm-family-link"
+         onClick={()=>expand(g)}>{expanded===g.id?"Ocultar detalle":"Ver clasificaciones"}</button>}
       </div>
       {expanded===g.id&&<div className="fm-family-origins">
        <div className="fm-family-origins-title">Nombre de esta familia en cada farmacia</div>
-       {originsBusy===g.id?<p>Consultando nombres locales…</p>:
-        !(origins[g.id]||[]).length?<p>Sin denominaciones locales vinculadas.</p>:
-        groupOrigins(origins[g.id]).map(([code,items])=>
-         <div className="fm-family-pharmacy" key={code}>
-          <strong>{pharmacyName(code)}</strong>
-          <div>{items.map(origin=><div className="fm-family-local" key={origin.sourceCode}>
-           <span title={"Código local "+origin.sourceCode}>{origin.sourceName||"Sin nombre local"}</span>
-           {view==="pendientes"&&options.length>0&&<label className="fm-family-assign">
-            <span>Vincular a</span>
-            <select aria-label={"Vincular "+origin.sourceCode+" de "+pharmacyName(code)}
-             value={destinations[code+"|"+origin.sourceCode]||""}
-             disabled={busy} onChange={e=>setDestinations(old=>({...old,[code+"|"+origin.sourceCode]:e.target.value}))}>
-             <option value="">Elegir familia global</option>
-             {options.map(target=><option key={target.id} value={target.id}>{target.name} · {SEGMENTS[target.segment]}</option>)}
-            </select>
-            <button type="button" className="btn btn-primary btn-sm"
-             disabled={busy||!destinations[code+"|"+origin.sourceCode]}
-             onClick={()=>relink(origin,destinations[code+"|"+origin.sourceCode])}>Asignar</button>
-           </label>}
-          </div>)}</div>
-         </div>)}
+       {g.members.map(member=><section className="fm-family-variant" key={member.id}>
+        {g.members.length>1&&<div className="fm-family-variant-head">
+         <div className="fm-family-variant-label">
+          <strong>{SEGMENTS[member.segment]||member.segment}</strong>
+          <span>{member.name}</span>
+          {member.referencePharmacy&&<small>Referencia: {pharmacyName(member.referencePharmacy)}</small>}
+         </div>
+         {editing===member.id?
+          <form onSubmit={e=>{e.preventDefault();saveName(member)}} className="fm-family-rename">
+           <input aria-label={"Nombre de "+(SEGMENTS[member.segment]||"familia")} autoFocus
+            maxLength={200} value={newName} onChange={e=>setNewName(e.target.value)}/>
+           <button className="btn btn-primary btn-sm" disabled={busy} type="submit"><Check size={15}/>Guardar</button>
+           <button className="btn btn-secondary btn-sm" type="button" onClick={()=>setEditing(null)}>Cancelar</button>
+          </form>:
+          <button className="fm-family-link" disabled={busy}
+           onClick={()=>{setEditing(member.id);setNewName(member.name)}}>Editar nombre</button>}
+        </div>}
+        {originsBusy===g.id&&!origins[member.id]?<p>Consultando nombres locales…</p>:
+         !(origins[member.id]||[]).length?<p>Sin denominaciones locales vinculadas.</p>:
+         groupOrigins(origins[member.id]).map(([code,items])=>
+          <div className="fm-family-pharmacy" key={code}>
+           <strong>{pharmacyName(code)}</strong>
+           <div>{items.map(origin=><div className="fm-family-local" key={origin.sourceCode}>
+            <span title={"Código local "+origin.sourceCode}>{origin.sourceName||"Sin nombre local"}</span>
+            {view==="pendientes"&&options.length>0&&<label className="fm-family-assign">
+             <span>Vincular a</span>
+             <select aria-label={"Vincular "+origin.sourceCode+" de "+pharmacyName(code)}
+              value={destinations[code+"|"+origin.sourceCode]||""}
+              disabled={busy} onChange={e=>setDestinations(old=>({...old,[code+"|"+origin.sourceCode]:e.target.value}))}>
+              <option value="">Elegir familia global</option>
+              {options.map(target=><option key={target.id} value={target.id}>{target.name} · {SEGMENTS[target.segment]}</option>)}
+             </select>
+             <button type="button" className="btn btn-primary btn-sm"
+              disabled={busy||!destinations[code+"|"+origin.sourceCode]}
+              onClick={()=>relink(origin,destinations[code+"|"+origin.sourceCode])}>Asignar</button>
+            </label>}
+           </div>)}</div>
+          </div>)}
+       </section>)}
       </div>}
      </article>)}
     </div>}
-   {view==="pendientes"&&records.length===30&&<div className="fm-families-pages">
+   {view==="pendientes"&&page*30<total&&<div className="fm-families-pages">
     <button className="btn btn-secondary btn-sm" disabled={page===1||loading}
      onClick={()=>{setPage(p=>Math.max(1,p-1));setExpanded(null)}}>Anterior</button>
     <span>Página {page}</span>
     <button className="btn btn-secondary btn-sm" disabled={loading}
      onClick={()=>{setPage(p=>p+1);setExpanded(null)}}>Siguiente</button>
    </div>}
-   {view==="pendientes"&&page>1&&records.length<30&&<div className="fm-families-pages">
+   {view==="pendientes"&&page>1&&page*30>=total&&<div className="fm-families-pages">
     <button className="btn btn-secondary btn-sm" onClick={()=>setPage(p=>p-1)}>Anterior</button>
     <span>Página {page}</span>
    </div>}

@@ -39,3 +39,27 @@ ORDER BY l.granted,l.mode;
 ```
 
 No debe deshabilitarse el sincronizador sin una intervención coordinada ni matar su sesión mientras haya una importación activa: la transacción en curso podría abortarse. Después de actualizar el binario, repetir la comprobación y una prueba de los mismos filtros en la web.
+
+## Optimización de radiografía de Ventas — noviembre de 2026
+
+La pantalla de **Ventas** conserva filtros de fechas y farmacias, ventas/unidades,
+evolución, familias unificadas, actividad por vendedor, mapa de calor y ticket medio.
+Se retira la tabla ABCD de artículos y la consulta `/ventas/recuento` exclusivamente
+de esta pantalla: ambos cálculos eran innecesarios para la visión agregada.
+
+- **Familias:** `/ventas/familias-ranking` selecciona primero las equivalencias
+  farmacia + identificador ERP del maestro global y agrupa directamente por
+  familia. Mantiene las líneas no vinculadas en «Sin clasificar».
+- **Vendedores y horarios:** `/ventas/actividad` agrupa directamente las líneas
+  por vendedor o franja horaria, sin reconstruir cada documento intermedio.
+- **Ticket medio:** `/ventas/ticket-medio-rapido` cuenta únicamente documentos
+  válidos mediante cabeceras indexadas; la vista ya dispone del importe neto
+  del resumen principal y no vuelve a agregar líneas para calcular la media.
+- **Histórico:** `/ventas/totales` reutiliza los cierres mensuales/anuales
+  inmutables cuando están disponibles, y calcula solo el tramo abierto.
+  Los cambios posteriores no reescriben meses cerrados.
+- **Degradación independiente:** si falla un análisis, el resto sigue visible.
+
+El benchmark de solo lectura `api/src/benchVentasPanorama.mjs` se activa
+explícitamente con `FM_BENCH_VENTAS_PANORAMA=1` y mide el período real
+de tres meses sin publicar importes ni referencias.

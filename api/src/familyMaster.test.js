@@ -10,9 +10,6 @@ function harness(){
   const text=typeof sql==="string"?sql:sql.text;
   const params=typeof sql==="string"?values:sql.values;
   queries.push({text,params});
-  if(text.includes("count(*) FILTER(WHERE"))return {rows:[{
-   maestros:65,medicacion:57,parafarmacia:8,pendientes:560
-  }]};
   if(text.includes("FROM farmetrica.familias_globales g")){
    return {rows:[{id:"5",name:"Dermocosmética",segment:"PARAFARMACIA",
     referencePharmacy:"ALMACEN",referenceCode:"11",customName:false}]};
@@ -41,19 +38,26 @@ test("el listado inicial consulta únicamente el maestro, sin contar CN",async()
  const {get,queries}=harness();
  const r=await get("/api/tenant/familias-globales");
  assert.equal(r.status,200);
- assert.equal(r.result.summary.maestros,65);
- assert.equal(r.result.summary.medicacion,57);
+ assert.equal(r.result.summary.maestros,1);
+ assert.equal(r.result.summary.parafarmacia,1);
+ assert.equal(r.result.groups.length,1);
+ assert.equal(r.result.groups[0].name,"Dermocosmética");
+ assert.equal(r.result.summary.medicacion,0);
  assert.equal(r.result.items.length,1);
  assert.ok(queries.every(q=>!q.text.includes("familias_globales_articulos")));
  assert.ok(queries.every(q=>!q.text.includes(".articulos")));
  assert.ok(queries.every(q=>!q.text.includes("json_agg")));
 });
-test("las familias por revisar quedan fuera del listado y paginadas",async()=>{
+test("las familias se agrupan antes de paginar y buscar; el listado no ordena por segmento",async()=>{
  const {get,queries}=harness();
- await get("/api/tenant/familias-globales",{view:"pendientes",page:"3",q:"solar"});
- const list=queries.find(q=>q.text.includes("LIMIT 30 OFFSET $3"));
- assert.deepEqual(list.params,["ampedia","solar",60]);
- assert.match(list.text,/NOT \(g.referencia_farmacia IS NOT NULL OR g.nombre_manual\)/);
+ const r=await get("/api/tenant/familias-globales",{view:"pendientes",page:"3",q:"solar"});
+ assert.equal(r.result.groups.length,0);
+ assert.equal(r.result.summary.pendientes,0);
+ assert.equal(queries.length,1);
+ assert.deepEqual(queries[0].params,["ampedia"]);
+ assert.match(queries[0].text,/ORDER BY g.nombre/);
+ assert.doesNotMatch(queries[0].text,/ORDER BY g.segmento/);
+ assert.doesNotMatch(queries[0].text,/LIMIT 30/);
 });
 test("nombres locales de farmacias se consultan sólo al desplegar",async()=>{
  const {get,queries}=harness();

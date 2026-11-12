@@ -142,7 +142,7 @@ test("dos años: encola los meses pendientes en una lectura, sin 24 sondeos HTTP
  assert.equal(result.missing,46);
  // La cola es asíncrona y sigue siendo SERIAL: no ocupa más conexiones que antes.
  await new Promise(resolve=>setTimeout(resolve,30));
- assert.equal(attempts,46,"los 46 cierres se encolan sin esperar 10 recargas");
+ assert.equal(attempts,23,"los 46 cierres se agrupan en 23 tandas de dos farmacias sin esperar 10 recargas");
 });
 
 test("lote de dos farmacias crea ambos cierres con un único escaneo mensual",async()=>{

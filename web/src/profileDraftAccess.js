@@ -5,11 +5,14 @@ export function withModuleView(permissions={},module){
  return {...permissions,[module]:["ver",...actions.filter(action=>action!=="ver")]};
 }
 
-export function normalizeExplicitModuleViews(profile){
+export function normalizeExplicitModuleViews(profile,editableModuleIds=null){
  if(!Array.isArray(profile?.modules))return profile;
+ const editable=Array.isArray(editableModuleIds)?new Set(editableModuleIds):null;
  let permissions=profile.permissions||{};
  for(const module of profile.modules){
-  if(!permissions[module]?.includes("ver"))permissions=withModuleView(permissions,module);
+  // No alterar permisos históricos de módulos ocultos/desactivados del cliente.
+  if((!editable||editable.has(module))&&!permissions[module]?.includes("ver"))
+   permissions=withModuleView(permissions,module);
  }
  return {...profile,permissions};
 }

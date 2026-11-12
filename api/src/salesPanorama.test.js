@@ -117,3 +117,30 @@ test("API no revela datos de otras farmacias ni módulos",async()=>{
  assert.equal((await run(q,{...ctx,modules:{ventas:false,dashboard:false}})).code,403);
  assert.equal((await run({...q,hasta:"2026-01-01"})).code,400);
 });
+
+test("dos años: encola los meses pendientes en una lectura, sin 24 sondeos HTTP",async()=>{
+ let attempts=0;
+ const conn={async query(q){
+  if(String(q).includes("pg_try_advisory_xact_lock")){
+   attempts++;return {rows:[{ok:false}]};
+  }
+  return {rows:[]};
+ },release(){}};
+ const pool={
+  async query(sql){
+   if(String(sql).includes("clock_timestamp"))
+    return {rows:[{today:"2026-11-12"}]};
+   return {rows:[]};
+  },
+  async connect(){return conn}
+ };
+ const cache=createSalesPanoramaCache(pool,{logger:{info(){},error(){}}});
+ const result=await cache.read({slug:"ampedia",schema:"ampedia",
+  ids:[1,2],pharmacies:ctx.pharmacies,
+  from:"2024-12-01",to:"2026-10-31",context:ctx});
+ assert.equal(result.status,"preparing");
+ assert.equal(result.missing,46);
+ // La cola es asíncrona y sigue siendo SERIAL: no ocupa más conexiones que antes.
+ await new Promise(resolve=>setTimeout(resolve,30));
+ assert.equal(attempts,46,"los 46 cierres se encolan sin esperar 10 recargas");
+});

@@ -3,6 +3,7 @@ import {buildDashboardMonthSQL,compatibleConsolidatedRange,
  summarizeConsolidations,madridDay} from "./dashboardConsolidations.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {createDashboardDailyService} from "./dashboardDailyService.js";
+import {createDashboardAnnualService,splitConsolidatedYears} from "./dashboardAnnualService.js";
 
 const IDENT=/^[a-z][a-z0-9_]{1,62}$/;
 const DEFAULT_NOW=()=>new Date();
@@ -62,7 +63,8 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
    {
     const {rows:exists}=await conn.query(
      "SELECT count(*)::int AS n FROM farmetrica.dashboard_consolidados_mensuales"+
-     " WHERE cliente_slug=$1 AND mes=$2::date",[slug,month]);
+     " WHERE cliente_slug=$1 AND mes=$2::date AND farmacia_id=ANY($3::int[])",
+     [slug,month,farms.map(p=>Number(p.id))]);
     if(Number(exists[0]?.n)===2*farms.length){await conn.query("COMMIT");return false}
    }
    for(const source of ["ventas","compras"]){
@@ -104,7 +106,21 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
   }
   return {...status,elapsedMs:Date.now()-started};
  }
- const daily=createDashboardDailyService(pool,{sourceScopes,now,logger});
+ const daily=createDashboardDailyService(pool,{sourceScopes,now,logger,dbClock});
+ const annual=createDashboardAnnualService(pool,{dbClock,logger});
+ // Trabajos ligeros de finalización iniciados por lecturas, fuera del
+ // tiempo de respuesta HTTP. Una cola por proceso impide escaneos simultáneos.
+ const scheduled=new Set();
+ let queue=Promise.resolve();
+ const enqueue=(key,job)=>{
+  if(scheduled.has(key))return;
+  scheduled.add(key);
+  queue=queue.then(job).catch(e=>logger.error?.("FM_DASHBOARD_CIERRE",key,e.code||e.name))
+   .finally(()=>scheduled.delete(key));
+ };
+ const scheduleMonth=(scope,month)=>enqueue("m:"+scope.slug+":"+month,()=>refreshMonth({...scope,month}));
+ const scheduleYear=(scope,year)=>enqueue("y:"+scope.slug+":"+year,()=>annual.refreshYear({...scope,year}));
+
  let lastNight="";
  async function runNightly(){
   const {today:local,hour}=await dbClock();
@@ -118,7 +134,11 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
     await refreshMonth({...scope,month:previous});
     await refreshMonth({...scope,month:prevMonth(previous)});
     await daily.refreshDays({...scope,month:local.slice(0,7)+"-01"},true);
-    await daily.refreshDays({...scope,month:previous},true);
+    await daily.refreshDays({...scope,month:previous});
+    // A 1 de enero, generar el ejercicio anterior solo desde 12 meses
+    // ya fijados. Nunca modificar un ejercicio existente.
+    if(local.slice(5,10)>="01-01")await annual.refreshYear({
+     slug:scope.slug,farms:scope.farms,year:Number(local.slice(0,4))-1});
    }
    // Si el servidor estuvo apagado, completar los huecos sin otro escaneo masivo.
    await backfill({months:48,maxMs:210000});
@@ -135,18 +155,39 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
   if(!range)return {available:false,reason:"range"};
   const rows=[];
   if(range.months.length){
-   const start=range.months[0],end=nextMonth(range.months.at(-1));
-   const result=await pool.query(
-    "SELECT farmacia_id,mes,fuente,importe,unidades,filas,filas_importe,"+
-    " filas_unidades,filas_producto,documentos,filas_coste,ventas_con_coste,margen_coste"+
-    " FROM farmetrica.dashboard_consolidados_mensuales"+
-    " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])"+
-    " AND mes>=$3::date AND mes<$4::date",
-    [slug,ids,start,end]);
-   const expected=range.months.length*ids.length*2;
-   if(result.rows.length!==expected)
-    return {available:false,reason:"pending",readyRows:result.rows.length,expectedRows:expected};
-   rows.push(...result.rows);
+   const split=splitConsolidatedYears(range.months);
+   // Un año completo se lee del snapshot anual. Si faltara para alguna
+   // farmacia o fuente, se recurre a sus meses; nunca a datos inventados.
+   const cachedYears=await annual.readYears({slug,ids,years:split.years});
+   rows.push(...cachedYears.rows);
+   const fallbackMonths=range.months.filter(m=>!cachedYears.matchedYears.includes(Number(m.slice(0,4))));
+   if(fallbackMonths.length){
+    const result=await pool.query(
+     "SELECT farmacia_id,mes,fuente,importe,unidades,filas,filas_importe,"+
+     " filas_unidades,filas_producto,documentos,filas_coste,ventas_con_coste,margen_coste"+
+     " FROM farmetrica.dashboard_consolidados_mensuales"+
+     " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])"+
+     " AND mes=ANY($3::date[])",
+     [slug,ids,fallbackMonths]);
+    const expected=fallbackMonths.length*ids.length*2;
+    if(result.rows.length!==expected){
+     const present=new Set(result.rows.map(row=>String(row.farmacia_id)+"|"+
+      String(row.mes instanceof Date?row.mes.toISOString().slice(0,10):row.mes).slice(0,10)+"|"+row.fuente));
+     // Encolamos solo meses realmente ausentes, nunca sobrescribimos.
+     for(const month of [...fallbackMonths].reverse()){
+      if(farms.some(f=>["ventas","compras"].some(source=>
+       !present.has(String(f.id)+"|"+month+"|"+source))))
+       scheduleMonth({slug,schema,farms},month);
+     }
+     return {available:false,reason:"pending",readyRows:result.rows.length+cachedYears.rows.length,
+      expectedRows:range.months.length*ids.length*2};
+    }
+    rows.push(...result.rows);
+   }
+   // Guardar cada anual faltante para no repetir 12 lecturas mensuales.
+   for(const year of split.years)
+    if(!cachedYears.matchedYears.includes(year))
+     scheduleYear({slug,farms},year);
   }
   if(range.liveRanges.length){
    // Los fragmentos parciales se calculan sobre la fuente original una sola vez.
@@ -173,8 +214,9 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
    liveRanges:range.liveRanges.length,liveCurrentMonth:range.active,
    ...summarizeConsolidations(rows,from,to)};
  }
- return {read,refreshMonth,backfill,backfillDays:daily.backfillDays,
-  refreshDays:daily.refreshDays,runNightly,start,sourceScopes};
+ return {read,refreshMonth,refreshYear:annual.refreshYear,backfill,
+  backfillDays:daily.backfillDays,refreshDays:daily.refreshDays,
+  runNightly,start,sourceScopes};
 }
 export function setupDashboardConsolidations(app,pool,{requireTenant}){
  const service=createDashboardConsolidationService(pool);

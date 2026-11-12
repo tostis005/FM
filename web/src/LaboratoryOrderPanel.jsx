@@ -631,7 +631,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           const value=k===4?null:available?
             (key==="stock"?row.warehouse?.stock??0:row.warehouse?.[key]):null;
           return <td key={"alm-"+key} className={"fm-lab-order-warehouse-col"+(k===4?" fm-lab-order-ordercol":"")}
-            title={k===4?"El almacén no emite propuestas propias":!available?"No hay datos del almacén para esta categoría":value===null||value===undefined?"Dato aún no importado":"Dato real del almacén"}>
+            title={k===4?"El almacén no emite propuestas propias":!available?"Esperando resultados":key==="stock"?"Stock del almacén; sin existencia informada se considera cero":value===null||value===undefined?"Dato aún no importado":"Dato real del almacén"}>
             {value===null||value===undefined?"—":fmt(value)}</td>;
          })}
          <td className="fm-lab-order-total" title={tab==="parafarmacia"&&row.globalStock!=null?

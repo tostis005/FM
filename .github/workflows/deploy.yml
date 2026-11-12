@@ -593,6 +593,16 @@ jobs:
             timeout 570 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api               env FM_DASHBOARD_BACKFILL_MONTHS=40 node src/backfillDashboardConsolidations.mjs
           '
 
+      - name: Medir radiografía de Ventas en PostgreSQL (solo lectura)
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'BENCH_VENTAS_PANORAMA')
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            cd /opt/farmawao
+            timeout 230 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api env FM_BENCH_VENTAS_PANORAMA=1 node src/benchVentasPanorama.mjs
+          '
+
       - name: Medir el preparador de proveedores unificados (solo lectura)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'acelerar preparador')
         continue-on-error: true

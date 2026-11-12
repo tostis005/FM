@@ -30,11 +30,12 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/analytics/ventas/totales")
   data={kpis:{ventas:3000,unidades:65},monthly:[{month:"2026-10",ventas:3000,unidades:65}],
    granularity:"month",series:[{bucket:"2026-10",ventas:3000,unidades:65}]};
- else if(p==="/api/analytics/ventas/familias-ranking")
-  data={families:[],totalSales:3000,totalUnits:65,totalLines:1,coveragePct:0};
- else if(p==="/api/analytics/ventas/actividad")
-  data={horarios:{total:3000,cells:[{weekday:1,hour:9,sales:3000,lines:1}]},
-   vendedores:{total:3000,sellers:[{pharmacyId:"1",name:"Ana",sales:3000,units:65}]}};
+ else if(p==="/api/analytics/ventas/panorama")
+  data={
+   familias:{families:[],totalSales:3000,totalUnits:65,totalLines:1,coveragePct:0},
+   actividad:{horarios:{total:3000,cells:[{weekday:1,hour:9,sales:3000,lines:1}]},
+    vendedores:{total:3000,sellers:[{pharmacyId:"1",name:"Ana",sales:3000,units:65}]}}
+  };
  else if(p==="/api/analytics/ventas/ticket-medio-rapido")
   data={tickets:10,pharmacies:[{id:"1",name:"Farmacia Centro",tickets:10}]};
  else if(p==="/api/analytics/ventas/recuento"){

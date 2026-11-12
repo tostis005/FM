@@ -20,12 +20,14 @@ export function mergeSalesTicketCounts(parts){
 }
 export async function mapTicketWindows(windows,load,{concurrency=2,onProgress}={}){
  const results=new Array(windows.length);
- let cursor=0,done=0;
+ let cursor=0,done=0,failed=false;
  await Promise.all(Array.from({length:Math.min(concurrency,windows.length)},async()=>{
-  while(cursor<windows.length){
+  while(cursor<windows.length&&!failed){
    const index=cursor++;
-   results[index]=await load(windows[index]);
-   onProgress?.(++done,windows.length);
+   try{
+    results[index]=await load(windows[index]);
+    if(!failed)onProgress?.(++done,windows.length);
+   }catch(error){failed=true;throw error;}
   }
  }));
  return results;

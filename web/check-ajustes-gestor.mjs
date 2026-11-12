@@ -54,8 +54,14 @@ await page.route("**/api/**",async route=>{
 try{
  await page.goto("http://127.0.0.1:4175/ajustes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor({timeout:15000});
- await page.getByRole("button",{name:"Ajustes",exact:true}).first().waitFor();
+ assert.equal(await page.getByRole("heading",{name:"Exclusiones de pedidos"}).count(),0,
+  "el índice no debe montar todos los formularios");
+ assert.equal(await page.getByRole("button",{name:/Abrir ajustes de/}).count(),5);
+
+ await page.getByRole("button",{name:"Abrir ajustes de Preparador de pedidos"}).click();
  await page.getByRole("heading",{name:"Exclusiones de pedidos"}).waitFor();
+ assert.ok(page.url().includes("seccion=compras"));
+ assert.equal(await page.getByRole("heading",{name:"Precios de referencia para genéricos"}).count(),0);
  assert.equal(await page.getByRole("heading",{name:"Frecuencia de pedidos"}).count(),0);
  assert.equal(await page.getByText("Revisar",{exact:true}).count(),0);
  assert.equal(await page.getByText("Ejemplos detectados en nombres de Farmatic").count(),0);
@@ -67,12 +73,21 @@ try{
  await page.getByText("Regla añadida.",{exact:true}).first().waitFor();
  assert.ok(writes.some(w=>w.path==="/api/tenant/pedidos/exclusiones"&&
   w.method==="POST"&&w.data.text==="*BAJA*"));
- await page.getByRole("button",{name:"Guardar período de análisis"}).click();
- assert.ok(writes.some(w=>w.path==="/api/tenant/configuracion-ventas"&&w.data.analysisMonths===12));
  await page.getByRole("button",{name:"Guardar cobertura global"}).click();
  assert.ok(writes.some(w=>w.path==="/api/tenant/stock-objetivo"&&w.data.days===20));
+
+ await page.getByRole("button",{name:"General",exact:true}).click();
+ await page.getByRole("heading",{name:"Análisis de ventas · ABCD y márgenes"}).waitFor();
+ await page.getByRole("button",{name:"Guardar período de análisis"}).click();
+ assert.ok(writes.some(w=>w.path==="/api/tenant/configuracion-ventas"&&w.data.analysisMonths===12));
+
+ await page.getByRole("button",{name:"Genéricos",exact:true}).click();
+ await page.getByRole("heading",{name:"Precios de referencia para genéricos"}).waitFor();
  await page.getByRole("button",{name:"Guardar política"}).click();
  assert.ok(writes.some(w=>w.path==="/api/analytics/politica-precios"&&w.data.percentile===20));
+
+ await page.getByRole("button",{name:"Transferidor",exact:true}).click();
+ await page.getByRole("heading",{name:"Stock del transferidor"}).waitFor();
  const familySection=page.locator(".fm-transfer-settings-section").filter({hasText:"Exposición por farmacia y familia"});
  await familySection.getByLabel("Farmacia").selectOption("1");
  const selector=familySection.getByLabel("Familia global");
@@ -87,6 +102,16 @@ try{
  await familySection.getByRole("button",{name:"Eliminar exposición de Capilar"}).click();
  assert.ok(writes.some(w=>w.path==="/api/tenant/transferidor-politica/familias"&&w.method==="DELETE"&&
   JSON.stringify(w.data.familyIds)===JSON.stringify(["10","11","12"])));
+
+ await page.goBack();
+ await page.getByRole("heading",{name:"Precios de referencia para genéricos"}).waitFor();
+ await page.getByRole("button",{name:"Ajustes",exact:true}).first().click();
+ await page.getByRole("button",{name:"Abrir ajustes de Transferidor"}).waitFor();
+ assert.equal(new URL(page.url()).searchParams.has("seccion"),false,
+  "volver a Ajustes abre el índice de bloques");
+
+ await page.goto("http://127.0.0.1:4175/ajustes?seccion=transferidor");
+ await page.getByRole("heading",{name:"Stock del transferidor"}).waitFor();
  assert.equal(errors.length,0,errors.join("\n"));
- console.log("OK gestor: Ajustes visibles, frecuencia retirada, reglas literales y configuraciones editables");
+ console.log("OK gestor: ajustes por áreas, navegación e historial, reglas literales y formularios editables");
 }finally{await browser.close()}

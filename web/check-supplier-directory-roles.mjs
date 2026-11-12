@@ -92,13 +92,22 @@ try{
   const nav=aside.querySelector(".side-nav").getBoundingClientRect();
   const toggle=aside.querySelector(".fm-sidebar-collapse-toggle").getBoundingClientRect();
   return {separated:toggle.top-brand.bottom,afterNav:toggle.top-nav.bottom,
-   rightGap:sidebar.right-toggle.right,scrollMode:getComputedStyle(aside).overflowY};
+   rightGap:sidebar.right-toggle.right,bottomGap:sidebar.bottom-toggle.bottom,
+   scrollable:aside.scrollHeight>aside.clientHeight,
+   label:toggle.textContent.trim(),iconCount:toggle.querySelectorAll("svg").length,
+   scrollMode:getComputedStyle(aside).overflowY};
  });
  assert.ok(footerPosition.separated>100,"El plegado no debe cubrir el logotipo");
- assert.ok(footerPosition.afterNav>=0&&footerPosition.afterNav<36,
-  "El plegado debe ser la última fila del menú: "+JSON.stringify(footerPosition));
- assert.ok(footerPosition.rightGap>=0&&footerPosition.rightGap<60,
-  "El control debe seguir integrado en el ancho del lateral: "+JSON.stringify(footerPosition));
+ assert.ok(footerPosition.afterNav>=0,
+  "El plegado debe ir después de las opciones del menú: "+JSON.stringify(footerPosition));
+ assert.ok(footerPosition.rightGap>=0&&footerPosition.rightGap<32,
+  "El icono debe quedar abajo a la derecha: "+JSON.stringify(footerPosition));
+ if(!footerPosition.scrollable){
+  assert.ok(footerPosition.bottomGap>=0&&footerPosition.bottomGap<42,
+   "El icono debe quedar al pie del lateral: "+JSON.stringify(footerPosition));
+ }
+ assert.equal(footerPosition.label,"","El control solo muestra el icono");
+ assert.equal(footerPosition.iconCount,1);
  assert.equal(footerPosition.scrollMode,"auto","El panel completo comparte una barra de desplazamiento");
  await superadmin.page.getByRole("button",{name:"Plegar menú lateral"}).click();
  assert.equal(await superadmin.page.locator("#farmetrica-sidebar").evaluate(node=>Math.round(node.getBoundingClientRect().width)),72);

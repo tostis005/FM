@@ -7,8 +7,10 @@ import {nameCommercialRows} from "./commercialNames.js";
 import {nameArticleRows} from "./articleNames.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
-function scope(req,res){
- const request={...req,query:{...req.query,modulo:"dashboard",orden:undefined,direccion:undefined}};
+function scope(req,res,{sales=false}={}){
+ const module=sales&&!req.context.modules?.dashboard&&req.context.role!=="superadministrador"?
+  "ventas":"dashboard";
+ const request={...req,query:{...req.query,modulo:module,orden:undefined,direccion:undefined}};
  const f=getFilters(request,res);
  if(!f)return null;
  if(f.search||f.families.length){
@@ -34,8 +36,13 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
   if(req.context.role==="superadministrador"||req.context.modules.dashboard)return next();
   res.status(403).json({error:"Inicio no habilitado"});
  }];
- app.get("/api/analytics/dashboard/horarios",...access,async(req,res,next)=>{
-  const f=scope(req,res);if(!f)return;
+ const salesAccess=[...requireTenant(),(req,res,next)=>{
+  if(req.context.role==="superadministrador"||
+     req.context.modules?.ventas||req.context.modules?.dashboard)return next();
+  res.status(403).json({error:"Ventas no habilitadas"});
+ }];
+ app.get("/api/analytics/dashboard/horarios",...salesAccess,async(req,res,next)=>{
+  const f=scope(req,res,{sales:true});if(!f)return;
   if(!f.ids.length)return res.json({cells:[],total:0});
   try{
    const {rows}=await pool.query(
@@ -46,8 +53,8 @@ export function setupDashboardInsights(app,pool,{requireTenant}){
    res.json({cells:rows,total:rows.reduce((n,r)=>n+Number(r.sales||0),0)});
   }catch(e){next(e)}
  });
- app.get("/api/analytics/dashboard/vendedores",...access,async(req,res,next)=>{
-  const f=scope(req,res);if(!f)return;
+ app.get("/api/analytics/dashboard/vendedores",...salesAccess,async(req,res,next)=>{
+  const f=scope(req,res,{sales:true});if(!f)return;
   if(!f.ids.length)return res.json({sellers:[],total:0});
   try{
    const {rows}=await pool.query(

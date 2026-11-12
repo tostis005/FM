@@ -99,7 +99,9 @@ test("la API mantiene el plan si falta la importación de una tercera farmacia",
  assert.deepEqual(selected.values[1],[1,2]);
  assert.ok(selected.q.includes('JOIN "ampedia".articulos'),"lee artículos Farmatic");
  assert.ok(selected.q.includes("a.origen_id::text AS article_id"),"agrupa por IdArticu");
- assert.ok(selected.q.includes("BETWEEN $3::int AND $4::int"),"particiona IdArticu");
+ assert.ok(selected.q.includes("catalog AS MATERIALIZED"),"lee el catálogo una sola vez");
+ assert.ok(selected.q.includes("WHERE stock>0"),"solo calcula para productos con donante");
+ assert.equal(queries.filter(x=>x.q.includes("WITH chosen AS MATERIALIZED")).length,1);
  assert.doesNotMatch(selected.q,/sinonimos|ean/);
 });
 
@@ -201,8 +203,71 @@ test("SQL empareja por CN y conserva el IdArticu para unir las ventas",async()=>
  if(error)throw error;
  const sql=queries.find(q=>q.includes("WITH chosen AS MATERIALIZED"));
  assert.match(sql,/a\.codigo_nacional/);
- assert.match(sql,/JOIN candidates c ON c\.cn=\(CASE/);
+ assert.match(sql,/JOIN candidates c ON c\.cn=a\.cn/);
+ assert.match(sql,/catalog AS MATERIALIZED/);
  assert.match(sql,/a\.origen_id::text AS article_id/);
  assert.match(sql,/l\.articulo_origen_id=a\.article_id/);
  assert.ok(!sql.includes("a.origen_id::text AS cn"));
+});
+
+test("consulta global usa una transacción de solo lectura y timeout local ampliado",async()=>{
+ const calls=[];
+ const query=async arg=>{
+  const sql=typeof arg==="string"?arg:arg.text;
+  calls.push({sql,values:arg?.values||[]});
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"1",cn:"123456",stock:30,units12:0,name:"Crema"},
+   {pharmacyId:"2",cn:"123456",stock:0,units12:365,name:"Crema"}
+  ]};
+  if(sql.includes("AS ready FROM farmetrica.farmacias"))
+   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
+  if(sql.includes("transferidor_configuracion_cliente"))
+   return {rows:[{minDays:4,targetDays:7}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  if(/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql))return {rows:[]};
+  throw Error("SQL imprevisto "+sql.slice(0,70));
+ };
+ const db={query,release(){calls.push({sql:"RELEASE"})}};
+ const pool={query,connect:async()=>db};
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},pool,{requireTenant:()=>[]});
+ const res={statusCode:200,status(n){this.statusCode=n;return this},
+  json(value){this.body=value;return this}};
+ let error;
+ await handler({query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testtimeout",schema:"testtimeout"},
+   pharmacies:pharmacies.slice(0,2)}},res,e=>{error=e});
+ if(error)throw error;
+ assert.equal(res.statusCode,200);
+ assert.equal(res.body.total,1);
+ assert.equal(res.body.rows[0].units,7);
+ assert.equal(calls.filter(x=>x.sql.includes("WITH chosen AS MATERIALIZED")).length,1);
+ assert.ok(calls.some(x=>x.sql==="BEGIN READ ONLY"));
+ assert.ok(calls.some(x=>x.sql==="SET LOCAL statement_timeout='110s'"));
+ assert.ok(calls.some(x=>x.sql==="COMMIT"));
+ assert.ok(calls.some(x=>x.sql==="RELEASE"));
+});
+test("si falla PostgreSQL devuelve un error explícito, no una tabla vacía",async()=>{
+ const query=async arg=>{
+  const sql=typeof arg==="string"?arg:arg.text;
+  if(sql.includes("AS ready FROM farmetrica.farmacias"))
+   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
+  if(sql.includes("WITH chosen AS MATERIALIZED"))
+   throw Object.assign(Error("canceling statement due to statement timeout"),{code:"57014"});
+  return {rows:[]};
+ };
+ let released=false;
+ const pool={query,connect:async()=>({query,release(){released=true}})};
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},pool,{requireTenant:()=>[]});
+ const res={statusCode:200,status(n){this.statusCode=n;return this},
+  json(value){this.body=value;return this}};
+ let error;
+ await handler({query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testfailure",schema:"testfailure"},
+   pharmacies:pharmacies.slice(0,2)}},res,e=>{error=e});
+ if(error)throw error;
+ assert.equal(res.statusCode,504);
+ assert.match(res.body.error,/tiempo/);
+ assert.equal(released,true);
 });

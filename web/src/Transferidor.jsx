@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {ArrowLeftRight,ArrowRight,RefreshCcw} from "lucide-react";
+import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
@@ -65,7 +65,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    render:r=>number(r.targetOrigin)},
   {key:"stockDestination",label:"Stock destino",align:"center",value:r=>r.stockDestination,
    render:r=>number(r.stockDestination)},
-  {key:"triggerDestination",label:"Disparador destino",align:"center",value:r=>r.triggerDestination,
+  {key:"triggerDestination",label:"Mínimo por ventas",align:"center",value:r=>r.triggerDestination,
    render:r=>number(r.triggerDestination)},
   {key:"extraDestination",label:"Exposición extra",align:"center",value:r=>r.extraDestination,
    render:r=><span title={r.reserveSource==="articulo"?"Regla específica por CN":r.reserveSource==="familia"?"Regla por familia":"Sin exposición adicional"}>{number(r.extraDestination)}</span>},
@@ -124,12 +124,26 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     <RefreshCcw size={14}/> Reintentar</button></p>}
   {data?.warning&&<p role="status" className="fm-op-message fm-op-warning">{data.warning}</p>}
   {data?.available&&<div className="fm-transfer-summary" aria-label="Resumen global">
-    <div><ArrowLeftRight size={19}/><span>Movimientos propuestos</span><strong>{number(data.summary?.movements)}</strong></div>
-    <div><ArrowRight size={19}/><span>Unidades a redistribuir</span><strong>{number(data.summary?.units)}</strong></div>
-    <div><span>Productos analizados</span><strong>{number(data.summary?.analyzed)}</strong></div>
-    <div><span>Resultados filtrados</span><strong>{number(data.total)}</strong>
-     <small>{number(data.summary?.filteredUnits)} unidades</small></div>
-   </div>}
+   {[
+    {id:"movements",Icon:ArrowLeftRight,label:"Movimientos propuestos",
+     value:number(data.summary?.movements)},
+    {id:"units",Icon:ArrowRight,label:"Unidades a redistribuir",
+     value:number(data.summary?.units)},
+    {id:"products",Icon:Boxes,label:"Productos analizados",
+     value:number(data.summary?.analyzed)},
+    {id:"filtered",Icon:ListFilter,label:"Resultados filtrados",
+     value:number(data.total),detail:number(data.summary?.filteredUnits)+" unidades"}
+   ].map(({id,Icon,label,value,detail})=>
+    <div key={id} className="fm-transfer-kpi">
+     <div className="fm-transfer-kpi-heading">
+      <Icon size={19} strokeWidth={1.9} aria-hidden="true"/>
+      <span>{label}</span>
+     </div>
+     <strong className="fm-transfer-kpi-value">{value}</strong>
+     <small className="fm-transfer-kpi-detail">{detail||"\u00a0"}</small>
+    </div>
+   )}
+  </div>}
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
     <h2>Propuestas entre farmacias</h2>

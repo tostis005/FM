@@ -219,7 +219,9 @@ export function transferidorCNChunks(rows,maxArticles=700){
 }
 async function readTransferInventory(pool,schema,slug,ids){
  const request={text:transferidorInventorySQL(schema),values:[slug,ids],query_timeout:65000};
- if(typeof pool.connect!=="function")return (await pool.query(request)).rows;
+ // Un cliente PG ya adquirido por el llamador (integración) no se reconecta.
+ if(typeof pool.connect!=="function"||typeof pool.release==="function")
+  return (await pool.query(request)).rows;
  const db=await pool.connect();
  try{
   await db.query("BEGIN READ ONLY");

@@ -21,35 +21,24 @@ export function distributeMedicationOrderTotal(row,line,pharmacyIds,value){
   ...Object.fromEntries(ids.map((id,i)=>[id,amounts[i]]))}};
 }
 export const isExcludedOrderRow=row=>row?.excluded===true;
+// Solo aceptar números reales como stock; una existencia NULL o ausente
+// significa cero en el preparador, nunca que la consulta haya terminado.
+const stockOrZero=value=>value==null||!Number.isFinite(Number(value))?0:Number(value);
 export function totalStockFor(row,pharmacyIds){
- const values=pharmacyIds.map(id=>row?.byPharmacy?.[String(id)]?.stock);
- return values.some(v=>v===null||v===undefined||!Number.isFinite(Number(v)))?
-  null:values.reduce((sum,v)=>sum+Number(v),0);
+ return pharmacyIds.reduce((sum,id)=>sum+
+  stockOrZero(row?.byPharmacy?.[String(id)]?.stock),0);
 }
-// Los KPI resumen el stock conocido del catálogo completo. Si faltan fichas
-// o una importación, se indica "parcial" en lugar de ocultar todo el total
-// o convertir una existencia desconocida en cero.
+// Una carga fallida/incompleta no se presenta como stock cero.
+// Con todas las métricas listas, los artículos sin ficha o con NULL valen 0.
 export function laboratoryStockTotals(rows,pharmacyIds,includeWarehouse=false){
- let pharmacyStock=0,warehouseStock=0,missingPharmacy=0,missingWarehouse=0;
+ if(rows.some(row=>row?.metricsReady!==true))
+  return {pharmacyStock:null,globalStock:null};
+ let pharmacyStock=0,warehouseStock=0;
  for(const row of rows){
-  for(const id of pharmacyIds){
-   const value=row?.metricsReady?row.byPharmacy?.[String(id)]?.stock:null;
-   if(value===null||value===undefined||!Number.isFinite(Number(value)))
-    missingPharmacy++;
-   else pharmacyStock+=Number(value);
-  }
-  if(includeWarehouse){
-   const value=row?.metricsReady&&row.warehouseReady===true?
-    row.warehouse?.stock:null;
-   if(value===null||value===undefined||!Number.isFinite(Number(value)))
-    missingWarehouse++;
-   else warehouseStock+=Number(value);
-  }
+  pharmacyStock+=totalStockFor(row,pharmacyIds);
+  if(includeWarehouse)warehouseStock+=stockOrZero(row?.warehouse?.stock);
  }
- return {pharmacyStock,globalStock:pharmacyStock+warehouseStock,
-  missingPharmacy,missingWarehouse,
-  pharmacyPartial:missingPharmacy>0,
-  globalPartial:missingPharmacy>0||missingWarehouse>0};
+ return {pharmacyStock,globalStock:pharmacyStock+warehouseStock};
 }
 // Mantener la ordenación numérica alineada con las cifras visibles de Totales y Pedir total.
 export function laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts={}){

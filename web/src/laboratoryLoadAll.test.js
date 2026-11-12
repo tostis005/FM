@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY,LAB_METRICS_BULK_LIMIT} from "./laboratoryLoadAll.js";
 import {ALL_LAB_ROWS,laboratoryTablePage,laboratoryTableViewport,LAB_VIRTUAL_ROW_HEIGHT} from "./laboratoryTableWindow.js";
 
-test("dos mil CN se calculan en diez lotes de 200, máximo dos consultas simultáneas",async()=>{
+test("dos mil CN se calculan en lotes de 75, máximo dos consultas simultáneas",async()=>{
  const initial=Array.from({length:2000},(_,i)=>({
   referencia:String(400000+i),cn:String(400000+i),nombre:"Artículo "+i
  }));
@@ -19,10 +19,11 @@ test("dos mil CN se calculan en diez lotes de 200, máximo dos consultas simult�
     unitsPeriod:5,suggested:1}},totalSold:5,totalSuggested:1
   }))};
  },{onBatch:x=>progress.push(x.loaded)});
- assert.equal(LAB_METRICS_BATCH,200);
+ assert.equal(LAB_METRICS_BATCH,75);
  assert.equal(LAB_METRICS_CONCURRENCY,2);
- assert.equal(sizes.length,10,"2.000 referencias se calculan con diez lotes optimizados");
- assert.ok(sizes.every(n=>n===200));
+ assert.equal(sizes.length,Math.ceil(2000/75),"Se dividen 2.000 referencias en 27 lotes");
+ assert.equal(sizes.reduce((sum,n)=>sum+n,0),2000);
+ assert.ok(sizes.every(n=>n>0&&n<=75));
  assert.ok(maxConcurrent<=2);
  assert.ok(maxConcurrent>=2);
  assert.equal(result.rows.length,2000);

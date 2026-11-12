@@ -140,24 +140,25 @@ function inventorySql(schema){
  SELECT f.id,${code} AS source_code
  FROM farmetrica.farmacias f
  WHERE f.cliente_slug=$1 AND f.id=ANY($2::int[]) AND f.activo=true
- AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
-), candidates AS MATERIALIZED (
- SELECT DISTINCT ${cn} AS cn
- FROM chosen f JOIN ${q}.articulos a
-  ON upper(btrim(a.farmacia_codigo))=f.source_code
- WHERE a.stock_actual>0
-  AND ${cn} IS NOT NULL
-  AND ${cn}::int BETWEEN $3::int AND $4::int
-), eligible AS MATERIALIZED (
+  AND coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia')='farmacia'
+), catalog AS MATERIALIZED (
+ -- Leer una sola vez el catálogo del conjunto de farmacias.
+ -- El identificador comercial del CN puede ser diferente al IdArticu local.
  SELECT f.id AS fid,f.source_code,a.origen_id::text AS article_id,
- ${cn} AS cn,a.nombre,
- a.stock_actual::float8 AS stock,a.sincronizado_en AS stock_at,
- g.familia_id AS family_id
+  ${cn} AS cn,a.nombre,a.stock_actual::float8 AS stock,
+  a.sincronizado_en AS stock_at
  FROM chosen f
  JOIN ${q}.articulos a ON upper(btrim(a.farmacia_codigo))=f.source_code
- JOIN candidates c ON c.cn=${cn}
+ WHERE ${cn} IS NOT NULL AND ${cn}::int BETWEEN 1 AND 399999
+), candidates AS MATERIALIZED (
+ -- Solo analizar productos que existen con stock positivo en alguna farmacia.
+ SELECT DISTINCT cn FROM catalog WHERE stock>0
+), eligible AS MATERIALIZED (
+ SELECT a.*,g.familia_id AS family_id
+ FROM catalog a
+ JOIN candidates c ON c.cn=a.cn
  LEFT JOIN farmetrica.familias_globales_articulos g ON g.cliente_slug=$1
-  AND g.farmacia_codigo=f.source_code AND g.articulo_origen_id=a.origen_id::text
+  AND g.farmacia_codigo=a.source_code AND g.articulo_origen_id=a.article_id
 ), sales_per_article AS MATERIALIZED (
  -- Igual que el Preparador: líneas documentales por artículo ERP y farmacia,
  -- unidas a las cabeceras válidas, con fecha España.
@@ -196,27 +197,37 @@ SELECT a.fid::text AS "pharmacyId",a.cn,max(a.nombre) AS name,
 FROM eligible a
 LEFT JOIN sales_per_article s ON s.fid=a.fid AND s.article_id=a.article_id
 LEFT JOIN pending p ON p.fid=a.fid AND p.article_id=a.article_id
-GROUP BY a.fid,a.cn
-ORDER BY a.cn,a.fid`;
+GROUP BY a.fid,a.cn`;
 }
 // Compartir un único cálculo global para filtros y paginación.
 const PLAN_CACHE_MS=180000;
 const globalRowsCache=new Map();
 async function loadTransferRows(pool,schema,slug,ids){
- const starts=Array.from({length:16},(_,i)=>i*25000);
- const segments=new Array(starts.length);
- let cursor=0;
- // Dos fragmentos en paralelo: menos espera sin cargar todo el histórico en RAM.
- await Promise.all(Array.from({length:2},async()=>{
-  while(cursor<starts.length){
-   const index=cursor++;
-   const start=starts[index];
-   const part=await pool.query({text:inventorySql(schema),
-    values:[slug,ids,start,start+24999],query_timeout:30000});
-   segments[index]=part.rows;
-  }
- }));
- return segments.flat();
+ const request={text:inventorySql(schema),values:[slug,ids],query_timeout:115000};
+ // El servidor usa una transacción de solo lectura para ampliar únicamente el
+ // timeout de este informe. Los demás módulos conservan sus límites habituales.
+ // Un cliente ya adquirido (pruebas de integración) usa su transacción existente.
+ if(typeof pool.connect!=="function")
+  return (await pool.query(request)).rows;
+ const db=await pool.connect();
+ const started=Date.now();
+ try{
+  await db.query("BEGIN READ ONLY");
+  await db.query("SET LOCAL statement_timeout='110s'");
+  const {rows}=await db.query(request);
+  await db.query("COMMIT");
+  console.info("TRANSFERIDOR_INVENTARIO",JSON.stringify({
+   status:"ok",elapsedMs:Date.now()-started,rows:rows.length,pharmacies:ids.length
+  }));
+  return rows;
+ }catch(e){
+  await db.query("ROLLBACK").catch(()=>{});
+  console.warn("TRANSFERIDOR_INVENTARIO",JSON.stringify({
+   status:"error",elapsedMs:Date.now()-started,code:e.code||e.name||"QUERY_ERROR",
+   pharmacies:ids.length
+  }));
+  throw e;
+ }finally{db.release()}
 }
 function getTransferRows(pool,schema,slug,ids,forceToken=""){
  const key=[slug,schema,...ids].join("|");
@@ -270,7 +281,7 @@ export function setupTransferidor(app,pool,{requireTenant}){
    const plan=buildGlobalTransfers(rows,available,policy);
    const filtered=filterTransferPlan(plan.transfers,opts);
    const uniqueProducts=new Set(plan.transfers.map(r=>r.cn)).size;
-   const emptyReason=!plan.products?"No hay artículos de parafarmacia con código IdArticu y stock.":
+   const emptyReason=!plan.products?"No hay artículos de parafarmacia con stock para redistribuir.":
     !plan.withSurplus?"No hay existencias sobrantes para redistribuir.":
     !plan.withNeed?"No hay necesidades de reposición que cubrir con transferencias.":
     !plan.transfers.length?"No coinciden los excedentes con las necesidades del mismo producto.":null;
@@ -285,7 +296,7 @@ export function setupTransferidor(app,pool,{requireTenant}){
      ". Se han calculado las otras farmacias.":plan.skipped?
      plan.skipped+" referencias sin stock fiable omitidas.":null});
   }catch(e){
-   if(["57014","53300"].includes(e.code))return res.status(504).json({error:"El cálculo de transferencias ha superado el tiempo disponible. Inténtalo más tarde."});
+   if(["57014","53300"].includes(e.code)||e.message==="Query read timeout")return res.status(504).json({error:"El cálculo de transferencias ha superado el tiempo disponible. Inténtalo más tarde."});
    next(e);
   }
  });

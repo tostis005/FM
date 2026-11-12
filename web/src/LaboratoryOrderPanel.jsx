@@ -678,7 +678,6 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      </div>
     </div>}
    </div>
-    </div>
    </>}
   </section>
   {commentRow&&<div className="fm-lab-comment-overlay" role="dialog" aria-modal="true"

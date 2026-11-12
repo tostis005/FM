@@ -71,7 +71,10 @@ export async function collectLaboratoryCatalog(fetchPage,{
  return {rows,total};
 }
 
-export const LAB_METRICS_CONCURRENCY=2;
+// Medido en producción con 686 CN / 6 farmacias: 3 workers reducen
+// de 17,39 s a 11,65 s frente a 2, sin cambiar ninguna métrica.
+// Limitar a 3 para no monopolizar las 6 conexiones de la API.
+export const LAB_METRICS_CONCURRENCY=3;
 const MIN_METRICS_BATCH=25;
 // Algunos laboratorios concentran muchas líneas históricas: si PostgreSQL no
 // puede agregar el lote solicitado, dividir solo ese lote, sin perder ni limitar

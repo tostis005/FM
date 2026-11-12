@@ -50,28 +50,43 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  const inProgress=["queued","inventory","calculating"].includes(data?.status);
  const progress=data?.progress||{done:0,total:0};
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
+ const minimumDays=Number(data?.summary?.minimumDays??4);
+ const targetDays=Number(data?.summary?.targetDays??7);
  const columns=useMemo(()=>[
-  {key:"cn",label:"CN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
-  {key:"name",label:"Producto",value:r=>r.name,render:r=><span title={r.name}>{r.name}</span>},
-  {key:"originName",label:"Origen",filterMode:"text",value:r=>r.originName,
+  {key:"cn",group:"Artículo",label:"CN",value:r=>r.cn,
+   render:r=><strong>{r.cn}</strong>},
+  {key:"name",group:"Artículo",label:"Producto",value:r=>r.name,
+   render:r=><span title={r.name}>{r.name}</span>},
+  {key:"originName",group:"Origen",label:"Farmacia",filterMode:"text",value:r=>r.originName,
    render:r=><strong>{r.originName}</strong>},
-  {key:"destinationName",label:"Destino",filterMode:"text",value:r=>r.destinationName,
-   render:r=><strong>{r.destinationName}</strong>},
-  {key:"units",label:"Unidades",align:"center",value:r=>r.units,
-   render:r=><strong className="fm-transfer-units">{number(r.units)}</strong>},
-  {key:"stockOrigin",label:"Stock origen",align:"center",value:r=>r.stockOrigin,
+  {key:"stockOrigin",group:"Origen",label:"Stock",align:"center",value:r=>r.stockOrigin,
    render:r=>number(r.stockOrigin)},
-  {key:"targetOrigin",label:"Objetivo origen",align:"center",searchable:false,value:r=>r.targetOrigin,
-   render:r=>number(r.targetOrigin)},
-  {key:"stockDestination",label:"Stock destino",align:"center",value:r=>r.stockDestination,
-   render:r=>number(r.stockDestination)},
-  {key:"triggerDestination",label:"Mínimo por ventas",align:"center",value:r=>r.triggerDestination,
-   render:r=>number(r.triggerDestination)},
-  {key:"extraDestination",label:"Exposición extra",align:"center",value:r=>r.extraDestination,
-   render:r=><span title={r.reserveSource==="articulo"?"Regla específica por CN":r.reserveSource==="familia"?"Regla por familia":"Sin exposición adicional"}>{number(r.extraDestination)}</span>},
-  {key:"targetDestination",label:"Objetivo destino",align:"center",searchable:false,value:r=>r.targetDestination,
-   render:r=>number(r.targetDestination)}
- ],[]);
+  {key:"targetOrigin",group:"Origen",label:"Debe conservar",align:"center",
+   searchable:false,value:r=>r.targetOrigin,
+   render:r=><span title={"Stock reservado en origen para "+targetDays+
+    " días de ventas y la exposición configurada"}>{number(r.targetOrigin)}</span>},
+  {key:"destinationName",group:"Destino",label:"Farmacia",filterMode:"text",
+   value:r=>r.destinationName,render:r=><strong>{r.destinationName}</strong>},
+  {key:"stockDestination",group:"Destino",label:"Stock",align:"center",
+   value:r=>r.stockDestination,render:r=>number(r.stockDestination)},
+  {key:"pendingDestination",group:"Destino",label:"Pedidos pendientes",align:"center",
+   value:r=>r.pendingDestination??0,render:r=>number(r.pendingDestination??0)},
+  {key:"triggerDestination",group:"Destino",label:"Previsión "+minimumDays+" días",
+   align:"center",value:r=>r.triggerDestination,
+   render:r=><span title="Unidades estimadas para cubrir los próximos "+minimumDays+
+    " días de ventas del destino">{number(r.triggerDestination)}</span>},
+  {key:"targetDestination",group:"Destino",label:"Objetivo "+targetDays+" días",
+   align:"center",searchable:false,value:r=>r.targetDestination,
+   render:r=><span className="fm-transfer-target" title={"Stock deseado para "+targetDays+
+    " días de ventas, más la exposición configurada"}>
+    <strong>{number(r.targetDestination)}</strong>
+    {r.extraDestination>0&&<small>incl. {number(r.extraDestination)} exposición</small>}
+   </span>},
+  {key:"units",group:"Propuesta",label:"Enviar",align:"center",value:r=>r.units,
+   render:r=><strong className="fm-transfer-units" title="Unidades propuestas para trasladar del origen al destino">
+    {number(r.units)}
+   </strong>}
+ ],[minimumDays,targetDays]);
  return <div className="fm-transferidor">
   <ReportPageHeader title="Transferidor"
    updatedAt={data?.calculatedAt||null} refreshing={loading}
@@ -147,7 +162,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
     <h2>Propuestas entre farmacias</h2>
-    <span>Activación: {number(data?.summary?.minimumDays??4)} días · Objetivo: {number(data?.summary?.targetDays??7)} días + exposición</span>
+    <span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
    </div>
    {!data&&loading?<LoadingPanel kind="table" label="Iniciando cálculo de transferencias…" rows={5}/>:error&&!data?
     <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:<>

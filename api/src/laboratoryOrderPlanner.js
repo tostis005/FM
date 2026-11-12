@@ -144,6 +144,7 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
   if(!byRef.has(row.reference))byRef.set(row.reference,{});
   byRef.get(row.reference)[String(row.pharmacyId)]={
    pharmacyId:String(row.pharmacyId),stock:row.stock===null?null:Number(row.stock),
+   stockInferredZero:row.stockInferredZero===true,
    stockAt:row.stockAt,unitsPeriod:Number(row.unitsPeriod||0),
    units3:Number(row.units3||0),units12:Number(row.units12||0),
    ordered:Number(row.ordered||0),targetUnits:row.targetUnits==null?null:Number(row.targetUnits),

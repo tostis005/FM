@@ -67,6 +67,8 @@ jobs:
           node --check api/src/applyFamilyDuplicates.mjs
           node --test api/src/familyDuplicateMerge.test.js
           node --check api/src/auditFamilyDuplicates.mjs
+          node --check api/src/familyDirectory.js
+          node --test api/src/familyDirectory.test.js
           node --test api/src/familyMaster.test.js
           node --check api/src/checkFamilyMasterPerformance.mjs
           node --check api/src/transferidorPolicy.js

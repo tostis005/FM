@@ -19,11 +19,6 @@ const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
 const ModuloDemo=React.lazy(()=>import("./ModuloDemo.jsx"));
 const Genericos=React.lazy(()=>import("./Genericos.jsx"));
-const ConfiguracionPrecios=React.lazy(()=>import("./ConfiguracionPrecios.jsx"));
-const ConfiguracionDiasStock=React.lazy(()=>import("./ConfiguracionDiasStock.jsx"));
-const ConfiguracionStockTransferidor=React.lazy(()=>import("./ConfiguracionStockTransferidor.jsx"));
-const ConfiguracionPreparador=React.lazy(()=>import("./ConfiguracionPreparador.jsx"));
-const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
 import {promotionMetrics,promotionAverageCompletion,hasOverlappingPromotions,participatingPromotionSales} from "./promotionMetrics.js";
 import {dateES,quantity,integer,percentage} from "./localeES.js";
 const ProveedoresMaestro=React.lazy(()=>import("./ProveedoresUnificados.jsx"));
@@ -42,7 +37,7 @@ const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 const PickingList=React.lazy(()=>import("./PickingList.jsx"));
 const Transferidor=React.lazy(()=>import("./Transferidor.jsx"));
-const ConfiguracionPickingList=React.lazy(()=>import("./ConfiguracionPickingList.jsx"));
+const AjustesPanel=React.lazy(()=>import("./AjustesPanel.jsx"));
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
 import ListTable, {ListPagination} from "./ListTable.jsx";
@@ -750,6 +745,7 @@ function App(){
   const url=id==="promociones-objetivos"?objectiveEditorUrl(promoId||"",requestedObjectiveMonth):"/"+id;
   if(window.location.pathname+window.location.search!==url)window.history.pushState({page:id},"",url);
   setPage(id);setSearch("");setMobileMenu(false);
+  if(id==="ajustes")window.dispatchEvent(new Event("fm-settings-navigate"));
  }
  function openReportFilters(){
   setReportModal({status:reportStatus,year:reportYear,month:reportMonth,
@@ -1738,20 +1734,11 @@ function App(){
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
-     {page==="ajustes"&&<div className="fm-production-settings">
-      <div className="page-header"><h1>Ajustes</h1></div>
+     {page==="ajustes"&&<AjustesPanel key={tenantContext.client.slug}
+      clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
+      analysisMonths={tenantContext.client.analysisMonths}
+      onAnalysisSaved={()=>loadContext(tenantContext.client.slug)}/>}
 
-      <ConfiguracionAnalisisVentas clientSlug={tenantContext.client.slug}
-       initialMonths={tenantContext.client.analysisMonths}
-       onSaved={()=>loadContext(tenantContext.client.slug)}/>
-      <ConfiguracionPrecios clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
-      <ConfiguracionDiasStock clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
-      <ConfiguracionStockTransferidor clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>
-      <ConfiguracionPickingList clientSlug={tenantContext.client.slug}
-       role={role} permissions={tenantContext.profile?.permissions}
-       stockEnabled={tenantContext.modules?.stock===true}/>
-       <ConfiguracionPreparador clientSlug={tenantContext.client.slug}/>
-     </div>}
    </React.Suspense>
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>

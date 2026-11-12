@@ -6,6 +6,7 @@ import pg from "pg";
 import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
+import {readRetirementPatterns,isRetiredProductName} from "./laboratoryRetirements.js";
 import {readLaboratoryOrderMatrix,indexedNormalizedCNMetricsSQL,skipWarehouseForMedication} from "./laboratoryOrderPlanner.js";
 
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,
@@ -44,6 +45,25 @@ try{
    const data=await timed("catalog_"+type,()=>readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type}));
    if(data){candidates.push({type,rows:data.rows});output[type+"References"]=data.rows.length;}
   }
+  // Comprobación pedida por el usuario. Solo registrar resultados booleanos,
+  // nunca los nombres reales ni el stock de ninguna farmacia.
+  const med=candidates.find(item=>item.type==="medicacion")?.rows||[];
+  const configured=await readRetirementPatterns(pool,ctx.client.slug);
+  output.configuredRetirementRuleCount=configured.length;
+  const exampleCNs=["654698","655872"];
+  const {rows:abbadia}=await pool.query({text:`
+   SELECT btrim(a.codigo_nacional) AS cn,btrim(a.nombre) AS nombre
+   FROM "${ctx.client.schema}".articulos a
+   WHERE upper(btrim(a.farmacia_codigo))='ABA'
+    AND btrim(a.codigo_nacional)=ANY($1::text[])
+    AND nullif(btrim(a.nombre),'') IS NOT NULL`,
+   values:[exampleCNs],query_timeout:4000});
+  output.retirementExamples=Object.fromEntries(exampleCNs.map(cn=>{
+   const row=med.find(item=>item.cn===cn);
+   return [cn,{present:!!row,excluded:row?.excluded??null,
+    matchesVisibleRule:row?isRetiredProductName(row.nombre,configured):null,
+    matchesAbadiaDescription:row?abbadia.some(a=>a.cn===cn&&a.nombre===row.nombre):null}];
+  }));
   const best=candidates.sort((a,b)=>b.rows.length-a.rows.length)[0];
   if(best?.rows.length){
    const date=new Date(),to=date.toISOString().slice(0,10);

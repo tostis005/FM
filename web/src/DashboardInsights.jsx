@@ -25,11 +25,11 @@ function heatColor(rank){
 const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v));
 const pct=v=>v==null?"—":percentage(v);
-function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid}){
+function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid},shared=null){
  const scope=[clientSlug,from,to,pharmacyIds.join(","),reloadKey].join("|");
  const [result,setResult]=useState(null);
  useEffect(()=>{
-  if(!valid)return;
+  if(!valid||shared)return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:from,hasta:to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
@@ -52,8 +52,14 @@ function useInsight(endpoint,{clientSlug,from,to,pharmacyIds,reloadKey,valid}){
    .catch(error=>{if(!controller.signal.aborted)setResult({scope,status:"error",error:error.message})})
    .finally(()=>clearTimeout(timeout));
   return()=>{clearTimeout(timeout);controller.abort()};
- },[endpoint,scope,valid]);
- return !valid?{status:"empty"}:result?.scope===scope?result:{status:"loading"};
+ },[endpoint,scope,valid,Boolean(shared)]);
+ if(!valid)return {status:"empty"};
+ // En Ventas, el mapa y el ranking reutilizan una sola respuesta compartida.
+ // Compras sigue usando su consulta independiente, sin alterar sus permisos.
+ if(shared)return shared.status==="ready"?
+  {status:"ready",data:shared.data?.[endpoint]}:
+  {status:shared.status,error:shared.error};
+ return result?.scope===scope?result:{status:"loading"};
 }
 function Panel({title,subtitle,insight,children,empty="Sin movimientos en este período"}){
  return <section className="card fm-insight-panel" aria-busy={insight.status==="loading"}>
@@ -63,8 +69,8 @@ function Panel({title,subtitle,insight,children,empty="Sin movimientos en este p
    insight.status==="empty"?<p className="fm-insight-status">{empty}</p>:children}
  </section>;
 }
-function Heatmap({scope}){
- const insight=useInsight("horarios",scope);
+function Heatmap({scope,shared}){
+ const insight=useInsight("horarios",scope,shared);
  const cells=Array.isArray(insight.data?.cells)?insight.data.cells:EMPTY;
  const total=Number(insight.data?.total)||0;
  const grid=useMemo(()=>{
@@ -109,8 +115,8 @@ function Heatmap({scope}){
    <p className="fm-insight-foot">Escala relativa a las franjas con ventas del período; los importes se muestran en cada celda y al pasar el cursor. Total: <strong>{euro(total)}</strong>.</p></>}
  </Panel>;
 }
-function Sellers({scope}){
- const insight=useInsight("vendedores",scope);
+function Sellers({scope,shared}){
+ const insight=useInsight("vendedores",scope,shared);
  const [showAll,setShowAll]=useState(false);
  const sellers=Array.isArray(insight.data?.sellers)?insight.data.sellers:EMPTY;
  const maximum=Math.max(1,...sellers.map(x=>Math.max(0,x.sales)));
@@ -276,11 +282,11 @@ function Purchases({scope,pharmacies,onNavigate,canNavigate}){
    </>}
  </Panel>;
 }
-export default function DashboardInsights({mode="dashboard",clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false}){
+export default function DashboardInsights({mode="dashboard",clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,onNavigate=()=>{},canNavigate=()=>false,salesActivity=null}){
  const scope={clientSlug,from:period.from,to:period.to,valid:period.valid,
   pharmacyIds,reloadKey};
  return <div className="fm-dashboard-insights">
-  {mode==="ventas"&&<><Heatmap scope={scope}/><Sellers scope={scope}/></>}
+  {mode==="ventas"&&<><Heatmap scope={scope} shared={salesActivity}/><Sellers scope={scope} shared={salesActivity}/></>}
   {mode==="compras"&&<Purchases scope={scope} pharmacies={pharmacies}
    onNavigate={onNavigate} canNavigate={canNavigate}/>}
  </div>;

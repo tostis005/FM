@@ -43,6 +43,15 @@ WITH refs AS MATERIALIZED (
   pharmacy_id,reference,article_id,stock,stock_at
  FROM article_matches
  ORDER BY pharmacy_id,article_id,reference,stock_at DESC NULLS LAST
+), pharmacy_inventory_ready AS MATERIALIZED (
+ -- Si esta farmacia ya tiene inventario cargado pero no hay ficha para
+ -- el CN concreto, su stock actual es 0; una ficha con stock NULL sigue
+ -- siendo desconocida. Sin importación general NO se presupone 0.
+ SELECT f.id AS pharmacy_id,EXISTS (
+  SELECT 1 FROM __SCHEMA__.articulos a
+  WHERE upper(btrim(a.farmacia_codigo))=f.source_code
+ ) AS ready
+ FROM pharmacies f
 ), inventory AS (
  SELECT pharmacy_id,reference,
   CASE WHEN count(stock)=count(*) THEN sum(stock)::float8 ELSE NULL::float8 END AS stock,
@@ -207,7 +216,8 @@ WITH refs AS MATERIALIZED (
  GROUP BY a.pharmacy_id,a.reference
 )
 SELECT x.reference,f.id::text AS "pharmacyId",
- i.stock,i.stock_at AS "stockAt",
+ resolved_stock.stock,resolved_stock.inferred AS "stockInferredZero",
+ i.stock_at AS "stockAt",
  wi.stock AS "warehouseStock",
  wi.stock_at AS "warehouseStockAt",
  wr.ready AS "warehouseReady",
@@ -222,17 +232,25 @@ SELECT x.reference,f.id::text AS "pharmacyId",
  -- Objetivo bruto para compensar excedentes entre farmacias en parafarmacia.
  greatest(coalesce(m.v3,0)/90.0,coalesce(m.v12,0)/365.0)*
   coalesce(policy.cobertura_dias,30) AS "targetUnits",
- CASE WHEN i.stock IS NULL THEN NULL::int
+ CASE WHEN resolved_stock.stock IS NULL THEN NULL::int
  ELSE greatest(0,least(999999,ceil(
   greatest(coalesce(m.v3,0)/90.0,coalesce(m.v12,0)/365.0)*
    coalesce(policy.cobertura_dias,30)
-   -i.stock-coalesce(pending.qty,0)-1e-9)))::int END AS suggested
+   -resolved_stock.stock-coalesce(pending.qty,0)-1e-9)))::int END AS suggested
 FROM refs x CROSS JOIN pharmacies f
 CROSS JOIN warehouse_ready wr
 CROSS JOIN warehouse_sales_ready wsr
 LEFT JOIN warehouse_inventory wi ON wi.reference=x.reference
 LEFT JOIN warehouse_sales ws ON ws.reference=x.reference
 LEFT JOIN inventory i ON i.pharmacy_id=f.id AND i.reference=x.reference
+LEFT JOIN pharmacy_inventory_ready pir ON pir.pharmacy_id=f.id
+CROSS JOIN LATERAL (
+ SELECT CASE
+  WHEN i.reference IS NULL AND pir.ready IS TRUE THEN 0::float8
+  ELSE i.stock
+ END AS stock,
+ (i.reference IS NULL AND pir.ready IS TRUE) AS inferred
+) resolved_stock
 LEFT JOIN movements m ON m.pharmacy_id=f.id AND m.reference=x.reference
 LEFT JOIN pending ON pending.pharmacy_id=f.id AND pending.reference=x.reference
 LEFT JOIN farmetrica.preparador_configuracion_cliente policy

@@ -24,6 +24,43 @@ export function skipWarehouseForMedication(sql){
  ].join("\n");
  return sql.slice(0,start+2)+"\n"+noWarehouse+"\n"+sql.slice(end+2);
 }
+// Variante diagnóstica: filtrar primero las cabeceras por fecha y farmacia,
+ // y reutilizarlas para todos los artículos de la misma consulta.
+ // Mantiene los predicados de validez, los tres períodos y los CN idénticos.
+export function datePrefilterLaboratoryMetricsSQL(sql){
+ const marker="), sales_per_article AS MATERIALIZED (";
+ const position=sql.indexOf(marker);
+ if(position<0)throw Error("No se ha encontrado la CTE de ventas");
+ const docs=`), eligible_sales_documents AS MATERIALIZED (
+ SELECT h.farmacia_codigo,h.sistema_origen,h.documento_id,h.fecha
+ FROM __SCHEMA__.fm_ventas_cabeceras h
+ JOIN pharmacies p ON p.source_code=h.farmacia_codigo
+ CROSS JOIN calculation_day d
+ WHERE h.lineas_completas AND NOT h.eliminado_logicamente
+   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   AND (
+     (h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day')
+     OR (h.fecha >= d.today-interval '364 days'
+         AND h.fecha < d.today+interval '1 day')
+   )
+`;
+ const old=` JOIN __SCHEMA__.fm_ventas_cabeceras h
+  ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen
+   AND h.documento_id=l.documento_id
+   AND h.lineas_completas AND NOT h.eliminado_logicamente
+   AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')
+   AND (
+     (h.fecha >= $4::date AND h.fecha < $5::date+interval '1 day')
+     OR (h.fecha >= d.today-interval '364 days'
+         AND h.fecha < d.today+interval '1 day')
+   )`;
+ const replacement=` JOIN eligible_sales_documents h
+  ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen
+   AND h.documento_id=l.documento_id`;
+ const suffix=sql.slice(position);
+ if(suffix.split(old).length!==2)throw Error("No se ha localizado el JOIN de ventas");
+ return sql.slice(0,position)+docs+suffix.replace(old,replacement);
+}
 const SQL_MEDICATION=skipWarehouseForMedication(SQL);
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -111,7 +148,9 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
  // La columna nativa cn_normalizado existe en Farmatic recientes y evita
  // transformar cada fila a JSON en las búsquedas de stock y ventas.
  const nativeCN=await hasNativeNormalizedCN(pool,ctx.client.schema).catch(()=>false);
- const sql=(options.type==="medicacion"?SQL_MEDICATION:SQL).replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
+ const baseSQL=options.type==="medicacion"?SQL_MEDICATION:SQL;
+ const sql=(options.datePrefilter===true?datePrefilterLaboratoryMetricsSQL(baseSQL):baseSQL)
+  .replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
   .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
  let rows;

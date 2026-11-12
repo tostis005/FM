@@ -1701,7 +1701,8 @@ function App(){
 
     {page==="usuarios"&&<EquipoCliente client={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} managerRole={tenantContext.role}/>}
     {page==="perfiles"&&["gestor","administrador","superadministrador"].includes(role)&&
-      <PerfilesGlobales client={tenantContext.client.slug} role={role}/>}
+      <PerfilesGlobales client={tenantContext.client.slug} role={role}
+       onSaved={()=>loadContext(tenantContext.client.slug)}/>}
     {page==="familias-maestro"&&["gestor","administrador","superadministrador"].includes(role)&&
       <FamiliasMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="proveedores"&&<ProveedoresMaestro key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}

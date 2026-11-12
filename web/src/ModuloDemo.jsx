@@ -15,6 +15,7 @@ import {loadHistoricalSummary} from "./historicalSummaries.js";
 import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import DashboardInsights from "./DashboardInsights.jsx";
+import SalesOverview from "./SalesOverview.jsx";
 import SavingsAnalysis from "./SavingsAnalysis.jsx";
 import ImpactoVerificado from "./ImpactoVerificado.jsx";
 import "./centroTrabajo.css";
@@ -911,6 +912,13 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      </BarChart>
     </ResponsiveContainer></div>}
    </section>}
+  {module==="ventas"&&<>
+    <SalesOverview clientSlug={clientSlug} period={period}
+     pharmacyIds={filters.pharmacyIds} reloadKey={reloadKey}/>
+    <DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
+     pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
+     onNavigate={onNavigate} canNavigate={canNavigate}/>
+   </>}
   {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
    pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}
   {module==="compras"&&<DashboardInsights mode="compras" clientSlug={clientSlug} period={period}
@@ -976,9 +984,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      {" "}referencias coincidentes{realReport?.tableTotalFiltered>3000?" (se muestran las primeras 3.000)":""}.
     </small>}
   </section>}
-  {module==="ventas"&&<DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
-   pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
-   onNavigate={onNavigate} canNavigate={canNavigate}/>}
+
   {(isReports||isAssistant)&&<section className="card fm-demo-table">
    <div className="section-heading"><h2>Artículos vendidos en el período</h2>
     <button className="btn btn-secondary" type="button" disabled={!rows.length}

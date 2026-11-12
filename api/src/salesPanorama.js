@@ -209,7 +209,13 @@ export function createSalesPanoramaCache(pool,{logger=console}={}){
     }
    }
    if(missing.length){
-    for(const item of missing.slice(0,5))schedule(item);
+    // Los cierres son secuenciales (una consulta de origen a la vez).
+    // Antes solo se encolaban cinco por petición: un rango de 24 meses y
+    // cinco farmacias necesitaba al menos 24 sondeos de 6 s para ENCOLAR,
+    // aunque PostgreSQL terminara cada mes enseguida. Encolar el histórico
+    // completo evita huecos ociosos entre sondeos, sin aumentar concurrencia.
+    // El límite mantiene la memoria acotada en rangos/hospitales extremos.
+    for(const item of missing.slice(0,300))schedule(item);
     const permanentlyFailed=missing.find(x=>Number(failures.get(keyOf(x))||0)>=3);
     if(permanentlyFailed)return {status:"error",
      error:"No se pudo preparar un mes del histórico. Revisa el registro de consultas."};

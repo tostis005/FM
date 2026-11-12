@@ -15,7 +15,7 @@ export function skipWarehouseForMedication(sql){
  const end=sql.indexOf("), eligible_articles AS MATERIALIZED (",start+1);
  if(start<0||end<=start)throw Error("No se han encontrado las CTE del almacén");
  const noWarehouse=[
-  " warehouse_ready AS (SELECT ($6::text=\'parafarmacia\') AS ready),",
+  " warehouse_ready AS (SELECT ($6::text='parafarmacia') AS ready),",
   " warehouse_sales_ready AS (SELECT false AS ready),",
   " warehouse_inventory AS (SELECT NULL::text AS reference,",
   "  NULL::float8 AS stock,NULL::timestamptz AS stock_at WHERE false),",

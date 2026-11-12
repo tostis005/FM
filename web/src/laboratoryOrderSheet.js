@@ -26,6 +26,41 @@ export function totalStockFor(row,pharmacyIds){
  return values.some(v=>v===null||v===undefined||!Number.isFinite(Number(v)))?
   null:values.reduce((sum,v)=>sum+Number(v),0);
 }
+// Mantener la ordenación numérica alineada con las cifras visibles de Totales y Pedir total.
+export function laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts={}){
+ if(!row?.metricsReady)return null;
+ if(field==="totalStock")return type==="parafarmacia"&&row.globalStock!=null?
+  row.globalStock:totalStockFor(row,pharmacyIds);
+ if(field==="totalUnits")return row.totalSold;
+ if(field==="totalSuggested")return row.totalSuggested;
+ if(field==="totalOrder"){
+  const line=orderLineFor(row,type,pharmacyIds,drafts);
+  return type==="medicacion"?medicationOrderTotal(line,pharmacyIds):line.units;
+ }
+ return null;
+}
+const numericalSortFields=new Set(["totalStock","totalUnits","totalSuggested","totalOrder"]);
+export function compareLaboratoryOrderRows(a,b,sort,type,pharmacyIds,drafts={}){
+ if(!sort||sort==="original")return 0;
+ const [field,direction]=sort.split(":");
+ if(numericalSortFields.has(field)){
+  const first=laboratoryOrderSortValue(a,field,type,pharmacyIds,drafts);
+  const second=laboratoryOrderSortValue(b,field,type,pharmacyIds,drafts);
+  const left=first==null?null:Number(first);
+  const right=second==null?null:Number(second);
+  const hasLeft=left!==null&&Number.isFinite(left);
+  const hasRight=right!==null&&Number.isFinite(right);
+  // Nunca presentar un stock desconocido como 0. Los guiones van al final.
+  if(!hasLeft||!hasRight)return hasLeft===hasRight?0:hasLeft?-1:1;
+  const difference=left-right;
+  return direction==="desc"?-difference:difference;
+ }
+ const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
+ const left=field==="cn"?String(a.cn||a.referencia||""):String(a.nombre||"");
+ const right=field==="cn"?String(b.cn||b.referencia||""):String(b.nombre||"");
+ const difference=collator.compare(left,right);
+ return direction==="desc"?-difference:difference;
+}
 // Las referencias dadas de baja son editables: el color rojo solo advierte.
 // No poner unidades a cero al leer borradores antiguos ni cambiar de pestaña.
 export function sanitizeExcludedOrderLine(row,line,type,pharmacyIds){

@@ -323,8 +323,9 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
   const seen=new Set(inventory.map(r=>String(r.pharmacyId)));
   job.missing=pharmacies.filter(p=>!seen.has(String(p.id)));
   if(seen.size<2){
-   job.status="complete";job.available=false;
-   job.warning="No hay dos farmacias con inventario sincronizado para comparar.";
+   job.status="complete";
+   job.warning=inventory.length?"No hay suficientes referencias comparables entre las farmacias.":
+    "No hay artículos de parafarmacia con stock para redistribuir.";
    return;
   }
   const pending=new Map(pendingRows.map(r=>[String(r.pharmacyId)+"|"+String(r.articleId),r.ordered]));
@@ -359,6 +360,11 @@ function getTransferJob(pool,schema,slug,pharmacies,forceToken=""){
  const key=[slug,schema,ids.join(","),forceToken].join("|");
  const now=Date.now(),current=transferJobs.get(key);
  if(current&&(current.expires===0||current.expires>now))return current;
+ // Un botón de refresco no debe duplicar el cálculo si todavía está activo.
+ const base=[slug,schema,ids.join(",")].join("|")+"|";
+ for(const [existingKey,existing] of transferJobs){
+  if(existingKey.startsWith(base)&&!existing.expires)return existing;
+ }
  const job={status:"queued",available:true,plan:{transfers:[],
   skipped:0,products:0,withNeed:0,withSurplus:0},progress:{done:0,total:0},
   policy:{minDays:4,targetDays:7},failed:0,warning:"",missing:[],analyzed:0,
@@ -396,7 +402,7 @@ export function setupTransferidor(app,pool,{requireTenant}){
     !plan.withNeed?"No hay necesidades por debajo del mínimo configurado.":
     !plan.transfers.length?"No coinciden excedentes y necesidades del mismo artículo.":null;
    const warning=[job.warning,job.missing.length?
-    "Sin inventario en "+job.missing.map(p=>p.name).join(", "):"",
+    "Sin referencias comparables en "+job.missing.map(p=>p.name).join(", "):"",
     job.failed?"No se han podido analizar "+job.failed+" CN. Reintenta la carga.":""].filter(Boolean).join(". ")||null;
    res.json({status:job.status,available:job.available,rows:filtered.rows,total:filtered.total,
     page:opts.page,pageSize:opts.size,progress:job.progress,

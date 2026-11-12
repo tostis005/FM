@@ -26,3 +26,12 @@ test("no concede lectura de otros módulos ni modifica perfiles con herencia glo
  const inherited={modules:null,sections:null,permissions:{ventas:[]}};
  assert.equal(normalizeExplicitModuleViews(inherited),inherited);
 });
+
+test("permisos de un módulo deshabilitado no cambian al guardar otro",()=>{
+ const draft={modules:["ventas","compras"],sections:["ventas","compras-preparador"],
+  permissions:{ventas:[],compras:[]}};
+ const fixed=normalizeExplicitModuleViews(draft,["ventas"]);
+ assert.deepEqual(fixed.permissions,{ventas:["ver"],compras:[]});
+ assert.deepEqual(fixed.modules,draft.modules);
+ assert.deepEqual(fixed.sections,draft.sections);
+});

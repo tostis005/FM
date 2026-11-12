@@ -6,7 +6,7 @@ import pg from "pg";
 import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
-import {readLaboratoryOrderMatrix,datePrefilterLaboratoryMetricsSQL,skipWarehouseForMedication} from "./laboratoryOrderPlanner.js";
+import {readLaboratoryOrderMatrix,indexedNormalizedCNMetricsSQL,skipWarehouseForMedication} from "./laboratoryOrderPlanner.js";
 
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:3,
  connectionTimeoutMillis:5000,query_timeout:32000,statement_timeout:32000});
@@ -65,13 +65,20 @@ try{
     if(!plan)return null;
     output.estimatedCost=Math.round(Number(plan["Total Cost"]||0));
     output.nativeCN=columns[0]?.native===true;
-    const dateSQL=datePrefilterLaboratoryMetricsSQL(skipWarehouseForMedication(raw))
+    const indexSQL=indexedNormalizedCNMetricsSQL(skipWarehouseForMedication(raw))
      .replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
      .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
-     .replaceAll("__CN_NORMALIZED__",columns[0]?.native?"a.cn_normalizado":"to_jsonb(a)->>'cn_normalizado'");
-    const datePlan=await pool.query({text:"EXPLAIN (FORMAT JSON) "+dateSQL,
+     .replaceAll("__CN_NORMALIZED__",columns[0]?.native?"a.cn_normalizado":"NULL::text");
+    const indexPlan=await pool.query({text:"EXPLAIN (FORMAT JSON) "+indexSQL,
      values:[JSON.stringify(selected),pharmacies,ctx.client.slug,from,to,"medicacion"],query_timeout:10000});
-    output.prefilterCost=Math.round(Number(datePlan.rows[0]?.["QUERY PLAN"]?.[0]?.Plan?.["Total Cost"]||0));
+    output.indexedCNCost=Math.round(Number(indexPlan.rows[0]?.["QUERY PLAN"]?.[0]?.Plan?.["Total Cost"]||0));
+    const indexedScans=[];
+    const visitIndexed=p=>{if(/Scan/.test(p["Node Type"]||""))
+      indexedScans.push({node:p["Node Type"],table:p["Relation Name"]||"",
+       index:p["Index Name"]||"",cost:Math.round(Number(p["Total Cost"]||0))});
+      for(const child of p.Plans||[])visitIndexed(child)};
+    visitIndexed(indexPlan.rows[0]?.["QUERY PLAN"]?.[0]?.Plan||{});
+    output.indexedCNScans=indexedScans.filter(x=>x.table==="articulos").slice(0,10);
     const scans=[];
     const visit=p=>{if(/Scan/.test(p["Node Type"]||""))
      scans.push({node:p["Node Type"],table:p["Relation Name"]||"",
@@ -82,20 +89,27 @@ try{
     return true;
    });
    let baseline200=null;
-   for(const count of [Math.min(200,best.rows.length),best.rows.length].filter((x,i,a)=>a.indexOf(x)===i)){
+   for(const count of [Math.min(50,best.rows.length),Math.min(100,best.rows.length),
+     Math.min(200,best.rows.length)].filter((x,i,a)=>a.indexOf(x)===i)){
     const res=await timed("matrix"+count,()=>readLaboratoryOrderMatrix(pool,ctx,{
      key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows.slice(0,count)
     }));
     if(res)output["matrix"+count+"Complete"]=res.metricsUnavailable===false;
     if(count===200)baseline200=res;
    }
-   const candidate=await timed("datePrefilter200",()=>readLaboratoryOrderMatrix(pool,ctx,{
+   const candidate=await timed("indexedCN200",()=>readLaboratoryOrderMatrix(pool,ctx,{
     key,pharmacies,type:best.type,from,to,
-    prefetchedRows:best.rows.slice(0,200),datePrefilter:true
+    prefetchedRows:best.rows.slice(0,200),indexedCN:true
    }));
    if(candidate){
-    output.datePrefilter200Complete=candidate.metricsUnavailable===false;
-    output.datePrefilter200EqualsBaseline=sameMetrics(baseline200,candidate);
+    output.indexedCN200Complete=candidate.metricsUnavailable===false;
+    output.indexedCN200EqualsBaseline=sameMetrics(baseline200,candidate);
+   }
+   if(candidate?.metricsUnavailable===false&&output.indexedCN200Ms<16000){
+    const full=await timed("indexedCNFull",()=>readLaboratoryOrderMatrix(pool,ctx,{
+      key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows,indexedCN:true
+    }));
+    if(full)output.indexedCNFullComplete=full.metricsUnavailable===false;
    }
   }
  }
@@ -143,12 +157,12 @@ try{
       Object.values(r.byPharmacy||{}).some(m=>m.units12!==null&&m.units12!==undefined)).length;
     }
    }
-   const date200=await timed("cantabriaDatePrefilter200",()=>readLaboratoryOrderMatrix(
+   const indexed200=await timed("cantabriaIndexedCN200",()=>readLaboratoryOrderMatrix(
     pool,ctx,{key,pharmacies,type:"parafarmacia",from,to,
-     prefetchedRows:candidates.slice(0,200),datePrefilter:true}));
-   if(date200){
-    output.cantabriaDatePrefilter200Complete=date200.metricsUnavailable===false;
-    output.cantabriaDatePrefilter200EqualsBaseline=sameMetrics(cantabriaBaseline200,date200);
+     prefetchedRows:candidates.slice(0,200),indexedCN:true}));
+   if(indexed200){
+    output.cantabriaIndexedCN200Complete=indexed200.metricsUnavailable===false;
+    output.cantabriaIndexedCN200EqualsBaseline=sameMetrics(cantabriaBaseline200,indexed200);
    }
   }
  }

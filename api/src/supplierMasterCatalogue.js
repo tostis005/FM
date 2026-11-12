@@ -78,7 +78,8 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
    coalesce(
     CASE WHEN btrim(coalesce(a.codigo_nacional,'')) ~ '^[0-9]{6,7}$'
      THEN btrim(a.codigo_nacional) END,
-    CASE WHEN btrim(coalesce(${cnNormalizado},'')) ~ '^[0-9]{6,7}
+    CASE WHEN btrim(coalesce(${cnNormalizado},'')) ~ '^[0-9]{6,7}$'
+     THEN btrim(${cnNormalizado}) END,
     CASE WHEN btrim(a.origen_id::text) ~ '^[0-9]{6,7}$'
      THEN btrim(a.origen_id::text) END
    ) AS cn,

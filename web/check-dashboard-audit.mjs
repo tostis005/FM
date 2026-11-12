@@ -171,6 +171,11 @@ try{
  await page.getByRole("heading",{name:"Ventas por vendedor"}).waitFor({timeout:12000});
  await page.locator(".fm-heat-cell").first().waitFor({timeout:12000});
 
+ const evolutionToggle=page.getByRole("group",{name:"Indicador de evolución de ventas"});
+ await evolutionToggle.getByRole("button",{name:"Unidades",exact:true}).click();
+ assert.equal(await evolutionToggle.getByRole("button",{name:"Unidades"}).getAttribute("aria-pressed"),
+  "true","La evolución debe alternar a unidades sin volver a consultar");
+ await evolutionToggle.getByRole("button",{name:"Ventas €",exact:true}).click();
  const heatToggle=page.getByRole("group",{name:"Indicador del mapa de calor"});
  await heatToggle.getByRole("button",{name:"Unidades",exact:true}).click();
  await page.getByRole("cell",{name:/Lunes de 09:00–10:00: 7 unidades/}).waitFor({timeout:12000});

@@ -211,6 +211,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   }),[clientSlug]);
  const [searchReady,setSearchReady]=useState(()=>readFilters(storageKey).search);
  useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
+ const [salesChartMode,setSalesChartMode]=useState("sales");
  const [detail,setDetail]=useState(null);
  const [realSales,setRealSales]=useState(null);
  // La lectura rápida del total se muestra antes que la tabla pesada.
@@ -672,7 +673,8 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     }))):
    (module==="compras"&&fastPurchase?.monthly||realReport?.monthly||[]).map(x=>({...x,month:x.month.slice(5)+"/"+x.month.slice(2,4)}));
  const available=Boolean(realReport?.available||(["dashboard","ventas"].includes(module)&&hasSales));
- const chartSeries=isDashboard?["ventas","compras","Ventas y compras"]:chartConfig;
+ const chartSeries=isDashboard?["ventas","compras","Ventas y compras"]:
+  module==="ventas"&&salesChartMode==="units"?["unidades",null,"Evolución de ventas"]:chartConfig;
 
  return <div className="fm-demo fm-demo-v2">
   <ReportPageHeader title={TITLES[module]||"Dashboard"} period={period} updatedAt={lastUpdated}
@@ -825,6 +827,16 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
   {!isAssistant&&(chart.length>0||chartLoading||salesModule)&&<section className={"card fm-demo-graph"+(module==="ventas"?" fm-sales-graph":"")} aria-busy={chartLoading}>
     {module==="ventas"?<SalesCardHeading icon={TrendingUp} title={chartSeries[2]}/>:
      <div className="section-heading"><h2>{chartSeries[2]}</h2></div>}
+    {module==="ventas"&&<div className="fm-so-controls fm-heat-controls">
+     <div className="fm-so-segment" role="group" aria-label="Indicador de evolución de ventas">
+      <button type="button" aria-pressed={salesChartMode==="sales"}
+       className={salesChartMode==="sales"?"is-active":""}
+       onClick={()=>setSalesChartMode("sales")}>Ventas €</button>
+      <button type="button" aria-pressed={salesChartMode==="units"}
+       className={salesChartMode==="units"?"is-active":""}
+       onClick={()=>setSalesChartMode("units")}>Unidades</button>
+     </div>
+    </div>}
     {chartLoading?<LoadingPanel kind="chart" label={userLoadingText(isDashboard?combinedPercent([saleProgress,buyProgress]):
       module==="ventas"?taskPercent(fastProgress,fastScope,Boolean(fastSales)):
       module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):null,

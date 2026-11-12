@@ -1,8 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan,setupTransferidor} from "./transferidor.js";
+import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan,setupTransferidor,
+ transferidorInventorySQL,transferidorSalesSQL,transferidorCNChunks,mergeTransferBatch} from "./transferidor.js";
 
 const pharmacies=[{id:"1",name:"Abadía"},{id:"2",name:"Europa"},{id:"3",name:"Centro"},{id:"4",name:"Norte"}];
+
+async function awaitTransferResult(handler,req,res){
+ for(let i=0;i<100;i++){
+  let error;
+  await handler(req,res,e=>{error=e});
+  if(error)throw error;
+  if(!["queued","inventory","calculating"].includes(res.body?.status))return res.body;
+  await new Promise(resolve=>setTimeout(resolve,2));
+ }
+ throw Error("El cálculo de prueba no terminó");
+}
+
 const item=(pharmacyId,cn,stock,target)=>({
  pharmacyId,cn,name:"Parafarmacia",stock,units3:0,units12:target*365/20,ordered:0
 });
@@ -59,52 +72,43 @@ test("dos donantes y dos receptores mantienen saldos globales coherentes",()=>{
  assert.equal(page.total,plan.length,"El total se cuenta antes de paginar");
 });
 
-test("la API mantiene el plan si falta la importación de una tercera farmacia",async()=>{
+test("la API permite leer resultados de dos farmacias aunque falte una tercera",async()=>{
  const queries=[];
  const db={async query(arg){
-  const q=typeof arg==="string"?arg:arg.text;
-  queries.push({q,values:typeof arg==="string"?[]:arg.values});
-  if(q.includes("AS ready FROM farmetrica.farmacias"))return {rows:[
-   {id:"1",ready:true},{id:"2",ready:true},{id:"3",ready:false}
+  const sql=typeof arg==="string"?arg:arg.text;
+  queries.push({sql,values:typeof arg==="string"?[]:arg.values});
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"1",sourceCode:"ABA",articleId:"123456",cn:"123456",name:"Crema",stock:20},
+   {pharmacyId:"2",sourceCode:"EUR",articleId:"123456",cn:"123456",name:"Crema",stock:0}
   ]};
-  if(q.includes("information_schema.columns"))return {rows:[{available:true}]};
-  if(q.includes("WITH chosen AS MATERIALIZED"))return {rows:[
-   {pharmacyId:"1",cn:"123456",name:"Crema",stock:20,units3:0,units12:0},
-   {pharmacyId:"2",cn:"123456",name:"Crema",stock:0,units3:90,units12:90}
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"2",articleId:"123456",units7:7}
   ]};
-  if(q.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:1,targetDays:20}]};
-  if(q.includes("transferidor_exposicion_"))return {rows:[]};
-  throw Error("Consulta imprevista: "+q.slice(0,100));
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:1,targetDays:20}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("SQL no previsto: "+sql.slice(0,100));
  }};
  let handler;
  setupTransferidor({get(path,...stack){
   assert.equal(path,"/api/analytics/stock/transferidor");
   handler=stack.at(-1);
  }},db,{requireTenant:()=>[]});
- const req={context:{role:"superadministrador",client:{slug:"ampedia",schema:"ampedia"},
+ const req={context:{role:"superadministrador",client:{slug:"testmissingpharmacy",schema:"ampedia"},
   pharmacies:pharmacies.slice(0,3)},query:{vista:"todos",pagina:"1",tamano:"50"}};
  const res={statusCode:200,status(n){this.statusCode=n;return this;},
   json(value){this.body=value;return this;}};
- let err=null;
- await handler(req,res,e=>{err=e});
- if(err)throw err;
+ const body=await awaitTransferResult(handler,req,res);
  assert.equal(res.statusCode,200);
- assert.equal(res.body.available,true);
- assert.equal(res.body.total,1);
- assert.equal(res.body.rows[0].originName,"Abadía");
- assert.equal(res.body.rows[0].destinationName,"Europa");
- assert.equal(res.body.rows[0].units,20);
- assert.match(res.body.warning,/Centro/);
- const selected=queries.find(x=>x.q.includes("WITH chosen AS MATERIALIZED"));
- assert.deepEqual(selected.values[1],[1,2]);
- assert.ok(selected.q.includes('JOIN "ampedia".articulos'),"lee artículos Farmatic");
- assert.ok(selected.q.includes("a.origen_id::text AS article_id"),"agrupa por IdArticu");
- assert.ok(selected.q.includes("catalog AS MATERIALIZED"),"lee el catálogo una sola vez");
- assert.ok(selected.q.includes("WHERE stock>0"),"solo calcula para productos con donante");
- assert.equal(queries.filter(x=>x.q.includes("WITH chosen AS MATERIALIZED")).length,1);
- assert.doesNotMatch(selected.q,/sinonimos|ean/);
+ assert.equal(body.status,"complete");
+ assert.equal(body.total,1);
+ assert.equal(body.rows[0].originName,"Abadía");
+ assert.equal(body.rows[0].destinationName,"Europa");
+ assert.equal(body.rows[0].units,20);
+ assert.match(body.warning,/Centro/);
+ assert.equal(queries.filter(q=>q.sql.includes("WITH chosen AS MATERIALIZED")).length,1);
+ assert.equal(queries.filter(q=>q.sql.includes("WITH refs AS MATERIALIZED")).length,1);
 });
-
 test("frontera IdArticu 399999 parafarmacia; 400000 medicación",()=>{
  const result=buildGlobalTransfers([
   item("1","399999",60,0),item("2","399999",0,10),
@@ -180,118 +184,132 @@ test("acepta CN de siete dígitos, normaliza a seis y agrupa la misma referencia
  assert.equal(plan.transfers[0].cn,"123456");
  assert.equal(plan.transfers[0].units,7);
 });
-test("SQL empareja por CN y conserva el IdArticu para unir las ventas",async()=>{
- const queries=[];
- const db={async query(arg){
-  const sql=typeof arg==="string"?arg:arg.text;
-  queries.push(sql);
-  if(sql.includes("AS ready FROM farmetrica.farmacias"))
-   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
-  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[]};
-  if(sql.includes("transferidor_configuracion_cliente"))
-   return {rows:[{minDays:4,targetDays:7}]};
-  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
-  throw Error("Consulta inesperada: "+sql.slice(0,60));
- }};
- let handler;
- setupTransferidor({get(_path,...stack){handler=stack.at(-1);}},db,
-  {requireTenant:()=>[]});
- let error;
- const res={status(n){this.code=n;return this},json(v){this.body=v;return this}};
- await handler({context:{role:"superadministrador",client:{slug:"testcn",schema:"testcn"},
-  pharmacies:pharmacies.slice(0,2)},query:{pagina:"1",tamano:"50"}},res,e=>{error=e});
- if(error)throw error;
- const sql=queries.find(q=>q.includes("WITH chosen AS MATERIALIZED"));
- assert.match(sql,/a\.codigo_nacional/);
- assert.match(sql,/JOIN candidates c ON c\.cn=a\.cn/);
- assert.match(sql,/catalog AS MATERIALIZED/);
- assert.match(sql,/a\.origen_id::text AS article_id/);
- assert.match(sql,/l\.articulo_origen_id=a\.article_id/);
- assert.match(sql,/JOIN eligible_articles ea ON ea\.fid=p\.farmacia_id/);
- assert.ok(!sql.includes("a.origen_id::text AS cn"));
+test("inventario y ventas se leen por separado, únicamente última semana",()=>{
+ const stock=transferidorInventorySQL("ampedia");
+ const sales=transferidorSalesSQL("ampedia");
+ assert.match(stock,/catalog AS MATERIALIZED/);
+ assert.match(stock,/a\.codigo_nacional/);
+ assert.match(stock,/a\.origen_id::text AS article_id/);
+ assert.match(stock,/JOIN donors d ON d\.cn=a\.cn/);
+ assert.ok(!stock.includes("fm_ventas_lineas"));
+ assert.match(sales,/l\.articulo_origen_id=r\.article_id/);
+ assert.match(sales,/interval '6 days'/);
+ assert.ok(!sales.includes("364 days"));
+ assert.ok(!sales.includes("89 days"));
+ assert.ok(!sales.includes("fm_ventas_analitica"));
 });
-
-test("consulta global usa una transacción de solo lectura y timeout local ampliado",async()=>{
+test("cada lote mantiene un CN completo y la suma de existencias por farmacia",()=>{
+ const entries=[
+  {cn:"123456",pharmacyId:"1",articleId:"ABC",sourceCode:"ABA",stock:4},
+  {cn:"123456",pharmacyId:"1",articleId:"DEF",sourceCode:"ABA",stock:6},
+  {cn:"123456",pharmacyId:"2",articleId:"XYZ",sourceCode:"EUR",stock:0},
+  {cn:"123457",pharmacyId:"1",articleId:"789",sourceCode:"ABA",stock:20}
+ ];
+ const chunks=transferidorCNChunks(entries,3);
+ assert.equal(chunks.length,2);
+ assert.equal(chunks.flat().length,entries.length);
+ assert.ok(chunks.every(part=>new Set(part.map(x=>x.cn)).size===1));
+ const combined=mergeTransferBatch(entries.slice(0,3),[
+  {pharmacyId:"1",articleId:"ABC",units7:7},
+  {pharmacyId:"1",articleId:"DEF",units7:3},
+  {pharmacyId:"2",articleId:"XYZ",units7:14}
+ ],new Map());
+ assert.equal(combined.length,2);
+ assert.equal(combined.find(x=>x.pharmacyId==="1").stock,10);
+ assert.equal(combined.find(x=>x.pharmacyId==="1").units7,10);
+ assert.equal(combined.find(x=>x.pharmacyId==="2").units7,14);
+});
+test("siete ventas en una semana equivalen a una unidad diaria",()=>{
+ const plan=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:30,units7:0,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:0,units7:7,name:"Crema"}
+ ],pharmacies.slice(0,2));
+ assert.equal(plan.transfers.length,1);
+ assert.equal(plan.transfers[0].units,7);
+});
+test("progreso: no repite el inventario y devuelve los movimientos al finalizar",async()=>{
  const calls=[];
  const query=async arg=>{
   const sql=typeof arg==="string"?arg:arg.text;
-  calls.push({sql,values:arg?.values||[]});
+  calls.push(sql);
   if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
-   {pharmacyId:"1",cn:"123456",stock:30,units12:0,name:"Crema"},
-   {pharmacyId:"2",cn:"123456",stock:0,units12:365,name:"Crema"}
+   {pharmacyId:"1",cn:"123456",sourceCode:"ABA",articleId:"123456",stock:30,name:"Crema"},
+   {pharmacyId:"2",cn:"123456",sourceCode:"EUR",articleId:"123456",stock:0,name:"Crema"}
   ]};
-  if(sql.includes("AS ready FROM farmetrica.farmacias"))
-   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
+  if(sql.includes("WITH refs AS MATERIALIZED"))
+   return {rows:[{pharmacyId:"2",articleId:"123456",units7:7}]};
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
   if(sql.includes("transferidor_configuracion_cliente"))
    return {rows:[{minDays:4,targetDays:7}]};
   if(sql.includes("transferidor_exposicion_"))return {rows:[]};
   if(/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql))return {rows:[]};
-  throw Error("SQL imprevisto "+sql.slice(0,70));
+  throw Error("SQL imprevisto: "+sql.slice(0,70));
  };
- const db={query,release(){calls.push({sql:"RELEASE"})}};
+ const db={query,release(){calls.push("RELEASE")}};
  const pool={query,connect:async()=>db};
  let handler;
  setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},pool,{requireTenant:()=>[]});
+ const req={query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testprogress",schema:"testprogress"},
+   pharmacies:pharmacies.slice(0,2)}};
  const res={statusCode:200,status(n){this.statusCode=n;return this},
   json(value){this.body=value;return this}};
- let error;
- await handler({query:{pagina:"1",tamano:"50"},
-  context:{role:"superadministrador",client:{slug:"testtimeout",schema:"testtimeout"},
-   pharmacies:pharmacies.slice(0,2)}},res,e=>{error=e});
- if(error)throw error;
+ const body=await awaitTransferResult(handler,req,res);
  assert.equal(res.statusCode,200);
- assert.equal(res.body.total,1);
- assert.equal(res.body.rows[0].units,7);
- assert.equal(calls.filter(x=>x.sql.includes("WITH chosen AS MATERIALIZED")).length,1);
- assert.ok(calls.some(x=>x.sql==="BEGIN READ ONLY"));
- assert.ok(calls.some(x=>x.sql==="SET LOCAL statement_timeout='110s'"));
- assert.ok(calls.some(x=>x.sql==="COMMIT"));
- assert.ok(calls.some(x=>x.sql==="RELEASE"));
+ assert.equal(body.status,"complete");
+ assert.equal(body.total,1);
+ assert.equal(body.rows[0].units,7);
+ assert.equal(calls.filter(x=>x.includes("WITH chosen AS MATERIALIZED")).length,1);
+ assert.equal(calls.filter(x=>x.includes("WITH refs AS MATERIALIZED")).length,1);
+ assert.ok(calls.includes("BEGIN READ ONLY"));
+ assert.ok(calls.includes("SET LOCAL statement_timeout='60s'"));
+ assert.ok(calls.includes("COMMIT"));
+ assert.ok(calls.includes("RELEASE"));
 });
-test("si falla PostgreSQL devuelve un error explícito, no una tabla vacía",async()=>{
+test("si PostgreSQL cancela el inventario el estado informa el error",async()=>{
  const query=async arg=>{
   const sql=typeof arg==="string"?arg:arg.text;
-  if(sql.includes("AS ready FROM farmetrica.farmacias"))
-   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
   if(sql.includes("WITH chosen AS MATERIALIZED"))
    throw Object.assign(Error("canceling statement due to statement timeout"),{code:"57014"});
+  if(/^(BEGIN|COMMIT|ROLLBACK|SET LOCAL)/.test(sql))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
   return {rows:[]};
  };
  let released=false;
  const pool={query,connect:async()=>({query,release(){released=true}})};
  let handler;
  setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},pool,{requireTenant:()=>[]});
+ const req={query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testfailure",schema:"testfailure"},
+   pharmacies:pharmacies.slice(0,2)}};
  const res={statusCode:200,status(n){this.statusCode=n;return this},
   json(value){this.body=value;return this}};
- let error;
- await handler({query:{pagina:"1",tamano:"50"},
-  context:{role:"superadministrador",client:{slug:"testfailure",schema:"testfailure"},
-   pharmacies:pharmacies.slice(0,2)}},res,e=>{error=e});
- if(error)throw error;
- assert.equal(res.statusCode,504);
- assert.match(res.body.error,/tiempo/);
+ const body=await awaitTransferResult(handler,req,res);
+ assert.equal(res.statusCode,503);
+ assert.equal(body.status,"error");
+ assert.match(body.error,/tiempo|índices/);
  assert.equal(released,true);
 });
-
-test("sin tablas sincronizadas devuelve causa clara y no un 500 opaco",async()=>{
+test("sin tablas de ventas no se muestra una tabla vacía sin explicar el error",async()=>{
  const query=async arg=>{
   const sql=typeof arg==="string"?arg:arg.text;
-  if(sql.includes("AS ready FROM farmetrica.farmacias"))
-   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
   if(sql.includes("WITH chosen AS MATERIALIZED"))
    throw Object.assign(Error("relation not found"),{code:"42P01"});
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
   return {rows:[]};
  };
  const pool={query,connect:async()=>({query,release(){}})};
  let handler;
  setupTransferidor({get(_path,...stack){handler=stack.at(-1)}},pool,{requireTenant:()=>[]});
+ const req={query:{pagina:"1",tamano:"50"},
+  context:{role:"superadministrador",client:{slug:"testabsent",schema:"testabsent"},
+   pharmacies:pharmacies.slice(0,2)}};
  const res={statusCode:200,status(n){this.statusCode=n;return this},
   json(value){this.body=value;return this}};
- let failure;
- await handler({query:{pagina:"1",tamano:"50"},
-  context:{role:"superadministrador",client:{slug:"testmissing",schema:"testmissing"},
-   pharmacies:pharmacies.slice(0,2)}},res,e=>{failure=e});
- if(failure)throw failure;
+ const body=await awaitTransferResult(handler,req,res);
  assert.equal(res.statusCode,503);
- assert.match(res.body.error,/sincronización/);
+ assert.equal(body.status,"error");
+ assert.match(body.error,/sincronización/);
 });

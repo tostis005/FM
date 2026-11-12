@@ -225,7 +225,7 @@ export default function FamiliasMaestro({clientSlug,pharmacies=[]}){
            <strong>{pharmacyName(code)}</strong>
            <div>{items.map(origin=><div className="fm-family-local" key={origin.sourceCode}>
             <span title={"Código local "+origin.sourceCode}>{origin.sourceName||"Sin nombre local"}</span>
-            {view==="pendientes"&&options.length>0&&<label className="fm-family-assign">
+            {!member.referencePharmacy&&!member.customName&&options.length>0&&<label className="fm-family-assign">
              <span>Vincular a</span>
              <select aria-label={"Vincular "+origin.sourceCode+" de "+pharmacyName(code)}
               value={destinations[code+"|"+origin.sourceCode]||""}

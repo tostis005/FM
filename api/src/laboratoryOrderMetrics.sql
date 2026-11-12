@@ -51,6 +51,7 @@ WITH refs AS MATERIALIZED (
 
  SELECT pharmacy_id,reference,
   sum(coalesce(stock,0))::float8 AS stock,
+  bool_or(stock IS NULL) AS stock_missing,
   min(stock_at) AS stock_at
  FROM articles GROUP BY pharmacy_id,reference
 
@@ -242,7 +243,7 @@ LEFT JOIN warehouse_sales ws ON ws.reference=x.reference
 LEFT JOIN inventory i ON i.pharmacy_id=f.id AND i.reference=x.reference
 CROSS JOIN LATERAL (
  SELECT coalesce(i.stock,0)::float8 AS stock,
-  (i.stock IS NULL) AS inferred
+  (i.reference IS NULL OR (i.stock=0 AND coalesce(i.stock_missing,false))) AS inferred
 ) resolved_stock
 LEFT JOIN movements m ON m.pharmacy_id=f.id AND m.reference=x.reference
 LEFT JOIN pending ON pending.pharmacy_id=f.id AND pending.reference=x.reference

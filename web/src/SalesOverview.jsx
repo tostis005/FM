@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Layers3,ReceiptText,Search,Store,ChartBar} from "lucide-react";
 import {euro,integer} from "./localeES.js";
+import DashboardInsights from "./DashboardInsights.jsx";
 import "./salesOverview.css";
 
 const money=value=>euro(Number(value)||0);
@@ -8,11 +9,11 @@ const number=value=>integer(Number(value)||0);
 const percent=value=>new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(value)+" %";
 const normalize=value=>String(value||"").toLocaleLowerCase("es")
  .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey}){
+function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey,enabled=true}){
  const token=[clientSlug,period.from,period.to,pharmacyIds.join(","),reloadKey].join("|");
  const [result,setResult]=useState(null);
  useEffect(()=>{
-  if(!period.valid)return;
+  if(!period.valid||!enabled)return;
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to});
   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
@@ -32,16 +33,16 @@ function useSalesOverviewData(resource,{clientSlug,period,pharmacyIds,reloadKey}
    .catch(error=>{if(!controller.signal.aborted)setResult({token,status:"error",error:error.message})})
    .finally(()=>clearTimeout(timer));
   return()=>{clearTimeout(timer);controller.abort()};
- },[token,period.valid,resource,clientSlug]);
- return !period.valid?{status:"empty"}:result?.token===token?result:{status:"loading"};
+ },[token,period.valid,enabled,resource,clientSlug]);
+ return !period.valid?{status:"empty"}:!enabled?{status:"loading"}:
+  result?.token===token?result:{status:"loading"};
 }
 function Status({result,empty}){
  if(result.status==="loading")return <p className="fm-so-status" role="status">Consultando ventas documentadas…</p>;
  if(result.status==="error")return <p className="fm-so-status fm-so-error" role="alert">{result.error}</p>;
  return <p className="fm-so-status">{empty}</p>;
 }
-function FamilyRanking({scope}){
- const result=useSalesOverviewData("familias-ranking",scope);
+function FamilyRanking({result}){
  const [mode,setMode]=useState("sales");
  const [search,setSearch]=useState("");
  const data=result.data||{};
@@ -99,8 +100,7 @@ function FamilyRanking({scope}){
    </>}
  </section>;
 }
-function TicketsAndPharmacies({scope}){
- const result=useSalesOverviewData("ticket-medio",scope);
+function TicketsAndPharmacies({result}){
  const kpis=result.data?.kpis;
  const pharmacies=Array.isArray(result.data?.pharmacies)?result.data.pharmacies:[];
  const maximum=Math.max(1,...pharmacies.map(p=>Math.max(0,p.sales)));
@@ -131,11 +131,22 @@ function TicketsAndPharmacies({scope}){
    </>}
  </section>;
 }
-export default function SalesOverview({clientSlug,period,pharmacyIds=[],reloadKey=0}){
- const scope={clientSlug,period,pharmacyIds,reloadKey};
- return <div className="fm-so-overview" aria-label="Análisis global de ventas">
-  <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2>
-   <p>Familias, ticket medio y evolución por establecimiento</p></div>
-  <div className="fm-so-grid"><FamilyRanking scope={scope}/><TicketsAndPharmacies scope={scope}/></div>
- </div>;
+export default function SalesOverview({clientSlug,period,pharmacyIds=[],pharmacies=[],reloadKey=0,
+ enabled=true,onNavigate=()=>{},canNavigate=()=>false}){
+ const scope={clientSlug,period,pharmacyIds,reloadKey,enabled};
+ // Dos lecturas en total: familias (consulta específica) y actividad (tres visuales).
+ // Los resúmenes empiezan después de los totales para no bloquear el KPI principal.
+ const families=useSalesOverviewData("familias-ranking",scope);
+ const activity=useSalesOverviewData("actividad",scope);
+ const tickets=activity.status==="ready"?{...activity,data:activity.data?.tickets}:activity;
+ return <>
+  <div className="fm-so-overview" aria-label="Análisis global de ventas">
+   <div className="fm-so-section-label"><ChartBar size={17}/><h2>Radiografía de las ventas</h2>
+    <p>Familias, ticket medio y evolución por establecimiento</p></div>
+   <div className="fm-so-grid"><FamilyRanking result={families}/><TicketsAndPharmacies result={tickets}/></div>
+  </div>
+  <DashboardInsights mode="ventas" clientSlug={clientSlug} period={period}
+   pharmacyIds={pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
+   salesActivity={activity} onNavigate={onNavigate} canNavigate={canNavigate}/>
+ </>;
 }

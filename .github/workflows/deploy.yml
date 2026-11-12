@@ -113,7 +113,7 @@ jobs:
           node --check api/src/dashboardConsolidations.js
           node --check api/src/dashboardConsolidationService.js
           node --check api/src/dashboardDailyService.js
-          node --test api/src/dashboardConsolidations.test.js
+          node --test api/src/dashboardConsolidations.test.js api/src/salesCachedMonthly.test.js
           node --test api/src/dashboardAnnualService.test.js
           node --test api/src/dashboardDailyService.test.js
           node --check api/src/salesInsights.js
@@ -149,7 +149,7 @@ jobs:
           node --test src/cns.test.js src/importarPromociones.test.js src/objetivosImportacion.test.js src/listLogic.test.js src/pickingListChannelView.test.js src/laboratoryExport.test.js src/promotionImportFlow.test.js src/promotionObjectiveFlow.test.js src/promotionMonthlyObjectives.test.js src/promotionObjectiveRoute.test.js src/promotionTrackingPace.test.js src/navigationBreadcrumbs.test.js src/promotionSalesVisibility.test.js
           node --test src/businessAnalytics.test.js
           node --test src/promotionMetrics.test.js src/promotionTicketRules.test.js src/promotionMonthFilter.test.js src/simuladorLogic.test.js src/simuladorProductSelection.test.js
-          node --test src/salesPeriods.test.js
+          node --test src/salesPeriods.test.js src/salesTicketWindows.test.js
           node --test src/loadingProgress.test.js src/historicalSummaries.test.js
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/laboratoryOrderSheet.test.js src/laboratoryOrderGrouping.test.js

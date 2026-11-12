@@ -315,7 +315,8 @@ test("CN ausente o con stock NULL en farmacia o almacén se calcula como 0",asyn
  const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
  assert.match(sql,/sum\(coalesce\(stock,0\)\)::float8 AS stock/);
  assert.match(sql,/coalesce\(i\.stock,0\)::float8 AS stock/);
- assert.match(sql,/\(i\.stock IS NULL\) AS inferred/);
+ assert.match(sql,/bool_or\(stock IS NULL\) AS stock_missing/);
+ assert.match(sql,/i\.reference IS NULL OR \(i\.stock=0 AND coalesce\(i\.stock_missing,false\)\)/);
  assert.match(sql,/resolved_stock\.stock-coalesce\(pending\.qty,0\)/);
  assert.match(sql,/resolved_stock\.inferred AS "stockInferredZero"/);
  assert.doesNotMatch(sql,/resolved_stock\.stock IS NULL THEN NULL/);

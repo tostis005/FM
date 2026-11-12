@@ -1322,3 +1322,11 @@ html,body{overflow-x:clip}
 @media(max-width:1120px){
  .table-scroll .fm-campaign-management-table{min-width:790px;table-layout:auto}
 }
+
+/* Cabecera de sesión legible con roles y perfiles de longitud variable. */
+.topbar-right .top-user{display:block;min-width:80px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar-right .top-user small{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-section-load-error{padding:28px;max-width:640px;margin:25px auto;color:#264b52}
+.fm-section-load-error h2{margin:0 0 10px;font-size:19px;color:#245e68}
+.fm-section-load-error p{margin:0 0 18px;line-height:1.5;color:#547279}
+@media(max-width:790px){.topbar-right .top-user{min-width:0;max-width:140px}}

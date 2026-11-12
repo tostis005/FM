@@ -4,9 +4,9 @@ export const LAB_CATALOG_BATCH=250;
 // Los 200 CN pueden superar los 30 s y obligar a repetir el SQL en sublotes.
 // Lotes de 75 evitan ese primer timeout sin aumentar consultas simultáneas.
 export const LAB_METRICS_BATCH=75;
-// Hasta este tamaño, una única agregación evita repetir JOINs e índices
-// de Farmatic; por encima, usar lotes paralelos y dividir si hay timeout.
-export const LAB_METRICS_BULK_LIMIT=450;
+// Las consultas pequeñas se hacen en una sola operación. Para más artículos,
+// usar lotes reales que permitan informar del avance sin simular porcentajes.
+export const LAB_METRICS_BULK_LIMIT=150;
 export const LAB_CATALOG_CONCURRENCY=3;
 
 export async function collectLaboratoryCatalog(fetchPage,{
@@ -75,6 +75,30 @@ export async function collectLaboratoryCatalog(fetchPage,{
 // de 17,39 s a 11,65 s frente a 2, sin cambiar ninguna métrica.
 // Limitar a 3 para no monopolizar las 6 conexiones de la API.
 export const LAB_METRICS_CONCURRENCY=3;
+// Entre 151 y 450 referencias bastan 2-3 consultas en paralelo; los catálogos
+// mayores conservan lotes de 75 para limitar el riesgo de timeout.
+export function laboratoryMetricsBatchSize(total){
+ const count=Math.max(0,Math.floor(Number(total)||0));
+ if(count<=LAB_METRICS_BULK_LIMIT||count>450)return LAB_METRICS_BATCH;
+ const chunks=Math.min(LAB_METRICS_CONCURRENCY,Math.ceil(count/110));
+ return Math.ceil(count/chunks);
+}
+// Reintentar solo lecturas idempotentes y errores transitorios. Un timeout de
+// SQL (504) debe pasar al modo de lotes, no repetirse como consulta masiva.
+export async function retryTransientLaboratoryRead(operation,{signal,attempts=2}={}){
+ const cancelled=()=>Object.assign(new Error("Consulta cancelada"),{name:"AbortError"});
+ const limit=Math.max(1,Math.floor(Number(attempts)||1));
+ for(let attempt=0;attempt<limit;attempt++){
+  if(signal?.aborted)throw cancelled();
+  try{return await operation()}
+  catch(error){
+   if(signal?.aborted)throw cancelled();
+   const transient=[429,502,503].includes(Number(error?.status))||error instanceof TypeError;
+   if(!transient||attempt===limit-1)throw error;
+   await new Promise(resolve=>setTimeout(resolve,200));
+  }
+ }
+}
 const MIN_METRICS_BATCH=25;
 // Algunos laboratorios concentran muchas líneas históricas: si PostgreSQL no
 // puede agregar el lote solicitado, dividir solo ese lote, sin perder ni limitar
@@ -97,7 +121,9 @@ export async function fetchLaboratoryMetricsAdaptive(items,fetchBatch,{signal}={
   if(signal?.aborted)throw cancelled();
   // Errores de estructura/autorización no mejoran partiendo los lotes.
   const definitive=new Set(["42P01","42703","42883","42601","42501","22P02","23502"]);
-  if(items.length<=MIN_METRICS_BATCH||definitive.has(error?.code))throw error;
+  if(items.length<=MIN_METRICS_BATCH||definitive.has(error?.code)||
+   (Number(error?.status)>=400&&Number(error?.status)<500&&Number(error?.status)!==429))
+   throw error;
   const middle=Math.ceil(items.length/2);
   const first=await fetchLaboratoryMetricsAdaptive(items.slice(0,middle),fetchBatch,{signal});
   const second=await fetchLaboratoryMetricsAdaptive(items.slice(middle),fetchBatch,{signal});

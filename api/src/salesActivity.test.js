@@ -14,10 +14,15 @@ const sample=[
  {kind:"vendedor",code:"ABA",sellerId:"12",sales:90,units:15},
  {kind:"vendedor",code:"VAL",sellerId:"12",sales:110,units:20}
 ];
-test("GROUPING SETS agrupa en una consulta y cuenta tickets por sistema/documento",()=>{
+test("agrega líneas por documento y las reutiliza para tres visuales sin DISTINCT masivo",()=>{
  const sql=buildSalesActivitySQL("ampedia");
+ assert.match(sql,/WITH documents AS MATERIALIZED/);
+ assert.match(sql,/v\.sistema_origen AS sale_source,v\.documento_id AS sale_document_id/);
+ assert.match(sql,/GROUP BY 1,2,3/);
+ assert.match(sql,/sum\(v\.importe\) AS amount/);
  assert.match(sql,/GROUP BY GROUPING SETS \(\(code\),\(code,seller_id\),\(weekday,hour\)\)/);
- assert.match(sql,/count\(DISTINCT \(sale_source,sale_document_id\)\)/);
+ assert.match(sql,/THEN count\(\*\)::bigint ELSE NULL::bigint END AS tickets/);
+ assert.doesNotMatch(sql,/count\(DISTINCT/);
  assert.match(sql,/v\.farmacia_codigo=ANY\(\$3::text\[\]\)/);
  assert.match(sql,/v\.fecha >= \$1::date/);
  assert.doesNotMatch(sql,/familias_globales|JOIN farmetrica\.farmacias/);

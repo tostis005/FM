@@ -866,7 +866,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    </section>}
   {module==="ventas"&&<SalesOverview clientSlug={clientSlug} period={period}
    pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
-   enabled={Boolean(fastSales||fastFailed)}
+   enabled={Boolean(fastSales||fastFailed)} salesTotal={fastSales?.kpis?.ventas??null}
    onNavigate={onNavigate} canNavigate={canNavigate}/>} 
   {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
    pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}

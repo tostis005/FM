@@ -6,10 +6,10 @@
 .fm-insight-status{color:#799187;font-size:13px;padding:24px 8px;min-height:95px}
 .fm-insight-foot{color:#698379;font-size:11px;line-height:1.5;margin:13px 0 0}
 .fm-heat-scroll,.fm-purchase-scroll{width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
-.fm-heat-grid{display:grid;gap:5px;min-width:1140px;align-items:stretch}
+.fm-heat-grid{display:grid;gap:3px;min-width:690px;align-items:stretch}
 .fm-heat-axis,.fm-heat-day{font-size:11px;font-weight:750;color:#587568;min-width:0;display:flex;align-items:center;justify-content:center;padding:8px 2px}
 .fm-heat-day{justify-content:flex-start}
-.fm-heat-cell{min-height:37px;border-radius:6px;display:flex;align-items:center;justify-content:center;padding:6px 2px;font-size:10px;font-variant-numeric:tabular-nums;font-weight:700;color:#28634e;white-space:nowrap}
+.fm-heat-cell{min-height:35px;border-radius:3px;display:flex;align-items:center;justify-content:center;padding:6px 2px;font-size:12px;font-variant-numeric:tabular-nums;font-weight:750;color:#3c3221;white-space:nowrap}
 .fm-heat-cell-strong{color:#fff}
 .fm-seller-list{display:grid;gap:13px}.fm-seller-row{display:grid;gap:6px}
 .fm-seller-label{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:#49695b}
@@ -57,9 +57,10 @@
 .fm-puc-comparator-table .list-pagination{margin-top:8px}
 
 /* Lectura cromática y navegación horizontal sin perder las etiquetas. */
-.fm-heat-scroll{border:1px solid #e6eee9;border-radius:10px;padding:10px;background:#fafcfb}
-.fm-heat-cell{font-size:10.5px;min-height:39px;border:1px solid #ffffff90;transition:outline-color .15s;color:#193c2e}
-.fm-heat-cell:hover{outline:2px solid #163d2c;outline-offset:-2px}
+.fm-heat-scroll{border:1px solid #ebe9dd;border-radius:10px;padding:10px;background:#fdfcf7}
+.fm-heat-cell{font-size:12px;min-height:35px;border:1px solid #ffffff90;transition:outline-color .15s}
+.fm-heat-row{display:contents}
+.fm-heat-cell:hover{outline:2px solid #624a1f;outline-offset:-2px}
 .fm-heat-cell-strong{color:#fff;text-shadow:0 1px 2px #132d2b55}
 .fm-heat-legend{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;margin:13px 0 2px;color:#557264;font-size:11px;font-weight:650}
 .fm-heat-legend>span:first-child{margin-right:5px}

@@ -125,6 +125,34 @@ export function buildSalesTicketCountsSQL(schema){
   " GROUP BY h.farmacia_codigo"
  ].join("\n");
 }
+// Recuento real de operaciones: una cabecera/documento, no una línea de venta.
+// Los filtros son exactamente los utilizados para el ticket medio rápido.
+export function buildSalesTicketHeatmapSQL(schema){
+ if(!SCHEMA.test(schema))throw Error("Esquema SQL no permitido");
+ const q='"'+schema+'"';
+ return [
+  "SELECT extract(isodow FROM h.fecha)::int AS weekday,",
+  " extract(hour FROM h.fecha)::int AS hour,count(*)::bigint AS tickets",
+  " FROM "+q+".fm_ventas_cabeceras h",
+  " WHERE h.farmacia_codigo=ANY($3::text[])",
+  " AND h.fecha >= $1::date AND h.fecha < $2::date+interval '1 day'",
+  " AND h.lineas_completas AND NOT h.eliminado_logicamente",
+  " AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')",
+  " AND EXISTS(SELECT 1 FROM "+q+".fm_ventas_lineas l",
+  " WHERE l.farmacia_codigo=h.farmacia_codigo AND l.sistema_origen=h.sistema_origen",
+  " AND l.documento_id=h.documento_id AND NOT l.eliminada_logicamente",
+  " AND coalesce(l.anulada,false)=false)",
+  " GROUP BY 1,2 ORDER BY 1,2"
+ ].join("\n");
+}
+export function summarizeSalesTicketHeatmap(rows){
+ const cells=(rows||[]).map(r=>({
+  weekday:numeric(r.weekday),hour:numeric(r.hour),tickets:numeric(r.tickets)
+ })).filter(r=>Number.isInteger(r.weekday)&&r.weekday>=1&&r.weekday<=7&&
+  Number.isInteger(r.hour)&&r.hour>=0&&r.hour<=23&&r.tickets>=0);
+ return {cells,total:cells.reduce((sum,r)=>sum+r.tickets,0)};
+}
+
 export function summarizeSalesTicketCounts(rows,pharmacies,ids){
  const codes=new Map((pharmacies||[]).filter(p=>ids.includes(Number(p.id))).map(p=>[
   String(p.databaseCode||p.sourceCode||"").trim().toUpperCase(),{id:String(p.id),name:p.name}
@@ -161,6 +189,24 @@ export function setupSalesOverview(app,pool,{requireTenant}){
     values:[s.from,s.to,s.codes,s.tenant],query_timeout:22000});
    res.json(mergeSalesFamilyRows(rows));
   }catch(e){next(e)}
+ });
+ app.get("/api/analytics/ventas/horarios-tickets",...requireTenant(),async(req,res,next)=>{
+  const s=salesScope(req,res);if(!s)return;
+  if(!s.ids.length)return res.json(summarizeSalesTicketHeatmap([]));
+  let conn;
+  try{
+   conn=await pool.connect();
+   await conn.query("BEGIN READ ONLY");
+   await conn.query("SET LOCAL statement_timeout='90s'");
+   const {rows}=await conn.query({text:buildSalesTicketHeatmapSQL(s.schema),
+    values:[s.from,s.to,s.codes],query_timeout:98000});
+   await conn.query("ROLLBACK");
+   res.setHeader?.("Cache-Control","private, no-store");
+   res.json(summarizeSalesTicketHeatmap(rows));
+  }catch(error){
+   if(conn)await conn.query("ROLLBACK").catch(()=>{});
+   next(error);
+  }finally{conn?.release()}
  });
  app.get("/api/analytics/ventas/ticket-medio-rapido",...requireTenant(),async(req,res,next)=>{
   const s=salesScope(req,res);if(!s)return;

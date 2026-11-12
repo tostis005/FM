@@ -5,25 +5,13 @@ import SalesCardHeading from "./SalesCardHeading.jsx";
 import {putPurchaseLink} from "./PurchasePlanner.jsx";
 import {PieChart,Pie,Cell,ResponsiveContainer,Tooltip} from "recharts";
 import {euro,integer,percentage} from "./localeES.js";
+import {salesTicketWindows,mapTicketWindows} from "./salesTicketWindows.js";
+import {HEAT_STOPS,HEAT_DAYS,heatColor,heatmapHours,mergeSalesHeatmap} from "./salesHeatmap.js";
 import "./dashboardInsights.css";
 
-const DAYS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
-const HOURS=[{from:0,to:9,label:"00–09"},
- ...Array.from({length:12},(_,i)=>({from:9+i,to:10+i,label:String(9+i).padStart(2,"0")+"–"+String(10+i).padStart(2,"0")})),
- {from:21,to:24,label:"21–24"}];
 const CHANNELS={cooperativa:"Mayorista*",laboratorio:"Laboratorio"};
 const COLORS={cooperativa:"#14966b",laboratorio:"#acdcca"};
 const EMPTY=[];
-// Diferenciar poco y mucho volumen sin colorear los huecos como ventas bajas.
-const HEAT_STOPS=["#bc3442","#e88e53","#f4d779","#8fcb9a","#176a46"];
-function heatColor(rank){
- const position=Math.max(0,Math.min(1,rank))*(HEAT_STOPS.length-1);
- const a=Math.floor(position),b=Math.min(HEAT_STOPS.length-1,a+1),fraction=position-a;
- const one=HEAT_STOPS[a],two=HEAT_STOPS[b];
- const hex=i=>Math.round(parseInt(one.slice(i,i+2),16)*(1-fraction)+
-  parseInt(two.slice(i,i+2),16)*fraction).toString(16).padStart(2,"0");
- return "#"+hex(1)+hex(3)+hex(5);
-}
 const price=v=>v==null?"—":new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR",
  minimumFractionDigits:2,maximumFractionDigits:3}).format(Number(v));
 const pct=v=>v==null?"—":percentage(v);
@@ -76,50 +64,100 @@ function Panel({title,subtitle,icon,insight,children,empty="Sin movimientos en e
    insight.status==="empty"?<p className="fm-insight-status">{empty}</p>:children}
  </section>;
 }
-function Heatmap({scope,shared}){
- const insight=useInsight("horarios",scope,shared);
+// Los tickets se consultan aparte del panorama económico: así el recuento
+// por operaciones nunca bloquea las familias ni los vendedores.
+function useTicketHeatmap({clientSlug,from,to,pharmacyIds,reloadKey,valid}){
+ const token=[clientSlug,from,to,pharmacyIds.join(","),reloadKey].join("|");
+ const [result,setResult]=useState(null);
+ useEffect(()=>{
+  if(!valid)return;
+  const controller=new AbortController();
+  const windows=salesTicketWindows(from,to);
+  setResult({token,status:"loading"});
+  const maxWait=Math.min(360000,Math.max(135000,windows.length*105000));
+  const timeout=setTimeout(()=>{
+   if(controller.signal.aborted)return;
+   setResult({token,status:"error",
+    error:"El recuento de tickets tarda demasiado. Prueba un período más corto."});
+   controller.abort();
+  },maxWait);
+  void mapTicketWindows(windows,async window=>{
+   const params=new URLSearchParams({desde:window.from,hasta:window.to});
+   if(pharmacyIds.length)params.set("farmacias",pharmacyIds.join(","));
+   const response=await fetch("/api/analytics/ventas/horarios-tickets?"+params,{
+    credentials:"same-origin",cache:"no-store",
+    headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+   });
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(data.error||"No se pudo contar las operaciones");
+   if(!Array.isArray(data.cells)||!Number.isFinite(Number(data.total)))
+    throw Error("El recuento de tickets está incompleto");
+   return data;
+  },{concurrency:1,onProgress:(done,total)=>{
+   if(!controller.signal.aborted&&done<total)
+    setResult({token,status:"loading",
+     message:"Consultando tickets históricos ("+done+" de "+total+" tramos)…"});
+  }}).then(parts=>{
+   if(!controller.signal.aborted)
+    setResult({token,status:"ready",data:mergeSalesHeatmap(parts)});
+  }).catch(error=>{
+   if(!controller.signal.aborted)setResult({token,status:"error",error:error.message});
+  }).finally(()=>clearTimeout(timeout));
+  return()=>{clearTimeout(timeout);controller.abort()};
+ },[token,valid]);
+ return !valid?{status:"empty"}:result?.token===token?result:{status:"loading"};
+}
+function Heatmap({scope}){
+ const insight=useTicketHeatmap(scope);
  const cells=Array.isArray(insight.data?.cells)?insight.data.cells:EMPTY;
  const total=Number(insight.data?.total)||0;
  const grid=useMemo(()=>{
   const map=new Map();
   for(const cell of cells){
-   const index=HOURS.findIndex(h=>Number(cell.hour)>=h.from&&Number(cell.hour)<h.to);
-   if(index<0)continue;
-   const key=String(cell.weekday)+"|"+index,old=map.get(key)||{value:0,lines:0};
-   old.value+=Number(cell.sales||0);old.lines+=Number(cell.lines||0);
-   map.set(key,old);
+   const key=String(cell.weekday)+"|"+String(cell.hour);
+   map.set(key,(map.get(key)||0)+Number(cell.tickets||0));
   }
   return map;
  },[cells]);
- // Los cuantiles evitan que un único pico haga indistinguibles todas las horas.
- const levels=[...new Set([...grid.values()].map(x=>x.value).filter(v=>v>0))].sort((a,b)=>a-b);
- const colorFor=value=>value<0?"#a32339":value===0?"#edf2ef":
-  heatColor(levels.length===1?1:levels.indexOf(value)/Math.max(1,levels.length-1));
- return <Panel title="Mapa de calor de ventas" icon={Clock3} insight={insight}>
-  {cells.length===0?<p className="fm-insight-status">No hay ventas registradas para la selección.</p>:
-   <><div className="fm-heat-scroll"><div className="fm-heat-grid" role="table" aria-label="Importe de ventas según día y horario" style={{gridTemplateColumns:"98px repeat("+HOURS.length+", minmax(75px,1fr))"}}>
-    <div className="fm-heat-axis" role="columnheader">Día</div>
-    {HOURS.map(h=><div key={h.label} className="fm-heat-axis" role="columnheader">{h.label}</div>)}
-    {DAYS.map((day,index)=><React.Fragment key={day}>
-     <div className="fm-heat-day" role="rowheader">{day}</div>
-     {HOURS.map((h,k)=>{
-      const cell=grid.get(String(index+1)+"|"+k),value=cell?.value||0;
-      const fraction=value>0&&levels.length>1?levels.indexOf(value)/(levels.length-1):value>0?1:0;
-      const background=colorFor(value);
-      const dark=value<0||value>0&&(fraction<0.24||fraction>0.81);
-      return <div key={h.label} role="cell" className={"fm-heat-cell "+(dark?"fm-heat-cell-strong":"")}
-       style={{backgroundColor:background}} title={day+" "+h.label+": "+euro(value)+" · "+integer(cell?.lines||0)+" líneas"}
-       aria-label={day+" de "+h.from+" a "+h.to+": "+euro(value)}>
-       {value!==0?euro(value):"—"}</div>;
-     })}
-    </React.Fragment>)}
-   </div></div>
-   <div className="fm-heat-legend" aria-label="Leyenda de intensidad de ventas">
-    <span>Menos ventas</span>
-    {HEAT_STOPS.map(color=><span key={color} className="fm-heat-legend-swatch" style={{backgroundColor:color}} aria-hidden="true"/>)}
-    <span>Más ventas</span><span className="fm-heat-legend-empty" aria-hidden="true"/><span>Sin ventas</span>
+ const hours=useMemo(()=>heatmapHours(cells),[cells]);
+ // Escala relativa a las franjas con actividad: rojo = más tickets.
+ const levels=[...new Set([...grid.values()].filter(value=>value>0))].sort((a,b)=>a-b);
+ return <Panel title="Mapa de calor de operaciones" icon={Clock3} insight={insight}>
+  {insight.status==="ready"&&cells.length===0?
+   <p className="fm-insight-status">No hay tickets registrados para la selección.</p>:
+   <><div className="fm-heat-scroll">
+    <div className="fm-heat-grid" role="table"
+     aria-label="Número de tickets por día de la semana y franja horaria"
+     style={{gridTemplateColumns:"112px repeat(7,minmax(76px,1fr))"}}>
+     <div className="fm-heat-row" role="row">
+      <div className="fm-heat-axis" role="columnheader">Horario</div>
+      {HEAT_DAYS.map(day=><div key={day} className="fm-heat-axis" role="columnheader">{day}</div>)}
+     </div>
+     {hours.map(({hour,label})=><div key={hour} className="fm-heat-row" role="row">
+      <div className="fm-heat-day" role="rowheader">{label}</div>
+      {HEAT_DAYS.map((day,index)=>{
+       const value=grid.get(String(index+1)+"|"+String(hour))||0;
+       const rank=value>0&&levels.length>1?levels.indexOf(value)/(levels.length-1):0;
+       const background=value>0?heatColor(rank):"#eef2eb";
+       return <div key={day} role="cell"
+        className={"fm-heat-cell"+(value>0&&rank>=0.7?" fm-heat-cell-strong":"")}
+        style={{backgroundColor:background}}
+        title={day+" "+label+": "+integer(value)+" operaciones"}
+        aria-label={day+" de "+label+": "+integer(value)+" tickets"}>
+        {integer(value)}
+       </div>;
+      })}
+     </div>)}
+    </div>
    </div>
-   <p className="fm-sales-heat-total">Total: <strong>{euro(total)}</strong></p></>}
+   <div className="fm-heat-legend" aria-label="Leyenda de operaciones por franja">
+    <span>Menos operaciones</span>
+    {HEAT_STOPS.map(color=><span key={color} className="fm-heat-legend-swatch"
+     style={{backgroundColor:color}} aria-hidden="true"/>)}
+    <span>Más operaciones</span><span className="fm-heat-legend-empty"
+     aria-hidden="true"/><span>Sin operaciones</span>
+   </div>
+   <p className="fm-sales-heat-total">Total de operaciones: <strong>{integer(total)} tickets</strong></p></>}
  </Panel>;
 }
 function Sellers({scope,shared}){

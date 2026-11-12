@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {buildSalesFamilyRankingSQL,mergeSalesFamilyRows,buildSalesTicketsSQL,
- buildSalesTicketCountsSQL,summarizeSalesTicketCounts,summarizeSalesTickets,setupSalesOverview} from "./salesOverview.js";
+ buildSalesTicketCountsSQL,summarizeSalesTicketCounts,summarizeSalesTickets,
+ buildSalesTicketHeatmapSQL,summarizeSalesTicketHeatmap,setupSalesOverview} from "./salesOverview.js";
 test("agrupa nombres equivalentes, respeta segmentos y conserva la facturación",()=>{
  const result=mergeSalesFamilyRows([
   {familyId:"1",name:"Dermocosmetica",segment:"PARAFARMACIA",sales:100,units:8,lines:4},
@@ -85,4 +86,53 @@ test("ticket medio rápido cuenta cabeceras documentales válidas sin agrupar l�
    {id:2,name:"Europa",databaseCode:"EUR"}],[1,2]);
  assert.equal(result.tickets,17);
  assert.deepEqual(result.pharmacies.map(p=>p.id),["1","2"]);
+});
+
+test("el mapa cuenta cabeceras válidas una vez por ticket, no artículos",()=>{
+ const sql=buildSalesTicketHeatmapSQL("ampedia");
+ assert.match(sql,/FROM "ampedia"\.fm_ventas_cabeceras h/);
+ assert.match(sql,/count\(\*\)::bigint AS tickets/);
+ assert.match(sql,/extract\(isodow FROM h\.fecha\)/);
+ assert.match(sql,/extract\(hour FROM h\.fecha\)/);
+ assert.match(sql,/h\.lineas_completas AND NOT h\.eliminado_logicamente/);
+ assert.match(sql,/AND EXISTS\(SELECT 1 FROM "ampedia"\.fm_ventas_lineas l/);
+ assert.match(sql,/l\.documento_id=h\.documento_id/);
+ assert.doesNotMatch(sql,/fm_ventas_analitica|count\(DISTINCT/);
+ assert.throws(()=>buildSalesTicketHeatmapSQL('bad";drop table x;--'));
+ const result=summarizeSalesTicketHeatmap([
+  {weekday:1,hour:9,tickets:"3"},{weekday:2,hour:11,tickets:"4"}
+ ]);
+ assert.deepEqual(result,{cells:[{weekday:1,hour:9,tickets:3},
+  {weekday:2,hour:11,tickets:4}],total:7});
+});
+test("endpoint horario aplica permisos y devuelve operaciones por franja",async()=>{
+ const routes=new Map(),calls=[];
+ const app={get(path,...args){routes.set(path,args.at(-1))}};
+ const conn={async query(arg){
+  calls.push(arg);
+  if(typeof arg==="object")return {rows:[{weekday:1,hour:9,tickets:"2"},
+   {weekday:7,hour:21,tickets:"5"}]};
+  return {rows:[]};
+ },release(){}};
+ setupSalesOverview(app,{connect:async()=>conn},{requireTenant:()=>[]});
+ const context={role:"gestor",client:{slug:"ampedia",schema:"ampedia"},
+  modules:{ventas:true},allowedPharmacyIds:[1],
+  pharmacies:[{id:"1",name:"Abadía",sourceCode:"ABA"}]};
+ const run=async(query,ctx=context)=>{
+  const res={code:200,status(n){this.code=n;return this},
+   json(v){this.data=v;return this},setHeader(){}};
+  let error;await routes.get("/api/analytics/ventas/horarios-tickets")(
+   {context:ctx,query},res,e=>{error=e});
+  if(error)throw error;return res;
+ };
+ const q={desde:"2026-11-01",hasta:"2026-11-12",farmacias:"1"};
+ const ok=await run(q);
+ assert.equal(ok.code,200);
+ assert.equal(ok.data.total,7);
+ assert.deepEqual(ok.data.cells.map(c=>c.tickets),[2,5]);
+ assert.deepEqual(calls.find(x=>typeof x==="object").values,
+  ["2026-11-01","2026-11-12",["ABA"]]);
+ assert.equal((await run({...q,farmacias:"2"})).code,403);
+ assert.equal((await run(q,{...context,modules:{ventas:false}})).code,403);
+ assert.equal(calls.filter(x=>typeof x==="object").length,1);
 });

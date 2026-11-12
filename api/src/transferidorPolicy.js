@@ -22,6 +22,13 @@ function authorized(req,pharmacyId){
  return validId(pharmacyId)&&(req.context?.pharmacies||[]).some(p=>String(p.id)===String(pharmacyId)&&p.active!==false);
 }
 function forbidden(res){return res.status(403).json({error:"La farmacia no está autorizada o es un almacén"});}
+function selectedFamilyIds(body={}){
+ const provided=Array.isArray(body.familyIds)?body.familyIds:[body.familyId];
+ if(!provided.length||provided.length>100||provided.some(id=>!validId(id)))return null;
+ const ids=[...new Set(provided.map(String))];
+ if(body.familyId!=null&&!ids.includes(String(body.familyId)))return null;
+ return ids;
+}
 export function setupTransferidorPolicy(app,pool,{requireTenantManager}){
  app.get("/api/tenant/transferidor-politica",...requireTenantManager(),async(req,res,next)=>{
   try{
@@ -43,31 +50,39 @@ export function setupTransferidorPolicy(app,pool,{requireTenantManager}){
   }catch(e){next(e);}
  });
  app.put("/api/tenant/transferidor-politica/familias",...requireTenantManager(),async(req,res,next)=>{
-  const {pharmacyId,familyId,days}=req.body||{};
+  const {pharmacyId,days}=req.body||{};
   if(!authorized(req,pharmacyId))return forbidden(res);
-  if(!validId(familyId)||!validInteger(days,1,365))
+  const ids=selectedFamilyIds(req.body);
+  if(!ids||!validInteger(days,1,365))
    return res.status(400).json({error:"Indica una familia global y días de exposición (1–365)"});
   try{
+   // Un nombre puede tener varias identidades internas. Guardar todas de forma
+   // atómica sin exigir un segmento ni fusionar artículos o familias de origen.
    const {rows}=await pool.query(
+    "WITH selected AS (SELECT g.id FROM farmetrica.familias_globales g "+
+    "WHERE g.cliente_slug=$1 AND g.id=ANY($3::bigint[]) AND g.activo) "+
     "INSERT INTO farmetrica.transferidor_exposicion_familias "+
     "(cliente_slug,farmacia_id,familia_id,exposicion_dias,actualizado_por) "+
-    "SELECT $1,$2,g.id,$4,$5 FROM farmetrica.familias_globales g "+
-    "WHERE g.cliente_slug=$1 AND g.id=$3 AND g.activo AND g.segmento='PARAFARMACIA' "+
+    "SELECT $1,$2,selected.id,$4,$5 FROM selected "+
+    "WHERE (SELECT count(*) FROM selected)=cardinality($3::bigint[]) "+
     "ON CONFLICT(cliente_slug,farmacia_id,familia_id) DO UPDATE "+
     "SET exposicion_dias=EXCLUDED.exposicion_dias,actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now() "+
-    "RETURNING farmacia_id",
-    [req.context.client.slug,pharmacyId,familyId,days,req.user?.email||"sistema"]);
-   if(!rows.length)return res.status(404).json({error:"Familia de parafarmacia no encontrada"});
-   res.json({ok:true});
+    "RETURNING familia_id",
+    [req.context.client.slug,pharmacyId,ids,days,req.user?.email||"sistema"]);
+   if(rows.length!==ids.length)return res.status(404).json({error:"No se han encontrado todas las familias seleccionadas"});
+   res.json({ok:true,updated:rows.length});
   }catch(e){next(e);}
  });
  app.delete("/api/tenant/transferidor-politica/familias",...requireTenantManager(),async(req,res,next)=>{
-  const {pharmacyId,familyId}=req.body||{};
+  const {pharmacyId}=req.body||{};
   if(!authorized(req,pharmacyId))return forbidden(res);
-  if(!validId(familyId))return res.status(400).json({error:"Familia incorrecta"});
+  const ids=selectedFamilyIds(req.body);
+  if(!ids)return res.status(400).json({error:"Familia incorrecta"});
   try{
-   const {rowCount}=await pool.query("DELETE FROM farmetrica.transferidor_exposicion_familias WHERE cliente_slug=$1 AND farmacia_id=$2 AND familia_id=$3",
-    [req.context.client.slug,pharmacyId,familyId]);
+   const {rowCount}=await pool.query(
+    "DELETE FROM farmetrica.transferidor_exposicion_familias "+
+    "WHERE cliente_slug=$1 AND farmacia_id=$2 AND familia_id=ANY($3::bigint[])",
+    [req.context.client.slug,pharmacyId,ids]);
    res.json({ok:true,deleted:rowCount});
   }catch(e){next(e);}
  });

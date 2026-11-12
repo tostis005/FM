@@ -1,7 +1,8 @@
 import React,{Suspense,useEffect,useState} from "react";
-import {ArrowLeft,ArrowRightLeft,ChevronRight,ClipboardList,Pill,Settings2,ShoppingCart,SlidersHorizontal} from "lucide-react";
+import {ArrowLeft,ArrowRightLeft,ChevronRight,ClipboardList,Pill,ShoppingCart,SlidersHorizontal} from "lucide-react";
 import {readSettingsSection,settingsSectionUrl} from "./settingsSections.js";
 import "./settingsLayout.css";
+import "./ajustesPanel.css";
 
 // Los formularios solo se cargan cuando se abre su área.
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));

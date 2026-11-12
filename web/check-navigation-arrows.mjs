@@ -50,6 +50,10 @@ try{
  assert.equal(sidebarStructure.rightPadding,0,"La barra debe quedar junto a la divisoria derecha");
  assert.ok(sidebarStructure.logoInPanel&&sidebarStructure.footerInPanel);
  assert.equal(sidebarStructure.toggleLabel,"Plegar menú");
+ await page.getByRole("button",{name:"Plegar menú"}).click();
+ assert.equal(await page.locator("#farmetrica-sidebar .brand-mark").isVisible(),true,
+  "El isotipo debe permanecer visible al plegar el lateral");
+ await page.getByRole("button",{name:"Desplegar menú"}).click();
  for(const group of ["Compras","Stock","Promociones"]){
   const caret=page.getByRole("button",{name:"Mostrar subopciones de "+group,exact:true});
   assert.equal(await caret.count(),1,group+" necesita flecha desplegable");

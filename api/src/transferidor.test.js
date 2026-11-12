@@ -19,15 +19,16 @@ test("redistribuye globalmente un CN sin asignar dos veces las mismas unidades",
  assert.equal(result.skipped,0);
 });
 
-test("medicación queda fuera y un artículo sin stock fiable nunca se reparte",()=>{
+test("medicación queda fuera y el stock nulo se considera cero",()=>{
  const result=buildGlobalTransfers([
   item("1","500001",10,0),item("2","500001",0,9),
   item("1","123457",null,2),item("2","123457",10,0),
   item("1","123458",6.5,0),item("2","123458",0,4)
  ],pharmacies.slice(0,2),20);
- assert.deepEqual(result.transfers.map(x=>x.cn),["123458"]);
- assert.equal(result.transfers[0].units,4);
- assert.equal(result.skipped,1);
+ assert.deepEqual(result.transfers.map(x=>x.cn),["123457","123458"]);
+ assert.equal(result.transfers[0].units,2);
+ assert.equal(result.transfers[1].units,4);
+ assert.equal(result.skipped,0);
 });
 
 test("filtra todos, envío, recepción y farmacia de origen/destino sobre plan global",()=>{
@@ -165,4 +166,43 @@ test("una reserva de CN reemplaza la reserva de familia y sirve sin ventas",()=>
  assert.equal(plan.transfers[0].units,1);
  assert.equal(plan.transfers[0].extraDestination,100);
  assert.equal(plan.transfers[0].reserveSource,"articulo");
+});
+
+test("acepta CN de siete dígitos, normaliza a seis y agrupa la misma referencia",()=>{
+ const rows=[
+  {pharmacyId:"1",cn:"1234567",stock:40,units12:0,name:"Crema"},
+  {pharmacyId:"2",cn:"123456",stock:0,units12:365,name:"Crema"}
+ ];
+ const plan=buildGlobalTransfers(rows,pharmacies.slice(0,2));
+ assert.equal(plan.transfers.length,1);
+ assert.equal(plan.transfers[0].cn,"123456");
+ assert.equal(plan.transfers[0].units,7);
+});
+test("SQL empareja por CN y conserva el IdArticu para unir las ventas",async()=>{
+ const queries=[];
+ const db={async query(arg){
+  const sql=typeof arg==="string"?arg:arg.text;
+  queries.push(sql);
+  if(sql.includes("AS ready FROM farmetrica.farmacias"))
+   return {rows:[{id:"1",ready:true},{id:"2",ready:true}]};
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))
+   return {rows:[{minDays:4,targetDays:7}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("Consulta inesperada: "+sql.slice(0,60));
+ }};
+ let handler;
+ setupTransferidor({get(_path,...stack){handler=stack.at(-1);}},db,
+  {requireTenant:()=>[]});
+ let error;
+ const res={status(n){this.code=n;return this},json(v){this.body=v;return this}};
+ await handler({context:{role:"superadministrador",client:{slug:"testcn",schema:"testcn"},
+  pharmacies:pharmacies.slice(0,2)},query:{pagina:"1",tamano:"50"}},res,e=>{error=e});
+ if(error)throw error;
+ const sql=queries.find(q=>q.includes("WITH chosen AS MATERIALIZED"));
+ assert.match(sql,/a\.codigo_nacional/);
+ assert.match(sql,/JOIN candidates c ON c\.cn=\(CASE/);
+ assert.match(sql,/a\.origen_id::text AS article_id/);
+ assert.match(sql,/l\.articulo_origen_id=a\.article_id/);
+ assert.ok(!sql.includes("a.origen_id::text AS cn"));
 });

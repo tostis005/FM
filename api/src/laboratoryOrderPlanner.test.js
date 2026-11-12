@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {cnCategory,isOrderQuantity,validPlannerDate,pharmacyScope,
  normalizeDraftItems,readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner,
- applyWarehouseToOrder,skipWarehouseForMedication} from "./laboratoryOrderPlanner.js";
+ applyWarehouseToOrder,skipWarehouseForMedication,indexedNormalizedCNMetricsSQL} from "./laboratoryOrderPlanner.js";
 
 test("rango CN por los seis dígitos significativos (incluye variante de siete)",()=>{
  for(const cn of ["000000","399999","0000000","3999999"])
@@ -322,4 +322,27 @@ test("CN normalizado: el predicado del índice parcial no filtra referencias adi
  assert.match(sql,/nullif\(btrim\(__CN_NORMALIZED__\),''\)=x\.cn\s+WHERE \$6::text='parafarmacia' AND x\.cn IS NOT NULL/);
  assert.match(sql,/fm_ventas_lineas l/);
  assert.match(sql,/FROM refs x CROSS JOIN pharmacies f/);
+});
+
+test("CN indexado: un lote de 200 referencias no dispara un scan global y conserva todas las ramas",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ for(const original of [sql,skipWarehouseForMedication(sql)]){
+  const indexed=indexedNormalizedCNMetricsSQL(original);
+  assert.equal((indexed.match(/JOIN LATERAL \(/g)||[]).length,
+   original===sql?2:1,"LATERAL para farmacias y, solo si existe, almacén");
+  assert.match(indexed,/OFFSET 0\s+\) a ON true/);
+  assert.match(indexed,/nullif\(btrim\(__CN_NORMALIZED__\),''\)=x\.cn/);
+  assert.match(indexed,/SELECT DISTINCT ON \(pharmacy_id,article_id,reference\)/);
+  assert.match(indexed,/SELECT DISTINCT pharmacy_id,article_id FROM articles/);
+  assert.match(indexed,/a\.origen_id::text=x\.cn/);
+  assert.match(indexed,/btrim\(a\.codigo_nacional\)=x\.cn/);
+  assert.match(indexed,/x\.cn IS NULL AND x\.reference='ERP:'/);
+  assert.match(indexed,/FROM refs x CROSS JOIN pharmacies f/);
+  assert.match(indexed,/ORDER BY x\.reference,f\.id/);
+ }
+ // Cuando no hay cn_normalizado física, el campo JSON inexistente es NULL.
+ // El reemplazo constante permite al plan suprimir la rama sin perder datos.
+ assert.ok(!indexedNormalizedCNMetricsSQL(sql).includes("LIMIT 1"));
+ assert.match(sql,/__CN_NORMALIZED__/);
 });

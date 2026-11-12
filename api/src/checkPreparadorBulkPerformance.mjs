@@ -88,14 +88,24 @@ try{
     output.planScans=scans.slice(0,15);
     return true;
    });
-   let baseline200=null;
-   for(const count of [Math.min(50,best.rows.length),Math.min(100,best.rows.length),
-     Math.min(200,best.rows.length)].filter((x,i,a)=>a.indexOf(x)===i)){
+   let baseline200=null,baseline75=null;
+   for(const count of [Math.min(50,best.rows.length),Math.min(75,best.rows.length),
+     Math.min(100,best.rows.length),Math.min(200,best.rows.length)]
+     .filter((x,i,a)=>a.indexOf(x)===i)){
     const res=await timed("matrix"+count,()=>readLaboratoryOrderMatrix(pool,ctx,{
      key,pharmacies,type:best.type,from,to,prefetchedRows:best.rows.slice(0,count)
     }));
     if(res)output["matrix"+count+"Complete"]=res.metricsUnavailable===false;
     if(count===200)baseline200=res;
+    if(count===75)baseline75=res;
+   }
+   const indexed75=await timed("indexedCN75",()=>readLaboratoryOrderMatrix(pool,ctx,{
+    key,pharmacies,type:best.type,from,to,
+    prefetchedRows:best.rows.slice(0,75),indexedCN:true
+   }));
+   if(indexed75){
+    output.indexedCN75Complete=indexed75.metricsUnavailable===false;
+    output.indexedCN75EqualsBaseline=sameMetrics(baseline75,indexed75);
    }
    const candidate=await timed("indexedCN200",()=>readLaboratoryOrderMatrix(pool,ctx,{
     key,pharmacies,type:best.type,from,to,

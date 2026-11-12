@@ -74,7 +74,7 @@ test("un mismo nombre de familia admite ramas mixtas y se guarda de forma atómi
  assert.equal(saved.result.updated,3);
  const insert=calls.find(x=>x.text.includes("INSERT INTO farmetrica.transferidor_exposicion_familias"));
  assert.deepEqual(insert.values[2],["5","8","9"]);
- assert.doesNotMatch(insert.text,/g\\.segmento/);
+ assert.ok(!insert.text.includes("g.segmento"),"La clasificación no limita la exposición");
  assert.match(insert.text,/cardinality/,"no debe guardar una selección incompleta");
  const deleted=await call("delete","/api/tenant/transferidor-politica/familias",payload);
  assert.equal(deleted.status,200);

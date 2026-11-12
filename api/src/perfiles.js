@@ -25,6 +25,7 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
  async function profile(req,id){
   const {rows}=await pool.query(`
    SELECT p.id AS "profileId",p.clave AS key,p.rol_base AS "baseRole",
+    p.modulos AS modules,p.secciones AS sections,p.permisos AS permissions,
     p.sistema AS system,
     EXISTS(SELECT 1 FROM farmetrica.usuario_clientes uc
      WHERE uc.perfil_id=p.id AND uc.cliente_slug<>$2::text) AS "usedOtherClient"
@@ -32,14 +33,14 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
    [id,req.context?.client?.slug||null]);
   return rows[0]||null;
  }
- async function validateBody(req,res){
+ async function validateBody(req,res,previous=null){
   const {rows:modules}=await pool.query("SELECT clave FROM farmetrica.modulos");
   const value=validateProfileDefinition(req.body,modules.map(m=>m.clave));
   if(!value){
    res.status(400).json({error:"Revisa los módulos, subsecciones y operaciones del perfil"});
    return null;
   }
-  if(!profileWithinManagerScope(req.context||{role:managerRole(req)},value)){
+  if(!profileWithinManagerScope(req.context||{role:managerRole(req)},value,previous)){
    res.status(403).json({error:"No puedes conceder módulos, páginas u operaciones por encima de los de tu propio perfil"});
    return null;
   }
@@ -95,7 +96,7 @@ export function setupProfiles(app,pool,{requireTenantManager,requireSuperadmin})
     return res.status(403).json({error:current.usedOtherClient?
      "Este perfil también se utiliza en otros clientes; solo un superadministrador puede cambiar su definición global.":
      "Los perfiles administrativos protegidos solo pueden modificarse desde superadministración."});
-   const value=await validateBody(req,res);
+   const value=await validateBody(req,res,current);
    if(!value)return;
    if(current.baseRole!==value.baseRole)
     return res.status(409).json({error:"El nivel base no puede cambiarse. Crea otro perfil para otro nivel."});

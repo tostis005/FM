@@ -2,6 +2,15 @@
 const validInteger=(n,min,max)=>Number.isSafeInteger(n)&&n>=min&&n<=max;
 const validId=n=>/^[1-9]\d*$/.test(String(n??""));
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
+// Misma clave de producto que en las propuestas: CN normalizado a seis cifras.
+const ARTICLE_CN_SQL=`(CASE
+ WHEN btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{6}([.][0-9])?$'
+  THEN left(btrim(a.codigo_nacional),6)
+ WHEN btrim(coalesce(a.codigo_nacional,''))~'^[0-9]{7}$'
+  THEN left(btrim(a.codigo_nacional),6)
+ WHEN btrim(a.origen_id::text)~'^[0-9]{6,7}$'
+  THEN left(btrim(a.origen_id::text),6)
+ ELSE NULL END)`;
 export function stockPolicyFromRows(global={},families=[],articles=[]){
  return {
   minDays:Number(global.minDays??4),targetDays:Number(global.targetDays??7),
@@ -101,7 +110,7 @@ export function setupTransferidorPolicy(app,pool,{requireTenantManager}){
      "WHERE f.cliente_slug=$1 AND f.id=$2 AND EXISTS(SELECT 1 FROM \""+schema+"\".articulos a "+
      "WHERE upper(btrim(a.farmacia_codigo))= "+
      "CASE WHEN f.cliente_slug='ampedia' AND f.id=5 AND upper(btrim(f.codigo_origen)) IN ('POL','VAL') "+
-     "THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END AND a.origen_id=$3) "+
+     "THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END AND "+ARTICLE_CN_SQL+"=$3) "+
      "ON CONFLICT(cliente_slug,farmacia_id,codigo_nacional) DO UPDATE "+
      "SET exposicion_unidades=EXCLUDED.exposicion_unidades,actualizado_por=EXCLUDED.actualizado_por,actualizado_en=now() "+
      "RETURNING farmacia_id",

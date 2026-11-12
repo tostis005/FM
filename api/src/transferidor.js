@@ -49,15 +49,18 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    const id=String(p.id),familyId=String(src?.familyId||"");
    const byArticle=articleReserve.get(id+"|"+product.cn);
    const byFamily=familyReserve.get(id+"|"+familyId);
-   // La reserva de CN sustituye la reserva de familia, no se suma dos veces.
+   // Las reservas de exposición nunca generan por sí solas una transferencia:
+   // primero debe faltar stock para cubrir las VENTAS previstas del destino.
    const extra=byArticle!=null?whole(byArticle):byFamily!=null?whole(daily*byFamily):0;
    const source=byArticle!=null?"articulo":byFamily!=null?"familia":"global";
-   const threshold=whole(daily*config.minDays)+extra;
+   const threshold=whole(daily*config.minDays);
    const target=whole(daily*config.targetDays)+extra;
    const ordered=Math.max(0,asNumber(src?.ordered));
-   // No se transfiere mientras se conserve el mínimo de rotación + exposición.
-   const need=stock+ordered<threshold?whole(target-stock-ordered):0;
-   // Nunca desvestir un expositor donante ni agotar sus 7 días de rotación.
+   const available=stock+ordered;
+   // minDays controla cuándo se activa la necesidad; targetDays, cuánto reponer.
+   // Un origen con excedente nunca es motivo suficiente para una propuesta.
+   const need=daily>0&&available<threshold?whole(target-available):0;
+   // Proteger al donante: conserva previsión de ventas más su exposición.
    const surplus=Math.max(0,Math.floor(stock-target+1e-9));
    return {id,name:p.name||id,stock,target,threshold,extra,source,ordered,need,surplus,
     stockAt:src?.stockAt||null};

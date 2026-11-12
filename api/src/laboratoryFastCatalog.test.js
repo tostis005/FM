@@ -17,6 +17,7 @@ function fixture({metricsError=false,empty=false}={}){
   if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[{cadena:"DESCATALOGADO"}]};
   if(sql.includes("SELECT intervalo_dias AS days"))return {rows:[{days:4}]};
   if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH canonical_pharmacy AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH p AS ("))return {rows:[]};
   if(sql.includes("links AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH pharmacies AS"))return {rows:empty?[]:[catalogRow]};
@@ -47,7 +48,8 @@ test("preparador usa exclusivamente Nomenclátor, ventas y recepciones",async()=
  assert.ok(query.sql.includes("link.laboratory_key IN (SELECT key FROM lab_aliases)"));
  assert.ok(query.sql.includes("EXISTS (SELECT 1 FROM"));
  assert.doesNotMatch(query.sql,/movements AS MATERIALIZED/);
- assert.match(query.sql,/preparador_exclusiones|ARRAY\[\x27ZZZ\x27,\x27\*BAJA\x27,\x27\* BAJA\x27\]::text\[\] \|\| \$8::text\[\]/);
+ assert.match(query.sql,/unnest\(\s*\$8::text\[\]/);
+ assert.doesNotMatch(query.sql,/ARRAY\['ZZZ'/);
  assert.doesNotMatch(query.sql,/articulos_laboratorio_maestro/);
  assert.deepEqual(query.values,["N:CINFA",[1],"ampedia","medicacion","",40,0,["DESCATALOGADO"]]);
 });
@@ -57,12 +59,13 @@ test("catálogo ligero de medicación evita la segunda consulta de movimientos",
   const sql=typeof q==="string"?q:q.text;statements.push(sql);
   if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
   if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH canonical_pharmacy AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("WITH p AS ("))return {rows:[{...catalogRow,total:1}]};
   throw Error("Consulta extra de catálogo no esperada");
  }};
  const result=await readDirectLaboratoryCatalog(pool,ctx,{...opts,skipMovementCheck:true});
  assert.equal(result.total,1);
- assert.equal(statements.length,3,"Exclusiones, esquema y catálogo; sin lectura de todo el histórico");
+ assert.equal(statements.length,4,"Exclusiones, esquema, catálogo y descripción canónica; sin releer el histórico");
  assert.ok(!statements.some(q=>q.includes("SELECT DISTINCT v.articulo_id")));
 });
 test("parafarmacia agrupa alias manuales sin correlacionar el maestro con cada artículo ERP",async()=>{
@@ -71,6 +74,7 @@ test("parafarmacia agrupa alias manuales sin correlacionar el maestro con cada a
   const sql=typeof q==="string"?q:q.text;
   if(sql.includes("FROM farmetrica.preparador_exclusiones"))return {rows:[]};
   if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("WITH canonical_pharmacy AS MATERIALIZED"))return {rows:[]};
   if(sql.includes("links AS MATERIALIZED")){
    quickSql=sql;return {rows:[{
     referencia:"001245",cn:"001245",nombre:"Producto Cinfa",tipo:"parafarmacia",

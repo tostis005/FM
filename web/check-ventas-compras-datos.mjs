@@ -7,7 +7,7 @@ const pharmacies=[{id:"1",name:"Farmacia Centro",sourceCode:"ABA",databaseCode:"
 const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,
  modules:{dashboard:true,ventas:true,compras:true},role:"superadministrador"};
-let purchaseDetailRequest=0,failedSort=false;
+let purchaseDetailRequest=0,salesDetailRequest=0;
 await page.route("**/api/**",async route=>{
  const url=new URL(route.request().url()),p=url.pathname;let data={};
  if(p==="/api/auth/me")data={user};
@@ -30,16 +30,20 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/analytics/ventas/totales")
   data={kpis:{ventas:3000,unidades:65},monthly:[{month:"2026-10",ventas:3000,unidades:65}],
    granularity:"month",series:[{bucket:"2026-10",ventas:3000,unidades:65}]};
- else if(p==="/api/analytics/ventas/recuento")data={totalProducts:2,totalArticles:1};
+ else if(p==="/api/analytics/ventas/familias-ranking")
+  data={families:[],totalSales:3000,totalUnits:65,totalLines:1,coveragePct:0};
+ else if(p==="/api/analytics/ventas/actividad")
+  data={horarios:{total:3000,cells:[{weekday:1,hour:9,sales:3000,lines:1}]},
+   vendedores:{total:3000,sellers:[{pharmacyId:"1",name:"Ana",sales:3000,units:65}]}};
+ else if(p==="/api/analytics/ventas/ticket-medio-rapido")
+  data={tickets:10,pharmacies:[{id:"1",name:"Farmacia Centro",tickets:10}]};
+ else if(p==="/api/analytics/ventas/recuento"){
+  salesDetailRequest++;
+  data={error:"La pantalla de Ventas no debe calcular recuentos"};
+ }
  else if(p==="/api/analytics/ventas/detalle"){
-  await new Promise(r=>setTimeout(r,260));
-  if(url.searchParams.get("orden")==="cn"&&!failedSort){
-   failedSort=true;await route.fulfill({status:503,contentType:"application/json",
-    body:JSON.stringify({error:"Error temporal del listado"})});return;
-  }
-  data={products:[{id:"1|654321",pharmacyId:"1",cn:"654321",
-   name:"Artículo vendido individual",units:65,value:3000,abcdClass:"A"}],
-   totalFiltered:1,hasMore:false,page:1};
+  salesDetailRequest++;
+  data={error:"La pantalla de Ventas ya no consulta artículos"};
  }else if(p==="/api/analytics/dashboard/horarios")data={total:0,cells:[]};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(data)});
 });
@@ -51,12 +55,11 @@ try{
  await page.waitForFunction(()=>document.querySelector(".fm-demo-table .fm-loading-panel")===null,
   null,{timeout:12000});
  await page.goto(base+"/ventas",{waitUntil:"domcontentloaded"});
- await page.getByText("Artículo vendido individual",{exact:true}).waitFor({timeout:15000});
- await page.getByRole("button",{name:"Ordenar CN"}).first().click();
- await page.getByText("Error temporal del listado").first().waitFor({timeout:12000});
- await page.getByRole("button",{name:"Reintentar consulta"}).click();
- await page.getByText("Artículo vendido individual",{exact:true}).waitFor({timeout:12000});
- await page.waitForFunction(()=>document.querySelector("#fm-sales-articles .fm-loading-panel")===null,
-  null,{timeout:12000});
- console.log("OK: Compras muestra referencias independientemente del resumen y Ventas recupera fallos");
+ await page.getByText("Ticket medio neto",{exact:true}).waitFor({timeout:15000});
+ await page.locator(".fm-demo-graph[aria-busy=false]").waitFor({timeout:15000});
+ await page.getByText("Ventas por familias",{exact:true}).waitFor({timeout:12000});
+ await page.getByText("300,00", {exact:false}).first().waitFor({timeout:12000});
+ assert.equal(salesDetailRequest,0,"Ventas no debe consultar ni referencias ni detalle");
+ assert.equal(await page.locator("#fm-sales-articles").count(),0);
+ console.log("OK: Compras conserva su detalle y Ventas ofrece visión general y ticket medio");
 }finally{await browser.close()}

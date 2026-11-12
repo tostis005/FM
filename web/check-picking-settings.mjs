@@ -54,7 +54,10 @@ try{
  assert.equal(stored,initial);
  await page.goto("http://127.0.0.1:4175/ajustes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor({timeout:15000});
- await page.getByRole("heading",{name:"Picking List",exact:true}).waitFor();
+ assert.equal(await page.getByRole("heading",{name:"Picking List",exact:true}).count(),0,
+  "el contenido de Picking List se abre solo al entrar en su área");
+ await page.getByRole("button",{name:"Abrir ajustes de Picking List"}).click();
+ await page.getByRole("heading",{name:"Picking List",exact:true}).last().waitFor();
  await page.getByText("Dropbox conectado para este cliente").waitFor();
  assert.equal(stored,initial);
  assert.equal(writes.filter(x=>x.method==="PUT").length,0,

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {cnCategory,isOrderQuantity,validPlannerDate,pharmacyScope,
  normalizeDraftItems,readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner,
- applyWarehouseToOrder} from "./laboratoryOrderPlanner.js";
+ applyWarehouseToOrder,skipWarehouseForMedication} from "./laboratoryOrderPlanner.js";
 
 test("rango CN por los seis dígitos significativos (incluye variante de siete)",()=>{
  for(const cn of ["000000","399999","0000000","3999999"])
@@ -273,4 +273,22 @@ test("parafarmacia utiliza objetivos y stock global, medicación suma necesidade
  assert.equal(applyWarehouseToOrder(article,sites,"parafarmacia",
   {warehouseReady:false}).totalSuggested,0,
   "Sin almacén importado se sigue usando el stock total de las farmacias");
+});
+
+test("medicación evita por completo el SQL de almacén sin alterar farmacias y pedidos",async()=>{
+ const {readFile}=await import("node:fs/promises");
+ const sql=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
+ const med=skipWarehouseForMedication(sql);
+ assert.doesNotMatch(med,/warehouse_scope AS/);
+ assert.doesNotMatch(med,/warehouse_matches AS/);
+ assert.doesNotMatch(med,/warehouse_sales AS MATERIALIZED/);
+ assert.doesNotMatch(med,/warehouse_distinct AS MATERIALIZED/);
+ assert.match(med,/warehouse_ready AS \(SELECT false AS ready\)/);
+ assert.match(med,/warehouse_sales_ready AS \(SELECT false AS ready\)/);
+ assert.match(med,/sales_per_article AS MATERIALIZED/);
+ assert.match(med,/pending_orders AS MATERIALIZED/);
+ assert.match(med,/SELECT x\.reference,f\.id::text AS "pharmacyId"/);
+ assert.match(sql,/warehouse_matches AS/,"Parafarmacia conserva stock de almacén");
+ assert.match(sql,/JOIN eligible_articles eligible\s+ON eligible\.pharmacy_id=p\.farmacia_id/);
+ assert.match(sql,/eligible\.article_id=order_line\.elem->>'articulo'/);
 });

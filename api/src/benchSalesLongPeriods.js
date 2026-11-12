@@ -83,6 +83,58 @@ try{
     error:oldError}));
   }
  }
+ // Cobertura del panorama que alimenta familias, vendedores y franjas.
+ // Solo leer agregados ya cerrados; nunca provocar preparaciones en producción.
+ const {rows:active}=await pool.query(
+  "SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia'"+
+  " AND activo ORDER BY id");
+ const activeIds=active.map(f=>Number(f.id));
+ if(activeIds.length){
+  const {rows:[p]}=await pool.query(
+   "SELECT count(*)::int AS n FROM farmetrica.ventas_panorama_meses_cerrados"+
+   " WHERE cliente_slug='ampedia' AND farmacia_id=ANY($1::int[])"+
+   " AND mes >= $2::date AND mes < $3::date",
+   [activeIds,from,iso(first)]);
+  const expected=activeIds.length*24;
+  const info={meses:24,farmacias:activeIds.length,
+   cierresPreparados:Number(p.n)||0,cierresNecesarios:expected};
+  if(Number(p.n)!==expected){
+   console.log("FM_VENTAS_PANORAMA_24M",JSON.stringify({...info,
+    resultado:"cierres_pendientes"}));
+  }else{
+   const months=Array.from({length:24},(_,i)=>{
+    const d=new Date(start);d.setUTCMonth(d.getUTCMonth()+i);
+    return iso(d);
+   });
+   let conn,elapsed=null,groups=null,dbError=null;
+   try{
+    conn=await pool.connect();
+    await conn.query("BEGIN READ ONLY");
+    await conn.query("SET LOCAL statement_timeout='20000ms'");
+    await conn.query("SET LOCAL work_mem='16MB'");
+    const t=millis();
+    const {rows}=await conn.query({
+     text:"SELECT farmacia_id,dimension AS kind,clave AS key,"+
+      " sum(importe)::float8 AS sales,sum(unidades)::float8 AS units,"+
+      " sum(lineas)::bigint AS lines FROM farmetrica.ventas_panorama_mensual"+
+      " WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[])"+
+      " AND mes=ANY($3::date[]) GROUP BY farmacia_id,dimension,clave",
+     values:["ampedia",activeIds,months],query_timeout:23000
+    });
+    elapsed=Math.round(millis()-t);groups=rows.length;
+   }catch(error){dbError=error.code||error.name}
+   finally{
+    if(conn){
+     await conn.query("ROLLBACK").catch(()=>{});
+     conn.release();
+    }
+   }
+   console.log("FM_VENTAS_PANORAMA_24M",JSON.stringify({...info,
+    lecturaAgrupadaMs:elapsed,grupos:groups,
+    resultado:dbError?"timeout_o_error":"medido",
+    error:dbError}));
+  }
+ }
 }catch(error){
  console.error("FM_VENTAS_24M_ERROR",error.code||error.name);
  exitCode=1;

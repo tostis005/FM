@@ -14,6 +14,8 @@ import "./operativaPreview.css";
 import "./settingsLayout.css";
 import "./navigationBreadcrumbs.css";
 import "./tenantAppearance.css";
+import {attemptStaleAssetRecovery} from "./deploymentRecovery.js";
+import {userRoleAndProfileLabel} from "./userRoleLabel.js";
 import {normalizeClientAppearance,clientAppearanceStyle,isCustomAppearance} from "./tenantAppearance.js";
 const AccessAdmin=React.lazy(()=>import("./Accesos.jsx"));
 const CambiarContrasena=React.lazy(()=>import("./CambiarContrasena.jsx"));
@@ -67,6 +69,28 @@ import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
 import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveWarehousePresentationToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
+
+// Vite avisa si la pestaña intenta cargar un chunk de la versión anterior.
+// Evitar la pantalla en blanco y respetar el límite de una recarga automática.
+window.addEventListener("vite:preloadError",event=>{
+ if(attemptStaleAssetRecovery(event.payload))event.preventDefault();
+});
+
+class SectionLoadBoundary extends React.Component {
+ constructor(props){super(props);this.state={error:null};}
+ static getDerivedStateFromError(error){return {error};}
+ componentDidCatch(error){attemptStaleAssetRecovery(error);}
+ render(){
+  if(!this.state.error)return this.props.children;
+  return <section className="card fm-section-load-error" role="alert">
+   <h2>No se pudo cargar esta sección</h2>
+   <p>Puede que la aplicación se haya actualizado. Recarga para obtener la versión más reciente.</p>
+   <button className="btn btn-primary" type="button" onClick={()=>window.location.reload()}>
+    <RefreshCcw size={16}/> Recargar página
+   </button>
+  </section>;
+ }
+}
 
 const DEFAULT_PHARMACIES = [
   {id:"1",name:"Abadía",city:"",active:true,sourceCode:"ABA",sourceHost:"",sourceDatabase:"Farmatic"},
@@ -1445,11 +1469,12 @@ function App(){
        {(sessionUser?.source==="local"||sessionUser?.source==="interno")&&<button type="button" className="btn btn-secondary btn-sm"
         onClick={()=>setPasswordModal(true)} aria-label="Cambiar contraseña">
         <ShieldCheck size={14}/> Cambiar contraseña</button>}
-       <span className="top-user">{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{sessionUser?.role==="superadministrador"?"Superadministrador":tenantContext.role==="administrador"?"Administrador de cliente":"Usuario autorizado"}</small></span>
+       <span className="top-user" title={userRoleAndProfileLabel(sessionUser,tenantContext)}>{sessionUser?.name||sessionUser?.email||"Administrador"}<small>{userRoleAndProfileLabel(sessionUser,tenantContext)}</small></span>
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
    <AppBreadcrumbs items={breadcrumbs} onNavigate={nav}/>
+   <SectionLoadBoundary key={tenantContext.client.slug+":"+page}>
    <React.Suspense fallback={<LoadingStatus label="Cargando sección…"/>}>
     {["promociones","seguimiento-global"].includes(page)&&promotionStoreStatus!=="connected"&&
      <section className="card fm-preview-panel" role={promotionStoreStatus==="error"?"alert":"status"}>
@@ -1759,6 +1784,7 @@ function App(){
       onAnalysisSaved={()=>loadContext(tenantContext.client.slug)}/>}
 
    </React.Suspense>
+   </SectionLoadBoundary>
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>
   </div>

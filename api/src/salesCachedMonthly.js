@@ -58,6 +58,6 @@ export function createSalesMonthlyReader(pool,{dbClock,scheduleMonth}){
   const data=summarizeConsolidations(rows,from,to);
   return {...data,available:true,cachedMonths:range.months.length-missing.length,
    liveRanges:range.liveRanges.length,missingLiveMonths:missing.length,
-   immutable:missing.length===0};
+   immutable:missing.length===0&&range.liveRanges.length===0};
  };
 }

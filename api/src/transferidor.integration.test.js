@@ -21,6 +21,17 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
   await db.query(`INSERT INTO ampedia.fm_ventas_lineas
    (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
    VALUES ('EUR','farmatic','TRANSF-VALIDAR-01','1','123478',100,500)`);
+  // Mismo CN en dos farmacias con diferentes identificadores ERP.
+  await db.query(`INSERT INTO ampedia.articulos
+   (farmacia_codigo,origen_id,nombre,codigo_nacional,stock_actual,sincronizado_en)
+   VALUES ('ABA','123479','Crema CN común','123479',40,now()),
+          ('EUR','223479','Crema CN común','123479',0,now())`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
+   (farmacia_codigo,sistema_origen,documento_id,fecha,lineas_completas)
+   VALUES ('EUR','farmatic','TRANSF-CN-02',now(),true)`);
+  await db.query(`INSERT INTO ampedia.fm_ventas_lineas
+   (farmacia_codigo,sistema_origen,documento_id,linea_id,articulo_origen_id,cantidad,importe_neto)
+   VALUES ('EUR','farmatic','TRANSF-CN-02','1','223479',100,500)`);
   let handler=null;
   setupTransferidor({get(path,...handlers){
    if(path==="/api/analytics/stock/transferidor")handler=handlers.at(-1);
@@ -43,6 +54,11 @@ test("PostgreSQL: Transferidor devuelve propuestas usando stock y ventas sincron
   assert.equal(line.originId,"1");
   assert.equal(line.destinationId,"2");
   assert.ok(line.units>0);
+  const common=res.body.rows.find(x=>x.cn==="123479");
+  assert.ok(common,"El CN compartido debe unir distintos IdArticu");
+  assert.equal(common.originId,"1");
+  assert.equal(common.destinationId,"2");
+  assert.ok(common.units>0);
  }finally{
   await db.query("ROLLBACK").catch(()=>{});
   db.release();

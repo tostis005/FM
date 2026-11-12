@@ -3,6 +3,7 @@ import {latestLaboratoryCN,latestSupplierCN,laboratoryIdsFromSnapshot,lastReceip
 import {readCachedLaboratoryOptions,invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
 import {readRetirementPatterns,retiredProductSQL} from "./laboratoryRetirements.js";
 import {readSupplierMasterCatalogue,mergeSupplierCatalogReferences} from "./supplierMasterCatalogue.js";
+import {canonicalizeLaboratoryCatalog} from "./laboratoryCanonicalDescriptions.js";
 export {readSupplierMasterCatalogue,mergeSupplierCatalogReferences} from "./supplierMasterCatalogue.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const normalizeCode=expr=>`CASE WHEN btrim(coalesce(${expr}::text,'')) ~ '^[0-9]+$'
@@ -94,8 +95,10 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
     result=>result.byLab.get(id)||[]):Promise.resolve(targeted),
    readMasterWithoutBlockingOrders(pool,ctx,{id,pharmacies,type,search,patterns})
   ]);
-  return {...mergeSupplierCatalogReferences(historic,master.rows,search,type),
-   warning:master.warning};
+  return canonicalizeLaboratoryCatalog(pool,ctx,{
+   ...mergeSupplierCatalogReferences(historic,master.rows,search,type),
+   warning:master.warning
+  },type,patterns);
  }
  const patterns=await readRetirementPatterns(pool,ctx.client.slug);
  const sql=`
@@ -165,8 +168,10 @@ export async function readUnifiedSupplierCN(pool,ctx,{key,pharmacies,type,search
  ]);
  const rows=historical.rows;
  if(rows.length>5000)throw Object.assign(Error("Más de 5000 referencias; refine la búsqueda"),{code:"TOO_MANY"});
- return {...mergeSupplierCatalogReferences(rows,master.rows,search,type),
-  warning:master.warning};
+ return canonicalizeLaboratoryCatalog(pool,ctx,{
+  ...mergeSupplierCatalogReferences(rows,master.rows,search,type),
+  warning:master.warning
+ },type,patterns);
 }
 export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin,requireTenantManager=requireTenantAdmin}){
  const permitted=req=>req.context.role==="superadministrador"||req.context.modules?.compras===true;

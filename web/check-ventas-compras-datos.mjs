@@ -55,7 +55,11 @@ try{
  await page.waitForFunction(()=>document.querySelector(".fm-demo-table .fm-loading-panel")===null,
   null,{timeout:12000});
  await page.goto(base+"/ventas",{waitUntil:"domcontentloaded"});
- await page.getByText("Ticket medio neto",{exact:true}).waitFor({timeout:15000});
+ const ticketKpi=page.getByRole("button",{name:"Ticket medio"});
+ await ticketKpi.waitFor({timeout:15000});
+ await ticketKpi.locator("strong").getByText("300,00",{exact:false}).waitFor({timeout:15000});
+ assert.equal(await page.locator(".fm-so-pharmacies").count(),0,
+  "Al seleccionar una sola farmacia no debe aparecer la comparación");
  await page.locator(".fm-demo-graph[aria-busy=false]").waitFor({timeout:15000});
  await page.getByText("Ventas por familias",{exact:true}).waitFor({timeout:12000});
  await page.getByText("300,00", {exact:false}).first().waitFor({timeout:12000});

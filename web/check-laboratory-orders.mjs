@@ -102,7 +102,7 @@ await page.route("**/api/**",async route=>{
   if(lab==="N:CINFA")await new Promise(resolve=>setTimeout(resolve,850));
   if(lab==="N:MULTI" && incoming?.referencias?.length===125)
    await new Promise(resolve=>setTimeout(resolve,900));
-  if(lab==="N:VOLUME" && incoming?.referencias?.[0]?.referencia==="002400")
+  if(lab==="N:VOLUME" && incoming?.referencias?.[0]?.referencia==="002375")
    await new Promise(resolve=>setTimeout(resolve,1000));
   if(lab==="N:ERROR"){
    await route.fulfill({status:503,contentType:"application/json",
@@ -369,7 +369,7 @@ try{
  // La opción Todos también recorre 600 referencias sin montar las 600 filas.
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("600 referencias");
  await page.getByRole("option",{name:"Laboratorio con 600 referencias"}).click();
- await page.waitForFunction(()=>/\b(200|400) de 600\b/.test(
+ await page.waitForFunction(()=>/\b(?:75|150|225|300|375|450|525) de 600\b/.test(
   document.querySelector(".fm-lab-order-summary [role='status']")?.textContent||""),
   null,{timeout:15000});
  assert.equal(await page.locator(".fm-lab-matrix-overlay").isVisible(),true,

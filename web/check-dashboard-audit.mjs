@@ -60,13 +60,15 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/analytics/ventas/detalle")body={products:[],hasMore:false,totalFiltered:0};
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/analytics/compras/estado")body={hasPurchases:true,pharmacies:[]};
- else if(p==="/api/analytics/ventas/actividad")body={
-  horarios:{cells:[
-   {weekday:1,hour:9,sales:123.45,lines:2},{weekday:5,hour:12,sales:345.67,lines:3}
-  ],total:469.12},
-  vendedores:{sellers:[{name:"Vendedor prueba",sales:469.12,units:5}],total:469.12},
-  tickets:{kpis:{tickets:20,sales:469.12,units:5,ticketMedio:23.456,unidadesPorTicket:0.25},
-   pharmacies:[{id:"1",name:"Farmacia Centro",tickets:20,sales:469.12,units:5,ticketMedio:23.456}]}
+ else if(p==="/api/analytics/ventas/panorama")body={
+  familias:{families:[],totalSales:469.12,totalUnits:5,coveragePct:0},
+  actividad:{
+   horarios:{cells:[
+    {weekday:1,hour:9,sales:123.45,lines:2},{weekday:5,hour:12,sales:345.67,lines:3}
+   ],total:469.12},
+   vendedores:{sellers:[{name:"Vendedor prueba",pharmacyId:"1",sales:469.12,units:5}],
+    total:469.12}
+  }
  };
  else if(p==="/api/analytics/dashboard/canales-compra")body={
   available:true,channels:[

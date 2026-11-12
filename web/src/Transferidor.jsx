@@ -18,8 +18,10 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  const reset=()=>setPage(1);
  useEffect(()=>{
   const controller=new AbortController();
-  const delay=setTimeout(async()=>{
-   setLoading(true);setError("");
+  let pollTimer=null;
+  const load=async()=>{
+   if(controller.signal.aborted)return;
+   setLoading(true);
    try{
     const query=new URLSearchParams({vista,farmacia:pharmacy,origen:origin,destino:destination,
      buscar:search,orden:sort.key,direccion:sort.direction,pagina:String(page),
@@ -29,14 +31,24 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
      credentials:"same-origin",cache:"no-store",signal:controller.signal,
      headers:{"X-Farmetrica-Cliente":clientSlug}});
     const result=await response.json().catch(()=>({}));
-    if(!response.ok)throw Error(result.error||"No se pudo calcular el Transferidor.");
-    if(!controller.signal.aborted)setData(result);
-   }catch(e){if(!controller.signal.aborted)setError(e.message);}
-   finally{if(!controller.signal.aborted)setLoading(false);}
-  },150);
-  return()=>{clearTimeout(delay);controller.abort()};
+    if(!response.ok||result.status==="error")
+     throw Error(result.error||"No se pudo calcular el Transferidor.");
+    if(controller.signal.aborted)return;
+    setData(result);
+    const pending=["queued","inventory","calculating"].includes(result.status);
+    if(pending)pollTimer=setTimeout(load,1300);
+    else setLoading(false);
+   }catch(e){
+    if(!controller.signal.aborted){setError(e.message);setLoading(false)}
+   }
+  };
+  setData(null);setError("");
+  const delay=setTimeout(load,150);
+  return()=>{clearTimeout(delay);clearTimeout(pollTimer);controller.abort()};
  },[clientSlug,vista,pharmacy,origin,destination,search,page,pageSize,sort.key,
   sort.direction,JSON.stringify(filters),revision]);
+ const inProgress=["queued","inventory","calculating"].includes(data?.status);
+ const progress=data?.progress||{done:0,total:0};
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
  const columns=useMemo(()=>[
   {key:"cn",label:"CN",value:r=>r.cn,render:r=><strong>{r.cn}</strong>},
@@ -101,6 +113,12 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     }}>Limpiar filtros</button>
    </div>
   </section>
+  {inProgress&&<p className="fm-op-message" role="status">
+   {data?.status==="queued"?"Preparando cálculo de transferencias…":
+    data?.status==="inventory"?"Recuperando el stock de las farmacias…":
+    "Calculando propuestas: "+number(progress.done)+" de "+number(progress.total)+" lotes."}
+   {data?.summary?.movements>0?" Ya hay "+number(data.summary.movements)+" propuestas disponibles.":""}
+  </p>}
   {error&&<p className="fm-op-message fm-op-error" role="alert">{error}
    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRevision(Date.now())}>
     <RefreshCcw size={14}/> Reintentar</button></p>}
@@ -117,7 +135,8 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     <h2>Propuestas entre farmacias</h2>
     <span>Activación: {number(data?.summary?.minimumDays??4)} días · Objetivo: {number(data?.summary?.targetDays??7)} días + exposición</span>
    </div>
-   {!data&&loading?<LoadingPanel kind="table" label="Calculando movimientos globales…" rows={5}/>:<>
+   {!data&&loading?<LoadingPanel kind="table" label="Iniciando cálculo de transferencias…" rows={5}/>:error&&!data?
+    <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:<>
     <ListTable rows={data?.rows||[]} columns={columns} rowKey={r=>r.id}
      label="transferencias" tableClass="fm-transfer-main-table"
      sort={sort} onSortChange={next=>{setSort(next||{key:"units",direction:"desc"});reset()}}

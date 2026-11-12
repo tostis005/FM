@@ -171,6 +171,7 @@ jobs:
           node check-marketing.mjs
           node check-theme.mjs
           node --test src/tenantAppearance.test.js
+          node --test src/deploymentRecovery.test.js src/userRoleLabel.test.js
           npm run build
 
   validar_postgresql:
@@ -218,6 +219,9 @@ jobs:
           psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql
           psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql
           psql_test --single-transaction < api/src/migrations/054_fondo_clientes.sql
+          psql_test --single-transaction < api/src/migrations/056_ampedia_fondo_suave.sql
+          psql_test --single-transaction < api/src/migrations/057_ampedia_paleta_agua.sql
+          psql_test --single-transaction < api/src/migrations/057_ampedia_paleta_agua.sql
           psql_test --single-transaction < api/src/migrations/054_fondo_clientes.sql
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
           psql_test --single-transaction < api/src/migrations/051_picking_list.sql

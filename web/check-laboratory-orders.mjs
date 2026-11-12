@@ -363,6 +363,9 @@ try{
  assert.ok(matrices.filter(m=>m.laboratorio==="P:12").reduce((n,m)=>n+(m.referencias?.length||0),0)>=125);
  assert.equal(saved.at(-1).lineas.length,125,"El borrador incluye todo el laboratorio");
  assert.equal(saved.at(-1).lineas.find(l=>l.name==="Referencia lote 125")?.units,9);
+ // Regresión: el límite de 25 de otro laboratorio no puede ocultar parte del nuevo catálogo.
+ await pageSize.selectOption("25");
+ assert.equal(await page.locator(".fm-lab-order-table tbody tr").count(),25);
  // La opción Todos también recorre 600 referencias sin montar las 600 filas.
  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("600 referencias");
  await page.getByRole("option",{name:"Laboratorio con 600 referencias"}).click();

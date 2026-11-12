@@ -76,17 +76,17 @@ try{
  await page.getByRole("button",{name:"Guardar cobertura global"}).click();
  assert.ok(writes.some(w=>w.path==="/api/tenant/stock-objetivo"&&w.data.days===20));
 
- await page.getByRole("button",{name:"General",exact:true}).click();
+ await page.getByRole("navigation",{name:"Áreas de ajustes"}).getByRole("button",{name:"General",exact:true}).click();
  await page.getByRole("heading",{name:"Análisis de ventas · ABCD y márgenes"}).waitFor();
  await page.getByRole("button",{name:"Guardar período de análisis"}).click();
  assert.ok(writes.some(w=>w.path==="/api/tenant/configuracion-ventas"&&w.data.analysisMonths===12));
 
- await page.getByRole("button",{name:"Genéricos",exact:true}).click();
+ await page.getByRole("navigation",{name:"Áreas de ajustes"}).getByRole("button",{name:"Genéricos",exact:true}).click();
  await page.getByRole("heading",{name:"Precios de referencia para genéricos"}).waitFor();
  await page.getByRole("button",{name:"Guardar política"}).click();
  assert.ok(writes.some(w=>w.path==="/api/analytics/politica-precios"&&w.data.percentile===20));
 
- await page.getByRole("button",{name:"Transferidor",exact:true}).click();
+ await page.getByRole("navigation",{name:"Áreas de ajustes"}).getByRole("button",{name:"Transferidor",exact:true}).click();
  await page.getByRole("heading",{name:"Stock del transferidor"}).waitFor();
  const familySection=page.locator(".fm-transfer-settings-section").filter({hasText:"Exposición por farmacia y familia"});
  await familySection.getByLabel("Farmacia").selectOption("1");

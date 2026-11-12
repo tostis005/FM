@@ -46,9 +46,20 @@ await page.route("**/api/**",async route=>{
     unitMargin:11.54,margin:138.48,abcdClass:letter}],
     totalFiltered:byColumn.abcdClass?31:25600,hasMore:false,page:1};
  }
- else if(p==="/api/analytics/dashboard/horarios")body={
-  total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))
- };
+ else if(p==="/api/analytics/ventas/actividad"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  body={
+   horarios:{total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))},
+   vendedores:{total:234.5,sellers:[{name:"Ana",sales:234.5,units:12}]},
+   tickets:{kpis:{tickets:8,sales:234.5,units:12,ticketMedio:29.3125,unidadesPorTicket:1.5},
+    pharmacies:[{id:"1",name:"Farmacia Centro",sales:234.5,tickets:8,units:12,ticketMedio:29.3125}]}
+  };
+ }
+ else if(["/api/analytics/dashboard/horarios","/api/analytics/dashboard/vendedores",
+  "/api/analytics/ventas/ticket-medio"].includes(p)){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  body={error:"Endpoint independiente obsoleto en la pantalla Ventas"};
+ }
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
  else if(p==="/api/analytics/ventas/familias-ranking"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
@@ -58,11 +69,7 @@ await page.route("**/api/**",async route=>{
    {key:"sin-clasificar",name:"Sin clasificar",classified:false,segments:[],sales:54.5,units:3,lines:2}
   ],totalSales:234.5,totalUnits:12,totalLines:6,classifiedLines:4,coveragePct:66.7};
  }
- else if(p==="/api/analytics/ventas/ticket-medio"){
-  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
-  body={kpis:{tickets:8,sales:234.5,units:12,ticketMedio:29.3125,unidadesPorTicket:1.5},
-   pharmacies:[{id:"1",name:"Farmacia Centro",sales:234.5,tickets:8,units:12,ticketMedio:29.3125}]};
- }
+
  else if(p==="/api/health/database")body={status:"ok",database:"connected"};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -116,13 +123,19 @@ try{
  await page.getByRole("button",{name:"Unidades",exact:true}).click();
  await page.getByText("9 uds.",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ventas €",exact:true}).click();
- for(const endpoint of ["/api/analytics/ventas/familias-ranking","/api/analytics/ventas/ticket-medio"]){
+ for(const endpoint of ["/api/analytics/ventas/familias-ranking","/api/analytics/ventas/actividad"]){
   const requested=requests.find(r=>r.path===endpoint)?.query;
   const total=totals().at(-1)?.query;
   if(!requested||requested.desde!==total.desde||requested.hasta!==total.hasta)
    throw Error("El panel "+endpoint+" no respeta el mismo período de ventas");
  }
  await page.locator(".fm-heat-legend-swatch").first().waitFor({state:"visible",timeout:12000});
+ const obsolete=["/api/analytics/dashboard/horarios","/api/analytics/dashboard/vendedores",
+  "/api/analytics/ventas/ticket-medio"];
+ if(requests.some(r=>obsolete.includes(r.path)))
+  throw Error("Ventas sigue repitiendo consultas de actividad: "+JSON.stringify(requests.filter(r=>obsolete.includes(r.path))));
+ if(requests.filter(r=>r.path==="/api/analytics/ventas/actividad").length!==1)
+  throw Error("El mapa, los vendedores y tickets deben compartir una única petición.");
  const heatColors=await page.locator(".fm-heat-cell").evaluateAll(cells=>
   [...new Set(cells.map(el=>getComputedStyle(el).backgroundColor))]);
  if(heatColors.length<6)

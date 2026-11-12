@@ -183,7 +183,11 @@ try{
  const heatColors=await page.locator(".fm-heat-cell").evaluateAll(cells=>
   [...new Set(cells.map(el=>getComputedStyle(el).backgroundColor))]);
  if(heatColors.length<6)throw Error("El mapa necesita cinco intensidades y cero");
- if(totals().length!==1)throw Error("El resumen mensual se consulta una vez");
+ // Tres alcances deliberados: todas, solo Centro y todas otra vez.
+ // Al mover el ticket medio no deben aparecer consultas duplicadas por visual.
+ if(totals().length!==3)
+  throw Error("Se espera un único total por cambio de farmacia: "+
+   JSON.stringify(totals().map(r=>r.query)));
  noHeavyDetails();
  await page.locator(".fm-unified-filters select").first().selectOption("today");
  await verifyPeriod("hour");

@@ -55,14 +55,16 @@ try{
  await page.goto("http://127.0.0.1:4175/ajustes",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor({timeout:15000});
  await page.getByRole("button",{name:"Ajustes",exact:true}).first().waitFor();
- await page.getByRole("heading",{name:"Artículos excluidos de nuevos pedidos"}).waitFor();
+ await page.getByRole("heading",{name:"Exclusiones de pedidos"}).waitFor();
  assert.equal(await page.getByRole("heading",{name:"Frecuencia de pedidos"}).count(),0);
  assert.equal(await page.getByText("Revisar",{exact:true}).count(),0);
  assert.equal(await page.getByText("Ejemplos detectados en nombres de Farmatic").count(),0);
- assert.equal(await page.getByText(/«Sonda vesical baja fricción»/).count(),1);
- await page.getByLabel("Nueva frase o cadena literal para excluir").fill("*BAJA*");
+ assert.equal(await page.getByText(/«Sonda vesical baja fricción»/).count(),0);
+ assert.equal(await page.getByText("Reglas automáticas incluidas:",{exact:true}).count(),0);
+ assert.equal(await page.getByText("ZZZ",{exact:true}).count(),0);
+ await page.getByLabel("Texto a excluir").fill("*BAJA*");
  await page.getByRole("button",{name:"Añadir regla"}).click();
- await page.getByText("Regla guardada.",{exact:false}).first().waitFor();
+ await page.getByText("Regla añadida.",{exact:true}).first().waitFor();
  assert.ok(writes.some(w=>w.path==="/api/tenant/pedidos/exclusiones"&&
   w.method==="POST"&&w.data.text==="*BAJA*"));
  await page.getByRole("button",{name:"Guardar período de análisis"}).click();

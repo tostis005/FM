@@ -15,7 +15,7 @@ import {loadHistoricalSummary} from "./historicalSummaries.js";
 import {historyStartDate} from "./historyStartDate.js";
 import {taskPercent,combinedPercent,userLoadingText} from "./loadingProgress.js";
 import DashboardInsights from "./DashboardInsights.jsx";
-import SalesOverview from "./SalesOverview.jsx";
+import SalesOverview,{useSalesOverviewData} from "./SalesOverview.jsx";
 import SavingsAnalysis from "./SavingsAnalysis.jsx";
 import ImpactoVerificado from "./ImpactoVerificado.jsx";
 import "./centroTrabajo.css";
@@ -87,7 +87,7 @@ function metricCards(module,k,analysisMonths=12){
  const map={
   dashboard:[shared[0],shared[1],shared[3],
    CARD("Diferencia ventas − compras","resultadoComercial","€")],
-  ventas:[shared[0],CARD("Unidades vendidas","unidades","n")],
+  ventas:[shared[0],CARD("Unidades vendidas","unidades","n"),CARD("Ticket medio","ticketMedio","€")],
   compras:[shared[1],CARD("Recepciones registradas","recepciones","n"),
    CARD("Unidades compradas","unidadesCompradas","n"),
    CARD("Proveedores","proveedores","n","proveedores"),
@@ -319,6 +319,11 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const fastSales=fastEligible&&fastResult?.scope===fastScope?fastResult.data:null;
  const fastFailed=fastEligible&&fastFailure?.scope===fastScope?fastFailure.message:null;
  const fastLoading=fastEligible&&!fastSales&&!fastFailed;
+ // Una sola consulta de tickets para el KPI superior y las farmacias.
+ const salesTickets=useSalesOverviewData("ticket-medio-rapido",{
+  clientSlug,period,pharmacyIds:filters.pharmacyIds,reloadKey,
+  enabled:module==="ventas"&&Boolean(fastSales||fastFailed)
+ });
  useEffect(()=>{
   if(!fastEligible)return;
   if(dashboardCacheEligible&&dashboardCacheStatus!=="miss")return;
@@ -568,6 +573,12 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const realRevenue=hasSales?(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.ventas||0),0)??0:null;
  const realUnits=(fastSales||realSales)?.monthly?.reduce((t,r)=>t+Number(r.unidades||0),0)||0;
  const realKpis={...realReport?.kpis,...(fastSales?.kpis||{}),...(fastPurchase?.kpis||{})};
+ const ticketsCount=Number(salesTickets.data?.tickets);
+ const salesAmount=fastSales?.kpis?.ventas;
+ realKpis.ticketMedio=salesTickets.status==="ready"&&
+  salesAmount!=null&&Number.isFinite(Number(salesAmount))&&
+  Number.isFinite(ticketsCount)&&ticketsCount>0?
+  Number(salesAmount)/ticketsCount:null;
  if(!realReport?.kpis&&hasSales&&(!fastSales?.kpis||!Object.hasOwn(fastSales.kpis,"ventas"))){
   realKpis.ventas=realRevenue;realKpis.unidades=realUnits;
  }
@@ -696,11 +707,17 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
      ["ventas","unidades","margen","margenPct"].includes(c.key)?dashboardSalesLoading:dashboardPurchaseLoading):
     module==="compras"&&shouldLoadPurchaseSummary?
      (!fastPurchase&&!purchaseSummaryError):
+    module==="ventas"&&c.key==="ticketMedio"?
+     (fastLoading||salesTickets.status==="loading"):
     module==="ventas"&&fastEligible?fastLoading:isFetchingSales;
    const isMargin=["margen","margenPct"].includes(c.key);
    const isCommercial=["resultadoComercial","resultadoComercialPct"].includes(c.key);
    const isSaleMetric=["ventas","unidades","margen","margenPct"].includes(c.key);
-   const reason=kpiLoading?"":isCommercial?
+   const reason=kpiLoading?"":c.key==="ticketMedio"?
+    salesTickets.status==="error"?"No se pudo consultar el ticket medio":
+    realKpis.ticketMedio==null?"Sin operaciones válidas o ventas disponibles":
+    "Venta neta por operación":
+    isCommercial?
     commercialReady?"Ventas − compras del período, sin ajuste de existencias ni gastos":
      fastFailed||purchaseSummaryError?
       "No disponible: una de las fuentes no se ha podido cargar":
@@ -719,7 +736,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
     module==="compras"?taskPercent(purchaseProgress,purchaseSummaryScope,Boolean(fastPurchase)):
     module==="ventas"&&["ventas","unidades"].includes(c.key)?
     taskPercent(fastProgress,fastScope,Boolean(fastSales)):null;
-   const sourceLabel=isDashboard?(isCommercial?"ventas y compras":
+   const sourceLabel=c.key==="ticketMedio"?"ticket medio":isDashboard?(isCommercial?"ventas y compras":
     ["ventas","unidades","margen","margenPct"].includes(c.key)?"ventas":"compras"):"datos";
    return <button key={c.label+c.key} type="button" className={"card fm-demo-kpi fm-kpi-link "+(active?"fm-kpi-active":"")}
     disabled={!active||kpiLoading} aria-busy={kpiLoading} onClick={()=>go(c.link)} aria-label={c.label+(kpiLoading?", cargando":active?": abrir "+TITLES[c.link]:"")}>
@@ -824,7 +841,7 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
    </section>}
   {module==="ventas"&&<SalesOverview clientSlug={clientSlug} period={period}
    pharmacyIds={filters.pharmacyIds} pharmacies={pharmacies} reloadKey={reloadKey}
-   enabled={Boolean(fastSales||fastFailed)} salesTotal={fastSales?.kpis?.ventas??null}
+   enabled={Boolean(fastSales||fastFailed)} tickets={salesTickets}
    onNavigate={onNavigate} canNavigate={canNavigate}/>} 
   {isDashboard&&<ImpactoVerificado clientSlug={clientSlug} pharmacies={pharmacies}
    pharmacyIds={filters.pharmacyIds} onNavigate={onNavigate} canNavigate={canNavigate}/>}

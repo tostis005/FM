@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {parseLaboratoryVariant,groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
+import {ALL_LAB_ROWS,laboratoryTablePage} from "./laboratoryTableWindow.js";
 
 const rows=[
  {referencia:"234567",cn:"234567",nombre:"Crema Solar SPF 50"},
@@ -57,4 +58,31 @@ test("dos variantes sin raíz pueden asociarse si comparten exactamente prefijo"
  ]);
  assert.equal(groups.length,1);
  assert.deepEqual(groups[0].rows.map(r=>r._visualLabel),["Regalo R1","Regalo R2"]);
+});
+
+test("ninguna referencia desaparece al agrupar, ordenar o paginar",()=>{
+ const catalogue=Array.from({length:140},(_,i)=>{
+  const index=i+1,base=Math.floor(i/7);
+  return {referencia:String(100000+index),cn:String(100000+index),
+   nombre:i%7===0?"Familia "+base:i%7===1?"Familia "+base+" R1":
+    i%7===2?"Familia "+base+" R2":
+    i%7===3?"Familia "+base+" DUPLO 2":"Artículo "+index,
+   metricsReady:true,totalSold:index,totalSuggested:index};
+ });
+ const expected=[...catalogue.map(r=>r.referencia)].sort();
+ for(const sort of ["original","cn:asc","cn:desc","article:asc","article:desc",
+  "totalStock:desc","totalUnits:desc","totalSuggested:asc","totalOrder:desc"]){
+  const groups=groupedLaboratoryRows(catalogue,sort,
+   (a,b)=>a.representative.totalSold-b.representative.totalSold);
+  const all=laboratoryTablePage(groups,ALL_LAB_ROWS,0).rows;
+  assert.equal(all.length,catalogue.length,"Todos debe mostrar los 140 CN incluso si existen grupos");
+  assert.deepEqual(all.map(r=>r.referencia).sort(),expected);
+  for(const size of [25,50,100]){
+   const pages=Math.ceil(groups.length/size);
+   const paged=Array.from({length:pages},(_,page)=>
+    laboratoryTablePage(groups,size,page).rows).flat();
+   assert.deepEqual(paged.map(r=>r.referencia).sort(),expected,
+    "El paginado nunca debe dejar referencias fuera, aunque el número de grupos sea menor");
+  }
+ }
 });

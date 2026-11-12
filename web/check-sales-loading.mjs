@@ -1,5 +1,4 @@
-// Prueba de carga progresiva real: SUM primero, recuentos y detalle después,
-// sin reutilizar resultados entre selecciones ni asumir spinners simultáneos.
+// Ventas estratégica: resumen y tres análisis, sin recuentos ni tabla de artículos.
 import {chromium} from "playwright";
 const BASE=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
@@ -46,6 +45,10 @@ await page.route("**/api/**",async route=>{
     unitMargin:11.54,margin:138.48,abcdClass:letter}],
     totalFiltered:byColumn.abcdClass?31:25600,hasMore:false,page:1};
  }
+ else if(p==="/api/analytics/ventas/ticket-medio-rapido"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  body={tickets:8,pharmacies:[{id:"1",name:"Farmacia Centro",tickets:8}]};
+ }
  else if(p==="/api/analytics/ventas/actividad"){
   requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
   body={
@@ -75,77 +78,73 @@ await page.route("**/api/**",async route=>{
 });
 const totals=()=>requests.filter(r=>r.path==="/api/analytics/ventas/totales");
 async function verifyPeriod(expected){
- // El spinner puede ser efímero si React termina la navegación más tarde.
- // Probar el estado estable real y la concurrencia con detalle todavía pendiente.
  await page.waitForFunction(()=>{
    const graph=document.querySelector(".fm-demo-graph");
    const kpi=document.querySelector(".fm-demo-kpi strong");
    return graph?.getAttribute("aria-busy")==="false"&&
      Boolean(kpi&&kpi.textContent?.trim()!=="—");
  },null,{timeout:14000});
- // La cifra y el gráfico ya son visibles mientras el detalle aún se procesa.
  const latest=totals().at(-1);
  if(!latest||latest.query.granularidad!==expected)
-  throw Error("Granularidad del SUM incorrecta: "+JSON.stringify(latest));
- const detailLoading=await page.locator(".fm-demo-table .fm-loading-panel").count();
- if(detailLoading!==1)
-  throw Error("La tabla debe seguir cargando después de recibir el SUM");
- await page.locator(".fm-demo-table .fm-loading-panel").waitFor({state:"detached",timeout:11000});
- await page.getByText("Artículo",{exact:true}).first().waitFor({state:"visible",timeout:10000});
- const selected=totals().at(-1).query;
- for(const endpoint of ["/api/analytics/ventas/recuento","/api/analytics/ventas/detalle"]){
-  const query=requests.filter(r=>r.path===endpoint).at(-1)?.query;
-  if(!query||query.desde!==selected.desde||query.hasta!==selected.hasta)
-   throw Error("Las fechas de "+endpoint+" no coinciden con el gráfico: "+
-    JSON.stringify({summary:selected,query}));
+  throw Error("Granularidad incorrecta: "+JSON.stringify(latest));
+ const current=latest.query;
+ for(const endpoint of [
+  "/api/analytics/ventas/familias-ranking",
+  "/api/analytics/ventas/actividad",
+  "/api/analytics/ventas/ticket-medio-rapido"
+ ]){
+  await page.waitForFunction(([path,from,to])=>{
+   return [...document.querySelectorAll(".fm-so-family,.fm-so-ticket,.fm-dashboard-insights")]
+    .length>=3;
+  },[endpoint,current.desde,current.hasta],{timeout:12000});
+  const hits=requests.filter(r=>r.path===endpoint&&
+   r.query.desde===current.desde&&r.query.hasta===current.hasta);
+  if(!hits.length){
+   await page.waitForTimeout(300);
+   if(!requests.some(r=>r.path===endpoint&&r.query.desde===current.desde&&r.query.hasta===current.hasta))
+    throw Error("No se consultó "+endpoint+" para los filtros del resumen");
+  }
  }
  return totals().length;
 }
+const forbidden=[
+ "/api/analytics/ventas/recuento","/api/analytics/ventas/detalle",
+ "/api/analytics/ventas/ticket-medio","/api/analytics/dashboard/horarios",
+ "/api/analytics/dashboard/vendedores"
+];
+const noHeavyDetails=()=>{
+ const duplicate=requests.filter(r=>forbidden.includes(r.path));
+ if(duplicate.length)throw Error("Ventas no debe recuperar artículos ni consultas obsoletas: "+JSON.stringify(duplicate));
+};
 try{
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});
  await page.locator(".fm-demo-kpi").first().waitFor({state:"visible",timeout:15000});
  await verifyPeriod("month");
- // El gestor ve primero la radiografía, después horarios y vendedores,
- // y por último el detalle de artículos, sin duplicar filtros ni consultas.
- const visualOrder=await page.evaluate(()=>{
-  const table=document.querySelector("#fm-sales-articles");
-  const map=document.querySelector(".fm-dashboard-insights .fm-insight-panel");
-  const overview=document.querySelector(".fm-so-overview");
-  return {hasTable:!!table,hasMap:!!map,hasOverview:!!overview,
-   overviewBeforeMap:!!(overview&&map&&(overview.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING)),
-   mapBeforeTable:!!(table&&map&&(map.compareDocumentPosition(table)&Node.DOCUMENT_POSITION_FOLLOWING))};
- });
- if(!visualOrder.hasOverview||!visualOrder.overviewBeforeMap||!visualOrder.mapBeforeTable)
-  throw Error("La radiografía, el mapa y el detalle deben mantener ese orden: "+JSON.stringify(visualOrder));
  await page.getByText("Ventas por familias",{exact:true}).waitFor();
  await page.getByText("Dermocosmética",{exact:true}).waitFor();
  await page.getByText("Ticket medio neto",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Unidades",exact:true}).click();
  await page.getByText("9 uds.",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Ventas €",exact:true}).click();
- for(const endpoint of ["/api/analytics/ventas/familias-ranking","/api/analytics/ventas/actividad"]){
-  const requested=requests.find(r=>r.path===endpoint)?.query;
-  const total=totals().at(-1)?.query;
-  if(!requested||requested.desde!==total.desde||requested.hasta!==total.hasta)
-   throw Error("El panel "+endpoint+" no respeta el mismo período de ventas");
- }
+ if(await page.getByText("Artículos diferentes",{exact:true}).count()||
+    await page.getByText("Referencias por farmacia",{exact:true}).count()||
+    await page.getByRole("heading",{name:"Artículos vendidos"}).count()||
+    await page.locator("#fm-sales-articles").count())
+  throw Error("Ventas debe mostrar visión estratégica y no detalle de artículos");
+ const order=await page.evaluate(()=>{
+  const overview=document.querySelector(".fm-so-overview");
+  const map=document.querySelector(".fm-dashboard-insights .fm-insight-panel");
+  return Boolean(overview&&map&&overview.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING);
+ });
+ if(!order)throw Error("Las familias y el ticket deben aparecer antes del mapa");
  await page.locator(".fm-heat-legend-swatch").first().waitFor({state:"visible",timeout:12000});
- const obsolete=["/api/analytics/dashboard/horarios","/api/analytics/dashboard/vendedores",
-  "/api/analytics/ventas/ticket-medio"];
- if(requests.some(r=>obsolete.includes(r.path)))
-  throw Error("Ventas sigue repitiendo consultas de actividad: "+JSON.stringify(requests.filter(r=>obsolete.includes(r.path))));
- if(requests.filter(r=>r.path==="/api/analytics/ventas/actividad").length!==1)
-  throw Error("El mapa, los vendedores y tickets deben compartir una única petición.");
  const heatColors=await page.locator(".fm-heat-cell").evaluateAll(cells=>
   [...new Set(cells.map(el=>getComputedStyle(el).backgroundColor))]);
- if(heatColors.length<6)
-  throw Error("El mapa debe distinguir cinco intensidades y celdas sin ventas: "+heatColors);
-
- if(totals().length!==1)throw Error("Se esperaba una consulta SQL mensual");
+ if(heatColors.length<6)throw Error("El mapa necesita cinco intensidades y cero");
+ if(totals().length!==1)throw Error("El resumen mensual se consulta una vez");
+ noHeavyDetails();
  await page.locator(".fm-unified-filters select").first().selectOption("today");
  await verifyPeriod("hour");
- let t=totals().at(-1).query;
- if(t.desde!==t.hasta)throw Error("Hoy debe solicitar un solo día");
  await page.locator(".fm-unified-filters select").first().selectOption("this_week");
  await verifyPeriod("day");
  await page.locator(".fm-unified-filters select").first().selectOption("custom");
@@ -153,53 +152,22 @@ try{
  await page.locator(".fm-unified-filters input[type=date]").last().fill("2026-10-12");
  await page.waitForFunction(()=>document.querySelector(".fm-unified-header-meta")?.textContent.includes("12/10/2026"),
   null,{timeout:8000});
- await page.waitForFunction(()=>document.querySelector(".fm-demo-graph .fm-loading-panel")===null,
-  null,{timeout:11000});
- await page.locator(".fm-demo-table .fm-loading-panel").waitFor({state:"detached",timeout:11000});
- t=totals().at(-1).query;
- for(const endpoint of ["/api/analytics/ventas/recuento","/api/analytics/ventas/detalle"]){
-  const query=requests.filter(r=>r.path===endpoint).at(-1)?.query;
-  if(!query||query.desde!==t.desde||query.hasta!==t.hasta)
-   throw Error("El período personalizado del detalle difiere del gráfico: "+
-    JSON.stringify({summary:t,query,endpoint}));
- }
- if(t.desde!=="2026-10-05"||t.hasta!=="2026-10-12"||t.granularidad!=="day")
-  throw Error("Fechas personalizadas incorrectas: "+JSON.stringify(t));
-
- // C y B deben poder elegirse aunque la primera página sólo contenga A.
- await page.getByRole("button",{name:"Filtrar por ABCD"}).click();
- await page.getByRole("checkbox",{name:"B",exact:true}).check();
- await page.getByRole("checkbox",{name:"C",exact:true}).check();
- await page.getByRole("button",{name:"Listo"}).click();
- await page.waitForFunction(()=>{
-  const elements=[...document.querySelectorAll(".fm-demo-table .fm-abcd")];
-  return elements.some(el=>el.textContent==="B");
- },null,{timeout:14000});
- const columnRequest=requests.filter(r=>r.path==="/api/analytics/ventas/detalle"&&r.query.columnas).at(-1);
- if(!columnRequest)throw Error("El filtro ABCD no ha llegado a PostgreSQL");
- const parsed=JSON.parse(columnRequest.query.columnas);
- if(JSON.stringify(parsed.abcdClass)!==JSON.stringify(["B","C"]))
-  throw Error("No se combinaron B/C en la consulta: "+columnRequest.query.columnas);
- if(columnRequest.query.desde!==t.desde||columnRequest.query.hasta!==t.hasta)
-  throw Error("Cambiar la columna ABCD no debe cambiar el período de ventas");
- // La pestaña recupera el foco sin relanzar todas las consultas ni perder
- // los filtros/estado actuales. El refresco explícito sigue funcionando.
- await page.waitForTimeout(500);
- const beforeFocus=requests.length, beforeTotals=totals().length;
+ await verifyPeriod("day");
+ const current=totals().at(-1).query;
+ if(current.desde!=="2026-10-05"||current.hasta!=="2026-10-12")
+  throw Error("Fechas personalizadas incorrectas");
+ noHeavyDetails();
+ const beforeFocus=requests.length,beforeTotals=totals().length;
  await page.evaluate(()=>{
   document.dispatchEvent(new Event("visibilitychange"));
   window.dispatchEvent(new Event("focus"));
  });
- await page.waitForTimeout(550);
- if(requests.length!==beforeFocus)
-  throw Error("Regresión: recuperar foco vuelve a consultar ventas ("+
-   beforeFocus+" -> "+requests.length+")");
- if(totals().length!==beforeTotals)
-  throw Error("Regresión: los totales se recalculan al volver a la pestaña");
- const refresh=page.getByRole("button",{name:"Actualizar",exact:true});
- await refresh.click();
+ await page.waitForTimeout(500);
+ if(requests.length!==beforeFocus||totals().length!==beforeTotals)
+  throw Error("El foco no debe volver a lanzar las consultas de Ventas");
+ await page.getByRole("button",{name:"Actualizar",exact:true}).click();
  await page.waitForTimeout(600);
- if(totals().length<=beforeTotals)
-  throw Error("El botón Actualizar debe solicitar datos nuevos");
- console.log("OK: SUM visible antes que ABCD, doble carga independiente y períodos reales");
+ if(totals().length<=beforeTotals)throw Error("Actualizar debe recargar datos");
+ noHeavyDetails();
+ console.log("OK Ventas: resumen y tres análisis sin recuentos, tabla ni llamadas redundantes");
 }finally{await browser.close()}

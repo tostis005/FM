@@ -188,6 +188,11 @@ WITH refs AS MATERIALIZED (
  FROM farmetrica.op_pedidos p
  JOIN pharmacies f ON f.id=p.farmacia_id
  CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.lineas,'[]'::jsonb)) AS order_line(elem)
+ -- Resolver primero las referencias solicitadas, antes de desplegar
+ -- asignaciones de otros artículos de pedidos abiertos.
+ JOIN eligible_articles eligible
+  ON eligible.pharmacy_id=p.farmacia_id
+   AND eligible.article_id=order_line.elem->>'articulo'
  CROSS JOIN LATERAL jsonb_array_elements(
   coalesce(order_line.elem->'asignaciones','[]'::jsonb)) AS assignment(elem)
  WHERE p.cliente_slug=$3

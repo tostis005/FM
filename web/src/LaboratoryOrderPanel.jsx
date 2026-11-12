@@ -308,6 +308,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const metricsLoading=loading&&Boolean(laboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
  const showMatrixOverlay=metricsLoading;
+ const matrixColumnCount=chosen.length*5+(tab==="parafarmacia"?12:7);
  const {pageTotalStock,pageGlobalStock,pageTotalSold,pageTotalSuggested,
   pageTotalOrder,warehousePending}=useMemo(()=>{
    const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
@@ -486,7 +487,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <div className="fm-lab-order-summary">
      {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos</span>}
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
-     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>
+     {tab==="parafarmacia"&&<span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>}
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
      <span><strong>{data.frequencyDays>0?data.frequencyDays+" días":"Bajo demanda"}</strong> · frecuencia de planificación</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
@@ -529,7 +530,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           </div>
          </th>
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       <th className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>Almacén</th>
+       {tab==="parafarmacia"&&<th className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>Almacén</th>}
        <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
        <th colSpan={2} className="fm-lab-order-order-group">Pedido</th>
       </tr><tr>
@@ -539,7 +540,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           "Unidades vendidas en los últimos 3 meses","Unidades vendidas en el período seleccionado",
           tab==="medicacion"?"Unidades del pedido para esta farmacia":"Propuesta de pedido para esta farmacia"][k]}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       {["STOCK","12M","3M","UDS","PEDIDO"]
+       {tab==="parafarmacia"&&["STOCK","12M","3M","UDS","PEDIDO"]
         .map((name,k)=><th key={"alm-"+k} className="fm-lab-order-warehouse-head"
          title={k===0?"Existencias reales del almacén":k===1?"Ventas del almacén en los últimos 12 meses":
           k===2?"Ventas del almacén en los últimos 3 meses":k===3?"Ventas del almacén en el período seleccionado":
@@ -551,7 +552,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       </tr></thead>
       <tbody>
       {viewport.virtualized&&viewport.top>0&&<tr className="fm-lab-virtual-spacer" aria-hidden="true"
-        style={{height:viewport.top}}><td colSpan={chosen.length*5+12}
+        style={{height:viewport.top}}><td colSpan={matrixColumnCount}
          style={{height:viewport.top}}/></tr>}
       {renderedRows.map(row=>{
        const line=showLine(row);
@@ -580,7 +581,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
-        {["stock","units12","units3","unitsPeriod","suggested"].map((key,k)=>{
+        {tab==="parafarmacia"&&["stock","units12","units3","unitsPeriod","suggested"].map((key,k)=>{
           const available=tab==="parafarmacia"&&row.metricsReady;
           const value=k===4?null:available?row.warehouse?.[key]:null;
           return <td key={"alm-"+key} className={"fm-lab-order-warehouse-col"+(k===4?" fm-lab-order-ordercol":"")}
@@ -613,12 +614,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        </tr>;
       })}
       {viewport.virtualized&&viewport.bottom>0&&<tr className="fm-lab-virtual-spacer" aria-hidden="true"
-       style={{height:viewport.bottom}}><td colSpan={chosen.length*5+12}
+       style={{height:viewport.bottom}}><td colSpan={matrixColumnCount}
          style={{height:viewport.bottom}}/></tr>}
       {!loading&&currentRows.length>0&&!tableVisibleRows.length&&<tr>
-        <td colSpan={chosen.length*5+12}>Ningún artículo coincide con los filtros de columna.</td>
+        <td colSpan={matrixColumnCount}>Ningún artículo coincide con los filtros de columna.</td>
        </tr>}
-       {!loading&&!currentRows.length&&<tr><td colSpan={chosen.length*5+12}>
+       {!loading&&!currentRows.length&&<tr><td colSpan={matrixColumnCount}>
        <div className="fm-lab-order-noresults">
         <strong>{tab==="parafarmacia"?
          "Sin referencias de parafarmacia en este laboratorio":

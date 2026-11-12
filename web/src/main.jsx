@@ -1454,10 +1454,9 @@ function App(){
     <button className="fm-sidebar-collapse-toggle" type="button"
      aria-label={sidebarCollapsed?"Desplegar menú lateral":"Plegar menú lateral"}
      aria-controls="farmetrica-sidebar-navigation" aria-expanded={!sidebarCollapsed}
-     title={sidebarCollapsed?"Desplegar menú":"Plegar menú"} onClick={()=>setSidebarCollapsed(v=>!v)}>
+     onClick={()=>setSidebarCollapsed(v=>!v)}>
      
-     {sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
-     <span className="fm-sidebar-toggle-label">{sidebarCollapsed?"Desplegar menú":"Plegar menú"}</span>
+     {sidebarCollapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>} 
     </button>
    </div>
   </aside>

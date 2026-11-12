@@ -31,6 +31,9 @@
 .fm-lab-order-table thead th.fm-lab-order-total-head{background:#e9f3ec;color:#24583b;font-weight:800}
 .fm-lab-order-table thead .fm-lab-total-sort{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:800;white-space:nowrap;cursor:pointer}
 .fm-lab-order-table .fm-lab-total-sort span{font-size:10px;opacity:.85}
+.fm-lab-order-table .fm-lab-total-sort span::before{content:"↕"}
+.fm-lab-order-table .fm-lab-total-sort span[data-direction="ascending"]::before{content:"▲"}
+.fm-lab-order-table .fm-lab-total-sort span[data-direction="descending"]::before{content:"▼"}
 .fm-lab-order-table .fm-lab-total-sort:hover,.fm-lab-order-table .fm-lab-total-sort:focus-visible{text-decoration:underline;text-underline-offset:3px}
 .fm-lab-order-total-input{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .fm-lab-order-table .fm-lab-order-group-sum{font-size:10px;line-height:1.2;color:#24583b;font-weight:750;border-radius:4px;padding:3px 4px;background:#d9efe0;white-space:nowrap}

@@ -301,7 +301,12 @@ export function setupTransferidor(app,pool,{requireTenant}){
      ". Se han calculado las otras farmacias.":plan.skipped?
      plan.skipped+" referencias sin stock fiable omitidas.":null});
   }catch(e){
-   if(["57014","53300"].includes(e.code)||e.message==="Query read timeout")return res.status(504).json({error:"El cálculo de transferencias ha superado el tiempo disponible. Inténtalo más tarde."});
+   // No incluir datos de farmacias ni productos en los registros de errores.
+   console.error("TRANSFERIDOR_API",JSON.stringify({code:e.code||e.name||"QUERY_ERROR"}));
+   if(["57014","53300"].includes(e.code)||e.message==="Query read timeout")
+    return res.status(504).json({error:"El cálculo de transferencias ha superado el tiempo disponible. Inténtalo más tarde."});
+   if(["42P01","42703"].includes(e.code))
+    return res.status(503).json({error:"Faltan datos de inventario o ventas para calcular las transferencias. Revisa la sincronización."});
    next(e);
   }
  });

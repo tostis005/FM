@@ -30,6 +30,8 @@ WITH refs AS MATERIALIZED (
   ON upper(btrim(a.farmacia_codigo))=f.source_code
    AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
  WHERE x.cn IS NOT NULL
+  -- Predicado idéntico al del índice parcial de CN normalizado.
+   AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL
  UNION ALL
  SELECT f.id,x.reference,a.origen_id::text,
    a.stock_actual::float8,a.sincronizado_en
@@ -96,6 +98,7 @@ WITH refs AS MATERIALIZED (
   ON upper(btrim(a.farmacia_codigo))=w.source_code
    AND nullif(btrim(__CN_NORMALIZED__),'')=x.cn
  WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
+   AND nullif(btrim(__CN_NORMALIZED__),'') IS NOT NULL
 ), warehouse_distinct AS MATERIALIZED (
  SELECT DISTINCT ON (reference,article_id)
    reference,article_id,stock,stock_at

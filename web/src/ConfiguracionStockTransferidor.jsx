@@ -14,26 +14,49 @@ const normalizePolicy=p=>({minDays:p?.minDays??4,targetDays:p?.targetDays??7,
  families:Array.isArray(p?.families)?p.families:[],articles:Array.isArray(p?.articles)?p.articles:[]});
 export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]}){
  const [policy,setPolicy]=useState({minDays:4,targetDays:7,families:[],articles:[]});
- const [names,setNames]=useState([]);
+ const [families,setFamilies]=useState([]);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
  const [error,setError]=useState(""),[notice,setNotice]=useState("");
  const [familyForm,setFamilyForm]=useState({pharmacyId:"",familyId:"",days:"30"});
  const [articleForm,setArticleForm]=useState({pharmacyId:"",cn:"",units:"100"});
  const available=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
- const families=useMemo(()=>names.filter(f=>f.segment==="PARAFARMACIA"),[names]);
- const getName=id=>names.find(f=>String(f.id)===String(id))?.name||"Familia "+id;
+ const familyById=useMemo(()=>{
+  const map=new Map();
+  for(const group of families)for(const member of group.members||[])
+   map.set(String(member.id),group);
+  return map;
+ },[families]);
+ const getName=id=>familyById.get(String(id))?.name||"Familia "+id;
+ // Un nombre único puede tener varios IDs internos. Se muestran juntos.
+ const familyRules=useMemo(()=>{
+  const grouped=new Map();
+  for(const rule of policy.families){
+   const group=familyById.get(String(rule.familyId));
+   const key=String(rule.pharmacyId)+"|"+(group?.key||"id:"+rule.familyId);
+   if(!grouped.has(key))grouped.set(key,{
+    pharmacyId:rule.pharmacyId,familyId:group?.id||rule.familyId,
+    familyIds:group?.members?.map(m=>m.id)||[rule.familyId],days:[]
+   });
+   grouped.get(key).days.push(Number(rule.days));
+  }
+  return [...grouped.values()].map(row=>{
+   const values=[...new Set(row.days)].sort((a,b)=>a-b);
+   return {...row,daysLabel:values.length===1?number(values[0])+" días extra":
+    number(values[0])+"–"+number(values[values.length-1])+" días extra"};
+  });
+ },[policy.families,familyById]);
  const getPharmacy=id=>available.find(p=>String(p.id)===String(id))?.name||"Farmacia "+id;
  async function reload(){
   const [p,f]=await Promise.all([
    request(clientSlug,"/api/tenant/transferidor-politica"),
-   request(clientSlug,"/api/tenant/familias-globales")]);
-  setPolicy(normalizePolicy(p));setNames(Array.isArray(f?.items)?f.items:[]);
+   request(clientSlug,"/api/tenant/familias-globales?view=todas")]);
+  setPolicy(normalizePolicy(p));setFamilies(Array.isArray(f?.groups)?f.groups:[]);
  }
  useEffect(()=>{
   let alive=true;setLoading(true);setError("");setNotice("");
   Promise.all([request(clientSlug,"/api/tenant/transferidor-politica"),
-   request(clientSlug,"/api/tenant/familias-globales")])
-  .then(([p,f])=>{if(alive){setPolicy(normalizePolicy(p));setNames(Array.isArray(f?.items)?f.items:[])}})
+   request(clientSlug,"/api/tenant/familias-globales?view=todas")])
+  .then(([p,f])=>{if(alive){setPolicy(normalizePolicy(p));setFamilies(Array.isArray(f?.groups)?f.groups:[])}})
   .catch(e=>{if(alive)setError(e.message)})
   .finally(()=>{if(alive)setLoading(false)});
   return()=>{alive=false};
@@ -55,10 +78,12 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
  async function submitFamily(e){
   e.preventDefault();
   const days=Number(familyForm.days);
-  if(!familyForm.pharmacyId||!familyForm.familyId||!Number.isInteger(days)||days<1||days>365)
+  const group=families.find(f=>String(f.id)===String(familyForm.familyId));
+  if(!familyForm.pharmacyId||!group||!Number.isInteger(days)||days<1||days>365)
    return setError("Elige una farmacia, una familia y entre 1 y 365 días.");
+  const familyIds=group.members.map(member=>member.id);
   await act(()=>request(clientSlug,"/api/tenant/transferidor-politica/familias",
-   {method:"PUT",body:JSON.stringify({...familyForm,days})}),"Exposición de familia guardada.");
+   {method:"PUT",body:JSON.stringify({...familyForm,familyIds,days})}),"Exposición de familia guardada.");
  }
  async function submitArticle(e){
   e.preventDefault();
@@ -71,7 +96,7 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
  async function remove(type,entry){
   await act(()=>request(clientSlug,"/api/tenant/transferidor-politica/"+type,
    {method:"DELETE",body:JSON.stringify(type==="familias"?
-    {pharmacyId:entry.pharmacyId,familyId:entry.familyId}:{pharmacyId:entry.pharmacyId,cn:entry.cn})}),
+    {pharmacyId:entry.pharmacyId,familyId:entry.familyId,familyIds:entry.familyIds}:{pharmacyId:entry.pharmacyId,cn:entry.cn})}),
    "Excepción eliminada: vuelve a aplicarse el nivel superior.");
  }
  return <section className="card fm-transfer-settings">
@@ -98,6 +123,7 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
    <p className="fm-transfer-settings-example">Ejemplo sin exposición: por debajo de 4 días de stock, el transferidor busca unidades para alcanzar los 7 días. No se lanza una transferencia mientras se mantiene el mínimo.</p>
    <div className="fm-transfer-settings-section">
     <div className="fm-transfer-settings-title"><strong>2. Exposición por farmacia y familia</strong><small>Días adicionales de exposición, no sustitutivos de los 4/7 días</small></div>
+    <p>Se puede elegir cualquier familia global. Si incluye varios tipos de artículos, la reserva se guarda para todos sus vínculos y solo se aplica a los artículos gestionados por el transferidor.</p>
     <form className="fm-transfer-settings-form" onSubmit={submitFamily}>
      <label>Farmacia
       <select required value={familyForm.pharmacyId} onChange={e=>setFamilyForm(x=>({...x,pharmacyId:e.target.value}))}>
@@ -115,10 +141,10 @@ export default function ConfiguracionStockTransferidor({clientSlug,pharmacies=[]
      <button className="btn btn-primary" type="submit" disabled={busy||!families.length}><Plus size={16}/>Guardar</button>
     </form>
     <div className="fm-transfer-settings-records">
-     {policy.families.length===0?<p>Sin excepciones familiares. Se aplica únicamente la regla global.</p>:
-      policy.families.map(r=><div key={r.pharmacyId+"|"+r.familyId}>
+     {familyRules.length===0?<p>Sin excepciones familiares. Se aplica únicamente la regla global.</p>:
+      familyRules.map(r=><div key={r.pharmacyId+"|"+r.familyId}>
        <span><strong>{getPharmacy(r.pharmacyId)}</strong> · {getName(r.familyId)}</span>
-       <strong>{number(r.days)} días extra</strong>
+       <strong>{r.daysLabel}</strong>
        <button type="button" className="btn btn-secondary btn-sm" disabled={busy}
         onClick={()=>remove("familias",r)} aria-label={"Eliminar exposición de "+getName(r.familyId)}>
         <Trash2 size={14}/></button>

@@ -4,6 +4,7 @@ import {buildDashboardMonthSQL,compatibleConsolidatedRange,
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {createDashboardDailyService} from "./dashboardDailyService.js";
 import {createDashboardAnnualService,splitConsolidatedYears} from "./dashboardAnnualService.js";
+import {createSalesMonthlyReader} from "./salesCachedMonthly.js";
 
 const IDENT=/^[a-z][a-z0-9_]{1,62}$/;
 const DEFAULT_NOW=()=>new Date();
@@ -119,6 +120,7 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
    .finally(()=>scheduled.delete(key));
  };
  const scheduleMonth=(scope,month)=>enqueue("m:"+scope.slug+":"+month,()=>refreshMonth({...scope,month}));
+ const readSales=createSalesMonthlyReader(pool,{dbClock,scheduleMonth});
  const scheduleYear=(scope,year)=>enqueue("y:"+scope.slug+":"+year,()=>annual.refreshYear({...scope,year}));
 
  let lastNight="";
@@ -214,7 +216,7 @@ export function createDashboardConsolidationService(pool,{now=DEFAULT_NOW,logger
    liveRanges:range.liveRanges.length,liveCurrentMonth:range.active,
    ...summarizeConsolidations(rows,from,to)};
  }
- return {read,refreshMonth,refreshYear:annual.refreshYear,backfill,
+ return {read,readSales,refreshMonth,refreshYear:annual.refreshYear,backfill,
   backfillDays:daily.backfillDays,refreshDays:daily.refreshDays,
   runNightly,start,sourceScopes};
 }

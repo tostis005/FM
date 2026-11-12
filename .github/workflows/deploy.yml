@@ -489,8 +489,10 @@ jobs:
           '
 
       - name: Diagnosticar matriz real de ventas y stock del preparador (solo lectura)
-        # Este diagnóstico no altera datos ni frena la publicación si una
-        # farmacia tiene histórico de ventas aún demasiado costoso.
+        # No lanzar el benchmark histórico pesado en CADA despliegue:
+        # competía con usuarios reales y repetía múltiples matrices de ventas.
+        # Activación explícita con BENCH_PREPARADOR en el mensaje del commit.
+        if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'BENCH_PREPARADOR')
         continue-on-error: true
         run: |
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '

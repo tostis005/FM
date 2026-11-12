@@ -247,7 +247,10 @@ export async function readDirectLaboratoryCatalog(pool,context,{key,pharmacies,t
  const {rows}=await pool.query({text:sql,
   values:[key,pharmacies,context.client.slug,type,search,size,(page-1)*size,patterns],
   query_timeout:30000});
- return {rows:rows.map(({total,...row})=>row),total:rows[0]?.total||0,page,size};
+ const result={rows:rows.map(({total,...row})=>row),
+  total:rows[0]?.total||0,page,size};
+ return skipCanonicalization?result:
+  canonicalizeLaboratoryCatalog(pool,context,result,type,patterns);
 }
 /** Desglose solo de lectura para distinguir un catálogo vacío de un enlace ERP roto. */
 export async function laboratoryLinkEvidence(pool,context,{key,pharmacies}){

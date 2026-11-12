@@ -50,6 +50,19 @@ await page.route("**/api/**",async route=>{
   total:845,cells:[10,30,75,230,500].map((sales,i)=>({weekday:1,hour:9+i,sales,lines:1}))
  };
  else if(p==="/api/analytics/ventas/familias")body={families:[]};
+ else if(p==="/api/analytics/ventas/familias-ranking"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  body={families:[
+   {key:"dermocosmetica",name:"Dermocosmética",classified:true,segments:["PARAFARMACIA"],
+    sales:180,units:9,lines:4},
+   {key:"sin-clasificar",name:"Sin clasificar",classified:false,segments:[],sales:54.5,units:3,lines:2}
+  ],totalSales:234.5,totalUnits:12,totalLines:6,classifiedLines:4,coveragePct:66.7};
+ }
+ else if(p==="/api/analytics/ventas/ticket-medio"){
+  requests.push({path:p,query:Object.fromEntries(url.searchParams.entries())});
+  body={kpis:{tickets:8,sales:234.5,units:12,ticketMedio:29.3125,unidadesPorTicket:1.5},
+   pharmacies:[{id:"1",name:"Farmacia Centro",sales:234.5,tickets:8,units:12,ticketMedio:29.3125}]};
+ }
  else if(p==="/api/health/database")body={status:"ok",database:"connected"};
  await route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)});
 });
@@ -85,15 +98,30 @@ try{
  await page.goto(BASE+"/ventas",{waitUntil:"domcontentloaded"});
  await page.locator(".fm-demo-kpi").first().waitFor({state:"visible",timeout:15000});
  await verifyPeriod("month");
- // Mostrar artículos antes del análisis horario y no al final de la página.
+ // El gestor ve primero la radiografía, después horarios y vendedores,
+ // y por último el detalle de artículos, sin duplicar filtros ni consultas.
  const visualOrder=await page.evaluate(()=>{
   const table=document.querySelector("#fm-sales-articles");
   const map=document.querySelector(".fm-dashboard-insights .fm-insight-panel");
-  return {hasTable:!!table,hasMap:!!map,
-   tableBeforeMap:!!(table&&map&&(table.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING))};
+  const overview=document.querySelector(".fm-so-overview");
+  return {hasTable:!!table,hasMap:!!map,hasOverview:!!overview,
+   overviewBeforeMap:!!(overview&&map&&(overview.compareDocumentPosition(map)&Node.DOCUMENT_POSITION_FOLLOWING)),
+   mapBeforeTable:!!(table&&map&&(map.compareDocumentPosition(table)&Node.DOCUMENT_POSITION_FOLLOWING))};
  });
- if(!visualOrder.tableBeforeMap)
-  throw Error("El detalle debe aparecer antes del mapa: "+JSON.stringify(visualOrder));
+ if(!visualOrder.hasOverview||!visualOrder.overviewBeforeMap||!visualOrder.mapBeforeTable)
+  throw Error("La radiografía, el mapa y el detalle deben mantener ese orden: "+JSON.stringify(visualOrder));
+ await page.getByText("Ventas por familias",{exact:true}).waitFor();
+ await page.getByText("Dermocosmética",{exact:true}).waitFor();
+ await page.getByText("Ticket medio neto",{exact:true}).waitFor();
+ await page.getByRole("button",{name:"Unidades",exact:true}).click();
+ await page.getByText("9 uds.",{exact:true}).waitFor();
+ await page.getByRole("button",{name:"Ventas €",exact:true}).click();
+ for(const endpoint of ["/api/analytics/ventas/familias-ranking","/api/analytics/ventas/ticket-medio"]){
+  const requested=requests.find(r=>r.path===endpoint)?.query;
+  const total=totals().at(-1)?.query;
+  if(!requested||requested.desde!==total.desde||requested.hasta!==total.hasta)
+   throw Error("El panel "+endpoint+" no respeta el mismo período de ventas");
+ }
  await page.locator(".fm-heat-legend-swatch").first().waitFor({state:"visible",timeout:12000});
  const heatColors=await page.locator(".fm-heat-cell").evaluateAll(cells=>
   [...new Set(cells.map(el=>getComputedStyle(el).backgroundColor))]);

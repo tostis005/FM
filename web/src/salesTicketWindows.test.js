@@ -29,3 +29,16 @@ test("limita consultas simultáneas y conserva el orden",async()=>{
  assert.deepEqual(result,[0,2,4,6,8,10]);
  assert.equal(max,2);
 });
+
+test("un error en un tramo detiene trabajos nuevos y no publica progreso tardío",async()=>{
+ const progress=[],started=[];
+ await assert.rejects(mapTicketWindows([0,1,2,3],async n=>{
+  started.push(n);
+  if(n===0)throw Error("falló tramo");
+  await new Promise(resolve=>setTimeout(resolve,12));
+  return n;
+ },{onProgress:(done,total)=>progress.push([done,total])}),/falló tramo/);
+ await new Promise(resolve=>setTimeout(resolve,20));
+ assert.deepEqual(started,[0,1]);
+ assert.deepEqual(progress,[]);
+});

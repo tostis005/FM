@@ -1,6 +1,7 @@
 import {readDirectLaboratoryCatalog} from "./laboratoryFastCatalog.js";
 import {readPurchasedLaboratoryCatalog} from "./laboratoryQuickCatalog.js";
 import {readRetirementPatterns} from "./laboratoryRetirements.js";
+import {canonicalizeLaboratoryCatalog} from "./laboratoryCanonicalDescriptions.js";
 import {readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 
 const MAX_REFERENCES=5000;
@@ -51,7 +52,7 @@ export async function readUnifiedLaboratoryCatalog(pool,ctx,{key,pharmacies,type
  const args={key,pharmacies,type,search:"",page:1,size:MAX_REFERENCES,
   hasNativeCN:nativeCN,patterns,skipMovementCheck:true};
  const [official,bought]=await Promise.all([
-  type==="medicacion"?readDirectLaboratoryCatalog(pool,ctx,args):
+  type==="medicacion"?readDirectLaboratoryCatalog(pool,ctx,{...args,skipCanonicalization:true}):
    Promise.resolve({rows:[],total:0}),
   readPurchasedLaboratoryCatalog(pool,ctx,args)
  ]);
@@ -61,5 +62,6 @@ export async function readUnifiedLaboratoryCatalog(pool,ctx,{key,pharmacies,type
  const rows=unionLaboratoryReferences(official.rows,bought.rows,search,type);
  if(rows.length>MAX_REFERENCES)
   throw Object.assign(new Error("Demasiados artículos para carga conjunta"),{code:"TOO_MANY"});
- return {rows,total:rows.length,metricsUnavailable:true};
+ return canonicalizeLaboratoryCatalog(pool,ctx,
+  {rows,total:rows.length,metricsUnavailable:true},type,patterns);
 }

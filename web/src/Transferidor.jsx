@@ -35,7 +35,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
      throw Error(result.error||"No se pudo calcular el Transferidor.");
     if(controller.signal.aborted)return;
     setData(result);
-    const pending=["queued","inventory","calculating"].includes(result.status);
+    const pending=["queued","inventory","calculating","enriching"].includes(result.status);
     if(pending)pollTimer=setTimeout(load,1300);
     else setLoading(false);
    }catch(e){
@@ -47,7 +47,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   return()=>{clearTimeout(delay);clearTimeout(pollTimer);controller.abort()};
  },[clientSlug,vista,pharmacy,origin,destination,search,page,pageSize,sort.key,
   sort.direction,JSON.stringify(filters),revision]);
- const inProgress=["queued","inventory","calculating"].includes(data?.status);
+ const inProgress=["queued","inventory","calculating","enriching"].includes(data?.status);
  const progress=data?.progress||{done:0,total:0};
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
  const minimumDays=Number(data?.summary?.minimumDays??4);
@@ -61,26 +61,38 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    render:r=><strong>{r.originName}</strong>},
   {key:"stockOrigin",group:"Origen",label:"Stock",align:"center",value:r=>r.stockOrigin,
    render:r=>number(r.stockOrigin)},
+  {key:"sales7Origin",group:"Origen",label:"Ventas 7d",align:"center",searchable:false,
+   value:r=>r.sales7Origin,render:r=><span title="Unidades vendidas en los últimos 7 días por el origen">{number(r.sales7Origin)}</span>},
+  {key:"sales30Origin",group:"Origen",label:"Ventas 30d",align:"center",searchable:false,
+   value:r=>r.sales30Origin,render:r=><span title={r.sales30Origin==null?
+    "Consultando o sin datos disponibles de 30 días":"Unidades vendidas en los últimos 30 días por el origen"}>{number(r.sales30Origin)}</span>},
   {key:"targetOrigin",group:"Origen",label:"Debe conservar",align:"center",
    searchable:false,value:r=>r.targetOrigin,
-   render:r=><span title={"Stock reservado en origen para "+targetDays+
-    " días de ventas y la exposición configurada"}>{number(r.targetOrigin)}</span>},
+   render:r=><span title={"Reserva del origen: "+targetDays+
+    " días de ventas más exposición"}>{number(r.targetOrigin)}</span>},
   {key:"destinationName",group:"Destino",label:"Farmacia",filterMode:"text",
    value:r=>r.destinationName,render:r=><strong>{r.destinationName}</strong>},
   {key:"stockDestination",group:"Destino",label:"Stock",align:"center",
    value:r=>r.stockDestination,render:r=>number(r.stockDestination)},
-  {key:"pendingDestination",group:"Destino",label:"Pedidos pendientes",align:"center",
-   value:r=>r.pendingDestination??0,render:r=>number(r.pendingDestination??0)},
-  {key:"triggerDestination",group:"Destino",label:"Previsión "+minimumDays+" días",
+  {key:"sales7Destination",group:"Destino",label:"Ventas 7d",align:"center",searchable:false,
+   value:r=>r.sales7Destination,render:r=><strong className="fm-transfer-sales-reference"
+    title="Ventas de 7 días usadas para calcular la previsión del destino">{number(r.sales7Destination)}</strong>},
+  {key:"sales30Destination",group:"Destino",label:"Ventas 30d",align:"center",searchable:false,
+   value:r=>r.sales30Destination,render:r=><span title={r.sales30Destination==null?
+    "Consultando o sin datos disponibles de 30 días":"Ventas del destino en los últimos 30 días; solo como referencia"}>{number(r.sales30Destination)}</span>},
+  {key:"pendingDestination",group:"Destino",label:"Pendientes",align:"center",
+   value:r=>r.pendingDestination??0,
+   render:r=><span title="Unidades de pedidos ya pendientes de recibir">{number(r.pendingDestination??0)}</span>},
+  {key:"triggerDestination",group:"Destino",label:"Mínimo "+minimumDays+"d",
    align:"center",value:r=>r.triggerDestination,
-   render:r=><span title={"Unidades estimadas para cubrir los próximos "+minimumDays+
-    " días de ventas del destino"}>{number(r.triggerDestination)}</span>},
-  {key:"targetDestination",group:"Destino",label:"Objetivo "+targetDays+" días",
+   render:r=><span title={"Ventas previstas en "+minimumDays+
+    " días; si stock más pendientes está por debajo, se activa la propuesta"}>{number(r.triggerDestination)}</span>},
+  {key:"targetDestination",group:"Destino",label:"Objetivo "+targetDays+"d",
    align:"center",searchable:false,value:r=>r.targetDestination,
    render:r=><span className="fm-transfer-target" title={"Stock deseado para "+targetDays+
-    " días de ventas, más la exposición configurada"}>
+    " días de ventas más exposición"}>
     <strong>{number(r.targetDestination)}</strong>
-    {r.extraDestination>0&&<small>incl. {number(r.extraDestination)} exposición</small>}
+    {r.extraDestination>0&&<small>+{number(r.extraDestination)} exposición</small>}
    </span>},
   {key:"units",group:"Propuesta",label:"Enviar",align:"center",value:r=>r.units,
    render:r=><strong className="fm-transfer-units" title="Unidades propuestas para trasladar del origen al destino">
@@ -89,7 +101,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  ],[minimumDays,targetDays]);
  return <div className="fm-transferidor">
   <ReportPageHeader title="Transferidor"
-   updatedAt={data?.calculatedAt||null} refreshing={loading}
+   updatedAt={data?.calculatedAt?new Date(data.calculatedAt):null} refreshing={loading}
    onRefresh={()=>setRevision(Date.now())}/>
   <section className="card fm-transfer-controls" aria-label="Filtros del transferidor">
    <div className="fm-transfer-tabs" role="group" aria-label="Tipo de movimiento">
@@ -131,6 +143,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   {inProgress&&<p className="fm-op-message" role="status">
    {data?.status==="queued"?"Preparando cálculo de transferencias…":
     data?.status==="inventory"?"Recuperando el stock de las farmacias…":
+    data?.status==="enriching"?"Consultando ventas de 30 días para los movimientos propuestos…":
     "Calculando propuestas: "+number(progress.done)+" de "+number(progress.total)+" lotes."}
    {data?.summary?.movements>0?" Ya hay "+number(data.summary.movements)+" propuestas disponibles.":""}
   </p>}
@@ -162,7 +175,8 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
     <h2>Propuestas entre farmacias</h2>
-    <span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
+    <div className="fm-transfer-table-meta"><span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
+     <small>Ventas 7d: base de previsión · Ventas 30d: referencia</small></div>
    </div>
    {!data&&loading?<LoadingPanel kind="table" label="Iniciando cálculo de transferencias…" rows={5}/>:error&&!data?
     <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:<>
@@ -172,7 +186,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
      serverFilters={filters} onServerFiltersChange={next=>{setFilters(next);reset()}}
      serverPagination={{page,pageSize,total:data?.total||0,
       onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);reset()}}}
-     showExport={false} loading={loading} loadingLabel="Recalculando transferencias…"
+     showExport={false} loading={loading&&!(data?.rows?.length>0)} loadingLabel="Recalculando transferencias…"
      emptyText={data?.available===false?"Sin inventario suficiente.":data?.summary?.movements===0?
       data?.emptyReason||"Sin transferencias propuestas.":"Sin transferencias para estos filtros."}/>
    </>}

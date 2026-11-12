@@ -110,7 +110,7 @@ received_with_cn AS MATERIALIZED (
   )
  )
 ), excluded_cn AS MATERIALIZED (
- -- Las reglas guardadas son SUBCADENAS LITERALES: '*BAJA*' exige ambos asteriscos.
+ -- Solo las reglas configuradas por el usuario se evalúan literalmente.
  SELECT coalesce(
    CASE WHEN btrim(ar.codigo_nacional) ~ '^[0-9]{6,7}$'
      THEN btrim(ar.codigo_nacional) END,
@@ -122,7 +122,7 @@ received_with_cn AS MATERIALIZED (
  FROM __SCHEMA__.articulos ar
  JOIN pharmacies p ON upper(btrim(ar.farmacia_codigo))=p.pharmacy_code
  WHERE EXISTS (SELECT 1 FROM unnest(
-   ARRAY['ZZZ','*BAJA','* BAJA']::text[] || $2::text[]
+   $2::text[]
   ) AS exclude(cadena)
   WHERE position(upper(exclude.cadena) in upper(coalesce(ar.nombre,'')))>0)
  GROUP BY 1

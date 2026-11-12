@@ -1,6 +1,6 @@
 // Mostrar todas las referencias sin montar miles de celdas simultáneamente.
 export const ALL_LAB_ROWS=0;
-export const LAB_VIRTUAL_ROW_HEIGHT=38;
+export const LAB_VIRTUAL_ROW_HEIGHT=56;
 export const LAB_VIRTUAL_THRESHOLD=250;
 
 export function laboratoryTablePage(groups,size=ALL_LAB_ROWS,page=0){

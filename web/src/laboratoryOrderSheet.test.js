@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {defaultLaboratoryLine,mergeVisibleOrderLines,orderLineFor,
  laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,
- medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,
+ medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,laboratoryStockTotals,
  laboratoryOrderSortValue,compareLaboratoryOrderRows,laboratoryOrderGroupValue,compareLaboratoryOrderGroups} from "./laboratoryOrderSheet.js";
 import {groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
 const pharmacies=[{id:"1",name:"Central"},{id:"2",name:"Norte"}];
@@ -235,4 +235,35 @@ test("los grupos sin métricas completas se ordenan al final, no como 0",()=>{
   compareLaboratoryOrderGroups(a,b,"totalStock:desc","parafarmacia",["1","2"]));
  assert.equal(sorted[0].representative.cn,"999999");
  assert.equal(sorted[1].representative.cn,"234567");
+});
+
+test("los KPI de stock conservan sumas conocidas si falta una ficha o almacén",()=>{
+ const rows=[
+  {metricsReady:true,byPharmacy:{"1":{stock:4},"2":{stock:3}},
+   warehouseReady:true,warehouse:{stock:2},globalStock:9},
+  {metricsReady:true,byPharmacy:{"1":{stock:0,stockInferredZero:true},"2":{stock:null}},
+   warehouseReady:false,warehouse:{stock:null},globalStock:null}
+ ];
+ const para=laboratoryStockTotals(rows,[1,2],true);
+ assert.equal(para.pharmacyStock,7);
+ assert.equal(para.globalStock,9);
+ assert.equal(para.missingPharmacy,1);
+ assert.equal(para.missingWarehouse,1);
+ assert.equal(para.pharmacyPartial,true);
+ assert.equal(para.globalPartial,true);
+ const med=laboratoryStockTotals(rows,[1,2],false);
+ assert.equal(med.pharmacyStock,7);
+ assert.equal(med.globalStock,7);
+ assert.equal(med.missingWarehouse,0);
+});
+
+test("stock cero validado no es una ausencia de datos",()=>{
+ const rows=[{metricsReady:true,byPharmacy:{"1":{stock:0},"2":{stock:0}},
+  warehouseReady:true,warehouse:{stock:0}}];
+ const totals=laboratoryStockTotals(rows,[1,2],true);
+ assert.deepEqual(totals,{pharmacyStock:0,globalStock:0,
+  missingPharmacy:0,missingWarehouse:0,pharmacyPartial:false,globalPartial:false});
+ const incomplete=laboratoryStockTotals([{metricsReady:false}], [1,2],true);
+ assert.equal(incomplete.missingPharmacy,2);
+ assert.equal(incomplete.missingWarehouse,1);
 });

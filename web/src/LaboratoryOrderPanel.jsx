@@ -8,18 +8,28 @@ import {ALL_LAB_ROWS,LAB_VIRTUAL_ROW_HEIGHT,laboratoryTablePage,laboratoryTableV
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
-import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,isExcludedOrderRow,compareLaboratoryOrderGroups,laboratoryOrderGroupValue} from "./laboratoryOrderSheet.js";
+import {defaultLaboratoryLine,orderLineFor,mergeVisibleOrderLines,laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,qty,medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,laboratoryStockTotals,isExcludedOrderRow,compareLaboratoryOrderGroups,laboratoryOrderGroupValue} from "./laboratoryOrderSheet.js";
 import {exportLaboratoryOrderWorkbook} from "./exportaciones.js";
 import "./laboratoryOrderPanel.css";
-import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BULK_LIMIT} from "./laboratoryLoadAll.js";
+import {collectLaboratoryCatalog,collectLaboratoryMetrics,LAB_CATALOG_BATCH,LAB_METRICS_BULK_LIMIT,laboratoryMetricsBatchSize,retryTransientLaboratoryRead} from "./laboratoryLoadAll.js";
 
 async function api(slug,path,{signal,method="GET",body}={}){
- const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
-  headers:{"X-Farmetrica-Cliente":slug,...(body?{"Content-Type":"application/json"}:{})},
-  ...(body?{body:JSON.stringify(body)}:{})});
- const result=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(result.error||"No se pudo completar la consulta");
- return result;
+ // Repetir únicamente lecturas idempotentes ante errores de red o 502/503.
+ // Nunca duplicar una grabación de pedido, ni repetir un SQL que agotó su tiempo.
+ const readOnly=method==="GET"||path.startsWith("/api/analytics/pedidos/matriz-");
+ return retryTransientLaboratoryRead(async()=>{
+  const response=await fetch(path,{method,credentials:"same-origin",cache:"no-store",signal,
+   headers:{"X-Farmetrica-Cliente":slug,...(body?{"Content-Type":"application/json"}:{})},
+   ...(body?{body:JSON.stringify(body)}:{})});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok){
+   const error=Error(result.error||"No se pudo completar la consulta");
+   error.status=response.status;
+   error.code=result.metricsErrorCode||result.code;
+   throw error;
+  }
+  return result;
+ },{signal,attempts:readOnly?2:1});
 }
 const empty={rows:[],total:0};
 const fmt=value=>value===null||value===undefined?"—":
@@ -197,11 +207,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     return;
    }
    setLoadStage("metrics");
-   // Mediciones reales: 367 CN se calculan en ~4-7 s de una sola vez.
-   // Repetir el mismo JOIN de stock y ventas 4 veces en lotes de 100
-   // introduce latencia y renderizados innecesarios. Agregar una vez
-   // hasta 450 CN; en catálogos grandes usar lotes de 200 adaptativos.
-   if(catalog.rows.length<=LAB_METRICS_BULK_LIMIT){
+   // Para catálogos pequeños una consulta es más rápida. Los medianos y
+    // grandes se calculan en lotes, con progreso real por artículos.
+    if(catalog.rows.length<=LAB_METRICS_BULK_LIMIT){
+    setLoadStage("bulk");
    let bulkComplete=false;
    try{
     const result=await api(clientSlug,"/api/analytics/pedidos/matriz-conjunta",{
@@ -250,7 +259,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
        referencias:items.map(item=>({
         referencia:item.referencia,cn:item.cn||null,nombre:item.nombre
        }))}
-     }),{signal:controller.signal,onBatch:({rows,loaded,frequencyDays})=>{
+     }),{batchSize:laboratoryMetricsBatchSize(catalog.rows.length),
+      signal:controller.signal,onBatch:({rows,loaded,frequencyDays})=>{
       lastPartial={rows,loaded,frequencyDays};
       if(!controller.signal.aborted)setMetricsProgress(loaded);
      }});
@@ -323,27 +333,21 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
  const showMatrixOverlay=metricsLoading;
  const matrixColumnCount=chosen.length*5+(tab==="parafarmacia"?12:7);
- const {pageTotalStock,pageGlobalStock,pageTotalSold,pageTotalSuggested,
-  pageTotalOrder,warehousePending}=useMemo(()=>{
-   const stocks=currentRows.map(row=>row.metricsReady?totalStockFor(row,ids):null);
-   const pageTotalStock=stocks.every(value=>value!==null)?
-    stocks.reduce((sum,value)=>sum+value,0):null;
-   const globalStocks=currentRows.map(row=>tab==="medicacion"?
-    row.metricsReady?totalStockFor(row,ids):null:
-    row.metricsReady?row.globalStock??null:null);
-   const pageGlobalStock=globalStocks.every(value=>value!==null)?
-    globalStocks.reduce((n,value)=>n+Number(value),0):null;
-   const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
-    row.metricsReady&&row.warehouseReady!==true);
-   const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
+ const stockTotals=useMemo(()=>laboratoryStockTotals(
+   currentRows,ids,tab==="parafarmacia"),[currentRows,scope,tab]);
+ const stockAvailable=!loading&&(currentRows.length===0||
+  currentRows.some(row=>row.metricsReady===true));
+ const {pageTotalSold,pageTotalSuggested,pageTotalOrder,warehousePending}=useMemo(()=>{
+  const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
+   row.metricsReady&&row.warehouseReady!==true);
+  const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
    const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
    const pageTotalOrder=currentRows.reduce((sum,row)=>{
     const line=orderLineFor(row,tab,ids,drafts);
     return sum+(tab==="parafarmacia"?Number(line.units||0):
      medicationOrderTotal(line,ids));
    },0);
-   return {pageTotalStock,pageGlobalStock,pageTotalSold,pageTotalSuggested,
-    pageTotalOrder,warehousePending};
+   return {pageTotalSold,pageTotalSuggested,pageTotalOrder,warehousePending};
   },[currentRows,scope,tab,drafts]);
  const hasInvalid=Object.values(drafts).some(line=>tab==="parafarmacia"?qty(line.units)===null:
   Object.values(line.unitsByPharmacy||{}).some(value=>qty(value)===null));
@@ -500,8 +504,14 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     <div className="fm-lab-order-lower" aria-busy={metricsLoading}>
     <div className="fm-lab-order-summary">
      {(!loading||data.rows?.length>0)&&<span className="fm-lab-order-article-count"><strong>{tableVisibleRows.length}</strong> artículos{tableVisibleRows.length!==currentRows.length?" de "+currentRows.length+" del catálogo":""}</span>}
-     <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalStock):"—"}</strong> stock farmacias</span>
-     {tab==="parafarmacia"&&<span><strong>{!loading&&!data.metricsUnavailable?fmt(pageGlobalStock):"—"}</strong> stock global</span>}
+     <span title={stockTotals.pharmacyPartial?"Suma del stock conocido; algunas farmacias no tienen inventario disponible":"Stock total de las farmacias seleccionadas"}>
+      <strong>{loading?"Calculando…":stockAvailable?fmt(stockTotals.pharmacyStock):"Sin datos"}</strong> stock farmacias
+      {stockAvailable&&stockTotals.pharmacyPartial&&<small className="fm-lab-stock-partial"> · parcial</small>}
+     </span>
+     {tab==="parafarmacia"&&<span title={stockTotals.globalPartial?"Farmacias y almacén: suma del stock conocido; faltan existencias por importar":"Stock de farmacias más almacén"}>
+      <strong>{loading?"Calculando…":stockAvailable?fmt(stockTotals.globalStock):"Sin datos"}</strong> stock global
+      {stockAvailable&&stockTotals.globalPartial&&<small className="fm-lab-stock-partial"> · parcial</small>}
+     </span>}
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
      <span><strong>{data.frequencyDays>0?data.frequencyDays+" días":"Bajo demanda"}</strong> · frecuencia de planificación</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
@@ -598,7 +608,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
         <td className="fm-lab-order-sticky fm-lab-order-cn" title={row.cn||"Código nacional no disponible"}>{row.cn||"—"}
          {row.provisional&&<small>CN pendiente</small>}</td>
         <td className="fm-lab-order-sticky fm-lab-order-name" title={row.nombre}>
-          {row.nombre}
+          <span className="fm-lab-order-name-text">{row.nombre}</span>
            {row._visualGroupSize>1&&<span className={"fm-lab-family-badge fm-lab-family-"+row._visualKind}
             title="Referencias relacionadas visualmente; cada CN se compra y contabiliza por separado">{row._visualLabel}</span>}
           </td>
@@ -720,6 +730,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
       <span>{data.rows?.length?
        (loadStage==="catalog"?"Preparando los artículos del laboratorio":
         loadStage==="render"?"Preparando la tabla y los totales finales":
+        loadStage==="bulk"?"Calculando "+data.rows.length+" artículos en una consulta única":
         "Calculando stock, ventas y totales: "+metricsProgress+" de "+data.rows.length+" artículos"):
        "Preparando los códigos nacionales del laboratorio"}</span>
      </div>

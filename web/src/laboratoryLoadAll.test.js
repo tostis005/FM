@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY,LAB_METRICS_BULK_LIMIT} from "./laboratoryLoadAll.js";
+import {collectLaboratoryMetrics,fetchLaboratoryMetricsAdaptive,LAB_METRICS_BATCH,LAB_METRICS_CONCURRENCY,LAB_METRICS_BULK_LIMIT,laboratoryMetricsBatchSize,retryTransientLaboratoryRead} from "./laboratoryLoadAll.js";
 import {ALL_LAB_ROWS,laboratoryTablePage,laboratoryTableViewport,LAB_VIRTUAL_ROW_HEIGHT} from "./laboratoryTableWindow.js";
 
 test("dos mil CN se calculan en lotes de 75, máximo tres consultas simultáneas",async()=>{
@@ -76,6 +76,16 @@ test("métricas: errores SQL permanentes no provocan más consultas",async()=>{
  assert.equal(calls,1);
 });
 
+test("métricas: un 429 tras reintento no debe generar nuevos lotes",async()=>{
+ let calls=0;
+ const error=Object.assign(new Error("Límite de consultas"),{status:429});
+ await assert.rejects(()=>fetchLaboratoryMetricsAdaptive(
+  Array.from({length:200},(_,i)=>({referencia:String(i)})),async()=>{
+   calls++;throw error;
+  }),{status:429});
+ assert.equal(calls,1);
+});
+
 test("métricas: cancelar al dividir evita consultas posteriores",async()=>{
  const controller=new AbortController();
  let calls=0;
@@ -117,8 +127,40 @@ test("5000 CN tienen scroll completo y render acotado sin truncar datos",()=>{
  assert.equal(laboratoryTableViewport(125,20).virtualized,false);
 });
 
-test("el umbral agregado evita consultas repetidas para 367 CN y divide mayores",()=>{
- assert.ok(LAB_METRICS_BULK_LIMIT>=367);
- assert.ok(LAB_METRICS_BULK_LIMIT<686);
+test("el progreso es real en catálogos medianos y no multiplica los lotes",()=>{
+ assert.equal(LAB_METRICS_BULK_LIMIT,150);
+ assert.equal(laboratoryMetricsBatchSize(151),76);
+ assert.equal(laboratoryMetricsBatchSize(220),110);
+ assert.equal(laboratoryMetricsBatchSize(367),123);
+ assert.equal(laboratoryMetricsBatchSize(450),150);
+ assert.equal(laboratoryMetricsBatchSize(686),LAB_METRICS_BATCH);
  assert.ok(LAB_METRICS_BATCH<=250);
+});
+
+test("las lecturas reintentan un 503, pero no un error de datos ni un timeout",async()=>{
+ const e=status=>Object.assign(new Error(String(status)),{status});
+ let calls=0;
+ const result=await retryTransientLaboratoryRead(async()=>{
+  calls++;
+  if(calls===1)throw e(503);
+  return {rows:[1]};
+ },{attempts:2});
+ assert.deepEqual(result,{rows:[1]});
+ assert.equal(calls,2);
+ for(const status of [400,403,504]){
+  calls=0;
+  await assert.rejects(()=>retryTransientLaboratoryRead(async()=>{
+   calls++;throw e(status);
+  }),{status});
+  assert.equal(calls,1,"No repetir HTTP "+status);
+ }
+});
+
+test("un cambio de laboratorio cancela el reintento pendiente",async()=>{
+ const controller=new AbortController();
+ let calls=0;
+ await assert.rejects(()=>retryTransientLaboratoryRead(async()=>{
+  calls++;controller.abort();throw Object.assign(new Error("Puerta de enlace"),{status:503});
+ },{signal:controller.signal}),{name:"AbortError"});
+ assert.equal(calls,1);
 });

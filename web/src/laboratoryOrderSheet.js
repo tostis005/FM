@@ -26,6 +26,31 @@ export function totalStockFor(row,pharmacyIds){
  return values.some(v=>v===null||v===undefined||!Number.isFinite(Number(v)))?
   null:values.reduce((sum,v)=>sum+Number(v),0);
 }
+// Los KPI resumen el stock conocido del catálogo completo. Si faltan fichas
+// o una importación, se indica "parcial" en lugar de ocultar todo el total
+// o convertir una existencia desconocida en cero.
+export function laboratoryStockTotals(rows,pharmacyIds,includeWarehouse=false){
+ let pharmacyStock=0,warehouseStock=0,missingPharmacy=0,missingWarehouse=0;
+ for(const row of rows){
+  for(const id of pharmacyIds){
+   const value=row?.metricsReady?row.byPharmacy?.[String(id)]?.stock:null;
+   if(value===null||value===undefined||!Number.isFinite(Number(value)))
+    missingPharmacy++;
+   else pharmacyStock+=Number(value);
+  }
+  if(includeWarehouse){
+   const value=row?.metricsReady&&row.warehouseReady===true?
+    row.warehouse?.stock:null;
+   if(value===null||value===undefined||!Number.isFinite(Number(value)))
+    missingWarehouse++;
+   else warehouseStock+=Number(value);
+  }
+ }
+ return {pharmacyStock,globalStock:pharmacyStock+warehouseStock,
+  missingPharmacy,missingWarehouse,
+  pharmacyPartial:missingPharmacy>0,
+  globalPartial:missingPharmacy>0||missingWarehouse>0};
+}
 // Mantener la ordenación numérica alineada con las cifras visibles de Totales y Pedir total.
 export function laboratoryOrderSortValue(row,field,type,pharmacyIds,drafts={}){
  if(!row?.metricsReady)return null;

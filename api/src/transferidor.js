@@ -86,9 +86,10 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
     Math.max(0,(site.visible7||0)/7,(site.visible30||0)/30)));
    const warehouseDaily=Math.max(0,(warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
    const backlog=whole(webPending.get(product.cn)||0);
-   const webEstimate=warehouseDaily===0;
-   const webReserve=Math.max(whole(warehouseDaily*config.targetDays),backlog,
-    webEstimate?whole(busiestStoreDaily*config.targetDays):0);
+   const webProjection=whole(warehouseDaily*config.targetDays);
+   const webProxy=warehouseDaily===0?whole(busiestStoreDaily*config.targetDays):0;
+   const webReserve=Math.max(webProjection,backlog,webProxy);
+   const webEstimate=webProxy>Math.max(webProjection,backlog);
    const replenishmentReserve=whole(busiestStoreDaily*config.minDays);
    warehouse.target=webReserve+replenishmentReserve;
    warehouse.threshold=warehouse.target;

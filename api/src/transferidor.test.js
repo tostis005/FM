@@ -328,6 +328,52 @@ test("siete ventas en una semana equivalen a una unidad diaria",()=>{
  assert.equal(plan.transfers[0].units,7);
 });
 
+test("API incorpora ALMACEN como origen aunque el perfil solo seleccione farmacias",async()=>{
+ const queries=[];
+ const db={async query(arg){
+  const sql=typeof arg==="string"?arg:arg.text;
+  queries.push(sql);
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {cn:"123456",pharmacyId:"1",sourceCode:"ABA",articleId:"111111",stock:0,name:"Crema",kind:"farmacia"},
+   {cn:"123456",pharmacyId:"2",sourceCode:"EUR",articleId:"222222",stock:0,name:"Crema",kind:"farmacia"},
+   {cn:"123456",pharmacyId:"9",sourceCode:"ALMACEN",articleId:"333333",stock:50,
+    name:"Crema",kind:"almacen",siteName:"ALM"}
+  ]};
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"1",articleId:"111111",units7:7,units30:30},
+   {pharmacyId:"9",articleId:"333333",units7:0,units30:0}
+  ]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))
+   return {rows:[{cn:"123456",units:2}]};
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:4,targetDays:7}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("SQL inesperado: "+sql.slice(0,90));
+ }};
+ let handler;
+ setupTransferidor({get(_p,...args){handler=args.at(-1)}},db,{requireTenant:()=>[]});
+ const req={query:{pagina:1,tamano:50},
+  context:{role:"superadministrador",modules:{stock:true},
+   client:{slug:"testwarehouseapi",schema:"ampedia"},
+   pharmacies:pharmacies.slice(0,2)}};
+ const res={statusCode:200,status(n){this.statusCode=n;return this},
+  json(body){this.body=body;return this}};
+ const body=await awaitTransferResult(handler,req,res);
+ assert.equal(body.status,"complete");
+ assert.equal(body.warehouseAvailable,true);
+ assert.equal(body.total,1);
+ assert.equal(body.rows[0].originKind,"almacen");
+ assert.equal(body.rows[0].originName,"ALM");
+ assert.equal(body.rows[0].originId,"9");
+ assert.equal(body.rows[0].units,7);
+ assert.equal(body.rows[0].targetOrigin,6);
+ assert.equal(body.rows[0].sales30Destination,30);
+ assert.equal(queries.filter(q=>q.includes("WITH refs AS MATERIALIZED")).length,1);
+ req.query={...req.query,origen:"almacen"};
+ const filtered=await awaitTransferResult(handler,req,res);
+ assert.equal(filtered.total,1);
+});
+
 test("el almacén protege su reserva y se usa antes de farmacias con excedente",()=>{
  const wh={id:"9",name:"ALM",establishmentType:"almacen"};
  const entries=[

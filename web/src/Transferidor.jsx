@@ -12,7 +12,14 @@ const number=n=>n==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigi
 export default function Transferidor({clientSlug,pharmacies=[]}){
  const [vista,setVista]=useState("todos"),[pharmacy,setPharmacy]=useState("");
  const [origin,setOrigin]=useState(""),[destination,setDestination]=useState("");
- const [search,setSearch]=useState(""),[sort,setSort]=useState({key:"units",direction:"desc"});
+ const [search,setSearch]=useState(()=>{
+  try{
+   const key="fm-transfer-prefill:"+clientSlug;
+   const value=sessionStorage.getItem(key)||"";
+   sessionStorage.removeItem(key);
+   return value.slice(0,100);
+  }catch{return "";}
+ }),[sort,setSort]=useState({key:"units",direction:"desc"});
  const [filters,setFilters]=useState({});
  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(0);
  const [snapshot,setSnapshot]=useState(null),[loading,setLoading]=useState(true);

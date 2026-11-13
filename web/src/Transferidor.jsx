@@ -50,7 +50,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     if(!controller.signal.aborted){setRequestError({key:requestKey,message:e.message});setLoading(false)}
    }
   };
-  setSnapshot(null);setRequestError(null);
+  setSnapshot(null);setRequestError(null);setExportError("");setExporting(false);
   const delay=setTimeout(load,150);
   return()=>{clearTimeout(delay);clearTimeout(pollTimer);controller.abort();
    exportController.current?.abort();};

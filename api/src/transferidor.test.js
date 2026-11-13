@@ -424,6 +424,34 @@ test("pedidos web pendientes prevalecen sobre media web y protegen stock central
  assert.equal(plan.transfers[1].units,5);
 });
 
+test("pedidos web pequeños sin histórico no eliminan la protección del canal online",()=>{
+ const wh={id:"9",name:"ALM",establishmentType:"almacen"};
+ const plan=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:0,units7:7,units30:30},
+  {pharmacyId:"2",cn:"123456",stock:20,units7:0,units30:0},
+  {pharmacyId:"9",cn:"123456",stock:12,units7:0,units30:0}
+ ],[...pharmacies.slice(0,2),wh],{
+  minDays:4,targetDays:7,families:[],articles:[],
+  webPendingByCn:new Map([["123456",2]])
+ });
+ assert.equal(plan.transfers[0].originId,"9");
+ assert.equal(plan.transfers[0].warehouseWebReserve,7);
+ assert.equal(plan.transfers[0].targetOrigin,11);
+ assert.equal(plan.transfers[0].units,1);
+ assert.equal(plan.transfers[1].units,6);
+});
+
+test("devoluciones netas no producen demanda negativa ni liberan la reserva web",()=>{
+ const wh={id:"9",name:"ALM",establishmentType:"almacen"};
+ const result=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:0,units7:7,units30:30},
+  {pharmacyId:"2",cn:"123456",stock:20,units7:0,units30:0},
+  {pharmacyId:"9",cn:"123456",stock:10,units7:-2,units30:-5}
+ ],[...pharmacies.slice(0,2),wh]);
+ assert.equal(result.transfers[0].originId,"2");
+ assert.equal(result.transfers[0].units,7);
+});
+
 test("sin datos de ventas web ni pedidos, conserva reserva de seguridad sustitutiva",()=>{
  const wh={id:"9",name:"ALM",establishmentType:"almacen"};
  const plan=buildGlobalTransfers([

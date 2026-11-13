@@ -4,7 +4,10 @@ import {buildProfitabilitySQL} from "./rentabilidadAnalisis.js";
 const columns=new Set(["nombre","familia","codigo_nacional","pmc","pvp","stock_actual","sincronizado_en"]);
 test("resumen integra meses, farmacias y familias del maestro",()=>{
  const sql=buildProfitabilitySQL("ampedia",columns,"overview");
- assert.match(sql,/GROUP BY GROUPING SETS \(\(month\),\("pharmacyId","pharmacyName"\),\(family\)\)/);
+ assert.match(sql,/FROM enriched GROUP BY month/);
+ assert.match(sql,/FROM enriched GROUP BY "pharmacyId","pharmacyName"/);
+ assert.match(sql,/FROM enriched GROUP BY family/);
+ assert.match(sql,/UNION ALL/);
  assert.match(sql,/farmetrica\.familias_globales_articulos linked/);
  assert.match(sql,/farmetrica\.familias_globales global_family/);
  assert.match(sql,/global_family\.id=linked\.familia_id/);

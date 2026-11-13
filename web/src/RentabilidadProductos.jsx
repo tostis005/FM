@@ -68,6 +68,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
  const [loading,setLoading]=useState(true);
  const [updatedAt,setUpdatedAt]=useState(null);
  const [rankingMetric,setRankingMetric]=useState("margin");
+ const [showAllFamilies,setShowAllFamilies]=useState(false);
  const timeZone=clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone;
  const period=useMemo(()=>resolveSalesPeriod(periodKey,new Date(),custom,timeZone),
   [periodKey,custom.from,custom.to,timeZone,reload]);
@@ -151,6 +152,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
  const productHeaders=[
   {key:"item",label:"CN · Producto",kind:"text",render:r=><div className="fm-profit-item"><strong>{r.cn||r.articleId||"—"}</strong><span>{r.name||"Sin descripción"}</span></div>},
   {key:"family",label:"Familia",kind:"text",render:r=>r.family||"Sin clasificar"},
+  {key:"laboratory",label:"Laboratorio",kind:"text",render:r=>r.laboratory||"—"},
   {key:"pharmacy",label:"Farmacia",kind:"text",render:r=>r.pharmacyName},
   {key:"units",label:"Uds.",render:r=>units(r.units)},
   {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},
@@ -166,10 +168,12 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   {key:"ticket",label:"Ticket",kind:"text",render:r=>r.ticket||"—"},
   {key:"item",label:"CN · Producto",kind:"text",render:r=><div className="fm-profit-item"><strong>{r.cn||"—"}</strong><span>{r.name||"—"}</span></div>},
   {key:"family",label:"Familia",kind:"text",render:r=>r.family||"Sin clasificar"},
+  {key:"laboratory",label:"Laboratorio",kind:"text",render:r=>r.laboratory||"—"},
   {key:"units",label:"Uds.",render:r=>units(r.units)},
   {key:"unitPrice",label:"Precio/ud.",render:r=>euros(r.unitPrice)},
   {key:"discount",label:"Dto. registrado",render:r=>r.discount==null?"—":String(r.discount)},
   {key:"sales",label:"Neto",render:r=>euros(r.sales)},
+  {key:"historicalCost",label:"Coste hist. informado",render:r=>euros(r.historicalCost)},
   {key:"pmc",label:"PMC",render:r=>euros(r.pmc)},
   {key:"margin",label:"Margen est.",render:r=>euros(r.margin)},
   {key:"marginPct",label:"Margen %",render:r=>percent(marginPct(r))}
@@ -256,11 +260,37 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       <ProfitTable rows={pharmaciesRows.map((r,i)=>({...r,key:r.pharmacyId||i}))} headers={[
        {key:"farmacia",label:"Farmacia",kind:"text",render:r=>r.pharmacyName},
        {key:"neto",label:"Importe",render:r=>euros(r.sales)},
+       {key:"cost",label:"Coste est.",render:r=>euros(r.cost)},
        {key:"margen",label:"Margen est.",render:r=>euros(r.margin)},
-       {key:"pct",label:"Margen %",render:r=>percent(marginPct(r))}
+       {key:"pct",label:"Margen %",render:r=>percent(marginPct(r))},
+       {key:"coverage",label:"Con PMC",render:r=>r.sales>0?percent(Math.min(100,Math.max(0,100*Number(r.coveredSales||0)/Number(r.sales)))):"—"}
       ]}/>
      </section>
     </div>
+    <section className="card fm-profit-panel">
+     <div className="fm-profit-panel-heading"><div><h2>Detalle de rentabilidad por familia</h2>
+      <p>{units(familyRows.length)} familias · nombres del maestro unificado</p></div>
+      <button className="btn btn-secondary btn-sm" type="button" disabled={!familyRows.length}
+       onClick={()=>writeCSV("rentabilidad-familias.csv",
+        ["Familia","Importe neto","Ventas con PMC","Coste estimado","Margen estimado","Margen % sobre ventas cubiertas","Unidades"],
+        familyRows.map(r=>[r.family,r.sales,r.coveredSales,r.cost,r.margin,marginPct(r),r.units]))}>
+       <Download size={15}/> CSV
+      </button>
+     </div>
+     <ProfitTable rows={(showAllFamilies?familyRows:familyRows.slice(0,20)).map((r,i)=>({...r,key:r.family||i}))}
+      headers={[
+       {key:"family",label:"Familia",kind:"text",render:r=>r.family},
+       {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},
+       {key:"units",label:"Unidades",render:r=>units(r.units)},
+       {key:"covered",label:"Ventas con PMC",render:r=>euros(r.coveredSales)},
+       {key:"cost",label:"Coste est.",render:r=>euros(r.cost)},
+       {key:"margin",label:"Margen est.",render:r=>euros(r.margin)},
+       {key:"pct",label:"Margen %",render:r=>percent(marginPct(r))}
+      ]}/>
+     {familyRows.length>20&&<div className="fm-profit-more"><button type="button" onClick={()=>setShowAllFamilies(v=>!v)}>
+      {showAllFamilies?"Mostrar menos":"Ver las "+units(familyRows.length)+" familias"}
+     </button></div>}
+    </section>
     <p className="fm-profit-note">El margen estimado se calcula sobre las ventas de artículos con PMC válido de su farmacia. Las ventas sin coste conocido se incluyen en el importe neto, pero no en el margen; la cobertura indica qué parte del importe tiene coste disponible. No equivale al beneficio contable ni al coste histórico del Power BI.</p>
    </>}
    {tab==="productos"&&<section className="card fm-profit-panel">
@@ -277,7 +307,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
     <ProfitTable rows={rows.map((r,i)=>({...r,key:r.pharmacyId+"|"+r.articleId+"|"+i}))} headers={productHeaders}/>
     <Pagination page={page} size={pageSize} total={payload.total} hasMore={page*pageSize<Number(payload.total||0)}
      onPage={setPage} onSize={setPageSize}/>
-    <p className="fm-profit-note">PVP, PMC y stock son valores del catálogo actual, no históricos. El margen utiliza PMC de la farmacia y solo aparece cuando existe un coste positivo. Las referencias no vendidas en el período no aparecen en esta tabla.</p>
+    <p className="fm-profit-note">El CSV exporta las filas de la página actual. PVP, PMC y stock son valores del catálogo actual, no históricos. El margen utiliza PMC de la farmacia y solo aparece cuando existe un coste positivo. Las referencias no vendidas en el período no aparecen en esta tabla.</p>
    </section>}
    {tab==="ventas"&&<section className="card fm-profit-panel">
     <div className="fm-profit-panel-heading"><div><h2>Detalle de ventas</h2>
@@ -286,7 +316,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
     </div>
     <ProfitTable rows={rows.map((r,i)=>({...r,key:r.pharmacyId+"|"+r.documentId+"|"+r.lineId+"|"+i}))} headers={saleHeaders}/>
     <Pagination page={page} size={pageSize} hasMore={payload.hasMore} onPage={setPage} onSize={setPageSize}/>
-    <p className="fm-profit-note">El descuento se muestra tal como se registra en origen, sin asumir su unidad. El coste histórico no sustituye automáticamente al PMC: el margen presentado es estimado con PMC actual. El bruto y el margen sobre bruto del PBIX requieren validar la equivalencia exacta de las columnas.</p>
+    <p className="fm-profit-note">El CSV exporta las filas de la página actual. El descuento se muestra tal como se registra en origen, sin asumir su unidad. El coste histórico no sustituye automáticamente al PMC: el margen presentado es estimado con PMC actual. El bruto y el margen sobre bruto del PBIX requieren validar la equivalencia exacta de las columnas.</p>
    </section>}
   </>}
  </div>;

@@ -7,7 +7,7 @@ export const PROFILE_EDITOR_SECTION_IDS=new Set([
  "dashboard","ventas","compras","compras-preparador","stock",
  "stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos",
  "promociones","promociones-objetivos","seguimiento-global","acciones",
- "oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"
+ "oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad"
 ]);
 export const USER_SECTIONS=[
  ["dashboard","Inicio","dashboard"],
@@ -31,7 +31,7 @@ export const USER_SECTIONS=[
  ["proveedores","Proveedores","proveedores"],
  ["proveedores-condiciones","Análisis de proveedores","proveedores"],
  ["genericos","Genéricos","genericos"],
- ["rentabilidad","Rentabilidad (resumen)","rentabilidad"],
+ ["rentabilidad","Rentabilidad","rentabilidad"],
  ["rentabilidad-segmentos","Por familia","rentabilidad"],
  ["rentabilidad-retorno","Ahorro verificado","rentabilidad"],
  ["informes","Informes","informes"],
@@ -46,7 +46,7 @@ export const USER_SECTIONS=[
  profileVisible:PROFILE_EDITOR_SECTION_IDS.has(id),
  // Estas rutas todavía utilizan ModuloDemo en la SPA.
  demo:new Set(["dashboard","ventas","compras","stock","reposicion",
-   "rentabilidad","acciones","informes"]).has(id)
+   "acciones","informes"]).has(id)
 }));
 const byId=new Map(USER_SECTIONS.map(s=>[s.id,s]));
 // Todas las secciones, incluido el directorio de proveedores, requieren
@@ -79,6 +79,7 @@ export function requestSections(req){
  const path=String(req.path||req.originalUrl?.split("?")[0]||"");
  const screen=path.match(/^\/api\/analytics\/pantallas\/([^/]+)/)?.[1];
  if(screen&&byId.has(screen))return [screen];
+ if(path.startsWith("/api/analytics/rentabilidad/"))return ["rentabilidad"];
  if(path.startsWith("/api/ventas/objetivos/"))return ["promociones-objetivos"];
  if(path==="/api/ventas/detalle")return ["seguimiento-global","promociones-objetivos"];
  if(path.startsWith("/api/analytics/stock/sin-recepciones"))return ["stock-sin-recepciones"];

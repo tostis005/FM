@@ -125,17 +125,28 @@ function enrichedCTE(schema,columns,view){
 export function buildProfitabilitySQL(schema,columns,view,order="sales",direction="desc"){
  if(!Object.hasOwn(SORT,order)||!["asc","desc"].includes(direction))throw Error("Ordenación inválida");
  const base=enrichedCTE(schema,columns,view);
- if(view==="overview")return base+"\n"+[
-  "SELECT CASE WHEN GROUPING(month)=0 THEN 'month'",
-  " WHEN GROUPING(\"pharmacyId\")=0 THEN 'pharmacy' ELSE 'family' END AS kind,",
-  " month::text AS bucket,\"pharmacyId\",\"pharmacyName\",family,",
-  " sum(sales)::float8 AS sales,sum(units)::float8 AS units,",
-  " sum(\"coveredSales\")::float8 AS \"coveredSales\",",
-  " sum(cost)::float8 AS cost,sum(margin)::float8 AS margin",
-  " FROM enriched",
-  " GROUP BY GROUPING SETS ((month),(\"pharmacyId\",\"pharmacyName\"),(family))",
-  " ORDER BY kind,bucket,\"pharmacyName\",margin DESC NULLS LAST"
- ].join("\n");
+ if(view==="overview"){
+  // Tres agregaciones explícitas del mismo conjunto materializado. Es más
+  // fácil de comprobar que GROUPING SETS y conserva importes sin extrapolar.
+  const sums="sum(sales)::float8 AS sales,sum(units)::float8 AS units,"+
+   " sum(\"coveredSales\")::float8 AS \"coveredSales\","+
+   " sum(cost)::float8 AS cost,sum(margin)::float8 AS margin";
+  return base+"\n"+[
+   "SELECT 'month'::text AS kind,month::text AS bucket,",
+   " NULL::text AS \"pharmacyId\",NULL::text AS \"pharmacyName\",",
+   " NULL::text AS family,"+sums,
+   " FROM enriched GROUP BY month",
+   " UNION ALL",
+   " SELECT 'pharmacy'::text AS kind,NULL::text AS bucket,",
+   " \"pharmacyId\",\"pharmacyName\",NULL::text AS family,"+sums,
+   " FROM enriched GROUP BY \"pharmacyId\",\"pharmacyName\"",
+   " UNION ALL",
+   " SELECT 'family'::text AS kind,NULL::text AS bucket,",
+   " NULL::text AS \"pharmacyId\",NULL::text AS \"pharmacyName\",family,"+sums,
+   " FROM enriched GROUP BY family",
+   " ORDER BY kind,bucket,\"pharmacyName\",margin DESC NULLS LAST"
+  ].join("\n");
+ }
  if(view==="products")return base+"\n"+[
   "SELECT *,count(*) OVER()::int AS total",
   " FROM enriched WHERE ($5::text='' OR cn ILIKE '%'||$5||'%'",

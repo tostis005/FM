@@ -3,132 +3,178 @@ import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {cnCategory} from "./laboratoryOrderPlanner.js";
 import {readTransferidorPolicy} from "./transferidorPolicy.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
-const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","targetOrigin","targetDestination","triggerDestination","extraDestination","sales7Origin","sales7Destination","sales30Origin","sales30Destination"]);
-const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","pendingDestination","triggerDestination","extraDestination","sales7Origin","sales7Destination","sales30Origin","sales30Destination"]);
+const SORT=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","targetOrigin","targetDestination","triggerDestination","extraDestination","sales7Origin","sales7Destination","sales30Origin","sales30Destination"]);
+const FILTERS=new Set(["cn","name","originName","destinationName","units","stockOrigin","stockDestination","triggerDestination","extraDestination","sales7Origin","sales7Destination","sales30Origin","sales30Destination"]);
 const CAP=999999;
 const asNumber=value=>Number.isFinite(Number(value))?Number(value):0;
 const whole=value=>Math.max(0,Math.min(CAP,Math.ceil(asNumber(value)-1e-9)));
 const identity=cn=>cnCategory(cn)==="parafarmacia"&&Number(String(cn).slice(0,6))>=1;
 const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 
-// El plan se calcula de una vez, antes de filtrar o paginar. Cada donante
-// dispone de un saldo restante que se reduce tras CADA propuesta: no hay doble asignación.
-// Sin parámetro: política nueva de transferencias 4/7.
-// Se conserva el argumento numérico histórico para pruebas y clientes antiguos.
+// Combina tendencias de 7 y 30 días, conservando más peso de la semana
+// cuando acelera y más peso del mes cuando la semana se enfría.
+export function transferidorDemandForecast(src={}){
+ const legacy=Math.max(0,asNumber(src?.units3))/90||
+  Math.max(0,asNumber(src?.units12))/365;
+ const week=src?.units7==null?null:Math.max(0,asNumber(src.units7))/7;
+ const month=src?.units30==null?null:Math.max(0,asNumber(src.units30))/30;
+ const recent=week??month??legacy,history=month??week??legacy;
+ const high=Math.max(recent,history),low=Math.min(recent,history);
+ const blended=recent>=history?
+  history+(recent-history)*0.75:
+  recent+(history-recent)*0.70;
+ return {recent,history,high,low,blended};
+}
+
+// El plan siempre se calcula globalmente antes de aplicar filtros y paginar.
+// Cada CN se trata por separado; las transferencias reducen el saldo del donante.
+// Nunca se usan pedidos de reposición inciertos como stock disponible.
 export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDays:7,families:[],articles:[]}){
- const config=typeof policy==="number"?{minDays:policy,targetDays:policy,families:[],articles:[]}:
+ const config=typeof policy==="number"?
+  {minDays:policy,targetDays:policy,families:[],articles:[],webPendingByCn:new Map()}:
   {minDays:Number(policy?.minDays??4),targetDays:Number(policy?.targetDays??7),
    families:policy?.families||[],articles:policy?.articles||[],
    webPendingByCn:policy?.webPendingByCn||new Map()};
- const familyReserve=new Map(config.families.map(x=>[String(x.pharmacyId)+"|"+String(x.familyId),Number(x.days)]));
- const articleReserve=new Map(config.articles.map(x=>[String(x.pharmacyId)+"|"+String(x.cn),Number(x.units)]));
+ const familyReserve=new Map(config.families.map(x=>
+  [String(x.pharmacyId)+"|"+String(x.familyId),Number(x.days)]));
+ const articleReserve=new Map(config.articles.map(x=>
+  [String(x.pharmacyId)+"|"+String(x.cn),Number(x.units)]));
  const validSites=new Map(pharmacies.map(p=>[String(p.id),p]));
  const webPending=config.webPendingByCn instanceof Map?config.webPendingByCn:
   new Map(Object.entries(config.webPendingByCn||{}));
  const products=new Map();
- for(const r of rows||[]){
-  const id=String(r.pharmacyId||""),rawCN=String(r.cn||"").trim();
-  if(!validSites.has(id)||!identity(rawCN))continue;
-  const cn=rawCN.slice(0,6);
-  if(!products.has(cn))products.set(cn,{cn,name:String(r.name||cn),sites:new Map()});
-  const group=products.get(cn);
-  if(!group.sites.has(id))group.sites.set(id,r);
+ for(const row of rows||[]){
+  const id=String(row.pharmacyId||""),raw=String(row.cn||"").trim();
+  if(!validSites.has(id)||!identity(raw))continue;
+  const cn=raw.slice(0,6);
+  if(!products.has(cn))products.set(cn,{cn,name:String(row.name||cn),sites:new Map()});
+  const product=products.get(cn);
+  if(!product.sites.has(id))product.sites.set(id,row);
  }
  const transfers=[];let skipped=0,withNeed=0,withSurplus=0;
  for(const product of products.values()){
-  const sites=[...validSites.values()].map(p=>{
-   const src=product.sites.get(String(p.id));
+  const sites=[...validSites.values()].map(pharmacy=>{
+   const src=product.sites.get(String(pharmacy.id));
    const rawStock=src?.stock;
-   // Stock sin informar: cero. Solo se descartan valores corruptos.
    if(rawStock!=null&&(!Number.isFinite(Number(rawStock))||Number(rawStock)<0))
     return {invalid:true};
    const stock=rawStock==null?0:Math.max(0,Number(rawStock));
-   const sold7=Math.max(0,asNumber(src?.units7));
-   const visible7=src?.units7==null?null:asNumber(src.units7);
-   const visible30=src?.units30==null?null:asNumber(src.units30);
-   const sold3=Math.max(0,asNumber(src?.units3));
-   const sold12=Math.max(0,asNumber(src?.units12));
-   // Los datos nuevos del Transferidor usan solo siete días; las métricas
-   // históricas se admiten como respaldo para clientes/tests antiguos.
-   const daily=src?.units7!=null?sold7/7:Math.max(sold3/90,sold12/365);
-   const id=String(p.id),familyId=String(src?.familyId||"");
-   const isWarehouse=p.establishmentType==="almacen"||p.kind==="almacen";
-   const byArticle=articleReserve.get(id+"|"+product.cn);
-   const byFamily=familyReserve.get(id+"|"+familyId);
-   // Las reservas de exposición nunca generan por sí solas una transferencia:
-   // primero debe faltar stock para cubrir las VENTAS previstas del destino.
-   const extra=byArticle!=null?whole(byArticle):byFamily!=null?whole(daily*byFamily):0;
-   const source=byArticle!=null?"articulo":byFamily!=null?"familia":"global";
-   const threshold=whole(daily*config.minDays);
-   const target=whole(daily*config.targetDays)+extra;
-   const ordered=Math.max(0,asNumber(src?.ordered));
-   const available=stock+ordered;
-   // minDays controla cuándo se activa la necesidad; targetDays, cuánto reponer.
-   // Un origen con excedente nunca es motivo suficiente para una propuesta.
-   const need=!isWarehouse&&daily>0&&available<threshold?whole(target-available):0;
-   // Proteger al donante: conserva previsión de ventas más su exposición.
-   const surplus=Math.max(0,Math.floor(stock-target+1e-9));
-   return {id,name:p.name||id,stock,target,threshold,extra,source,ordered,need,surplus,
-    visible7,visible30,isWarehouse,
+   const forecast=transferidorDemandForecast(src);
+   const id=String(pharmacy.id),familyId=String(src?.familyId||"");
+   const isWarehouse=pharmacy.establishmentType==="almacen"||pharmacy.kind==="almacen";
+   const article=articleReserve.get(id+"|"+product.cn);
+   const family=familyReserve.get(id+"|"+familyId);
+   const extra=article!=null?whole(article):family!=null?whole(forecast.blended*family):0;
+   const reserveSource=article!=null?"articulo":family!=null?"familia":"global";
+   const highTarget=whole(forecast.high*config.targetDays)+extra;
+   const baseTarget=whole(forecast.blended*config.targetDays)+extra;
+   const lowTarget=whole(forecast.low*config.targetDays)+extra;
+   const threshold=whole(forecast.high*config.minDays);
+   const safetyFloor=whole(forecast.high*config.minDays)+extra;
+   const need=!isWarehouse&&forecast.high>0&&stock<threshold;
+   return {id,name:pharmacy.name||id,stock,remaining:stock,received:0,
+    forecast,extra,reserveSource,highTarget,baseTarget,lowTarget,
+    safetyFloor,threshold,need,isWarehouse,
+    visible7:src?.units7==null?null:asNumber(src.units7),
+    visible30:src?.units30==null?null:asNumber(src.units30),
     stockAt:src?.stockAt||null};
   });
-  if(sites.some(s=>s.invalid)){skipped++;continue;}
+  if(sites.some(site=>site.invalid)){skipped++;continue;}
   const retail=sites.filter(site=>!site.isWarehouse);
   const warehouse=sites.find(site=>site.isWarehouse);
   if(warehouse){
-   // La reserva central protege a la vez el canal web y la reposición de tiendas.
-   // No se confunde venta de farmacia con salida del almacén; la primera se
-   // utiliza solo como previsión conservadora de reposiciones.
-   // Ventas de todas las farmacias NO son envíos del almacén.
-   // Una cobertura de emergencia para la farmacia de mayor rotación
-   // evita atribuir al almacén la demanda de toda la red.
-   const busiestStoreDaily=Math.max(0,...retail.map(site=>
-    Math.max(0,(site.visible7||0)/7,(site.visible30||0)/30)));
-   const warehouseDaily=Math.max(0,(warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
+   // Las ventas minoristas no son salidas directas del almacén.
+   const busiest=Math.max(0,...retail.map(site=>site.forecast.high));
+   const webDaily=warehouse.forecast.high;
    const backlog=whole(webPending.get(product.cn)||0);
-   const webProjection=whole(warehouseDaily*config.targetDays);
-   const webProxy=warehouseDaily===0?whole(busiestStoreDaily*config.targetDays):0;
+   const webProjection=whole(webDaily*config.targetDays);
+   const webProxy=webDaily===0?whole(busiest*config.targetDays):0;
    const webReserve=Math.max(webProjection,backlog,webProxy);
-   const webEstimate=webProxy>Math.max(webProjection,backlog);
-   const replenishmentReserve=whole(busiestStoreDaily*config.minDays);
-   warehouse.target=webReserve+replenishmentReserve;
-   warehouse.threshold=warehouse.target;
-   warehouse.surplus=Math.max(0,Math.floor(warehouse.stock-warehouse.target+1e-9));
+   const replenishmentReserve=whole(busiest*config.minDays);
+   warehouse.safetyFloor=webReserve+replenishmentReserve;
+   warehouse.highTarget=warehouse.safetyFloor;
+   warehouse.baseTarget=warehouse.safetyFloor;
+   warehouse.lowTarget=warehouse.safetyFloor;
    warehouse.webReserve=webReserve;
    warehouse.replenishmentReserve=replenishmentReserve;
-   warehouse.webEstimate=webEstimate;
+   warehouse.webEstimate=webProxy>Math.max(webProjection,backlog);
   }
-  if(sites.some(s=>s.need>0))withNeed++;
-  if(sites.some(s=>s.surplus>0))withSurplus++;
-  // Almacén primero SIEMPRE que conserve sus reservas; después farmacias.
-  const sources=sites.filter(s=>s.surplus>0).sort((a,b)=>
-   Number(b.isWarehouse)-Number(a.isWarehouse)||b.surplus-a.surplus||stable(a.id,b.id));
-  const targets=sites.filter(s=>s.need>0).sort((a,b)=>b.need-a.need||stable(a.id,b.id));
-  for(const target of targets){
-   let pending=target.need;
-   for(const source of sources){
-    if(!pending)break;
-    const units=Math.min(pending,source.surplus);
-    if(!units||source.id===target.id)continue;
-    transfers.push({id:product.cn+":"+source.id+":"+target.id,cn:product.cn,
-     name:product.name,originId:source.id,originName:source.name,
-     destinationId:target.id,destinationName:target.name,units,
-     stockOrigin:source.stock,targetOrigin:source.target,
-     originKind:source.isWarehouse?"almacen":"farmacia",
-     warehouseWebReserve:source.isWarehouse?source.webReserve:null,
-     warehousePharmacyReserve:source.isWarehouse?source.replenishmentReserve:null,
-     warehouseWebEstimate:source.isWarehouse?source.webEstimate:null,
-     sales7Origin:source.visible7,sales30Origin:source.visible30,
-     stockDestination:target.stock,pendingDestination:target.ordered,
-     sales7Destination:target.visible7,sales30Destination:target.visible30,
-     targetDestination:target.target,
-     triggerDestination:target.threshold,extraDestination:target.extra,
-     reserveSource:target.source,minDays:config.minDays,targetDays:config.targetDays,
-     stockAt:source.stockAt&&target.stockAt?
-      (source.stockAt<target.stockAt?source.stockAt:target.stockAt):source.stockAt||target.stockAt});
-    source.surplus-=units;pending-=units;
+  const targets=retail.filter(site=>site.need);
+  if(targets.length)withNeed++;
+  if(sites.some(site=>site.remaining>site.safetyFloor))withSurplus++;
+  if(!targets.length)continue;
+  const donors=sites.filter(site=>!site.need);
+  const movements=new Map();
+  const cover=site=>{
+   if(site.forecast.blended<=0)return Infinity;
+   return Math.max(0,site.remaining+site.received-site.extra)/site.forecast.blended;
+  };
+  const donorOrder=(a,b)=>
+   Number(b.isWarehouse)-Number(a.isWarehouse)||cover(b)-cover(a)||stable(a.id,b.id);
+  const targetOrder=(a,b)=>cover(a)-cover(b)||stable(a.id,b.id);
+  function move(source,target,units){
+   if(units<=0||source.id===target.id)return;
+   source.remaining-=units;target.received+=units;
+   const id=product.cn+":"+source.id+":"+target.id;
+   if(movements.has(id)){movements.get(id).units+=units;return;}
+   movements.set(id,{id,cn:product.cn,name:product.name,
+    originId:source.id,originName:source.name,
+    destinationId:target.id,destinationName:target.name,units,
+    originKind:source.isWarehouse?"almacen":"farmacia",
+    stockOrigin:source.stock,targetOrigin:source.safetyFloor,
+    originIdealTarget:source.highTarget,
+    warehouseWebReserve:source.isWarehouse?source.webReserve:null,
+    warehousePharmacyReserve:source.isWarehouse?source.replenishmentReserve:null,
+    warehouseWebEstimate:source.isWarehouse?source.webEstimate:null,
+    sales7Origin:source.visible7,sales30Origin:source.visible30,
+    stockDestination:target.stock,
+    sales7Destination:target.visible7,sales30Destination:target.visible30,
+    targetDestination:target.highTarget,
+    balancedTargetDestination:target.baseTarget,
+    lowTargetDestination:target.lowTarget,
+    triggerDestination:target.threshold,extraDestination:target.extra,
+    forecastDailyDestination:target.forecast.blended,
+    reserveSource:target.reserveSource,minDays:config.minDays,targetDays:config.targetDays,
+    stockAt:source.stockAt&&target.stockAt?
+     (source.stockAt<target.stockAt?source.stockAt:target.stockAt):
+     source.stockAt||target.stockAt});
+  }
+  // Alta: cubrir el escenario exigente SOLO con excedente sobre el objetivo
+  // exigente de cada donante. Media: cumplir la previsión base desde excedente
+  // sobre su objetivo base. Equilibrio: compartir únicamente stock por encima
+  // de la seguridad mínima, sin empeorar la cobertura relativa del donante.
+  for(const [tier,goal] of [["high","highTarget"],["medium","baseTarget"],["balanced","baseTarget"]]){
+   let updated=true,rounds=0;
+   while(updated&&rounds++<=targets.length+1){
+    updated=false;
+    for(const target of targets.slice().sort(targetOrder)){
+     const needed=whole(target[goal]-(target.stock+target.received));
+     if(!needed)continue;
+     for(const source of donors.slice().sort(donorOrder)){
+      if(source.id===target.id)continue;
+      const floor=tier==="high"?source.highTarget:
+       tier==="medium"?source.baseTarget:source.safetyFloor;
+      const maxSend=Math.floor(Math.max(0,source.remaining-floor)+1e-9);
+      if(!maxSend)continue;
+      let units=Math.min(maxSend,needed);
+      if(tier==="balanced"&&!source.isWarehouse){
+       // Igualar días de cobertura, en lugar de vaciar una farmacia para otra.
+       const sourceRate=source.forecast.blended,targetRate=target.forecast.blended;
+       if(sourceRate>0&&targetRate>0){
+        const gap=cover(source)-cover(target);
+        if(gap<=0)continue;
+        units=Math.min(units,Math.floor(gap/(1/sourceRate+1/targetRate)+1e-9));
+       }
+      }
+      if(!units)continue;
+      move(source,target,units);updated=true;
+      break; // Reordenar tras cada movimiento para atender primero al más desprotegido.
+     }
+    }
+    if(tier!=="balanced")break; // Etapas rápida y media: una pasada por destino.
    }
   }
+  transfers.push(...movements.values());
  }
  return {transfers,skipped,products:products.size,withNeed,withSurplus};
 }
@@ -239,17 +285,6 @@ JOIN ${q}.fm_ventas_cabeceras h ON h.farmacia_codigo=l.farmacia_codigo
  AND h.fecha < (now() AT TIME ZONE 'Europe/Madrid')::date+interval '1 day'
 GROUP BY r.fid,r.article_id`;
 }
-function transferidorPendingSQL(){
- return `SELECT p.farmacia_id::text AS "pharmacyId",
- l.line->>'articulo' AS "articleId",
- coalesce(sum((assignment.item->>'unidades')::float8),0)::float8 AS ordered
-FROM farmetrica.op_pedidos p
-CROSS JOIN LATERAL jsonb_array_elements(coalesce(p.lineas,'[]'::jsonb)) AS l(line)
-CROSS JOIN LATERAL jsonb_array_elements(coalesce(l.line->'asignaciones','[]'::jsonb)) AS assignment(item)
-WHERE p.cliente_slug=$1 AND p.farmacia_id=ANY($2::int[])
- AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
-GROUP BY p.farmacia_id,l.line->>'articulo'`;
-}
 // Snapshot fresco de Picking List. Si falta o caduca no se atribuyen
 // pedidos ficticios: se aplica la reserva conservadora por rotación global.
 export function transferidorPendingWebSQL(){
@@ -304,7 +339,7 @@ async function readTransferSales(pool,schema,entries){
   values:[JSON.stringify(refs)],query_timeout:20000});
  return rows;
 }
-export function mergeTransferBatch(entries,metrics,pending){
+export function mergeTransferBatch(entries,metrics){
  const byArticle=new Map(metrics.map(m=>[String(m.pharmacyId)+"|"+String(m.articleId),m]));
  const joined=new Map();
  for(const entry of entries){
@@ -314,13 +349,12 @@ export function mergeTransferBatch(entries,metrics,pending){
   if(!joined.has(key))joined.set(key,{
    cn:String(entry.cn),pharmacyId:fid,name:String(entry.name||entry.cn),
    familyId:entry.familyId||null,kind:entry.kind||"farmacia",stock:0,
-   units7:0,units30:0,ordered:0,stockAt:entry.stockAt||null
+   units7:0,units30:0,stockAt:entry.stockAt||null
   });
   const item=joined.get(key);
   item.stock+=Math.max(0,Number(entry.stock)||0);
   item.units7+=Number(sold?.units7)||0;
   item.units30+=Number(sold?.units30)||0;
-  item.ordered+=Number(pending.get(fid+"|"+article))||0;
   if(!item.familyId&&entry.familyId)item.familyId=entry.familyId;
  }
  return [...joined.values()];
@@ -354,10 +388,10 @@ function splitTransferCN(entries){
  if(groups.length>1)return [groups[0],groups.slice(1).flat()];
  return null;
 }
-async function transferBatch(pool,schema,entries,pharmacies,policy,pending,job){
+async function transferBatch(pool,schema,entries,pharmacies,policy,job){
  try{
   const sales=await readTransferSales(pool,schema,entries);
-  const plan=buildGlobalTransfers(mergeTransferBatch(entries,sales,pending),pharmacies,policy);
+  const plan=buildGlobalTransfers(mergeTransferBatch(entries,sales),pharmacies,policy);
   job.plan.transfers.push(...plan.transfers);
   for(const field of ["skipped","products","withNeed","withSurplus"])
    job.plan[field]+=plan[field];
@@ -367,8 +401,8 @@ async function transferBatch(pool,schema,entries,pharmacies,policy,pending,job){
    const parts=entries.length>25?splitTransferCN(entries):null;
    if(parts){
     job.progress.total++;
-    await transferBatch(pool,schema,parts[0],pharmacies,policy,pending,job);
-    await transferBatch(pool,schema,parts[1],pharmacies,policy,pending,job);
+    await transferBatch(pool,schema,parts[0],pharmacies,policy,job);
+    await transferBatch(pool,schema,parts[1],pharmacies,policy,job);
    }else{
     job.failed+=new Set(entries.map(x=>x.cn)).size;
     job.progress.done++;
@@ -395,10 +429,9 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
  const started=Date.now();
  try{
   job.status="inventory";
-  const [inventory,policy,{rows:pendingRows},webPending]=await Promise.all([
+  const [inventory,policy,webPending]=await Promise.all([
    readTransferInventory(pool,schema,slug,ids),
    readTransferidorPolicy(pool,slug,ids),
-   pool.query({text:transferidorPendingSQL(),values:[slug,ids],query_timeout:15000}),
    pool.query({text:transferidorPendingWebSQL(),values:[slug],query_timeout:8000})
     .then(result=>result.rows)
     .catch(e=>{
@@ -418,7 +451,6 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
     "No hay artículos de parafarmacia con stock para redistribuir.";
    return;
   }
-  const pending=new Map(pendingRows.map(r=>[String(r.pharmacyId)+"|"+String(r.articleId),r.ordered]));
   const chunks=transferidorCNChunks(inventory,350);
   job.progress={done:0,total:chunks.length};
   job.policy=policy;
@@ -427,7 +459,7 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
   job.analyzed=new Set(inventory.map(r=>r.cn)).size;
   job.status="calculating";
   await processTransferChunks(chunks,entries=>
-   transferBatch(pool,schema,entries,allSources,supplyPolicy,pending,job),{
+   transferBatch(pool,schema,entries,allSources,supplyPolicy,job),{
     concurrency:typeof pool.connect==="function"&&typeof pool.release!=="function"?2:1
    });
   job.status=job.failed?"partial":"complete";

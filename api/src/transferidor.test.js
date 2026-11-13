@@ -572,19 +572,77 @@ test("almacén en la consulta de inventario y pedidos web pendientes solo con sn
  assert.match(web,/30 minutes/);
 });
 
-test("la previsión usa solo la semana aunque las ventas del mes sean muy superiores",()=>{
+test("la previsión usa ambas ventanas para calcular el objetivo",()=>{
  const plan=buildGlobalTransfers([
   {pharmacyId:"1",cn:"123456",stock:40,units7:0,units30:190,name:"Crema"},
   {pharmacyId:"2",cn:"123456",stock:1,units7:7,units30:120,name:"Crema"}
  ],pharmacies.slice(0,2)).transfers;
  assert.equal(plan.length,1);
- assert.equal(plan[0].units,6,"7 días de objetivo menos 1 de stock");
- assert.equal(plan[0].sales7Origin,0);
+ assert.equal(plan[0].units,14);
+ assert.equal(plan[0].targetDestination,28);
+ assert.equal(plan[0].balancedTargetDestination,22);
+ assert.equal(plan[0].targetOrigin,26);
  assert.equal(plan[0].sales30Origin,190);
  assert.equal(plan[0].sales7Destination,7);
  assert.equal(plan[0].sales30Destination,120);
 });
-
+test("semana al alza se acerca al escenario de mayor venta",()=>{
+ const p=transferidorDemandForecast({units7:21,units30:30});
+ assert.equal(p.recent,3);assert.equal(p.history,1);
+ assert.equal(p.high,3);assert.equal(p.low,1);
+ assert.equal(p.blended,2.5);
+});
+test("semana a la baja prioriza el promedio del mes",()=>{
+ const p=transferidorDemandForecast({units7:7,units30:90});
+ assert.equal(p.recent,1);assert.equal(p.history,3);
+ assert.equal(p.high,3);assert.equal(p.low,1);
+ assert.ok(Math.abs(p.blended-2.4)<1e-9);
+});
+test("un mes activo activa el envío incluso con cero ventas semanales",()=>{
+ const plan=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:40,units7:0,units30:0},
+  {pharmacyId:"2",cn:"123456",stock:0,units7:0,units30:30}
+ ],pharmacies.slice(0,2)).transfers;
+ assert.equal(plan.length,1);
+ assert.equal(plan[0].targetDestination,7);
+ assert.equal(plan[0].balancedTargetDestination,5);
+ assert.equal(plan[0].units,7);
+});
+test("cuotas en escasez igualan días cubiertos entre farmacias",()=>{
+ const targets=[
+  {id:"1",stock:0,received:0,extra:0,highTarget:7,forecast:{blended:1}},
+  {id:"2",stock:0,received:0,extra:0,highTarget:7,forecast:{blended:1}}
+ ];
+ const quotas=transferidorFairQuotas(targets,9,"highTarget");
+ assert.equal((quotas.get("1")||0)+(quotas.get("2")||0),9);
+ assert.ok(Math.abs(quotas.get("1")-quotas.get("2"))<=1);
+});
+test("dos farmacias deficitarias reciben stock equilibrado sin descapitalizar origen",()=>{
+ const result=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:12,units7:7,units30:30},
+  {pharmacyId:"2",cn:"123456",stock:0,units7:7,units30:30},
+  {pharmacyId:"3",cn:"123456",stock:0,units7:7,units30:30}
+ ],pharmacies.slice(0,3));
+ const moves=result.transfers;
+ assert.equal(new Set(moves.map(m=>m.id)).size,moves.length);
+ const sent=moves.reduce((n,r)=>n+r.units,0);
+ assert.ok(sent<=8,"Origen conserva al menos cuatro unidades");
+ const to=id=>moves.filter(m=>m.destinationId===id).reduce((n,r)=>n+r.units,0);
+ assert.ok(Math.abs(to("2")-to("3"))<=1,"Distribuye el stock entre ambas tiendas");
+});
+test("sin mes disponible no se inventa historia y se usa la semana",()=>{
+ const p=transferidorDemandForecast({units7:14});
+ assert.equal(p.high,2);assert.equal(p.blended,2);assert.equal(p.low,2);
+});
+test("la farmacia con menos cobertura tiene preferencia en el reparto",()=>{
+ const targets=[
+  {id:"1",stock:4,received:0,extra:0,highTarget:10,forecast:{blended:1}},
+  {id:"2",stock:0,received:0,extra:0,highTarget:10,forecast:{blended:1}}
+ ];
+ const quotas=transferidorFairQuotas(targets,4,"highTarget");
+ assert.equal(quotas.get("2"),4);
+ assert.equal(quotas.get("1"),0);
+});
 test("sin propuestas, ventas 7 y 30 se calculan igualmente en una sola lectura",async()=>{
  let salesQueries=0;
  const db={async query(arg){

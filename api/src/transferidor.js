@@ -80,11 +80,13 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    // No se confunde venta de farmacia con salida del almacén; la primera se
    // utiliza solo como previsión conservadora de reposiciones.
    const retailDaily=retail.reduce((sum,site)=>
-    sum+Math.max((site.visible7||0)/7,(site.visible30||0)/30),0);
-   const webDaily=Math.max((warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
+    sum+Math.max(0,(site.visible7||0)/7,(site.visible30||0)/30),0);
+   const webDaily=Math.max(0,(warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
    const backlog=whole(webPending.get(product.cn)||0);
+   // Si no existe histórico web fiable, el backlog por sí solo no sustituye
+   // la previsión: conservar también cobertura proporcional a las tiendas.
    const webReserve=Math.max(whole(webDaily*config.targetDays),backlog,
-    webDaily===0&&backlog===0?whole(retailDaily*config.targetDays):0);
+    webDaily===0?whole(retailDaily*config.targetDays):0);
    const replenishmentReserve=whole(retailDaily*config.minDays);
    warehouse.target=webReserve+replenishmentReserve;
    warehouse.threshold=warehouse.target;

@@ -208,7 +208,7 @@ const NAV=[
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
- {id:"rentabilidad-productos",label:"Rentabilidad de productos",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
+ {id:"rentabilidad-productos",label:"Rentabilidad de productos",icon:BarChart3,module:"rentabilidad"},
  {id:"rentabilidad-segmentos",label:"Por familia",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},

@@ -264,7 +264,7 @@ export function setupProfitability(app,pool,{requireTenant}){
     total:view==="products"?Number(rows[0]?.total||0):null,
     page:f.page,pageSize:f.size,
     hasMore:view==="sales"&&result.rows.length>f.size,
-    costMethod:"PMC actual del catálogo; margen estimado, no beneficio contable."});
+    costMethod:"Coste unitario del catálogo (campo PMC); no equivale necesariamente al PUC de cada compra. Margen estimado."});
   }catch(error){
    // No convertir errores de SQL o timeouts en un aviso genérico imposible de diagnosticar.
    console.error("FM_RENTABILIDAD_CONSULTA",{

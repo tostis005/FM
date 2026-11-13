@@ -10,8 +10,7 @@ function exercise(view,fail=null){
  }};
  const pool={query:async(payload)=>{
   queries.push(payload);
-  if(typeof payload==="string")return {rows:[]};
-  if(payload.text?.includes("information_schema.columns"))
+  if((typeof payload==="string"?payload:payload.text)?.includes("information_schema.columns"))
    return {rows:["farmacia_codigo","origen_id","nombre","familia","pmc","pvp","codigo_nacional"]
     .map(column_name=>({column_name}))};
   if(fail)throw fail;

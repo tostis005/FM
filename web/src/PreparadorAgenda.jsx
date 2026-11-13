@@ -19,6 +19,7 @@ export default function PreparadorAgenda({clientSlug,laboratories=[],canEdit=fal
  const [historyFor,setHistoryFor]=useState(""),[history,setHistory]=useState([]),
   [historyBusy,setHistoryBusy]=useState(false);
  const [localVersion,setLocalVersion]=useState(0);
+ const [expanded,setExpanded]=useState(false);
  const eligible=new Set(laboratories.map(l=>l.key));
  useEffect(()=>{
   const ac=new AbortController();setLoading(true);setError("");
@@ -59,21 +60,31 @@ export default function PreparadorAgenda({clientSlug,laboratories=[],canEdit=fal
    setHistory(data.items||[]);setLocalVersion(v=>v+1);
   }catch(e){setError(e.message)}finally{setHistoryBusy(false)}
  }
- return <section className="card fm-order-agenda" aria-label="Agenda de pedidos">
-  <header className="fm-order-agenda-header">
-   <div><h2><CalendarDays size={20}/> Planificación de pedidos</h2>
-    <p>Agenda global de pedidos. Hasta que registres una fecha real, verás una previsión de prueba que se actualiza cada día.</p></div>
-   <button className="btn btn-secondary btn-sm" disabled={loading}
-    onClick={()=>setLocalVersion(v=>v+1)} aria-label="Actualizar agenda"><RefreshCcw size={15}/> Actualizar</button>
-  </header>
-  <div className="fm-order-agenda-kpis">
-   {[[ "vencido","Vencidos"],["hoy","Hoy"],["manana","Mañana"],["proximo","Próx. 7 días"],["sin_fecha","Sin fecha real"]].map(([key,label])=>
-    <button key={key} className={"fm-order-agenda-kpi "+(filter===key?"active":"")}
-     onClick={()=>{setFilter(key);setLimit(12)}} aria-pressed={filter===key}>
-     <strong>{counts[key]}</strong><span>{label}</span>
-    </button>)}
+ return <section className="card fm-order-agenda fm-order-agenda-compact" aria-label="Agenda de pedidos" aria-busy={loading}>
+  <div className="fm-order-agenda-toolbar">
+   <div className="fm-order-agenda-title">
+    <h2><CalendarDays size={17}/> Planificación de pedidos</h2>
+   </div>
+   <div className="fm-order-agenda-kpis" role="group" aria-label="Filtrar planificación de pedidos">
+    {[["vencido","Vencidos"],["hoy","Hoy"],["manana","Mañana"],["proximo","Próx. 7 días"],["sin_fecha","Sin fecha real"]].map(([key,label])=>
+     <button key={key} type="button" className={"fm-order-agenda-kpi "+(filter===key?"active":"")}
+      onClick={()=>{setFilter(key);setLimit(12);setExpanded(true)}} aria-pressed={filter===key}>
+      <strong>{loading?"…":counts[key]}</strong><span>{label}</span>
+     </button>)}
+   </div>
+   <div className="fm-order-agenda-toolbar-actions">
+    <button type="button" className="btn btn-secondary btn-sm fm-order-agenda-refresh" disabled={loading}
+     onClick={()=>setLocalVersion(v=>v+1)} aria-label="Actualizar agenda" title="Actualizar agenda">
+     <RefreshCcw size={14}/></button>
+    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setExpanded(v=>!v)}
+     aria-expanded={expanded} aria-controls="fm-order-agenda-details">
+     {expanded?"Ocultar":"Ver agenda"} {expanded?<ChevronUp size={14}/>:<ChevronDown size={14}/>}
+    </button>
+   </div>
   </div>
   {error&&<p role="alert" className="fm-op-message fm-op-error">{error}</p>}
+  {expanded&&<div className="fm-order-agenda-details" id="fm-order-agenda-details">
+   <p className="fm-order-agenda-help">Agenda global de pedidos. Las previsiones de prueba se actualizan cada día hasta registrar una fecha real.</p>
   {loading?<p role="status">Cargando fechas de pedido…</p>:
    !visible.length?<p className="fm-muted">No hay laboratorios en este grupo. Puedes elegir otra categoría arriba.</p>:
    <div className="fm-order-agenda-list">
@@ -116,5 +127,6 @@ export default function PreparadorAgenda({clientSlug,laboratories=[],canEdit=fal
   {visible.length>limit&&<button className="btn btn-secondary" onClick={()=>setLimit(n=>n+12)}>
    Mostrar más laboratorios ({visible.length-limit} restantes)</button>}
   {items.length>0&&<p className="fm-order-agenda-footnote"><Clock3 size={14}/> Los plazos «Demo» son solo una vista previa dinámica: no constituyen pedidos ni se acumulan como vencidos. Tras registrar una fecha real, se aplica el plazo auténtico del laboratorio.</p>}
+  </div>}
  </section>;
 }

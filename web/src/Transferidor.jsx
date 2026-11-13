@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse,LoaderCircle} from "lucide-react";
+import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse,LoaderCircle,CheckCircle2,AlertCircle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {KpiValue} from "./LoadingState.jsx";
@@ -54,7 +54,12 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  const inProgress=transferidorCalculating(data?.status);
  const waitingForResults=transferidorWaitingForFirstRows(data,error);
  const progress=data?.progress||{done:0,total:0};
+ const progressDone=Math.max(0,Number(progress.done)||0);
+ const progressTotal=Math.max(0,Number(progress.total)||0);
+ const progressPercent=progressTotal?Math.min(100,Math.round(100*progressDone/progressTotal)):0;
+ const elapsed=Number.isFinite(data?.elapsedMs)?Math.round(data.elapsedMs/1000):null;
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
+ const selectedSite=sites.find(p=>String(p.id)===String(pharmacy));
  const minimumDays=Number(data?.summary?.minimumDays??4);
  const targetDays=Number(data?.summary?.targetDays??7);
  const columns=useMemo(()=>[
@@ -68,16 +73,26 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    render:r=>number(r.stockOrigin)},
   {key:"sales30Origin",group:"Origen",label:"Ventas 30d",align:"center",searchable:false,
    value:r=>r.sales30Origin,render:r=><span title={r.sales30Origin==null?
-    "Consultando o sin datos disponibles de 30 días":"Unidades vendidas en los últimos 30 días por el origen"}>{number(r.sales30Origin)}</span>},
+    "Consultando o sin datos disponibles de 30 días":r.originKind==="almacen"?
+    "Ventas registradas en el almacén durante 30 días; no incluyen todos los traspasos internos":
+    "Unidades vendidas en los últimos 30 días por el origen"}>{number(r.sales30Origin)}</span>},
   {key:"sales7Origin",group:"Origen",label:"Ventas 7d",align:"center",searchable:false,
-   value:r=>r.sales7Origin,render:r=><span title="Unidades vendidas en los últimos 7 días por el origen">{number(r.sales7Origin)}</span>},
+   value:r=>r.sales7Origin,render:r=><span title={r.originKind==="almacen"?
+    "Ventas registradas en el almacén en los últimos 7 días; no equivalen a todas sus salidas":
+    "Unidades vendidas en los últimos 7 días por el origen"}>{number(r.sales7Origin)}</span>},
   {key:"targetOrigin",group:"Origen",label:"Debe conservar",align:"center",
    searchable:false,value:r=>r.targetOrigin,
-   render:r=><span title={r.originKind==="almacen"?
-    "Reserva protegida: "+number(r.warehouseWebReserve)+" uds. web y "+
-    number(r.warehousePharmacyReserve)+" uds. reposición de farmacias":
+   render:r=><span className="fm-transfer-target" title={r.originKind==="almacen"?
+    "Reserva del almacén: "+number(r.warehouseWebReserve)+
+    " uds. para web"+(r.warehouseWebEstimate?" (estimación de seguridad, no ventas reales)":"")+
+    " y "+number(r.warehousePharmacyReserve)+
+    " uds. para reposición de una farmacia de alta rotación":
     "Reserva de farmacia: "+targetDays+" días de ventas más exposición"}>
-    {number(r.targetOrigin)}</span>},
+    <strong>{number(r.targetOrigin)}</strong>
+    {r.originKind==="almacen"&&<small className="fm-transfer-reserve-details">
+     Web{r.warehouseWebEstimate?" estim.":""} {number(r.warehouseWebReserve)} · Repos. {number(r.warehousePharmacyReserve)}
+    </small>}
+   </span>},
   {key:"destinationName",group:"Destino",label:"Farmacia",filterMode:"text",
    value:r=>r.destinationName,render:r=><strong>{r.destinationName}</strong>},
   {key:"stockDestination",group:"Destino",label:"Stock",align:"center",
@@ -109,17 +124,24 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  ],[minimumDays,targetDays]);
  return <div className="fm-transferidor">
   <ReportPageHeader title="Transferidor"
-   updatedAt={data?.calculatedAt?new Date(data.calculatedAt):null} refreshing={loading}
+   updatedAt={data?.calculatedAt?new Date(data.calculatedAt):null} refreshing={waitingForResults}
    onRefresh={()=>setRevision(Date.now())}/>
   <section className="card fm-transfer-controls" aria-label="Filtros del transferidor">
-   <div className="fm-transfer-tabs" role="group" aria-label="Tipo de movimiento">
-    {[["todos","Todos"],["envio","Lo que se envía"],["recibo","Lo que se recibe"]].map(([id,label])=>
+   <div className="fm-transfer-tabs" role="group" aria-label="Movimientos de la farmacia seleccionada">
+    {[["todos","Todos"],["envio","Salidas"],["recibo","Entradas"]].map(([id,label])=>
      <button key={id} type="button" className={"btn "+(vista===id?"btn-primary":"btn-secondary")}
-      aria-pressed={vista===id} onClick={()=>{setVista(id);reset()}}>{label}</button>)}
+      disabled={!pharmacy&&id!=="todos"} aria-pressed={vista===id}
+      title={!pharmacy&&id!=="todos"?"Selecciona una farmacia":id==="envio"?
+       "Envíos desde la farmacia elegida":id==="recibo"?"Recepciones de la farmacia elegida":
+       "Movimientos de la farmacia elegida"}
+      onClick={()=>{setVista(id);reset()}}>{label}</button>)}
+    <small className="fm-transfer-tabs-note">{pharmacy?
+     "Movimientos de "+(selectedSite?.name||"la farmacia seleccionada"):
+     "Selecciona una farmacia para distinguir entradas y salidas"}</small>
    </div>
    <div className="fm-transfer-filters">
     <label>Farmacia
-     <select value={pharmacy} onChange={e=>{setPharmacy(e.target.value);reset()}}>
+     <select value={pharmacy} onChange={e=>{setPharmacy(e.target.value);setVista("todos");reset()}}>
       <option value="">Todas las farmacias</option>
       {sites.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
      </select>
@@ -149,12 +171,23 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     }}>Limpiar filtros</button>
    </div>
   </section>
-  {inProgress&&!waitingForResults&&<p className="fm-op-message" role="status">
-   {data?.status==="queued"?"Preparando cálculo de transferencias…":
-    data?.status==="inventory"?"Recuperando stock de farmacias y almacén…":
-    "Calculando propuestas: "+number(progress.done)+" de "+number(progress.total)+" lotes."}
-   {data?.summary?.movements>0?" Ya hay "+number(data.summary.movements)+" propuestas disponibles.":""}
-  </p>}
+  {data&&!error&&<div className="fm-transfer-calc-state" role="status" aria-live="polite">
+   {inProgress?<LoaderCircle size={16} className="fm-transfer-spinner" aria-hidden="true"/>:
+    data.status==="partial"?<AlertCircle size={16} aria-hidden="true"/>:
+    <CheckCircle2 size={16} aria-hidden="true"/>}
+   <span><strong>{inProgress?
+    progressTotal?"Calculando · "+progressPercent+" %":"Preparando cálculo…":
+    data.status==="partial"?"Cálculo finalizado con incidencias":"Cálculo completado"}</strong>
+    {inProgress?progressTotal?
+     " · "+number(progressDone)+" de "+number(progressTotal)+" lotes"+
+     (!waitingForResults?" · Resultados provisionales, puedes consultarlos":""):
+     " · Recuperando stock y ventas":
+     " · "+number(progressDone)+" lotes"+(elapsed!=null?" · "+elapsed+" s":"")}
+   </span>
+   {inProgress&&progressTotal>0&&<div className="fm-transfer-calc-track" role="progressbar"
+    aria-label="Progreso del cálculo" aria-valuemin={0} aria-valuemax={100}
+    aria-valuenow={progressPercent}><span style={{width:progressPercent+"%"}}/></div>}
+  </div>}
   {error&&<p className="fm-op-message fm-op-error" role="alert">{error}
    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRevision(Date.now())}>
     <RefreshCcw size={14}/> Reintentar</button></p>}
@@ -184,7 +217,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   </div>}
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
-    <h2>Propuestas entre farmacias</h2>
+    <h2>Propuestas de redistribución</h2>
     <div className="fm-transfer-table-meta"><span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
      <small>Ventas 30d: contexto · Ventas 7d: base de previsión · Almacén protegido</small></div>
    </div>

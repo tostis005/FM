@@ -36,7 +36,7 @@ const viewOptions=[
 ];
 const allColumns=[
  ["cn","CN / referencia"],["name","Producto"],["family","Familia"],
- ["pharmacyName","Farmacia"],["units","Unidades"],["sales","Importe neto"],
+ ["laboratory","Laboratorio"],["pharmacyName","Farmacia"],["units","Unidades"],["sales","Importe neto"],
  ["pvp","PVP catálogo"],["pmc","PMC actual"],["stock","Stock actual"],
  ["coveredSales","Ventas con PMC"],["margin","Margen estimado"]
 ];
@@ -195,7 +195,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   <div className="fm-profit-tabs" role="tablist" aria-label="Perspectivas de rentabilidad">
    {viewOptions.map(option=><button key={option.id} type="button" role="tab"
     aria-selected={tab===option.id} className={tab===option.id?"active":""}
-    onClick={()=>{setTab(option.id);setSearch("");setSort("sales");setDirection("desc")}}>
+    onClick={()=>{setTab(option.id);setSearch("");setDebounced("");setSort("sales");setDirection("desc")}}>
     <option.icon size={17}/>{option.label}</button>)}
   </div>
   {!period.valid&&<div className="fm-profit-alert"><AlertCircle size={18}/>{period.reason}</div>}

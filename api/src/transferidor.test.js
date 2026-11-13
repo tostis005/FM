@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan,setupTransferidor,
  transferidorInventorySQL,transferidorSalesSQL,transferidorPendingWebSQL,
- transferidorCNChunks,mergeTransferBatch} from "./transferidor.js";
+ transferidorCNChunks,mergeTransferBatch,processTransferChunks} from "./transferidor.js";
 
 const pharmacies=[{id:"1",name:"Abadía"},{id:"2",name:"Europa"},{id:"3",name:"Centro"},{id:"4",name:"Norte"}];
 
@@ -374,6 +374,77 @@ test("API incorpora ALMACEN como origen aunque el perfil solo seleccione farmaci
  assert.equal(filtered.total,1);
 });
 
+test("sin farmacia seleccionada las tres vistas se normalizan a todos",()=>{
+ const all=parseTransferFilters({vista:"todos"},pharmacies);
+ const sends=parseTransferFilters({vista:"envio"},pharmacies);
+ const receives=parseTransferFilters({vista:"recibo"},pharmacies);
+ assert.equal(all.vista,"todos");
+ assert.equal(sends.vista,"todos");
+ assert.equal(receives.vista,"todos");
+ assert.equal(parseTransferFilters({vista:"envio",farmacia:"1"},pharmacies).vista,"envio");
+ assert.equal(parseTransferFilters({vista:"recibo",farmacia:"2"},pharmacies).vista,"recibo");
+});
+
+test("el almacén no protege toda la rotación agregada de la red como si fuera suya",()=>{
+ const wh={id:"9",name:"ALM",establishmentType:"almacen"};
+ const result=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:0,units7:14,units30:60},
+  {pharmacyId:"2",cn:"123456",stock:10,units7:7,units30:30},
+  {pharmacyId:"3",cn:"123456",stock:10,units7:7,units30:30},
+  {pharmacyId:"9",cn:"123456",stock:60,units7:0,units30:0}
+ ],[...pharmacies.slice(0,3),wh]);
+ const move=result.transfers.find(t=>t.originId==="9");
+ assert.ok(move,"El almacén debe poder aportar excedentes");
+ assert.equal(move.warehousePharmacyReserve,8,"Una farmacia de mayor rotación, 4d");
+ assert.equal(move.warehouseWebReserve,14,"Sin salidas web, referencia de una farmacia, 7d");
+ assert.equal(move.targetOrigin,22,"No se atribuyen 11 días de toda la red");
+ assert.equal(move.warehouseWebEstimate,true);
+});
+
+test("el histórico del almacén y pedidos web prevalecen frente a previsión sustitutiva",()=>{
+ const wh={id:"9",name:"ALM",establishmentType:"almacen"};
+ const result=buildGlobalTransfers([
+  {pharmacyId:"1",cn:"123456",stock:0,units7:14,units30:60},
+  {pharmacyId:"2",cn:"123456",stock:10,units7:7,units30:30},
+  {pharmacyId:"9",cn:"123456",stock:100,units7:21,units30:60}
+ ],[...pharmacies.slice(0,2),wh],{minDays:4,targetDays:7,
+  families:[],articles:[],webPendingByCn:new Map([["123456",25]])});
+ const move=result.transfers.find(t=>t.originId==="9");
+ assert.ok(move);
+ assert.equal(move.warehouseWebEstimate,false);
+ assert.equal(move.warehouseWebReserve,25);
+ assert.equal(move.warehousePharmacyReserve,8);
+ assert.equal(move.targetOrigin,33);
+});
+
+test("los lotes paralelos procesan cada CN una sola vez y respetan el límite de concurrencia",async()=>{
+ const all=Array.from({length:8},(_,i)=>i);
+ const started=[],done=[];
+ let concurrent=0,peak=0;
+ await processTransferChunks(all,async id=>{
+  started.push(id);concurrent++;peak=Math.max(peak,concurrent);
+  await new Promise(resolve=>setTimeout(resolve,2));
+  concurrent--;done.push(id);
+ },{concurrency:2});
+ assert.equal(peak,2);
+ assert.equal(new Set(started).size,8);
+ assert.deepEqual(started.slice().sort((a,b)=>a-b),all);
+ assert.deepEqual(done.slice().sort((a,b)=>a-b),all);
+});
+
+test("los lotes no propagan error hasta que terminan los demás trabajadores",async()=>{
+ const seen=[];
+ let error;
+ try{
+  await processTransferChunks([0,1,2],async n=>{
+   await new Promise(resolve=>setTimeout(resolve,2));
+   seen.push(n);
+   if(n===0)throw Error("lote");
+  },{concurrency:2});
+ }catch(e){error=e}
+ assert.match(String(error),/lote/);
+ assert.ok(seen.includes(1),"El segundo trabajador debe terminar");
+});
 test("el almacén protege su reserva y se usa antes de farmacias con excedente",()=>{
  const wh={id:"9",name:"ALM",establishmentType:"almacen"};
  const entries=[

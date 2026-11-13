@@ -86,6 +86,7 @@ test("la API permite leer resultados de dos farmacias aunque falte una tercera",
    {pharmacyId:"1",articleId:"123456",units7:0,units30:3},
    {pharmacyId:"2",articleId:"123456",units7:7,units30:25}
   ]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
   if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:1,targetDays:20}]};
   if(sql.includes("transferidor_exposicion_"))return {rows:[]};
@@ -451,6 +452,7 @@ test("sin propuestas, ventas 7 y 30 se calculan igualmente en una sola lectura",
    salesQueries++;
    return {rows:[{pharmacyId:"2",articleId:"2",units7:7,units30:30}]};
   }
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
   if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("transferidor_configuracion_cliente"))return {rows:[]};
@@ -478,6 +480,7 @@ test("un timeout en lectura conjunta no inventa ventas 30d ni movimientos",async
   ]};
   if(sql.includes("WITH refs AS MATERIALIZED"))
    throw Object.assign(Error("timeout"),{code:"57014"});
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
   if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("transferidor_configuracion_cliente"))return {rows:[]};
@@ -507,6 +510,7 @@ test("progreso: no repite el inventario y devuelve los movimientos al finalizar"
   ]};
   if(sql.includes("WITH refs AS MATERIALIZED"))
    return {rows:[{pharmacyId:"2",articleId:"123456",units7:7,units30:24}]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
   if(sql.includes("transferidor_configuracion_cliente"))
    return {rows:[{minDays:4,targetDays:7}]};
@@ -603,6 +607,7 @@ test("el cliente recibe propuestas parciales antes de terminar todos los lotes",
    return {rows:JSON.parse(arg.values[0]).filter(r=>r.fid==="2")
     .map(r=>({pharmacyId:"2",articleId:r.article_id,units7:7,units30:30}))};
   }
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
   if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
   if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:4,targetDays:7}]};
   if(sql.includes("transferidor_exposicion_"))return {rows:[]};
@@ -625,7 +630,7 @@ test("el cliente recibe propuestas parciales antes de terminar todos los lotes",
    await new Promise(resolve=>setTimeout(resolve,2));
   }
   assert.ok(observed,"Debe publicar el primer lote antes de completar el segundo");
-  assert.equal(res.body.progress.total,2);
+  assert.equal(res.body.progress.total,3);
   assert.equal(res.body.total,175);
  }finally{unblock()}
  const body=await awaitTransferResult(handler,req,res);

@@ -842,3 +842,56 @@ test("el cliente recibe propuestas parciales antes de terminar todos los lotes",
  assert.equal(salesCount,3);
  assert.equal(body.rows[0].sales30Destination,30);
 });
+
+test("Transferidor muestra todas las propuestas por defecto, sin página oculta",()=>{
+ const options=parseTransferFilters({},pharmacies);
+ assert.equal(options.size,0);
+ assert.equal(options.page,1);
+ const proposals=Array.from({length:1205},(_,index)=>({
+  id:"t-"+index,cn:String(100000+index),name:"Articulo "+index,
+  originId:"1",originName:"Abadía",destinationId:"2",destinationName:"Europa",
+  units:1205-index
+ }));
+ const all=filterTransferPlan(proposals,options);
+ assert.equal(all.total,1205);
+ assert.equal(all.rows.length,1205);
+ assert.equal(all.rows[0].id,"t-0");
+ assert.equal(all.rows.at(-1).id,"t-1204");
+});
+test("limitar a 500 o 1000 conserva todas las propuestas en páginas sucesivas",()=>{
+ const proposals=Array.from({length:1205},(_,index)=>({
+  id:"t-"+index,cn:String(100000+index),name:"Articulo "+index,
+  originId:"1",originName:"Abadía",destinationId:"2",destinationName:"Europa",
+  units:1205-index
+ }));
+ for(const limit of [500,1000]){
+  const first=filterTransferPlan(proposals,parseTransferFilters({pagina:"1",tamano:String(limit)},pharmacies));
+  const second=filterTransferPlan(proposals,parseTransferFilters({pagina:"2",tamano:String(limit)},pharmacies));
+  assert.equal(first.rows.length,limit);
+  assert.equal(second.rows.length,1205-limit);
+  assert.equal(first.total,1205);
+  assert.equal(second.total,1205);
+  assert.equal(new Set([...first.rows,...second.rows].map(r=>r.id)).size,1205);
+ }
+});
+test("el CSV puede pedir todas las filas con los filtros activos, no solo la página actual",()=>{
+ const proposals=[
+  {id:"1",cn:"123456",name:"Crema",originId:"1",originName:"Abadía",
+   destinationId:"2",destinationName:"Europa",units:2},
+  {id:"2",cn:"123457",name:"Crema",originId:"2",originName:"Europa",
+   destinationId:"1",destinationName:"Abadía",units:3},
+  {id:"3",cn:"123458",name:"Crema",originId:"1",originName:"Abadía",
+   destinationId:"2",destinationName:"Europa",units:4}
+ ];
+ const opts=parseTransferFilters({pagina:"1",tamano:"0",origen:"1",buscar:"Crema"},pharmacies);
+ const result=filterTransferPlan(proposals,opts);
+ assert.equal(result.total,2);
+ assert.deepEqual(result.rows.map(r=>r.id),["3","1"]);
+ assert.equal(result.units,6);
+});
+test("la paginación Todas exige página 1 y rechaza tamaños arbitrarios",()=>{
+ assert.equal(parseTransferFilters({tamano:"0",pagina:"1"},pharmacies).size,0);
+ for(const query of [
+  {tamano:"0",pagina:"2"},{tamano:"-1"},{tamano:"25000"},{tamano:"abc"}
+ ])assert.throws(()=>parseTransferFilters(query,pharmacies),/filtros|paginación/);
+});

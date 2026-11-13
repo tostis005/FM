@@ -48,6 +48,8 @@
 .fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(2),.fm-transfer-main-table tbody td:nth-child(2){position:sticky;left:85px;min-width:220px;width:220px;max-width:220px;z-index:3;background:#f5f9f6;border-right:2px solid #aebfb3}
 .fm-transfer-main-table tbody tr:nth-child(even) td:nth-child(-n+2){background:#eff5f1}
 .fm-transfer-main-table thead tr.fm-smart-group-row th:first-child{position:sticky;left:0;z-index:4}
+.fm-transfer-origin-name{display:inline-flex;align-items:center;gap:6px;max-width:100%;white-space:nowrap}
+.fm-transfer-origin-name svg{flex:none;color:#266e50}
 .fm-transfer-sales-reference{font-weight:750;color:#25604e}
 .fm-transfer-units{display:inline-block;min-width:35px;padding:4px 8px;border-radius:6px;background:#cbe9d5;color:#166439;font-size:13px;font-weight:800}
 @media(max-width:570px){.fm-transfer-table-meta{align-items:flex-start;text-align:left}.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(1),.fm-transfer-main-table tbody td:nth-child(1){min-width:76px;width:76px}.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(2),.fm-transfer-main-table tbody td:nth-child(2){left:76px;min-width:165px;width:165px;max-width:165px}.fm-transfer-main-table th,.fm-transfer-main-table td{padding:8px 7px}}

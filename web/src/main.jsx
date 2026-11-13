@@ -761,11 +761,12 @@ function App(){
  const currentPharmacies=establishments.filter(f=>(f.name+" "+f.city+" "+(f.sourceCode||"")).toLocaleLowerCase("es").includes(filterText));
  const editingIsWarehouse=pharmacyForm?.establishmentType==="almacen";
  function nav(id,promoId,{preserveObjectiveDraft=false,objectiveMonth:requestedObjectiveMonth=""}={}){
+  if(id==="rentabilidad-productos")id="rentabilidad";
   if(id==="proveedores-condiciones")id="proveedores";
   if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
   }
-  const intended=id==="seguimiento-campana"?"seguimiento-global":id==="rentabilidad-productos"?"rentabilidad":id;
+  const intended=id==="seguimiento-campana"?"seguimiento-global":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
    const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||

@@ -252,7 +252,7 @@ const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion",
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos","promociones","promociones-objetivos","acciones"]);
+ "stock","stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","rentabilidad-productos","promociones","promociones-objetivos","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);

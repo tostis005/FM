@@ -1,8 +1,9 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse} from "lucide-react";
+import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse,LoaderCircle} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
-import {LoadingPanel} from "./LoadingState.jsx";
+import {KpiValue} from "./LoadingState.jsx";
+import {transferidorCalculating,transferidorWaitingForFirstRows} from "./transferidorLoading.js";
 import "./transferidor.css";
 
 const number=n=>n==null?"—":new Intl.NumberFormat("es-ES",{maximumFractionDigits:0}).format(n);
@@ -13,8 +14,12 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  const [search,setSearch]=useState(""),[sort,setSort]=useState({key:"units",direction:"desc"});
  const [filters,setFilters]=useState({});
  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(50);
- const [data,setData]=useState(null),[loading,setLoading]=useState(true);
- const [error,setError]=useState(""),[revision,setRevision]=useState(0);
+ const [snapshot,setSnapshot]=useState(null),[loading,setLoading]=useState(true);
+ const [requestError,setRequestError]=useState(null),[revision,setRevision]=useState(0);
+ const requestKey=JSON.stringify([clientSlug,vista,pharmacy,origin,destination,search,
+  page,pageSize,sort.key,sort.direction,filters,revision]);
+ const data=snapshot?.key===requestKey?snapshot.value:null;
+ const error=requestError?.key===requestKey?requestError.message:"";
  const reset=()=>setPage(1);
  useEffect(()=>{
   const controller=new AbortController();
@@ -34,20 +39,20 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     if(!response.ok||result.status==="error")
      throw Error(result.error||"No se pudo calcular el Transferidor.");
     if(controller.signal.aborted)return;
-    setData(result);
-    const pending=["queued","inventory","calculating"].includes(result.status);
+    setSnapshot({key:requestKey,value:result});
+    const pending=transferidorCalculating(result.status);
     if(pending)pollTimer=setTimeout(load,1300);
     else setLoading(false);
    }catch(e){
-    if(!controller.signal.aborted){setError(e.message);setLoading(false)}
+    if(!controller.signal.aborted){setRequestError({key:requestKey,message:e.message});setLoading(false)}
    }
   };
-  setData(null);setError("");
+  setSnapshot(null);setRequestError(null);
   const delay=setTimeout(load,150);
   return()=>{clearTimeout(delay);clearTimeout(pollTimer);controller.abort()};
- },[clientSlug,vista,pharmacy,origin,destination,search,page,pageSize,sort.key,
-  sort.direction,JSON.stringify(filters),revision]);
- const inProgress=["queued","inventory","calculating"].includes(data?.status);
+ },[requestKey]);
+ const inProgress=transferidorCalculating(data?.status);
+ const waitingForResults=transferidorWaitingForFirstRows(data,error);
  const progress=data?.progress||{done:0,total:0};
  const sites=useMemo(()=>pharmacies.filter(p=>p.establishmentType!=="almacen"&&p.active!==false),[pharmacies]);
  const minimumDays=Number(data?.summary?.minimumDays??4);
@@ -144,7 +149,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     }}>Limpiar filtros</button>
    </div>
   </section>
-  {inProgress&&<p className="fm-op-message" role="status">
+  {inProgress&&!waitingForResults&&<p className="fm-op-message" role="status">
    {data?.status==="queued"?"Preparando cálculo de transferencias…":
     data?.status==="inventory"?"Recuperando stock de farmacias y almacén…":
     "Calculando propuestas: "+number(progress.done)+" de "+number(progress.total)+" lotes."}
@@ -154,24 +159,26 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setRevision(Date.now())}>
     <RefreshCcw size={14}/> Reintentar</button></p>}
   {data?.warning&&<p role="status" className="fm-op-message fm-op-warning">{data.warning}</p>}
-  {data?.available&&<div className="fm-transfer-summary" aria-label="Resumen global">
+  {!error&&data?.available!==false&&<div className="fm-transfer-summary" aria-label="Resumen global" aria-busy={waitingForResults}>
    {[
     {id:"movements",Icon:ArrowLeftRight,label:"Movimientos propuestos",
-     value:number(data.summary?.movements)},
+     value:number(data?.summary?.movements)},
     {id:"units",Icon:ArrowRight,label:"Unidades a redistribuir",
-     value:number(data.summary?.units)},
+     value:number(data?.summary?.units)},
     {id:"products",Icon:Boxes,label:"Productos analizados",
-     value:number(data.summary?.analyzed)},
+     value:number(data?.summary?.analyzed)},
     {id:"filtered",Icon:ListFilter,label:"Resultados filtrados",
-     value:number(data.total),detail:number(data.summary?.filteredUnits)+" unidades"}
+     value:number(data?.total),detail:number(data?.summary?.filteredUnits)+" unidades"}
    ].map(({id,Icon,label,value,detail})=>
     <div key={id} className="fm-transfer-kpi">
      <div className="fm-transfer-kpi-heading">
       <Icon size={19} strokeWidth={1.9} aria-hidden="true"/>
       <span>{label}</span>
      </div>
-     <strong className="fm-transfer-kpi-value">{value}</strong>
-     <small className="fm-transfer-kpi-detail">{detail||"\u00a0"}</small>
+     <div className="fm-transfer-kpi-value">
+      <KpiValue loading={waitingForResults} loadingText="Calculando…" value={value} label={label}/>
+     </div>
+     <small className="fm-transfer-kpi-detail">{waitingForResults?"\u00a0":detail||"\u00a0"}</small>
     </div>
    )}
   </div>}
@@ -181,19 +188,32 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     <div className="fm-transfer-table-meta"><span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
      <small>Ventas 30d: contexto · Ventas 7d: base de previsión · Almacén protegido</small></div>
    </div>
-   {!data&&loading?<LoadingPanel kind="table" label="Iniciando cálculo de transferencias…" rows={5}/>:error&&!data?
-    <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:<>
-    <ListTable rows={data?.rows||[]} columns={columns} rowKey={r=>r.id}
-     label="transferencias" tableClass="fm-transfer-main-table"
-     sort={sort} onSortChange={next=>{setSort(next||{key:"units",direction:"desc"});reset()}}
-     serverFilters={filters} onServerFiltersChange={next=>{setFilters(next);reset()}}
-     serverPagination={{page,pageSize,total:data?.total||0,
-      onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);reset()}}}
-     showExport={false} loading={loading&&!(data?.rows?.length>0)} loadingLabel="Recalculando transferencias…"
-     emptyText={data?.available===false?"Sin inventario suficiente.":data?.summary?.movements===0?
-      data?.emptyReason||"Sin transferencias propuestas.":"Sin transferencias para estos filtros."}/>
-   </>}
-
+   {error&&!data?
+    <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:
+    <div className="fm-transfer-table-frame" aria-busy={waitingForResults}>
+     <div className="fm-transfer-table-content" aria-hidden={waitingForResults}
+      inert={waitingForResults?"":undefined}>
+      <ListTable rows={data?.rows||[]} columns={columns} rowKey={r=>r.id}
+       label="transferencias" tableClass="fm-transfer-main-table"
+       sort={sort} onSortChange={next=>{setSort(next||{key:"units",direction:"desc"});reset()}}
+       serverFilters={filters} onServerFiltersChange={next=>{setFilters(next);reset()}}
+       serverPagination={{page,pageSize,total:data?.total||0,
+        onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);reset()}}}
+       showExport={false} loading={false}
+       emptyText={data?.available===false?"Sin inventario suficiente.":data?.summary?.movements===0?
+        data?.emptyReason||"Sin transferencias propuestas.":"Sin transferencias para estos filtros."}/>
+     </div>
+     {waitingForResults&&<div className="fm-transfer-table-overlay" role="status" aria-live="polite">
+      <div className="fm-transfer-loading-card">
+       <LoaderCircle size={30} className="fm-transfer-spinner" aria-hidden="true"/>
+       <strong>Cargando stock, ventas y transferencias…</strong>
+       <span>{data?.status==="inventory"?"Consultando existencias de farmacias y almacén":
+        data?.status==="calculating"?
+         "Calculando propuestas: "+number(progress.done)+" de "+number(progress.total)+" lotes":
+         "Preparando los artículos y los datos de ventas"}</span>
+      </div>
+     </div>}
+    </div>}
   </section>
  </div>;
 }

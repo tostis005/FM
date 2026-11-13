@@ -87,7 +87,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     " uds. para web"+(r.warehouseWebEstimate?" (estimación de seguridad, no ventas reales)":"")+
     " y "+number(r.warehousePharmacyReserve)+
     " uds. para reposición de una farmacia de alta rotación":
-    "Reserva de farmacia: "+targetDays+" días de ventas más exposición"}>
+    "Stock mínimo protegido del origen: "+minimumDays+" días al mayor ritmo de ventas (7 o 30 días), más exposición"}>
     <strong>{number(r.targetOrigin)}</strong>
     {r.originKind==="almacen"&&<small className="fm-transfer-reserve-details">
      Web{r.warehouseWebEstimate?" estim.":""} {number(r.warehouseWebReserve)} · Repos. {number(r.warehousePharmacyReserve)}
@@ -99,23 +99,22 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    value:r=>r.stockDestination,render:r=>number(r.stockDestination)},
   {key:"sales30Destination",group:"Destino",label:"Ventas 30d",align:"center",searchable:false,
    value:r=>r.sales30Destination,render:r=><span title={r.sales30Destination==null?
-    "Consultando o sin datos disponibles de 30 días":"Ventas del destino en los últimos 30 días; solo como referencia"}>{number(r.sales30Destination)}</span>},
+    "Consultando o sin datos disponibles de 30 días":"Ventas del destino en los últimos 30 días, combinadas con las de 7 días para calcular la reposición"}>{number(r.sales30Destination)}</span>},
   {key:"sales7Destination",group:"Destino",label:"Ventas 7d",align:"center",searchable:false,
    value:r=>r.sales7Destination,render:r=><strong className="fm-transfer-sales-reference"
-    title="Ventas de 7 días usadas para calcular la previsión del destino">{number(r.sales7Destination)}</strong>},
-  {key:"pendingDestination",group:"Destino",label:"Pendientes",align:"center",
-   value:r=>r.pendingDestination??0,
-   render:r=><span title="Unidades de pedidos ya pendientes de recibir">{number(r.pendingDestination??0)}</span>},
+    title="Ventas de 7 días combinadas con las de 30 para calcular la reposición">{number(r.sales7Destination)}</strong>},
   {key:"triggerDestination",group:"Destino",label:"Mínimo "+minimumDays+"d",
    align:"center",value:r=>r.triggerDestination,
-   render:r=><span title={"Ventas previstas en "+minimumDays+
-    " días; si stock más pendientes está por debajo, se activa la propuesta"}>{number(r.triggerDestination)}</span>},
+   render:r=><span title={"Umbral de reposición: "+minimumDays+
+    " días usando la mayor tendencia de ventas entre 7 y 30 días. Solo cuenta el stock físico."}>{number(r.triggerDestination)}</span>},
   {key:"targetDestination",group:"Destino",label:"Objetivo "+targetDays+"d",
    align:"center",searchable:false,value:r=>r.targetDestination,
-   render:r=><span className="fm-transfer-target" title={"Stock deseado para "+targetDays+
-    " días de ventas más exposición"}>
+   render:r=><span className="fm-transfer-target" title={"Objetivo exigente para "+targetDays+
+    " días: mayor ritmo entre 7 y 30 días. Objetivo intermedio: "+
+    number(r.balancedTargetDestination)+". El reparto protege la seguridad de los orígenes."}>
     <strong>{number(r.targetDestination)}</strong>
-    {r.extraDestination>0&&<small>+{number(r.extraDestination)} exposición</small>}
+    <small>Base {number(r.balancedTargetDestination)}{r.extraDestination>0?
+     " · +"+number(r.extraDestination)+" exposición":""}</small>
    </span>},
   {key:"units",group:"Propuesta",label:"Enviar",align:"center",value:r=>r.units,
    render:r=><strong className="fm-transfer-units" title="Unidades propuestas para trasladar del origen al destino">
@@ -219,7 +218,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
    <div className="fm-transfer-table-title">
     <h2>Propuestas de redistribución</h2>
     <div className="fm-transfer-table-meta"><span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
-     <small>Ventas 30d: contexto · Ventas 7d: base de previsión · Almacén protegido</small></div>
+     <small>Previsión combinada 7/30 días · Solo stock actual · Orígenes protegidos</small></div>
    </div>
    {error&&!data?
     <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:

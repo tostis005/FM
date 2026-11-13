@@ -17,3 +17,14 @@ test("El informe reúne resumen, productos y detalle de ventas",()=>{
  assert.match(screen,/Detalle de rentabilidad por familia/);
  assert.match(screen,/Coste hist\. informado/);
 });
+
+test("Rentabilidad ofrece filtro de familia separado de búsqueda libre",()=>{
+ assert.match(screen,/\/api\/analytics\/rentabilidad\/familias/);
+ assert.match(screen,/aria-label="Filtrar por familia"/);
+ assert.match(screen,/Todas las familias/);
+ assert.match(screen,/params\.set\("familia",family\)/);
+ assert.match(screen,/Buscar CN o producto/);
+ assert.match(screen,/Coste unitario \(catálogo\)/);
+ assert.match(screen,/Ventas con coste/);
+ assert.doesNotMatch(screen,/label:"PMC"/);
+});

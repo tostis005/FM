@@ -33,3 +33,9 @@
 .fm-proactive-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .fm-proactive-kpis article{padding:12px}
 .fm-proactive .fm-proactive-panel{padding:13px}}
+/* Progreso real del cálculo incremental: las filas ya verificadas permanecen visibles. */
+.fm-proactive-progress{display:flex;align-items:center;gap:10px;padding:11px 14px;
+ border:1px solid #cadcd1;border-radius:10px;background:#f4faf7;color:#315e4b;
+ font-size:12px;line-height:1.5;flex-wrap:wrap}
+.fm-proactive-progress strong{font-weight:750}
+.fm-proactive-progress .fm-load-spinner{flex-shrink:0}

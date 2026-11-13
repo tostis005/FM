@@ -18,10 +18,13 @@ const stable=(a,b)=>String(a).localeCompare(String(b),"es",{numeric:true});
 export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDays:7,families:[],articles:[]}){
  const config=typeof policy==="number"?{minDays:policy,targetDays:policy,families:[],articles:[]}:
   {minDays:Number(policy?.minDays??4),targetDays:Number(policy?.targetDays??7),
-   families:policy?.families||[],articles:policy?.articles||[]};
+   families:policy?.families||[],articles:policy?.articles||[],
+   webPendingByCn:policy?.webPendingByCn||new Map()};
  const familyReserve=new Map(config.families.map(x=>[String(x.pharmacyId)+"|"+String(x.familyId),Number(x.days)]));
  const articleReserve=new Map(config.articles.map(x=>[String(x.pharmacyId)+"|"+String(x.cn),Number(x.units)]));
  const validSites=new Map(pharmacies.map(p=>[String(p.id),p]));
+ const webPending=config.webPendingByCn instanceof Map?config.webPendingByCn:
+  new Map(Object.entries(config.webPendingByCn||{}));
  const products=new Map();
  for(const r of rows||[]){
   const id=String(r.pharmacyId||""),rawCN=String(r.cn||"").trim();
@@ -49,6 +52,7 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    // históricas se admiten como respaldo para clientes/tests antiguos.
    const daily=src?.units7!=null?sold7/7:Math.max(sold3/90,sold12/365);
    const id=String(p.id),familyId=String(src?.familyId||"");
+   const isWarehouse=p.establishmentType==="almacen"||p.kind==="almacen";
    const byArticle=articleReserve.get(id+"|"+product.cn);
    const byFamily=familyReserve.get(id+"|"+familyId);
    // Las reservas de exposición nunca generan por sí solas una transferencia:
@@ -61,17 +65,38 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    const available=stock+ordered;
    // minDays controla cuándo se activa la necesidad; targetDays, cuánto reponer.
    // Un origen con excedente nunca es motivo suficiente para una propuesta.
-   const need=daily>0&&available<threshold?whole(target-available):0;
+   const need=!isWarehouse&&daily>0&&available<threshold?whole(target-available):0;
    // Proteger al donante: conserva previsión de ventas más su exposición.
    const surplus=Math.max(0,Math.floor(stock-target+1e-9));
    return {id,name:p.name||id,stock,target,threshold,extra,source,ordered,need,surplus,
-    visible7,visible30,
+    visible7,visible30,isWarehouse,
     stockAt:src?.stockAt||null};
   });
   if(sites.some(s=>s.invalid)){skipped++;continue;}
+  const retail=sites.filter(site=>!site.isWarehouse);
+  const warehouse=sites.find(site=>site.isWarehouse);
+  if(warehouse){
+   // La reserva central protege a la vez el canal web y la reposición de tiendas.
+   // No se confunde venta de farmacia con salida del almacén; la primera se
+   // utiliza solo como previsión conservadora de reposiciones.
+   const retailDaily=retail.reduce((sum,site)=>
+    sum+Math.max((site.visible7||0)/7,(site.visible30||0)/30),0);
+   const webDaily=Math.max((warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
+   const backlog=whole(webPending.get(product.cn)||0);
+   const webReserve=Math.max(whole(webDaily*config.targetDays),backlog,
+    webDaily===0&&backlog===0?whole(retailDaily*config.targetDays):0);
+   const replenishmentReserve=whole(retailDaily*config.minDays);
+   warehouse.target=webReserve+replenishmentReserve;
+   warehouse.threshold=warehouse.target;
+   warehouse.surplus=Math.max(0,Math.floor(warehouse.stock-warehouse.target+1e-9));
+   warehouse.webReserve=webReserve;
+   warehouse.replenishmentReserve=replenishmentReserve;
+  }
   if(sites.some(s=>s.need>0))withNeed++;
   if(sites.some(s=>s.surplus>0))withSurplus++;
-  const sources=sites.filter(s=>s.surplus>0).sort((a,b)=>b.surplus-a.surplus||stable(a.id,b.id));
+  // Almacén primero SIEMPRE que conserve sus reservas; después farmacias.
+  const sources=sites.filter(s=>s.surplus>0).sort((a,b)=>
+   Number(b.isWarehouse)-Number(a.isWarehouse)||b.surplus-a.surplus||stable(a.id,b.id));
   const targets=sites.filter(s=>s.need>0).sort((a,b)=>b.need-a.need||stable(a.id,b.id));
   for(const target of targets){
    let pending=target.need;
@@ -83,6 +108,9 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
      name:product.name,originId:source.id,originName:source.name,
      destinationId:target.id,destinationName:target.name,units,
      stockOrigin:source.stock,targetOrigin:source.target,
+     originKind:source.isWarehouse?"almacen":"farmacia",
+     warehouseWebReserve:source.isWarehouse?source.webReserve:null,
+     warehousePharmacyReserve:source.isWarehouse?source.replenishmentReserve:null,
      sales7Origin:source.visible7,sales30Origin:source.visible30,
      stockDestination:target.stock,pendingDestination:target.ordered,
      sales7Destination:target.visible7,sales30Destination:target.visible30,

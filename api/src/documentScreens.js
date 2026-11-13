@@ -285,13 +285,30 @@ export function buildDocumentScreenSQL(section,schema,columns=new Set(),order='d
   WHERE ${range} AND nullif(btrim(v.articulo_id),'') IS NOT NULL
   GROUP BY f.id,upper(btrim(v.farmacia_codigo)),v.articulo_id
  ), catalog AS MATERIALIZED (
-  SELECT g.*,nullif(btrim(coalesce(art.family,'')),'') AS family,art.pmc
+  SELECT g.*,
+   coalesce(nullif(btrim(global_family.nombre),''),'Sin clasificar') AS family,
+   art.pmc
   FROM grouped g LEFT JOIN LATERAL (
     SELECT ${family} AS family,${pmc} AS pmc
     FROM ${q}.articulos a
     WHERE upper(btrim(a.farmacia_codigo))=g.code AND a.origen_id=g.articulo_id
     ${timestamp} LIMIT 1
   ) art ON true
+  -- Usar la misma familia reconciliada que Ventas y el Maestro de familias.
+  -- La equivalencia local cubre artículos sin enlace individual vigente.
+  LEFT JOIN farmetrica.familias_globales_articulos linked
+   ON linked.cliente_slug=$4 AND linked.farmacia_codigo=g.code
+   AND linked.articulo_origen_id=g.articulo_id
+  LEFT JOIN farmetrica.familias_globales_alias alias
+   ON alias.cliente_slug=$4 AND alias.farmacia_codigo=g.code
+   AND alias.codigo_origen=nullif(btrim(art.family),'')
+  LEFT JOIN farmetrica.familias_globales source_family
+   ON source_family.cliente_slug=$4
+   AND source_family.id=coalesce(linked.familia_id,alias.familia_id)
+  LEFT JOIN farmetrica.familias_globales global_family
+   ON global_family.cliente_slug=$4
+   AND global_family.id=coalesce(source_family.fusionado_a,source_family.id)
+   AND global_family.activo
  ), sections AS (
   SELECT coalesce(family,'Sin clasificar') AS family,
    sum(sales)::float8 AS sales,sum(units)::float8 AS units,

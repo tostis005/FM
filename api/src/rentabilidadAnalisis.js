@@ -15,10 +15,11 @@ function scope(req,res){
  }
  const from=String(req.query.desde||""),to=String(req.query.hasta||"");
  const selection=String(req.query.farmacias||""),search=String(req.query.buscar||"").trim();
+ const family=String(req.query.familia||"").trim();
  const page=Number(req.query.pagina||1),size=Number(req.query.tamano||50);
  const order=String(req.query.orden||"sales"),direction=String(req.query.direccion||"desc").toLowerCase();
  if(!validDate(from)||!validDate(to)||from>to||Date.parse(to)-Date.parse(from)>366*86400000||
-  selection.length>2000||search.length>100||page<1||!Number.isSafeInteger(page)||page>1000||
+  selection.length>2000||search.length>100||family.length>160||page<1||!Number.isSafeInteger(page)||page>1000||
   ![25,50,100].includes(size)||!Object.hasOwn(SORT,order)||!["asc","desc"].includes(direction)||
   (selection&&selection.split(",").some(id=>!/^[1-9]\d{0,8}$/.test(id)))){
   res.status(400).json({error:"Filtros de rentabilidad no válidos"});return null;
@@ -30,7 +31,7 @@ function scope(req,res){
  }
  const schema=String(req.context.client?.schema||"");
  if(!IDENT.test(schema))throw Error("Esquema de cliente no válido");
- return {from,to,ids,schema,slug:req.context.client.slug,search,page,size,order,direction};
+ return {from,to,ids,schema,slug:req.context.client.slug,search,family,page,size,order,direction};
 }
 function articleColumns(columns){
  const col=(key,type="text")=>columns.has(key)?"a."+key:"NULL::"+type;
@@ -82,6 +83,19 @@ function enrichedCTE(schema,columns,view){
   " JOIN farmetrica.farmacias f ON f.cliente_slug=$4",
   " AND upper(btrim(v.farmacia_codigo))="+pharmacy+" AND f.id=ANY($3::int[])",
   " WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
+  " AND ($8::text='' OR EXISTS (",
+  " SELECT 1 FROM farmetrica.familias_globales_articulos link",
+  " JOIN farmetrica.familias_globales fg",
+  " ON fg.cliente_slug=link.cliente_slug AND fg.id=link.familia_id AND fg.activo",
+  " WHERE link.cliente_slug=$4 AND link.farmacia_codigo=upper(btrim(v.farmacia_codigo))",
+  " AND link.articulo_origen_id=v.articulo_id AND fg.nombre=$8::text",
+  " ) OR ($8::text='Sin clasificar' AND NOT EXISTS (",
+  " SELECT 1 FROM farmetrica.familias_globales_articulos unl",
+  " JOIN farmetrica.familias_globales ufg ON ufg.cliente_slug=unl.cliente_slug",
+  " AND ufg.id=unl.familia_id AND ufg.activo",
+  " WHERE unl.cliente_slug=$4 AND unl.farmacia_codigo=upper(btrim(v.farmacia_codigo))",
+  " AND unl.articulo_origen_id=v.articulo_id",
+  " )))",
   " AND ($5::text='' OR v.articulo_id ILIKE '%'||$5||'%' OR",
   " coalesce(v.numero_ticket,'') ILIKE '%'||$5||'%' OR",
   " v.documento_id ILIKE '%'||$5||'%' OR EXISTS (",
@@ -95,6 +109,39 @@ function enrichedCTE(schema,columns,view){
   " LIMIT $6::int OFFSET $7::int",
   ")"
  ];
+ if(period){
+  // Agrupar por artículo/mes en raw, pero buscar el catálogo y la familia
+  // una única vez por farmacia/artículo: antes se repetía por cada mes.
+  return from.concat([
+   ", article_keys AS MATERIALIZED (",
+   " SELECT DISTINCT code,\"articleId\" FROM raw",
+   " WHERE nullif(btrim(\"articleId\"),'') IS NOT NULL",
+   ")",
+   ", article_map AS MATERIALIZED (",
+   " SELECT k.code,k.\"articleId\",art.pmc,",
+   " coalesce(nullif(btrim(fam.nombre),''),'Sin clasificar') AS family",
+   " FROM article_keys k",
+   " LEFT JOIN LATERAL (",
+   " SELECT "+c.pmc+" AS pmc FROM "+q+".articulos a",
+   " WHERE upper(btrim(a.farmacia_codigo))=k.code AND a.origen_id=k.\"articleId\"",
+   " "+c.updated+" LIMIT 1",
+   " ) art ON true",
+   " LEFT JOIN farmetrica.familias_globales_articulos linked",
+   " ON linked.cliente_slug=$4 AND linked.farmacia_codigo=k.code",
+   " AND linked.articulo_origen_id=k.\"articleId\"",
+   " LEFT JOIN farmetrica.familias_globales fam",
+   " ON fam.cliente_slug=linked.cliente_slug AND fam.id=linked.familia_id AND fam.activo",
+   ")",
+   ", enriched AS MATERIALIZED (",
+   " SELECT r.*,coalesce(m.family,'Sin clasificar') AS family,",
+   " CASE WHEN m.pmc>0 THEN r.sales ELSE NULL END AS \"coveredSales\",",
+   " CASE WHEN m.pmc>0 THEN r.units*m.pmc ELSE NULL END AS cost,",
+   " CASE WHEN m.pmc>0 THEN r.sales-r.units*m.pmc ELSE NULL END AS margin",
+   " FROM raw r LEFT JOIN article_map m",
+   " ON m.code=r.code AND m.\"articleId\"=r.\"articleId\"",
+   ")"
+  ]).join("\n");
+ }
  return from.concat([
   ", enriched AS MATERIALIZED (",
   " SELECT r.*,coalesce(nullif(btrim(a.name),''),r.\"articleId\",'Artículo sin identificar') AS name,",
@@ -133,26 +180,29 @@ export function buildProfitabilitySQL(schema,columns,view,order="sales",directio
    " sum(\"coveredSales\")::float8 AS \"coveredSales\","+
    " sum(cost)::float8 AS cost,sum(margin)::float8 AS margin";
   return base+"\n"+[
+   ", scoped AS MATERIALIZED (",
+   " SELECT * FROM enriched WHERE ($5::text='' OR family=$5::text)",
+   ")",
    "SELECT 'month'::text AS kind,month::text AS bucket,",
    " NULL::text AS \"pharmacyId\",NULL::text AS \"pharmacyName\",",
    " NULL::text AS family,"+sums,
-   " FROM enriched GROUP BY month",
+   " FROM scoped GROUP BY month",
    " UNION ALL",
    " SELECT 'pharmacy'::text AS kind,NULL::text AS bucket,",
    " \"pharmacyId\",\"pharmacyName\",NULL::text AS family,"+sums,
-   " FROM enriched GROUP BY \"pharmacyId\",\"pharmacyName\"",
+   " FROM scoped GROUP BY \"pharmacyId\",\"pharmacyName\"",
    " UNION ALL",
    " SELECT 'family'::text AS kind,NULL::text AS bucket,",
    " NULL::text AS \"pharmacyId\",NULL::text AS \"pharmacyName\",family,"+sums,
-   " FROM enriched GROUP BY family",
+   " FROM scoped GROUP BY family",
    " ORDER BY kind,bucket,\"pharmacyName\",margin DESC NULLS LAST"
   ].join("\n");
  }
  if(view==="products")return base+"\n"+[
   "SELECT *,count(*) OVER()::int AS total",
-  " FROM enriched WHERE ($5::text='' OR cn ILIKE '%'||$5||'%'",
-  " OR name ILIKE '%'||$5||'%' OR family ILIKE '%'||$5||'%'",
-  " OR \"pharmacyName\" ILIKE '%'||$5||'%' OR laboratory ILIKE '%'||$5||'%')",
+  " FROM enriched WHERE ($8::text='' OR family=$8::text)",
+  " AND ($5::text='' OR cn ILIKE '%'||$5||'%'",
+  " OR name ILIKE '%'||$5||'%' OR laboratory ILIKE '%'||$5||'%')",
   " ORDER BY "+SORT[order]+" "+direction.toUpperCase()+" NULLS LAST,cn,\"pharmacyId\"",
   " LIMIT $6::int OFFSET $7::int"
  ].join("\n");
@@ -176,8 +226,8 @@ export function setupProfitability(app,pool,{requireTenant}){
     return res.json({available:false,rows:[],message:"Catálogo de artículos pendiente de sincronización."});
    const sql=buildProfitabilitySQL(f.schema,columns,view,f.order,f.direction);
    const limit=view==="sales"?f.size+1:f.size;
-   const values=view==="overview"?[f.from,f.to,f.ids,f.slug]:
-    [f.from,f.to,f.ids,f.slug,f.search,limit,(f.page-1)*f.size];
+   const values=view==="overview"?[f.from,f.to,f.ids,f.slug,f.family]:
+    [f.from,f.to,f.ids,f.slug,f.search,limit,(f.page-1)*f.size,f.family];
    const result=await pool.query({text:sql,values,query_timeout:27000});
    const rows=view==="sales"?result.rows.slice(0,f.size):result.rows;
    res.json({available:true,rows,

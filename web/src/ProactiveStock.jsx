@@ -38,7 +38,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
  },[search]);
  useEffect(()=>{
   const controller=new AbortController();let cancelled=false,timedOut=false;
-  const timeout=setTimeout(()=>{timedOut=true;controller.abort();},29000);
+  const timeout=setTimeout(()=>{timedOut=true;controller.abort();},48000);
   const params=new URLSearchParams({dias:String(days),buscar:readySearch,
    pagina:String(page),tamano:String(size)});
   if(pharmacyId)params.set("farmacias",pharmacyId);

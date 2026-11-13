@@ -40,7 +40,8 @@ function articleColumns(columns){
   updated:columns.has("sincronizado_en")?"ORDER BY a.sincronizado_en DESC NULLS LAST":""};
 }
 function enrichedCTE(schema,columns,view){
- if(!IDENT.test(schema)||!["overview","products","sales"].includes(view))throw Error("Vista inválida");
+ if(!IDENT.test(schema))throw Error("Esquema SQL inválido");
+ if(!["overview","products","sales"].includes(view))throw Error("Vista inválida");
  const q='"'+schema+'"',c=articleColumns(columns),pharmacy=pharmacyDataCodeSQL("f");
  const period=view==="overview";
  const from=period?[

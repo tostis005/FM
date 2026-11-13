@@ -5,7 +5,6 @@ import {LoadingPanel} from "./LoadingState.jsx";
 import ListTable from "./ListTable.jsx";
 import {downloadTableCSV} from "./tableExport.js";
 import {euro,integer,dateES} from "./localeES.js";
-import {putPurchaseLink} from "./PurchasePlanner.jsx";
 import "./proactiveStock.css";
 
 const LABELS={
@@ -37,29 +36,46 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
   return()=>clearTimeout(t);
  },[search]);
  useEffect(()=>{
-  const controller=new AbortController();let cancelled=false,timedOut=false;
-  const timeout=setTimeout(()=>{timedOut=true;controller.abort();},48000);
+  const controller=new AbortController();
+  let disposed=false,pollTimer=null;
   const params=new URLSearchParams({dias:String(days),buscar:readySearch,
    pagina:String(page),tamano:String(size)});
   if(pharmacyId)params.set("farmacias",pharmacyId);
+  if(refresh)params.set("recalcular",String(refresh));
+  const load=async()=>{
+   if(disposed||controller.signal.aborted)return;
+   let timedOut=false;
+   const timeout=setTimeout(()=>{timedOut=true;controller.abort();},16000);
+   try{
+    const response=await fetch("/api/analytics/gestion-proactiva/"+mode+"?"+params,{
+     credentials:"same-origin",cache:"no-store",signal:controller.signal,
+     headers:{"X-Farmetrica-Cliente":clientSlug}
+    });
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(body.error||"No se pudo consultar el análisis");
+    if(disposed)return;
+    setResult(body);
+    const pending=["queued","checking","calculating"].includes(body.status);
+    setBusy(pending);
+    if(pending)pollTimer=setTimeout(load,1500);
+   }catch(e){
+    if(!disposed){
+     setError(timedOut?"No se recibió respuesta de la API. Revisa la conexión y reintenta.":e.message||"No se pudo consultar el análisis");
+     setBusy(false);
+    }
+   }finally{clearTimeout(timeout);}
+  };
   setBusy(true);setError("");setResult(null);setNotice("");
-  fetch("/api/analytics/gestion-proactiva/"+mode+"?"+params,{
-   credentials:"same-origin",cache:"no-store",signal:controller.signal,
-   headers:{"X-Farmetrica-Cliente":clientSlug}
-  }).then(async response=>{
-   const body=await response.json().catch(()=>({}));
-   if(!response.ok)throw Error(body.error||"No se pudo consultar el análisis");
-   return body;
-  }).then(data=>{if(!cancelled)setResult(data);})
-   .catch(e=>{if(!cancelled)setError(timedOut?"La consulta está tardando demasiado. Selecciona una farmacia.":e.message);})
-   .finally(()=>{clearTimeout(timeout);if(!cancelled)setBusy(false);});
-  return()=>{cancelled=true;clearTimeout(timeout);controller.abort();};
+  const delay=setTimeout(load,100);
+  return()=>{disposed=true;clearTimeout(delay);clearTimeout(pollTimer);controller.abort();};
  },[mode,clientSlug,days,pharmacyId,readySearch,page,size,refresh]);
  const rows=result?.rows||[],total=result?.total||0;
  const values=result?.summary||{};
  const go=r=>{
   if(r.alertType==="rotura"){
-   try{putPurchaseLink(clientSlug,{cn:localCode(r),articleId:r.articleId,pharmacyId:r.pharmacyId});}
+   try{sessionStorage.setItem("fm_preparador_enlace:"+clientSlug,JSON.stringify({
+    cn:localCode(r),articleId:r.articleId,pharmacyId:r.pharmacyId
+   }));}
    catch{}
    onNavigate("compras-preparador");
   }else{
@@ -133,7 +149,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
   <ReportPageHeader title={isAlerts?"Alertas inteligentes":"Stock inmovilizado"}
    description={isAlerts?"Detección automática de riesgos de rotura, artículos sin ventas y exceso de cobertura.":
     "Identifica existencias sin ventas netas, estima su valor y revisa cómo recuperar capital."}
-   refreshing={busy} onRefresh={()=>{setPage(1);setRefresh(n=>n+1)}}/>
+   refreshing={busy} onRefresh={()=>{setPage(1);setRefresh(Date.now())}}/>
   <section className="card fm-proactive-controls" aria-label="Filtros de gestión proactiva">
    <label>Farmacia
     <select value={pharmacyId} onChange={e=>{setPharmacyId(e.target.value);setPage(1)}}>
@@ -152,7 +168,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
      onChange={e=>{setSearch(e.target.value);setPage(1)}} placeholder="Nombre, CN o referencia ERP"/></span>
    </label>
    <button type="button" className="btn btn-secondary btn-sm"
-    onClick={()=>{setPage(1);setRefresh(n=>n+1)}} disabled={busy}>
+    onClick={()=>{setPage(1);setRefresh(Date.now())}} disabled={busy}>
     <RefreshCw size={15}/> Actualizar
    </button>
   </section>
@@ -162,11 +178,18 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
    {" "}Se excluyen las farmacias sin stock actualizado en 7 días o sin ventas documentales verificadas en 14 días.
    Los importes usan el coste de catálogo PMC o PUC cuando existe y son orientativos, no ahorro realizado.
   </p>
-  {busy&&<section className="card fm-proactive-panel"><LoadingPanel label="Analizando ventas y existencias verificadas…" rows={6}/></section>}
+  {busy&&!result&&<section className="card fm-proactive-panel"><LoadingPanel label="Comprobando stock y ventas…" rows={6}/></section>}
+  {busy&&result&&<div className="fm-proactive-progress" role="status" aria-live="polite">
+   <span className="fm-load-spinner" aria-hidden="true"/>
+   <span><strong>Calculando por farmacias y períodos</strong>
+    {" · "+number(result.progress?.done||0)+" de "+number(result.progress?.total||0)+" bloques"}
+    {" · "+number(result.completedSites||0)+" farmacias terminadas"}
+    {result.total>0?" · Datos parciales visibles":""}</span>
+  </div>}
   {error&&<section className="card fm-proactive-panel fm-proactive-error" role="alert">
-   <AlertTriangle size={18}/>{error}<button type="button" onClick={()=>setRefresh(n=>n+1)}>Reintentar</button>
+   <AlertTriangle size={18}/>{error}<button type="button" onClick={()=>setRefresh(Date.now())}>Reintentar</button>
   </section>}
-  {!busy&&!error&&result&&<>
+  {!error&&result&&<>
    {excluded.length>0&&<div className="fm-proactive-warning" role="status">
     <AlertTriangle size={18}/>Datos excluidos: {excluded.map(x=>x.name+" ("+x.reason+")").join("; ")}.
    </div>}

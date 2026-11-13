@@ -285,6 +285,11 @@ function pageFromUrl(){
 function App(){
  const [data,setData]=useState(readState);
  const [page,setPage]=useState(pageFromUrl);
+ // Normalizar marcadores anteriores a la única vista de Rentabilidad.
+ useEffect(()=>{
+  if(window.location.pathname.replace(/\\/+$/,"")==="/rentabilidad-productos")
+   window.history.replaceState({...(window.history.state||{}),page:"rentabilidad"},"","/rentabilidad"+window.location.search);
+ },[]);
  // La SPA debe empezar arriba al navegar entre módulos, submenús o al usar
  // Atrás/Adelante. El navegador no debe restaurar el scroll de otra ruta.
  useEffect(()=>{
@@ -760,7 +765,7 @@ function App(){
   if(id==="promociones-objetivos"&&!preserveObjectiveDraft){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
   }
-  const intended=id==="seguimiento-campana"?"seguimiento-global":id;
+  const intended=id==="seguimiento-campana"?"seguimiento-global":id==="rentabilidad-productos"?"rentabilidad":id;
   const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
    const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||

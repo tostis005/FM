@@ -287,7 +287,7 @@ function App(){
  const [page,setPage]=useState(pageFromUrl);
  // Normalizar marcadores anteriores a la única vista de Rentabilidad.
  useEffect(()=>{
-  if(window.location.pathname.replace(/\\/+$/,"")==="/rentabilidad-productos")
+  if(["/rentabilidad-productos","/rentabilidad-productos/"].includes(window.location.pathname))
    window.history.replaceState({...(window.history.state||{}),page:"rentabilidad"},"","/rentabilidad"+window.location.search);
  },[]);
  // La SPA debe empezar arriba al navegar entre módulos, submenús o al usar

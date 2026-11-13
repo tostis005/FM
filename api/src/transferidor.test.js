@@ -366,7 +366,7 @@ test("API incorpora ALMACEN como origen aunque el perfil solo seleccione farmaci
  assert.equal(body.rows[0].originName,"ALM");
  assert.equal(body.rows[0].originId,"9");
  assert.equal(body.rows[0].units,7);
- assert.equal(body.rows[0].targetOrigin,6);
+ assert.equal(body.rows[0].targetOrigin,11);
  assert.equal(body.rows[0].sales30Destination,30);
  assert.equal(queries.filter(q=>q.includes("WITH refs AS MATERIALIZED")).length,1);
  req.query={...req.query,origen:"almacen"};

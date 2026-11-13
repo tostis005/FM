@@ -37,8 +37,8 @@ const viewOptions=[
 const allColumns=[
  ["cn","CN / referencia"],["name","Producto"],["family","Familia"],
  ["laboratory","Laboratorio"],["pharmacyName","Farmacia"],["units","Unidades"],["sales","Importe neto"],
- ["pvp","PVP catálogo"],["pmc","PMC actual"],["stock","Stock actual"],
- ["coveredSales","Ventas con PMC"],["margin","Margen estimado"]
+ ["pvp","PVP catálogo"],["pmc","Coste unitario (catálogo)"],["stock","Stock actual"],
+ ["coveredSales","Ventas con coste"],["margin","Margen estimado"]
 ];
 function ProfitTable({rows,headers,empty}){
  return <div className="fm-profit-table-scroll"><table className="fm-profit-table">
@@ -57,6 +57,10 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
  const [ids,setIds]=useState(()=>reconcilePharmacyIds(readSharedReportFilters(clientSlug).pharmacyIds||[],pharmacies));
  const [tab,setTab]=useState("resumen");
  const [search,setSearch]=useState("");
+ const [family,setFamily]=useState("");
+ const [familyOptions,setFamilyOptions]=useState([]);
+ const [familyLoading,setFamilyLoading]=useState(true);
+ const [familyError,setFamilyError]=useState(false);
  const [debounced,setDebounced]=useState("");
  const [page,setPage]=useState(1);
  const [pageSize,setPageSize]=useState(50);
@@ -74,14 +78,36 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   [periodKey,custom.from,custom.to,timeZone,reload]);
  const tooLong=period.valid&&Date.parse(period.to)-Date.parse(period.from)>366*86400000;
  const pharmacyKey=ids.join(",");
+ useEffect(()=>{
+  const controller=new AbortController();
+  setFamilyLoading(true);setFamilyError(false);
+  fetch("/api/analytics/rentabilidad/familias",{
+   credentials:"same-origin",cache:"no-store",
+   headers:{"X-Farmetrica-Cliente":clientSlug},signal:controller.signal
+  }).then(async response=>{
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(data.error||"No se pudieron cargar las familias");
+   return data;
+  }).then(data=>{
+   if(!controller.signal.aborted){
+    const names=Array.isArray(data.families)?data.families.filter(x=>typeof x==="string"&&x.trim()):[];
+    const unique=[...new Set(names.filter(x=>x!=="Sin clasificar"))].sort((a,b)=>a.localeCompare(b,"es",{sensitivity:"base"}));
+    setFamilyOptions([...unique,"Sin clasificar"]);
+   }
+  }).catch(error=>{if(!controller.signal.aborted){setFamilyError(true);setFamilyOptions([]);}})
+   .finally(()=>{if(!controller.signal.aborted)setFamilyLoading(false)});
+  return()=>controller.abort();
+ },[clientSlug]);
  useEffect(()=>{const t=setTimeout(()=>setDebounced(search),300);return()=>clearTimeout(t)},[search]);
- useEffect(()=>setPage(1),[tab,debounced,pharmacyKey,period.from,period.to,sort,direction,pageSize]);
+ useEffect(()=>setPage(1),[tab,debounced,family,pharmacyKey,period.from,period.to,sort,direction,pageSize]);
  useEffect(()=>{
   if(!period.valid||tooLong){setPayload(null);setLoading(false);return;}
   const controller=new AbortController();
   const params=new URLSearchParams({desde:period.from,hasta:period.to,
    pagina:String(page),tamano:String(pageSize),orden:sort,direccion:direction});
   if(ids.length)params.set("farmacias",ids.join(","));
+  if(family)params.set("familia",family);
+  if(reload>0)params.set("actualizar","1");
   if(tab!=="resumen"&&debounced)params.set("buscar",debounced);
   setLoading(true);setError("");setPayload(null);
   const view=tab==="resumen"?"overview":tab==="productos"?"products":"sales";
@@ -100,7 +126,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
    setError(e.name==="TimeoutError"?"La consulta ha superado el tiempo disponible. Prueba con un período más corto.":e.message);
   }}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});
   return()=>controller.abort();
- },[clientSlug,period.valid,period.from,period.to,tooLong,pharmacyKey,debounced,tab,page,pageSize,sort,direction,reload]);
+ },[clientSlug,period.valid,period.from,period.to,tooLong,pharmacyKey,family,debounced,tab,page,pageSize,sort,direction,reload]);
  const rows=payload?.rows||[];
  const pharmaciesRows=rows.filter(r=>r.kind==="pharmacy");
  const familyRows=rows.filter(r=>r.kind==="family").sort((a,b)=>Number(b.margin||0)-Number(a.margin||0));
@@ -125,14 +151,14 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   .sort((a,b)=>(b.rentabilidad??-Infinity)-(a.rentabilidad??-Infinity));
  function exportCurrent(){
   if(tab==="resumen"){
-   writeCSV("rentabilidad-farmacias.csv",["Farmacia","Importe neto","Ventas con PMC","Coste estimado","Margen estimado","Margen % cubierto","Unidades"],
+   writeCSV("rentabilidad-farmacias.csv",["Farmacia","Importe neto","Ventas con coste","Coste estimado","Margen estimado","Margen % cubierto","Unidades"],
     pharmaciesRows.map(r=>[r.pharmacyName,r.sales,r.coveredSales,r.cost,r.margin,marginPct(r),r.units]));
   }else if(tab==="productos"){
    writeCSV("rentabilidad-productos.csv",[...allColumns.map(c=>c[1]),"Margen % cubierto"],
     rows.map(r=>[...allColumns.map(([key])=>r[key]),marginPct(r)]));
   }else{
    writeCSV("rentabilidad-ventas.csv",["Fecha","Farmacia","Ticket","CN / referencia","Producto","Familia","Unidades",
-    "Precio unitario registrado","Descuento registrado","Importe neto","Coste histórico informado","PMC actual","Margen estimado"],
+    "Precio unitario registrado","Descuento registrado","Importe neto","Coste histórico informado","Coste unitario (catálogo)","Margen estimado"],
     rows.map(r=>[r.at,r.pharmacyName,r.ticket,r.cn,r.name,r.family,r.units,r.unitPrice,r.discount,
      r.sales,r.historicalCost,r.pmc,r.margin]));
   }
@@ -157,7 +183,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   {key:"units",label:"Uds.",render:r=>units(r.units)},
   {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},
   {key:"pvp",label:"PVP",render:r=>euros(r.pvp)},
-  {key:"pmc",label:"PMC",render:r=>euros(r.pmc)},
+  {key:"pmc",label:"Coste/ud.",render:r=>euros(r.pmc),title:()=>"Coste unitario del catálogo (precio medio de coste)"},
   {key:"stock",label:"Stock",render:r=>units(r.stock)},
   {key:"margin",label:"Margen est.",render:r=>euros(r.margin)},
   {key:"marginPct",label:"Margen %",render:r=>percent(marginPct(r))}
@@ -188,7 +214,16 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
    }} customFrom={custom.from} customTo={custom.to}
    onCustomFromChange={value=>{setCustom(c=>({...c,from:value}));updateSharedReportFilters(clientSlug,{customFrom:value})}}
    onCustomToChange={value=>{setCustom(c=>({...c,to:value}));updateSharedReportFilters(clientSlug,{customTo:value})}}>
-   {tab!=="resumen"&&<label className="fm-profit-search"><span>Buscar</span><span><Search size={16}/>
+   <label className="fm-unified-filter fm-profit-family-filter">
+    <span>Familia</span>
+    <select aria-label="Filtrar por familia" value={family} onChange={e=>setFamily(e.target.value)}
+     disabled={familyLoading&&!familyOptions.length}>
+     <option value="">{familyLoading?"Cargando familias…":"Todas las familias"}</option>
+     {familyOptions.map(name=><option key={name} value={name}>{name}</option>)}
+    </select>
+    {familyError&&<small role="status">No se pudieron cargar las familias.</small>}
+   </label>
+   {tab!=="resumen"&&<label className="fm-profit-search"><span>Buscar CN o producto</span><span><Search size={16}/>
     <input value={search} onChange={e=>setSearch(e.target.value)}
      placeholder={tab==="productos"?"CN, producto, familia…":"Ticket, CN, referencia…"}/></span></label>}
   </ReportFilterBar>
@@ -211,7 +246,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       ["Importe neto",euros(sums.sales)],
       ["Margen estimado cubierto",sums.covered>0?euros(sums.margin):"—"],
       ["Margen sobre ventas cubiertas",sums.covered>0?percent(sums.margin/sums.covered*100):"—"],
-      ["Cobertura de PMC",percent(coverage)],
+      ["Cobertura de costes",percent(coverage)],
       ["Unidades vendidas",units(sums.units)]
      ].map(([label,value])=><article key={label} className="card"><span>{label}</span><strong>{value}</strong></article>)}
     </div>
@@ -263,7 +298,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
        {key:"cost",label:"Coste est.",render:r=>euros(r.cost)},
        {key:"margen",label:"Margen est.",render:r=>euros(r.margin)},
        {key:"pct",label:"Margen %",render:r=>percent(marginPct(r))},
-       {key:"coverage",label:"Con PMC",render:r=>r.sales>0?percent(Math.min(100,Math.max(0,100*Number(r.coveredSales||0)/Number(r.sales)))):"—"}
+       {key:"coverage",label:"Con coste",render:r=>r.sales>0?percent(Math.min(100,Math.max(0,100*Number(r.coveredSales||0)/Number(r.sales)))):"—"}
       ]}/>
      </section>
     </div>
@@ -272,7 +307,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       <p>{units(familyRows.length)} familias · nombres del maestro unificado</p></div>
       <button className="btn btn-secondary btn-sm" type="button" disabled={!familyRows.length}
        onClick={()=>writeCSV("rentabilidad-familias.csv",
-        ["Familia","Importe neto","Ventas con PMC","Coste estimado","Margen estimado","Margen % sobre ventas cubiertas","Unidades"],
+        ["Familia","Importe neto","Ventas con coste","Coste estimado","Margen estimado","Margen % sobre ventas cubiertas","Unidades"],
         familyRows.map(r=>[r.family,r.sales,r.coveredSales,r.cost,r.margin,marginPct(r),r.units]))}>
        <Download size={15}/> CSV
       </button>
@@ -282,7 +317,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
        {key:"family",label:"Familia",kind:"text",render:r=>r.family},
        {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},
        {key:"units",label:"Unidades",render:r=>units(r.units)},
-       {key:"covered",label:"Ventas con PMC",render:r=>euros(r.coveredSales)},
+       {key:"covered",label:"Ventas con coste",render:r=>euros(r.coveredSales)},
        {key:"cost",label:"Coste est.",render:r=>euros(r.cost)},
        {key:"margin",label:"Margen est.",render:r=>euros(r.margin)},
        {key:"pct",label:"Margen %",render:r=>percent(marginPct(r))}
@@ -291,7 +326,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       {showAllFamilies?"Mostrar menos":"Ver las "+units(familyRows.length)+" familias"}
      </button></div>}
     </section>
-    <p className="fm-profit-note">El margen estimado se calcula sobre las ventas de artículos con PMC válido de su farmacia. Las ventas sin coste conocido se incluyen en el importe neto, pero no en el margen; la cobertura indica qué parte del importe tiene coste disponible. No equivale al beneficio contable ni al coste histórico del Power BI.</p>
+    <p className="fm-profit-note">El margen estimado se calcula sobre las ventas de artículos con un coste unitario válido en el catálogo de su farmacia. Las ventas sin coste conocido se incluyen en el importe neto, pero no en el margen; la cobertura indica qué parte del importe tiene coste disponible. No equivale al beneficio contable ni al coste histórico del Power BI.</p>
    </>}
    {tab==="productos"&&<section className="card fm-profit-panel">
     <div className="fm-profit-panel-heading"><div><h2>Estudio de productos y categorías</h2>
@@ -307,7 +342,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
     <ProfitTable rows={rows.map((r,i)=>({...r,key:r.pharmacyId+"|"+r.articleId+"|"+i}))} headers={productHeaders}/>
     <Pagination page={page} size={pageSize} total={payload.total} hasMore={page*pageSize<Number(payload.total||0)}
      onPage={setPage} onSize={setPageSize}/>
-    <p className="fm-profit-note">El CSV exporta las filas de la página actual. PVP, PMC y stock son valores del catálogo actual, no históricos. El margen utiliza PMC de la farmacia y solo aparece cuando existe un coste positivo. Las referencias no vendidas en el período no aparecen en esta tabla.</p>
+    <p className="fm-profit-note">El CSV exporta las filas de la página actual. PVP, coste unitario y stock son valores actuales del catálogo, no históricos. El coste unitario del catálogo (PMC) no es necesariamente el PUC real pagado en cada recepción. El margen utiliza el coste unitario del catálogo de esa farmacia y solo aparece cuando es positivo. Las referencias no vendidas en el período no aparecen en esta tabla.</p>
    </section>}
    {tab==="ventas"&&<section className="card fm-profit-panel">
     <div className="fm-profit-panel-heading"><div><h2>Detalle de ventas</h2>
@@ -316,7 +351,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
     </div>
     <ProfitTable rows={rows.map((r,i)=>({...r,key:r.pharmacyId+"|"+r.documentId+"|"+r.lineId+"|"+i}))} headers={saleHeaders}/>
     <Pagination page={page} size={pageSize} hasMore={payload.hasMore} onPage={setPage} onSize={setPageSize}/>
-    <p className="fm-profit-note">El CSV exporta las filas de la página actual. El descuento se muestra tal como se registra en origen, sin asumir su unidad. El coste histórico no sustituye automáticamente al PMC: el margen presentado es estimado con PMC actual. El bruto y el margen sobre bruto del PBIX requieren validar la equivalencia exacta de las columnas.</p>
+    <p className="fm-profit-note">El CSV exporta las filas de la página actual. El descuento se muestra tal como se registra en origen, sin asumir su unidad. El coste histórico no sustituye automáticamente al coste del catálogo: el margen mostrado es una estimación basada en el coste unitario actual. El bruto y el margen sobre bruto del PBIX requieren validar la equivalencia exacta de las columnas.</p>
    </section>}
   </>}
  </div>;

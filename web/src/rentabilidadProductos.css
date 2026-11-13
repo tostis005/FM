@@ -51,3 +51,6 @@
 @media(max-width:1150px){.fm-profit-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.fm-profit-dual{grid-template-columns:1fr}}
 @media(max-width:700px){.fm-profit-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fm-profit-tabs button{padding:9px 11px;font-size:12px}.fm-profit-panel{padding:13px}.fm-profit-chart{height:220px}.fm-profit-panel-heading{flex-wrap:wrap}.fm-profit-pagination{align-items:flex-start;flex-direction:column}.fm-profit-pagination>div{flex-wrap:wrap}}
 @media(prefers-color-scheme:dark){.fm-profit-tabs button.active{background:#193a2d;border-color:#286044;color:#adf0cf}.fm-profit-segment button.active{background:#2d443b;color:#b7efd2}.fm-profit-bar>div{background:#25372e}.fm-profit-alert{background:#3a3025;border-color:#655037;color:#f5d59d}}
+.fm-profit-more{display:flex;justify-content:center;padding-top:12px}
+.fm-profit-more button{border:1px solid var(--border,#dce5e0);background:var(--surface,#fff);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:12px;font-weight:650;color:var(--text-muted,#627d6c)}
+.fm-profit-more button:hover{border-color:#77b89e;color:#1b7954}

@@ -34,17 +34,19 @@ try{
  const menu=superadmin.getByRole("navigation",{name:"Módulos"});
  const links=menu.locator(".side-nav-parent > button.side-link");
  for(const label of ["Alertas inteligentes","Stock inmovilizado"]){
-  const item=links.getByRole("button",{name:label,exact:true});
+  const item=menu.getByRole("button",{name:label,exact:true});
   await item.waitFor({state:"visible",timeout:15000});
   assert.equal(await item.count(),1,label+" debe ser entrada principal");
+  assert.equal(await item.evaluate(el=>el.parentElement?.classList.contains("side-nav-parent")),true,
+   label+" debe estar directamente en el menú principal");
  }
  const order=await links.allTextContents();
  assert.deepEqual(order.slice(0,3).map(s=>s.trim()),
   ["Inicio","Alertas inteligentes","Stock inmovilizado"]);
- await links.getByRole("button",{name:"Alertas inteligentes"}).click();
+ await menu.getByRole("button",{name:"Alertas inteligentes",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Alertas inteligentes"}).waitFor({timeout:12000});
  assert.equal(new URL(superadmin.url()).pathname,"/alertas-inteligentes");
- await links.getByRole("button",{name:"Stock inmovilizado"}).click();
+ await menu.getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Stock inmovilizado"}).waitFor({timeout:12000});
  assert.equal(new URL(superadmin.url()).pathname,"/stock-inmovilizado");
  await superadmin.close();

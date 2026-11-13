@@ -360,6 +360,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/057_politica_stock_transferidor.sql
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/proactiveStock.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardConsolidations.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardDailyService.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js

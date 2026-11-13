@@ -57,7 +57,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
  const toggleSort=field=>{if(sort===field)setAscending(v=>!v);else{setSort(field);setAscending(field==="family")}};
  const sharedChange=(patch)=>updateSharedReportFilters(clientSlug,patch);
  return <div className="fm-operativa-preview fm-operativa-real fm-rentabilidad">
-  <ReportPageHeader title="Rentabilidad de productos" description="Ventas, márgenes estimados y cobertura de costes por familia. Primera propuesta con datos sincronizados." period={period} updatedAt={updatedAt} refreshing={loading} onRefresh={()=>setReload(n=>n+1)}/>
+  <ReportPageHeader title="Rentabilidad de productos" description="Ventas, margen estimado y cobertura de costes por familia, con datos sincronizados." period={period} updatedAt={updatedAt} refreshing={loading} onRefresh={()=>setReload(n=>n+1)}/>
   <ReportFilterBar periodKey={periodKey} pharmacies={pharmacies} pharmacyIds={ids}
    onPharmacyChange={next=>{const value=reconcilePharmacyIds(next,pharmacies);setIds(value);sharedChange({pharmacyIds:value})}}
    onPeriodChange={value=>{setPeriodKey(value);if(value==="custom"){const d=resolveSalesPeriod("this_month",new Date(),{}, "Europe/Madrid");const from=custom.from||d.from,to=custom.to||d.to;setCustom({from,to});sharedChange({period:value,customFrom:from,customTo:to})}else sharedChange({period:value})}}
@@ -98,7 +98,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
     </tr></thead><tbody>{rows.map((r,i)=><tr key={r.family||i}><td>{r.family||"Sin familia"}</td><td>{money(r.sales)}</td><td>{number(r.units)}</td><td>{money(r.margin)}</td><td>{money(r.coveredSales)}</td><td>{r.coveredSales!=null&&r.margin!=null?money(r.coveredSales-r.margin):"—"}</td><td>{r.coveredSales>0&&r.margin!=null?pct(r.margin/r.coveredSales*100):"—"}</td><td>{number(r.costedReferences)} / {number(r.references)}</td></tr>)}</tbody></table></div>
     {!rows.length&&<p className="fm-rent-notice">Sin resultados para los filtros seleccionados.</p>}
     <div className="fm-rent-paging"><span>Página {page} de {Math.max(1,Math.ceil(total/pageSize))}</span><div>
-     <label>Filas <select value={pageSize} onChange={e=>setPageSize(Number(e.target.value))}>{[25,50,100,250,500].map(n=><option value={n} key={n}>{n}</option>)}</select></label>
+     <label>Filas <select value={pageSize} onChange={e=>setPageSize(Number(e.target.value))}>{[25,50,100].map(n=><option value={n} key={n}>{n}</option>)}</select></label>
      <button type="button" disabled={page===1} onClick={()=>setPage(p=>p-1)}>Anterior</button>
      <button type="button" disabled={page*pageSize>=total} onClick={()=>setPage(p=>p+1)}>Siguiente</button>
     </div></div>

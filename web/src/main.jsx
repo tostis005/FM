@@ -208,7 +208,6 @@ const NAV=[
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
- {id:"rentabilidad-productos",label:"Rentabilidad de productos",icon:BarChart3,module:"rentabilidad"},
  {id:"rentabilidad-segmentos",label:"Por familia",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
@@ -252,7 +251,7 @@ const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion",
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","rentabilidad-productos","promociones","promociones-objetivos","acciones"]);
+ "stock","stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -279,6 +278,7 @@ function pageFromUrl(){
  if(path==="promociones/seguimiento"||path==="seguimiento"||promotionIdFromUrl())return "seguimiento-global";
  if(path==="promociones/nueva"||path==="promociones/simulador")return "promociones-objetivos";
  if(path==="proveedores-maestro"||path==="proveedores-condiciones")return "proveedores";
+ if(path==="rentabilidad-productos")return "rentabilidad";
  return ROUTES.has(path)?path:"dashboard";
 }
 
@@ -1777,7 +1777,7 @@ function App(){
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="stock-transferidor"&&<Transferidor key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
-     {(page==="rentabilidad"||page==="rentabilidad-productos")&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+     {page==="rentabilidad"&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

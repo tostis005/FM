@@ -490,6 +490,7 @@ test("pedidos web pendientes prevalecen sobre media web y protegen stock central
  assert.equal(plan.transfers[0].originId,"9");
  assert.equal(plan.transfers[0].units,2);
  assert.equal(plan.transfers[0].warehouseWebReserve,50);
+ assert.equal(plan.transfers[0].warehouseWebEstimate,false,"El pendiente web real no se etiqueta como estimado");
  assert.equal(plan.transfers[0].targetOrigin,54);
  assert.equal(plan.transfers[1].originId,"2");
  assert.equal(plan.transfers[1].units,5);

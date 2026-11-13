@@ -52,6 +52,7 @@ jobs:
           node --test api/src/oauthClients.test.js api/src/oauthFlow.test.js
           node --test api/src/documentScreensRentabilidad.test.js
           node --test api/src/rentabilidadAnalisis.test.js
+          node --test api/src/rentabilidadEndpoints.test.js
           node --check api/src/operativa.js
           node --test api/src/operativaRules.test.js
           node --check api/src/accesos.js

@@ -212,6 +212,22 @@ export function buildProfitabilitySQL(schema,columns,view,order="sales",directio
  ].join("\n");
 }
 export function setupProfitability(app,pool,{requireTenant}){
+ // Caché de lectura efímera y compartimentada por cliente/farmacias/filtros.
+ // Evita recalcular el resumen al regresar de otra pestaña y deduplica solicitudes.
+ const overviewCache=new Map(),ttlMs=120000,maxEntries=32;
+ app.get("/api/analytics/rentabilidad/familias",...requireTenant(),async(req,res,next)=>{
+  try{
+   if(req.context.role!=="superadministrador"&&req.context.modules?.rentabilidad!==true)
+    return res.status(403).json({error:"Módulo de rentabilidad no habilitado"});
+   const {rows}=await pool.query({
+    text:"SELECT DISTINCT btrim(nombre) AS name FROM farmetrica.familias_globales"+
+     " WHERE cliente_slug=$1 AND activo AND nullif(btrim(nombre),'') IS NOT NULL"+
+     " ORDER BY name",
+    values:[req.context.client.slug],query_timeout:9000
+   });
+   res.json({families:rows.map(row=>row.name)});
+  }catch(error){next(error);}
+ });
  app.get("/api/analytics/rentabilidad/:view",...requireTenant(),async(req,res,next)=>{
   const view=String(req.params.view||"");
   if(!["overview","products","sales"].includes(view))
@@ -228,7 +244,21 @@ export function setupProfitability(app,pool,{requireTenant}){
    const limit=view==="sales"?f.size+1:f.size;
    const values=view==="overview"?[f.from,f.to,f.ids,f.slug,f.family]:
     [f.from,f.to,f.ids,f.slug,f.search,limit,(f.page-1)*f.size,f.family];
-   const result=await pool.query({text:sql,values,query_timeout:27000});
+   let result;
+   if(view==="overview"){
+    const key=JSON.stringify([f.slug,f.schema,f.from,f.to,[...f.ids].sort((a,b)=>a-b),f.family]);
+    const now=Date.now(),existing=overviewCache.get(key);
+    if(existing&&existing.expires>now&&req.query.actualizar!=="1"){
+     result=await existing.promise;
+    }else{
+     const promise=pool.query({text:sql,values,query_timeout:27000})
+      .catch(error=>{if(overviewCache.get(key)?.promise===promise)overviewCache.delete(key);throw error;});
+     overviewCache.delete(key);
+     overviewCache.set(key,{promise,expires:now+ttlMs});
+     if(overviewCache.size>maxEntries)overviewCache.delete(overviewCache.keys().next().value);
+     result=await promise;
+    }
+   }else result=await pool.query({text:sql,values,query_timeout:27000});
    const rows=view==="sales"?result.rows.slice(0,f.size):result.rows;
    res.json({available:true,rows,
     total:view==="products"?Number(rows[0]?.total||0):null,

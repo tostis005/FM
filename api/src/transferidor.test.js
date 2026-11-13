@@ -865,13 +865,15 @@ test("limitar a 500 o 1000 conserva todas las propuestas en páginas sucesivas",
   units:1205-index
  }));
  for(const limit of [500,1000]){
-  const first=filterTransferPlan(proposals,parseTransferFilters({pagina:"1",tamano:String(limit)},pharmacies));
-  const second=filterTransferPlan(proposals,parseTransferFilters({pagina:"2",tamano:String(limit)},pharmacies));
-  assert.equal(first.rows.length,limit);
-  assert.equal(second.rows.length,1205-limit);
-  assert.equal(first.total,1205);
-  assert.equal(second.total,1205);
-  assert.equal(new Set([...first.rows,...second.rows].map(r=>r.id)).size,1205);
+  const all=[];
+  for(let page=1;page<=Math.ceil(proposals.length/limit);page++){
+   const result=filterTransferPlan(proposals,parseTransferFilters(
+    {pagina:String(page),tamano:String(limit)},pharmacies));
+   assert.equal(result.total,1205);
+   assert.equal(result.rows.length,Math.min(limit,1205-(page-1)*limit));
+   all.push(...result.rows);
+  }
+  assert.equal(new Set(all.map(r=>r.id)).size,1205);
  }
 });
 test("el CSV puede pedir todas las filas con los filtros activos, no solo la página actual",()=>{

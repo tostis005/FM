@@ -53,3 +53,37 @@
 .fm-transfer-sales-reference{font-weight:750;color:#25604e}
 .fm-transfer-units{display:inline-block;min-width:35px;padding:4px 8px;border-radius:6px;background:#cbe9d5;color:#166439;font-size:13px;font-weight:800}
 @media(max-width:570px){.fm-transfer-table-meta{align-items:flex-start;text-align:left}.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(1),.fm-transfer-main-table tbody td:nth-child(1){min-width:76px;width:76px}.fm-transfer-main-table thead tr:not(.fm-smart-group-row) th:nth-child(2),.fm-transfer-main-table tbody td:nth-child(2){left:76px;min-width:165px;width:165px;max-width:165px}.fm-transfer-main-table th,.fm-transfer-main-table td{padding:8px 7px}}
+
+/* Carga inicial como el Preparador: tabla bloqueada hasta que aparece el
+   primer movimiento. Después permanece visible durante los demás lotes. */
+.fm-transfer-table-frame{position:relative;min-width:0;isolation:isolate}
+.fm-transfer-table-frame[aria-busy="true"]{min-height:300px}
+.fm-transfer-table-frame[aria-busy="true"] .fm-transfer-table-content{
+ visibility:hidden;pointer-events:none
+}
+.fm-transfer-table-overlay{
+ position:absolute;inset:0;z-index:20;
+ display:flex;align-items:flex-start;justify-content:center;
+ padding:28px 12px 16px;border-radius:9px;
+ background:rgba(245,249,247,.97);pointer-events:auto
+}
+.fm-transfer-loading-card{
+ display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:9px;max-width:min(92%,430px);padding:20px 24px;
+ border:1px solid #cfe3d6;border-radius:11px;
+ background:var(--surface,#fff);box-shadow:0 10px 30px #183c2424;
+ color:#254a36;text-align:center;font-size:12px;line-height:1.45
+}
+.fm-transfer-loading-card>strong{font-size:14px;font-weight:750}
+.fm-transfer-loading-card>span{color:#647b6a}
+.fm-transfer-spinner{flex-shrink:0;color:#168255;animation:fm-transfer-spin 1s linear infinite}
+@keyframes fm-transfer-spin{to{transform:rotate(360deg)}}
+.fm-transfer-kpi-value .fm-kpi-value{max-width:100%;font-size:inherit}
+.fm-transfer-kpi[aria-busy="true"]{cursor:progress}
+@media(max-width:600px){
+ .fm-transfer-table-overlay{padding:20px 8px 10px}
+ .fm-transfer-loading-card{padding:15px;gap:6px}
+ .fm-transfer-loading-card>strong{font-size:12px}
+ .fm-transfer-spinner{width:25px;height:25px}
+}
+@media(prefers-reduced-motion:reduce){.fm-transfer-spinner{animation:none}}

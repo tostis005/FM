@@ -276,3 +276,54 @@
 .fm-unified-master .fm-supplier-tabs button span.fm-load-spinner{display:inline-block;flex:none;width:13px;height:13px;min-width:0;padding:0;border:2.5px solid #c5e7d8;border-top-color:#128b64;border-radius:50%;background:transparent}
 .fm-unified-master .fm-master-empty .btn{margin-left:9px}
 @media(max-width:640px){.fm-unified-master .fm-master-loading-indicator{margin:-6px 0 14px}}
+
+/* Preparador: agenda secundaria en una sola franja; el selector de laboratorio
+   aparece inmediatamente debajo. El listado completo se despliega a demanda. */
+.fm-order-agenda.fm-order-agenda-compact{
+ padding:10px 14px!important;margin:0 0 10px!important;gap:10px!important
+}
+.fm-order-agenda-toolbar{
+ display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;
+ align-items:center;gap:12px;min-width:0
+}
+.fm-order-agenda-title{min-width:0}
+.fm-order-agenda-title h2{
+ display:flex;align-items:center;gap:7px;margin:0;font-size:13px;
+ font-weight:760;line-height:1.3;color:#24543f;white-space:nowrap
+}
+.fm-order-agenda-title svg{flex:0 0 auto}
+.fm-order-agenda-compact .fm-order-agenda-kpis{
+ display:flex;align-items:center;flex-wrap:nowrap;gap:6px;overflow-x:auto;
+ padding:2px 0;scrollbar-width:thin
+}
+.fm-order-agenda-compact .fm-order-agenda-kpi{
+ display:inline-flex;flex:0 0 auto;flex-direction:row;align-items:center;
+ gap:5px;min-width:0;min-height:32px;padding:5px 8px;border-radius:8px
+}
+.fm-order-agenda-compact .fm-order-agenda-kpi strong{
+ font-size:13px;line-height:1.1;color:#205b40
+}
+.fm-order-agenda-compact .fm-order-agenda-kpi span{
+ font-size:10.5px;line-height:1.2;white-space:nowrap
+}
+.fm-order-agenda-toolbar-actions{display:flex;align-items:center;gap:6px}
+.fm-order-agenda-toolbar-actions .btn{
+ display:inline-flex;align-items:center;justify-content:center;gap:5px;
+ min-height:32px;padding:6px 9px;white-space:nowrap;font-size:11px
+}
+.fm-order-agenda-compact .fm-order-agenda-details{
+ display:flex;flex-direction:column;gap:10px;min-width:0;
+ border-top:1px solid #e9f0e9;padding-top:12px
+}
+.fm-order-agenda-help{margin:0;color:var(--text-muted,#66737d);font-size:11.5px;line-height:1.5}
+@media(max-width:1100px){
+ .fm-order-agenda-toolbar{grid-template-columns:minmax(0,1fr) max-content;gap:7px 10px}
+ .fm-order-agenda-toolbar-actions{grid-column:2;grid-row:1}
+ .fm-order-agenda-compact .fm-order-agenda-kpis{grid-column:1/-1;grid-row:2}
+}
+@media(max-width:640px){
+ .fm-order-agenda.fm-order-agenda-compact{padding:10px!important;margin-bottom:10px!important;gap:8px!important}
+ .fm-order-agenda-title h2{font-size:12.5px}
+ .fm-order-agenda-compact .fm-order-agenda-kpi{min-height:30px;padding:5px 7px}
+ .fm-order-agenda-toolbar-actions .btn{min-height:30px;padding:5px 7px}
+}

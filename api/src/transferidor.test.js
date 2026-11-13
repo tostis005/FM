@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {buildGlobalTransfers,parseTransferFilters,filterTransferPlan,setupTransferidor,
  transferidorInventorySQL,transferidorSalesSQL,transferidorPendingWebSQL,
- transferidorCNChunks,mergeTransferBatch,processTransferChunks} from "./transferidor.js";
+ transferidorCNChunks,mergeTransferBatch,processTransferChunks,
+ transferidorDemandForecast,transferidorFairQuotas} from "./transferidor.js";
 
 const pharmacies=[{id:"1",name:"Abadía"},{id:"2",name:"Europa"},{id:"3",name:"Centro"},{id:"4",name:"Norte"}];
 
@@ -27,7 +28,7 @@ test("redistribuye globalmente un CN sin asignar dos veces las mismas unidades",
   item("3","123456",1,4),item("4","123456",0,0)
  ],pharmacies,20);
  assert.equal(result.transfers.reduce((n,t)=>n+t.units,0),6);
- assert.deepEqual(result.transfers.map(t=>[t.originId,t.destinationId,t.units]),
+ assert.deepEqual(result.transfers.map(t=>[t.originId,t.destinationId,t.units]).sort((a,b)=>a[1].localeCompare(b[1])),
   [["2","1",3],["2","3",3]]);
  assert.ok(result.transfers.every(t=>t.originId!==t.destinationId));
  assert.equal(result.skipped,0);
@@ -66,8 +67,8 @@ test("dos donantes y dos receptores mantienen saldos globales coherentes",()=>{
  for(const [id,available] of [["1",5],["2",5]]){
   assert.ok(plan.filter(r=>r.originId===id).reduce((n,r)=>n+r.units,0)<=available);
  }
- assert.equal(plan.filter(r=>r.destinationId==="3").reduce((n,r)=>n+r.units,0),8);
- assert.equal(plan.filter(r=>r.destinationId==="4").reduce((n,r)=>n+r.units,0),2);
+ assert.equal(plan.filter(r=>r.destinationId==="3").reduce((n,r)=>n+r.units,0),6);
+ assert.equal(plan.filter(r=>r.destinationId==="4").reduce((n,r)=>n+r.units,0),4);
  const page=filterTransferPlan(plan,parseTransferFilters({pagina:"2",tamano:"10",
   orden:"units",direccion:"desc"},pharmacies));
  assert.equal(page.total,plan.length,"El total se cuenta antes de paginar");
@@ -107,7 +108,7 @@ test("la API permite leer resultados de dos farmacias aunque falte una tercera",
  assert.equal(body.total,1);
  assert.equal(body.rows[0].originName,"Abadía");
  assert.equal(body.rows[0].destinationName,"Europa");
- assert.equal(body.rows[0].units,20);
+ assert.equal(body.rows[0].units,18,"Reserva mínima del donante aunque la semana sea cero");
  assert.equal(body.rows[0].sales7Origin,0);
  assert.equal(body.rows[0].sales7Destination,7);
  assert.equal(body.rows[0].sales30Origin,3);
@@ -118,22 +119,20 @@ test("la API permite leer resultados de dos farmacias aunque falte una tercera",
  assert.equal(queries.filter(q=>q.sql.includes('AS "units30"')).length,1);
 });
 
-test("la propuesta expone pedidos pendientes del destino para explicar unidades a enviar",()=>{
+test("los pedidos pendientes no son stock inmediato ni afectan al envío",()=>{
  const plan=buildGlobalTransfers([
   {pharmacyId:"1",cn:"123456",name:"Crema",stock:28,units7:0},
-  {pharmacyId:"2",cn:"123456",name:"Crema",stock:1,ordered:2,units7:7}
+  {pharmacyId:"2",cn:"123456",name:"Crema",stock:1,ordered:300,units7:7}
  ],pharmacies.slice(0,2));
  assert.equal(plan.transfers.length,1);
  const move=plan.transfers[0];
- assert.equal(move.pendingDestination,2);
  assert.equal(move.stockDestination,1);
  assert.equal(move.triggerDestination,4);
  assert.equal(move.targetDestination,7);
- assert.equal(move.units,4,"Se envía objetivo 7 menos stock 1 y pedidos pendientes 2");
- const filtered=filterTransferPlan(plan.transfers,
-  parseTransferFilters({orden:"pendingDestination",filtros:'{"pendingDestination":"2"}'},
-   pharmacies.slice(0,2)));
- assert.equal(filtered.total,1,"Permite filtrar y ordenar por pendientes");
+ assert.equal(move.units,6);
+ assert.ok(!Object.hasOwn(move,"pendingDestination"));
+ assert.throws(()=>parseTransferFilters({orden:"pendingDestination"},pharmacies.slice(0,2)));
+ assert.throws(()=>parseTransferFilters({filtros:'{"pendingDestination":"2"}'},pharmacies.slice(0,2)));
 });
 
 test("una exposición extra se muestra dentro del objetivo, sin variar la previsión mínima",()=>{
@@ -247,19 +246,18 @@ test("si el destino cubre el mínimo de ventas no se transfiere para rellenar ex
  assert.equal(result.withNeed,0);
 });
 
-test("las ventas previstas y los pedidos pendientes determinan la necesidad real",()=>{
+test("solo el stock físico determina si hay necesidad inmediata",()=>{
  const rows=[
   {pharmacyId:"1",cn:"123456",stock:30,units7:0,name:"Crema"},
-  {pharmacyId:"2",cn:"123456",stock:3,units7:7,ordered:1,name:"Crema"}
+  {pharmacyId:"2",cn:"123456",stock:3,units7:7,ordered:100,name:"Crema"}
  ];
- assert.equal(buildGlobalTransfers(rows,pharmacies.slice(0,2)).transfers.length,0,
-  "Tres unidades más una pendiente cubren cuatro días de ventas");
+ const first=buildGlobalTransfers(rows,pharmacies.slice(0,2));
+ assert.equal(first.transfers.length,1);
+ assert.equal(first.transfers[0].units,4);
  rows[1].ordered=0;
- const result=buildGlobalTransfers(rows,pharmacies.slice(0,2));
- assert.equal(result.transfers.length,1);
- assert.equal(result.transfers[0].units,4);
- assert.equal(result.transfers[0].triggerDestination,4);
- assert.equal(result.transfers[0].targetDestination,7);
+ const second=buildGlobalTransfers(rows,pharmacies.slice(0,2));
+ assert.deepEqual(first.transfers,second.transfers);
+ assert.equal(second.transfers[0].triggerDestination,4);
 });
 
 test("el stock de seguridad del donante limita las unidades propuestas",()=>{
@@ -270,8 +268,9 @@ test("el stock de seguridad del donante limita las unidades propuestas",()=>{
  const result=buildGlobalTransfers(rows,pharmacies.slice(0,2));
  assert.equal(result.withNeed,1);
  assert.equal(result.withSurplus,1);
- assert.equal(result.transfers[0].units,1,
-  "Donante mantiene siete unidades para siete días de sus propias ventas");
+ assert.equal(result.transfers[0].units,4,
+  "En escasez, conserva al menos cuatro días al mayor ritmo de ventas");
+ assert.equal(result.transfers[0].targetOrigin,4);
 });
 
 test("acepta CN de siete dígitos, normaliza a seis y agrupa la misma referencia",()=>{

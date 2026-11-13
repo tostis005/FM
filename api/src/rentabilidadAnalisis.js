@@ -111,19 +111,14 @@ function enrichedCTE(schema,columns,view){
   " WHERE upper(btrim(a.farmacia_codigo))=r.code AND a.origen_id=r.\"articleId\"",
   " "+c.updated+" LIMIT 1",
   " ) a ON true",
+  // Exactamente el mismo enlace de artículo a familia que emplea Ventas.
+  // Evitar joins de alias adicionales y grupos fusionados duplicados.
   " LEFT JOIN farmetrica.familias_globales_articulos linked",
   " ON linked.cliente_slug=$4 AND linked.farmacia_codigo=r.code",
   " AND linked.articulo_origen_id=r.\"articleId\"",
-  " LEFT JOIN farmetrica.familias_globales_alias local_alias",
-  " ON local_alias.cliente_slug=$4 AND local_alias.farmacia_codigo=r.code",
-  " AND local_alias.codigo_origen=nullif(btrim(a.family),'')",
-  " LEFT JOIN farmetrica.familias_globales origin_family",
-  " ON origin_family.cliente_slug=$4",
-  " AND origin_family.id=coalesce(linked.familia_id,local_alias.familia_id)",
   " LEFT JOIN farmetrica.familias_globales global_family",
-  " ON global_family.cliente_slug=$4",
-  " AND global_family.id=coalesce(origin_family.fusionado_a,origin_family.id)",
-  " AND global_family.activo",
+  " ON global_family.cliente_slug=linked.cliente_slug",
+  " AND global_family.id=linked.familia_id AND global_family.activo",
   ")"
  ]).join("\n");
 }
@@ -178,6 +173,16 @@ export function setupProfitability(app,pool,{requireTenant}){
     page:f.page,pageSize:f.size,
     hasMore:view==="sales"&&result.rows.length>f.size,
     costMethod:"PMC actual del catálogo; margen estimado, no beneficio contable."});
-  }catch(error){if(error.status)return res.status(error.status).json({error:error.message});next(error);}
+  }catch(error){
+   // No convertir errores de SQL o timeouts en un aviso genérico imposible de diagnosticar.
+   console.error("FM_RENTABILIDAD_CONSULTA",{
+    vista:view,codigo:error.code||error.name,
+    detalle:String(error.message||"").slice(0,250)
+   });
+   if(error.status)return res.status(error.status).json({error:error.message});
+   if(error.code==="57014"||/timeout|timed out/i.test(String(error.message||"")))
+    return res.status(503).json({error:"La consulta de rentabilidad tardó demasiado. Selecciona menos farmacias o un período más corto."});
+   return res.status(503).json({error:"No se pudo consultar la rentabilidad. El servidor ha registrado el fallo para su revisión."});
+  }
  });
 }

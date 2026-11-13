@@ -1765,7 +1765,7 @@ function App(){
     {page==="acciones"&&<CentroTrabajo key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       pharmacies={tenantContext.pharmacies} userEmail={sessionUser?.email} tenantRole={tenantContext.role}
       canOpenSection={canOpenSection}/>}
-    {DEMO_MODULES.has(page)&&page!=="genericos"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
+    {DEMO_MODULES.has(page)&&page!=="genericos"&&page!=="rentabilidad"&&<ModuloDemo key={tenantContext.client.slug+":"+page} module={page}
       pharmacies={tenantContext.pharmacies} clientSlug={tenantContext.client.slug}
       analysisMonths={tenantContext.client.analysisMonths}
       tenantRole={tenantContext.role}
@@ -1777,7 +1777,7 @@ function App(){
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="stock-transferidor"&&<Transferidor key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
-     {page==="rentabilidad-productos"&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+     {(page==="rentabilidad"||page==="rentabilidad-productos")&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

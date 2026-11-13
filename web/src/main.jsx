@@ -39,6 +39,7 @@ const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
 const PickingList=React.lazy(()=>import("./PickingList.jsx"));
 const Transferidor=React.lazy(()=>import("./Transferidor.jsx"));
+const RentabilidadProductos=React.lazy(()=>import("./RentabilidadProductos.jsx"));
 const AjustesPanel=React.lazy(()=>import("./AjustesPanel.jsx"));
 const ObjetivosPromociones=React.lazy(()=>import("./ObjetivosPromociones.jsx"));
 const PromotionColorReport=React.lazy(()=>import("./PromotionColorReport.jsx"));
@@ -207,6 +208,7 @@ const NAV=[
  {id:"proveedores",label:"Proveedores",icon:Users,module:"proveedores"},
  {id:"genericos",label:"Genéricos",icon:Activity,module:"genericos"},
  {id:"rentabilidad",label:"Rentabilidad",icon:Target,module:"rentabilidad"},
+ {id:"rentabilidad-productos",label:"Rentabilidad de productos",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"rentabilidad-segmentos",label:"Por familia",icon:BarChart3,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"rentabilidad-retorno",label:"Retorno económico",icon:TrendingUp,module:"rentabilidad",childOf:"rentabilidad"},
  {id:"informes",label:"Informes",icon:ArrowDownToLine,module:"informes",childOf:"rentabilidad"},
@@ -1775,6 +1777,7 @@ function App(){
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="stock-transferidor"&&<Transferidor key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
+     {page==="rentabilidad-productos"&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {DOCUMENT_SCREENS.has(page)&&<PantallasReales key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}

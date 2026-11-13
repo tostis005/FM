@@ -26,6 +26,41 @@ export function transferidorDemandForecast(src={}){
  return {recent,history,high,low,blended};
 }
 
+// Reparto proporcional a los días de cobertura: cuando no alcanza el stock,
+// igualar primero las farmacias menos cubiertas antes de completar una sola.
+export function transferidorFairQuotas(targets,budget,goal){
+ const states=targets.map(site=>{
+  const current=site.stock+site.received;
+  const need=whole(site[goal]-current);
+  return {site,need,current,rate:Math.max(1e-9,site.forecast.blended),
+   quota:0};
+ }).filter(s=>s.need>0);
+ const available=Math.min(Math.max(0,Math.floor(budget)),states.reduce((n,s)=>n+s.need,0));
+ if(!available)return new Map();
+ if(available===states.reduce((n,s)=>n+s.need,0))
+  return new Map(states.map(x=>[x.site.id,x.need]));
+ let lower=Math.min(...states.map(s=>(s.current-s.site.extra)/s.rate));
+ let upper=Math.max(...states.map(s=>(s.site[goal]-s.site.extra)/s.rate));
+ for(let iteration=0;iteration<36;iteration++){
+  const level=(lower+upper)/2;
+  const demand=states.reduce((n,s)=>n+Math.min(s.need,
+   Math.max(0,level*s.rate+s.site.extra-s.current)),0);
+  if(demand>available)upper=level;
+  else lower=level;
+ }
+ for(const s of states)
+  s.quota=Math.min(s.need,Math.max(0,Math.floor(lower*s.rate+s.site.extra-s.current+1e-9)));
+ let left=available-states.reduce((n,s)=>n+s.quota,0);
+ while(left>0){
+  const eligible=states.filter(s=>s.quota<s.need);
+  if(!eligible.length)break;
+  eligible.sort((a,b)=>(a.current+a.quota-a.site.extra)/a.rate-
+   (b.current+b.quota-b.site.extra)/b.rate||stable(a.site.id,b.site.id));
+  eligible[0].quota++;left--;
+ }
+ return new Map(states.map(s=>[s.site.id,s.quota]));
+}
+
 // El plan siempre se calcula globalmente antes de aplicar filtros y paginar.
 // Cada CN se trata por separado; las transferencias reducen el saldo del donante.
 // Nunca se usan pedidos de reposición inciertos como stock disponible.
@@ -139,26 +174,32 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
      (source.stockAt<target.stockAt?source.stockAt:target.stockAt):
      source.stockAt||target.stockAt});
   }
-  // Alta: cubrir el escenario exigente SOLO con excedente sobre el objetivo
-  // exigente de cada donante. Media: cumplir la previsión base desde excedente
-  // sobre su objetivo base. Equilibrio: compartir únicamente stock por encima
-  // de la seguridad mínima, sin empeorar la cobertura relativa del donante.
-  for(const [tier,goal] of [["high","highTarget"],["medium","baseTarget"],["balanced","baseTarget"]]){
-   let updated=true,rounds=0;
-   while(updated&&rounds++<=targets.length+1){
-    updated=false;
+  // 1) Escenario exigente, solo del excedente real sobre objetivos exigentes.
+  // 2) Escenario prudente: mayor rotación entre dos períodos, pero cobertura
+  // baja; 3) previsión intermedia; 4) igualar coberturas sin comprometer la
+  // reserva mínima de 4 días y exposición en los orígenes.
+  const steps=[
+   ["high","highTarget","highTarget"],
+   ["low","lowTarget","baseTarget"],
+   ["medium","baseTarget","baseTarget"],
+   ["balanced","baseTarget","safetyFloor"]
+  ];
+  for(const [tier,goal,floorKey] of steps){
+   for(let round=0;round<(tier==="balanced"?targets.length+2:1);round++){
+    const supply=donors.reduce((sum,source)=>
+     sum+Math.floor(Math.max(0,source.remaining-source[floorKey])+1e-9),0);
+    if(!supply)break;
+    const quotas=transferidorFairQuotas(targets,supply,goal);
+    if(!quotas.size)break;
+    let changed=false;
     for(const target of targets.slice().sort(targetOrder)){
-     const needed=whole(target[goal]-(target.stock+target.received));
+     let needed=quotas.get(target.id)||0;
      if(!needed)continue;
      for(const source of donors.slice().sort(donorOrder)){
-      if(source.id===target.id)continue;
-      const floor=tier==="high"?source.highTarget:
-       tier==="medium"?source.baseTarget:source.safetyFloor;
-      const maxSend=Math.floor(Math.max(0,source.remaining-floor)+1e-9);
-      if(!maxSend)continue;
-      let units=Math.min(maxSend,needed);
+      const canSpare=Math.floor(Math.max(0,source.remaining-source[floorKey])+1e-9);
+      if(!canSpare)continue;
+      let units=Math.min(canSpare,needed);
       if(tier==="balanced"&&!source.isWarehouse){
-       // Igualar días de cobertura, en lugar de vaciar una farmacia para otra.
        const sourceRate=source.forecast.blended,targetRate=target.forecast.blended;
        if(sourceRate>0&&targetRate>0){
         const gap=cover(source)-cover(target);
@@ -167,11 +208,11 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
        }
       }
       if(!units)continue;
-      move(source,target,units);updated=true;
-      break; // Reordenar tras cada movimiento para atender primero al más desprotegido.
+      move(source,target,units);changed=true;needed-=units;
+      if(!needed)break;
      }
     }
-    if(tier!=="balanced")break; // Etapas rápida y media: una pasada por destino.
+    if(!changed||tier!=="balanced")break;
    }
   }
   transfers.push(...movements.values());

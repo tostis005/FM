@@ -163,9 +163,9 @@ export function setupProfitability(app,pool,{requireTenant}){
     return res.json({available:false,rows:[],message:"Catálogo de artículos pendiente de sincronización."});
    const sql=buildProfitabilitySQL(f.schema,columns,view,f.order,f.direction);
    const limit=view==="sales"?f.size+1:f.size;
-   const result=await pool.query({text:sql,
-    values:[f.from,f.to,f.ids,f.slug,f.search,limit,(f.page-1)*f.size],
-    query_timeout:27000});
+   const values=view==="overview"?[f.from,f.to,f.ids,f.slug]:
+    [f.from,f.to,f.ids,f.slug,f.search,limit,(f.page-1)*f.size];
+   const result=await pool.query({text:sql,values,query_timeout:27000});
    const rows=view==="sales"?result.rows.slice(0,f.size):result.rows;
    res.json({available:true,rows,
     total:view==="products"?Number(rows[0]?.total||0):null,

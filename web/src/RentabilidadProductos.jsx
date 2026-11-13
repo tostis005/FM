@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText,AlertCircle} from "lucide-react";
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
@@ -67,6 +67,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
  const [sort,setSort]=useState("sales");
  const [direction,setDirection]=useState("desc");
  const [reload,setReload]=useState(0);
+ const lastRefresh=useRef(0);
  const [payload,setPayload]=useState(null);
  const [error,setError]=useState("");
  const [loading,setLoading]=useState(true);
@@ -107,7 +108,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
    pagina:String(page),tamano:String(pageSize),orden:sort,direccion:direction});
   if(ids.length)params.set("farmacias",ids.join(","));
   if(family)params.set("familia",family);
-  if(reload>0)params.set("actualizar","1");
+  if(reload!==lastRefresh.current){params.set("actualizar","1");lastRefresh.current=reload;}
   if(tab!=="resumen"&&debounced)params.set("buscar",debounced);
   setLoading(true);setError("");setPayload(null);
   const view=tab==="resumen"?"overview":tab==="productos"?"products":"sales";
@@ -200,7 +201,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   {key:"discount",label:"Dto. registrado",render:r=>r.discount==null?"—":String(r.discount)},
   {key:"sales",label:"Neto",render:r=>euros(r.sales)},
   {key:"historicalCost",label:"Coste hist. informado",render:r=>euros(r.historicalCost)},
-  {key:"pmc",label:"PMC",render:r=>euros(r.pmc)},
+  {key:"pmc",label:"Coste/ud.",render:r=>euros(r.pmc),title:()=>"Coste unitario actual del catálogo"},
   {key:"margin",label:"Margen est.",render:r=>euros(r.margin)},
   {key:"marginPct",label:"Margen %",render:r=>percent(marginPct(r))}
  ];
@@ -264,7 +265,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       </ResponsiveContainer></div>:<p className="fm-profit-empty">Sin evolución para el período.</p>}
      </section>
      <section className="card fm-profit-panel">
-      <div className="fm-profit-panel-heading"><h2>Rentabilidad por farmacia</h2><p>Margen sobre el importe con PMC disponible (%)</p></div>
+      <div className="fm-profit-panel-heading"><h2>Rentabilidad por farmacia</h2><p>Margen sobre el importe con coste conocido (%)</p></div>
       {pharmacyChart.length?<div className="fm-profit-chart"><ResponsiveContainer width="100%" height="100%">
        <BarChart data={pharmacyChart} layout="vertical" margin={{top:8,right:24,left:6,bottom:0}}>
         <CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" tick={{fontSize:11}} unit="%"/>

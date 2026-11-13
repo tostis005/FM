@@ -37,6 +37,7 @@ const OperativaReal=React.lazy(()=>import("./OperativaReal.jsx"));
 const CentroTrabajo=React.lazy(()=>import("./CentroTrabajo.jsx"));
 const PantallasReales=React.lazy(()=>import("./PantallasReales.jsx"));
 const StockSinRecepciones=React.lazy(()=>import("./StockSinRecepciones.jsx"));
+const ProactiveStock=React.lazy(()=>import("./ProactiveStock.jsx"));
 const PickingList=React.lazy(()=>import("./PickingList.jsx"));
 const Transferidor=React.lazy(()=>import("./Transferidor.jsx"));
 const RentabilidadProductos=React.lazy(()=>import("./RentabilidadProductos.jsx"));
@@ -201,6 +202,7 @@ const NAV=[
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
+ {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:Package,module:"stock",childOf:"stock",super:true},
   {id:"stock-transferidor",label:"Transferidor",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"picking-list",label:"Picking List",icon:ClipboardList,module:"stock",childOf:"stock"},
@@ -214,6 +216,7 @@ const NAV=[
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
  {id:"promociones-objetivos",label:"Nueva campaña",icon:Plus,module:"promociones",childOf:"promociones"},
  {id:"acciones",label:"Trabajo y ahorro",icon:ClipboardList,module:"acciones"},
+ {id:"alertas-inteligentes",label:"Alertas inteligentes",icon:Bell,module:"acciones",childOf:"acciones",super:true},
  {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
  {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
  {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},
@@ -251,7 +254,7 @@ const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion",
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
 const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
- "stock","stock-sin-recepciones","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones"]);
+ "stock","stock-sin-recepciones","stock-inmovilizado","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones","alertas-inteligentes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
  const match=window.location.pathname.match(/^\/promociones\/([^/]+)\/seguimiento\/?$/);
@@ -767,7 +770,8 @@ function App(){
    setObjectiveCampaign(null);setObjectiveMonth("");setObjectiveRestoreError("");
   }
   const intended=id==="seguimiento-campana"?"seguimiento-global":id;
-  const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended);
+  const isAdministrative=CONFIG_IDS.has(intended)||ADMIN_IDS.has(intended)||
+    ["stock-inmovilizado","alertas-inteligentes"].includes(intended);
   if(!(isAdministrative?visibleNav.some(item=>item.id===intended):intended==="acciones"?canOpenWorkCenter():canOpenSection(intended))){
    const next=NAV.find(item=>item.childOf===intended&&canOpenSection(item.id))?.id||
     (intended==="promociones"&&canOpenSection("seguimiento-global")?"seguimiento-global":null);
@@ -1362,7 +1366,9 @@ function App(){
  });
  const breadcrumbs=navigationBreadcrumbs(page,NAV,canOpenSection,
   {editingObjectives:Boolean(objectiveCampaign||objectiveLocation?.id)});
- const allowed=page==="picking-list"?visibleNav.some(item=>item.id==="picking-list")&&canOpenSection(page):
+ const allowed=["stock-inmovilizado","alertas-inteligentes"].includes(page)?
+   sessionUser?.role==="superadministrador":
+   page==="picking-list"?visibleNav.some(item=>item.id==="picking-list")&&canOpenSection(page):
    page==="proveedores"?canOpenSection(page):
    CONFIG_IDS.has(page)||ADMIN_IDS.has(page)?
    visibleNav.some(item=>item.id===page):page==="acciones"?canOpenWorkCenter():canOpenSection(page);
@@ -1781,6 +1787,10 @@ function App(){
       tenantRole={tenantContext.role}
       pharmacies={tenantContext.pharmacies}/>}
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
+    {["stock-inmovilizado","alertas-inteligentes"].includes(page)&&sessionUser?.role==="superadministrador"&&<ProactiveStock key={tenantContext.client.slug+":"+page}
+      mode={page==="alertas-inteligentes"?"alertas":"inmovilizado"}
+      clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
+      demo={tenantContext.client.demo} onNavigate={nav}/>}
     {page==="stock-transferidor"&&<Transferidor key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
      {page==="rentabilidad"&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}

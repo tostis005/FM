@@ -50,6 +50,7 @@ import {setupWorkDigestPreferences,startWorkDigestNotifications} from "./workDig
 import {setupDocumentScreens} from "./documentScreens.js";
 import {setupProfitability} from "./rentabilidadAnalisis.js";
 import {setupStockSinRecepciones} from "./stockSinRecepciones.js";
+import {setupProactiveStock} from "./proactiveStock.js";
 import {setupMasterSources} from "./masterSources.js";
 import {setupFamilyMaster} from "./familyMaster.js";
 import {nameCommercialRows} from "./commercialNames.js";
@@ -174,6 +175,7 @@ setupPharmacyState(app,pool,{requireTenant});
 setupDocumentScreens(app,pool,{requireTenant});
 setupProfitability(app,pool,{requireTenant});
 setupStockSinRecepciones(app,pool,{requireTenantModule});
+setupProactiveStock(app,pool,{requireTenant});
 setupSalesSummary(app,pool,{requireTenant});
 const dashboardCache=setupDashboardConsolidations(app,pool,{requireTenant});
 setupSalesTotals(app,pool,{requireTenant,consolidations:dashboardCache});

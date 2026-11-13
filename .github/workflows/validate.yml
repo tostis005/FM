@@ -84,6 +84,8 @@ jobs:
           node --test api/src/stockTargetDays.test.js
           node --check api/src/stockSinRecepciones.js
           node --test api/src/stockSinRecepciones.test.js
+          node --check api/src/proactiveStock.js
+          node --test api/src/proactiveStock.test.js
           node --test api/src/transferidor.test.js
           node --check api/src/pickingList.js
           node --test api/src/pickingListCore.test.js api/src/pickingListSettings.test.js api/src/pickingListAutoRefresh.test.js api/src/warehouseName.test.js
@@ -358,6 +360,7 @@ jobs:
           psql_test --single-transaction < api/src/migrations/057_politica_stock_transferidor.sql
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js
+          TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/proactiveStock.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardConsolidations.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/dashboardDailyService.pg.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/integrationLiveReports.test.js

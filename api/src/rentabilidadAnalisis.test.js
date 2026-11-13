@@ -4,23 +4,26 @@ import {buildProfitabilitySQL} from "./rentabilidadAnalisis.js";
 const columns=new Set(["nombre","familia","codigo_nacional","pmc","pvp","stock_actual","sincronizado_en"]);
 test("resumen integra meses, farmacias y familias del maestro",()=>{
  const sql=buildProfitabilitySQL("ampedia",columns,"overview");
- assert.match(sql,/FROM enriched GROUP BY month/);
- assert.match(sql,/FROM enriched GROUP BY "pharmacyId","pharmacyName"/);
- assert.match(sql,/FROM enriched GROUP BY family/);
+ assert.match(sql,/FROM scoped GROUP BY month/);
+ assert.match(sql,/FROM scoped GROUP BY "pharmacyId","pharmacyName"/);
+ assert.match(sql,/FROM scoped GROUP BY family/);
  assert.match(sql,/UNION ALL/);
  assert.match(sql,/farmetrica\.familias_globales_articulos linked/);
- assert.match(sql,/farmetrica\.familias_globales global_family/);
- assert.match(sql,/global_family\.id=linked\.familia_id/);
- assert.match(sql,/global_family\.nombre/);
- assert.match(sql,/r\.units\*a\.pmc/);
- assert.match(sql,/CASE WHEN a\.pmc>0 THEN r\.sales ELSE NULL END/);
- assert.doesNotMatch(sql,/\$5/);
+ assert.match(sql,/farmetrica\.familias_globales fam/);
+ assert.match(sql,/fam\.id=linked\.familia_id/);
+ assert.match(sql,/fam\.nombre/);
+ assert.match(sql,/r\.units\*m\.pmc/);
+ assert.match(sql,/CASE WHEN m\.pmc>0 THEN r\.sales ELSE NULL END/);
+ assert.match(sql,/family=\$5::text/);
+ assert.match(sql,/article_keys AS MATERIALIZED/);
+ assert.match(sql,/article_map AS MATERIALIZED/);
 });
 test("productos usan costes por farmacia, stock y búsqueda segura",()=>{
  const sql=buildProfitabilitySQL("ampedia",columns,"products","margin","desc");
  assert.match(sql,/a\.stock_actual/);
  assert.match(sql,/ORDER BY margin DESC NULLS LAST/);
  assert.match(sql,/count\(\*\) OVER\(\)::int AS total/);
+ assert.match(sql,/family=\$8::text/);
  assert.match(sql,/\$5::text=''/);
  assert.match(sql,/AND f\.id=ANY\(\$3::int\[\]\)/);
 });
@@ -30,6 +33,7 @@ test("detalle de ventas pagina líneas antes de enriquecerlas",()=>{
  assert.match(sql,/v\.descuento_linea::numeric/);
  assert.match(sql,/v\.coste_historico::numeric/);
  assert.match(sql,/LIMIT \$6::int OFFSET \$7::int/);
+ assert.match(sql,/fg\.nombre=\$8::text/);
  assert.match(sql,/SELECT \* FROM enriched/);
 });
 test("rechaza esquemas y ordenaciones no validados",()=>{

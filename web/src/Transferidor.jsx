@@ -1,8 +1,9 @@
-import React,{useEffect,useMemo,useState} from "react";
-import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse,LoaderCircle,CheckCircle2,AlertCircle} from "lucide-react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
+import {ArrowLeftRight,ArrowRight,Boxes,ListFilter,RefreshCcw,Warehouse,LoaderCircle,CheckCircle2,AlertCircle,Download,Printer} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {KpiValue} from "./LoadingState.jsx";
+import {downloadTableCSV} from "./tableExport.js";
 import {transferidorCalculating,transferidorWaitingForFirstRows} from "./transferidorLoading.js";
 import "./transferidor.css";
 
@@ -13,9 +14,11 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
  const [origin,setOrigin]=useState(""),[destination,setDestination]=useState("");
  const [search,setSearch]=useState(""),[sort,setSort]=useState({key:"units",direction:"desc"});
  const [filters,setFilters]=useState({});
- const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(50);
+ const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(0);
  const [snapshot,setSnapshot]=useState(null),[loading,setLoading]=useState(true);
  const [requestError,setRequestError]=useState(null),[revision,setRevision]=useState(0);
+ const [exporting,setExporting]=useState(false),[exportError,setExportError]=useState("");
+ const exportController=useRef(null);
  const requestKey=JSON.stringify([clientSlug,vista,pharmacy,origin,destination,search,
   page,pageSize,sort.key,sort.direction,filters,revision]);
  const data=snapshot?.key===requestKey?snapshot.value:null;
@@ -49,7 +52,8 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   };
   setSnapshot(null);setRequestError(null);
   const delay=setTimeout(load,150);
-  return()=>{clearTimeout(delay);clearTimeout(pollTimer);controller.abort()};
+  return()=>{clearTimeout(delay);clearTimeout(pollTimer);controller.abort();
+   exportController.current?.abort();};
  },[requestKey]);
  const inProgress=transferidorCalculating(data?.status);
  const waitingForResults=transferidorWaitingForFirstRows(data,error);
@@ -109,18 +113,50 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
     " días usando la mayor tendencia de ventas entre 7 y 30 días. Solo cuenta el stock físico."}>{number(r.triggerDestination)}</span>},
   {key:"targetDestination",group:"Destino",label:"Objetivo "+targetDays+"d",
    align:"center",searchable:false,value:r=>r.targetDestination,
-   render:r=><span className="fm-transfer-target" title={"Objetivo exigente para "+targetDays+
-    " días: mayor ritmo entre 7 y 30 días. Objetivo intermedio: "+
-    number(r.balancedTargetDestination)+". El reparto protege la seguridad de los orígenes."}>
-    <strong>{number(r.targetDestination)}</strong>
-    <small>Base {number(r.balancedTargetDestination)}{r.extraDestination>0?
-     " · +"+number(r.extraDestination)+" exposición":""}</small>
-   </span>},
+   render:r=><strong title={"Stock objetivo para "+targetDays+
+    " días según el escenario exigente de ventas; el envío propuesto puede ser menor para proteger otros establecimientos."}>
+    {number(r.targetDestination)}
+   </strong>},
   {key:"units",group:"Propuesta",label:"Enviar",align:"center",value:r=>r.units,
    render:r=><strong className="fm-transfer-units" title="Unidades propuestas para trasladar del origen al destino">
     {number(r.units)}
    </strong>}
  ],[minimumDays,targetDays]);
+ const exportCsv=async()=>{
+  if(!data||inProgress||exporting||!data.total)return;
+  setExportError("");setExporting(true);
+  const controller=new AbortController();
+  exportController.current=controller;
+  try{
+   let rows=data.rows||[];
+   if(pageSize!==0){
+    const query=new URLSearchParams({
+     vista,farmacia:pharmacy,origen:origin,destino:destination,buscar:search,
+     orden:sort.key,direccion:sort.direction,pagina:"1",tamano:"0",
+     filtros:JSON.stringify(filters),recalcular:revision?String(revision):""
+    });
+    const response=await fetch("/api/analytics/stock/transferidor?"+query,{
+     credentials:"same-origin",cache:"no-store",signal:controller.signal,
+     headers:{"X-Farmetrica-Cliente":clientSlug}});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok||result.status==="error")
+     throw Error(result.error||"No se pudieron exportar los movimientos.");
+    if(transferidorCalculating(result.status))
+     throw Error("El cálculo ha caducado. Actualiza el Transferidor antes de exportar.");
+    rows=result.rows||[];
+   }
+   if(controller.signal.aborted)return;
+   const fields=columns.filter(c=>c.value);
+   downloadTableCSV("farmetrica-transferencias",
+    fields.map(c=>(c.group?c.group+" · ":"")+c.label),
+    rows.map(r=>fields.map(c=>c.value(r))));
+  }catch(e){
+   if(!controller.signal.aborted)setExportError(e.message);
+  }finally{
+   if(exportController.current===controller)exportController.current=null;
+   if(!controller.signal.aborted)setExporting(false);
+  }
+ };
  return <div className="fm-transferidor">
   <ReportPageHeader title="Transferidor"
    updatedAt={data?.calculatedAt?new Date(data.calculatedAt):null} refreshing={waitingForResults}
@@ -217,9 +253,21 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
   <section className="card fm-transfer-table">
    <div className="fm-transfer-table-title">
     <h2>Propuestas de redistribución</h2>
-    <div className="fm-transfer-table-meta"><span>Mínimo: {number(minimumDays)} días · Reposición: {number(targetDays)} días + exposición</span>
-     <small>Previsión combinada 7/30 días · Solo stock actual · Orígenes protegidos</small></div>
+    <div className="fm-transfer-table-actions">
+     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>window.print()}
+      disabled={inProgress||!data?.total||exporting||pageSize!==0}
+      title={pageSize!==0?"Selecciona Todas para imprimir todas las propuestas":"Imprimir todas las propuestas"}>
+      <Printer size={14} aria-hidden="true"/> Imprimir
+     </button>
+     <button type="button" className="btn btn-secondary btn-sm" onClick={exportCsv}
+      disabled={inProgress||!data?.total||exporting}>
+      {exporting?<LoaderCircle size={14} className="fm-transfer-spinner" aria-hidden="true"/>:
+       <Download size={14} aria-hidden="true"/>}
+      {exporting?"Preparando CSV…":"Exportar CSV"}
+     </button>
+    </div>
    </div>
+   {exportError&&<p role="alert" className="fm-op-message fm-op-error">{exportError}</p>}
    {error&&!data?
     <p className="fm-op-message fm-op-error">No se han podido obtener las propuestas.</p>:
     <div className="fm-transfer-table-frame" aria-busy={waitingForResults}>
@@ -231,6 +279,7 @@ export default function Transferidor({clientSlug,pharmacies=[]}){
        serverFilters={filters} onServerFiltersChange={next=>{setFilters(next);reset()}}
        serverPagination={{page,pageSize,total:data?.total||0,
         onPageChange:setPage,onPageSizeChange:n=>{setPageSize(n);reset()}}}
+       pageSizes={[0,500,1000]}
        showExport={false} loading={false}
        emptyText={data?.available===false?"Sin inventario suficiente.":data?.summary?.movements===0?
         data?.emptyReason||"Sin transferencias propuestas.":"Sin transferencias para estos filtros."}/>

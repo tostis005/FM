@@ -135,7 +135,8 @@ export function parseTransferFilters(query={},pharmacies=[]){
  let filters={};
  try{filters=typeof query.filtros==="string"?JSON.parse(query.filtros):{};}catch{throw Error("Filtros de columnas incorrectos");}
  if(!["todos","envio","recibo"].includes(vista)||
-  [pharmacy,origin,destination].some(x=>x&&!allowed.has(x))||
+  [pharmacy,destination].some(x=>x&&!allowed.has(x))||
+  (origin&&origin!=="almacen"&&!allowed.has(origin))||
   !SORT.has(sort)||!["asc","desc"].includes(direction)||
   !Number.isSafeInteger(page)||page<1||page>100000||![10,25,50,100].includes(size)||
   search.length>100||typeof filters!=="object"||!filters||Array.isArray(filters)||
@@ -150,7 +151,7 @@ export function filterTransferPlan(plan,options){
   if(options.vista==="envio"&&options.pharmacy&&r.originId!==options.pharmacy)return false;
   if(options.vista==="recibo"&&options.pharmacy&&r.destinationId!==options.pharmacy)return false;
   if(options.vista==="todos"&&options.pharmacy&&r.originId!==options.pharmacy&&r.destinationId!==options.pharmacy)return false;
-  if(options.origin&&options.origin!==r.originId)return false;
+  if(options.origin&&options.origin!==r.originId&&!(options.origin==="almacen"&&r.originKind==="almacen"))return false;
   if(options.destination&&options.destination!==r.destinationId)return false;
   if(text&&!norm([r.cn,r.name,r.originName,r.destinationName].join(" ")).includes(text))return false;
   return Object.entries(options.filters).every(([key,filter])=>!filter||norm(r[key]).includes(norm(filter)));
@@ -241,6 +242,16 @@ CROSS JOIN LATERAL jsonb_array_elements(coalesce(l.line->'asignaciones','[]'::js
 WHERE p.cliente_slug=$1 AND p.farmacia_id=ANY($2::int[])
  AND p.estado IN ('borrador','pendiente_aprobacion','aprobado','exportado')
 GROUP BY p.farmacia_id,l.line->>'articulo'`;
+}
+// Snapshot fresco de Picking List. Si falta o caduca no se atribuyen
+// pedidos ficticios: se aplica la reserva conservadora por rotación global.
+export function transferidorPendingWebSQL(){
+ return `SELECT left(btrim(p.cn),6) AS cn,sum(p.quantity)::float8 AS units
+ FROM farmetrica.picking_list_pendientes p
+ JOIN farmetrica.picking_list_fuentes f ON f.cliente_slug=p.cliente_slug
+  AND f.ultima_importacion >= now()-interval '30 minutes'
+ WHERE p.cliente_slug=$1 AND btrim(p.cn)~'^[0-9]{6,7}$'
+ GROUP BY left(btrim(p.cn),6)`;
 }
 export function transferidorCNChunks(rows,maxArticles=700){
  const groups=new Map();
@@ -364,14 +375,24 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
  const started=Date.now();
  try{
   job.status="inventory";
-  const [inventory,policy,{rows:pendingRows}]=await Promise.all([
+  const [inventory,policy,{rows:pendingRows},webPending]=await Promise.all([
    readTransferInventory(pool,schema,slug,ids),
    readTransferidorPolicy(pool,slug,ids),
-   pool.query({text:transferidorPendingSQL(),values:[slug,ids],query_timeout:15000})
+   pool.query({text:transferidorPendingSQL(),values:[slug,ids],query_timeout:15000}),
+   pool.query({text:transferidorPendingWebSQL(),values:[slug],query_timeout:8000})
+    .then(result=>result.rows)
+    .catch(e=>{
+     console.warn("TRANSFERIDOR_PICKING_PENDIENTES",{code:e.code||e.name});
+     return [];
+    })
   ]);
-  const seen=new Set(inventory.map(r=>String(r.pharmacyId)));
+  const seen=new Set(inventory.filter(r=>r.kind!=="almacen").map(r=>String(r.pharmacyId)));
   job.missing=pharmacies.filter(p=>!seen.has(String(p.id)));
-  if(seen.size<2){
+  const whRow=inventory.find(r=>r.kind==="almacen");
+  const warehouseSites=whRow?[{id:String(whRow.pharmacyId),
+   name:whRow.siteName||"Almacén central",establishmentType:"almacen"}]:[];
+  job.warehouseAvailable=warehouseSites.length>0;
+  if(!seen.size||(!warehouseSites.length&&seen.size<2)){
    job.status="complete";
    job.warning=inventory.length?"No hay suficientes referencias comparables entre las farmacias.":
     "No hay artículos de parafarmacia con stock para redistribuir.";
@@ -381,10 +402,12 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
   const chunks=transferidorCNChunks(inventory,350);
   job.progress={done:0,total:chunks.length};
   job.policy=policy;
-  job.analyzed= new Set(inventory.map(r=>r.cn)).size;
+  const supplyPolicy={...policy,webPendingByCn:new Map(webPending.map(row=>[String(row.cn),row.units]))};
+  const allSources=[...pharmacies,...warehouseSites];
+  job.analyzed=new Set(inventory.map(r=>r.cn)).size;
   job.status="calculating";
   for(const entries of chunks)
-   await transferBatch(pool,schema,entries,pharmacies,policy,pending,job);
+   await transferBatch(pool,schema,entries,allSources,supplyPolicy,pending,job);
   job.status=job.failed?"partial":"complete";
   if(job.failed&&!job.plan.products){
    job.status="error";
@@ -417,7 +440,7 @@ function getTransferJob(pool,schema,slug,pharmacies,forceToken=""){
  const job={status:"queued",available:true,plan:{transfers:[],
   skipped:0,products:0,withNeed:0,withSurplus:0},progress:{done:0,total:0},
   policy:{minDays:4,targetDays:7},failed:0,
-  warning:"",missing:[],analyzed:0,
+  warehouseAvailable:false,warning:"",missing:[],analyzed:0,
   createdAt:now,expires:0,error:""};
  transferJobs.set(key,job);
  if(transferJobs.size>20){
@@ -439,9 +462,9 @@ export function setupTransferidor(app,pool,{requireTenant}){
   catch(e){return res.status(400).json({error:e.message})}
   const schema=ctx.client?.schema;
   if(!SCHEMA.test(schema||""))return res.status(400).json({error:"Cliente no válido"});
-  if(pharmacies.length<2)return res.json({available:false,status:"complete",
+  if(pharmacies.length<1)return res.json({available:false,status:"complete",
    rows:[],total:0,summary:{movements:0,units:0,products:0},
-   warning:"Se necesitan dos farmacias para comparar."});
+   warning:"Se necesita una farmacia para calcular transferencias."});
   try{
    const job=getTransferJob(pool,schema,ctx.client.slug,pharmacies,String(req.query.recalcular||""));
    if(job.status==="error")return res.status(503).json({status:"error",error:job.error});
@@ -457,6 +480,7 @@ export function setupTransferidor(app,pool,{requireTenant}){
     ""].filter(Boolean).join(". ")||null;
    res.json({status:job.status,available:job.available,rows:filtered.rows,total:filtered.total,
     page:opts.page,pageSize:opts.size,progress:job.progress,
+    warehouseAvailable:job.warehouseAvailable,
     emptyReason,summary:{movements:plan.transfers.length,
      units:plan.transfers.reduce((sum,r)=>sum+r.units,0),
      filteredUnits:filtered.units,

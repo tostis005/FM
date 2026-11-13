@@ -164,6 +164,7 @@ jobs:
           node check-public-links.mjs
           node --test src/assistantStreamClient.test.js src/profileDraftAccess.test.js
           node --test src/deploymentRecovery.test.js src/userRoleLabel.test.js
+          node --test src/rentabilidadNavigation.test.js
           npm run build
 
   deploy:

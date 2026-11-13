@@ -415,6 +415,7 @@ jobs:
             if curl --silent --fail http://127.0.0.1:4175/promociones >/dev/null; then break; fi
             sleep 1
           done
+          node check-superadmin-proactive-menu.mjs
           node check-master-sources.mjs
           node check-familias-maestro.mjs
           node check-user-modules.mjs

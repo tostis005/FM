@@ -5,7 +5,7 @@ import {
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,
-  PanelLeftClose, PanelLeftOpen, Layers3
+  PanelLeftClose, PanelLeftOpen, Layers3, PackageSearch
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
@@ -189,6 +189,9 @@ function Field({label,children,hint}) {return <label className="field"><span cla
 function FormActions({onCancel,label="Guardar cambios",disabled=false}){return <div className="form-actions"><button className="btn btn-secondary" type="button" onClick={onCancel}>Cancelar</button><button className="btn btn-primary" type="submit" disabled={disabled}><Check size={16}/>{label}</button></div>}
 const NAV=[
  {id:"dashboard",label:"Inicio",icon:LayoutDashboard,module:"dashboard"},
+ // Acceso directo durante la fase de validación, únicamente superadministrador.
+ {id:"alertas-inteligentes",label:"Alertas inteligentes",icon:Bell,module:"acciones",super:true},
+ {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:PackageSearch,module:"stock",super:true},
  {id:"ventas",label:"Ventas",icon:TrendingUp,module:"ventas"},
  {id:"ventas-tickets",label:"Tickets",icon:ClipboardList,module:"ventas",childOf:"ventas"},
  {id:"ventas-devoluciones",label:"Devoluciones y anulaciones",icon:RefreshCcw,module:"ventas",childOf:"ventas"},
@@ -202,7 +205,6 @@ const NAV=[
  {id:"stock",label:"Stock",icon:Package,module:"stock"},
  {id:"stock-historico",label:"Histórico de stock",icon:BarChart3,module:"stock",childOf:"stock"},
   {id:"stock-sin-recepciones",label:"Stock sin recepciones",icon:Clock3,module:"stock",childOf:"stock"},
- {id:"stock-inmovilizado",label:"Stock inmovilizado",icon:Package,module:"stock",childOf:"stock",super:true},
   {id:"stock-transferidor",label:"Transferidor",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"stock-traspasos",label:"Traspasos entre farmacias",icon:ArrowRightLeft,module:"stock",childOf:"stock"},
  {id:"picking-list",label:"Picking List",icon:ClipboardList,module:"stock",childOf:"stock"},
@@ -216,7 +218,6 @@ const NAV=[
  {id:"promociones",label:"Promociones",icon:Tag,module:"promociones"},
  {id:"promociones-objetivos",label:"Nueva campaña",icon:Plus,module:"promociones",childOf:"promociones"},
  {id:"acciones",label:"Trabajo y ahorro",icon:ClipboardList,module:"acciones"},
- {id:"alertas-inteligentes",label:"Alertas inteligentes",icon:Bell,module:"acciones",childOf:"acciones",super:true},
  {id:"oportunidades-seguimiento",label:"Seguimiento",icon:CheckCircle2,module:"acciones",childOf:"acciones"},
  {id:"alertas",label:"Alertas",icon:Bell,module:"acciones"},
  {id:"mi-trabajo",label:"Mi trabajo",icon:ClipboardList,module:"acciones",childOf:"alertas"},

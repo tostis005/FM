@@ -1350,7 +1350,7 @@ function App(){
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles","familias-maestro","ajustes"].includes(item.id)&&role==="gestor");
    if(item.id==="acciones")return canOpenWorkCenter();
    if(item.module)return canOpenSection(item.id)||
-     NAV.some(child=>child.childOf===item.id&&canOpenSection(child.id))||
+     NAV.some(child=>child.childOf===item.id&&DEMO_NAV_IDS.has(child.id)&&canOpenSection(child.id))||
      (item.id==="promociones"&&canOpenSection("seguimiento-global"));
    return true;
  });

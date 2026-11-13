@@ -54,3 +54,64 @@
 .fm-profit-more{display:flex;justify-content:center;padding-top:12px}
 .fm-profit-more button{border:1px solid var(--border,#dce5e0);background:var(--surface,#fff);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:12px;font-weight:650;color:var(--text-muted,#627d6c)}
 .fm-profit-more button:hover{border-color:#77b89e;color:#1b7954}
+
+/* Navegación unificada: sin botones grises que parezcan controles ajenos al producto. */
+.fm-profit-page .fm-profit-tabs{
+ display:flex;gap:24px;padding:0 2px;margin-top:0;
+ border-bottom:1px solid #e3ece8;background:transparent
+}
+.fm-profit-page .fm-profit-tabs button,
+.fm-profit-page .fm-profit-tabs button:hover,
+.fm-profit-page .fm-profit-tabs button.active{
+ appearance:none;border:0;border-bottom:3px solid transparent;border-radius:0;
+ box-shadow:none;background:transparent;min-height:44px;padding:10px 3px 12px;
+ color:#587267;font-size:13px;font-weight:650;outline-offset:3px
+}
+.fm-profit-page .fm-profit-tabs button:hover{color:#167951}
+.fm-profit-page .fm-profit-tabs button.active{
+ color:var(--fm-brand-primary,#12825a);
+ border-bottom-color:var(--fm-brand-primary,#12825a);
+ font-weight:760
+}
+.fm-profit-page .fm-profit-segment{
+ gap:12px;padding:0;background:transparent;border:0;border-radius:0
+}
+.fm-profit-page .fm-profit-segment button,
+.fm-profit-page .fm-profit-segment button.active{
+ padding:6px 1px 7px;border:0;border-bottom:2px solid transparent;
+ border-radius:0;background:transparent;box-shadow:none;
+ color:#577468;font-weight:600;white-space:nowrap
+}
+.fm-profit-page .fm-profit-segment button.active{
+ color:var(--fm-brand-primary,#12825a);
+ border-bottom-color:var(--fm-brand-primary,#12825a);
+ font-weight:750
+}
+.fm-profit-page .fm-unified-filters .fm-period-shortcut{
+ background:#fff;border:1px solid #d8e8de;color:#426e55;
+ box-shadow:none;font-weight:600
+}
+.fm-profit-page .fm-unified-filters .fm-period-shortcut.is-selected{
+ background:#eaf7ef;border-color:#78c6a0;color:#146e48;
+ box-shadow:none
+}
+.fm-profit-page .fm-profit-sort button,
+.fm-profit-page .fm-profit-pagination button,
+.fm-profit-page .fm-profit-more button{
+ background:#fff;border-color:#d9e8e0;color:#286849;
+ box-shadow:none
+}
+.fm-profit-page .fm-profit-panel-heading .btn.btn-secondary{
+ background:#fff;color:#236b4b;border-color:#d9e8e0
+}
+.app-shell[data-tenant-theme="custom"] .fm-profit-page .fm-profit-tabs button.active,
+.app-shell[data-tenant-theme="custom"] .fm-profit-page .fm-profit-segment button.active{
+ color:var(--fm-brand-primary,#12825a);
+ border-bottom-color:var(--fm-brand-primary,#12825a)
+}
+.app-shell[data-tenant-theme="custom"] .fm-profit-page .fm-period-shortcut.is-selected{
+ color:var(--fm-brand-primary,#12825a);
+ border-color:var(--fm-brand-border,#78c6a0);
+ background:var(--fm-brand-subtle,#eaf7ef)
+}
+@media(max-width:700px){.fm-profit-page .fm-profit-tabs{gap:15px}}

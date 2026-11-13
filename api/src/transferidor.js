@@ -79,20 +79,23 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
    // La reserva central protege a la vez el canal web y la reposición de tiendas.
    // No se confunde venta de farmacia con salida del almacén; la primera se
    // utiliza solo como previsión conservadora de reposiciones.
-   const retailDaily=retail.reduce((sum,site)=>
-    sum+Math.max(0,(site.visible7||0)/7,(site.visible30||0)/30),0);
-   const webDaily=Math.max(0,(warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
+   // Ventas de todas las farmacias NO son envíos del almacén.
+   // Una cobertura de emergencia para la farmacia de mayor rotación
+   // evita atribuir al almacén la demanda de toda la red.
+   const busiestStoreDaily=Math.max(0,...retail.map(site=>
+    Math.max(0,(site.visible7||0)/7,(site.visible30||0)/30)));
+   const warehouseDaily=Math.max(0,(warehouse.visible7||0)/7,(warehouse.visible30||0)/30);
    const backlog=whole(webPending.get(product.cn)||0);
-   // Si no existe histórico web fiable, el backlog por sí solo no sustituye
-   // la previsión: conservar también cobertura proporcional a las tiendas.
-   const webReserve=Math.max(whole(webDaily*config.targetDays),backlog,
-    webDaily===0?whole(retailDaily*config.targetDays):0);
-   const replenishmentReserve=whole(retailDaily*config.minDays);
+   const webEstimate=warehouseDaily===0;
+   const webReserve=Math.max(whole(warehouseDaily*config.targetDays),backlog,
+    webEstimate?whole(busiestStoreDaily*config.targetDays):0);
+   const replenishmentReserve=whole(busiestStoreDaily*config.minDays);
    warehouse.target=webReserve+replenishmentReserve;
    warehouse.threshold=warehouse.target;
    warehouse.surplus=Math.max(0,Math.floor(warehouse.stock-warehouse.target+1e-9));
    warehouse.webReserve=webReserve;
    warehouse.replenishmentReserve=replenishmentReserve;
+   warehouse.webEstimate=webEstimate;
   }
   if(sites.some(s=>s.need>0))withNeed++;
   if(sites.some(s=>s.surplus>0))withSurplus++;
@@ -113,6 +116,7 @@ export function buildGlobalTransfers(rows,pharmacies,policy={minDays:4,targetDay
      originKind:source.isWarehouse?"almacen":"farmacia",
      warehouseWebReserve:source.isWarehouse?source.webReserve:null,
      warehousePharmacyReserve:source.isWarehouse?source.replenishmentReserve:null,
+     warehouseWebEstimate:source.isWarehouse?source.webEstimate:null,
      sales7Origin:source.visible7,sales30Origin:source.visible30,
      stockDestination:target.stock,pendingDestination:target.ordered,
      sales7Destination:target.visible7,sales30Destination:target.visible30,
@@ -144,7 +148,7 @@ export function parseTransferFilters(query={},pharmacies=[]){
   search.length>100||typeof filters!=="object"||!filters||Array.isArray(filters)||
   Object.entries(filters).some(([k,v])=>!FILTERS.has(k)||typeof v!=="string"||v.length>100))
   throw Error("Revisa los filtros, la farmacia o la paginación");
- return {vista,pharmacy,origin,destination,sort,direction,page,size,search,filters};
+ return {vista:pharmacy?vista:"todos",pharmacy,origin,destination,sort,direction,page,size,search,filters};
 }
 export function filterTransferPlan(plan,options){
  const norm=x=>String(x??"").toLocaleLowerCase("es");
@@ -373,6 +377,19 @@ async function transferBatch(pool,schema,entries,pharmacies,policy,pending,job){
   throw e;
  }
 }
+// Un CN aparece en un único lote: no se duplica ningún saldo.
+export async function processTransferChunks(chunks,run,{concurrency=2}={}){
+ const workers=Math.min(Math.max(1,Math.trunc(concurrency)||1),chunks.length);
+ let cursor=0;
+ const outcome=await Promise.allSettled(Array.from({length:workers},async()=>{
+  while(cursor<chunks.length){
+   const current=chunks[cursor++];
+   await run(current);
+  }
+ }));
+ const failure=outcome.find(result=>result.status==="rejected");
+ if(failure)throw failure.reason;
+}
 async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
  const started=Date.now();
  try{
@@ -408,8 +425,10 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
   const allSources=[...pharmacies,...warehouseSites];
   job.analyzed=new Set(inventory.map(r=>r.cn)).size;
   job.status="calculating";
-  for(const entries of chunks)
-   await transferBatch(pool,schema,entries,allSources,supplyPolicy,pending,job);
+  await processTransferChunks(chunks,entries=>
+   transferBatch(pool,schema,entries,allSources,supplyPolicy,pending,job),{
+    concurrency:typeof pool.connect==="function"&&typeof pool.release!=="function"?2:1
+   });
   job.status=job.failed?"partial":"complete";
   if(job.failed&&!job.plan.products){
    job.status="error";
@@ -427,7 +446,7 @@ async function runTransferJob(pool,schema,slug,ids,pharmacies,job){
    "La consulta ha agotado el tiempo disponible. Revisa los índices de artículos y ventas.":
    "No se pudo calcular el Transferidor.";
   console.error("TRANSFERIDOR_JOB",JSON.stringify({code:e.code||e.name||"QUERY_ERROR"}));
- }finally{job.expires=Date.now()+TRANSFER_TTL}
+ }finally{job.finishedAt=Date.now();job.expires=Date.now()+TRANSFER_TTL}
 }
 function getTransferJob(pool,schema,slug,pharmacies,forceToken=""){
  const ids=pharmacies.map(p=>Number(p.id)).sort((a,b)=>a-b);
@@ -443,7 +462,7 @@ function getTransferJob(pool,schema,slug,pharmacies,forceToken=""){
   skipped:0,products:0,withNeed:0,withSurplus:0},progress:{done:0,total:0},
   policy:{minDays:4,targetDays:7},failed:0,
   warehouseAvailable:false,warning:"",missing:[],analyzed:0,
-  createdAt:now,expires:0,error:""};
+  createdAt:now,finishedAt:0,expires:0,error:""};
  transferJobs.set(key,job);
  if(transferJobs.size>20){
   for(const [k,v] of transferJobs){
@@ -482,6 +501,7 @@ export function setupTransferidor(app,pool,{requireTenant}){
     ""].filter(Boolean).join(". ")||null;
    res.json({status:job.status,available:job.available,rows:filtered.rows,total:filtered.total,
     page:opts.page,pageSize:opts.size,progress:job.progress,
+    elapsedMs:(job.finishedAt||Date.now())-job.createdAt,
     warehouseAvailable:job.warehouseAvailable,
     emptyReason,summary:{movements:plan.transfers.length,
      units:plan.transfers.reduce((sum,r)=>sum+r.units,0),

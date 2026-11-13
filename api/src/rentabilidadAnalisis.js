@@ -83,7 +83,13 @@ function enrichedCTE(schema,columns,view){
   " WHERE v.fecha >= $1::date AND v.fecha < $2::date+interval '1 day'",
   " AND ($5::text='' OR v.articulo_id ILIKE '%'||$5||'%' OR",
   " coalesce(v.numero_ticket,'') ILIKE '%'||$5||'%' OR",
-  " v.documento_id ILIKE '%'||$5||'%')",
+  " v.documento_id ILIKE '%'||$5||'%' OR EXISTS (",
+  " SELECT 1 FROM "+q+".articulos search_article",
+  " WHERE upper(btrim(search_article.farmacia_codigo))=upper(btrim(v.farmacia_codigo))",
+  " AND search_article.origen_id=v.articulo_id",
+  " AND (search_article.nombre ILIKE '%'||$5||'%'"+
+   (columns.has("codigo_nacional")?" OR search_article.codigo_nacional ILIKE '%'||$5||'%'":"")+")",
+  " ))",
   " ORDER BY v.fecha DESC,v.documento_id DESC,v.linea_id DESC",
   " LIMIT $6::int OFFSET $7::int",
   ")"
@@ -139,7 +145,7 @@ export function buildProfitabilitySQL(schema,columns,view,order="sales",directio
   "SELECT *,count(*) OVER()::int AS total",
   " FROM enriched WHERE ($5::text='' OR cn ILIKE '%'||$5||'%'",
   " OR name ILIKE '%'||$5||'%' OR family ILIKE '%'||$5||'%'",
-  " OR \"pharmacyName\" ILIKE '%'||$5||'%')",
+  " OR \"pharmacyName\" ILIKE '%'||$5||'%' OR laboratory ILIKE '%'||$5||'%')",
   " ORDER BY "+SORT[order]+" "+direction.toUpperCase()+" NULLS LAST,cn,\"pharmacyId\"",
   " LIMIT $6::int OFFSET $7::int"
  ].join("\n");

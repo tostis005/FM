@@ -224,7 +224,8 @@ export function parseTransferFilters(query={},pharmacies=[]){
  const vista=String(query.vista||"todos");
  const pharmacy=String(query.farmacia||""),origin=String(query.origen||""),destination=String(query.destino||"");
  const sort=String(query.orden||"units"),direction=String(query.direccion||"desc");
- const page=Number(query.pagina||1),size=Number(query.tamano||50);
+ // tamano=0 significa todas las propuestas (vista predeterminada).
+ const page=Number(query.pagina??1),size=Number(query.tamano??0);
  const search=String(query.buscar||"").trim();
  let filters={};
  try{filters=typeof query.filtros==="string"?JSON.parse(query.filtros):{};}catch{throw Error("Filtros de columnas incorrectos");}
@@ -232,7 +233,8 @@ export function parseTransferFilters(query={},pharmacies=[]){
   [pharmacy,destination].some(x=>x&&!allowed.has(x))||
   (origin&&origin!=="almacen"&&!allowed.has(origin))||
   !SORT.has(sort)||!["asc","desc"].includes(direction)||
-  !Number.isSafeInteger(page)||page<1||page>100000||![10,25,50,100].includes(size)||
+  !Number.isSafeInteger(page)||page<1||page>100000||![0,10,25,50,100,500,1000].includes(size)||
+  (size===0&&page!==1)||
   search.length>100||typeof filters!=="object"||!filters||Array.isArray(filters)||
   Object.entries(filters).some(([k,v])=>!FILTERS.has(k)||typeof v!=="string"||v.length>100))
   throw Error("Revisa los filtros, la farmacia o la paginación");
@@ -256,7 +258,8 @@ export function filterTransferPlan(plan,options){
   const cmp=typeof x==="number"&&typeof y==="number"?x-y:stable(x,y);
   return factor*cmp||stable(a.cn,b.cn)||stable(a.originId,b.originId)||stable(a.destinationId,b.destinationId);
  });
- return {rows:result.slice((options.page-1)*options.size,options.page*options.size),
+ return {rows:options.size===0?result:
+  result.slice((options.page-1)*options.size,options.page*options.size),
   total:result.length,units:result.reduce((sum,r)=>sum+r.units,0)};
 }
 // Identidad entre farmacias por CN comercial. Ventas y pedidos usan el IdArticu local.

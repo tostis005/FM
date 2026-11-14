@@ -92,6 +92,11 @@ export function setupDemoClients(app,pool,{requireSuperadmin}){
    await db.query(`INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado)
      SELECT $1,clave,clave=ANY($2::text[]) FROM farmetrica.modulos
      ON CONFLICT(cliente_slug,modulo_clave) DO NOTHING`,[slug,DEMO_MODULES]);
+   // Una demo nueva necesita sus propios maestros y configuraciones antes de
+   // estar disponible: transacción única, sin copiar ventas ni recepciones.
+   await db.query("SET LOCAL statement_timeout = '180s'");
+   await db.query({text:"SELECT farmetrica.inicializar_maestros_demo($1)",
+    values:[slug],query_timeout:185000});
    await db.query("COMMIT");
    return res.status(201).json({slug:inserted[0].slug,name,sourceSlug,
      schema:slug,demo:true,readOnly:true,pharmacies:count[0].n,

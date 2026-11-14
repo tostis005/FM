@@ -20,6 +20,9 @@ export function prepareDemoPharmacyMapping(pharmacies,{scope,sourcePharmacyId=nu
  }
  // Este mapa es SOLO del provisionador privado. Nunca incluir IDs/códigos de
  // origen en la API pública, el CSV ni los maestros visibles de la demo.
+ const sourceCodes=selected.map(p=>String(p.databaseCode||p.sourceCode||'').trim().toUpperCase());
+ if(sourceCodes.some(code=>!code) || new Set(sourceCodes).size!==sourceCodes.length)
+  throw new TypeError('Códigos ERP de origen ausentes o duplicados');
  return selected.map((p,i)=>({
   sourcePharmacyId:Number(p.id),
   sourceCode:String(p.databaseCode||p.sourceCode||'').trim().toUpperCase(),
@@ -34,6 +37,7 @@ export function validateDemoActivation(input){
     !['multifarmacia','monofarmacia'].includes(input.scope) ||
     input.storage!=='base_independiente' ||
     !ALIAS.test(input.connectionAlias||'') ||
+    !ALIAS.test(input.sourceConnectionAlias||'') ||
     input.connectionAlias===input.sourceConnectionAlias ||
     input.anonymizationAuditPassed!==true ||
     !Number.isSafeInteger(input.anonymizationVersion) ||

@@ -76,7 +76,8 @@ export function proactiveSalesSliceSQL(schema){
  return [
   'SELECT l.articulo_origen_id::text AS "articleId",',
   " sum("+net+")::float8 AS units,",
-  " sum(CASE WHEN h.fecha>=$4::date THEN "+net+" ELSE 0 END)::float8 AS \"units30\"",
+  " sum(CASE WHEN h.fecha>=$4::date THEN "+net+" ELSE 0 END)::float8 AS \"units30\",",
+  " to_char(max(h.fecha) FILTER(WHERE l.cantidad>0 AND l.devuelta IS NOT TRUE),\'YYYY-MM-DD\') AS \"lastSaleDate\"",
   " FROM "+q+".fm_ventas_cabeceras h JOIN "+q+".fm_ventas_lineas l",
   " ON l.farmacia_codigo=h.farmacia_codigo AND l.sistema_origen=h.sistema_origen",
   " AND l.documento_id=h.documento_id",
@@ -89,6 +90,33 @@ export function proactiveSalesSliceSQL(schema){
   " GROUP BY l.articulo_origen_id"
  ].join("\n");
 }
+// Última venta efectiva anterior al período de análisis, no una devolución.
+// Se consulta por lotes de referencias inmovilizadas; nunca es necesaria para
+// decidir si una referencia está inmovilizada y no bloquea el listado principal.
+export function proactiveLastSaleSQL(schema){
+ if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
+ const q='"'+schema+'"';
+ return [
+  'WITH codes AS (SELECT DISTINCT v.farmacia_codigo',
+  ' FROM '+q+'.fm_ventas_cabeceras v',
+  ' WHERE upper(btrim(v.farmacia_codigo))=$1::text',
+  ' AND v.lineas_completas AND NOT v.eliminado_logicamente)',
+  ' SELECT l.articulo_origen_id::text AS "articleId",',
+  ' to_char(max(h.fecha),\'YYYY-MM-DD\') AS "lastSaleDate"',
+  ' FROM codes c JOIN '+q+'.fm_ventas_lineas l',
+  ' ON l.farmacia_codigo=c.farmacia_codigo',
+  ' JOIN '+q+'.fm_ventas_cabeceras h',
+  ' ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen',
+  ' AND h.documento_id=l.documento_id',
+  ' WHERE 1=1',
+  ' AND l.articulo_origen_id=ANY($2::text[]) AND h.fecha<$3::date',
+  ' AND l.cantidad>0 AND l.devuelta IS NOT TRUE',
+  ' AND h.lineas_completas AND NOT h.eliminado_logicamente',
+  ' AND NOT l.eliminada_logicamente AND coalesce(l.anulada,false)=false',
+  " AND lower(btrim(h.estado)) NOT IN ('anulado','anulada','cancelado','cancelada','void')",
+  ' GROUP BY l.articulo_origen_id'
+ ].join("\n");
+}
 export function classifyProactiveStock(stock,sale,days){
  const unitsPeriod=Math.max(0,number(sale?.units));
  const units30=Math.max(0,number(sale?.units30));
@@ -98,7 +126,9 @@ export function classifyProactiveStock(stock,sale,days){
  const alertType=units30>0&&number(stock.stock)*30/units30<=7?"rotura":
   unitsPeriod<=0?"sin_ventas":
   number(stock.stock)*days/unitsPeriod>=120?"exceso":null;
- return {...stock,unitsPeriod,units30,coverDays,capital,alertType};
+ return {...stock,unitsPeriod,units30,coverDays,capital,alertType,
+  lastSaleDate:sale?.lastSaleDate||null,
+  lastSaleStatus:sale?.lastSaleDate?"found":"pending"};
 }
 const sortProactive=(rows,mode)=>rows.sort((a,b)=>{
  const order={rotura:0,sin_ventas:1,exceso:2};
@@ -126,7 +156,10 @@ async function salesSlice(pool,sql,code,from,to,last30,totals,job){
   const response=await pool.query({text:sql,values:[code,from,to,last30],query_timeout:23000});
   for(const r of response.rows){
    const key=String(r.articleId),prev=totals.get(key)||{units:0,units30:0};
-   prev.units+=number(r.units);prev.units30+=number(r.units30);totals.set(key,prev);
+   prev.units+=number(r.units);prev.units30+=number(r.units30);
+   const date=r.lastSaleDate?String(r.lastSaleDate).slice(0,10):null;
+   if(date&&(!prev.lastSaleDate||date>prev.lastSaleDate))prev.lastSaleDate=date;
+   totals.set(key,prev);
   }
   job.progress.done++;
  }catch(e){
@@ -170,6 +203,7 @@ async function runJob(pool,job){
   const last30=shift(madridDay(),-29);
   job.progress.total=chosen.length*(spans.length+1);
   const inventorySQL=proactiveInventorySQL(f.schema),salesSQL=proactiveSalesSliceSQL(f.schema);
+  const historyBatches=[];
   for(const site of chosen){
    try{
     const inventory=await pool.query({text:inventorySQL,
@@ -193,6 +227,9 @@ async function runJob(pool,job){
     }
     job.rows.alertas.push(...alertRows);
     job.rows.inmovilizado.push(...idleRows);
+    const pendingDates=idleRows.filter(r=>r.lastSaleStatus==="pending");
+    for(let start=0;start<pendingDates.length;start+=150)
+     historyBatches.push({code:site.code,items:pendingDates.slice(start,start+150)});
     sortProactive(job.rows.alertas,"alertas");
     sortProactive(job.rows.inmovilizado,"inmovilizado");
     job.completedSites++;
@@ -203,6 +240,32 @@ async function runJob(pool,job){
     job.excluded.push({pharmacyId:String(site.id),name:site.nombre,
      reason:timeout(e)?"La consulta de ventas de esta farmacia superó el límite de tiempo":
       "No se pudo verificar todo el período de ventas"});
+   }
+  }
+  // Enriquecer fechas de venta anteriores a los 90/180 días. Los resultados
+  // principales ya están publicados para que el usuario pueda consultarlos.
+  if(historyBatches.length){
+   job.status="dates";job.progress.total+=historyBatches.length;
+   const lastSaleSQL=proactiveLastSaleSQL(f.schema);
+   const startDate=shift(madridDay(),1-f.days);
+   for(const batch of historyBatches){
+    try{
+     const result=await pool.query({text:lastSaleSQL,
+      values:[batch.code,batch.items.map(r=>String(r.articleId)),startDate],
+      query_timeout:22000});
+     const dates=new Map(result.rows.map(r=>[String(r.articleId),
+      r.lastSaleDate?String(r.lastSaleDate).slice(0,10):null]));
+     for(const row of batch.items){
+      row.lastSaleDate=dates.get(String(row.articleId))||null;
+      row.lastSaleStatus=row.lastSaleDate?"found":"not_found";
+     }
+    }catch(e){
+     job.dateIncomplete+=batch.items.length;
+     for(const row of batch.items)row.lastSaleStatus="unavailable";
+     console.warn("GESTION_PROACTIVA_ULTIMA_VENTA",JSON.stringify({
+      code:e.code||e.name,items:batch.items.length,slug:f.slug
+     }));
+    }finally{job.progress.done++;}
    }
   }
   job.status=job.completedSites===0?"unavailable":job.excluded.length?"partial":"complete";
@@ -236,7 +299,8 @@ export function getProactiveJob(pool,filters){
  const key=f.refresh?base+"|"+f.refresh:base;
  if(jobs.has(key))return jobs.get(key);
  const job={status:"queued",message:"",filters:f,rows:{alertas:[],inmovilizado:[]},
-  progress:{done:0,total:0},excluded:[],completedSites:0,createdAt:now,expires:0};
+  progress:{done:0,total:0},excluded:[],dateIncomplete:0,
+  completedSites:0,createdAt:now,expires:0};
  jobs.set(key,job);queue.push({pool,job});pump(pool);
  return job;
 }
@@ -250,7 +314,8 @@ export function proactiveJobResponse(job,f){
   summary:{valuedSubtotal:round(valued.reduce((n,r)=>n+r.capital,0),2),
    valuedCount:valued.length,stockUnits:rows.reduce((n,r)=>n+number(r.stock),0),
    riskCount:rows.filter(r=>r.alertType==="rotura").length},
-  excluded:job.excluded,message:job.message||null,
+  excluded:job.excluded,dateIncomplete:job.dateIncomplete||0,
+  message:job.message||null,
   rows:rows.slice((f.page-1)*f.size,f.page*f.size)};
 }
 export function setupProactiveStock(app,pool,{requireTenant}){

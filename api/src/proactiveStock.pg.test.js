@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
 import {proactiveInventorySQL,proactiveSalesSliceSQL,proactiveCoverageSQL,
- classifyProactiveStock} from "./proactiveStock.js";
+ proactiveLastSaleSQL,classifyProactiveStock} from "./proactiveStock.js";
 
 test("PostgreSQL: inventario y ventas troceadas consultan documentos reales, sin escrituras",{
  skip:!process.env.TEST_DB_URL
@@ -20,6 +20,13 @@ test("PostgreSQL: inventario y ventas troceadas consultan documentos reales, sin
   for(const row of sales.rows){
    assert.equal(typeof row.articleId,"string");
    assert.ok(Number.isFinite(Number(row.units)));
+  }
+  const history=await pool.query({text:proactiveLastSaleSQL("ampedia"),
+   values:["ABA",["A-00001","R1","R2"],"2026-10-01"],query_timeout:20000});
+  assert.ok(Array.isArray(history.rows));
+  for(const row of history.rows){
+   assert.equal(typeof row.articleId,"string");
+   assert.ok(row.lastSaleDate!=null);
   }
   for(const row of inventory.rows.slice(0,5)){
    const signal=classifyProactiveStock(row,null,90);

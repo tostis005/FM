@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
  demoLaboratoryIdsFromSnapshot,
  demoSupplierCNFromSnapshot,
- demoAllLaboratoryCNFromSnapshot
+ demoAllLaboratoryCNFromSnapshot,
+ demoAgendaLaboratoryCounts
 } from "./demoPreparadorSnapshot.js";
 
 const ctx={client:{slug:"demo_individual",schema:"demo_individual",demo:true},
@@ -20,6 +21,7 @@ function fakePool({ready=true}={}){
   if(text.includes("FROM farmetrica.preparador_ultima_recepcion_estado"))
    return {rows:ready?[{present:1}]:[]};
   if(text.includes("SELECT DISTINCT demo.id"))return {rows:[{lab_id:"9001"}]};
+  if(text.includes("count(*)::int AS cn"))return {rows:[{lab_id:"9001",cn:7}]};
   if(text.includes("WHERE cache.cliente_slug=$1 AND demo.id=$3"))
    return {rows:[{cn:"654321",nombre:"Articulo",excluded:false}]};
   if(text.includes("SELECT demo.id::text AS lab_id"))
@@ -53,4 +55,12 @@ test("si no hay snapshot en origen no se inventa catálogo de pedidos",async()=>
  const {pool}=fakePool({ready:false});
  assert.equal(await demoLaboratoryIdsFromSnapshot(pool,ctx,[42]),null);
  assert.equal(await demoSupplierCNFromSnapshot(pool,ctx,[42],"9001"),null);
+});
+
+test("la agenda de cada demo usa el recuento real limitado a sus farmacias",async()=>{
+ const {pool,calls}=fakePool();
+ const counts=await demoAgendaLaboratoryCounts(pool,ctx,[42]);
+ assert.equal(counts.get("9001"),7);
+ assert.deepEqual(calls.at(-1).values,["ampedia","demo_individual",[1]]);
+ assert.match(calls.at(-1).text,/GROUP BY demo\.id/);
 });

@@ -64,6 +64,16 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
    AND f.tipo_establecimiento='almacen'
    AND upper(btrim(f.codigo_origen))='ALMACEN'
    AND cardinality($2::int[])>0
+ ), snapshot_origin AS (
+  SELECT coalesce(c.demo_origen_slug,c.slug) AS slug,
+    coalesce(origin_lab.id,demo_lab.id) AS lab_id
+  FROM farmetrica.clientes c
+  JOIN farmetrica.proveedores_unificados demo_lab
+   ON demo_lab.cliente_slug=c.slug AND demo_lab.id=$3::bigint
+  LEFT JOIN farmetrica.proveedores_unificados origin_lab
+   ON origin_lab.cliente_slug=c.demo_origen_slug
+    AND origin_lab.clave_unificada=demo_lab.clave_unificada
+  WHERE c.slug=$1
  ), aliases AS (
   -- Identidad: código proveedor de Farmatic + farmacia, no nombre comercial.
   SELECT DISTINCT c.id AS pharmacy_id,c.code,${normalizeCode("ua.codigo_origen")} AS supplier
@@ -101,8 +111,9 @@ export async function readSupplierMasterCatalogue(pool,ctx,{id,pharmacies,type,s
   -- La última recepción directa válida prevalece sobre la ficha habitual.
   AND NOT EXISTS (
    SELECT 1 FROM farmetrica.preparador_ultima_recepcion_cache winner
-   WHERE winner.cliente_slug=$1 AND winner.cn=matched.cn
-    AND winner.lab_id<>$3::bigint
+   CROSS JOIN snapshot_origin original
+   WHERE winner.cliente_slug=original.slug AND winner.cn=matched.cn
+    AND winner.lab_id<>original.lab_id
   )
   AND (CASE WHEN cn IS NOT NULL AND left(cn,6)::integer>=400000
    THEN 'medicacion' ELSE 'parafarmacia' END)=$4

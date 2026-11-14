@@ -68,6 +68,15 @@ BEGIN
   END IF;
  END IF;
 
+ -- Si una demo antigua había copiado el almacén como farmacia, ocultarlo
+ -- solamente en esa demo. El origen real no se modifica.
+ UPDATE farmetrica.farmacias f
+ SET tipo_establecimiento='almacen',activo=false,actualizado_en=now()
+ FROM farmetrica.clientes c
+ WHERE f.cliente_slug=c.slug AND c.demo_origen_slug IS NOT NULL
+   AND upper(btrim(f.codigo_origen))='ALMACEN'
+   AND (f.tipo_establecimiento<>'almacen' OR f.activo=true);
+
  -- Reparación aditiva de las demos creadas con versiones antiguas.
  -- No crear vistas de tablas de configuraciones/promociones ni tocar entidades propias.
  FOR item IN SELECT d.slug,d.esquema_datos AS demo_schema,s.esquema_datos AS data_schema

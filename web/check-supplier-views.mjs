@@ -84,7 +84,14 @@ try{
  await page.waitForFunction(()=>document.querySelector(".fm-supplier-summary-item strong")?.textContent==="5",null,{timeout:10000});
  await page.getByRole("tab",{name:/Laboratorios/}).click();
  assert.equal(await page.getByRole("button",{name:/Unificación de laboratorios/}).count(),0);
- await page.getByText("Laboratorios Alfa SA").first().waitFor();
+ try{
+  await page.locator(".fm-supplier-master-list .fm-master-name-link")
+   .filter({hasText:"Laboratorios Alfa SA"}).first().waitFor({timeout:12000});
+ }catch(error){
+  console.error("Diagnóstico maestro:",(await page.locator(".fm-supplier-master-list")
+   .innerText()).slice(0,2500),"errores",errors);
+  throw error;
+ }
  assert.equal(await page.getByRole("combobox",{name:/Frecuencia de Laboratorios Alfa SA/}).count(),1);
  await page.getByRole("combobox",{name:/Frecuencia de Laboratorios Alfa SA/}).selectOption("3");
  await page.getByText("Frecuencia actualizada").waitFor();

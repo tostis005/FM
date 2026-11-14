@@ -172,7 +172,7 @@ test("última venta histórica se asigna solo a la referencia de la farmacia, si
  assert.equal(historicalQueries,1);
  const result=proactiveJobResponse(job,f);
  assert.deepEqual(result.rows.map(r=>[r.articleId,r.lastSaleDate,r.lastSaleStatus]),[
-  ["R2",null,"not_found"],["R1","2025-02-21","found"]
+  ["R1","2025-02-21","found"],["R2",null,"not_found"]
  ]);
  assert.equal(result.dateIncomplete,0);
 });

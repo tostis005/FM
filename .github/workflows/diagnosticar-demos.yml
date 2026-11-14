@@ -160,3 +160,48 @@ jobs:
           FROM farmetrica.clientes c WHERE c.slug IN('ampedia','demo_farmetrica','demo_individual');
           COMMIT;
           SQL
+
+      - name: Comprobar la matriz real del preparador de Demo Individual
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T api node --input-type=module' <<'JS'
+          import pg from "pg";
+          import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
+          import {pharmacyDataCodeSQL} from "./src/pharmacyCodes.js";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,
+            connectionTimeoutMillis:5000,statement_timeout:35000,query_timeout:38000});
+          const db=await pool.connect();
+          try{
+           await db.query("BEGIN READ ONLY");
+           await db.query("SET LOCAL statement_timeout='30s'");
+           for(const slug of ["demo_individual","demo_farmetrica"]){
+            const {rows:ph}=await db.query({
+             text:"SELECT id::int,codigo_origen FROM farmetrica.farmacias "+
+              "WHERE cliente_slug=$1 AND activo AND tipo_establecimiento='farmacia' ORDER BY id LIMIT 1",
+             values:[slug],query_timeout:3000});
+            if(!ph.length)throw Error(slug+": no active pharmacy");
+            const code=ph[0].codigo_origen==="POL"?"VAL":ph[0].codigo_origen;
+            const {rows:sample}=await db.query({text:
+             'SELECT codigo_nacional AS cn FROM "'+slug+'".articulos WHERE farmacia_codigo=$1 '+
+             "AND codigo_nacional ~ '^[0-9]{6,7}$' AND stock_actual>0 LIMIT 1",
+             values:[code],query_timeout:8000});
+            if(!sample.length)throw Error(slug+": no matching article");
+            const cn=String(sample[0].cn),type=Number(cn.slice(0,6))>=400000?"medicacion":"parafarmacia";
+            const ctx={client:{slug,schema:slug,demo:true},pharmacies:[{id:String(ph[0].id)}]};
+            const start=Date.now();
+            const matrix=await readLaboratoryOrderMatrix(db,ctx,{
+             key:"P:1",pharmacies:[ph[0].id],type,from:"2026-09-01",to:"2026-11-14",
+             prefetchedRows:[{referencia:cn,cn,nombre:"Diagnóstico"}]});
+            const m=matrix.rows[0]?.byPharmacy?.[String(ph[0].id)];
+            console.info("DEMO_MATRIX",JSON.stringify({slug,type,rows:matrix.rows.length,
+             metricsUnavailable:matrix.metricsUnavailable,errorCode:matrix.metricsErrorCode||null,
+             hasMetrics:Boolean(m),stockDefined:m?.stock!==undefined,
+             unitsDefined:m?.unitsPeriod!==undefined,durationMs:Date.now()-start}));
+           }
+           await db.query("ROLLBACK");
+          }catch(e){await db.query("ROLLBACK").catch(()=>{});console.error("DEMO_MATRIX_ERROR",e.code||e.name,e.message);process.exitCode=1}
+          finally{db.release();await pool.end()}
+          JS

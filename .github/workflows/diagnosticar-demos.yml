@@ -185,9 +185,17 @@ jobs:
             if(!ph.length)throw Error(slug+": no active pharmacy");
             const code=ph[0].codigo_origen==="POL"?"VAL":ph[0].codigo_origen;
             const {rows:sample}=await db.query({text:
-             'SELECT codigo_nacional AS cn FROM "'+slug+'".articulos WHERE farmacia_codigo=$1 '+
-             "AND codigo_nacional ~ '^[0-9]{6,7}$' LIMIT 1",
+             'SELECT coalesce(nullif(btrim(codigo_nacional),\'\'),nullif(btrim(origen_id::text),\'\')) AS cn '+
+             'FROM "'+slug+'".articulos WHERE upper(btrim(farmacia_codigo))=upper(btrim($1)) '+
+             "AND (codigo_nacional ~ '^[0-9]{6,7}$' OR origen_id::text ~ '^[0-9]{6,7}$') LIMIT 1",
              values:[code],query_timeout:8000});
+            const {rows:scopeCheck}=await db.query({text:
+             'SELECT count(*)::int AS all_articles, '+
+             'count(*) FILTER(WHERE codigo_nacional ~ \'^[0-9]{6,7}$\')::int AS cn_articles, '+
+             'count(*) FILTER(WHERE origen_id::text ~ \'^[0-9]{6,7}$\')::int AS id_articles '+
+             'FROM "'+slug+'".articulos WHERE upper(btrim(farmacia_codigo))=upper(btrim($1))',
+             values:[code],query_timeout:16000});
+            console.info("DEMO_ARTICLE_SCOPE",JSON.stringify({slug,...scopeCheck[0]}));
             if(!sample.length)throw Error(slug+": no article with 6/7 digit CN");
             const {rows:overview}=await db.query({text:
              'SELECT count(*)::int AS products,count(*) FILTER(WHERE stock_actual>0)::int AS positive '+

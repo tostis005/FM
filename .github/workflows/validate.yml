@@ -40,7 +40,7 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
-          node --test api/src/tenantPharmacyScope.test.js api/src/demoPresentation.test.js api/src/pharmacyCodes.test.js
+          node --test api/src/tenantPharmacyScope.test.js api/src/demoPresentation.test.js api/src/pharmacyCodes.test.js api/src/demoClients.test.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js

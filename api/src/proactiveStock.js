@@ -97,12 +97,18 @@ export function proactiveLastSaleSQL(schema){
  if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
  const q='"'+schema+'"';
  return [
-  'SELECT l.articulo_origen_id::text AS "articleId",',
+  'WITH codes AS (SELECT DISTINCT v.farmacia_codigo',
+  ' FROM '+q+'.fm_ventas_cabeceras v',
+  ' WHERE upper(btrim(v.farmacia_codigo))=$1::text',
+  ' AND v.lineas_completas AND NOT v.eliminado_logicamente)',
+  ' SELECT l.articulo_origen_id::text AS "articleId",',
   ' max(h.fecha::date) AS "lastSaleDate"',
-  ' FROM '+q+'.fm_ventas_lineas l JOIN '+q+'.fm_ventas_cabeceras h',
+  ' FROM codes c JOIN '+q+'.fm_ventas_lineas l',
+  ' ON l.farmacia_codigo=c.farmacia_codigo',
+  ' JOIN '+q+'.fm_ventas_cabeceras h',
   ' ON h.farmacia_codigo=l.farmacia_codigo AND h.sistema_origen=l.sistema_origen',
   ' AND h.documento_id=l.documento_id',
-  ' WHERE upper(btrim(l.farmacia_codigo))=$1::text',
+  ' WHERE 1=1',
   ' AND l.articulo_origen_id=ANY($2::text[]) AND h.fecha<$3::date',
   ' AND l.cantidad>0 AND l.devuelta IS NOT TRUE',
   ' AND h.lineas_completas AND NOT h.eliminado_logicamente',

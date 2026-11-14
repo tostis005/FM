@@ -6,7 +6,7 @@ import {resolveDemoSourceScope} from "./demoDataScope.js";
 import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {latestSupplierCN} from "./preparadorLastReceipt.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
-import {readLaboratoryOrderMatrix} from "./laboratoryOrderPlanner.js";
+import {readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner} from "./laboratoryOrderPlanner.js";
 import {demoAgendaLaboratoryCounts} from "./demoPreparadorSnapshot.js";
 
 if(!process.env.DATABASE_URL)throw Error("DATABASE_URL necesario");
@@ -87,6 +87,32 @@ try{
     Number.isFinite(ph.units3)&&Number.isFinite(ph.units12)&&
     Number.isFinite(ph.unitsPeriod)&&Number.isFinite(ph.suggested);
   })),slug+": stock, ventas o propuesta ausentes en la matriz");
+  // Validación del contrato HTTP: los códigos demo y el cuerpo enviado por
+  // la interfaz deben superar la validación y devolver filas con métricas.
+  const routes=new Map(),routeApp={
+   post:(route,...handlers)=>routes.set(route,handlers),
+   get:()=>{},put:()=>{},delete:()=>{}
+  };
+  setupLaboratoryOrderPlanner(routeApp,db,{requireTenant:()=>[(req,res,next)=>next()]});
+  const endpoint=routes.get("/api/analytics/pedidos/matriz-referencias");
+  assert.ok(endpoint,slug+": no existe endpoint de métricas");
+  const req={context:ctx,body:{
+   laboratorio:labs[0].key,tipo:selected.tipo,farmacias:ids,
+   desde:new Date(Date.now()-90*86400000).toISOString().slice(0,10),
+   hasta:new Date().toISOString().slice(0,10),
+   referencias:references.slice(0,1).map(item=>({
+    referencia:item.referencia,cn:item.cn,nombre:item.nombre
+   }))
+  }};
+  let status=200,response,routeError;
+  const res={status(code){status=code;return this},
+   json(value){response=value;return this}};
+  await endpoint.at(-1)(req,res,error=>{routeError=error});
+  assert.equal(routeError,undefined,slug+": excepción al responder métricas");
+  assert.equal(status,200,slug+": el endpoint rechaza una farmacia válida");
+  assert.equal(response?.metricsUnavailable,false,
+   slug+": el endpoint no entrega stock/ventas");
+  assert.equal(response?.rows?.length,1,slug+": respuesta de métricas incompleta");
   const {rows:master}=await db.query(
    "SELECT EXISTS(SELECT 1 FROM farmetrica.familias_globales_articulos "+
    "WHERE cliente_slug=$1 LIMIT 1) AS families, "+

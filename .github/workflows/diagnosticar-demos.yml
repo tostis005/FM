@@ -132,5 +132,31 @@ jobs:
                 x.slug,x.relname,nonempty;
             END LOOP;
           END $audit_tables$;
+          SELECT d.slug,
+            (SELECT count(*) FROM farmetrica.proveedores_unificados u WHERE u.cliente_slug=d.slug) AS proveedores_unificados,
+            (SELECT count(*) FROM farmetrica.proveedores_unificados_alias a WHERE a.cliente_slug=d.slug) AS alias_proveedores,
+            (SELECT count(*) FROM farmetrica.proveedores_maestro p WHERE p.cliente_slug=d.slug) AS proveedores_maestro,
+            (SELECT count(*) FROM farmetrica.preparador_ultima_recepcion_cache c WHERE c.cliente_slug=d.slug) AS cn_ultima_recepcion,
+            (SELECT count(*) FROM farmetrica.preparador_ultima_recepcion_estado s WHERE s.cliente_slug=d.slug) AS snapshot_registrado,
+            (SELECT count(*) FROM farmetrica.preparador_frecuencia_laboratorio p WHERE p.cliente_slug=d.slug) AS frecuencia_laboratorios,
+            (SELECT count(*) FROM farmetrica.preparador_pedidos_globales p WHERE p.cliente_slug=d.slug) AS pedidos_preparador,
+            (SELECT count(*) FROM farmetrica.familias_globales g WHERE g.cliente_slug=d.slug) AS familias,
+            (SELECT count(*) FROM farmetrica.familias_globales_articulos a WHERE a.cliente_slug=d.slug) AS articulos_familias,
+            (SELECT count(*) FROM farmetrica.politica_stock_transferidor p WHERE p.cliente_slug=d.slug) AS politica_transferidor,
+            (SELECT count(*) FROM farmetrica.picking_list_fuentes p WHERE p.cliente_slug=d.slug) AS picking_fuentes,
+            (SELECT count(*) FROM farmetrica.dashboard_consolidados_diarios p WHERE p.cliente_slug=d.slug) AS dashboard_dias,
+            (SELECT count(*) FROM farmetrica.dashboard_consolidados_anuales p WHERE p.cliente_slug=d.slug) AS dashboard_anios,
+            (SELECT count(*) FROM farmetrica.ventas_panorama_meses_cerrados p WHERE p.cliente_slug=d.slug) AS panorama_meses
+          FROM farmetrica.clientes d WHERE d.slug IN
+            ('ampedia','demo_farmetrica','demo_individual') ORDER BY d.slug;
+          SELECT d.slug, m.modulo_clave, m.habilitado
+          FROM farmetrica.cliente_modulos m
+          JOIN farmetrica.clientes d ON d.slug=m.cliente_slug
+          WHERE d.slug IN ('demo_farmetrica','demo_individual')
+           AND m.modulo_clave IN ('dashboard','compras','stock','reposicion','ventas','genericos','rentabilidad')
+          ORDER BY d.slug,m.modulo_clave;
+          SELECT c.slug,
+            (SELECT COUNT(*) FROM farmetrica.usuarios_clientes u WHERE u.cliente_slug=c.slug) AS memberships
+          FROM farmetrica.clientes c WHERE c.slug IN('ampedia','demo_farmetrica','demo_individual');
           COMMIT;
           SQL

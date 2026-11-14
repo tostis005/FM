@@ -249,7 +249,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
    // ni recalcular los totales por cada lote: actualizar solo el progreso.
    // La matriz completa se publica en un único render al finalizar.
    setLoadStage("progress");
-   let lastPartial=null;
+   let lastPartial=null,lastVisibleProgress=0;
    try{
     const completed=await collectLaboratoryMetrics(catalog.rows,items=>api(
      clientSlug,"/api/analytics/pedidos/matriz-referencias",{
@@ -262,7 +262,19 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      }),{batchSize:laboratoryMetricsBatchSize(catalog.rows.length),
       signal:controller.signal,onBatch:({rows,loaded,frequencyDays})=>{
       lastPartial={rows,loaded,frequencyDays};
-      if(!controller.signal.aborted)setMetricsProgress(loaded);
+      if(!controller.signal.aborted){
+       setMetricsProgress(loaded);
+       // Mostrar stock/ventas ya calculados, sin esperar a que termine
+       // el último lote del laboratorio. Evitar renders muy frecuentes.
+       const now=Date.now();
+       if(!lastVisibleProgress||now-lastVisibleProgress>=700||loaded===catalog.total){
+        lastVisibleProgress=now;
+        setData(current=>({...current,rows,total:catalog.total,
+         metricsLoaded:loaded,frequencyDays,
+         metricsUnavailable:loaded<catalog.total,
+         warning:catalog.warning||null}));
+       }
+      }
      }});
     if(controller.signal.aborted)return;
     setData({rows:completed.rows,total:catalog.total,loaded:catalog.total,
@@ -331,7 +343,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const showLine=row=>orderLineFor(row,tab,ids,drafts);
  const metricsLoading=loading&&Boolean(laboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
- const showMatrixOverlay=metricsLoading;
+ const showMatrixOverlay=metricsLoading&&!data.metricsLoaded;
  const matrixColumnCount=chosen.length*5+(tab==="parafarmacia"?12:7);
  const stockTotals=useMemo(()=>laboratoryStockTotals(
    currentRows,ids,tab==="parafarmacia"),[currentRows,scope,tab]);
@@ -472,6 +484,15 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     {data.warning&&<p role="status" className="fm-lab-order-warning">
      <AlertTriangle size={15}/> {data.warning}
     </p>}
+    {!loading&&data.metricsUnavailable&&data.rows?.length>0&&scope&&<div className="fm-lab-order-warning" role="status">
+     <AlertTriangle size={15}/>
+     <span>No se han podido completar todas las métricas.
+      {data.metricsLoaded>0?" Hay "+data.metricsLoaded+" de "+data.total+" artículos calculados.":""}
+      Puedes reintentar la consulta de stock y ventas.</span>
+     <button type="button" className="btn btn-secondary" onClick={()=>setReload(n=>n+1)}>
+      Reintentar stock y ventas
+     </button>
+    </div>}
     {!laboratory.startsWith("P:")&&(!loading&&data.total===0||Boolean(error)||diagnostic)&&
      <div className="fm-lab-order-diagnostic-area">
       <button type="button" className="btn btn-secondary" disabled={diagnosticBusy}
@@ -521,7 +542,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalOrder):"—"}</strong> uds. a pedir</span>
 
     </div>
-    <div className="fm-lab-matrix-frame" data-metrics-loading={metricsLoading?"true":"false"}>
+    <div className="fm-lab-matrix-frame" data-metrics-loading={showMatrixOverlay?"true":"false"}>
      <HorizontalTableScroll className="fm-lab-order-scroll" label="artículos y métricas por farmacia"
       scrollRef={tableScrollRef} aria-busy={metricsLoading}
       data-virtualized={viewport.virtualized?"true":"false"}

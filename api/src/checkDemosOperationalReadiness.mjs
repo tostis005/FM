@@ -6,6 +6,7 @@ import {resolveDemoSourceScope} from "./demoDataScope.js";
 import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {latestSupplierCN} from "./preparadorLastReceipt.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {readLaboratoryOrderMatrix,setupLaboratoryOrderPlanner} from "./laboratoryOrderPlanner.js";
 import {demoAgendaLaboratoryCounts} from "./demoPreparadorSnapshot.js";
 
 if(!process.env.DATABASE_URL)throw Error("DATABASE_URL necesario");
@@ -65,6 +66,53 @@ try{
   });
   assert.ok(prepared.rows.some(item=>String(item.cn)===String(selected.cn)),
    slug+": el preparador no muestra un CN confirmado del laboratorio");
+  // Los CN del selector no bastan: validar en producción las columnas que
+  // realmente muestra el preparador (stock, 3/12 meses, ventas y propuesta).
+  const references=sample.filter(item=>item.tipo===selected.tipo).slice(0,25);
+  const matrix=await readLaboratoryOrderMatrix(db,ctx,{
+   key:labs[0].key,pharmacies:ids,type:selected.tipo,
+   from:new Date(Date.now()-90*86400000).toISOString().slice(0,10),
+   to:new Date().toISOString().slice(0,10),
+   prefetchedRows:references.map(item=>({
+    referencia:item.referencia,cn:item.cn,nombre:item.nombre
+   }))
+  });
+  assert.equal(matrix.metricsUnavailable,false,
+   slug+": fallo al calcular stock y ventas: "+(matrix.metricsErrorCode||"sin código"));
+  assert.equal(matrix.rows.length,references.length,
+   slug+": matriz con referencias incompletas");
+  assert.ok(matrix.rows.every(item=>ids.every(id=>{
+   const ph=item.byPharmacy?.[String(id)];
+   return ph&&Number.isFinite(ph.stock)&&
+    Number.isFinite(ph.units3)&&Number.isFinite(ph.units12)&&
+    Number.isFinite(ph.unitsPeriod)&&Number.isFinite(ph.suggested);
+  })),slug+": stock, ventas o propuesta ausentes en la matriz");
+  // Validación del contrato HTTP: los códigos demo y el cuerpo enviado por
+  // la interfaz deben superar la validación y devolver filas con métricas.
+  const routes=new Map(),routeApp={
+   post:(route,...handlers)=>routes.set(route,handlers),
+   get:()=>{},put:()=>{},delete:()=>{}
+  };
+  setupLaboratoryOrderPlanner(routeApp,db,{requireTenant:()=>[(req,res,next)=>next()]});
+  const endpoint=routes.get("/api/analytics/pedidos/matriz-referencias");
+  assert.ok(endpoint,slug+": no existe endpoint de métricas");
+  const req={context:ctx,body:{
+   laboratorio:labs[0].key,tipo:selected.tipo,farmacias:ids,
+   desde:new Date(Date.now()-90*86400000).toISOString().slice(0,10),
+   hasta:new Date().toISOString().slice(0,10),
+   referencias:references.slice(0,1).map(item=>({
+    referencia:item.referencia,cn:item.cn,nombre:item.nombre
+   }))
+  }};
+  let status=200,response,routeError;
+  const res={status(code){status=code;return this},
+   json(value){response=value;return this}};
+  await endpoint.at(-1)(req,res,error=>{routeError=error});
+  assert.equal(routeError,undefined,slug+": excepción al responder métricas");
+  assert.equal(status,200,slug+": el endpoint rechaza una farmacia válida");
+  assert.equal(response?.metricsUnavailable,false,
+   slug+": el endpoint no entrega stock/ventas");
+  assert.equal(response?.rows?.length,1,slug+": respuesta de métricas incompleta");
   const {rows:master}=await db.query(
    "SELECT EXISTS(SELECT 1 FROM farmetrica.familias_globales_articulos "+
    "WHERE cliente_slug=$1 LIMIT 1) AS families, "+
@@ -75,7 +123,8 @@ try{
   // Comprobar que la prueba se ejecutó solo en lectura, nunca contra ERP en escritura.
   console.info("DEMO_INTEGRAL_OK",JSON.stringify({slug,pharmacies:ids.length,
    laboratories:labs.length,sampleReferences:sample.length,
-   salesAndPurchases:true,stock:true,families:true,agenda:true}));
+   salesAndPurchases:true,stock:true,families:true,agenda:true,
+   verifiedMetrics:matrix.rows.length}));
  }
  await db.query("ROLLBACK");
 }catch(error){

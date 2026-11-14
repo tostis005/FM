@@ -372,9 +372,10 @@ try{
  await page.waitForFunction(()=>/\b(?:75|150|225|300|375|450|525) de 600\b/.test(
   document.querySelector(".fm-lab-order-summary [role='status']")?.textContent||""),
   null,{timeout:15000});
- assert.equal(await page.locator(".fm-lab-matrix-overlay").isVisible(),true,
-  "La carga progresiva no debe ocultar la cortinilla hasta terminar las 600 métricas");
- await page.locator(".fm-lab-matrix-overlay").waitFor({state:"hidden",timeout:30000});
+ assert.equal(await page.locator(".fm-lab-matrix-overlay").isVisible(),false,
+  "Tras el primer lote la matriz debe mostrar el stock ya calculado, sin bloquear todos los artículos");
+ assert.equal(await page.locator(".fm-lab-matrix-frame").getAttribute("data-metrics-loading"),"false");
+ await page.locator('.fm-lab-order-lower[aria-busy="false"]').waitFor({timeout:30000});
  const largeTable=page.locator(".fm-lab-order-scroll");
  assert.equal(await largeTable.getAttribute("data-virtualized"),"true");
  assert.ok(await page.locator(".fm-lab-order-table tbody tr").count()<=70);

@@ -1,78 +1,77 @@
-# FARMÉTRICA · Evolución SaaS con base independiente por cliente (14/11/2026)
+# FARMÉTRICA · Fuente de datos compartida y configuración por cliente (14/11/2026)
 
-## Decisión
-Mantener **un solo producto y código**. El cliente real Ampedia continúa utilizando la misma base de datos, esquema `ampedia`, sincronizador, permisos y API mientras no termine una migración verificada. Cada alta comercial nueva pasará a una **base PostgreSQL separada**, no a un esquema ni a vistas enlazadas. La identidad (superadmin, permisos de pertenencia y catálogo de clientes) será un plano de control; los movimientos, configuraciones y datos operativos de un cliente pertenecerán a su plano de datos.
+## Decisión revisada
+Para Ampedia y las dos demostraciones comerciales, **una única importación de datos y ninguna copia de movimientos**. Los tres clientes tendrán identidades y configuraciones distintas, pero los esquemas demo consultarán datos del origen a través de vistas read-only y siempre se limitarán a las farmacias habilitadas para cada demo.
 
-### Hallazgos confirmados en `main`
-- `api/src/server.js` instancia un único `pg.Pool` desde `DATABASE_URL`.
-- `api/src/tenant.js` resuelve cliente, rol, farmacia y módulos, pero sólo selecciona `esquema_datos` dentro de esa base; **no resuelve base de datos física**.
-- Funcionalidades del preparador, transferidor, ventas, dashboards y otras cruzan `farmetrica.*` (tablas de control, consolidaciones, maestros) con `ampedia.*` (movimientos). La separación física requiere inventario de consultas y migración por etapas.
-- `api/src/demoClients.js` crea vistas sobre movimientos del origen: comparte importes, productos, proveedores y datos operativos reales. **No es demo pública ni datos anonimizados**, aunque `pharmacyCodes.js` cambie códigos visibles.
-- `web/src/main.jsx` conserva semilla local de Ampedia; cuando haya sesión real el cliente debe tomarse del contexto autenticado del servidor, sin que una pantalla demo herede esa semilla.
-- `farmetrica.cliente_apariencia` ya permite marca, colores, logo y estilo visual por cliente; `farmetrica.cliente_modulos` ya habilita módulos; configuraciones del preparador y transferidor ya se guardan por `cliente_slug`.
+Para clientes reales futuros se mantiene la opción de base de datos PostgreSQL **independiente por cliente**; esta fase no la crea ni altera el destino actual del sincronizador. La idea de una "base de configuración" es correcta **lógicamente**: hoy vive sobre todo en el esquema `farmetrica` dentro de la misma BD. Moverla físicamente a otra BD **no es trivial** y se pospone.
 
-## Arquitectura objetivo
-```text
-                   web Farmétrica (mismo frontend)
-                             |
-          login / autorización / selección de tenant
-                             |
-            plano de control SaaS (base propia)
-            clientes, membresías, licencias, destino
-                  /             |             \
-       Ampedia actual      Demo Grupo     Demo Individual
-       PostgreSQL real     PostgreSQL     PostgreSQL
-       sin cambios         independiente  independiente
-                                   ^           ^
-                                   |           |
-                    publicador de datasets DEMO validados
-                                   ^
-                             almacén de lectura
-                          / réplica / export incremental
-                                   ^
-                          sincronizador de Ampedia
+## Inventario de lo que existe
+| Lugar | Ejemplos | Naturaleza |
+|---|---|---|
+| `ampedia` | Ventas, recepciones, artículos, documentos y snapshots | Datos ERP reales |
+| Esquemas demo | `ventas`, `compras`, `articulos`, `proveedores`, `productos`, `stock` | Vistas enlazadas; no copias de grandes tablas |
+| `farmetrica` | `clientes`, `usuario_clientes`, `farmacias`, `cliente_modulos`, `cliente_apariencia`, `preparador_configuracion_cliente`, `transferidor_configuracion_cliente` | Configuración separada por `cliente_slug` |
+| `farmetrica` | `dashboard_consolidados_mensuales`, `ventas_panorama_mensual`, `proveedores_unificados`, `familias_globales`, tareas, promociones, perfiles | Datos derivados, maestros compartidos o actividad; **no son sólo configuración** |
+| `public` | `acceso_cuentas`, `farmacias` heredado, `stock_farmacia` | Compatibilidad técnica; inventariar antes de extraer |
+| API `server.js` | Un único `pg.Pool` `DATABASE_URL` | Aún no hace routing a DB física distinta |
+
+El código ya implementa pertenencia por tenant, módulos, perfiles, apariencia visual y configuración parcial por cliente. Existe `demo_origen_slug` y un creador de demos con vistas de lectura. Este creador **no clona todo el modelo documental**, por lo que no cabe prometer que todas las pantallas equivalen hoy a producción.
+
+## La topología de las 3 experiencias
+```
+    FarmetricaSync -> esquema ampedia: datos ERPs actualizados
+                                |
+                 +--------------+--------------+
+                 |              |              |
+             Ampedia        Demo Grupo     Demo Individual
+           esquema real     vistas origen   vistas origen
+                 |              |              |
+                 +--------------+--------------+
+                                |
+          farmetrica: clientes / farmacias / permisos / marca /
+             módulos / reglas / personalizaciones por slug
 ```
 
-**Compatibilidad inicial:** el cliente sin entrada en `cliente_despliegues` sigue en la ruta heredada. El registro de ubicación introducido en `064` **aún no cambia conexiones**. No activar `base_independiente` hasta desarrollar y probar el router/pool por cliente o un API dedicado por tenant usando la misma imagen. Al principio un proceso API por cliente con `DATABASE_URL` propio puede reducir el riesgo frente a un refactor masivo; el control de sesión y dominios debe probarse igualmente.
+- Ampedia: mismas farmacias, nombres, módulos, rutas y cálculos de siempre; no cambiar importador.
+- Demo Grupo: todas las farmacias elegidas, alias y códigos visibles ficticios. Datos reales consultados por vistas.
+- Demo Individual: catálogo de farmacias del mismo dataset pero exactamente una marcada activa. Debe restringirse **en contexto de API** (`allowedPharmacyIds`) y no sólo ocultarse en el menú. Cada agregación, filtro, exportación, informe, IA y caché debe respetar el subconjunto.
+- Por seguridad la edición de demo debe mantener un camino administrativo que muestre tanto las farmacias activas como las deshabilitadas, para permitir reactivación.
 
-## Las dos demos
-1. **Demo Grupo**: todas las farmacias elegibles del origen, nombres/códigos ficticios, apariencia y logos de Farmétrica o marca genérica. Sin nombre de cadena, ubicaciones, hostname, cuentas ni logos originales.
-2. **Demo Individual**: una farmacia del mismo origen, con su propio catálogo y operaciones, **una sola farmacia en base de datos, permisos, API, filtros, informes y exportaciones**. No basta esconder cuatro opciones en el frontend. Todos los totales y comparativas se recalculan sólo desde esa farmacia.
-3. Dos destinos **físicamente distintos**. La demo de grupo no debe ser la base de datos de lectura de la demo individual; ambas derivan de una entrega saneada y versionada. Los nombres demo se configurarán por tenant y no en el origen. El maestro de farmacias, los perfiles, la marca y la configuración de módulos deben ser específicos a cada demo.
+**Advertencia:** cambiar sólo los nombres de farmacias **no anonimiza** cifras, artículos, proveedores, empleados o patrones comerciales. La demo enlazada se considera privada, limitada a destinatarios autorizados; no es apta automáticamente para prospects externos ni para difusión pública. Antes de ampliar acceso, revisar campos, exports, CSV, MCP, texto libre, metadatos y permisos contractuales; utilizar sintéticos para los datos que no puedan compartirse.
 
-**Copia exacta funcional, no copia literal de datos:** reproducir esquemas, cobertura analítica, histórico útil y funcionalidad sin copiar identificadores personales, datos identificables de empleados, pacientes, recetas, documentos libres, hosts internos ni identificadores comerciales cuya divulgación no esté autorizada. Los nombres de farmacias no son garantía de anonimización. Si un dato se comparte con posibles clientes ajenos, exigir revisión de reidentificación y de secretos comerciales; para pantallas con información sensible o imposible de sanear, usar datos sintéticos coherentes. Los importes y los patrones reales pueden revelar identidad por comparación externa.
+## Personalizaciones: cómo añadirlas sin forks
+1. **Marca y experiencia:** reutilizar `cliente_apariencia` (nombre, logo, colores), nombres y farmacias de `farmetrica.farmacias`.
+2. **Licencias y acceso:** reutilizar `cliente_modulos`, asignaciones por usuario, perfiles y secciones. Los permisos son verificaciones de backend, no sólo menú.
+3. **Parámetros:** reutilizar tablas dedicadas a cobertura de preparador, política de transferidor, exposiciones, análisis de ventas, etc. Cada una se filtra por `cliente_slug`.
+4. **Variantes funcionales:** usar `cliente_personalizaciones` (migración 064) como registro **inactivo** hasta implementar soporte en cada módulo. Ejemplo futuro: `transferidor` variantes `estandar` o `con_reserva`, con un contrato tipado, validación de parámetros y pruebas de regresión. Ausencia de variante significa comportamiento histórico. No aceptar SQL ni JavaScript de clientes.
+5. **Perfiles:** hoy `farmetrica.perfiles` son globales; si las farmacias necesitan perfiles distintos por cliente habrá que añadir perfiles específicos o clonables sin modificar plantillas globales.
 
-## Alimentación asíncrona propuesta
-1. **No** realizar escrituras a demos desde las transacciones del sincronizador Windows.
-2. Publicar del origen una única fuente incremental controlada (idealmente réplica de lectura o proceso de exportación limitado). Los mecanismos de replicación SQL nativos **no anonimizan por sí mismos** y pueden retener WAL si el destino se atasca. Medir y monitorizar antes de habilitar.
-3. Un worker separado lee sólo columnas y tablas de una **lista permitida**; transforma nombres, códigos, IDs, vendedores, documentos y campos libres con reglas aprobadas; rechaza por defecto tablas y columnas nuevas.
-4. Preparar una instantánea coherente de datos saneados en staging con versión de esquema. Validar FKs, filas, coherencia entre compras/ventas, duplicados, filtros de farmacia, agregados, PUC, stock y exclusiones. No usar `SELECT *`.
-5. Publicar con upsert incremental idempotente y borrados propagados. Dos consumidores independientes escriben en Demo Grupo y Demo Individual con permisos de escritura exclusivos de esos destinos.
-6. Grabar checkpoint por origen/tabla, sello de actualización, versión de transformación y estado por demo. Mostrar en superadministración frescura y fallos. No reanudar un destino si la versión de anonimización no está auditada.
-7. Limitar consultas en el origen por lotes, tiempo y horario, con backpressure. Si hay saturación, **la demo se retrasa**; la carga operativa del real siempre tiene prioridad.
+## Separación física futura de configuración y datos
+PostgreSQL no permite `JOIN` directo entre dos bases independientes. Actualmente muchas consultas cruzan `farmetrica.farmacias`/`farmetrica` maestros con `ampedia` movimientos dentro de **la misma transacción y conexión**. Extraer el esquema `farmetrica` como base física de configuración no es sólo cambiar `DATABASE_URL`:
 
-Recomendación: empezar con una copia completa inicial fuera del horario operativo y actualizaciones incrementales cada 30–60 minutos, ajustando con benchmarks; no prometer impacto cero. Publicar demos sólo si los datos tienen suficiente frescura y la auditoría está aprobada.
+- Crear un **plano de control** con clientes, sesiones, módulos, permisos y destino de datos. El backend verifica el cliente y selecciona el pool de datos de una lista permitida de alias de conexión secretos.
+- Dejar en el **plano de datos** tablas de movimientos, documentos, snapshots, agregados e índices necesarios para calcular cada reporte.
+- Introducir en las consultas un pequeño contexto de farmacias autorizadas resuelto por API; no hacer `JOIN` a tablas del control en otra BD. Mantener un catálogo técnico local versionado si el SQL del ERP lo requiere.
+- Decidir qué tablas `farmetrica` de negocio deben trasladarse o sincronizarse por cliente; no mover a ciegas `familias_globales`, `ventas_panorama_mensual`, `preparador_pedidos_realizados`, catálogos y caches.
+- Desplegar por etapas con pruebas E2E, sin fallback silencioso al pool de Ampedia. Aislar secretos, backups, restauración y borrado por cliente.
 
-## Personalización sin bifurcar el código
-**Nivel 1:** identidad visual, nombres, permisos, módulos y ubicación/farmacias.
-**Nivel 2:** parámetros por cliente: días de cobertura, umbrales, columnas visibles, métricas, filtros, vistas predeterminadas.
-**Nivel 3:** variantes aprobadas de algoritmos y flujos (p. ej. transferidor `estandar`, `con_reserva`, `consolidado`), habilitadas mediante `cliente_personalizaciones` y validadas en backend. No aceptar SQL ni fragmentos de código del cliente, no crear un fork por farmacia. Las nuevas variantes comienzan con comportamiento estándar si no existe configuración.
+## Cambios de esta rama (seguros y parciales)
+- Nuevo `064` **aditivo**: registro de modo de almacenamiento futuro y variantes por cliente; ninguna conexión, importación o algoritmo cambia al crear las tablas.
+- `tenantScopedPharmacyIds`: en demos las farmacias deshabilitadas salen de `allowedPharmacyIds` y del contexto operativo. Ampedia conserva comportamiento heredado.
+- Ruta superadmin de catálogo completo de farmacias demo, incluyendo inactivas, para administrarlas sin alterar origen.
+- Panel de clientes: nombre y checkbox de visibilidad para cada farmacia demo; se impide quitar la última farmacia activa.
+- Se aclara en la interfaz la distinción entre «nuevo esquema dentro de la BD» y «demo con vistas a datos reales». Se evita decir que ya se crea una BD física independiente.
 
-## Fases verificables
-- **Fase 0 (este PR):** inventario, contrato de arquitectura, tablas de registro aditivas, validaciones y tests de planificación. Sin conexiones nuevas, sin copias, sin activar demos, sin cambios de sincronizador ni de cálculo.
-- **Fase 1:** preparar plantilla de BD independiente y migraciones reproducibles. Ejecutarla en una base vacía, contar tablas/vistas dependientes, comprobar que una instancia puede servir todas las pantallas de Ampedia sin dependencia cruzada.
-- **Fase 2:** separar control plane y data plane, resolver tenant **sólo desde sesión verificada**, no desde un valor libre que seleccione DSN. Implementar pool/router con credenciales mínimas, límite de conexiones, lista cerrada de destinos y bloqueo de fallback. Pruebas de acceso cruzado, SQL, descargas, cachés, procesos programados, IA/MCP y auditar subconsultas no cualificadas.
-- **Fase 3:** worker de datos saneados con prueba reproducible de anonimizacion, export y validación por tabla, incluyendo datos históricos. Garantizar no publicar hasta aprobación de auditoría y prueba de consistencia.
-- **Fase 4:** crear físicamente Demo Grupo y Demo Individual, tematizar, asignar accesos limitados y probar todas las pantallas reales de ambos escenarios. Activación progresiva sin cambiar el DSN del origen.
-- **Fase 5:** nuevas farmacias reales con BD independiente y variantes configurables. Medir consumo, migraciones, observabilidad, mantenimiento, backups/restauración por cliente, portabilidad y eliminación segura.
+## Pendiente antes de crear/demo comercial
+1. Auditar exhaustivamente las pantallas y APIs que consultan ventas, compras, transferidor, preparador, stock, rentabilidad, dashboards, caché, exportaciones, asistente y MCP. Localizar SQL que no filtra por las farmacias activas; corregirlo de forma compatible.
+2. Validar igualdad de resultados de Demo Grupo frente a Ampedia en mismo período, salvo nombres/permisos; Demo Individual debe producir métricas calculadas para una sola farmacia.
+3. Ampliar las vistas/catálogo derivados para que los módulos modernos de documentos y analítica tengan la misma cobertura de datos; comparar índices y planes para medir coste de las vistas.
+4. Crear una segunda demo **sólo después** de verificar el origen, módulos, identidad visual, contexto y acceso, sin copiar movimientos ni habilitar permisos externos automáticamente.
+5. Añadir gestión tipada y en UI de variantes por cliente, comenzando por transferidor y preparador; el cálculo actual sigue siendo predeterminado.
+6. Para futuro cliente real, diseñar router de BDs y migrador idempotente antes de conectar el sincronizador de ese cliente.
 
-## Criterios de aceptación antes de compartir demos
-- Ninguna query de una demo puede acceder a `ampedia.*`, al PostgreSQL real o a una vista del origen.
-- Ningún identificador original aparece en UI, export CSV, informe, URL, metadatos JSON, caché local, logs accesibles, imagen, documento adjunto ni asistente/MCP.
-- Caso monofarmacia: exactamente una farmacia en las respuestas API, permisos y tablas fuente; todo indicador responde sólo a ella.
-- Seguridad: login separado y revocación, sin cambios de escritura en el cliente de origen; verificar también tareas en segundo plano.
-- Rendimiento: latencias P95/P99, uso de CPU/I/O, bloqueos y tiempo de sincronización reales comparados antes y después. Si empeoran, desactivar el worker sin tocar Ampedia.
-- Cada destino es restaurable individualmente y conserva auditoría de fuente y versión de anonimización.
-
-## Riesgos de despliegue
-La lista de migraciones del workflow de producción es **explícita**: añadir `064` a la lista, sin reejecutar DDL pesada. Los datos del origen permanecen intactos. Reversión del código: desactivar las nuevas rutas y conservar tablas aditivas sin pérdida de datos. **No** ejecutar `CREATE DATABASE`, `pg_dump`, `CREATE SUBSCRIPTION`, importar datos reales ni activar accesos comerciales en esta fase.
+## Verificaciones y rollback
+- Ejecutar CI: unitarias de ámbito demo, migración `064` dos veces, integración PostgreSQL de clientes y smoke de frontend.
+- No modificar `main` ni despliegue de producción hasta revisión, copia de seguridad y tests.
+- Revertir código/UI detiene el cambio de ámbito; la migración 064 es aditiva y no obliga a borrar tablas.
+- Las demos enlazadas consultan el **mismo dataset real**: su rendimiento no es automáticamente gratuito. Medir actividad y concurrencia en PostgreSQL antes de compartir accesos.

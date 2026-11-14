@@ -59,19 +59,21 @@ PostgreSQL no permite `JOIN` directo entre dos bases independientes. Actualmente
 - Nuevo `064` **aditivo**: registro de modo de almacenamiento futuro y variantes por cliente; ninguna conexión, importación o algoritmo cambia al crear las tablas.
 - `tenantScopedPharmacyIds`: en demos las farmacias deshabilitadas salen de `allowedPharmacyIds` y del contexto operativo. Ampedia conserva comportamiento heredado.
 - Ruta superadmin de catálogo completo de farmacias demo, incluyendo inactivas, para administrarlas sin alterar origen.
-- Panel de clientes: nombre y checkbox de visibilidad para cada farmacia demo; se impide quitar la última farmacia activa.
+- Panel de clientes: nombre, código visible (p. ej. `PER`) y checkbox de visibilidad para cada farmacia demo; se impide quitar la última farmacia activa.
+- En las respuestas API de demos, los campos identificadores de farmacia se sustituyen por sus alias configurados; los códigos ERP reales se conservan únicamente para consultas internas.
+- La creación de nuevas demos permite elegir todas las farmacias o una sola. `065` aprovisiona la demo individual de Ampedia de manera idempotente y enlaza vistas de tablas documentales; sin copiar movimientos.
 - Se aclara en la interfaz la distinción entre «nuevo esquema dentro de la BD» y «demo con vistas a datos reales». Se evita decir que ya se crea una BD física independiente.
 
 ## Pendiente antes de crear/demo comercial
 1. Auditar exhaustivamente las pantallas y APIs que consultan ventas, compras, transferidor, preparador, stock, rentabilidad, dashboards, caché, exportaciones, asistente y MCP. Localizar SQL que no filtra por las farmacias activas; corregirlo de forma compatible.
 2. Validar igualdad de resultados de Demo Grupo frente a Ampedia en mismo período, salvo nombres/permisos; Demo Individual debe producir métricas calculadas para una sola farmacia.
 3. Ampliar las vistas/catálogo derivados para que los módulos modernos de documentos y analítica tengan la misma cobertura de datos; comparar índices y planes para medir coste de las vistas.
-4. Crear una segunda demo **sólo después** de verificar el origen, módulos, identidad visual, contexto y acceso, sin copiar movimientos ni habilitar permisos externos automáticamente.
+4. El script aditivo `065` prepara `demo_individual` con exactamente una farmacia activa, por defecto la primera de Ampedia, y repara vistas documentales faltantes de las demos existentes. No crea usuarios ni credenciales para terceros. Comprobar el resultado en staging y producción antes de habilitar accesos externos.
 5. Añadir gestión tipada y en UI de variantes por cliente, comenzando por transferidor y preparador; el cálculo actual sigue siendo predeterminado.
 6. Para futuro cliente real, diseñar router de BDs y migrador idempotente antes de conectar el sincronizador de ese cliente.
 
 ## Verificaciones y rollback
 - Ejecutar CI: unitarias de ámbito demo, migración `064` dos veces, integración PostgreSQL de clientes y smoke de frontend.
-- No modificar `main` ni despliegue de producción hasta revisión, copia de seguridad y tests.
+- No modificar `main` ni despliegue de producción hasta revisión, copia de seguridad y tests. La demo enlazada NO es anonimización comercial completa: otros campos pueden conservar datos confidenciales.
 - Revertir código/UI detiene el cambio de ámbito; la migración 064 es aditiva y no obliga a borrar tablas.
 - Las demos enlazadas consultan el **mismo dataset real**: su rendimiento no es automáticamente gratuito. Medir actividad y concurrencia en PostgreSQL antes de compartir accesos.

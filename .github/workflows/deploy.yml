@@ -536,13 +536,15 @@ jobs:
                  AND destino.clave_unificada=original.clave_unificada
                WHERE cache.cliente_slug='ampedia'
                  AND EXISTS(
-                   SELECT 1 FROM farmetrica.farmacias f
-                   JOIN farmetrica.farmacias df ON df.cliente_slug=d.slug AND df.activo
-                     AND upper(btrim(df.codigo_origen))=(
-                       CASE WHEN f.cliente_slug='ampedia' AND f.id=5
-                        AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
-                        THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END)
-                   WHERE f.cliente_slug='ampedia' AND f.id=ANY(cache.pharmacy_ids)
+                   SELECT 1 FROM farmetrica.farmacias real_site
+                   JOIN farmetrica.farmacias demo_site
+                    ON demo_site.cliente_slug=d.slug AND demo_site.activo
+                     AND upper(btrim(demo_site.codigo_origen))=(
+                       CASE WHEN real_site.cliente_slug='ampedia' AND real_site.id=5
+                        AND upper(btrim(real_site.codigo_origen)) IN ('POL','VAL')
+                        THEN 'VAL' ELSE upper(btrim(real_site.codigo_origen)) END)
+                   WHERE real_site.cliente_slug='ampedia'
+                     AND real_site.id=ANY(cache.pharmacy_ids)
                  )
                LIMIT 1) THEN
                 RAISE EXCEPTION 'Demo % sin referencias vivas del preparador',d.slug;

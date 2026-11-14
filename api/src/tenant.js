@@ -23,6 +23,7 @@ import {USER_SECTIONS,effectiveUserSections,validateSectionGrants,requestSection
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 import {setupProfiles} from "./perfiles.js";
 import {appearanceFromDatabase,validateAppearance} from "./clientAppearance.js";
+import {tenantScopedPharmacyIds} from "./tenantPharmacyScope.js";
 import {effectiveProfileModules,profileAllows,requestProfileOperation} from "./profilePolicy.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
@@ -47,8 +48,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",nullif(btrim(f.codigo_visible),'') AS \"displayCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
       [slug]);
     const all = role==="superadministrador"||role==="administrador";
-    const ids = all ? pharmacies.map(p=>Number(p.id)):
-      (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
+    const isDemo=Boolean(cliente.demo_origen_slug);
+    const ids=tenantScopedPharmacyIds(pharmacies,{demo:isDemo,privileged:all,
+      assignedIds:membership?.pharmacies||[]});
     const effectiveModules=effectiveProfileModules(
       effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
       membership?.profile_permissions,isSuper(req.user));
@@ -544,6 +546,26 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   // filtros comerciales ni se ofrece como farmacia para asignación de usuarios.
   app.get("/api/tenant/establecimientos",...requireTenantManager(),
     (req,res)=>res.json(req.context.establishments));
+  // La administración necesita ver también las farmacias deshabilitadas de la demo
+  // para volver a habilitarlas; el ámbito operativo NO las incluye.
+  app.get("/api/admin/clientes/:slug/farmacias",requireSuperadmin,async(req,res,next)=>{
+    const slug=String(req.params.slug||"").toLowerCase();
+    if(!SLUG.test(slug))return res.status(400).json({error:"Cliente inválido"});
+    try{
+      const {rows:[client]}=await pool.query(
+        "SELECT demo_origen_slug FROM farmetrica.clientes WHERE slug=$1",[slug]);
+      if(!client)return res.status(404).json({error:"Cliente inexistente"});
+      if(!client.demo_origen_slug)return res.status(400).json({error:"Este cliente no es una demo"});
+      const {rows}=await pool.query(
+        "SELECT id::text AS id,nombre AS name,ciudad AS city,activo AS active, "+
+        "coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" "+
+        "FROM farmetrica.farmacias f WHERE cliente_slug=$1 ORDER BY id",[slug]);
+      res.json(rows.filter(p=>p.establishmentType!=="almacen").map((p,i)=>({
+        id:p.id,name:p.name,city:p.city,active:p.active,
+        displayCode:"DEMO"+String(i+1).padStart(2,"0")
+      })));
+    }catch(e){next(e)}
+  });
   app.get("/api/tenant/farmacias",...requireTenant(),(req,res)=>res.json(req.context.pharmacies));
   app.post("/api/tenant/farmacias",...requireTenantAdmin(),async(req,res,next)=>{
     try{

@@ -110,5 +110,27 @@ jobs:
               END LOOP;
             END LOOP;
           END $check$;
+          DO $audit_tables$
+          DECLARE x record; nonempty bool;
+          BEGIN
+            FOR x IN
+              SELECT d.slug, d.esquema_datos, cls.relname
+              FROM farmetrica.clientes d
+              JOIN pg_namespace ns ON ns.nspname=d.esquema_datos
+              JOIN pg_class cls ON cls.relnamespace=ns.oid
+              WHERE d.demo_origen_slug IS NOT NULL
+               AND cls.relkind IN ('r','p')
+               AND cls.relname IN('fm_ventas_cabeceras','fm_ventas_lineas',
+                 'fm_recepciones_cabeceras','fm_recepciones_lineas',
+                 'fm_pedidos_cabeceras','fm_pedidos_lineas',
+                 'fm_stock_fotografia','fm_producto_correspondencias')
+              ORDER BY d.slug,cls.relname
+            LOOP
+              EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.%I LIMIT 1)',
+                x.esquema_datos,x.relname) INTO nonempty;
+              RAISE NOTICE 'demo=% tabla_local=% tiene_registros=%',
+                x.slug,x.relname,nonempty;
+            END LOOP;
+          END $audit_tables$;
           COMMIT;
           SQL

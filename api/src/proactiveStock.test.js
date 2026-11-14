@@ -157,7 +157,7 @@ test("última venta histórica se asigna solo a la referencia de la farmacia, si
    {pharmacyId:"1",pharmacyName:"Farmacia uno",articleId:"R1",stock:5,unitCost:1},
    {pharmacyId:"1",pharmacyName:"Farmacia uno",articleId:"R2",stock:2,unitCost:2}
   ]};
-  if(sql.includes("max(h.fecha::date) AS")) {
+  if(sql.includes("to_char(max(h.fecha)")) {
    historicalQueries++;
    assert.match(sql,/h.fecha<\$3::date/);
    assert.deepEqual(request.values[1],["R1","R2"]);
@@ -185,7 +185,7 @@ test("fallo del historial no convierte la ausencia de fecha en ausencia de venta
   if(sql.includes("a.stock_actual>0"))return {rows:[{
    pharmacyId:"1",pharmacyName:"Farmacia uno",articleId:"R1",stock:2,unitCost:null
   }]};
-  if(sql.includes("max(h.fecha::date) AS"))throw Object.assign(Error("Timeout"),{code:"57014"});
+  if(sql.includes("to_char(max(h.fecha)"))throw Object.assign(Error("Timeout"),{code:"57014"});
   if(sql.includes("GROUP BY l.articulo_origen_id"))return {rows:[]};
   assert.fail("Consulta inesperada");
  }};

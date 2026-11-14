@@ -214,8 +214,33 @@ jobs:
              metricsUnavailable:matrix.metricsUnavailable,errorCode:matrix.metricsErrorCode||null,
              hasMetrics:Boolean(m),stockDefined:m?.stock!==undefined,
              unitsDefined:m?.unitsPeriod!==undefined,durationMs:Date.now()-start}));
+            const {rows:real}=await db.query("SELECT id::int FROM farmetrica.farmacias "+
+             "WHERE cliente_slug='ampedia' AND upper(btrim(codigo_origen))=$1 LIMIT 1",[code]);
+            if(!real.length)throw Error(slug+": missing source pharmacy");
+            const {rows:batch}=await db.query({text:
+             "SELECT DISTINCT cn FROM farmetrica.preparador_ultima_recepcion_cache "+
+             "WHERE cliente_slug='ampedia' AND cn ~ '^[0-9]{6,7}$' "+
+             "AND left(cn,6)::integer>=400000 AND $1::int=ANY(pharmacy_ids) LIMIT 75",
+             values:[real[0].id],query_timeout:8000});
+            if(batch.length>=25){
+             const started=Date.now();
+             const result=await readLaboratoryOrderMatrix(db,ctx,{
+              key:"P:1",pharmacies:[ph[0].id],type:"medicacion",
+              from:"2026-09-01",to:"2026-11-14",
+              prefetchedRows:batch.map(r=>({referencia:r.cn,cn:r.cn,nombre:"Diagnóstico"}))});
+             console.info("DEMO_MATRIX_BATCH",JSON.stringify({slug,size:batch.length,
+               unavailable:result.metricsUnavailable,errorCode:result.metricsErrorCode||null,
+               returnedMetrics:Object.keys(result.rows[0]?.byPharmacy||{}).length,
+               durationMs:Date.now()-started}));
+            }
            }
            await db.query("ROLLBACK");
           }catch(e){await db.query("ROLLBACK").catch(()=>{});console.error("DEMO_MATRIX_ERROR",e.code||e.name,e.message);process.exitCode=1}
           finally{db.release();await pool.end()}
           JS
+
+      - name: Consultar errores de métricas del preparador sin datos de productos
+        shell: bash
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose logs --since 3h api 2>&1 | grep PREPARADOR_METRICAS | tail -n 18 || true'

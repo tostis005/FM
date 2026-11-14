@@ -22,30 +22,30 @@ async function api(path,options={}){
 }
 // Alias de farmacia editables solo dentro del cliente demo, sin tocar
 // códigos ERP ni el maestro del cliente original.
-function DemoFarmacias({clientSlug}){
+function DemoFarmacias({clientSlug,onUpdated}){
  const [open,setOpen]=useState(false),[items,setItems]=useState([]),
   [loading,setLoading]=useState(false),[saving,setSaving]=useState(""),
   [error,setError]=useState("");
  const headers={"X-Farmetrica-Cliente":clientSlug};
  async function load(){
   setLoading(true);setError("");
-  try{setItems(await api("/api/tenant/farmacias",{headers}))}
+  try{setItems(await api("/api/admin/clientes/"+encodeURIComponent(clientSlug)+"/farmacias"))}
   catch(e){setError(e.message)}finally{setLoading(false)}
  }
  async function save(item){
   setSaving(String(item.id));setError("");
   try{
-   const saved=await api("/api/tenant/farmacias/"+item.id,{
+   await api("/api/tenant/farmacias/"+item.id,{
     method:"PATCH",headers,body:JSON.stringify({
-     name:item.name,city:item.city||"",active:Boolean(item.active)
+     name:item.name,city:item.city||"",active:Boolean(item.active),displayCode:item.displayCode
     })});
-   setItems(old=>old.map(row=>row.id===saved.id?saved:row));
+   await load();onUpdated?.();
   }catch(e){setError(e.message)}finally{setSaving("")}
  }
  return <div className="fm-manage-wide" style={{padding:"12px 0"}}>
   <button type="button" className="btn btn-secondary" onClick={()=>{
    setOpen(!open);if(!open)void load();
-  }}>{open?"Ocultar farmacias demo":"Editar nombres de farmacias demo"}</button>
+  }}>{open?"Ocultar farmacias demo":"Configurar farmacias de la demo"}</button>
   {open&&<div style={{marginTop:14}}>
    {loading&&<LoadingStatus label="Consultando farmacias demo…"/>}
    {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
@@ -54,8 +54,15 @@ function DemoFarmacias({clientSlug}){
      <input aria-label={"Nombre demo "+p.id} value={p.name}
       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}/>
     </label>
-    <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()}
-     onClick={()=>save(p)}>{saving===p.id?"Guardando…":"Guardar nombre"}</button>
+    <label>Código visible (2–8 caracteres)
+      <input aria-label={"Código visible demo "+p.id} maxLength={8} value={p.displayCode||""}
+       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,displayCode:e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,"")}:x))}/>
+    </label>
+    <label><input type="checkbox" checked={Boolean(p.active)}
+      onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,active:e.target.checked}:x))}/>
+      Visible en la demo</label>
+    <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()||!(/^[A-Z0-9_-]{2,8}$/.test(p.displayCode||""))}
+     onClick={()=>save(p)}>{saving===String(p.id)?"Guardando…":"Guardar cambios"}</button>
    </div>)}
   </div>}
  </div>;
@@ -122,14 +129,14 @@ function ClientDomains({client}){
 
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
- const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:""});
+ const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:"",scope:"all"});
  async function refresh(){setLoading(true);try{setClients(await api("/api/admin/clientes"))}finally{setLoading(false)}}
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
  async function createClient(e){
   e.preventDefault();setBusy("new");setError("");
   try{
    await api(newClient.sourceSlug?"/api/admin/clientes/demo":"/api/admin/clientes",{method:"POST",body:JSON.stringify(newClient)});
-   setNewClient({slug:"",name:"",sourceSlug:""});await refresh();onUpdated?.();
+   setNewClient({slug:"",name:"",sourceSlug:"",scope:"all"});await refresh();onUpdated?.();
   }catch(error){setError(error.message)}finally{setBusy("")}
  }
  async function toggle(slug,module,enabled){
@@ -142,6 +149,12 @@ export function ClientesPanel({onUpdated}){
  }
  return <div className="fm-management">
   <div className="page-header"><h1>Clientes</h1></div>
+  <section className="card fm-manage-client" role="note">
+   <strong>Aislamiento de datos SaaS</strong>
+   <p>Los clientes existentes siguen funcionando en esquemas de la base actual.
+   Las futuras bases independientes y las demos con nombres ficticios se están preparando
+   por separado; el registro de planificación no activa conexiones ni publica datos.</p>
+  </section>
   
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
   <section className="card fm-manage-client"><div className="section-heading"><h2>Nuevo cliente</h2><Building2 size={19}/></div>
@@ -149,14 +162,21 @@ export function ClientesPanel({onUpdated}){
     <label>Nombre comercial<input required maxLength={150} value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Grupo de farmacias"/></label>
     <label>Datos del cliente
      <select value={newClient.sourceSlug} onChange={e=>setNewClient({...newClient,sourceSlug:e.target.value})}>
-      <option value="">Nuevo cliente · base de datos independiente</option>
+      <option value="">Nuevo cliente · esquema en la base actual</option>
       {clients.filter(x=>!x.demoSourceSlug&&x.active).map(x=>
-        <option key={x.slug} value={x.slug}>Demo enlazada a {x.name}</option>)}
+        <option key={x.slug} value={x.slug}>Demo privada con vistas a {x.name} (datos reales)</option>)}
      </select>
     </label>
+    {newClient.sourceSlug&&<label>Farmacias visibles al crear la demo
+      <select value={newClient.scope} onChange={e=>setNewClient({...newClient,scope:e.target.value})}>
+        <option value="all">Todas las farmacias</option>
+        <option value="single">Solo una farmacia</option>
+      </select>
+    </label>}
     {newClient.sourceSlug&&<p className="fm-manage-wide" role="note">
-     Demo privada enlazada al cliente seleccionado.
-     Antes de compartirla, anonimiza también la información comercial.
+     Esta opción heredada crea vistas conectadas a datos comerciales reales y NO una base independiente.
+     Sólo debe usarse de forma privada y autorizada. No es apta para demos comerciales externas.
+     Las nuevas demos aisladas requieren aprovisionamiento y una auditoría de anonimización.
     </p>}
     <label>Identificador / esquema<input required pattern="[a-z][a-z0-9_]{1,62}" value={newClient.slug} onChange={e=>setNewClient({...newClient,slug:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")})} placeholder="grupo_farmacias"/></label>
     <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>
@@ -165,8 +185,8 @@ export function ClientesPanel({onUpdated}){
   {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
   <AIShareLinks clients={clients}/>
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
-   <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
-   {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
+   <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada con vistas a datos reales de "+c.demoSourceSlug:""} · {c.storageMode==="base_independiente"?"BD independiente ("+(c.deploymentState||"planificada")+")":"Esquema de la base actual"}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
+   {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug} onUpdated={onUpdated}/>}
    <ClientAppearance client={c.slug} initial={c.appearance} onSaved={()=>{void refresh();onUpdated?.();}}/>
    <ClientDomains key={c.slug} client={c.slug}/>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{id==="proveedores"?"El directorio de consulta siempre está disponible":c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>

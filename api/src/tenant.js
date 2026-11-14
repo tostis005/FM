@@ -23,6 +23,8 @@ import {USER_SECTIONS,effectiveUserSections,validateSectionGrants,requestSection
 import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 import {setupProfiles} from "./perfiles.js";
 import {appearanceFromDatabase,validateAppearance} from "./clientAppearance.js";
+import {tenantScopedPharmacyIds} from "./tenantPharmacyScope.js";
+import {demoPresentationMaps,maskDemoReport} from "./demoPresentation.js";
 import {effectiveProfileModules,profileAllows,requestProfileOperation} from "./profilePolicy.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
@@ -47,8 +49,15 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       "SELECT f.id::text AS id,f.nombre AS name,f.ciudad AS city,f.activo AS active,f.codigo_origen AS \"sourceCode\",nullif(btrim(f.codigo_visible),'') AS \"displayCode\",f.host_origen AS \"sourceHost\",f.bd_origen AS \"sourceDatabase\",coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" FROM farmetrica.farmacias f WHERE f.cliente_slug=$1 ORDER BY f.id",
       [slug]);
     const all = role==="superadministrador"||role==="administrador";
-    const ids = all ? pharmacies.map(p=>Number(p.id)):
-      (membership?.pharmacies||[]).map(Number).filter(id=>pharmacies.some(p=>Number(p.id)===id));
+    const isDemo=Boolean(cliente.demo_origen_slug);
+    const ids=tenantScopedPharmacyIds(pharmacies,{demo:isDemo,privileged:all,
+      assignedIds:membership?.pharmacies||[]});
+    const demoOriginNames=isDemo?(await pool.query(
+      'SELECT nombre AS name,'+pharmacyDataCodeSQL("f")+' AS "databaseCode" '+
+      'FROM farmetrica.farmacias f WHERE f.cliente_slug=$1',
+      [cliente.demo_origen_slug])).rows:[];
+    const demoPresentation=isDemo?demoPresentationMaps(pharmacies.map((p,i)=>
+      decoratePharmacy(slug,p,{demo:true,ordinal:i+1})),demoOriginNames):null;
     const effectiveModules=effectiveProfileModules(
       effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
       membership?.profile_permissions,isSuper(req.user));
@@ -59,6 +68,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user),role),
       profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,
       profilePermissions:membership?.profile_permissions??null,
+      demoPresentation,
       pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))&&p.establishmentType!=="almacen")
         .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
       establishments:pharmacies.filter(p=>ids.includes(Number(p.id)))
@@ -83,6 +93,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
          return res.status(403).json({error:"Tu perfil no permite esta operación"});
         if(!predicate(ctx,req.user))return res.status(403).json({error:"No tienes permiso para esta funcionalidad"});
         req.context=ctx;
+        // No modificar los códigos internos usados por los JOIN; transformar
+        // únicamente las etiquetas de farmacia en la respuesta pública de la demo.
+        if(ctx.client.demo && ctx.demoPresentation && !req._demoPresentationInstalled){
+          const sendJson=res.json.bind(res);
+          res.json=value=>sendJson(maskDemoReport(value,ctx.demoPresentation));
+          req._demoPresentationInstalled=true;
+        }
         next();
       }catch(e){next(e);}
     }];
@@ -155,10 +172,12 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "max(a.nombre_marca) AS \"brandName\",max(a.logo_url) AS \"logoUrl\", "+
         "max(a.color_primario) AS \"primaryColor\",max(a.color_secundario) AS \"secondaryColor\", "+
         "max(a.color_fondo) AS \"pageColor\", "+
-        "max(a.estilo_menu) AS \"menuMode\" "+
+        "max(a.estilo_menu) AS \"menuMode\", "+
+        "max(d.almacenamiento) AS \"storageMode\",max(d.estado) AS \"deploymentState\" "+
         "FROM farmetrica.clientes c "+
         "LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug "+
         "LEFT JOIN farmetrica.cliente_apariencia a ON a.cliente_slug=c.slug "+
+        "LEFT JOIN farmetrica.cliente_despliegues d ON d.cliente_slug=c.slug "+
         "GROUP BY c.slug ORDER BY c.nombre");
       res.json(rows.map(({brandName,logoUrl,primaryColor,secondaryColor,pageColor,menuMode,...client})=>({
         ...client,appearance:appearanceFromDatabase({brandName,logoUrl,primaryColor,secondaryColor,pageColor,menuMode})
@@ -542,6 +561,28 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   // filtros comerciales ni se ofrece como farmacia para asignación de usuarios.
   app.get("/api/tenant/establecimientos",...requireTenantManager(),
     (req,res)=>res.json(req.context.establishments));
+  // La administración necesita ver también las farmacias deshabilitadas de la demo
+  // para volver a habilitarlas; el ámbito operativo NO las incluye.
+  app.get("/api/admin/clientes/:slug/farmacias",requireSuperadmin,async(req,res,next)=>{
+    const slug=String(req.params.slug||"").toLowerCase();
+    if(!SLUG.test(slug))return res.status(400).json({error:"Cliente inválido"});
+    try{
+      const {rows:[client]}=await pool.query(
+        "SELECT demo_origen_slug FROM farmetrica.clientes WHERE slug=$1",[slug]);
+      if(!client)return res.status(404).json({error:"Cliente inexistente"});
+      if(!client.demo_origen_slug)return res.status(400).json({error:"Este cliente no es una demo"});
+      const {rows}=await pool.query(
+        "SELECT id::text AS id,nombre AS name,ciudad AS city,activo AS active, "+
+        "codigo_visible AS \"displayCode\", "+
+        "coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" "+
+        "FROM farmetrica.farmacias f WHERE cliente_slug=$1 ORDER BY id",[slug]);
+      res.json(rows.filter(p=>p.establishmentType!=="almacen").map((p,i)=>({
+        id:p.id,name:p.name,city:p.city,active:p.active,
+        displayCode:/^[A-Z0-9_-]{2,8}$/.test(String(p.displayCode||""))?
+          p.displayCode:"D"+String(i+1).padStart(2,"0")
+      })));
+    }catch(e){next(e)}
+  });
   app.get("/api/tenant/farmacias",...requireTenant(),(req,res)=>res.json(req.context.pharmacies));
   app.post("/api/tenant/farmacias",...requireTenantAdmin(),async(req,res,next)=>{
     try{
@@ -599,11 +640,39 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(!/^[1-9]\d{0,8}$/.test(req.params.id))return res.status(400).json({error:"Farmacia inválida"});
       if(req.context.client.demo){
         const name=String(req.body?.name||"").trim(),city=String(req.body?.city||"").trim();
-        if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean")
+        const displayCode=String(req.body?.displayCode||"").trim().toUpperCase();
+        if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean"||
+           !visibleCodeValid(displayCode))
           return res.status(400).json({error:"Datos de farmacia demo inválidos"});
+        if(!await visibleCodeAvailable(req,res,displayCode,req.params.id))return;
+        if(!req.body.active){
+          // El panel permite desactivar todas salvo la última farmacia.
+          // La comprobación y la actualización se serializan por demo.
+          const db=await pool.connect();
+          try{
+            await db.query("BEGIN");
+            await db.query("SELECT pg_advisory_xact_lock(hashtext($1))",[req.context.client.slug]);
+            const {rows:remaining}=await db.query(
+              "SELECT count(*)::int AS n FROM farmetrica.farmacias "+
+              "WHERE cliente_slug=$1 AND id<>$2 AND activo=true "+
+              "AND upper(btrim(codigo_origen))<>'ALMACEN'",
+              [req.context.client.slug,Number(req.params.id)]);
+            if(!remaining[0]?.n){
+              await db.query("ROLLBACK");
+              return res.status(409).json({error:"La demo debe mantener al menos una farmacia activa"});
+            }
+            const {rows}=await db.query(
+              'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_visible=$6,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode"',
+              [Number(req.params.id),req.context.client.slug,name,city,false,displayCode]);
+            if(!rows.length){await db.query("ROLLBACK");return res.status(404).json({error:"Farmacia no encontrada"});}
+            await db.query("COMMIT");
+            return res.json(decoratePharmacy(req.context.client.slug,rows[0],{demo:true}));
+          }catch(e){await db.query("ROLLBACK").catch(()=>{});throw e}
+          finally{db.release()}
+        }
         const {rows}=await pool.query(
           'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
-          [Number(req.params.id),req.context.client.slug,name,city,req.body.active]);
+          [Number(req.params.id),req.context.client.slug,name,city,true,displayCode]);
         if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
         return res.json(decoratePharmacy(req.context.client.slug,rows[0],
           {demo:true,ordinal:req.context.pharmacies.findIndex(p=>p.id===String(req.params.id))+1}));

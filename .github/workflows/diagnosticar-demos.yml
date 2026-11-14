@@ -142,7 +142,7 @@ jobs:
             (SELECT count(*) FROM farmetrica.preparador_pedidos_globales p WHERE p.cliente_slug=d.slug) AS pedidos_preparador,
             (SELECT count(*) FROM farmetrica.familias_globales g WHERE g.cliente_slug=d.slug) AS familias,
             (SELECT count(*) FROM farmetrica.familias_globales_articulos a WHERE a.cliente_slug=d.slug) AS articulos_familias,
-            (SELECT count(*) FROM farmetrica.politica_stock_transferidor p WHERE p.cliente_slug=d.slug) AS politica_transferidor,
+            (SELECT count(*) FROM farmetrica.transferidor_configuracion_cliente p WHERE p.cliente_slug=d.slug) AS politica_transferidor,
             (SELECT count(*) FROM farmetrica.picking_list_fuentes p WHERE p.cliente_slug=d.slug) AS picking_fuentes,
             (SELECT count(*) FROM farmetrica.dashboard_consolidados_diarios p WHERE p.cliente_slug=d.slug) AS dashboard_dias,
             (SELECT count(*) FROM farmetrica.dashboard_consolidados_anuales p WHERE p.cliente_slug=d.slug) AS dashboard_anios,
@@ -156,7 +156,7 @@ jobs:
            AND m.modulo_clave IN ('dashboard','compras','stock','reposicion','ventas','genericos','rentabilidad')
           ORDER BY d.slug,m.modulo_clave;
           SELECT c.slug,
-            (SELECT COUNT(*) FROM farmetrica.usuarios_clientes u WHERE u.cliente_slug=c.slug) AS memberships
+            (SELECT COUNT(*) FROM farmetrica.usuario_clientes u WHERE u.cliente_slug=c.slug) AS memberships
           FROM farmetrica.clientes c WHERE c.slug IN('ampedia','demo_farmetrica','demo_individual');
           COMMIT;
           SQL

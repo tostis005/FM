@@ -83,7 +83,7 @@ export function setupDemoClients(app,pool,{requireSuperadmin}){
     SELECT $1,'Farmacia Demo '||lpad(n::text,2,'0'),'',($3='all' OR n=1),
        CASE WHEN $2='ampedia' AND id=5 AND upper(btrim(codigo_origen)) IN ('POL','VAL')
           THEN 'VAL' ELSE upper(btrim(codigo_origen)) END,
-       'DEM'||lpad(n::text,2,'0'),NULL,'Demo','farmacia'
+       'D'||lpad(n::text,2,'0'),NULL,'Demo','farmacia'
     FROM origen ORDER BY n`,[slug,sourceSlug,scope]);
    const {rows:count}=await db.query(
     "SELECT count(*)::int AS n,count(*) FILTER(WHERE activo=true)::int AS enabled "+

@@ -185,10 +185,12 @@ export function setupUnifiedSuppliers(app,pool,{requireTenant,requireTenantAdmin
   try{
    // Directorio común del cliente, visible en consulta para todos los usuarios
    // con acceso a Proveedores; no depende de la farmacia local del usuario.
-   const {rows:groupPharmacies}=await pool.query(
-    "SELECT id FROM farmetrica.farmacias WHERE cliente_slug=$1 AND activo ORDER BY id",
-    [req.context.client.slug]);
-   res.json(await listUnifiedSuppliers(pool,req.context,groupPharmacies.map(f=>Number(f.id)),false));
+   const demoIds=req.context.client.demo?
+    (req.context.allowedPharmacyIds||[]).map(Number):null;
+   const groupPharmacies=demoIds?demoIds:
+    (await pool.query("SELECT id FROM farmetrica.farmacias WHERE cliente_slug=$1 AND activo ORDER BY id",
+      [req.context.client.slug])).rows.map(f=>Number(f.id));
+   res.json(await listUnifiedSuppliers(pool,req.context,groupPharmacies,false));
   }catch(e){next(e)}
  });
  app.get("/api/analytics/pedidos/proveedores-unificados",...requireTenant(),async(req,res,next)=>{

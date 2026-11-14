@@ -4,6 +4,7 @@ import {readFile} from "node:fs/promises";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {readRetirementPatterns} from "./laboratoryRetirements.js";
 import {invalidateCachedLaboratoryOptions} from "./laboratoryOptionCache.js";
+import {demoLaboratoryIdsFromSnapshot,demoSupplierCNFromSnapshot,demoAllLaboratoryCNFromSnapshot} from "./demoPreparadorSnapshot.js";
 const SQL=await readFile(new URL("./preparadorLastReceipt.sql",import.meta.url),"utf8");
 const SNAPSHOT_SQL=(await readFile(new URL("./preparadorLastReceiptSnapshot.sql",import.meta.url),"utf8"))
  .trim().replace(/;\s*$/,"");
@@ -25,9 +26,10 @@ export function invalidateLastReceiptCache(pool,slug){
  // Los cambios de clasificación/manuales recalculan fuera de la petición
  // que guarda el maestro; nunca hacen esperar al usuario que edita.
  if(typeof pool.connect!=="function"||typeof pool.totalCount!=="number")return;
- void pool.query("SELECT esquema_datos FROM farmetrica.clientes WHERE slug=$1",[slug])
+ void pool.query("SELECT esquema_datos,demo_origen_slug FROM farmetrica.clientes WHERE slug=$1",[slug])
   .then(({rows})=>{
    const schema=rows[0]?.esquema_datos;
+   if(rows[0]?.demo_origen_slug)return; // el snapshot se comparte con origen
    if(/^[a-z][a-z0-9_]{1,62}$/.test(schema||""))
     return refreshLastReceiptSnapshot(pool,{client:{slug,schema}});
   }).catch(error=>console.warn("PREPARADOR_SNAPSHOT_INVALIDATE",error.code||error.name));
@@ -37,6 +39,7 @@ export function invalidateLastReceiptCache(pool,slug){
  * El bloqueo consultivo evita duplicar trabajos entre varias réplicas.
  */
 export function refreshLastReceiptSnapshot(pool,ctx){
+ if(ctx.client.demo)return Promise.resolve({skipped:true,reason:"demo_vista_origen"});
  const {slug,schema}=ctx.client;
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(schema)||!slug)
   return Promise.reject(Error("Esquema inválido"));
@@ -101,6 +104,7 @@ export async function laboratoryIdsFromSnapshot(pool,ctx,pharmacies){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(ctx.client.schema))throw Error("Esquema inválido");
  const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);
  if(!ids.length)return [];
+ if(ctx.client.demo)return demoLaboratoryIdsFromSnapshot(pool,ctx,ids);
  let state;
  try{
   ({rows:state}=await pool.query({text:`
@@ -131,6 +135,15 @@ export async function latestSupplierCN(pool,ctx,pharmacies,labId){
   !/^[1-9][0-9]{0,17}$/.test(String(labId)))throw Error("Laboratorio inválido");
  const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);
  if(!ids.length)return [];
+ if(ctx.client.demo){
+  const rows=await demoSupplierCNFromSnapshot(pool,ctx,ids,labId);
+  return rows===null?null:rows.map(r=>({
+   referencia:String(r.cn),cn:String(r.cn),nombre:r.nombre||String(r.cn),
+   tipo:Number(String(r.cn).slice(0,6))>=400000?"medicacion":"parafarmacia",
+   inMaster:false,inReceipts:true,inPurchases:true,inSales:false,
+   generic:false,provisional:false,pharmacyIds:null,excluded:r.excluded===true
+  }));
+ }
  let state;
  try{
   state=await pool.query({text:`
@@ -161,6 +174,19 @@ export async function latestLaboratoryCN(pool,ctx,pharmacies){
  if(!/^[a-z][a-z0-9_]{1,62}$/.test(ctx.client.schema))throw Error("Esquema inválido");
  const ids=[...new Set(pharmacies.map(Number))].sort((a,b)=>a-b);
  if(!ids.length)return {byLab:new Map(),total:0};
+ if(ctx.client.demo){
+  const rows=await demoAllLaboratoryCNFromSnapshot(pool,ctx,ids);
+  const byLab=new Map();
+  for(const r of rows||[]){
+   const id=String(r.lab_id),cn=String(r.cn);
+   if(!byLab.has(id))byLab.set(id,[]);
+   byLab.get(id).push({referencia:cn,cn,nombre:r.nombre||cn,
+    tipo:Number(cn.slice(0,6))>=400000?"medicacion":"parafarmacia",
+    inMaster:false,inReceipts:true,inPurchases:true,inSales:false,
+    generic:false,provisional:false,pharmacyIds:null,excluded:r.excluded===true});
+  }
+  return {byLab,total:rows?.length||0};
+ }
  const scope=ctx.client.slug+"|"+ids.join(",");
  let cache=caches.get(pool);
  if(!cache){cache=new Map();caches.set(pool,cache);}

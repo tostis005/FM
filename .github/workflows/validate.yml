@@ -40,7 +40,7 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
-          node --test api/src/tenantPharmacyScope.test.js api/src/demoPresentation.test.js api/src/pharmacyCodes.test.js api/src/demoClients.test.js api/src/demoTenantScope.test.js api/src/demoDataScope.test.js
+          node --test api/src/tenantPharmacyScope.test.js api/src/demoPresentation.test.js api/src/pharmacyCodes.test.js api/src/demoClients.test.js api/src/demoTenantScope.test.js api/src/demoDataScope.test.js api/src/demoPreparadorSnapshot.test.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js
@@ -390,6 +390,49 @@ jobs:
           psql_test --single-transaction < api/src/migrations/060_fusiones_familias_auditadas.sql
           psql_test --single-transaction < api/src/migrations/060_fusiones_familias_auditadas.sql
           psql_test --single-transaction < api/src/migrations/057_politica_stock_transferidor.sql
+          # Datos controlados para reproducir la falta de laboratorios/familias en demos.
+          psql_test -At -c "INSERT INTO farmetrica.proveedores_unificados
+             (cliente_slug,clave_unificada,nombre,clase)
+             VALUES('ampedia','CI_DEMO_LAB','Laboratorio con albaranes de CI','DIRECTO')
+             ON CONFLICT(cliente_slug,clave_unificada) DO NOTHING;
+             INSERT INTO farmetrica.proveedores_unificados_alias
+             (cliente_slug,proveedor_id,farmacia_codigo,codigo_origen,nombre_origen)
+             SELECT 'ampedia',id,'ABA','CI-SUP-01','Proveedor demo CI'
+             FROM farmetrica.proveedores_unificados
+             WHERE cliente_slug='ampedia' AND clave_unificada='CI_DEMO_LAB'
+             ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen) DO NOTHING;
+             INSERT INTO farmetrica.preparador_ultima_recepcion_cache
+             (cliente_slug,cn,lab_id,nombre,pharmacy_ids,blocked_pharmacy_ids)
+             SELECT 'ampedia','995731',id,'Articulo demo CI',
+                ARRAY[(SELECT id FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND codigo_origen='ABA')],
+                '{}'::int[]
+             FROM farmetrica.proveedores_unificados
+             WHERE cliente_slug='ampedia' AND clave_unificada='CI_DEMO_LAB'
+             ON CONFLICT(cliente_slug,cn) DO NOTHING;
+             INSERT INTO farmetrica.preparador_ultima_recepcion_estado(cliente_slug,actualizado_en)
+             VALUES('ampedia',now()) ON CONFLICT(cliente_slug) DO NOTHING;
+             INSERT INTO farmetrica.familias_globales(cliente_slug,clave,nombre,segmento)
+             VALUES('ampedia','CI_DEMO_FAMILY','Familia demo CI','MEDICACION')
+             ON CONFLICT(cliente_slug,clave) DO NOTHING;
+             INSERT INTO farmetrica.familias_globales_articulos
+              (cliente_slug,farmacia_codigo,articulo_origen_id,familia_id,metodo)
+             SELECT 'ampedia','ABA','CI_ART_1',id,'familia_local'
+             FROM farmetrica.familias_globales
+             WHERE cliente_slug='ampedia' AND clave='CI_DEMO_FAMILY'
+             ON CONFLICT(cliente_slug,farmacia_codigo,articulo_origen_id) DO NOTHING;" >/dev/null
+          psql_test --single-transaction < api/src/migrations/067_maestros_operativos_demos.sql
+          psql_test --single-transaction < api/src/migrations/067_maestros_operativos_demos.sql
+          test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_unificados
+             WHERE cliente_slug='demo_individual' AND clave_unificada='CI_DEMO_LAB'")" = 1
+          test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_unificados_alias
+             WHERE cliente_slug='demo_individual' AND farmacia_codigo='ABA'
+              AND codigo_origen='CI-SUP-01'")" = 1
+          test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.familias_globales_articulos
+             WHERE cliente_slug='demo_individual' AND articulo_origen_id='CI_ART_1'")" = 1
+          test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.demo_maestros_inicializados
+             WHERE demo_slug='demo_individual' AND origen_slug='ampedia'")" = 1
+          test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.proveedores_unificados
+             WHERE cliente_slug='ampedia' AND clave_unificada='CI_DEMO_LAB'")" = 1
           npm install --prefix api --no-audit --no-fund
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/documentalViews.integration.test.js
           TEST_DB_URL=postgres://testfm:testfm@127.0.0.1:5432/farmawao node --test api/src/proactiveStock.pg.test.js

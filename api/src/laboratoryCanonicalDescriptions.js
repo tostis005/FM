@@ -46,7 +46,8 @@ export async function canonicalizeLaboratoryCatalog(pool,ctx,catalog,type,patter
 WITH canonical_pharmacy AS MATERIALIZED (
  SELECT ${pharmacyDataCodeSQL("f")} AS code,0 AS priority
  FROM farmetrica.farmacias f
- WHERE f.cliente_slug=$1 AND (
+ WHERE f.cliente_slug=(SELECT coalesce(d.demo_origen_slug,d.slug)
+   FROM farmetrica.clientes d WHERE d.slug=$1) AND (
   ($3::text='medicacion' AND upper(btrim(f.codigo_origen))='ABA')
   OR ($3::text='parafarmacia' AND f.tipo_establecimiento='almacen')
  )
@@ -55,8 +56,10 @@ WITH canonical_pharmacy AS MATERIALIZED (
  -- entrada ALMACEN. Nunca sobreescribe una descripción actual.
  SELECT 'AMP'::text AS code,1 AS priority
  FROM farmetrica.farmacias f
- WHERE $1='ampedia' AND $3::text='parafarmacia'
-  AND f.cliente_slug=$1 AND f.tipo_establecimiento='almacen'
+ WHERE $3::text='parafarmacia'
+  AND f.cliente_slug=(SELECT coalesce(d.demo_origen_slug,d.slug)
+     FROM farmetrica.clientes d WHERE d.slug=$1)
+  AND f.tipo_establecimiento='almacen'
   AND upper(btrim(f.codigo_origen))='ALMACEN'
 ), matched AS (
  SELECT btrim(a.codigo_nacional) AS cn,btrim(a.nombre) AS nombre,

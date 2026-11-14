@@ -251,7 +251,7 @@ jobs:
           SQL
           )
           test "$documental_state" = ready || test "$documental_state" = missing
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 050_perfiles_globales.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 027_pedidos_laboratorio_borradores.sql 047_pedidos_laboratorio_comentarios.sql 048_proveedor_fichas_documentos.sql 049_almacen_establecimiento.sql 051_picking_list.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 061_dashboard_consolidados_anuales.sql 062_ventas_panorama_mensual.sql 063_reparar_lectura_ventas_gestor.sql 064_aislamiento_clientes_y_demos.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 041_preparador_ultima_recepcion_cache.sql 042_preparador_agenda_y_cobertura.sql 043_preparador_agenda_global.sql 044_proveedores_otros_servicios.sql 035_stock_sin_recepciones_indices.sql 056_ampedia_fondo_suave.sql 057_ampedia_paleta_agua.sql 065_demo_monofarmacia_y_vistas.sql 066_reparar_origen_documental_demos.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 050_perfiles_globales.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 027_pedidos_laboratorio_borradores.sql 047_pedidos_laboratorio_comentarios.sql 048_proveedor_fichas_documentos.sql 049_almacen_establecimiento.sql 051_picking_list.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 061_dashboard_consolidados_anuales.sql 062_ventas_panorama_mensual.sql 063_reparar_lectura_ventas_gestor.sql 064_aislamiento_clientes_y_demos.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 041_preparador_ultima_recepcion_cache.sql 042_preparador_agenda_y_cobertura.sql 043_preparador_agenda_global.sql 044_proveedores_otros_servicios.sql 035_stock_sin_recepciones_indices.sql 056_ampedia_fondo_suave.sql 057_ampedia_paleta_agua.sql 065_demo_monofarmacia_y_vistas.sql 066_reparar_origen_documental_demos.sql 067_maestros_operativos_demos.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
             if [ "$baseline_state" = ready ]; then
               case " $legacy_migrations " in
                 *" $migration "*)
@@ -511,7 +511,43 @@ jobs:
                 IF ready THEN matched:=matched+1; END IF;
               END LOOP;
               IF matched=0 THEN RAISE EXCEPTION 'Demo % sin ventas enlazadas',d.slug; END IF;
-              RAISE NOTICE 'Demo % con datos reales: % farmacias con ventas',d.slug,matched;
+              IF NOT EXISTS (SELECT 1 FROM farmetrica.demo_maestros_inicializados x
+                    WHERE x.demo_slug=d.slug AND x.origen_slug='ampedia') THEN
+                RAISE EXCEPTION 'Demo % sin maestros inicializados',d.slug;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados x
+                    WHERE x.cliente_slug=d.slug AND x.activo AND x.clase='DIRECTO')
+                 OR NOT EXISTS (SELECT 1 FROM farmetrica.proveedores_unificados_alias x
+                    WHERE x.cliente_slug=d.slug)
+                 OR NOT EXISTS (SELECT 1 FROM farmetrica.familias_globales x
+                    WHERE x.cliente_slug=d.slug)
+                 OR NOT EXISTS (SELECT 1 FROM farmetrica.familias_globales_articulos x
+                    WHERE x.cliente_slug=d.slug)
+                 OR NOT EXISTS (SELECT 1 FROM farmetrica.preparador_frecuencia_laboratorio x
+                    WHERE x.cliente_slug=d.slug) THEN
+                RAISE EXCEPTION 'Demo % carece de laboratorios, familias o agenda',d.slug;
+              END IF;
+              IF NOT EXISTS (
+               SELECT 1 FROM farmetrica.preparador_ultima_recepcion_cache cache
+               JOIN farmetrica.proveedores_unificados original
+                ON original.cliente_slug='ampedia' AND original.id=cache.lab_id
+               JOIN farmetrica.proveedores_unificados destino
+                ON destino.cliente_slug=d.slug
+                 AND destino.clave_unificada=original.clave_unificada
+               WHERE cache.cliente_slug='ampedia'
+                 AND EXISTS(
+                   SELECT 1 FROM farmetrica.farmacias f
+                   JOIN farmetrica.farmacias df ON df.cliente_slug=d.slug AND df.activo
+                     AND upper(btrim(df.codigo_origen))=(
+                       CASE WHEN f.cliente_slug='ampedia' AND f.id=5
+                        AND upper(btrim(f.codigo_origen)) IN ('POL','VAL')
+                        THEN 'VAL' ELSE upper(btrim(f.codigo_origen)) END)
+                   WHERE f.cliente_slug='ampedia' AND f.id=ANY(cache.pharmacy_ids)
+                 )
+               LIMIT 1) THEN
+                RAISE EXCEPTION 'Demo % sin referencias vivas del preparador',d.slug;
+              END IF;
+              RAISE NOTICE 'Demo % OK: ventas, farmacias, proveedores, familias y preparador',d.slug;
             END LOOP;
             IF (SELECT count(*) FROM farmetrica.clientes
                 WHERE demo_origen_slug='ampedia'
@@ -521,6 +557,16 @@ jobs:
           END $demo_check$;
           COMMIT;
           SQL
+
+      - name: Comprobar con la API real el preparador, stock, familias y compras de las demos
+        timeout-minutes: 3
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api \
+              node src/checkDemosOperationalReadiness.mjs
+          '
 
       - name: Reiniciar catálogo de promociones de Ampedia (solicitado, auditado)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'RESET_COMPLETO_PROMOCIONES_20261106')

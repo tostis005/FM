@@ -333,10 +333,12 @@ GROUP BY r.fid,r.article_id`;
 // pedidos ficticios: se aplica la reserva conservadora por rotación global.
 export function transferidorPendingWebSQL(){
  return `SELECT left(btrim(p.cn),6) AS cn,sum(p.quantity)::float8 AS units
- FROM farmetrica.picking_list_pendientes p
+ FROM farmetrica.clientes tenant
+ JOIN farmetrica.picking_list_pendientes p
+   ON p.cliente_slug=coalesce(tenant.demo_origen_slug,tenant.slug)
  JOIN farmetrica.picking_list_fuentes f ON f.cliente_slug=p.cliente_slug
   AND f.ultima_importacion >= now()-interval '30 minutes'
- WHERE p.cliente_slug=$1 AND btrim(p.cn)~'^[0-9]{6,7}$'
+ WHERE tenant.slug=$1 AND btrim(p.cn)~'^[0-9]{6,7}$'
  GROUP BY left(btrim(p.cn),6)`;
 }
 export function transferidorCNChunks(rows,maxArticles=700){
@@ -563,6 +565,11 @@ export function setupTransferidor(app,pool,{requireTenant}){
   if(pharmacies.length<1)return res.json({available:false,status:"complete",
    rows:[],total:0,summary:{movements:0,units:0,products:0},
    warning:"Se necesita una farmacia para calcular transferencias."});
+  if(ctx.client.demo&&pharmacies.length===1)return res.json({
+   available:false,status:"complete",rows:[],total:0,
+   summary:{movements:0,units:0,products:0},
+   emptyReason:"Una sola farmacia activa no permite transferencias entre farmacias.",
+   warning:"Esta demo tiene una sola farmacia activa. Habilita otra en Administración para usar el Transferidor."});
   try{
    const job=getTransferJob(pool,schema,ctx.client.slug,pharmacies,String(req.query.recalcular||""));
    if(job.status==="error")return res.status(503).json({status:"error",error:job.error});

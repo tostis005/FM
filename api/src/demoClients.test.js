@@ -25,8 +25,10 @@ test('demo enlazada tiene vistas documentales de solo lectura sin copiar movimie
 test('alta monofarmacia habilita una sola farmacia y guarda cliente propio',async()=>{
  const routes={};
  const app={post:(url,...handlers)=>routes[url]=handlers};
- const sql=[],db={async query(query,params=[]){
-  sql.push({query,params});
+ const sql=[],db={async query(statement,params=[]){
+  const query=typeof statement==="string"?statement:statement.text;
+  const values=typeof statement==="string"?params:statement.values||[];
+  sql.push({query,params:values});
   if(query.includes('SELECT slug,esquema_datos,analisis_abcd_meses'))return {
    rows:[{slug:'ampedia',esquema_datos:'ampedia',analisis_abcd_meses:12}]};
   if(query.includes('SELECT 1 FROM pg_namespace'))return {rows:[]};
@@ -50,5 +52,6 @@ test('alta monofarmacia habilita una sola farmacia y guarda cliente propio',asyn
  assert.equal(output.enabledPharmacies,1);
  assert.ok(sql.some(q=>q.query.includes("($3='all' OR n=1)")&&q.params[2]==='single'));
  assert.ok(sql.some(q=>q.query.includes('INSERT INTO farmetrica.clientes')));
+ assert.ok(sql.some(q=>q.query.includes('SELECT farmetrica.inicializar_maestros_demo($1)')&&q.params[0]==='demo_individual'));
  assert.ok(!sql.some(q=>q.query.includes('DELETE FROM "ampedia"')||q.query.includes('UPDATE "ampedia"')));
 });

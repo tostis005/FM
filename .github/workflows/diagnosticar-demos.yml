@@ -1,0 +1,80 @@
+name: Diagnosticar demos sin modificar datos
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnosticar-demos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      VPS_HOST: ${{ vars.VPS_HOST || secrets.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER || secrets.VPS_USER }}
+      VPS_KEY: ${{ secrets.VPS_SSH_KEY }}
+    steps:
+      - name: Autenticar SSH de producción
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS_HOST" && test -n "$VPS_USER" && test -n "$VPS_KEY"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$VPS_KEY" | tr -d '\r' > ~/.ssh/id_fm
+          chmod 600 ~/.ssh/id_fm
+          ssh-keygen -y -f ~/.ssh/id_fm >/dev/null
+          ssh-keyscan -T 10 -H "$VPS_HOST" > ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts
+      - name: Diagnosticar sólo metadatos y presencia de datos ERP
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN TRANSACTION READ ONLY;
+          SET LOCAL statement_timeout='12000ms';
+          SELECT d.slug AS demo,d.esquema_datos AS esquema,
+            d.demo_origen_slug AS origen,
+            to_regclass(format('%I.fm_ventas_analitica',d.esquema_datos)) IS NOT NULL AS vista_ventas,
+            to_regclass(format('%I.articulos',d.esquema_datos)) IS NOT NULL AS vista_articulos,
+            to_regclass(format('%I.fm_recepciones_analitica',d.esquema_datos)) IS NOT NULL AS vista_compras
+          FROM farmetrica.clientes d WHERE d.demo_origen_slug IS NOT NULL
+          ORDER BY d.slug;
+          SELECT d.slug AS demo,
+            count(*) AS farmacias,
+            count(*) FILTER (WHERE f.activo) AS activas,
+            count(*) FILTER (WHERE f.activo AND origen.id IS NOT NULL) AS activas_con_codigo_erp_valido,
+            count(*) FILTER (WHERE f.activo AND origen.id IS NULL) AS activas_sin_correspondencia_erp
+          FROM farmetrica.clientes d JOIN farmetrica.farmacias f ON f.cliente_slug=d.slug
+          LEFT JOIN farmetrica.farmacias origen
+            ON origen.cliente_slug=d.demo_origen_slug
+            AND upper(btrim(f.codigo_origen)) =
+            (CASE WHEN origen.cliente_slug='ampedia' AND origen.id=5
+              AND upper(btrim(origen.codigo_origen)) IN ('POL','VAL')
+              THEN 'VAL' ELSE upper(btrim(origen.codigo_origen)) END)
+          WHERE d.demo_origen_slug IS NOT NULL
+          GROUP BY d.slug ORDER BY d.slug;
+          DO $audit$
+          DECLARE d record; exists_ventas bool; exists_articulos bool;
+          BEGIN
+            FOR d IN SELECT slug,esquema_datos FROM farmetrica.clientes
+              WHERE demo_origen_slug IS NOT NULL ORDER BY slug LOOP
+              exists_ventas:=false; exists_articulos:=false;
+              IF to_regclass(format('%I.fm_ventas_analitica',d.esquema_datos)) IS NOT NULL THEN
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.fm_ventas_analitica LIMIT 1)',
+                  d.esquema_datos) INTO exists_ventas;
+              END IF;
+              IF to_regclass(format('%I.articulos',d.esquema_datos)) IS NOT NULL THEN
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.articulos LIMIT 1)',
+                  d.esquema_datos) INTO exists_articulos;
+              END IF;
+              RAISE NOTICE 'demo=% ventas_vista_con_datos=% articulos_con_datos=%',
+                d.slug,exists_ventas,exists_articulos;
+            END LOOP;
+          END $audit$;
+          COMMIT;
+          SQL

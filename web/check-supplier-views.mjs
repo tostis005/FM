@@ -126,7 +126,7 @@ try{
  }
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:/Planificación de pedidos/}).waitFor({timeout:15000});
- await page.getByText("Laboratorios Alfa SA").first().waitFor();
+ await page.locator(".fm-order-agenda").getByText("Laboratorios Alfa SA").first().waitFor();
  await page.getByText("240 códigos nacionales únicos").waitFor();
  const agenda=page.locator(".fm-order-agenda");
  assert.equal(await agenda.locator("select,input[type=search]").count(),0);

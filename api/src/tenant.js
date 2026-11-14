@@ -625,9 +625,34 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         const name=String(req.body?.name||"").trim(),city=String(req.body?.city||"").trim();
         if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean")
           return res.status(400).json({error:"Datos de farmacia demo inválidos"});
+        if(!req.body.active){
+          // El panel permite desactivar todas salvo la última farmacia.
+          // La comprobación y la actualización se serializan por demo.
+          const db=await pool.connect();
+          try{
+            await db.query("BEGIN");
+            await db.query("SELECT pg_advisory_xact_lock(hashtext($1))",[req.context.client.slug]);
+            const {rows:remaining}=await db.query(
+              "SELECT count(*)::int AS n FROM farmetrica.farmacias "+
+              "WHERE cliente_slug=$1 AND id<>$2 AND activo=true "+
+              "AND upper(btrim(codigo_origen))<>'ALMACEN'",
+              [req.context.client.slug,Number(req.params.id)]);
+            if(!remaining[0]?.n){
+              await db.query("ROLLBACK");
+              return res.status(409).json({error:"La demo debe mantener al menos una farmacia activa"});
+            }
+            const {rows}=await db.query(
+              'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
+              [Number(req.params.id),req.context.client.slug,name,city,false]);
+            if(!rows.length){await db.query("ROLLBACK");return res.status(404).json({error:"Farmacia no encontrada"});}
+            await db.query("COMMIT");
+            return res.json(decoratePharmacy(req.context.client.slug,rows[0],{demo:true}));
+          }catch(e){await db.query("ROLLBACK").catch(()=>{});throw e}
+          finally{db.release()}
+        }
         const {rows}=await pool.query(
           'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
-          [Number(req.params.id),req.context.client.slug,name,city,req.body.active]);
+          [Number(req.params.id),req.context.client.slug,name,city,true]);
         if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
         return res.json(decoratePharmacy(req.context.client.slug,rows[0],
           {demo:true,ordinal:req.context.pharmacies.findIndex(p=>p.id===String(req.params.id))+1}));

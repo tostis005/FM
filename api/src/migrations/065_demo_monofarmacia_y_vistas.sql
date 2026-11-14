@@ -42,7 +42,7 @@ BEGIN
     '',(n=1),
     CASE WHEN id=5 AND upper(btrim(codigo_origen)) IN ('POL','VAL') THEN 'VAL'
       ELSE upper(btrim(codigo_origen)) END,
-    'DEM'||lpad(n::text,2,'0'),NULL,'Demo','farmacia'
+    'D'||lpad(n::text,2,'0'),NULL,'Demo','farmacia'
    FROM origen;
    IF NOT EXISTS(SELECT 1 FROM farmetrica.farmacias WHERE cliente_slug='demo_individual' AND activo) THEN
     RAISE EXCEPTION 'No se encontró una farmacia activa para Demo Individual';

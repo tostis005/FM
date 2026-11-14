@@ -23,8 +23,18 @@ async function openAs(role){
     const isAlerts=path.endsWith("alertas");
     if(isAlerts)alertPolls++;
     const pending=isAlerts&&alertPolls<3;
+    const rows=isAlerts?[]:[
+     {pharmacyId:"1",pharmacyName:"Farmacia de prueba",articleId:"R1",
+      cn:"123456",name:"Artículo sin venta reciente",stock:8,unitsPeriod:0,
+      unitCost:3,capital:24,alertType:"sin_ventas",
+      lastSaleDate:"2025-07-12",lastSaleStatus:"found"},
+     {pharmacyId:"1",pharmacyName:"Farmacia de prueba",articleId:"R2",
+      cn:"654321",name:"Artículo sin historial",stock:2,unitsPeriod:0,
+      unitCost:5,capital:10,alertType:"sin_ventas",
+      lastSaleDate:null,lastSaleStatus:"not_found"}
+    ];
     data={available:true,mode:isAlerts?"alertas":"inmovilizado",
-     status:pending?"calculating":"complete",rows:[],total:0,excluded:[],
+     status:pending?"calculating":"complete",rows,total:rows.length,excluded:[],
      completedSites:pending?0:1,progress:{done:pending?alertPolls:3,total:3},
      summary:{valuedSubtotal:0,valuedCount:0,stockUnits:0,riskCount:0}};
    }
@@ -57,6 +67,9 @@ try{
  assert.equal(new URL(superadmin.url()).pathname,"/alertas-inteligentes");
  await menu.getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Stock inmovilizado"}).waitFor({timeout:12000});
+ await superadmin.getByRole("columnheader",{name:"Última venta"}).waitFor({timeout:12000});
+ await superadmin.getByText("12/07/2025", {exact:true}).waitFor({timeout:12000});
+ await superadmin.getByText("Sin ventas registradas",{exact:true}).waitFor({timeout:12000});
  assert.equal(new URL(superadmin.url()).pathname,"/stock-inmovilizado");
  await superadmin.close();
 

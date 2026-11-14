@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS farmetrica.demo_proyectos (
    (alcance='multifarmacia' AND farmacia_origen_id IS NULL)
  ),
  CHECK (estado <> 'listo' OR
-  (auditoria_anonimizacion_aprobada AND version_anonimizacion >= 1
+  (auditoria_anonimizacion_aprobada AND coalesce(version_anonimizacion,0) >= 1
    AND ultima_sincronizacion IS NOT NULL)),
  UNIQUE(alias_conexion)
 );

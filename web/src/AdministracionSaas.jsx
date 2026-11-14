@@ -37,7 +37,7 @@ function DemoFarmacias({clientSlug}){
   try{
    await api("/api/tenant/farmacias/"+item.id,{
     method:"PATCH",headers,body:JSON.stringify({
-     name:item.name,city:item.city||"",active:Boolean(item.active)
+     name:item.name,city:item.city||"",active:Boolean(item.active),displayCode:item.displayCode
     })});
    await load();
   }catch(e){setError(e.message)}finally{setSaving("")}
@@ -54,10 +54,14 @@ function DemoFarmacias({clientSlug}){
      <input aria-label={"Nombre demo "+p.id} value={p.name}
       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}/>
     </label>
+    <label>Código visible (2–8 caracteres)
+      <input aria-label={"Código visible demo "+p.id} maxLength={8} value={p.displayCode||""}
+       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,displayCode:e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,"")}:x))}/>
+    </label>
     <label><input type="checkbox" checked={Boolean(p.active)}
       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,active:e.target.checked}:x))}/>
       Visible en la demo</label>
-    <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()}
+    <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()||!(/^[A-Z0-9_-]{2,8}$/.test(p.displayCode||""))}
      onClick={()=>save(p)}>{saving===String(p.id)?"Guardando…":"Guardar cambios"}</button>
    </div>)}
   </div>}

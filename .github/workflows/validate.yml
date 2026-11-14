@@ -40,6 +40,7 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
+          node --test api/src/tenantPharmacyScope.test.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js
@@ -216,6 +217,8 @@ jobs:
           psql_test --single-transaction < api/src/migrations/028_modulos_usuario.sql
           psql_test --single-transaction < api/src/migrations/040_secciones_usuario.sql
           psql_test --single-transaction < api/src/migrations/050_perfiles_globales.sql
+          psql_test --single-transaction < api/src/migrations/064_aislamiento_clientes_y_demos.sql
+          psql_test --single-transaction < api/src/migrations/064_aislamiento_clientes_y_demos.sql
           psql_test --single-transaction < api/src/migrations/051_picking_list.sql
           psql_test --single-transaction < api/src/migrations/052_codigos_visibles.sql
           psql_test --single-transaction < api/src/migrations/053_apariencia_clientes.sql

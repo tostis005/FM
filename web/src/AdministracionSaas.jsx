@@ -129,14 +129,14 @@ function ClientDomains({client}){
 
 export function ClientesPanel({onUpdated}){
  const [clients,setClients]=useState([]),[busy,setBusy]=useState(""),[error,setError]=useState(""),[loading,setLoading]=useState(true);
- const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:""});
+ const [newClient,setNewClient]=useState({slug:"",name:"",sourceSlug:"",scope:"all"});
  async function refresh(){setLoading(true);try{setClients(await api("/api/admin/clientes"))}finally{setLoading(false)}}
  useEffect(()=>{refresh().catch(e=>setError(e.message))},[]);
  async function createClient(e){
   e.preventDefault();setBusy("new");setError("");
   try{
    await api(newClient.sourceSlug?"/api/admin/clientes/demo":"/api/admin/clientes",{method:"POST",body:JSON.stringify(newClient)});
-   setNewClient({slug:"",name:"",sourceSlug:""});await refresh();onUpdated?.();
+   setNewClient({slug:"",name:"",sourceSlug:"",scope:"all"});await refresh();onUpdated?.();
   }catch(error){setError(error.message)}finally{setBusy("")}
  }
  async function toggle(slug,module,enabled){
@@ -167,6 +167,12 @@ export function ClientesPanel({onUpdated}){
         <option key={x.slug} value={x.slug}>Demo privada con vistas a {x.name} (datos reales)</option>)}
      </select>
     </label>
+    {newClient.sourceSlug&&<label>Farmacias visibles al crear la demo
+      <select value={newClient.scope} onChange={e=>setNewClient({...newClient,scope:e.target.value})}>
+        <option value="all">Todas las farmacias</option>
+        <option value="single">Solo una farmacia</option>
+      </select>
+    </label>}
     {newClient.sourceSlug&&<p className="fm-manage-wide" role="note">
      Esta opción heredada crea vistas conectadas a datos comerciales reales y NO una base independiente.
      Sólo debe usarse de forma privada y autorizada. No es apta para demos comerciales externas.

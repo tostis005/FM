@@ -73,7 +73,7 @@ test("el catálogo no atribuye la raíz a partir de un regalo o un proveedor hom
  assert.ok(!seen.some(q=>q.text?.includes("jsonb_to_recordset($3::jsonb)")));
  const catalogSQL=seen.find(q=>q.text?.includes("FROM matched")).text;
  assert.match(catalogSQL,/ua\.proveedor_id=\$3/);
- assert.match(catalogSQL,/winner\.lab_id<>\$3::bigint/);
+ assert.match(catalogSQL,/winner\.lab_id<>original\.lab_id/);
  assert.doesNotMatch(catalogSQL,/other\.nombre/);
  assert.deepEqual(seen.find(q=>q.text?.includes("FROM matched")).values.slice(0,3),
   ["ampedia",[1],"1162"]);

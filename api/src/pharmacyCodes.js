@@ -10,8 +10,10 @@ export function pharmacyDataCodeSQL(alias="f"){
 export function decoratePharmacy(slug,pharmacy,{demo=false,ordinal=0}={}){
  const master=String(pharmacy.sourceCode||"").trim().toUpperCase();
  if(demo){
-  const fake="DEMO"+String(ordinal||Number(pharmacy.id)).padStart(2,"0");
-  return {...pharmacy,sourceCode:fake,displayCode:fake,
+  const fallback="DEM"+String(ordinal||Number(pharmacy.id)).padStart(2,"0");
+  const configured=String(pharmacy.displayCode||"").trim().toUpperCase();
+  const visible=/^[A-Z0-9_-]{2,8}$/.test(configured)?configured:fallback;
+  return {...pharmacy,sourceCode:visible,displayCode:visible,
     databaseCode:master,sourceHost:"",sourceDatabase:"",
     name:pharmacy.name};
  }

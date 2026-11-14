@@ -36,6 +36,7 @@ test('ninguna demo viva o no auditada puede declararse publicable',()=>{
   {anonymizationAuditPassed:false}, {anonymizationVersion:0},
   {dataVerificationPassed:false},
   {connectionAlias:'FM_DB_AMPEDIA'}, {connectionAlias:'postgres://secret'},
+  {sourceConnectionAlias:undefined},
   {slug:'ampedia'}, {sourceSlug:'demo_grupo'}
  ]){
   assert.equal(validateDemoActivation({...ready,...override}).allowed,false,

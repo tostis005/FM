@@ -15,6 +15,9 @@ const LABELS={
 const money=v=>v==null?"Sin coste conocido":euro(Number(v));
 const number=v=>v==null?"—":integer(Number(v));
 const date=v=>v?dateES(v):"—";
+const lastSaleLabel=r=>r.lastSaleStatus==="found"&&r.lastSaleDate?date(r.lastSaleDate):
+ r.lastSaleStatus==="not_found"?"Sin ventas registradas":
+ r.lastSaleStatus==="unavailable"?"No disponible":"Consultando…";
 const localCode=r=>/^\d{6,7}$/.test(String(r.cn||"").trim())?String(r.cn).trim().slice(0,6):"";
 const priority=r=>r.alertType==="rotura"||(r.alertType==="sin_ventas"&&r.capital>=500)?"Alta":"Media";
 const suggestion=r=>r.alertType==="rotura"?
@@ -121,6 +124,9 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
    value:r=>r.coverDays,render:r=>r.coverDays==null?"Sin demanda":number(r.coverDays)+" días"}]:[
    {key:"unitCost",label:"Coste/ud.",sortable:false,searchable:false,value:r=>r.unitCost,
     render:r=>money(r.unitCost)}]),
+  ...(!isAlerts?[{key:"lastSaleDate",label:"Última venta",sortable:false,searchable:false,
+   value:r=>r.lastSaleDate||"",render:r=><span className="fm-proactive-last-sale">
+    {lastSaleLabel(r)}</span>}]:[]),
   {key:"capital",label:"Stock valorado",sortable:false,searchable:false,value:r=>r.capital,
    render:r=><strong>{money(r.capital)}</strong>},
   {key:"action",label:"Siguiente paso",sortable:false,searchable:false,
@@ -141,9 +147,12 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
  ],[isAlerts,days,clientSlug,actionBusy,created,demo]);
  const exportPage=()=>downloadTableCSV((isAlerts?"alertas-inteligentes":"stock-inmovilizado")+"-pagina-"+page,
   ["Farmacia","Referencia ERP","CN","Producto","Motivo","Stock","Ventas netas período",
-   "Cobertura días","Coste unitario","Valor stock","Fecha stock","Acción"],
+   "Cobertura días","Coste unitario",...(!isAlerts?["Última venta"]:[]),
+   "Valor stock","Fecha stock","Acción"],
   rows.map(r=>[r.pharmacyName,r.articleId,localCode(r),r.name,LABELS[r.alertType]?.title||"Sin ventas",
-   r.stock,r.unitsPeriod,r.coverDays??"",r.unitCost??"",r.capital??"",r.stockAt||"",suggestion(r)]));
+   r.stock,r.unitsPeriod,r.coverDays??"",r.unitCost??"",
+   ...(!isAlerts?[lastSaleLabel(r)]:[]),
+   r.capital??"",r.stockAt||"",suggestion(r)]));
  const excluded=result?.excluded||[];
  return <div className="fm-proactive">
   <ReportPageHeader title={isAlerts?"Alertas inteligentes":"Stock inmovilizado"}
@@ -177,11 +186,12 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
     "Stock inmovilizado significa sin ventas netas durante el período seleccionado; no implica que el artículo esté caducado o que pueda devolverse."}
    {" "}Se excluyen las farmacias sin stock actualizado en 7 días o sin ventas documentales verificadas en 14 días.
    Los importes usan el coste de catálogo PMC o PUC cuando existe y son orientativos, no ahorro realizado.
+   {!isAlerts&&" Última venta consulta todo el historial documental disponible, no solo el período elegido."}
   </p>
   {busy&&!result&&<section className="card fm-proactive-panel"><LoadingPanel label="Comprobando stock y ventas…" rows={6}/></section>}
   {busy&&result&&<div className="fm-proactive-progress" role="status" aria-live="polite">
    <span className="fm-load-spinner" aria-hidden="true"/>
-   <span><strong>Calculando por farmacias y períodos</strong>
+   <span><strong>{result.status==="dates"?"Buscando fechas de última venta":"Calculando por farmacias y períodos"}</strong>
     {" · "+number(result.progress?.done||0)+" de "+number(result.progress?.total||0)+" bloques"}
     {" · "+number(result.completedSites||0)+" farmacias terminadas"}
     {result.total>0?" · Datos parciales visibles":""}</span>
@@ -190,6 +200,9 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
    <AlertTriangle size={18}/>{error}<button type="button" onClick={()=>setRefresh(Date.now())}>Reintentar</button>
   </section>}
   {!error&&result&&<>
+   {!isAlerts&&result.dateIncomplete>0&&<div className="fm-proactive-warning" role="status">
+    <AlertTriangle size={18}/>No se ha podido verificar la última venta de {number(result.dateIncomplete)} referencias. Se indica «No disponible».
+   </div>}
    {excluded.length>0&&<div className="fm-proactive-warning" role="status">
     <AlertTriangle size={18}/>Datos excluidos: {excluded.map(x=>x.name+" ("+x.reason+")").join("; ")}.
    </div>}

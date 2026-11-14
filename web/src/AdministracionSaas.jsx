@@ -29,23 +29,23 @@ function DemoFarmacias({clientSlug}){
  const headers={"X-Farmetrica-Cliente":clientSlug};
  async function load(){
   setLoading(true);setError("");
-  try{setItems(await api("/api/tenant/farmacias",{headers}))}
+  try{setItems(await api("/api/admin/clientes/"+encodeURIComponent(clientSlug)+"/farmacias"))}
   catch(e){setError(e.message)}finally{setLoading(false)}
  }
  async function save(item){
   setSaving(String(item.id));setError("");
   try{
-   const saved=await api("/api/tenant/farmacias/"+item.id,{
+   await api("/api/tenant/farmacias/"+item.id,{
     method:"PATCH",headers,body:JSON.stringify({
      name:item.name,city:item.city||"",active:Boolean(item.active)
     })});
-   setItems(old=>old.map(row=>row.id===saved.id?saved:row));
+   await load();
   }catch(e){setError(e.message)}finally{setSaving("")}
  }
  return <div className="fm-manage-wide" style={{padding:"12px 0"}}>
   <button type="button" className="btn btn-secondary" onClick={()=>{
    setOpen(!open);if(!open)void load();
-  }}>{open?"Ocultar farmacias demo":"Editar nombres de farmacias demo"}</button>
+  }}>{open?"Ocultar farmacias demo":"Configurar farmacias de la demo"}</button>
   {open&&<div style={{marginTop:14}}>
    {loading&&<LoadingStatus label="Consultando farmacias demo…"/>}
    {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
@@ -54,8 +54,11 @@ function DemoFarmacias({clientSlug}){
      <input aria-label={"Nombre demo "+p.id} value={p.name}
       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}/>
     </label>
+    <label><input type="checkbox" checked={Boolean(p.active)}
+      onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,active:e.target.checked}:x))}/>
+      Visible en la demo</label>
     <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()}
-     onClick={()=>save(p)}>{saving===p.id?"Guardando…":"Guardar nombre"}</button>
+     onClick={()=>save(p)}>{saving===String(p.id)?"Guardando…":"Guardar cambios"}</button>
    </div>)}
   </div>}
  </div>;

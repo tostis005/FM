@@ -10,7 +10,7 @@ DECLARE
  target_name text;
  tab text;
  tables text[] := ARRAY[
-  'ventas','compras','articulos','proveedores','productos','stock',
+  'ventas','compras','articulos','proveedores','productos','stock','sinonimos',
   'fm_ventas_cabeceras','fm_ventas_lineas','fm_ventas_analitica',
   'fm_recepciones_cabeceras','fm_recepciones_lineas','fm_recepciones_analitica',
   'fm_pedidos_cabeceras','fm_pedidos_lineas','fm_stock_fotografia',

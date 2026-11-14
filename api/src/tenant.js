@@ -564,7 +564,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       res.json(rows.filter(p=>p.establishmentType!=="almacen").map((p,i)=>({
         id:p.id,name:p.name,city:p.city,active:p.active,
         displayCode:/^[A-Z0-9_-]{2,8}$/.test(String(p.displayCode||""))?
-          p.displayCode:"DEM"+String(i+1).padStart(2,"0")
+          p.displayCode:"D"+String(i+1).padStart(2,"0")
       })));
     }catch(e){next(e)}
   });

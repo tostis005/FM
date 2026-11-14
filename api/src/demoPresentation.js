@@ -1,10 +1,15 @@
 // Convertir etiquetas técnicas ERP en alias visibles ÚNICAMENTE en respuestas demo.
 // Mantener los IDs/códigos de origen intactos internamente para que los JOIN funcionen.
-const CODE_KEYS=new Set([
- 'databaseCode','sourceCode','source_code','code','pharmacyCode',
- 'farmaciaCodigo','farmacia_codigo','codigoFarmacia','codigo_farmacia',
- 'codigo_origen','pharmacy_code','sourcePharmacyCode'
+// Los códigos de proveedor, artículo y laboratorio también se llaman
+// sourceCode/code/codigo_origen. Jamás convertirlos como si fueran farmacias.
+// databaseCode es técnico y lo usa el frontend para cruzar datos ERP; mantenerlo.
+const PHARMACY_CODE_KEYS=new Set([
+ 'pharmacyCode','farmaciaCodigo','farmacia_codigo','codigoFarmacia',
+ 'codigo_farmacia','pharmacy_code','sourcePharmacyCode'
 ]);
+const isPharmacyCodeRecord=value=>value&&typeof value==='object'&&
+ ['pharmacyCode','farmacia_codigo','pharmacy_code','sourcePharmacyCode']
+ .some(key=>Object.hasOwn(value,key));
 const NAME_KEYS=new Set([
  'pharmacy','farmacia','pharmacyName','farmaciaNombre','pharmacy_name',
  'nombre_farmacia','nombreFarmacia'
@@ -36,7 +41,8 @@ export function maskDemoReport(value,maps){
  if(!value||typeof value!=='object'||value instanceof Date)return value;
  const copy={};
  for(const [key,v] of Object.entries(value)){
-  if(typeof v==='string'&&CODE_KEYS.has(key)){
+  if(typeof v==='string'&&(
+   PHARMACY_CODE_KEYS.has(key)||(key==='code'&&isPharmacyCodeRecord(value)))){
    copy[key]=maps.codes.get(stringCode(v))||v;
   }else if(typeof v==='string'&&NAME_KEYS.has(key)){
    copy[key]=maps.names.get(v.trim())||v;

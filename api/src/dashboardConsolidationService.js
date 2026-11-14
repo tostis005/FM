@@ -2,6 +2,7 @@ import pg from "pg";
 import {buildDashboardMonthSQL,compatibleConsolidatedRange,
  summarizeConsolidations,madridDay} from "./dashboardConsolidations.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {resolveDemoSourceScope} from "./demoDataScope.js";
 import {createDashboardDailyService} from "./dashboardDailyService.js";
 import {createDashboardAnnualService,splitConsolidatedYears} from "./dashboardAnnualService.js";
 import {createSalesMonthlyReader} from "./salesCachedMonthly.js";
@@ -238,13 +239,17 @@ export function setupDashboardConsolidations(app,pool,{requireTenant}){
    return res.status(403).json({error:"Farmacia no autorizada"});
   const unique=[...new Set(ids)];
   if(!unique.length)return res.json({available:true,...summarizeConsolidations([],from,to)});
-  const codeById=new Map((context.pharmacies||[]).map(f=>[
-   Number(f.id),String(f.databaseCode||f.sourceCode||"").trim().toUpperCase()]));
-  const farms=unique.map(id=>({id,code:codeById.get(id)}));
-  if(farms.some(f=>!f.code))return res.status(503).json({error:"Falta código ERP de farmacia"});
   try{
-   res.json(await service.read({slug:context.client.slug,schema:context.client.schema,
-    ids:unique,farms,from,to,granularity}));
+   // En demos, los cierres del ERP original son la única fuente histórica.
+   // No leer cierres demo anteriores generados sobre tablas vacías o pendientes.
+   const origin=await resolveDemoSourceScope(pool,context,unique);
+   const codeById=new Map((context.pharmacies||[]).map(f=>[
+    Number(f.id),String(f.databaseCode||f.sourceCode||"").trim().toUpperCase()]));
+   const farms=origin?.farms||unique.map(id=>({id,code:codeById.get(id)}));
+   if(farms.some(f=>!f.code))return res.status(503).json({error:"Falta código ERP de farmacia"});
+   res.json(await service.read({slug:origin?.slug||context.client.slug,
+    schema:origin?.schema||context.client.schema,
+    ids:origin?.ids||unique,farms,from,to,granularity}));
   }catch(e){next(e)}
  });
  return service;

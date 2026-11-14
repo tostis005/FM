@@ -27,8 +27,8 @@ try{
    " FROM farmetrica.farmacias WHERE cliente_slug=$1 AND activo AND "+
    "coalesce(tipo_establecimiento,'farmacia')='farmacia' ORDER BY id",[slug]);
   const ids=pharmacies.map(p=>Number(p.id));
-  assert.equal(ids.length,slug==="demo_individual"?1:5,
-   slug+": número inesperado de farmacias activas");
+  assert.ok(ids.length>=1,
+   slug+": ninguna farmacia activa; el administrador puede activar o desactivar farmacias");
   const ctx={client:{slug,schema:client.esquema_datos,demo:true},
    pharmacies,allowedPharmacyIds:ids,role:"superadministrador",
    modules:{compras:true,stock:true,ventas:true}};

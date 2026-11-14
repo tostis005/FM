@@ -6,6 +6,7 @@ import {resolveDemoSourceScope} from "./demoDataScope.js";
 import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {latestSupplierCN} from "./preparadorLastReceipt.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
+import {demoAgendaLaboratoryCounts} from "./demoPreparadorSnapshot.js";
 
 if(!process.env.DATABASE_URL)throw Error("DATABASE_URL necesario");
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,
@@ -51,6 +52,9 @@ try{
   assert.equal(docs[0]?.receipts,true,slug+": compras no disponibles");
   const labs=await listUnifiedSuppliers(db,ctx,ids,true);
   assert.ok(labs.length>0,slug+": selector de laboratorios vacío");
+  const agendaCN=await demoAgendaLaboratoryCounts(db,ctx,ids);
+  assert.ok(agendaCN.size>0&&agendaCN.has(String(labs[0].id)),
+    slug+": agenda no muestra el laboratorio seleccionado");
   const sample=await latestSupplierCN(db,ctx,ids,labs[0].id);
   assert.ok(sample?.length>0,slug+": laboratorio sin CN");
   // Ejecutar exactamente la agregación que utiliza el preparador, no solo

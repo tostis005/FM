@@ -40,7 +40,7 @@ jobs:
           node --test api/src/aiShareLinks.test.js
           node --check api/src/accesos.js
           node --check api/src/tenant.js
-          node --test api/src/tenantPharmacyScope.test.js api/src/demoPresentation.test.js api/src/pharmacyCodes.test.js api/src/demoClients.test.js api/src/demoTenantScope.test.js
+          node --test api/src/tenantPharmacyScope.test.js api/src/demoPresentation.test.js api/src/pharmacyCodes.test.js api/src/demoClients.test.js api/src/demoTenantScope.test.js api/src/demoDataScope.test.js
           node --check api/src/familyMaster.js
           node --test api/src/familyMatching.test.js
           node --check api/src/familyDuplicates.js
@@ -364,6 +364,23 @@ jobs:
           psql_test -At -c "UPDATE farmetrica.farmacias SET nombre='Farmacia Perez',codigo_visible='PER' WHERE cliente_slug='demo_individual' AND activo" >/dev/null
           test "$(psql_test -At -c "SELECT nombre||':'||codigo_visible FROM farmetrica.farmacias WHERE cliente_slug='demo_individual' AND activo")" = 'Farmacia Perez:PER'
           test "$(psql_test -At -c "SELECT nombre FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND codigo_origen='ABA'")" = 'Abadía'
+          # Simular una demo creada con el modelo documental anterior:
+          # tablas vacías locales y vistas analíticas apuntando a ellas.
+          psql_test -At -c "CREATE SCHEMA demo_legado_ci;
+            INSERT INTO farmetrica.clientes(slug,nombre,esquema_datos,demo_origen_slug)
+            VALUES ('demo_legado_ci','Demo legacy CI','demo_legado_ci','ampedia');
+            SELECT farmetrica.preparar_modelo_documental('demo_legado_ci');
+            SELECT farmetrica.preparar_vistas_documentales('demo_legado_ci');" >/dev/null
+          test "$(psql_test -At -c "SELECT EXISTS(SELECT 1 FROM ampedia.fm_ventas_analitica)")" = t
+          test "$(psql_test -At -c "SELECT EXISTS(SELECT 1 FROM demo_legado_ci.fm_ventas_analitica)")" = f
+          psql_test --single-transaction < api/src/migrations/066_reparar_origen_documental_demos.sql
+          psql_test --single-transaction < api/src/migrations/066_reparar_origen_documental_demos.sql
+          test "$(psql_test -At -c "SELECT (SELECT count(*) FROM demo_legado_ci.fm_ventas_analitica)=(SELECT count(*) FROM ampedia.fm_ventas_analitica)")" = t
+          test "$(psql_test -At -c "SELECT (SELECT count(*) FROM demo_legado_ci.fm_recepciones_analitica)=(SELECT count(*) FROM ampedia.fm_recepciones_analitica)")" = t
+          test "$(psql_test -At -c "SELECT (SELECT count(*) FROM demo_legado_ci.fm_ventas_cabeceras)=(SELECT count(*) FROM ampedia.fm_ventas_cabeceras)")" = t
+          test "$(psql_test -At -c "SELECT to_regclass('demo_legado_ci.fm_ventas_cabeceras_demo_legacy') IS NOT NULL")" = t
+          test "$(psql_test -At -c "SELECT relkind='v' FROM pg_class WHERE oid='demo_legado_ci.fm_ventas_cabeceras'::regclass")" = t
+          test "$(psql_test -At -c "SELECT (SELECT count(*) FROM ampedia.fm_ventas_analitica)=(SELECT count(*) FROM demo_individual.fm_ventas_analitica)")" = t
           # Reaplicar documental después de crear una demo nunca hace ALTER TABLE en vistas.
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/056_maestro_familias.sql

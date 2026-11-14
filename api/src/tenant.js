@@ -24,6 +24,7 @@ import {setupOutgoingTransfers} from "./outgoingTransfers.js";
 import {setupProfiles} from "./perfiles.js";
 import {appearanceFromDatabase,validateAppearance} from "./clientAppearance.js";
 import {tenantScopedPharmacyIds} from "./tenantPharmacyScope.js";
+import {demoPresentationMaps,maskDemoReport} from "./demoPresentation.js";
 import {effectiveProfileModules,profileAllows,requestProfileOperation} from "./profilePolicy.js";
 export function setupTenant(app,pool,{requireUser,requireSuperadmin,
   sendLocalInvitation=async()=>({sent:false}),localInvitationsReady=()=>false}) {
@@ -51,6 +52,12 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     const isDemo=Boolean(cliente.demo_origen_slug);
     const ids=tenantScopedPharmacyIds(pharmacies,{demo:isDemo,privileged:all,
       assignedIds:membership?.pharmacies||[]});
+    const demoOriginNames=isDemo?(await pool.query(
+      'SELECT nombre AS name,'+pharmacyDataCodeSQL("f")+' AS "databaseCode" '+
+      'FROM farmetrica.farmacias f WHERE f.cliente_slug=$1',
+      [cliente.demo_origen_slug])).rows:[];
+    const demoPresentation=isDemo?demoPresentationMaps(pharmacies.map((p,i)=>
+      decoratePharmacy(slug,p,{demo:true,ordinal:i+1})),demoOriginNames):null;
     const effectiveModules=effectiveProfileModules(
       effectiveUserModules(modules,membership?.module_grants,isSuper(req.user)),
       membership?.profile_permissions,isSuper(req.user));
@@ -61,6 +68,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       sections:effectiveUserSections(effectiveModules,membership?.section_grants,isSuper(req.user),role),
       profileId:membership?.profile_id??null,profileName:membership?.profile_name??null,
       profilePermissions:membership?.profile_permissions??null,
+      demoPresentation,
       pharmacies:pharmacies.filter(p=>ids.includes(Number(p.id))&&p.establishmentType!=="almacen")
         .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
       establishments:pharmacies.filter(p=>ids.includes(Number(p.id)))
@@ -85,6 +93,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
          return res.status(403).json({error:"Tu perfil no permite esta operación"});
         if(!predicate(ctx,req.user))return res.status(403).json({error:"No tienes permiso para esta funcionalidad"});
         req.context=ctx;
+        // No modificar los códigos internos usados por los JOIN; transformar
+        // únicamente las etiquetas de farmacia en la respuesta pública de la demo.
+        if(ctx.client.demo && ctx.demoPresentation && !req._demoPresentationInstalled){
+          const sendJson=res.json.bind(res);
+          res.json=value=>sendJson(maskDemoReport(value,ctx.demoPresentation));
+          req._demoPresentationInstalled=true;
+        }
         next();
       }catch(e){next(e);}
     }];

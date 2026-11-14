@@ -90,11 +90,12 @@ try{
   const brand=aside.querySelector(".brand").getBoundingClientRect();
   const sidebar=aside.getBoundingClientRect();
   const nav=aside.querySelector(".side-nav").getBoundingClientRect();
-  const toggle=aside.querySelector(".fm-sidebar-collapse-toggle").getBoundingClientRect();
+  const toggleElement=aside.querySelector(".fm-sidebar-collapse-toggle");
+  const toggle=toggleElement.getBoundingClientRect();
   return {separated:toggle.top-brand.bottom,afterNav:toggle.top-nav.bottom,
    rightGap:sidebar.right-toggle.right,bottomGap:sidebar.bottom-toggle.bottom,
    scrollable:aside.scrollHeight>aside.clientHeight,
-   label:toggle.textContent.trim(),iconCount:toggle.querySelectorAll("svg").length,
+   label:toggleElement.textContent.trim(),iconCount:toggleElement.querySelectorAll("svg").length,
    scrollMode:getComputedStyle(aside).overflowY};
  });
  assert.ok(footerPosition.separated>100,"El plegado no debe cubrir el logotipo");

@@ -5,6 +5,7 @@ import {validSalesDateRange} from "./salesAnalysisPeriod.js";
 import {mergeSalesFamilyRows} from "./salesOverview.js";
 import {nameCommercialRows} from "./commercialNames.js";
 import {summarizeSalesActivityRows} from "./salesActivity.js";
+import {resolveDemoSourceScope,mapDemoPharmacyIds} from "./demoDataScope.js";
 
 const IDENT=/^[a-z][a-z0-9_]{1,62}$/;
 const keyOf=({slug,id,month})=>slug+"|"+id+"|"+month;
@@ -371,14 +372,22 @@ export function setupSalesPanorama(app,pool,{requireTenant}){
    const ids=[...new Set(raw?raw.split(",").map(Number):allowed)];
    if(ids.some(id=>!allowed.includes(id)))
     return res.status(403).json({error:"Farmacia no autorizada"});
-   const result=await cache.read({slug:ctx.client.slug,schema:ctx.client.schema,
-    ids,pharmacies:ctx.pharmacies||[],from,to,context:ctx});
+   // Las demos leen el cierre dimensional de su cliente de origen.
+   // No procesar meses vacíos ni copiar los snapshots del cliente real.
+   const origin=await resolveDemoSourceScope(pool,ctx,ids);
+   const context=origin?{
+    ...ctx,client:{...ctx.client,slug:origin.slug,schema:origin.schema},
+    pharmacies:origin.pharmacies
+   }:ctx;
+   const result=await cache.read({slug:origin?.slug||ctx.client.slug,
+    schema:origin?.schema||ctx.client.schema,
+    ids:origin?.ids||ids,pharmacies:context.pharmacies||[],from,to,context});
    if(result.status==="preparing")return res.status(202).json(result);
    if(result.status==="error")return res.status(503).json({error:result.error});
    if(result.status==="unsupported")return res.status(400).json({
     error:"El período solicitado no se puede agregar"});
    res.setHeader?.("Cache-Control","private, no-store");
-   return res.json(result.data);
+   return res.json(origin?mapDemoPharmacyIds(result.data,origin.idMap):result.data);
   }catch(error){next(error)}
  });
  return cache;

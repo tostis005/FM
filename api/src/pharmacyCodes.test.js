@@ -39,3 +39,18 @@ test("Cambiar código visible no cambia ID, código origen ERP ni nombre públic
  assert.equal(customized.databaseCode,"VAL");
  assert.equal(customized.name,"Farmacia Plaza");
 });
+
+test("Demo: código y nombre se resuelven desde configuración, nunca desde el origen",()=>{
+ const pharmacy={id:"101",name:"Farmacia Pérez",sourceCode:"ABA",displayCode:"PER",
+  sourceHost:"192.0.2.4",sourceDatabase:"Farmatic",active:true};
+ const rendered=decoratePharmacy("demo_grupo",pharmacy,{demo:true,ordinal:1});
+ assert.equal(rendered.name,"Farmacia Pérez");
+ assert.equal(rendered.sourceCode,"PER");
+ assert.equal(rendered.displayCode,"PER");
+ assert.equal(rendered.databaseCode,"ABA","El enlace técnico ERP sigue siendo interno para las consultas");
+ assert.equal(rendered.sourceHost,"");
+ assert.equal(rendered.sourceDatabase,"");
+ assert.equal(decoratePharmacy("demo_individual",{...pharmacy,displayCode:null},{demo:true,ordinal:1}).displayCode,"D01");
+ assert.equal(decoratePharmacy("ampedia",pharmacy).sourceCode,"ABA",
+   "Los alias demo no modifican la identidad del cliente real");
+});

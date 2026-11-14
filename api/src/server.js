@@ -517,6 +517,7 @@ try {
   await pool.query(userModuleMigration);
   await pool.query(await readFile(new URL("./migrations/040_secciones_usuario.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL("./migrations/050_perfiles_globales.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL("./migrations/064_aislamiento_clientes_y_demos.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL("./migrations/051_picking_list.sql",import.meta.url),"utf8"));
   const analysisMigration=await readFile(new URL("./migrations/012_analisis_ventas_cliente.sql",import.meta.url),"utf8");
   await pool.query(analysisMigration);

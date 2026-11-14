@@ -68,8 +68,9 @@ REVOKE ALL ON FUNCTION farmetrica.preparar_vistas_documentales(text) FROM PUBLIC
 DO $apply$
 DECLARE schema_item record;
 BEGIN
- FOR schema_item IN SELECT DISTINCT esquema_datos FROM farmetrica.clientes
-  WHERE to_regnamespace(esquema_datos) IS NOT NULL LOOP
+ FOR schema_item IN SELECT DISTINCT c.esquema_datos FROM farmetrica.clientes c
+  WHERE coalesce(to_jsonb(c)->>'demo_origen_slug','')=''
+   AND to_regnamespace(c.esquema_datos) IS NOT NULL LOOP
   PERFORM farmetrica.preparar_modelo_documental(schema_item.esquema_datos);
   PERFORM farmetrica.preparar_vistas_documentales(schema_item.esquema_datos);
  END LOOP;

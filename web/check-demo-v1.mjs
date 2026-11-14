@@ -34,7 +34,7 @@ try{
  await page.getByRole("heading",{name:"Inicio",exact:true}).waitFor({timeout:15000});
  const sidebar=page.locator("#farmetrica-sidebar .side-nav");
  const top=await sidebar.locator(".side-nav-parent>.side-link").allTextContents();
- assert.deepEqual(top.map(x=>x.trim()),["Inicio","Ventas","Compras","Stock","Proveedores","Genéricos","Promociones","Trabajo y ahorro"]);
+ assert.deepEqual(top.map(x=>x.trim()),["Inicio","Alertas inteligentes","Stock inmovilizado","Ventas","Compras","Stock","Proveedores","Genéricos","Rentabilidad","Promociones","Trabajo y ahorro"]);
  assert.equal(await sidebar.getByRole("button",{name:"Proveedores",exact:true}).count(),1,
   "Un superadministrador ve Proveedores incluso si el cliente no tiene el módulo habilitado");
  assert.equal(await sidebar.getByRole("button",{name:"Alertas",exact:true}).count(),0);

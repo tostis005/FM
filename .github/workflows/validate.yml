@@ -359,6 +359,11 @@ jobs:
           test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='demo_individual' AND activo")" = 1
           test "$(psql_test -At -c "SELECT demo_origen_slug FROM farmetrica.clientes WHERE slug='demo_individual'")" = ampedia
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='demo_individual' AND c.relname='fm_ventas_analitica' AND c.relkind='v'")" = 1
+          # Las vistas leen los mismos movimientos; los alias solo cambian en la demo.
+          test "$(psql_test -At -c "SELECT (SELECT count(*) FROM demo_individual.ventas)=(SELECT count(*) FROM ampedia.ventas)")" = t
+          psql_test -At -c "UPDATE farmetrica.farmacias SET nombre='Farmacia Perez',codigo_visible='PER' WHERE cliente_slug='demo_individual' AND activo" >/dev/null
+          test "$(psql_test -At -c "SELECT nombre||':'||codigo_visible FROM farmetrica.farmacias WHERE cliente_slug='demo_individual' AND activo")" = 'Farmacia Perez:PER'
+          test "$(psql_test -At -c "SELECT nombre FROM farmetrica.farmacias WHERE cliente_slug='ampedia' AND codigo_origen='ABA'")" = 'Abadía'
           # Reaplicar documental después de crear una demo nunca hace ALTER TABLE en vistas.
           psql_test --single-transaction < api/src/migrations/018_lectura_documental.sql
           psql_test --single-transaction < api/src/migrations/056_maestro_familias.sql

@@ -1,4 +1,5 @@
 import {randomUUID} from "node:crypto";
+import {demoAgendaLaboratoryCounts} from "./demoPreparadorSnapshot.js";
 
 const VALID_ID=/^P:[1-9][0-9]{0,17}$/;
 const VALID_DATE=/^\d{4}-\d{2}-\d{2}$/;
@@ -53,12 +54,12 @@ export function setupPreparadorAgenda(app,pool,{requireTenant}){
  app.get("/api/analytics/pedidos/agenda",...auth,async(req,res,next)=>{
   if(!canRead(req))return error(res,403,"Compras no habilitado");
   try{
+   const demo=req.context.client.demo===true;
    const {rows}=await pool.query({text:`
     SELECT p.id::text,p.nombre AS name,fr.intervalo_dias AS days,
      last_order.fecha::text AS "lastOrder",
      (now() AT TIME ZONE 'Europe/Madrid')::date::text AS today,
-     (SELECT count(*)::int FROM farmetrica.preparador_ultima_recepcion_cache c
-      WHERE c.cliente_slug=p.cliente_slug AND c.lab_id=p.id) AS cn
+     ${demo?"0::int":"(SELECT count(*)::int FROM farmetrica.preparador_ultima_recepcion_cache c WHERE c.cliente_slug=p.cliente_slug AND c.lab_id=p.id)"} AS cn
     FROM farmetrica.preparador_frecuencia_laboratorio fr
     JOIN farmetrica.proveedores_unificados p
      ON p.cliente_slug=fr.cliente_slug AND fr.laboratorio_clave='P:'||p.id::text
@@ -78,12 +79,15 @@ export function setupPreparadorAgenda(app,pool,{requireTenant}){
     ) last_order ON true
     WHERE fr.cliente_slug=$1 AND fr.intervalo_dias BETWEEN 1 AND 365
      AND p.activo AND p.clase=ANY($2::text[])
-     AND EXISTS(SELECT 1 FROM farmetrica.preparador_ultima_recepcion_cache c
-      WHERE c.cliente_slug=p.cliente_slug AND c.lab_id=p.id)
+     ${demo?"":"AND EXISTS(SELECT 1 FROM farmetrica.preparador_ultima_recepcion_cache c WHERE c.cliente_slug=p.cliente_slug AND c.lab_id=p.id)"}
     ORDER BY p.nombre`,values:[clientSlug(req),READY],query_timeout:7000});
+   const counts=demo?await demoAgendaLaboratoryCounts(pool,req.context,
+     req.context.allowedPharmacyIds||[]):null;
+   const agendaRows=counts?rows.filter(r=>counts.has(String(r.id)))
+     .map(r=>({...r,cn:counts.get(String(r.id))})):rows;
    const today=rows[0]?.today||
     new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Madrid",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
-   res.json({today,items:buildAgenda(rows,today)});
+   res.json({today,items:buildAgenda(agendaRows,today)});
   }catch(e){fail(next,e)}
  });
  app.get("/api/analytics/pedidos/agenda/historial",...auth,async(req,res,next)=>{

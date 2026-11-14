@@ -96,8 +96,14 @@ BEGIN
        ) INTO points_origin;
      END IF;
      IF NOT points_origin THEN
+       -- La versión anterior podía tener otro listado de columnas. Una vista
+       -- no contiene movimientos; recrearla sin CASCADE respeta dependencias
+       -- externas o aborta la transacción de forma segura.
+       IF kind='v' THEN
+         EXECUTE format('DROP VIEW %I.%I',d.demo_schema,tab);
+       END IF;
        q:=format(
-         'CREATE OR REPLACE VIEW %I.%I AS SELECT src.* FROM %I.%I src CROSS JOIN (SELECT true AS solo_lectura) bloqueo',
+         'CREATE VIEW %I.%I AS SELECT src.* FROM %I.%I src CROSS JOIN (SELECT true AS solo_lectura) bloqueo',
          d.demo_schema,tab,d.source_schema,tab);
        EXECUTE q;
        RAISE NOTICE 'Demo %: vista % apunta al origen',d.slug,tab;

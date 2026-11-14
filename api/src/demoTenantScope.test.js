@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {setupTenant} from './tenant.js';
 
-test('demo individual: contexto excluye farmacias inactivas y oculta códigos ERP en JSON',async()=>{
+test('demo individual: contexto excluye farmacias inactivas y mantiene código técnico para consultas',async()=>{
  const routes=new Map(),calls=[];
  const app={
   get:(path,...handlers)=>routes.set('GET '+path,handlers),
@@ -46,7 +46,7 @@ test('demo individual: contexto excluye farmacias inactivas y oculta códigos ER
  assert.equal(fail,undefined);
  assert.equal(status,200);
  assert.equal(payload.pharmacies[0].sourceCode,'PER');
- assert.equal(payload.pharmacies[0].databaseCode,'PER');
+ assert.equal(payload.pharmacies[0].databaseCode,'ABA','El código técnico se necesita en la web para cruces ERP');
  assert.equal(payload.pharmacies[0].name,'Farmacia Pérez');
  assert.equal(payload.pharmacies.some(p=>p.name==='Farmacia Deshabilitada'),false);
  assert.equal(payload.establishments.length,1);

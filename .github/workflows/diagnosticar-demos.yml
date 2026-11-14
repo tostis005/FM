@@ -170,6 +170,7 @@ jobs:
             'cd /opt/farmawao && docker compose exec -T api node --input-type=module' <<'JS'
           import pg from "pg";
           import {readLaboratoryOrderMatrix} from "./src/laboratoryOrderPlanner.js";
+          import {readUnifiedLaboratoryCatalog} from "./src/laboratoryUnionCatalog.js";
           import {pharmacyDataCodeSQL} from "./src/pharmacyCodes.js";
           const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,
             connectionTimeoutMillis:5000,statement_timeout:35000,query_timeout:38000});
@@ -232,6 +233,40 @@ jobs:
                unavailable:result.metricsUnavailable,errorCode:result.metricsErrorCode||null,
                returnedMetrics:Object.keys(result.rows[0]?.byPharmacy||{}).length,
                durationMs:Date.now()-started}));
+            }
+            const {rows:lab}=await db.query({text:
+             "SELECT lab_id::text AS id,count(*)::int AS cn "+
+             "FROM farmetrica.preparador_ultima_recepcion_cache "+
+             "WHERE cliente_slug='ampedia' AND $1::int=ANY(pharmacy_ids) "+
+             "AND cn ~ '^[0-9]{6,7}$' AND left(cn,6)::int>=400000 "+
+             "GROUP BY lab_id HAVING count(*) BETWEEN 80 AND 250 "+
+             "ORDER BY count(*) DESC LIMIT 1",
+             values:[real[0].id],query_timeout:8000});
+            if(lab.length){
+             const {rows:demoLab}=await db.query({text:
+              "SELECT destination.id::text AS id FROM farmetrica.proveedores_unificados original "+
+              "JOIN farmetrica.proveedores_unificados destination "+
+              "ON destination.cliente_slug=$2 AND destination.clave_unificada=original.clave_unificada "+
+              "WHERE original.cliente_slug=$1 AND original.id=$3",
+              values:["ampedia",slug,lab[0].id],query_timeout:3000});
+             if(!demoLab.length)throw Error(slug+": lab identity missing");
+             const startCatalog=Date.now();
+             const realCatalog=await readUnifiedLaboratoryCatalog(db,ctx,{
+              key:"P:"+demoLab[0].id,pharmacies:[ph[0].id],type:"medicacion",search:""
+             });
+             console.info("DEMO_REAL_CATALOG",JSON.stringify({slug,
+              references:realCatalog.rows.length,total:realCatalog.total,
+              durationMs:Date.now()-startCatalog}));
+             if(realCatalog.rows.length){
+              const realStart=Date.now();
+              const outcome=await readLaboratoryOrderMatrix(db,ctx,{
+               key:"P:"+demoLab[0].id,pharmacies:[ph[0].id],
+               type:"medicacion",from:"2026-09-01",to:"2026-11-14",
+               prefetchedRows:realCatalog.rows.slice(0,75)});
+              console.info("DEMO_REAL_MATRIX",JSON.stringify({slug,items:outcome.rows.length,
+               unavailable:outcome.metricsUnavailable,errorCode:outcome.metricsErrorCode||null,
+               durationMs:Date.now()-realStart}));
+             }
             }
            }
            await db.query("ROLLBACK");

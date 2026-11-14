@@ -66,6 +66,20 @@ test("PostgreSQL: páginas reales, tickets multillínea, devoluciones, filtros, 
  }
  try{
   await db.query("BEGIN");
+  // El informe de rentabilidad ya usa el maestro reconciliado de familias.
+  // Preparar la equivalencia del fixture en esta transacción, sin alterar datos reales.
+  await db.query(`
+    WITH family AS (
+      INSERT INTO farmetrica.familias_globales(cliente_slug,clave,nombre,segmento)
+      VALUES ('ampedia','ci_digestivo_documental','Digestivo','MEDICACION')
+      ON CONFLICT(cliente_slug,clave) DO UPDATE SET nombre=EXCLUDED.nombre
+      RETURNING id
+    )
+    INSERT INTO farmetrica.familias_globales_alias
+      (cliente_slug,farmacia_codigo,codigo_origen,familia_id,nombre_origen,metodo)
+    SELECT 'ampedia','ABA','Digestivo',family.id,'Digestivo','manual'
+    FROM family ON CONFLICT(cliente_slug,farmacia_codigo,codigo_origen)
+    DO UPDATE SET familia_id=EXCLUDED.familia_id`);
   await db.query(`INSERT INTO ampedia.fm_ventas_cabeceras
    (farmacia_codigo,sistema_origen,documento_id,numero_documento,fecha,lineas_completas)
    VALUES ('ABA','farmatic','SCREEN-CI-V1','SCREEN-CI-V1','2026-10-18',true),

@@ -77,6 +77,19 @@ BEGIN
    AND upper(btrim(f.codigo_origen))='ALMACEN'
    AND (f.tipo_establecimiento<>'almacen' OR f.activo=true);
 
+ -- Inicializar códigos visibles de tres caracteres en las demos antiguas.
+ -- No tocar códigos ERP, ni sobrescribir abreviaturas ya personalizadas.
+ WITH ordered AS (
+  SELECT f.id,row_number() OVER (PARTITION BY f.cliente_slug ORDER BY f.id) AS ordinal
+  FROM farmetrica.farmacias f
+  JOIN farmetrica.clientes c ON c.slug=f.cliente_slug
+  WHERE c.demo_origen_slug IS NOT NULL
+   AND coalesce(f.tipo_establecimiento,'farmacia')='farmacia'
+ )
+ UPDATE farmetrica.farmacias f
+ SET codigo_visible='D'||lpad(ordered.ordinal::text,2,'0'),actualizado_en=now()
+ FROM ordered WHERE ordered.id=f.id AND nullif(btrim(f.codigo_visible),'') IS NULL;
+
  -- Reparación aditiva de las demos creadas con versiones antiguas.
  -- No crear vistas de tablas de configuraciones/promociones ni tocar entidades propias.
  FOR item IN SELECT d.slug,d.esquema_datos AS demo_schema,s.esquema_datos AS data_schema

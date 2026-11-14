@@ -558,11 +558,13 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(!client.demo_origen_slug)return res.status(400).json({error:"Este cliente no es una demo"});
       const {rows}=await pool.query(
         "SELECT id::text AS id,nombre AS name,ciudad AS city,activo AS active, "+
+        "codigo_visible AS \"displayCode\", "+
         "coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" "+
         "FROM farmetrica.farmacias f WHERE cliente_slug=$1 ORDER BY id",[slug]);
       res.json(rows.filter(p=>p.establishmentType!=="almacen").map((p,i)=>({
         id:p.id,name:p.name,city:p.city,active:p.active,
-        displayCode:"DEMO"+String(i+1).padStart(2,"0")
+        displayCode:/^[A-Z0-9_-]{2,8}$/.test(String(p.displayCode||""))?
+          p.displayCode:"DEM"+String(i+1).padStart(2,"0")
       })));
     }catch(e){next(e)}
   });
@@ -623,8 +625,11 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
       if(!/^[1-9]\d{0,8}$/.test(req.params.id))return res.status(400).json({error:"Farmacia inválida"});
       if(req.context.client.demo){
         const name=String(req.body?.name||"").trim(),city=String(req.body?.city||"").trim();
-        if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean")
+        const displayCode=String(req.body?.displayCode||"").trim().toUpperCase();
+        if(!name||name.length>150||city.length>150||typeof req.body?.active!=="boolean"||
+           !visibleCodeValid(displayCode))
           return res.status(400).json({error:"Datos de farmacia demo inválidos"});
+        if(!await visibleCodeAvailable(req,res,displayCode,req.params.id))return;
         if(!req.body.active){
           // El panel permite desactivar todas salvo la última farmacia.
           // La comprobación y la actualización se serializan por demo.
@@ -642,8 +647,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
               return res.status(409).json({error:"La demo debe mantener al menos una farmacia activa"});
             }
             const {rows}=await db.query(
-              'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
-              [Number(req.params.id),req.context.client.slug,name,city,false]);
+              'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,codigo_visible=$6,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode"',
+              [Number(req.params.id),req.context.client.slug,name,city,false,displayCode]);
             if(!rows.length){await db.query("ROLLBACK");return res.status(404).json({error:"Farmacia no encontrada"});}
             await db.query("COMMIT");
             return res.json(decoratePharmacy(req.context.client.slug,rows[0],{demo:true}));
@@ -652,7 +657,7 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         }
         const {rows}=await pool.query(
           'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,actualizado_en=now() WHERE id=$1 AND cliente_slug=$2 AND upper(btrim(codigo_origen))<>\'ALMACEN\' RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode"',
-          [Number(req.params.id),req.context.client.slug,name,city,true]);
+          [Number(req.params.id),req.context.client.slug,name,city,true,displayCode]);
         if(!rows.length)return res.status(404).json({error:"Farmacia no encontrada"});
         return res.json(decoratePharmacy(req.context.client.slug,rows[0],
           {demo:true,ordinal:req.context.pharmacies.findIndex(p=>p.id===String(req.params.id))+1}));

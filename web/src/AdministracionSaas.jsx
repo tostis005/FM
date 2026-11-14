@@ -142,6 +142,12 @@ export function ClientesPanel({onUpdated}){
  }
  return <div className="fm-management">
   <div className="page-header"><h1>Clientes</h1></div>
+  <section className="card fm-manage-client" role="note">
+   <strong>Aislamiento de datos SaaS</strong>
+   <p>Los clientes existentes siguen funcionando en esquemas de la base actual.
+   Las futuras bases independientes y las dos demos anonimizadas se están preparando
+   por separado; el registro de planificación no activa conexiones ni publica datos.</p>
+  </section>
   
   {error&&<div className="fm-manage-feedback" role="alert">{error}</div>}
   <section className="card fm-manage-client"><div className="section-heading"><h2>Nuevo cliente</h2><Building2 size={19}/></div>
@@ -149,14 +155,15 @@ export function ClientesPanel({onUpdated}){
     <label>Nombre comercial<input required maxLength={150} value={newClient.name} onChange={e=>setNewClient({...newClient,name:e.target.value})} placeholder="Grupo de farmacias"/></label>
     <label>Datos del cliente
      <select value={newClient.sourceSlug} onChange={e=>setNewClient({...newClient,sourceSlug:e.target.value})}>
-      <option value="">Nuevo cliente · base de datos independiente</option>
+      <option value="">Nuevo cliente · esquema en la base actual</option>
       {clients.filter(x=>!x.demoSourceSlug&&x.active).map(x=>
-        <option key={x.slug} value={x.slug}>Demo enlazada a {x.name}</option>)}
+        <option key={x.slug} value={x.slug}>Demo privada con vistas a {x.name} (datos reales)</option>)}
      </select>
     </label>
     {newClient.sourceSlug&&<p className="fm-manage-wide" role="note">
-     Demo privada enlazada al cliente seleccionado.
-     Antes de compartirla, anonimiza también la información comercial.
+     Esta opción heredada crea vistas conectadas a datos comerciales reales y NO una base independiente.
+     Sólo debe usarse de forma privada y autorizada. No es apta para demos comerciales externas.
+     Las nuevas demos aisladas requieren aprovisionamiento y una auditoría de anonimización.
     </p>}
     <label>Identificador / esquema<input required pattern="[a-z][a-z0-9_]{1,62}" value={newClient.slug} onChange={e=>setNewClient({...newClient,slug:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")})} placeholder="grupo_farmacias"/></label>
     <div className="fm-manage-wide"><button type="submit" disabled={Boolean(busy)} className="btn btn-primary">{busy==="new"?"Creando…":"Crear cliente"}</button></div>
@@ -165,7 +172,7 @@ export function ClientesPanel({onUpdated}){
   {loading&&clients.length>0&&<LoadingStatus label="Actualizando la configuración de clientes…"/>}
   <AIShareLinks clients={clients}/>
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
-   <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada de "+c.demoSourceSlug:""}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
+   <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada con vistas a datos reales de "+c.demoSourceSlug:""} · {c.storageMode==="base_independiente"?"BD independiente ("+(c.deploymentState||"planificada")+")":"Esquema de la base actual"}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
    {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
    <ClientAppearance client={c.slug} initial={c.appearance} onSaved={()=>{void refresh();onUpdated?.();}}/>
    <ClientDomains key={c.slug} client={c.slug}/>

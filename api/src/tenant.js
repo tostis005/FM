@@ -155,10 +155,12 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "max(a.nombre_marca) AS \"brandName\",max(a.logo_url) AS \"logoUrl\", "+
         "max(a.color_primario) AS \"primaryColor\",max(a.color_secundario) AS \"secondaryColor\", "+
         "max(a.color_fondo) AS \"pageColor\", "+
-        "max(a.estilo_menu) AS \"menuMode\" "+
+        "max(a.estilo_menu) AS \"menuMode\", "+
+        "max(d.almacenamiento) AS \"storageMode\",max(d.estado) AS \"deploymentState\" "+
         "FROM farmetrica.clientes c "+
         "LEFT JOIN farmetrica.cliente_modulos m ON m.cliente_slug=c.slug "+
         "LEFT JOIN farmetrica.cliente_apariencia a ON a.cliente_slug=c.slug "+
+        "LEFT JOIN farmetrica.cliente_despliegues d ON d.cliente_slug=c.slug "+
         "GROUP BY c.slug ORDER BY c.nombre");
       res.json(rows.map(({brandName,logoUrl,primaryColor,secondaryColor,pageColor,menuMode,...client})=>({
         ...client,appearance:appearanceFromDatabase({brandName,logoUrl,primaryColor,secondaryColor,pageColor,menuMode})

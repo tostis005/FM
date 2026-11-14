@@ -58,7 +58,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
     if(!response.ok)throw Error(body.error||"No se pudo consultar el análisis");
     if(disposed)return;
     setResult(body);
-    const pending=["queued","checking","calculating"].includes(body.status);
+    const pending=["queued","checking","calculating","dates"].includes(body.status);
     setBusy(pending);
     if(pending)pollTimer=setTimeout(load,1500);
    }catch(e){

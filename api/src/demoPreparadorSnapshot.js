@@ -63,3 +63,19 @@ export async function demoAllLaboratoryCNFromSnapshot(pool,ctx,pharmacies){
   values:[scope.slug,ctx.client.slug,scope.ids],query_timeout:6500});
  return rows;
 }
+
+// Agenda: cantidad de CN por laboratorio, filtrada a las farmacias ACTIVAS
+// de la demo. La última compra real es compartida; la fecha de pedido
+// confirmada continúa siendo independiente en la tabla de cada demo.
+export async function demoAgendaLaboratoryCounts(pool,ctx,pharmacies){
+ const scope=await sourceScope(pool,ctx,pharmacies);
+ if(!scope||!await sourceReady(pool,scope.slug))return new Map();
+ const {rows}=await pool.query({text:`
+  SELECT demo.id::text AS lab_id,count(*)::int AS cn
+  FROM farmetrica.preparador_ultima_recepcion_cache cache
+  ${supplierJoin}
+  WHERE cache.cliente_slug=$1 AND cache.pharmacy_ids && $3::int[]
+  GROUP BY demo.id`,
+  values:[scope.slug,ctx.client.slug,scope.ids],query_timeout:6500});
+ return new Map(rows.map(r=>[String(r.lab_id),Number(r.cn)]));
+}

@@ -126,6 +126,8 @@ try{
  }
  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:/Planificación de pedidos/}).waitFor({timeout:15000});
+ // Desde la compactación de la planificación, la agenda comienza plegada.
+ await page.locator(".fm-order-agenda").getByRole("button",{name:/Ver agenda/}).click();
  await page.locator(".fm-order-agenda").getByText("Laboratorios Alfa SA").first().waitFor();
  await page.getByText("240 códigos nacionales únicos").waitFor();
  const agenda=page.locator(".fm-order-agenda");

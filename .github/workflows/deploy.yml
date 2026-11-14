@@ -558,6 +558,16 @@ jobs:
           COMMIT;
           SQL
 
+      - name: Comprobar con la API real el preparador, stock, familias y compras de las demos
+        timeout-minutes: 3
+        run: |
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" '
+            set -eu
+            cd /opt/farmawao
+            timeout 150 docker compose -f compose.yaml -f compose.farmacias.yml exec -T api \
+              node src/checkDemosOperationalReadiness.mjs
+          '
+
       - name: Reiniciar catálogo de promociones de Ampedia (solicitado, auditado)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'RESET_COMPLETO_PROMOCIONES_20261106')
         timeout-minutes: 3

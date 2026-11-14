@@ -22,7 +22,7 @@ async function api(path,options={}){
 }
 // Alias de farmacia editables solo dentro del cliente demo, sin tocar
 // códigos ERP ni el maestro del cliente original.
-function DemoFarmacias({clientSlug}){
+function DemoFarmacias({clientSlug,onUpdated}){
  const [open,setOpen]=useState(false),[items,setItems]=useState([]),
   [loading,setLoading]=useState(false),[saving,setSaving]=useState(""),
   [error,setError]=useState("");
@@ -39,7 +39,7 @@ function DemoFarmacias({clientSlug}){
     method:"PATCH",headers,body:JSON.stringify({
      name:item.name,city:item.city||"",active:Boolean(item.active),displayCode:item.displayCode
     })});
-   await load();
+   await load();onUpdated?.();
   }catch(e){setError(e.message)}finally{setSaving("")}
  }
  return <div className="fm-manage-wide" style={{padding:"12px 0"}}>
@@ -186,7 +186,7 @@ export function ClientesPanel({onUpdated}){
   <AIShareLinks clients={clients}/>
   {clients.map(c=><section key={c.slug} className="card fm-manage-client">
    <div className="fm-manage-client-header"><div><h2><Building2 size={20} style={{verticalAlign:"middle",marginRight:8}}/>{c.name}</h2><p>Cliente: {c.slug} · Esquema operativo: {c.schema}{c.demoSourceSlug?" · Demo privada con vistas a datos reales de "+c.demoSourceSlug:""} · {c.storageMode==="base_independiente"?"BD independiente ("+(c.deploymentState||"planificada")+")":"Esquema de la base actual"}</p></div><span>{c.active?"Activo":"Inactivo"}</span></div>
-   {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug}/>}
+   {c.demoSourceSlug&&<DemoFarmacias clientSlug={c.slug} onUpdated={onUpdated}/>}
    <ClientAppearance client={c.slug} initial={c.appearance} onSaved={()=>{void refresh();onUpdated?.();}}/>
    <ClientDomains key={c.slug} client={c.slug}/>
    <div className="fm-modules-grid">{MODULES.map(([id,label])=><label key={id} className="fm-module-toggle"><span><strong>{label}</strong><small>{id==="proveedores"?"El directorio de consulta siempre está disponible":c.modules?.[id]?"Visible para el cliente":"Oculto para el cliente"}</small></span>

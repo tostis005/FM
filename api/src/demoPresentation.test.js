@@ -14,13 +14,20 @@ test('demo: en JSON e informes se reemplazan códigos ERP por códigos editables
    {code:'ABA',farmacia:'Valdemarías',sourceCode:'ABA'}],
   supply:{sourceCode:'LAB01',name:'Laboratorio ABA'}};
  const masked=maskDemoReport(raw,maps);
- assert.equal(masked.pharmacies[0].databaseCode,'PER');
+ assert.equal(masked.pharmacies[0].databaseCode,'ABA','El frontend necesita el código ERP técnico para sus cruces');
  assert.equal(masked.rows[0].code,'NOR');
  assert.equal(masked.rows[0].farmacia_codigo,'PER');
  assert.equal(masked.rows[0].pharmacy,'Farmacia Pérez');
  assert.equal(masked.rows[1].farmacia,'Farmacia Norte');
+ assert.equal(masked.rows[1].sourceCode,'ABA','El identificador ambiguo no debe transformarse');
  assert.equal(masked.supply.sourceCode,'LAB01');
  assert.equal(masked.supply.name,'Laboratorio ABA');
+ // sourceCode también identifica PROVEEDORES. Un proveedor llamado ABA
+ // no puede cambiar de código por el alias visible de la farmacia.
+ const supplier=maskDemoReport({sourceCode:'ABA',codigo_origen:'ABA',code:'ABA',name:'Proveedor A'},maps);
+ assert.equal(supplier.sourceCode,'ABA');
+ assert.equal(supplier.codigo_origen,'ABA');
+ assert.equal(supplier.code,'ABA');
  assert.equal(raw.rows[0].code,'VAL','Nunca alterar el objeto usado en SQL/cálculos');
 });
 test('no se reescriben importes ni nombres de producto',()=>{

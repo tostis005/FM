@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import pg from "pg";
 import {resolveDemoSourceScope} from "./demoDataScope.js";
-import {listUnifiedSuppliers} from "./unifiedSuppliers.js";
+import {listUnifiedSuppliers,readUnifiedSupplierCN} from "./unifiedSuppliers.js";
 import {latestSupplierCN} from "./preparadorLastReceipt.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 
@@ -53,6 +53,14 @@ try{
   assert.ok(labs.length>0,slug+": selector de laboratorios vacío");
   const sample=await latestSupplierCN(db,ctx,ids,labs[0].id);
   assert.ok(sample?.length>0,slug+": laboratorio sin CN");
+  // Ejecutar exactamente la agregación que utiliza el preparador, no solo
+  // validar la existencia del caché: al elegir un laboratorio debe aparecer CN.
+  const selected=sample[0];
+  const prepared=await readUnifiedSupplierCN(db,ctx,{
+   key:labs[0].key,pharmacies:ids,type:selected.tipo,search:selected.cn
+  });
+  assert.ok(prepared.rows.some(item=>String(item.cn)===String(selected.cn)),
+   slug+": el preparador no muestra un CN confirmado del laboratorio");
   const {rows:master}=await db.query(
    "SELECT EXISTS(SELECT 1 FROM farmetrica.familias_globales_articulos "+
    "WHERE cliente_slug=$1 LIMIT 1) AS families, "+

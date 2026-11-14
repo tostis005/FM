@@ -251,7 +251,7 @@ jobs:
           SQL
           )
           test "$documental_state" = ready || test "$documental_state" = missing
-          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 050_perfiles_globales.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 027_pedidos_laboratorio_borradores.sql 047_pedidos_laboratorio_comentarios.sql 048_proveedor_fichas_documentos.sql 049_almacen_establecimiento.sql 051_picking_list.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 061_dashboard_consolidados_anuales.sql 062_ventas_panorama_mensual.sql 063_reparar_lectura_ventas_gestor.sql 064_aislamiento_clientes_y_demos.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 041_preparador_ultima_recepcion_cache.sql 042_preparador_agenda_y_cobertura.sql 043_preparador_agenda_global.sql 044_proveedores_otros_servicios.sql 035_stock_sin_recepciones_indices.sql 056_ampedia_fondo_suave.sql 057_ampedia_paleta_agua.sql 065_demo_monofarmacia_y_vistas.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
+          for migration in 001_farmacias.sql 002_accesos.sql 003_multitenant.sql 028_modulos_usuario.sql 040_secciones_usuario.sql 050_perfiles_globales.sql 040_secciones_usuario.sql 029_fuentes_catalogo.sql 030_proveedor_laboratorio.sql 031_preparador_bajas.sql 027_pedidos_laboratorio_borradores.sql 047_pedidos_laboratorio_comentarios.sql 048_proveedor_fichas_documentos.sql 049_almacen_establecimiento.sql 051_picking_list.sql 012_analisis_ventas_cliente.sql 013_accesos_locales.sql 020_dominios_cliente_reset.sql 014_clientes_demo.sql 024_ai_mcp_demo_keys.sql 015_cache_analitica_ventas.sql 038_dashboard_consolidados_mensuales.sql 039_dashboard_consolidados_diarios.sql 061_dashboard_consolidados_anuales.sql 062_ventas_panorama_mensual.sql 063_reparar_lectura_ventas_gestor.sql 064_aislamiento_clientes_y_demos.sql 016_modelo_documental.sql 018_lectura_documental.sql 021_traspasos_salientes.sql 016_operativa_manual.sql 032_laboratory_order_frequency.sql 033_laboratorios_personalizados.sql 005_proveedores.sql 017_proveedores_visibilidad.sql 036_proveedores_unificados.sql 041_preparador_ultima_recepcion_cache.sql 042_preparador_agenda_y_cobertura.sql 043_preparador_agenda_global.sql 044_proveedores_otros_servicios.sql 035_stock_sin_recepciones_indices.sql 056_ampedia_fondo_suave.sql 057_ampedia_paleta_agua.sql 065_demo_monofarmacia_y_vistas.sql 066_reparar_origen_documental_demos.sql 006_solicitudes_demo.sql 007_solicitudes_privacidad.sql; do
             if [ "$baseline_state" = ready ]; then
               case " $legacy_migrations " in
                 *" $migration "*)
@@ -482,6 +482,45 @@ jobs:
           ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
             'curl -fsS --max-time 10 http://127.0.0.1:18080/fm-release.json' > /tmp/farmetrica-release.json
           grep -F "\"commit\":\"$GITHUB_SHA\"" /tmp/farmetrica-release.json
+
+      - name: Verificar datos reales de ambas demos sin escribir movimientos
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_fm -o BatchMode=yes -o StrictHostKeyChecking=yes "$VPS_USER@$VPS_HOST" \
+            'cd /opt/farmawao && docker compose exec -T db psql -X -v ON_ERROR_STOP=1 -U farmawao -d farmawao' <<'SQL'
+          BEGIN TRANSACTION READ ONLY;
+          SET LOCAL statement_timeout='25000ms';
+          DO $demo_check$
+          DECLARE d record; f record; ready boolean; matched integer;
+          BEGIN
+            FOR d IN SELECT slug,esquema_datos FROM farmetrica.clientes
+              WHERE demo_origen_slug='ampedia' AND activo
+                AND slug IN('demo_farmetrica','demo_individual') LOOP
+              IF to_regclass(format('%I.fm_ventas_analitica',d.esquema_datos)) IS NULL
+               OR to_regclass(format('%I.fm_ventas_cabeceras',d.esquema_datos)) IS NULL
+               OR to_regclass(format('%I.fm_ventas_lineas',d.esquema_datos)) IS NULL THEN
+                RAISE EXCEPTION 'Demo % sin vistas documentales',d.slug;
+              END IF;
+              matched:=0;
+              FOR f IN SELECT codigo_origen FROM farmetrica.farmacias
+                WHERE cliente_slug=d.slug AND activo LOOP
+                EXECUTE format(
+                 'SELECT EXISTS(SELECT 1 FROM %I.fm_ventas_analitica WHERE farmacia_codigo=$1 LIMIT 1)',
+                 d.esquema_datos) INTO ready USING upper(btrim(f.codigo_origen));
+                IF ready THEN matched:=matched+1; END IF;
+              END LOOP;
+              IF matched=0 THEN RAISE EXCEPTION 'Demo % sin ventas enlazadas',d.slug; END IF;
+              RAISE NOTICE 'Demo % con datos reales: % farmacias con ventas',d.slug,matched;
+            END LOOP;
+            IF (SELECT count(*) FROM farmetrica.clientes
+                WHERE demo_origen_slug='ampedia'
+                  AND slug IN('demo_farmetrica','demo_individual'))<>2 THEN
+              RAISE EXCEPTION 'No están registradas las dos demos';
+            END IF;
+          END $demo_check$;
+          COMMIT;
+          SQL
 
       - name: Reiniciar catálogo de promociones de Ampedia (solicitado, auditado)
         if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'RESET_COMPLETO_PROMOCIONES_20261106')

@@ -148,7 +148,7 @@ export function ClientesPanel({onUpdated}){
   <section className="card fm-manage-client" role="note">
    <strong>Aislamiento de datos SaaS</strong>
    <p>Los clientes existentes siguen funcionando en esquemas de la base actual.
-   Las futuras bases independientes y las dos demos anonimizadas se están preparando
+   Las futuras bases independientes y las demos con nombres ficticios se están preparando
    por separado; el registro de planificación no activa conexiones ni publica datos.</p>
   </section>
   

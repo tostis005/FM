@@ -76,5 +76,39 @@ jobs:
                 d.slug,exists_ventas,exists_articulos;
             END LOOP;
           END $audit$;
+          SELECT d.slug AS demo, t.tabla, coalesce(c.relkind::text,'no_existe') AS clase,
+            CASE WHEN c.relkind='v' THEN
+              position('ampedia.' IN pg_get_viewdef(c.oid,true))>0
+            ELSE NULL END AS vista_apunta_ampedia
+          FROM farmetrica.clientes d
+          CROSS JOIN (VALUES ('ventas'),('articulos'),
+            ('fm_ventas_cabeceras'),('fm_ventas_lineas'),('fm_ventas_analitica'),
+            ('fm_recepciones_cabeceras'),('fm_recepciones_lineas'),('fm_recepciones_analitica')
+          ) AS t(tabla)
+          LEFT JOIN pg_namespace n ON n.nspname=d.esquema_datos
+          LEFT JOIN pg_class c ON c.relnamespace=n.oid AND c.relname=t.tabla
+          WHERE d.demo_origen_slug IS NOT NULL
+          ORDER BY d.slug,t.tabla;
+          SELECT cliente_slug AS cliente, count(*) AS filas_cache_mes
+          FROM farmetrica.dashboard_consolidados_mensuales
+          WHERE cliente_slug IN('ampedia','demo_farmetrica','demo_individual')
+          GROUP BY cliente_slug ORDER BY cliente_slug;
+          DO $check$
+          DECLARE d record; k record; has_by_active bool; fresh_by_active bool;
+          BEGIN
+            FOR d IN SELECT c.slug,c.esquema_datos FROM farmetrica.clientes c
+              WHERE c.demo_origen_slug IS NOT NULL ORDER BY c.slug LOOP
+              FOR k IN SELECT CASE WHEN f.codigo_origen='POL' THEN 'VAL' ELSE f.codigo_origen END AS code
+                  FROM farmetrica.farmacias f
+                  WHERE f.cliente_slug=d.slug AND f.activo LOOP
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.fm_ventas_analitica WHERE farmacia_codigo=$1 LIMIT 1)',
+                   d.esquema_datos) INTO has_by_active USING k.code;
+                EXECUTE format('SELECT EXISTS(SELECT 1 FROM %I.fm_ventas_analitica WHERE farmacia_codigo=$1 AND fecha >= CURRENT_DATE - INTERVAL ''60 days'' LIMIT 1)',
+                   d.esquema_datos) INTO fresh_by_active USING k.code;
+                RAISE NOTICE 'demo=% farmacia_activa_ventas=% ventas_ultimos_60_dias=%',
+                  d.slug,has_by_active,fresh_by_active;
+              END LOOP;
+            END LOOP;
+          END $check$;
           COMMIT;
           SQL

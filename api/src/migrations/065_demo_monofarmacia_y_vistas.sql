@@ -75,7 +75,9 @@ BEGIN
  FROM farmetrica.clientes c
  WHERE f.cliente_slug=c.slug AND c.demo_origen_slug IS NOT NULL
    AND upper(btrim(f.codigo_origen))='ALMACEN'
-   AND (f.tipo_establecimiento<>'almacen' OR f.activo=true);
+   AND f.tipo_establecimiento<>'almacen';
+ -- Si ya se configuró manualmente un almacén en una demo, no desactivarlo
+ -- en cada despliegue; respetar las decisiones del administrador.
 
  -- Inicializar códigos visibles de tres caracteres en las demos antiguas.
  -- No tocar códigos ERP, ni sobrescribir abreviaturas ya personalizadas.

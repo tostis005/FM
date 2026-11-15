@@ -481,18 +481,18 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      onCustomFromChange={v=>changeDate("from",v)}
      onCustomToChange={v=>changeDate("to",v)}/>
     {!range.valid&&<p role="alert" className="fm-op-message fm-op-error">Selecciona un período válido y comprueba las fechas desde/hasta.</p>}
-    {data.warning&&<p role="status" className="fm-lab-order-warning">
-     <AlertTriangle size={15}/> {data.warning}
-    </p>}
-    {!loading&&data.metricsUnavailable&&data.rows?.length>0&&scope&&<div className="fm-lab-order-warning" role="status">
-     <AlertTriangle size={15}/>
-     <span>No se han podido completar todas las métricas.
-      {data.metricsLoaded>0?" Hay "+data.metricsLoaded+" de "+data.total+" artículos calculados.":""}
-      Puedes reintentar la consulta de stock y ventas.</span>
-     <button type="button" className="btn btn-secondary" onClick={()=>setReload(n=>n+1)}>
-      Reintentar stock y ventas
-     </button>
-    </div>}
+    {(data.warning||(!loading&&data.metricsUnavailable&&data.rows?.length>0&&scope))&&
+     <div className="fm-lab-order-warning" role="status">
+      <AlertTriangle size={15}/>
+      <span className="fm-lab-warning-text">
+       {data.warning||"No se han podido completar las métricas de stock y ventas."}
+       {!loading&&data.metricsUnavailable&&data.metricsLoaded>0&&
+        " Hay "+data.metricsLoaded+" de "+data.total+" artículos calculados."}
+      </span>
+      {!loading&&data.metricsUnavailable&&data.rows?.length>0&&scope&&
+       <button type="button" className="btn btn-secondary fm-lab-warning-retry"
+        onClick={()=>setReload(n=>n+1)}>Reintentar stock y ventas</button>}
+     </div>}
     {!laboratory.startsWith("P:")&&(!loading&&data.total===0||Boolean(error)||diagnostic)&&
      <div className="fm-lab-order-diagnostic-area">
       <button type="button" className="btn btn-secondary" disabled={diagnosticBusy}

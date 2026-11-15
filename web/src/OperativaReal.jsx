@@ -57,7 +57,7 @@ function SelectStatus({value,onChange,values,disabled}){return <select aria-labe
  onChange={e=>onChange(e.target.value)}>{values.map(s=><option key={s} value={s}>{ESTADOS[s]||s}</option>)}</select>}
 function Button({children,onClick,disabled,primary=false}){return <button type="button"
  className={"btn "+(primary?"btn-primary":"btn-secondary")} disabled={disabled} onClick={onClick}>{children}</button>}
-export default function OperativaReal({section,pharmacies=[],clientSlug,userEmail="",tenantRole=""}){
+export default function OperativaReal({section,pharmacies=[],warehouses=[],clientSlug,userEmail="",tenantRole=""}){
  const operationalPharmacyKey="fm_operativa_farmacia:"+clientSlug;
  const resource=MAP[section], [pharmacy,setPharmacy]=useState(()=>{
   const operational=sessionStorage.getItem(operationalPharmacyKey);
@@ -205,7 +205,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
  // El preparador se consulta a escala de grupo, no depende de /api/operativa
  // ni del selector local para abrir. Los planes ya guardados se gestionan aparte.
  if(section==="compras-preparador")return <div className="fm-operativa-preview fm-operativa-real">
-  <PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
+  <PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies} warehouses={warehouses}
    canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}
    onCreated={()=>{}}/>
  </div>;
@@ -218,7 +218,7 @@ export default function OperativaReal({section,pharmacies=[],clientSlug,userEmai
    {header}
    {error&&<div className="fm-op-message fm-op-error" role="alert">{error}</div>}
    {notice&&<div className="fm-op-message" role="status">{notice}</div>}
-   {section==="compras-preparador"&&<PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies}
+   {section==="compras-preparador"&&<PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies} warehouses={warehouses}
     canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)} onCreated={()=>void refresh({silent:true})}/>}
   {resource==="pedidos"&&<>
     <Cards entries={[["Planes",NUM(items.length)],["Pendientes de aprobación",NUM(items.filter(n=>n.estado==="pendiente_aprobacion").length)],

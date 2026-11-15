@@ -361,6 +361,29 @@ jobs:
           test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.farmacias
            WHERE cliente_slug='demo_individual' AND codigo_origen='ALMACEN'
              AND tipo_establecimiento='almacen' AND activo=false")" = 1
+          # La configuración manual debe sobrevivir a TODAS las migraciones
+          # idempotentes: 0, 1 o varios almacenes a elección del cliente.
+          psql_test -At -c "UPDATE farmetrica.farmacias SET activo=true
+            WHERE cliente_slug='demo_individual' AND codigo_origen='ALMACEN'" >/dev/null
+          psql_test --single-transaction < api/src/migrations/065_demo_monofarmacia_y_vistas.sql
+          psql_test --single-transaction < api/src/migrations/068_almacenes_configurables_demo.sql
+          test "$(psql_test -At -c "SELECT activo FROM farmetrica.farmacias
+            WHERE cliente_slug='demo_individual' AND codigo_origen='ALMACEN'")" = t
+          psql_test -At -c "UPDATE farmetrica.farmacias
+            SET activo=false,tipo_establecimiento='farmacia'
+            WHERE cliente_slug='demo_individual' AND codigo_origen='ALMACEN'" >/dev/null
+          psql_test --single-transaction < api/src/migrations/065_demo_monofarmacia_y_vistas.sql
+          test "$(psql_test -At -c "SELECT tipo_establecimiento FROM farmetrica.farmacias
+            WHERE cliente_slug='demo_individual' AND codigo_origen='ALMACEN'")" = farmacia
+          psql_test -At -c "UPDATE farmetrica.farmacias SET tipo_establecimiento='almacen'
+            WHERE cliente_slug='demo_individual' AND codigo_origen='ALMACEN'" >/dev/null
+          psql_test -At -c "UPDATE farmetrica.farmacias SET activo=false
+            WHERE cliente_slug='ampedia' AND codigo_origen='ALMACEN'" >/dev/null
+          psql_test --single-transaction < api/src/migrations/049_almacen_establecimiento.sql
+          test "$(psql_test -At -c "SELECT activo FROM farmetrica.farmacias
+            WHERE cliente_slug='ampedia' AND codigo_origen='ALMACEN'")" = f
+          psql_test -At -c "UPDATE farmetrica.farmacias SET activo=true
+            WHERE cliente_slug='ampedia' AND codigo_origen='ALMACEN'" >/dev/null
           test "$(psql_test -At -c "SELECT count(*) FROM farmetrica.farmacias WHERE cliente_slug='demo_individual' AND activo")" = 1
           test "$(psql_test -At -c "SELECT demo_origen_slug FROM farmetrica.clientes WHERE slug='demo_individual'")" = ampedia
           test "$(psql_test -At -c "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='demo_individual' AND c.relname='fm_ventas_analitica' AND c.relkind='v'")" = 1

@@ -70,7 +70,7 @@ import { parseCNs, isValidCN, normalizeStoredCNs } from "./cns.js";
 import { exportPromotionExcel, exportLabSalesExcel, exportLabSalesZip } from "./exportaciones.js";
 import {validateLabPromotion,preparePromotionLabExport} from "./laboratoryExport.js";
 import {promotionTicketPolicy} from "./promotionTicketRules.js";
-import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveWarehousePresentationToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
+import { pharmacyBackendConfigured, hasPharmacySession, signInPharmacies, loadPharmacies, savePharmacyToServer, saveEstablishmentConfigurationToServer, loadPromotionSales, loadTicketLines, loadStoredPromotions, saveStoredPromotion, deleteStoredPromotion, importStoredPromotions, deleteStoredPromotions,activateStoredPromotions } from "./farmaciasApi.js";
 
 // Vite avisa si la pestaña intenta cargar un chunk de la versión anterior.
 // Evitar la pantalla en blanco y respetar el límite de una recarga automática.
@@ -331,7 +331,7 @@ function App(){
  const [editingUser,setEditingUser]=useState(null);
  const [userForm,setUserForm]=useState({id:null,name:"",email:"",role:"farmacia",pharmacies:[],active:true});
  const [editingPharmacy,setEditingPharmacy]=useState(null);
- const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic"});
+ const [pharmacyForm,setPharmacyForm]=useState({id:"",name:"",city:"",active:true,displayCode:"",sourceCode:"",sourceHost:"",sourceDatabase:"Farmatic",establishmentType:"farmacia"});
   const [pharmacyApiStatus,setPharmacyApiStatus]=useState("cargando");
  const [pharmacyLastUpdated,setPharmacyLastUpdated]=useState(null);
   const [sessionUser,setSessionUser]=useState(null);
@@ -1209,7 +1209,8 @@ function App(){
         headers:{"X-Farmetrica-Cliente":tenantContext.client.slug}});
        if(response.ok){
         const all=await response.json();
-        if(Array.isArray(all))setTenantContext(c=>c?{...c,pharmacies:records,establishments:all}:c);
+        if(Array.isArray(all))setTenantContext(c=>c?{...c,pharmacies:records,establishments:all,
+          warehouses:all.filter(p=>p.establishmentType==="almacen"&&p.active!==false)}:c);
        }
       }
       setPharmacyApiStatus("connected");setPharmacyApiError("");setPharmacyLastUpdated(new Date());
@@ -1237,28 +1238,19 @@ function App(){
       return setToast("Inicia sesión como administrador desde Accesos");
     setSavingPharmacy(true);
     try{
-      if(pharmacyForm.establishmentType==="almacen"){
-        await saveWarehousePresentationToServer(id,name,displayCode);
-        await refreshPharmacies();
-        setToast("Nombre y código visible del almacén actualizados");
+      if(editingPharmacy==="nuevo"){
+        await savePharmacyToServer({...pharmacyForm,id,name,displayCode,
+          sourceCode:displayCode,sourceHost:pharmacyForm.sourceHost||"",
+          sourceDatabase:pharmacyForm.sourceDatabase||"Farmatic"},true);
       }else{
-        // En ediciones el código origen, el host y la BD se preservan en backend.
-        // Para una nueva farmacia, el código inicial de origen coincide con su
-        // código visible hasta que se configure en el sincronizador.
-        const f={...pharmacyForm,id,name,displayCode,
-          sourceCode:editingPharmacy==="nuevo"?displayCode:pharmacyForm.sourceCode,
-          sourceHost:pharmacyForm.sourceHost||"",
-          sourceDatabase:pharmacyForm.sourceDatabase||"Farmatic"};
-        if(pharmacyApiStatus==="connected"){
-          await savePharmacyToServer(f,editingPharmacy==="nuevo");
-          await refreshPharmacies();
-          setToast("Farmacia actualizada en PostgreSQL");
-        }else{
-          setData(prev=>({...prev,pharmacies:prev.pharmacies.some(x=>x.id===id)?
-           prev.pharmacies.map(x=>x.id===id?f:x):[...prev.pharmacies,f]}));
-          setToast("Cambios guardados");
-        }
+        await saveEstablishmentConfigurationToServer(id,{
+          name,city:pharmacyForm.city||"",displayCode,
+          active:Boolean(pharmacyForm.active),
+          establishmentType:pharmacyForm.establishmentType||"farmacia"
+        });
       }
+      await refreshPharmacies();
+      setToast("Establecimiento actualizado. El preparador aplicará el tipo configurado.");
       setEditingPharmacy(null);
     }catch(err){setToast(err.message)}
     finally{setSavingPharmacy(false)}
@@ -1986,17 +1978,22 @@ function App(){
      <Field label="Código visible"><input required placeholder={editingIsWarehouse?"ALM":"ABA"}
        maxLength={8} autoCapitalize="characters" value={pharmacyForm.displayCode||""}
        onChange={e=>setPharmacyForm({...pharmacyForm,displayCode:e.target.value.toUpperCase()})}/></Field>
-     {editingIsWarehouse?<div className="note small-note">
-      <ShieldCheck size={16}/> El ID y el código de sincronización
-      <strong>{pharmacyForm.sourceCode||"ALMACEN"}</strong> permanecen intactos.
-     </div>:<>
-      <Field label="Ciudad (opcional)"><input value={pharmacyForm.city||""}
-       onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field>
-      <Field label="Estado"><select value={String(pharmacyForm.active)}
-       onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}>
+     <Field label="Tipo de establecimiento"><select aria-label="Tipo de establecimiento"
+       value={pharmacyForm.establishmentType||"farmacia"}
+       onChange={e=>setPharmacyForm({...pharmacyForm,establishmentType:e.target.value})}>
+       <option value="farmacia">Farmacia</option><option value="almacen">Almacén</option>
+      </select></Field>
+     <Field label="Ciudad (opcional)"><input value={pharmacyForm.city||""}
+      onChange={e=>setPharmacyForm({...pharmacyForm,city:e.target.value})}/></Field>
+     <Field label="Estado"><select value={String(pharmacyForm.active)}
+      onChange={e=>setPharmacyForm({...pharmacyForm,active:e.target.value==="true"})}>
        <option value="true">Activa</option><option value="false">Inactiva</option>
       </select></Field>
-     </>}
+     {editingPharmacy!=="nuevo"&&<div className="note small-note">
+      <ShieldCheck size={16}/> El código ERP original
+      <strong>{pharmacyForm.databaseCode||pharmacyForm.sourceCode||"—"}</strong>
+      no cambia al modificar el tipo.
+     </div>}
      <FormActions onCancel={()=>setEditingPharmacy(null)}
       label={savingPharmacy?"Guardando…":"Guardar cambios"} disabled={savingPharmacy}/>
     </form>

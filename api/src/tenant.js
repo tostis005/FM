@@ -73,6 +73,11 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
       establishments:pharmacies.filter(p=>ids.includes(Number(p.id)))
         .map((p,i)=>decoratePharmacy(slug,p,{demo:Boolean(cliente.demo_origen_slug),ordinal:i+1})),
+      // Los almacenes activos forman parte de la configuración del cliente,
+      // incluso si el usuario sólo tiene asignada una farmacia comercial.
+      // No se incluyen como farmacia destinataria de pedidos.
+      warehouses:pharmacies.filter(p=>p.active!==false&&p.establishmentType==="almacen")
+        .map((p,i)=>decoratePharmacy(slug,p,{demo:isDemo,ordinal:i+1})),
       allowedPharmacyIds:ids.filter(id=>pharmacies.some(p=>Number(p.id)===id&&p.establishmentType!=="almacen"))};
   }
   function middleware(predicate=()=>true) {
@@ -161,7 +166,8 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     res.json({user:{email:req.user.email,name:req.user.name,role:req.user.role},
       clients,client:ctx.client,role:ctx.role,modules:ctx.modules,sections:ctx.sections,
       profile:{id:ctx.profileId,name:ctx.profileName,permissions:ctx.profilePermissions},
-      pharmacies:ctx.pharmacies,establishments:ctx.establishments});
+      pharmacies:ctx.pharmacies,establishments:ctx.establishments,
+      warehouses:ctx.warehouses});
     }catch(e){next(e)}
   });
   app.get("/api/admin/clientes",requireSuperadmin,async(_req,res,next)=>{
@@ -576,8 +582,9 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
         "codigo_visible AS \"displayCode\", "+
         "coalesce(to_jsonb(f)->>'tipo_establecimiento','farmacia') AS \"establishmentType\" "+
         "FROM farmetrica.farmacias f WHERE cliente_slug=$1 ORDER BY id",[slug]);
-      res.json(rows.filter(p=>p.establishmentType!=="almacen").map((p,i)=>({
+      res.json(rows.map((p,i)=>({
         id:p.id,name:p.name,city:p.city,active:p.active,
+        establishmentType:p.establishmentType,
         displayCode:/^[A-Z0-9_-]{2,8}$/.test(String(p.displayCode||""))?
           p.displayCode:"D"+String(i+1).padStart(2,"0")
       })));
@@ -614,6 +621,65 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     return true;
   }
   const visibleCodeValid=code=>/^[A-Z0-9_-]{2,8}$/.test(code);
+  // Configuración independiente por cliente: cualquier establecimiento puede
+  // ser farmacia o almacén, con 0, 1 o varios almacenes activos. El código ERP
+  // y los movimientos de origen nunca se modifican. Transacción serializada
+  // para impedir desactivar la última farmacia comercial.
+  app.patch("/api/tenant/establecimientos/:id/configuracion",
+    ...requireTenantAdmin(),async(req,res,next)=>{
+    const id=Number(req.params.id);
+    const name=String(req.body?.name||"").trim(),
+      city=String(req.body?.city||"").trim(),
+      displayCode=String(req.body?.displayCode||"").trim().toUpperCase(),
+      active=req.body?.active,
+      type=req.body?.establishmentType;
+    if(!Number.isSafeInteger(id)||id<1||id>999999999||
+       !name||name.length>150||city.length>150||!visibleCodeValid(displayCode)||
+       typeof active!=="boolean"||!["farmacia","almacen"].includes(type))
+      return res.status(400).json({error:"Datos de establecimiento inválidos"});
+    const db=await pool.connect();
+    try{
+      await db.query("BEGIN");
+      await db.query("SELECT pg_advisory_xact_lock(hashtext($1))",[req.context.client.slug]);
+      const {rows:existing}=await db.query(
+        "SELECT id FROM farmetrica.farmacias WHERE id=$1 AND cliente_slug=$2 FOR UPDATE",
+        [id,req.context.client.slug]);
+      if(!existing.length){
+        await db.query("ROLLBACK");
+        return res.status(404).json({error:"Establecimiento no encontrado"});
+      }
+      const {rows:duplicates}=await db.query(
+        "SELECT 1 FROM farmetrica.farmacias WHERE cliente_slug=$1 AND id<>$2 "+
+        "AND upper(btrim(coalesce(nullif(codigo_visible,''),codigo_origen)))=$3 LIMIT 1",
+        [req.context.client.slug,id,displayCode]);
+      if(duplicates.length){
+        await db.query("ROLLBACK");
+        return res.status(409).json({error:"Otro establecimiento ya usa ese código visible"});
+      }
+      if(type==="almacen"||!active){
+        const {rows:remaining}=await db.query(
+          "SELECT count(*)::int AS n FROM farmetrica.farmacias "+
+          "WHERE cliente_slug=$1 AND id<>$2 AND activo=true "+
+          "AND coalesce(tipo_establecimiento,'farmacia')='farmacia'",
+          [req.context.client.slug,id]);
+        if(remaining[0]?.n===0){
+          await db.query("ROLLBACK");
+          return res.status(409).json({error:"Debe permanecer al menos una farmacia activa"});
+        }
+      }
+      const {rows}=await db.query(
+        'UPDATE farmetrica.farmacias SET nombre=$3,ciudad=$4,activo=$5,'+
+        'codigo_visible=$6,tipo_establecimiento=$7,actualizado_en=now() '+
+        'WHERE id=$1 AND cliente_slug=$2 RETURNING id::text AS id,nombre AS name,'+
+        'ciudad AS city,activo AS active,codigo_origen AS "sourceCode",'+
+        'codigo_visible AS "displayCode",tipo_establecimiento AS "establishmentType"',
+        [id,req.context.client.slug,name,city,active,displayCode,type]);
+      await db.query("COMMIT");
+      res.json(decoratePharmacy(req.context.client.slug,rows[0],
+        {demo:req.context.client.demo}));
+    }catch(e){await db.query("ROLLBACK").catch(()=>{});next(e)}
+    finally{db.release()}
+  });
   app.patch("/api/tenant/establecimientos/:id",...requireTenantAdmin(),async(req,res,next)=>{
     try{
       if(!/^[1-9]\d{0,8}$/.test(req.params.id))

@@ -1786,7 +1786,8 @@ function App(){
     {REAL_SECTIONS.has(page)&&<OperativaReal key={tenantContext.client.slug+":"+page}
       section={page} clientSlug={tenantContext.client.slug} userEmail={sessionUser?.email}
       tenantRole={tenantContext.role}
-      pharmacies={tenantContext.pharmacies}/>}
+      pharmacies={tenantContext.pharmacies}
+      warehouses={tenantContext.warehouses||[]}/>}
     {page==="stock-sin-recepciones"&&<StockSinRecepciones key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
     {["stock-inmovilizado","alertas-inteligentes"].includes(page)&&sessionUser?.role==="superadministrador"&&<ProactiveStock key={tenantContext.client.slug+":"+page}
       mode={page==="alertas-inteligentes"?"alertas":"inmovilizado"}

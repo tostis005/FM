@@ -11,6 +11,7 @@ import {setupLaboratoryOrderSettings} from "./laboratoryOrderSettings.js";
 import {setupPreparadorAgenda} from "./preparadorAgenda.js";
 import {setupSupplierWorkspace} from "./supplierWorkspace.js";
 import {setupDemoClients} from "./demoClients.js";
+import {demoRequestIsReadOnly} from "./demoReadOnlyRoutes.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import {setupPickingList,startPickingListPolling} from "./pickingList.js";
 import { setupGenericAnalytics } from "./genericos.js";
@@ -142,7 +143,7 @@ setupDemoClients(app,pool,{requireSuperadmin});
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas
 // administrativas registradas arriba y nunca escriben en el origen.
 app.use("/api", (req,res,next)=>{
- if(["GET","HEAD","OPTIONS"].includes(req.method)||req.path.startsWith("/public/"))return next();
+ if(demoRequestIsReadOnly(req.method,req.path)||req.path.startsWith("/public/"))return next();
  const test=requireTenant();
  test[0](req,res,error=>{
   if(error)return next(error);

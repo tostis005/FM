@@ -11,6 +11,7 @@ import {setupLaboratoryOrderSettings} from "./laboratoryOrderSettings.js";
 import {setupPreparadorAgenda} from "./preparadorAgenda.js";
 import {setupSupplierWorkspace} from "./supplierWorkspace.js";
 import {setupDemoClients} from "./demoClients.js";
+import {isDemoReadOnlyPost} from "./demoReadOnlyRoutes.js";
 import { setupSyncStatus } from "./syncStatus.js";
 import {setupPickingList,startPickingListPolling} from "./pickingList.js";
 import { setupGenericAnalytics } from "./genericos.js";
@@ -142,7 +143,12 @@ setupDemoClients(app,pool,{requireSuperadmin});
 // Las configuraciones de equipo/farmacias propias del demo usan sus rutas
 // administrativas registradas arriba y nunca escriben en el origen.
 app.use("/api", (req,res,next)=>{
- if(["GET","HEAD","OPTIONS"].includes(req.method)||req.path.startsWith("/public/"))return next();
+ // Las matrices POST son SELECT puros: usan body para hasta 5000 CN,
+ // pero nunca guardan pedidos. Sus rutas requieren después requireTenant.
+ // Aquí req.path está relativo al montaje /api de Express.
+ if(["GET","HEAD","OPTIONS"].includes(req.method)||
+    req.path.startsWith("/public/")||
+    isDemoReadOnlyPost(req.method,req.path))return next();
  const test=requireTenant();
  test[0](req,res,error=>{
   if(error)return next(error);

@@ -32,7 +32,9 @@ const pharmacies=[{id:"1",name:"Abadía",sourceCode:"ABA",databaseCode:"ABA"},
 const user={email:"lab-order-ci@example.invalid",role:"superadministrador",name:"CI"};
 const context={user,clients:[{slug:"ampedia",name:"Ampedia"}],
  client:{slug:"ampedia",schema:"ampedia",name:"Ampedia"},
- role:"superadministrador",pharmacies,modules:{compras:true,dashboard:true,proveedores:true}};
+ role:"superadministrador",pharmacies,
+ warehouses:[{id:"6",name:"Almacén",active:true,establishmentType:"almacen"}],
+ modules:{compras:true,dashboard:true,proveedores:true}};
 const saved=[],matrices=[],labQueries=[],catalogCalls=[],errors=[];
 page.on("pageerror",e=>errors.push(e.message));
 await page.route("**/api/**",async route=>{
@@ -422,6 +424,18 @@ try{
   assert.equal(await page.locator(".fm-laboratory-catalog").count(),0);
   assert.ok(labQueries.every(q=>q.uso==="preparador"),
    "El selector por farmacia exige proveedores unificados");
+  // Cambiar a un cliente sin almacenes: la interfaz deja de mostrar por
+  // completo sus columnas y mensajes, sin duplicar stock global.
+  context.warehouses=[];
+  await page.goto("http://127.0.0.1:4175/compras-preparador",{waitUntil:"domcontentloaded"});
+  await page.getByRole("combobox",{name:"Seleccionar laboratorio"}).fill("Laboratorio Ejemplo");
+  await page.getByRole("option",{name:"Laboratorio Ejemplo"}).click();
+  await page.getByText("Crema solar").first().waitFor({timeout:12000});
+  assert.equal(await page.locator(".fm-lab-order-warehouse-group, .fm-lab-order-warehouse-head, .fm-lab-order-warehouse-col").count(),0,
+    "Sin almacenes configurados no hay columnas de almacén");
+  assert.equal(await page.getByText("Almacén pendiente de importar").count(),0);
+  assert.equal(await page.locator(".fm-lab-order-summary").getByText("stock global",{exact:false}).count(),0,
+    "Sin almacenes no mostrar stock global duplicado");
   assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK preparador por laboratorio: matriz, para conjunta, medicación individual, borradores y XLSX");
 }finally{await browser.close();}

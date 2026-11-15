@@ -22,12 +22,9 @@ INSERT INTO farmetrica.farmacias
  (cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen,tipo_establecimiento)
 SELECT 'ampedia','Almacén central','',true,'ALMACEN',NULL,'Almacen','almacen'
 WHERE EXISTS (SELECT 1 FROM farmetrica.clientes WHERE slug='ampedia')
-ON CONFLICT (cliente_slug,codigo_origen)
-DO UPDATE SET
- tipo_establecimiento='almacen',
- bd_origen='Almacen',
- activo=true,
- actualizado_en=now();
+ON CONFLICT (cliente_slug,codigo_origen) DO NOTHING;
+-- No volver a activar automáticamente el almacén en cada despliegue.
+-- El tipo y el estado son ahora configurables por cliente.
 
 -- La relación se resuelve sin suponer el ID: coincide de forma exacta con la
 -- clave que emite el sincronizador (ALMACEN) en el mismo cliente.

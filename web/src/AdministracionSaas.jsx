@@ -35,9 +35,10 @@ function DemoFarmacias({clientSlug,onUpdated}){
  async function save(item){
   setSaving(String(item.id));setError("");
   try{
-   await api("/api/tenant/farmacias/"+item.id,{
+   await api("/api/tenant/establecimientos/"+item.id+"/configuracion",{
     method:"PATCH",headers,body:JSON.stringify({
-     name:item.name,city:item.city||"",active:Boolean(item.active),displayCode:item.displayCode
+     name:item.name,city:item.city||"",active:Boolean(item.active),
+     displayCode:item.displayCode,establishmentType:item.establishmentType||"farmacia"
     })});
    await load();onUpdated?.();
   }catch(e){setError(e.message)}finally{setSaving("")}
@@ -45,12 +46,12 @@ function DemoFarmacias({clientSlug,onUpdated}){
  return <div className="fm-manage-wide" style={{padding:"12px 0"}}>
   <button type="button" className="btn btn-secondary" onClick={()=>{
    setOpen(!open);if(!open)void load();
-  }}>{open?"Ocultar farmacias demo":"Configurar farmacias de la demo"}</button>
+  }}>{open?"Ocultar establecimientos":"Configurar farmacias y almacenes de la demo"}</button>
   {open&&<div style={{marginTop:14}}>
    {loading&&<LoadingStatus label="Consultando farmacias demo…"/>}
    {error&&<p role="alert" className="fm-manage-feedback">{error}</p>}
    {items.map(p=><div key={p.id} className="fm-manage-form" style={{margin:"12px 0"}}>
-    <label>Farmacia {p.displayCode}
+    <label>Establecimiento {p.displayCode}
      <input aria-label={"Nombre demo "+p.id} value={p.name}
       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,name:e.target.value}:x))}/>
     </label>
@@ -58,9 +59,16 @@ function DemoFarmacias({clientSlug,onUpdated}){
       <input aria-label={"Código visible demo "+p.id} maxLength={8} value={p.displayCode||""}
        onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,displayCode:e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g,"")}:x))}/>
     </label>
+    <label>Tipo<select aria-label={"Tipo de establecimiento demo "+p.id}
+      value={p.establishmentType||"farmacia"}
+      onChange={e=>setItems(old=>old.map(x=>x.id===p.id?
+       {...x,establishmentType:e.target.value}:x))}>
+     <option value="farmacia">Farmacia</option>
+     <option value="almacen">Almacén</option>
+    </select></label>
     <label><input type="checkbox" checked={Boolean(p.active)}
       onChange={e=>setItems(old=>old.map(x=>x.id===p.id?{...x,active:e.target.checked}:x))}/>
-      Visible en la demo</label>
+      Activo en la demo</label>
     <button type="button" className="btn btn-secondary" disabled={Boolean(saving)||!p.name.trim()||!(/^[A-Z0-9_-]{2,8}$/.test(p.displayCode||""))}
      onClick={()=>save(p)}>{saving===String(p.id)?"Guardando…":"Guardar cambios"}</button>
    </div>)}

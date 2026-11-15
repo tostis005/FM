@@ -259,8 +259,13 @@ test("almacén solo descuenta del pedido conjunto de parafarmacia, sin alterar l
 test("SQL consulta el almacén por código de sincronización y solo en parafarmacia",async()=>{
  const {readFile}=await import("node:fs/promises");
  const text=await readFile(new URL("./laboratoryOrderMetrics.sql",import.meta.url),"utf8");
- assert.match(text,/tipo_establecimiento'.*'almacen'/);
- assert.match(text,/codigo_origen\)\)='ALMACEN'/);
+ assert.match(text,/tipo_establecimiento='almacen'/);
+ assert.doesNotMatch(text,/codigo_origen\)\)='ALMACEN'/);
+ assert.match(text,/w\.warehouse_id/);
+ assert.match(text,/warehouse_by_site AS/);
+ assert.match(text,/warehouse_inventory_by_site AS/);
+ assert.match(text,/warehouse_sales_total AS/);
+ assert.match(text,/__WAREHOUSE_CODE__/);
  assert.match(text,/\$6::text='parafarmacia'/);
  assert.match(text,/warehouse_inventory AS/);
  assert.match(text,/warehouse_ready AS/);
@@ -300,7 +305,8 @@ test("medicación evita por completo el SQL de almacén sin alterar farmacias y 
  assert.doesNotMatch(med,/warehouse_matches AS/);
  assert.doesNotMatch(med,/warehouse_sales AS MATERIALIZED/);
  assert.doesNotMatch(med,/warehouse_distinct AS MATERIALIZED/);
- assert.match(med,/warehouse_ready AS \(SELECT \(\$6::text='parafarmacia'\) AS ready\)/);
+ assert.match(med,/warehouse_ready AS \(SELECT \(\$6::text='parafarmacia' AND false\) AS ready\)/);
+ assert.match(med,/warehouse_by_site AS \(SELECT NULL::text AS reference/);
  assert.match(med,/warehouse_sales_ready AS \(SELECT false AS ready\)/);
  assert.match(med,/sales_per_article AS MATERIALIZED/);
  assert.match(med,/pending_orders AS MATERIALIZED/);
@@ -375,4 +381,52 @@ test("caché del índice por esquema: solo se fuerza LATERAL con índice válido
  const missing={async query(){return {rows:[{available:false}]}}};
  assert.equal(await hasIndexedNormalizedCN(missing,"tenant_demo"),false);
  await assert.rejects(()=>hasIndexedNormalizedCN(pool,"a;DROP TABLE"),/Esquema no autorizado/);
+});
+
+test("dos almacenes configurados devuelven desglose y solo descuentan la suma una vez",()=>{
+ const row={cn:"123456"};
+ const byPharmacy={"1":{stock:8,targetUnits:18,ordered:1,suggested:9},
+                   "2":{stock:2,targetUnits:10,ordered:0,suggested:8}};
+ const metric={warehouseReady:true,warehouseStock:7,
+  warehouseBySite:{"81":{stock:3,units12:5},"82":{stock:4,units12:2}}};
+ const result=applyWarehouseToOrder(row,byPharmacy,"parafarmacia",metric);
+ assert.equal(result.pharmacyStock,10);
+ assert.equal(result.warehouseStock,7);
+ assert.equal(result.globalStock,17);
+ assert.equal(result.totalSuggested,10);
+ assert.equal(result.warehouseBySite["81"].stock,3);
+ assert.equal(result.warehouseBySite["82"].stock,4);
+ const without=applyWarehouseToOrder(row,byPharmacy,"parafarmacia",
+  {warehouseReady:false,warehouseStock:null});
+ assert.equal(without.globalStock,10);
+ assert.equal(without.totalSuggested,17);
+});
+test("sin almacenes no se ejecutan las CTE de ningún almacén",async()=>{
+ const statements=[];
+ const pool={async query(q){
+  const sql=typeof q==="string"?q:q.text;
+  statements.push(sql);
+  if(sql.includes("SELECT intervalo_dias"))return {rows:[{days:7}]};
+  if(sql.includes("information_schema.columns"))return {rows:[{available:true}]};
+  if(sql.includes("FROM pg_index i"))return {rows:[{available:false}]};
+  if(sql.startsWith("WITH refs AS MATERIALIZED"))return {rows:[{
+   reference:"123456",pharmacyId:"1",stock:2,unitsPeriod:3,units3:6,
+   units12:12,targetUnits:6,ordered:0,suggested:4,warehouseReady:false
+  }]};
+  throw Error("Consulta no esperada "+sql.slice(0,70));
+ }};
+ const ctx={client:{slug:"demo_individual",schema:"demo_individual"},
+  warehouses:[],pharmacies:[{id:1}]};
+ const result=await readLaboratoryOrderMatrix(pool,ctx,{
+  key:"P:5",pharmacies:[1],type:"parafarmacia",
+  from:"2026-11-01",to:"2026-11-15",
+  prefetchedRows:[{referencia:"123456",cn:"123456",nombre:"Artículo"}]
+ });
+ assert.equal(result.warehouseConfigured,false);
+ assert.deepEqual(result.warehouses,[]);
+ assert.equal(result.rows[0].warehouseStock,0);
+ assert.equal(result.rows[0].globalStock,2);
+ const query=statements.find(x=>x.startsWith("WITH refs AS MATERIALIZED"));
+ assert.doesNotMatch(query,/warehouse_scope AS/);
+ assert.doesNotMatch(query,/warehouse_matches AS/);
 });

@@ -68,14 +68,9 @@ BEGIN
   END IF;
  END IF;
 
- -- Si una demo antigua había copiado el almacén como farmacia, ocultarlo
- -- solamente en esa demo. El origen real no se modifica.
- UPDATE farmetrica.farmacias f
- SET tipo_establecimiento='almacen',activo=false,actualizado_en=now()
- FROM farmetrica.clientes c
- WHERE f.cliente_slug=c.slug AND c.demo_origen_slug IS NOT NULL
-   AND upper(btrim(f.codigo_origen))='ALMACEN'
-   AND (f.tipo_establecimiento<>'almacen' OR f.activo=true);
+ -- Las versiones anteriores normalizaron ALMACEN en demos. No alterar
+ -- nunca más su tipo o estado: ahora son configurables por administrador.
+ -- Los nuevos almacenes opcionales se provisionan desde la migración 068.
 
  -- Inicializar códigos visibles de tres caracteres en las demos antiguas.
  -- No tocar códigos ERP, ni sobrescribir abreviaturas ya personalizadas.

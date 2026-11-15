@@ -365,10 +365,14 @@ test("PostgreSQL: consultas reales de artículos, compras, ventas y grupos DCPF"
     {slug:"demo_ci_qa",name:"Demo de comprobación",sourceSlug:"ampedia"});
   assert.equal(created.demo,true);
   const {rows:fake}=await pool.query(
-    "SELECT nombre,codigo_origen FROM farmetrica.farmacias WHERE cliente_slug='demo_ci_qa' ORDER BY id");
-  assert.ok(fake.length>=2);
-  assert.ok(fake.every(x=>x.nombre.startsWith("Farmacia Demo ")));
-  assert.equal(fake.find(x=>x.codigo_origen==="VAL")?.nombre.startsWith("Farmacia Demo "),true);
+    "SELECT nombre,codigo_origen,activo,tipo_establecimiento FROM farmetrica.farmacias WHERE cliente_slug='demo_ci_qa' ORDER BY id");
+  const demoSites=fake.filter(x=>x.tipo_establecimiento==="farmacia");
+  const warehouses=fake.filter(x=>x.tipo_establecimiento==="almacen");
+  assert.ok(demoSites.length>=2);
+  assert.ok(demoSites.every(x=>x.nombre.startsWith("Farmacia Demo ")));
+  assert.equal(demoSites.find(x=>x.codigo_origen==="VAL")?.nombre.startsWith("Farmacia Demo "),true);
+  assert.ok(warehouses.length>=1,"La demo puede configurar almacenes del origen");
+  assert.ok(warehouses.every(x=>x.activo===false),"Nunca habilitar almacenes demo automáticamente");
   const {rows:views}=await pool.query(
     "SELECT c.relname,pg_relation_is_updatable(c.oid,false) AS rights FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='demo_ci_qa' AND c.relname IN ('ventas','compras','articulos')");
   assert.equal(views.length,3);

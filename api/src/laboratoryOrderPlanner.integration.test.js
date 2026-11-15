@@ -55,3 +55,51 @@ test("PostgreSQL real: sin ficha y ficha con stock NULL se contabilizan como cer
    "La propuesta se calcula con stock cero tras obtener las ventas");
  }finally{await pool.end();}
 });
+
+test("PostgreSQL: cero y dos almacenes opcionales, stock sin duplicados",{
+ skip:!process.env.TEST_DB_URL
+},async()=>{
+ const pool=new pg.Pool({connectionString:process.env.TEST_DB_URL,max:1});
+ const db=await pool.connect();
+ try{
+  await db.query("BEGIN");
+  const {rows:[first]}=await db.query(
+   "UPDATE farmetrica.farmacias SET activo=true,tipo_establecimiento='almacen' "+
+   "WHERE cliente_slug='ampedia' AND codigo_origen='ALMACEN' RETURNING id");
+  assert.ok(first,"Almacén físico disponible en fixture");
+  const {rows:[second]}=await db.query(
+   "INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,tipo_establecimiento) "+
+   "VALUES('ampedia','CI Almacén 2','',true,'ALMCI02','almacen') RETURNING id");
+  await db.query(`INSERT INTO ampedia.articulos
+    (farmacia_codigo,origen_id,nombre,codigo_nacional,familia,pmc,pvp,stock_actual)
+    VALUES
+     ('ABA','WHCI-P','Prueba multi-almacén','000987','Test',1,3,2),
+     ('ALMACEN','WHCI-W1','Prueba multi-almacén','000987','Test',1,3,3),
+     ('ALMCI02','WHCI-W2','Prueba multi-almacén','000987','Test',1,3,4)`);
+  const ctx={client:{slug:"ampedia",schema:"ampedia"},pharmacies:[{id:1}],
+   warehouses:[
+    {id:String(first.id),name:"Almacén central",active:true,establishmentType:"almacen"},
+    {id:String(second.id),name:"CI Almacén 2",active:true,establishmentType:"almacen"}
+   ]};
+  const options={key:"P:1",pharmacies:[1],type:"parafarmacia",
+   from:"2026-10-01",to:"2026-11-14",
+   prefetchedRows:[{referencia:"000987",cn:"000987",nombre:"Prueba"}]};
+  const data=await readLaboratoryOrderMatrix(db,ctx,options);
+  assert.equal(data.metricsUnavailable,false,data.warning||"");
+  assert.equal(data.warehouseConfigured,true);
+  assert.equal(data.warehouses.length,2);
+  const item=data.rows[0];
+  assert.equal(item.pharmacyStock,2);
+  assert.equal(item.warehouseStock,7);
+  assert.equal(item.globalStock,9);
+  assert.equal(item.warehouseBySite[String(first.id)].stock,3);
+  assert.equal(item.warehouseBySite[String(second.id)].stock,4);
+  const none=await readLaboratoryOrderMatrix(db,{...ctx,warehouses:[]},options);
+  assert.equal(none.metricsUnavailable,false,none.warning||"");
+  assert.equal(none.warehouseConfigured,false);
+  assert.equal(none.rows[0].globalStock,2);
+  assert.deepEqual(none.rows[0].warehouseBySite,{});
+  await db.query("ROLLBACK");
+ }catch(error){await db.query("ROLLBACK").catch(()=>{});throw error}
+ finally{db.release();await pool.end()}
+});

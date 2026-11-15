@@ -140,3 +140,9 @@ export const saveWarehousePresentationToServer=(id,name,displayCode)=>request(
   "/api/tenant/establecimientos/"+encodeURIComponent(id),{
     method:"PATCH",body:JSON.stringify({name,displayCode})
   });
+
+// Farmacia o almacén se configuran sin alterar la identidad ERP del establecimiento.
+export const saveEstablishmentConfigurationToServer=(id,settings)=>request(
+ "/api/tenant/establecimientos/"+encodeURIComponent(id)+"/configuracion",{
+ method:"PATCH",body:JSON.stringify(settings)
+});

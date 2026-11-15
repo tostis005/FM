@@ -15,12 +15,14 @@ export function skipWarehouseForMedication(sql){
  const end=sql.indexOf("), eligible_articles AS MATERIALIZED (",start+1);
  if(start<0||end<=start)throw Error("No se han encontrado las CTE del almacén");
  const noWarehouse=[
-  " warehouse_ready AS (SELECT ($6::text='parafarmacia') AS ready),",
+  " warehouse_ready AS (SELECT ($6::text='parafarmacia' AND false) AS ready),",
   " warehouse_sales_ready AS (SELECT false AS ready),",
   " warehouse_inventory AS (SELECT NULL::text AS reference,",
   "  NULL::float8 AS stock,NULL::timestamptz AS stock_at WHERE false),",
-  " warehouse_sales AS (SELECT NULL::text AS reference,",
+  " warehouse_sales_total AS (SELECT NULL::text AS reference,",
   "  NULL::float8 AS sold,NULL::float8 AS v3,NULL::float8 AS v12 WHERE false),",
+  " warehouse_by_site AS (SELECT NULL::text AS reference,",
+  "  NULL::jsonb AS sites WHERE false),",
  ].join("\n");
  return sql.slice(0,start+2)+"\n"+noWarehouse+"\n"+sql.slice(end+2);
 }
@@ -73,7 +75,8 @@ export function indexedNormalizedCNMetricsSQL(sql){
  }
  return result;
 }
-const SQL_MEDICATION=skipWarehouseForMedication(SQL);
+const SQL_NO_WAREHOUSES=skipWarehouseForMedication(SQL);
+const SQL_MEDICATION=SQL_NO_WAREHOUSES;
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
 export function cnCategory(cn){
@@ -136,6 +139,7 @@ export function applyWarehouseToOrder(row,byPharmacy,type,warehouseMetric){
   ready,salesReady:warehouseSalesReady
  };
  return {pharmacyStock,warehouseStock,globalStock,warehouse,
+  warehouseBySite:isPara&&warehouseMetric?.warehouseBySite||{},
   warehouseReady:ready,warehouseStockAt:warehouse.stockAt,
   totalSuggested};
 }
@@ -163,13 +167,17 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
   hasNativeNormalizedCN(pool,ctx.client.schema).catch(()=>false),
   hasIndexedNormalizedCN(pool,ctx.client.schema).catch(()=>false)
  ]);
- const baseSQL=options.type==="medicacion"?SQL_MEDICATION:SQL;
+ const warehouses=Array.isArray(ctx.warehouses)?
+  ctx.warehouses.filter(w=>w.active!==false&&w.establishmentType==="almacen"):[];
+ const withWarehouses=options.type==="parafarmacia"&&warehouses.length>0;
+ const baseSQL=withWarehouses?SQL:SQL_NO_WAREHOUSES;
  // La ruta indexada supera la comparación en seis farmacias y conserva las
  // cifras de cada CN. Solo se activa si ese esquema tiene el índice válido.
  const useIndexedCN=nativeCN&&indexAvailable&&options.indexedCN!==false;
  const sql=(useIndexedCN?indexedNormalizedCNMetricsSQL(baseSQL):baseSQL)
   .replaceAll("__SCHEMA__",'"'+ctx.client.schema+'"')
   .replaceAll("__FARMACIA_CODE__",pharmacyDataCodeSQL("f"))
+  .replaceAll("__WAREHOUSE_CODE__",pharmacyDataCodeSQL("f"))
   // Sin columna nativa, el acceso JSON a una clave inexistente siempre era NULL.
   // Sustituirlo por NULL constante permite al plan descartar esa rama completa.
   .replaceAll("__CN_NORMALIZED__",nativeCN?"a.cn_normalizado":"NULL::text");
@@ -210,7 +218,8 @@ export async function readLaboratoryOrderMatrix(pool,ctx,options){
    suggested:row.suggested===null?null:Number(row.suggested)
   };
  }
- return {...base,from:options.from,to:options.to,frequencyDays,warning,metricsUnavailable:false,
+ return {...base,from:options.from,to:options.to,frequencyDays,warning,
+  warehouses,warehouseConfigured:withWarehouses,metricsUnavailable:false,
   rows:base.rows.map(row=>{
    const byPharmacy=byRef.get(row.referencia)||{};
    return {...row,byPharmacy,

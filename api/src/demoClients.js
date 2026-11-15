@@ -70,7 +70,7 @@ export function setupDemoClients(app,pool,{requireSuperadmin}){
     "VALUES($1,$2,$1,$3,$4) RETURNING slug",
     [slug,name,sourceSlug,src[0].analisis_abcd_meses]);
    // Aislar sólo nombres y códigos visibles; mantener codigo_origen para JOIN de informes.
-   // El almacén NO es una farmacia comercial y jamás se habilita en estas demos.
+   // Los almacenes se ofrecen por separado; sólo se habilitan explícitamente.
    await db.query(`WITH origen AS (
       SELECT f.*,row_number() OVER (ORDER BY f.id) AS n
       FROM farmetrica.farmacias f WHERE f.cliente_slug=$2
@@ -85,9 +85,29 @@ export function setupDemoClients(app,pool,{requireSuperadmin}){
           THEN 'VAL' ELSE upper(btrim(codigo_origen)) END,
        'D'||lpad(n::text,2,'0'),NULL,'Demo','farmacia'
     FROM origen ORDER BY n`,[slug,sourceSlug,scope]);
+   // Las demos nuevas también pueden activar uno o varios almacenes del
+   // origen. Se crean como configuraciones independientes e INACTIVAS.
+   await db.query(`WITH almacenes AS (
+     SELECT f.id,f.codigo_origen,
+      row_number() OVER (ORDER BY f.id) AS n
+     FROM farmetrica.farmacias f
+     WHERE f.cliente_slug=$2 AND f.tipo_establecimiento='almacen'
+   )
+   INSERT INTO farmetrica.farmacias
+    (cliente_slug,nombre,ciudad,activo,codigo_origen,codigo_visible,
+     host_origen,bd_origen,tipo_establecimiento)
+   SELECT $1,'Almacén Demo '||lpad(n::text,2,'0'),'',
+     false,
+     CASE WHEN $2='ampedia' AND id=5
+       AND upper(btrim(codigo_origen)) IN ('POL','VAL')
+       THEN 'VAL' ELSE codigo_origen END,
+     'A'||lpad(n::text,2,'0'),NULL,'Demo','almacen'
+   FROM almacenes ON CONFLICT(cliente_slug,codigo_origen) DO NOTHING`,
+   [slug,sourceSlug]);
    const {rows:count}=await db.query(
     "SELECT count(*)::int AS n,count(*) FILTER(WHERE activo=true)::int AS enabled "+
-    "FROM farmetrica.farmacias WHERE cliente_slug=$1",[slug]);
+    "FROM farmetrica.farmacias WHERE cliente_slug=$1 "+
+    "AND tipo_establecimiento='farmacia'",[slug]);
    if(!count[0]?.n)throw Error("El origen no dispone de farmacias activas");
    await db.query(`INSERT INTO farmetrica.cliente_modulos(cliente_slug,modulo_clave,habilitado)
      SELECT $1,clave,clave=ANY($2::text[]) FROM farmetrica.modulos

@@ -44,11 +44,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const scope=ids.map(String).join(",");
  const chosen=pharmacies.filter(p=>ids.some(id=>String(id)===String(p.id)));
  const activeWarehouses=warehouses.filter(w=>w.active!==false&&w.establishmentType==="almacen");
- const showWarehouses=tab==="parafarmacia"&&activeWarehouses.length>0;
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
  const [tab,setTab]=useState("parafarmacia");
+ const showWarehouses=tab==="parafarmacia"&&activeWarehouses.length>0;
  const [columnFilter,setColumnFilter]=useState({cn:"",article:""});
  const [tableSort,setTableSort]=useState("original"),[tablePage,setTablePage]=useState(0),
   [tablePageSize,setTablePageSize]=useState(ALL_LAB_ROWS);

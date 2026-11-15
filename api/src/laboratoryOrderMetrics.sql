@@ -85,7 +85,7 @@ WITH refs AS MATERIALIZED (
  WHERE $6::text='parafarmacia' AND x.cn IS NOT NULL
    AND nullif(btrim(a.codigo_nacional),'') IS NOT NULL
  UNION ALL
- SELECT x.reference,a.origen_id::text,a.stock_actual::float8,a.sincronizado_en
+ SELECT x.reference,w.warehouse_id,w.source_code,a.origen_id::text,a.stock_actual::float8,a.sincronizado_en
  FROM refs x CROSS JOIN warehouse_scope w
  JOIN __SCHEMA__.articulos a
   ON upper(btrim(a.farmacia_codigo))=w.source_code

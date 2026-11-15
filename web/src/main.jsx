@@ -1966,7 +1966,7 @@ function App(){
   {editingPharmacy&&<div className="drawer-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setEditingPharmacy(null)}}>
    <div className="drawer">
     <div className="drawer-top">
-     <div><h2>{editingIsWarehouse?"Editar almacén":editingPharmacy==="nuevo"?"Nueva farmacia":"Editar farmacia"}</h2>
+     <div><h2>{editingPharmacy==="nuevo"?"Nuevo establecimiento":"Editar establecimiento"}</h2>
       <p>Nombre y código visible para identificar el establecimiento en Farmetrica. No se modifica el código del sincronizador.</p></div>
      <button className="icon-btn" onClick={()=>setEditingPharmacy(null)} aria-label="Cerrar"><X/></button>
     </div>

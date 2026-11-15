@@ -595,12 +595,15 @@ export function setupTenant(app,pool,{requireUser,requireSuperadmin,
     try{
       if(req.context.client.demo)return res.status(403).json({error:"Las farmacias demo se crean desde el cliente de origen"});
       const f=validatePharmacy(req.body);
+      const type=req.body?.establishmentType||"farmacia";
+      if(!["farmacia","almacen"].includes(type))
+        return res.status(400).json({error:"Tipo de establecimiento inválido"});
       if(!visibleCodeValid(f.sourceCode))
         return res.status(400).json({error:"El código inicial debe tener entre 2 y 8 caracteres"});
       if(!await visibleCodeAvailable(req,res,f.sourceCode,0))return;
       const {rows}=await pool.query(
-        'INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen,codigo_visible) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase"',
-        [req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase,f.sourceCode]);
+        'INSERT INTO farmetrica.farmacias(cliente_slug,nombre,ciudad,activo,codigo_origen,host_origen,bd_origen,codigo_visible,tipo_establecimiento) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id::text AS id,nombre AS name,ciudad AS city,activo AS active,codigo_origen AS "sourceCode",codigo_visible AS "displayCode",host_origen AS "sourceHost",bd_origen AS "sourceDatabase",tipo_establecimiento AS "establishmentType"',
+        [req.context.client.slug,f.name,f.city,f.active,f.sourceCode,f.sourceHost,f.sourceDatabase,f.sourceCode,type]);
       res.status(201).json(decoratePharmacy(req.context.client.slug,rows[0]));
     }catch(e){next(e);}
   });

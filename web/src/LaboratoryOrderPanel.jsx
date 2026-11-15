@@ -34,7 +34,7 @@ async function api(slug,path,{signal,method="GET",body}={}){
 const empty={rows:[],total:0};
 const fmt=value=>value===null||value===undefined?"—":
  new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(value));
-export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=false}){
+export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouses=[],canEdit=false}){
  const shared=()=>readSharedReportFilters(clientSlug);
  const [period,setPeriod]=useState(()=>shared().period||"this_month");
  const [customFrom,setCustomFrom]=useState(()=>shared().customFrom||"");
@@ -43,6 +43,8 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const ids=pharmacies.map(p=>Number(p.id)).filter(Number.isSafeInteger).sort((a,b)=>a-b);
  const scope=ids.map(String).join(",");
  const chosen=pharmacies.filter(p=>ids.some(id=>String(id)===String(p.id)));
+ const activeWarehouses=warehouses.filter(w=>w.active!==false&&w.establishmentType==="almacen");
+ const showWarehouses=tab==="parafarmacia"&&activeWarehouses.length>0;
  const range=useMemo(()=>resolveSalesPeriod(period,new Date(),{from:customFrom,to:customTo}),[period,customFrom,customTo]);
  const [labs,setLabs]=useState([]);
  const [laboratory,setLaboratory]=useState("");
@@ -344,14 +346,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
  const metricsLoading=loading&&Boolean(laboratory);
  // No ocultar al llegar el primer bloque: esperar a los totales completos.
  const showMatrixOverlay=metricsLoading&&!data.metricsLoaded;
- const matrixColumnCount=chosen.length*5+(tab==="parafarmacia"?12:7);
+ const matrixColumnCount=chosen.length*5+(showWarehouses?activeWarehouses.length*5:0)+7;
  const stockTotals=useMemo(()=>laboratoryStockTotals(
-   currentRows,ids,tab==="parafarmacia"),[currentRows,scope,tab]);
+   currentRows,ids,showWarehouses),[currentRows,scope,showWarehouses]);
  const stockAvailable=!loading&&!data.metricsUnavailable&&
   stockTotals.pharmacyStock!==null;
- const {pageTotalSold,pageTotalSuggested,pageTotalOrder,warehousePending}=useMemo(()=>{
-  const warehousePending=tab==="parafarmacia"&&currentRows.some(row=>
-   row.metricsReady&&row.warehouseReady!==true);
+ const {pageTotalSold,pageTotalSuggested,pageTotalOrder}=useMemo(()=>{
   const pageTotalSold=currentRows.reduce((sum,row)=>sum+Number(row.totalSold||0),0);
    const pageTotalSuggested=currentRows.reduce((sum,row)=>sum+Number(row.totalSuggested||0),0);
    const pageTotalOrder=currentRows.reduce((sum,row)=>{
@@ -359,7 +359,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
     return sum+(tab==="parafarmacia"?Number(line.units||0):
      medicationOrderTotal(line,ids));
    },0);
-   return {pageTotalSold,pageTotalSuggested,pageTotalOrder,warehousePending};
+   return {pageTotalSold,pageTotalSuggested,pageTotalOrder};
   },[currentRows,scope,tab,drafts]);
  const hasInvalid=Object.values(drafts).some(line=>tab==="parafarmacia"?qty(line.units)===null:
   Object.values(line.unitsByPharmacy||{}).some(value=>qty(value)===null));
@@ -528,14 +528,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
      <span title="Stock de las farmacias seleccionadas; las existencias sin dato cuentan como cero">
       <strong>{loading?"Calculando…":stockAvailable?fmt(stockTotals.pharmacyStock):"Sin datos"}</strong> stock farmacias
      </span>
-     {tab==="parafarmacia"&&<span title="Stock de farmacias más almacén; las existencias sin dato cuentan como cero">
+     {showWarehouses&&<span title="Stock conjunto de farmacias y almacenes configurados">
       <strong>{loading?"Calculando…":stockAvailable?fmt(stockTotals.globalStock):"Sin datos"}</strong> stock global
      </span>}
       <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSold):"—"}</strong> vendidas</span>
      <span><strong>{data.frequencyDays>0?data.frequencyDays+" días":"Bajo demanda"}</strong> · frecuencia de planificación</span>
      <span><strong>{!loading&&!data.metricsUnavailable?fmt(pageTotalSuggested):"—"}</strong> propuestas</span>
-     {warehousePending&&<span className="fm-lab-warehouse-pending">
-      Almacén pendiente de importar: propuesta provisional</span>}
+
      {metricsLoading&&metricsProgress>0&&<span role="status">
       Stock y ventas: {metricsProgress} de {data.total} artículos calculados
      </span>}
@@ -573,7 +572,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           </div>
          </th>
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
-       {tab==="parafarmacia"&&<th className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>Almacén</th>}
+       {showWarehouses&&activeWarehouses.map(w=><th key={"warehouse-"+w.id}
+        className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>
+        {w.name}
+       </th>)}
        <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
        <th colSpan={2} className="fm-lab-order-order-group">Pedido</th>
       </tr><tr>
@@ -583,11 +585,11 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
           "Unidades vendidas en los últimos 3 meses","Unidades vendidas en el período seleccionado",
           tab==="medicacion"?"Unidades del pedido para esta farmacia":"Propuesta de pedido para esta farmacia"][k]}
          className={"fm-lab-order-sub shade-"+i%3+(k===4?" fm-lab-order-ordercol":"")}>{name}</th>))}
-       {tab==="parafarmacia"&&["STOCK","12M","3M","UDS","PEDIDO"]
-        .map((name,k)=><th key={"alm-"+k} className="fm-lab-order-warehouse-head"
-         title={k===0?"Existencias reales del almacén":k===1?"Ventas del almacén en los últimos 12 meses":
-          k===2?"Ventas del almacén en los últimos 3 meses":k===3?"Ventas del almacén en el período seleccionado":
-          "El almacén no genera una propuesta independiente"}>{name}</th>)}
+       {showWarehouses&&activeWarehouses.flatMap(w=>["STOCK","12M","3M","UDS","PEDIDO"]
+        .map((name,k)=><th key={"alm-"+w.id+"-"+k} className="fm-lab-order-warehouse-head"
+         title={k===0?"Existencias de "+w.name:k===1?"Ventas de "+w.name+" en 12 meses":
+          k===2?"Ventas de "+w.name+" en 3 meses":k===3?"Ventas de "+w.name+" en el período":
+          "Los almacenes no generan propuestas independientes"}>{name}</th>))}
        <th className="fm-lab-order-total-head" aria-sort={sortDirection("totalStock")}
         title="Stock conjunto de las farmacias y, en parafarmacia, del almacén cuando está disponible">
         <button type="button" className="fm-lab-total-sort" onClick={()=>toggleTableSort("totalStock")}
@@ -647,16 +649,18 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],canEdit=f
              onChange={e=>updateLine(row,e.target.value,p.id)}/>:fmt(value)}
            </td>);
         })}
-        {tab==="parafarmacia"&&["stock","units12","units3","unitsPeriod","suggested"].map((key,k)=>{
-          const available=tab==="parafarmacia"&&row.metricsReady;
-          const value=k===4?null:available?
-            (key==="stock"?row.warehouse?.stock??0:row.warehouse?.[key]):null;
-          return <td key={"alm-"+key} className={"fm-lab-order-warehouse-col"+(k===4?" fm-lab-order-ordercol":"")}
-            title={k===4?"El almacén no emite propuestas propias":!available?"Esperando resultados":key==="stock"?"Stock del almacén; sin existencia informada se considera cero":value===null||value===undefined?"Dato aún no importado":"Dato real del almacén"}>
-            {value===null||value===undefined?"—":fmt(value)}</td>;
-         })}
-         <td className="fm-lab-order-total" title={tab==="parafarmacia"&&row.globalStock!=null?
-          "Stock global de farmacias y almacén":"Stock de todas las farmacias"}>
+        {showWarehouses&&activeWarehouses.flatMap(w=>["stock","units12","units3","unitsPeriod","suggested"].map((key,k)=>{
+          const available=row.metricsReady,details=row.warehouseBySite?.[String(w.id)]||{};
+          const value=k===4?null:available?(key==="stock"?details.stock??0:details[key]):null;
+          return <td key={"alm-"+w.id+"-"+key}
+           className={"fm-lab-order-warehouse-col"+(k===4?" fm-lab-order-ordercol":"")}
+           title={k===4?"Los almacenes no emiten propuestas propias":!available?"Calculando":
+            key==="stock"?"Existencias de "+w.name+" (0 si no figuran)":value==null?
+            "No hay ventas registradas del almacén":"Dato del almacén "+w.name}>
+           {value==null?"—":fmt(value)}</td>;
+         }))}
+         <td className="fm-lab-order-total" title={showWarehouses&&row.globalStock!=null?
+          "Stock total de farmacias y almacenes configurados":"Stock de todas las farmacias"}>
           {row.metricsReady?fmt(tab==="parafarmacia"?
            row.globalStock??totalStockFor(row,ids):
            totalStockFor(row,ids)):"—"}</td>

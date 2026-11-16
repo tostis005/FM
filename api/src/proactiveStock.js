@@ -145,7 +145,13 @@ export function classifyProactiveStock(stock,sale,days){
  const alertType=units30>0&&number(stock.stock)*30/units30<=7?"rotura":
   unitsPeriod<=0?"sin_ventas":
   number(stock.stock)*days/unitsPeriod>=120?"exceso":null;
- return {...stock,unitsPeriod,units30,coverDays,capital,alertType,
+ // Unidades por encima de 120 días de cobertura: capital revisable,
+ // nunca ahorro realizado ni unidades que se puedan devolver automáticamente.
+ const excessUnits=alertType==="exceso"?
+  Math.max(0,Math.floor(number(stock.stock)-unitsPeriod*120/days)):null;
+ const excessCapital=excessUnits!=null&&stock.unitCost!=null&&Number(stock.unitCost)>0?
+  round(excessUnits*Number(stock.unitCost),2):null;
+ return {...stock,unitsPeriod,units30,coverDays,capital,alertType,excessUnits,excessCapital,
   lastSaleDate:sale?.lastSaleDate||null,
   lastSaleStatus:sale?.lastSaleDate?"found":"pending"};
 }
@@ -377,7 +383,9 @@ export function proactiveJobResponse(job,f){
    riskCount:rows.filter(r=>r.alertType==="rotura").length,
    savingPotential:round(rows.reduce((n,r)=>n+number(r.savingPotential),0),2),
    pricedOpportunities:rows.filter(r=>r.savingPotential!=null).length,
-   priceSkipped:job.priceSkipped||0},
+   priceSkipped:job.priceSkipped||0,
+   excessCapital:round(rows.reduce((n,r)=>n+number(r.excessCapital),0),2),
+   excessValuedCount:rows.filter(r=>r.excessCapital!=null).length},
   filterOptions:{signal:[...new Set(all.map(r=>LABEL[r.alertType]).filter(Boolean))],
    pharmacy:[...new Set(all.map(r=>r.pharmacyName).filter(Boolean))]},
   excluded:job.excluded,dateIncomplete:job.dateIncomplete||0,

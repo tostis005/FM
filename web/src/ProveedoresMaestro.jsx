@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import {Plus,X,WandSparkles} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
+import {transferCapabilities} from "./transferTopology.js";
 import SupplierLaboratoryMappings from "./SupplierLaboratoryMappings.jsx";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
@@ -189,7 +190,8 @@ export default function ProveedoresMaestro({clientSlug}){
     <summary>Excepciones de laboratorio por farmacia (configuración avanzada)</summary>
     <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
    </details>
-   <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
+   {transferCapabilities(pharmacies).canTransferBetweenPharmacies&&
+    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>}
    {mappingSupplier&&<div className="fm-demo-overlay fm-supplier-lab-overlay"
     onMouseDown={e=>{if(e.target===e.currentTarget)setMappingSupplier(null)}}>
     <div className="fm-demo-detail fm-provider-dialog fm-supplier-lab-dialog" role="dialog"

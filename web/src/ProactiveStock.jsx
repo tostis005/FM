@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowRightLeft,BellRing,ClipboardPlus,Download,PackageSearch,RefreshCw,Search,ShoppingCart} from "lucide-react";
 import {ReportPageHeader} from "./ReportControls.jsx";
-import {LoadingPanel} from "./LoadingState.jsx";
+import {KpiValue,LoadingStatus} from "./LoadingState.jsx";
 import ListTable from "./ListTable.jsx";
 import {downloadTableCSV} from "./tableExport.js";
 import {euro,integer,dateES} from "./localeES.js";
@@ -90,8 +90,14 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   const delay=setTimeout(load,100);
   return()=>{disposed=true;clearTimeout(delay);clearTimeout(pollTimer);controller.abort();};
  },[mode,clientSlug,days,pharmacyId,readySearch,page,size,refresh,sort?.key,sort?.direction,filtersKey]);
- const rows=result?.rows||[],total=result?.total||0;
- const values=result?.summary||{};
+ // El backend publica primero estados intermedios; nunca son métricas definitivas.
+ // Mantener el esqueleto de la pantalla, pero no dibujar ceros provisionales.
+ const calculating=busy||(!result&&!error);
+ const ready=Boolean(result&&!calculating&&!error&&result.available!==false);
+ const rows=ready?result.rows||[]:[];
+ const total=ready?result.total||0:0;
+ const values=ready?result.summary||{}:{};
+
  const go=r=>{
   if(r.alertType==="rotura"){
    try{sessionStorage.setItem("fm_preparador_enlace:"+clientSlug,JSON.stringify({
@@ -229,53 +235,76 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
    Los importes usan el coste de catálogo PMC o PUC cuando existe y son orientativos, no ahorro realizado.
    {!isAlerts&&" Última venta consulta todo el historial documental disponible, no solo el período elegido."}
   </p>
-  {busy&&!result&&<section className="card fm-proactive-panel"><LoadingPanel label="Comprobando stock y ventas…" rows={6}/></section>}
-  {busy&&result&&<div className="fm-proactive-progress" role="status" aria-live="polite">
-   <span className="fm-load-spinner" aria-hidden="true"/>
-   <span><strong>{result.status==="dates"?"Buscando fechas de última venta":"Calculando por farmacias y períodos"}</strong>
-    {" · "+number(result.progress?.done||0)+" de "+number(result.progress?.total||0)+" bloques"}
-    {" · "+number(result.completedSites||0)+" farmacias terminadas"}
-    {result.total>0?" · Datos parciales visibles":""}</span>
+
+  {calculating&&<div className="fm-proactive-progress" role="status" aria-live="polite">
+   <LoadingStatus label={result?.status==="dates"?"Comprobando la fecha de última venta…":
+    "Analizando stock, compras y ventas…"}/>
+   {result?.progress?.total>0&&<span className="fm-proactive-progress-detail">
+    {number(result.progress.done)} de {number(result.progress.total)} bloques analizados
+    {" · "+number(result.completedSites||0)+" farmacias procesadas"}
+   </span>}
   </div>}
   {error&&<section className="card fm-proactive-panel fm-proactive-error" role="alert">
    <AlertTriangle size={18}/>{error}<button type="button" onClick={()=>setRefresh(Date.now())}>Reintentar</button>
   </section>}
   {isAlerts&&<p className="fm-proactive-note">Capital por exceso: unidades que superan 120 días de cobertura × coste unitario de catálogo, cuando existe. Es inventario a revisar, no un ahorro ni un compromiso de devolución. * Ahorro potencial: unidades orientativas para cubrir 30 días × diferencia positiva entre PUC histórico de cooperativa y PUC objetivo del percentil configurado de laboratorio. Requiere dos compras comparables por canal; no incluye rappels, portes ni garantiza precio, disponibilidad o ahorro real.</p>}
-  {!error&&result&&<>
-   {!isAlerts&&result.dateIncomplete>0&&<div className="fm-proactive-warning" role="status">
+  {!error&&<>
+   {ready&&!isAlerts&&result.dateIncomplete>0&&<div className="fm-proactive-warning" role="status">
     <AlertTriangle size={18}/>No se ha podido verificar la última venta de {number(result.dateIncomplete)} referencias. Se indica «No disponible».
    </div>}
-   {excluded.length>0&&<div className="fm-proactive-warning" role="status">
+   {ready&&excluded.length>0&&<div className="fm-proactive-warning" role="status">
     <AlertTriangle size={18}/>Datos excluidos: {excluded.map(x=>x.name+" ("+x.reason+")").join("; ")}.
    </div>}
-   {result.available===false?<section className="card fm-proactive-panel" role="status">
+   {!calculating&&result?.available===false?<section className="card fm-proactive-panel" role="status">
      {result.message||"No hay cobertura suficiente para realizar el análisis."}
     </section>:<>
-    <div className="fm-proactive-kpis">
-     <article className="card"><small>{isAlerts?"Alertas detectadas":"Referencias sin ventas"}</small><strong>{number(total)}</strong></article>
-     <article className="card"><small>{isAlerts?"Roturas potenciales":"Unidades inmovilizadas"}</small><strong>{number(isAlerts?values.riskCount:values.stockUnits)}</strong></article>
-     <article className="card"><small>{isAlerts?"Stock valorado en alertas":"Capital inmovilizado con coste"}</small><strong>{values.valuedCount?money(values.valuedSubtotal):"Sin valoración"}</strong></article>
-     <article className="card"><small>Referencias con coste</small><strong>{number(values.valuedCount)} / {number(total)}</strong></article>
-     {isAlerts&&<article className="card"><small>Capital por exceso de stock</small><strong>{values.excessValuedCount?money(values.excessCapital):"Sin exceso valorado"}</strong><small>Stock por encima de 120 días; no es ahorro realizado</small></article>}
-     {isAlerts&&<article className="card"><small>Ahorro potencial en compras*</small><strong>{values.pricedOpportunities?money(values.savingPotential):"Sin precios comparables"}</strong><small>{number(values.pricedOpportunities||0)} referencias con ambos PUC</small></article>}
+    <div className="fm-proactive-kpis" aria-busy={calculating}>
+     <article className="card">
+      <small>{isAlerts?"Alertas detectadas":"Referencias sin ventas"}</small>
+      <KpiValue loading={calculating} loadingText="Calculando…" label={isAlerts?"Alertas detectadas":"Referencias sin ventas"} value={number(total)}/>
+     </article>
+     <article className="card">
+      <small>{isAlerts?"Roturas potenciales":"Unidades inmovilizadas"}</small>
+      <KpiValue loading={calculating} loadingText="Calculando…" label={isAlerts?"Roturas potenciales":"Unidades inmovilizadas"} value={number(isAlerts?values.riskCount:values.stockUnits)}/>
+     </article>
+     <article className="card">
+      <small>{isAlerts?"Stock valorado en alertas":"Capital inmovilizado con coste"}</small>
+      <KpiValue loading={calculating} loadingText="Calculando…" label={isAlerts?"Stock valorado en alertas":"Capital inmovilizado con coste"} value={values.valuedCount?money(values.valuedSubtotal):"Sin valoración"}/>
+     </article>
+     <article className="card">
+      <small>Referencias con coste</small>
+      <KpiValue loading={calculating} loadingText="Calculando…" label="Referencias con coste" value={number(values.valuedCount)+" / "+number(total)}/>
+     </article>
+     {isAlerts&&<article className="card">
+      <small>Capital por exceso de stock</small>
+      <KpiValue loading={calculating} loadingText="Calculando…" label="Capital por exceso de stock" value={values.excessValuedCount?money(values.excessCapital):"Sin exceso valorado"}/>
+      <small>{calculating?"\u00a0":"Stock por encima de 120 días; no es ahorro realizado"}</small>
+     </article>}
+     {isAlerts&&<article className="card">
+      <small>Ahorro potencial en compras*</small>
+      <KpiValue loading={calculating} loadingText="Calculando…" label="Ahorro potencial en compras" value={values.pricedOpportunities?money(values.savingPotential):"Sin precios comparables"}/>
+      <small>{calculating?"\u00a0":number(values.pricedOpportunities||0)+" referencias con ambos PUC"}</small>
+     </article>}
     </div>
     <section className="card fm-proactive-panel">
      <div className="fm-proactive-table-head"><h2>{isAlerts?"Situaciones detectadas":"Existencias sin ventas netas"}</h2>
-      <button type="button" className="btn btn-secondary btn-sm" onClick={exportPage} disabled={!rows.length}>
+      <button type="button" className="btn btn-secondary btn-sm" onClick={exportPage} disabled={calculating||!rows.length}>
        <Download size={15}/> Exportar página CSV</button>
      </div>
      {notice&&<p className="fm-proactive-feedback" role="status">{notice}</p>}
      <ListTable rows={rows} rowKey={r=>r.pharmacyId+"|"+r.articleId}
       columns={columns} label="referencias" showExport={false}
       sort={sort} onSortChange={next=>{setSort(next);setPage(1)}}
-      serverFilters={columnFilters} filterOptions={result?.filterOptions||{}}
+      serverFilters={columnFilters} filterOptions={ready?result.filterOptions||{}:{}}
       onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
       tableClass="fm-proactive-table" emptyText="No se han detectado casos para los filtros elegidos."
+      loading={calculating} loadingLabel={isAlerts?"Calculando alertas inteligentes…":"Revisando stock inmovilizado…"}
       serverPagination={{page,pageSize:size,total,
        onPageChange:setPage,onPageSizeChange:n=>{setSize(n);setPage(1)}}}
       pageSizes={[25,50,100]}/>
     </section>
    </>}
   </>}
+
  </div>;
 }

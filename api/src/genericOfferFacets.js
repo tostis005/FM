@@ -23,7 +23,8 @@ const forms=[
  ["Polvo / granulado",/\b(polvo|granulado)\b/i]
 ];
 const strengthPattern=/(\d+(?:[.,]\d+)?)\s*(microgramos?|mcg|ug|mg|g|ui|%)(?:\s*\/\s*(?:(\d+(?:[.,]\d+)?)\s*)?(ml|g|dosis))?(?=$|[\s,;.)])/i;
-const packagePattern=/\b(\d{1,4})\s*(comprimidos?|capsulas?|sobres?|viales?|ampollas?|parches?|supositorios?|ovulos?|tabletas?|ml|g)\b/i;
+const packagePattern=/\b(\d{1,4})\s*(comprimidos?|capsulas?|sobres?|viales?|ampollas?|parches?|supositorios?|ovulos?|tabletas?)\b/i;
+const liquidPackPattern=/\b(?:envase|frasco|botella)\s*(?:de\s*)?(\d{1,4})\s*(ml|g)\b/i;
 
 export function describeGenericOfferGroup(group){
  const name=clean(group?.name);
@@ -35,7 +36,9 @@ export function describeGenericOfferGroup(group){
   "";
  const form=forms.find(([,re])=>re.test(description))?.[0]||"";
  const packMatch=description.match(packagePattern);
- const pack=packMatch?packMatch[1]+" "+packMatch[2]:"";
+ const liquidPack=description.match(liquidPackPattern);
+ const pack=packMatch?packMatch[1]+" "+packMatch[2]:
+  liquidPack?liquidPack[1]+" "+liquidPack[2]:"";
  return {...group,
   principle:clean(group?.principle)||"Sin principio activo identificado",
   strength,form,pack};

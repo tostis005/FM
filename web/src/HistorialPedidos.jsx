@@ -119,13 +119,16 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
    {loading?<LoadingPanel kind="table" label="Cargando historial de pedidos…" rows={6}/>:<>
     <div className="fm-orders-history-scroll">
      <table className="fm-orders-history-table">
-      <thead><tr><th>Fecha</th><th>Laboratorio</th><th>Tipo</th><th>Referencias</th>
+      <thead><tr><th>Fecha</th><th>Laboratorio</th><th>Tipo</th><th>Farmacias</th><th>Referencias</th>
        <th>Unidades</th><th>Origen</th><th>Realizado por</th><th>Excel</th></tr></thead>
       <tbody>
        {visible.map(item=><tr key={item.id}>
         <td>{dateES(item.fecha)}</td>
         <td><strong>{item.laboratorioNombre}</strong></td>
         <td>{item.tipo==="medicacion"?"Medicación":"Parafarmacia"}</td>
+        <td title={item.farmaciasClave.split(",").map(id=>
+         pharmacies.find(p=>String(p.id)===id)?.name||id).join(", ")}>
+         {item.farmaciasClave.split(",").length===1?"1 farmacia":item.farmaciasClave.split(",").length+" farmacias"}</td>
         <td>{number(item.referencias)}</td><td>{number(item.unidades)}</td>
         <td>{item.origen==="excel"?"Importado": "Preparador"}
          {item.archivoNombre&&<small title={item.archivoNombre}>{item.archivoNombre}</small>}</td>
@@ -135,7 +138,7 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
          disabled={busy} onClick={()=>void downloadOrder(item)}>
          <Download size={14}/> Excel</button></td>
        </tr>)}
-       {!visible.length&&<tr><td colSpan={8} className="fm-orders-empty">
+       {!visible.length&&<tr><td colSpan={9} className="fm-orders-empty">
         {items.length?"No hay pedidos que coincidan con los filtros.":"Todavía no se han registrado pedidos realizados."}
        </td></tr>}
       </tbody>

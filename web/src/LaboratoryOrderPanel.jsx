@@ -323,11 +323,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const currentRows=data.rows||[];
  // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
  const tableVisibleRows=useMemo(()=>{
-  const cn=columnFilter.cn.trim().toLocaleLowerCase("es"),
-   article=columnFilter.article.trim().toLocaleLowerCase("es");
+  const cn=columnFilter.cn.trim().toLocaleLowerCase("es");
+  const fold=value=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+   .toLocaleLowerCase("es");
+  const words=fold(columnFilter.article).trim().split(/\s+/).filter(Boolean);
   return currentRows.filter(row=>
    (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
-   (!article||String(row.nombre||"").toLocaleLowerCase("es").includes(article)));
+   (!words.length||words.every(word=>fold(row.nombre).includes(word))));
  },[currentRows,columnFilter]);
  // Ordenar por la suma de TODAS las referencias de cada grupo, pero mantener
  // los campos y CN individuales para editar, guardar y exportar.

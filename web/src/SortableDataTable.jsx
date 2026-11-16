@@ -5,6 +5,7 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {Download} from "lucide-react";
 import {downloadTableCSV} from "./tableExport.js";
 import {searchText} from "./listLogic.js";
+import {filterModeForColumn} from "./tableFilterModes.js";
 
 const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
 export function readableCell(value){
@@ -48,11 +49,11 @@ export default function SortableDataTable({
  const [sort,setSort]=useState(null),[page,setPage]=useState(0);
  const [pageSize,setPageSize]=useState(50),[filters,setFilters]=useState({});
  const isAction=index=>/^(acciones?|historial|quitar|reparto|seleccionar)$/iu.test(String(headers[index]||""));
- const filterMode=index=>{
-  if(isAction(index))return "none";
-  if(filterModes[index])return filterModes[index];
-  return /farmacia|estado|\babcd\b|clasificaci[oó]n|prioridad|\btipo\b|categor[ií]a|responsable/iu.test(String(headers[index]))?"multi":"text";
- };
+ const filterMode=index=>filterModeForColumn({
+  label:String(headers[index]||""),
+  declared:isAction(index)?"none":filterModes[index],
+  values:(rows||[]).map(row=>readableCell(row[index]))
+ });
  const filtered=useMemo(()=>(rows||[]).filter(row=>headers.every((_,i)=>{
   const condition=filters[i],text=readableCell(row[i]);
   if(Array.isArray(condition))return !condition.length||condition.includes(text);

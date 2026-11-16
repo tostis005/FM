@@ -69,3 +69,57 @@ border:1px solid var(--border,#e2e9e4);border-radius:10px;background:var(--surfa
 .fm-gof-actions{justify-content:stretch}.fm-gof-actions button{width:100%;justify-content:center}
 .fm-gof-pharmacy-inputs label{width:calc(50% - 6px)}
 }
+/* Búsqueda estructurada CN -> DCPF -> oferta, con formulario independiente. */
+.fm-gof-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;
+ align-items:end;margin-top:17px}
+.fm-gof-filters .fm-gof-filter-search{grid-column:1/-1}
+.fm-gof-filters label{min-width:0;display:block}
+.fm-gof-filters input,.fm-gof-filters select{width:100%;min-width:0}
+.fm-gof-filter-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:9px;
+ align-items:center;flex-wrap:wrap}
+.fm-gof-filter-actions button{display:inline-flex;gap:7px;align-items:center;justify-content:center}
+.fm-gof-catalog{margin-top:19px}
+.fm-gof-catalog-title{display:flex;gap:12px;justify-content:space-between;align-items:baseline;flex-wrap:wrap}
+.fm-gof-catalog-title h3{margin:0;font-size:.94rem;font-weight:720}
+.fm-gof-catalog-title span{font-size:.78rem;color:var(--text-muted,#617268)}
+.fm-gof-catalog-scroll{margin-top:10px;overflow-x:auto;overscroll-behavior-x:contain;
+ border:1px solid var(--border,#e0e8e2);border-radius:10px}
+.fm-gof-catalog-table{min-width:940px;width:100%;border-collapse:collapse;font-size:.79rem}
+.fm-gof-catalog-table th{padding:10px;text-align:left;white-space:nowrap;
+ background:var(--surface-secondary,#f5f8f6);color:var(--text-muted,#52685d);
+ border-bottom:1px solid var(--border,#e0e8e2);font-weight:650}
+.fm-gof-catalog-table td{padding:11px 10px;border-bottom:1px solid var(--border,#e0e8e2);
+ line-height:1.4;vertical-align:middle}
+.fm-gof-catalog-table tr:last-child td{border-bottom:0}
+.fm-gof-catalog-table tr.is-selected{background:color-mix(in srgb,#159c70 8%,transparent)}
+.fm-gof-catalog-table td:first-child{min-width:310px;max-width:440px}
+.fm-gof-catalog-table td:first-child small{display:block;margin-top:4px;font-size:.71rem;
+ color:var(--text-muted,#627669)}
+.fm-gof-catalog-table button{white-space:nowrap}
+.fm-gof-catalog .list-pagination{margin-top:10px}
+.fm-gof-config{padding:20px;min-width:0}
+.fm-gof-config .section-heading h2{display:flex;gap:8px;align-items:center}
+.fm-gof-config .section-heading p{font-size:.85rem;color:var(--text-muted,#617268);line-height:1.5}
+.fm-gof-config h3{font-size:.92rem;margin:23px 0 9px}
+.fm-gof-config-file{display:flex;justify-content:space-between;align-items:center;
+ gap:16px;padding:17px;border:1px solid var(--border,#dde6df);
+ border-radius:11px;background:var(--surface-secondary,#f6f8f7);margin-top:16px}
+.fm-gof-config-file>div{display:grid;gap:4px;min-width:0}
+.fm-gof-config-file>div small{font-size:.73rem;color:var(--text-muted,#64756d)}
+.fm-gof-config-file>div strong{font-size:.93rem;overflow-wrap:anywhere}
+.fm-gof-config-file>div span{font-size:.78rem;color:var(--text-muted,#627569)}
+.fm-gof-source-scroll{overflow-x:auto;border:1px solid var(--border,#e0e8e2);border-radius:10px}
+.fm-gof-source-table{width:100%;border-collapse:collapse;font-size:.84rem}
+.fm-gof-source-table th{text-align:left;background:var(--surface-secondary,#f5f8f6);
+ padding:10px 14px;font-weight:680;border-bottom:1px solid var(--border,#e0e8e2)}
+.fm-gof-source-table td{padding:10px 14px;border-bottom:1px solid var(--border,#e0e8e2)}
+.fm-gof-source-table td:last-child,.fm-gof-source-table th:last-child{text-align:right}
+.fm-gof-source-table tr:last-child td{border-bottom:0}
+@media(max-width:850px){.fm-gof-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.fm-gof-filters{grid-template-columns:1fr;gap:10px}
+ .fm-gof-filters .fm-gof-filter-search{grid-column:auto}
+ .fm-gof-filter-actions{grid-column:auto;display:grid;grid-template-columns:1fr 1fr}
+ .fm-gof-filter-actions button{white-space:normal;min-height:40px}
+ .fm-gof-config{padding:13px}.fm-gof-config-file{display:grid;gap:13px}
+ .fm-gof-config-file .fm-gof-upload{justify-content:center;width:100%}
+}

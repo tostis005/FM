@@ -148,7 +148,7 @@ jobs:
           python3 -m py_compile api/src/setup_temp_login.py
           docker run --rm -v "$PWD/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.27-alpine nginx -t
       - name: Validar formato de CNs y disponibilidad de transferencias
-        run: node --test web/src/cns.test.js web/src/transferTopology.test.js web/src/tableFilterModes.test.js
+        run: node --test web/src/cns.test.js web/src/transferTopology.test.js web/src/tableFilterModes.test.js web/src/pharmacyPresentation.test.js
       - name: Compilar React
         working-directory: web
         run: |

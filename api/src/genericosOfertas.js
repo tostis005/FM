@@ -1,4 +1,5 @@
 import {normalizeDraftItems,pharmacyScope,validPlannerDate} from "./laboratoryOrderPlanner.js";
+import {describeGenericOfferGroup,genericOfferFacets} from "./genericOfferFacets.js";
 
 const CN=/^[0-9]{6,7}$/;
 const DCPF=/^[0-9]{1,30}$/;
@@ -122,6 +123,30 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
     ...counts[0]});
   }catch(e){await connection.query("ROLLBACK").catch(()=>{});next(e)}
   finally{connection.release()}
+ });
+
+ // Catálogo completo, siempre filtrado por las tarifas del cliente y por CN EFG
+ // del Nomenclátor. El frontend puede combinar molécula, dosis, forma y envase
+ // sin realizar una consulta independiente por cada filtro.
+ app.get("/api/genericos/ofertas/catalogo",...guard,async(req,res,next)=>{
+  if(denyRead(req,res))return;
+  try{
+   const {rows}=await pool.query({
+    text:"SELECT n.dcpf::text AS dcpf,"+
+     "coalesce(max(nullif(n.descripcion_dcpf,'')),min(n.nombre)) AS name,"+
+     "coalesce(min(nullif(n.principio_activo,'')),'') AS principle,"+
+     "count(DISTINCT o.laboratorio_fuente)::int AS laboratories,"+
+     "count(DISTINCT o.cn)::int AS offers,min(o.puc)::float8 AS \"bestPuc\" "+
+     "FROM farmetrica.genericos_ofertas_laboratorios o "+
+     "JOIN farmetrica.nomenclator_presentaciones n ON n.cn=o.cn "+
+     "WHERE o.cliente_slug=$1 AND n.generico=true "+
+     "GROUP BY n.dcpf ORDER BY min(n.principio_activo),min(n.nombre) LIMIT 8000",
+    values:[req.context.client.slug],query_timeout:15000
+   });
+   const groups=rows.map(describeGenericOfferGroup);
+   res.json({items:groups,facets:genericOfferFacets(groups),
+    total:groups.length,source:"Tarifas importadas del cliente + Nomenclátor AEMPS"});
+  }catch(e){next(e)}
  });
  app.get("/api/genericos/ofertas/buscar",...guard,async(req,res,next)=>{
   if(denyRead(req,res))return;

@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const page=await browser.newPage({viewport:{width:1280,height:850}});
 const user={email:"gestor-ajustes-ci@example.invalid",name:"Gestor prueba",role:"usuario"};
-const pharmacies=[{id:"1",name:"Farmacia prueba",sourceCode:"ABA"}];
+const pharmacies=[{id:"1",name:"Farmacia prueba",sourceCode:"ABA"},
+ {id:"2",name:"Farmacia de apoyo",sourceCode:"EUR"}];
 const context={user,role:"gestor",
  client:{slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,
@@ -112,6 +113,17 @@ try{
 
  await page.goto("http://127.0.0.1:4175/ajustes?seccion=transferidor");
  await page.getByRole("heading",{name:"Stock del transferidor"}).waitFor();
+
+ // Un cliente con una única farmacia y ningún almacén no debe ver estos ajustes.
+ pharmacies.splice(1,1);
+ await page.goto("http://127.0.0.1:4175/ajustes");
+ await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor();
+ assert.equal(await page.getByRole("button",{name:"Abrir ajustes de Transferidor"}).count(),0);
+ assert.equal(await page.getByRole("button",{name:/Abrir ajustes de/}).count(),4);
+ await page.goto("http://127.0.0.1:4175/ajustes?seccion=transferidor");
+ await page.getByRole("heading",{name:"Ajustes",exact:true}).waitFor();
+ await page.waitForURL(url=>!new URL(url).searchParams.has("seccion"));
+ assert.equal(await page.getByRole("heading",{name:"Stock del transferidor"}).count(),0);
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("OK gestor: ajustes por áreas, navegación e historial, reglas literales y formularios editables");
 }finally{await browser.close()}

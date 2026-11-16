@@ -30,6 +30,8 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
  const [destinations,setDestinations]=useState({}),[overrides,setOverrides]=useState({});
  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const fileRef=useRef(null);
+ const pharmacyScope=pharmacies.map(p=>String(p.id)).join(",");
+ useEffect(()=>{setOverrides({})},[pharmacyScope]);
  useEffect(()=>{
   const controller=new AbortController();setMetaLoading(true);
   Promise.all([

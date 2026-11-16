@@ -17,6 +17,20 @@ await page.route("**/api/**",async route=>{
  else if(p==="/api/tenant/context")data=context;
  else if(p==="/api/tenant/promociones")data={promotions:[]};
  else if(p==="/api/tenant/farmacias")data=pharmacies;
+ else if(p==="/api/genericos/ofertas/estado")data={
+  summary:{total:3,matched:3,groups:3,laboratories:3,
+   filename:"RESUMEN TODOS LOS LABORATORIOS.xlsx",importedAt:"2026-11-16T12:00:00Z"},
+  laboratories:[{name:"CINFA",offers:1},{name:"NORMON",offers:1},{name:"SANDOZ",offers:1}]
+ };
+ else if(p==="/api/genericos/ofertas/proveedores")data={items:[]};
+ else if(p==="/api/genericos/ofertas/catalogo")data={items:[
+  {dcpf:"111",principle:"PARACETAMOL",name:"Paracetamol 500 mg 20 comprimidos",
+   strength:"500 mg",form:"Comprimidos",pack:"20 comprimidos",laboratories:2,offers:2,bestPuc:1.1},
+  {dcpf:"112",principle:"PARACETAMOL",name:"Paracetamol 1 g 20 comprimidos",
+   strength:"1 g",form:"Comprimidos",pack:"20 comprimidos",laboratories:1,offers:1,bestPuc:2.1},
+  {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
+   strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
+ ]};
  else if(p==="/api/genericos/reales"&&u.searchParams.get("buscar")==="error-api"){
   await route.fulfill({status:503,contentType:"application/json",
    body:JSON.stringify({error:"Error de consulta simulado"})});return;
@@ -68,7 +82,19 @@ try{
  await page.goto(BASE+"/genericos",{waitUntil:"domcontentloaded"});
  // El comparador comercial es la vista principal; conservar la cobertura del análisis.
  await page.getByRole("heading",{name:"Genéricos · Comparador de compras"}).waitFor();
- await page.getByRole("heading",{name:"1. Selecciona el medicamento"}).waitFor();
+ await page.getByRole("heading",{name:"1. Busca y selecciona un genérico"}).waitFor();
+ await page.getByLabel("Principio activo").selectOption("PARACETAMOL");
+ await page.getByRole("button",{name:"Mostrar resultados"}).click();
+ await page.waitForFunction(()=>document.querySelectorAll(".fm-gof-catalog-table tbody tr").length===2);
+ assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),2,
+  "Una molécula muestra todas sus presentaciones tarifadas");
+ await page.getByLabel("Dosis o concentración").selectOption("500 mg");
+ await page.getByRole("button",{name:"Mostrar resultados"}).click();
+ assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),1,
+  "Una dosis reduce el listado sin mezclar presentaciones");
+ await page.getByRole("button",{name:"Configuración de tarifas"}).click();
+ await page.getByRole("heading",{name:"Genéricos · Configuración de tarifas"}).waitFor();
+ await page.getByText("RESUMEN TODOS LOS LABORATORIOS.xlsx",{exact:true}).first().waitFor();
  await page.getByRole("button",{name:"Análisis y rentabilidad"}).click();
  await page.getByRole("heading",{name:"Genéricos",exact:true}).waitFor();
  // El análisis puede haber precargado sus datos mientras se muestra el comparador.

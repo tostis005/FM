@@ -1,5 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
-import {Download,FileSpreadsheet,Save,Search,ShoppingCart,Upload,RefreshCcw} from "lucide-react";
+import {Download,FileSpreadsheet,Save,Search,ShoppingCart,Upload,RefreshCcw,Settings2} from "lucide-react";
+import {ListPagination} from "./ListTable.jsx";
+import {filterGenericOfferGroups,genericOfferOptions} from "./genericOfferFilters.js";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {readGenericOfferExcel} from "./genericOffersImport.js";
@@ -21,10 +23,13 @@ async function request(clientSlug,path,{method="GET",body,signal}={}){
 const sourceName=item=>item.name||item.principle||"Presentación sin descripción";
 const niceDate=v=>String(v||"").slice(0,10).split("-").reverse().join("/");
 
-export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=false,range}){
+export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=false,range,mode="comparador"}){
  const [status,setStatus]=useState(null),[suppliers,setSuppliers]=useState([]);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
- const [search,setSearch]=useState(""),[found,setFound]=useState([]),[searchBusy,setSearchBusy]=useState(false);
+ const [catalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
+ const [search,setSearch]=useState(""),[principle,setPrinciple]=useState(""),
+  [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
+ const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
  const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
  const [volume,setVolume]=useState(""),[shares,setShares]=useState({}),[chosenCN,setChosenCN]=useState({});
  const [destinations,setDestinations]=useState({}),[overrides,setOverrides]=useState({});
@@ -45,17 +50,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   return()=>controller.abort();
  },[clientSlug,refresh]);
  useEffect(()=>{
-  const controller=new AbortController();
-  const timer=setTimeout(()=>{
-   setSearchBusy(true);
-   request(clientSlug,"/api/genericos/ofertas/buscar?"+new URLSearchParams({buscar:search.trim()}),
-    {signal:controller.signal})
-    .then(v=>{if(!controller.signal.aborted)setFound(v.items||[])})
-    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
-    .finally(()=>{if(!controller.signal.aborted)setSearchBusy(false)});
-  },300);
-  return()=>{clearTimeout(timer);controller.abort()};
- },[clientSlug,search,refresh]);
+  if(mode!=="comparador")return;
+  const controller=new AbortController();setCatalogBusy(true);
+  request(clientSlug,"/api/genericos/ofertas/catalogo",{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted)setCatalog(v.items||[])})
+   .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setCatalogBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,mode,refresh]);
  useEffect(()=>{
   if(!dcpf){setDetails(null);return}
   const controller=new AbortController();setDetailBusy(true);setError("");
@@ -73,7 +75,22 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     .finally(()=>{if(!controller.signal.aborted)setDetailBusy(false)});
   return()=>controller.abort();
  },[clientSlug,dcpf,refresh]);
- const selectedGroup=found.find(g=>String(g.dcpf)===String(dcpf));
+ const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
+ const searchScope=useMemo(()=>filterGenericOfferGroups(catalog,{text:search,principle}),[catalog,search,principle]);
+ const strengths=useMemo(()=>genericOfferOptions(searchScope,"strength"),[searchScope]);
+ const formScope=useMemo(()=>filterGenericOfferGroups(searchScope,{strength}),[searchScope,strength]);
+ const forms=useMemo(()=>genericOfferOptions(formScope,"form"),[formScope]);
+ const packScope=useMemo(()=>filterGenericOfferGroups(formScope,{form}),[formScope,form]);
+ const packs=useMemo(()=>genericOfferOptions(packScope,"pack"),[packScope]);
+ const results=useMemo(()=>applied?
+  filterGenericOfferGroups(catalog,applied):[],[catalog,applied]);
+ const pageCount=pageSize===0?1:Math.max(1,Math.ceil(results.length/pageSize));
+ const safePage=Math.min(page,pageCount-1);
+ const visibleResults=pageSize===0?results:results.slice(safePage*pageSize,(safePage+1)*pageSize);
+ const showResults=()=>{
+  setApplied({text:search,principle,strength,form,pack});setPage(0);setDcpf("");
+  setNotice("");
+ };
  const labs=useMemo(()=>{
   const map=new Map();
   for(const offer of details?.offers||[]){
@@ -188,6 +205,49 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   }catch(e){setError(e.message)}
   finally{setBusy(false)}
  }
+ if(mode==="config")return <div className="fm-gof">
+  <ReportPageHeader title="Genéricos · Configuración de tarifas"
+   description="Actualización de ofertas comerciales por laboratorio, privadas para este cliente"
+   refreshing={metaLoading} onRefresh={()=>setRefresh(x=>x+1)}/>
+  {error&&<p role="alert" className="fm-gof-message fm-gof-error">{error}</p>}
+  {notice&&<p role="status" className="fm-gof-message">{notice}</p>}
+  <div className="fm-gof-kpis">
+   {[
+    ["Ofertas cargadas",status?.summary?.total],
+    ["CN vinculados a AEMPS",status?.summary?.matched],
+    ["Conjuntos relacionados",status?.summary?.groups],
+    ["Laboratorios",status?.summary?.laboratories]
+   ].map(([label,value])=><div className="card fm-gof-kpi" key={label}>
+    <small>{label}</small><KpiValue loading={metaLoading} label={label}
+     loadingText="Consultando tarifas…" value={integers(value)}/></div>)}
+  </div>
+  <section className="card fm-gof-config">
+   <div className="section-heading"><div><h2><Settings2 size={19}/> Archivo de tarifas vigente</h2>
+    <p>Los gestores pueden sustituir las tarifas cuando los laboratorios comuniquen nuevas condiciones. El comparador leerá automáticamente los precios actualizados.</p></div></div>
+   <div className="fm-gof-config-file">
+    <div><small>Última importación</small>
+     <strong>{status?.summary?.filename||"Sin archivo importado"}</strong>
+     <span>{status?.summary?.importedAt?niceDate(status.summary.importedAt):"Todavía no existen tarifas cargadas"}</span></div>
+    <label className="btn btn-primary fm-gof-upload">
+     <Upload size={16}/>{busy?"Importando…":"Actualizar fichero Excel"}
+     <input ref={fileRef} type="file" accept=".xlsx" disabled={!canEdit||busy}
+      onChange={e=>void importFile(e.target.files?.[0]||null)}/></label>
+   </div>
+   <p className="fm-gof-legal">El archivo debe contener una pestaña por laboratorio, con Código nacional, PVL, descuento, Neto, IVA y PUC. La importación sustituye las tarifas anteriores del cliente, pero no modifica el Nomenclátor ni las compras históricas. Los objetivos guardados se conservan siempre que sigan existiendo sus CN y conjuntos equivalentes.</p>
+   <h3>Laboratorios presentes en la tarifa</h3>
+   {metaLoading?<LoadingPanel kind="table" label="Consultando tarifas vigentes…" rows={4}/>:
+    <div className="fm-gof-source-scroll"><table className="fm-gof-source-table">
+     <thead><tr><th>Laboratorio (hoja Excel)</th><th>Referencias de tarifa</th></tr></thead>
+     <tbody>{(status?.laboratories||[]).map(x=><tr key={x.name}>
+      <td>{x.name}</td><td>{integers(x.offers)}</td>
+     </tr>)}
+     {!(status?.laboratories||[]).length&&<tr><td colSpan={2}>
+      Todavía no se han importado tarifas de este cliente.</td></tr>}
+     </tbody>
+    </table></div>}
+  </section>
+ </div>;
+
  return <div className="fm-gof">
   <ReportPageHeader title="Genéricos · Comparador de compras"
    description="Tarifas de laboratorio vinculadas por código nacional y conjunto DCPF de AEMPS"
@@ -204,41 +264,80 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     <small>{label}</small><KpiValue loading={metaLoading} label={label} loadingText="Calculando…" value={integers(value)}/>
    </div>)}
   </div>
-  {canEdit&&<section className="card fm-gof-import">
-   <div><strong><FileSpreadsheet size={17}/> Tarifas comerciales</strong>
-    <p>Importa un archivo con una pestaña por laboratorio (Código, PVL, %Dto, Neto, IVA, PUC). Reemplaza la tarifa vigente del cliente, sin cambiar los datos del Nomenclátor ni las compras reales.</p>
-    {status?.summary?.filename&&<small>Archivo vigente: {status.summary.filename} · {status.summary.importedAt?niceDate(status.summary.importedAt):"—"}</small>}
-   </div>
-   <label className="btn btn-secondary fm-gof-upload"><Upload size={15}/>
-    {busy?"Procesando…":"Importar / actualizar Excel"}
-    <input ref={fileRef} type="file" accept=".xlsx" disabled={busy}
-     onChange={e=>void importFile(e.target.files?.[0]||null)}/></label>
-  </section>}
+  {!metaLoading&&status?.summary?.filename&&
+   <p className="fm-gof-hint">Tarifas vigentes: <strong>{status.summary.filename}</strong>. Los gestores pueden actualizarlas desde «Configuración de tarifas».</p>}
   <section className="card fm-gof-picker">
-   <div className="section-heading"><div><h2>1. Selecciona el medicamento</h2>
-    <p>La comparación agrupa únicamente presentaciones equivalentes (misma composición, dosis, forma y envase).</p></div></div>
-   <div className="fm-gof-search-row">
-    <label>Buscar por CN, principio activo o presentación
+   <div className="section-heading"><div><h2>1. Busca y selecciona un genérico</h2>
+    <p>Busca por texto o CN, o elige primero un principio activo. Puedes acotar por dosis, forma farmacéutica y envase: solo aparecen presentaciones con tarifa importada y equivalencia oficial AEMPS.</p></div></div>
+   <form className="fm-gof-filters" onSubmit={e=>{e.preventDefault();showResults()}}>
+    <label className="fm-gof-filter-search">Búsqueda libre (nombre, molécula o CN)
      <span className="fm-gof-search"><Search size={16}/>
       <input type="search" value={search} onChange={e=>setSearch(e.target.value)}
-       placeholder="Ej.: esomeprazol 20 mg 28 cápsulas"/></span></label>
-    <label>Conjunto DCPF
-     <select value={dcpf} onChange={e=>{setDcpf(e.target.value);setVolume("");setNotice("");setOverrides({})}}>
-      <option value="">Selecciona un genérico</option>
-      {dcpf&&!found.some(g=>String(g.dcpf)===String(dcpf))&&
-       <option value={dcpf}>Conjunto DCPF {dcpf}</option>}
-      {found.map(g=><option key={g.dcpf} value={g.dcpf}>
-       {sourceName(g)} · {g.laboratories} lab. · DCPF {g.dcpf}</option>)}
+       placeholder="Ej.: paracetamol 500 mg o un CN"/></span></label>
+    <label>Principio activo
+     <select value={principle} onChange={e=>{
+      setPrinciple(e.target.value);setStrength("");setForm("");setPack("");
+     }}><option value="">Todas las moléculas</option>
+      {genericOfferOptions(catalog,"principle").filter(x=>x!=="Sin principio activo identificado")
+       .map(x=><option value={x} key={x}>{x}</option>)}
      </select></label>
-   </div>
-   {searchBusy&&<span className="fm-gof-hint"><span className="fm-load-spinner" aria-hidden="true"/> Buscando conjuntos…</span>}
+    <label>Dosis o concentración
+     <select value={strength} onChange={e=>{setStrength(e.target.value);setForm("");setPack("")}}>
+      <option value="">Todas las dosis</option>
+      {strengths.map(x=><option value={x} key={x}>{x}</option>)}
+     </select></label>
+    <label>Forma farmacéutica
+     <select value={form} onChange={e=>{setForm(e.target.value);setPack("")}}>
+      <option value="">Todas las formas</option>
+      {forms.map(x=><option value={x} key={x}>{x}</option>)}
+     </select></label>
+    <label>Envase / presentación
+     <select value={pack} onChange={e=>setPack(e.target.value)}>
+      <option value="">Todos los envases</option>
+      {packs.map(x=><option value={x} key={x}>{x}</option>)}
+     </select></label>
+    <div className="fm-gof-filter-actions">
+     <button type="button" className="btn btn-secondary" onClick={()=>{
+      setSearch("");setPrinciple("");setStrength("");setForm("");setPack("");
+      setApplied(null);setDcpf("");setPage(0);
+     }}>Limpiar filtros</button>
+     <button type="submit" className="btn btn-primary" disabled={catalogBusy}>
+      <Search size={16}/> Mostrar resultados</button>
+    </div>
+   </form>
+   {catalogBusy?<LoadingPanel kind="table" label="Relacionando ofertas y presentaciones oficiales…" rows={4}/>:
+    applied?<div className="fm-gof-catalog">
+     <div className="fm-gof-catalog-title"><h3>Presentaciones encontradas</h3>
+      <span>{integers(results.length)} conjuntos con ofertas de laboratorio</span></div>
+     <div className="fm-gof-catalog-scroll"><table className="fm-gof-catalog-table">
+      <thead><tr><th>Principio activo / presentación equivalente</th><th>Dosis</th>
+       <th>Forma</th><th>Envase</th><th>Laboratorios</th><th>Menor PUC ofertado</th><th/></tr></thead>
+      <tbody>{visibleResults.map(item=><tr key={item.dcpf}
+       className={String(dcpf)===String(item.dcpf)?"is-selected":""}>
+       <td><strong>{sourceName(item)}</strong><small>{item.principle} · DCPF {item.dcpf}</small></td>
+       <td>{item.strength||"—"}</td><td>{item.form||"—"}</td>
+       <td>{item.pack||"—"}</td><td>{integers(item.laboratories)}</td>
+       <td className="fm-gof-num">{euros(item.bestPuc)}</td>
+       <td><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{
+        setDcpf(item.dcpf);setVolume("");setNotice("");setOverrides({});
+        document.getElementById("fm-gof-detail")?.scrollIntoView({behavior:"smooth",block:"start"});
+       }}>{String(dcpf)===String(item.dcpf)?"Seleccionado":"Comparar precios"}</button></td>
+      </tr>)}
+      {!results.length&&<tr><td colSpan={7}>No hay presentaciones con tarifa para estos filtros. Prueba con otra dosis o amplía la búsqueda.</td></tr>}
+      </tbody>
+     </table></div>
+     {results.length>0&&<ListPagination total={results.length} page={safePage}
+      pageSize={pageSize} pageSizes={[25,50,100,500,0]}
+      onPageChange={setPage} onPageSizeChange={size=>{setPageSize(size);setPage(0)}}
+      label="conjuntos"/>}
+    </div>:<p className="fm-gof-hint">Selecciona, por ejemplo, «Paracetamol» y pulsa «Mostrar resultados» para ver todas las dosis y presentaciones que tienen tarifas importadas.</p>}
    {!metaLoading&&status?.summary?.total===0&&
-    <p className="fm-gof-hint">Todavía no hay tarifas importadas. La comparación estará disponible al incorporar el Excel del cliente.</p>}
+    <p className="fm-gof-hint">Todavía no hay tarifas importadas. Un gestor puede cargarlas desde «Configuración de tarifas».</p>}
    {!!status?.summary?.total&&status.summary.matched<status.summary.total&&
-    <p className="fm-gof-hint">{integers(status.summary.total-status.summary.matched)} CN del Excel no aparecen en el Nomenclátor activo y no entran en comparaciones por equivalencia.</p>}
+    <p className="fm-gof-hint">{integers(status.summary.total-status.summary.matched)} CN del archivo no aparecen en el Nomenclátor AEMPS activo y no se incluyen en comparaciones clínicas.</p>}
   </section>
   {detailBusy?<LoadingPanel kind="table" label="Relacionando CN, DCPF y ofertas de laboratorio…" rows={5}/>:
-  dcpf&&details&&<section className="card fm-gof-results">
+  dcpf&&details&&<section id="fm-gof-detail" className="card fm-gof-results">
    <div className="section-heading"><div><h2>2. Compara los precios de los laboratorios</h2>
     <p>{selectedGroup?sourceName(selectedGroup):"Conjunto DCPF "+dcpf} · {labs.length} laboratorios con ofertas EFG</p></div></div>
    {labs.length?<div className="fm-gof-scroll"><table className="fm-gof-table">

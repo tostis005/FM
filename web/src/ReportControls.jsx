@@ -38,6 +38,9 @@ export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacy
  showPeriod=true,showPharmacies=true,customFrom="",customTo="",onCustomFromChange,onCustomToChange,
  quickPeriodKey, onQuickPeriodChange,alwaysShowDates=false,showQuickPeriods=true,periodLabel="Período",children}){
  const onlyOnePharmacy=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
+ // Evitar una tarjeta vacía en operativa cuando su único campo era Farmacia.
+ if(!showPeriod&&(!showPharmacies||onlyOnePharmacy)&&!children&&
+  !(showQuickPeriods&&onQuickPeriodChange))return null;
  return <div className="card fm-unified-filters">
   {showPeriod&&<label className="fm-unified-filter"><span>{periodLabel}</span>
    <select value={periodKey} onChange={e=>onPeriodChange?.(e.target.value)}>

@@ -78,7 +78,7 @@ try{
  await menu.getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Stock inmovilizado"}).waitFor({timeout:12000});
  await superadmin.getByRole("columnheader",{name:"Última venta"}).waitFor({timeout:12000});
- assert.equal(await superadmin.getByRole("columnheader",{name:"Farmacia",exact:true}).count(),0,
+ assert.equal(await superadmin.getByRole("button",{name:"Ordenar Farmacia",exact:true}).count(),0,
   "una sola farmacia no requiere columna ni filtro de farmacia");
  assert.equal(await superadmin.locator(".fm-proactive-controls select").count(),1,
   "con una farmacia única se conserva el período, no un selector redundante");
@@ -101,7 +101,7 @@ try{
  const multi=await openAs("superadministrador",true);
  await multi.getByRole("navigation",{name:"Módulos"})
   .getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
- await multi.getByRole("columnheader",{name:"Farmacia",exact:true}).waitFor({timeout:12000});
+ await multi.getByRole("button",{name:"Ordenar Farmacia",exact:true}).waitFor({timeout:12000});
  assert.equal(await multi.locator(".fm-proactive-controls select").count(),2,
   "con varias farmacias debe mantenerse el selector de farmacia y el del período");
  await multi.close();

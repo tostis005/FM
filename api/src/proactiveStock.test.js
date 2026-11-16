@@ -62,6 +62,10 @@ test("señales de riesgo, cobertura y capital no mezclan falta de coste con cero
  assert.equal(withSale.lastSaleStatus,"found");
  const excess=classifyProactiveStock({...stock,stock:100},{units:3,units30:0},90);
  assert.equal(excess.alertType,"exceso");
+ assert.equal(excess.excessUnits,96);
+ const valued=classifyProactiveStock({...stock,stock:100,unitCost:5},{units:3,units30:0},90);
+ assert.equal(valued.excessCapital,480);
+ assert.equal(risk.excessCapital,null);
  assert.equal(classifyProactiveStock({...stock,stock:10},{units:100,units30:0},90).alertType,null);
 });
 test("deniega las dos rutas a usuarios no superadmin antes de consultar",()=>{

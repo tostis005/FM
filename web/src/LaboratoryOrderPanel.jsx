@@ -102,7 +102,10 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
      throw Error("Espera a que termine la carga y revisa las cantidades antes de confirmar.");
     const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
     const lines=Object.values(combined).filter(line=>tab==="parafarmacia"?
-     Number(line.units)>0:Object.values(line.unitsByPharmacy||{}).some(value=>Number(value)>0));
+     Number(line.units)>0:Object.values(line.unitsByPharmacy||{}).some(value=>Number(value)>0))
+     .map(line=>({reference:line.reference,cn:line.cn,name:line.name,
+      ...(tab==="parafarmacia"?{units:line.units}:{unitsByPharmacy:line.unitsByPharmacy}),
+      comment:line.comment||"",excluded:line.excluded===true}));
     if(!lines.length)throw Error("El pedido no tiene unidades positivas que registrar.");
     if(lines.length>5000)throw Error("Demasiadas referencias en el pedido.");
     const response=await api(clientSlug,"/api/analytics/pedidos/historial",{

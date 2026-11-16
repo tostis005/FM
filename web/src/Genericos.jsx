@@ -11,6 +11,7 @@ import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
 import {searchText} from "./listLogic.js";
+import GenericosComparador from "./GenericosComparador.jsx";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
 const money=euro;
@@ -144,7 +145,8 @@ function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
  </div>;
 }
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id])=>id));
-export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
+export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false,canEdit=false}){
+ const [view,setView]=useState("comparador");
  // El contrato normalizado funciona en TODOS los clientes, no solo Ampedia.
  // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
  const [useReal,setUseReal]=useState(true);
@@ -241,7 +243,19 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  }));
  const safePage=Math.max(0,Math.min(page,Math.ceil(visibleGroups.length/pageSize)-1));
  const chunk=visibleGroups.slice(safePage*pageSize,(safePage+1)*pageSize);
+ const tabs=<div className="fm-generics-view-switch" role="group" aria-label="Vista de genéricos">
+  <button type="button" className={view==="comparador"?"is-selected":""}
+   aria-pressed={view==="comparador"} onClick={()=>setView("comparador")}>Comparador de compras</button>
+  <button type="button" className={view==="analisis"?"is-selected":""}
+   aria-pressed={view==="analisis"} onClick={()=>setView("analisis")}>Análisis y rentabilidad</button>
+ </div>;
+ if(view==="comparador")return <div className="fm-generics">
+  {tabs}
+  <GenericosComparador clientSlug={clientSlug} pharmacies={pharmacies}
+   canEdit={canEdit&&!demo} range={range}/>
+ </div>;
  return <div className="fm-generics">
+  {tabs}
   <ReportPageHeader title="Genéricos" period={range} updatedAt={updatedAt}
    refreshing={loading} onRefresh={()=>setReload(x=>x+1)}/>
   <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{

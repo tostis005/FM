@@ -8,13 +8,13 @@ import {proactivePriceSQL,suggestedProactiveUnits,enrichProactivePrices} from ".
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DAY_OPTIONS=new Set([90,180]);
 const MODES=new Set(["alertas","inmovilizado"]);
-const SORTABLE=new Set(["signal","pharmacy","product","stock","unitsPeriod","coverDays","unitCost","lastSaleDate","capital","savingPotential","suggestedUnits"]);
+const SORTABLE=new Set(["signal","pharmacy","product","stock","unitsPeriod","coverDays","unitCost","lastSaleDate","capital","savingPotential","suggestedUnits","excessCapital"]);
 const FILTERABLE=new Set([...SORTABLE]);
 const SELECT_FILTERS=new Set(["signal","pharmacy"]);
 const FIELD={signal:r=>r.alertType,pharmacy:r=>r.pharmacyName,product:r=>r.name||r.cn||r.articleId,
  stock:r=>r.stock,unitsPeriod:r=>r.unitsPeriod,coverDays:r=>r.coverDays,
  unitCost:r=>r.unitCost,lastSaleDate:r=>r.lastSaleDate,capital:r=>r.capital,
- savingPotential:r=>r.savingPotential,suggestedUnits:r=>r.suggestedUnits};
+ savingPotential:r=>r.savingPotential,suggestedUnits:r=>r.suggestedUnits,excessCapital:r=>r.excessCapital};
 const LABEL={rotura:"Riesgo de rotura",sin_ventas:"Sin ventas netas",exceso:"Exceso de cobertura"};
 const TODAY="(now() AT TIME ZONE 'Europe/Madrid')::date";
 const TTL=10*60*1000;

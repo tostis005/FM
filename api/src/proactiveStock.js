@@ -2,6 +2,8 @@
 // Todos los resultados provienen de stock actual y documentos completos del ERP.
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import {madridDay} from "./dashboardConsolidations.js";
+import {readPricePolicy} from "./pricePolicy.js";
+import {proactivePriceSQL,suggestedProactiveUnits,enrichProactivePrices} from "./proactiveEconomics.js";
 
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DAY_OPTIONS=new Set([90,180]);
@@ -221,6 +223,7 @@ async function runJob(pool,job){
   job.progress.total=chosen.length*(spans.length+1);
   const inventorySQL=proactiveInventorySQL(f.schema),salesSQL=proactiveSalesSliceSQL(f.schema);
   const historyBatches=[];
+  let pricePolicy=null,pricePolicyRead=false;
   for(const site of chosen){
    try{
     const inventory=await pool.query({text:inventorySQL,
@@ -241,6 +244,28 @@ async function runJob(pool,job){
      const calculated=classifyProactiveStock(stock,sold.get(String(stock.articleId)),f.days);
      if(calculated.alertType)alertRows.push(calculated);
      if(calculated.unitsPeriod<=0)idleRows.push(calculated);
+    }
+    // Las oportunidades de compra se muestran sólo con compras históricas
+    // verificadas de cooperativa y laboratorio en la misma farmacia y artículo.
+    const candidates=alertRows.filter(r=>r.alertType==="rotura").map(r=>({
+     ...r,suggestedUnits:suggestedProactiveUnits(r)}))
+     .filter(r=>r.suggestedUnits>0).sort((a,b)=>b.suggestedUnits-a.suggestedUnits);
+    if(candidates.length){
+     if(!pricePolicyRead){pricePolicyRead=true;
+      try{pricePolicy=await readPricePolicy(pool,f.slug);}
+      catch(e){console.warn("GESTION_PROACTIVA_PRECIOS_POLITICA",e.code||e.name);}
+     }
+     const selected=candidates.slice(0,150),ids=new Set(selected.map(r=>String(r.articleId)));
+     for(const row of alertRows)if(row.alertType==="rotura")row.suggestedUnits=suggestedProactiveUnits(row);
+     job.priceSkipped=(job.priceSkipped||0)+Math.max(0,candidates.length-selected.length);
+     if(pricePolicy){
+      const configured=pricePolicy.overrides?.find(x=>Number(x.pharmacyId)===Number(site.id))||pricePolicy.global;
+      try{
+       const {rows:receipts}=await pool.query({text:proactivePriceSQL(f.schema),
+        values:[f.slug,site.code,configured.months,[...ids]],query_timeout:22000});
+       enrichProactivePrices(alertRows.filter(r=>ids.has(String(r.articleId))&&r.alertType==="rotura"),receipts,configured);
+      }catch(e){console.warn("GESTION_PROACTIVA_PRECIOS",JSON.stringify({slug:f.slug,code:e.code||e.name}));}
+     }
     }
     job.rows.alertas.push(...alertRows);
     job.rows.inmovilizado.push(...idleRows);
@@ -351,7 +376,8 @@ export function proactiveJobResponse(job,f){
    valuedCount:valued.length,stockUnits:rows.reduce((n,r)=>n+number(r.stock),0),
    riskCount:rows.filter(r=>r.alertType==="rotura").length,
    savingPotential:round(rows.reduce((n,r)=>n+number(r.savingPotential),0),2),
-   pricedOpportunities:rows.filter(r=>r.savingPotential!=null).length},
+   pricedOpportunities:rows.filter(r=>r.savingPotential!=null).length,
+   priceSkipped:job.priceSkipped||0},
   filterOptions:{signal:[...new Set(all.map(r=>LABEL[r.alertType]).filter(Boolean))],
    pharmacy:[...new Set(all.map(r=>r.pharmacyName).filter(Boolean))]},
   excluded:job.excluded,dateIncomplete:job.dateIncomplete||0,

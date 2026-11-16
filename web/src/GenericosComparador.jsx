@@ -1,5 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
-import {Download,FileSpreadsheet,Save,Search,ShoppingCart,Upload,RefreshCcw} from "lucide-react";
+import {Download,FileSpreadsheet,Save,Search,ShoppingCart,Upload,RefreshCcw,Settings2} from "lucide-react";
+import {ListPagination} from "./ListTable.jsx";
+import {filterGenericOfferGroups,genericOfferOptions} from "./genericOfferFilters.js";
 import {ReportPageHeader} from "./ReportControls.jsx";
 import {LoadingPanel,KpiValue} from "./LoadingState.jsx";
 import {readGenericOfferExcel} from "./genericOffersImport.js";
@@ -21,10 +23,13 @@ async function request(clientSlug,path,{method="GET",body,signal}={}){
 const sourceName=item=>item.name||item.principle||"Presentación sin descripción";
 const niceDate=v=>String(v||"").slice(0,10).split("-").reverse().join("/");
 
-export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=false,range}){
+export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=false,range,mode="comparador"}){
  const [status,setStatus]=useState(null),[suppliers,setSuppliers]=useState([]);
  const [metaLoading,setMetaLoading]=useState(true),[refresh,setRefresh]=useState(0);
- const [search,setSearch]=useState(""),[found,setFound]=useState([]),[searchBusy,setSearchBusy]=useState(false);
+ const [catalog,setCatalog]=useState([]),[catalogBusy,setCatalogBusy]=useState(true);
+ const [search,setSearch]=useState(""),[principle,setPrinciple]=useState(""),
+  [strength,setStrength]=useState(""),[form,setForm]=useState(""),[pack,setPack]=useState("");
+ const [applied,setApplied]=useState(null),[page,setPage]=useState(0),[pageSize,setPageSize]=useState(100);
  const [dcpf,setDcpf]=useState(""),[details,setDetails]=useState(null),[detailBusy,setDetailBusy]=useState(false);
  const [volume,setVolume]=useState(""),[shares,setShares]=useState({}),[chosenCN,setChosenCN]=useState({});
  const [destinations,setDestinations]=useState({}),[overrides,setOverrides]=useState({});
@@ -45,17 +50,14 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
   return()=>controller.abort();
  },[clientSlug,refresh]);
  useEffect(()=>{
-  const controller=new AbortController();
-  const timer=setTimeout(()=>{
-   setSearchBusy(true);
-   request(clientSlug,"/api/genericos/ofertas/buscar?"+new URLSearchParams({buscar:search.trim()}),
-    {signal:controller.signal})
-    .then(v=>{if(!controller.signal.aborted)setFound(v.items||[])})
-    .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
-    .finally(()=>{if(!controller.signal.aborted)setSearchBusy(false)});
-  },300);
-  return()=>{clearTimeout(timer);controller.abort()};
- },[clientSlug,search,refresh]);
+  if(mode!=="comparador")return;
+  const controller=new AbortController();setCatalogBusy(true);
+  request(clientSlug,"/api/genericos/ofertas/catalogo",{signal:controller.signal})
+   .then(v=>{if(!controller.signal.aborted)setCatalog(v.items||[])})
+   .catch(e=>{if(!controller.signal.aborted)setError(e.message)})
+   .finally(()=>{if(!controller.signal.aborted)setCatalogBusy(false)});
+  return()=>controller.abort();
+ },[clientSlug,mode,refresh]);
  useEffect(()=>{
   if(!dcpf){setDetails(null);return}
   const controller=new AbortController();setDetailBusy(true);setError("");
@@ -73,7 +75,22 @@ export default function GenericosComparador({clientSlug,pharmacies=[],canEdit=fa
     .finally(()=>{if(!controller.signal.aborted)setDetailBusy(false)});
   return()=>controller.abort();
  },[clientSlug,dcpf,refresh]);
- const selectedGroup=found.find(g=>String(g.dcpf)===String(dcpf));
+ const selectedGroup=catalog.find(g=>String(g.dcpf)===String(dcpf));
+ const searchScope=useMemo(()=>filterGenericOfferGroups(catalog,{text:search,principle}),[catalog,search,principle]);
+ const strengths=useMemo(()=>genericOfferOptions(searchScope,"strength"),[searchScope]);
+ const formScope=useMemo(()=>filterGenericOfferGroups(searchScope,{strength}),[searchScope,strength]);
+ const forms=useMemo(()=>genericOfferOptions(formScope,"form"),[formScope]);
+ const packScope=useMemo(()=>filterGenericOfferGroups(formScope,{form}),[formScope,form]);
+ const packs=useMemo(()=>genericOfferOptions(packScope,"pack"),[packScope]);
+ const results=useMemo(()=>applied?
+  filterGenericOfferGroups(catalog,applied):[],[catalog,applied]);
+ const pageCount=pageSize===0?1:Math.max(1,Math.ceil(results.length/pageSize));
+ const safePage=Math.min(page,pageCount-1);
+ const visibleResults=pageSize===0?results:results.slice(safePage*pageSize,(safePage+1)*pageSize);
+ const showResults=()=>{
+  setApplied({text:search,principle,strength,form,pack});setPage(0);setDcpf("");
+  setNotice("");
+ };
  const labs=useMemo(()=>{
   const map=new Map();
   for(const offer of details?.offers||[]){

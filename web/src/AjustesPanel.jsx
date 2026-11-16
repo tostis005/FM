@@ -3,6 +3,7 @@ import {ArrowLeft,ArrowRightLeft,ChevronRight,ClipboardList,Pill,ShoppingCart,Sl
 import {readSettingsSection,settingsSectionUrl} from "./settingsSections.js";
 import "./settingsLayout.css";
 import "./ajustesPanel.css";
+import {transferCapabilities} from "./transferTopology.js";
 
 // Los formularios solo se cargan cuando se abre su área.
 const ConfiguracionAnalisisVentas=React.lazy(()=>import("./ConfiguracionAnalisisVentas.jsx"));
@@ -20,7 +21,7 @@ const AREAS=[
  {id:"picking-list",label:"Picking List",description:"Origen de los pedidos pendientes.",detail:"Conexión con Dropbox",icon:ClipboardList}
 ];
 
-export default function AjustesPanel({clientSlug,pharmacies=[],analysisMonths=12,onAnalysisSaved}){
+export default function AjustesPanel({clientSlug,pharmacies=[],warehouses=[],analysisMonths=12,onAnalysisSaved}){
  const [section,setSection]=useState(()=>readSettingsSection(window.location.search));
  useEffect(()=>{
   const sync=()=>setSection(readSettingsSection(window.location.search));
@@ -31,7 +32,14 @@ export default function AjustesPanel({clientSlug,pharmacies=[],analysisMonths=12
    window.removeEventListener("fm-settings-navigate",sync);
   };
  },[]);
- const active=AREAS.find(area=>area.id===section);
+ const canTransfer=transferCapabilities(pharmacies,warehouses).canUseTransferidor;
+ const areas=AREAS.filter(area=>area.id!=="transferidor"||canTransfer);
+ const active=areas.find(area=>area.id===section);
+ useEffect(()=>{
+  if(section!=="transferidor"||canTransfer)return;
+  window.history.replaceState({page:"ajustes"}, "",settingsSectionUrl(null));
+  setSection(null);
+ },[section,canTransfer]);
  function navigateTo(id){
   const url=settingsSectionUrl(id);
   if(window.location.pathname+window.location.search!==url)
@@ -61,7 +69,7 @@ export default function AjustesPanel({clientSlug,pharmacies=[],analysisMonths=12
   </header>
   {!active?
    <div className="fm-settings-overview">
-    {AREAS.map(area=><button key={area.id} type="button" className="fm-settings-area-card"
+    {areas.map(area=><button key={area.id} type="button" className="fm-settings-area-card"
      onClick={()=>navigateTo(area.id)} aria-label={"Abrir ajustes de "+area.label}>
      <span className="fm-settings-area-icon"><area.icon size={22} aria-hidden="true"/></span>
      <span className="fm-settings-area-copy"><strong>{area.label}</strong>
@@ -74,7 +82,7 @@ export default function AjustesPanel({clientSlug,pharmacies=[],analysisMonths=12
      <button className="fm-settings-rail-back" type="button" onClick={()=>navigateTo(null)}>
       <ArrowLeft size={16} aria-hidden="true"/> Todos los ajustes
      </button>
-     {AREAS.map(area=><button key={area.id} type="button"
+     {areas.map(area=><button key={area.id} type="button"
       className={"fm-settings-rail-item"+(section===area.id?" is-active":"")}
       aria-current={section===area.id?"page":undefined} onClick={()=>navigateTo(area.id)}>
       <area.icon size={17} aria-hidden="true"/><span>{area.label}</span>

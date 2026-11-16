@@ -71,6 +71,17 @@ try{
  await superadmin.getByText("12/07/2025", {exact:true}).waitFor({timeout:12000});
  await superadmin.getByText("Sin ventas registradas",{exact:true}).waitFor({timeout:12000});
  assert.equal(new URL(superadmin.url()).pathname,"/stock-inmovilizado");
+ // Una farmacia sin almacén no ofrece redistribución; el enlace debe ser útil.
+ assert.equal(await menu.getByRole("button",{name:"Transferidor",exact:true}).count(),0);
+ assert.equal(await superadmin.getByRole("columnheader",{name:"Siguiente paso"}).count(),0);
+ await superadmin.getByRole("button",{name:"Ver stock"}).first().click();
+ await superadmin.getByRole("heading",{name:"Stock",exact:true}).waitFor({timeout:12000});
+ await superadmin.locator(".fm-demo-search input").waitFor({timeout:12000});
+ assert.equal(await superadmin.locator(".fm-demo-search input").inputValue(),"123456",
+  "la alerta debe abrir la referencia concreta en Stock");
+ await superadmin.goto(base+"/stock-transferidor",{waitUntil:"domcontentloaded"});
+ await superadmin.waitForURL("**/dashboard",{timeout:12000});
+ assert.equal(await superadmin.getByRole("heading",{name:"Transferidor"}).count(),0);
  await superadmin.close();
 
  const admin=await openAs("administrador");

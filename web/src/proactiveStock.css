@@ -38,3 +38,10 @@
  font-size:12px;line-height:1.5;flex-wrap:wrap}
 .fm-proactive-progress strong{font-weight:750}
 .fm-proactive-progress .fm-load-spinner{flex-shrink:0}
+
+/* Acciones compactas: el texto de recomendación se muestra como ayuda del botón,
+   no repetido en cada fila. */
+.fm-proactive-task-select{max-width:210px;min-width:160px;padding:7px 8px;border:1px solid var(--border,#d8e3dd);border-radius:8px;background:var(--surface,#fff);color:inherit;font-size:12px}
+.fm-proactive-actions>div{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:210px}
+.fm-proactive-kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+@media(max-width:620px){.fm-proactive-actions>div{min-width:180px}.fm-proactive-task-select{max-width:180px}}

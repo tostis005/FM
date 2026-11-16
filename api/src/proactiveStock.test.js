@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  proactiveFilters,proactiveCoverageSQL,proactiveInventorySQL,proactiveSalesSliceSQL,
- proactiveLastSaleSQL,classifyProactiveStock,setupProactiveStock,getProactiveJob,proactiveJobResponse
+ proactiveLastSaleSQL,classifyProactiveStock,setupProactiveStock,getProactiveJob,proactiveJobResponse,filterProactiveRows
 } from "./proactiveStock.js";
 
 const req=(query={},slug="prueba_alertas")=>({query,
@@ -197,4 +197,26 @@ test("fallo del historial no convierte la ausencia de fecha en ausencia de venta
  assert.equal(result.rows[0].lastSaleDate,null);
  assert.equal(result.dateIncomplete,1);
  assert.equal(result.total,1);
+});
+
+test("filtros de columna y ordenación se aplican al total antes de paginar",()=>{
+ const source=[
+  {pharmacyName:"Centro",alertType:"rotura",name:"Cápsulas",stock:2,capital:40},
+  {pharmacyName:"Norte",alertType:"sin_ventas",name:"Crema",stock:10,capital:120},
+  {pharmacyName:"Centro",alertType:"sin_ventas",name:"Bálsamo",stock:5,capital:50}
+ ];
+ const f=proactiveFilters(req({columnas:JSON.stringify({signal:["Sin ventas netas"],pharmacy:["Centro"]}),
+  orden:"capital",direccion:"desc"}),"alertas");
+ const filtered=filterProactiveRows(source,f);
+ assert.deepEqual(filtered.map(r=>r.name),["Bálsamo"]);
+ const job={rows:{alertas:source},status:"complete",progress:{done:1,total:1},excluded:[],completedSites:2};
+ const page=proactiveJobResponse(job,{...f,filters:{signal:["Sin ventas netas"]},size:25});
+ assert.equal(page.total,2);
+ assert.deepEqual(page.rows.map(r=>r.capital),[120,50]);
+ assert.deepEqual(page.filterOptions.pharmacy,["Centro","Norte"]);
+});
+test("rechaza columnas no permitidas y ordenaciones arbitrarias",()=>{
+ assert.throws(()=>proactiveFilters(req({orden:"DROP TABLE"}),"alertas"),e=>e.status===400);
+ assert.throws(()=>proactiveFilters(req({columnas:'{"__proto__":"oops"}'}),"alertas"),e=>e.status===400);
+ assert.throws(()=>proactiveFilters(req({columnas:'{"pharmacy":"texto"}'}),"alertas"),e=>e.status===400);
 });

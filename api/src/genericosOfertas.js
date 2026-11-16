@@ -136,7 +136,8 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
      "coalesce(max(nullif(n.descripcion_dcpf,'')),min(n.nombre)) AS name,"+
      "coalesce(min(nullif(n.principio_activo,'')),'') AS principle,"+
      "count(DISTINCT o.laboratorio_fuente)::int AS laboratories,"+
-     "count(DISTINCT o.cn)::int AS offers,min(o.puc)::float8 AS \"bestPuc\" "+
+     "count(DISTINCT o.cn)::int AS offers,array_agg(DISTINCT o.cn) AS cns,"+
+     "min(o.puc)::float8 AS \"bestPuc\" "+
      "FROM farmetrica.genericos_ofertas_laboratorios o "+
      "JOIN farmetrica.nomenclator_presentaciones n ON n.cn=o.cn "+
      "WHERE o.cliente_slug=$1 AND n.generico=true "+

@@ -248,6 +248,8 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
  });
  app.post("/api/genericos/ofertas/preparar",...guard,async(req,res,next)=>{
   if(denyWrite(req,res))return;
+  if(req.context.role!=="superadministrador"&&req.context.modules?.compras!==true)
+   return error(res,403,"El módulo de compras no está habilitado para preparar pedidos");
   const dcpf=clean(req.body?.dcpf),from=clean(req.body?.from),to=clean(req.body?.to),
    entries=req.body?.entries,selected=req.body?.pharmacies;
   const allowed=new Set(scope(req));

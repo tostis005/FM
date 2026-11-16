@@ -21,6 +21,16 @@ const lastSaleLabel=r=>r.lastSaleStatus==="found"&&r.lastSaleDate?date(r.lastSal
  r.lastSaleStatus==="unavailable"?"No disponible":"Consultando…";
 const localCode=r=>/^\d{6,7}$/.test(String(r.cn||"").trim())?String(r.cn).trim().slice(0,6):"";
 const priority=r=>r.alertType==="rotura"||(r.alertType==="sin_ventas"&&r.capital>=500)?"Alta":"Media";
+const taskChoices=(r,canTransfer)=>r.alertType==="rotura"?[
+ ["pedido","Revisar pedido y plazos"],["precio","Comparar PUC y negociar compra"],
+ ["proveedor","Confirmar disponibilidad"]]:
+ r.alertType==="exceso"?[
+ ["compras","Reducir próxima compra"],["promocion","Valorar promoción"],
+ ...(canTransfer?[["redistribuir","Revisar redistribución"]]:[])]:[
+ ["devolucion","Evaluar devolución"],["compras","Pausar próximas compras"],
+ ["promocion","Valorar promoción"],
+ ...(canTransfer?[["redistribuir","Revisar redistribución"]]:[])];
+const taskKey=r=>String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType);
 const suggestion=(r,canTransfer)=>r.alertType==="rotura"?
  "Comprobar el pedido y el suministro antes de reponer.":
  r.alertType==="exceso"?
@@ -38,6 +48,9 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
  const [result,setResult]=useState(null),[busy,setBusy]=useState(false);
  const [error,setError]=useState(""),[actionBusy,setActionBusy]=useState("");
  const [notice,setNotice]=useState(""),[created,setCreated]=useState([]);
+ const [taskActions,setTaskActions]=useState({});
+ const [columnFilters,setColumnFilters]=useState({}),[sort,setSort]=useState(null);
+ const filtersKey=JSON.stringify(columnFilters);
  useEffect(()=>{
   const t=setTimeout(()=>setReadySearch(search.trim()),350);
   return()=>clearTimeout(t);
@@ -46,7 +59,8 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   const controller=new AbortController();
   let disposed=false,pollTimer=null;
   const params=new URLSearchParams({dias:String(days),buscar:readySearch,
-   pagina:String(page),tamano:String(size)});
+   pagina:String(page),tamano:String(size),columnas:filtersKey,
+  orden:sort?.key||"",direccion:sort?.direction||"desc"});
   if(pharmacyId)params.set("farmacias",pharmacyId);
   if(refresh)params.set("recalcular",String(refresh));
   const load=async()=>{
@@ -75,7 +89,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   setBusy(true);setError("");setResult(null);setNotice("");
   const delay=setTimeout(load,100);
   return()=>{disposed=true;clearTimeout(delay);clearTimeout(pollTimer);controller.abort();};
- },[mode,clientSlug,days,pharmacyId,readySearch,page,size,refresh]);
+ },[mode,clientSlug,days,pharmacyId,readySearch,page,size,refresh,sort?.key,sort?.direction,filtersKey]);
  const rows=result?.rows||[],total=result?.total||0;
  const values=result?.summary||{};
  const go=r=>{
@@ -97,19 +111,26 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   }
  };
  const createTask=async r=>{
-  const key=String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType);
+  const selected=taskActions[taskKey(r)]||taskChoices(r,canUseTransferidor)[0][0];
+  const choice=taskChoices(r,canUseTransferidor).find(([id])=>id===selected);
+  if(!choice)return;
+  const key=taskKey(r)+"|"+selected;
   if(actionBusy||created.includes(key)||demo)return;
   setActionBusy(key);setNotice("");
-  const label=LABELS[r.alertType]?.title||"Revisar producto";
+  const label=choice[1];
   try{
+   const note=selected==="precio"&&r.priceEvidence&&r.savingPotential>0?
+    " Escenario orientativo: "+r.suggestedUnits+" unidades; PUC cooperativa "+r.cooperativePuc+
+    "; PUC objetivo "+r.targetPuc+" (percentil "+r.priceEvidence.percentile+
+    "); ahorro potencial "+r.savingPotential+" EUR. Precios históricos, no oferta vigente.":"";
    const response=await fetch("/api/operativa",{method:"POST",credentials:"same-origin",
     headers:{"Content-Type":"application/json","X-Farmetrica-Cliente":clientSlug},
-    body:JSON.stringify({recurso:"trabajo",farmacia:r.pharmacyId,tipo:"alerta",
+    body:JSON.stringify({recurso:"trabajo",farmacia:r.pharmacyId,tipo:"tarea",
      titulo:label+": "+String(r.name||r.articleId).slice(0,125),
      prioridad:priority(r)==="Alta"?"alta":"media",
      descripcion:label+" en "+r.pharmacyName+". "+suggestion(r,canUseTransferidor)+
-      " Existencias: "+r.stock+" unidades; ventas netas ("+days+" días): "+
-      r.unitsPeriod+". La valoración es orientativa y puede no estar disponible."})
+      " Existencias: "+r.stock+" unidades; ventas netas ("+days+" días): "+r.unitsPeriod+"."+
+      note+" Validar datos, condiciones y disponibilidad antes de actuar."})
    });
    const body=await response.json().catch(()=>({}));
    if(!response.ok)throw Error(body.error||"No se pudo registrar la tarea");
@@ -117,7 +138,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   }catch(e){setNotice(e.message||"No se pudo registrar la tarea");}
   finally{setActionBusy("");}
  };
- const columns=useMemo(()=>[
+  const columns=useMemo(()=>[
   ...(isAlerts?[{key:"signal",label:"Alerta",sortable:false,searchable:false,
    value:r=>LABELS[r.alertType]?.title||"Revisar",
    render:r=><span className={"fm-proactive-signal "+(r.alertType==="rotura"?"is-urgent":"")}>

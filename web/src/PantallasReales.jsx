@@ -1,3 +1,5 @@
+import {isPharmacyColumn} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import React,{useEffect,useMemo,useState} from "react";
 import {RefreshCw,Search,Download} from "lucide-react";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
@@ -125,6 +127,7 @@ const SORT_FIELD={
  "rentabilidad-segmentos":{family:"family",units:"units",sales:"sales",margin:"margin"}
 };
 function Metrics({section,data,pharmacies}){
+ const singlePharmacy=useSinglePharmacy();
  const n=Number(data?.total||0),s=data?.summary||{};
  const cards={
   "productos":[["Referencias encontradas",UNITS(n)],["Farmacias seleccionadas",UNITS(pharmacies.length)]],
@@ -136,12 +139,13 @@ function Metrics({section,data,pharmacies}){
   "proveedores-condiciones":[["Proveedor y farmacia",UNITS(n)],["Compras netas",EUR(s.value)],["Recepciones",UNITS(s.other)],["Unidades",UNITS(s.units)]],
   "rentabilidad-segmentos":[["Familias",UNITS(n)],["Ventas",EUR(s.value)],["Margen estimado cubierto",EUR(s.other)],["Unidades",UNITS(s.units)]]
  }[section]||[];
- return <div className="fm-preview-kpis">{cards.map(([label,value])=><article key={label} className="card fm-preview-kpi">
+ return <div className="fm-preview-kpis">{cards.filter(([label])=>!singlePharmacy||label!=="Farmacias seleccionadas").map(([label,value])=><article key={label} className="card fm-preview-kpi">
   <span>{label}</span><strong>{value}</strong>
  </article>)}</div>;
 }
 function GridTable({section,rows,sort,setSort,onOpenTicket,onOpenReceipt}){
- const cols=META[section].cols;
+ const singlePharmacy=useSinglePharmacy();
+ const cols=singlePharmacy?META[section].cols.filter(col=>!isPharmacyColumn({key:col[0],label:col[1]})):META[section].cols;
  const [filters,setFilters]=useState({});
  const cellText=(col,r)=>readableCell(col[2](r));
  const filtered=rows.filter(r=>cols.every(col=>{

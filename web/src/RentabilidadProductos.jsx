@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from "react";
 import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText,AlertCircle} from "lucide-react";
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
@@ -40,7 +41,12 @@ const allColumns=[
  ["pvp","PVP catálogo"],["pmc","Coste unitario (catálogo)"],["stock","Stock actual"],
  ["coveredSales","Ventas con coste"],["margin","Margen estimado"]
 ];
-function ProfitTable({rows,headers,empty}){
+function ProfitTable({rows,headers,empty,complete=false}){
+ if(complete)return <SortableDataTable
+  headers={headers.map(col=>col.label)}
+  rows={rows.map(item=>headers.map(col=><span title={col.title?.(item)}>{col.render(item)}</span>))}
+  empty={empty||"No hay datos con los filtros actuales."} label="filas de rentabilidad"
+  showExport={false}/>;
  return <div className="fm-profit-table-scroll"><table className="fm-profit-table">
   <thead><tr>{headers.map(col=><th key={col.key}>{col.label}</th>)}</tr></thead>
   <tbody>{rows.map((item,index)=><tr key={item.key||index}>{headers.map(col=>
@@ -293,7 +299,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
      <section className="card fm-profit-panel">
       <div className="fm-profit-panel-heading"><h2>Comparativa por farmacia</h2>
        <button className="btn btn-secondary btn-sm" type="button" onClick={exportCurrent} disabled={!pharmaciesRows.length}><Download size={15}/> CSV</button></div>
-      <ProfitTable rows={pharmaciesRows.map((r,i)=>({...r,key:r.pharmacyId||i}))} headers={[
+      <ProfitTable complete rows={pharmaciesRows.map((r,i)=>({...r,key:r.pharmacyId||i}))} headers={[
        {key:"farmacia",label:"Farmacia",kind:"text",render:r=>r.pharmacyName},
        {key:"neto",label:"Importe",render:r=>euros(r.sales)},
        {key:"cost",label:"Coste est.",render:r=>euros(r.cost)},
@@ -313,7 +319,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
        <Download size={15}/> CSV
       </button>
      </div>
-     <ProfitTable rows={(showAllFamilies?familyRows:familyRows.slice(0,20)).map((r,i)=>({...r,key:r.family||i}))}
+     <ProfitTable complete rows={(showAllFamilies?familyRows:familyRows.slice(0,20)).map((r,i)=>({...r,key:r.family||i}))}
       headers={[
        {key:"family",label:"Familia",kind:"text",render:r=>r.family},
        {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},

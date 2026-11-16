@@ -4,6 +4,7 @@ import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,
 
 import SortableDataTable from "./SortableDataTable.jsx";
 import PurchasePlanner from "./PurchasePlanner.jsx";
+import HistorialPedidos from "./HistorialPedidos.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import {LoadingPanel} from "./LoadingState.jsx";
 import {readSharedReportFilters} from "./sharedReportFilters.js";
@@ -23,6 +24,7 @@ const NUM=n=>new Intl.NumberFormat("es-ES").format(n);
 const EUR=n=>new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"}).format(n);
 const TITLES={
  "compras-preparador":"Preparador de pedidos",
+ "compras-historial":"Historial de pedidos",
  "compras-pendientes":"Pendientes de asignar",
  "compras-pedidos":"Pedidos preparados",
  "stock-traspasos":"Traspasos entre farmacias",
@@ -141,7 +143,7 @@ export default function OperativaReal({section,pharmacies=[],warehouses=[],clien
    setUnits(String(link.units||1));
   }catch{}
  },[section,clientSlug]);
- useEffect(()=>{setSelected("");setDraft(null);if(section!=="compras-preparador")void refresh();},[section,clientSlug,pharmacy]);
+ useEffect(()=>{setSelected("");setDraft(null);if(section!=="compras-preparador"&&section!=="compras-historial")void refresh();},[section,clientSlug,pharmacy]);
  async function save(method,recurso,body={},id){
   setBusy(true);setNotice("");setError("");
   try{
@@ -205,9 +207,13 @@ export default function OperativaReal({section,pharmacies=[],warehouses=[],clien
  </>;
  // El preparador se consulta a escala de grupo, no depende de /api/operativa
  // ni del selector local para abrir. Los planes ya guardados se gestionan aparte.
+ if(section==="compras-historial")return <div className="fm-operativa-preview fm-operativa-real">
+  <HistorialPedidos clientSlug={clientSlug} pharmacies={pharmacies} userEmail={userEmail}
+   canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}/>
+ </div>;
  if(section==="compras-preparador")return <div className="fm-operativa-preview fm-operativa-real">
   <PurchasePlanner clientSlug={clientSlug} pharmacies={pharmacies} warehouses={warehouses}
-   canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}
+   userEmail={userEmail} canEdit={["gestor","administrador","superadministrador"].includes(tenantRole)}
    onCreated={()=>{}}/>
  </div>;
  if(mode==="loading")return <div className="fm-operativa-preview fm-operativa-real">{header}

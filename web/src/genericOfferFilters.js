@@ -10,7 +10,7 @@ export function filterGenericOfferGroups(items,{text="",principle="",strength=""
   if(form&&g.form!==form)return false;
   if(pack&&g.pack!==pack)return false;
   const searchable=foldGenericOffer([
-   g.principle,g.name,g.dcpf,g.strength,g.form,g.pack
+   g.principle,g.name,g.dcpf,...(g.cns||[]),g.strength,g.form,g.pack
   ].join(" "));
   return terms.every(term=>searchable.includes(term));
  });

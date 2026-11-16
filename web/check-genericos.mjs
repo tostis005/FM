@@ -66,6 +66,10 @@ await page.route("**/api/**",async route=>{
 });
 try{
  await page.goto(BASE+"/genericos",{waitUntil:"domcontentloaded"});
+ // El comparador comercial es la vista principal; conservar la cobertura del análisis.
+ await page.getByRole("heading",{name:"Genéricos · Comparador de compras"}).waitFor();
+ await page.getByRole("heading",{name:"1. Selecciona el medicamento"}).waitFor();
+ await page.getByRole("button",{name:"Análisis y rentabilidad"}).click();
  await page.getByRole("heading",{name:"Genéricos",exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelectorAll(".fm-generic-metric .fm-kpi-spinner").length===5,
   {timeout:7000});

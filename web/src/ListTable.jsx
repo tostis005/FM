@@ -43,6 +43,8 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const [page,setPage]=useState(0);
   const [pageSize,setPageSize]=useState(initialPageSize);
   const externalPage=Boolean(serverPagination);
+  // No mostrar contadores de "0 de 0" hasta que termine la primera consulta.
+  const initialLoading=loading&&!(rows||[]).length;
   const activeSize=externalPage?serverPagination.pageSize:pageSize;
   // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
   // Ordenar solamente la respuesta truncada produciría resultados engañosos.
@@ -180,8 +182,8 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
       {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{!remotelyFiltered&&rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
-    <ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
-      onPageSizeChange={changePageSize} label={label} loading={loading} pageSizes={pageSizes}/>
+    {!initialLoading&&<ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
+      onPageSizeChange={changePageSize} label={label} loading={loading} pageSizes={pageSizes}/>}
     </LoadingFrame>
   </>;
 }

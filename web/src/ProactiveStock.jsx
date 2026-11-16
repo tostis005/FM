@@ -139,26 +139,30 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   finally{setActionBusy("");}
  };
   const columns=useMemo(()=>[
-  ...(isAlerts?[{key:"signal",label:"Alerta",sortable:false,searchable:false,
+  ...(isAlerts?[{key:"signal",label:"Alerta",filterMode:"multi",
    value:r=>LABELS[r.alertType]?.title||"Revisar",
    render:r=><span className={"fm-proactive-signal "+(r.alertType==="rotura"?"is-urgent":"")}>
     {LABELS[r.alertType]?.title||"Revisar"}</span>}]:[]),
-  {key:"pharmacy",label:"Farmacia",sortable:false,searchable:false,value:r=>r.pharmacyName},
-  {key:"product",label:"Artículo / CN",sortable:false,searchable:false,value:r=>r.name,
+  {key:"pharmacy",label:"Farmacia",filterMode:"multi",value:r=>r.pharmacyName},
+  {key:"product",label:"Artículo / CN",value:r=>r.name,
    render:r=><div className="fm-proactive-product"><strong>{r.name||"Sin descripción"}</strong>
     <small>{localCode(r)?"CN "+localCode(r):"Ref. ERP "+r.articleId}</small></div>},
-  {key:"stock",label:"Stock",sortable:false,searchable:false,value:r=>r.stock,render:r=>number(r.stock)},
-  {key:"unitsPeriod",label:"Ventas netas",sortable:false,searchable:false,value:r=>r.unitsPeriod,
+  {key:"stock",label:"Stock",value:r=>r.stock,render:r=>number(r.stock)},
+  {key:"unitsPeriod",label:"Ventas netas",value:r=>r.unitsPeriod,
    render:r=>number(r.unitsPeriod)},
-  ...(isAlerts?[{key:"coverDays",label:"Cobertura",sortable:false,searchable:false,
+  ...(isAlerts?[{key:"coverDays",label:"Cobertura",
    value:r=>r.coverDays,render:r=>r.coverDays==null?"Sin demanda":number(r.coverDays)+" días"}]:[
-   {key:"unitCost",label:"Coste/ud.",sortable:false,searchable:false,value:r=>r.unitCost,
+   {key:"unitCost",label:"Coste/ud.",value:r=>r.unitCost,
     render:r=>money(r.unitCost)}]),
-  ...(!isAlerts?[{key:"lastSaleDate",label:"Última venta",sortable:false,searchable:false,
+  ...(!isAlerts?[{key:"lastSaleDate",label:"Última venta",
    value:r=>r.lastSaleDate||"",render:r=><span className="fm-proactive-last-sale">
     {lastSaleLabel(r)}</span>}]:[]),
-  {key:"capital",label:"Stock valorado",sortable:false,searchable:false,value:r=>r.capital,
+  {key:"capital",label:"Stock valorado",value:r=>r.capital,
    render:r=><strong>{money(r.capital)}</strong>},
+  ...(isAlerts?[{key:"suggestedUnits",label:"Reposición 30d",value:r=>r.suggestedUnits,
+   render:r=>r.suggestedUnits==null?"—":<span title="Escenario orientativo de 30 días con ventas documentales del último mes">{number(r.suggestedUnits)} uds.</span>},
+   {key:"savingPotential",label:"Ahorro potencial",value:r=>r.savingPotential,
+    render:r=>r.savingPotential==null?"—":<strong title={"Estimación no realizada: "+number(r.suggestedUnits)+" uds. × diferencia positiva entre PUC cooperativa "+money(r.cooperativePuc)+" y objetivo histórico "+money(r.targetPuc)+". Percentil "+r.priceEvidence?.percentile+"; verificar ofertas y disponibilidad."}>{money(r.savingPotential)}</strong>}]:[]),
   {key:"action",label:"Acciones",sortable:false,searchable:false,
    value:()=>"",render:r=><div className="fm-proactive-actions">
     <div>
@@ -167,22 +171,27 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
       {r.alertType==="rotura"?<ShoppingCart size={14}/>:canUseTransferidor?<ArrowRightLeft size={14}/>:<PackageSearch size={14}/>}
       {r.alertType==="rotura"?"Preparador":canUseTransferidor?"Transferidor":"Ver stock"}
      </button>
-     {isAlerts&&<button type="button" className="btn btn-secondary btn-sm"
-      disabled={Boolean(actionBusy)||demo||created.includes(String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType))}
+     <select className="fm-proactive-task-select" aria-label={"Acción para "+String(r.name||r.articleId)}
+      value={taskActions[taskKey(r)]||taskChoices(r,canUseTransferidor)[0][0]}
+      onChange={e=>setTaskActions(old=>({...old,[taskKey(r)]:e.target.value}))}>
+      {taskChoices(r,canUseTransferidor).map(([id,label])=><option value={id} key={id}>{label}</option>)}
+     </select>
+     <button type="button" className="btn btn-secondary btn-sm"
+      disabled={Boolean(actionBusy)||demo||created.includes(taskKey(r)+"|"+(taskActions[taskKey(r)]||taskChoices(r,canUseTransferidor)[0][0]))}
       onClick={()=>createTask(r)}><ClipboardPlus size={14}/>
-      {created.includes(String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType))?
-       "Registrada":actionBusy===String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType)?"Guardando…":"Crear tarea"}</button>}
+      {created.includes(taskKey(r)+"|"+(taskActions[taskKey(r)]||taskChoices(r,canUseTransferidor)[0][0]))?
+       "Registrada":actionBusy===taskKey(r)+"|"+(taskActions[taskKey(r)]||taskChoices(r,canUseTransferidor)[0][0])?"Guardando…":"Crear tarea"}</button>
     </div>
    </div>}
- ],[isAlerts,days,clientSlug,actionBusy,created,demo,canUseTransferidor]);
+ ],[isAlerts,days,clientSlug,actionBusy,created,demo,canUseTransferidor,taskActions]);
  const exportPage=()=>downloadTableCSV((isAlerts?"alertas-inteligentes":"stock-inmovilizado")+"-pagina-"+page,
   ["Farmacia","Referencia ERP","CN","Producto","Motivo","Stock","Ventas netas período",
    "Cobertura días","Coste unitario",...(!isAlerts?["Última venta"]:[]),
-   "Valor stock","Fecha stock","Acción"],
+   "Valor stock","Fecha stock","Reposición orientativa 30d","PUC coop. observado","PUC objetivo histórico","Ahorro potencial","Acción"],
   rows.map(r=>[r.pharmacyName,r.articleId,localCode(r),r.name,LABELS[r.alertType]?.title||"Sin ventas",
    r.stock,r.unitsPeriod,r.coverDays??"",r.unitCost??"",
    ...(!isAlerts?[lastSaleLabel(r)]:[]),
-   r.capital??"",r.stockAt||"",suggestion(r,canUseTransferidor)]));
+   r.capital??"",r.stockAt||"",r.suggestedUnits??"",r.cooperativePuc??"",r.targetPuc??"",r.savingPotential??"",suggestion(r,canUseTransferidor)]));
  const excluded=result?.excluded||[];
  return <div className="fm-proactive">
   <ReportPageHeader title={isAlerts?"Alertas inteligentes":"Stock inmovilizado"}
@@ -229,6 +238,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   {error&&<section className="card fm-proactive-panel fm-proactive-error" role="alert">
    <AlertTriangle size={18}/>{error}<button type="button" onClick={()=>setRefresh(Date.now())}>Reintentar</button>
   </section>}
+  {isAlerts&&<p className="fm-proactive-note">* Ahorro potencial: unidades orientativas para cubrir 30 días × diferencia positiva entre PUC histórico de cooperativa y PUC objetivo del percentil configurado de laboratorio. Requiere dos compras comparables por canal; no incluye rappels, portes ni garantiza precio, disponibilidad o ahorro real.</p>}
   {!error&&result&&<>
    {!isAlerts&&result.dateIncomplete>0&&<div className="fm-proactive-warning" role="status">
     <AlertTriangle size={18}/>No se ha podido verificar la última venta de {number(result.dateIncomplete)} referencias. Se indica «No disponible».
@@ -244,6 +254,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
      <article className="card"><small>{isAlerts?"Roturas potenciales":"Unidades inmovilizadas"}</small><strong>{number(isAlerts?values.riskCount:values.stockUnits)}</strong></article>
      <article className="card"><small>Valor con coste conocido</small><strong>{values.valuedCount?money(values.valuedSubtotal):"Sin valoración"}</strong></article>
      <article className="card"><small>Referencias con coste</small><strong>{number(values.valuedCount)} / {number(total)}</strong></article>
+     {isAlerts&&<article className="card"><small>Ahorro potencial en compras*</small><strong>{values.pricedOpportunities?money(values.savingPotential):"Sin precios comparables"}</strong><small>{number(values.pricedOpportunities||0)} referencias con ambos PUC</small></article>}
     </div>
     <section className="card fm-proactive-panel">
      <div className="fm-proactive-table-head"><h2>{isAlerts?"Situaciones detectadas":"Existencias sin ventas netas"}</h2>
@@ -253,6 +264,9 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
      {notice&&<p className="fm-proactive-feedback" role="status">{notice}</p>}
      <ListTable rows={rows} rowKey={r=>r.pharmacyId+"|"+r.articleId}
       columns={columns} label="referencias" showExport={false}
+      sort={sort} onSortChange={next=>{setSort(next);setPage(1)}}
+      serverFilters={columnFilters} filterOptions={result?.filterOptions||{}}
+      onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
       tableClass="fm-proactive-table" emptyText="No se han detectado casos para los filtros elegidos."
       serverPagination={{page,pageSize:size,total,
        onPageChange:setPage,onPageSizeChange:n=>{setSize(n);setPage(1)}}}

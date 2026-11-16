@@ -60,7 +60,7 @@ function parseXml(text){
   return xml;
 }
 const local=(el,tag)=>[...el.getElementsByTagName("*")].filter(n=>n.localName===tag);
-async function sheetsFromExcel(buffer){
+export async function sheetsFromExcel(buffer){
   const {default: JSZip}=await import("jszip");
   const zip=await JSZip.loadAsync(buffer);
   const workbook=parseXml(await zip.file("xl/workbook.xml")?.async("text"));

@@ -251,7 +251,24 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  </div>;
  if(view==="comparador")return <div className="fm-generics">
   {tabs}
-  <GenericosComparador clientSlug={clientSlug} pharmacies={pharmacies}
+  <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{
+    setPeriodKey(k);
+    if(k==="custom"){
+     const defaultRange=resolveSalesPeriod("this_month",new Date(),{},
+      clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
+     const from=customFrom||defaultRange.from,to=customTo||defaultRange.to;
+     setCustomFrom(from);setCustomTo(to);
+     updateSharedReportFilters(clientSlug,{period:k,customFrom:from,customTo:to});
+    }else updateSharedReportFilters(clientSlug,{period:k});
+   }}
+   pharmacies={pharmacies} pharmacyIds={ids}
+   onPharmacyChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);
+    setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}
+   customFrom={customFrom} customTo={customTo}
+   onCustomFromChange={value=>{setCustomFrom(value);updateSharedReportFilters(clientSlug,{customFrom:value})}}
+   onCustomToChange={value=>{setCustomTo(value);updateSharedReportFilters(clientSlug,{customTo:value})}}/>
+  <GenericosComparador clientSlug={clientSlug}
+   pharmacies={ids.length?pharmacies.filter(p=>ids.map(String).includes(String(p.id))):pharmacies}
    canEdit={canEdit&&!demo} range={range}/>
  </div>;
  return <div className="fm-generics">

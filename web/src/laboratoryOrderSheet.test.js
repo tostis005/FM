@@ -125,7 +125,7 @@ test("el Excel incluye bloque Almacén y totales compactos sin duplicar stock",(
  assert.equal(excel[0].length,22);
  assert.deepEqual(excel[1].slice(-10),[
   "Stock","Ventas 12m","Ventas 3m","Vendido período","Propuesta",
-  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"]);
+  "Total farm.","Total + Almacén","Propuesta","Pedir total","Comentarios"]);
  assert.deepEqual(excel[2].slice(-10),[1000,0,0,0,null,7,1007,0,0,""]);
  const med=defaultLaboratoryLine({...item,cn:"400123"},"medicacion",["1","2"]);
  assert.deepEqual(med.unitsByPharmacy,{"1":10,"2":7});

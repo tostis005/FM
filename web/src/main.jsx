@@ -7,7 +7,7 @@ import {
   ChevronRight, CircleHelp, ClipboardList, Clock3, Filter, Home, LayoutDashboard, LogOut,
   MoreHorizontal, Pencil, Plus, Search, Settings2, ShieldCheck, Sparkles, Store, Tag, Target, ShoppingCart,
   Trash2, TrendingUp, Users, X, BarChart3, Package, Copy, RefreshCcw, Upload, Database, Mail,
-  PanelLeftClose, PanelLeftOpen, Layers3, PackageSearch
+  PanelLeftClose, PanelLeftOpen, Layers3, PackageSearch, History
 } from "lucide-react";
 import "./styles.css";
 import "./loginTheme.css";
@@ -201,6 +201,7 @@ const NAV=[
  {id:"compras-recepciones",label:"Recepciones completas",icon:ClipboardList,module:"compras",childOf:"compras"},
  {id:"reposicion",label:"Reposición",icon:RefreshCcw,module:"reposicion",childOf:"compras"},
  {id:"compras-preparador",label:"Preparador de pedidos",icon:ShoppingCart,module:"compras",childOf:"compras"},
+ {id:"compras-historial",label:"Historial de pedidos",icon:History,module:"compras",childOf:"compras"},
  {id:"compras-pendientes",label:"Pendientes de asignar",icon:ClipboardList,module:"compras",childOf:"compras"},
  {id:"compras-pedidos",label:"Pedidos preparados",icon:Package,module:"compras",childOf:"compras"},
  {id:"compras-devoluciones",label:"Devoluciones a proveedores",icon:RefreshCcw,module:"compras",childOf:"compras"},
@@ -256,7 +257,7 @@ const CONFIG_IDS=new Set(["farmacias","usuarios","perfiles","familias-maestro","
 const DEMO_MODULES=new Set(["dashboard","ventas","compras","stock","reposicion","genericos","rentabilidad","informes"]);
 // La demo comercial concentra el menú sin borrar pantallas, permisos, rutas ni datos.
 // Las vistas avanzadas siguen accesibles por enlace directo y pueden recuperarse.
-const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador",
+const DEMO_NAV_IDS=new Set(["dashboard","ventas","compras","compras-preparador","compras-historial",
  "stock","stock-sin-recepciones","stock-inmovilizado","stock-transferidor","picking-list","proveedores","genericos","rentabilidad","promociones","promociones-objetivos","acciones","alertas-inteligentes"]);
 const ROUTES = new Set(NAV.map(item => item.id));
 function promotionIdFromUrl(){
@@ -1349,7 +1350,8 @@ function App(){
   }
  },[tenantContext?.client?.slug,role]);
  const canOpenSection=id=>topologyAllows(id)&&(sessionUser?.role==="superadministrador"||
-   tenantContext?.sections?.[id]===true);
+   tenantContext?.sections?.[id]===true||
+    (id==="compras-historial"&&tenantContext?.sections?.["compras-preparador"]===true));
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{

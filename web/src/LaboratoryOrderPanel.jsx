@@ -35,7 +35,7 @@ async function api(slug,path,{signal,method="GET",body}={}){
 const empty={rows:[],total:0};
 const fmt=value=>value===null||value===undefined?"—":
  new Intl.NumberFormat("es-ES",{maximumFractionDigits:1}).format(Number(value));
-export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouses=[],canEdit=false}){
+export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouses=[],canEdit=false,userEmail=""}){
  const shared=()=>readSharedReportFilters(clientSlug);
  const [period,setPeriod]=useState(()=>shared().period||"this_month");
  const [customFrom,setCustomFrom]=useState(()=>shared().customFrom||"");
@@ -88,13 +88,35 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
   setRecordLab(key);setRecordType(type);setRecordError("");
   setRecordDate(new Date().toLocaleDateString("en-CA",{timeZone:"Europe/Madrid"}));
  }
+
  async function confirmRecord(){
   if(!recordLab)return;
   setRecordBusy(true);setRecordError("");
   try{
-   await api(clientSlug,"/api/analytics/pedidos/agenda/realizados",{
-    method:"POST",body:{laboratorio:recordLab,fecha:recordDate,tipo:recordType}});
-   setNotice("Fecha global registrada. Se ha recalculado el próximo vencimiento del laboratorio.");
+   if(recordType==="fecha_inicial"){
+    await api(clientSlug,"/api/analytics/pedidos/agenda/realizados",{
+     method:"POST",body:{laboratorio:recordLab,fecha:recordDate,tipo:recordType}});
+    setNotice("Fecha inicial registrada; se ha actualizado la planificación.");
+   }else{
+    if(loading||data.metricsUnavailable||hasInvalid||!range.valid)
+     throw Error("Espera a que termine la carga y revisa las cantidades antes de confirmar.");
+    const combined=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
+    const lines=Object.values(combined).filter(line=>tab==="parafarmacia"?
+     Number(line.units)>0:Object.values(line.unitsByPharmacy||{}).some(value=>Number(value)>0))
+     .map(line=>({reference:line.reference,cn:line.cn,name:line.name,
+      ...(tab==="parafarmacia"?{units:line.units}:{unitsByPharmacy:line.unitsByPharmacy}),
+      comment:line.comment||"",excluded:line.excluded===true}));
+    if(!lines.length)throw Error("El pedido no tiene unidades positivas que registrar.");
+    if(lines.length>5000)throw Error("Demasiadas referencias en el pedido.");
+    const response=await api(clientSlug,"/api/analytics/pedidos/historial",{
+     method:"POST",body:{laboratorio:recordLab,tipo:tab,farmacias:ids,
+      fecha:recordDate,desde:range.from,hasta:range.to,
+      origen:"preparador",lineas:lines,comentarioGlobal:globalComment}});
+    setDrafts({});setSavedLines([]);setPersisted(false);setSavedDate(null);
+    setDirty(false);setGlobalComment("");setSavedGlobalComment("");
+    setNotice("Pedido realizado y archivado en el historial por "+response.realizadoPor+".");
+    setReload(n=>n+1);
+   }
    setRecordLab("");setAgendaRefresh(n=>n+1);
   }catch(e){setRecordError(e.message)}finally{setRecordBusy(false)}
  }
@@ -301,11 +323,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
  const currentRows=data.rows||[];
  // El paginado y los filtros son únicamente visuales: pedidos y totales completos.
  const tableVisibleRows=useMemo(()=>{
-  const cn=columnFilter.cn.trim().toLocaleLowerCase("es"),
-   article=columnFilter.article.trim().toLocaleLowerCase("es");
+  const cn=columnFilter.cn.trim().toLocaleLowerCase("es");
+  const fold=value=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+   .toLocaleLowerCase("es");
+  const words=fold(columnFilter.article).trim().split(/\s+/).filter(Boolean);
   return currentRows.filter(row=>
    (!cn||String(row.cn||row.referencia||"").toLocaleLowerCase("es").includes(cn))&&
-   (!article||String(row.nombre||"").toLocaleLowerCase("es").includes(article)));
+   (!words.length||words.every(word=>fold(row.nombre).includes(word))));
  },[currentRows,columnFilter]);
  // Ordenar por la suma de TODAS las referencias de cada grupo, pero mantener
  // los campos y CN individuales para editar, guardar y exportar.
@@ -419,34 +443,31 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
      desde:range.from,hasta:range.to,lineas:lines,comentarioGlobal:globalComment}});
    setDrafts(combined);setSavedLines(lines);setSavedGlobalComment(globalComment);setPersisted(true);
    setDirty(false);setSavedDate({from:range.from,to:range.to});
-   setNotice("Borrador guardado: "+result.count+" referencias revisadas. Ya puedes generar el Excel.");
+   setNotice("Borrador guardado en Farmétrica para este cliente, laboratorio y farmacias ("+result.count+" referencias).");
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
+
  async function exportExcel(){
-  if(!persisted||dirty||loading||data.metricsUnavailable||!savedLines.length)return;
+  if(loading||busy||data.metricsUnavailable||!range.valid||hasInvalid)return;
   try{
-   setBusy(true);setError("");
-   const activeCatalog=new Map((data.rows||[]).map(row=>[row.referencia,row]));
-   const matrix=savedLines.map(line=>{
-    const active=activeCatalog.get(line.reference);
-    const row={referencia:line.reference,cn:line.cn,nombre:line.name,
-     byPharmacy:line.metrics||{},excluded:active?.excluded===true||line.excluded===true,
-     warehouseStock:active?.warehouseStock??null,warehouse:active?.warehouse||null,
-     globalStock:active?.globalStock??null,
-     totalSuggested:active?.totalSuggested??null};
-    return {row,line:orderLineFor(row,tab,ids,{[line.reference]:line})};
-   });
+   setBusy(true);setError("");setNotice("");
+   // El Excel refleja las cantidades actuales, incluso sin guardar borrador.
+   // La búsqueda visual no elimina las líneas fuera de la vista del pedido.
+   const all=mergeVisibleOrderLines(data.rows||[],tab,ids,drafts);
+   const matrix=(data.rows||[]).map(row=>({row,
+    line:orderLineFor(row,tab,ids,all)}));
+   if(matrix.length>5000)throw Error("Acota el laboratorio: supera las 5.000 referencias.");
    const matrixByReference=new Map(matrix.map(item=>[item.row.referencia,item]));
    const sortedMatrix=groupedLaboratoryRows(matrix.map(item=>item.row))
     .flatMap(group=>group.rows.map(row=>matrixByReference.get(row.referencia)));
-   const ordered=sortedMatrix.filter(item=>(
-    tab==="parafarmacia"?Number(item.line.units)>0:
-    Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0)));
-   if(!ordered.length){setError("El borrador no contiene cantidades positivas para exportar.");return}
-   const rows=laboratoryExcelRows(sortedMatrix,chosen,tab,savedGlobalComment);
-   const orderRows=laboratoryOrderListRows(ordered,chosen,tab,savedGlobalComment);
+   const ordered=sortedMatrix.filter(item=>tab==="parafarmacia"?
+    Number(item.line.units)>0:
+    Object.values(item.line.unitsByPharmacy||{}).some(q=>Number(q)>0));
+   if(!ordered.length)throw Error("No hay cantidades positivas para exportar.");
+   const rows=laboratoryExcelRows(sortedMatrix,chosen,tab,globalComment);
+   const orderRows=laboratoryOrderListRows(ordered,chosen,tab,globalComment);
    await exportLaboratoryOrderWorkbook(rows,laboratoryExportName(labName,tab),orderRows,tab);
-   setNotice("Excel generado desde el último borrador guardado. No se ha enviado ningún pedido.");
+   setNotice("Excel generado con las cantidades actuales, sin guardar ni confirmar el pedido.");
   }catch(e){setError(e.message)}finally{setBusy(false)}
  }
  return <>
@@ -464,6 +485,12 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
     <div className="fm-lab-order-chooser">
      <LaboratoryPicker laboratories={labs} loading={labsLoading} selected={laboratory}
       onSelect={key=>chooseLaboratory(key)}/>
+     <label className="fm-lab-description-search">Buscar por descripción
+      <input type="search" aria-label="Buscar palabras de la descripción"
+       placeholder="Contiene palabras de la descripción…"
+       value={columnFilter.article}
+       onChange={e=>{setColumnFilter(prev=>({...prev,article:e.target.value}));setTablePage(0)}}/>
+     </label>
     </div>
    </div>
    {error&&<p className="fm-op-message fm-op-error" role="alert"><AlertTriangle size={15}/>{error}</p>}
@@ -575,7 +602,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        {showWarehouses&&activeWarehouses.map(w=><th key={"warehouse-"+w.id}
         className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>
-        {w.name}
+        {/^alm$/i.test(String(w.name||"").trim())?"Almacén":w.name||"Almacén"}
        </th>)}
        <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
        <th colSpan={2} className="fm-lab-order-order-group">Pedido</th>
@@ -738,12 +765,13 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
       value={globalComment} disabled={!canEdit||loading}
       onChange={e=>{setGlobalComment(e.target.value);setDirty(true);setNotice("")}}/>
     </div>
+    <p className="fm-lab-draft-help">Guardar borrador conserva las cantidades y comentarios en la base de datos del cliente, compartidos con los usuarios autorizados. Generar Excel es independiente y no marca el pedido como realizado.</p>
     <div className="fm-lab-order-actions">
      <button className="btn btn-secondary" type="button" onClick={save}
       disabled={!canEdit||busy||loading||!range.valid||!scope||data.metricsUnavailable||hasInvalid}>
       <Save size={16}/> {busy?"Guardando…":"Guardar borrador"}</button>
      <button className="btn btn-primary" type="button" onClick={exportExcel}
-      disabled={busy||loading||data.metricsUnavailable||!persisted||dirty||!savedLines.length}>
+      disabled={busy||loading||data.metricsUnavailable||!range.valid||hasInvalid||!data.rows?.length}>
       <Download size={16}/> Generar Excel</button>
      {canEdit&&<button className="btn btn-secondary" type="button"
       onClick={()=>beginRecord(laboratory)} disabled={busy||loading||!laboratory||!ids.length}>
@@ -793,6 +821,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
       onChange={e=>setRecordDate(e.target.value)}/>
     </label>
     <p className="fm-muted">La fecha se aplica a la planificación conjunta del laboratorio, independientemente de la farmacia.</p>
+    {recordType==="pedido"&&<p className="fm-muted"><strong>Realizado por:</strong> {userEmail||"Usuario de la sesión"} · Se registrará el correo autenticado y una copia de las líneas del pedido en Compras → Historial de pedidos.</p>}
     {recordError&&<p role="alert" className="fm-op-message fm-op-error">{recordError}</p>}
     <div className="fm-order-confirm-actions">
      <button className="btn btn-secondary" disabled={recordBusy} onClick={()=>setRecordLab("")}>Cancelar</button>

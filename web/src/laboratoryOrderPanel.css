@@ -255,3 +255,22 @@
 .fm-lab-order-pager span{font-size:12px;color:#536e60;white-space:nowrap}
 .fm-lab-order-pager .btn{font-size:11px;min-height:32px}
 @media(max-width:620px){.fm-lab-order-pager{justify-content:center}.fm-lab-order-chooser{width:100%}}
+
+/* Vista densa del preparador: ancho mínimo de datos sin perder legibilidad. */
+.fm-lab-order-table{font-size:10px}
+.fm-lab-order-table th,.fm-lab-order-table td{padding:5px 3px;min-width:38px}
+.fm-lab-order-table .fm-lab-order-cn{width:68px;max-width:68px;min-width:68px}
+.fm-lab-order-table .fm-lab-order-name{left:68px;width:190px;max-width:190px;min-width:190px}
+.fm-lab-order-table .fm-lab-order-sub{font-size:9px}
+.fm-lab-order-table .fm-lab-order-editcol{min-width:60px}
+.fm-lab-order-table input[type=number]{width:49px;max-width:49px;padding:4px 2px;font-size:11px}
+.fm-lab-order-table .fm-lab-order-commentcol{min-width:85px!important}
+.fm-lab-order-table .fm-lab-comment-link{padding:4px;font-size:9px;gap:3px}
+.fm-lab-description-search{display:grid;gap:4px;margin-top:8px;font-size:11px;font-weight:650;color:#4d6658}
+.fm-lab-description-search input{width:100%;box-sizing:border-box}
+.fm-lab-draft-help{margin:0;color:#536e60;font-size:11px;line-height:1.45}
+@media(max-width:720px){
+ .fm-lab-order-table .fm-lab-order-cn{width:62px;max-width:62px;min-width:62px}
+ .fm-lab-order-table .fm-lab-order-name{left:62px;width:148px;max-width:148px;min-width:148px}
+ .fm-lab-order-table th,.fm-lab-order-table td{min-width:36px;padding:5px 2px}
+}

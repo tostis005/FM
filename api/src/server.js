@@ -598,6 +598,9 @@ try {
     "./migrations/059_equivalencias_nombre_familias.sql",import.meta.url),"utf8"));
   await pool.query(await readFile(new URL(
     "./migrations/060_fusiones_familias_auditadas.sql",import.meta.url),"utf8"));
+  // Migración aditiva de bajo impacto, se aplica incluso en bases ya inicializadas.
+  await pool.query(await readFile(new URL(
+    "./migrations/069_historial_pedidos_laboratorio.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

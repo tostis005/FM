@@ -139,11 +139,11 @@ export function laboratoryExcelRows(lines,pharmacies,type,globalComment=""){
  const ids=pharmacies.map(p=>String(p.id));
  const grouping=["CN","Artículo",...pharmacies.flatMap(p=>
   [p.name,"","","",""]),"Almacén","","","","",
-  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"];
+  "Total farm.","Total + Almacén","Propuesta","Pedir total","Comentarios"];
  const headings=["CN","Artículo",...pharmacies.flatMap(()=>
   ["Stock","Ventas 12m","Ventas 3m","Vendido período",isMedication?"Pedir":"Propuesta"]),
   "Stock","Ventas 12m","Ventas 3m","Vendido período",isMedication?"Pedir":"Propuesta",
-  "Total farm.","Total + ALM","Propuesta","Pedir total","Comentarios"];
+  "Total farm.","Total + Almacén","Propuesta","Pedir total","Comentarios"];
  const rows=lines.map(({row,line})=>{
   const measures=ids.map(id=>row.byPharmacy?.[id]||{});
   const proposals=row.totalSuggested!==undefined?row.totalSuggested:

@@ -1,7 +1,7 @@
 // Identificadores de ruta ligeros: no se importa una pantalla completa
 // para comprobar qué sección corresponde a la URL.
 export const REAL_SECTION_MAP={
- "compras-preparador":"pedidos","compras-pendientes":"pedidos","compras-pedidos":"pedidos",
+ "compras-preparador":"pedidos","compras-historial":"pedidos","compras-pendientes":"pedidos","compras-pedidos":"pedidos",
  "oportunidades-seguimiento":"oportunidades","alertas":"trabajo","mi-trabajo":"trabajo",
  "stock-traspasos":"traspasos","rentabilidad-retorno":"resultados"
 };

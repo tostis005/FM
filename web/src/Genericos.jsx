@@ -203,6 +203,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   return p.toString();
  },[range.from,range.to,ids.join(",")]);
  useEffect(()=>{
+  // No cargar el análisis histórico hasta que el usuario abra esa pestaña.
+  // El comparador consulta únicamente las tarifas vigentes del cliente.
+  if(view!=="analisis")return;
   if(!query){setData(null);setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
   setLoading(true);setError("");setData(null);
@@ -217,7 +220,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    .then(j=>{if(mounted&&j){setData(j);setUpdatedAt(new Date());}}).catch(e=>{if(mounted)setError(e.message)})
    .finally(()=>{if(mounted)setLoading(false)});
   return()=>{mounted=false;controller.abort()};
- },[query,clientSlug,reload,useReal]);
+ },[view,query,clientSlug,reload,useReal]);
  useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
  // No refrescar los datos automáticamente mientras el usuario consulta
  // grupos o detalles. El botón «Actualizar» sigue disponible para hacerlo a demanda.

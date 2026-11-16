@@ -6,6 +6,14 @@ import {madridDay} from "./dashboardConsolidations.js";
 const SCHEMA=/^[a-z][a-z0-9_]{1,62}$/;
 const DAY_OPTIONS=new Set([90,180]);
 const MODES=new Set(["alertas","inmovilizado"]);
+const SORTABLE=new Set(["signal","pharmacy","product","stock","unitsPeriod","coverDays","unitCost","lastSaleDate","capital","savingPotential","suggestedUnits"]);
+const FILTERABLE=new Set([...SORTABLE]);
+const SELECT_FILTERS=new Set(["signal","pharmacy"]);
+const FIELD={signal:r=>r.alertType,pharmacy:r=>r.pharmacyName,product:r=>r.name||r.cn||r.articleId,
+ stock:r=>r.stock,unitsPeriod:r=>r.unitsPeriod,coverDays:r=>r.coverDays,
+ unitCost:r=>r.unitCost,lastSaleDate:r=>r.lastSaleDate,capital:r=>r.capital,
+ savingPotential:r=>r.savingPotential,suggestedUnits:r=>r.suggestedUnits};
+const LABEL={rotura:"Riesgo de rotura",sin_ventas:"Sin ventas netas",exceso:"Exceso de cobertura"};
 const TODAY="(now() AT TIME ZONE 'Europe/Madrid')::date";
 const TTL=10*60*1000;
 const jobs=new Map(),queue=[];
@@ -31,10 +39,19 @@ export function proactiveFilters(req,mode){
  const page=Number(req.query?.pagina||1),size=Number(req.query?.tamano||50);
  if(!Number.isSafeInteger(page)||page<1||page>2000||![25,50,100].includes(size))
   throw invalid("Paginación incorrecta");
+ const sort=String(req.query?.orden||""),direction=String(req.query?.direccion||"desc");
+ if(sort&&!SORTABLE.has(sort)||!["asc","desc"].includes(direction))throw invalid("Ordenación inválida");
+ let filters={};
+ try{filters=req.query?.columnas?JSON.parse(String(req.query.columnas)):{};}catch{throw invalid("Filtros de columna inválidos");}
+ if(!filters||typeof filters!=="object"||Array.isArray(filters)||
+  String(req.query?.columnas||"").length>2500||
+  Object.entries(filters).some(([key,value])=>!FILTERABLE.has(key)||
+   (SELECT_FILTERS.has(key)?!Array.isArray(value)||value.length>60||value.some(v=>typeof v!=="string"||v.length>120):
+    typeof value!=="string"||value.length>120)))throw invalid("Filtros de columna inválidos");
  const refresh=String(req.query?.recalcular||"");
  if(refresh&&!/^\d{1,16}$/.test(refresh))throw invalid("Recálculo no válido");
  return {schema,slug:ctx.client.slug,ids:[...new Set(ids)].sort((a,b)=>a-b),
-  days,search,page,size,mode,refresh};
+  days,search,page,size,mode,refresh,sort,direction,filters};
 }
 export function proactiveCoverageSQL(schema){
  if(!SCHEMA.test(schema||""))throw Error("Esquema inválido");
@@ -304,8 +321,27 @@ export function getProactiveJob(pool,filters){
  jobs.set(key,job);queue.push({pool,job});pump(pool);
  return job;
 }
+export function filterProactiveRows(source,f){
+ const filters=f.filters||{};
+ const result=(source||[]).filter(row=>Object.entries(filters).every(([key,condition])=>{
+  const value=key==="signal"?LABEL[row.alertType]||row.alertType:FIELD[key]?.(row);
+  if(Array.isArray(condition))return !condition.length||condition.includes(String(value??""));
+  return !condition.trim()||String(value??"").toLocaleLowerCase("es").includes(condition.trim().toLocaleLowerCase("es"));
+ }));
+ if(!f.sort)return result;
+ const direction=f.direction==="asc"?1:-1;
+ const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
+ return result.map((row,i)=>({row,i})).sort((a,b)=>{
+  const x=f.sort==="signal"?LABEL[a.row.alertType]:FIELD[f.sort](a.row);
+  const y=f.sort==="signal"?LABEL[b.row.alertType]:FIELD[f.sort](b.row);
+  if(x==null||x==="")return y==null||y===""?a.i-b.i:1;
+  if(y==null||y==="")return -1;
+  const order=typeof x==="number"&&typeof y==="number"?x-y:collator.compare(String(x),String(y));
+  return order*direction||a.i-b.i;
+ }).map(x=>x.row);
+}
 export function proactiveJobResponse(job,f){
- const rows=job.rows[f.mode]||[],total=rows.length;
+ const all=job.rows[f.mode]||[],rows=filterProactiveRows(all,f),total=rows.length;
  const valued=rows.filter(x=>x.capital!=null);
  const status=job.status;
  return {available:!["unavailable","error"].includes(status),status,
@@ -313,7 +349,11 @@ export function proactiveJobResponse(job,f){
   progress:job.progress,completedSites:job.completedSites,
   summary:{valuedSubtotal:round(valued.reduce((n,r)=>n+r.capital,0),2),
    valuedCount:valued.length,stockUnits:rows.reduce((n,r)=>n+number(r.stock),0),
-   riskCount:rows.filter(r=>r.alertType==="rotura").length},
+   riskCount:rows.filter(r=>r.alertType==="rotura").length,
+   savingPotential:round(rows.reduce((n,r)=>n+number(r.savingPotential),0),2),
+   pricedOpportunities:rows.filter(r=>r.savingPotential!=null).length},
+  filterOptions:{signal:[...new Set(all.map(r=>LABEL[r.alertType]).filter(Boolean))],
+   pharmacy:[...new Set(all.map(r=>r.pharmacyName).filter(Boolean))]},
   excluded:job.excluded,dateIncomplete:job.dateIncomplete||0,
   message:job.message||null,
   rows:rows.slice((f.page-1)*f.size,f.page*f.size)};

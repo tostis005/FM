@@ -10,6 +10,8 @@ import {euro,quantity,dateTimeES,percentage} from "./localeES.js";
 import {ticketLineAmounts} from "./ticketLineAmounts.js";
 import {downloadTableCSV} from "./tableExport.js";
 import {civilToday} from "./promotionLifecycle.js";
+import {hasSinglePharmacy} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 
 const num=quantity;
 const money=euro;
@@ -35,6 +37,7 @@ const TICKET_COLUMNS=[
 ];
 
 export default function DetalleVentas({promotions=[],pharmacies=[],connected,loading=false,pharmacyScopeIds=null,simulator=false,directQuery=null}){
+  const singlePharmacy=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
   const [promoId,setPromoId]=useState("");
   const [exporting,setExporting]=useState(false);
   const [exportError,setExportError]=useState("");
@@ -75,7 +78,8 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
     }
     if(!promotions.length)setPromoId("");
   },[promotions.map(p=>p.id).join("|")]);
-  const visibleColumns=simulator?TICKET_COLUMNS.filter(([key])=>key!=="at"):TICKET_COLUMNS;
+  const visibleColumns=TICKET_COLUMNS.filter(([key])=>
+   (!simulator||key!=="at")&&(!singlePharmacy||key!=="pharmacy"));
   const filters=promo?{
     cns:promo.cns||[],start:simulator?promo.start:applied.start||promo.start,
     end:simulator?promo.end:applied.end||promo.end||civilToday(),
@@ -159,7 +163,7 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
       <button type="button" className="btn btn-secondary btn-sm"
        disabled={result.status==="loading"||!result.rows.length}
        onClick={()=>downloadTableCSV("farmetrica-tickets-"+(promo?.id||"ventas")+"-pagina",
-        TICKET_COLUMNS.map(c=>c[1]),result.rows.map(row=>TICKET_COLUMNS.map(c=>c[2](row))))}>
+        visibleColumns.map(c=>c[1]),result.rows.map(row=>visibleColumns.map(c=>c[2](row))))}>
        <Download size={15}/> Exportar página (CSV)</button>
      </div>
     </div>

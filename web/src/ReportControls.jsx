@@ -2,6 +2,8 @@ import React from "react";
 import {RefreshCw} from "lucide-react";
 import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {SALES_PERIODS} from "./salesPeriods.js";
+import {hasSinglePharmacy} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import "./reportControls.css";
 
 // El mismo conjunto de atajos se utiliza en cada pantalla con intervalo de fechas.
@@ -35,12 +37,13 @@ export function ReportPageHeader({title,description,period,updatedAt,onRefresh,r
 export function ReportFilterBar({periodKey,onPeriodChange,pharmacies=[],pharmacyIds=[],onPharmacyChange,
  showPeriod=true,showPharmacies=true,customFrom="",customTo="",onCustomFromChange,onCustomToChange,
  quickPeriodKey, onQuickPeriodChange,alwaysShowDates=false,showQuickPeriods=true,periodLabel="Período",children}){
+ const onlyOnePharmacy=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
  return <div className="card fm-unified-filters">
   {showPeriod&&<label className="fm-unified-filter"><span>{periodLabel}</span>
    <select value={periodKey} onChange={e=>onPeriodChange?.(e.target.value)}>
     {SALES_PERIODS.map(([id,label])=><option key={id} value={id}>{label}</option>)}
    </select></label>}
-  {showPharmacies&&<div className="fm-unified-filter"><span>Farmacias</span>
+  {showPharmacies&&!onlyOnePharmacy&&<div className="fm-unified-filter"><span>Farmacias</span>
    <MultiSelectFilter label="Farmacias" placeholder="Todas las farmacias"
     options={pharmacies.map(f=>({value:String(f.id),label:f.name}))}
     value={pharmacyIds} onChange={onPharmacyChange}/></div>}

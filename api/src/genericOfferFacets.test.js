@@ -22,3 +22,11 @@ test("una descripción sin dosis conocida no crea una equivalencia ficticia",()=
  assert.equal(p.form,"");
  assert.equal(p.pack,"");
 });
+
+test("una solución inyectable no se etiqueta como solución oral",()=>{
+ const injectable=describeGenericOfferGroup({name:"Paracetamol 10 mg/ml solución inyectable en vial",principle:"PARACETAMOL"});
+ const oral=describeGenericOfferGroup({name:"Paracetamol 10 mg/ml solución oral en frasco de 150 ml",principle:"PARACETAMOL"});
+ assert.equal(injectable.form,"Inyectable");
+ assert.equal(oral.form,"Solución oral");
+ assert.equal(oral.pack,"150 ml");
+});

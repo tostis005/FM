@@ -159,7 +159,9 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
     {lastSaleLabel(r)}</span>}]:[]),
   {key:"capital",label:"Stock valorado",value:r=>r.capital,
    render:r=><strong>{money(r.capital)}</strong>},
-  ...(isAlerts?[{key:"suggestedUnits",label:"Reposición 30d",value:r=>r.suggestedUnits,
+  ...(isAlerts?[{key:"excessCapital",label:"Capital >120d",value:r=>r.excessCapital,
+   render:r=>r.excessCapital==null?"—":<strong title={number(r.excessUnits)+" unidades por encima de la cobertura de 120 días, a coste de catálogo. Capital revisable, no ahorro confirmado."}>{money(r.excessCapital)}</strong>},
+   {key:"suggestedUnits",label:"Reposición 30d",value:r=>r.suggestedUnits,
    render:r=>r.suggestedUnits==null?"—":<span title="Escenario orientativo de 30 días con ventas documentales del último mes">{number(r.suggestedUnits)} uds.</span>},
    {key:"savingPotential",label:"Ahorro potencial",value:r=>r.savingPotential,
     render:r=>r.savingPotential==null?"—":<strong title={"Estimación no realizada: "+number(r.suggestedUnits)+" uds. × diferencia positiva entre PUC cooperativa "+money(r.cooperativePuc)+" y objetivo histórico "+money(r.targetPuc)+". Percentil "+r.priceEvidence?.percentile+"; verificar ofertas y disponibilidad."}>{money(r.savingPotential)}</strong>}]:[]),
@@ -187,11 +189,11 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
  const exportPage=()=>downloadTableCSV((isAlerts?"alertas-inteligentes":"stock-inmovilizado")+"-pagina-"+page,
   ["Farmacia","Referencia ERP","CN","Producto","Motivo","Stock","Ventas netas período",
    "Cobertura días","Coste unitario",...(!isAlerts?["Última venta"]:[]),
-   "Valor stock","Fecha stock","Reposición orientativa 30d","PUC coop. observado","PUC objetivo histórico","Ahorro potencial","Acción"],
+   "Valor stock","Fecha stock","Capital sobre cobertura 120d","Reposición orientativa 30d","PUC coop. observado","PUC objetivo histórico","Ahorro potencial","Acción"],
   rows.map(r=>[r.pharmacyName,r.articleId,localCode(r),r.name,LABELS[r.alertType]?.title||"Sin ventas",
    r.stock,r.unitsPeriod,r.coverDays??"",r.unitCost??"",
    ...(!isAlerts?[lastSaleLabel(r)]:[]),
-   r.capital??"",r.stockAt||"",r.suggestedUnits??"",r.cooperativePuc??"",r.targetPuc??"",r.savingPotential??"",suggestion(r,canUseTransferidor)]));
+   r.capital??"",r.stockAt||"",r.excessCapital??"",r.suggestedUnits??"",r.cooperativePuc??"",r.targetPuc??"",r.savingPotential??"",suggestion(r,canUseTransferidor)]));
  const excluded=result?.excluded||[];
  return <div className="fm-proactive">
   <ReportPageHeader title={isAlerts?"Alertas inteligentes":"Stock inmovilizado"}
@@ -238,7 +240,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
   {error&&<section className="card fm-proactive-panel fm-proactive-error" role="alert">
    <AlertTriangle size={18}/>{error}<button type="button" onClick={()=>setRefresh(Date.now())}>Reintentar</button>
   </section>}
-  {isAlerts&&<p className="fm-proactive-note">* Ahorro potencial: unidades orientativas para cubrir 30 días × diferencia positiva entre PUC histórico de cooperativa y PUC objetivo del percentil configurado de laboratorio. Requiere dos compras comparables por canal; no incluye rappels, portes ni garantiza precio, disponibilidad o ahorro real.</p>}
+  {isAlerts&&<p className="fm-proactive-note">Capital por exceso: unidades que superan 120 días de cobertura × coste unitario de catálogo, cuando existe. Es inventario a revisar, no un ahorro ni un compromiso de devolución. * Ahorro potencial: unidades orientativas para cubrir 30 días × diferencia positiva entre PUC histórico de cooperativa y PUC objetivo del percentil configurado de laboratorio. Requiere dos compras comparables por canal; no incluye rappels, portes ni garantiza precio, disponibilidad o ahorro real.</p>}
   {!error&&result&&<>
    {!isAlerts&&result.dateIncomplete>0&&<div className="fm-proactive-warning" role="status">
     <AlertTriangle size={18}/>No se ha podido verificar la última venta de {number(result.dateIncomplete)} referencias. Se indica «No disponible».
@@ -252,8 +254,9 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
     <div className="fm-proactive-kpis">
      <article className="card"><small>{isAlerts?"Alertas detectadas":"Referencias sin ventas"}</small><strong>{number(total)}</strong></article>
      <article className="card"><small>{isAlerts?"Roturas potenciales":"Unidades inmovilizadas"}</small><strong>{number(isAlerts?values.riskCount:values.stockUnits)}</strong></article>
-     <article className="card"><small>Valor con coste conocido</small><strong>{values.valuedCount?money(values.valuedSubtotal):"Sin valoración"}</strong></article>
+     <article className="card"><small>{isAlerts?"Stock valorado en alertas":"Capital inmovilizado con coste"}</small><strong>{values.valuedCount?money(values.valuedSubtotal):"Sin valoración"}</strong></article>
      <article className="card"><small>Referencias con coste</small><strong>{number(values.valuedCount)} / {number(total)}</strong></article>
+     {isAlerts&&<article className="card"><small>Capital por exceso de stock</small><strong>{values.excessValuedCount?money(values.excessCapital):"Sin exceso valorado"}</strong><small>Stock por encima de 120 días; no es ahorro realizado</small></article>}
      {isAlerts&&<article className="card"><small>Ahorro potencial en compras*</small><strong>{values.pricedOpportunities?money(values.savingPotential):"Sin precios comparables"}</strong><small>{number(values.pricedOpportunities||0)} referencias con ambos PUC</small></article>}
     </div>
     <section className="card fm-proactive-panel">

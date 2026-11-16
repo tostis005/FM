@@ -3,6 +3,8 @@ import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
+import {isPharmacyColumn} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import {KpiValue,LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
@@ -43,14 +45,16 @@ const allColumns=[
  ["coveredSales","Ventas con coste"],["margin","Margen estimado"]
 ];
 function ProfitTable({rows,headers,empty,complete=false}){
+ const singlePharmacy=useSinglePharmacy();
+ const visibleHeaders=singlePharmacy?headers.filter(col=>!isPharmacyColumn(col)):headers;
  if(complete)return <SortableDataTable
   headers={headers.map(col=>col.label)}
   rows={rows.map(item=>headers.map(col=><span title={col.title?.(item)}>{col.render(item)}</span>))}
   empty={empty||"No hay datos con los filtros actuales."} label="filas de rentabilidad"
   showExport={false}/>;
  return <div className="fm-profit-table-scroll"><table className="fm-profit-table">
-  <thead><tr>{headers.map(col=><th key={col.key}>{col.label}</th>)}</tr></thead>
-  <tbody>{rows.map((item,index)=><tr key={item.key||index}>{headers.map(col=>
+  <thead><tr>{visibleHeaders.map(col=><th key={col.key}>{col.label}</th>)}</tr></thead>
+  <tbody>{rows.map((item,index)=><tr key={item.key||index}>{visibleHeaders.map(col=>
    <td key={col.key} className={col.kind==="text"?"fm-profit-left":""} title={col.title?.(item)}>
     {col.render(item)}
    </td>)}</tr>)}</tbody>

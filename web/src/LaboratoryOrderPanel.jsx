@@ -602,7 +602,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
         {chosen.map((p,i)=><th key={p.id} className={"fm-lab-order-group shade-"+i%3} colSpan={5}>{p.name}</th>)}
        {showWarehouses&&activeWarehouses.map(w=><th key={"warehouse-"+w.id}
         className="fm-lab-order-group fm-lab-order-warehouse-group" colSpan={5}>
-        {w.name}
+        {/^alm$/i.test(String(w.name||"").trim())?"Almacén":w.name||"Almacén"}
        </th>)}
        <th colSpan={3} className="fm-lab-order-total-group">Totales</th>
        <th colSpan={2} className="fm-lab-order-order-group">Pedido</th>

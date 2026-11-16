@@ -31,14 +31,16 @@ export function setupLaboratoryOrderHistory(app,pool,{requireTenant}){
   if(!canSee(req))return res.status(403).json({error:"Compras no habilitado"});
   try{
    const {rows}=await pool.query({
-    text:'SELECT id::text,laboratorio_clave AS "laboratorio",'+
-     'laboratorio_nombre AS "laboratorioNombre",tipo,'+
+    text:'SELECT h.id::text,laboratorio_clave AS "laboratorio",'+
+     'laboratorio_nombre AS "laboratorioNombre",h.tipo,'+
      'farmacias_clave AS "farmaciasClave",fecha_pedido::text AS "fecha",'+
      'origen,archivo_nombre AS "archivoNombre",realizado_por AS "realizadoPor",'+
      'registrado_en AS "registradoEn",total_referencias AS "referencias",'+
      'total_unidades AS "unidades" '+
-     'FROM farmetrica.pedidos_laboratorio_historial '+
-     'WHERE cliente_slug=$1 ORDER BY fecha_pedido DESC,id DESC LIMIT 500',
+     'FROM farmetrica.pedidos_laboratorio_historial h '+
+     'JOIN farmetrica.preparador_pedidos_globales g ON g.cliente_slug=h.cliente_slug '+
+     'AND g.grupo_id=h.grupo_agenda AND g.anulado_en IS NULL '+
+     'WHERE h.cliente_slug=$1 ORDER BY h.fecha_pedido DESC,h.id DESC LIMIT 500',
     values:[req.context.client.slug],query_timeout:5000
    });
    res.json({items:rows.filter(row=>canSeeOrder(req,row))});
@@ -50,14 +52,16 @@ export function setupLaboratoryOrderHistory(app,pool,{requireTenant}){
    return res.status(400).json({error:"Pedido inválido"});
   try{
    const {rows}=await pool.query({
-    text:'SELECT id::text,laboratorio_clave AS "laboratorio",'+
-     'laboratorio_nombre AS "laboratorioNombre",tipo,'+
+    text:'SELECT h.id::text,laboratorio_clave AS "laboratorio",'+
+     'laboratorio_nombre AS "laboratorioNombre",h.tipo,'+
      'farmacias_clave AS "farmaciasClave",fecha_pedido::text AS "fecha",'+
      'origen,archivo_nombre AS "archivoNombre",realizado_por AS "realizadoPor",'+
      'registrado_en AS "registradoEn",desde::text,hasta::text,'+
      'lineas,comentario_global AS "comentarioGlobal" '+
-     'FROM farmetrica.pedidos_laboratorio_historial '+
-     'WHERE cliente_slug=$1 AND id=$2::bigint',
+     'FROM farmetrica.pedidos_laboratorio_historial h '+
+     'JOIN farmetrica.preparador_pedidos_globales g ON g.cliente_slug=h.cliente_slug '+
+     'AND g.grupo_id=h.grupo_agenda AND g.anulado_en IS NULL '+
+     'WHERE h.cliente_slug=$1 AND h.id=$2::bigint',
     values:[req.context.client.slug,req.params.id],query_timeout:5000
    });
    const record=rows[0];

@@ -6,11 +6,12 @@ import ListTable from "./ListTable.jsx";
 import {downloadTableCSV} from "./tableExport.js";
 import {euro,integer,dateES} from "./localeES.js";
 import "./proactiveStock.css";
+import {transferCapabilities} from "./transferTopology.js";
 
 const LABELS={
- rotura:{title:"Riesgo de rotura",detail:"La venta reciente puede agotar el stock en 7 días o menos.",action:"Preparar pedido"},
- sin_ventas:{title:"Sin ventas netas",detail:"Hay existencias, pero no consta venta neta durante el período analizado.",action:"Ver transferidor"},
- exceso:{title:"Exceso de cobertura",detail:"El stock equivale a 120 días o más según la venta histórica.",action:"Ver transferidor"}
+ rotura:{title:"Riesgo de rotura"},
+ sin_ventas:{title:"Sin ventas netas"},
+ exceso:{title:"Exceso de cobertura"}
 };
 const money=v=>v==null?"Sin coste conocido":euro(Number(v));
 const number=v=>v==null?"—":integer(Number(v));
@@ -20,14 +21,17 @@ const lastSaleLabel=r=>r.lastSaleStatus==="found"&&r.lastSaleDate?date(r.lastSal
  r.lastSaleStatus==="unavailable"?"No disponible":"Consultando…";
 const localCode=r=>/^\d{6,7}$/.test(String(r.cn||"").trim())?String(r.cn).trim().slice(0,6):"";
 const priority=r=>r.alertType==="rotura"||(r.alertType==="sin_ventas"&&r.capital>=500)?"Alta":"Media";
-const suggestion=r=>r.alertType==="rotura"?
+const suggestion=(r,canTransfer)=>r.alertType==="rotura"?
  "Comprobar el pedido y el suministro antes de reponer.":
  r.alertType==="exceso"?
- "Comprobar necesidades en otras farmacias y reducir próximas compras.":
- "Valorar redistribución, devolución al proveedor si procede o reducción de compras.";
+ (canTransfer?"Comprobar necesidades en otros establecimientos y reducir próximas compras.":
+  "Revisar próximas compras y valorar devolución al proveedor si procede."):
+ (canTransfer?"Valorar redistribución, devolución al proveedor si procede o reducción de compras.":
+  "Valorar devolución al proveedor si procede o reducción de próximas compras.");
 
-export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",onNavigate=()=>{},demo=false}){
+export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],mode="alertas",onNavigate=()=>{},demo=false}){
  const isAlerts=mode==="alertas";
+ const canUseTransferidor=transferCapabilities(pharmacies,warehouses).canUseTransferidor;
  const [days,setDays]=useState(90),[pharmacyId,setPharmacyId]=useState("");
  const [search,setSearch]=useState(""),[readySearch,setReadySearch]=useState("");
  const [page,setPage]=useState(1),[size,setSize]=useState(50),[refresh,setRefresh]=useState(0);
@@ -81,10 +85,15 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
    }));}
    catch{}
    onNavigate("compras-preparador");
-  }else{
+  }else if(canUseTransferidor){
    try{sessionStorage.setItem("fm-transfer-prefill:"+clientSlug,localCode(r)||r.name||r.articleId);}
    catch{}
    onNavigate("stock-transferidor");
+  }else{
+   try{sessionStorage.setItem("fm-stock-focus:"+clientSlug,JSON.stringify({
+    search:localCode(r)||r.name||String(r.articleId),pharmacyId:r.pharmacyId
+   }));}catch{}
+   onNavigate("stock");
   }
  };
  const createTask=async r=>{
@@ -98,7 +107,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
     body:JSON.stringify({recurso:"trabajo",farmacia:r.pharmacyId,tipo:"alerta",
      titulo:label+": "+String(r.name||r.articleId).slice(0,125),
      prioridad:priority(r)==="Alta"?"alta":"media",
-     descripcion:label+" en "+r.pharmacyName+". "+suggestion(r)+
+     descripcion:label+" en "+r.pharmacyName+". "+suggestion(r,canUseTransferidor)+
       " Existencias: "+r.stock+" unidades; ventas netas ("+days+" días): "+
       r.unitsPeriod+". La valoración es orientativa y puede no estar disponible."})
    });
@@ -129,13 +138,13 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
     {lastSaleLabel(r)}</span>}]:[]),
   {key:"capital",label:"Stock valorado",sortable:false,searchable:false,value:r=>r.capital,
    render:r=><strong>{money(r.capital)}</strong>},
-  {key:"action",label:"Siguiente paso",sortable:false,searchable:false,
-   value:r=>suggestion(r),render:r=><div className="fm-proactive-actions">
-    <span>{suggestion(r)}</span>
+  {key:"action",label:"Acciones",sortable:false,searchable:false,
+   value:()=>"",render:r=><div className="fm-proactive-actions">
     <div>
-     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>go(r)}>
-      {r.alertType==="rotura"?<ShoppingCart size={14}/>:<ArrowRightLeft size={14}/>}
-      {r.alertType==="rotura"?"Preparador":"Transferidor"}
+     <button type="button" className="btn btn-secondary btn-sm" onClick={()=>go(r)}
+      title={suggestion(r,canUseTransferidor)}>
+      {r.alertType==="rotura"?<ShoppingCart size={14}/>:canUseTransferidor?<ArrowRightLeft size={14}/>:<PackageSearch size={14}/>}
+      {r.alertType==="rotura"?"Preparador":canUseTransferidor?"Transferidor":"Ver stock"}
      </button>
      {isAlerts&&<button type="button" className="btn btn-secondary btn-sm"
       disabled={Boolean(actionBusy)||demo||created.includes(String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType))}
@@ -144,7 +153,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
        "Registrada":actionBusy===String(r.pharmacyId)+"|"+String(r.articleId)+"|"+String(r.alertType)?"Guardando…":"Crear tarea"}</button>}
     </div>
    </div>}
- ],[isAlerts,days,clientSlug,actionBusy,created,demo]);
+ ],[isAlerts,days,clientSlug,actionBusy,created,demo,canUseTransferidor]);
  const exportPage=()=>downloadTableCSV((isAlerts?"alertas-inteligentes":"stock-inmovilizado")+"-pagina-"+page,
   ["Farmacia","Referencia ERP","CN","Producto","Motivo","Stock","Ventas netas período",
    "Cobertura días","Coste unitario",...(!isAlerts?["Última venta"]:[]),
@@ -152,7 +161,7 @@ export default function ProactiveStock({clientSlug,pharmacies=[],mode="alertas",
   rows.map(r=>[r.pharmacyName,r.articleId,localCode(r),r.name,LABELS[r.alertType]?.title||"Sin ventas",
    r.stock,r.unitsPeriod,r.coverDays??"",r.unitCost??"",
    ...(!isAlerts?[lastSaleLabel(r)]:[]),
-   r.capital??"",r.stockAt||"",suggestion(r)]));
+   r.capital??"",r.stockAt||"",suggestion(r,canUseTransferidor)]));
  const excluded=result?.excluded||[];
  return <div className="fm-proactive">
   <ReportPageHeader title={isAlerts?"Alertas inteligentes":"Stock inmovilizado"}

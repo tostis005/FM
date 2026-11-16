@@ -7,6 +7,7 @@ import {downloadTableCSV} from "./tableExport.js";
 import {euro,integer,dateES} from "./localeES.js";
 import "./proactiveStock.css";
 import {transferCapabilities} from "./transferTopology.js";
+import {hasSinglePharmacy} from "./pharmacyPresentation.js";
 
 const LABELS={
  rotura:{title:"Riesgo de rotura"},
@@ -41,6 +42,7 @@ const suggestion=(r,canTransfer)=>r.alertType==="rotura"?
 
 export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],mode="alertas",onNavigate=()=>{},demo=false}){
  const isAlerts=mode==="alertas";
+ const onlyOnePharmacy=hasSinglePharmacy(pharmacies);
  const canUseTransferidor=transferCapabilities(pharmacies,warehouses).canUseTransferidor;
  const [days,setDays]=useState(90),[pharmacyId,setPharmacyId]=useState("");
  const [search,setSearch]=useState(""),[readySearch,setReadySearch]=useState("");
@@ -207,13 +209,13 @@ export default function ProactiveStock({clientSlug,pharmacies=[],warehouses=[],m
     "Identifica existencias sin ventas netas, estima su valor y revisa cómo recuperar capital."}
    refreshing={busy} onRefresh={()=>{setPage(1);setRefresh(Date.now())}}/>
   <section className="card fm-proactive-controls" aria-label="Filtros de gestión proactiva">
-   <label>Farmacia
+   {!onlyOnePharmacy&&<label>Farmacia
     <select value={pharmacyId} onChange={e=>{setPharmacyId(e.target.value);setPage(1)}}>
      <option value="">Todas las farmacias</option>
      {pharmacies.filter(f=>f.active!==false).map(p=>
       <option key={p.id} value={String(p.id)}>{p.name}</option>)}
     </select>
-   </label>
+   </label>}
    <label>Período analizado
     <select value={days} onChange={e=>{setDays(Number(e.target.value));setPage(1)}}>
      <option value={90}>Últimos 90 días</option><option value={180}>Últimos 180 días</option>

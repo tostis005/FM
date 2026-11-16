@@ -7,6 +7,8 @@ import {simulatorPeriods,validSimulatorPeriod,simulatorTarget,simulatorStockTarg
 import {requestPromotionBatches,loadPromotionHistoryInBatches} from "./promotionHistoryBatches.js";
 import {objectiveDraftSelection} from "./promotionObjectiveFlow.js";
 import {promotionObjectiveMonths,objectiveMonthDates,objectiveHistoryAnchor,historicPeriodAvailable,objectiveMonthSaveState} from "./promotionMonthlyObjectives.js";
+import {hasSinglePharmacy} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 import "./ObjetivosPromociones.css";
 
 const CN=value=>/^\d{6}$/.test(value||"");
@@ -27,10 +29,19 @@ async function post(clientSlug,path,body,signal){
  return data;
 }
 export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage=false,onCreatePromotion,editingPromotion=null,objectiveMonth="",onObjectiveMonthChange,onSaveObjectives,onBack}){
+ const singlePharmacy=useSinglePharmacy()||hasSinglePharmacy(pharmacies);
  const active=useMemo(()=>pharmacies.filter(f=>f.active!==false),[pharmacies]);
  const preset=useMemo(()=>objectiveDraftSelection(editingPromotion,active,objectiveMonth),[editingPromotion,active,objectiveMonth]);
  const isEditing=Boolean(editingPromotion?.id);
  const [selectedPharmacies,setSelectedPharmacies]=useState(()=>preset.pharmacyIds);
+ // En una farmacia única no hay selector: garantizar que el ámbito sigue
+ // incluyendo esa farmacia aunque un borrador anterior guardase un listado vacío.
+ useEffect(()=>{
+  if(!singlePharmacy||!active.length)return;
+  const id=String(active[0].id);
+  setSelectedPharmacies(ids=>ids.length===1&&ids[0]===id?ids:[id]);
+ },[singlePharmacy,active]);
+
  const initializedPharmacies=useRef(active.length>0);
  const [mode,setMode]=useState("search");
  const [search,setSearch]=useState("");
@@ -350,7 +361,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    </div>
   </section>
   <section className="card fm-objectives-card">
-   <h2>2. Farmacias, ventas y objetivos</h2>
+   <h2>2. {singlePharmacy?"Ventas y objetivos":"Farmacias, ventas y objetivos"}</h2>
    <div className={"fm-objectives-storage fm-objectives-storage-"+
     (draftTouched?"pending":currentMonthSaved?"saved":"preview")}
     role="status" aria-live="polite">
@@ -366,10 +377,10 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
             (isEditing?"Las unidades que se muestran por defecto son una propuesta calculada a partir de la referencia histórica y el porcentaje. Todavía no están guardadas.":"Puedes modificar las unidades libremente. Solo se guardarán como objetivos de una promoción cuando elijas las fechas y el mes en el siguiente paso.")}</p>
     </div>
    </div>
-   <div className="fm-objectives-pharmacies">{active.map(f=><label key={f.id}>
+   {!singlePharmacy&&<div className="fm-objectives-pharmacies">{active.map(f=><label key={f.id}>
     <input type="checkbox" checked={selectedPharmacies.includes(String(f.id))}
      onChange={e=>{setDraftTouched(true);setSelectedPharmacies(ids=>e.target.checked?[...new Set([...ids,String(f.id)])]:
-      ids.filter(id=>id!==String(f.id)));}}/>{f.name}</label>)}</div>
+      ids.filter(id=>id!==String(f.id)));}}/>{f.name}</label>)}</div>}
    <div className="fm-objectives-custom">
     <label>Período desde <input type="date" value={customFrom} onChange={e=>{setDraftTouched(true);setCustomFrom(e.target.value);}}/></label>
     <label>Hasta <input type="date" min={customFrom||undefined} value={customTo}
@@ -380,7 +391,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
    <LoadingFrame loading={historyBusy} label="Calculando ventas y objetivos por farmacia…" className="fm-objectives-loading-frame">
    <div className="fm-objectives-history-scroll">
     <table className={"fm-objectives-table fm-objectives-unified-table"+(baseline==="stock"?" fm-objectives-stock-mode":"")}>
-     <thead><tr><th>Farmacia</th>
+     <thead><tr>{!singlePharmacy&&<th>Farmacia</th>}
       {periods.map(p=><th key={p.id}><label className={"fm-objectives-base "+(baseline===p.id?"chosen":"")}>
        <input type="radio" name="simulator-objective-reference" value={p.id}
         checked={baseline===p.id} onChange={()=>{setDraftTouched(true);setBaseline(p.id);}}
@@ -396,7 +407,7 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
      <tbody>
       {chosenPharmacies.map(f=>{
        const id=String(f.id),pct=rate(id);
-       return <tr key={id}><th>{f.name}</th>
+       return <tr key={id}>{!singlePharmacy&&<th>{f.name}</th>}
         {periods.map(p=><td key={p.id}>{!periodReady(p)?"Aún no disponible":!selectedCNs.length||historyBusy||historyError?"—":
          <strong>{num(units(id,p.id))}</strong>}</td>)}
         <td>{!selectedCNs.length||historyBusy||historyError?"—":
@@ -424,12 +435,12 @@ export default function ObjetivosPromociones({clientSlug,pharmacies=[],canManage
          </small></td>
        </tr>;
       })}
-      <tr className="fm-objectives-summary"><th>Total</th>
+      {!singlePharmacy&&<tr className="fm-objectives-summary"><th>Total</th>
        {periods.map(p=><td key={p.id}>{!periodReady(p)?"—":!selectedCNs.length||historyBusy||historyError?"—":
         <strong>{num(totals(p.id))}</strong>}</td>)}
        <td>{!selectedCNs.length||historyBusy||historyError||!hasStock?"—":
         <strong title="Suma de unidades registradas para las farmacias seleccionadas">{num(totalStock())}</strong>}</td>
-       {baseline!=="stock"&&<td>—</td>}<td><strong>{num(totalTarget())}</strong></td></tr>
+       {baseline!=="stock"&&<td>—</td>}<td><strong>{num(totalTarget())}</strong></td></tr>}
      </tbody>
     </table>
    </div>

@@ -6,6 +6,8 @@ import {Download} from "lucide-react";
 import {downloadTableCSV} from "./tableExport.js";
 import {searchText} from "./listLogic.js";
 import {filterModeForColumn} from "./tableFilterModes.js";
+import {isPharmacyColumn} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 
 const collator=new Intl.Collator("es",{numeric:true,sensitivity:"base"});
 export function readableCell(value){
@@ -46,6 +48,9 @@ export default function SortableDataTable({
  headers,rows=[],empty="No hay resultados para esta selección.",
  label="registros",tableClass="fm-preview-table",filterModes={},showExport=true,showPagination=true
 }){
+ const singlePharmacy=useSinglePharmacy();
+ const visibleColumns=headers.map((header,index)=>({header,index}))
+  .filter(({header})=>!singlePharmacy||!isPharmacyColumn(header));
  const [sort,setSort]=useState(null),[page,setPage]=useState(0);
  const [pageSize,setPageSize]=useState(50),[filters,setFilters]=useState({});
  const isAction=index=>/^(acciones?|historial|quitar|reparto|seleccionar)$/iu.test(String(headers[index]||""));
@@ -78,13 +83,13 @@ export default function SortableDataTable({
   {showExport&&<div className="fm-table-toolbar">
    <span className="fm-table-export-scope">{sorted.length} resultados disponibles</span>
    <button className="btn btn-secondary btn-sm" type="button" disabled={!sorted.length}
-    onClick={()=>downloadTableCSV("farmetrica-"+label.toLowerCase(),headers,
-      sorted.map(row=>row.map(readableCell)))}>
+    onClick={()=>downloadTableCSV("farmetrica-"+label.toLowerCase(),visibleColumns.map(c=>c.header),
+      sorted.map(row=>visibleColumns.map(c=>readableCell(row[c.index]))))}>
     <Download size={15}/> Exportar CSV</button>
   </div>}
   <HorizontalTableScroll className="fm-preview-scroll" label={label}>
    <table className={tableClass+" fm-unified-table smart-table"}>
-    <thead><tr>{headers.map((header,i)=><th key={i}
+    <thead><tr>{visibleColumns.map(({header,index:i})=><th key={i}
        aria-sort={isAction(i)||sort?.index!==i?"none":sort.direction==="asc"?"ascending":"descending"}>
       {!isAction(i)?<button className="smart-sort" type="button" onClick={()=>changeSort(i)}
         aria-label={"Ordenar "+header}>
@@ -92,7 +97,7 @@ export default function SortableDataTable({
         {sort?.index===i?(sort.direction==="asc"?"▲":"▼"):"↕"}</span></button>:
        <span className="smart-th-label">{header}</span>}
      </th>)}</tr>
-     <tr className="smart-filter-row">{headers.map((header,i)=><th key={i}>
+     <tr className="smart-filter-row">{visibleColumns.map(({header,index:i})=><th key={i}>
       {filterMode(i)==="none"?<span className="smart-filter-blank"/>:
        filterMode(i)==="multi"?<MultiSelectFilter label={String(header)}
         options={[...new Set((rows||[]).map(row=>readableCell(row[i])).filter(Boolean))].sort((a,b)=>collator.compare(a,b))}
@@ -104,8 +109,8 @@ export default function SortableDataTable({
      </th>)}</tr>
     </thead>
     <tbody>{shown.length?shown.map((r,i)=><tr key={safePage*pageSize+i}>
-      {r.map((v,j)=><td key={j}>{v}</td>)}</tr>):
-     <tr><td colSpan={headers.length}>{empty}</td></tr>}</tbody>
+      {visibleColumns.map(({index:j})=><td key={j}>{r[j]}</td>)}</tr>):
+     <tr><td colSpan={visibleColumns.length}>{empty}</td></tr>}</tbody>
    </table>
   </HorizontalTableScroll>
   {showPagination&&<ListPagination total={sorted.length} page={safePage} pageSize={pageSize}

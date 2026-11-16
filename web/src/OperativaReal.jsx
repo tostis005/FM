@@ -1,3 +1,4 @@
+import {hasSinglePharmacy} from "./pharmacyPresentation.js";
 import React,{useEffect,useMemo,useState} from "react";
 import {AlertTriangle,ArrowDownToLine,ArrowRightLeft,ClipboardList,Package,Plus,ShoppingCart,Users} from "lucide-react";
 
@@ -194,12 +195,12 @@ export default function OperativaReal({section,pharmacies=[],warehouses=[],clien
   <ReportPageHeader title={title} updatedAt={lastUpdated}
    refreshing={mode==="loading"||busy} onRefresh={()=>void refresh()}/>
   <ReportFilterBar showPeriod={false} showPharmacies={false}>
-   <label className="fm-unified-filter"><span>Farmacia</span>
+   {!hasSinglePharmacy(pharmacies)&&<label className="fm-unified-filter"><span>Farmacia</span>
     <select aria-label="Farmacia" value={pharmacy}
      onChange={e=>{const id=e.target.value;setPharmacy(id);
       sessionStorage.setItem(operationalPharmacyKey,id);}}>
      {pharmacies.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}
-    </select></label>
+    </select></label>}
   </ReportFilterBar>
  </>;
  // El preparador se consulta a escala de grupo, no depende de /api/operativa

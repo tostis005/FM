@@ -145,6 +145,7 @@ jobs:
           node --test api/src/articleNames.test.js
           node --check api/src/genericosOfertas.js
           node --test api/src/genericosOfertas.test.js
+          node --test api/src/genericOfferFacets.test.js
           node --test api/src/genericos.test.js
           node --test api/src/genericArticleDetail.test.js
           python3 -m unittest discover -s deploy/nomenclator -p 'test_*.py'
@@ -171,7 +172,7 @@ jobs:
           node --test src/laboratoryLoadAll.test.js src/asyncBatches.test.js
           node --test src/localeES.test.js
           node --test src/promotionMetrics.test.js src/promotionMonthFilter.test.js src/promotionLifecycle.test.js src/promotionSalesRanges.test.js src/simuladorLogic.test.js src/simuladorProductSelection.test.js
-          node --test src/laboratoryExport.test.js src/laboratoryOrderSheet.test.js src/laboratoryOrderGrouping.test.js src/orderExcelImport.test.js src/genericOffersImport.test.js
+          node --test src/laboratoryExport.test.js src/laboratoryOrderSheet.test.js src/laboratoryOrderGrouping.test.js src/orderExcelImport.test.js src/genericOffersImport.test.js src/genericOfferFilters.test.js
           node --test src/dictadoVoz.test.js src/assistantStreamClient.test.js src/profileDraftAccess.test.js
           node check-login.mjs
           node generate-seo.mjs

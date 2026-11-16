@@ -6,9 +6,10 @@ const base=process.env.RESPONSIVE_BASE_URL||"http://127.0.0.1:4175";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 const modules={dashboard:true,stock:true,acciones:true};
 const pharmacies=[{id:"1",name:"Farmacia de prueba",active:true,sourceCode:"ABA"}];
-async function openAs(role){
+async function openAs(role,multiple=false){
  const page=await browser.newPage({viewport:{width:1280,height:850}});
  const user={email:"menu-"+role+"@example.invalid",name:"Prueba menú",role};
+ const visiblePharmacies=multiple?[...pharmacies,{id:"2",name:"Segunda farmacia",active:true,sourceCode:"AB2"}]:pharmacies;
  let alertPolls=0;
  await page.route("**/api/**",async route=>{
   const path=new URL(route.request().url()).pathname;
@@ -16,7 +17,7 @@ async function openAs(role){
   if(path==="/api/auth/me")data={user};
   else if(path==="/api/tenant/context")data={user,role,client:{
    slug:"ampedia",name:"Ampedia",schema:"ampedia",analysisMonths:12
-  },clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,
+  },clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies:visiblePharmacies,
    modules,sections:{dashboard:true,stock:true,acciones:true}};
   else if(path==="/api/analytics/gestion-proactiva/alertas"||
    path==="/api/analytics/gestion-proactiva/inmovilizado"){
@@ -77,6 +78,10 @@ try{
  await menu.getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Stock inmovilizado"}).waitFor({timeout:12000});
  await superadmin.getByRole("columnheader",{name:"Última venta"}).waitFor({timeout:12000});
+ assert.equal(await superadmin.getByRole("columnheader",{name:"Farmacia",exact:true}).count(),0,
+  "una sola farmacia no requiere columna ni filtro de farmacia");
+ assert.equal(await superadmin.locator(".fm-proactive-controls select").count(),1,
+  "con una farmacia única se conserva el período, no un selector redundante");
  await superadmin.getByText("12/07/2025", {exact:true}).waitFor({timeout:12000});
  await superadmin.getByText("Sin ventas registradas",{exact:true}).waitFor({timeout:12000});
  assert.equal(new URL(superadmin.url()).pathname,"/stock-inmovilizado");
@@ -92,6 +97,14 @@ try{
  await superadmin.waitForURL("**/dashboard",{timeout:12000});
  assert.equal(await superadmin.getByRole("heading",{name:"Transferidor"}).count(),0);
  await superadmin.close();
+
+ const multi=await openAs("superadministrador",true);
+ await multi.getByRole("navigation",{name:"Módulos"})
+  .getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
+ await multi.getByRole("columnheader",{name:"Farmacia",exact:true}).waitFor({timeout:12000});
+ assert.equal(await multi.locator(".fm-proactive-controls select").count(),2,
+  "con varias farmacias debe mantenerse el selector de farmacia y el del período");
+ await multi.close();
 
  const admin=await openAs("administrador");
  const regularMenu=admin.getByRole("navigation",{name:"Módulos"});

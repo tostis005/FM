@@ -1,3 +1,4 @@
+import {transferCapabilities} from "./transferTopology.js";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -640,6 +641,9 @@ function App(){
  const {promos:rawPromos,users:storedUsers}=data;
  // Ocultar objetivos y farmacias fuera del ámbito autorizado de esta sesión.
  const pharmacies=tenantContext?.pharmacies||[];
+ const transferTopology=transferCapabilities(pharmacies,tenantContext?.warehouses||[]);
+ const topologyAllows=id=>id==="stock-transferidor"?transferTopology.canUseTransferidor:
+  id==="stock-traspasos"?transferTopology.canTransferBetweenPharmacies:true;
  // Persistir un único ámbito de farmacias por cliente al cambiar de módulo.
  const pharmacyScopeKey=pharmacies.map(p=>String(p.id)).join(",");
  useEffect(()=>{
@@ -1343,11 +1347,12 @@ function App(){
    setFrom("");setTo("");setStatusFilter("Activa");setImportViewIds(null);
   }
  },[tenantContext?.client?.slug,role]);
- const canOpenSection=id=>sessionUser?.role==="superadministrador"||
-   tenantContext?.sections?.[id]===true;
+ const canOpenSection=id=>topologyAllows(id)&&(sessionUser?.role==="superadministrador"||
+   tenantContext?.sections?.[id]===true);
  const canOpenWorkCenter=()=>["acciones","oportunidades-seguimiento","mi-trabajo","alertas","rentabilidad-retorno"]
    .some(canOpenSection);
  const visibleNav=NAV.filter(item=>{
+   if(!topologyAllows(item.id))return false;
    if(item.super)return sessionUser?.role==="superadministrador";
    if(item.id==="picking-list"&&!["administrador","gestor","superadministrador"].includes(role))return false;
    if(item.admin)return ["administrador","superadministrador"].includes(role)||(["usuarios","estado","perfiles","familias-maestro","ajustes"].includes(item.id)&&role==="gestor");
@@ -1784,7 +1789,7 @@ function App(){
     {["stock-inmovilizado","alertas-inteligentes"].includes(page)&&sessionUser?.role==="superadministrador"&&<ProactiveStock key={tenantContext.client.slug+":"+page}
       mode={page==="alertas-inteligentes"?"alertas":"inmovilizado"}
       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
-      demo={tenantContext.client.demo} onNavigate={nav}/>}
+      demo={tenantContext.client.demo} warehouses={tenantContext.warehouses||[]} onNavigate={nav}/>}
     {page==="stock-transferidor"&&<Transferidor key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
      {page==="picking-list"&&<PickingList key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} role={role} permissions={tenantContext.profile?.permissions}/>} 
      {page==="rentabilidad"&&<RentabilidadProductos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}/>}
@@ -1793,6 +1798,7 @@ function App(){
     {page==="accesos"&&<AccessAdmin onAuthenticated={()=>window.dispatchEvent(new Event("farmawao-auth-changed"))}/>}
      {page==="ajustes"&&<AjustesPanel key={tenantContext.client.slug}
       clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies}
+      warehouses={tenantContext.warehouses||[]}
       analysisMonths={tenantContext.client.analysisMonths}
       onAnalysisSaved={()=>loadContext(tenantContext.client.slug)}/>}
 

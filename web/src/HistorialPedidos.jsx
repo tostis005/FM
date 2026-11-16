@@ -47,7 +47,7 @@ export default function HistorialPedidos({clientSlug,pharmacies=[],userEmail="",
    .finally(()=>{if(!controller.signal.aborted)setLabsLoading(false)});
   return()=>controller.abort();
  },[clientSlug,scope,canEdit]);
- useEffect(()=>{setPreview(null);setNotice("")},[file,type,clientSlug,scope]);
+ useEffect(()=>{setPreview(null)},[type,clientSlug,scope]);
  const visible=useMemo(()=>items.filter(item=>{
   const q=search.trim().toLocaleLowerCase("es");
   return (!q||[item.laboratorioNombre,item.realizadoPor,item.archivoNombre,item.tipo]

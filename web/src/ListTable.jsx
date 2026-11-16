@@ -7,6 +7,8 @@ import {LoadingPanel,LoadingFrame} from "./LoadingState.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {integer} from "./localeES.js";
 import {filterModeForColumn} from "./tableFilterModes.js";
+import {isPharmacyColumn} from "./pharmacyPresentation.js";
+import {useSinglePharmacy} from "./PharmacyPresentationContext.jsx";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -33,7 +35,11 @@ export function ListPagination({total,page,pageSize,onPageChange,onPageSizeChang
     </div>}
   </div>;
 }
-export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName="",renderExpandedRow=null,expandedRowKeys=[],initialPageSize=50,pageSizes=PAGE_SIZES}){
+export default function ListTable({rows,columns:providedColumns,rowKey,onRowClick,emptyText="No hay registros",label="registros",tableClass="",loading=false,loadingLabel="Cargando registros…",defaultSort=null,sort:serverSort,onSortChange,serverFilters=null,onServerFiltersChange=null,filterOptions=null,serverPagination=null,selection=null,showExport=true,onExport=null,exportFileName="",renderExpandedRow=null,expandedRowKeys=[],initialPageSize=50,pageSizes=PAGE_SIZES}){
+  const singlePharmacy=useSinglePharmacy();
+  // La farmacia sigue en los datos y el API; sólo desaparece su columna de la vista.
+  const columns=useMemo(()=>singlePharmacy?providedColumns.filter(col=>!isPharmacyColumn(col)):providedColumns,
+    [providedColumns,singlePharmacy]);
   const [localFilters,setLocalFilters]=useState({});
  const remotelyFiltered=serverFilters!==null&&typeof onServerFiltersChange==="function";
  const filters=remotelyFiltered?serverFilters:localFilters;

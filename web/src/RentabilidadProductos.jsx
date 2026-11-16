@@ -3,6 +3,7 @@ import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import SortableDataTable from "./SortableDataTable.jsx";
+import {KpiValue,LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
@@ -55,6 +56,41 @@ function ProfitTable({rows,headers,empty,complete=false}){
    </td>)}</tr>)}</tbody>
  </table>{rows.length===0&&<p className="fm-profit-empty">{empty||"No hay datos con los filtros actuales."}</p>}</div>;
 }
+// Los mismos componentes de carga usados en el resto del producto: sin valores
+// provisionales ni cambios bruscos de estructura al terminar la consulta.
+function RentabilidadLoading({tab}){
+ const labels=["Importe neto","Margen estimado cubierto","Margen sobre ventas cubiertas",
+  "Cobertura de costes","Unidades vendidas"];
+ return tab==="resumen"?<>
+  <div className="fm-profit-kpis" role="status" aria-label="Cargando indicadores de rentabilidad">
+   {labels.map(label=><article className="card" key={label}>
+    <span>{label}</span><KpiValue loading loadingText="Calculando…" label={label}/>
+   </article>)}
+  </div>
+  <div className="fm-profit-dual">
+   {["Evolución mensual","Rentabilidad por farmacia"].map(label=>
+    <section className="card fm-profit-panel" key={label}>
+     <div className="fm-profit-panel-heading"><h2>{label}</h2></div>
+     <LoadingPanel kind="chart" label={"Calculando "+label.toLowerCase()+"…"}/>
+    </section>)}
+  </div>
+  <div className="fm-profit-dual">
+   {["Familias con mayor rentabilidad","Comparativa por farmacia"].map(label=>
+    <section className="card fm-profit-panel" key={label}>
+     <div className="fm-profit-panel-heading"><h2>{label}</h2></div>
+     <LoadingPanel kind="table" label={"Cargando "+label.toLowerCase()+"…"} rows={5}/>
+    </section>)}
+  </div>
+  <section className="card fm-profit-panel">
+   <div className="fm-profit-panel-heading"><h2>Detalle de rentabilidad por familia</h2></div>
+   <LoadingPanel kind="table" label="Cargando familias…" rows={6}/>
+  </section>
+ </>:<section className="card fm-profit-panel">
+  <div className="fm-profit-panel-heading"><h2>{tab==="productos"?"Productos y categorías":"Detalle de ventas"}</h2></div>
+  <LoadingPanel kind="table" label={tab==="productos"?"Cargando rentabilidad por producto…":"Cargando detalle de ventas…"} rows={7}/>
+ </section>;
+}
+
 export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[]}){
  const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug).period||"3");
  const [custom,setCustom]=useState(()=>{
@@ -244,7 +280,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   {tooLong&&<div className="fm-profit-alert"><AlertCircle size={18}/>El análisis admite hasta 12 meses por consulta. Selecciona un período más corto.</div>}
   {error&&<div className="fm-profit-alert" role="alert"><AlertCircle size={18}/>{error}
     <button type="button" onClick={()=>setReload(v=>v+1)}>Reintentar</button></div>}
-  {loading&&<div className="card fm-profit-loading" role="status"><RefreshCw size={18} className="fm-profit-spin"/>Cargando análisis de rentabilidad…</div>}
+  {loading&&!error&&period.valid&&!tooLong&&<RentabilidadLoading tab={tab}/>}
   {!loading&&!error&&!tooLong&&payload?.available===false&&<div className="card fm-profit-alert">{payload.message||"Datos pendientes de sincronización."}</div>}
   {!loading&&!error&&!tooLong&&payload?.available!==false&&payload&&<>
    {tab==="resumen"&&<>
@@ -255,7 +291,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       ["Margen sobre ventas cubiertas",sums.covered>0?percent(sums.margin/sums.covered*100):"—"],
       ["Cobertura de costes",percent(coverage)],
       ["Unidades vendidas",units(sums.units)]
-     ].map(([label,value])=><article key={label} className="card"><span>{label}</span><strong>{value}</strong></article>)}
+     ].map(([label,value])=><article key={label} className="card"><span>{label}</span><KpiValue value={value} label={label}/></article>)}
     </div>
     <div className="fm-profit-dual">
      <section className="card fm-profit-panel">

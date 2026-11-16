@@ -111,7 +111,7 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
     "SELECT 1 FROM farmetrica.genericos_ofertas_laboratorios o "+
     "JOIN farmetrica.nomenclator_presentaciones n ON n.cn=o.cn "+
     "WHERE o.cliente_slug=g.cliente_slug AND o.laboratorio_fuente=g.laboratorio_fuente "+
-    "AND o.cn=g.cn AND n.dcpf::text=g.dcpf)",[tenant]);
+    "AND o.cn=g.cn AND n.dcpf::text=g.dcpf AND n.generico=true)",[tenant]);
    const {rows:counts}=await connection.query(
     "SELECT count(n.cn)::int AS matched,count(*) FILTER(WHERE n.cn IS NULL)::int AS unmatched "+
     "FROM farmetrica.genericos_ofertas_laboratorios o "+
@@ -140,8 +140,7 @@ export function setupGenericosOfertas(app,pool,{requireTenantModule}){
      "OR n.nombre ILIKE '%'||$2||'%' OR n.principio_activo ILIKE '%'||$2||'%' "+
      "OR n.dcpf::text LIKE '%'||$2||'%' "+
      "OR coalesce(to_jsonb(n)->>'descripcion_dcpf','') ILIKE '%'||$2||'%') "+
-     "AND EXISTS (SELECT 1 FROM farmetrica.nomenclator_presentaciones v "+
-     "WHERE v.dcpf=n.dcpf AND v.generico=true) "+
+     "AND n.generico=true "+
      "GROUP BY n.dcpf ORDER BY count(DISTINCT o.laboratorio_fuente) DESC,"+
      "count(*) DESC,min(n.nombre) LIMIT 80",
     values:[req.context.client.slug,q],query_timeout:15000

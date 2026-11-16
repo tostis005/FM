@@ -162,6 +162,26 @@ export async function exportPromotionExcel(promo, pharmacyName) {
   downloadBlob(blob, fileName(promo));
 }
 
+/** Propuestas de compra por laboratorio, no equivale a envío ni pedido confirmado. */
+export async function exportGenericOfferOrders(orders,filename="propuestas-genericos.xlsx"){
+ if(!Array.isArray(orders)||!orders.length)throw Error("No hay unidades asignadas para exportar");
+ const sheets=orders.map((order,i)=>({
+  name:(String(i+1)+"-"+String(order.laboratory||"Laboratorio")
+   .replace(/[\[\]:*?\/\\]/g," ").slice(0,27)).slice(0,31),
+  widths:[14,65,30,14,22,22,18],
+  rows:[
+   ["CN","Medicamento AEMPS","Farmacia","Unidades","PUC ofertado IVA incl. (€)",
+    "Importe orientativo (€)","DCPF"],
+   ...order.lines.flatMap(line=>(line.pharmacies||[])
+    .filter(p=>Number(p.units)>0).map(p=>[
+     line.cn,line.name,p.name,Number(p.units),Number(line.puc),
+     Math.round(Number(p.units)*Number(line.puc)*100)/100,line.dcpf
+    ]))
+  ]
+ }));
+ downloadBlob(await workbook(sheets),filename);
+}
+
 export async function exportAllPromotionsZip(promotions, pharmacyName) {
   const {default: JSZip}=await import("jszip");
   promotions.forEach(ensureValidCNs);

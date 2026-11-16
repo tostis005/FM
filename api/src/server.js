@@ -39,6 +39,7 @@ import {setupSalesDetail} from "./salesDetail.js";
 import {createSalesCache} from "./salesCache.js";
 import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
+import {setupGenericosOfertas} from "./genericosOfertas.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
 import {setupPromotionObjectives} from "./promocionesObjetivos.js";
@@ -191,6 +192,7 @@ setupPricePolicy(app,pool,{requireTenant,requireTenantManager});
 setupOperativa(app,pool,{requireTenant});
 setupWorkDigestPreferences(app,pool,{requireTenant});
 setupGenericosReales(app,pool,{requireTenantModule});
+setupGenericosOfertas(app,pool,{requireTenantModule});
 setupAssistant(app,pool,{requireTenant});
 
 const selectFields = `id::text AS id, nombre, ciudad, activo, codigo_origen AS "sourceCode",
@@ -601,6 +603,8 @@ try {
   // Migración aditiva de bajo impacto, se aplica incluso en bases ya inicializadas.
   await pool.query(await readFile(new URL(
     "./migrations/069_historial_pedidos_laboratorio.sql",import.meta.url),"utf8"));
+  await pool.query(await readFile(new URL(
+    "./migrations/070_genericos_ofertas_laboratorios.sql",import.meta.url),"utf8"));
   await bootstrapAdmins();
   // Limpiar de forma periódica los contactos vencidos; sin acceder a datos de farmacias.
   const purgeExpiredPublicRequests=async()=>{

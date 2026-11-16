@@ -39,3 +39,15 @@
 - **Seguridad clínica y económica:** comparar productos del mismo conjunto oficial no autoriza automáticamente una sustitución ni demuestra que exista una oferta comercial disponible.
 
 Fuentes: AEMPS, Estructura del nombre de un medicamento; AEMPS, Nomenclátor de Prescripción; EMA, Generic and hybrid medicines.
+
+
+## Comparador de ofertas comerciales y objetivos (noviembre 2026)
+- En **Genéricos → Comparador de compras** el gestor importa un archivo XLSX con una hoja por laboratorio. Cabeceras: Código, Artículo, PVL, %Dto, Neto, IVA, PUC; optativas U. Min, U. Pack y U. caja.
+- El nombre de la **hoja Excel** identifica la fuente de la tarifa, no demuestra quién fabrica/comercializa el medicamento ni el proveedor al que llega el pedido. El CN se cruza exactamente con el Nomenclátor y la comparación económica se agrupa exclusivamente por **DCPF**; solo se proponen CN oficiales EFG.
+- La importación sustituye atómicamente las tarifas anteriores del **cliente autenticado**. Las ofertas se mantienen en farmetrica.genericos_ofertas_laboratorios, nunca en el catálogo AEMPS global ni en el repositorio. Los CN sin equivalencia oficial aparecen en el diagnóstico y no se comparan; los códigos repetidos al mismo precio se consolidan, pero un mismo laboratorio/CN con tarifas divergentes provoca error.
+- El **PUC ofertado con IVA** procede del Excel. Se diferencia del **PUC real histórico** de recepciones; no se presupone que la oferta siga vigente ni que se puedan ignorar packs o mínimos.
+- Los porcentajes objetivo se guardan por cliente y DCPF, distribuidos entre las hojas/laboratorios de oferta. La suma no supera el 100 %; el resto se deja **sin asignar**.
+- Para preparar pedidos, se introducen unidades previstas y se revisa el reparto editable por farmacia. Se exige una correspondencia explícita entre laboratorio del Excel y **proveedor unificado directo y activo**. Las cantidades se incorporan a los borradores del preparador sin borrar referencias no relacionadas; el CN que ya existía se actualiza con confirmación previa.
+- **Generar borradores no envía pedidos** al laboratorio, no confirma recepciones ni descuenta stock. Un usuario debe revisar cada borrador y tramitar su envío por el canal comercial correspondiente.
+- Los usuarios de lectura solo pueden consultar; gestores/administradores pueden importar y decidir objetivos. Los clientes demo no pueden realizar escrituras. Tarifas, objetivos y proveedor de destino se aíslan por cliente_slug.
+- El archivo comercial original se carga a través de la UI con sesión válida; no se incluye como semilla ni en commits para proteger precios negociados y evitar exponer condiciones entre clientes.

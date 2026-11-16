@@ -11,6 +11,7 @@ import "./genericos.css";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {ListPagination} from "./ListTable.jsx";
 import {searchText} from "./listLogic.js";
+import GenericosComparador from "./GenericosComparador.jsx";
 import {euro,integer,quantity,percentage,dateES} from "./localeES.js";
 
 const money=euro;
@@ -144,7 +145,8 @@ function GroupDetail({group,query,clientSlug,useReal=false,cache,cacheKey}){
  </div>;
 }
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([id])=>!["24","36","60","all"].includes(id)).map(([id])=>id));
-export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false}){
+export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false,canEdit=false}){
+ const [view,setView]=useState("comparador");
  // El contrato normalizado funciona en TODOS los clientes, no solo Ampedia.
  // Conservar la ruta legacy únicamente cuando el API confirme esquema antiguo.
  const [useReal,setUseReal]=useState(true);
@@ -201,6 +203,9 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
   return p.toString();
  },[range.from,range.to,ids.join(",")]);
  useEffect(()=>{
+  // No cargar el análisis histórico hasta que el usuario abra esa pestaña.
+  // El comparador consulta únicamente las tarifas vigentes del cliente.
+  if(view!=="analisis")return;
   if(!query){setData(null);setLoading(false);return;}
   let mounted=true;const controller=new AbortController();
   setLoading(true);setError("");setData(null);
@@ -215,7 +220,7 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
    .then(j=>{if(mounted&&j){setData(j);setUpdatedAt(new Date());}}).catch(e=>{if(mounted)setError(e.message)})
    .finally(()=>{if(mounted)setLoading(false)});
   return()=>{mounted=false;controller.abort()};
- },[query,clientSlug,reload,useReal]);
+ },[view,query,clientSlug,reload,useReal]);
  useEffect(()=>{setActive(null);setPage(0)},[query,clientSlug]);
  // No refrescar los datos automáticamente mientras el usuario consulta
  // grupos o detalles. El botón «Actualizar» sigue disponible para hacerlo a demanda.
@@ -241,7 +246,36 @@ export default function Genericos({clientSlug="ampedia",pharmacies=[],demo=false
  }));
  const safePage=Math.max(0,Math.min(page,Math.ceil(visibleGroups.length/pageSize)-1));
  const chunk=visibleGroups.slice(safePage*pageSize,(safePage+1)*pageSize);
+ const tabs=<div className="fm-generics-view-switch" role="group" aria-label="Vista de genéricos">
+  <button type="button" className={view==="comparador"?"is-selected":""}
+   aria-pressed={view==="comparador"} onClick={()=>setView("comparador")}>Comparador de compras</button>
+  <button type="button" className={view==="analisis"?"is-selected":""}
+   aria-pressed={view==="analisis"} onClick={()=>setView("analisis")}>Análisis y rentabilidad</button>
+ </div>;
+ if(view==="comparador")return <div className="fm-generics">
+  {tabs}
+  <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{
+    setPeriodKey(k);
+    if(k==="custom"){
+     const defaultRange=resolveSalesPeriod("this_month",new Date(),{},
+      clientSlug==="ampedia"?"Europe/Madrid":Intl.DateTimeFormat().resolvedOptions().timeZone);
+     const from=customFrom||defaultRange.from,to=customTo||defaultRange.to;
+     setCustomFrom(from);setCustomTo(to);
+     updateSharedReportFilters(clientSlug,{period:k,customFrom:from,customTo:to});
+    }else updateSharedReportFilters(clientSlug,{period:k});
+   }}
+   pharmacies={pharmacies} pharmacyIds={ids}
+   onPharmacyChange={next=>{const pharmacyIds=reconcilePharmacyIds(next,pharmacies);
+    setIds(pharmacyIds);updateSharedReportFilters(clientSlug,{pharmacyIds})}}
+   customFrom={customFrom} customTo={customTo}
+   onCustomFromChange={value=>{setCustomFrom(value);updateSharedReportFilters(clientSlug,{customFrom:value})}}
+   onCustomToChange={value=>{setCustomTo(value);updateSharedReportFilters(clientSlug,{customTo:value})}}/>
+  <GenericosComparador clientSlug={clientSlug}
+   pharmacies={ids.length?pharmacies.filter(p=>ids.map(String).includes(String(p.id))):pharmacies}
+   canEdit={canEdit&&!demo} range={range}/>
+ </div>;
  return <div className="fm-generics">
+  {tabs}
   <ReportPageHeader title="Genéricos" period={range} updatedAt={updatedAt}
    refreshing={loading} onRefresh={()=>setReload(x=>x+1)}/>
   <ReportFilterBar periodKey={periodKey} onPeriodChange={k=>{

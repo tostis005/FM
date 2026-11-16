@@ -69,7 +69,7 @@ export function setupLaboratoryOrderHistory(app,pool,{requireTenant}){
    res.json(record);
   }catch(error){next(error)}
  });
- app.post("/api/analytics/pedidos/historial",...auth,async(req,res,next)=>{
+ if(typeof app.post==="function")app.post("/api/analytics/pedidos/historial",...auth,async(req,res,next)=>{
   if(!canRecord(req))return res.status(403).json({error:"No tienes permiso para registrar pedidos"});
   const lab=normalizeLaboratoryKey(req.body?.laboratorio);
   const type=String(req.body?.tipo||""),date=String(req.body?.fecha||""),

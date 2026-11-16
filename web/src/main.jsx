@@ -1,4 +1,5 @@
 import {transferCapabilities} from "./transferTopology.js";
+import {PharmacyPresentationProvider} from "./PharmacyPresentationContext.jsx";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -1485,6 +1486,7 @@ function App(){
        <button type="button" className="icon-btn" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={signOut}><LogOut size={18}/></button></div>
    </header>
    <main className="main-content">
+   <PharmacyPresentationProvider pharmacies={pharmacies}>
    <AppBreadcrumbs items={breadcrumbs} onNavigate={nav}/>
    <SectionLoadBoundary key={tenantContext.client.slug+":"+page}>
    <React.Suspense fallback={<LoadingStatus label="Cargando sección…"/>}>
@@ -1804,6 +1806,7 @@ function App(){
 
    </React.Suspense>
    </SectionLoadBoundary>
+   </PharmacyPresentationProvider>
    </main>
    <footer className="app-footer"><span>© 2026 Farmetrica</span></footer>
   </div>

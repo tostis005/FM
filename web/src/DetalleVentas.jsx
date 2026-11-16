@@ -58,7 +58,7 @@ export default function DetalleVentas({promotions=[],pharmacies=[],connected,loa
   },[JSON.stringify(columnDraft)]);
   const scopeIds=(pharmacyScopeIds??pharmacies.map(p=>p.id)).map(String);
   const scopeKey=scopeIds.join(",");
-  const columnPharmacies=Array.isArray(columnFilters.pharmacy)?columnFilters.pharmacy:[];
+  const columnPharmacies=singlePharmacy?[]:Array.isArray(columnFilters.pharmacy)?columnFilters.pharmacy:[];
   const selectedPharmacies=columnPharmacies.length?
    scopeIds.filter(id=>columnPharmacies.includes(id)):scopeIds;
   const effectiveColumnFilters={...columnFilters,pharmacy:selectedPharmacies};

@@ -1775,7 +1775,8 @@ function App(){
     {page==="fuentes"&&<FuentesMaestras/>}
     {page==="estado"&&<PharmacyState key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}/>}
     {page==="solicitudes"&&<SolicitudesDemo/>}
-    {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}/>}
+    {page==="genericos"&&<Genericos key={tenantContext.client.slug} clientSlug={tenantContext.client.slug} pharmacies={tenantContext.pharmacies} demo={tenantContext.client.demo}
+      canEdit={["gestor","administrador","superadministrador"].includes(tenantContext.role)}/>}
     {page==="acciones"&&<CentroTrabajo key={tenantContext.client.slug} clientSlug={tenantContext.client.slug}
       pharmacies={tenantContext.pharmacies} userEmail={sessionUser?.email} tenantRole={tenantContext.role}
       canOpenSection={canOpenSection}/>}

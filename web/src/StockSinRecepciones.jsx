@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {Search} from "lucide-react";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
-import {LoadingPanel} from "./LoadingState.jsx";
+import {LoadingStatus} from "./LoadingState.jsx";
 import ListTable from "./ListTable.jsx";
 import {dateES,quantity,euro} from "./localeES.js";
 import {downloadTableCSV} from "./tableExport.js";
@@ -146,25 +146,26 @@ export default function StockSinRecepciones({clientSlug,pharmacies=[]}){
   {!valid&&<p role="alert" className="fm-op-message">Selecciona una fecha válida hasta hoy.</p>}
   {error&&<div role="alert" className="fm-op-message fm-op-error">{error}
    <button type="button" onClick={()=>setReload(n=>n+1)}>Reintentar</button></div>}
-  {loading?<section className="card fm-preview-panel">
-   <LoadingPanel label="Buscando artículos con stock y sin recepciones recientes…" rows={7}/>
-  </section>:valid&&!error&&data?.available===false?
-   <p className="fm-op-message" role="status">{data.message||"No hay datos suficientes para este informe."}</p>:
-   valid&&!error&&data&&
-    <section className="card fm-preview-panel">
-     <div className="fm-preview-panel-head">
-      <h2>Artículos encontrados</h2>
-      <span className="fm-real-count">{quantity(rows.length)} en esta página · {quantity(stockOnPage)} uds. de stock en esta página</span>
-     </div>
-     <ListTable rows={rows} columns={columns} rowKey={r=>r.pharmacyId+"|"+r.sourceId}
-      label="artículos" tableClass="fm-real-screen-table fm-stale-stock-table"
-      emptyText="No se encontraron artículos con stock que cumplan el filtro."
-      sort={sort} onSortChange={next=>{setSort(next);setPage(1)}}
-      serverFilters={columnFilters}
-      onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
-      serverPagination={{page,pageSize:size,total:Number(data.total??0),
-       onPageChange:setPage,onPageSizeChange:n=>{setSize(n);setPage(1)}}}
-      onExport={exportPage}/>
-    </section>}
+  {valid&&!error&&!loading&&data?.available===false&&
+   <p className="fm-op-message" role="status">{data.message||"No hay datos suficientes para este informe."}</p>}
+  {valid&&!error&&(loading||(data&&data.available!==false))&&
+   <section className="card fm-preview-panel" aria-busy={loading}>
+    <div className="fm-preview-panel-head">
+     <h2>Artículos encontrados</h2>
+     {loading?<LoadingStatus compact label="Comprobando stock y recepciones…"/>:
+      <span className="fm-real-count">{quantity(rows.length)} en esta página · {quantity(stockOnPage)} uds. de stock en esta página</span>}
+    </div>
+    <ListTable rows={loading?[]:rows} columns={columns} rowKey={r=>r.pharmacyId+"|"+r.sourceId}
+     label="artículos" tableClass="fm-real-screen-table fm-stale-stock-table"
+     loading={loading} loadingLabel="Buscando artículos con stock y sin recepciones recientes…"
+     emptyText="No se encontraron artículos con stock que cumplan el filtro."
+     sort={sort} onSortChange={next=>{setSort(next);setPage(1)}}
+     serverFilters={columnFilters}
+     onServerFiltersChange={next=>{setColumnFilters(next);setPage(1)}}
+     serverPagination={{page,pageSize:size,total:Number(data?.total??0),
+      onPageChange:setPage,onPageSizeChange:n=>{setSize(n);setPage(1)}}}
+     onExport={exportPage}/>
+   </section>}
+
  </div>;
 }

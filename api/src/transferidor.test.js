@@ -897,3 +897,56 @@ test("la paginación Todas exige página 1 y rechaza tamaños arbitrarios",()=>{
   {tamano:"0",pagina:"2"},{tamano:"-1"},{tamano:"25000"},{tamano:"abc"}
  ])assert.throws(()=>parseTransferFilters(query,pharmacies),/filtros|paginación/);
 });
+
+
+test("una farmacia sin almacén no arranca el cálculo de transferencias",async()=>{
+ let queried=false,handler;
+ setupTransferidor({get(_path,...handlers){handler=handlers.at(-1)}},{
+  async query(){queried=true;throw Error("No debería consultar la base de datos");}
+ },{requireTenant:()=>[]});
+ const req={query:{},context:{role:"superadministrador",modules:{stock:true},
+  client:{slug:"demo_simple",schema:"ampedia",demo:true},
+  pharmacies:[{id:"1",name:"Única farmacia",active:true}],warehouses:[]}};
+ const res={statusCode:200,status(n){this.statusCode=n;return this;},
+  json(body){this.body=body;return this;}};
+ await handler(req,res);
+ assert.equal(res.statusCode,200);
+ assert.equal(res.body.available,false);
+ assert.equal(res.body.total,0);
+ assert.match(res.body.warning,/otra farmacia o un almacén/);
+ assert.equal(queried,false);
+});
+
+test("una farmacia y un almacén activo sí pueden calcular redistribución",async()=>{
+ let handler;
+ const db={async query(arg){
+  const sql=typeof arg==="string"?arg:arg.text;
+  if(sql.includes("WITH chosen AS MATERIALIZED"))return {rows:[
+   {cn:"123456",pharmacyId:"1",sourceCode:"ABA",articleId:"111111",stock:0,name:"Crema",kind:"farmacia"},
+   {cn:"123456",pharmacyId:"9",sourceCode:"ALMACEN",articleId:"999999",stock:50,name:"Crema",kind:"almacen",siteName:"Almacén"}
+  ]};
+  if(sql.includes("WITH refs AS MATERIALIZED"))return {rows:[
+   {pharmacyId:"1",articleId:"111111",units7:7,units30:30}
+  ]};
+  if(sql.includes("FROM farmetrica.picking_list_pendientes"))return {rows:[]};
+  if(sql.includes("FROM farmetrica.op_pedidos"))return {rows:[]};
+  if(sql.includes("transferidor_configuracion_cliente"))return {rows:[{minDays:4,targetDays:7}]};
+  if(sql.includes("transferidor_exposicion_"))return {rows:[]};
+  throw Error("SQL inesperado: "+sql.slice(0,100));
+ }};
+ setupTransferidor({get(_path,...handlers){handler=handlers.at(-1)}},db,{requireTenant:()=>[]});
+ const req={query:{pagina:1,tamano:50},context:{
+  role:"superadministrador",modules:{stock:true},
+  client:{slug:"demo_almacen",schema:"ampedia",demo:true},
+  pharmacies:[{id:"1",name:"Farmacia",active:true}],
+  warehouses:[{id:"9",name:"Almacén",active:true,establishmentType:"almacen"}]
+ }};
+ const res={statusCode:200,status(n){this.statusCode=n;return this;},
+  json(body){this.body=body;return this;}};
+ const result=await awaitTransferResult(handler,req,res);
+ assert.equal(result.status,"complete");
+ assert.equal(result.warehouseAvailable,true);
+ assert.equal(result.total,1);
+ assert.equal(result.rows[0].originKind,"almacen");
+ assert.equal(result.rows[0].destinationId,"1");
+});

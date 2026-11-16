@@ -234,7 +234,11 @@ try{
        }));
        // Contrato único para todas las tablas montadas, incluidas las que
        // tienen cabecera doble con filtros y ordenación.
-       const layouts=await page.locator(".fm-dual-scroll").evaluateAll(roots=>
+       // En una navegación, React puede desmontar y remontar la tabla entre
+       // elegir el nodo y leer sus estilos. Reintentar sólo los estilos vacíos.
+       let layouts=[];
+       for(let attempt=0;attempt<4;attempt++){
+        layouts=await page.locator(".fm-dual-scroll").evaluateAll(roots=>
          roots.map(root=>{
           const pane=[...root.children].find(el=>!el.classList.contains("fm-dual-scroll-top"));
           const head=pane?.querySelector("table > thead");
@@ -245,6 +249,9 @@ try{
            hasTop:!!root.querySelector(".fm-dual-scroll-top")
           }:null;
          }).filter(Boolean));
+        if(layouts.every(item=>item.sticky&&item.vertical&&item.maxHeight))break;
+        await page.waitForTimeout(250);
+       }
        for(const layout of layouts){
          if(layout.sticky!=="sticky"||!["auto","scroll"].includes(layout.vertical)||
             !layout.hasTop||layout.maxHeight==="none")

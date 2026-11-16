@@ -2,6 +2,8 @@ import React,{useEffect,useMemo,useRef,useState} from "react";
 import {BarChart3,Download,Search,RefreshCw,TrendingUp,PackageSearch,ReceiptText,AlertCircle} from "lucide-react";
 import {Bar,BarChart,CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
+import SortableDataTable from "./SortableDataTable.jsx";
+import {KpiValue,LoadingPanel} from "./LoadingState.jsx";
 import {resolveSalesPeriod} from "./salesPeriods.js";
 import {readSharedReportFilters,updateSharedReportFilters} from "./sharedReportFilters.js";
 import {reconcilePharmacyIds} from "./reportFilterScopes.js";
@@ -40,7 +42,12 @@ const allColumns=[
  ["pvp","PVP catálogo"],["pmc","Coste unitario (catálogo)"],["stock","Stock actual"],
  ["coveredSales","Ventas con coste"],["margin","Margen estimado"]
 ];
-function ProfitTable({rows,headers,empty}){
+function ProfitTable({rows,headers,empty,complete=false}){
+ if(complete)return <SortableDataTable
+  headers={headers.map(col=>col.label)}
+  rows={rows.map(item=>headers.map(col=><span title={col.title?.(item)}>{col.render(item)}</span>))}
+  empty={empty||"No hay datos con los filtros actuales."} label="filas de rentabilidad"
+  showExport={false}/>;
  return <div className="fm-profit-table-scroll"><table className="fm-profit-table">
   <thead><tr>{headers.map(col=><th key={col.key}>{col.label}</th>)}</tr></thead>
   <tbody>{rows.map((item,index)=><tr key={item.key||index}>{headers.map(col=>
@@ -49,6 +56,41 @@ function ProfitTable({rows,headers,empty}){
    </td>)}</tr>)}</tbody>
  </table>{rows.length===0&&<p className="fm-profit-empty">{empty||"No hay datos con los filtros actuales."}</p>}</div>;
 }
+// Los mismos componentes de carga usados en el resto del producto: sin valores
+// provisionales ni cambios bruscos de estructura al terminar la consulta.
+function RentabilidadLoading({tab}){
+ const labels=["Importe neto","Margen estimado cubierto","Margen sobre ventas cubiertas",
+  "Cobertura de costes","Unidades vendidas"];
+ return tab==="resumen"?<>
+  <div className="fm-profit-kpis" role="status" aria-label="Cargando indicadores de rentabilidad">
+   {labels.map(label=><article className="card" key={label}>
+    <span>{label}</span><KpiValue loading loadingText="Calculando…" label={label}/>
+   </article>)}
+  </div>
+  <div className="fm-profit-dual">
+   {["Evolución mensual","Rentabilidad por farmacia"].map(label=>
+    <section className="card fm-profit-panel" key={label}>
+     <div className="fm-profit-panel-heading"><h2>{label}</h2></div>
+     <LoadingPanel kind="chart" label={"Calculando "+label.toLowerCase()+"…"}/>
+    </section>)}
+  </div>
+  <div className="fm-profit-dual">
+   {["Familias con mayor rentabilidad","Comparativa por farmacia"].map(label=>
+    <section className="card fm-profit-panel" key={label}>
+     <div className="fm-profit-panel-heading"><h2>{label}</h2></div>
+     <LoadingPanel kind="table" label={"Cargando "+label.toLowerCase()+"…"} rows={5}/>
+    </section>)}
+  </div>
+  <section className="card fm-profit-panel">
+   <div className="fm-profit-panel-heading"><h2>Detalle de rentabilidad por familia</h2></div>
+   <LoadingPanel kind="table" label="Cargando familias…" rows={6}/>
+  </section>
+ </>:<section className="card fm-profit-panel">
+  <div className="fm-profit-panel-heading"><h2>{tab==="productos"?"Productos y categorías":"Detalle de ventas"}</h2></div>
+  <LoadingPanel kind="table" label={tab==="productos"?"Cargando rentabilidad por producto…":"Cargando detalle de ventas…"} rows={7}/>
+ </section>;
+}
+
 export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[]}){
  const [periodKey,setPeriodKey]=useState(()=>readSharedReportFilters(clientSlug).period||"3");
  const [custom,setCustom]=useState(()=>{
@@ -238,7 +280,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
   {tooLong&&<div className="fm-profit-alert"><AlertCircle size={18}/>El análisis admite hasta 12 meses por consulta. Selecciona un período más corto.</div>}
   {error&&<div className="fm-profit-alert" role="alert"><AlertCircle size={18}/>{error}
     <button type="button" onClick={()=>setReload(v=>v+1)}>Reintentar</button></div>}
-  {loading&&<div className="card fm-profit-loading" role="status"><RefreshCw size={18} className="fm-profit-spin"/>Cargando análisis de rentabilidad…</div>}
+  {loading&&!error&&period.valid&&!tooLong&&<RentabilidadLoading tab={tab}/>}
   {!loading&&!error&&!tooLong&&payload?.available===false&&<div className="card fm-profit-alert">{payload.message||"Datos pendientes de sincronización."}</div>}
   {!loading&&!error&&!tooLong&&payload?.available!==false&&payload&&<>
    {tab==="resumen"&&<>
@@ -249,7 +291,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
       ["Margen sobre ventas cubiertas",sums.covered>0?percent(sums.margin/sums.covered*100):"—"],
       ["Cobertura de costes",percent(coverage)],
       ["Unidades vendidas",units(sums.units)]
-     ].map(([label,value])=><article key={label} className="card"><span>{label}</span><strong>{value}</strong></article>)}
+     ].map(([label,value])=><article key={label} className="card"><span>{label}</span><KpiValue value={value} label={label}/></article>)}
     </div>
     <div className="fm-profit-dual">
      <section className="card fm-profit-panel">
@@ -293,7 +335,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
      <section className="card fm-profit-panel">
       <div className="fm-profit-panel-heading"><h2>Comparativa por farmacia</h2>
        <button className="btn btn-secondary btn-sm" type="button" onClick={exportCurrent} disabled={!pharmaciesRows.length}><Download size={15}/> CSV</button></div>
-      <ProfitTable rows={pharmaciesRows.map((r,i)=>({...r,key:r.pharmacyId||i}))} headers={[
+      <ProfitTable complete rows={pharmaciesRows.map((r,i)=>({...r,key:r.pharmacyId||i}))} headers={[
        {key:"farmacia",label:"Farmacia",kind:"text",render:r=>r.pharmacyName},
        {key:"neto",label:"Importe",render:r=>euros(r.sales)},
        {key:"cost",label:"Coste est.",render:r=>euros(r.cost)},
@@ -313,7 +355,7 @@ export default function RentabilidadProductos({clientSlug="ampedia",pharmacies=[
        <Download size={15}/> CSV
       </button>
      </div>
-     <ProfitTable rows={(showAllFamilies?familyRows:familyRows.slice(0,20)).map((r,i)=>({...r,key:r.family||i}))}
+     <ProfitTable complete rows={(showAllFamilies?familyRows:familyRows.slice(0,20)).map((r,i)=>({...r,key:r.family||i}))}
       headers={[
        {key:"family",label:"Familia",kind:"text",render:r=>r.family},
        {key:"sales",label:"Importe neto",render:r=>euros(r.sales)},

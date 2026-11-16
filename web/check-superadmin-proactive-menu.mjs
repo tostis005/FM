@@ -61,9 +61,18 @@ try{
   ["Inicio","Alertas inteligentes","Stock inmovilizado"]);
  await menu.getByRole("button",{name:"Alertas inteligentes",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Alertas inteligentes"}).waitFor({timeout:12000});
- await superadmin.getByText("Calculando por farmacias y períodos").waitFor({timeout:9000});
+ await superadmin.getByText("Analizando stock, compras y ventas…").waitFor({timeout:9000});
  await superadmin.getByRole("heading",{name:"Situaciones detectadas"}).waitFor({timeout:9000});
- await superadmin.waitForFunction(()=>!document.querySelector(".fm-proactive-progress"),null,{timeout:9000});
+ // Los estados iniciales de la API no deben visualizar seis contadores a cero.
+ await superadmin.locator(".fm-proactive-kpis .fm-kpi-value[aria-busy='true']").first()
+  .waitFor({timeout:9000});
+ assert.equal(await superadmin.locator(".fm-proactive-kpis .fm-kpi-value[aria-busy='true']").count(),6,
+  "todos los indicadores deben mostrar el spinner corporativo mientras hay cálculos pendientes");
+ assert.equal(await superadmin.locator(".list-page-count").count(),0,
+  "no mostrar paginación 0 de 0 mientras todavía no hay datos definitivos");
+ await superadmin.waitForFunction(()=>!document.querySelector(".fm-proactive-progress"),null,{timeout:10000});
+ assert.equal(await superadmin.locator(".fm-proactive-kpis .fm-kpi-value[aria-busy='true']").count(),0,
+  "los KPIs deben mostrar valores al terminar el cálculo");
  assert.equal(new URL(superadmin.url()).pathname,"/alertas-inteligentes");
  await menu.getByRole("button",{name:"Stock inmovilizado",exact:true}).click();
  await superadmin.getByRole("heading",{name:"Stock inmovilizado"}).waitFor({timeout:12000});
@@ -71,6 +80,17 @@ try{
  await superadmin.getByText("12/07/2025", {exact:true}).waitFor({timeout:12000});
  await superadmin.getByText("Sin ventas registradas",{exact:true}).waitFor({timeout:12000});
  assert.equal(new URL(superadmin.url()).pathname,"/stock-inmovilizado");
+ // Una farmacia sin almacén no ofrece redistribución; el enlace debe ser útil.
+ assert.equal(await menu.getByRole("button",{name:"Transferidor",exact:true}).count(),0);
+ assert.equal(await superadmin.getByRole("columnheader",{name:"Siguiente paso"}).count(),0);
+ await superadmin.getByRole("button",{name:"Ver stock"}).first().click();
+ await superadmin.getByRole("heading",{name:"Stock",exact:true}).waitFor({timeout:12000});
+ await superadmin.locator(".fm-demo-search input").waitFor({timeout:12000});
+ assert.equal(await superadmin.locator(".fm-demo-search input").inputValue(),"123456",
+  "la alerta debe abrir la referencia concreta en Stock");
+ await superadmin.goto(base+"/stock-transferidor",{waitUntil:"domcontentloaded"});
+ await superadmin.waitForURL("**/dashboard",{timeout:12000});
+ assert.equal(await superadmin.getByRole("heading",{name:"Transferidor"}).count(),0);
  await superadmin.close();
 
  const admin=await openAs("administrador");

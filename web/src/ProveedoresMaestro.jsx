@@ -2,9 +2,10 @@ import React,{useEffect,useMemo,useState} from "react";
 import {Plus,X,WandSparkles} from "lucide-react";
 import ListTable from "./ListTable.jsx";
 import TraspasosSalientes from "./TraspasosSalientes.jsx";
+import {transferCapabilities} from "./transferTopology.js";
 import SupplierLaboratoryMappings from "./SupplierLaboratoryMappings.jsx";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
-import {SkeletonLine,LoadingStatus} from "./LoadingState.jsx";
+import {KpiValue,LoadingStatus} from "./LoadingState.jsx";
 import {ReportPageHeader,ReportFilterBar} from "./ReportControls.jsx";
 import "./moduleDemo.css";
 const EMPTY={sourceCode:"",name:"",type:"sin_clasificar",active:true,cooperative:false,ignoreReports:false};
@@ -142,7 +143,7 @@ export default function ProveedoresMaestro({clientSlug}){
       onClick={()=>void matchLaboratories(true)}>Aplicar {suggestions.length} vinculaciones seguras</button>
     </div>
    </section>}
-   <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><strong>{loading&&!rows.length?<SkeletonLine width="60%" height="22px"/>:id==="total"?rows.length:rows.filter(r=>r[id]===true).length}</strong></div>)}</div>   <section className="card fm-demo-table">
+   <div className="fm-supplier-summary">{[["total","Proveedores"],["cooperative","Cooperativas"],["ignoreReports","Ignorados en informes"]].map(([id,label])=><div key={id} className="card fm-supplier-summary-item"><span>{label}</span><KpiValue loading={loading&&!rows.length} label={label} loadingText="Consultando…" value={id==="total"?rows.length:rows.filter(r=>r[id]===true).length}/></div>)}</div>   <section className="card fm-demo-table">
     <div className="section-heading"><h2>Proveedores</h2>{loading?<LoadingStatus compact label="Cargando proveedores…"/>:<span className="count-label">{rows.length}</span>}</div>
     
     <ListTable rows={visible} rowKey={r=>r.id||r.sourceCode} label="proveedores" defaultSort={{key:"name",direction:"asc"}} loading={loading} loadingLabel="Consultando catálogo de proveedores…" emptyText="No hay proveedores registrados"
@@ -189,7 +190,8 @@ export default function ProveedoresMaestro({clientSlug}){
     <summary>Excepciones de laboratorio por farmacia (configuración avanzada)</summary>
     <SupplierLaboratoryMappings clientSlug={clientSlug} suppliers={rows}/>
    </details>
-   <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>
+   {transferCapabilities(pharmacies).canTransferBetweenPharmacies&&
+    <TraspasosSalientes clientSlug={clientSlug} suppliers={rows}/>}
    {mappingSupplier&&<div className="fm-demo-overlay fm-supplier-lab-overlay"
     onMouseDown={e=>{if(e.target===e.currentTarget)setMappingSupplier(null)}}>
     <div className="fm-demo-detail fm-provider-dialog fm-supplier-lab-dialog" role="dialog"

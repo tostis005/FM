@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
-import {Download,Save,AlertTriangle,LoaderCircle,MessageSquareText} from "lucide-react";
+import {Download,Save,AlertTriangle,MessageSquareText} from "lucide-react";
+import {LoadingStatus} from "./LoadingState.jsx";
 import LaboratoryPicker from "./LaboratoryPicker.jsx";
 import PreparadorAgenda from "./PreparadorAgenda.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
@@ -750,8 +751,7 @@ export default function LaboratoryOrderPanel({clientSlug,pharmacies=[],warehouse
     </div>
     {showMatrixOverlay&&<div className="fm-lab-matrix-overlay fm-lab-order-full-overlay" role="status" aria-live="polite">
      <div className="fm-lab-matrix-loading">
-      <LoaderCircle size={30} className="fm-lab-spinner" aria-hidden="true"/>
-      <strong>Cargando artículos, ventas y stock…</strong>
+      <LoadingStatus label="Cargando artículos, ventas y stock…"/>
       <span>{data.rows?.length?
        (loadStage==="catalog"?"Preparando los artículos del laboratorio":
         loadStage==="render"?"Preparando la tabla y los totales finales":

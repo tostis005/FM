@@ -6,6 +6,7 @@ import {MultiSelectFilter} from "./MultiSelectFilter.jsx";
 import {LoadingPanel,LoadingFrame} from "./LoadingState.jsx";
 import HorizontalTableScroll from "./HorizontalTableScroll.jsx";
 import {integer} from "./localeES.js";
+import {filterModeForColumn} from "./tableFilterModes.js";
 
 // Tablas consistentes para promociones, farmacias, usuarios y accesos.
 // La búsqueda por cabecera, ordenación y paginación operan sobre todos los
@@ -42,6 +43,8 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
   const [page,setPage]=useState(0);
   const [pageSize,setPageSize]=useState(initialPageSize);
   const externalPage=Boolean(serverPagination);
+  // No mostrar contadores de "0 de 0" hasta que termine la primera consulta.
+  const initialLoading=loading&&!(rows||[]).length;
   const activeSize=externalPage?serverPagination.pageSize:pageSize;
   // Con paginación remota, SQL ya ordenó el universo antes de LIMIT/OFFSET.
   // Ordenar solamente la respuesta truncada produciría resultados engañosos.
@@ -97,6 +100,13 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
    else all.push({id,label:id,columns:[col]});
    return all;
   },[]);
+  const columnOptions=col=>filterOptions?.[col.key]??
+   (typeof col.options==="function"?col.options(rows):col.options||
+    [...new Set((rows||[]).flatMap(r=>col.filterValues?.(r)||[col.value(r)]))]);
+  const modeFor=col=>filterModeForColumn({label:col.label,
+   declared:col.searchable===false?"none":col.filterMode,
+   values:externalPage?[]:columnOptions(col),remote:externalPage,
+   hasServerOptions:Boolean(filterOptions&&Object.hasOwn(filterOptions,col.key))});
   const csvColumns=columns.filter(col=>col.exportable!==false&&
    col.label&&col.key!=="actions"&&col.key!=="action");
   const exportCurrent=()=>{
@@ -142,17 +152,15 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
           </th>)}</tr>
           <tr className="smart-filter-row">{selection&&<th className="fm-selection-column">
             <span className="smart-filter-blank"/></th>}{columns.map(col=><th key={col.key} className={columnClass(col)}>
-            {col.searchable===false?<span className="smart-filter-blank"/>:
-              (col.filterMode==="multi"||(!externalPage&&col.filterMode!=="text"&&/farmacia|\babcd\b|clasificaci[oó]n|estado|\btipo\b|prioridad|categor[ií]a/i.test(col.label)))?<MultiSelectFilter label={col.label}
-                options={filterOptions?.[col.key]||
-                  (typeof col.options==="function"?col.options(rows):col.options||
-                  [...new Set(rows.flatMap(r=>col.filterValues?.(r)||[col.value(r)]))])}
+            {modeFor(col)==="none"?<span className="smart-filter-blank"/>:
+              modeFor(col)==="multi"?<MultiSelectFilter label={col.label}
+                options={columnOptions(col)}
                 value={Array.isArray(filters[col.key])?filters[col.key]:[]}
                 onChange={next=>changeFilter(col.key,next)}/>:
               <input className="smart-column-filter" type="search" value={filters[col.key]||""}
                 aria-label={"Buscar en "+col.label} placeholder={"Filtrar "+col.label.toLowerCase()} title={"Buscar en "+col.label}
                 onChange={e=>changeFilter(col.key,e.target.value)}/>}
-          </th>)}</tr>
+           </th>)}</tr>
         </thead>
         <tbody>{loading&&!rows.length?<tr><td colSpan={columns.length+(selection?1:0)}><LoadingPanel kind="table" label={loadingLabel} rows={Math.min(activeSize,5)}/></td></tr>:slice.map(row=><React.Fragment key={rowKey(row)}><tr className={onRowClick?"click-row":undefined}
           tabIndex={onRowClick?0:undefined} aria-label={onRowClick?"Abrir registro":undefined}
@@ -174,8 +182,8 @@ export default function ListTable({rows,columns,rowKey,onRowClick,emptyText="No 
       {!filtered.length&&!loading&&<div className="empty-state"><strong>{emptyText}</strong>{!remotelyFiltered&&rows?.length>0&&<p>Prueba a borrar algún filtro de columna.</p>}</div>}
     </HorizontalTableScroll>
     <p className="table-scroll-hint" aria-hidden="true">Desliza la tabla horizontalmente para ver más columnas →</p>
-    <ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
-      onPageSizeChange={changePageSize} label={label} loading={loading} pageSizes={pageSizes}/>
+    {!initialLoading&&<ListPagination total={externalPage?serverPagination.total:filtered.length} page={safePage} pageSize={activeSize} onPageChange={goToPage}
+      onPageSizeChange={changePageSize} label={label} loading={loading} pageSizes={pageSizes}/>}
     </LoadingFrame>
   </>;
 }

@@ -189,6 +189,19 @@ const QUESTIONS=[
  ["¿Qué acciones tienen mayor importe asociado?","acciones"]
 ];
 const STORAGE="fm_analytics_filters_";
+// Al abrir Stock desde una alerta, seleccionar la referencia sin alterar otros clientes.
+function consumeStockFocus(clientSlug){
+ try{
+  const key="fm-stock-focus:"+clientSlug;
+  const raw=sessionStorage.getItem(key);
+  if(!raw)return {};
+  sessionStorage.removeItem(key);
+  const focus=JSON.parse(raw);
+  if(!focus||typeof focus!=="object")return {};
+  return {search:String(focus.search||"").slice(0,100),
+   pharmacyIds:focus.pharmacyId?[String(focus.pharmacyId)]:[],families:[]};
+ }catch{return {};}
+}
 const COMMON_PERIOD_KEYS=new Set(SALES_PERIODS.filter(([key])=>!["all","24","36","60"].includes(key)).map(([key])=>key));
 function readFilters(key){
  try{const saved=JSON.parse(sessionStorage.getItem(key)||"null");
@@ -203,13 +216,14 @@ export default function ModuloDemo({module,pharmacies=[],clientSlug="ampedia",an
  const storageKey=STORAGE+clientSlug+"_"+module;
  const [filters,setFilters]=useState(()=>({
     ...readFilters(storageKey),
-    ...readSharedReportFilters(clientSlug)
+    ...readSharedReportFilters(clientSlug),
+    ...(module==="stock"?consumeStockFocus(clientSlug):{})
   }));
  useEffect(()=>initializeSharedReportFilters(clientSlug,{
     period:filters.period,customFrom:filters.customFrom,customTo:filters.customTo,
     pharmacyIds:reconcilePharmacyIds(filters.pharmacyIds,pharmacies)
   }),[clientSlug]);
- const [searchReady,setSearchReady]=useState(()=>readFilters(storageKey).search);
+ const [searchReady,setSearchReady]=useState(()=>filters.search);
  useEffect(()=>{const timer=setTimeout(()=>setSearchReady(filters.search),320);return()=>clearTimeout(timer)},[filters.search]);
  const [salesChartMode,setSalesChartMode]=useState("sales");
  const [needTicketActivity,setNeedTicketActivity]=useState(false);

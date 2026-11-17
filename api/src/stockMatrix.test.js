@@ -2,12 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {stockMatrixFilters,buildStockMatrixSQL} from "./stockMatrix.js";
 const context={client:{slug:"demo",schema:"demo"},allowedPharmacyIds:[1,2],
- pharmacies:[{id:1,name:"A"},{id:2,name:"B"}]};
+ pharmacies:[{id:1,name:"A"},{id:2,name:"B"}],warehouses:[{id:9,name:"Almacén",active:true}]};
 test("matriz usa las farmacias autorizadas y valida la selección",()=>{
  assert.deepEqual(stockMatrixFilters({context,query:{}}).ids,[1,2]);
  assert.deepEqual(stockMatrixFilters({context,query:{farmacias:"2"}}).ids,[2]);
  assert.throws(()=>stockMatrixFilters({context,query:{farmacias:"3"}}),{status:403});
  assert.throws(()=>stockMatrixFilters({context,query:{farmacias:"2;DROP"}}),{status:400});
+ assert.deepEqual(stockMatrixFilters({context,query:{tipo:"almacenes"}}).ids,[9]);
+ assert.throws(()=>stockMatrixFilters({context,query:{tipo:"almacenes",farmacias:"1"}}),{status:403});
 });
 test("SQL agrega por CN y mantiene separados los códigos ERP locales",()=>{
  const sql=buildStockMatrixSQL("demo");

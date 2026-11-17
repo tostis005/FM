@@ -132,7 +132,7 @@ try{
   "Una dosis reduce el listado sin mezclar presentaciones");
  await page.getByRole("button",{name:"Comparar precios"}).click();
  await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
- await page.getByText("100",{exact:true}).first().waitFor();
+ await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});
  await page.getByRole("button",{name:"Redirigir 80 % aquí"}).first().click();
  assert.equal(await page.getByRole("button",{name:"Destino seleccionado"}).count(),1,
   "Redirigir un 80 % debe marcar exactamente un laboratorio objetivo");

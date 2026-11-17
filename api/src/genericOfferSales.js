@@ -77,7 +77,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
      "sum(v.unidades)::float8 AS units FROM "+schema+".fm_ventas_analitica v "+
      "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
      "AND upper(btrim(v.farmacia_codigo))=ANY($3::text[]) "+
-     "AND v.articulo_id::text=ANY($4::text[]) GROUP BY 1,2",
+     "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
     values:[from,to,codes,articleIds],query_timeout:22000
    });
    const totals=sumGenericOfferSales(targets.rows,mapped.rows,sales.rows);

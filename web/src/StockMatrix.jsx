@@ -27,7 +27,11 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
  const [loading,setLoading]=useState(true),[error,setError]=useState("");
  const [data,setData]=useState(null),[updatedAt,setUpdatedAt]=useState(null);
  const [expanded,setExpanded]=useState([]);
+ const [history,setHistory]=useState(null);
+ const [historyBusy,setHistoryBusy]=useState(false);
+ const [historyError,setHistoryError]=useState("");
  const key=ids.join(",");
+ const expandedKey=expanded[0]||"";
  useEffect(()=>{
   const timer=setTimeout(()=>{setReadySearch(search.trim());setReadyFamily(family.trim());},330);
   return()=>clearTimeout(timer);
@@ -61,6 +65,25 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
   });
   return()=>{disposed=true;clearTimeout(timeout);controller.abort();};
  },[clientSlug,view,key,readySearch,readyFamily,onlyStock,page,size,sort.key,sort.direction,revision]);
+ useEffect(()=>{
+  if(!expandedKey){setHistory(null);setHistoryError("");setHistoryBusy(false);return;}
+  const controller=new AbortController();
+  let disposed=false;
+  const params=new URLSearchParams({tipo:view,producto:expandedKey});
+  if(ids.length)params.set("farmacias",key);
+  setHistory(null);setHistoryError("");setHistoryBusy(true);
+  fetch("/api/analytics/stock/matriz/detalle?"+params,{
+   credentials:"same-origin",cache:"no-store",signal:controller.signal,
+   headers:{"X-Farmetrica-Cliente":clientSlug}
+  }).then(async response=>{
+   const body=await response.json().catch(()=>({}));
+   if(!response.ok)throw Error(body.error||"No se pudo consultar el histórico");
+   return body;
+  }).then(body=>{if(!disposed)setHistory(body);})
+   .catch(e=>{if(!disposed)setHistoryError(e.message||"No se pudo consultar el histórico");})
+   .finally(()=>{if(!disposed)setHistoryBusy(false);});
+  return()=>{disposed=true;controller.abort();};
+ },[clientSlug,view,key,expandedKey,revision]);
  const visiblePharmacies=useMemo(()=>ids.length?
   scopedSites.filter(p=>ids.includes(String(p.id))):scopedSites,[scopedSites,key]);
  const rows=data?.rows||[];
@@ -100,19 +123,42 @@ export default function StockMatrix({clientSlug,pharmacies=[],warehouses=[]}){
  const total=Number(data?.total||0);
  const unitsOnPage=rows.reduce((sum,row)=>sum+Number(row.stockTotal||0),0);
  function detail(row){
+  const info=history?.product===row.productKey?history:null;
+  const receipts=new Map((info?.lastReceipts||[]).map(r=>[String(r.pharmacyId),r.lastReceiptAt]));
+  const months=[...new Set((info?.monthlySales||[]).map(r=>r.month))].sort().reverse();
+  const sold=new Map((info?.monthlySales||[]).map(r=>[r.month+"|"+String(r.pharmacyId),Number(r.units||0)]));
   return <div className="fm-stock-matrix-detail">
-   <h3>Detalle por farmacia · {row.name}</h3>
-   <p>El guion indica que no existe un dato de inventario para esa farmacia; no equivale a cero unidades.</p>
+   <h3>Detalle por establecimiento · {row.name}</h3>
+   <p>«—» en stock significa que no consta ficha de inventario en ese establecimiento, no que existan cero unidades.</p>
    <div className="fm-stock-matrix-detail-scroll">
-    <table><thead><tr><th>Farmacia</th><th>Stock</th><th>PVP</th><th>Coste medio (PMC)</th><th>Actualizado</th></tr></thead>
+    <table><thead><tr><th>{view==="almacenes"?"Almacén":"Farmacia"}</th><th>Stock</th><th>PVP</th><th>Coste medio (PMC)</th>
+     <th>Actualizado</th>{info?.receiptsAvailable&&<th>Última entrada</th>}</tr></thead>
     <tbody>{visiblePharmacies.map(p=><tr key={p.id}>
      <td>{p.name||p.nombre||p.id}</td>
      <td>{number(stockFor(row,p.id))}</td>
      <td>{costFor(row,p.id,"pvp")==null?"—":euro(costFor(row,p.id,"pvp"))}</td>
      <td>{costFor(row,p.id,"pmc")==null?"—":euro(costFor(row,p.id,"pmc"))}</td>
      <td>{localDate(costFor(row,p.id,"updatedAt"))}</td>
+     {info?.receiptsAvailable&&<td>{localDate(receipts.get(String(p.id)))}</td>}
     </tr>)}</tbody></table>
    </div>
+   {historyBusy&&<LoadingStatus compact label="Consultando entradas y ventas del producto…"/>}
+   {historyError&&<p role="alert">{historyError}</p>}
+   {info?.salesAvailable&&<section className="fm-stock-matrix-sales">
+    <h4>Ventas mensuales documentadas · últimos 12 meses</h4>
+    {months.length?<div className="fm-stock-matrix-detail-scroll">
+     <table><thead><tr><th>Mes</th>{visiblePharmacies.map(p=><th key={p.id}>{p.name||p.nombre||p.id}</th>)}<th>Total</th></tr></thead>
+     <tbody>{months.map(month=><tr key={month}>
+      <td>{month.slice(5)}/{month.slice(0,4)}</td>
+      {visiblePharmacies.map(p=><td key={p.id}>{sold.has(month+"|"+p.id)?
+       number(sold.get(month+"|"+p.id)):"—"}</td>)}
+      <td><strong>{number(visiblePharmacies.reduce((sum,p)=>
+       sum+(sold.get(month+"|"+p.id)||0),0))}</strong></td>
+     </tr>)}</tbody></table>
+    </div>:<p>No hay ventas documentadas para este producto en los últimos 12 meses.</p>}
+   </section>}
+   {info&&(!info.salesAvailable||!info.receiptsAvailable)&&
+    <p className="fm-stock-matrix-source-warning">Los datos históricos no están disponibles en todas las fuentes sincronizadas. No se muestran valores estimados.</p>}
   </div>;
  }
  return <div className="fm-stock-matrix fm-operativa-preview fm-operativa-real">

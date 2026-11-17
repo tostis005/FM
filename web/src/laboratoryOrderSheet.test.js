@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {defaultLaboratoryLine,mergeVisibleOrderLines,orderLineFor,
  laboratoryExcelRows,laboratoryOrderListRows,laboratoryExportName,
  medicationOrderTotal,distributeMedicationOrderTotal,totalStockFor,laboratoryStockTotals,
- laboratoryOrderSortValue,compareLaboratoryOrderRows,laboratoryOrderGroupValue,compareLaboratoryOrderGroups} from "./laboratoryOrderSheet.js";
+ laboratoryOrderSortValue,compareLaboratoryOrderRows,laboratoryOrderGroupValue,compareLaboratoryOrderGroups,matchesLaboratoryColumnFilters} from "./laboratoryOrderSheet.js";
 import {groupedLaboratoryRows} from "./laboratoryOrderGrouping.js";
 const pharmacies=[{id:"1",name:"Central"},{id:"2",name:"Norte"}];
 const row={referencia:"000123",cn:"000123",nombre:"Crema solar",
@@ -267,4 +267,18 @@ test("sin métricas terminadas, un error de carga no se convierte en existencias
  const rows=[{metricsReady:true,byPharmacy:{"1":{stock:5}}},{metricsReady:false}];
  assert.deepEqual(laboratoryStockTotals(rows,[1],true),
   {pharmacyStock:null,globalStock:null});
+});
+
+test("Proveedor filtra como Artículo, sin alterar el preparador por laboratorio",()=>{
+ const cinfa={...row,proveedor:"Laboratorios Cinfa"};
+ const normon={...row,referencia:"000124",nombre:"Compresas",proveedor:"Laboratorios Normón"};
+ const unknown={...row,referencia:"000125",nombre:"Jarabe",proveedor:null};
+ const all=[cinfa,normon,unknown];
+ const filters={cn:"",article:"",provider:"CINFA"};
+ assert.deepEqual(all.filter(x=>matchesLaboratoryColumnFilters(x,filters,true)),[cinfa]);
+ assert.equal(matchesLaboratoryColumnFilters(cinfa,{...filters,provider:"labóratórios cínfa"},true),true);
+ assert.equal(matchesLaboratoryColumnFilters(normon,filters,false),true);
+ assert.equal(matchesLaboratoryColumnFilters(unknown,filters,true),false);
+ assert.equal(compareLaboratoryOrderRows(cinfa,normon,"provider:asc","parafarmacia",["1"],{}),0)>0,false);
+ assert.ok(compareLaboratoryOrderRows(cinfa,normon,"provider:asc","parafarmacia",["1"],{})<0);
 });

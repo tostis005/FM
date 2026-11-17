@@ -42,11 +42,12 @@ export function breakdownGenericOfferSales(targets,mapped,sales,pharmacies=[]){
   const group=cnToDcpf.get(cn);
   const pharmacyId=codeToPharmacy.get(String(s.code));
   if(!group||!pharmacyId)continue;
-  if(!summary.has(group))summary.set(group,{units:0,cns:new Map(),pharmacies:new Map()});
-  const item=summary.get(group),units=Number(s.units||0);
-  item.units+=units;
+  if(!summary.has(group))summary.set(group,{units:0,revenue:0,cns:new Map(),pharmacies:new Map(),pharmacyRevenues:new Map()});
+  const item=summary.get(group),units=Number(s.units||0),revenue=Number(s.revenue||0);
+  item.units+=units;item.revenue+=revenue;
   item.cns.set(cn,(item.cns.get(cn)||0)+units);
   item.pharmacies.set(pharmacyId,(item.pharmacies.get(pharmacyId)||0)+units);
+  item.pharmacyRevenues.set(pharmacyId,(item.pharmacyRevenues.get(pharmacyId)||0)+revenue);
  }
  return summary;
 }
@@ -85,7 +86,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     const cols=new Set(columns.rows.filter(x=>x.table_name===table).map(x=>x.column_name));
     return names.every(name=>cols.has(name));
    };
-   if(!has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades"]))
+   if(!has("fm_ventas_analitica",["farmacia_codigo","articulo_id","fecha","unidades","importe"]))
     return res.json({salesAvailable:false,items:[],warning:"No hay ventas importadas para el período"});
    if(!codes.length||!targets.rows.length)
     return res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:0}))});
@@ -120,7 +121,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     const months=[...new Set(plan.cached.map(row=>row.month))];
     const {rows:cached}=await pool.query({
      text:"SELECT farmacia_id,mes::text AS mes,clave AS article,"+
-      "sum(unidades)::float8 AS units "+
+      "sum(unidades)::float8 AS units,sum(importe)::float8 AS revenue "+
       "FROM farmetrica.ventas_panorama_mensual "+
       "WHERE cliente_slug=$1 AND farmacia_id=ANY($2::int[]) "+
       "AND mes=ANY($3::date[]) AND dimension='articulo' "+
@@ -137,7 +138,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
    for(const segment of plan.raw){
     const {rows:raw}=await pool.query({
      text:"SELECT v.farmacia_codigo AS code,v.articulo_id::text AS article,"+
-      "sum(v.unidades)::float8 AS units FROM "+schema+".fm_ventas_analitica v "+
+      "sum(v.unidades)::float8 AS units,sum(v.importe)::float8 AS revenue "+schema+".fm_ventas_analitica v "+
       "WHERE v.fecha>=$1::date AND v.fecha<$2::date+interval '1 day' "+
       "AND v.farmacia_codigo=ANY($3::text[]) "+
       "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
@@ -152,10 +153,10 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
     const base={dcpf,units:totals.get(dcpf)||0};
     if(!detail)return base;
     const group=breakdown.get(dcpf);
-    return {...base,
+    return {...base,revenue:group?.revenue||0,
      cns:[...(group?.cns||new Map())].map(([cn,units])=>({cn,units})),
      pharmacies:[...(group?.pharmacies||new Map())].map(([pharmacyId,units])=>
-      ({pharmacyId,units}))};
+      ({pharmacyId,units,revenue:group.pharmacyRevenues.get(pharmacyId)||0}))};
    })});
   }catch(e){
    if(["57014","53300"].includes(e.code)||/timeout/i.test(e.message||""))

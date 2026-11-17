@@ -10,6 +10,7 @@ const context={user,client:{slug:"ampedia",name:"Ampedia",schema:"ampedia"},
  clients:[{slug:"ampedia",name:"Ampedia"}],pharmacies,modules,role:"superadministrador"};
 let headerSeen=false;
 let listRequests=0,detailRequests=0,catalogRequests=0,movementsRequests=0,failMetrics=false;
+let genericSalesRequests=0,failGenericSales=false;
 await page.route("**/api/**",async route=>{
  const req=route.request(),u=new URL(req.url()),p=u.pathname;
  let data={};
@@ -31,6 +32,18 @@ await page.route("**/api/**",async route=>{
   {dcpf:"113",principle:"OMEPRAZOL",name:"Omeprazol 20 mg 28 cápsulas",
    strength:"20 mg",form:"Cápsulas",pack:"28 cápsulas",laboratories:1,offers:1,bestPuc:3.1}
  ]};
+ else if(p==="/api/genericos/ofertas/ventas"){
+  genericSalesRequests++;
+  const body=req.postDataJSON();
+  assert.ok(["111","112","113"].some(id=>body.dcpfs.includes(id)),
+   "El comparador consulta las ventas de presentaciones DCPF visibles");
+  if(failGenericSales){
+   await route.fulfill({status:503,contentType:"application/json",
+    body:JSON.stringify({error:"Consulta de ventas no disponible"})});return;
+  }
+  data={salesAvailable:true,items:(body.dcpfs||[]).map(dcpf=>({
+   dcpf,units:{"111":123,"112":45,"113":60}[dcpf]??0}))};
+ }
  else if(p==="/api/genericos/ventas/catalogo"){
   await new Promise(resolve=>setTimeout(resolve,180));
   data={version:{sha256:"aa",fecha_fuente:"2026-10-18",importado_en:"2026-10-18",total_genericos:6000},total:2,
@@ -121,15 +134,38 @@ try{
  // El comparador comercial es la vista principal; conservar la cobertura del análisis.
  await page.getByRole("heading",{name:"Genéricos · Comparador de compras"}).waitFor();
  await page.getByRole("heading",{name:"1. Busca y selecciona un genérico"}).waitFor();
- await page.getByLabel("Principio activo").selectOption("PARACETAMOL");
+ const molecule=page.getByRole("combobox",{name:"Buscar y seleccionar molécula"});
+ await molecule.waitFor();
+ assert.equal(await molecule.inputValue(),"","Todas las moléculas no debe ocupar el campo de búsqueda");
+ assert.match(await molecule.getAttribute("placeholder"),/Todas las moléculas/);
+ await molecule.fill("parac");
+ await page.getByRole("option",{name:"PARACETAMOL"}).click();
+ assert.equal(await molecule.inputValue(),"PARACETAMOL");
  await page.getByRole("button",{name:"Mostrar resultados"}).click();
  await page.waitForFunction(()=>document.querySelectorAll(".fm-gof-catalog-table tbody tr").length===2);
  assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),2,
   "Una molécula muestra todas sus presentaciones tarifadas");
+ await page.waitForFunction(()=>
+  document.querySelector(".fm-gof-catalog-table tbody tr td:nth-child(6)")?.textContent.trim()==="123",
+  null,{timeout:12000});
+ assert.equal((await page.locator(".fm-gof-catalog-table tbody tr").first().locator("td").nth(5).innerText()).trim(),"123",
+  "El comparador muestra las unidades reales recibidas de la API de ventas");
+ assert.ok(genericSalesRequests>0,"Se ha consultado el endpoint de unidades del comparador");
  await page.getByLabel("Dosis o concentración").selectOption("500 mg");
  await page.getByRole("button",{name:"Mostrar resultados"}).click();
  assert.equal(await page.locator(".fm-gof-catalog-table tbody tr").count(),1,
   "Una dosis reduce el listado sin mezclar presentaciones");
+ failGenericSales=true;
+ await page.getByRole("combobox",{name:"Período"}).selectOption("3");
+ await page.getByRole("button",{name:"Reintentar ventas"}).waitFor({timeout:12000});
+ assert.equal((await page.locator(".fm-gof-catalog-table tbody tr td").nth(5).innerText()).trim(),"—",
+  "Si falla la API, no se muestra un falso cero");
+ failGenericSales=false;
+ await page.getByRole("button",{name:"Reintentar ventas"}).click();
+ await page.waitForFunction(()=>
+  document.querySelector(".fm-gof-catalog-table tbody tr td:nth-child(6)")?.textContent.trim()==="123",
+  null,{timeout:12000});
+ await page.getByRole("combobox",{name:"Período"}).selectOption("12");
  await page.getByRole("button",{name:"Comparar precios"}).click();
  await page.getByRole("heading",{name:"2. Comparativa y objetivo de redirección"}).waitFor();
  await page.locator(".fm-gof-history-kpis").getByText("100",{exact:true}).waitFor({timeout:12000});

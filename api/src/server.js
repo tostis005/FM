@@ -41,6 +41,7 @@ import { setupPricePolicy } from "./pricePolicy.js";
 import { setupGenericosReales } from "./genericosReales.js";
 import {setupGenericosOfertas} from "./genericosOfertas.js";
 import {setupGenericOfferHistory} from "./genericOfferHistory.js";
+import {setupGenericOfferSales} from "./genericOfferSales.js";
 import {setupGenericosVentasFast} from "./genericosVentasFast.js";
 import {pharmacyDataCodeSQL} from "./pharmacyCodes.js";
 import { setupTenantPromotions } from "./promocionesTenant.js";
@@ -196,6 +197,7 @@ setupWorkDigestPreferences(app,pool,{requireTenant});
 setupGenericosReales(app,pool,{requireTenantModule});
 setupGenericosOfertas(app,pool,{requireTenantModule});
 setupGenericOfferHistory(app,pool,{requireTenantModule});
+setupGenericOfferSales(app,pool,{requireTenantModule});
 setupGenericosVentasFast(app,pool,{requireTenantModule});
 setupAssistant(app,pool,{requireTenant});
 

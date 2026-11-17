@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {sumGenericOfferSales,setupGenericOfferSales} from "./genericOfferSales.js";
 
 test("agrega unidades de CN directos e IDs ERP por DCPF sin duplicar ventas",()=>{
@@ -50,4 +51,12 @@ test("endpoint de ventas rechaza otras farmacias y conserva el período seleccio
  assert.deepEqual(ok.data,{salesAvailable:true,items:[{dcpf:"10",units:6}]});
  assert.ok(queries.some(q=>q.values?.includes("ejemplo")));
  assert.ok(queries.some(q=>q.values?.includes("2026-10-31")));
+});
+
+// Regresión del error de producción: la API existía, pero faltaba registrarla
+// en server.js; las pruebas unitarias del endpoint no detectaban ese olvido.
+test("la ruta de ventas del comparador está conectada al servidor",()=>{
+ const source=readFileSync(new URL("./server.js",import.meta.url),"utf8");
+ assert.match(source,/import\s*\{\s*setupGenericOfferSales\s*\}\s*from\s*["']\.\/genericOfferSales\.js["']/);
+ assert.match(source,/setupGenericOfferSales\(app,pool,\{requireTenantModule\}\)/);
 });

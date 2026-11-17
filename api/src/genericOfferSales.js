@@ -117,7 +117,7 @@ export function setupGenericOfferSales(app,pool,{requireTenantModule}){
       "AND v.articulo_id=ANY($4::text[]) GROUP BY 1,2",
      values:[segment.from,segment.to,segment.codes,articleIds],query_timeout:16000
     });
-    allSales.push(...raw.rows);
+    allSales.push(...raw);
    }
    const totals=sumGenericOfferSales(targets.rows,mapped.rows,allSales);
    res.json({salesAvailable:true,items:dcpfs.map(dcpf=>({dcpf,units:totals.get(dcpf)||0}))});

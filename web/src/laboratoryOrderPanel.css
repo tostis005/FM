@@ -318,3 +318,32 @@
 .fm-lab-cross-actions{display:flex;justify-content:flex-end;align-items:center;gap:7px;flex-wrap:wrap}
 .fm-lab-cross-actions .btn{min-height:33px;padding:6px 12px;font-size:11px;white-space:nowrap}
 @media(max-width:680px){.fm-lab-cross-grid{grid-template-columns:minmax(0,1fr)}}
+
+/* Densidad equilibrada de la matriz: cuatro cifras por métrica sin recortar valores superiores. */
+.fm-lab-order-table th,.fm-lab-order-table td{padding:4px 2px}
+.fm-lab-order-table th.fm-lab-order-group{padding:7px 4px;font-size:11px}
+.fm-lab-order-table .fm-lab-order-cell,
+.fm-lab-order-table .fm-lab-order-warehouse-col,
+.fm-lab-order-table .fm-lab-order-sub,
+.fm-lab-order-table .fm-lab-order-warehouse-head,
+.fm-lab-order-table .fm-lab-order-total,
+.fm-lab-order-table .fm-lab-order-total-head{
+ min-width:44px;width:44px
+}
+/* El número conserva su tipo y límites; solo se ocultan las flechas
+   del navegador para ganar ancho de lectura y edición. */
+.fm-lab-order-table input[type=number]{
+ box-sizing:border-box;width:48px;max-width:48px;min-width:48px;
+ min-height:26px;padding:3px 2px;font-size:11px;
+ appearance:textfield;-moz-appearance:textfield
+}
+.fm-lab-order-table input[type=number]::-webkit-outer-spin-button,
+.fm-lab-order-table input[type=number]::-webkit-inner-spin-button{
+ -webkit-appearance:none;margin:0
+}
+.fm-lab-order-table .fm-lab-order-editcol{min-width:54px}
+.fm-lab-order-table .fm-lab-order-total-input{gap:3px}
+.fm-lab-order-table thead .fm-lab-total-sort{gap:2px}
+.fm-lab-order-table .fm-lab-order-commentcol{min-width:81px!important}
+.fm-lab-order-table .fm-lab-comment-link{gap:2px;padding:4px 3px}
+.fm-lab-order-table .fm-lab-order-ordercol{border-right-width:1px}
